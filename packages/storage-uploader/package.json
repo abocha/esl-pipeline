@@ -33,6 +33,7 @@
     "dev": "tsx watch bin/cli.ts",
     "test": "pnpm run test:unit",
     "test:unit": "vitest run --exclude \"**/*.integration.test.ts\" --exclude \"**/*.integration.test.tsx\"",
+    "test:unit:prebuilt": "vitest run --exclude \"**/*.integration.test.ts\" --exclude \"**/*.integration.test.tsx\"",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },

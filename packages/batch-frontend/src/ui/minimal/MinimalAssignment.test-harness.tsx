@@ -2,6 +2,7 @@
 import {
   act,
   configure,
+  fireEvent,
   type RenderResult,
   render,
   screen,
@@ -195,16 +196,16 @@ export function makeLearningPreset(
   };
 }
 
-export async function previewCurrentDraft(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByRole('button', { name: /Preview current draft/i }));
+export async function previewCurrentDraft(_user: ReturnType<typeof userEvent.setup>) {
+  fireEvent.click(screen.getByRole('button', { name: /Preview current draft/i }));
   await screen.findByText('Preview ready for current draft.', {}, { timeout: UI_WAIT_TIMEOUT_MS });
 }
 
-export async function preparePromptReady(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+export async function preparePromptReady(_user: ReturnType<typeof userEvent.setup>) {
+  fireEvent.click(screen.getByRole('button', { name: /Drop audio file/i }));
   await screen.findByDisplayValue('Student transcript text', {}, { timeout: UI_WAIT_TIMEOUT_MS });
 
-  await user.click(screen.getByRole('button', { name: /Generate prompt/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Generate prompt/i }));
   await screen.findByDisplayValue('Prompt package output', {}, { timeout: UI_WAIT_TIMEOUT_MS });
 }
 

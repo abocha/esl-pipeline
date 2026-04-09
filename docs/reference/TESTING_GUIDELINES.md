@@ -30,19 +30,25 @@ If this guide conflicts with [`docs/reference/agents-ssot.md`](agents-ssot.md), 
 ## Lane Contract
 
 - Root unit lane: `pnpm test`
-- Root prebuilt unit lane: `pnpm test:unit`
+- Root workspace unit lane: `pnpm test:unit`
+- Root prebuilt unit lane: `pnpm test:unit:prebuilt`
+- Root fast prebuilt unit subset lane: `pnpm test:unit:prebuilt:fast`
 - Root unit timing lane: `pnpm test:timings:unit`
 - Root legacy timing alias: `pnpm test:timings:frontend`
 - Root integration lane: `pnpm test:integration`
 - Root prebuilt integration lane: `pnpm test:integration:prebuilt`
 - Root backend DB + worker lane: `pnpm test:backend:db:worker`
 - Root full check: `pnpm check`
-  - Runs `build`, `typecheck`, `lint`, `test`, `test:integration:prebuilt`, and the backend DB + worker lane.
+  - Runs `build`, `typecheck`, `lint`, `test:unit:prebuilt`, `test:integration:prebuilt`, and the backend DB + worker lane.
+- Root fast check: `pnpm check:fast`
+  - Runs repo guards, `build`, `lint`, and the prebuilt unit subset for orchestrator, batch-backend, and batch-frontend.
 - Root lint lane:
   - `pnpm lint` runs Biome for baseline JS/TS/TSX/JSON linting, then ESLint for specialized React and Vitest checks.
 - Root lane behavior:
   - `pnpm test` delegates to `pnpm test:unit`.
   - `pnpm test:unit` runs package-level `test:unit` scripts in parallel (`--if-present`).
+  - `pnpm test:unit:prebuilt` runs package-level `test:unit:prebuilt` scripts in parallel (`--if-present`) for already-built workspaces.
+  - Packages that need build artifacts should keep `test:unit` self-contained and expose `test:unit:prebuilt` as the same unit suite without the setup build step.
   - `pnpm test:integration` runs `pnpm build` first, then delegates to `pnpm test:integration:prebuilt`.
   - `pnpm test:integration:prebuilt` runs package-level integration scripts in parallel (`--if-present`).
   - `pnpm test:timings:unit` runs the repo-wide timing lane across the targeted packages, and `pnpm test:timings:frontend` remains as a backwards-compatible alias.
@@ -61,6 +67,7 @@ Root script contract:
 - `pnpm test` is the human-facing unit lane wrapper.
 - `pnpm test:unit` is the canonical workspace unit aggregator and only calls package `test:unit`.
 - `pnpm test:unit` must fail if any package contains test files but omits `test:unit`.
+- `pnpm test:unit:prebuilt` is the already-built workspace unit aggregator for callers like `pnpm check`.
 - `pnpm test:integration` is the human-facing self-contained integration wrapper.
 - `pnpm test:integration:prebuilt` is the already-built integration aggregator for callers like `pnpm check`.
 
@@ -142,6 +149,7 @@ Use this order when updating tests:
 2. Run lane-level checks:
    - `pnpm test`
    - `pnpm test:unit` when specifically validating package entrypoint normalization
+   - `pnpm test:unit:prebuilt` when the workspace is already built
    - `pnpm test:integration`
    - `pnpm test:integration:prebuilt` when the workspace is already built
    - `pnpm test:backend:db:worker` when backend PG/Redis behavior changed
