@@ -92,6 +92,7 @@ export function registerPublishValidationTests() {
             publishTarget: 'html',
             withTts: true,
             ttsProvider: 'elevenlabs',
+            ttsStrategy: 'auto',
           },
         }),
       );
@@ -183,6 +184,9 @@ export function registerJobActionTests() {
           screen.getByRole('combobox', { name: /Study-text strategy/i }),
           'dialogue',
         );
+        expect(
+          (screen.getByRole('combobox', { name: /Study-text model/i }) as HTMLSelectElement).value,
+        ).toBe('eleven_v3');
         fireEvent.change(screen.getByPlaceholderText('e.g. es'), { target: { value: 'es' } });
         fireEvent.change(screen.getByPlaceholderText('0.42'), { target: { value: '0.42' } });
         fireEvent.change(screen.getByPlaceholderText('7'), { target: { value: '7' } });
@@ -198,15 +202,13 @@ export function registerJobActionTests() {
               studyTextVoiceAccent: 'british',
               studyTextTtsStrategy: 'dialogue',
               studyTextTtsProvider: 'elevenlabs',
+              studyTextElevenlabsModel: 'eleven_v3',
               studyTextDialogueLanguage: 'es',
               studyTextDialogueStability: 0.42,
               studyTextDialogueSeed: 7,
             }),
           );
         });
-        expect(vi.mocked(api.rerunJob).mock.calls.at(-1)?.[1]).not.toHaveProperty(
-          'studyTextElevenlabsModel',
-        );
       },
       INTEGRATION_TEST_TIMEOUT_MS,
     );
@@ -304,6 +306,111 @@ export function registerJobActionTests() {
           'dialogue',
         );
         expect(within(studyModel).getByRole('option', { name: 'eleven_v3' })).toBeTruthy();
+      },
+      INTEGRATION_TEST_TIMEOUT_MS,
+    );
+
+    it(
+      'disables publish model selection in auto mode and filters elevenlabs models by strategy',
+      async () => {
+        const user = createMinimalUser();
+        await renderPublishedAssignment();
+
+        const strategySelect = screen.getByRole('combobox', { name: /Study text strategy/i });
+        const modelSelect = screen.getByRole('combobox', { name: /TTS model/i });
+
+        expect((strategySelect as HTMLSelectElement).value).toBe('auto');
+        expect((modelSelect as HTMLSelectElement).disabled).toBe(true);
+        expect(screen.getByText(/Auto follows the draft at runtime/i)).toBeTruthy();
+
+        await user.selectOptions(strategySelect, 'dialogue');
+        await waitFor(() => {
+          expect((modelSelect as HTMLSelectElement).value).toBe('eleven_v3');
+        });
+        expect(
+          within(modelSelect)
+            .getAllByRole('option')
+            .map((option) => option.textContent),
+        ).toEqual(['eleven_v3']);
+
+        await user.selectOptions(strategySelect, 'tts');
+        await waitFor(() => {
+          expect((modelSelect as HTMLSelectElement).disabled).toBe(false);
+        });
+        expect(within(modelSelect).queryByRole('option', { name: 'eleven_v3' })).toBeNull();
+      },
+      INTEGRATION_TEST_TIMEOUT_MS,
+    );
+
+    it(
+      'publishes explicit dialogue strategy with eleven_v3 and google strategy with google model',
+      async () => {
+        const { user } = await renderPreviewReadyAssignment();
+
+        await user.selectOptions(
+          screen.getByRole('combobox', { name: /Study text strategy/i }),
+          'dialogue',
+        );
+        await waitFor(() => {
+          expect(
+            (screen.getByRole('combobox', { name: /TTS model/i }) as HTMLSelectElement).value,
+          ).toBe('eleven_v3');
+        });
+        await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
+
+        await waitFor(() => {
+          expect(api.materializeDraft).toHaveBeenCalled();
+        });
+        expect(vi.mocked(api.materializeDraft).mock.calls.at(-1)?.[1]?.jobOverrides).toEqual(
+          expect.objectContaining({
+            publishTarget: 'html',
+            withTts: true,
+            ttsProvider: 'elevenlabs',
+            ttsStrategy: 'dialogue',
+            studyTextElevenlabsModel: 'eleven_v3',
+          }),
+        );
+
+        vi.mocked(api.materializeDraft).mockClear();
+        await user.selectOptions(screen.getByRole('combobox', { name: /TTS provider/i }), 'google');
+        await user.selectOptions(screen.getByRole('combobox', { name: /TTS model/i }), 'studio');
+        await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
+
+        await waitFor(() => {
+          expect(api.materializeDraft).toHaveBeenCalled();
+        });
+        expect(vi.mocked(api.materializeDraft).mock.calls.at(-1)?.[1]?.jobOverrides).toEqual(
+          expect.objectContaining({
+            publishTarget: 'html',
+            withTts: true,
+            ttsProvider: 'google',
+            ttsStrategy: 'dialogue',
+            googleTtsModel: 'studio',
+          }),
+        );
+      },
+      INTEGRATION_TEST_TIMEOUT_MS,
+    );
+
+    it(
+      'limits publish study-text strategies to the advertised job options',
+      async () => {
+        const defaultOptions = await api.fetchJobOptions();
+        vi.mocked(api.fetchJobOptions).mockReset();
+        vi.mocked(api.fetchJobOptions).mockResolvedValueOnce({
+          ...defaultOptions,
+          ttsStrategies: ['auto'],
+        });
+
+        await renderPreviewReadyAssignment();
+
+        const strategySelect = screen.getByRole('combobox', { name: /Study text strategy/i });
+        expect(
+          within(strategySelect)
+            .getAllByRole('option')
+            .map((option) => option.textContent),
+        ).toEqual(['Auto from draft']);
+        expect((strategySelect as HTMLSelectElement).value).toBe('auto');
       },
       INTEGRATION_TEST_TIMEOUT_MS,
     );

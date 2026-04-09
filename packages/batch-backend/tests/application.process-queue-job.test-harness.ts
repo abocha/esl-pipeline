@@ -81,6 +81,8 @@ export function makeJob(overrides: Partial<JobRecord> = {}): JobRecord {
     notionDatabase: 'db-123',
     publishTarget: 'notion',
     ttsStrategy: 'auto',
+    ttsProvider: 'elevenlabs',
+    studyTextElevenlabsModel: null,
     createdAt: now,
     updatedAt: now,
     startedAt: null,

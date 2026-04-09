@@ -82,6 +82,8 @@ describe('application/process-queue-job', () => {
       notionDatabase: initial.notionDatabase,
       publishTarget: initial.publishTarget,
       ttsStrategy: initial.ttsStrategy,
+      ttsProvider: initial.ttsProvider,
+      studyTextElevenlabsModel: undefined,
     });
     expect(path.isAbsolute(payload.md)).toBe(true);
     if (initial.md == null) {
@@ -116,6 +118,39 @@ describe('application/process-queue-job', () => {
       type: 'job_state_changed',
       job: succeeded,
     });
+  });
+
+  it('forwards explicit study-text elevenlabs model on new assignment publish jobs', async () => {
+    const initial = makeJob({
+      state: 'queued',
+      ttsProvider: 'elevenlabs',
+      ttsStrategy: 'dialogue',
+      studyTextElevenlabsModel: 'eleven_v3',
+    });
+    getJobByIdSpy.mockResolvedValue(initial);
+
+    const running = makeJob({ ...initial, state: 'running' });
+    const succeeded = {
+      ...running,
+      state: 'succeeded',
+      finishedAt: new Date('2024-01-01T10:02:00Z'),
+    };
+    updateJobStateAndResultSpy
+      .mockResolvedValueOnce(running as any)
+      .mockResolvedValueOnce(succeeded as any);
+    runAssignmentJobSpy.mockResolvedValue({ manifestPath: '/manifests/job-1.json' });
+
+    await processQueueJob({ jobId: 'job-1' });
+
+    expect(runAssignmentJobSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ttsProvider: 'elevenlabs',
+        ttsStrategy: 'dialogue',
+        studyTextElevenlabsModel: 'eleven_v3',
+      }),
+      expect.any(String),
+      expect.anything(),
+    );
   });
 
   it('does not process when queued -> running optimistic update fails (state race)', async () => {

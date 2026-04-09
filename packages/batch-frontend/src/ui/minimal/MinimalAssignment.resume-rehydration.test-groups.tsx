@@ -575,6 +575,7 @@ export function registerResumePresetRaceTests() {
           publishTarget: 'html',
           withTts: true,
           ttsProvider: 'elevenlabs',
+          ttsStrategy: 'auto',
         });
       },
       INTEGRATION_TEST_TIMEOUT_MS,
@@ -693,8 +694,122 @@ export function registerResumePresetRaceTests() {
         learningPresetId: 'general-english',
         withTts: true,
         ttsProvider: 'elevenlabs',
+        ttsStrategy: 'auto',
       });
       expect(publishCall?.jobOverrides).not.toHaveProperty('preset');
     });
+
+    it('rehydrates explicit publish strategy and elevenlabs model from resumed job status', async () => {
+      vi.mocked(api.listUserJobs).mockResolvedValueOnce({
+        jobs: [
+          makeJobStatus({
+            jobId: 'job-dialogue-1',
+            draftId: 'draft-1',
+            state: 'succeeded',
+          }),
+        ],
+        total: 1,
+        limit: 20,
+        offset: 0,
+      });
+      vi.mocked(api.getJobStatus).mockResolvedValueOnce(
+        makeJobStatus({
+          jobId: 'job-dialogue-1',
+          draftId: 'draft-1',
+          state: 'succeeded',
+          ttsProvider: 'elevenlabs',
+          ttsStrategy: 'dialogue',
+          studyTextElevenlabsModel: 'eleven_v3',
+        }),
+      );
+
+      globalThis.history.replaceState(null, '', '/?jobId=job-dialogue-1');
+      renderMinimalAssignment();
+
+      await waitFor(() => {
+        expect(api.getJobStatus).toHaveBeenCalledWith('job-dialogue-1');
+      });
+      expect(
+        (
+          (await screen.findByRole('combobox', {
+            name: /Study text strategy/i,
+          })) as HTMLSelectElement
+        ).value,
+      ).toBe('dialogue');
+      expect(
+        (screen.getByRole('combobox', { name: /TTS model/i }) as HTMLSelectElement).value,
+      ).toBe('eleven_v3');
+    });
+
+    it(
+      'preserves resumed publish strategy until delayed job options finish loading',
+      async () => {
+        let resolveJobOptions: (value: Awaited<ReturnType<typeof api.fetchJobOptions>>) => void =
+          () => {};
+
+        vi.mocked(api.fetchJobOptions).mockReset();
+        vi.mocked(api.fetchJobOptions).mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              resolveJobOptions = resolve;
+            }),
+        );
+        vi.mocked(api.listUserJobs).mockResolvedValueOnce({
+          jobs: [
+            makeJobStatus({
+              jobId: 'job-dialogue-race',
+              draftId: 'draft-1',
+              state: 'succeeded',
+            }),
+          ],
+          total: 1,
+          limit: 20,
+          offset: 0,
+        });
+        vi.mocked(api.getJobStatus).mockResolvedValueOnce(
+          makeJobStatus({
+            jobId: 'job-dialogue-race',
+            draftId: 'draft-1',
+            state: 'succeeded',
+            ttsProvider: 'elevenlabs',
+            ttsStrategy: 'dialogue',
+            studyTextElevenlabsModel: 'eleven_v3',
+          }),
+        );
+
+        globalThis.history.replaceState(null, '', '/?jobId=job-dialogue-race');
+        renderMinimalAssignment();
+
+        await waitFor(() => {
+          expect(api.getJobStatus).toHaveBeenCalledWith('job-dialogue-race');
+        });
+        const strategySelect = (await screen.findByRole('combobox', {
+          name: /Study text strategy/i,
+        })) as HTMLSelectElement;
+        const modelSelect = screen.getByRole('combobox', {
+          name: /TTS model/i,
+        }) as HTMLSelectElement;
+
+        expect(strategySelect.value).toBe('dialogue');
+        expect(modelSelect.value).toBe('eleven_v3');
+
+        resolveJobOptions({
+          presets: ['b2-default'],
+          cefrLevels: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'],
+          cefrDefault: 'B1',
+          voiceAccents: ['american'],
+          voices: [{ id: 'voice-a', name: 'Voice A', accent: 'american' }],
+          notionDatabases: [{ id: 'db-1', name: 'DB One' }],
+          ttsStrategies: ['auto', 'dialogue', 'tts'],
+          supportedActions: [],
+        });
+
+        await waitFor(() => {
+          expect(strategySelect.value).toBe('dialogue');
+        });
+        expect(modelSelect.value).toBe('eleven_v3');
+      },
+      INTEGRATION_TEST_TIMEOUT_MS,
+    );
   });
 }
