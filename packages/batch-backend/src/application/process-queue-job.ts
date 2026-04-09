@@ -216,6 +216,7 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
                 publishTarget: running.publishTarget ?? undefined,
                 ttsStrategy: running.ttsStrategy ?? undefined,
                 ttsProvider: running.ttsProvider ?? userSettingsTtsProvider ?? undefined,
+                studyTextElevenlabsModel: running.studyTextElevenlabsModel ?? undefined,
                 googleTtsModel: running.googleTtsModel ?? undefined,
                 settings: userSettings,
               },

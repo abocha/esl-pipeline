@@ -5,6 +5,12 @@ import type { JobState } from '@esl-pipeline/contracts';
 
 import { getJobSummaryWithDefaults } from '../../application/job-summary.js';
 import { listJobsWithDefaults } from '../../application/list-jobs.js';
+import {
+  publishElevenLabsModelSchema,
+  publishGoogleTtsModelSchema,
+  publishTtsProviderSchema,
+  publishTtsStrategySchema,
+} from '../../application/publish-study-text-overrides.js';
 import { getReadinessMetricsWithDefaults } from '../../application/readiness-metrics.js';
 import { SubmitJobRequest, submitJob, ValidationError } from '../../application/submit-job.js';
 import type { BatchBackendConfig } from '../../config/env.js';
@@ -845,9 +851,10 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
       voiceId: z.string().min(1).optional(),
       forceTts: z.boolean().optional(),
       notionDatabase: z.string().min(1).optional(),
-      ttsStrategy: z.enum(['auto', 'dialogue', 'tts']).optional(),
-      ttsProvider: z.enum(['elevenlabs', 'google']).optional(),
-      googleTtsModel: z.enum(['chirp3_hd', 'studio', 'neural2', 'wavenet']).optional(),
+      ttsStrategy: publishTtsStrategySchema.optional(),
+      ttsProvider: publishTtsProviderSchema.optional(),
+      studyTextElevenlabsModel: publishElevenLabsModelSchema.optional(),
+      googleTtsModel: publishGoogleTtsModelSchema.optional(),
     });
 
     try {
@@ -863,6 +870,7 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
         notionDatabase: validatedData.notionDatabase,
         ttsStrategy: validatedData.ttsStrategy,
         ttsProvider: validatedData.ttsProvider,
+        studyTextElevenlabsModel: validatedData.studyTextElevenlabsModel,
         googleTtsModel: validatedData.googleTtsModel,
         userId: authenticatedUser.id,
       });

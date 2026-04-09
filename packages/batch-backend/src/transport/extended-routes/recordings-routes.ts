@@ -16,11 +16,19 @@ import { listRecordingsWithDefaults } from '../../application/list-recordings.js
 import { materializeDraft } from '../../application/materialize-draft.js';
 import { ProfilePathError } from '../../application/profile-path.js';
 import { PromptOptionError } from '../../application/prompt-options.js';
+import {
+  collectPublishStudyTextOverrideIssues,
+  publishElevenLabsModelSchema,
+  publishGoogleTtsModelSchema,
+  publishTtsProviderSchema,
+  publishTtsStrategySchema,
+} from '../../application/publish-study-text-overrides.js';
 import { recordingToDto } from '../../application/recording-dto.js';
 import {
   RecordingRetryError,
   retryRecordingTranscription,
 } from '../../application/retry-recording-transcription.js';
+import { ValidationError } from '../../application/submit-job.js';
 import { updateRecordingTranscript } from '../../application/update-recording-transcript.js';
 import { RecordingSourceSchema, RecordingStatusSchema } from '../../domain/recording-model.js';
 import {
@@ -50,6 +58,21 @@ type RecordingUploadRequest = FastifyRequest & {
     throwFileSizeLimit?: boolean;
   }) => Promise<MultipartFile | undefined>;
 };
+
+function isApplicationValidationError(
+  error: unknown,
+): error is ValidationError & { code?: string } {
+  return (
+    error instanceof ValidationError ||
+    (typeof error === 'object' &&
+      error !== null &&
+      'name' in error &&
+      error.name === 'ValidationError' &&
+      'message' in error &&
+      typeof error.message === 'string' &&
+      (!('code' in error) || typeof error.code === 'string'))
+  );
+}
 
 export function registerRecordingRoutes(
   app: FastifyInstance,
@@ -632,6 +655,13 @@ export function registerRecordingRoutes(
             details: error.issues,
           });
         }
+        if (isApplicationValidationError(error)) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: error.message,
+            code: error.code,
+          });
+        }
 
         logger.error(error instanceof Error ? error : String(error), {
           event: 'http_request',
@@ -852,6 +882,13 @@ export function registerRecordingRoutes(
             details: error.issues,
           });
         }
+        if (isApplicationValidationError(error)) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: error.message,
+            code: error.code,
+          });
+        }
 
         logger.error(error instanceof Error ? error : String(error), {
           event: 'http_request',
@@ -918,20 +955,37 @@ export function registerRecordingRoutes(
       const { draftId } = request.params as { draftId: string };
       const routePath = resolveRoutePath(request, 'POST /drafts/:draftId/materialize');
 
-      const jobOverridesSchema = z.object({
-        learningPresetId: z.string().min(1).optional(),
-        notionDatabase: z.string().min(1).optional(),
-        publishTarget: z.enum(['notion', 'anytype', 'html']).optional(),
-        withTts: z.boolean().optional(),
-        forceTts: z.boolean().optional(),
-        ttsStrategy: z.enum(['auto', 'dialogue', 'tts']).optional(),
-        ttsProvider: z.enum(['elevenlabs', 'google']).optional(),
-        googleTtsModel: z.enum(['chirp3_hd', 'studio', 'neural2', 'wavenet']).optional(),
-        upload: z.enum(['auto', 's3', 'none']).optional(),
-        voiceId: z.string().min(1).optional(),
-        voiceAccent: z.string().min(1).optional(),
-        autoPublish: z.boolean().optional(),
-      });
+      const jobOverridesSchema = z
+        .object({
+          learningPresetId: z.string().min(1).optional(),
+          notionDatabase: z.string().min(1).optional(),
+          publishTarget: z.enum(['notion', 'anytype', 'html']).optional(),
+          withTts: z.boolean().optional(),
+          forceTts: z.boolean().optional(),
+          ttsStrategy: publishTtsStrategySchema.optional(),
+          ttsProvider: publishTtsProviderSchema.optional(),
+          studyTextElevenlabsModel: publishElevenLabsModelSchema.optional(),
+          googleTtsModel: publishGoogleTtsModelSchema.optional(),
+          upload: z.enum(['auto', 's3', 'none']).optional(),
+          voiceId: z.string().min(1).optional(),
+          voiceAccent: z.string().min(1).optional(),
+          autoPublish: z.boolean().optional(),
+        })
+        .superRefine((value, ctx) => {
+          const issues = collectPublishStudyTextOverrideIssues({
+            ttsStrategy: value.ttsStrategy,
+            ttsProvider: value.ttsProvider,
+            studyTextElevenlabsModel: value.studyTextElevenlabsModel,
+            googleTtsModel: value.googleTtsModel,
+          });
+          for (const issue of issues) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: issue.path,
+              message: issue.message,
+            });
+          }
+        });
 
       const schema = z.object({
         jobId: z.string().min(1).optional(),
@@ -971,6 +1025,13 @@ export function registerRecordingRoutes(
             error: 'validation_failed',
             message: 'Invalid request body',
             details: error.issues,
+          });
+        }
+        if (isApplicationValidationError(error)) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: error.message,
+            code: error.code,
           });
         }
 

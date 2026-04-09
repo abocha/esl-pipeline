@@ -16,6 +16,7 @@ describe('MinimalAssignment logic helpers', () => {
       buildPublishJobOverrides({
         publishTarget: 'html',
         selectedTtsProvider: 'google',
+        selectedTtsStrategy: 'tts',
         selectedTtsModel: 'studio',
         selectedPreset: 'general-english-intensive',
         validPresetIds: ['general-english-intensive'],
@@ -25,16 +26,18 @@ describe('MinimalAssignment logic helpers', () => {
       publishTarget: 'html',
       withTts: true,
       ttsProvider: 'google',
+      ttsStrategy: 'tts',
       googleTtsModel: 'studio',
       learningPresetId: 'general-english-intensive',
     });
   });
 
-  it('omits invalid preset and blank google model overrides', () => {
+  it('omits invalid preset and blank elevenlabs model overrides in auto mode', () => {
     expect(
       buildPublishJobOverrides({
         publishTarget: 'notion',
         selectedTtsProvider: 'elevenlabs',
+        selectedTtsStrategy: 'auto',
         selectedTtsModel: '  ',
         selectedPreset: 'legacy',
         validPresetIds: ['general-english-intensive'],
@@ -44,6 +47,27 @@ describe('MinimalAssignment logic helpers', () => {
       publishTarget: 'notion',
       withTts: true,
       ttsProvider: 'elevenlabs',
+      ttsStrategy: 'auto',
+    });
+  });
+
+  it('includes explicit elevenlabs study-text model outside auto mode', () => {
+    expect(
+      buildPublishJobOverrides({
+        publishTarget: 'html',
+        selectedTtsProvider: 'elevenlabs',
+        selectedTtsStrategy: 'dialogue',
+        selectedTtsModel: 'eleven_v3',
+        selectedPreset: '',
+        validPresetIds: [],
+        learningPresetCatalogEnabled: false,
+      }),
+    ).toEqual({
+      publishTarget: 'html',
+      withTts: true,
+      ttsProvider: 'elevenlabs',
+      ttsStrategy: 'dialogue',
+      studyTextElevenlabsModel: 'eleven_v3',
     });
   });
 

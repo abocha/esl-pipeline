@@ -136,6 +136,26 @@ export function registerPromptEditorTests() {
       });
       expect(screen.getByDisplayValue('Prompt package output')).toBeTruthy();
     });
+
+    it('sends teacher notes into prompt package generation', async () => {
+      const user = createMinimalUser();
+      renderMinimalAssignment();
+
+      await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+      await screen.findByDisplayValue('Student transcript text');
+
+      const teacherNotesInput = screen.getByRole('textbox', { name: /Teacher notes/i });
+      await user.type(teacherNotesInput, ' Focus on article usage and stress patterns. ');
+      await user.click(screen.getByRole('button', { name: /Generate prompt/i }));
+
+      await waitFor(() => {
+        expect(api.createPromptPackage).toHaveBeenCalledWith('rec-1', {
+          notes: 'Focus on article usage and stress patterns.',
+          templateId: 'tpl-default',
+          profileId: 'profile-default.md',
+        });
+      });
+    });
   });
 }
 

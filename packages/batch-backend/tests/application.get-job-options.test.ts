@@ -234,6 +234,16 @@ describe('application/get-job-options', () => {
       { id: 'notion-db-b1', name: 'B1 Lessons' },
       { id: 'notion-db-b2', name: 'B2 Lessons' },
     ]);
+    expect(
+      result.generation?.modelOptions
+        .filter((option) => option.provider === 'google_ai_studio')
+        .map((option) => option.id),
+    ).toEqual(
+      expect.arrayContaining([
+        'gemma-4-31b-it',
+        'gemma-4-26b-a4b-it',
+      ]),
+    );
     expect(result.voiceAccents.length).toBeGreaterThan(0);
     expect(Array.isArray(result.voices)).toBe(true);
     expect(result.supportedActions).toHaveLength(3);

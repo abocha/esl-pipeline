@@ -1,4 +1,5 @@
 import type {
+  ElevenLabsTtsModelId,
   GenerateDraftResponse,
   GoogleTtsModel,
   JobConfigOverrides,
@@ -10,6 +11,7 @@ export type MinimalPublishTarget = 'notion' | 'anytype' | 'html';
 export interface PublishJobOverridesInput {
   publishTarget: MinimalPublishTarget;
   selectedTtsProvider: 'elevenlabs' | 'google';
+  selectedTtsStrategy: 'auto' | 'dialogue' | 'tts';
   selectedTtsModel: string;
   selectedPreset: string;
   validPresetIds: readonly string[];
@@ -18,7 +20,13 @@ export interface PublishJobOverridesInput {
 
 export type PublishJobOverrides = Pick<
   JobConfigOverrides,
-  'publishTarget' | 'withTts' | 'ttsProvider' | 'googleTtsModel' | 'learningPresetId'
+  | 'publishTarget'
+  | 'withTts'
+  | 'ttsProvider'
+  | 'ttsStrategy'
+  | 'studyTextElevenlabsModel'
+  | 'googleTtsModel'
+  | 'learningPresetId'
 >;
 
 export interface DraftPreviewGate {
@@ -100,10 +108,13 @@ export function buildPublishJobOverrides(input: PublishJobOverridesInput): Publi
     publishTarget: input.publishTarget,
     withTts: true,
     ttsProvider: input.selectedTtsProvider,
+    ttsStrategy: input.selectedTtsStrategy,
   };
 
   if (input.selectedTtsProvider === 'google' && input.selectedTtsModel.trim()) {
     overrides.googleTtsModel = input.selectedTtsModel.trim() as GoogleTtsModel;
+  } else if (input.selectedTtsStrategy !== 'auto' && input.selectedTtsModel.trim()) {
+    overrides.studyTextElevenlabsModel = input.selectedTtsModel.trim() as ElevenLabsTtsModelId;
   }
 
   if (

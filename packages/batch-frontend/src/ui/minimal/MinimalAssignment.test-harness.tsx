@@ -126,6 +126,7 @@ export function makeJobStatus(overrides: Partial<api.JobStatus> = {}): api.JobSt
     publishTarget: 'html',
     ttsStrategy: 'auto',
     ttsProvider: 'elevenlabs',
+    studyTextElevenlabsModel: null,
     googleTtsModel: null,
     autoPublish: false,
     notionUrl: null,
@@ -286,7 +287,7 @@ export async function waitForResumedPromptReady(text = 'Prompt package output') 
 }
 
 export async function waitForJobActionsReady(jobId = 'job-1') {
-  await screen.findByRole('heading', { name: /7\. Job actions/i }, { timeout: UI_WAIT_TIMEOUT_MS });
+  await screen.findByRole('heading', { name: /8\. Job actions/i }, { timeout: UI_WAIT_TIMEOUT_MS });
   await waitFor(
     () => {
       expect(screen.getAllByText(new RegExp(`Job ID: ${jobId}`, 'i')).length).toBeGreaterThan(0);
@@ -505,7 +506,7 @@ export function setupMinimalAssignmentTest() {
     ttsStrategies: ['auto', 'dialogue', 'tts'],
     ttsProviders: ['elevenlabs', 'google'],
     ttsModelOptionsByProvider: {
-      elevenlabs: ['eleven_multilingual_v2'],
+      elevenlabs: ['eleven_v3', 'eleven_multilingual_v2', 'eleven_flash_v2_5', 'eleven_flash_v2'],
       google: ['chirp3_hd', 'studio', 'neural2', 'wavenet'],
     },
     defaultTtsProvider: 'elevenlabs',

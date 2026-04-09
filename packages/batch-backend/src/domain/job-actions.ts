@@ -6,7 +6,6 @@ import {
   type JobActionRequest,
   type JobActionResponse,
   JobActionType,
-  type JobConfigOverrides,
 } from '@esl-pipeline/contracts';
 
 export { JobActionType } from '@esl-pipeline/contracts';
@@ -16,6 +15,9 @@ type RerunPayload = NonNullable<
 >;
 type CancelPayload = NonNullable<
   Extract<JobActionRequest, { type: JobActionType.CANCEL }>['payload']
+>;
+type EditMetadataPayload = NonNullable<
+  Extract<JobActionRequest, { type: JobActionType.EDIT_METADATA }>['payload']
 >;
 
 /**
@@ -48,7 +50,7 @@ export interface CancelJobAction extends JobAction {
  */
 export interface EditMetadataAction extends JobAction {
   type: JobActionType.EDIT_METADATA;
-  payload: JobConfigOverrides;
+  payload: EditMetadataPayload;
 }
 
 /**

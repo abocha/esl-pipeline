@@ -114,6 +114,85 @@ describe('application/job-actions/edit-metadata', () => {
     );
   });
 
+  it('rejects invalid publish study-text model combinations after applying effective overrides', async () => {
+    vi.spyOn(jobRepository, 'getJobById').mockResolvedValue({
+      ...baseJob,
+      ttsProvider: 'elevenlabs',
+      ttsStrategy: 'auto',
+    });
+
+    const result = await editMetadata('job-1', {
+      type: JobActionType.EDIT_METADATA,
+      requestedAt: new Date(),
+      payload: { studyTextElevenlabsModel: 'eleven_v3' },
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('validation_failed');
+    expect(result.message).toContain('Automatic ElevenLabs publish jobs');
+  });
+
+  it('clears a persisted elevenlabs publish model when switching provider to google', async () => {
+    vi.spyOn(jobRepository, 'getJobById').mockResolvedValue({
+      ...baseJob,
+      ttsProvider: 'elevenlabs',
+      ttsStrategy: 'dialogue',
+      studyTextElevenlabsModel: 'eleven_v3',
+    });
+    vi.spyOn(jobEvents, 'publishJobEvent').mockImplementation(() => {});
+    vi.spyOn(jobRepository, 'updateJobMetadata').mockResolvedValue({
+      ...baseJob,
+      ttsProvider: 'google',
+      ttsStrategy: 'dialogue',
+      studyTextElevenlabsModel: null,
+    });
+
+    const result = await editMetadata('job-1', {
+      type: JobActionType.EDIT_METADATA,
+      requestedAt: new Date(),
+      payload: { ttsProvider: 'google' },
+    });
+
+    expect(result.success).toBe(true);
+    expect(jobRepository.updateJobMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'job-1',
+        ttsProvider: 'google',
+        studyTextElevenlabsModel: null,
+      }),
+    );
+  });
+
+  it('accepts an explicit null study-text elevenlabs model to clear persisted publish metadata', async () => {
+    vi.spyOn(jobRepository, 'getJobById').mockResolvedValue({
+      ...baseJob,
+      ttsProvider: 'elevenlabs',
+      ttsStrategy: 'dialogue',
+      studyTextElevenlabsModel: 'eleven_v3',
+    });
+    vi.spyOn(jobEvents, 'publishJobEvent').mockImplementation(() => {});
+    vi.spyOn(jobRepository, 'updateJobMetadata').mockResolvedValue({
+      ...baseJob,
+      ttsProvider: 'elevenlabs',
+      ttsStrategy: 'dialogue',
+      studyTextElevenlabsModel: null,
+    });
+
+    const result = await editMetadata('job-1', {
+      type: JobActionType.EDIT_METADATA,
+      requestedAt: new Date(),
+      payload: { studyTextElevenlabsModel: null },
+    });
+
+    expect(result.success).toBe(true);
+    expect(jobRepository.updateJobMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'job-1',
+        studyTextElevenlabsModel: null,
+      }),
+    );
+  });
+
   it('returns no-op when metadata payload does not change effective values', async () => {
     vi.spyOn(jobRepository, 'getJobById').mockResolvedValue({
       ...baseJob,

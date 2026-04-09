@@ -51,6 +51,7 @@ function buildApprovalJob(withTts: boolean): JobRecord {
     forceTts: null,
     notionDatabase: null,
     ttsStrategy: 'dialogue',
+    studyTextElevenlabsModel: null,
     notionUrl: null,
     createdAt: new Date('2024-01-01T00:00:00Z'),
     updatedAt: new Date('2024-01-01T00:00:00Z'),
@@ -124,6 +125,7 @@ describe('application/create-approval-job', () => {
       publishTarget: 'notion',
       ttsStrategy: 'dialogue',
       ttsProvider: undefined,
+      studyTextElevenlabsModel: undefined,
       googleTtsModel: undefined,
       voiceAccent: 'british',
       voiceId: undefined,
@@ -175,6 +177,7 @@ describe('application/create-approval-job', () => {
       expect.objectContaining({
         withTts: true,
         ttsProvider: 'google',
+        studyTextElevenlabsModel: undefined,
         googleTtsModel: 'chirp3_hd',
       }),
     );
@@ -222,7 +225,46 @@ describe('application/create-approval-job', () => {
       expect.objectContaining({
         withTts: false,
         ttsProvider: 'google',
+        studyTextElevenlabsModel: undefined,
         googleTtsModel: 'studio',
+      }),
+    );
+  });
+
+  it('persists explicit elevenlabs publish model overrides', async () => {
+    const draft = buildDraft();
+    const promptPackage = buildPromptPackage();
+    const approvalJob = buildApprovalJob(true);
+    const insertApprovalJob = vi.fn().mockResolvedValue(approvalJob);
+    const publishEvent = vi.fn();
+    const config = loadConfig();
+
+    await createApprovalJobFromDraft(
+      {
+        draft,
+        promptPackage,
+        jobOverrides: {
+          ttsProvider: 'elevenlabs',
+          ttsStrategy: 'dialogue',
+          studyTextElevenlabsModel: 'eleven_v3',
+        },
+      },
+      {
+        jobs: { insertApprovalJob },
+        settings: {
+          getByUserId: vi.fn().mockResolvedValue(buildSettings()),
+          createDefault: vi.fn(),
+        },
+        config,
+        publishEvent,
+      },
+    );
+
+    expect(insertApprovalJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ttsProvider: 'elevenlabs',
+        ttsStrategy: 'dialogue',
+        studyTextElevenlabsModel: 'eleven_v3',
       }),
     );
   });

@@ -8,6 +8,7 @@
 - [ ] `pnpm format`
 - [ ] `pnpm run lint:repo-hygiene`
 - [ ] `pnpm check:fast`
+- [ ] `pnpm release:verify:contracts` and `pnpm --filter @esl-pipeline/batch-backend run db:verify-baseline` when migrations/schema/contracts changed
 - [ ] Targeted package tests (if applicable)
 - [ ] Manual smoke test (if applicable)
 

@@ -631,6 +631,7 @@ export async function newAssignment(
               force: flags.force || flags.redoTts,
               defaultAccent: flags.accentPreference,
               defaultVoiceId: flags.voiceId,
+              modelId: flags.studyTextElevenlabsModel,
               ttsProvider: flags.ttsProvider,
               googleTtsModel: flags.googleTtsModel,
 

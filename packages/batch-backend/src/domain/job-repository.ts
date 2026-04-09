@@ -13,6 +13,7 @@ import { withPgClient } from '../infrastructure/db.js';
 import { logger } from '../infrastructure/logger.js';
 import {
   assertTransition,
+  ElevenLabsTtsModelId,
   GoogleTtsModel,
   JobRecord,
   JobState,
@@ -58,6 +59,7 @@ interface JobRow {
   publish_target: string | null;
   mode: string | null;
   tts_provider: string | null;
+  study_text_elevenlabs_model: string | null;
   google_tts_model: string | null;
   notion_url: string | null;
   anytype_url: string | null;
@@ -92,6 +94,7 @@ export interface InsertJobParams {
   publishTarget?: PublishTarget;
   ttsStrategy?: TtsStrategy;
   ttsProvider?: TtsProviderId;
+  studyTextElevenlabsModel?: ElevenLabsTtsModelId;
   googleTtsModel?: GoogleTtsModel;
   userId?: string;
   autoPublish?: boolean;
@@ -171,7 +174,8 @@ export interface UpdateJobMetadataParams {
   forceTts?: boolean;
   ttsStrategy?: TtsStrategy;
   ttsProvider?: TtsProviderId;
-  googleTtsModel?: GoogleTtsModel;
+  studyTextElevenlabsModel?: ElevenLabsTtsModelId | null;
+  googleTtsModel?: GoogleTtsModel | null;
   upload?: JobUploadOption | null;
   voiceId?: string;
   voiceAccent?: string;
@@ -215,6 +219,7 @@ async function insertJobWithState(params: InsertJobParams, state: JobState): Pro
         publish_target,
         mode,
         tts_provider,
+        study_text_elevenlabs_model,
         google_tts_model,
         auto_publish,
         source_job_id,
@@ -224,7 +229,7 @@ async function insertJobWithState(params: InsertJobParams, state: JobState): Pro
       )
       VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
-        $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28
+        $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29
       )
       RETURNING
         id,
@@ -251,6 +256,7 @@ async function insertJobWithState(params: InsertJobParams, state: JobState): Pro
         publish_target,
         mode,
         tts_provider,
+        study_text_elevenlabs_model,
         google_tts_model,
         notion_url,
         anytype_url,
@@ -288,6 +294,7 @@ async function insertJobWithState(params: InsertJobParams, state: JobState): Pro
         params.publishTarget ?? null,
         params.ttsStrategy ?? null,
         params.ttsProvider ?? null,
+        params.studyTextElevenlabsModel ?? null,
         params.googleTtsModel ?? null,
         params.autoPublish ?? false,
         params.sourceJobId ?? null,
@@ -334,6 +341,7 @@ export async function getJobById(id: string): Promise<JobRecord | null> {
         j.publish_target,
         j.mode,
         j.tts_provider,
+        j.study_text_elevenlabs_model,
         j.google_tts_model,
         j.notion_url,
         j.anytype_url,
@@ -397,6 +405,7 @@ export async function listJobs(options: JobListOptions): Promise<JobRecord[]> {
         j.publish_target,
         j.mode,
         j.tts_provider,
+        j.study_text_elevenlabs_model,
         j.google_tts_model,
         j.notion_url,
         j.anytype_url,
@@ -731,6 +740,7 @@ export async function updateJobStateAndResult(args: {
         publish_target,
         mode,
         tts_provider,
+        study_text_elevenlabs_model,
         google_tts_model,
         notion_url,
         anytype_url,
@@ -815,6 +825,7 @@ export async function updateJobDraftLink(args: {
         publish_target,
         mode,
         tts_provider,
+        study_text_elevenlabs_model,
         google_tts_model,
         notion_url,
         anytype_url,
@@ -900,6 +911,11 @@ export async function updateJobMetadata(
     updates.push(`tts_provider = $${values.length}`);
   }
 
+  if (params.studyTextElevenlabsModel !== undefined) {
+    values.push(params.studyTextElevenlabsModel);
+    updates.push(`study_text_elevenlabs_model = $${values.length}`);
+  }
+
   if (params.googleTtsModel !== undefined) {
     values.push(params.googleTtsModel);
     updates.push(`google_tts_model = $${values.length}`);
@@ -966,6 +982,7 @@ export async function updateJobMetadata(
         publish_target,
         mode,
         tts_provider,
+        study_text_elevenlabs_model,
         google_tts_model,
         notion_url,
         anytype_url,
@@ -1052,6 +1069,7 @@ export async function approveJob(args: {
         publish_target,
         mode,
         tts_provider,
+        study_text_elevenlabs_model,
         google_tts_model,
         notion_url,
         anytype_url,
@@ -1134,6 +1152,9 @@ function mapRowToJob(row: JobRow): JobRecord {
     publishTarget: normalizePublishTarget(row.publish_target),
     ttsStrategy: normalizeTtsStrategy(row.mode, { jobId: row.id }),
     ttsProvider: normalizeTtsProvider(row.tts_provider, { jobId: row.id }),
+    studyTextElevenlabsModel: normalizeElevenLabsTtsModel(row.study_text_elevenlabs_model, {
+      jobId: row.id,
+    }),
     googleTtsModel: normalizeGoogleTtsModel(row.google_tts_model, { jobId: row.id }),
     notionUrl: row.notion_url ?? null,
     anytypeUrl: row.anytype_url ?? null,
@@ -1214,6 +1235,29 @@ function normalizeTtsProvider(value: unknown, ctx: { jobId: string }): TtsProvid
   }
   throw new Error(
     `Unsupported jobs.tts_provider value type "${typeof value}" for job ${ctx.jobId}; expected null or a TtsProviderId string`,
+  );
+}
+
+function normalizeElevenLabsTtsModel(
+  value: unknown,
+  ctx: { jobId: string },
+): ElevenLabsTtsModelId | null {
+  if (value == null) return null;
+  if (
+    value === 'eleven_v3' ||
+    value === 'eleven_multilingual_v2' ||
+    value === 'eleven_flash_v2_5' ||
+    value === 'eleven_flash_v2'
+  ) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    throw new TypeError(
+      `Unsupported jobs.study_text_elevenlabs_model value "${value}" for job ${ctx.jobId}; migrate legacy rows before running this version`,
+    );
+  }
+  throw new Error(
+    `Unsupported jobs.study_text_elevenlabs_model value type "${typeof value}" for job ${ctx.jobId}; expected null or an ElevenLabsTtsModelId string`,
   );
 }
 

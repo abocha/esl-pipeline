@@ -95,6 +95,9 @@ describe('application/submit-job', () => {
       notionDatabase: request.notionDatabase,
       publishTarget: 'notion',
       ttsStrategy: request.ttsStrategy,
+      ttsProvider: request.ttsProvider,
+      studyTextElevenlabsModel: request.studyTextElevenlabsModel,
+      googleTtsModel: request.googleTtsModel,
       autoPublish: undefined,
       userId: request.userId,
     });
@@ -164,6 +167,7 @@ describe('application/submit-job', () => {
       voiceAccent: fakeJob.voiceAccent,
       forceTts: fakeJob.forceTts,
       ttsProvider: undefined,
+      studyTextElevenlabsModel: undefined,
       googleTtsModel: undefined,
       notionDatabase: fakeJob.notionDatabase,
       publishTarget: 'notion',
@@ -219,6 +223,7 @@ describe('application/submit-job', () => {
       voiceAccent: undefined,
       forceTts: undefined,
       ttsProvider: undefined,
+      studyTextElevenlabsModel: undefined,
       googleTtsModel: undefined,
       notionDatabase: undefined,
       publishTarget: 'notion',
@@ -246,5 +251,36 @@ describe('application/submit-job', () => {
     expect(insertJobSpy).not.toHaveBeenCalled();
     expect(enqueue).not.toHaveBeenCalled();
     expect(publishJobEventSpy).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid publish-side elevenlabs model combinations', async () => {
+    const enqueue = vi.fn().mockResolvedValue(void 0);
+    createJobQueueSpy.mockReturnValue({
+      queue: {} as any,
+      queueEvents: {} as any,
+      enqueue,
+      cancelQueuedJob: vi.fn(),
+    });
+
+    await expect(
+      submitJob({
+        md: 'fixtures/ok.md',
+        ttsProvider: 'elevenlabs',
+        ttsStrategy: 'auto',
+        studyTextElevenlabsModel: 'eleven_v3',
+      }),
+    ).rejects.toThrow(
+      'Automatic ElevenLabs publish jobs must use strategy-default model selection.',
+    );
+
+    await expect(
+      submitJob({
+        md: 'fixtures/ok.md',
+        ttsProvider: 'google',
+        studyTextElevenlabsModel: 'eleven_v3',
+      }),
+    ).rejects.toThrow('studyTextElevenlabsModel must be omitted');
+
+    expect(insertJobSpy).not.toHaveBeenCalled();
   });
 });

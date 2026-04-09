@@ -321,8 +321,8 @@ describeHttpServerIntegrationSuite(
           learningPresetId: 'general-english',
           notionDatabase: 'notion-db',
           withTts: true,
-          ttsProvider: 'google',
-          googleTtsModel: 'chirp3_hd',
+          ttsProvider: 'elevenlabs',
+          studyTextElevenlabsModel: 'eleven_v3',
           forceTts: true,
           ttsStrategy: 'dialogue',
           upload: 's3',
@@ -342,6 +342,63 @@ describeHttpServerIntegrationSuite(
         draftId: 'draft-3',
         jobId: undefined,
         jobOverrides: payload.jobOverrides,
+      });
+    });
+
+    it('POST /drafts/:id/materialize rejects invalid study-text elevenlabs override combinations', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/drafts/draft-3/materialize',
+        payload: {
+          jobOverrides: {
+            withTts: true,
+            ttsProvider: 'elevenlabs',
+            ttsStrategy: 'auto',
+            studyTextElevenlabsModel: 'eleven_v3',
+          },
+        },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toEqual({
+        error: 'validation_failed',
+        message: 'Invalid request body',
+        details: expect.arrayContaining([
+          expect.objectContaining({
+            message: 'Automatic ElevenLabs publish jobs must use strategy-default model selection.',
+            path: ['jobOverrides', 'studyTextElevenlabsModel'],
+          }),
+        ]),
+      });
+    });
+
+    it('POST /drafts/:id/materialize maps ValidationError from defaulted publish overrides to 400', async () => {
+      const { ValidationError } = await import('../src/application/submit-job.js');
+      const materializeDraft = vi.spyOn(materializeDraftModule, 'materializeDraft');
+      materializeDraft.mockClear();
+      materializeDraft.mockRejectedValue(
+        new ValidationError(
+          'Automatic ElevenLabs publish jobs must use strategy-default model selection.',
+          'invalid_study_text_elevenlabs_model_for_strategy',
+        ),
+      );
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/drafts/draft-3/materialize',
+        payload: {
+          jobOverrides: {
+            ttsProvider: 'elevenlabs',
+            studyTextElevenlabsModel: 'eleven_multilingual_v2',
+          },
+        },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toEqual({
+        error: 'validation_failed',
+        message: 'Automatic ElevenLabs publish jobs must use strategy-default model selection.',
+        code: 'invalid_study_text_elevenlabs_model_for_strategy',
       });
     });
 
