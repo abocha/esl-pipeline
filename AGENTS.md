@@ -4,7 +4,7 @@
 
 - Audience: AI agents and maintainers.
 - Authority Level: router + operating contract.
-- Last Verified Against: 2026-04-05 repo state.
+- Last Verified Against: 2026-04-09 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly or after major workflow/tooling changes.
 - Status: `router`.
@@ -26,7 +26,10 @@ Everything below assumes **Node.js 24.11.1+**, pnpm, and system ffmpeg.
 3. [`docs/backend-frontend/backend-frontend-alignment.md`](docs/backend-frontend/backend-frontend-alignment.md) - live capability status.
 4. [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md) - contracts/invariants.
 
-If you are resuming after context loss: start at [`START_HERE.md`](START_HERE.md).
+If you are resuming after context loss: start at
+[`docs/playbooks/RESTART_TOMORROW.md`](docs/playbooks/RESTART_TOMORROW.md), then
+check the live slice in
+[`docs/reference/V1_IMPLEMENTATION_TRACKER.md`](docs/reference/V1_IMPLEMENTATION_TRACKER.md).
 
 ## Plan Continuity Rule (Mandatory)
 

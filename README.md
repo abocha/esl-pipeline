@@ -5,7 +5,10 @@ The operational path is backend-first (`batch-backend` + `batch-frontend`) with 
 
 ## Fast Re-Entry
 
-- If you are resuming after context overload, start at [`START_HERE.md`](START_HERE.md).
+- If you are resuming after context overload, start at
+  [`docs/playbooks/RESTART_TOMORROW.md`](docs/playbooks/RESTART_TOMORROW.md),
+  then check
+  [`docs/reference/V1_IMPLEMENTATION_TRACKER.md`](docs/reference/V1_IMPLEMENTATION_TRACKER.md).
 
 ## What This Repo Is (Current State)
 

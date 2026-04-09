@@ -5,7 +5,7 @@
 - Audience: founder-maintainer and AI execution support.
 - Read Time: 5 minutes.
 - Authority Level: V1 execution source of truth.
-- Last Verified Against: 2026-03-13 repo state.
+- Last Verified Against: 2026-04-09 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: weekly while V1 execution remains active.
 - Status: `roadmap`.
@@ -90,5 +90,4 @@ Targeted follow-through depends on the current slice:
 - broader planning surfaces:
   - [`docs/plans/README.md`](../plans/README.md)
 - weekly reset / low-energy continuity:
-  - [`START_HERE.md`](../../START_HERE.md)
   - [`docs/playbooks/RESTART_TOMORROW.md`](../playbooks/RESTART_TOMORROW.md)

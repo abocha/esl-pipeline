@@ -62,19 +62,21 @@ Success condition: one meaningful roadmap step is closed.
 
 When in doubt, always use this order:
 
-1. WS2A preset plumbing MVP
-2. WS2B direct LLM generation (only after WS2A done)
-3. WS3 TTS fallback
-4. WS5 quota/cost policy
-5. WS4 CRM-lite lesson ledger
-6. Stabilization
+1. The current `Today "Now" slice` in `docs/reference/V1_IMPLEMENTATION_TRACKER.md`
+2. The current stabilization or readiness follow-through named in that tracker
+3. The active plan README linked from `docs/plans/README.md` if the tracker points to a deeper workstream
+4. Reliability-only follow-up if readiness metrics are red
+5. Weekly review cleanup in `docs/playbooks/WEEKLY_PRODUCT_REVIEW_TEMPLATE.md` if you need a low-energy closeout
 
-This order protects architecture and avoids rewrites later.
+This order keeps the restart path aligned with the live tracker instead of a frozen workstream list.
 
 Scope lock reminder:
 
 - In this phase, ship `general-english` preset content only.
-- Baseline prompt is `docs/prompt-gallery/templates/hw_prompt_definitive.md`.
+- Baseline homework method lives in
+  `docs/reference/HOMEWORK_PEDAGOGY_AND_TEMPLATE_SPEC.md`.
+- The bootstrap seed template remains
+  `docs/prompt-gallery/templates/hw_prompt_definitive.md`.
 
 ## Anti-Spiral Rules
 

@@ -5,7 +5,7 @@
 - Audience: founder-maintainer and implementing agents.
 - Read Time: 10 minutes.
 - Authority Level: implementation-driving reference for WS2B OpenAI integration.
-- Last Updated: 2026-02-18.
+- Last Updated: 2026-04-09.
 
 ## Purpose
 
