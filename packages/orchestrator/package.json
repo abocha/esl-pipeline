@@ -44,9 +44,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1019.0",
-    "@elevenlabs/elevenlabs-js": "^2.40.0",
-    "@notionhq/client": "^5.15.0",
+    "@aws-sdk/client-s3": "^3.1027.0",
+    "@elevenlabs/elevenlabs-js": "^2.42.0",
+    "@notionhq/client": "^5.17.0",
     "gray-matter": "^4.0.3",
     "js-yaml": "^4.1.1",
     "remark-parse": "^11.0.0",
@@ -65,10 +65,10 @@
     "@esl-pipeline/tts-core": "workspace:*",
     "@esl-pipeline/tts-provider-elevenlabs": "workspace:*",
     "@esl-pipeline/tts-provider-google": "workspace:*",
-    "@types/node": "^25.5.0",
+    "@types/node": "^25.5.2",
     "tsup": "8.5.1",
     "typescript": "^6.0.2",
-    "vitest": "^4.1.2"
+    "vitest": "^4.1.4"
   },
   "engines": {
     "node": ">=24.11.1"
