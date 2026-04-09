@@ -1,7 +1,21 @@
 # Batch Backend Legacy Schema Inventory
 
-Purpose: Wave 3 inventory of legacy runtime schema patch groups in
-`packages/batch-backend/src/infrastructure/db.ts`, mapped to migration parity.
+## Meta
+
+- Audience: maintainers and implementing agents auditing schema hardening.
+- Read Time: 3 minutes.
+- Authority Level: supporting migration-parity reference for batch-backend schema hardening.
+- Last Verified Against: 2026-04-09 repo state.
+- Owner: backend/frontend maintainers + automation agents.
+- Review Cadence: after migration or legacy-schema compatibility changes.
+- Status: `reference`.
+
+## Purpose
+
+- Map the frozen legacy runtime patch catalog to versioned migration coverage.
+- Support reviews that verify migration-first remains the default schema path.
+- Preserve the Wave 3 inventory of legacy patch groups in
+  `packages/batch-backend/src/infrastructure/db.ts`, mapped to migration parity.
 
 ## Inventory Mapping
 

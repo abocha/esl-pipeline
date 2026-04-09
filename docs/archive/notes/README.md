@@ -6,6 +6,10 @@ Historical notes, correction plans, and implementation memos that are no longer 
 
 - `docs/archive/notes/2026-02/`
 
+## 2026-02 Highlights
+
+- `docs/archive/notes/2026-02/REVIEW.md`
+
 ## Active Replacements
 
 - Docs governance policy: `docs/reference/DOCS_GOVERNANCE.md`
