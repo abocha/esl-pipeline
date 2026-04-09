@@ -2,6 +2,7 @@
 // Minimal job domain model for the batch-backend.
 // Keeps semantics simple and mirrors the `jobs` table schema used in db.ts.
 import type {
+  ElevenLabsTtsModelId,
   GoogleTtsModel,
   JobState,
   JobUploadOption,
@@ -35,6 +36,7 @@ export interface JobRecord {
   publishTarget?: PublishTarget | null;
   ttsStrategy?: TtsStrategy | null;
   ttsProvider?: TtsProviderId | null;
+  studyTextElevenlabsModel?: ElevenLabsTtsModelId | null;
   googleTtsModel?: GoogleTtsModel | null;
   notionUrl?: string | null;
   anytypeUrl?: string | null;
@@ -85,6 +87,7 @@ export function assertTransition(from: JobState, to: JobState): void {
 }
 
 export {
+  type ElevenLabsTtsModelId,
   type GoogleTtsModel,
   type JobState,
   type JobUploadOption,

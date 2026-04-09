@@ -47,6 +47,7 @@ describeHttpServerIntegrationSuite(
         publishTarget: undefined,
         ttsStrategy: undefined,
         ttsProvider: undefined,
+        studyTextElevenlabsModel: undefined,
         googleTtsModel: undefined,
       });
     });
@@ -84,6 +85,7 @@ describeHttpServerIntegrationSuite(
         publishTarget: undefined,
         ttsStrategy: 'dialogue',
         ttsProvider: undefined,
+        studyTextElevenlabsModel: undefined,
         googleTtsModel: undefined,
       });
     });
@@ -114,6 +116,34 @@ describeHttpServerIntegrationSuite(
       );
     });
 
+    it('POST /jobs forwards explicit dialogue study-text elevenlabs model', async () => {
+      const submitJob = vi.spyOn(submitJobModule, 'submitJob');
+      submitJob.mockResolvedValue({ jobId: 'job-eleven-1' });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/jobs',
+        payload: {
+          md: 'fixtures/ok.md',
+          withTts: true,
+          ttsProvider: 'elevenlabs',
+          ttsStrategy: 'dialogue',
+          studyTextElevenlabsModel: 'eleven_v3',
+        },
+      });
+
+      expect(response.statusCode).toBe(202);
+      expect(submitJob).toHaveBeenCalledWith(
+        expect.objectContaining({
+          md: 'fixtures/ok.md',
+          withTts: true,
+          ttsProvider: 'elevenlabs',
+          ttsStrategy: 'dialogue',
+          studyTextElevenlabsModel: 'eleven_v3',
+        }),
+      );
+    });
+
     it('POST /jobs accepts learningPresetId and forwards it', async () => {
       const submitJob = vi.spyOn(submitJobModule, 'submitJob');
       submitJob.mockResolvedValue({ jobId: 'job-345' });
@@ -140,6 +170,7 @@ describeHttpServerIntegrationSuite(
         publishTarget: undefined,
         ttsStrategy: undefined,
         ttsProvider: undefined,
+        studyTextElevenlabsModel: undefined,
         googleTtsModel: undefined,
       });
     });
@@ -243,6 +274,7 @@ describeHttpServerIntegrationSuite(
         publishTarget: null,
         ttsStrategy: 'dialogue',
         ttsProvider: null,
+        studyTextElevenlabsModel: null,
         googleTtsModel: null,
         notionUrl: 'https://notion.so/job-approve-1',
         anytypeUrl: null,
@@ -312,6 +344,9 @@ describeHttpServerIntegrationSuite(
         notionDatabase: 'db-123',
         publishTarget: 'notion',
         ttsStrategy: 'dialogue',
+        ttsProvider: null,
+        studyTextElevenlabsModel: null,
+        googleTtsModel: null,
         autoPublish: null,
         notionUrl: 'https://notion.so/job-1',
         anytypeUrl: null,
@@ -346,6 +381,9 @@ describeHttpServerIntegrationSuite(
         notionDatabase: 'db-123',
         publishTarget: 'notion',
         ttsStrategy: 'dialogue',
+        ttsProvider: null,
+        studyTextElevenlabsModel: null,
+        googleTtsModel: null,
         autoPublish: null,
         notionUrl: 'https://notion.so/job-1',
         anytypeUrl: null,

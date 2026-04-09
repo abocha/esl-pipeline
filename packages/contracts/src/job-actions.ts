@@ -46,6 +46,14 @@ export interface RerunJobPayload {
   pronunciationChunkEdgeVoice?: string;
 }
 
+export type EditMetadataJobPayload = Omit<
+  JobConfigOverrides,
+  'studyTextElevenlabsModel' | 'googleTtsModel'
+> & {
+  studyTextElevenlabsModel?: ElevenLabsTtsModelId | null;
+  googleTtsModel?: GoogleTtsModel | null;
+};
+
 /**
  * Request to execute a job action
  */
@@ -62,7 +70,7 @@ export type JobActionRequest =
     }
   | {
       type: JobActionType.EDIT_METADATA;
-      payload?: JobConfigOverrides;
+      payload?: EditMetadataJobPayload;
     };
 
 /**

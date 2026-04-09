@@ -144,6 +144,12 @@ export interface RunAssignmentPayload {
   publishTarget?: 'notion' | 'anytype' | 'html';
   ttsStrategy?: TtsStrategy | null;
   ttsProvider?: 'elevenlabs' | 'google' | null;
+  studyTextElevenlabsModel?:
+    | 'eleven_v3'
+    | 'eleven_multilingual_v2'
+    | 'eleven_flash_v2_5'
+    | 'eleven_flash_v2'
+    | null;
   googleTtsModel?: 'chirp3_hd' | 'studio' | 'neural2' | 'wavenet' | null;
   settings?: RunJobSettings;
 }

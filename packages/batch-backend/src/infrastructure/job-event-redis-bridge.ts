@@ -39,6 +39,7 @@ interface SerializedJobRecord {
   notionDatabase: string | null;
   ttsStrategy: string | null;
   ttsProvider: string | null;
+  studyTextElevenlabsModel: string | null;
   googleTtsModel: string | null;
   notionUrl: string | null;
   anytypeUrl: string | null;
@@ -302,6 +303,7 @@ function serializeJobRecord(job: JobRecord): SerializedJobRecord {
     notionDatabase: job.notionDatabase ?? null,
     ttsStrategy: job.ttsStrategy ?? null,
     ttsProvider: job.ttsProvider ?? null,
+    studyTextElevenlabsModel: job.studyTextElevenlabsModel ?? null,
     googleTtsModel: job.googleTtsModel ?? null,
     notionUrl: job.notionUrl ?? null,
     anytypeUrl: job.anytypeUrl ?? null,
@@ -334,6 +336,7 @@ function deserializeJobRecord(serialized: SerializedJobRecord): JobRecord {
     notionDatabase: serialized.notionDatabase ?? null,
     ttsStrategy: normalizeTtsStrategy(serialized.ttsStrategy),
     ttsProvider: normalizeTtsProvider(serialized.ttsProvider),
+    studyTextElevenlabsModel: normalizeElevenLabsTtsModel(serialized.studyTextElevenlabsModel),
     googleTtsModel: normalizeGoogleTtsModel(serialized.googleTtsModel),
     notionUrl: serialized.notionUrl ?? null,
     anytypeUrl: serialized.anytypeUrl ?? null,
@@ -366,6 +369,20 @@ function normalizeTtsProvider(value: string | null | undefined): JobRecord['ttsP
 
 function normalizeGoogleTtsModel(value: string | null | undefined): JobRecord['googleTtsModel'] {
   if (value === 'chirp3_hd' || value === 'studio' || value === 'neural2' || value === 'wavenet') {
+    return value;
+  }
+  return null;
+}
+
+function normalizeElevenLabsTtsModel(
+  value: string | null | undefined,
+): JobRecord['studyTextElevenlabsModel'] {
+  if (
+    value === 'eleven_v3' ||
+    value === 'eleven_multilingual_v2' ||
+    value === 'eleven_flash_v2_5' ||
+    value === 'eleven_flash_v2'
+  ) {
     return value;
   }
   return null;

@@ -147,6 +147,10 @@ Use this order when updating tests:
    - `pnpm test:backend:db:worker` when backend PG/Redis behavior changed
 3. Run `pnpm check:fast` before PR when changes have broader behavior risk.
 4. Run `pnpm check` before merge for changes that can affect DB-backed backend or worker behavior.
+5. When touching backend migrations, `packages/batch-backend/schema.sql`, or `packages/contracts/src/contract-versions.ts`, also run:
+   - `pnpm release:verify:contracts`
+   - `pnpm --filter @esl-pipeline/batch-backend run db:verify-baseline`
+   - regenerate baseline first with `pnpm --filter @esl-pipeline/batch-backend run db:generate-baseline` if verification reports drift
 
 ## CI Check Mapping
 
