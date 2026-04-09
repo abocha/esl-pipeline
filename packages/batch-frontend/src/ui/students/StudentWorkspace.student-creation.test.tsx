@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 
@@ -49,7 +49,7 @@ describe('StudentWorkspace student creation', () => {
     await renderWorkspaceForStudentCreation();
 
     await user.click(screen.getByRole('button', { name: /Create Student/i }));
-    await user.type(screen.getByLabelText(/Student Name/i), 'Alex');
+    fireEvent.change(screen.getByLabelText(/Student Name/i), { target: { value: 'Alex' } });
     await user.selectOptions(screen.getByLabelText(/Initial Profile/i), 'profile-alt.md');
     await user.click(screen.getByRole('button', { name: /^Create Student$/i }));
 

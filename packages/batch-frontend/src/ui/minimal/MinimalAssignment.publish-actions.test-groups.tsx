@@ -74,7 +74,9 @@ export function registerPublishValidationTests() {
         throw new Error('Expected draft textarea to be rendered');
       }
       fireEvent.change(draftTextarea, { target: { value: '# Final draft' } });
-      await user.selectOptions(screen.getByRole('combobox', { name: /Preset/i }), 'b2-default');
+      fireEvent.change(screen.getByRole('combobox', { name: /Preset/i }), {
+        target: { value: 'b2-default' },
+      });
       await previewCurrentDraft(user);
       await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
 
@@ -180,10 +182,9 @@ export function registerJobActionTests() {
         fireEvent.change(screen.getByRole('textbox', { name: /Study-text accent/i }), {
           target: { value: 'british' },
         });
-        await user.selectOptions(
-          screen.getByRole('combobox', { name: /Study-text strategy/i }),
-          'dialogue',
-        );
+        fireEvent.change(screen.getByRole('combobox', { name: /Study-text strategy/i }), {
+          target: { value: 'dialogue' },
+        });
         expect(
           (screen.getByRole('combobox', { name: /Study-text model/i }) as HTMLSelectElement).value,
         ).toBe('eleven_v3');
@@ -288,9 +289,11 @@ export function registerJobActionTests() {
         await user.click(screen.getByRole('checkbox', { name: /Study-text audio/i }));
         await user.click(screen.getByRole('checkbox', { name: /Main pronunciation audio/i }));
         await user.click(screen.getByRole('checkbox', { name: /Pronunciation chunk audio/i }));
-        await user.selectOptions(
+        fireEvent.change(
           screen.getByRole('combobox', { name: /Pronunciation chunk provider/i }),
-          'elevenlabs',
+          {
+            target: { value: 'elevenlabs' },
+          },
         );
 
         const studyModel = screen.getByRole('combobox', { name: /Study-text model/i });
@@ -301,10 +304,9 @@ export function registerJobActionTests() {
         expect(within(mainModel).queryByRole('option', { name: 'eleven_v3' })).toBeNull();
         expect(within(chunkModel).queryByRole('option', { name: 'eleven_v3' })).toBeNull();
 
-        await user.selectOptions(
-          screen.getByRole('combobox', { name: /Study-text strategy/i }),
-          'dialogue',
-        );
+        fireEvent.change(screen.getByRole('combobox', { name: /Study-text strategy/i }), {
+          target: { value: 'dialogue' },
+        });
         expect(within(studyModel).getByRole('option', { name: 'eleven_v3' })).toBeTruthy();
       },
       INTEGRATION_TEST_TIMEOUT_MS,
@@ -313,7 +315,6 @@ export function registerJobActionTests() {
     it(
       'disables publish model selection in auto mode and filters elevenlabs models by strategy',
       async () => {
-        const user = createMinimalUser();
         await renderPublishedAssignment();
 
         const strategySelect = screen.getByRole('combobox', { name: /Study text strategy/i });
@@ -323,7 +324,7 @@ export function registerJobActionTests() {
         expect((modelSelect as HTMLSelectElement).disabled).toBe(true);
         expect(screen.getByText(/Auto follows the draft at runtime/i)).toBeTruthy();
 
-        await user.selectOptions(strategySelect, 'dialogue');
+        fireEvent.change(strategySelect, { target: { value: 'dialogue' } });
         await waitFor(() => {
           expect((modelSelect as HTMLSelectElement).value).toBe('eleven_v3');
         });
@@ -333,7 +334,7 @@ export function registerJobActionTests() {
             .map((option) => option.textContent),
         ).toEqual(['eleven_v3']);
 
-        await user.selectOptions(strategySelect, 'tts');
+        fireEvent.change(strategySelect, { target: { value: 'tts' } });
         await waitFor(() => {
           expect((modelSelect as HTMLSelectElement).disabled).toBe(false);
         });
@@ -347,10 +348,9 @@ export function registerJobActionTests() {
       async () => {
         const { user } = await renderPreviewReadyAssignment();
 
-        await user.selectOptions(
-          screen.getByRole('combobox', { name: /Study text strategy/i }),
-          'dialogue',
-        );
+        fireEvent.change(screen.getByRole('combobox', { name: /Study text strategy/i }), {
+          target: { value: 'dialogue' },
+        });
         await waitFor(() => {
           expect(
             (screen.getByRole('combobox', { name: /TTS model/i }) as HTMLSelectElement).value,
@@ -372,8 +372,12 @@ export function registerJobActionTests() {
         );
 
         vi.mocked(api.materializeDraft).mockClear();
-        await user.selectOptions(screen.getByRole('combobox', { name: /TTS provider/i }), 'google');
-        await user.selectOptions(screen.getByRole('combobox', { name: /TTS model/i }), 'studio');
+        fireEvent.change(screen.getByRole('combobox', { name: /TTS provider/i }), {
+          target: { value: 'google' },
+        });
+        fireEvent.change(screen.getByRole('combobox', { name: /TTS model/i }), {
+          target: { value: 'studio' },
+        });
         await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
 
         await waitFor(() => {

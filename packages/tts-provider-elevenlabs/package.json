@@ -30,6 +30,7 @@
     "test": "pnpm run test:unit",
     "test:integration": "vitest run \"tests/integration.test.ts\"",
     "test:unit": "pnpm run test:unit:setup && vitest run --exclude \"tests/integration.test.ts\"",
+    "test:unit:prebuilt": "vitest run --exclude \"tests/integration.test.ts\"",
     "test:unit:setup": "pnpm --filter @esl-pipeline/contracts build && pnpm --filter @esl-pipeline/pmd build && pnpm --filter @esl-pipeline/provider-runtime build && pnpm --filter @esl-pipeline/tts-core build",
     "test:unit:timings": "pnpm run test:unit:setup && vitest run --exclude \"tests/integration.test.ts\" --reporter=json --outputFile=../../tmp/test-timings/tts-provider-elevenlabs/vitest.json",
     "test:watch": "vitest",

@@ -1,3 +1,4 @@
+import { fireEvent } from '@testing-library/react';
 import { beforeEach, describe, it } from 'vitest';
 
 import {
@@ -108,8 +109,7 @@ export function registerPromptEditorTests() {
       await waitFor(() => {
         expect((profileEditor as HTMLTextAreaElement).disabled).toBe(false);
       });
-      await user.clear(profileEditor);
-      await user.type(profileEditor, 'Updated profile content');
+      fireEvent.change(profileEditor, { target: { value: 'Updated profile content' } });
       await user.click(screen.getByRole('button', { name: /Save profile/i }));
 
       await waitFor(() => {
@@ -145,7 +145,9 @@ export function registerPromptEditorTests() {
       await screen.findByDisplayValue('Student transcript text');
 
       const teacherNotesInput = screen.getByRole('textbox', { name: /Teacher notes/i });
-      await user.type(teacherNotesInput, ' Focus on article usage and stress patterns. ');
+      fireEvent.change(teacherNotesInput, {
+        target: { value: ' Focus on article usage and stress patterns. ' },
+      });
       await user.click(screen.getByRole('button', { name: /Generate prompt/i }));
 
       await waitFor(() => {
