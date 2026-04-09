@@ -1,5 +1,9 @@
 # START HERE (Low-Stress Reboot)
 
+Archived on 2026-04-09 after the active re-entry path was consolidated into
+`docs/playbooks/RESTART_TOMORROW.md` plus the live tracker in
+`docs/reference/V1_IMPLEMENTATION_TRACKER.md`.
+
 If your brain is overloaded, use this file and do only what it says.
 
 ## 5-Minute Restart
