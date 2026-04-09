@@ -11,6 +11,7 @@ import {
   makeRecording,
   makeTranscript,
   now,
+  openPublishingSettings,
   previewCurrentDraft,
   renderMinimalAssignment,
   testScreen as screen,
@@ -38,10 +39,10 @@ export function registerResumeBasicTests() {
       expect(api.fetchStudentOptions).toHaveBeenCalledTimes(1);
       expect(api.listProfileContents).toHaveBeenCalledTimes(1);
 
-      expect(screen.getByRole('heading', { name: /1\. Upload recording/i })).toBeTruthy();
-      expect(screen.getByRole('heading', { name: /7\. Publish/i })).toBeTruthy();
+      expect(screen.getByRole('heading', { name: /Add lesson source/i })).toBeTruthy();
+      expect(screen.getByRole('heading', { name: /Review and share/i })).toBeTruthy();
       expect(
-        (screen.getByRole('combobox', { name: /Publish to/i }) as HTMLSelectElement).value,
+        (screen.getByRole('combobox', { name: /Share to/i }) as HTMLSelectElement).value,
       ).toBe('html');
     });
 
@@ -112,7 +113,7 @@ export function registerResumeBasicTests() {
       await waitFor(() => {
         expect(api.getJobStatus).not.toHaveBeenCalled();
       });
-      expect(screen.queryByText(/Pinned job:/i)).toBeNull();
+      expect(screen.queryByText(/Current assignment/i)).toBeNull();
     });
 
     it('rehydrates workflow state from server job context in query params', async () => {
@@ -241,19 +242,22 @@ export function registerResumeBasicTests() {
       });
       expect(api.fetchJobProvenance).toHaveBeenLastCalledWith('job-resume');
 
-      const resumeSelect = screen.getByRole('combobox', { name: /Recent jobs/i });
+      const resumeSelect = screen.getByRole('combobox', { name: /Recent assignments/i });
       expect(within(resumeSelect).getByRole('option', { name: /Alex/i })).toBeTruthy();
       expect(within(resumeSelect).queryByRole('option', { name: /No saved jobs yet/i })).toBeNull();
 
       expect(await screen.findByDisplayValue('Recovered transcript')).toBeTruthy();
       expect(await screen.findByDisplayValue('Recovered prompt')).toBeTruthy();
       expect(await screen.findByDisplayValue('# Recovered draft')).toBeTruthy();
+      openPublishingSettings();
       expect(
-        ((await screen.findByRole('combobox', { name: /Preset/i })) as HTMLSelectElement).value,
+        (
+          (await screen.findByRole('combobox', { name: /Learning preset/i })) as HTMLSelectElement
+        ).value,
       ).toBe('b2-default');
       resolveProfileOptions({ profiles: [{ id: 'profile-default.md', label: 'Default Profile' }] });
       expect(screen.getAllByText(/Anytype server unreachable/i).length).toBeGreaterThan(0);
-      await user.click(screen.getByRole('button', { name: /Generate prompt/i }));
+      await user.click(screen.getByRole('button', { name: /Refresh instructions/i }));
       await waitFor(() => {
         expect(api.createPromptPackage).toHaveBeenCalledWith(
           expect.any(String),
@@ -351,7 +355,8 @@ export function registerResumePresetRaceTests() {
         expect(api.getJobStatus).toHaveBeenCalledWith('job-stale-preset');
       });
 
-      const presetSelect = await screen.findByRole('combobox', { name: /Preset/i });
+      openPublishingSettings();
+      const presetSelect = await screen.findByRole('combobox', { name: /Learning preset/i });
       expect((presetSelect as HTMLSelectElement).value).toBe('b1-default');
     });
 
@@ -440,11 +445,12 @@ export function registerResumePresetRaceTests() {
         expect(api.getJobStatus).toHaveBeenCalledWith('job-empty-presets');
       });
 
-      const presetSelect = await screen.findByRole('combobox', { name: /Preset/i });
+      openPublishingSettings();
+      const presetSelect = await screen.findByRole('combobox', { name: /Learning preset/i });
       expect((presetSelect as HTMLSelectElement).value).toBe('');
 
       await previewCurrentDraft(user);
-      await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
+      await user.click(screen.getByRole('button', { name: /Share assignment/i }));
 
       await waitFor(() => {
         expect(api.materializeDraft).toHaveBeenCalled();
@@ -539,8 +545,9 @@ export function registerResumePresetRaceTests() {
         expect(await screen.findByDisplayValue('# Draft markdown')).toBeTruthy();
         expect(await screen.findByDisplayValue('Prompt package output')).toBeTruthy();
 
+        openPublishingSettings();
         await previewCurrentDraft(user);
-        await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
+        await user.click(screen.getByRole('button', { name: /Share assignment/i }));
 
         await waitFor(() => {
           expect(api.materializeDraft).toHaveBeenCalledTimes(1);
@@ -560,13 +567,13 @@ export function registerResumePresetRaceTests() {
           supportedActions: [],
         });
 
-        const presetSelect = await screen.findByRole('combobox', { name: /Preset/i });
+        const presetSelect = await screen.findByRole('combobox', { name: /Learning preset/i });
         await waitFor(() => {
           expect((presetSelect as HTMLSelectElement).value).toBe('b2-default');
         });
 
         await previewCurrentDraft(user);
-        await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
+        await user.click(screen.getByRole('button', { name: /Share assignment/i }));
         await waitFor(() => {
           expect(api.materializeDraft).toHaveBeenCalledTimes(2);
         });
@@ -677,13 +684,14 @@ export function registerResumePresetRaceTests() {
       await waitFor(() => {
         expect(api.getJobStatus).toHaveBeenCalledWith('job-learning-race');
       });
-      const presetSelect = await screen.findByRole('combobox', { name: /Preset/i });
+      openPublishingSettings();
+      const presetSelect = await screen.findByRole('combobox', { name: /Learning preset/i });
       await waitFor(() => {
         expect((presetSelect as HTMLSelectElement).value).toBe('general-english');
       });
 
       await previewCurrentDraft(user);
-      await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
+      await user.click(screen.getByRole('button', { name: /Share assignment/i }));
 
       await waitFor(() => {
         expect(api.materializeDraft).toHaveBeenCalled();
@@ -729,15 +737,16 @@ export function registerResumePresetRaceTests() {
       await waitFor(() => {
         expect(api.getJobStatus).toHaveBeenCalledWith('job-dialogue-1');
       });
+      openPublishingSettings();
       expect(
         (
           (await screen.findByRole('combobox', {
-            name: /Study text strategy/i,
+            name: /Reading style/i,
           })) as HTMLSelectElement
         ).value,
       ).toBe('dialogue');
       expect(
-        (screen.getByRole('combobox', { name: /TTS model/i }) as HTMLSelectElement).value,
+        (screen.getByRole('combobox', { name: /Voice model/i }) as HTMLSelectElement).value,
       ).toBe('eleven_v3');
     });
 
@@ -783,11 +792,12 @@ export function registerResumePresetRaceTests() {
         await waitFor(() => {
           expect(api.getJobStatus).toHaveBeenCalledWith('job-dialogue-race');
         });
+        openPublishingSettings();
         const strategySelect = (await screen.findByRole('combobox', {
-          name: /Study text strategy/i,
+          name: /Reading style/i,
         })) as HTMLSelectElement;
         const modelSelect = screen.getByRole('combobox', {
-          name: /TTS model/i,
+          name: /Voice model/i,
         }) as HTMLSelectElement;
 
         expect(strategySelect.value).toBe('dialogue');

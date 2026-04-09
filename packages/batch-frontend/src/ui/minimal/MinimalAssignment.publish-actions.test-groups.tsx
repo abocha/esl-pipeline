@@ -2,9 +2,12 @@ import { fireEvent } from '@testing-library/react';
 import { afterEach, beforeEach, describe, it } from 'vitest';
 
 import {
+  openAdvancedActions,
   testApi as api,
   createMinimalUser,
   createTimerAwareMinimalUser,
+  makeJobStatus,
+  openPublishingSettings,
   testExpect as expect,
   INTEGRATION_TEST_TIMEOUT_MS,
   previewCurrentDraft,
@@ -59,7 +62,7 @@ export function registerPublishValidationTests() {
       }
       fireEvent.change(draftTextarea, { target: { value: '# Broken draft' } });
 
-      await user.click(screen.getByRole('button', { name: /Save draft/i }));
+      await user.click(screen.getByRole('button', { name: /Save assignment content/i }));
 
       await screen.findByText('Fix validation errors before saving.');
       expect(api.createDraft).not.toHaveBeenCalled();
@@ -74,11 +77,12 @@ export function registerPublishValidationTests() {
         throw new Error('Expected draft textarea to be rendered');
       }
       fireEvent.change(draftTextarea, { target: { value: '# Final draft' } });
-      fireEvent.change(screen.getByRole('combobox', { name: /Preset/i }), {
+      openPublishingSettings();
+      fireEvent.change(screen.getByRole('combobox', { name: /Learning preset/i }), {
         target: { value: 'b2-default' },
       });
       await previewCurrentDraft(user);
-      await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
+      await user.click(screen.getByRole('button', { name: /Share assignment/i }));
 
       await waitFor(() => {
         expect(api.createDraft).toHaveBeenCalledWith('pkg-1', '# Final draft');
@@ -104,7 +108,7 @@ export function registerPublishValidationTests() {
       });
 
       await screen.findAllByText(/Job ID: job-1/i);
-      expect(screen.getByText(/Status: succeeded/i)).toBeTruthy();
+      expect(screen.getAllByText(/Status: succeeded/i).length).toBeGreaterThan(0);
     }, 30_000);
   });
 }
@@ -128,9 +132,9 @@ export function registerJobActionTests() {
         const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
         fireEvent.change(draftTextarea, { target: { value: '# Preview gated draft' } });
 
-        const publishButton = screen.getByRole('button', { name: /Publish assignment/i });
+        const publishButton = screen.getByRole('button', { name: /Share assignment/i });
         expect((publishButton as HTMLButtonElement).disabled).toBe(true);
-        expect(screen.getByText('Preview required before publish.')).toBeTruthy();
+        expect(screen.getByText('Preview required before sharing.')).toBeTruthy();
         expect(api.materializeDraft).not.toHaveBeenCalled();
 
         await previewCurrentDraft(user);
@@ -142,7 +146,7 @@ export function registerJobActionTests() {
         await waitFor(() => {
           expect((publishButton as HTMLButtonElement).disabled).toBe(true);
         });
-        expect(screen.getByText('Preview required before publish.')).toBeTruthy();
+        expect(screen.getByText('Preview required before sharing.')).toBeTruthy();
       },
       INTEGRATION_TEST_TIMEOUT_MS,
     );
@@ -153,6 +157,7 @@ export function registerJobActionTests() {
         vi.useFakeTimers({ shouldAdvanceTime: true });
         const user = createTimerAwareMinimalUser();
         await renderPublishedActionsAssignment({ status: { state: 'succeeded' } });
+        openAdvancedActions();
 
         await user.click(screen.getByRole('button', { name: /Regenerate pronunciation audio/i }));
 
@@ -173,6 +178,7 @@ export function registerJobActionTests() {
         vi.useFakeTimers({ shouldAdvanceTime: true });
         const user = createTimerAwareMinimalUser();
         await renderPublishedAssignment();
+        openAdvancedActions();
 
         await user.click(screen.getByRole('button', { name: /Custom rerun/i }));
         await user.click(screen.getByRole('checkbox', { name: /Study-text audio/i }));
@@ -224,6 +230,7 @@ export function registerJobActionTests() {
 **Natural sentence practice:** The device is as heavy as the old one.`;
         const user = createMinimalUser();
         await renderPublishedAssignment({ draftText: connectedSpeechDraft });
+        openAdvancedActions();
         await waitFor(() => {
           expect(api.fetchDraft).toHaveBeenCalledWith('draft-1');
         });
@@ -264,6 +271,7 @@ export function registerJobActionTests() {
             pronunciationMode: 'connected_speech',
           },
         });
+        openAdvancedActions();
 
         await user.click(screen.getByRole('button', { name: /Custom rerun/i }));
         await user.click(screen.getByRole('checkbox', { name: /Pronunciation chunk audio/i }));
@@ -284,6 +292,7 @@ export function registerJobActionTests() {
       async () => {
         const user = createMinimalUser();
         await renderPublishedAssignment();
+        openAdvancedActions();
 
         await user.click(screen.getByRole('button', { name: /Custom rerun/i }));
         await user.click(screen.getByRole('checkbox', { name: /Study-text audio/i }));
@@ -317,12 +326,15 @@ export function registerJobActionTests() {
       async () => {
         await renderPublishedAssignment();
 
-        const strategySelect = screen.getByRole('combobox', { name: /Study text strategy/i });
-        const modelSelect = screen.getByRole('combobox', { name: /TTS model/i });
+        openPublishingSettings();
+        const strategySelect = screen.getByRole('combobox', { name: /Reading style/i });
+        const modelSelect = screen.getByRole('combobox', { name: /Voice model/i });
 
         expect((strategySelect as HTMLSelectElement).value).toBe('auto');
         expect((modelSelect as HTMLSelectElement).disabled).toBe(true);
-        expect(screen.getByText(/Auto follows the draft at runtime/i)).toBeTruthy();
+        expect(
+          screen.getByText(/Auto follows the assignment at runtime\. Choose Dialogue or TTS to lock a model\./i),
+        ).toBeTruthy();
 
         fireEvent.change(strategySelect, { target: { value: 'dialogue' } });
         await waitFor(() => {
@@ -348,15 +360,16 @@ export function registerJobActionTests() {
       async () => {
         const { user } = await renderPreviewReadyAssignment();
 
-        fireEvent.change(screen.getByRole('combobox', { name: /Study text strategy/i }), {
+        openPublishingSettings();
+        fireEvent.change(screen.getByRole('combobox', { name: /Reading style/i }), {
           target: { value: 'dialogue' },
         });
         await waitFor(() => {
           expect(
-            (screen.getByRole('combobox', { name: /TTS model/i }) as HTMLSelectElement).value,
+            (screen.getByRole('combobox', { name: /Voice model/i }) as HTMLSelectElement).value,
           ).toBe('eleven_v3');
         });
-        await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
+        await user.click(screen.getByRole('button', { name: /Share assignment/i }));
 
         await waitFor(() => {
           expect(api.materializeDraft).toHaveBeenCalled();
@@ -372,13 +385,13 @@ export function registerJobActionTests() {
         );
 
         vi.mocked(api.materializeDraft).mockClear();
-        fireEvent.change(screen.getByRole('combobox', { name: /TTS provider/i }), {
+        fireEvent.change(screen.getByRole('combobox', { name: /Voice engine/i }), {
           target: { value: 'google' },
         });
-        fireEvent.change(screen.getByRole('combobox', { name: /TTS model/i }), {
+        fireEvent.change(screen.getByRole('combobox', { name: /Voice model/i }), {
           target: { value: 'studio' },
         });
-        await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
+        await user.click(screen.getByRole('button', { name: /Share assignment/i }));
 
         await waitFor(() => {
           expect(api.materializeDraft).toHaveBeenCalled();
@@ -408,7 +421,8 @@ export function registerJobActionTests() {
 
         await renderPreviewReadyAssignment();
 
-        const strategySelect = screen.getByRole('combobox', { name: /Study text strategy/i });
+        openPublishingSettings();
+        const strategySelect = screen.getByRole('combobox', { name: /Reading style/i });
         expect(
           within(strategySelect)
             .getAllByRole('option')
@@ -425,6 +439,7 @@ export function registerJobActionTests() {
         vi.useFakeTimers({ shouldAdvanceTime: true });
         const user = createTimerAwareMinimalUser();
         await renderPublishedAssignment();
+        openAdvancedActions();
 
         await user.click(screen.getByRole('button', { name: /Republish current draft/i }));
 
@@ -432,6 +447,40 @@ export function registerJobActionTests() {
           expect(api.rerunJob).toHaveBeenCalledWith('job-1', { republishOnly: true });
         });
         expect(screen.getByText('Rerun queued')).toBeTruthy();
+      },
+      INTEGRATION_TEST_TIMEOUT_MS,
+    );
+
+    it(
+      'keeps advanced actions open when a queued rerun switches to a new job id',
+      async () => {
+        vi.useFakeTimers({ shouldAdvanceTime: true });
+        const user = createTimerAwareMinimalUser();
+        vi.mocked(api.rerunJob).mockResolvedValueOnce({
+          success: true,
+          message: 'Republish queued for follow-up job',
+          jobId: 'job-2',
+          actionType: 'rerun',
+        });
+
+        await renderPublishedAssignment();
+        openAdvancedActions();
+        vi.mocked(api.getJobStatus).mockResolvedValueOnce(
+          makeJobStatus({
+            jobId: 'job-2',
+            state: 'queued',
+          }) as never,
+        );
+
+        await user.click(screen.getByRole('button', { name: /Republish current draft/i }));
+
+        await waitFor(() => {
+          expect(api.rerunJob).toHaveBeenCalledWith('job-1', { republishOnly: true });
+          expect(screen.getByText('Republish queued for follow-up job')).toBeTruthy();
+          expect(screen.getByRole('button', { name: /Hide advanced actions/i })).toBeTruthy();
+          expect(screen.getByRole('button', { name: /Refresh actions/i })).toBeTruthy();
+          expect(screen.getAllByText(/Job ID: job-2/i).length).toBeGreaterThan(0);
+        });
       },
       INTEGRATION_TEST_TIMEOUT_MS,
     );
@@ -460,9 +509,10 @@ export function registerJobActionTests() {
             error: 'cancelled: duplicate run',
           } as never);
 
+        openAdvancedActions();
         const reasonInput = screen.getByPlaceholderText('reason for cancellation');
         fireEvent.change(reasonInput, { target: { value: 'duplicate run' } });
-        const actionsHeading = screen.getByRole('heading', { name: /8\. Job actions/i });
+        const actionsHeading = screen.getByRole('heading', { name: /Advanced actions/i });
         const actionsSection = actionsHeading.closest('section');
         if (!actionsSection) {
           throw new Error('Expected job actions section to be rendered');
@@ -482,8 +532,9 @@ export function registerJobActionTests() {
       async () => {
         vi.useFakeTimers({ shouldAdvanceTime: true });
         await renderPublishedAssignment({ status: { state: 'succeeded' } });
+        openAdvancedActions();
 
-        const actionsHeading = screen.getByRole('heading', { name: /8\. Job actions/i });
+        const actionsHeading = screen.getByRole('heading', { name: /Advanced actions/i });
         const actionsSection = actionsHeading.closest('section');
         if (!actionsSection) {
           throw new Error('Expected job actions section to be rendered');

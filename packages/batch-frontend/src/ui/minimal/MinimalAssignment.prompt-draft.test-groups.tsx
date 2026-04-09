@@ -5,6 +5,7 @@ import {
   testApi as api,
   createMinimalUser,
   createTimerAwareMinimalUser,
+  openRecordingSettings,
   testExpect as expect,
   makeRecording,
   now,
@@ -69,7 +70,8 @@ export function registerPromptEditorTests() {
       const user = createMinimalUser();
       renderMinimalAssignment();
 
-      const sttProviderSelect = await screen.findByRole('combobox', { name: /STT provider/i });
+      openRecordingSettings();
+      const sttProviderSelect = await screen.findByRole('combobox', { name: /Transcript engine/i });
       await waitFor(() => {
         expect((sttProviderSelect as HTMLSelectElement).value).toBe('google');
       });
@@ -148,7 +150,7 @@ export function registerPromptEditorTests() {
       fireEvent.change(teacherNotesInput, {
         target: { value: ' Focus on article usage and stress patterns. ' },
       });
-      await user.click(screen.getByRole('button', { name: /Generate prompt/i }));
+      await user.click(screen.getByRole('button', { name: /Generate instructions/i }));
 
       await waitFor(() => {
         expect(api.createPromptPackage).toHaveBeenCalledWith('rec-1', {
@@ -241,7 +243,7 @@ export function registerPromptStudentSelectionTests() {
         expect(screen.getByDisplayValue('Student transcript text')).toBeTruthy();
       });
 
-      await user.click(screen.getByRole('button', { name: /Generate prompt/i }));
+      await user.click(screen.getByRole('button', { name: /Generate instructions/i }));
 
       await waitFor(() => {
         expect(api.createPromptPackage).toHaveBeenCalledWith('rec-1', {
