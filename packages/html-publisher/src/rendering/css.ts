@@ -15,7 +15,7 @@ export const DEFAULT_THEME: Required<ThemeTokens> = {
   tocBorder: '#e5dac8',
 };
 
-export const DEFAULT_CSS = `
+const DEFAULT_CSS = `
 :root {
   --theme-h1: ${DEFAULT_THEME.h1};
   --theme-h2: ${DEFAULT_THEME.h2};

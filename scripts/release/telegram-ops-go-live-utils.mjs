@@ -43,7 +43,7 @@ function stripWrappingQuotes(value) {
   return value;
 }
 
-export function parseDotEnvContent(content) {
+function parseDotEnvContent(content) {
   const entries = new Map();
   for (const rawLine of content.split(/\r?\n/u)) {
     const line = rawLine.trim();

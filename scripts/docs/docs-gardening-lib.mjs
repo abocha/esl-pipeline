@@ -21,7 +21,7 @@ const CONFIDENCE_RANK = {
   low: 1,
 };
 
-export function buildDocsChecks({ repoRoot = process.cwd(), config } = {}) {
+function buildDocsChecks({ repoRoot = process.cwd(), config } = {}) {
   const resolvedConfig = config ?? loadDocsCheckConfig(repoRoot);
   const core = runDocsChecks('core', { repoRoot, config: resolvedConfig });
   const ops = runDocsChecks('ops', { repoRoot, config: resolvedConfig });

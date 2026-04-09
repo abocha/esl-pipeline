@@ -195,25 +195,6 @@ export function makeLearningPreset(
   };
 }
 
-export async function publishAssignmentFlow(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
-  await screen.findByDisplayValue('Student transcript text', {}, { timeout: UI_WAIT_TIMEOUT_MS });
-
-  await user.click(screen.getByRole('button', { name: /Generate prompt/i }));
-  await screen.findByDisplayValue('Prompt package output', {}, { timeout: UI_WAIT_TIMEOUT_MS });
-
-  const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
-  expect(draftTextarea).toBeTruthy();
-  if (!draftTextarea) {
-    throw new Error('Expected draft textarea to be rendered');
-  }
-  await user.type(draftTextarea, '# Final draft');
-  await previewCurrentDraft(user);
-
-  await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
-  await screen.findByText(/Job ID: job-1/i, {}, { timeout: UI_WAIT_TIMEOUT_MS });
-}
-
 export async function previewCurrentDraft(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: /Preview current draft/i }));
   await screen.findByText('Preview ready for current draft.', {}, { timeout: UI_WAIT_TIMEOUT_MS });
@@ -227,7 +208,7 @@ export async function preparePromptReady(user: ReturnType<typeof userEvent.setup
   await screen.findByDisplayValue('Prompt package output', {}, { timeout: UI_WAIT_TIMEOUT_MS });
 }
 
-export function hydrateResumedAssignment(
+function hydrateResumedAssignment(
   overrides: {
     status?: Partial<api.JobStatus>;
     jobs?: api.JobStatus[];
@@ -282,11 +263,11 @@ export function hydrateResumedAssignment(
   return status;
 }
 
-export async function waitForResumedPromptReady(text = 'Prompt package output') {
+async function waitForResumedPromptReady(text = 'Prompt package output') {
   await screen.findByDisplayValue(text, {}, { timeout: UI_WAIT_TIMEOUT_MS });
 }
 
-export async function waitForJobActionsReady(jobId = 'job-1') {
+async function waitForJobActionsReady(jobId = 'job-1') {
   await screen.findByRole('heading', { name: /8\. Job actions/i }, { timeout: UI_WAIT_TIMEOUT_MS });
   await waitFor(
     () => {
@@ -376,27 +357,6 @@ export async function renderGenerationReadyAssignment(
       draftText: overrides.draftText ?? '# Draft markdown',
     },
     { user: createMinimalUser(), waitFor: 'promptReady' },
-  );
-}
-
-export async function renderResumedFailureAssignment(
-  overrides: Parameters<typeof hydrateResumedAssignment>[0] = {},
-): Promise<
-  RenderResult & {
-    user: ReturnType<typeof userEvent.setup>;
-    status: ReturnType<typeof hydrateResumedAssignment>;
-  }
-> {
-  return renderResumedAssignment(
-    {
-      ...overrides,
-      status: {
-        state: 'failed',
-        error: 'Something went wrong.',
-        ...overrides.status,
-      },
-    },
-    { waitFor: 'jobActions' },
   );
 }
 
@@ -731,14 +691,11 @@ export function setupMinimalAssignmentTest() {
 }
 
 export const testAct = act;
-export const testRender = render;
 export const testScreen: typeof screen = screen;
 export const testWaitFor = waitFor;
 export const testWithin = within;
-export const testUserEvent = userEvent;
 export const testExpect = expect;
 export const testVi = vi;
 export const testApi = api;
-export const testMinimalAssignment = MinimalAssignment;
 
 export { INTEGRATION_TEST_TIMEOUT_MS, now, UI_WAIT_TIMEOUT_MS };
