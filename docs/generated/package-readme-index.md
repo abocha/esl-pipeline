@@ -9,25 +9,25 @@
 
 ## Packages
 
-| Package                                 | README Title                          | Enforced | Path                                         |
-| --------------------------------------- | ------------------------------------- | -------- | -------------------------------------------- |
-| `@esl-pipeline/anytype-adapter`         | @esl-pipeline/anytype-adapter         | no       | `packages/anytype-adapter/README.md`         |
-| `@esl-pipeline/batch-backend`           | @esl-pipeline/batch-backend           | yes      | `packages/batch-backend/README.md`           |
-| `@esl-pipeline/batch-frontend`          | @esl-pipeline/batch-frontend          | yes      | `packages/batch-frontend/README.md`          |
-| `@esl-pipeline/contracts`               | @esl-pipeline/contracts               | no       | `packages/contracts/README.md`               |
-| `@esl-pipeline/html-publisher`          | @esl-pipeline/html-publisher          | no       | `packages/html-publisher/README.md`          |
-| `@esl-pipeline/md-validator`            | @esl-pipeline/md-validator            | no       | `packages/md-validator/README.md`            |
-| `@esl-pipeline/notion-adapter`          | @esl-pipeline/notion-adapter          | no       | `packages/notion-adapter/README.md`          |
-| `@esl-pipeline/orchestrator`            | @esl-pipeline/orchestrator            | yes      | `packages/orchestrator/README.md`            |
-| `@esl-pipeline/pmd`                     | @esl-pipeline/pmd                     | no       | `packages/pmd/README.md`                     |
-| `@esl-pipeline/provider-runtime`        | @esl-pipeline/provider-runtime        | yes      | `packages/provider-runtime/README.md`        |
-| `@esl-pipeline/shared-infrastructure`   | @esl-pipeline/shared-infrastructure   | no       | `packages/shared-infrastructure/README.md`   |
-| `@esl-pipeline/storage-uploader`        | @esl-pipeline/storage-uploader        | no       | `packages/storage-uploader/README.md`        |
-| `@esl-pipeline/stt-core`                | @esl-pipeline/stt-core                | no       | `packages/stt-core/README.md`                |
-| `@esl-pipeline/stt-provider-deepgram`   | @esl-pipeline/stt-provider-deepgram   | no       | `packages/stt-provider-deepgram/README.md`   |
-| `@esl-pipeline/stt-provider-elevenlabs` | @esl-pipeline/stt-provider-elevenlabs | no       | `packages/stt-provider-elevenlabs/README.md` |
-| `@esl-pipeline/stt-provider-google`     | @esl-pipeline/stt-provider-google     | no       | `packages/stt-provider-google/README.md`     |
-| `@esl-pipeline/telegram-ops-bot`        | @esl-pipeline/telegram-ops-bot        | yes      | `packages/telegram-ops-bot/README.md`        |
-| `@esl-pipeline/tts-core`                | @esl-pipeline/tts-core                | no       | `packages/tts-core/README.md`                |
-| `@esl-pipeline/tts-provider-elevenlabs` | @esl-pipeline/tts-provider-elevenlabs | no       | `packages/tts-provider-elevenlabs/README.md` |
-| `@esl-pipeline/tts-provider-google`     | @esl-pipeline/tts-provider-google     | no       | `packages/tts-provider-google/README.md`     |
+| Package | README Title | Enforced | Path |
+| --- | --- | --- | --- |
+| `@esl-pipeline/anytype-adapter` | @esl-pipeline/anytype-adapter | no | `packages/anytype-adapter/README.md` |
+| `@esl-pipeline/batch-backend` | @esl-pipeline/batch-backend | yes | `packages/batch-backend/README.md` |
+| `@esl-pipeline/batch-frontend` | @esl-pipeline/batch-frontend | yes | `packages/batch-frontend/README.md` |
+| `@esl-pipeline/contracts` | @esl-pipeline/contracts | no | `packages/contracts/README.md` |
+| `@esl-pipeline/html-publisher` | @esl-pipeline/html-publisher | no | `packages/html-publisher/README.md` |
+| `@esl-pipeline/md-validator` | @esl-pipeline/md-validator | no | `packages/md-validator/README.md` |
+| `@esl-pipeline/notion-adapter` | @esl-pipeline/notion-adapter | no | `packages/notion-adapter/README.md` |
+| `@esl-pipeline/orchestrator` | @esl-pipeline/orchestrator | yes | `packages/orchestrator/README.md` |
+| `@esl-pipeline/pmd` | @esl-pipeline/pmd | no | `packages/pmd/README.md` |
+| `@esl-pipeline/provider-runtime` | @esl-pipeline/provider-runtime | yes | `packages/provider-runtime/README.md` |
+| `@esl-pipeline/shared-infrastructure` | @esl-pipeline/shared-infrastructure | no | `packages/shared-infrastructure/README.md` |
+| `@esl-pipeline/storage-uploader` | @esl-pipeline/storage-uploader | no | `packages/storage-uploader/README.md` |
+| `@esl-pipeline/stt-core` | @esl-pipeline/stt-core | no | `packages/stt-core/README.md` |
+| `@esl-pipeline/stt-provider-deepgram` | @esl-pipeline/stt-provider-deepgram | no | `packages/stt-provider-deepgram/README.md` |
+| `@esl-pipeline/stt-provider-elevenlabs` | @esl-pipeline/stt-provider-elevenlabs | no | `packages/stt-provider-elevenlabs/README.md` |
+| `@esl-pipeline/stt-provider-google` | @esl-pipeline/stt-provider-google | no | `packages/stt-provider-google/README.md` |
+| `@esl-pipeline/telegram-ops-bot` | @esl-pipeline/telegram-ops-bot | yes | `packages/telegram-ops-bot/README.md` |
+| `@esl-pipeline/tts-core` | @esl-pipeline/tts-core | no | `packages/tts-core/README.md` |
+| `@esl-pipeline/tts-provider-elevenlabs` | @esl-pipeline/tts-provider-elevenlabs | no | `packages/tts-provider-elevenlabs/README.md` |
+| `@esl-pipeline/tts-provider-google` | @esl-pipeline/tts-provider-google | no | `packages/tts-provider-google/README.md` |

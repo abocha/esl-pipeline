@@ -5,7 +5,7 @@
 - Audience: AI agents, maintainers.
 - Read Time: 4 minutes.
 - Authority Level: Operational quickstart.
-- Last Verified Against: 2026-03-09 repo state.
+- Last Verified Against: 2026-04-09 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly.
 - Status: `active`.
@@ -85,6 +85,7 @@ Full runbooks:
 
 - [`docs/operations/postgres-backup-s3.md`](operations/postgres-backup-s3.md)
 - [`docs/operations/postgres-ops-health.md`](operations/postgres-ops-health.md)
+- [`docs/operations/rollup-optional-binary-troubleshooting.md`](operations/rollup-optional-binary-troubleshooting.md)
 
 ## Related
 

@@ -5,7 +5,7 @@
 - Audience: AI agents, maintainers.
 - Read Time: 2 minutes.
 - Authority Level: Router.
-- Last Verified Against: 2026-03-13 repo state.
+- Last Verified Against: 2026-04-09 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly.
 - Status: `router`.
@@ -29,11 +29,14 @@
 - Repo orientation: [`docs/PROJECT_OVERVIEW.md`](PROJECT_OVERVIEW.md)
 - Setup/run commands: [`docs/QUICK_START.md`](QUICK_START.md)
 - Backend/frontend status: [`docs/backend-frontend/backend-frontend-alignment.md`](backend-frontend/backend-frontend-alignment.md)
+- Batch-backend service boundary: [`docs/backend-frontend/batch-backend-ssot.md`](backend-frontend/batch-backend-ssot.md)
+- Batch-backend migration parity inventory: [`docs/backend-frontend/batch-backend-legacy-schema-inventory.md`](backend-frontend/batch-backend-legacy-schema-inventory.md)
 - Batch system map: [`docs/backend-frontend/BATCH_SYSTEM.md`](backend-frontend/BATCH_SYSTEM.md)
 - Orchestrator architecture and ownership:
   - [`docs/reference/ORCHESTRATOR_SYSTEM_REVIEW.md`](reference/ORCHESTRATOR_SYSTEM_REVIEW.md)
   - [`docs/reference/ORCHESTRATOR_OWNERSHIP_LEDGER.md`](reference/ORCHESTRATOR_OWNERSHIP_LEDGER.md)
 - Env contracts: [`docs/reference/env.md`](reference/env.md)
+- Manifest schema and compatibility: [`docs/reference/pipeline-manifest.md`](reference/pipeline-manifest.md)
 - Test methodology + lane model: [`docs/reference/TESTING_GUIDELINES.md`](reference/TESTING_GUIDELINES.md)
 - Validator ruleset conventions: [`docs/reference/MD_VALIDATOR_RULESET_CONVENTIONS.md`](reference/MD_VALIDATOR_RULESET_CONVENTIONS.md)
 
@@ -41,6 +44,8 @@
 
 - Docker host paths and port collisions:
   - [`docs/operations/docker-host-paths.md`](operations/docker-host-paths.md)
+- Batch deployment runbook:
+  - [`docs/backend-frontend/DEPLOYMENT.md`](backend-frontend/DEPLOYMENT.md)
 - Postgres backup/restore:
   - [`docs/operations/postgres-backup-restore.md`](operations/postgres-backup-restore.md)
 - S3 archival + scheduling:
@@ -53,8 +58,12 @@
   - [`docs/operations/voice-alignment-v2-runbook.md`](operations/voice-alignment-v2-runbook.md)
 - Student-memory replay and backfill:
   - [`docs/operations/student-memory-replay-backfill.md`](operations/student-memory-replay-backfill.md)
+- Legacy profile normalization during live transition:
+  - [`docs/operations/legacy-profile-normalization.md`](operations/legacy-profile-normalization.md)
 - Prompt gallery DB bootstrap:
   - [`docs/operations/prompt-gallery-bootstrap.md`](operations/prompt-gallery-bootstrap.md)
+- Local dependency-hydration troubleshooting:
+  - [`docs/operations/rollup-optional-binary-troubleshooting.md`](operations/rollup-optional-binary-troubleshooting.md)
 - Versioning and release automation:
   - [`docs/reference/VERSIONING_MODEL.md`](reference/VERSIONING_MODEL.md)
 - Historical pre-v1 tag reset record:
@@ -69,10 +78,14 @@
 - Learning preset architecture and provider policy:
   - [`docs/reference/PRESET_V2_SPEC.md`](reference/PRESET_V2_SPEC.md)
   - [`docs/reference/HOMEWORK_PROMPTING_SYSTEM_GUIDE.md`](reference/HOMEWORK_PROMPTING_SYSTEM_GUIDE.md)
+  - [`docs/reference/gpt-5.4_prompt-guidance.md`](reference/gpt-5.4_prompt-guidance.md)
   - [`docs/reference/HOMEWORK_PEDAGOGY_AND_TEMPLATE_SPEC.md`](reference/HOMEWORK_PEDAGOGY_AND_TEMPLATE_SPEC.md)
   - [`docs/reference/STUDENT_MEMORY_EXTRACTION_CAPABILITY_POLICY.md`](reference/STUDENT_MEMORY_EXTRACTION_CAPABILITY_POLICY.md)
   - [`docs/reference/STUDENT_MEMORY_EXTRACTION_SCHEMA_SPEC.md`](reference/STUDENT_MEMORY_EXTRACTION_SCHEMA_SPEC.md)
   - [`docs/reference/GENERATION_PROVIDER_POLICY.md`](reference/GENERATION_PROVIDER_POLICY.md)
+- Prompt rewrite drafts and candidate payloads:
+  - [`docs/reference/HOMEWORK_PROMPT_DEFINITIVE_ASSEMBLY_DRAFT.md`](reference/HOMEWORK_PROMPT_DEFINITIVE_ASSEMBLY_DRAFT.md)
+  - [`docs/reference/HOMEWORK_PROMPT_CANDIDATE_TEMPLATE_PAYLOAD.md`](reference/HOMEWORK_PROMPT_CANDIDATE_TEMPLATE_PAYLOAD.md)
 - Generation-provider evaluation profiles:
   - [`docs/reference/OPENAI_RESPONSES_WS2B_PROFILE.md`](reference/OPENAI_RESPONSES_WS2B_PROFILE.md)
   - [`docs/reference/OPENROUTER_WS2B_PROFILE.md`](reference/OPENROUTER_WS2B_PROFILE.md)
@@ -85,6 +98,7 @@
   - [`docs/playbooks/WEEKLY_PRODUCT_REVIEW_TEMPLATE.md`](playbooks/WEEKLY_PRODUCT_REVIEW_TEMPLATE.md)
 - Implementation continuity tracker:
   - [`docs/reference/V1_IMPLEMENTATION_TRACKER.md`](reference/V1_IMPLEMENTATION_TRACKER.md)
+  - [`docs/playbooks/RESTART_TOMORROW.md`](playbooks/RESTART_TOMORROW.md)
 
 ## Docs System Paths
 

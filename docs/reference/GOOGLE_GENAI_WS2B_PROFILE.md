@@ -5,7 +5,7 @@
 - Audience: founder-maintainer and implementing agents.
 - Read Time: 9 minutes.
 - Authority Level: implementation-driving reference for WS2B Google GenAI integration.
-- Last Updated: 2026-02-18.
+- Last Updated: 2026-04-09.
 
 ## Purpose
 
