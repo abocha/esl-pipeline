@@ -107,6 +107,7 @@ export interface NewAssignmentFlags {
   voiceId?: string;
   withTts?: boolean;
   ttsProvider?: TtsProvider;
+  studyTextElevenlabsModel?: ElevenLabsTtsModelId;
   googleTtsModel?: GoogleTtsModel;
   publishTarget?: PublishTarget;
   anytypeSpaceId?: string;

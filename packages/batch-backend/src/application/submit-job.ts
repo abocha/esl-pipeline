@@ -10,11 +10,17 @@ import { insertJob } from '../domain/job-repository.js';
 import { logger } from '../infrastructure/logger.js';
 import { createJobQueue } from '../infrastructure/queue-bullmq.js';
 import { buildLearningPresetProvenance, normalizeLearningPresetId } from './learning-preset.js';
+import { collectPublishStudyTextOverrideIssues } from './publish-study-text-overrides.js';
 
 export type UploadTarget = 'auto' | 's3' | 'none';
 export type TtsStrategy = DomainTtsStrategy;
 export type TtsProvider = 'elevenlabs' | 'google';
 export type GoogleTtsModel = 'chirp3_hd' | 'studio' | 'neural2' | 'wavenet';
+export type ElevenLabsTtsModelId =
+  | 'eleven_v3'
+  | 'eleven_multilingual_v2'
+  | 'eleven_flash_v2_5'
+  | 'eleven_flash_v2';
 
 export interface SubmitJobRequest {
   md: string;
@@ -28,6 +34,7 @@ export interface SubmitJobRequest {
   publishTarget?: 'notion' | 'anytype' | 'html';
   ttsStrategy?: TtsStrategy;
   ttsProvider?: TtsProvider;
+  studyTextElevenlabsModel?: ElevenLabsTtsModelId;
   googleTtsModel?: GoogleTtsModel;
   userId?: string;
   autoPublish?: boolean;
@@ -152,6 +159,31 @@ function validateSubmitJobRequest(req: SubmitJobRequest): void {
       'invalid_google_tts_model',
     );
   }
+
+  if (
+    req.studyTextElevenlabsModel &&
+    !['eleven_v3', 'eleven_multilingual_v2', 'eleven_flash_v2_5', 'eleven_flash_v2'].includes(
+      req.studyTextElevenlabsModel,
+    )
+  ) {
+    throw new ValidationError(
+      'studyTextElevenlabsModel must be eleven_v3, eleven_multilingual_v2, eleven_flash_v2_5, or eleven_flash_v2 when provided',
+      'invalid_study_text_elevenlabs_model',
+    );
+  }
+
+  const publishStudyTextIssues = collectPublishStudyTextOverrideIssues({
+    ttsStrategy: req.ttsStrategy,
+    ttsProvider: req.ttsProvider,
+    studyTextElevenlabsModel: req.studyTextElevenlabsModel,
+    googleTtsModel: req.googleTtsModel,
+  });
+  if (publishStudyTextIssues.length > 0) {
+    const issue = publishStudyTextIssues[0];
+    if (issue) {
+      throw new ValidationError(issue.message, issue.code);
+    }
+  }
 }
 
 // submitJob.declaration()
@@ -179,6 +211,7 @@ export async function submitJob(req: SubmitJobRequest): Promise<SubmitJobRespons
     publishTarget: req.publishTarget ?? 'notion',
     ttsStrategy: req.ttsStrategy,
     ttsProvider: req.ttsProvider,
+    studyTextElevenlabsModel: req.studyTextElevenlabsModel,
     googleTtsModel: req.googleTtsModel,
     userId: req.userId,
     autoPublish: req.autoPublish,

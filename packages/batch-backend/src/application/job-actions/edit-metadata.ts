@@ -8,6 +8,13 @@ import { JobActionType } from '../../domain/job-actions.js';
 import { publishJobEvent } from '../../domain/job-events.js';
 import type { JobRecord } from '../../domain/job-model.js';
 import { getJobById, updateJobMetadata } from '../../domain/job-repository.js';
+import {
+  collectPublishStudyTextOverrideIssues,
+  publishElevenLabsModelSchema,
+  publishGoogleTtsModelSchema,
+  publishTtsProviderSchema,
+  publishTtsStrategySchema,
+} from '../publish-study-text-overrides.js';
 
 const editMetadataSchema = z.object({
   learningPresetId: z.string().min(1).optional(),
@@ -15,9 +22,10 @@ const editMetadataSchema = z.object({
   publishTarget: z.enum(['notion', 'anytype', 'html']).optional(),
   withTts: z.boolean().optional(),
   forceTts: z.boolean().optional(),
-  ttsStrategy: z.enum(['auto', 'dialogue', 'tts']).optional(),
-  ttsProvider: z.enum(['elevenlabs', 'google']).optional(),
-  googleTtsModel: z.enum(['chirp3_hd', 'studio', 'neural2', 'wavenet']).optional(),
+  ttsStrategy: publishTtsStrategySchema.optional(),
+  ttsProvider: publishTtsProviderSchema.optional(),
+  studyTextElevenlabsModel: publishElevenLabsModelSchema.nullable().optional(),
+  googleTtsModel: publishGoogleTtsModelSchema.nullable().optional(),
   upload: z.enum(['auto', 's3', 'none']).optional(),
   voiceId: z.string().min(1).optional(),
   voiceAccent: z.string().min(1).optional(),
@@ -31,7 +39,7 @@ function getEffectiveMetadataOverrides(
   const effective: EditMetadataOverrides = {};
   const assignIfChanged = <K extends keyof EditMetadataOverrides>(
     key: K,
-    current: EditMetadataOverrides[K],
+    current: EditMetadataOverrides[K] | null,
   ): void => {
     const next = overrides[key];
     if (next !== undefined && next !== current) {
@@ -39,19 +47,80 @@ function getEffectiveMetadataOverrides(
     }
   };
 
-  assignIfChanged('learningPresetId', job.learningPresetId ?? undefined);
-  assignIfChanged('notionDatabase', job.notionDatabase ?? undefined);
-  assignIfChanged('publishTarget', job.publishTarget ?? undefined);
-  assignIfChanged('withTts', job.withTts ?? undefined);
-  assignIfChanged('forceTts', job.forceTts ?? undefined);
-  assignIfChanged('ttsStrategy', job.ttsStrategy ?? undefined);
-  assignIfChanged('ttsProvider', job.ttsProvider ?? undefined);
-  assignIfChanged('googleTtsModel', job.googleTtsModel ?? undefined);
-  assignIfChanged('upload', job.upload ?? undefined);
-  assignIfChanged('voiceId', job.voiceId ?? undefined);
-  assignIfChanged('voiceAccent', job.voiceAccent ?? undefined);
+  assignIfChanged('learningPresetId', job.learningPresetId ?? null);
+  assignIfChanged('notionDatabase', job.notionDatabase ?? null);
+  assignIfChanged('publishTarget', job.publishTarget ?? null);
+  assignIfChanged('withTts', job.withTts ?? null);
+  assignIfChanged('forceTts', job.forceTts ?? null);
+  assignIfChanged('ttsStrategy', job.ttsStrategy ?? null);
+  assignIfChanged('ttsProvider', job.ttsProvider ?? null);
+  assignIfChanged('studyTextElevenlabsModel', job.studyTextElevenlabsModel ?? null);
+  assignIfChanged('googleTtsModel', job.googleTtsModel ?? null);
+  assignIfChanged('upload', job.upload ?? null);
+  assignIfChanged('voiceId', job.voiceId ?? null);
+  assignIfChanged('voiceAccent', job.voiceAccent ?? null);
 
   return effective;
+}
+
+function getEffectivePublishStudyTextOverrides(
+  job: JobRecord,
+  overrides: EditMetadataOverrides,
+): {
+  ttsStrategy?: JobRecord['ttsStrategy'];
+  ttsProvider?: JobRecord['ttsProvider'];
+  studyTextElevenlabsModel?: JobRecord['studyTextElevenlabsModel'];
+  googleTtsModel?: JobRecord['googleTtsModel'];
+} {
+  const ttsStrategy = overrides.ttsStrategy ?? job.ttsStrategy ?? undefined;
+  const ttsProvider = overrides.ttsProvider ?? job.ttsProvider ?? undefined;
+  const studyTextElevenlabsModel =
+    overrides.studyTextElevenlabsModel !== undefined
+      ? overrides.studyTextElevenlabsModel
+      : ttsProvider === 'google' || ttsStrategy === 'auto'
+        ? null
+        : (job.studyTextElevenlabsModel ?? null);
+  const googleTtsModel =
+    overrides.googleTtsModel !== undefined
+      ? overrides.googleTtsModel
+      : ttsProvider === 'elevenlabs'
+        ? null
+        : (job.googleTtsModel ?? null);
+
+  return {
+    ttsStrategy,
+    ttsProvider,
+    studyTextElevenlabsModel,
+    googleTtsModel,
+  };
+}
+
+function withImpliedPublishModelClears(
+  job: JobRecord,
+  overrides: EditMetadataOverrides,
+): EditMetadataOverrides {
+  const effective = getEffectivePublishStudyTextOverrides(job, overrides);
+  const nextOverrides: EditMetadataOverrides = { ...overrides };
+
+  if (
+    overrides.studyTextElevenlabsModel === undefined &&
+    effective.studyTextElevenlabsModel === null &&
+    job.studyTextElevenlabsModel !== null &&
+    job.studyTextElevenlabsModel !== undefined
+  ) {
+    nextOverrides.studyTextElevenlabsModel = null;
+  }
+
+  if (
+    overrides.googleTtsModel === undefined &&
+    effective.googleTtsModel === null &&
+    job.googleTtsModel !== null &&
+    job.googleTtsModel !== undefined
+  ) {
+    nextOverrides.googleTtsModel = null;
+  }
+
+  return nextOverrides;
 }
 
 /**
@@ -129,20 +198,36 @@ export async function editMetadata(
     };
   }
 
+  const normalizedOverrides = withImpliedPublishModelClears(job, overrides);
+  const publishStudyTextIssues = collectPublishStudyTextOverrideIssues(
+    getEffectivePublishStudyTextOverrides(job, normalizedOverrides),
+  );
+  if (publishStudyTextIssues.length > 0) {
+    return {
+      success: false,
+      message: publishStudyTextIssues[0]?.message ?? 'Invalid metadata payload',
+      jobId,
+      actionType: JobActionType.EDIT_METADATA,
+      timestamp: new Date(),
+      error: 'validation_failed',
+    };
+  }
+
   const updated = await updateJobMetadata({
     id: jobId,
     expectedState: 'awaiting_approval',
-    learningPresetId: overrides.learningPresetId,
-    notionDatabase: overrides.notionDatabase,
-    publishTarget: overrides.publishTarget,
-    withTts: overrides.withTts,
-    forceTts: overrides.forceTts,
-    ttsStrategy: overrides.ttsStrategy,
-    ttsProvider: overrides.ttsProvider,
-    googleTtsModel: overrides.googleTtsModel,
-    upload: overrides.upload,
-    voiceId: overrides.voiceId,
-    voiceAccent: overrides.voiceAccent,
+    learningPresetId: normalizedOverrides.learningPresetId,
+    notionDatabase: normalizedOverrides.notionDatabase,
+    publishTarget: normalizedOverrides.publishTarget,
+    withTts: normalizedOverrides.withTts,
+    forceTts: normalizedOverrides.forceTts,
+    ttsStrategy: normalizedOverrides.ttsStrategy,
+    ttsProvider: normalizedOverrides.ttsProvider,
+    studyTextElevenlabsModel: normalizedOverrides.studyTextElevenlabsModel,
+    googleTtsModel: normalizedOverrides.googleTtsModel,
+    upload: normalizedOverrides.upload,
+    voiceId: normalizedOverrides.voiceId,
+    voiceAccent: normalizedOverrides.voiceAccent,
   });
 
   if (!updated) {

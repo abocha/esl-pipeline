@@ -83,6 +83,7 @@ const FALLBACK_ELEVENLABS_MODELS = [
 
 type UiTtsProvider = (typeof FALLBACK_TTS_PROVIDERS)[number];
 type UiPronunciationChunkTtsProvider = (typeof FALLBACK_PRONUNCIATION_CHUNK_TTS_PROVIDERS)[number];
+type UiPublishTtsStrategy = 'auto' | 'dialogue' | 'tts';
 type PronunciationMode =
   | 'shadow_sentence'
   | 'connected_speech'
@@ -109,6 +110,16 @@ function formatSttProviderLabel(provider: SttProvider): string {
   if (provider === 'deepgram') return 'Deepgram';
   if (provider === 'elevenlabs') return 'ElevenLabs';
   return 'Google';
+}
+
+function isUiPublishTtsStrategy(value: string | null | undefined): value is UiPublishTtsStrategy {
+  return value === 'auto' || value === 'dialogue' || value === 'tts';
+}
+
+function formatPublishTtsStrategyLabel(strategy: UiPublishTtsStrategy): string {
+  if (strategy === 'auto') return 'Auto from draft';
+  if (strategy === 'dialogue') return 'Dialogue';
+  return 'TTS';
 }
 
 function isDefaultStudentName(name: string): boolean {
@@ -316,6 +327,7 @@ export const MinimalAssignment: React.FC = () => {
   const [jobStatus, setJobStatusState] = useState<JobStatus | null>(null);
   const [publishTarget, setPublishTarget] = useState<'notion' | 'anytype' | 'html'>('html');
   const [selectedTtsProvider, setSelectedTtsProvider] = useState<UiTtsProvider>('elevenlabs');
+  const [selectedTtsStrategy, setSelectedTtsStrategy] = useState<UiPublishTtsStrategy>('auto');
   const [selectedTtsModel, setSelectedTtsModel] = useState('');
   const [selectedPreset, setSelectedPreset] = useState('');
   const [jobOptions, setJobOptions] = useState<JobOptionsResponse | null>(null);
@@ -435,10 +447,6 @@ export const MinimalAssignment: React.FC = () => {
       google: googleOptions.length > 0 ? googleOptions : [...FALLBACK_GOOGLE_TTS_MODELS],
     };
   }, [jobOptions?.defaultTtsModelByProvider, jobOptions?.ttsModelOptionsByProvider]);
-  const selectedTtsModelOptions = useMemo(
-    () => ttsModelOptionsByProvider[selectedTtsProvider] ?? [],
-    [selectedTtsProvider, ttsModelOptionsByProvider],
-  );
   const elevenlabsModelOptions = useMemo(
     () => ttsModelOptionsByProvider.elevenlabs ?? [...FALLBACK_ELEVENLABS_MODELS],
     [ttsModelOptionsByProvider],
@@ -455,6 +463,33 @@ export const MinimalAssignment: React.FC = () => {
     () => ttsModelOptionsByProvider.google ?? [...FALLBACK_GOOGLE_TTS_MODELS],
     [ttsModelOptionsByProvider],
   );
+  const publishElevenlabsModelOptions = useMemo(() => {
+    if (selectedTtsStrategy === 'dialogue') {
+      return elevenlabsModelOptions.includes('eleven_v3')
+        ? ['eleven_v3']
+        : (['eleven_v3'] as const);
+    }
+    if (selectedTtsStrategy === 'tts') {
+      return elevenlabsStandardModelOptions.length > 0
+        ? elevenlabsStandardModelOptions
+        : [FALLBACK_ELEVENLABS_MODEL];
+    }
+    return [] as readonly string[];
+  }, [elevenlabsModelOptions, elevenlabsStandardModelOptions, selectedTtsStrategy]);
+  const selectedTtsModelOptions = useMemo(
+    () =>
+      selectedTtsProvider === 'google' ? googleTtsModelOptions : [...publishElevenlabsModelOptions],
+    [googleTtsModelOptions, publishElevenlabsModelOptions, selectedTtsProvider],
+  );
+  const availablePublishTtsStrategies = useMemo<UiPublishTtsStrategy[]>(() => {
+    if (!jobOptions) {
+      return selectedTtsStrategy === 'auto' ? ['auto'] : [selectedTtsStrategy, 'auto'];
+    }
+    const configured = (jobOptions?.ttsStrategies ?? []).filter(isUiPublishTtsStrategy);
+    return configured.length > 0 ? configured : ['auto'];
+  }, [jobOptions, jobOptions?.ttsStrategies, selectedTtsStrategy]);
+  const publishModelSelectionDisabled =
+    selectedTtsProvider === 'elevenlabs' && selectedTtsStrategy === 'auto';
   const defaultPronunciationChunkProvider = useMemo<UiPronunciationChunkTtsProvider>(
     () => getDefaultPronunciationChunkProviderForMode(rerunTargetPronunciationMode),
     [rerunTargetPronunciationMode],
@@ -547,6 +582,7 @@ export const MinimalAssignment: React.FC = () => {
     setPublishing(false);
     setPublishError(null);
     setSelectedTtsProvider('elevenlabs');
+    setSelectedTtsStrategy('auto');
     setSelectedTtsModel('');
     setJobStatusState(null);
     setJobProvenance(null);
@@ -716,24 +752,76 @@ export const MinimalAssignment: React.FC = () => {
   }, [jobOptions?.defaultTtsProvider, selectedTtsProvider, ttsProviders]);
 
   useEffect(() => {
+    if (!jobOptions) return;
+    const fallbackStrategy = availablePublishTtsStrategies[0];
+    if (!fallbackStrategy) return;
+    if (!availablePublishTtsStrategies.includes(selectedTtsStrategy)) {
+      setSelectedTtsStrategy(fallbackStrategy);
+    }
+  }, [availablePublishTtsStrategies, jobOptions, selectedTtsStrategy]);
+
+  useEffect(() => {
     const modelOptions = ttsModelOptionsByProvider[selectedTtsProvider] ?? [];
-    if (modelOptions.length === 0) {
-      if (selectedTtsModel) setSelectedTtsModel('');
+    if (selectedTtsProvider === 'google') {
+      if (modelOptions.length === 0) {
+        if (selectedTtsModel) setSelectedTtsModel('');
+        return;
+      }
+      const configuredDefault = jobOptions?.defaultTtsModelByProvider?.google;
+      const preferredModel =
+        configuredDefault && modelOptions.includes(configuredDefault)
+          ? configuredDefault
+          : modelOptions[0];
+      if (!preferredModel) return;
+      if (!selectedTtsModel || !modelOptions.includes(selectedTtsModel)) {
+        setSelectedTtsModel(preferredModel);
+      }
       return;
     }
-    const configuredDefault = jobOptions?.defaultTtsModelByProvider?.[selectedTtsProvider];
+
+    if (selectedTtsStrategy === 'auto') {
+      if (selectedTtsModel) {
+        setSelectedTtsModel('');
+      }
+      return;
+    }
+
+    if (selectedTtsStrategy === 'dialogue') {
+      if (selectedTtsModel !== 'eleven_v3') {
+        setSelectedTtsModel('eleven_v3');
+      }
+      return;
+    }
+
+    if (publishElevenlabsModelOptions.length === 0) {
+      if (selectedTtsModel) {
+        setSelectedTtsModel('');
+      }
+      return;
+    }
+
+    const configuredDefault = jobOptions?.defaultTtsModelByProvider?.elevenlabs;
     const preferredModel =
-      configuredDefault && modelOptions.includes(configuredDefault)
+      configuredDefault &&
+      configuredDefault !== 'eleven_v3' &&
+      publishElevenlabsModelOptions.includes(configuredDefault)
         ? configuredDefault
-        : modelOptions[0];
+        : (publishElevenlabsModelOptions.find((model) => model === FALLBACK_ELEVENLABS_MODEL) ??
+          publishElevenlabsModelOptions[0]);
     if (!preferredModel) return;
-    if (!selectedTtsModel || !modelOptions.includes(selectedTtsModel)) {
+    if (
+      !selectedTtsModel ||
+      !publishElevenlabsModelOptions.includes(selectedTtsModel) ||
+      selectedTtsModel === 'eleven_v3'
+    ) {
       setSelectedTtsModel(preferredModel);
     }
   }, [
     jobOptions?.defaultTtsModelByProvider,
+    publishElevenlabsModelOptions,
     selectedTtsModel,
     selectedTtsProvider,
+    selectedTtsStrategy,
     ttsModelOptionsByProvider,
   ]);
 
@@ -775,8 +863,8 @@ export const MinimalAssignment: React.FC = () => {
       return;
     }
     if (rerunStudyTextStrategy === 'dialogue') {
-      if (rerunStudyTextModel && rerunStudyTextModel !== 'eleven_v3') {
-        setRerunStudyTextModel('');
+      if (rerunStudyTextModel !== 'eleven_v3') {
+        setRerunStudyTextModel('eleven_v3');
       }
       return;
     }
@@ -997,13 +1085,25 @@ export const MinimalAssignment: React.FC = () => {
         if (status.publishTarget) {
           setPublishTarget(status.publishTarget);
         }
+        if (status.ttsStrategy) {
+          setSelectedTtsStrategy(status.ttsStrategy);
+        }
         const resumedTtsProvider = status.ttsProvider;
         if (isUiTtsProvider(resumedTtsProvider)) {
           setSelectedTtsProvider(resumedTtsProvider);
           setRerunStudyTextProvider(resumedTtsProvider);
           setRerunPronunciationMainProvider(resumedTtsProvider);
         }
-        if (typeof status.googleTtsModel === 'string' && status.googleTtsModel.trim().length > 0) {
+        if (
+          typeof status.studyTextElevenlabsModel === 'string' &&
+          status.studyTextElevenlabsModel.trim().length > 0
+        ) {
+          setSelectedTtsModel(status.studyTextElevenlabsModel);
+          setRerunStudyTextModel(status.studyTextElevenlabsModel);
+        } else if (
+          typeof status.googleTtsModel === 'string' &&
+          status.googleTtsModel.trim().length > 0
+        ) {
           setSelectedTtsModel(status.googleTtsModel);
           setRerunStudyTextModel(status.googleTtsModel);
           setRerunPronunciationMainModel(status.googleTtsModel);
@@ -1662,6 +1762,7 @@ export const MinimalAssignment: React.FC = () => {
         jobOverrides: buildPublishJobOverrides({
           publishTarget,
           selectedTtsProvider,
+          selectedTtsStrategy,
           selectedTtsModel,
           selectedPreset: validPreset,
           validPresetIds: presetOptionIds,
@@ -2723,13 +2824,28 @@ export const MinimalAssignment: React.FC = () => {
           </select>
         </label>
         <label className="minimal-select">
+          Study text strategy
+          <select
+            value={selectedTtsStrategy}
+            onChange={(event) => setSelectedTtsStrategy(event.target.value as UiPublishTtsStrategy)}
+          >
+            {availablePublishTtsStrategies.map((strategy) => (
+              <option key={strategy} value={strategy}>
+                {formatPublishTtsStrategyLabel(strategy)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="minimal-select">
           TTS model
           <select
             value={selectedTtsModel}
             onChange={(event) => setSelectedTtsModel(event.target.value)}
-            disabled={selectedTtsModelOptions.length === 0}
+            disabled={publishModelSelectionDisabled || selectedTtsModelOptions.length === 0}
           >
-            {selectedTtsModelOptions.length === 0 ? (
+            {publishModelSelectionDisabled ? (
+              <option value="">Auto follows the draft</option>
+            ) : selectedTtsModelOptions.length === 0 ? (
               <option value="">No models available</option>
             ) : null}
             {selectedTtsModelOptions.map((model) => (
@@ -2739,6 +2855,11 @@ export const MinimalAssignment: React.FC = () => {
             ))}
           </select>
         </label>
+        {publishModelSelectionDisabled ? (
+          <p className="minimal-muted">
+            Auto follows the draft at runtime; choose Dialogue or TTS to lock a model.
+          </p>
+        ) : null}
         <label className="minimal-select">
           Publish to
           <select

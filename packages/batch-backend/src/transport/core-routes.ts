@@ -7,6 +7,12 @@ import { approveJobForPipeline } from '../application/approve-job.js';
 import { getJobProvenance } from '../application/get-job-provenance.js';
 import { getJobStatus } from '../application/get-job-status.js';
 import { jobRecordToDto } from '../application/job-dto.js';
+import {
+  publishElevenLabsModelSchema,
+  publishGoogleTtsModelSchema,
+  publishTtsProviderSchema,
+  publishTtsStrategySchema,
+} from '../application/publish-study-text-overrides.js';
 import { deriveRecordingDisplayName } from '../application/recording-dto.js';
 import { type SubmitJobRequest, submitJob } from '../application/submit-job.js';
 import { getVersionMeta } from '../application/version-meta.js';
@@ -54,9 +60,10 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
       forceTts: z.boolean().optional(),
       notionDatabase: z.string().min(1).optional(),
       publishTarget: z.enum(['notion', 'anytype', 'html']).optional(),
-      ttsStrategy: z.enum(['auto', 'dialogue', 'tts']).optional(),
-      ttsProvider: z.enum(['elevenlabs', 'google']).optional(),
-      googleTtsModel: z.enum(['chirp3_hd', 'studio', 'neural2', 'wavenet']).optional(),
+      ttsStrategy: publishTtsStrategySchema.optional(),
+      ttsProvider: publishTtsProviderSchema.optional(),
+      studyTextElevenlabsModel: publishElevenLabsModelSchema.optional(),
+      googleTtsModel: publishGoogleTtsModelSchema.optional(),
     });
 
     const validatedData = jobSchema.parse(body);
@@ -73,6 +80,7 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
       publishTarget: validatedData.publishTarget,
       ttsStrategy: validatedData.ttsStrategy,
       ttsProvider: validatedData.ttsProvider,
+      studyTextElevenlabsModel: validatedData.studyTextElevenlabsModel,
       googleTtsModel: validatedData.googleTtsModel,
     });
 

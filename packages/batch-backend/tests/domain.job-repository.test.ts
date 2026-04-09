@@ -79,6 +79,7 @@ describe('domain/job-repository', () => {
       expect(job.forceTts).toBeNull();
       expect(job.notionDatabase).toBeNull();
       expect(job.ttsStrategy).toBeNull();
+      expect(job.studyTextElevenlabsModel).toBeNull();
       expect(job.notionUrl).toBeNull();
       expect(job.recordingId).toBeNull();
       expect(job.transcriptId).toBeNull();
@@ -117,6 +118,8 @@ describe('domain/job-repository', () => {
         forceTts: true,
         notionDatabase: 'db-123',
         ttsStrategy: 'dialogue',
+        ttsProvider: 'elevenlabs',
+        studyTextElevenlabsModel: 'eleven_v3',
       });
 
       expect(job.voiceId).toBe('voice_amanda');
@@ -124,6 +127,8 @@ describe('domain/job-repository', () => {
       expect(job.forceTts).toBe(true);
       expect(job.notionDatabase).toBe('db-123');
       expect(job.ttsStrategy).toBe('dialogue');
+      expect(job.ttsProvider).toBe('elevenlabs');
+      expect(job.studyTextElevenlabsModel).toBe('eleven_v3');
       expect(job.notionUrl).toBeNull();
       expect(job.recordingId).toBe(recordingId);
       expect(job.transcriptId).toBe(transcriptId);

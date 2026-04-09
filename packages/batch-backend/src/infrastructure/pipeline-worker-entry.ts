@@ -149,6 +149,10 @@ async function runAssignmentPipeline(
     flags.ttsProvider = payload.ttsProvider;
   }
 
+  if (payload.studyTextElevenlabsModel) {
+    flags.studyTextElevenlabsModel = payload.studyTextElevenlabsModel;
+  }
+
   if (payload.googleTtsModel) {
     flags.googleTtsModel = payload.googleTtsModel;
   }

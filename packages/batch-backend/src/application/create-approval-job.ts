@@ -14,6 +14,8 @@ import {
   DEFAULT_LEARNING_PRESET_ID,
   normalizeLearningPresetId,
 } from './learning-preset.js';
+import { collectPublishStudyTextOverrideIssues } from './publish-study-text-overrides.js';
+import { ValidationError } from './submit-job.js';
 
 export interface CreateApprovalJobParams {
   draft: DraftRecord;
@@ -64,6 +66,19 @@ export async function createApprovalJobFromDraft(
   }
 
   const jobOverrides = params.jobOverrides ?? {};
+  const publishStudyTextIssues = collectPublishStudyTextOverrideIssues({
+    ttsStrategy: jobOverrides.ttsStrategy ?? ttsStrategy,
+    ttsProvider: jobOverrides.ttsProvider,
+    studyTextElevenlabsModel: jobOverrides.studyTextElevenlabsModel,
+    googleTtsModel: jobOverrides.googleTtsModel,
+  });
+  if (publishStudyTextIssues.length > 0) {
+    const issue = publishStudyTextIssues[0];
+    throw new ValidationError(
+      issue?.message ?? 'Invalid study-text TTS override',
+      issue?.code ?? 'validation_failed',
+    );
+  }
   const withTts =
     jobOverrides.withTts ?? (jobOverrides.ttsProvider === 'google' ? true : hasTtsKey);
   const selectedPreset = preset;
@@ -87,6 +102,7 @@ export async function createApprovalJobFromDraft(
     withTts,
     ttsStrategy: jobOverrides.ttsStrategy ?? ttsStrategy,
     ttsProvider: jobOverrides.ttsProvider,
+    studyTextElevenlabsModel: jobOverrides.studyTextElevenlabsModel,
     googleTtsModel: jobOverrides.googleTtsModel,
     voiceAccent: jobOverrides.voiceAccent ?? voiceAccent,
     voiceId: jobOverrides.voiceId,

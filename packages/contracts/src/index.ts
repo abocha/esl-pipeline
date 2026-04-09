@@ -145,6 +145,7 @@ export interface SubmitJobRequest {
   upload?: JobUploadOption;
   ttsStrategy?: TtsStrategy;
   ttsProvider?: TtsProviderId;
+  studyTextElevenlabsModel?: ElevenLabsTtsModelId;
   googleTtsModel?: GoogleTtsModel;
   voiceId?: string;
   voiceAccent?: string;
@@ -159,6 +160,7 @@ export interface JobConfigOverrides {
   forceTts?: boolean;
   ttsStrategy?: TtsStrategy;
   ttsProvider?: TtsProviderId;
+  studyTextElevenlabsModel?: ElevenLabsTtsModelId;
   googleTtsModel?: GoogleTtsModel;
   upload?: JobUploadOption;
   voiceId?: string;
@@ -198,6 +200,7 @@ export interface JobStatusDto {
   publishTarget: PublishTarget | null;
   ttsStrategy: TtsStrategy | null;
   ttsProvider?: TtsProviderId | null;
+  studyTextElevenlabsModel?: ElevenLabsTtsModelId | null;
   googleTtsModel?: GoogleTtsModel | null;
   autoPublish: boolean | null;
   notionUrl: string | null;
