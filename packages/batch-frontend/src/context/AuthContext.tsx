@@ -130,5 +130,3 @@ export function useAuth(): AuthContextType {
   }
   return context;
 }
-
-export { AuthContext };

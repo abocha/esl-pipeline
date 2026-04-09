@@ -1,6 +1,14 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "entry": ["eslint.config.js", "vitest.config.ts", "scripts/**/*.mjs"],
+  "entry": [
+    "eslint.config.js",
+    "vitest.config.ts",
+    "scripts/**/*.mjs",
+    "packages/batch-backend/src/infrastructure/pipeline-worker-entry.ts",
+    "packages/batch-backend/src/tools/refresh-homework-memory.ts",
+    "packages/batch-backend/src/tools/refresh-student-memory-snapshots.ts",
+    "packages/orchestrator/examples/service/server.ts"
+  ],
   "project": ["scripts/**/*.mjs"],
   "ignoreDependencies": [
     "@elevenlabs/elevenlabs-js",
@@ -11,6 +19,16 @@
     "unified",
     "zod",
     "pino-pretty"
+  ],
+  "ignoreFiles": [
+    "packages/batch-backend/src/application/homework-memory-backfill.ts",
+    "packages/batch-backend/src/application/student-memory-snapshot-backfill.ts",
+    "packages/batch-backend/src/infrastructure/pipeline-worker-entry.ts",
+    "packages/batch-backend/src/tools/refresh-homework-memory.ts",
+    "packages/batch-backend/src/tools/refresh-student-memory-snapshots.ts",
+    "packages/orchestrator/examples/service/server.ts",
+    "scripts/smoke/telegram-ops/fake-backend.mjs",
+    "scripts/smoke/telegram-ops/fake-telegram-api.mjs"
   ],
   "ignoreBinaries": ["actionlint", "rg"],
   "workspaces": {
