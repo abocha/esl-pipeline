@@ -193,8 +193,12 @@ Docs governance and IA:
   6. `pnpm format`
   7. `pnpm run lint:repo-hygiene`
   8. `pnpm check:fast`
-  9. `git push -u origin <branch>`
-  10. `gh pr create --base main --head <branch> --title "<title>" --body-file .github/pull_request_template.md --label <release:major|release:minor|release:patch>`
+  9. If touching `packages/batch-backend/migrations/**`, `packages/batch-backend/schema.sql`, or `packages/contracts/src/contract-versions.ts`:
+     - `pnpm release:verify:contracts`
+     - `pnpm --filter @esl-pipeline/batch-backend run db:verify-baseline`
+     - if needed, regenerate baseline with `pnpm --filter @esl-pipeline/batch-backend run db:generate-baseline`
+  10. `git push -u origin <branch>`
+  11. `gh pr create --base main --head <branch> --title "<title>" --body-file .github/pull_request_template.md --label <release:major|release:minor|release:patch>`
 - Pull request body protocol:
   - Use `.github/pull_request_template.md` sections exactly:
     - `Summary`
@@ -202,6 +206,7 @@ Docs governance and IA:
     - `Risk Notes`
     - `Checklist`
   - In `Validation`, include commands actually run, including `pnpm format`, `pnpm run lint:repo-hygiene`, `pnpm check:fast`, targeted tests, and manual smoke if applicable.
+  - When migrations, schema baselines, or contract-version files change, also include `pnpm release:verify:contracts` and `pnpm --filter @esl-pipeline/batch-backend run db:verify-baseline`.
 - Mandatory release label protocol:
   - Every PR targeting `main` must have exactly one release label:
     - `release:major`

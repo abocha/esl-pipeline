@@ -94,6 +94,12 @@ This validates:
 1. Contract versions are valid semver.
 2. `DB_MIGRATION_HEAD` matches latest migration in `packages/batch-backend/migrations`.
 
+Pre-PR rule when migrations or schema baselines change:
+
+1. Run `pnpm release:verify:contracts`.
+2. Run `pnpm --filter @esl-pipeline/batch-backend run db:verify-baseline`.
+3. If schema verification reports drift, regenerate with `pnpm --filter @esl-pipeline/batch-backend run db:generate-baseline` and commit the updated `packages/batch-backend/schema.sql`.
+
 ## Non-Goals
 
 1. Supporting older runtime branches by default.
