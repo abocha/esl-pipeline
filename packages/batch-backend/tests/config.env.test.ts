@@ -56,6 +56,9 @@ describe('config/env - core defaults', () => {
         expect(cfg.generation.providers.openai.requestTimeoutMs).toBe(240_000);
         expect(cfg.generation.providers.googleAiStudio.requestTimeoutMs).toBe(240_000);
         expect(cfg.generation.providers.openrouter.requestTimeoutMs).toBe(240_000);
+        expect(cfg.generation.models.googleAiStudio.allowed).toEqual(
+          expect.arrayContaining(['gemma-4-31b-it', 'gemma-4-26b-a4b-it']),
+        );
         // Orchestrator core defaults
         expect(cfg.orchestrator.manifestStore).toBeDefined();
         expect(['filesystem', 's3']).toContain(cfg.orchestrator.manifestStore);
