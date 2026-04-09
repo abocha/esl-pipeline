@@ -39,7 +39,7 @@ export function registerResumeBasicTests() {
       expect(api.listProfileContents).toHaveBeenCalledTimes(1);
 
       expect(screen.getByRole('heading', { name: /1\. Upload recording/i })).toBeTruthy();
-      expect(screen.getByRole('heading', { name: /6\. Publish/i })).toBeTruthy();
+      expect(screen.getByRole('heading', { name: /7\. Publish/i })).toBeTruthy();
       expect(
         (screen.getByRole('combobox', { name: /Publish to/i }) as HTMLSelectElement).value,
       ).toBe('html');

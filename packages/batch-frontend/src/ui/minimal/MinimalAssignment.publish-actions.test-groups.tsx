@@ -351,7 +351,7 @@ export function registerJobActionTests() {
 
         const reasonInput = screen.getByPlaceholderText('reason for cancellation');
         fireEvent.change(reasonInput, { target: { value: 'duplicate run' } });
-        const actionsHeading = screen.getByRole('heading', { name: /7\. Job actions/i });
+        const actionsHeading = screen.getByRole('heading', { name: /8\. Job actions/i });
         const actionsSection = actionsHeading.closest('section');
         if (!actionsSection) {
           throw new Error('Expected job actions section to be rendered');
@@ -372,7 +372,12 @@ export function registerJobActionTests() {
         vi.useFakeTimers({ shouldAdvanceTime: true });
         await renderPublishedAssignment({ status: { state: 'succeeded' } });
 
-        const cancelButton = screen.getByRole('button', { name: /Cancel job/i });
+        const actionsHeading = screen.getByRole('heading', { name: /8\. Job actions/i });
+        const actionsSection = actionsHeading.closest('section');
+        if (!actionsSection) {
+          throw new Error('Expected job actions section to be rendered');
+        }
+        const cancelButton = within(actionsSection).getByRole('button', { name: /Cancel job/i });
         expect(cancelButton.getAttribute('disabled')).not.toBeNull();
         expect(
           screen.getByText(/Cancel is only available for queued or running jobs\./i),

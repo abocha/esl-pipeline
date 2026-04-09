@@ -286,7 +286,7 @@ export async function waitForResumedPromptReady(text = 'Prompt package output') 
 }
 
 export async function waitForJobActionsReady(jobId = 'job-1') {
-  await screen.findByRole('heading', { name: /7\. Job actions/i }, { timeout: UI_WAIT_TIMEOUT_MS });
+  await screen.findByRole('heading', { name: /8\. Job actions/i }, { timeout: UI_WAIT_TIMEOUT_MS });
   await waitFor(
     () => {
       expect(screen.getAllByText(new RegExp(`Job ID: ${jobId}`, 'i')).length).toBeGreaterThan(0);

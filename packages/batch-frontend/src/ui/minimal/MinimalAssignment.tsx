@@ -284,6 +284,7 @@ export const MinimalAssignment: React.FC = () => {
 
   const [promptOptions, setPromptOptions] = useState<PromptOptionsResponse | null>(null);
   const [promptPackage, setPromptPackage] = useState<PromptPackageResponse | null>(null);
+  const [teacherNotes, setTeacherNotes] = useState('');
   const [promptText, setPromptText] = useState('');
   const [promptLoading, setPromptLoading] = useState(false);
   const [promptError, setPromptError] = useState<string | null>(null);
@@ -525,6 +526,7 @@ export const MinimalAssignment: React.FC = () => {
     setTranscriptSaving(false);
     setRetryingTranscript(false);
     setPromptPackage(null);
+    setTeacherNotes('');
     setPromptText('');
     setPromptError(null);
     setPromptCopyState('idle');
@@ -1088,6 +1090,7 @@ export const MinimalAssignment: React.FC = () => {
           try {
             const resumedPromptPackage = await fetchPromptPackage(status.promptPackageId);
             setPromptPackage(resumedPromptPackage);
+            setTeacherNotes(resumedPromptPackage.notes ?? '');
             setPromptText(resumedPromptPackage.text ?? '');
             setPromptError(null);
             if (!resolvedStudentId && resumedPromptPackage.studentId) {
@@ -1097,11 +1100,13 @@ export const MinimalAssignment: React.FC = () => {
             const message =
               error instanceof Error ? error.message : 'Unable to load prompt package.';
             setPromptPackage(null);
+            setTeacherNotes('');
             setPromptText('');
             setPromptError(message);
           }
         } else {
           setPromptPackage(null);
+          setTeacherNotes('');
           setPromptText('');
           setPromptError(null);
         }
@@ -1448,11 +1453,14 @@ export const MinimalAssignment: React.FC = () => {
     setGenerationError(null);
     setGenerationSuccess(null);
     try {
+      const normalizedTeacherNotes = teacherNotes.trim();
       const response = await createPromptPackage(recording.recordingId, {
+        ...(normalizedTeacherNotes ? { notes: normalizedTeacherNotes } : {}),
         templateId: selectedTemplateId,
         profileId: selectedProfileId || undefined,
       });
       setPromptPackage(response);
+      setTeacherNotes(response.notes ?? normalizedTeacherNotes);
       setPromptText(response.text ?? '');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to generate prompt.';
@@ -2375,7 +2383,24 @@ export const MinimalAssignment: React.FC = () => {
 
       <section className="minimal-section">
         <div className="minimal-section-header">
-          <h2>4. Prompt</h2>
+          <h2>4. Teacher notes</h2>
+        </div>
+        <p className="minimal-help">
+          Optional lesson-specific guidance. Included downstream in the prompt as{' '}
+          <code>[TEACHER_NOTES]</code>.
+        </p>
+        <textarea
+          aria-label="Teacher notes"
+          value={teacherNotes}
+          onChange={(event) => setTeacherNotes(event.target.value)}
+          rows={6}
+          placeholder="Add lesson-specific context, corrections, or priorities for this prompt..."
+        />
+      </section>
+
+      <section className="minimal-section">
+        <div className="minimal-section-header">
+          <h2>5. Prompt</h2>
           <div className="minimal-inline">
             <button
               type="button"
@@ -2436,7 +2461,7 @@ export const MinimalAssignment: React.FC = () => {
 
       <section className="minimal-section">
         <div className="minimal-section-header">
-          <h2>5. Draft</h2>
+          <h2>6. Draft</h2>
           <div className="minimal-inline">
             <button
               type="button"
@@ -2643,7 +2668,7 @@ export const MinimalAssignment: React.FC = () => {
 
       <section className="minimal-section">
         <div className="minimal-section-header">
-          <h2>6. Publish</h2>
+          <h2>7. Publish</h2>
           <button
             type="button"
             className="minimal-primary"
@@ -2758,7 +2783,7 @@ export const MinimalAssignment: React.FC = () => {
 
       <section className="minimal-section">
         <div className="minimal-section-header">
-          <h2>7. Job actions</h2>
+          <h2>8. Job actions</h2>
           <button type="button" className="minimal-secondary" onClick={() => void loadJobOptions()}>
             Refresh actions
           </button>
