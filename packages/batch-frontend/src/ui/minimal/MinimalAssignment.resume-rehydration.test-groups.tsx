@@ -116,6 +116,72 @@ export function registerResumeBasicTests() {
       expect(screen.queryByText(/Current assignment/i)).toBeNull();
     });
 
+    it('prefers an active job when refreshing recent work and the old selection disappears', async () => {
+      vi.mocked(api.listUserJobs)
+        .mockResolvedValueOnce({
+          jobs: [
+            makeJobStatus({
+              jobId: 'job-old-finished',
+              state: 'succeeded',
+              startedAt: now,
+              finishedAt: now,
+            }),
+          ],
+          total: 1,
+          limit: 20,
+          offset: 0,
+        })
+        .mockResolvedValueOnce({
+          jobs: [
+            makeJobStatus({
+              jobId: 'job-new-finished',
+              state: 'succeeded',
+              startedAt: now,
+              finishedAt: now,
+            }),
+            makeJobStatus({
+              jobId: 'job-running',
+              state: 'running',
+              startedAt: now,
+              finishedAt: null,
+            }),
+          ],
+          total: 2,
+          limit: 20,
+          offset: 0,
+        });
+      vi.mocked(api.getJobStatus).mockResolvedValueOnce(
+        makeJobStatus({
+          jobId: 'job-running',
+          state: 'running',
+          startedAt: now,
+          finishedAt: null,
+        }),
+      );
+
+      const user = createMinimalUser();
+      renderMinimalAssignment();
+
+      await waitFor(() => {
+        expect(api.listUserJobs).toHaveBeenCalledTimes(1);
+      });
+
+      await user.click(screen.getByRole('button', { name: /Refresh recent work/i }));
+
+      await waitFor(() => {
+        expect(api.listUserJobs).toHaveBeenCalledTimes(2);
+      });
+      expect(
+        (screen.getByRole('combobox', { name: /Recent assignments/i }) as HTMLSelectElement).value,
+      ).toBe('job-running');
+
+      await user.click(screen.getByRole('button', { name: /Resume selected assignment/i }));
+
+      await waitFor(() => {
+        expect(api.getJobStatus).toHaveBeenCalledWith('job-running');
+      });
+    });
+
     it('rehydrates workflow state from server job context in query params', async () => {
       const user = createMinimalUser();
       let resolveProfileOptions: (value: { profiles: { id: string; label: string }[] }) => void =

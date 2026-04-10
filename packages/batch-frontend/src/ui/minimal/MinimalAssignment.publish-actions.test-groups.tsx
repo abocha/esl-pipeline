@@ -322,6 +322,88 @@ export function registerJobActionTests() {
     );
 
     it(
+      'resets custom rerun settings when resuming a different assignment',
+      async () => {
+        const user = createMinimalUser();
+        const jobA = makeJobStatus({
+          jobId: 'job-a',
+          state: 'succeeded',
+          ttsProvider: 'elevenlabs',
+          studyTextElevenlabsModel: 'eleven_flash_v2_5',
+        });
+        const jobB = makeJobStatus({
+          jobId: 'job-b',
+          state: 'succeeded',
+          ttsProvider: 'google',
+          googleTtsModel: 'studio',
+        });
+
+        await renderPublishedAssignment({
+          status: jobA,
+          jobs: [jobA, jobB],
+        });
+        openAdvancedActions();
+
+        await user.click(screen.getByRole('button', { name: /Custom rerun/i }));
+        await user.click(screen.getByRole('checkbox', { name: /Study-text audio/i }));
+        fireEvent.change(screen.getByRole('textbox', { name: /Study-text voice ID/i }), {
+          target: { value: 'voice-from-a' },
+        });
+        fireEvent.change(screen.getByRole('combobox', { name: /Study-text provider/i }), {
+          target: { value: 'elevenlabs' },
+        });
+
+        vi.mocked(api.getJobStatus).mockResolvedValueOnce(jobB);
+        vi.mocked(api.fetchJobProvenance).mockResolvedValueOnce({
+          job: { sourceJobId: 'job-a' },
+          promptPackage: { id: 'pkg-1' },
+          draft: { id: 'draft-1' },
+          tts: null,
+          lineage: {},
+          actions: [],
+        } as never);
+
+        fireEvent.change(screen.getByRole('combobox', { name: /Recent assignments/i }), {
+          target: { value: 'job-b' },
+        });
+        await user.click(screen.getByRole('button', { name: /Resume selected assignment/i }));
+
+        await waitFor(() => {
+          expect(screen.getAllByText(/Job ID: job-b/i).length).toBeGreaterThan(0);
+        });
+
+        openAdvancedActions();
+        await user.click(screen.getByRole('button', { name: /Custom rerun/i }));
+        await user.click(screen.getByRole('checkbox', { name: /Study-text audio/i }));
+
+        expect(
+          (screen.getByRole('combobox', { name: /Study-text provider/i }) as HTMLSelectElement)
+            .value,
+        ).toBe('google');
+        expect(
+          (screen.getByRole('combobox', { name: /Study-text model/i }) as HTMLSelectElement).value,
+        ).toBe('studio');
+        expect(
+          (screen.getByRole('textbox', { name: /Study-text voice ID/i }) as HTMLInputElement).value,
+        ).toBe('');
+
+        await user.click(screen.getByRole('button', { name: /Queue custom rerun/i }));
+
+        await waitFor(() => {
+          expect(api.rerunJob).toHaveBeenLastCalledWith(
+            'job-b',
+            expect.objectContaining({
+              regenerateStudyTextAudio: true,
+              studyTextTtsProvider: 'google',
+              studyTextGoogleTtsModel: 'studio',
+            }),
+          );
+        });
+      },
+      INTEGRATION_TEST_TIMEOUT_MS,
+    );
+
+    it(
       'disables publish model selection in auto mode and filters elevenlabs models by strategy',
       async () => {
         await renderPublishedAssignment();
