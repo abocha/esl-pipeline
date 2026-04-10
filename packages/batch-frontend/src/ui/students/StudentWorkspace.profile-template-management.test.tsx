@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 
@@ -41,8 +41,7 @@ describe('StudentWorkspace profile and template management', () => {
     const templateEditor = screen.getByPlaceholderText(
       /Select a template to edit/i,
     ) as HTMLTextAreaElement;
-    await user.clear(templateEditor);
-    await user.type(templateEditor, String.raw`HEADER\nUPDATED`);
+    fireEvent.change(templateEditor, { target: { value: String.raw`HEADER\nUPDATED` } });
     await user.click(screen.getByRole('button', { name: /Save Template Content/i }));
 
     await waitFor(() => {
@@ -65,7 +64,9 @@ describe('StudentWorkspace profile and template management', () => {
 
     await renderLoadedWorkspace();
 
-    await user.type(screen.getByLabelText(/New template ID/i), 'hw/custom-template.md');
+    fireEvent.change(screen.getByLabelText(/New template ID/i), {
+      target: { value: 'hw/custom-template.md' },
+    });
     await user.click(screen.getByRole('button', { name: /Create Template/i }));
 
     await waitFor(() => {

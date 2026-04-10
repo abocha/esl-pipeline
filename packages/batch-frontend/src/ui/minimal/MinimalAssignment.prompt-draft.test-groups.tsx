@@ -1,3 +1,4 @@
+import { fireEvent } from '@testing-library/react';
 import { beforeEach, describe, it } from 'vitest';
 
 import {
@@ -7,6 +8,7 @@ import {
   testExpect as expect,
   makeRecording,
   now,
+  openRecordingSettings,
   renderMinimalAssignment,
   renderPromptReadyAssignment,
   testScreen as screen,
@@ -68,7 +70,8 @@ export function registerPromptEditorTests() {
       const user = createMinimalUser();
       renderMinimalAssignment();
 
-      const sttProviderSelect = await screen.findByRole('combobox', { name: /STT provider/i });
+      openRecordingSettings();
+      const sttProviderSelect = await screen.findByRole('combobox', { name: /Transcript engine/i });
       await waitFor(() => {
         expect((sttProviderSelect as HTMLSelectElement).value).toBe('google');
       });
@@ -108,8 +111,7 @@ export function registerPromptEditorTests() {
       await waitFor(() => {
         expect((profileEditor as HTMLTextAreaElement).disabled).toBe(false);
       });
-      await user.clear(profileEditor);
-      await user.type(profileEditor, 'Updated profile content');
+      fireEvent.change(profileEditor, { target: { value: 'Updated profile content' } });
       await user.click(screen.getByRole('button', { name: /Save profile/i }));
 
       await waitFor(() => {
@@ -145,8 +147,10 @@ export function registerPromptEditorTests() {
       await screen.findByDisplayValue('Student transcript text');
 
       const teacherNotesInput = screen.getByRole('textbox', { name: /Teacher notes/i });
-      await user.type(teacherNotesInput, ' Focus on article usage and stress patterns. ');
-      await user.click(screen.getByRole('button', { name: /Generate prompt/i }));
+      fireEvent.change(teacherNotesInput, {
+        target: { value: ' Focus on article usage and stress patterns. ' },
+      });
+      await user.click(screen.getByRole('button', { name: /Generate instructions/i }));
 
       await waitFor(() => {
         expect(api.createPromptPackage).toHaveBeenCalledWith('rec-1', {
@@ -239,7 +243,7 @@ export function registerPromptStudentSelectionTests() {
         expect(screen.getByDisplayValue('Student transcript text')).toBeTruthy();
       });
 
-      await user.click(screen.getByRole('button', { name: /Generate prompt/i }));
+      await user.click(screen.getByRole('button', { name: /Generate instructions/i }));
 
       await waitFor(() => {
         expect(api.createPromptPackage).toHaveBeenCalledWith('rec-1', {

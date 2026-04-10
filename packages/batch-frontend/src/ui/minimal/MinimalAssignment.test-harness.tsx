@@ -2,6 +2,7 @@
 import {
   act,
   configure,
+  fireEvent,
   type RenderResult,
   render,
   screen,
@@ -195,39 +196,26 @@ export function makeLearningPreset(
   };
 }
 
-export async function publishAssignmentFlow(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
-  await screen.findByDisplayValue('Student transcript text', {}, { timeout: UI_WAIT_TIMEOUT_MS });
-
-  await user.click(screen.getByRole('button', { name: /Generate prompt/i }));
-  await screen.findByDisplayValue('Prompt package output', {}, { timeout: UI_WAIT_TIMEOUT_MS });
-
-  const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
-  expect(draftTextarea).toBeTruthy();
-  if (!draftTextarea) {
-    throw new Error('Expected draft textarea to be rendered');
-  }
-  await user.type(draftTextarea, '# Final draft');
-  await previewCurrentDraft(user);
-
-  await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
-  await screen.findByText(/Job ID: job-1/i, {}, { timeout: UI_WAIT_TIMEOUT_MS });
+export async function previewCurrentDraft(_user: ReturnType<typeof userEvent.setup>) {
+  fireEvent.click(screen.getByRole('button', { name: /Preview assignment/i }));
+  await screen.findByText(
+    'Preview ready for current assignment.',
+    {},
+    {
+      timeout: UI_WAIT_TIMEOUT_MS,
+    },
+  );
 }
 
-export async function previewCurrentDraft(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByRole('button', { name: /Preview current draft/i }));
-  await screen.findByText('Preview ready for current draft.', {}, { timeout: UI_WAIT_TIMEOUT_MS });
-}
-
-export async function preparePromptReady(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+export async function preparePromptReady(_user: ReturnType<typeof userEvent.setup>) {
+  fireEvent.click(screen.getByRole('button', { name: /Drop audio file/i }));
   await screen.findByDisplayValue('Student transcript text', {}, { timeout: UI_WAIT_TIMEOUT_MS });
 
-  await user.click(screen.getByRole('button', { name: /Generate prompt/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Generate instructions/i }));
   await screen.findByDisplayValue('Prompt package output', {}, { timeout: UI_WAIT_TIMEOUT_MS });
 }
 
-export function hydrateResumedAssignment(
+function hydrateResumedAssignment(
   overrides: {
     status?: Partial<api.JobStatus>;
     jobs?: api.JobStatus[];
@@ -282,18 +270,58 @@ export function hydrateResumedAssignment(
   return status;
 }
 
-export async function waitForResumedPromptReady(text = 'Prompt package output') {
+async function waitForResumedPromptReady(text = 'Prompt package output') {
   await screen.findByDisplayValue(text, {}, { timeout: UI_WAIT_TIMEOUT_MS });
 }
 
-export async function waitForJobActionsReady(jobId = 'job-1') {
-  await screen.findByRole('heading', { name: /8\. Job actions/i }, { timeout: UI_WAIT_TIMEOUT_MS });
+async function waitForJobActionsReady(jobId = 'job-1') {
+  await screen.findByRole(
+    'heading',
+    { name: /Advanced actions/i },
+    { timeout: UI_WAIT_TIMEOUT_MS },
+  );
+  fireEvent.click(screen.getByRole('button', { name: /Show advanced actions/i }));
   await waitFor(
     () => {
       expect(screen.getAllByText(new RegExp(`Job ID: ${jobId}`, 'i')).length).toBeGreaterThan(0);
     },
     { timeout: UI_WAIT_TIMEOUT_MS },
   );
+}
+
+export function openRecordingSettings() {
+  const trigger = screen.queryByText(/Recording settings/i);
+  if (trigger && !(trigger.closest('details') as HTMLDetailsElement | null)?.open) {
+    fireEvent.click(trigger);
+  }
+}
+
+export function openGenerationSettings() {
+  const trigger = screen.queryByText(/Generation settings/i);
+  if (trigger && !(trigger.closest('details') as HTMLDetailsElement | null)?.open) {
+    fireEvent.click(trigger);
+  }
+}
+
+export function openGenerationLimits() {
+  const trigger = screen.queryByText(/Generation limits and provider notes/i);
+  if (trigger && !(trigger.closest('details') as HTMLDetailsElement | null)?.open) {
+    fireEvent.click(trigger);
+  }
+}
+
+export function openPublishingSettings() {
+  const trigger = screen.queryByText(/Audio and publishing settings/i);
+  if (trigger && !(trigger.closest('details') as HTMLDetailsElement | null)?.open) {
+    fireEvent.click(trigger);
+  }
+}
+
+export function openAdvancedActions() {
+  const trigger = screen.queryByRole('button', { name: /Show advanced actions/i });
+  if (trigger) {
+    fireEvent.click(trigger);
+  }
 }
 
 export function createMinimalUser(): ReturnType<typeof userEvent.setup> {
@@ -376,27 +404,6 @@ export async function renderGenerationReadyAssignment(
       draftText: overrides.draftText ?? '# Draft markdown',
     },
     { user: createMinimalUser(), waitFor: 'promptReady' },
-  );
-}
-
-export async function renderResumedFailureAssignment(
-  overrides: Parameters<typeof hydrateResumedAssignment>[0] = {},
-): Promise<
-  RenderResult & {
-    user: ReturnType<typeof userEvent.setup>;
-    status: ReturnType<typeof hydrateResumedAssignment>;
-  }
-> {
-  return renderResumedAssignment(
-    {
-      ...overrides,
-      status: {
-        state: 'failed',
-        error: 'Something went wrong.',
-        ...overrides.status,
-      },
-    },
-    { waitFor: 'jobActions' },
   );
 }
 
@@ -731,14 +738,11 @@ export function setupMinimalAssignmentTest() {
 }
 
 export const testAct = act;
-export const testRender = render;
 export const testScreen: typeof screen = screen;
 export const testWaitFor = waitFor;
 export const testWithin = within;
-export const testUserEvent = userEvent;
 export const testExpect = expect;
 export const testVi = vi;
 export const testApi = api;
-export const testMinimalAssignment = MinimalAssignment;
 
 export { INTEGRATION_TEST_TIMEOUT_MS, now, UI_WAIT_TIMEOUT_MS };

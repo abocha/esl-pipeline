@@ -238,12 +238,7 @@ describe('application/get-job-options', () => {
       result.generation?.modelOptions
         .filter((option) => option.provider === 'google_ai_studio')
         .map((option) => option.id),
-    ).toEqual(
-      expect.arrayContaining([
-        'gemma-4-31b-it',
-        'gemma-4-26b-a4b-it',
-      ]),
-    );
+    ).toEqual(expect.arrayContaining(['gemma-4-31b-it', 'gemma-4-26b-a4b-it']));
     expect(result.voiceAccents.length).toBeGreaterThan(0);
     expect(Array.isArray(result.voices)).toBe(true);
     expect(result.supportedActions).toHaveLength(3);

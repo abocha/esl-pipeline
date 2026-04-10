@@ -9,79 +9,79 @@
 
 ## Plan Files
 
-| Kind | Title | Path |
-| --- | --- | --- |
-| backlog | Optimization Backlog | `docs/plans/backlog/README.md` |
-| completed | legacy-retirement-plan_wave1.md | `docs/plans/completed/legacy-retirement/legacy-retirement-plan_wave1.md` |
-| completed | legacy-retirement-plan_wave2.md | `docs/plans/completed/legacy-retirement/legacy-retirement-plan_wave2.md` |
-| completed | Completed Plan Waves | `docs/plans/completed/README.md` |
-| completed | Wave 1 - Quick ROI | `docs/plans/completed/wave-1-quick-roi.md` |
-| completed | Wave 2 - Maintainability | `docs/plans/completed/wave-2-maintainability.md` |
-| completed | Wave 3 - Schema Unification | `docs/plans/completed/wave-3-schema-unification.md` |
-| standalone | Fix Plan: Preview/Published HTML Behavior + Pronunciation Placement + Inline Code Semantics | `docs/plans/fix-plan-for-preview-and-html.md` |
-| phase/detail | Phase 3 - Enforcement Expansion to Backend/Frontend Docs | `docs/plans/harness-agentic-docs-upgrade/phase-3-enforcement-expansion-backend-frontend.md` |
-| phase/detail | Phase 4 - Enforcement Expansion to Selected Package READMEs | `docs/plans/harness-agentic-docs-upgrade/phase-4-enforcement-expansion-package-readmes.md` |
-| phase/detail | Phase 5 - Gardening Calibration and Rule Promotion Loop | `docs/plans/harness-agentic-docs-upgrade/phase-5-gardening-calibration-and-rule-promotion.md` |
-| topic | Harness-Aligned Agentic Docs Upgrade - Next Phases | `docs/plans/harness-agentic-docs-upgrade/README.md` |
-| phase/detail | Verification, Acceptance, and Assumptions | `docs/plans/harness-agentic-docs-upgrade/verification-acceptance-and-assumptions.md` |
-| phase/detail | Legacy Retirement Backlog | `docs/plans/legacy-retirement/legacy-retirement-backlog.md` |
-| phase/detail | Legacy Retirement Execution Playbook | `docs/plans/legacy-retirement/legacy-retirement-execution-playbook.md` |
-| phase/detail | Legacy Retirement Inventory | `docs/plans/legacy-retirement/legacy-retirement-inventory.md` |
-| phase/detail | CLI Removal Release and Migration Note Template | `docs/plans/orchestrator-library-only-roadmap/cli-removal-release-and-migration-note-template.md` |
-| topic | Orchestrator Library-Only Roadmap | `docs/plans/orchestrator-library-only-roadmap/README.md` |
-| phase/detail | Stage 1: Baseline and Ownership Lock | `docs/plans/orchestrator-library-only-roadmap/stage-1-baseline-and-ownership-lock.md` |
-| phase/detail | Stage 2: CLI Sunset Declaration | `docs/plans/orchestrator-library-only-roadmap/stage-2-cli-sunset-declaration.md` |
-| phase/detail | Stage 3: Shared Duplication Extraction | `docs/plans/orchestrator-library-only-roadmap/stage-3-shared-duplication-extraction.md` |
-| phase/detail | Stage 4: Orchestrator Core Modularization | `docs/plans/orchestrator-library-only-roadmap/stage-4-orchestrator-core-modularization.md` |
-| phase/detail | Stage 5: API v2 Additive Contract | `docs/plans/orchestrator-library-only-roadmap/stage-5-api-v2-additive-contract.md` |
-| phase/detail | Stage 6: Backend Cutover and Parity | `docs/plans/orchestrator-library-only-roadmap/stage-6-backend-cutover-and-parity.md` |
-| phase/detail | Stage 7: CLI, Wizard, and Path-Picker Removal | `docs/plans/orchestrator-library-only-roadmap/stage-7-cli-wizard-path-picker-removal.md` |
-| phase/detail | Stage 8: Final Cleanup and CI Guardrails | `docs/plans/orchestrator-library-only-roadmap/stage-8-final-cleanup-and-ci-guardrails.md` |
-| phase/detail | PostgreSQL Hardening Status Snapshot (2026-02-20) | `docs/plans/postgres-hardening-offline-migration/current-state-strengths-weaknesses-roadmap.md` |
-| phase/detail | Offline Data Migration Runbook | `docs/plans/postgres-hardening-offline-migration/offline-data-migration-runbook.md` |
-| phase/detail | Phase 1 Canonical Object Map | `docs/plans/postgres-hardening-offline-migration/phase-1-canonical-object-map.md` |
-| phase/detail | Phase 1 Drift Report | `docs/plans/postgres-hardening-offline-migration/phase-1-drift-report.md` |
-| phase/detail | Phase 1 Migration Decision Ledger | `docs/plans/postgres-hardening-offline-migration/phase-1-migration-decision-ledger.md` |
-| phase/detail | Phase 1 Implementation Plan - Re-baseline and Drift Elimination | `docs/plans/postgres-hardening-offline-migration/phase-1-rebaseline-and-drift-elimination.md` |
-| phase/detail | Phase 2 Execution Plan - Versioned Migration System | `docs/plans/postgres-hardening-offline-migration/phase-2-versioned-migration-system.md` |
-| phase/detail | Phase 3 Execution Spec: Query, Index, and Data Path Optimization | `docs/plans/postgres-hardening-offline-migration/phase-3-query-index-and-data-path-optimization.md` |
-| phase/detail | Phase 4 - Connection and Startup Hardening | `docs/plans/postgres-hardening-offline-migration/phase-4-connection-and-startup-hardening.md` |
-| phase/detail | Phase 5 - RLS Readiness and Enablement Path | `docs/plans/postgres-hardening-offline-migration/phase-5-rls-readiness-and-enablement-path.md` |
-| phase/detail | Phase 6 Plan: Testing and CI Hardening (Postgres + Redis | `docs/plans/postgres-hardening-offline-migration/phase-6-testing-and-ci-hardening.md` |
-| topic | PostgreSQL Hardening + Offline Data-Preserving Migration Plan | `docs/plans/postgres-hardening-offline-migration/README.md` |
-| phase/detail | Verification, Acceptance Criteria, and Assumptions | `docs/plans/postgres-hardening-offline-migration/verification-acceptance-and-assumptions.md` |
-| standalone | End-to-End Plan: Pronunciation Shadow-Sentence Audio + HTML Word TTS | `docs/plans/Pronunciation-Shadow-Sentence-Audio-and-HTML-Word-TTS.md` |
-| router | Plans Directory | `docs/plans/README.md` |
-| phase/detail | Phase 1 - Core Contracts | `docs/plans/stt-multi-provider-refactor/phase-1-core-contracts.md` |
-| phase/detail | Phase 2 - Deepgram and ElevenLabs Adapters | `docs/plans/stt-multi-provider-refactor/phase-2-provider-adapters-deepgram-elevenlabs.md` |
-| phase/detail | Phase 3 - Google Cloud STT V2 Adapter | `docs/plans/stt-multi-provider-refactor/phase-3-provider-adapter-google-v2.md` |
-| phase/detail | Phase 4 - Backend Integration and Cache Policy | `docs/plans/stt-multi-provider-refactor/phase-4-backend-integration-and-cache.md` |
-| phase/detail | Phase 5 - Schema, Backfill, and Cutover | `docs/plans/stt-multi-provider-refactor/phase-5-schema-backfill-and-cutover.md` |
-| phase/detail | Phase 6 - Frontend, Docs, and Operations | `docs/plans/stt-multi-provider-refactor/phase-6-frontend-docs-and-ops.md` |
-| topic | STT Multi-Provider Refactor | `docs/plans/stt-multi-provider-refactor/README.md` |
-| phase/detail | Verification, Acceptance, and Assumptions | `docs/plans/stt-multi-provider-refactor/verification-acceptance-and-assumptions.md` |
-| phase/detail | Phase 1 - Requirements, Contracts, and Schema Boundaries | `docs/plans/student-memory-system-upgrade/phase-1-requirements-contracts-and-schema-boundaries.md` |
-| phase/detail | Phase 2 - Lesson Memory Pipeline | `docs/plans/student-memory-system-upgrade/phase-2-lesson-memory-pipeline.md` |
-| phase/detail | Phase 3 - Homework Memory Pipeline | `docs/plans/student-memory-system-upgrade/phase-3-homework-memory-pipeline.md` |
-| phase/detail | Phase 4 - Student Rollup and Retrieval Packaging | `docs/plans/student-memory-system-upgrade/phase-4-student-rollup-and-retrieval-packaging.md` |
-| phase/detail | Phase 5 - Prompt Template and Provider Runtime | `docs/plans/student-memory-system-upgrade/phase-5-prompt-template-and-provider-runtime.md` |
-| phase/detail | Phase 6 - Frontend, Ops, Backfill, and Rollout | `docs/plans/student-memory-system-upgrade/phase-6-frontend-ops-backfill-and-rollout.md` |
-| topic | Student Memory System Upgrade | `docs/plans/student-memory-system-upgrade/README.md` |
-| phase/detail | Verification, Acceptance, and Assumptions | `docs/plans/student-memory-system-upgrade/verification-acceptance-and-assumptions.md` |
-| phase/detail | Student Profile Enrichment Implementation Plan | `docs/plans/student-profile-enrichment/implementation.md` |
-| phase/detail | Phase 1: Candidate Fact Pipeline | `docs/plans/student-profile-enrichment/phase-1-candidate-fact-pipeline.md` |
-| phase/detail | Phase 2: Teacher Review Workflow | `docs/plans/student-profile-enrichment/phase-2-teacher-review-workflow.md` |
-| phase/detail | Phase 3: Profile Revision Promotion | `docs/plans/student-profile-enrichment/phase-3-profile-revision-promotion.md` |
-| phase/detail | Phase 4: Starter Profile UX | `docs/plans/student-profile-enrichment/phase-4-starter-profile-ux.md` |
-| phase/detail | Phase 5: Live Transition and Operator Adoption | `docs/plans/student-profile-enrichment/phase-5-live-transition-and-operator-adoption.md` |
-| topic | Student Profile Enrichment and Verification | `docs/plans/student-profile-enrichment/README.md` |
-| phase/detail | Verification, Acceptance, and Assumptions | `docs/plans/student-profile-enrichment/verification-acceptance-and-assumptions.md` |
-| phase/detail | A-Track Telegram UX Audit | `docs/plans/telegram-ops-control-panel-hardening/a-track-ux-audit.md` |
-| phase/detail | A-Track Completion Plan: `A2` Closeout + `A` Durability | `docs/plans/telegram-ops-control-panel-hardening/A2-closeout.md` |
-| phase/detail | A-Track Phase Plan: `A3` UX Activation | `docs/plans/telegram-ops-control-panel-hardening/A3-ux-activation.md` |
-| phase/detail | `A4` Guided Telegram Interaction | `docs/plans/telegram-ops-control-panel-hardening/A4-guided-telegram-interaction.md` |
-| phase/detail | Telegram Bot Future Student-Facing Roadmap (Draft) | `docs/plans/telegram-ops-control-panel-hardening/future-student-facing-roadmap.md` |
-| phase/detail | Plan: Add `/student`, `/jobs`, `/today`, and `/botstatus` to Telegram Ops Bot | `docs/plans/telegram-ops-control-panel-hardening/new-operations.md` |
-| topic | Telegram Ops Control Panel Hardening Plan | `docs/plans/telegram-ops-control-panel-hardening/README.md` |
-| phase/detail | V2 Telegram Ops Bot UX: Summary → Browse → Detail → Share | `docs/plans/telegram-ops-control-panel-hardening/ux-v2.md` |
-| standalone | Versioning Private Contracts Overhaul | `docs/plans/versioning-private-contracts-overhaul.md` |
+| Kind         | Title                                                                                       | Path                                                                                                |
+| ------------ | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| backlog      | Optimization Backlog                                                                        | `docs/plans/backlog/README.md`                                                                      |
+| completed    | legacy-retirement-plan_wave1.md                                                             | `docs/plans/completed/legacy-retirement/legacy-retirement-plan_wave1.md`                            |
+| completed    | legacy-retirement-plan_wave2.md                                                             | `docs/plans/completed/legacy-retirement/legacy-retirement-plan_wave2.md`                            |
+| completed    | Completed Plan Waves                                                                        | `docs/plans/completed/README.md`                                                                    |
+| completed    | Wave 1 - Quick ROI                                                                          | `docs/plans/completed/wave-1-quick-roi.md`                                                          |
+| completed    | Wave 2 - Maintainability                                                                    | `docs/plans/completed/wave-2-maintainability.md`                                                    |
+| completed    | Wave 3 - Schema Unification                                                                 | `docs/plans/completed/wave-3-schema-unification.md`                                                 |
+| standalone   | Fix Plan: Preview/Published HTML Behavior + Pronunciation Placement + Inline Code Semantics | `docs/plans/fix-plan-for-preview-and-html.md`                                                       |
+| phase/detail | Phase 3 - Enforcement Expansion to Backend/Frontend Docs                                    | `docs/plans/harness-agentic-docs-upgrade/phase-3-enforcement-expansion-backend-frontend.md`         |
+| phase/detail | Phase 4 - Enforcement Expansion to Selected Package READMEs                                 | `docs/plans/harness-agentic-docs-upgrade/phase-4-enforcement-expansion-package-readmes.md`          |
+| phase/detail | Phase 5 - Gardening Calibration and Rule Promotion Loop                                     | `docs/plans/harness-agentic-docs-upgrade/phase-5-gardening-calibration-and-rule-promotion.md`       |
+| topic        | Harness-Aligned Agentic Docs Upgrade - Next Phases                                          | `docs/plans/harness-agentic-docs-upgrade/README.md`                                                 |
+| phase/detail | Verification, Acceptance, and Assumptions                                                   | `docs/plans/harness-agentic-docs-upgrade/verification-acceptance-and-assumptions.md`                |
+| phase/detail | Legacy Retirement Backlog                                                                   | `docs/plans/legacy-retirement/legacy-retirement-backlog.md`                                         |
+| phase/detail | Legacy Retirement Execution Playbook                                                        | `docs/plans/legacy-retirement/legacy-retirement-execution-playbook.md`                              |
+| phase/detail | Legacy Retirement Inventory                                                                 | `docs/plans/legacy-retirement/legacy-retirement-inventory.md`                                       |
+| phase/detail | CLI Removal Release and Migration Note Template                                             | `docs/plans/orchestrator-library-only-roadmap/cli-removal-release-and-migration-note-template.md`   |
+| topic        | Orchestrator Library-Only Roadmap                                                           | `docs/plans/orchestrator-library-only-roadmap/README.md`                                            |
+| phase/detail | Stage 1: Baseline and Ownership Lock                                                        | `docs/plans/orchestrator-library-only-roadmap/stage-1-baseline-and-ownership-lock.md`               |
+| phase/detail | Stage 2: CLI Sunset Declaration                                                             | `docs/plans/orchestrator-library-only-roadmap/stage-2-cli-sunset-declaration.md`                    |
+| phase/detail | Stage 3: Shared Duplication Extraction                                                      | `docs/plans/orchestrator-library-only-roadmap/stage-3-shared-duplication-extraction.md`             |
+| phase/detail | Stage 4: Orchestrator Core Modularization                                                   | `docs/plans/orchestrator-library-only-roadmap/stage-4-orchestrator-core-modularization.md`          |
+| phase/detail | Stage 5: API v2 Additive Contract                                                           | `docs/plans/orchestrator-library-only-roadmap/stage-5-api-v2-additive-contract.md`                  |
+| phase/detail | Stage 6: Backend Cutover and Parity                                                         | `docs/plans/orchestrator-library-only-roadmap/stage-6-backend-cutover-and-parity.md`                |
+| phase/detail | Stage 7: CLI, Wizard, and Path-Picker Removal                                               | `docs/plans/orchestrator-library-only-roadmap/stage-7-cli-wizard-path-picker-removal.md`            |
+| phase/detail | Stage 8: Final Cleanup and CI Guardrails                                                    | `docs/plans/orchestrator-library-only-roadmap/stage-8-final-cleanup-and-ci-guardrails.md`           |
+| phase/detail | PostgreSQL Hardening Status Snapshot (2026-02-20)                                           | `docs/plans/postgres-hardening-offline-migration/current-state-strengths-weaknesses-roadmap.md`     |
+| phase/detail | Offline Data Migration Runbook                                                              | `docs/plans/postgres-hardening-offline-migration/offline-data-migration-runbook.md`                 |
+| phase/detail | Phase 1 Canonical Object Map                                                                | `docs/plans/postgres-hardening-offline-migration/phase-1-canonical-object-map.md`                   |
+| phase/detail | Phase 1 Drift Report                                                                        | `docs/plans/postgres-hardening-offline-migration/phase-1-drift-report.md`                           |
+| phase/detail | Phase 1 Migration Decision Ledger                                                           | `docs/plans/postgres-hardening-offline-migration/phase-1-migration-decision-ledger.md`              |
+| phase/detail | Phase 1 Implementation Plan - Re-baseline and Drift Elimination                             | `docs/plans/postgres-hardening-offline-migration/phase-1-rebaseline-and-drift-elimination.md`       |
+| phase/detail | Phase 2 Execution Plan - Versioned Migration System                                         | `docs/plans/postgres-hardening-offline-migration/phase-2-versioned-migration-system.md`             |
+| phase/detail | Phase 3 Execution Spec: Query, Index, and Data Path Optimization                            | `docs/plans/postgres-hardening-offline-migration/phase-3-query-index-and-data-path-optimization.md` |
+| phase/detail | Phase 4 - Connection and Startup Hardening                                                  | `docs/plans/postgres-hardening-offline-migration/phase-4-connection-and-startup-hardening.md`       |
+| phase/detail | Phase 5 - RLS Readiness and Enablement Path                                                 | `docs/plans/postgres-hardening-offline-migration/phase-5-rls-readiness-and-enablement-path.md`      |
+| phase/detail | Phase 6 Plan: Testing and CI Hardening (Postgres + Redis                                    | `docs/plans/postgres-hardening-offline-migration/phase-6-testing-and-ci-hardening.md`               |
+| topic        | PostgreSQL Hardening + Offline Data-Preserving Migration Plan                               | `docs/plans/postgres-hardening-offline-migration/README.md`                                         |
+| phase/detail | Verification, Acceptance Criteria, and Assumptions                                          | `docs/plans/postgres-hardening-offline-migration/verification-acceptance-and-assumptions.md`        |
+| standalone   | End-to-End Plan: Pronunciation Shadow-Sentence Audio + HTML Word TTS                        | `docs/plans/Pronunciation-Shadow-Sentence-Audio-and-HTML-Word-TTS.md`                               |
+| router       | Plans Directory                                                                             | `docs/plans/README.md`                                                                              |
+| phase/detail | Phase 1 - Core Contracts                                                                    | `docs/plans/stt-multi-provider-refactor/phase-1-core-contracts.md`                                  |
+| phase/detail | Phase 2 - Deepgram and ElevenLabs Adapters                                                  | `docs/plans/stt-multi-provider-refactor/phase-2-provider-adapters-deepgram-elevenlabs.md`           |
+| phase/detail | Phase 3 - Google Cloud STT V2 Adapter                                                       | `docs/plans/stt-multi-provider-refactor/phase-3-provider-adapter-google-v2.md`                      |
+| phase/detail | Phase 4 - Backend Integration and Cache Policy                                              | `docs/plans/stt-multi-provider-refactor/phase-4-backend-integration-and-cache.md`                   |
+| phase/detail | Phase 5 - Schema, Backfill, and Cutover                                                     | `docs/plans/stt-multi-provider-refactor/phase-5-schema-backfill-and-cutover.md`                     |
+| phase/detail | Phase 6 - Frontend, Docs, and Operations                                                    | `docs/plans/stt-multi-provider-refactor/phase-6-frontend-docs-and-ops.md`                           |
+| topic        | STT Multi-Provider Refactor                                                                 | `docs/plans/stt-multi-provider-refactor/README.md`                                                  |
+| phase/detail | Verification, Acceptance, and Assumptions                                                   | `docs/plans/stt-multi-provider-refactor/verification-acceptance-and-assumptions.md`                 |
+| phase/detail | Phase 1 - Requirements, Contracts, and Schema Boundaries                                    | `docs/plans/student-memory-system-upgrade/phase-1-requirements-contracts-and-schema-boundaries.md`  |
+| phase/detail | Phase 2 - Lesson Memory Pipeline                                                            | `docs/plans/student-memory-system-upgrade/phase-2-lesson-memory-pipeline.md`                        |
+| phase/detail | Phase 3 - Homework Memory Pipeline                                                          | `docs/plans/student-memory-system-upgrade/phase-3-homework-memory-pipeline.md`                      |
+| phase/detail | Phase 4 - Student Rollup and Retrieval Packaging                                            | `docs/plans/student-memory-system-upgrade/phase-4-student-rollup-and-retrieval-packaging.md`        |
+| phase/detail | Phase 5 - Prompt Template and Provider Runtime                                              | `docs/plans/student-memory-system-upgrade/phase-5-prompt-template-and-provider-runtime.md`          |
+| phase/detail | Phase 6 - Frontend, Ops, Backfill, and Rollout                                              | `docs/plans/student-memory-system-upgrade/phase-6-frontend-ops-backfill-and-rollout.md`             |
+| topic        | Student Memory System Upgrade                                                               | `docs/plans/student-memory-system-upgrade/README.md`                                                |
+| phase/detail | Verification, Acceptance, and Assumptions                                                   | `docs/plans/student-memory-system-upgrade/verification-acceptance-and-assumptions.md`               |
+| phase/detail | Student Profile Enrichment Implementation Plan                                              | `docs/plans/student-profile-enrichment/implementation.md`                                           |
+| phase/detail | Phase 1: Candidate Fact Pipeline                                                            | `docs/plans/student-profile-enrichment/phase-1-candidate-fact-pipeline.md`                          |
+| phase/detail | Phase 2: Teacher Review Workflow                                                            | `docs/plans/student-profile-enrichment/phase-2-teacher-review-workflow.md`                          |
+| phase/detail | Phase 3: Profile Revision Promotion                                                         | `docs/plans/student-profile-enrichment/phase-3-profile-revision-promotion.md`                       |
+| phase/detail | Phase 4: Starter Profile UX                                                                 | `docs/plans/student-profile-enrichment/phase-4-starter-profile-ux.md`                               |
+| phase/detail | Phase 5: Live Transition and Operator Adoption                                              | `docs/plans/student-profile-enrichment/phase-5-live-transition-and-operator-adoption.md`            |
+| topic        | Student Profile Enrichment and Verification                                                 | `docs/plans/student-profile-enrichment/README.md`                                                   |
+| phase/detail | Verification, Acceptance, and Assumptions                                                   | `docs/plans/student-profile-enrichment/verification-acceptance-and-assumptions.md`                  |
+| phase/detail | A-Track Telegram UX Audit                                                                   | `docs/plans/telegram-ops-control-panel-hardening/a-track-ux-audit.md`                               |
+| phase/detail | A-Track Completion Plan: `A2` Closeout + `A` Durability                                     | `docs/plans/telegram-ops-control-panel-hardening/A2-closeout.md`                                    |
+| phase/detail | A-Track Phase Plan: `A3` UX Activation                                                      | `docs/plans/telegram-ops-control-panel-hardening/A3-ux-activation.md`                               |
+| phase/detail | `A4` Guided Telegram Interaction                                                            | `docs/plans/telegram-ops-control-panel-hardening/A4-guided-telegram-interaction.md`                 |
+| phase/detail | Telegram Bot Future Student-Facing Roadmap (Draft)                                          | `docs/plans/telegram-ops-control-panel-hardening/future-student-facing-roadmap.md`                  |
+| phase/detail | Plan: Add `/student`, `/jobs`, `/today`, and `/botstatus` to Telegram Ops Bot               | `docs/plans/telegram-ops-control-panel-hardening/new-operations.md`                                 |
+| topic        | Telegram Ops Control Panel Hardening Plan                                                   | `docs/plans/telegram-ops-control-panel-hardening/README.md`                                         |
+| phase/detail | V2 Telegram Ops Bot UX: Summary → Browse → Detail → Share                                   | `docs/plans/telegram-ops-control-panel-hardening/ux-v2.md`                                          |
+| standalone   | Versioning Private Contracts Overhaul                                                       | `docs/plans/versioning-private-contracts-overhaul.md`                                               |

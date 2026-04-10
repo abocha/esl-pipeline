@@ -259,6 +259,8 @@ for (const pkg of report.packages) {
   lines.push('');
 }
 
-writeFileSync(reportJsonPath, JSON.stringify(report, null, 2));
+writeFileSync(reportJsonPath, `${JSON.stringify(report, null, 2)}\n`);
 writeFileSync(reportMdPath, `${lines.join('\n')}\n`);
-console.log(lines.join('\n'));
+
+console.log(`[timings] wrote ${path.relative(rootDir, reportJsonPath)}`);
+console.log(`[timings] wrote ${path.relative(rootDir, reportMdPath)}`);
