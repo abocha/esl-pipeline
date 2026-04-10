@@ -5,7 +5,6 @@ import type {
   GenerateDraftRequest,
   GenerateDraftResponse,
   JobOptionsResponse,
-  JobProvenanceResponse,
   JobStatus,
   MarkdownValidationResponse,
   ProfileRevisionSummaryResponse,
@@ -19,14 +18,10 @@ import type {
 } from '../../utils/api';
 import {
   approveJob,
-  cancelJob,
   createDraft,
   createPromptPackage,
-  fetchDraft,
   fetchJobOptions,
-  fetchJobProvenance,
   fetchPromptOptions,
-  fetchPromptPackage,
   fetchRecordingTranscript,
   fetchStudentOptions,
   GenerationDraftApiError,
@@ -36,10 +31,8 @@ import {
   getRecording,
   listProfileContents,
   listProfileRevisions,
-  listUserJobs,
   materializeDraft,
   renderHtmlPreview,
-  rerunJob,
   restoreProfileRevision,
   retryRecordingTranscription,
   updateDraft,
@@ -49,16 +42,16 @@ import {
   validateMarkdown,
 } from '../../utils/api';
 import { copyTextToClipboard } from '../../utils/clipboard';
-import { DropZone } from '../shared/DropZone';
-import { UploadProgress } from '../shared/UploadProgress';
 import {
-  buildCustomRerunPayload,
-  buildPresetRerunPayload,
   buildPublishJobOverrides,
   getDraftPreviewGate,
   getNextGenerationQuotaSnapshot,
   hasActiveGenerationQuotaSelection,
 } from './MinimalAssignment.logic';
+import {
+  AdvancedActionsStage,
+  useAdvancedActionsController,
+} from './MinimalAssignment.advanced';
 import {
   getJobPollingDecision,
   getRecordingPollingDecision,
@@ -66,6 +59,21 @@ import {
   isTerminalJobState,
 } from './MinimalAssignment.polling';
 import { getGenerationQuotaWindowDecision } from './MinimalAssignment.quota-window';
+import {
+  type HydratedAssignmentSnapshot,
+  useMinimalAssignmentResume,
+} from './MinimalAssignment.resume';
+import {
+  AssignmentStageSection,
+  ContextStageSection,
+  ReviewStageSection,
+  SourceStageSection,
+  StartStageSection,
+  WorkflowOverview,
+  type WorkflowStage,
+  type WorkflowStageStatus,
+  type WorkflowSummaryItem,
+} from './MinimalAssignment.stages';
 import './MinimalAssignment.css';
 
 const AUDIO_EXTENSIONS = ['.wav', '.mp3', '.m4a', '.aac', '.ogg', '.opus'];
@@ -95,12 +103,6 @@ type PronunciationMode =
 
 function isUiTtsProvider(value: string | null | undefined): value is UiTtsProvider {
   return value === 'elevenlabs' || value === 'google';
-}
-
-function isUiPronunciationChunkTtsProvider(
-  value: string | null | undefined,
-): value is UiPronunciationChunkTtsProvider {
-  return value === 'edge-tts' || value === 'elevenlabs' || value === 'google';
 }
 
 function isSttProvider(value: string | null | undefined): value is SttProvider {
@@ -141,13 +143,6 @@ function sortStudentsForPicker(students: StudentOption[]): StudentOption[] {
 
     return left.id.localeCompare(right.id);
   });
-}
-
-function readJobIdFromQuery(): string | null {
-  if (globalThis.window === undefined) return null;
-  const params = new URLSearchParams(globalThis.location.search);
-  const value = params.get('jobId')?.trim();
-  return value || null;
 }
 
 function writeJobIdToQuery(jobId: string | null): void {
@@ -252,104 +247,6 @@ interface SelectablePresetOption {
   source: 'learning' | 'legacy';
 }
 
-type WorkflowStageId = 'start' | 'source' | 'context' | 'assignment' | 'review' | 'advanced';
-type WorkflowStageStatus = 'current' | 'complete' | 'available' | 'locked';
-
-interface WorkflowStage {
-  id: WorkflowStageId;
-  title: string;
-  description: string;
-  status: WorkflowStageStatus;
-}
-
-interface WorkflowSummaryItem {
-  label: string;
-  value: string;
-  note?: string;
-}
-
-interface WorkflowOverviewProps {
-  currentStageTitle: string;
-  stages: WorkflowStage[];
-  summaryItems: WorkflowSummaryItem[];
-}
-
-interface StageSectionProps {
-  stage: WorkflowStage;
-  actions?: React.ReactNode;
-  children: React.ReactNode;
-}
-
-function formatWorkflowStageStatusLabel(status: WorkflowStageStatus): string {
-  if (status === 'complete') return 'Done';
-  if (status === 'current') return 'Now';
-  if (status === 'available') return 'Available';
-  return 'Locked';
-}
-
-function WorkflowOverview({ currentStageTitle, stages, summaryItems }: WorkflowOverviewProps) {
-  return (
-    <section className="minimal-overview" aria-labelledby="assignment-builder-title">
-      <div className="minimal-overview-header">
-        <div className="minimal-overview-copy">
-          <span className="minimal-eyebrow">Assignment Builder</span>
-          <h1 id="assignment-builder-title">Build and share a lesson assignment</h1>
-          <p>
-            Move from recording to published lesson in guided stages, with the technical controls
-            tucked away until you actually need them.
-          </p>
-        </div>
-        <div className="minimal-stage-state is-current">Current focus: {currentStageTitle}</div>
-      </div>
-
-      <div className="minimal-summary-grid">
-        {summaryItems.map((item) => (
-          <div key={item.label} className="minimal-summary-card">
-            <span className="minimal-summary-label">{item.label}</span>
-            <span className="minimal-summary-value">{item.value}</span>
-            {item.note ? <span className="minimal-summary-note">{item.note}</span> : null}
-          </div>
-        ))}
-      </div>
-
-      <ol className="minimal-stage-list" aria-label="Assignment progress">
-        {stages.map((stage, index) => (
-          <li key={stage.id} className={`minimal-stage-item is-${stage.status}`}>
-            <span className="minimal-stage-step" aria-hidden="true">
-              {index + 1}
-            </span>
-            <div className={`minimal-stage-state is-${stage.status}`}>
-              {formatWorkflowStageStatusLabel(stage.status)}
-            </div>
-            <span className="minimal-stage-name">{stage.title}</span>
-            <span className="minimal-stage-description">{stage.description}</span>
-          </li>
-        ))}
-      </ol>
-    </section>
-  );
-}
-
-function StageSection({ stage, actions, children }: StageSectionProps) {
-  return (
-    <section className={`minimal-section minimal-stage-card is-${stage.status}`}>
-      <div className="minimal-stage-header">
-        <div className="minimal-stage-header-copy">
-          <h2>{stage.title}</h2>
-          <p>{stage.description}</p>
-        </div>
-        <div className="minimal-stage-header-actions">
-          <span className={`minimal-stage-state is-${stage.status}`}>
-            {formatWorkflowStageStatusLabel(stage.status)}
-          </span>
-          {actions}
-        </div>
-      </div>
-      {children}
-    </section>
-  );
-}
-
 function buildSelectablePresetOptions(
   options: Pick<JobOptionsResponse, 'learningPresets' | 'presets'> | null | undefined,
 ): SelectablePresetOption[] {
@@ -434,14 +331,7 @@ export const MinimalAssignment: React.FC = () => {
   const [studentOptions, setStudentOptions] = useState<StudentOption[]>([]);
   const [studentOptionsError, setStudentOptionsError] = useState<string | null>(null);
   const [selectedStudentId, setSelectedStudentId] = useState('');
-  const [resumeJobs, setResumeJobs] = useState<JobStatus[]>([]);
-  const [selectedResumeJobId, setSelectedResumeJobId] = useState('');
-  const [resumeLoading, setResumeLoading] = useState(false);
-  const [resumeError, setResumeError] = useState<string | null>(null);
-  const [pinnedJobExpanded, setPinnedJobExpanded] = useState(true);
   const [uploadCacheNotice, setUploadCacheNotice] = useState<string | null>(null);
-  const resumeInitializedRef = useRef(false);
-  const preserveAdvancedActionsOnNextJobSwitchRef = useRef<string | null>(null);
 
   const [profileOptions, setProfileOptions] = useState<{ id: string; label: string }[]>([]);
   const [profileOptionsError, setProfileOptionsError] = useState<string | null>(null);
@@ -457,44 +347,8 @@ export const MinimalAssignment: React.FC = () => {
   >(null);
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
 
-  const [actionBusy, setActionBusy] = useState<'rerun' | 'cancel' | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
-  const [jobProvenance, setJobProvenance] = useState<JobProvenanceResponse | null>(null);
-  const [jobProvenanceLoading, setJobProvenanceLoading] = useState(false);
-  const [jobProvenanceError, setJobProvenanceError] = useState<string | null>(null);
-
-  const [showAdvancedActions, setShowAdvancedActions] = useState(false);
-  const [showCustomRerun, setShowCustomRerun] = useState(false);
-  const [rerunStudyTextAudio, setRerunStudyTextAudio] = useState(false);
-  const [rerunPronunciationMainAudio, setRerunPronunciationMainAudio] = useState(false);
-  const [rerunPronunciationChunkAudio, setRerunPronunciationChunkAudio] = useState(false);
-  const [rerunStudyTextProvider, setRerunStudyTextProvider] = useState<UiTtsProvider>('elevenlabs');
-  const [rerunStudyTextModel, setRerunStudyTextModel] = useState('');
-  const [rerunStudyTextVoiceId, setRerunStudyTextVoiceId] = useState('');
-  const [rerunStudyTextVoiceAccent, setRerunStudyTextVoiceAccent] = useState('');
-  const [rerunStudyTextStrategy, setRerunStudyTextStrategy] = useState<'auto' | 'dialogue' | 'tts'>(
-    'auto',
-  );
-  const [rerunStudyTextDialogueLanguage, setRerunStudyTextDialogueLanguage] = useState('');
-  const [rerunStudyTextDialogueStability, setRerunStudyTextDialogueStability] = useState('');
-  const [rerunStudyTextDialogueSeed, setRerunStudyTextDialogueSeed] = useState('');
-  const [rerunPronunciationMainProvider, setRerunPronunciationMainProvider] =
-    useState<UiTtsProvider>('elevenlabs');
-  const [rerunPronunciationMainModel, setRerunPronunciationMainModel] = useState('');
-  const [rerunPronunciationMainVoiceId, setRerunPronunciationMainVoiceId] = useState('');
-  const [rerunPronunciationMainVoiceAccent, setRerunPronunciationMainVoiceAccent] = useState('');
-  const [rerunPronunciationChunkProvider, setRerunPronunciationChunkProvider] =
-    useState<UiPronunciationChunkTtsProvider>('edge-tts');
-  const [rerunPronunciationChunkProviderDirty, setRerunPronunciationChunkProviderDirty] =
-    useState(false);
   const [rerunTargetPronunciationMode, setRerunTargetPronunciationMode] =
     useState<PronunciationMode | null>(null);
-  const [rerunPronunciationChunkModel, setRerunPronunciationChunkModel] = useState('');
-  const [rerunPronunciationChunkVoiceId, setRerunPronunciationChunkVoiceId] = useState('');
-  const [rerunPronunciationChunkVoiceAccent, setRerunPronunciationChunkVoiceAccent] = useState('');
-  const [rerunPronunciationChunkEdgeVoice, setRerunPronunciationChunkEdgeVoice] = useState('');
-  const [cancelReason, setCancelReason] = useState('');
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewing, setPreviewing] = useState(false);
@@ -600,47 +454,6 @@ export const MinimalAssignment: React.FC = () => {
   const presetOptionIds = useMemo(() => presetOptions.map((preset) => preset.id), [presetOptions]);
   const learningPresetCatalogEnabled = (jobOptions?.learningPresets?.length ?? 0) > 0;
 
-  const loadJobProvenance = useCallback(async (jobId: string) => {
-    setJobProvenanceLoading(true);
-    setJobProvenanceError(null);
-    try {
-      const provenance = await fetchJobProvenance(jobId);
-      setJobProvenance(provenance);
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Unable to load job provenance details.';
-      setJobProvenanceError(message);
-    } finally {
-      setJobProvenanceLoading(false);
-    }
-  }, []);
-
-  const loadResumeJobs = useCallback(async (): Promise<JobStatus[]> => {
-    try {
-      const response = await listUserJobs({
-        limit: 20,
-        offset: 0,
-        order: 'desc',
-      });
-      const jobs = response.jobs ?? [];
-      setResumeJobs(jobs);
-      setSelectedResumeJobId((current) => {
-        if (current && jobs.some((job) => job.jobId === current)) return current;
-        return (
-          jobs.find((job) => isActivelyProcessingJobState(job.state))?.jobId ?? jobs[0]?.jobId ?? ''
-        );
-      });
-      setResumeError(null);
-      return jobs;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to load recent jobs.';
-      setResumeError(message);
-      setResumeJobs([]);
-      setSelectedResumeJobId('');
-      return [];
-    }
-  }, []);
-
   const invalidateDraftGenerationRequests = useCallback(() => {
     generationRequestVersionRef.current += 1;
     setGeneratingDraft(false);
@@ -686,32 +499,16 @@ export const MinimalAssignment: React.FC = () => {
     setSelectedTtsStrategy('auto');
     setSelectedTtsModel('');
     setJobStatusState(null);
-    setJobProvenance(null);
-    setJobProvenanceError(null);
-    setJobProvenanceLoading(false);
+    setRerunTargetPronunciationMode(null);
     setSelectedFileName(null);
     setUploadError(null);
     setUploadProgress(0);
     setUploading(false);
     setUploadCacheNotice(null);
-    setResumeError(null);
-    setPinnedJobExpanded(true);
     setPreviewHtml(null);
     setPreviewError(null);
     setPreviewing(false);
     setLastPreviewedDraftHash(null);
-    preserveAdvancedActionsOnNextJobSwitchRef.current = null;
-    setShowAdvancedActions(false);
-    setShowCustomRerun(false);
-    setRerunStudyTextAudio(false);
-    setRerunPronunciationMainAudio(false);
-    setRerunPronunciationChunkAudio(false);
-    setRerunStudyTextProvider('elevenlabs');
-    setRerunStudyTextModel('');
-    setRerunPronunciationMainProvider('elevenlabs');
-    setRerunPronunciationMainModel('');
-    setRerunPronunciationChunkProvider('edge-tts');
-    setRerunPronunciationChunkModel('');
   }, [invalidateDraftGenerationRequests]);
 
   const loadPromptOptions = useCallback(async () => {
@@ -772,6 +569,78 @@ export const MinimalAssignment: React.FC = () => {
       setProfileOptionsError(message);
     }
   }, []);
+
+  const applyHydratedSnapshot = useCallback((snapshot: HydratedAssignmentSnapshot) => {
+    setJobStatusState(snapshot.jobStatus);
+    setPublishTarget(snapshot.publishTarget);
+    setSelectedTtsProvider(snapshot.selectedTtsProvider);
+    setSelectedTtsStrategy(snapshot.selectedTtsStrategy);
+    setSelectedTtsModel(snapshot.selectedTtsModel);
+    setSelectedPreset(snapshot.selectedPreset);
+    setRecording(snapshot.recording);
+    setRecordingStatus(snapshot.recordingStatus);
+    setRecordingError(snapshot.recordingError);
+    setSelectedFileName(snapshot.selectedFileName);
+    setTranscript(snapshot.transcript);
+    setTranscriptText(snapshot.transcriptText);
+    setTranscriptStatus(snapshot.transcriptStatus);
+    setTranscriptError(snapshot.transcriptError);
+    setPromptPackage(snapshot.promptPackage);
+    setTeacherNotes(snapshot.teacherNotes);
+    setPromptText(snapshot.promptText);
+    setPromptError(snapshot.promptError);
+    setDraft(snapshot.draft);
+    setDraftText(snapshot.draftText);
+    setDraftError(snapshot.draftError);
+    setRerunTargetPronunciationMode(snapshot.rerunTargetPronunciationMode);
+    setPublishError(snapshot.publishError);
+    setSelectedStudentId(snapshot.selectedStudentId);
+    setSelectedProfileId(snapshot.selectedProfileId);
+    setProfileSelectionMode(snapshot.profileSelectionMode);
+    setUploadError(snapshot.uploadError);
+    setUploadCacheNotice(snapshot.uploadCacheNotice);
+    setPreviewHtml(snapshot.previewHtml);
+    setPreviewError(snapshot.previewError);
+    setLastPreviewedDraftHash(snapshot.lastPreviewedDraftHash);
+    setValidation(snapshot.validation);
+    setValidationError(snapshot.validationError);
+  }, []);
+
+  const applyCurrentJobStatus = useCallback((job: JobStatus | null) => {
+    setJobStatusState(job);
+  }, []);
+
+  const resume = useMinimalAssignmentResume({
+    applyHydratedSnapshot,
+    applyCurrentJobStatus,
+    invalidateDraftGenerationRequests,
+    jobOptions,
+    presetOptionIds,
+    resolveBoundProfileId,
+    currentPublishTarget: publishTarget,
+    currentSelectedTtsProvider: selectedTtsProvider,
+    currentSelectedTtsStrategy: selectedTtsStrategy,
+    currentSelectedTtsModel: selectedTtsModel,
+    currentSelectedPreset: selectedPreset,
+    currentSelectedStudentId: selectedStudentId,
+    currentSelectedProfileId: selectedProfileId,
+    currentProfileSelectionMode: profileSelectionMode,
+  });
+
+  const advancedActions = useAdvancedActionsController({
+    jobStatus,
+    jobOptions,
+    selectedTtsProvider,
+    ttsProviders,
+    googleTtsModelOptions,
+    elevenlabsStandardModelOptions,
+    defaultPronunciationChunkProvider,
+    applyJobStatusTransition: resume.applyJobStatusTransition,
+    refreshResumeJobs: resume.loadResumeJobs,
+  });
+  const resumeLoadResumeJobs = resume.loadResumeJobs;
+  const resumeSetPinnedJobExpanded = resume.setPinnedJobExpanded;
+  const resumeSetSelectedResumeJobId = resume.setSelectedResumeJobId;
 
   useEffect(() => {
     void loadPromptOptions();
@@ -929,129 +798,6 @@ export const MinimalAssignment: React.FC = () => {
   ]);
 
   useEffect(() => {
-    if (!ttsProviders.includes(rerunStudyTextProvider)) {
-      setRerunStudyTextProvider(selectedTtsProvider);
-    }
-  }, [rerunStudyTextProvider, selectedTtsProvider, ttsProviders]);
-
-  useEffect(() => {
-    if (!ttsProviders.includes(rerunPronunciationMainProvider)) {
-      setRerunPronunciationMainProvider(selectedTtsProvider);
-    }
-  }, [rerunPronunciationMainProvider, selectedTtsProvider, ttsProviders]);
-
-  useEffect(() => {
-    if (!isUiPronunciationChunkTtsProvider(rerunPronunciationChunkProvider)) {
-      setRerunPronunciationChunkProvider(defaultPronunciationChunkProvider);
-    }
-  }, [defaultPronunciationChunkProvider, rerunPronunciationChunkProvider]);
-
-  useEffect(() => {
-    if (!rerunPronunciationChunkProviderDirty) {
-      setRerunPronunciationChunkProvider(defaultPronunciationChunkProvider);
-    }
-  }, [defaultPronunciationChunkProvider, rerunPronunciationChunkProviderDirty, jobStatus?.jobId]);
-
-  useEffect(() => {
-    if (rerunStudyTextProvider === 'google') {
-      if (!rerunStudyTextModel || !googleTtsModelOptions.includes(rerunStudyTextModel)) {
-        setRerunStudyTextModel(googleTtsModelOptions[0] ?? '');
-      }
-      return;
-    }
-    if (rerunStudyTextStrategy === 'auto') {
-      if (rerunStudyTextModel) {
-        setRerunStudyTextModel('');
-      }
-      return;
-    }
-    if (rerunStudyTextStrategy === 'dialogue') {
-      if (rerunStudyTextModel !== 'eleven_v3') {
-        setRerunStudyTextModel('eleven_v3');
-      }
-      return;
-    }
-    if (
-      rerunStudyTextModel &&
-      !elevenlabsStandardModelOptions.includes(
-        rerunStudyTextModel as (typeof elevenlabsStandardModelOptions)[number],
-      )
-    ) {
-      setRerunStudyTextModel('');
-    }
-  }, [
-    elevenlabsStandardModelOptions,
-    googleTtsModelOptions,
-    rerunStudyTextModel,
-    rerunStudyTextProvider,
-    rerunStudyTextStrategy,
-  ]);
-
-  useEffect(() => {
-    if (rerunPronunciationMainProvider === 'google') {
-      if (
-        !rerunPronunciationMainModel ||
-        !googleTtsModelOptions.includes(rerunPronunciationMainModel)
-      ) {
-        setRerunPronunciationMainModel(googleTtsModelOptions[0] ?? '');
-      }
-      return;
-    }
-    if (
-      !rerunPronunciationMainModel ||
-      !elevenlabsStandardModelOptions.includes(
-        rerunPronunciationMainModel as (typeof elevenlabsStandardModelOptions)[number],
-      )
-    ) {
-      setRerunPronunciationMainModel(
-        elevenlabsStandardModelOptions.find((model) => model === 'eleven_flash_v2_5') ??
-          elevenlabsStandardModelOptions[0] ??
-          '',
-      );
-    }
-  }, [
-    elevenlabsStandardModelOptions,
-    googleTtsModelOptions,
-    rerunPronunciationMainModel,
-    rerunPronunciationMainProvider,
-  ]);
-
-  useEffect(() => {
-    if (rerunPronunciationChunkProvider === 'google') {
-      if (
-        !rerunPronunciationChunkModel ||
-        !googleTtsModelOptions.includes(rerunPronunciationChunkModel)
-      ) {
-        setRerunPronunciationChunkModel(googleTtsModelOptions[0] ?? '');
-      }
-      return;
-    }
-    if (rerunPronunciationChunkProvider === 'elevenlabs') {
-      if (
-        !rerunPronunciationChunkModel ||
-        !elevenlabsStandardModelOptions.includes(
-          rerunPronunciationChunkModel as (typeof elevenlabsStandardModelOptions)[number],
-        )
-      ) {
-        setRerunPronunciationChunkModel(
-          elevenlabsStandardModelOptions.find((model) => model === 'eleven_flash_v2_5') ??
-            elevenlabsStandardModelOptions[0] ??
-            '',
-        );
-      }
-      return;
-    }
-    if (rerunPronunciationChunkModel) {
-      setRerunPronunciationChunkModel('');
-    }
-  }, [
-    elevenlabsStandardModelOptions,
-    googleTtsModelOptions,
-    rerunPronunciationChunkModel,
-    rerunPronunciationChunkProvider,
-  ]);
-
-  useEffect(() => {
     if (generationProviders.length === 0) {
       if (selectedGenerationProvider) {
         setSelectedGenerationProvider('');
@@ -1156,249 +902,6 @@ export const MinimalAssignment: React.FC = () => {
     },
     [resetFlow, selectedStudentId, selectedSttProvider, uploading],
   );
-
-  const hydrateFromJob = useCallback(
-    async (jobId: string, knownJobs?: JobStatus[]) => {
-      if (!jobId) return;
-
-      invalidateDraftGenerationRequests();
-      setResumeLoading(true);
-      setResumeError(null);
-      setPublishError(null);
-      setActionError(null);
-      setActionSuccess(null);
-      setUploadError(null);
-      setUploadCacheNotice(null);
-      setPreviewHtml(null);
-      setPreviewError(null);
-      setLastPreviewedDraftHash(null);
-
-      try {
-        const status = await getJobStatus(jobId);
-        setJobStatusState(status);
-        setSelectedResumeJobId(status.jobId);
-        setPinnedJobExpanded(!isTerminalJobState(status.state));
-        writeJobIdToQuery(status.jobId);
-        const candidateJobs = knownJobs ?? resumeJobs;
-        let resolvedStudentId =
-          candidateJobs.find((job) => job.jobId === status.jobId)?.studentId ??
-          status.studentId ??
-          null;
-
-        if (status.publishTarget) {
-          setPublishTarget(status.publishTarget);
-        }
-        if (status.ttsStrategy) {
-          setSelectedTtsStrategy(status.ttsStrategy);
-        }
-        const resumedTtsProvider = status.ttsProvider;
-        if (isUiTtsProvider(resumedTtsProvider)) {
-          setSelectedTtsProvider(resumedTtsProvider);
-          setRerunStudyTextProvider(resumedTtsProvider);
-          setRerunPronunciationMainProvider(resumedTtsProvider);
-        }
-        if (
-          typeof status.studyTextElevenlabsModel === 'string' &&
-          status.studyTextElevenlabsModel.trim().length > 0
-        ) {
-          setSelectedTtsModel(status.studyTextElevenlabsModel);
-          setRerunStudyTextModel(status.studyTextElevenlabsModel);
-        } else if (
-          typeof status.googleTtsModel === 'string' &&
-          status.googleTtsModel.trim().length > 0
-        ) {
-          setSelectedTtsModel(status.googleTtsModel);
-          setRerunStudyTextModel(status.googleTtsModel);
-          setRerunPronunciationMainModel(status.googleTtsModel);
-        }
-        const resumedPresetId = status.learningPresetId ?? status.preset;
-        if (resumedPresetId) {
-          setSelectedPreset((current) =>
-            normalizePresetSelection(
-              jobOptions ? presetOptionIds : undefined,
-              resumedPresetId,
-              current,
-            ),
-          );
-        }
-
-        if (status.recordingId) {
-          try {
-            const resumedRecording = await getRecording(status.recordingId);
-            setRecording(resumedRecording);
-            setRecordingStatus(resumedRecording.status);
-            setRecordingError(resumedRecording.error ?? null);
-            setSelectedFileName(resumedRecording.displayName || null);
-            if (resumedRecording.studentId) {
-              resolvedStudentId = resumedRecording.studentId;
-            }
-
-            if (
-              status.transcriptId ||
-              resumedRecording.transcriptId ||
-              resumedRecording.status === 'transcribed'
-            ) {
-              try {
-                const resumedTranscript = await fetchRecordingTranscript(
-                  resumedRecording.recordingId,
-                );
-                setTranscript(resumedTranscript);
-                setTranscriptText(resumedTranscript.text ?? '');
-                setTranscriptStatus('ready');
-                setTranscriptError(null);
-              } catch (error) {
-                const message =
-                  error instanceof Error ? error.message : 'Unable to load transcript.';
-                if (
-                  resumedRecording.status === 'transcribing' ||
-                  resumedRecording.status === 'queued'
-                ) {
-                  setTranscriptStatus('processing');
-                  setTranscriptError(null);
-                } else {
-                  setTranscriptStatus('failed');
-                  setTranscriptError(message);
-                }
-              }
-            } else if (resumedRecording.status === 'failed') {
-              setTranscriptStatus('failed');
-              setTranscriptError(resumedRecording.error ?? 'Transcription failed.');
-            } else {
-              setTranscript(null);
-              setTranscriptText('');
-              setTranscriptStatus('processing');
-              setTranscriptError(null);
-            }
-          } catch (error) {
-            const message = error instanceof Error ? error.message : 'Unable to load recording.';
-            setRecording(null);
-            setRecordingStatus(null);
-            setRecordingError(message);
-            setTranscript(null);
-            setTranscriptText('');
-            setTranscriptStatus('failed');
-            setTranscriptError(message);
-          }
-        } else {
-          setRecording(null);
-          setRecordingStatus(null);
-          setRecordingError(null);
-          setTranscript(null);
-          setTranscriptText('');
-          setTranscriptStatus('idle');
-          setTranscriptError(null);
-        }
-
-        if (status.promptPackageId) {
-          try {
-            const resumedPromptPackage = await fetchPromptPackage(status.promptPackageId);
-            setPromptPackage(resumedPromptPackage);
-            setTeacherNotes(resumedPromptPackage.notes ?? '');
-            setPromptText(resumedPromptPackage.text ?? '');
-            setPromptError(null);
-            if (!resolvedStudentId && resumedPromptPackage.studentId) {
-              resolvedStudentId = resumedPromptPackage.studentId;
-            }
-          } catch (error) {
-            const message =
-              error instanceof Error ? error.message : 'Unable to load prompt package.';
-            setPromptPackage(null);
-            setTeacherNotes('');
-            setPromptText('');
-            setPromptError(message);
-          }
-        } else {
-          setPromptPackage(null);
-          setTeacherNotes('');
-          setPromptText('');
-          setPromptError(null);
-        }
-
-        const persistedPronunciationMode = status.pronunciationMode ?? null;
-
-        if (status.draftId) {
-          try {
-            const resumedDraft = await fetchDraft(status.draftId);
-            setDraft(resumedDraft);
-            setDraftText(resumedDraft.text ?? '');
-            setRerunTargetPronunciationMode(
-              detectPronunciationModeFromDraft(resumedDraft.text ?? ''),
-            );
-            setDraftError(null);
-            if (!resolvedStudentId && resumedDraft.studentId) {
-              resolvedStudentId = resumedDraft.studentId;
-            }
-          } catch (error) {
-            const message = error instanceof Error ? error.message : 'Unable to load saved draft.';
-            setDraft(null);
-            setDraftText('');
-            setRerunTargetPronunciationMode(persistedPronunciationMode);
-            setDraftError(message);
-          }
-        } else {
-          setDraft(null);
-          setDraftText('');
-          setRerunTargetPronunciationMode(persistedPronunciationMode);
-          setDraftError(null);
-        }
-
-        setValidation(null);
-        setValidationError(null);
-        if (status.state === 'failed' && status.error) {
-          setPublishError(describeJobFailureReason(status));
-        }
-        if (resolvedStudentId) {
-          setProfileSelectionMode('auto');
-          setSelectedStudentId(resolvedStudentId);
-          setSelectedProfileId(resolveBoundProfileId(resolvedStudentId));
-        }
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : 'Unable to resume the selected assignment.';
-        setResumeError(message);
-      } finally {
-        setResumeLoading(false);
-      }
-    },
-    [
-      invalidateDraftGenerationRequests,
-      jobOptions,
-      presetOptionIds,
-      resolveBoundProfileId,
-      resumeJobs,
-    ],
-  );
-
-  const handleResumeSelectedJob = useCallback(async () => {
-    if (!selectedResumeJobId) return;
-    await hydrateFromJob(selectedResumeJobId, resumeJobs);
-    await loadResumeJobs();
-  }, [hydrateFromJob, loadResumeJobs, resumeJobs, selectedResumeJobId]);
-
-  useEffect(() => {
-    if (resumeInitializedRef.current) return;
-    resumeInitializedRef.current = true;
-
-    const initializeResume = async () => {
-      setResumeLoading(true);
-      const jobs = await loadResumeJobs();
-      const queryJobId = readJobIdFromQuery();
-      if (queryJobId) {
-        setSelectedResumeJobId(queryJobId);
-        await hydrateFromJob(queryJobId, jobs);
-        return;
-      }
-
-      const candidate = jobs.find((job) => isActivelyProcessingJobState(job.state)) ?? null;
-      if (candidate) {
-        await hydrateFromJob(candidate.jobId, jobs);
-      } else {
-        setResumeLoading(false);
-      }
-    };
-
-    void initializeResume();
-  }, [hydrateFromJob, loadResumeJobs]);
 
   const handleFiles = (files: File[]) => {
     const file = files[0];
@@ -1877,11 +1380,8 @@ export const MinimalAssignment: React.FC = () => {
         mdStorageUri: materialized.mdStorageUri,
       });
       const refreshed = await getJobStatus(materialized.jobId);
-      setJobStatusState(refreshed);
-      setSelectedResumeJobId(refreshed.jobId);
-      setPinnedJobExpanded(!isTerminalJobState(refreshed.state));
-      writeJobIdToQuery(refreshed.jobId);
-      await loadResumeJobs();
+      resume.applyJobStatusTransition(refreshed);
+      await resume.loadResumeJobs();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to publish assignment.';
       setPublishError(message);
@@ -1938,7 +1438,7 @@ export const MinimalAssignment: React.FC = () => {
         if (!decision.shouldContinuePolling) {
           clearInterval(interval);
           if (decision.shouldRefreshResumeJobs) {
-            void loadResumeJobs();
+            void resumeLoadResumeJobs();
           }
         }
       } catch (error) {
@@ -1952,163 +1452,25 @@ export const MinimalAssignment: React.FC = () => {
       active = false;
       clearInterval(interval);
     };
-  }, [jobStatus?.jobId, jobStatus?.state, loadResumeJobs]);
-
-  useEffect(() => {
-    const nextJobId = jobStatus?.jobId ?? null;
-    if (
-      nextJobId &&
-      preserveAdvancedActionsOnNextJobSwitchRef.current &&
-      preserveAdvancedActionsOnNextJobSwitchRef.current === nextJobId
-    ) {
-      preserveAdvancedActionsOnNextJobSwitchRef.current = null;
-      setActionBusy(null);
-      setActionError(null);
-      setShowCustomRerun(false);
-      setCancelReason('');
-      setRerunPronunciationChunkProviderDirty(false);
-      return;
-    }
-
-    preserveAdvancedActionsOnNextJobSwitchRef.current = null;
-    setActionBusy(null);
-    setActionError(null);
-    setActionSuccess(null);
-    setShowAdvancedActions(false);
-    setShowCustomRerun(false);
-    setCancelReason('');
-    setRerunPronunciationChunkProviderDirty(false);
-  }, [jobStatus?.jobId]);
+  }, [jobStatus?.jobId, jobStatus?.state, resumeLoadResumeJobs]);
 
   useEffect(() => {
     if (!jobStatus) return;
-    setSelectedResumeJobId((current) => current || jobStatus.jobId);
+    resumeSetSelectedResumeJobId((current) => current || jobStatus.jobId);
     if (isTerminalJobState(jobStatus.state)) {
-      setPinnedJobExpanded(false);
+      resumeSetPinnedJobExpanded(false);
       if (jobStatus.state === 'failed' && jobStatus.error) {
         setPublishError(describeJobFailureReason(jobStatus));
       }
     }
-  }, [jobStatus]);
-
-  useEffect(() => {
-    if (!jobStatus?.jobId) {
-      setJobProvenance(null);
-      setJobProvenanceError(null);
-      setJobProvenanceLoading(false);
-      return;
-    }
-    void loadJobProvenance(jobStatus.jobId);
-  }, [jobStatus?.jobId, loadJobProvenance]);
-
-  const queueRerun = async (payload: Parameters<typeof rerunJob>[1], fallbackMessage: string) => {
-    if (!jobStatus?.jobId) return;
-
-    const currentJobId = jobStatus.jobId;
-    setActionBusy('rerun');
-    setActionError(null);
-    setActionSuccess(null);
-    try {
-      const result = await rerunJob(currentJobId, payload);
-      setActionSuccess(result.message ?? fallbackMessage);
-      const nextJobId = result.jobId || currentJobId;
-      preserveAdvancedActionsOnNextJobSwitchRef.current =
-        nextJobId !== currentJobId ? nextJobId : null;
-      const refreshed = await getJobStatus(nextJobId);
-      setJobStatusState(refreshed);
-      setSelectedResumeJobId(refreshed.jobId);
-      setPinnedJobExpanded(!isTerminalJobState(refreshed.state));
-      writeJobIdToQuery(refreshed.jobId);
-      await loadJobProvenance(refreshed.jobId);
-      await loadResumeJobs();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : fallbackMessage;
-      setActionError(message);
-    } finally {
-      setActionBusy(null);
-    }
-  };
-
-  const handleRepublishCurrentDraft = async () => {
-    await queueRerun(buildPresetRerunPayload('republish'), 'Republish queued.');
-  };
-
-  const handleRegeneratePronunciationAudio = async () => {
-    await queueRerun(buildPresetRerunPayload('pronunciation'), 'Pronunciation rerun queued.');
-  };
-
-  const handleRegenerateStudyTextAudio = async () => {
-    await queueRerun(buildPresetRerunPayload('studyText'), 'Study-text rerun queued.');
-  };
-
-  const handleRegenerateAllAudio = async () => {
-    await queueRerun(buildPresetRerunPayload('allAudio'), 'Full audio rerun queued.');
-  };
-
-  const handleCustomRerun = async () => {
-    if (!jobStatus?.jobId) return;
-
-    const payload = buildCustomRerunPayload({
-      rerunStudyTextAudio,
-      rerunPronunciationMainAudio,
-      rerunPronunciationChunkAudio,
-      rerunStudyTextProvider,
-      rerunStudyTextModel,
-      rerunStudyTextVoiceId,
-      rerunStudyTextVoiceAccent,
-      rerunStudyTextStrategy,
-      rerunStudyTextDialogueLanguage,
-      rerunStudyTextDialogueStability,
-      rerunStudyTextDialogueSeed,
-      rerunPronunciationMainProvider,
-      rerunPronunciationMainModel,
-      rerunPronunciationMainVoiceId,
-      rerunPronunciationMainVoiceAccent,
-      rerunPronunciationChunkProvider,
-      rerunPronunciationChunkModel,
-      rerunPronunciationChunkVoiceId,
-      rerunPronunciationChunkVoiceAccent,
-      rerunPronunciationChunkEdgeVoice,
-    });
-    if (!payload.ok) {
-      setActionError(payload.error);
-      return;
-    }
-
-    await queueRerun(payload.payload, 'Custom rerun queued.');
-  };
-
-  const handleCancelJob = async () => {
-    if (!jobStatus?.jobId) return;
-
-    const trimmedReason = cancelReason.trim();
-    setActionBusy('cancel');
-    setActionError(null);
-    setActionSuccess(null);
-    try {
-      const result = await cancelJob(
-        jobStatus.jobId,
-        trimmedReason ? { reason: trimmedReason } : undefined,
-      );
-      setActionSuccess(result.message ?? 'Job cancellation requested.');
-      const refreshed = await getJobStatus(jobStatus.jobId);
-      setJobStatusState(refreshed);
-      await loadJobProvenance(jobStatus.jobId);
-      await loadResumeJobs();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to cancel job.';
-      setActionError(message);
-    } finally {
-      setActionBusy(null);
-    }
-  };
+  }, [jobStatus, resumeSetPinnedJobExpanded, resumeSetSelectedResumeJobId]);
 
   const transcriptReady = transcriptStatus === 'ready' && transcriptText.trim().length > 0;
-  const promptReady = promptPackage?.id && promptText.trim().length > 0;
-  const jobReady = jobStatus?.jobId;
+  const promptReady = Boolean(promptPackage?.id && promptText.trim().length > 0);
+  const jobReady = Boolean(jobStatus?.jobId);
   const selectedResumeJob = useMemo(
-    () => resumeJobs.find((job) => job.jobId === selectedResumeJobId) ?? null,
-    [resumeJobs, selectedResumeJobId],
+    () => resume.resumeJobs.find((job) => job.jobId === resume.selectedResumeJobId) ?? null,
+    [resume.resumeJobs, resume.selectedResumeJobId],
   );
   const studentNameById = useMemo(
     () => new Map(studentOptions.map((student) => [student.id, student.name])),
@@ -2168,7 +1530,6 @@ export const MinimalAssignment: React.FC = () => {
       : jobPublishTarget === 'html'
         ? 'HTML link pending...'
         : 'Notion link pending...';
-  const actionCapabilities = jobOptions?.supportedActions ?? [];
   const activeGenerationQuota = generationRuntimeQuotaSnapshot ?? generationOptions?.quota ?? null;
   const generationQuotaSourceLabel = activeGenerationQuota
     ? toGenerationQuotaSourceLabel(activeGenerationQuota.source)
@@ -2198,26 +1559,6 @@ export const MinimalAssignment: React.FC = () => {
         activeGenerationQuota.usedTokensToday,
       ].some((value) => value !== undefined && value !== null),
   );
-  const rerunImplemented =
-    actionCapabilities.find((capability) => capability.type === 'rerun')?.implemented ?? false;
-  const cancelImplemented =
-    actionCapabilities.find((capability) => capability.type === 'cancel')?.implemented ?? false;
-  const cancelAllowedState = jobStatus?.state === 'queued' || jobStatus?.state === 'running';
-  const rerunEnabled = Boolean(jobStatus?.jobId) && rerunImplemented && actionBusy === null;
-  const cancelEnabled =
-    Boolean(jobStatus?.jobId) && cancelImplemented && cancelAllowedState && actionBusy === null;
-  const customRerunHasSelection =
-    rerunStudyTextAudio || rerunPronunciationMainAudio || rerunPronunciationChunkAudio;
-  const customRerunSummary = [
-    rerunStudyTextAudio ? 'regenerate study-text audio' : 'reuse study-text audio',
-    rerunPronunciationMainAudio
-      ? 'regenerate main pronunciation audio'
-      : 'reuse main pronunciation audio',
-    rerunPronunciationChunkAudio
-      ? 'regenerate pronunciation chunk audio'
-      : 'reuse pronunciation chunk audio',
-    'refresh published output',
-  ];
   const generationDefaultModelForSelection =
     generationOptions?.defaultModelByProvider?.[
       selectedGenerationProvider as keyof NonNullable<
@@ -2272,7 +1613,7 @@ export const MinimalAssignment: React.FC = () => {
         ? 'current'
         : 'locked';
     const advancedStatus: WorkflowStageStatus = jobReady
-      ? showAdvancedActions
+      ? advancedActions.showAdvancedActions
         ? 'current'
         : 'available'
       : 'locked';
@@ -2348,7 +1689,7 @@ export const MinimalAssignment: React.FC = () => {
     promptReady,
     recording,
     reviewReady,
-    showAdvancedActions,
+    advancedActions.showAdvancedActions,
     transcriptReady,
   ]);
 
@@ -2422,1336 +1763,203 @@ export const MinimalAssignment: React.FC = () => {
         summaryItems={workflowSummaryItems}
       />
 
-      <StageSection
+      <StartStageSection
         stage={startStage}
-        actions={
-          <button type="button" className="minimal-secondary" onClick={resetFlow}>
-            Start new assignment
-          </button>
+        onStartNewAssignment={resetFlow}
+        onRefreshRecentWork={() => void resume.loadResumeJobs()}
+        onResumeSelectedAssignment={() => void resume.handleResumeSelectedJob()}
+        resumeLoading={resume.resumeLoading}
+        selectedResumeJobId={resume.selectedResumeJobId}
+        onSelectedResumeJobIdChange={resume.setSelectedResumeJobId}
+        resumeJobs={resume.resumeJobs}
+        resumeError={resume.resumeError}
+        selectedResumeJob={selectedResumeJob}
+        formatResumeJobLabel={formatResumeJobLabel}
+        describeResumeJobStudent={describeResumeJobStudent}
+        currentJobStatus={jobStatus}
+        publishUrl={publishUrl}
+        publishLabel={publishLabel}
+        publishPending={publishPending}
+        pinnedJobExpanded={resume.pinnedJobExpanded}
+        onTogglePinnedJobExpanded={() => resume.setPinnedJobExpanded((current) => !current)}
+        onRegeneratePronunciationAudio={() =>
+          void advancedActions.handleRegeneratePronunciationAudio()
         }
-      >
-        <div className="minimal-stage-layout">
-          <div className="minimal-stage-panel">
-            <div className="minimal-stage-panel-header">
-              <div className="minimal-stage-panel-title">
-                <h3>Resume recent work</h3>
-                <p>Pick up where you left off, or refresh the list if a new job finished recently.</p>
-              </div>
-              <div className="minimal-inline">
-                <button
-                  type="button"
-                  className="minimal-secondary"
-                  onClick={() => void loadResumeJobs()}
-                  disabled={resumeLoading}
-                >
-                  {resumeLoading ? 'Refreshing...' : 'Refresh recent work'}
-                </button>
-                <button
-                  type="button"
-                  className="minimal-primary"
-                  onClick={() => void handleResumeSelectedJob()}
-                  disabled={!selectedResumeJobId || resumeLoading}
-                >
-                  Resume selected assignment
-                </button>
-              </div>
-            </div>
-            <label className="minimal-select">
-              Recent assignments
-              <select
-                value={selectedResumeJobId}
-                onChange={(event) => setSelectedResumeJobId(event.target.value)}
-                disabled={resumeJobs.length === 0 || resumeLoading}
-              >
-                {resumeJobs.length === 0 ? <option value="">No saved assignments yet</option> : null}
-                {resumeJobs.map((job) => (
-                  <option key={job.jobId} value={job.jobId}>
-                    {formatResumeJobLabel(job)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {resumeError ? <p className="minimal-error">{resumeError}</p> : null}
-            {selectedResumeJob ? (
-              <p className="minimal-muted">
-                Selected assignment: {selectedResumeJob.jobId} ({selectedResumeJob.state} •{' '}
-                {describeResumeJobStudent(selectedResumeJob)})
-              </p>
-            ) : null}
-          </div>
+        onRepublishCurrentDraft={() => void advancedActions.handleRepublishCurrentDraft()}
+        onCancelJob={() => void advancedActions.handleCancelJob()}
+        rerunEnabled={advancedActions.rerunEnabled}
+        cancelEnabled={advancedActions.cancelEnabled}
+        actionBusy={advancedActions.actionBusy}
+      />
 
-          {jobStatus?.jobId ? (
-            <div className="minimal-pinned-job">
-              <div className="minimal-stage-panel-header">
-                <div className="minimal-stage-panel-title">
-                  <h3>Current assignment</h3>
-                  <p>Keep an eye on the latest shared output and jump back into advanced controls when needed.</p>
-                </div>
-                <button
-                  type="button"
-                  className="minimal-secondary"
-                  onClick={() => setPinnedJobExpanded((current) => !current)}
-                >
-                  {pinnedJobExpanded ? 'Hide details' : 'Show details'}
-                </button>
-              </div>
-              <div className="minimal-meta">
-                <span>Job ID: {jobStatus.jobId}</span>
-                <span>Status: {jobStatus.state}</span>
-                {publishUrl ? (
-                  <a href={publishUrl} target="_blank" rel="noreferrer">
-                    {publishLabel}
-                  </a>
-                ) : (
-                  <span className="minimal-muted">{publishPending}</span>
-                )}
-              </div>
-              {pinnedJobExpanded ? (
-                <div className="minimal-inline">
-                  <button
-                    type="button"
-                    className="minimal-secondary"
-                    onClick={() => void handleRegeneratePronunciationAudio()}
-                    disabled={!rerunEnabled}
-                  >
-                    {actionBusy === 'rerun' ? 'Queuing rerun...' : 'Refresh pronunciation audio'}
-                  </button>
-                  <button
-                    type="button"
-                    className="minimal-secondary"
-                    onClick={() => void handleRepublishCurrentDraft()}
-                    disabled={!rerunEnabled}
-                  >
-                    {actionBusy === 'rerun' ? 'Queuing rerun...' : 'Republish current draft'}
-                  </button>
-                  <button
-                    type="button"
-                    className="minimal-secondary"
-                    onClick={() => void handleCancelJob()}
-                    disabled={!cancelEnabled}
-                  >
-                    {actionBusy === 'cancel' ? 'Cancelling...' : 'Cancel job'}
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-      </StageSection>
+      <SourceStageSection
+        stage={sourceStage}
+        onRefreshStudents={() => void loadStudentOptions()}
+        studentOptions={studentOptions}
+        studentOptionsError={studentOptionsError}
+        selectedStudentId={selectedStudentId}
+        onSelectedStudentIdChange={handleStudentSelectionChange}
+        selectedStudent={selectedStudent}
+        selectedSttProvider={selectedSttProvider}
+        onSelectedSttProviderChange={(provider) => {
+          sttProviderUserChangedRef.current = true;
+          setSelectedSttProvider(provider);
+        }}
+        sttProviders={sttProviders}
+        formatSttProviderLabel={formatSttProviderLabel}
+        audioExtensions={AUDIO_EXTENSIONS}
+        uploading={uploading}
+        selectedFileName={selectedFileName}
+        uploadProgress={uploadProgress}
+        onFiles={handleFiles}
+        onCancelUpload={handleCancelUpload}
+        uploadError={uploadError}
+        uploadCacheNotice={uploadCacheNotice}
+        recording={recording}
+        recordingStatus={recordingStatus}
+        recordingError={recordingError}
+        transcriptStatus={transcriptStatus}
+        transcriptError={transcriptError}
+        transcriptReady={transcriptReady}
+        onRefreshTranscript={() => void loadTranscript()}
+        retryingTranscript={retryingTranscript}
+        onRetryTranscript={() => void handleRetryTranscription()}
+        transcriptText={transcriptText}
+        onTranscriptTextChange={setTranscriptText}
+        transcriptDirty={transcriptDirty}
+        transcriptSaving={transcriptSaving}
+        onSaveTranscript={() => void handleSaveTranscript()}
+      />
 
-      <StageSection stage={sourceStage}>
-        <div className="minimal-stage-layout">
-          <div className="minimal-stage-panel">
-            <div className="minimal-stage-panel-header">
-              <div className="minimal-stage-panel-title">
-                <h3>Lesson recording</h3>
-                <p>Choose a student, upload a recording, and let the transcript start in the background.</p>
-              </div>
-              <button
-                type="button"
-                className="minimal-secondary"
-                onClick={() => void loadStudentOptions()}
-              >
-                Refresh students
-              </button>
-            </div>
-            <label className="minimal-select">
-              Student (optional)
-              <select
-                value={selectedStudentId}
-                onChange={(event) => handleStudentSelectionChange(event.target.value)}
-              >
-                {studentOptions.map((student) => (
-                  <option key={student.id} value={student.id}>
-                    {student.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {selectedStudent ? (
-              <p className="minimal-muted">
-                Selected: {selectedStudent.name}
-                {selectedStudent.profileId ? ` (profile: ${selectedStudent.profileId})` : ''}
-              </p>
-            ) : null}
-            {studentOptionsError ? <p className="minimal-error">{studentOptionsError}</p> : null}
-            <details className="minimal-details">
-              <summary>Recording settings</summary>
-              <label className="minimal-select">
-                Transcript engine
-                <select
-                  value={selectedSttProvider}
-                  onChange={(event) => {
-                    sttProviderUserChangedRef.current = true;
-                    setSelectedSttProvider(event.target.value as SttProvider);
-                  }}
-                  disabled={sttProviders.length === 0}
-                >
-                  {sttProviders.map((provider) => (
-                    <option key={provider} value={provider}>
-                      {formatSttProviderLabel(provider)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </details>
-            <DropZone
-              title={uploading ? 'Uploading...' : 'Drop audio file'}
-              description="Drag a recording here or click to browse"
-              hint="Single file upload"
-              accept={{ 'audio/*': AUDIO_EXTENSIONS }}
-              multiple={false}
-              disabled={uploading}
-              onFiles={handleFiles}
-            />
-            {uploading ? (
-              <UploadProgress
-                fileName={selectedFileName}
-                progress={uploadProgress}
-                onCancel={handleCancelUpload}
-              />
-            ) : null}
-            {uploadError ? <p className="minimal-error">{uploadError}</p> : null}
-            {uploadCacheNotice ? <p className="minimal-success">{uploadCacheNotice}</p> : null}
-            {recording ? (
-              <div className="minimal-meta">
-                <span>Recording ID: {recording.recordingId}</span>
-                <span>Status: {recordingStatus ?? 'unknown'}</span>
-                <span>Transcript engine: {formatSttProviderLabel(selectedSttProvider)}</span>
-                {selectedStudent ? <span>Student: {selectedStudent.name}</span> : null}
-              </div>
-            ) : null}
-            {recordingError ? <p className="minimal-error">{recordingError}</p> : null}
-          </div>
+      <ContextStageSection
+        stage={contextStage}
+        onRefreshProfiles={() => void loadProfileOptions()}
+        onSaveProfile={() => void handleSaveProfile()}
+        profileBusy={profileBusy}
+        selectedProfileId={selectedProfileId}
+        onSelectedProfileIdChange={(nextProfileId) => {
+          if (!nextProfileId) {
+            setProfileSelectionMode('auto');
+            setSelectedProfileId(selectedStudentId ? resolveBoundProfileId(selectedStudentId) : '');
+            return;
+          }
+          setProfileSelectionMode('manual');
+          setSelectedProfileId(nextProfileId);
+        }}
+        profileOptions={profileOptions}
+        newProfileId={newProfileId}
+        onNewProfileIdChange={setNewProfileId}
+        onCreateProfile={() => void handleCreateProfile()}
+        profileEditorText={profileEditorText}
+        onProfileEditorTextChange={setProfileEditorText}
+        profileDirty={profileDirty}
+        profileOptionsError={profileOptionsError}
+        profileRevisionError={profileRevisionError}
+        profileSuccess={profileSuccess}
+        profileRevisions={profileRevisions}
+        onRestoreRevision={(revisionId) => void handleRestoreRevision(revisionId)}
+        teacherNotes={teacherNotes}
+        onTeacherNotesChange={setTeacherNotes}
+      />
 
-          <div className="minimal-stage-panel">
-            <div className="minimal-stage-panel-header">
-              <div className="minimal-stage-panel-title">
-                <h3>Transcript</h3>
-                <p>Review the transcript here. You can refresh, retry, and make manual edits before continuing.</p>
-              </div>
-              <button
-                type="button"
-                className="minimal-secondary"
-                onClick={() => void loadTranscript()}
-                disabled={!recording?.recordingId || transcriptStatus === 'loading'}
-              >
-                Refresh transcript
-              </button>
-            </div>
-            {recording ? (
-              transcriptStatus === 'processing' || transcriptStatus === 'idle' ? (
-                <p className="minimal-help">
-                  Transcript in progress. We check every few seconds automatically.
-                </p>
-              ) : null
-            ) : (
-              <p className="minimal-help">Upload a recording to unlock the transcript.</p>
-            )}
-            {transcriptStatus === 'loading' ? (
-              <p className="minimal-help">Loading transcript...</p>
-            ) : null}
-            {transcriptStatus === 'failed' ? (
-              <div className="minimal-block">
-                <p className="minimal-error">{transcriptError ?? 'Transcript failed to load.'}</p>
-                <button
-                  type="button"
-                  className="minimal-secondary"
-                  onClick={() => void handleRetryTranscription()}
-                  disabled={retryingTranscript}
-                >
-                  {retryingTranscript ? 'Retrying...' : 'Retry transcript'}
-                </button>
-              </div>
-            ) : null}
-            {transcriptReady ? (
-              <div className="minimal-block">
-                <textarea
-                  aria-label="Transcript text"
-                  value={transcriptText}
-                  onChange={(event) => setTranscriptText(event.target.value)}
-                  rows={10}
-                />
-                <div className="minimal-inline">
-                  <button
-                    type="button"
-                    className="minimal-primary"
-                    onClick={() => void handleSaveTranscript()}
-                    disabled={!transcriptDirty || transcriptSaving}
-                  >
-                    {transcriptSaving ? 'Saving...' : 'Save transcript edits'}
-                  </button>
-                  {transcriptDirty ? <span className="minimal-muted">Unsaved edits</span> : null}
-                </div>
-                {transcriptError ? <p className="minimal-error">{transcriptError}</p> : null}
-              </div>
-            ) : null}
-          </div>
-        </div>
-      </StageSection>
+      <AssignmentStageSection
+        stage={assignmentStage}
+        transcriptReady={transcriptReady}
+        promptLoading={promptLoading}
+        promptReady={Boolean(promptReady)}
+        promptOptionsReady={Boolean(promptOptions)}
+        onGeneratePrompt={() => void handleGeneratePrompt()}
+        onCopyPrompt={handleCopyPrompt}
+        promptCopyState={promptCopyState}
+        onReloadPromptOptions={() => void loadPromptOptions()}
+        promptError={promptError}
+        promptPackage={promptPackage}
+        promptText={promptText}
+        onPromptTextChange={setPromptText}
+        onSaveDraft={() => void handleSaveDraft()}
+        validating={validating}
+        draftDirty={draftDirty}
+        generationOptionsAvailable={Boolean(generationOptions)}
+        selectedGenerationProvider={selectedGenerationProvider}
+        onSelectedGenerationProviderChange={setSelectedGenerationProvider}
+        generationProviders={generationProviders}
+        selectedGenerationModel={selectedGenerationModel}
+        onSelectedGenerationModelChange={setSelectedGenerationModel}
+        generationModelsForProvider={generationModelsForProvider}
+        onGenerateDraft={() => void handleGenerateDraft()}
+        generatingDraft={generatingDraft}
+        generationBlockedByQuota={generationBlockedByQuota}
+        activeGenerationQuota={activeGenerationQuota}
+        generationQuotaSourceLabel={generationQuotaSourceLabel}
+        generationQuotaUpdatedRelative={generationQuotaUpdatedRelative}
+        generationQuotaUpdatedAbsolute={generationQuotaUpdatedAbsolute}
+        generationQuotaHasNumericValues={generationQuotaHasNumericValues}
+        generationQuotaBlockedReason={generationQuotaBlockedReason}
+        generationError={generationError}
+        generationSuccess={generationSuccess}
+        draftText={draftText}
+        onDraftTextChange={setDraftText}
+        validation={validation}
+        validationError={validationError}
+        draftError={draftError}
+      />
 
-      <StageSection stage={contextStage}>
-        <div className="minimal-stage-layout">
-          <div className="minimal-stage-panel">
-            <div className="minimal-stage-panel-header">
-              <div className="minimal-stage-panel-title">
-                <h3>Learner profile</h3>
-                <p>Use a saved learner profile to shape the assignment instructions, or edit the profile when needed.</p>
-              </div>
-              <div className="minimal-inline">
-                <button
-                  type="button"
-                  className="minimal-secondary"
-                  onClick={() => void loadProfileOptions()}
-                  disabled={profileBusy !== null}
-                >
-                  Refresh profiles
-                </button>
-                <button
-                  type="button"
-                  className="minimal-primary"
-                  onClick={() => void handleSaveProfile()}
-                  disabled={!selectedProfileId || profileBusy !== null || !profileDirty}
-                >
-                  {profileBusy === 'saving' ? 'Saving...' : 'Save profile'}
-                </button>
-              </div>
-            </div>
-            <label className="minimal-select">
-              Learner profile
-              <select
-                value={selectedProfileId}
-                onChange={(event) => {
-                  const nextProfileId = event.target.value;
-                  if (!nextProfileId) {
-                    setProfileSelectionMode('auto');
-                    setSelectedProfileId(
-                      selectedStudentId ? resolveBoundProfileId(selectedStudentId) : '',
-                    );
-                    return;
-                  }
-                  setProfileSelectionMode('manual');
-                  setSelectedProfileId(nextProfileId);
-                }}
-              >
-                <option value="">Select profile</option>
-                {profileOptions.map((profile) => (
-                  <option key={profile.id} value={profile.id}>
-                    {profile.label} ({profile.id})
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="minimal-inline">
-              <label className="minimal-field grow">
-                <span>New profile file</span>
-                <input
-                  value={newProfileId}
-                  onChange={(event) => setNewProfileId(event.target.value)}
-                  placeholder="profiles/new-student.md"
-                />
-              </label>
-              <button
-                type="button"
-                className="minimal-secondary"
-                onClick={() => void handleCreateProfile()}
-                disabled={profileBusy !== null}
-              >
-                {profileBusy === 'creating' ? 'Creating...' : 'Create profile'}
-              </button>
-            </div>
-            <textarea
-              aria-label="Profile content"
-              value={profileEditorText}
-              onChange={(event) => setProfileEditorText(event.target.value)}
-              rows={10}
-              placeholder="Profile content..."
-              disabled={!selectedProfileId && !newProfileId.trim()}
-            />
-            {profileDirty ? <p className="minimal-muted">Unsaved profile edits</p> : null}
-            {profileOptionsError ? <p className="minimal-error">{profileOptionsError}</p> : null}
-            {profileRevisionError ? <p className="minimal-error">{profileRevisionError}</p> : null}
-            {profileSuccess ? <p className="minimal-success">{profileSuccess}</p> : null}
-            {selectedProfileId ? (
-              <details className="minimal-details">
-                <summary>Profile history</summary>
-                {profileRevisions.length > 0 ? (
-                  <div className="minimal-list">
-                    {profileRevisions.map((revision) => (
-                      <div key={revision.id} className="minimal-list-item">
-                        <span>
-                          {revision.source} • {new Date(revision.createdAt).toLocaleString()}
-                        </span>
-                        <button
-                          type="button"
-                          className="minimal-secondary"
-                          onClick={() => void handleRestoreRevision(revision.id)}
-                          disabled={profileBusy !== null}
-                        >
-                          {profileBusy === 'restoring' ? 'Restoring...' : 'Restore'}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="minimal-muted">No revisions yet.</p>
-                )}
-              </details>
-            ) : null}
-          </div>
-
-          <div className="minimal-stage-panel">
-            <div className="minimal-stage-panel-title">
-              <h3>Lesson guidance</h3>
-              <p>Optional lesson-specific goals, corrections, or priorities you want the assignment to reflect.</p>
-            </div>
-            <textarea
-              aria-label="Teacher notes"
-              value={teacherNotes}
-              onChange={(event) => setTeacherNotes(event.target.value)}
-              rows={8}
-              placeholder="Add lesson-specific context, corrections, or priorities for this assignment..."
-            />
-            <p className="minimal-help">
-              This gets woven into the assignment instructions as extra teaching context.
-            </p>
-          </div>
-        </div>
-      </StageSection>
-
-      <StageSection stage={assignmentStage}>
-        <div className="minimal-stage-layout">
-          <div className="minimal-stage-panel">
-            <div className="minimal-stage-panel-header">
-              <div className="minimal-stage-panel-title">
-                <h3>Assignment instructions</h3>
-                <p>Generate the teaching instructions first, then tweak them before you create the assignment content.</p>
-              </div>
-              <div className="minimal-inline">
-                <button
-                  type="button"
-                  className="minimal-primary"
-                  onClick={() => void handleGeneratePrompt()}
-                  disabled={!transcriptReady || promptLoading || !promptOptions}
-                >
-                  {promptLoading
-                    ? 'Generating...'
-                    : promptReady
-                      ? 'Refresh instructions'
-                      : 'Generate instructions'}
-                </button>
-                <button
-                  type="button"
-                  className="minimal-secondary"
-                  onClick={handleCopyPrompt}
-                  disabled={!promptText.trim()}
-                >
-                  {promptCopyState === 'copied' ? 'Copied' : 'Copy instructions'}
-                </button>
-                {promptOptions ? null : (
-                  <button
-                    type="button"
-                    className="minimal-secondary"
-                    onClick={() => void loadPromptOptions()}
-                  >
-                    Reload instructions
-                  </button>
-                )}
-              </div>
-            </div>
-            <p className="minimal-help">
-              Uses the default template and the current learner profile when one is selected.
-            </p>
-            {promptError ? <p className="minimal-error">{promptError}</p> : null}
-            {promptPackage?.profileDrift?.detected ? (
-              <div className="minimal-alert warning">
-                <strong>Profile drift detected</strong>
-                <p className="minimal-help">
-                  The learner profile changed after these instructions were generated (
-                  {promptPackage.profileDrift.reason}). Refresh the instructions to pick up the latest version.
-                </p>
-              </div>
-            ) : null}
-            {promptText ? (
-              <textarea
-                aria-label="Prompt text"
-                value={promptText}
-                onChange={(event) => setPromptText(event.target.value)}
-                rows={12}
-              />
-            ) : (
-              <p className="minimal-muted">Generate instructions to continue.</p>
-            )}
-          </div>
-
-          <div className="minimal-stage-panel">
-            <div className="minimal-stage-panel-header">
-              <div className="minimal-stage-panel-title">
-                <h3>Assignment content</h3>
-                <p>Generate the assignment content from the instructions, or paste and edit your own version here.</p>
-              </div>
-              <div className="minimal-inline">
-                <button
-                  type="button"
-                  className="minimal-primary"
-                  onClick={() => void handleSaveDraft()}
-                  disabled={!promptReady || validating}
-                >
-                  {validating ? 'Validating...' : 'Save assignment content'}
-                </button>
-                {draftDirty ? <span className="minimal-muted">Unsaved changes</span> : null}
-              </div>
-            </div>
-            <details className="minimal-details">
-              <summary>Generation settings</summary>
-              <div className="minimal-generation-block">
-                <div className="minimal-inline">
-                  <label className="minimal-select">
-                    Generation provider
-                    <select
-                      value={selectedGenerationProvider}
-                      onChange={(event) => setSelectedGenerationProvider(event.target.value)}
-                      disabled={
-                        !generationOptions || generatingDraft || generationProviders.length === 0
-                      }
-                    >
-                      {generationProviders.length === 0 ? (
-                        <option value="">No providers available</option>
-                      ) : null}
-                      {generationProviders.map((provider) => (
-                        <option key={provider} value={provider}>
-                          {provider}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="minimal-select">
-                    Generation model
-                    <select
-                      value={selectedGenerationModel}
-                      onChange={(event) => setSelectedGenerationModel(event.target.value)}
-                      disabled={
-                        !generationOptions ||
-                        generatingDraft ||
-                        !selectedGenerationProvider ||
-                        generationModelsForProvider.length === 0
-                      }
-                    >
-                      {generationModelsForProvider.length === 0 ? (
-                        <option value="">No models available</option>
-                      ) : null}
-                      {generationModelsForProvider.map((modelOption) => (
-                        <option
-                          key={`${modelOption.provider}:${modelOption.id}`}
-                          value={modelOption.id}
-                        >
-                          {modelOption.id}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <button
-                    type="button"
-                    className="minimal-secondary"
-                    onClick={() => void handleGenerateDraft()}
-                    disabled={
-                      !promptReady ||
-                      generatingDraft ||
-                      !generationOptions ||
-                      !selectedGenerationProvider ||
-                      !selectedGenerationModel ||
-                      generationBlockedByQuota
-                    }
-                  >
-                    {generatingDraft ? 'Generating assignment...' : 'Generate assignment content'}
-                  </button>
-                </div>
-                {generationOptions ? (
-                  <details className="minimal-details" open>
-                    <summary>Generation limits and provider notes</summary>
-                    {activeGenerationQuota ? (
-                      <>
-                        <div className="minimal-meta">
-                          <span>Source: {generationQuotaSourceLabel}</span>
-                          <span>
-                            Updated: {generationQuotaUpdatedRelative} ({generationQuotaUpdatedAbsolute})
-                          </span>
-                        </div>
-                        {generationQuotaHasNumericValues ? (
-                          <div className="minimal-quota-grid">
-                            {activeGenerationQuota.requestsPerMinute === undefined ||
-                            activeGenerationQuota.requestsPerMinute === null ? null : (
-                              <div className="minimal-quota-item">
-                                RPM: {activeGenerationQuota.requestsPerMinute}
-                              </div>
-                            )}
-                            {activeGenerationQuota.tokensPerMinute === undefined ||
-                            activeGenerationQuota.tokensPerMinute === null ? null : (
-                              <div className="minimal-quota-item">
-                                TPM: {activeGenerationQuota.tokensPerMinute}
-                              </div>
-                            )}
-                            {activeGenerationQuota.requestsPerDay === undefined ||
-                            activeGenerationQuota.requestsPerDay === null ? null : (
-                              <div className="minimal-quota-item">
-                                RPD: {activeGenerationQuota.requestsPerDay}
-                              </div>
-                            )}
-                            {activeGenerationQuota.dailyTokenBudget === undefined ||
-                            activeGenerationQuota.dailyTokenBudget === null ? null : (
-                              <div className="minimal-quota-item">
-                                Daily token budget: {activeGenerationQuota.dailyTokenBudget}
-                              </div>
-                            )}
-                            {activeGenerationQuota.dailyTokenRemaining === undefined ||
-                            activeGenerationQuota.dailyTokenRemaining === null ? null : (
-                              <div className="minimal-quota-item">
-                                Daily token remaining: {activeGenerationQuota.dailyTokenRemaining}
-                              </div>
-                            )}
-                            {activeGenerationQuota.dailyRequestBudget === undefined ||
-                            activeGenerationQuota.dailyRequestBudget === null ? null : (
-                              <div className="minimal-quota-item">
-                                Daily request budget: {activeGenerationQuota.dailyRequestBudget}
-                              </div>
-                            )}
-                            {activeGenerationQuota.dailyRequestRemaining === undefined ||
-                            activeGenerationQuota.dailyRequestRemaining === null ? null : (
-                              <div className="minimal-quota-item">
-                                Daily request remaining: {activeGenerationQuota.dailyRequestRemaining}
-                              </div>
-                            )}
-                            {activeGenerationQuota.rpmBudget === undefined ||
-                            activeGenerationQuota.rpmBudget === null ? null : (
-                              <div className="minimal-quota-item">
-                                RPM budget: {activeGenerationQuota.rpmBudget}
-                              </div>
-                            )}
-                            {activeGenerationQuota.rpmRemaining === undefined ||
-                            activeGenerationQuota.rpmRemaining === null ? null : (
-                              <div className="minimal-quota-item">
-                                RPM remaining: {activeGenerationQuota.rpmRemaining}
-                              </div>
-                            )}
-                            {activeGenerationQuota.usedRequestsToday === undefined ||
-                            activeGenerationQuota.usedRequestsToday === null ? null : (
-                              <div className="minimal-quota-item">
-                                Used requests today: {activeGenerationQuota.usedRequestsToday}
-                              </div>
-                            )}
-                            {activeGenerationQuota.usedTokensToday === undefined ||
-                            activeGenerationQuota.usedTokensToday === null ? null : (
-                              <div className="minimal-quota-item">
-                                Used tokens today: {activeGenerationQuota.usedTokensToday}
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          <p className="minimal-muted">No numeric limits available for this model.</p>
-                        )}
-                        {activeGenerationQuota.dashboardUrl ? (
-                          <a
-                            href={activeGenerationQuota.dashboardUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            View provider limits
-                          </a>
-                        ) : null}
-                        {generationQuotaBlockedReason ? (
-                          <p className="minimal-error">{generationQuotaBlockedReason}</p>
-                        ) : null}
-                      </>
-                    ) : (
-                      <p className="minimal-muted">Quota snapshot unavailable.</p>
-                    )}
-                  </details>
-                ) : (
-                  <p className="minimal-muted">
-                    Generation options unavailable. Reload assignment settings if needed.
-                  </p>
-                )}
-                {generationError ? <p className="minimal-error">{generationError}</p> : null}
-                {generationSuccess ? <p className="minimal-success">{generationSuccess}</p> : null}
-              </div>
-            </details>
-            <textarea
-              aria-label="Draft markdown"
-              value={draftText}
-              onChange={(event) => setDraftText(event.target.value)}
-              rows={14}
-            />
-            {validation?.errors?.length ? (
-              <div className="minimal-alert">
-                <strong>Validation errors</strong>
-                <ul>
-                  {validation.errors.map((error, index) => (
-                    <li key={`${error}-${index}`}>{error}</li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-            {validation?.warnings?.length ? (
-              <div className="minimal-alert warning">
-                <strong>Warnings</strong>
-                <ul>
-                  {validation.warnings.map((warning, index) => (
-                    <li key={`${warning}-${index}`}>{warning}</li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-            {validationError ? <p className="minimal-error">{validationError}</p> : null}
-            {draftError ? <p className="minimal-error">{draftError}</p> : null}
-          </div>
-        </div>
-      </StageSection>
-
-      <StageSection
+      <ReviewStageSection
         stage={reviewStage}
-        actions={
-          <button
-            type="button"
-            className="minimal-primary"
-            onClick={() => void handlePublish()}
-            disabled={!canPublishWithPreview}
-          >
-            {publishing ? 'Sharing...' : 'Share assignment'}
-          </button>
-        }
-      >
-        <div className="minimal-stage-layout">
-          <div className="minimal-stage-panel">
-            <div className="minimal-stage-panel-header">
-              <div className="minimal-stage-panel-title">
-                <h3>Preview before you share</h3>
-                <p>Preview locks the current version, so you always know exactly what will be shared.</p>
-              </div>
-              <div className="minimal-inline">
-                <button
-                  type="button"
-                  className="minimal-secondary"
-                  onClick={() => void handlePreviewDraft()}
-                  disabled={previewing || draftText.trim().length === 0}
-                >
-                  {previewing ? 'Rendering preview...' : 'Preview assignment'}
-                </button>
-                <span className={previewReadyForCurrentDraft ? 'minimal-success' : 'minimal-muted'}>
-                  {previewReadyForCurrentDraft
-                    ? 'Preview ready for current assignment.'
-                    : 'Preview required before sharing.'}
-                </span>
-              </div>
-            </div>
-            <label className="minimal-select">
-              Share to
-              <select
-                value={publishTarget}
-                onChange={(event) =>
-                  setPublishTarget(event.target.value as 'notion' | 'anytype' | 'html')
-                }
-              >
-                <option value="notion">Notion</option>
-                <option value="anytype">Anytype</option>
-                <option value="html">HTML page</option>
-              </select>
-            </label>
-            <details className="minimal-details">
-              <summary>Audio and publishing settings</summary>
-              <div className="minimal-grid">
-                <label className="minimal-select">
-                  Learning preset
-                  <select
-                    value={selectedPreset}
-                    onChange={(event) => setSelectedPreset(event.target.value)}
-                    disabled={!jobOptions || presetOptions.length === 0}
-                  >
-                    {presetOptions.length > 0 ? null : (
-                      <option value="">No presets available</option>
-                    )}
-                    {presetOptions.map((preset) => (
-                      <option key={preset.id} value={preset.id}>
-                        {preset.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="minimal-select">
-                  Voice engine
-                  <select
-                    value={selectedTtsProvider}
-                    onChange={(event) => setSelectedTtsProvider(event.target.value as UiTtsProvider)}
-                    disabled={ttsProviders.length === 0}
-                  >
-                    {ttsProviders.map((provider) => (
-                      <option key={provider} value={provider}>
-                        {provider}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="minimal-select">
-                  Reading style
-                  <select
-                    value={selectedTtsStrategy}
-                    onChange={(event) =>
-                      setSelectedTtsStrategy(event.target.value as UiPublishTtsStrategy)
-                    }
-                  >
-                    {availablePublishTtsStrategies.map((strategy) => (
-                      <option key={strategy} value={strategy}>
-                        {formatPublishTtsStrategyLabel(strategy)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="minimal-select">
-                  Voice model
-                  <select
-                    value={selectedTtsModel}
-                    onChange={(event) => setSelectedTtsModel(event.target.value)}
-                    disabled={publishModelSelectionDisabled || selectedTtsModelOptions.length === 0}
-                  >
-                    {publishModelSelectionDisabled ? (
-                      <option value="">Auto follows the assignment</option>
-                    ) : selectedTtsModelOptions.length === 0 ? (
-                      <option value="">No models available</option>
-                    ) : null}
-                    {selectedTtsModelOptions.map((model) => (
-                      <option key={model} value={model}>
-                        {model}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              {publishModelSelectionDisabled ? (
-                <p className="minimal-muted">
-                  Auto follows the assignment at runtime. Choose Dialogue or TTS to lock a model.
-                </p>
-              ) : null}
-            </details>
-            {previewError ? <p className="minimal-error">{previewError}</p> : null}
-            {previewHtml ? (
-              <details className="minimal-preview" open>
-                <summary>Preview panel</summary>
-                <iframe className="minimal-preview-frame" srcDoc={previewHtml} title="Draft preview" />
-              </details>
-            ) : null}
-            {publishError ? <p className="minimal-error">{publishError}</p> : null}
-            {jobStatus?.state === 'failed' && jobStatus.error ? (
-              <p className="minimal-error">{describeJobFailureReason(jobStatus)}</p>
-            ) : null}
-            {jobReady ? (
-              <div className="minimal-meta">
-                <span>Job ID: {jobStatus?.jobId}</span>
-                <span>Status: {jobStatus?.state}</span>
-                {publishUrl ? (
-                  <a href={publishUrl} target="_blank" rel="noreferrer">
-                    {publishLabel}
-                  </a>
-                ) : (
-                  <span className="minimal-muted">{publishPending}</span>
-                )}
-              </div>
-            ) : null}
-          </div>
-        </div>
-      </StageSection>
+        onPublish={() => void handlePublish()}
+        canPublishWithPreview={canPublishWithPreview}
+        publishing={publishing}
+        previewing={previewing}
+        onPreviewDraft={() => void handlePreviewDraft()}
+        draftHasContent={draftText.trim().length > 0}
+        previewReadyForCurrentDraft={previewReadyForCurrentDraft}
+        publishTarget={publishTarget}
+        onPublishTargetChange={setPublishTarget}
+        selectedPreset={selectedPreset}
+        onSelectedPresetChange={setSelectedPreset}
+        presetOptions={presetOptions}
+        jobOptionsLoaded={Boolean(jobOptions)}
+        selectedTtsProvider={selectedTtsProvider}
+        onSelectedTtsProviderChange={setSelectedTtsProvider}
+        ttsProviders={ttsProviders}
+        selectedTtsStrategy={selectedTtsStrategy}
+        onSelectedTtsStrategyChange={setSelectedTtsStrategy}
+        availablePublishTtsStrategies={availablePublishTtsStrategies}
+        formatPublishTtsStrategyLabel={formatPublishTtsStrategyLabel}
+        selectedTtsModel={selectedTtsModel}
+        onSelectedTtsModelChange={setSelectedTtsModel}
+        publishModelSelectionDisabled={publishModelSelectionDisabled}
+        selectedTtsModelOptions={selectedTtsModelOptions}
+        previewError={previewError}
+        previewHtml={previewHtml}
+        publishError={publishError}
+        currentJobStatus={jobStatus}
+        jobFailureReason={jobStatus?.state === 'failed' && jobStatus.error
+          ? describeJobFailureReason(jobStatus)
+          : null}
+        jobReady={Boolean(jobReady)}
+        publishUrl={publishUrl}
+        publishLabel={publishLabel}
+        publishPending={publishPending}
+      />
 
-      <StageSection
+      <AdvancedActionsStage
         stage={advancedStage}
-        actions={
-          jobReady ? (
-            <button
-              type="button"
-              className="minimal-secondary"
-              onClick={() => setShowAdvancedActions((current) => !current)}
-            >
-              {showAdvancedActions ? 'Hide advanced actions' : 'Show advanced actions'}
-            </button>
-          ) : undefined
-        }
-      >
-        {!jobReady ? (
-          <p className="minimal-help">
-            Share the assignment once to unlock republish, reruns, cancellation, and lineage details.
-          </p>
-        ) : showAdvancedActions ? (
-          <div className="minimal-stage-layout">
-            <div className="minimal-stage-panel">
-              <div className="minimal-stage-panel-header">
-                <div className="minimal-stage-panel-title">
-                  <h3>Republish and rerun</h3>
-                  <p>Choose exactly what to regenerate. Anything you leave unchecked stays as-is.</p>
-                </div>
-                <button
-                  type="button"
-                  className="minimal-secondary"
-                  onClick={() => void loadJobOptions()}
-                >
-                  Refresh actions
-                </button>
-              </div>
-              <div className="minimal-meta">
-                <span>Job ID: {jobStatus?.jobId}</span>
-                <span>State: {jobStatus?.state}</span>
-              </div>
-              <div className="minimal-grid">
-                <button
-                  type="button"
-                  className="minimal-primary"
-                  onClick={() => void handleRepublishCurrentDraft()}
-                  disabled={!rerunEnabled}
-                >
-                  {actionBusy === 'rerun' ? 'Queuing rerun...' : 'Republish current draft'}
-                </button>
-                <button
-                  type="button"
-                  className="minimal-primary"
-                  onClick={() => void handleRegeneratePronunciationAudio()}
-                  disabled={!rerunEnabled}
-                >
-                  {actionBusy === 'rerun' ? 'Queuing rerun...' : 'Regenerate pronunciation audio'}
-                </button>
-                <button
-                  type="button"
-                  className="minimal-primary"
-                  onClick={() => void handleRegenerateStudyTextAudio()}
-                  disabled={!rerunEnabled}
-                >
-                  {actionBusy === 'rerun' ? 'Queuing rerun...' : 'Regenerate study-text audio'}
-                </button>
-                <button
-                  type="button"
-                  className="minimal-primary"
-                  onClick={() => void handleRegenerateAllAudio()}
-                  disabled={!rerunEnabled}
-                >
-                  {actionBusy === 'rerun' ? 'Queuing rerun...' : 'Regenerate all audio'}
-                </button>
-                <button
-                  type="button"
-                  className="minimal-secondary"
-                  onClick={() => setShowCustomRerun((current) => !current)}
-                  disabled={!rerunEnabled}
-                >
-                  {showCustomRerun ? 'Hide custom rerun' : 'Custom rerun'}
-                </button>
-              </div>
-              <p className="minimal-help">
-                Pronunciation chunks default to `edge-tts`, except `connected_speech`, which defaults to ElevenLabs.
-              </p>
-              {showCustomRerun ? (
-                <div className="minimal-block">
-                  <div className="minimal-grid">
-                    <label className="minimal-checkbox">
-                      <input
-                        type="checkbox"
-                        checked={rerunStudyTextAudio}
-                        onChange={(event) => setRerunStudyTextAudio(event.target.checked)}
-                      />
-                      <span>Study-text audio</span>
-                    </label>
-                    <label className="minimal-checkbox">
-                      <input
-                        type="checkbox"
-                        checked={rerunPronunciationMainAudio}
-                        onChange={(event) => setRerunPronunciationMainAudio(event.target.checked)}
-                      />
-                      <span>Main pronunciation audio</span>
-                    </label>
-                    <label className="minimal-checkbox">
-                      <input
-                        type="checkbox"
-                        checked={rerunPronunciationChunkAudio}
-                        onChange={(event) => setRerunPronunciationChunkAudio(event.target.checked)}
-                      />
-                      <span>Pronunciation chunk audio</span>
-                    </label>
-                  </div>
-                  <p className="minimal-help">{customRerunSummary.join(' • ')}</p>
-                  {rerunStudyTextAudio ? (
-                    <div className="minimal-grid">
-                      <label className="minimal-field">
-                        <span>Study-text provider</span>
-                        <select
-                          value={rerunStudyTextProvider}
-                          onChange={(event) =>
-                            setRerunStudyTextProvider(event.target.value as UiTtsProvider)
-                          }
-                        >
-                          {ttsProviders.map((provider) => (
-                            <option key={provider} value={provider}>
-                              {provider}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="minimal-field">
-                        <span>Study-text model</span>
-                        <select
-                          value={rerunStudyTextModel}
-                          onChange={(event) => setRerunStudyTextModel(event.target.value)}
-                        >
-                          {rerunStudyTextProvider === 'google' ? (
-                            googleTtsModelOptions.map((model) => (
-                              <option key={model} value={model}>
-                                {model}
-                              </option>
-                            ))
-                          ) : rerunStudyTextStrategy === 'auto' ? (
-                            <option value="">
-                              Strategy default (`dialogue` {`->`} `eleven_v3`, `tts` {`->`}{' '}
-                              `eleven_multilingual_v2`)
-                            </option>
-                          ) : rerunStudyTextStrategy === 'dialogue' ? (
-                            <>
-                              <option value="">Dialogue default (`eleven_v3`)</option>
-                              <option value="eleven_v3">eleven_v3</option>
-                            </>
-                          ) : (
-                            <>
-                              <option value="">TTS default (`eleven_multilingual_v2`)</option>
-                              {elevenlabsStandardModelOptions.map((model) => (
-                                <option key={model} value={model}>
-                                  {model}
-                                </option>
-                              ))}
-                            </>
-                          )}
-                        </select>
-                      </label>
-                      <label className="minimal-field">
-                        <span>Study-text voice ID</span>
-                        <input
-                          value={rerunStudyTextVoiceId}
-                          onChange={(event) => setRerunStudyTextVoiceId(event.target.value)}
-                          placeholder="voice id override"
-                        />
-                      </label>
-                      <label className="minimal-field">
-                        <span>Study-text accent</span>
-                        <input
-                          value={rerunStudyTextVoiceAccent}
-                          onChange={(event) => setRerunStudyTextVoiceAccent(event.target.value)}
-                          placeholder="accent override"
-                        />
-                      </label>
-                      <label className="minimal-field">
-                        <span>Study-text strategy</span>
-                        <select
-                          value={rerunStudyTextStrategy}
-                          onChange={(event) =>
-                            setRerunStudyTextStrategy(event.target.value as 'auto' | 'dialogue' | 'tts')
-                          }
-                        >
-                          {(jobOptions?.ttsStrategies?.length
-                            ? jobOptions.ttsStrategies
-                            : ['auto', 'dialogue', 'tts']
-                          ).map((strategy) => (
-                            <option key={strategy} value={strategy}>
-                              {strategy}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="minimal-field">
-                        <span>Dialogue language</span>
-                        <input
-                          value={rerunStudyTextDialogueLanguage}
-                          onChange={(event) => setRerunStudyTextDialogueLanguage(event.target.value)}
-                          placeholder="e.g. es"
-                        />
-                      </label>
-                      <label className="minimal-field">
-                        <span>Dialogue stability (0..1)</span>
-                        <input
-                          value={rerunStudyTextDialogueStability}
-                          onChange={(event) => setRerunStudyTextDialogueStability(event.target.value)}
-                          placeholder="0.42"
-                        />
-                      </label>
-                      <label className="minimal-field">
-                        <span>Dialogue seed (integer)</span>
-                        <input
-                          value={rerunStudyTextDialogueSeed}
-                          onChange={(event) => setRerunStudyTextDialogueSeed(event.target.value)}
-                          placeholder="7"
-                        />
-                      </label>
-                    </div>
-                  ) : null}
-                  {rerunPronunciationMainAudio ? (
-                    <div className="minimal-grid">
-                      <label className="minimal-field">
-                        <span>Main pronunciation provider</span>
-                        <select
-                          value={rerunPronunciationMainProvider}
-                          onChange={(event) =>
-                            setRerunPronunciationMainProvider(event.target.value as UiTtsProvider)
-                          }
-                        >
-                          {ttsProviders.map((provider) => (
-                            <option key={provider} value={provider}>
-                              {provider}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="minimal-field">
-                        <span>Main pronunciation model</span>
-                        <select
-                          value={rerunPronunciationMainModel}
-                          onChange={(event) => setRerunPronunciationMainModel(event.target.value)}
-                        >
-                          {(rerunPronunciationMainProvider === 'google'
-                            ? googleTtsModelOptions
-                            : elevenlabsStandardModelOptions
-                          ).map((model) => (
-                            <option key={model} value={model}>
-                              {model}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="minimal-field">
-                        <span>Main pronunciation voice ID</span>
-                        <input
-                          value={rerunPronunciationMainVoiceId}
-                          onChange={(event) => setRerunPronunciationMainVoiceId(event.target.value)}
-                          placeholder="voice id override"
-                        />
-                      </label>
-                      <label className="minimal-field">
-                        <span>Main pronunciation accent</span>
-                        <input
-                          value={rerunPronunciationMainVoiceAccent}
-                          onChange={(event) => setRerunPronunciationMainVoiceAccent(event.target.value)}
-                          placeholder="accent override"
-                        />
-                      </label>
-                    </div>
-                  ) : null}
-                  {rerunPronunciationChunkAudio ? (
-                    <div className="minimal-grid">
-                      <label className="minimal-field">
-                        <span>Pronunciation chunk provider</span>
-                        <select
-                          value={rerunPronunciationChunkProvider}
-                          onChange={(event) => {
-                            setRerunPronunciationChunkProviderDirty(true);
-                            setRerunPronunciationChunkProvider(
-                              event.target.value as UiPronunciationChunkTtsProvider,
-                            );
-                          }}
-                        >
-                          {FALLBACK_PRONUNCIATION_CHUNK_TTS_PROVIDERS.map((provider) => (
-                            <option key={provider} value={provider}>
-                              {provider}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      {rerunPronunciationChunkProvider === 'edge-tts' ? (
-                        <label className="minimal-field">
-                          <span>Edge voice</span>
-                          <input
-                            value={rerunPronunciationChunkEdgeVoice}
-                            onChange={(event) =>
-                              setRerunPronunciationChunkEdgeVoice(event.target.value)
-                            }
-                            placeholder="e.g. en-US-AriaNeural"
-                          />
-                        </label>
-                      ) : (
-                        <>
-                          <label className="minimal-field">
-                            <span>Pronunciation chunk model</span>
-                            <select
-                              value={rerunPronunciationChunkModel}
-                              onChange={(event) =>
-                                setRerunPronunciationChunkModel(event.target.value)
-                              }
-                            >
-                              {(rerunPronunciationChunkProvider === 'google'
-                                ? googleTtsModelOptions
-                                : elevenlabsStandardModelOptions
-                              ).map((model) => (
-                                <option key={model} value={model}>
-                                  {model}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <label className="minimal-field">
-                            <span>Pronunciation chunk voice ID</span>
-                            <input
-                              value={rerunPronunciationChunkVoiceId}
-                              onChange={(event) =>
-                                setRerunPronunciationChunkVoiceId(event.target.value)
-                              }
-                              placeholder="voice id override"
-                            />
-                          </label>
-                          <label className="minimal-field">
-                            <span>Pronunciation chunk accent</span>
-                            <input
-                              value={rerunPronunciationChunkVoiceAccent}
-                              onChange={(event) =>
-                                setRerunPronunciationChunkVoiceAccent(event.target.value)
-                              }
-                              placeholder="accent override"
-                            />
-                          </label>
-                        </>
-                      )}
-                    </div>
-                  ) : null}
-                  <div className="minimal-inline">
-                    <button
-                      type="button"
-                      className="minimal-primary"
-                      onClick={() => void handleCustomRerun()}
-                      disabled={!rerunEnabled || !customRerunHasSelection}
-                    >
-                      {actionBusy === 'rerun' ? 'Queuing rerun...' : 'Queue custom rerun'}
-                    </button>
-                  </div>
-                  <p className="minimal-help">
-                    `eleven_v3` is dialogue-only. `eleven_flash_v2` is the only ElevenLabs model that supports IPA. `eleven_flash_v2_5` is the fast, cheap pronunciation option.
-                  </p>
-                </div>
-              ) : null}
-            </div>
-
-            <div className="minimal-stage-panel">
-              <div className="minimal-stage-panel-title">
-                <h3>Cancel and inspect</h3>
-                <p>Use these tools when you need to stop a job or trace exactly how the current output was made.</p>
-              </div>
-              <div className="minimal-block">
-                <div className="minimal-inline">
-                  <label className="minimal-field grow">
-                    <span>Cancel reason (optional)</span>
-                    <input
-                      value={cancelReason}
-                      onChange={(event) => setCancelReason(event.target.value)}
-                      placeholder="reason for cancellation"
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    className="minimal-secondary"
-                    onClick={() => void handleCancelJob()}
-                    disabled={!cancelEnabled}
-                  >
-                    {actionBusy === 'cancel' ? 'Cancelling...' : 'Cancel job'}
-                  </button>
-                </div>
-                {!cancelAllowedState && jobStatus ? (
-                  <p className="minimal-muted">Cancel is only available for queued or running jobs.</p>
-                ) : null}
-              </div>
-              {jobOptionsError ? <p className="minimal-error">{jobOptionsError}</p> : null}
-              {!rerunImplemented || !cancelImplemented ? (
-                <p className="minimal-muted">
-                  Some actions are unavailable because backend capability metadata does not mark them as implemented.
-                </p>
-              ) : null}
-              {actionError ? <p className="minimal-error">{actionError}</p> : null}
-              {actionSuccess ? <p className="minimal-success">{actionSuccess}</p> : null}
-              <details className="minimal-details" open>
-                <summary>Assignment lineage</summary>
-                <div className="minimal-section-header">
-                  <p className="minimal-help">See which prompt, draft, profile snapshot, and audio chain produced this assignment.</p>
-                  <button
-                    type="button"
-                    className="minimal-secondary"
-                    onClick={() => jobStatus?.jobId && void loadJobProvenance(jobStatus.jobId)}
-                    disabled={jobProvenanceLoading}
-                  >
-                    {jobProvenanceLoading ? 'Refreshing...' : 'Refresh lineage'}
-                  </button>
-                </div>
-                {jobProvenanceError ? <p className="minimal-error">{jobProvenanceError}</p> : null}
-                {jobProvenance ? (
-                  <>
-                    <div className="minimal-meta">
-                      <span>Source job: {jobProvenance.job.sourceJobId ?? 'none'}</span>
-                      <span>Prompt package: {jobProvenance.promptPackage?.id ?? 'none'}</span>
-                      <span>Draft: {jobProvenance.draft?.id ?? 'none'}</span>
-                    </div>
-                    {jobProvenance.tts ? (
-                      <div className="minimal-meta">
-                        <span>TTS provider: {jobProvenance.tts.provider ?? 'unknown'}</span>
-                        <span>
-                          Generated chars: {jobProvenance.tts.generatedCharacters ?? 0} (cached:{' '}
-                          {jobProvenance.tts.cachedCharacters ?? 0})
-                        </span>
-                        <span>
-                          Estimated spend:{' '}
-                          {typeof jobProvenance.tts.estimatedSpendUsd === 'number'
-                            ? `$${jobProvenance.tts.estimatedSpendUsd.toFixed(4)}`
-                            : 'n/a'}
-                        </span>
-                      </div>
-                    ) : null}
-                    {jobProvenance.lineage?.profile?.snapshot?.revisionId ||
-                    jobProvenance.lineage?.template?.snapshot?.revisionId ? (
-                      <div className="minimal-meta">
-                        <span>
-                          Profile revision:{' '}
-                          {jobProvenance.lineage?.profile?.snapshot?.revisionId ?? 'unknown'}
-                        </span>
-                        <span>
-                          Template revision:{' '}
-                          {jobProvenance.lineage?.template?.snapshot?.revisionId ?? 'unknown'}
-                        </span>
-                      </div>
-                    ) : null}
-                    {jobProvenance.lineage?.bindingAtCreation ? (
-                      <div className="minimal-meta">
-                        <span>
-                          Bound profile at creation:{' '}
-                          {jobProvenance.lineage.bindingAtCreation.profileId}
-                        </span>
-                        <span>
-                          Bound from:{' '}
-                          {new Date(
-                            jobProvenance.lineage.bindingAtCreation.effectiveFrom,
-                          ).toLocaleString()}
-                        </span>
-                      </div>
-                    ) : null}
-                    {jobProvenance.actions.length > 0 ? (
-                      <div className="minimal-list">
-                        {jobProvenance.actions.slice(0, 6).map((event) => (
-                          <div key={event.id} className="minimal-list-item">
-                            <span>
-                              {event.actionType} • {event.outcome} •{' '}
-                              {new Date(event.requestedAt).toLocaleString()}
-                            </span>
-                            <span className="minimal-muted">{event.message}</span>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="minimal-muted">No action audit events yet.</p>
-                    )}
-                  </>
-                ) : (
-                  <p className="minimal-muted">Lineage details will appear once loaded.</p>
-                )}
-              </details>
-            </div>
-          </div>
-        ) : (
-          <p className="minimal-help">
-            Advanced actions are available, but currently tucked away until you open them.
-          </p>
-        )}
-      </StageSection>
+        jobReady={Boolean(jobReady)}
+        jobStatus={jobStatus}
+        controller={advancedActions}
+        onRefreshActions={() => void loadJobOptions()}
+        jobOptionsError={jobOptionsError}
+        ttsProviders={ttsProviders}
+        googleTtsModelOptions={googleTtsModelOptions}
+        elevenlabsStandardModelOptions={elevenlabsStandardModelOptions}
+        pronunciationChunkProviders={FALLBACK_PRONUNCIATION_CHUNK_TTS_PROVIDERS}
+        studyTextStrategies={jobOptions?.ttsStrategies?.filter(isUiPublishTtsStrategy) ?? [
+          'auto',
+          'dialogue',
+          'tts',
+        ]}
+      />
     </div>
   );
 };
