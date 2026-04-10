@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type {
-  DraftResponse,
   JobOptionsResponse,
   JobStatus,
-  PromptPackageResponse,
   RecordingListItem,
   RecordingStatus,
   RecordingTranscriptResponse,
@@ -21,6 +19,7 @@ import {
   type MinimalPublishTarget,
   type PublishJobOverridesInput,
 } from './MinimalAssignment.logic';
+import type { AuthoringHydrationSnapshot } from './MinimalAssignment.authoring';
 import { isActivelyProcessingJobState, isTerminalJobState } from './MinimalAssignment.polling';
 
 type UiTtsProvider = PublishJobOverridesInput['selectedTtsProvider'];
@@ -109,11 +108,6 @@ function isUiPublishTtsStrategy(value: string | null | undefined): value is UiPu
 
 export interface HydratedAssignmentSnapshot {
   jobStatus: JobStatus;
-  publishTarget: MinimalPublishTarget;
-  selectedTtsProvider: UiTtsProvider;
-  selectedTtsStrategy: UiPublishTtsStrategy;
-  selectedTtsModel: string;
-  selectedPreset: string;
   recording: RecordingListItem | null;
   recordingStatus: RecordingStatus | null;
   recordingError: string | null;
@@ -122,25 +116,14 @@ export interface HydratedAssignmentSnapshot {
   transcriptText: string;
   transcriptStatus: TranscriptUiStatus;
   transcriptError: string | null;
-  promptPackage: PromptPackageResponse | null;
   teacherNotes: string;
-  promptText: string;
-  promptError: string | null;
-  draft: DraftResponse | null;
-  draftText: string;
-  draftError: string | null;
   rerunTargetPronunciationMode: PronunciationMode | null;
-  publishError: string | null;
   selectedStudentId: string;
   selectedProfileId: string;
   profileSelectionMode: 'auto' | 'manual';
   uploadError: string | null;
   uploadCacheNotice: string | null;
-  previewHtml: string | null;
-  previewError: string | null;
-  lastPreviewedDraftHash: string | null;
-  validation: null;
-  validationError: null;
+  authoring: AuthoringHydrationSnapshot;
 }
 
 interface UseMinimalAssignmentResumeParams {
@@ -268,11 +251,6 @@ export function useMinimalAssignmentResume({
 
         const snapshot: HydratedAssignmentSnapshot = {
           jobStatus: status,
-          publishTarget: status.publishTarget ?? currentPublishTarget,
-          selectedTtsProvider,
-          selectedTtsStrategy,
-          selectedTtsModel,
-          selectedPreset,
           recording: null,
           recordingStatus: null,
           recordingError: null,
@@ -281,26 +259,33 @@ export function useMinimalAssignmentResume({
           transcriptText: '',
           transcriptStatus: 'idle',
           transcriptError: null,
-          promptPackage: null,
           teacherNotes: '',
-          promptText: '',
-          promptError: null,
-          draft: null,
-          draftText: '',
-          draftError: null,
           rerunTargetPronunciationMode: status.pronunciationMode ?? null,
-          publishError:
-            status.state === 'failed' && status.error ? describeJobFailureReason(status) : null,
           selectedStudentId: currentSelectedStudentId,
           selectedProfileId: currentSelectedProfileId,
           profileSelectionMode: currentProfileSelectionMode,
           uploadError: null,
           uploadCacheNotice: null,
-          previewHtml: null,
-          previewError: null,
-          lastPreviewedDraftHash: null,
-          validation: null,
-          validationError: null,
+          authoring: {
+            publishTarget: status.publishTarget ?? currentPublishTarget,
+            selectedTtsProvider,
+            selectedTtsStrategy,
+            selectedTtsModel,
+            selectedPreset,
+            promptPackage: null,
+            promptText: '',
+            promptError: null,
+            draft: null,
+            draftText: '',
+            draftError: null,
+            publishError:
+              status.state === 'failed' && status.error ? describeJobFailureReason(status) : null,
+            previewHtml: null,
+            previewError: null,
+            lastPreviewedDraftHash: null,
+            validation: null,
+            validationError: null,
+          },
         };
 
         if (status.recordingId) {
@@ -357,14 +342,14 @@ export function useMinimalAssignmentResume({
         if (status.promptPackageId) {
           try {
             const resumedPromptPackage = await fetchPromptPackage(status.promptPackageId);
-            snapshot.promptPackage = resumedPromptPackage;
+            snapshot.authoring.promptPackage = resumedPromptPackage;
             snapshot.teacherNotes = resumedPromptPackage.notes ?? '';
-            snapshot.promptText = resumedPromptPackage.text ?? '';
+            snapshot.authoring.promptText = resumedPromptPackage.text ?? '';
             if (!resolvedStudentId && resumedPromptPackage.studentId) {
               resolvedStudentId = resumedPromptPackage.studentId;
             }
           } catch (error) {
-            snapshot.promptError =
+            snapshot.authoring.promptError =
               error instanceof Error ? error.message : 'Unable to load prompt package.';
           }
         }
@@ -372,8 +357,8 @@ export function useMinimalAssignmentResume({
         if (status.draftId) {
           try {
             const resumedDraft = await fetchDraft(status.draftId);
-            snapshot.draft = resumedDraft;
-            snapshot.draftText = resumedDraft.text ?? '';
+            snapshot.authoring.draft = resumedDraft;
+            snapshot.authoring.draftText = resumedDraft.text ?? '';
             snapshot.rerunTargetPronunciationMode = detectPronunciationModeFromDraft(
               resumedDraft.text ?? '',
             );
@@ -381,7 +366,7 @@ export function useMinimalAssignmentResume({
               resolvedStudentId = resumedDraft.studentId;
             }
           } catch (error) {
-            snapshot.draftError =
+            snapshot.authoring.draftError =
               error instanceof Error ? error.message : 'Unable to load saved draft.';
           }
         }

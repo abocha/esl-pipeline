@@ -1,15 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type {
-  DraftResponse,
-  GenerateDraftRequest,
-  GenerateDraftResponse,
   JobOptionsResponse,
   JobStatus,
-  MarkdownValidationResponse,
   ProfileRevisionSummaryResponse,
   PromptOptionsResponse,
-  PromptPackageResponse,
   RecordingListItem,
   RecordingStatus,
   RecordingTranscriptResponse,
@@ -17,37 +12,22 @@ import type {
   StudentOption,
 } from '../../utils/api';
 import {
-  approveJob,
-  createDraft,
-  createPromptPackage,
   fetchJobOptions,
   fetchPromptOptions,
   fetchRecordingTranscript,
   fetchStudentOptions,
-  GenerationDraftApiError,
-  generateDraft,
   getJobStatus,
   getProfileContent,
   getRecording,
   listProfileContents,
   listProfileRevisions,
-  materializeDraft,
-  renderHtmlPreview,
   restoreProfileRevision,
   retryRecordingTranscription,
-  updateDraft,
   updateRecordingTranscript,
   uploadRecording,
   upsertProfileContent,
-  validateMarkdown,
 } from '../../utils/api';
-import { copyTextToClipboard } from '../../utils/clipboard';
-import {
-  buildPublishJobOverrides,
-  getDraftPreviewGate,
-  getNextGenerationQuotaSnapshot,
-  hasActiveGenerationQuotaSelection,
-} from './MinimalAssignment.logic';
+import { useMinimalAssignmentAuthoringController } from './MinimalAssignment.authoring';
 import {
   AdvancedActionsStage,
   useAdvancedActionsController,
@@ -58,7 +38,6 @@ import {
   isActivelyProcessingJobState,
   isTerminalJobState,
 } from './MinimalAssignment.polling';
-import { getGenerationQuotaWindowDecision } from './MinimalAssignment.quota-window';
 import {
   type HydratedAssignmentSnapshot,
   useMinimalAssignmentResume,
@@ -169,72 +148,6 @@ function describeJobFailureReason(job: Pick<JobStatus, 'publishTarget' | 'error'
   return reason;
 }
 
-function normalizePresetSelection(
-  availablePresets: string[] | undefined,
-  requestedPreset: string | null | undefined,
-  currentPreset: string,
-): string {
-  if (availablePresets === undefined) {
-    return requestedPreset ?? currentPreset;
-  }
-  if (availablePresets.length === 0) {
-    return '';
-  }
-  if (requestedPreset && availablePresets.includes(requestedPreset)) {
-    return requestedPreset;
-  }
-  if (currentPreset && availablePresets.includes(currentPreset)) {
-    return currentPreset;
-  }
-  return availablePresets[0] ?? '';
-}
-
-function toGenerationQuotaSourceLabel(source: GenerateDraftResponse['quota']['source']): string {
-  if (source === 'configured') return 'Configured';
-  if (source === 'provider') return 'Provider';
-  return 'Hybrid';
-}
-
-function formatRelativeTimestamp(timestamp: string, nowMs: number = Date.now()): string {
-  const parsedMs = Date.parse(timestamp);
-  if (Number.isNaN(parsedMs)) {
-    return 'unknown';
-  }
-  const deltaMs = nowMs - parsedMs;
-  if (deltaMs <= 60_000) {
-    return 'just now';
-  }
-  if (deltaMs < 3_600_000) {
-    return `${Math.floor(deltaMs / 60_000)}m ago`;
-  }
-  if (deltaMs < 86_400_000) {
-    return `${Math.floor(deltaMs / 3_600_000)}h ago`;
-  }
-  return `${Math.floor(deltaMs / 86_400_000)}d ago`;
-}
-
-function formatAbsoluteTimestamp(timestamp: string): string {
-  const parsed = new Date(timestamp);
-  if (Number.isNaN(parsed.getTime())) {
-    return timestamp;
-  }
-  return parsed.toLocaleString();
-}
-
-function detectPronunciationModeFromDraft(text: string): PronunciationMode | null {
-  const match = text.match(/\*\*Mode:\*\*\s*([a-z_]+)/i);
-  if (!match) return null;
-  const mode = match[1]?.trim().toLowerCase();
-  return mode === 'shadow_sentence' ||
-    mode === 'connected_speech' ||
-    mode === 'intonation' ||
-    mode === 'rhythm_chunking' ||
-    mode === 'sentence_stress' ||
-    mode === 'minimal_pair'
-    ? mode
-    : null;
-}
-
 function getDefaultPronunciationChunkProviderForMode(
   mode: PronunciationMode | null,
 ): UiPronunciationChunkTtsProvider {
@@ -278,7 +191,6 @@ export const MinimalAssignment: React.FC = () => {
   const [selectedSttProvider, setSelectedSttProvider] = useState<SttProvider>('deepgram');
   const uploadAbortRef = useRef<AbortController | null>(null);
   const sttProviderUserChangedRef = useRef(false);
-  const generationRequestVersionRef = useRef(0);
 
   const [transcript, setTranscript] = useState<RecordingTranscriptResponse | null>(null);
   const [transcriptText, setTranscriptText] = useState('');
@@ -290,42 +202,8 @@ export const MinimalAssignment: React.FC = () => {
   const [retryingTranscript, setRetryingTranscript] = useState(false);
 
   const [promptOptions, setPromptOptions] = useState<PromptOptionsResponse | null>(null);
-  const [promptPackage, setPromptPackage] = useState<PromptPackageResponse | null>(null);
   const [teacherNotes, setTeacherNotes] = useState('');
-  const [promptText, setPromptText] = useState('');
-  const [promptLoading, setPromptLoading] = useState(false);
-  const [promptError, setPromptError] = useState<string | null>(null);
-  const [promptCopyState, setPromptCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
-
-  const [draftText, setDraftText] = useState('');
-  const [draft, setDraft] = useState<DraftResponse | null>(null);
-  const [draftError, setDraftError] = useState<string | null>(null);
-  const [generatingDraft, setGeneratingDraft] = useState(false);
-  const [generationError, setGenerationError] = useState<string | null>(null);
-  const [generationSuccess, setGenerationSuccess] = useState<string | null>(null);
-  const [selectedGenerationProvider, setSelectedGenerationProvider] = useState('');
-  const [selectedGenerationModel, setSelectedGenerationModel] = useState('');
-  const [generationRuntimeQuotaSnapshot, setGenerationRuntimeQuotaSnapshot] = useState<
-    GenerateDraftResponse['quota'] | null
-  >(null);
-  const [generationRuntimeSelection, setGenerationRuntimeSelection] = useState<{
-    provider: string;
-    model: string;
-  } | null>(null);
-  const [quotaWindowTickMs, setQuotaWindowTickMs] = useState(() => Date.now());
-
-  const [validation, setValidation] = useState<MarkdownValidationResponse | null>(null);
-  const [validationError, setValidationError] = useState<string | null>(null);
-  const [validating, setValidating] = useState(false);
-
-  const [publishing, setPublishing] = useState(false);
-  const [publishError, setPublishError] = useState<string | null>(null);
   const [jobStatus, setJobStatusState] = useState<JobStatus | null>(null);
-  const [publishTarget, setPublishTarget] = useState<'notion' | 'anytype' | 'html'>('html');
-  const [selectedTtsProvider, setSelectedTtsProvider] = useState<UiTtsProvider>('elevenlabs');
-  const [selectedTtsStrategy, setSelectedTtsStrategy] = useState<UiPublishTtsStrategy>('auto');
-  const [selectedTtsModel, setSelectedTtsModel] = useState('');
-  const [selectedPreset, setSelectedPreset] = useState('');
   const [jobOptions, setJobOptions] = useState<JobOptionsResponse | null>(null);
   const [jobOptionsError, setJobOptionsError] = useState<string | null>(null);
   const [studentOptions, setStudentOptions] = useState<StudentOption[]>([]);
@@ -349,24 +227,8 @@ export const MinimalAssignment: React.FC = () => {
 
   const [rerunTargetPronunciationMode, setRerunTargetPronunciationMode] =
     useState<PronunciationMode | null>(null);
-  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
-  const [previewError, setPreviewError] = useState<string | null>(null);
-  const [previewing, setPreviewing] = useState(false);
-  const [lastPreviewedDraftHash, setLastPreviewedDraftHash] = useState<string | null>(null);
 
   const generationOptions = jobOptions?.generation ?? null;
-  const generationProviders = useMemo(
-    () => generationOptions?.providers ?? [],
-    [generationOptions],
-  );
-  const generationModelOptions = useMemo(
-    () => generationOptions?.modelOptions ?? [],
-    [generationOptions],
-  );
-  const generationModelsForProvider = useMemo(
-    () => generationModelOptions.filter((option) => option.provider === selectedGenerationProvider),
-    [generationModelOptions, selectedGenerationProvider],
-  );
   const sttProviders = useMemo<SttProvider[]>(() => {
     const providers = (jobOptions?.sttProviders ?? [])
       .map((provider) => (isSttProvider(provider) ? provider : null))
@@ -418,33 +280,6 @@ export const MinimalAssignment: React.FC = () => {
     () => ttsModelOptionsByProvider.google ?? [...FALLBACK_GOOGLE_TTS_MODELS],
     [ttsModelOptionsByProvider],
   );
-  const publishElevenlabsModelOptions = useMemo(() => {
-    if (selectedTtsStrategy === 'dialogue') {
-      return elevenlabsModelOptions.includes('eleven_v3')
-        ? ['eleven_v3']
-        : (['eleven_v3'] as const);
-    }
-    if (selectedTtsStrategy === 'tts') {
-      return elevenlabsStandardModelOptions.length > 0
-        ? elevenlabsStandardModelOptions
-        : [FALLBACK_ELEVENLABS_MODEL];
-    }
-    return [] as readonly string[];
-  }, [elevenlabsModelOptions, elevenlabsStandardModelOptions, selectedTtsStrategy]);
-  const selectedTtsModelOptions = useMemo(
-    () =>
-      selectedTtsProvider === 'google' ? googleTtsModelOptions : [...publishElevenlabsModelOptions],
-    [googleTtsModelOptions, publishElevenlabsModelOptions, selectedTtsProvider],
-  );
-  const availablePublishTtsStrategies = useMemo<UiPublishTtsStrategy[]>(() => {
-    if (!jobOptions) {
-      return selectedTtsStrategy === 'auto' ? ['auto'] : [selectedTtsStrategy, 'auto'];
-    }
-    const configured = (jobOptions?.ttsStrategies ?? []).filter(isUiPublishTtsStrategy);
-    return configured.length > 0 ? configured : ['auto'];
-  }, [jobOptions, selectedTtsStrategy]);
-  const publishModelSelectionDisabled =
-    selectedTtsProvider === 'elevenlabs' && selectedTtsStrategy === 'auto';
   const defaultPronunciationChunkProvider = useMemo<UiPronunciationChunkTtsProvider>(
     () => getDefaultPronunciationChunkProviderForMode(rerunTargetPronunciationMode),
     [rerunTargetPronunciationMode],
@@ -453,14 +288,45 @@ export const MinimalAssignment: React.FC = () => {
   const presetOptions = useMemo(() => buildSelectablePresetOptions(jobOptions), [jobOptions]);
   const presetOptionIds = useMemo(() => presetOptions.map((preset) => preset.id), [presetOptions]);
   const learningPresetCatalogEnabled = (jobOptions?.learningPresets?.length ?? 0) > 0;
+  const selectedTemplateId = useMemo(() => {
+    if (!promptOptions) return '';
+    return promptOptions.defaults.templateId ?? promptOptions.templates?.[0]?.id ?? '';
+  }, [promptOptions]);
 
-  const invalidateDraftGenerationRequests = useCallback(() => {
-    generationRequestVersionRef.current += 1;
-    setGeneratingDraft(false);
-  }, []);
+  const authoring = useMinimalAssignmentAuthoringController({
+    recordingId: recording?.recordingId ?? null,
+    transcriptStatus,
+    teacherNotes,
+    selectedProfileId,
+    selectedTemplateId,
+    currentJobId: jobStatus?.jobId ?? null,
+    learningPresetCatalogEnabled,
+    presetOptionIds,
+    generationOptions,
+    ttsProviders,
+    ttsModelOptionsByProvider,
+    elevenlabsModelOptions,
+    elevenlabsStandardModelOptions,
+    googleTtsModelOptions,
+    defaultTtsProvider: isUiTtsProvider(jobOptions?.defaultTtsProvider)
+      ? jobOptions.defaultTtsProvider
+      : null,
+    defaultTtsModelByProvider: jobOptions?.defaultTtsModelByProvider,
+    configuredTtsStrategies: (jobOptions?.ttsStrategies ?? []).filter(isUiPublishTtsStrategy),
+    onDraftPronunciationModeDetected: setRerunTargetPronunciationMode,
+    onTeacherNotesResolved: setTeacherNotes,
+  });
+  const {
+    invalidatePendingGeneration: invalidateAuthoringGeneration,
+    resetAuthoring,
+    setPromptError,
+    applyHydrationSnapshot: applyAuthoringHydration,
+    setPublishError: setAuthoringPublishError,
+  } = authoring;
 
   const resetFlow = useCallback(() => {
-    invalidateDraftGenerationRequests();
+    invalidateAuthoringGeneration();
+    resetAuthoring();
     uploadAbortRef.current?.abort();
     uploadAbortRef.current = null;
     sttProviderUserChangedRef.current = false;
@@ -474,30 +340,7 @@ export const MinimalAssignment: React.FC = () => {
     setTranscriptError(null);
     setTranscriptSaving(false);
     setRetryingTranscript(false);
-    setPromptPackage(null);
     setTeacherNotes('');
-    setPromptText('');
-    setPromptError(null);
-    setPromptCopyState('idle');
-    setDraft(null);
-    setDraftText('');
-    setDraftError(null);
-    setGeneratingDraft(false);
-    setGenerationError(null);
-    setGenerationSuccess(null);
-    setSelectedGenerationProvider('');
-    setSelectedGenerationModel('');
-    setGenerationRuntimeQuotaSnapshot(null);
-    setGenerationRuntimeSelection(null);
-    setQuotaWindowTickMs(Date.now());
-    setValidation(null);
-    setValidationError(null);
-    setValidating(false);
-    setPublishing(false);
-    setPublishError(null);
-    setSelectedTtsProvider('elevenlabs');
-    setSelectedTtsStrategy('auto');
-    setSelectedTtsModel('');
     setJobStatusState(null);
     setRerunTargetPronunciationMode(null);
     setSelectedFileName(null);
@@ -505,11 +348,7 @@ export const MinimalAssignment: React.FC = () => {
     setUploadProgress(0);
     setUploading(false);
     setUploadCacheNotice(null);
-    setPreviewHtml(null);
-    setPreviewError(null);
-    setPreviewing(false);
-    setLastPreviewedDraftHash(null);
-  }, [invalidateDraftGenerationRequests]);
+  }, [invalidateAuthoringGeneration, resetAuthoring]);
 
   const loadPromptOptions = useCallback(async () => {
     try {
@@ -520,16 +359,12 @@ export const MinimalAssignment: React.FC = () => {
       const message = error instanceof Error ? error.message : 'Unable to load prompt options.';
       setPromptError(message);
     }
-  }, []);
+  }, [setPromptError]);
 
   const loadJobOptions = useCallback(async () => {
     try {
       const response = await fetchJobOptions();
-      const nextPresetOptionIds = buildSelectablePresetOptions(response).map((preset) => preset.id);
       setJobOptions(response);
-      setSelectedPreset((current) =>
-        normalizePresetSelection(nextPresetOptionIds, undefined, current),
-      );
       setJobOptionsError(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to load job options.';
@@ -572,11 +407,6 @@ export const MinimalAssignment: React.FC = () => {
 
   const applyHydratedSnapshot = useCallback((snapshot: HydratedAssignmentSnapshot) => {
     setJobStatusState(snapshot.jobStatus);
-    setPublishTarget(snapshot.publishTarget);
-    setSelectedTtsProvider(snapshot.selectedTtsProvider);
-    setSelectedTtsStrategy(snapshot.selectedTtsStrategy);
-    setSelectedTtsModel(snapshot.selectedTtsModel);
-    setSelectedPreset(snapshot.selectedPreset);
     setRecording(snapshot.recording);
     setRecordingStatus(snapshot.recordingStatus);
     setRecordingError(snapshot.recordingError);
@@ -585,26 +415,15 @@ export const MinimalAssignment: React.FC = () => {
     setTranscriptText(snapshot.transcriptText);
     setTranscriptStatus(snapshot.transcriptStatus);
     setTranscriptError(snapshot.transcriptError);
-    setPromptPackage(snapshot.promptPackage);
     setTeacherNotes(snapshot.teacherNotes);
-    setPromptText(snapshot.promptText);
-    setPromptError(snapshot.promptError);
-    setDraft(snapshot.draft);
-    setDraftText(snapshot.draftText);
-    setDraftError(snapshot.draftError);
     setRerunTargetPronunciationMode(snapshot.rerunTargetPronunciationMode);
-    setPublishError(snapshot.publishError);
     setSelectedStudentId(snapshot.selectedStudentId);
     setSelectedProfileId(snapshot.selectedProfileId);
     setProfileSelectionMode(snapshot.profileSelectionMode);
     setUploadError(snapshot.uploadError);
     setUploadCacheNotice(snapshot.uploadCacheNotice);
-    setPreviewHtml(snapshot.previewHtml);
-    setPreviewError(snapshot.previewError);
-    setLastPreviewedDraftHash(snapshot.lastPreviewedDraftHash);
-    setValidation(snapshot.validation);
-    setValidationError(snapshot.validationError);
-  }, []);
+    applyAuthoringHydration(snapshot.authoring);
+  }, [applyAuthoringHydration]);
 
   const applyCurrentJobStatus = useCallback((job: JobStatus | null) => {
     setJobStatusState(job);
@@ -613,15 +432,15 @@ export const MinimalAssignment: React.FC = () => {
   const resume = useMinimalAssignmentResume({
     applyHydratedSnapshot,
     applyCurrentJobStatus,
-    invalidateDraftGenerationRequests,
+    invalidateDraftGenerationRequests: invalidateAuthoringGeneration,
     jobOptions,
     presetOptionIds,
     resolveBoundProfileId,
-    currentPublishTarget: publishTarget,
-    currentSelectedTtsProvider: selectedTtsProvider,
-    currentSelectedTtsStrategy: selectedTtsStrategy,
-    currentSelectedTtsModel: selectedTtsModel,
-    currentSelectedPreset: selectedPreset,
+    currentPublishTarget: authoring.publishTarget,
+    currentSelectedTtsProvider: authoring.selectedTtsProvider,
+    currentSelectedTtsStrategy: authoring.selectedTtsStrategy,
+    currentSelectedTtsModel: authoring.selectedTtsModel,
+    currentSelectedPreset: authoring.selectedPreset,
     currentSelectedStudentId: selectedStudentId,
     currentSelectedProfileId: selectedProfileId,
     currentProfileSelectionMode: profileSelectionMode,
@@ -630,7 +449,7 @@ export const MinimalAssignment: React.FC = () => {
   const advancedActions = useAdvancedActionsController({
     jobStatus,
     jobOptions,
-    selectedTtsProvider,
+    selectedTtsProvider: authoring.selectedTtsProvider,
     ttsProviders,
     googleTtsModelOptions,
     elevenlabsStandardModelOptions,
@@ -681,13 +500,6 @@ export const MinimalAssignment: React.FC = () => {
   }, [loadSelectedProfile]);
 
   useEffect(() => {
-    if (!jobOptions) {
-      return;
-    }
-    setSelectedPreset((current) => normalizePresetSelection(presetOptionIds, undefined, current));
-  }, [jobOptions, presetOptionIds, selectedPreset]);
-
-  useEffect(() => {
     if (sttProviders.length === 0) return;
     const configuredDefault = jobOptions?.defaultSttProvider;
     const preferredProvider =
@@ -709,147 +521,6 @@ export const MinimalAssignment: React.FC = () => {
       setSelectedSttProvider(preferredProvider);
     }
   }, [jobOptions?.defaultSttProvider, selectedSttProvider, sttProviders]);
-
-  useEffect(() => {
-    if (ttsProviders.length === 0) return;
-    const configuredDefault = jobOptions?.defaultTtsProvider;
-    const preferredProvider =
-      configuredDefault && ttsProviders.includes(configuredDefault)
-        ? configuredDefault
-        : ttsProviders[0];
-    if (!preferredProvider) return;
-    if (!ttsProviders.includes(selectedTtsProvider)) {
-      setSelectedTtsProvider(preferredProvider);
-    }
-  }, [jobOptions?.defaultTtsProvider, selectedTtsProvider, ttsProviders]);
-
-  useEffect(() => {
-    if (!jobOptions) return;
-    const fallbackStrategy = availablePublishTtsStrategies[0];
-    if (!fallbackStrategy) return;
-    if (!availablePublishTtsStrategies.includes(selectedTtsStrategy)) {
-      setSelectedTtsStrategy(fallbackStrategy);
-    }
-  }, [availablePublishTtsStrategies, jobOptions, selectedTtsStrategy]);
-
-  useEffect(() => {
-    const modelOptions = ttsModelOptionsByProvider[selectedTtsProvider] ?? [];
-    if (selectedTtsProvider === 'google') {
-      if (modelOptions.length === 0) {
-        if (selectedTtsModel) setSelectedTtsModel('');
-        return;
-      }
-      const configuredDefault = jobOptions?.defaultTtsModelByProvider?.google;
-      const preferredModel =
-        configuredDefault && modelOptions.includes(configuredDefault)
-          ? configuredDefault
-          : modelOptions[0];
-      if (!preferredModel) return;
-      if (!selectedTtsModel || !modelOptions.includes(selectedTtsModel)) {
-        setSelectedTtsModel(preferredModel);
-      }
-      return;
-    }
-
-    if (selectedTtsStrategy === 'auto') {
-      if (selectedTtsModel) {
-        setSelectedTtsModel('');
-      }
-      return;
-    }
-
-    if (selectedTtsStrategy === 'dialogue') {
-      if (selectedTtsModel !== 'eleven_v3') {
-        setSelectedTtsModel('eleven_v3');
-      }
-      return;
-    }
-
-    if (publishElevenlabsModelOptions.length === 0) {
-      if (selectedTtsModel) {
-        setSelectedTtsModel('');
-      }
-      return;
-    }
-
-    const configuredDefault = jobOptions?.defaultTtsModelByProvider?.elevenlabs;
-    const preferredModel =
-      configuredDefault &&
-      configuredDefault !== 'eleven_v3' &&
-      publishElevenlabsModelOptions.includes(configuredDefault)
-        ? configuredDefault
-        : (publishElevenlabsModelOptions.find((model) => model === FALLBACK_ELEVENLABS_MODEL) ??
-          publishElevenlabsModelOptions[0]);
-    if (!preferredModel) return;
-    if (
-      !selectedTtsModel ||
-      !publishElevenlabsModelOptions.includes(selectedTtsModel) ||
-      selectedTtsModel === 'eleven_v3'
-    ) {
-      setSelectedTtsModel(preferredModel);
-    }
-  }, [
-    jobOptions?.defaultTtsModelByProvider,
-    publishElevenlabsModelOptions,
-    selectedTtsModel,
-    selectedTtsProvider,
-    selectedTtsStrategy,
-    ttsModelOptionsByProvider,
-  ]);
-
-  useEffect(() => {
-    if (generationProviders.length === 0) {
-      if (selectedGenerationProvider) {
-        setSelectedGenerationProvider('');
-      }
-      return;
-    }
-    const configuredDefault = generationOptions?.defaultProvider;
-    const fallbackProvider =
-      (configuredDefault && generationProviders.includes(configuredDefault)
-        ? configuredDefault
-        : generationProviders[0]) ?? '';
-    const hasSelectedProvider = generationProviders.includes(
-      selectedGenerationProvider as (typeof generationProviders)[number],
-    );
-    if (!selectedGenerationProvider || !hasSelectedProvider) {
-      setSelectedGenerationProvider(fallbackProvider);
-    }
-  }, [generationOptions?.defaultProvider, generationProviders, selectedGenerationProvider]);
-
-  useEffect(() => {
-    if (!selectedGenerationProvider || generationModelsForProvider.length === 0) {
-      if (selectedGenerationModel) {
-        setSelectedGenerationModel('');
-      }
-      return;
-    }
-    const modelIds = generationModelsForProvider.map((option) => option.id);
-    const configuredDefaultModel =
-      generationOptions?.defaultModelByProvider?.[
-        selectedGenerationProvider as keyof NonNullable<
-          typeof generationOptions
-        >['defaultModelByProvider']
-      ];
-    const defaultSelectedModel = generationModelsForProvider.find(
-      (option) => option.defaultSelected,
-    )?.id;
-    const fallbackModel =
-      (configuredDefaultModel && modelIds.includes(configuredDefaultModel)
-        ? configuredDefaultModel
-        : defaultSelectedModel && modelIds.includes(defaultSelectedModel)
-          ? defaultSelectedModel
-          : modelIds[0]) ?? '';
-
-    if (!selectedGenerationModel || !modelIds.includes(selectedGenerationModel)) {
-      setSelectedGenerationModel(fallbackModel);
-    }
-  }, [
-    generationModelsForProvider,
-    generationOptions?.defaultModelByProvider,
-    selectedGenerationModel,
-    selectedGenerationProvider,
-  ]);
 
   useEffect(() => {
     if (profileSelectionMode !== 'auto') {
@@ -1033,11 +704,6 @@ export const MinimalAssignment: React.FC = () => {
     }
   };
 
-  const selectedTemplateId = useMemo(() => {
-    if (!promptOptions) return '';
-    return promptOptions.defaults.templateId ?? promptOptions.templates?.[0]?.id ?? '';
-  }, [promptOptions]);
-
   const selectedStudent = useMemo(
     () => studentOptions.find((student) => student.id === selectedStudentId) ?? null,
     [studentOptions, selectedStudentId],
@@ -1139,293 +805,6 @@ export const MinimalAssignment: React.FC = () => {
     }
   };
 
-  const handleGeneratePrompt = async () => {
-    if (!recording?.recordingId) {
-      setPromptError('Upload a recording first.');
-      return;
-    }
-    if (!selectedTemplateId) {
-      setPromptError('Prompt template defaults are missing. Check prompt templates in settings.');
-      return;
-    }
-    if (transcriptStatus !== 'ready') {
-      setPromptError('Transcript is not ready yet.');
-      return;
-    }
-
-    invalidateDraftGenerationRequests();
-    setPromptLoading(true);
-    setPromptError(null);
-    setGenerationError(null);
-    setGenerationSuccess(null);
-    try {
-      const normalizedTeacherNotes = teacherNotes.trim();
-      const response = await createPromptPackage(recording.recordingId, {
-        ...(normalizedTeacherNotes ? { notes: normalizedTeacherNotes } : {}),
-        templateId: selectedTemplateId,
-        profileId: selectedProfileId || undefined,
-      });
-      setPromptPackage(response);
-      setTeacherNotes(response.notes ?? normalizedTeacherNotes);
-      setPromptText(response.text ?? '');
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to generate prompt.';
-      setPromptError(message);
-    } finally {
-      setPromptLoading(false);
-    }
-  };
-
-  const handleCopyPrompt = async () => {
-    if (!promptText.trim()) return;
-    const success = await copyTextToClipboard(promptText);
-    setPromptCopyState(success ? 'copied' : 'error');
-    setTimeout(() => setPromptCopyState('idle'), 2000);
-  };
-
-  const mapGenerationError = (error: unknown): string => {
-    const candidate = error as { code?: unknown; requestId?: unknown; message?: unknown };
-    const code = typeof candidate?.code === 'string' ? candidate.code : undefined;
-    const requestId = typeof candidate?.requestId === 'string' ? candidate.requestId : undefined;
-    const isMappedCategory =
-      code === 'provider_rate_limit' ||
-      code === 'provider_timeout' ||
-      code === 'provider_contract_error' ||
-      code === 'budget_exceeded';
-
-    if (error instanceof GenerationDraftApiError || isMappedCategory) {
-      const limitDetails =
-        error instanceof GenerationDraftApiError && error.limitType
-          ? ` Limit: ${error.used ?? '?'} / ${error.limit ?? '?'}` +
-            (error.window ? ` (${error.window} window).` : '.')
-          : '';
-      const baseMessage =
-        code === 'provider_rate_limit'
-          ? 'Provider rate limit reached. Try again shortly or choose another model/provider.'
-          : code === 'provider_timeout'
-            ? 'Provider timed out. Retry or choose a faster model/provider.'
-            : code === 'provider_contract_error'
-              ? 'Provider request failed due to compatibility/contract error. Try another model/provider.'
-              : code === 'budget_exceeded'
-                ? `Generation blocked by safety budget policy.${limitDetails} Switch model/provider or wait for reset.`
-                : error instanceof Error
-                  ? error.message
-                  : 'Unable to generate draft.';
-      return requestId ? `${baseMessage} Request ID: ${requestId}` : baseMessage;
-    }
-    return error instanceof Error ? error.message : 'Unable to generate draft.';
-  };
-
-  const handleGenerateDraft = async (): Promise<GenerateDraftResponse | null> => {
-    if (!promptPackage?.id) {
-      setGenerationError('Generate a prompt package first.');
-      setGenerationSuccess(null);
-      return null;
-    }
-    if (generationOptions && !selectedGenerationProvider) {
-      setGenerationError('Select a generation provider.');
-      setGenerationSuccess(null);
-      return null;
-    }
-    if (generationOptions && !selectedGenerationModel) {
-      setGenerationError('Select a generation model.');
-      setGenerationSuccess(null);
-      return null;
-    }
-
-    setGeneratingDraft(true);
-    setGenerationError(null);
-    setGenerationSuccess(null);
-    const requestVersion = generationRequestVersionRef.current + 1;
-    generationRequestVersionRef.current = requestVersion;
-    try {
-      const generated = await generateDraft({
-        promptPackageId: promptPackage.id,
-        provider: (selectedGenerationProvider || undefined) as GenerateDraftRequest['provider'],
-        model: selectedGenerationModel || undefined,
-      });
-      if (generationRequestVersionRef.current !== requestVersion) {
-        return null;
-      }
-      setDraftText(generated.text ?? '');
-      setDraft(null);
-      setDraftError(null);
-      setValidation(null);
-      setValidationError(null);
-      setPreviewHtml(null);
-      setPreviewError(null);
-      setLastPreviewedDraftHash(null);
-      setGenerationRuntimeQuotaSnapshot((current) =>
-        getNextGenerationQuotaSnapshot(current, { kind: 'success', quota: generated.quota }),
-      );
-      setGenerationRuntimeSelection({
-        provider: generated.provider,
-        model: generated.model,
-      });
-      setQuotaWindowTickMs(Date.now());
-      setGenerationSuccess(
-        `Generated with ${generated.provider}/${generated.model}. Review and save draft.`,
-      );
-      return generated;
-    } catch (error) {
-      if (generationRequestVersionRef.current !== requestVersion) {
-        return null;
-      }
-      setGenerationError(mapGenerationError(error));
-      return null;
-    } finally {
-      if (generationRequestVersionRef.current === requestVersion) {
-        setGeneratingDraft(false);
-      }
-    }
-  };
-
-  const draftDirty = useMemo(() => {
-    const original = draft?.text ?? '';
-    return draftText.trim() !== original.trim();
-  }, [draft?.text, draftText]);
-
-  const runValidation = async () => {
-    if (!draftText.trim()) {
-      setValidation(null);
-      setValidationError(null);
-      return { ok: false } as MarkdownValidationResponse;
-    }
-    setValidating(true);
-    setValidationError(null);
-    try {
-      const selectedValidationPreset =
-        selectedPreset && presetOptionIds.includes(selectedPreset) ? selectedPreset : null;
-      const response = await validateMarkdown(
-        draftText.trim(),
-        true,
-        learningPresetCatalogEnabled ? { learningPresetId: selectedValidationPreset } : undefined,
-      );
-      setValidation(response);
-      return response;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to validate markdown.';
-      setValidationError(message);
-      return { ok: false, errors: [message], warnings: [] } as MarkdownValidationResponse;
-    } finally {
-      setValidating(false);
-    }
-  };
-
-  const handleSaveDraft = async (): Promise<DraftResponse | null> => {
-    if (!promptPackage?.id) {
-      setDraftError('Generate a prompt package first.');
-      return null;
-    }
-    if (!draftText.trim()) {
-      setDraftError('Paste the assignment draft text first.');
-      return null;
-    }
-
-    const validationResult = await runValidation();
-    if (validationResult.errors && validationResult.errors.length > 0) {
-      setDraftError('Fix validation errors before saving.');
-      return null;
-    }
-
-    setDraftError(null);
-    try {
-      const response = draft?.id
-        ? await updateDraft(draft.id, draftText.trim())
-        : await createDraft(promptPackage.id, draftText.trim());
-      setDraft(response);
-      setRerunTargetPronunciationMode(detectPronunciationModeFromDraft(response.text ?? draftText));
-      return response;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to save draft.';
-      setDraftError(message);
-      return null;
-    }
-  };
-
-  const handlePublish = async () => {
-    setPublishError(null);
-    if (!draftPreviewGate.previewReady) {
-      setPublishError('Preview current draft before publishing.');
-      return;
-    }
-    setPublishing(true);
-
-    try {
-      let savedDraft = draft;
-      if (!savedDraft || draftDirty) {
-        savedDraft = await handleSaveDraft();
-      }
-      if (!savedDraft) {
-        setPublishing(false);
-        return;
-      }
-
-      const validPreset =
-        selectedPreset && presetOptionIds.includes(selectedPreset) ? selectedPreset : '';
-      const materialized = await materializeDraft(savedDraft.id, {
-        ...(jobStatus?.jobId ? { jobId: jobStatus.jobId } : {}),
-        jobOverrides: buildPublishJobOverrides({
-          publishTarget,
-          selectedTtsProvider,
-          selectedTtsStrategy,
-          selectedTtsModel,
-          selectedPreset: validPreset,
-          validPresetIds: presetOptionIds,
-          learningPresetCatalogEnabled,
-        }),
-      });
-      await approveJob(materialized.jobId, {
-        md: materialized.mdPath,
-        mdStorageUri: materialized.mdStorageUri,
-      });
-      const refreshed = await getJobStatus(materialized.jobId);
-      resume.applyJobStatusTransition(refreshed);
-      await resume.loadResumeJobs();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to publish assignment.';
-      setPublishError(message);
-    } finally {
-      setPublishing(false);
-    }
-  };
-
-  const handlePreviewDraft = async () => {
-    const normalizedDraft = draftText.trim();
-    if (!normalizedDraft) {
-      setPreviewError('Paste the assignment markdown first.');
-      return;
-    }
-    setPreviewing(true);
-    setPreviewError(null);
-    try {
-      const validationResult = await runValidation();
-      if (validationResult.errors && validationResult.errors.length > 0) {
-        setPreviewHtml(null);
-        setLastPreviewedDraftHash(null);
-        setPreviewError('Fix validation errors before preview.');
-        return;
-      }
-      const validPreset =
-        selectedPreset && presetOptionIds.includes(selectedPreset) ? selectedPreset : null;
-      const htmlResponse = await renderHtmlPreview({
-        text: normalizedDraft,
-        title: validationResult.meta?.title?.trim() || undefined,
-        learningPresetId: learningPresetCatalogEnabled ? validPreset : null,
-      });
-      const html = htmlResponse.html;
-      setPreviewHtml(html);
-      setLastPreviewedDraftHash(draftPreviewGate.draftHash);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to render preview.';
-      setPreviewError(message);
-      setPreviewHtml(null);
-      setLastPreviewedDraftHash(null);
-    } finally {
-      setPreviewing(false);
-    }
-  };
-
   useEffect(() => {
     if (!jobStatus?.jobId || !isActivelyProcessingJobState(jobStatus.state)) return;
     let active = true;
@@ -1444,7 +823,7 @@ export const MinimalAssignment: React.FC = () => {
       } catch (error) {
         if (!active) return;
         const message = error instanceof Error ? error.message : 'Unable to refresh job status.';
-        setPublishError(message);
+        setAuthoringPublishError(message);
       }
     }, POLL_INTERVAL_MS);
 
@@ -1452,7 +831,7 @@ export const MinimalAssignment: React.FC = () => {
       active = false;
       clearInterval(interval);
     };
-  }, [jobStatus?.jobId, jobStatus?.state, resumeLoadResumeJobs]);
+  }, [jobStatus?.jobId, jobStatus?.state, resumeLoadResumeJobs, setAuthoringPublishError]);
 
   useEffect(() => {
     if (!jobStatus) return;
@@ -1460,13 +839,12 @@ export const MinimalAssignment: React.FC = () => {
     if (isTerminalJobState(jobStatus.state)) {
       resumeSetPinnedJobExpanded(false);
       if (jobStatus.state === 'failed' && jobStatus.error) {
-        setPublishError(describeJobFailureReason(jobStatus));
+        setAuthoringPublishError(describeJobFailureReason(jobStatus));
       }
     }
-  }, [jobStatus, resumeSetPinnedJobExpanded, resumeSetSelectedResumeJobId]);
+  }, [jobStatus, resumeSetPinnedJobExpanded, resumeSetSelectedResumeJobId, setAuthoringPublishError]);
 
   const transcriptReady = transcriptStatus === 'ready' && transcriptText.trim().length > 0;
-  const promptReady = Boolean(promptPackage?.id && promptText.trim().length > 0);
   const jobReady = Boolean(jobStatus?.jobId);
   const selectedResumeJob = useMemo(
     () => resume.resumeJobs.find((job) => job.jobId === resume.selectedResumeJobId) ?? null,
@@ -1499,19 +877,7 @@ export const MinimalAssignment: React.FC = () => {
       ).toLocaleString()}`,
     [describeResumeJobStudent],
   );
-  const canPublish = promptReady && draftText.trim().length > 0 && !publishing;
-  const draftPreviewGate = useMemo(
-    () =>
-      getDraftPreviewGate({
-        draftText,
-        previewHtml,
-        lastPreviewedDraftHash,
-      }),
-    [draftText, previewHtml, lastPreviewedDraftHash],
-  );
-  const previewReadyForCurrentDraft = draftPreviewGate.previewReady;
-  const canPublishWithPreview = canPublish && previewReadyForCurrentDraft;
-  const jobPublishTarget = jobStatus?.publishTarget ?? publishTarget;
+  const jobPublishTarget = jobStatus?.publishTarget ?? authoring.publishTarget;
   const publishUrl =
     jobPublishTarget === 'anytype'
       ? (jobStatus?.anytypeUrl ?? jobStatus?.htmlUrl)
@@ -1530,66 +896,16 @@ export const MinimalAssignment: React.FC = () => {
       : jobPublishTarget === 'html'
         ? 'HTML link pending...'
         : 'Notion link pending...';
-  const activeGenerationQuota = generationRuntimeQuotaSnapshot ?? generationOptions?.quota ?? null;
-  const generationQuotaSourceLabel = activeGenerationQuota
-    ? toGenerationQuotaSourceLabel(activeGenerationQuota.source)
-    : null;
-  const generationQuotaUpdatedRelative = activeGenerationQuota
-    ? formatRelativeTimestamp(activeGenerationQuota.lastUpdatedAt)
-    : null;
-  const generationQuotaUpdatedAbsolute = activeGenerationQuota
-    ? formatAbsoluteTimestamp(activeGenerationQuota.lastUpdatedAt)
-    : null;
-  const generationQuotaHasNumericValues = Boolean(
-    activeGenerationQuota &&
-      [
-        activeGenerationQuota.requestsPerMinute,
-        activeGenerationQuota.tokensPerMinute,
-        activeGenerationQuota.requestsPerDay,
-        activeGenerationQuota.dailyTokenBudget,
-        activeGenerationQuota.dailyRequestBudget,
-        activeGenerationQuota.dailyRequestUsed,
-        activeGenerationQuota.dailyRequestRemaining,
-        activeGenerationQuota.dailyTokenUsed,
-        activeGenerationQuota.dailyTokenRemaining,
-        activeGenerationQuota.rpmBudget,
-        activeGenerationQuota.rpmUsed,
-        activeGenerationQuota.rpmRemaining,
-        activeGenerationQuota.usedRequestsToday,
-        activeGenerationQuota.usedTokensToday,
-      ].some((value) => value !== undefined && value !== null),
-  );
-  const generationDefaultModelForSelection =
-    generationOptions?.defaultModelByProvider?.[
-      selectedGenerationProvider as keyof NonNullable<
-        typeof generationOptions
-      >['defaultModelByProvider']
-    ] ?? generationModelsForProvider[0]?.id;
-  const activeQuotaAppliesToCurrentSelection = hasActiveGenerationQuotaSelection({
-    generationRuntimeQuotaSnapshot,
-    generationRuntimeSelection,
-    selectedGenerationProvider,
-    selectedGenerationModel,
-    generationDefaultProvider: generationOptions?.defaultProvider,
-    generationDefaultModelForSelection,
-    generationOptionsLoaded: Boolean(generationOptions),
-  });
-  const quotaWindowDecision = getGenerationQuotaWindowDecision({
-    quota: activeGenerationQuota,
-    quotaWindowTickMs,
-    activeQuotaAppliesToCurrentSelection,
-  });
-  const generationQuotaBlockedReason = quotaWindowDecision.blockedReason;
-  const generationBlockedByQuota = Boolean(generationQuotaBlockedReason);
-  const shouldTrackQuotaWindow = quotaWindowDecision.shouldTrackWindow;
-  const hasAssignmentContent = draftText.trim().length > 0;
-  const hasTeachingContext = Boolean(selectedProfileId || teacherNotes.trim() || promptReady);
+  const hasAssignmentContent = authoring.draftText.trim().length > 0;
+  const hasTeachingContext =
+    Boolean(selectedProfileId || teacherNotes.trim() || authoring.promptReady);
   const reviewReady =
-    hasAssignmentContent && (!draftPreviewGate.previewRequired || previewReadyForCurrentDraft);
+    hasAssignmentContent &&
+    (!authoring.draftPreviewGate.previewRequired || authoring.previewReadyForCurrentDraft);
 
   const workflowStages = useMemo<WorkflowStage[]>(() => {
     const startStatus: WorkflowStageStatus =
-      recording !== null || promptReady || hasAssignmentContent || Boolean(jobReady)
+      recording !== null || authoring.promptReady || hasAssignmentContent || Boolean(jobReady)
         ? 'complete'
         : 'current';
     const sourceStatus: WorkflowStageStatus = transcriptReady
@@ -1597,14 +913,14 @@ export const MinimalAssignment: React.FC = () => {
       : recording
         ? 'current'
         : 'locked';
-    const contextStatus: WorkflowStageStatus = promptReady
+    const contextStatus: WorkflowStageStatus = authoring.promptReady
       ? 'complete'
       : transcriptReady
         ? 'current'
         : 'locked';
     const assignmentStatus: WorkflowStageStatus = hasAssignmentContent
       ? 'complete'
-      : promptReady
+      : authoring.promptReady
         ? 'current'
         : 'locked';
     const reviewStatus: WorkflowStageStatus = jobReady
@@ -1640,7 +956,7 @@ export const MinimalAssignment: React.FC = () => {
       {
         id: 'context',
         title: 'Add teaching context',
-        description: promptReady
+        description: authoring.promptReady
           ? 'Learner context has been applied to the instructions.'
           : transcriptReady
             ? hasTeachingContext
@@ -1654,7 +970,7 @@ export const MinimalAssignment: React.FC = () => {
         title: 'Create assignment',
         description: hasAssignmentContent
           ? 'Assignment content is ready to review.'
-          : promptReady
+          : authoring.promptReady
             ? 'Generate or edit the assignment content.'
             : 'Unlocks after instructions are ready.',
         status: assignmentStatus,
@@ -1681,12 +997,12 @@ export const MinimalAssignment: React.FC = () => {
       },
     ];
   }, [
+    authoring.promptReady,
     hasAssignmentContent,
     jobReady,
     jobStatus?.jobId,
     jobStatus?.state,
     hasTeachingContext,
-    promptReady,
     recording,
     reviewReady,
     advancedActions.showAdvancedActions,
@@ -1713,8 +1029,12 @@ export const MinimalAssignment: React.FC = () => {
       },
       {
         label: 'Assignment',
-        value: hasAssignmentContent ? 'Drafted' : promptReady ? 'Instructions ready' : 'Not started',
-        note: draftDirty ? 'You have unsaved assignment edits.' : undefined,
+        value: hasAssignmentContent
+          ? 'Drafted'
+          : authoring.promptReady
+            ? 'Instructions ready'
+            : 'Not started',
+        note: authoring.draftDirty ? 'You have unsaved assignment edits.' : undefined,
       },
       {
         label: 'Share status',
@@ -1723,10 +1043,10 @@ export const MinimalAssignment: React.FC = () => {
       },
     ],
     [
-      draftDirty,
+      authoring.draftDirty,
+      authoring.promptReady,
       hasAssignmentContent,
       jobStatus?.state,
-      promptReady,
       publishLabel,
       publishUrl,
       recording,
@@ -1742,18 +1062,6 @@ export const MinimalAssignment: React.FC = () => {
   const assignmentStage = workflowStages[3] ?? contextStage;
   const reviewStage = workflowStages[4] ?? assignmentStage;
   const advancedStage = workflowStages[5] ?? reviewStage;
-
-  useEffect(() => {
-    if (!shouldTrackQuotaWindow) {
-      return;
-    }
-    const interval = globalThis.setInterval(() => {
-      setQuotaWindowTickMs(Date.now());
-    }, 15_000);
-    return () => {
-      globalThis.clearInterval(interval);
-    };
-  }, [shouldTrackQuotaWindow]);
 
   return (
     <div className="minimal-assignment">
@@ -1865,74 +1173,78 @@ export const MinimalAssignment: React.FC = () => {
       <AssignmentStageSection
         stage={assignmentStage}
         transcriptReady={transcriptReady}
-        promptLoading={promptLoading}
-        promptReady={Boolean(promptReady)}
+        promptLoading={authoring.promptLoading}
+        promptReady={authoring.promptReady}
         promptOptionsReady={Boolean(promptOptions)}
-        onGeneratePrompt={() => void handleGeneratePrompt()}
-        onCopyPrompt={handleCopyPrompt}
-        promptCopyState={promptCopyState}
+        onGeneratePrompt={() => void authoring.generatePrompt()}
+        onCopyPrompt={authoring.copyPrompt}
+        promptCopyState={authoring.promptCopyState}
         onReloadPromptOptions={() => void loadPromptOptions()}
-        promptError={promptError}
-        promptPackage={promptPackage}
-        promptText={promptText}
-        onPromptTextChange={setPromptText}
-        onSaveDraft={() => void handleSaveDraft()}
-        validating={validating}
-        draftDirty={draftDirty}
+        promptError={authoring.promptError}
+        promptPackage={authoring.promptPackage}
+        promptText={authoring.promptText}
+        onPromptTextChange={authoring.setPromptText}
+        onSaveDraft={() => void authoring.saveDraft()}
+        validating={authoring.validating}
+        draftDirty={authoring.draftDirty}
         generationOptionsAvailable={Boolean(generationOptions)}
-        selectedGenerationProvider={selectedGenerationProvider}
-        onSelectedGenerationProviderChange={setSelectedGenerationProvider}
-        generationProviders={generationProviders}
-        selectedGenerationModel={selectedGenerationModel}
-        onSelectedGenerationModelChange={setSelectedGenerationModel}
-        generationModelsForProvider={generationModelsForProvider}
-        onGenerateDraft={() => void handleGenerateDraft()}
-        generatingDraft={generatingDraft}
-        generationBlockedByQuota={generationBlockedByQuota}
-        activeGenerationQuota={activeGenerationQuota}
-        generationQuotaSourceLabel={generationQuotaSourceLabel}
-        generationQuotaUpdatedRelative={generationQuotaUpdatedRelative}
-        generationQuotaUpdatedAbsolute={generationQuotaUpdatedAbsolute}
-        generationQuotaHasNumericValues={generationQuotaHasNumericValues}
-        generationQuotaBlockedReason={generationQuotaBlockedReason}
-        generationError={generationError}
-        generationSuccess={generationSuccess}
-        draftText={draftText}
-        onDraftTextChange={setDraftText}
-        validation={validation}
-        validationError={validationError}
-        draftError={draftError}
+        selectedGenerationProvider={authoring.selectedGenerationProvider}
+        onSelectedGenerationProviderChange={authoring.setSelectedGenerationProvider}
+        generationProviders={authoring.generationProviders}
+        selectedGenerationModel={authoring.selectedGenerationModel}
+        onSelectedGenerationModelChange={authoring.setSelectedGenerationModel}
+        generationModelsForProvider={authoring.generationModelsForProvider}
+        onGenerateDraft={() => void authoring.generateDraft()}
+        generatingDraft={authoring.generatingDraft}
+        generationBlockedByQuota={authoring.generationBlockedByQuota}
+        activeGenerationQuota={authoring.activeGenerationQuota}
+        generationQuotaSourceLabel={authoring.generationQuotaSourceLabel}
+        generationQuotaUpdatedRelative={authoring.generationQuotaUpdatedRelative}
+        generationQuotaUpdatedAbsolute={authoring.generationQuotaUpdatedAbsolute}
+        generationQuotaHasNumericValues={authoring.generationQuotaHasNumericValues}
+        generationQuotaBlockedReason={authoring.generationQuotaBlockedReason}
+        generationError={authoring.generationError}
+        generationSuccess={authoring.generationSuccess}
+        draftText={authoring.draftText}
+        onDraftTextChange={authoring.setDraftText}
+        validation={authoring.validation}
+        validationError={authoring.validationError}
+        draftError={authoring.draftError}
       />
 
       <ReviewStageSection
         stage={reviewStage}
-        onPublish={() => void handlePublish()}
-        canPublishWithPreview={canPublishWithPreview}
-        publishing={publishing}
-        previewing={previewing}
-        onPreviewDraft={() => void handlePreviewDraft()}
-        draftHasContent={draftText.trim().length > 0}
-        previewReadyForCurrentDraft={previewReadyForCurrentDraft}
-        publishTarget={publishTarget}
-        onPublishTargetChange={setPublishTarget}
-        selectedPreset={selectedPreset}
-        onSelectedPresetChange={setSelectedPreset}
+        onPublish={() =>
+          void authoring.publishAssignment({
+            onPublishedJob: resume.applyJobStatusTransition,
+            refreshResumeJobs: resume.loadResumeJobs,
+          })}
+        canPublishWithPreview={authoring.canPublishWithPreview}
+        publishing={authoring.publishing}
+        previewing={authoring.previewing}
+        onPreviewDraft={() => void authoring.previewDraft()}
+        draftHasContent={authoring.draftText.trim().length > 0}
+        previewReadyForCurrentDraft={authoring.previewReadyForCurrentDraft}
+        publishTarget={authoring.publishTarget}
+        onPublishTargetChange={authoring.setPublishTarget}
+        selectedPreset={authoring.selectedPreset}
+        onSelectedPresetChange={authoring.setSelectedPreset}
         presetOptions={presetOptions}
         jobOptionsLoaded={Boolean(jobOptions)}
-        selectedTtsProvider={selectedTtsProvider}
-        onSelectedTtsProviderChange={setSelectedTtsProvider}
+        selectedTtsProvider={authoring.selectedTtsProvider}
+        onSelectedTtsProviderChange={authoring.setSelectedTtsProvider}
         ttsProviders={ttsProviders}
-        selectedTtsStrategy={selectedTtsStrategy}
-        onSelectedTtsStrategyChange={setSelectedTtsStrategy}
-        availablePublishTtsStrategies={availablePublishTtsStrategies}
+        selectedTtsStrategy={authoring.selectedTtsStrategy}
+        onSelectedTtsStrategyChange={authoring.setSelectedTtsStrategy}
+        availablePublishTtsStrategies={authoring.availablePublishTtsStrategies}
         formatPublishTtsStrategyLabel={formatPublishTtsStrategyLabel}
-        selectedTtsModel={selectedTtsModel}
-        onSelectedTtsModelChange={setSelectedTtsModel}
-        publishModelSelectionDisabled={publishModelSelectionDisabled}
-        selectedTtsModelOptions={selectedTtsModelOptions}
-        previewError={previewError}
-        previewHtml={previewHtml}
-        publishError={publishError}
+        selectedTtsModel={authoring.selectedTtsModel}
+        onSelectedTtsModelChange={authoring.setSelectedTtsModel}
+        publishModelSelectionDisabled={authoring.publishModelSelectionDisabled}
+        selectedTtsModelOptions={authoring.selectedTtsModelOptions}
+        previewError={authoring.previewError}
+        previewHtml={authoring.previewHtml}
+        publishError={authoring.publishError}
         currentJobStatus={jobStatus}
         jobFailureReason={jobStatus?.state === 'failed' && jobStatus.error
           ? describeJobFailureReason(jobStatus)
