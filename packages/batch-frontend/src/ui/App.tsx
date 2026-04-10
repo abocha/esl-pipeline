@@ -1,11 +1,11 @@
-import React, { Suspense, lazy, useCallback, useState } from 'react';
+import React, { lazy, Suspense, useCallback, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { Navigate, Route, Routes } from 'react-router-dom';
 
 import { useAuth } from '../context/AuthContext';
+import type { AuthMode } from './auth/AuthDialog';
 import { MinimalAssignment } from './minimal/MinimalAssignment';
 import { MinimalShell } from './minimal/MinimalShell';
-import type { AuthMode } from './auth/AuthDialog';
 
 const AuthDialog = lazy(async () => {
   const module = await import('./auth/AuthDialog');

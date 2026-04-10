@@ -584,7 +584,9 @@ export function useMinimalAssignmentAuthoringController({
   onDraftPronunciationModeDetected,
   onTeacherNotesResolved,
 }: UseMinimalAssignmentAuthoringControllerParams): AuthoringController {
-  const [state, dispatch] = useReducer(authoringReducer, undefined, () => createInitialAuthoringState());
+  const [state, dispatch] = useReducer(authoringReducer, undefined, () =>
+    createInitialAuthoringState(),
+  );
   const generationRequestVersionRef = useRef(0);
   const promptCopyResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -598,7 +600,9 @@ export function useMinimalAssignmentAuthoringController({
   );
   const generationModelsForProvider = useMemo(
     () =>
-      generationModelOptions.filter((option) => option.provider === state.selectedGenerationProvider),
+      generationModelOptions.filter(
+        (option) => option.provider === state.selectedGenerationProvider,
+      ),
     [generationModelOptions, state.selectedGenerationProvider],
   );
   const availablePublishTtsStrategies = useMemo<UiPublishTtsStrategy[]>(() => {
@@ -619,11 +623,7 @@ export function useMinimalAssignmentAuthoringController({
         : [FALLBACK_ELEVENLABS_STANDARD_MODEL];
     }
     return [] as readonly string[];
-  }, [
-    elevenlabsModelOptions,
-    elevenlabsStandardModelOptions,
-    state.selectedTtsStrategy,
-  ]);
+  }, [elevenlabsModelOptions, elevenlabsStandardModelOptions, state.selectedTtsStrategy]);
   const selectedTtsModelOptions = useMemo(
     () =>
       state.selectedTtsProvider === 'google'
@@ -650,7 +650,8 @@ export function useMinimalAssignmentAuthoringController({
   const previewReadyForCurrentDraft = draftPreviewGate.previewReady;
   const canPublish = promptReady && state.draftText.trim().length > 0 && !state.publishing;
   const canPublishWithPreview = canPublish && previewReadyForCurrentDraft;
-  const activeGenerationQuota = state.generationRuntimeQuotaSnapshot ?? generationOptions?.quota ?? null;
+  const activeGenerationQuota =
+    state.generationRuntimeQuotaSnapshot ?? generationOptions?.quota ?? null;
   const generationQuotaSourceLabel = activeGenerationQuota
     ? toGenerationQuotaSourceLabel(activeGenerationQuota.source)
     : null;
@@ -831,14 +832,22 @@ export function useMinimalAssignmentAuthoringController({
         ? await updateDraft(state.draft.id, state.draftText.trim())
         : await createDraft(state.promptPackage.id, state.draftText.trim());
       dispatch({ type: 'draft_save_succeeded', payload: { draft: response } });
-      onDraftPronunciationModeDetected(detectPronunciationModeFromDraft(response.text ?? state.draftText));
+      onDraftPronunciationModeDetected(
+        detectPronunciationModeFromDraft(response.text ?? state.draftText),
+      );
       return response;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to save draft.';
       dispatch({ type: 'draft_save_failed', payload: { error: message } });
       return null;
     }
-  }, [onDraftPronunciationModeDetected, runValidation, state.draft?.id, state.draftText, state.promptPackage]);
+  }, [
+    onDraftPronunciationModeDetected,
+    runValidation,
+    state.draft?.id,
+    state.draftText,
+    state.promptPackage,
+  ]);
 
   const generatePrompt = useCallback(async () => {
     if (!recordingId) {
@@ -848,12 +857,17 @@ export function useMinimalAssignmentAuthoringController({
     if (!selectedTemplateId) {
       dispatch({
         type: 'prompt_generate_failed',
-        payload: { error: 'Prompt template defaults are missing. Check prompt templates in settings.' },
+        payload: {
+          error: 'Prompt template defaults are missing. Check prompt templates in settings.',
+        },
       });
       return;
     }
     if (transcriptStatus !== 'ready') {
-      dispatch({ type: 'prompt_generate_failed', payload: { error: 'Transcript is not ready yet.' } });
+      dispatch({
+        type: 'prompt_generate_failed',
+        payload: { error: 'Transcript is not ready yet.' },
+      });
       return;
     }
 
@@ -934,7 +948,8 @@ export function useMinimalAssignmentAuthoringController({
     try {
       const generated = await generateDraft({
         promptPackageId: state.promptPackage.id,
-        provider: (state.selectedGenerationProvider || undefined) as GenerateDraftRequest['provider'],
+        provider: (state.selectedGenerationProvider ||
+          undefined) as GenerateDraftRequest['provider'],
         model: state.selectedGenerationModel || undefined,
       });
       if (generationRequestVersionRef.current !== requestVersion) {

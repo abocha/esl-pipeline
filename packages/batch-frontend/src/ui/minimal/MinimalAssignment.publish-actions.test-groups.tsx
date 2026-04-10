@@ -2,14 +2,14 @@ import { fireEvent } from '@testing-library/react';
 import { afterEach, beforeEach, describe, it } from 'vitest';
 
 import {
-  openAdvancedActions,
   testApi as api,
   createMinimalUser,
   createTimerAwareMinimalUser,
-  makeJobStatus,
-  openPublishingSettings,
   testExpect as expect,
   INTEGRATION_TEST_TIMEOUT_MS,
+  makeJobStatus,
+  openAdvancedActions,
+  openPublishingSettings,
   previewCurrentDraft,
   renderDraftReadyAssignment,
   renderMinimalAssignment,
@@ -298,12 +298,9 @@ export function registerJobActionTests() {
         await user.click(screen.getByRole('checkbox', { name: /Study-text audio/i }));
         await user.click(screen.getByRole('checkbox', { name: /Main pronunciation audio/i }));
         await user.click(screen.getByRole('checkbox', { name: /Pronunciation chunk audio/i }));
-        fireEvent.change(
-          screen.getByRole('combobox', { name: /Pronunciation chunk provider/i }),
-          {
-            target: { value: 'elevenlabs' },
-          },
-        );
+        fireEvent.change(screen.getByRole('combobox', { name: /Pronunciation chunk provider/i }), {
+          target: { value: 'elevenlabs' },
+        });
 
         const studyModel = screen.getByRole('combobox', { name: /Study-text model/i });
         const mainModel = screen.getByRole('combobox', { name: /Main pronunciation model/i });
@@ -415,7 +412,9 @@ export function registerJobActionTests() {
         expect((strategySelect as HTMLSelectElement).value).toBe('auto');
         expect((modelSelect as HTMLSelectElement).disabled).toBe(true);
         expect(
-          screen.getByText(/Auto follows the assignment at runtime\. Choose Dialogue or TTS to lock a model\./i),
+          screen.getByText(
+            /Auto follows the assignment at runtime\. Choose Dialogue or TTS to lock a model\./i,
+          ),
         ).toBeTruthy();
 
         fireEvent.change(strategySelect, { target: { value: 'dialogue' } });
