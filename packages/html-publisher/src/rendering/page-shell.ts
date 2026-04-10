@@ -12,7 +12,7 @@ export interface PageShellInput {
   behaviorScript: string;
 }
 
-export function renderHeader(
+function renderHeader(
   title: string,
   frontmatter: Frontmatter,
   options: ResolvedRenderOptions,
@@ -69,6 +69,6 @@ export function renderPageShell(input: PageShellInput): string {
 </html>`;
 }
 
-export function serializeJsonForHtml(value: unknown): string {
+function serializeJsonForHtml(value: unknown): string {
   return JSON.stringify(value ?? null).replaceAll('<', String.raw`\u003c`);
 }

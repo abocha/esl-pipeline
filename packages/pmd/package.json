@@ -34,6 +34,7 @@
     "dev": "tsx watch src/index.ts",
     "test": "pnpm run test:unit",
     "test:unit": "vitest run --exclude \"**/*.integration.test.ts\" --exclude \"**/*.integration.test.tsx\"",
+    "test:unit:prebuilt": "vitest run --exclude \"**/*.integration.test.ts\" --exclude \"**/*.integration.test.tsx\"",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },
@@ -47,10 +48,10 @@
     "unified": "^11.0.5"
   },
   "devDependencies": {
-    "@types/node": "^25.5.0",
+    "@types/node": "^25.5.2",
     "tsx": "^4.21.0",
     "typescript": "^6.0.2",
-    "vitest": "^4.1.2"
+    "vitest": "^4.1.4"
   },
   "engines": {
     "node": ">=24.11.1"

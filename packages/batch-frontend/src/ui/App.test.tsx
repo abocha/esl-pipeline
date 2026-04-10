@@ -114,7 +114,7 @@ describe('App', () => {
 
     await user.click(screen.getByRole('link', { name: /Student Workspace/i }));
 
-    expect(screen.getByText('Student workspace content')).toBeTruthy();
+    expect(await screen.findByText('Student workspace content')).toBeTruthy();
   });
 
   it('logs out and shows a success toast', async () => {

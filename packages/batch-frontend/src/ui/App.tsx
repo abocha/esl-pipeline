@@ -1,12 +1,21 @@
-import React, { useCallback, useState } from 'react';
+import React, { lazy, Suspense, useCallback, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { Navigate, Route, Routes } from 'react-router-dom';
 
 import { useAuth } from '../context/AuthContext';
-import { AuthDialog, AuthMode } from './auth/AuthDialog';
+import type { AuthMode } from './auth/AuthDialog';
 import { MinimalAssignment } from './minimal/MinimalAssignment';
 import { MinimalShell } from './minimal/MinimalShell';
-import { StudentWorkspace } from './students/StudentWorkspace';
+
+const AuthDialog = lazy(async () => {
+  const module = await import('./auth/AuthDialog');
+  return { default: module.AuthDialog };
+});
+
+const StudentWorkspace = lazy(async () => {
+  const module = await import('./students/StudentWorkspace');
+  return { default: module.StudentWorkspace };
+});
 
 export const App: React.FC = () => {
   const { user, isAuthenticated, isLoading, logout } = useAuth();
@@ -62,18 +71,20 @@ export const App: React.FC = () => {
   return (
     <>
       {appBody}
-      <AuthDialog
-        mode={authMode}
-        initialEmail={prefillEmail}
-        onRegistered={handleRegistered}
-        onClose={closeDialog}
-        onSwitchMode={(mode) => {
-          if (mode === 'register') {
-            setPrefillEmail('');
-          }
-          setAuthMode(mode);
-        }}
-      />
+      <Suspense fallback={null}>
+        <AuthDialog
+          mode={authMode}
+          initialEmail={prefillEmail}
+          onRegistered={handleRegistered}
+          onClose={closeDialog}
+          onSwitchMode={(mode) => {
+            if (mode === 'register') {
+              setPrefillEmail('');
+            }
+            setAuthMode(mode);
+          }}
+        />
+      </Suspense>
     </>
   );
 };
@@ -89,12 +100,25 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ user, onLogout }) =
     <Routes>
       <Route element={<MinimalShell user={user} onLogout={onLogout} />}>
         <Route path="/" element={<MinimalAssignment />} />
-        <Route path="/students/workspace" element={<StudentWorkspace />} />
+        <Route
+          path="/students/workspace"
+          element={
+            <Suspense fallback={<RouteLoadingFallback />}>
+              <StudentWorkspace />
+            </Suspense>
+          }
+        />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 };
+
+const RouteLoadingFallback: React.FC = () => (
+  <div className="auth-shell">
+    <LoadingPanel />
+  </div>
+);
 
 const LoadingPanel: React.FC = () => (
   <section className="loading-panel card animate-fade-in">

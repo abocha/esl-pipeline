@@ -7,6 +7,9 @@ import {
   createTimerAwareMinimalUser,
   testExpect as expect,
   INTEGRATION_TEST_TIMEOUT_MS,
+  makeJobStatus,
+  openAdvancedActions,
+  openPublishingSettings,
   previewCurrentDraft,
   renderDraftReadyAssignment,
   renderMinimalAssignment,
@@ -59,7 +62,7 @@ export function registerPublishValidationTests() {
       }
       fireEvent.change(draftTextarea, { target: { value: '# Broken draft' } });
 
-      await user.click(screen.getByRole('button', { name: /Save draft/i }));
+      await user.click(screen.getByRole('button', { name: /Save assignment content/i }));
 
       await screen.findByText('Fix validation errors before saving.');
       expect(api.createDraft).not.toHaveBeenCalled();
@@ -74,9 +77,12 @@ export function registerPublishValidationTests() {
         throw new Error('Expected draft textarea to be rendered');
       }
       fireEvent.change(draftTextarea, { target: { value: '# Final draft' } });
-      await user.selectOptions(screen.getByRole('combobox', { name: /Preset/i }), 'b2-default');
+      openPublishingSettings();
+      fireEvent.change(screen.getByRole('combobox', { name: /Learning preset/i }), {
+        target: { value: 'b2-default' },
+      });
       await previewCurrentDraft(user);
-      await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
+      await user.click(screen.getByRole('button', { name: /Share assignment/i }));
 
       await waitFor(() => {
         expect(api.createDraft).toHaveBeenCalledWith('pkg-1', '# Final draft');
@@ -102,7 +108,7 @@ export function registerPublishValidationTests() {
       });
 
       await screen.findAllByText(/Job ID: job-1/i);
-      expect(screen.getByText(/Status: succeeded/i)).toBeTruthy();
+      expect(screen.getAllByText(/Status: succeeded/i).length).toBeGreaterThan(0);
     }, 30_000);
   });
 }
@@ -126,9 +132,9 @@ export function registerJobActionTests() {
         const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
         fireEvent.change(draftTextarea, { target: { value: '# Preview gated draft' } });
 
-        const publishButton = screen.getByRole('button', { name: /Publish assignment/i });
+        const publishButton = screen.getByRole('button', { name: /Share assignment/i });
         expect((publishButton as HTMLButtonElement).disabled).toBe(true);
-        expect(screen.getByText('Preview required before publish.')).toBeTruthy();
+        expect(screen.getByText('Preview required before sharing.')).toBeTruthy();
         expect(api.materializeDraft).not.toHaveBeenCalled();
 
         await previewCurrentDraft(user);
@@ -140,7 +146,7 @@ export function registerJobActionTests() {
         await waitFor(() => {
           expect((publishButton as HTMLButtonElement).disabled).toBe(true);
         });
-        expect(screen.getByText('Preview required before publish.')).toBeTruthy();
+        expect(screen.getByText('Preview required before sharing.')).toBeTruthy();
       },
       INTEGRATION_TEST_TIMEOUT_MS,
     );
@@ -151,6 +157,7 @@ export function registerJobActionTests() {
         vi.useFakeTimers({ shouldAdvanceTime: true });
         const user = createTimerAwareMinimalUser();
         await renderPublishedActionsAssignment({ status: { state: 'succeeded' } });
+        openAdvancedActions();
 
         await user.click(screen.getByRole('button', { name: /Regenerate pronunciation audio/i }));
 
@@ -171,6 +178,7 @@ export function registerJobActionTests() {
         vi.useFakeTimers({ shouldAdvanceTime: true });
         const user = createTimerAwareMinimalUser();
         await renderPublishedAssignment();
+        openAdvancedActions();
 
         await user.click(screen.getByRole('button', { name: /Custom rerun/i }));
         await user.click(screen.getByRole('checkbox', { name: /Study-text audio/i }));
@@ -180,10 +188,9 @@ export function registerJobActionTests() {
         fireEvent.change(screen.getByRole('textbox', { name: /Study-text accent/i }), {
           target: { value: 'british' },
         });
-        await user.selectOptions(
-          screen.getByRole('combobox', { name: /Study-text strategy/i }),
-          'dialogue',
-        );
+        fireEvent.change(screen.getByRole('combobox', { name: /Study-text strategy/i }), {
+          target: { value: 'dialogue' },
+        });
         expect(
           (screen.getByRole('combobox', { name: /Study-text model/i }) as HTMLSelectElement).value,
         ).toBe('eleven_v3');
@@ -223,6 +230,7 @@ export function registerJobActionTests() {
 **Natural sentence practice:** The device is as heavy as the old one.`;
         const user = createMinimalUser();
         await renderPublishedAssignment({ draftText: connectedSpeechDraft });
+        openAdvancedActions();
         await waitFor(() => {
           expect(api.fetchDraft).toHaveBeenCalledWith('draft-1');
         });
@@ -263,6 +271,7 @@ export function registerJobActionTests() {
             pronunciationMode: 'connected_speech',
           },
         });
+        openAdvancedActions();
 
         await user.click(screen.getByRole('button', { name: /Custom rerun/i }));
         await user.click(screen.getByRole('checkbox', { name: /Pronunciation chunk audio/i }));
@@ -283,15 +292,15 @@ export function registerJobActionTests() {
       async () => {
         const user = createMinimalUser();
         await renderPublishedAssignment();
+        openAdvancedActions();
 
         await user.click(screen.getByRole('button', { name: /Custom rerun/i }));
         await user.click(screen.getByRole('checkbox', { name: /Study-text audio/i }));
         await user.click(screen.getByRole('checkbox', { name: /Main pronunciation audio/i }));
         await user.click(screen.getByRole('checkbox', { name: /Pronunciation chunk audio/i }));
-        await user.selectOptions(
-          screen.getByRole('combobox', { name: /Pronunciation chunk provider/i }),
-          'elevenlabs',
-        );
+        fireEvent.change(screen.getByRole('combobox', { name: /Pronunciation chunk provider/i }), {
+          target: { value: 'elevenlabs' },
+        });
 
         const studyModel = screen.getByRole('combobox', { name: /Study-text model/i });
         const mainModel = screen.getByRole('combobox', { name: /Main pronunciation model/i });
@@ -301,11 +310,92 @@ export function registerJobActionTests() {
         expect(within(mainModel).queryByRole('option', { name: 'eleven_v3' })).toBeNull();
         expect(within(chunkModel).queryByRole('option', { name: 'eleven_v3' })).toBeNull();
 
-        await user.selectOptions(
-          screen.getByRole('combobox', { name: /Study-text strategy/i }),
-          'dialogue',
-        );
+        fireEvent.change(screen.getByRole('combobox', { name: /Study-text strategy/i }), {
+          target: { value: 'dialogue' },
+        });
         expect(within(studyModel).getByRole('option', { name: 'eleven_v3' })).toBeTruthy();
+      },
+      INTEGRATION_TEST_TIMEOUT_MS,
+    );
+
+    it(
+      'resets custom rerun settings when resuming a different assignment',
+      async () => {
+        const user = createMinimalUser();
+        const jobA = makeJobStatus({
+          jobId: 'job-a',
+          state: 'succeeded',
+          ttsProvider: 'elevenlabs',
+          studyTextElevenlabsModel: 'eleven_flash_v2_5',
+        });
+        const jobB = makeJobStatus({
+          jobId: 'job-b',
+          state: 'succeeded',
+          ttsProvider: 'google',
+          googleTtsModel: 'studio',
+        });
+
+        await renderPublishedAssignment({
+          status: jobA,
+          jobs: [jobA, jobB],
+        });
+        openAdvancedActions();
+
+        await user.click(screen.getByRole('button', { name: /Custom rerun/i }));
+        await user.click(screen.getByRole('checkbox', { name: /Study-text audio/i }));
+        fireEvent.change(screen.getByRole('textbox', { name: /Study-text voice ID/i }), {
+          target: { value: 'voice-from-a' },
+        });
+        fireEvent.change(screen.getByRole('combobox', { name: /Study-text provider/i }), {
+          target: { value: 'elevenlabs' },
+        });
+
+        vi.mocked(api.getJobStatus).mockResolvedValueOnce(jobB);
+        vi.mocked(api.fetchJobProvenance).mockResolvedValueOnce({
+          job: { sourceJobId: 'job-a' },
+          promptPackage: { id: 'pkg-1' },
+          draft: { id: 'draft-1' },
+          tts: null,
+          lineage: {},
+          actions: [],
+        } as never);
+
+        fireEvent.change(screen.getByRole('combobox', { name: /Recent assignments/i }), {
+          target: { value: 'job-b' },
+        });
+        await user.click(screen.getByRole('button', { name: /Resume selected assignment/i }));
+
+        await waitFor(() => {
+          expect(screen.getAllByText(/Job ID: job-b/i).length).toBeGreaterThan(0);
+        });
+
+        openAdvancedActions();
+        await user.click(screen.getByRole('button', { name: /Custom rerun/i }));
+        await user.click(screen.getByRole('checkbox', { name: /Study-text audio/i }));
+
+        expect(
+          (screen.getByRole('combobox', { name: /Study-text provider/i }) as HTMLSelectElement)
+            .value,
+        ).toBe('google');
+        expect(
+          (screen.getByRole('combobox', { name: /Study-text model/i }) as HTMLSelectElement).value,
+        ).toBe('studio');
+        expect(
+          (screen.getByRole('textbox', { name: /Study-text voice ID/i }) as HTMLInputElement).value,
+        ).toBe('');
+
+        await user.click(screen.getByRole('button', { name: /Queue custom rerun/i }));
+
+        await waitFor(() => {
+          expect(api.rerunJob).toHaveBeenLastCalledWith(
+            'job-b',
+            expect.objectContaining({
+              regenerateStudyTextAudio: true,
+              studyTextTtsProvider: 'google',
+              studyTextGoogleTtsModel: 'studio',
+            }),
+          );
+        });
       },
       INTEGRATION_TEST_TIMEOUT_MS,
     );
@@ -313,17 +403,21 @@ export function registerJobActionTests() {
     it(
       'disables publish model selection in auto mode and filters elevenlabs models by strategy',
       async () => {
-        const user = createMinimalUser();
         await renderPublishedAssignment();
 
-        const strategySelect = screen.getByRole('combobox', { name: /Study text strategy/i });
-        const modelSelect = screen.getByRole('combobox', { name: /TTS model/i });
+        openPublishingSettings();
+        const strategySelect = screen.getByRole('combobox', { name: /Reading style/i });
+        const modelSelect = screen.getByRole('combobox', { name: /Voice model/i });
 
         expect((strategySelect as HTMLSelectElement).value).toBe('auto');
         expect((modelSelect as HTMLSelectElement).disabled).toBe(true);
-        expect(screen.getByText(/Auto follows the draft at runtime/i)).toBeTruthy();
+        expect(
+          screen.getByText(
+            /Auto follows the assignment at runtime\. Choose Dialogue or TTS to lock a model\./i,
+          ),
+        ).toBeTruthy();
 
-        await user.selectOptions(strategySelect, 'dialogue');
+        fireEvent.change(strategySelect, { target: { value: 'dialogue' } });
         await waitFor(() => {
           expect((modelSelect as HTMLSelectElement).value).toBe('eleven_v3');
         });
@@ -333,7 +427,7 @@ export function registerJobActionTests() {
             .map((option) => option.textContent),
         ).toEqual(['eleven_v3']);
 
-        await user.selectOptions(strategySelect, 'tts');
+        fireEvent.change(strategySelect, { target: { value: 'tts' } });
         await waitFor(() => {
           expect((modelSelect as HTMLSelectElement).disabled).toBe(false);
         });
@@ -343,20 +437,205 @@ export function registerJobActionTests() {
     );
 
     it(
+      'falls back to eleven_multilingual_v2 for tts strategy when only eleven_v3 is configured',
+      async () => {
+        vi.mocked(api.fetchJobOptions).mockResolvedValueOnce({
+          presets: ['b1-default', 'b2-default'],
+          cefrLevels: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'],
+          cefrDefault: 'B1',
+          generation: {
+            providers: ['openai'],
+            defaultProvider: 'openai',
+            modelOptions: [
+              {
+                provider: 'openai',
+                id: 'gpt-5.2',
+                tier: 'primary',
+                fallbackRank: 0,
+                defaultSelected: true,
+                enabled: true,
+              },
+            ],
+            defaultModelByProvider: {
+              openai: 'gpt-5.2',
+            },
+            quota: {
+              source: 'hybrid',
+              lastUpdatedAt: '2026-02-18T00:00:00.000Z',
+              requestsPerMinute: 5,
+              tokensPerMinute: 250000,
+              requestsPerDay: 20,
+            },
+          },
+          voiceAccents: ['american'],
+          voices: [{ id: 'voice-a', name: 'Voice A', accent: 'american' }],
+          notionDatabases: [{ id: 'db-1', name: 'DB One' }],
+          sttProviders: ['deepgram', 'elevenlabs', 'google'],
+          defaultSttProvider: 'deepgram',
+          sttModelOptionsByProvider: {
+            deepgram: ['nova-3'],
+            elevenlabs: ['scribe_v2'],
+            google: ['latest_long'],
+          },
+          defaultSttModelByProvider: {
+            deepgram: 'nova-3',
+            elevenlabs: 'scribe_v2',
+            google: 'latest_long',
+          },
+          ttsStrategies: ['auto', 'dialogue', 'tts'],
+          ttsProviders: ['elevenlabs', 'google'],
+          ttsModelOptionsByProvider: {
+            elevenlabs: ['eleven_v3'],
+            google: ['chirp3_hd'],
+          },
+          defaultTtsProvider: 'elevenlabs',
+          defaultTtsModelByProvider: {
+            elevenlabs: 'eleven_v3',
+            google: 'chirp3_hd',
+          },
+          supportedActions: [
+            {
+              type: 'rerun',
+              label: 'Rerun',
+              description: 'Republish current draft or selectively regenerate audio families',
+              implemented: true,
+            },
+            {
+              type: 'cancel',
+              label: 'Cancel',
+              description: 'Cancel active job',
+              implemented: true,
+            },
+          ],
+        });
+
+        await renderPublishedAssignment();
+
+        openPublishingSettings();
+        const strategySelect = screen.getByRole('combobox', { name: /Reading style/i });
+        const modelSelect = screen.getByRole('combobox', { name: /Voice model/i });
+
+        fireEvent.change(strategySelect, { target: { value: 'tts' } });
+
+        await waitFor(() => {
+          expect((modelSelect as HTMLSelectElement).value).toBe('eleven_multilingual_v2');
+        });
+        expect(
+          within(modelSelect)
+            .getAllByRole('option')
+            .map((option) => option.textContent),
+        ).toEqual(['eleven_multilingual_v2']);
+      },
+      INTEGRATION_TEST_TIMEOUT_MS,
+    );
+
+    it(
+      'prefers eleven_multilingual_v2 for tts strategy when no elevenlabs default is configured',
+      async () => {
+        vi.mocked(api.fetchJobOptions).mockResolvedValueOnce({
+          presets: ['b1-default', 'b2-default'],
+          cefrLevels: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'],
+          cefrDefault: 'B1',
+          generation: {
+            providers: ['openai'],
+            defaultProvider: 'openai',
+            modelOptions: [
+              {
+                provider: 'openai',
+                id: 'gpt-5.2',
+                tier: 'primary',
+                fallbackRank: 0,
+                defaultSelected: true,
+                enabled: true,
+              },
+            ],
+            defaultModelByProvider: {
+              openai: 'gpt-5.2',
+            },
+            quota: {
+              source: 'hybrid',
+              lastUpdatedAt: '2026-02-18T00:00:00.000Z',
+              requestsPerMinute: 5,
+              tokensPerMinute: 250000,
+              requestsPerDay: 20,
+            },
+          },
+          voiceAccents: ['american'],
+          voices: [{ id: 'voice-a', name: 'Voice A', accent: 'american' }],
+          notionDatabases: [{ id: 'db-1', name: 'DB One' }],
+          sttProviders: ['deepgram', 'elevenlabs', 'google'],
+          defaultSttProvider: 'deepgram',
+          sttModelOptionsByProvider: {
+            deepgram: ['nova-3'],
+            elevenlabs: ['scribe_v2'],
+            google: ['latest_long'],
+          },
+          defaultSttModelByProvider: {
+            deepgram: 'nova-3',
+            elevenlabs: 'scribe_v2',
+            google: 'latest_long',
+          },
+          ttsStrategies: ['auto', 'dialogue', 'tts'],
+          ttsProviders: ['elevenlabs', 'google'],
+          ttsModelOptionsByProvider: {
+            elevenlabs: ['eleven_flash_v2_5', 'eleven_multilingual_v2'],
+            google: ['chirp3_hd'],
+          },
+          defaultTtsProvider: 'elevenlabs',
+          defaultTtsModelByProvider: {
+            google: 'chirp3_hd',
+          },
+          supportedActions: [
+            {
+              type: 'rerun',
+              label: 'Rerun',
+              description: 'Republish current draft or selectively regenerate audio families',
+              implemented: true,
+            },
+            {
+              type: 'cancel',
+              label: 'Cancel',
+              description: 'Cancel active job',
+              implemented: true,
+            },
+          ],
+        });
+
+        await renderPublishedAssignment();
+
+        openPublishingSettings();
+        const strategySelect = screen.getByRole('combobox', { name: /Reading style/i });
+        const modelSelect = screen.getByRole('combobox', { name: /Voice model/i });
+
+        fireEvent.change(strategySelect, { target: { value: 'tts' } });
+
+        await waitFor(() => {
+          expect((modelSelect as HTMLSelectElement).value).toBe('eleven_multilingual_v2');
+        });
+        expect(
+          within(modelSelect)
+            .getAllByRole('option')
+            .map((option) => option.textContent),
+        ).toEqual(['eleven_flash_v2_5', 'eleven_multilingual_v2']);
+      },
+      INTEGRATION_TEST_TIMEOUT_MS,
+    );
+
+    it(
       'publishes explicit dialogue strategy with eleven_v3 and google strategy with google model',
       async () => {
         const { user } = await renderPreviewReadyAssignment();
 
-        await user.selectOptions(
-          screen.getByRole('combobox', { name: /Study text strategy/i }),
-          'dialogue',
-        );
+        openPublishingSettings();
+        fireEvent.change(screen.getByRole('combobox', { name: /Reading style/i }), {
+          target: { value: 'dialogue' },
+        });
         await waitFor(() => {
           expect(
-            (screen.getByRole('combobox', { name: /TTS model/i }) as HTMLSelectElement).value,
+            (screen.getByRole('combobox', { name: /Voice model/i }) as HTMLSelectElement).value,
           ).toBe('eleven_v3');
         });
-        await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
+        await user.click(screen.getByRole('button', { name: /Share assignment/i }));
 
         await waitFor(() => {
           expect(api.materializeDraft).toHaveBeenCalled();
@@ -372,9 +651,13 @@ export function registerJobActionTests() {
         );
 
         vi.mocked(api.materializeDraft).mockClear();
-        await user.selectOptions(screen.getByRole('combobox', { name: /TTS provider/i }), 'google');
-        await user.selectOptions(screen.getByRole('combobox', { name: /TTS model/i }), 'studio');
-        await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
+        fireEvent.change(screen.getByRole('combobox', { name: /Voice engine/i }), {
+          target: { value: 'google' },
+        });
+        fireEvent.change(screen.getByRole('combobox', { name: /Voice model/i }), {
+          target: { value: 'studio' },
+        });
+        await user.click(screen.getByRole('button', { name: /Share assignment/i }));
 
         await waitFor(() => {
           expect(api.materializeDraft).toHaveBeenCalled();
@@ -404,7 +687,8 @@ export function registerJobActionTests() {
 
         await renderPreviewReadyAssignment();
 
-        const strategySelect = screen.getByRole('combobox', { name: /Study text strategy/i });
+        openPublishingSettings();
+        const strategySelect = screen.getByRole('combobox', { name: /Reading style/i });
         expect(
           within(strategySelect)
             .getAllByRole('option')
@@ -421,6 +705,7 @@ export function registerJobActionTests() {
         vi.useFakeTimers({ shouldAdvanceTime: true });
         const user = createTimerAwareMinimalUser();
         await renderPublishedAssignment();
+        openAdvancedActions();
 
         await user.click(screen.getByRole('button', { name: /Republish current draft/i }));
 
@@ -428,6 +713,40 @@ export function registerJobActionTests() {
           expect(api.rerunJob).toHaveBeenCalledWith('job-1', { republishOnly: true });
         });
         expect(screen.getByText('Rerun queued')).toBeTruthy();
+      },
+      INTEGRATION_TEST_TIMEOUT_MS,
+    );
+
+    it(
+      'keeps advanced actions open when a queued rerun switches to a new job id',
+      async () => {
+        vi.useFakeTimers({ shouldAdvanceTime: true });
+        const user = createTimerAwareMinimalUser();
+        vi.mocked(api.rerunJob).mockResolvedValueOnce({
+          success: true,
+          message: 'Republish queued for follow-up job',
+          jobId: 'job-2',
+          actionType: 'rerun',
+        });
+
+        await renderPublishedAssignment();
+        openAdvancedActions();
+        vi.mocked(api.getJobStatus).mockResolvedValueOnce(
+          makeJobStatus({
+            jobId: 'job-2',
+            state: 'queued',
+          }) as never,
+        );
+
+        await user.click(screen.getByRole('button', { name: /Republish current draft/i }));
+
+        await waitFor(() => {
+          expect(api.rerunJob).toHaveBeenCalledWith('job-1', { republishOnly: true });
+          expect(screen.getByText('Republish queued for follow-up job')).toBeTruthy();
+          expect(screen.getByRole('button', { name: /Hide advanced actions/i })).toBeTruthy();
+          expect(screen.getByRole('button', { name: /Refresh actions/i })).toBeTruthy();
+          expect(screen.getAllByText(/Job ID: job-2/i).length).toBeGreaterThan(0);
+        });
       },
       INTEGRATION_TEST_TIMEOUT_MS,
     );
@@ -456,9 +775,10 @@ export function registerJobActionTests() {
             error: 'cancelled: duplicate run',
           } as never);
 
+        openAdvancedActions();
         const reasonInput = screen.getByPlaceholderText('reason for cancellation');
         fireEvent.change(reasonInput, { target: { value: 'duplicate run' } });
-        const actionsHeading = screen.getByRole('heading', { name: /8\. Job actions/i });
+        const actionsHeading = screen.getByRole('heading', { name: /Advanced actions/i });
         const actionsSection = actionsHeading.closest('section');
         if (!actionsSection) {
           throw new Error('Expected job actions section to be rendered');
@@ -478,8 +798,9 @@ export function registerJobActionTests() {
       async () => {
         vi.useFakeTimers({ shouldAdvanceTime: true });
         await renderPublishedAssignment({ status: { state: 'succeeded' } });
+        openAdvancedActions();
 
-        const actionsHeading = screen.getByRole('heading', { name: /8\. Job actions/i });
+        const actionsHeading = screen.getByRole('heading', { name: /Advanced actions/i });
         const actionsSection = actionsHeading.closest('section');
         if (!actionsSection) {
           throw new Error('Expected job actions section to be rendered');
