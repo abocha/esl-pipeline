@@ -1,40 +1,17 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
 import type {
   JobOptionsResponse,
   JobStatus,
-  ProfileRevisionSummaryResponse,
   PromptOptionsResponse,
-  RecordingListItem,
-  RecordingStatus,
-  RecordingTranscriptResponse,
   SttProvider,
-  StudentOption,
 } from '../../utils/api';
-import {
-  fetchJobOptions,
-  fetchPromptOptions,
-  fetchRecordingTranscript,
-  fetchStudentOptions,
-  getJobStatus,
-  getProfileContent,
-  getRecording,
-  listProfileContents,
-  listProfileRevisions,
-  restoreProfileRevision,
-  retryRecordingTranscription,
-  updateRecordingTranscript,
-  uploadRecording,
-  upsertProfileContent,
-} from '../../utils/api';
+import { fetchJobOptions, fetchPromptOptions, getJobStatus } from '../../utils/api';
+import { AdvancedActionsStage, useAdvancedActionsController } from './MinimalAssignment.advanced';
 import { useMinimalAssignmentAuthoringController } from './MinimalAssignment.authoring';
-import {
-  AdvancedActionsStage,
-  useAdvancedActionsController,
-} from './MinimalAssignment.advanced';
+import { useMinimalAssignmentContextController } from './MinimalAssignment.context';
 import {
   getJobPollingDecision,
-  getRecordingPollingDecision,
   isActivelyProcessingJobState,
   isTerminalJobState,
 } from './MinimalAssignment.polling';
@@ -42,6 +19,7 @@ import {
   type HydratedAssignmentSnapshot,
   useMinimalAssignmentResume,
 } from './MinimalAssignment.resume';
+import { useMinimalAssignmentSourceController } from './MinimalAssignment.source';
 import {
   AssignmentStageSection,
   ContextStageSection,
@@ -57,7 +35,6 @@ import './MinimalAssignment.css';
 
 const AUDIO_EXTENSIONS = ['.wav', '.mp3', '.m4a', '.aac', '.ogg', '.opus'];
 const POLL_INTERVAL_MS = 3000;
-const FALLBACK_STT_PROVIDERS: SttProvider[] = ['deepgram', 'elevenlabs', 'google'];
 const FALLBACK_TTS_PROVIDERS = ['elevenlabs', 'google'] as const;
 const FALLBACK_PRONUNCIATION_CHUNK_TTS_PROVIDERS = ['edge-tts', 'elevenlabs', 'google'] as const;
 const FALLBACK_GOOGLE_TTS_MODELS = ['chirp3_hd', 'studio', 'neural2', 'wavenet'] as const;
@@ -102,26 +79,6 @@ function formatPublishTtsStrategyLabel(strategy: UiPublishTtsStrategy): string {
   if (strategy === 'auto') return 'Auto from draft';
   if (strategy === 'dialogue') return 'Dialogue';
   return 'TTS';
-}
-
-function isDefaultStudentName(name: string): boolean {
-  return name.trim().toLowerCase() === 'default';
-}
-
-function sortStudentsForPicker(students: StudentOption[]): StudentOption[] {
-  return [...students].sort((left, right) => {
-    const leftIsDefault = isDefaultStudentName(left.name);
-    const rightIsDefault = isDefaultStudentName(right.name);
-
-    if (leftIsDefault !== rightIsDefault) {
-      return leftIsDefault ? -1 : 1;
-    }
-
-    const byName = left.name.localeCompare(right.name, undefined, { sensitivity: 'base' });
-    if (byName !== 0) return byName;
-
-    return left.id.localeCompare(right.id);
-  });
 }
 
 function writeJobIdToQuery(jobId: string | null): void {
@@ -180,64 +137,16 @@ function buildSelectablePresetOptions(
 }
 
 export const MinimalAssignment: React.FC = () => {
-  const [recording, setRecording] = useState<RecordingListItem | null>(null);
-  const [recordingStatus, setRecordingStatus] = useState<RecordingStatus | null>(null);
-  const [recordingError, setRecordingError] = useState<string | null>(null);
-
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
-  const [selectedSttProvider, setSelectedSttProvider] = useState<SttProvider>('deepgram');
-  const uploadAbortRef = useRef<AbortController | null>(null);
-  const sttProviderUserChangedRef = useRef(false);
-
-  const [transcript, setTranscript] = useState<RecordingTranscriptResponse | null>(null);
-  const [transcriptText, setTranscriptText] = useState('');
-  const [transcriptStatus, setTranscriptStatus] = useState<
-    'idle' | 'loading' | 'processing' | 'ready' | 'failed'
-  >('idle');
-  const [transcriptError, setTranscriptError] = useState<string | null>(null);
-  const [transcriptSaving, setTranscriptSaving] = useState(false);
-  const [retryingTranscript, setRetryingTranscript] = useState(false);
-
   const [promptOptions, setPromptOptions] = useState<PromptOptionsResponse | null>(null);
   const [teacherNotes, setTeacherNotes] = useState('');
   const [jobStatus, setJobStatusState] = useState<JobStatus | null>(null);
   const [jobOptions, setJobOptions] = useState<JobOptionsResponse | null>(null);
   const [jobOptionsError, setJobOptionsError] = useState<string | null>(null);
-  const [studentOptions, setStudentOptions] = useState<StudentOption[]>([]);
-  const [studentOptionsError, setStudentOptionsError] = useState<string | null>(null);
-  const [selectedStudentId, setSelectedStudentId] = useState('');
-  const [uploadCacheNotice, setUploadCacheNotice] = useState<string | null>(null);
-
-  const [profileOptions, setProfileOptions] = useState<{ id: string; label: string }[]>([]);
-  const [profileOptionsError, setProfileOptionsError] = useState<string | null>(null);
-  const [selectedProfileId, setSelectedProfileId] = useState('');
-  const [profileSelectionMode, setProfileSelectionMode] = useState<'auto' | 'manual'>('auto');
-  const [newProfileId, setNewProfileId] = useState('');
-  const [profileEditorText, setProfileEditorText] = useState('');
-  const [loadedProfileContent, setLoadedProfileContent] = useState('');
-  const [profileRevisions, setProfileRevisions] = useState<ProfileRevisionSummaryResponse[]>([]);
-  const [profileRevisionError, setProfileRevisionError] = useState<string | null>(null);
-  const [profileBusy, setProfileBusy] = useState<
-    'loading' | 'saving' | 'creating' | 'restoring' | null
-  >(null);
-  const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
 
   const [rerunTargetPronunciationMode, setRerunTargetPronunciationMode] =
     useState<PronunciationMode | null>(null);
 
   const generationOptions = jobOptions?.generation ?? null;
-  const sttProviders = useMemo<SttProvider[]>(() => {
-    const providers = (jobOptions?.sttProviders ?? [])
-      .map((provider) => (isSttProvider(provider) ? provider : null))
-      .filter((provider): provider is SttProvider => provider !== null);
-    if (providers.length > 0) {
-      return [...new Set(providers)];
-    }
-    return [...FALLBACK_STT_PROVIDERS];
-  }, [jobOptions?.sttProviders]);
   const ttsProviders = useMemo<UiTtsProvider[]>(() => {
     const providers = (jobOptions?.ttsProviders ?? [])
       .map((provider) => (isUiTtsProvider(provider) ? provider : null))
@@ -293,11 +202,54 @@ export const MinimalAssignment: React.FC = () => {
     return promptOptions.defaults.templateId ?? promptOptions.templates?.[0]?.id ?? '';
   }, [promptOptions]);
 
+  const resetJobShell = useCallback(() => {
+    writeJobIdToQuery(null);
+    setTeacherNotes('');
+    setJobStatusState(null);
+    setRerunTargetPronunciationMode(null);
+  }, []);
+
+  const source = useMinimalAssignmentSourceController({
+    configuredSttProviders: jobOptions?.sttProviders,
+    defaultSttProvider: isSttProvider(jobOptions?.defaultSttProvider)
+      ? jobOptions.defaultSttProvider
+      : null,
+    onBeforeUploadReset: resetJobShell,
+  });
+
+  const context = useMinimalAssignmentContextController({
+    selectedStudentId: source.selectedStudentId,
+    resolveBoundProfileId: source.resolveBoundProfileId,
+  });
+  const {
+    resetSourceFlow,
+    applyHydratedSnapshot: applySourceHydration,
+    loadStudentOptions,
+    loadTranscript,
+    handleRetryTranscription,
+    handleSaveTranscript,
+    handleSelectedSttProviderChange,
+    handleStudentSelectionChange,
+    handleFiles,
+    handleCancelUpload,
+    setTranscriptText,
+  } = source;
+  const {
+    applyHydratedSnapshot: applyContextHydration,
+    loadProfileOptions,
+    handleSelectedProfileChange,
+    handleCreateProfile,
+    handleSaveProfile,
+    handleRestoreRevision,
+    setNewProfileId,
+    setProfileEditorText,
+  } = context;
+
   const authoring = useMinimalAssignmentAuthoringController({
-    recordingId: recording?.recordingId ?? null,
-    transcriptStatus,
+    recordingId: source.recording?.recordingId ?? null,
+    transcriptStatus: source.transcriptStatus,
     teacherNotes,
-    selectedProfileId,
+    selectedProfileId: context.selectedProfileId,
     selectedTemplateId,
     currentJobId: jobStatus?.jobId ?? null,
     learningPresetCatalogEnabled,
@@ -327,28 +279,9 @@ export const MinimalAssignment: React.FC = () => {
   const resetFlow = useCallback(() => {
     invalidateAuthoringGeneration();
     resetAuthoring();
-    uploadAbortRef.current?.abort();
-    uploadAbortRef.current = null;
-    sttProviderUserChangedRef.current = false;
-    writeJobIdToQuery(null);
-    setRecording(null);
-    setRecordingStatus(null);
-    setRecordingError(null);
-    setTranscript(null);
-    setTranscriptText('');
-    setTranscriptStatus('idle');
-    setTranscriptError(null);
-    setTranscriptSaving(false);
-    setRetryingTranscript(false);
-    setTeacherNotes('');
-    setJobStatusState(null);
-    setRerunTargetPronunciationMode(null);
-    setSelectedFileName(null);
-    setUploadError(null);
-    setUploadProgress(0);
-    setUploading(false);
-    setUploadCacheNotice(null);
-  }, [invalidateAuthoringGeneration, resetAuthoring]);
+    resetSourceFlow();
+    resetJobShell();
+  }, [invalidateAuthoringGeneration, resetAuthoring, resetJobShell, resetSourceFlow]);
 
   const loadPromptOptions = useCallback(async () => {
     try {
@@ -372,58 +305,32 @@ export const MinimalAssignment: React.FC = () => {
     }
   }, []);
 
-  const loadStudentOptions = useCallback(async () => {
-    try {
-      const response = await fetchStudentOptions();
-      const sortedStudents = sortStudentsForPicker(response.students ?? []);
-      setStudentOptions(sortedStudents);
-      setSelectedStudentId((current) => {
-        if (current) return current;
-        return sortedStudents.find((student) => isDefaultStudentName(student.name))?.id ?? '';
+  const applyHydratedSnapshot = useCallback(
+    (snapshot: HydratedAssignmentSnapshot) => {
+      setJobStatusState(snapshot.jobStatus);
+      applySourceHydration({
+        recording: snapshot.recording,
+        recordingStatus: snapshot.recordingStatus,
+        recordingError: snapshot.recordingError,
+        selectedFileName: snapshot.selectedFileName,
+        transcript: snapshot.transcript,
+        transcriptText: snapshot.transcriptText,
+        transcriptStatus: snapshot.transcriptStatus,
+        transcriptError: snapshot.transcriptError,
+        selectedStudentId: snapshot.selectedStudentId,
+        uploadError: snapshot.uploadError,
+        uploadCacheNotice: snapshot.uploadCacheNotice,
       });
-      setStudentOptionsError(null);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to load students.';
-      setStudentOptionsError(message);
-    }
-  }, []);
-
-  const resolveBoundProfileId = useCallback(
-    (studentId: string): string =>
-      studentOptions.find((student) => student.id === studentId)?.profileId ?? '',
-    [studentOptions],
+      setTeacherNotes(snapshot.teacherNotes);
+      setRerunTargetPronunciationMode(snapshot.rerunTargetPronunciationMode);
+      applyContextHydration({
+        selectedProfileId: snapshot.selectedProfileId,
+        profileSelectionMode: snapshot.profileSelectionMode,
+      });
+      applyAuthoringHydration(snapshot.authoring);
+    },
+    [applyAuthoringHydration, applyContextHydration, applySourceHydration],
   );
-
-  const loadProfileOptions = useCallback(async () => {
-    try {
-      const response = await listProfileContents();
-      setProfileOptions(response.profiles ?? []);
-      setProfileOptionsError(null);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to load profiles.';
-      setProfileOptionsError(message);
-    }
-  }, []);
-
-  const applyHydratedSnapshot = useCallback((snapshot: HydratedAssignmentSnapshot) => {
-    setJobStatusState(snapshot.jobStatus);
-    setRecording(snapshot.recording);
-    setRecordingStatus(snapshot.recordingStatus);
-    setRecordingError(snapshot.recordingError);
-    setSelectedFileName(snapshot.selectedFileName);
-    setTranscript(snapshot.transcript);
-    setTranscriptText(snapshot.transcriptText);
-    setTranscriptStatus(snapshot.transcriptStatus);
-    setTranscriptError(snapshot.transcriptError);
-    setTeacherNotes(snapshot.teacherNotes);
-    setRerunTargetPronunciationMode(snapshot.rerunTargetPronunciationMode);
-    setSelectedStudentId(snapshot.selectedStudentId);
-    setSelectedProfileId(snapshot.selectedProfileId);
-    setProfileSelectionMode(snapshot.profileSelectionMode);
-    setUploadError(snapshot.uploadError);
-    setUploadCacheNotice(snapshot.uploadCacheNotice);
-    applyAuthoringHydration(snapshot.authoring);
-  }, [applyAuthoringHydration]);
 
   const applyCurrentJobStatus = useCallback((job: JobStatus | null) => {
     setJobStatusState(job);
@@ -435,15 +342,15 @@ export const MinimalAssignment: React.FC = () => {
     invalidateDraftGenerationRequests: invalidateAuthoringGeneration,
     jobOptions,
     presetOptionIds,
-    resolveBoundProfileId,
+    resolveBoundProfileId: source.resolveBoundProfileId,
     currentPublishTarget: authoring.publishTarget,
     currentSelectedTtsProvider: authoring.selectedTtsProvider,
     currentSelectedTtsStrategy: authoring.selectedTtsStrategy,
     currentSelectedTtsModel: authoring.selectedTtsModel,
     currentSelectedPreset: authoring.selectedPreset,
-    currentSelectedStudentId: selectedStudentId,
-    currentSelectedProfileId: selectedProfileId,
-    currentProfileSelectionMode: profileSelectionMode,
+    currentSelectedStudentId: source.selectedStudentId,
+    currentSelectedProfileId: context.selectedProfileId,
+    currentProfileSelectionMode: context.profileSelectionMode,
   });
 
   const advancedActions = useAdvancedActionsController({
@@ -467,343 +374,6 @@ export const MinimalAssignment: React.FC = () => {
     void loadStudentOptions();
     void loadProfileOptions();
   }, [loadJobOptions, loadProfileOptions, loadPromptOptions, loadStudentOptions]);
-
-  const loadSelectedProfile = useCallback(async () => {
-    if (!selectedProfileId) {
-      setProfileEditorText('');
-      setLoadedProfileContent('');
-      setProfileRevisions([]);
-      setProfileRevisionError(null);
-      return;
-    }
-
-    setProfileBusy('loading');
-    setProfileRevisionError(null);
-    try {
-      const [profile, revisions] = await Promise.all([
-        getProfileContent(selectedProfileId),
-        listProfileRevisions(selectedProfileId, { limit: 20, offset: 0, order: 'desc' }),
-      ]);
-      setProfileEditorText(profile.content ?? '');
-      setLoadedProfileContent(profile.content ?? '');
-      setProfileRevisions(revisions.items ?? []);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to load selected profile.';
-      setProfileRevisionError(message);
-    } finally {
-      setProfileBusy(null);
-    }
-  }, [selectedProfileId]);
-
-  useEffect(() => {
-    void loadSelectedProfile();
-  }, [loadSelectedProfile]);
-
-  useEffect(() => {
-    if (sttProviders.length === 0) return;
-    const configuredDefault = jobOptions?.defaultSttProvider;
-    const preferredProvider =
-      configuredDefault && sttProviders.includes(configuredDefault)
-        ? configuredDefault
-        : sttProviders[0];
-    if (!preferredProvider) return;
-    if (
-      configuredDefault &&
-      sttProviders.includes(configuredDefault) &&
-      !sttProviderUserChangedRef.current &&
-      selectedSttProvider !== configuredDefault
-    ) {
-      setSelectedSttProvider(configuredDefault);
-      return;
-    }
-
-    if (!sttProviders.includes(selectedSttProvider)) {
-      setSelectedSttProvider(preferredProvider);
-    }
-  }, [jobOptions?.defaultSttProvider, selectedSttProvider, sttProviders]);
-
-  useEffect(() => {
-    if (profileSelectionMode !== 'auto') {
-      return;
-    }
-    if (!selectedStudentId) {
-      setSelectedProfileId('');
-      return;
-    }
-    const boundProfileId = resolveBoundProfileId(selectedStudentId);
-    setSelectedProfileId((current) => (current === boundProfileId ? current : boundProfileId));
-  }, [profileSelectionMode, resolveBoundProfileId, selectedStudentId]);
-
-  const handleUpload = useCallback(
-    async (file: File) => {
-      if (uploading) return;
-      resetFlow();
-      setSelectedFileName(file.name);
-      setUploading(true);
-      setUploadError(null);
-      setUploadProgress(0);
-
-      const controller = new AbortController();
-      uploadAbortRef.current = controller;
-      try {
-        const response = await uploadRecording(file, {
-          studentId: selectedStudentId || undefined,
-          sttProvider: selectedSttProvider,
-          signal: controller.signal,
-          onProgress: (progress) => setUploadProgress(progress),
-        });
-        setRecording(response);
-        setRecordingStatus(response.status);
-        setRecordingError(response.error ?? null);
-        setSelectedFileName(response.displayName || file.name);
-        setUploadCacheNotice(
-          response.cacheHit ? 'Reused an existing transcript for this exact audio file.' : null,
-        );
-      } catch (error) {
-        if (controller.signal.aborted) {
-          setUploadError('Upload canceled.');
-        } else {
-          const message = error instanceof Error ? error.message : 'Unable to upload recording.';
-          setUploadError(message);
-        }
-      } finally {
-        setUploading(false);
-        uploadAbortRef.current = null;
-      }
-    },
-    [resetFlow, selectedStudentId, selectedSttProvider, uploading],
-  );
-
-  const handleFiles = (files: File[]) => {
-    const file = files[0];
-    if (!file) return;
-    void handleUpload(file);
-  };
-
-  const handleCancelUpload = () => {
-    if (!uploadAbortRef.current) return;
-    uploadAbortRef.current.abort();
-  };
-
-  const loadTranscript = useCallback(async () => {
-    if (!recording?.recordingId) return;
-    setTranscriptStatus('loading');
-    setTranscriptError(null);
-
-    try {
-      const response = await fetchRecordingTranscript(recording.recordingId);
-      setTranscript(response);
-      setTranscriptText(response.text ?? '');
-      setTranscriptStatus('ready');
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to load transcript.';
-      if (recordingStatus && recordingStatus !== 'transcribed') {
-        setTranscriptStatus('processing');
-        setTranscriptError(null);
-      } else {
-        setTranscriptStatus('failed');
-        setTranscriptError(message);
-      }
-    }
-  }, [recording?.recordingId, recordingStatus]);
-
-  useEffect(() => {
-    if (!recording?.recordingId) return;
-    let active = true;
-    let interval: ReturnType<typeof setInterval> | null = null;
-
-    const pollRecording = async () => {
-      try {
-        const updated = await getRecording(recording.recordingId);
-        if (!active) return;
-        setRecording(updated);
-        setRecordingStatus(updated.status);
-        setRecordingError(updated.error ?? null);
-        const decision = getRecordingPollingDecision({
-          status: updated.status,
-          error: updated.error,
-          hasTranscriptId: Boolean(transcript?.transcriptId),
-        });
-        if (decision.shouldLoadTranscript) {
-          void loadTranscript();
-        }
-        if (decision.shouldMarkTranscriptFailed) {
-          setTranscriptStatus('failed');
-          setTranscriptError(decision.transcriptFailureMessage);
-        }
-        if (!decision.shouldContinuePolling) {
-          if (interval) clearInterval(interval);
-          interval = null;
-        }
-      } catch (error) {
-        if (!active) return;
-        const message =
-          error instanceof Error ? error.message : 'Unable to refresh recording status.';
-        setRecordingError(message);
-      }
-    };
-
-    void pollRecording();
-    interval = setInterval(pollRecording, POLL_INTERVAL_MS);
-
-    return () => {
-      active = false;
-      if (interval) clearInterval(interval);
-    };
-  }, [recording?.recordingId, loadTranscript, transcript?.transcriptId]);
-
-  useEffect(() => {
-    if (transcriptText.trim()) {
-      setTranscriptStatus('ready');
-      setTranscriptError(null);
-    }
-  }, [transcriptText]);
-
-  const transcriptDirty = useMemo(() => {
-    const original = transcript?.text ?? '';
-    return transcriptText.trim() !== original.trim();
-  }, [transcript?.text, transcriptText]);
-
-  const handleSaveTranscript = async () => {
-    if (!recording?.recordingId) return;
-    setTranscriptSaving(true);
-    setTranscriptError(null);
-    try {
-      const response = await updateRecordingTranscript(
-        recording.recordingId,
-        transcriptText.trim(),
-      );
-      setTranscript(response);
-      setTranscriptText(response.text ?? transcriptText.trim());
-      setTranscriptStatus('ready');
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to save transcript.';
-      setTranscriptError(message);
-    } finally {
-      setTranscriptSaving(false);
-    }
-  };
-
-  const handleRetryTranscription = async () => {
-    if (!recording?.recordingId) return;
-    setRetryingTranscript(true);
-    setTranscriptError(null);
-    try {
-      const updated = await retryRecordingTranscription(recording.recordingId, {
-        sttProvider: selectedSttProvider,
-      });
-      setRecording(updated);
-      setRecordingStatus(updated.status);
-      setRecordingError(updated.error ?? null);
-      setTranscriptStatus('processing');
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to retry transcription.';
-      setTranscriptError(message);
-    } finally {
-      setRetryingTranscript(false);
-    }
-  };
-
-  const selectedStudent = useMemo(
-    () => studentOptions.find((student) => student.id === selectedStudentId) ?? null,
-    [studentOptions, selectedStudentId],
-  );
-
-  const handleStudentSelectionChange = useCallback(
-    (nextStudentId: string) => {
-      setProfileSelectionMode('auto');
-      setSelectedStudentId(nextStudentId);
-      if (!nextStudentId) {
-        setSelectedProfileId('');
-        return;
-      }
-      setSelectedProfileId(resolveBoundProfileId(nextStudentId));
-    },
-    [resolveBoundProfileId],
-  );
-
-  const profileDirty = useMemo(
-    () => profileEditorText.trim() !== loadedProfileContent.trim(),
-    [loadedProfileContent, profileEditorText],
-  );
-
-  const handleCreateProfile = async () => {
-    const candidate = newProfileId.trim();
-    if (!candidate) {
-      setProfileRevisionError('Profile ID is required (for example: profiles/new-student.md).');
-      return;
-    }
-
-    setProfileBusy('creating');
-    setProfileRevisionError(null);
-    setProfileSuccess(null);
-    try {
-      const created = await upsertProfileContent(candidate, profileEditorText);
-      await loadProfileOptions();
-      setProfileSelectionMode('manual');
-      setSelectedProfileId(created.id);
-      setNewProfileId('');
-      setProfileSuccess(`Created profile ${created.id}.`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to create profile.';
-      setProfileRevisionError(message);
-    } finally {
-      setProfileBusy(null);
-    }
-  };
-
-  const handleSaveProfile = async () => {
-    if (!selectedProfileId) {
-      setProfileRevisionError('Select a profile to save.');
-      return;
-    }
-
-    setProfileBusy('saving');
-    setProfileRevisionError(null);
-    setProfileSuccess(null);
-    try {
-      const saved = await upsertProfileContent(selectedProfileId, profileEditorText);
-      setLoadedProfileContent(saved.content);
-      const revisions = await listProfileRevisions(saved.id, {
-        limit: 20,
-        offset: 0,
-        order: 'desc',
-      });
-      setProfileRevisions(revisions.items ?? []);
-      setProfileSuccess(`Saved ${saved.id}.`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to save profile.';
-      setProfileRevisionError(message);
-    } finally {
-      setProfileBusy(null);
-    }
-  };
-
-  const handleRestoreRevision = async (revisionId: string) => {
-    if (!selectedProfileId || !revisionId) return;
-
-    setProfileBusy('restoring');
-    setProfileRevisionError(null);
-    setProfileSuccess(null);
-    try {
-      const restored = await restoreProfileRevision(selectedProfileId, revisionId);
-      setProfileEditorText(restored.content);
-      setLoadedProfileContent(restored.content);
-      const revisions = await listProfileRevisions(restored.id, {
-        limit: 20,
-        offset: 0,
-        order: 'desc',
-      });
-      setProfileRevisions(revisions.items ?? []);
-      setProfileSuccess('Profile restored from revision.');
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Unable to restore profile revision.';
-      setProfileRevisionError(message);
-    } finally {
-      setProfileBusy(null);
-    }
-  };
 
   useEffect(() => {
     if (!jobStatus?.jobId || !isActivelyProcessingJobState(jobStatus.state)) return;
@@ -842,17 +412,22 @@ export const MinimalAssignment: React.FC = () => {
         setAuthoringPublishError(describeJobFailureReason(jobStatus));
       }
     }
-  }, [jobStatus, resumeSetPinnedJobExpanded, resumeSetSelectedResumeJobId, setAuthoringPublishError]);
+  }, [
+    jobStatus,
+    resumeSetPinnedJobExpanded,
+    resumeSetSelectedResumeJobId,
+    setAuthoringPublishError,
+  ]);
 
-  const transcriptReady = transcriptStatus === 'ready' && transcriptText.trim().length > 0;
+  const transcriptReady = source.transcriptReady;
   const jobReady = Boolean(jobStatus?.jobId);
   const selectedResumeJob = useMemo(
     () => resume.resumeJobs.find((job) => job.jobId === resume.selectedResumeJobId) ?? null,
     [resume.resumeJobs, resume.selectedResumeJobId],
   );
   const studentNameById = useMemo(
-    () => new Map(studentOptions.map((student) => [student.id, student.name])),
-    [studentOptions],
+    () => new Map(source.studentOptions.map((student) => [student.id, student.name])),
+    [source.studentOptions],
   );
   const describeResumeJobStudent = useCallback(
     (job: JobStatus): string => {
@@ -897,20 +472,24 @@ export const MinimalAssignment: React.FC = () => {
         ? 'HTML link pending...'
         : 'Notion link pending...';
   const hasAssignmentContent = authoring.draftText.trim().length > 0;
-  const hasTeachingContext =
-    Boolean(selectedProfileId || teacherNotes.trim() || authoring.promptReady);
+  const hasTeachingContext = Boolean(
+    context.selectedProfileId || teacherNotes.trim() || authoring.promptReady,
+  );
   const reviewReady =
     hasAssignmentContent &&
     (!authoring.draftPreviewGate.previewRequired || authoring.previewReadyForCurrentDraft);
 
   const workflowStages = useMemo<WorkflowStage[]>(() => {
     const startStatus: WorkflowStageStatus =
-      recording !== null || authoring.promptReady || hasAssignmentContent || Boolean(jobReady)
+      source.recording !== null ||
+      authoring.promptReady ||
+      hasAssignmentContent ||
+      Boolean(jobReady)
         ? 'complete'
         : 'current';
     const sourceStatus: WorkflowStageStatus = transcriptReady
       ? 'complete'
-      : recording
+      : source.recording
         ? 'current'
         : 'locked';
     const contextStatus: WorkflowStageStatus = authoring.promptReady
@@ -948,7 +527,7 @@ export const MinimalAssignment: React.FC = () => {
         title: 'Add lesson source',
         description: transcriptReady
           ? 'Transcript is ready for review and editing.'
-          : recording
+          : source.recording
             ? 'Audio is uploaded. Finish the transcript before moving on.'
             : 'Choose a student and upload a recording.',
         status: sourceStatus,
@@ -1003,7 +582,7 @@ export const MinimalAssignment: React.FC = () => {
     jobStatus?.jobId,
     jobStatus?.state,
     hasTeachingContext,
-    recording,
+    source.recording,
     reviewReady,
     advancedActions.showAdvancedActions,
     transcriptReady,
@@ -1019,12 +598,14 @@ export const MinimalAssignment: React.FC = () => {
     () => [
       {
         label: 'Student',
-        value: selectedStudent?.name ?? 'No student yet',
-        note: selectedProfileId ? `Profile: ${selectedProfileId}` : 'You can keep this optional.',
+        value: source.selectedStudent?.name ?? 'No student yet',
+        note: context.selectedProfileId
+          ? `Profile: ${context.selectedProfileId}`
+          : 'You can keep this optional.',
       },
       {
         label: 'Transcript',
-        value: transcriptReady ? 'Ready' : recording ? transcriptStatus : 'Waiting',
+        value: transcriptReady ? 'Ready' : source.recording ? source.transcriptStatus : 'Waiting',
         note: transcriptReady ? 'You can still edit wording before moving on.' : undefined,
       },
       {
@@ -1049,11 +630,11 @@ export const MinimalAssignment: React.FC = () => {
       jobStatus?.state,
       publishLabel,
       publishUrl,
-      recording,
-      selectedProfileId,
-      selectedStudent?.name,
+      source.recording,
+      source.selectedStudent?.name,
+      context.selectedProfileId,
       transcriptReady,
-      transcriptStatus,
+      source.transcriptStatus,
     ],
   );
   const startStage = workflowStages[0] ?? workflowStages.at(-1)!;
@@ -1103,39 +684,36 @@ export const MinimalAssignment: React.FC = () => {
       <SourceStageSection
         stage={sourceStage}
         onRefreshStudents={() => void loadStudentOptions()}
-        studentOptions={studentOptions}
-        studentOptionsError={studentOptionsError}
-        selectedStudentId={selectedStudentId}
+        studentOptions={source.studentOptions}
+        studentOptionsError={source.studentOptionsError}
+        selectedStudentId={source.selectedStudentId}
         onSelectedStudentIdChange={handleStudentSelectionChange}
-        selectedStudent={selectedStudent}
-        selectedSttProvider={selectedSttProvider}
-        onSelectedSttProviderChange={(provider) => {
-          sttProviderUserChangedRef.current = true;
-          setSelectedSttProvider(provider);
-        }}
-        sttProviders={sttProviders}
+        selectedStudent={source.selectedStudent}
+        selectedSttProvider={source.selectedSttProvider}
+        onSelectedSttProviderChange={handleSelectedSttProviderChange}
+        sttProviders={source.sttProviders}
         formatSttProviderLabel={formatSttProviderLabel}
         audioExtensions={AUDIO_EXTENSIONS}
-        uploading={uploading}
-        selectedFileName={selectedFileName}
-        uploadProgress={uploadProgress}
+        uploading={source.uploading}
+        selectedFileName={source.selectedFileName}
+        uploadProgress={source.uploadProgress}
         onFiles={handleFiles}
         onCancelUpload={handleCancelUpload}
-        uploadError={uploadError}
-        uploadCacheNotice={uploadCacheNotice}
-        recording={recording}
-        recordingStatus={recordingStatus}
-        recordingError={recordingError}
-        transcriptStatus={transcriptStatus}
-        transcriptError={transcriptError}
+        uploadError={source.uploadError}
+        uploadCacheNotice={source.uploadCacheNotice}
+        recording={source.recording}
+        recordingStatus={source.recordingStatus}
+        recordingError={source.recordingError}
+        transcriptStatus={source.transcriptStatus}
+        transcriptError={source.transcriptError}
         transcriptReady={transcriptReady}
         onRefreshTranscript={() => void loadTranscript()}
-        retryingTranscript={retryingTranscript}
+        retryingTranscript={source.retryingTranscript}
         onRetryTranscript={() => void handleRetryTranscription()}
-        transcriptText={transcriptText}
+        transcriptText={source.transcriptText}
         onTranscriptTextChange={setTranscriptText}
-        transcriptDirty={transcriptDirty}
-        transcriptSaving={transcriptSaving}
+        transcriptDirty={source.transcriptDirty}
+        transcriptSaving={source.transcriptSaving}
         onSaveTranscript={() => void handleSaveTranscript()}
       />
 
@@ -1143,28 +721,20 @@ export const MinimalAssignment: React.FC = () => {
         stage={contextStage}
         onRefreshProfiles={() => void loadProfileOptions()}
         onSaveProfile={() => void handleSaveProfile()}
-        profileBusy={profileBusy}
-        selectedProfileId={selectedProfileId}
-        onSelectedProfileIdChange={(nextProfileId) => {
-          if (!nextProfileId) {
-            setProfileSelectionMode('auto');
-            setSelectedProfileId(selectedStudentId ? resolveBoundProfileId(selectedStudentId) : '');
-            return;
-          }
-          setProfileSelectionMode('manual');
-          setSelectedProfileId(nextProfileId);
-        }}
-        profileOptions={profileOptions}
-        newProfileId={newProfileId}
+        profileBusy={context.profileBusy}
+        selectedProfileId={context.selectedProfileId}
+        onSelectedProfileIdChange={handleSelectedProfileChange}
+        profileOptions={context.profileOptions}
+        newProfileId={context.newProfileId}
         onNewProfileIdChange={setNewProfileId}
         onCreateProfile={() => void handleCreateProfile()}
-        profileEditorText={profileEditorText}
+        profileEditorText={context.profileEditorText}
         onProfileEditorTextChange={setProfileEditorText}
-        profileDirty={profileDirty}
-        profileOptionsError={profileOptionsError}
-        profileRevisionError={profileRevisionError}
-        profileSuccess={profileSuccess}
-        profileRevisions={profileRevisions}
+        profileDirty={context.profileDirty}
+        profileOptionsError={context.profileOptionsError}
+        profileRevisionError={context.profileRevisionError}
+        profileSuccess={context.profileSuccess}
+        profileRevisions={context.profileRevisions}
         onRestoreRevision={(revisionId) => void handleRestoreRevision(revisionId)}
         teacherNotes={teacherNotes}
         onTeacherNotesChange={setTeacherNotes}
@@ -1218,7 +788,8 @@ export const MinimalAssignment: React.FC = () => {
           void authoring.publishAssignment({
             onPublishedJob: resume.applyJobStatusTransition,
             refreshResumeJobs: resume.loadResumeJobs,
-          })}
+          })
+        }
         canPublishWithPreview={authoring.canPublishWithPreview}
         publishing={authoring.publishing}
         previewing={authoring.previewing}
@@ -1246,9 +817,11 @@ export const MinimalAssignment: React.FC = () => {
         previewHtml={authoring.previewHtml}
         publishError={authoring.publishError}
         currentJobStatus={jobStatus}
-        jobFailureReason={jobStatus?.state === 'failed' && jobStatus.error
-          ? describeJobFailureReason(jobStatus)
-          : null}
+        jobFailureReason={
+          jobStatus?.state === 'failed' && jobStatus.error
+            ? describeJobFailureReason(jobStatus)
+            : null
+        }
         jobReady={Boolean(jobReady)}
         publishUrl={publishUrl}
         publishLabel={publishLabel}
@@ -1266,11 +839,9 @@ export const MinimalAssignment: React.FC = () => {
         googleTtsModelOptions={googleTtsModelOptions}
         elevenlabsStandardModelOptions={elevenlabsStandardModelOptions}
         pronunciationChunkProviders={FALLBACK_PRONUNCIATION_CHUNK_TTS_PROVIDERS}
-        studyTextStrategies={jobOptions?.ttsStrategies?.filter(isUiPublishTtsStrategy) ?? [
-          'auto',
-          'dialogue',
-          'tts',
-        ]}
+        studyTextStrategies={
+          jobOptions?.ttsStrategies?.filter(isUiPublishTtsStrategy) ?? ['auto', 'dialogue', 'tts']
+        }
       />
     </div>
   );
