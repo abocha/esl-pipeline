@@ -70,10 +70,7 @@ export interface AdvancedActionsController {
   toggleAdvancedActions: () => void;
   toggleCustomRerun: () => void;
   setCancelReason: (value: string) => void;
-  setFormField: <K extends keyof CustomRerunInput>(
-    field: K,
-    value: CustomRerunInput[K],
-  ) => void;
+  setFormField: <K extends keyof CustomRerunInput>(field: K, value: CustomRerunInput[K]) => void;
   setPronunciationChunkProvider: (provider: UiPronunciationChunkTtsProvider) => void;
   refreshLineage: () => Promise<void>;
   handleRepublishCurrentDraft: () => Promise<void>;
@@ -131,16 +128,13 @@ export function useAdvancedActionsController({
     [],
   );
 
-  const setPronunciationChunkProvider = useCallback(
-    (provider: UiPronunciationChunkTtsProvider) => {
-      setRerunPronunciationChunkProviderDirty(true);
-      setForm((current) => ({
-        ...current,
-        rerunPronunciationChunkProvider: provider,
-      }));
-    },
-    [],
-  );
+  const setPronunciationChunkProvider = useCallback((provider: UiPronunciationChunkTtsProvider) => {
+    setRerunPronunciationChunkProviderDirty(true);
+    setForm((current) => ({
+      ...current,
+      rerunPronunciationChunkProvider: provider,
+    }));
+  }, []);
 
   const loadJobProvenance = useCallback(async (jobId: string) => {
     setJobProvenanceLoading(true);
@@ -255,18 +249,11 @@ export function useAdvancedActionsController({
         rerunPronunciationChunkProvider: defaultPronunciationChunkProvider,
       }));
     }
-  }, [
-    defaultPronunciationChunkProvider,
-    rerunPronunciationChunkProviderDirty,
-    jobStatus?.jobId,
-  ]);
+  }, [defaultPronunciationChunkProvider, rerunPronunciationChunkProviderDirty, jobStatus?.jobId]);
 
   useEffect(() => {
     if (form.rerunStudyTextProvider === 'google') {
-      if (
-        !form.rerunStudyTextModel ||
-        !googleTtsModelOptions.includes(form.rerunStudyTextModel)
-      ) {
+      if (!form.rerunStudyTextModel || !googleTtsModelOptions.includes(form.rerunStudyTextModel)) {
         setForm((current) => ({
           ...current,
           rerunStudyTextModel: googleTtsModelOptions[0] ?? '',
@@ -384,10 +371,7 @@ export function useAdvancedActionsController({
   }, [jobStatus?.jobId, loadJobProvenance]);
 
   const queueRerun = useCallback(
-    async (
-      payload: Parameters<typeof rerunJob>[1],
-      fallbackMessage: string,
-    ): Promise<void> => {
+    async (payload: Parameters<typeof rerunJob>[1], fallbackMessage: string): Promise<void> => {
       if (!jobStatus?.jobId) return;
 
       const currentJobId = jobStatus.jobId;
@@ -555,8 +539,7 @@ export function AdvancedActionsStage({
     >
       {!jobReady ? (
         <p className="minimal-help">
-          Share the assignment once to unlock republish, reruns, cancellation, and lineage
-          details.
+          Share the assignment once to unlock republish, reruns, cancellation, and lineage details.
         </p>
       ) : controller.showAdvancedActions ? (
         <div className="minimal-stage-layout">
@@ -564,9 +547,7 @@ export function AdvancedActionsStage({
             <div className="minimal-stage-panel-header">
               <div className="minimal-stage-panel-title">
                 <h3>Republish and rerun</h3>
-                <p>
-                  Choose exactly what to regenerate. Anything you leave unchecked stays as-is.
-                </p>
+                <p>Choose exactly what to regenerate. Anything you leave unchecked stays as-is.</p>
               </div>
               <button type="button" className="minimal-secondary" onClick={onRefreshActions}>
                 Refresh actions
@@ -644,10 +625,7 @@ export function AdvancedActionsStage({
                       type="checkbox"
                       checked={controller.form.rerunPronunciationMainAudio}
                       onChange={(event) =>
-                        controller.setFormField(
-                          'rerunPronunciationMainAudio',
-                          event.target.checked,
-                        )
+                        controller.setFormField('rerunPronunciationMainAudio', event.target.checked)
                       }
                     />
                     <span>Main pronunciation audio</span>
@@ -962,8 +940,8 @@ export function AdvancedActionsStage({
                   </button>
                 </div>
                 <p className="minimal-help">
-                  `eleven_v3` is dialogue-only. `eleven_flash_v2` is the only ElevenLabs model
-                  that supports IPA. `eleven_flash_v2_5` is the fast, cheap pronunciation option.
+                  `eleven_v3` is dialogue-only. `eleven_flash_v2` is the only ElevenLabs model that
+                  supports IPA. `eleven_flash_v2_5` is the fast, cheap pronunciation option.
                 </p>
               </div>
             ) : null}
@@ -973,8 +951,8 @@ export function AdvancedActionsStage({
             <div className="minimal-stage-panel-title">
               <h3>Cancel and inspect</h3>
               <p>
-                Use these tools when you need to stop a job or trace exactly how the current
-                output was made.
+                Use these tools when you need to stop a job or trace exactly how the current output
+                was made.
               </p>
             </div>
             <div className="minimal-block">
@@ -997,7 +975,9 @@ export function AdvancedActionsStage({
                 </button>
               </div>
               {!controller.cancelAllowedState && jobStatus ? (
-                <p className="minimal-muted">Cancel is only available for queued or running jobs.</p>
+                <p className="minimal-muted">
+                  Cancel is only available for queued or running jobs.
+                </p>
               ) : null}
             </div>
             {jobOptionsError ? <p className="minimal-error">{jobOptionsError}</p> : null}
@@ -1007,7 +987,9 @@ export function AdvancedActionsStage({
                 as implemented.
               </p>
             ) : null}
-            {controller.actionError ? <p className="minimal-error">{controller.actionError}</p> : null}
+            {controller.actionError ? (
+              <p className="minimal-error">{controller.actionError}</p>
+            ) : null}
             {controller.actionSuccess ? (
               <p className="minimal-success">{controller.actionSuccess}</p>
             ) : null}
@@ -1034,15 +1016,19 @@ export function AdvancedActionsStage({
                 <>
                   <div className="minimal-meta">
                     <span>Source job: {controller.jobProvenance.job.sourceJobId ?? 'none'}</span>
-                    <span>Prompt package: {controller.jobProvenance.promptPackage?.id ?? 'none'}</span>
+                    <span>
+                      Prompt package: {controller.jobProvenance.promptPackage?.id ?? 'none'}
+                    </span>
                     <span>Draft: {controller.jobProvenance.draft?.id ?? 'none'}</span>
                   </div>
                   {controller.jobProvenance.tts ? (
                     <div className="minimal-meta">
-                      <span>TTS provider: {controller.jobProvenance.tts.provider ?? 'unknown'}</span>
                       <span>
-                        Generated chars: {controller.jobProvenance.tts.generatedCharacters ?? 0}
-                        {' '} (cached: {controller.jobProvenance.tts.cachedCharacters ?? 0})
+                        TTS provider: {controller.jobProvenance.tts.provider ?? 'unknown'}
+                      </span>
+                      <span>
+                        Generated chars: {controller.jobProvenance.tts.generatedCharacters ?? 0}{' '}
+                        (cached: {controller.jobProvenance.tts.cachedCharacters ?? 0})
                       </span>
                       <span>
                         Estimated spend:{' '}

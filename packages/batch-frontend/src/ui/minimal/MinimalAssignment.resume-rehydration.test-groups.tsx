@@ -41,9 +41,9 @@ export function registerResumeBasicTests() {
 
       expect(screen.getByRole('heading', { name: /Add lesson source/i })).toBeTruthy();
       expect(screen.getByRole('heading', { name: /Review and share/i })).toBeTruthy();
-      expect(
-        (screen.getByRole('combobox', { name: /Share to/i }) as HTMLSelectElement).value,
-      ).toBe('html');
+      expect((screen.getByRole('combobox', { name: /Share to/i }) as HTMLSelectElement).value).toBe(
+        'html',
+      );
     });
 
     it('auto-resumes queued/running jobs and skips terminal jobs on initial load', async () => {
@@ -317,9 +317,8 @@ export function registerResumeBasicTests() {
       expect(await screen.findByDisplayValue('# Recovered draft')).toBeTruthy();
       openPublishingSettings();
       expect(
-        (
-          (await screen.findByRole('combobox', { name: /Learning preset/i })) as HTMLSelectElement
-        ).value,
+        ((await screen.findByRole('combobox', { name: /Learning preset/i })) as HTMLSelectElement)
+          .value,
       ).toBe('b2-default');
       resolveProfileOptions({ profiles: [{ id: 'profile-default.md', label: 'Default Profile' }] });
       expect(screen.getAllByText(/Anytype server unreachable/i).length).toBeGreaterThan(0);

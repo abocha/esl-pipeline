@@ -15,11 +15,11 @@ import {
   getRecording,
   listUserJobs,
 } from '../../utils/api';
+import type { AuthoringHydrationSnapshot } from './MinimalAssignment.authoring';
 import {
   type MinimalPublishTarget,
   type PublishJobOverridesInput,
 } from './MinimalAssignment.logic';
-import type { AuthoringHydrationSnapshot } from './MinimalAssignment.authoring';
 import { isActivelyProcessingJobState, isTerminalJobState } from './MinimalAssignment.polling';
 
 type UiTtsProvider = PublishJobOverridesInput['selectedTtsProvider'];
@@ -192,7 +192,9 @@ export function useMinimalAssignmentResume({
             return current;
           }
           return (
-            jobs.find((job) => isActivelyProcessingJobState(job.state))?.jobId ?? jobs[0]?.jobId ?? ''
+            jobs.find((job) => isActivelyProcessingJobState(job.state))?.jobId ??
+            jobs[0]?.jobId ??
+            ''
           );
         });
       }

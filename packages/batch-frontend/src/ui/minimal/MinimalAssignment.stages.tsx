@@ -8,20 +8,14 @@ import type {
   PromptPackageResponse,
   RecordingListItem,
   RecordingStatus,
-  StudentOption,
   SttProvider,
+  StudentOption,
 } from '../../utils/api';
 import { DropZone } from '../shared/DropZone';
 import { UploadProgress } from '../shared/UploadProgress';
 import type { MinimalPublishTarget } from './MinimalAssignment.logic';
 
-export type WorkflowStageId =
-  | 'start'
-  | 'source'
-  | 'context'
-  | 'assignment'
-  | 'review'
-  | 'advanced';
+export type WorkflowStageId = 'start' | 'source' | 'context' | 'assignment' | 'review' | 'advanced';
 export type WorkflowStageStatus = 'current' | 'complete' | 'available' | 'locked';
 
 export interface WorkflowStage {
@@ -864,8 +858,8 @@ export function AssignmentStageSection({
               <strong>Profile drift detected</strong>
               <p className="minimal-help">
                 The learner profile changed after these instructions were generated (
-                {promptPackage.profileDrift.reason}). Refresh the instructions to pick up the
-                latest version.
+                {promptPackage.profileDrift.reason}). Refresh the instructions to pick up the latest
+                version.
               </p>
             </div>
           ) : null}
@@ -912,7 +906,9 @@ export function AssignmentStageSection({
                     value={selectedGenerationProvider}
                     onChange={(event) => onSelectedGenerationProviderChange(event.target.value)}
                     disabled={
-                      !generationOptionsAvailable || generatingDraft || generationProviders.length === 0
+                      !generationOptionsAvailable ||
+                      generatingDraft ||
+                      generationProviders.length === 0
                     }
                   >
                     {generationProviders.length === 0 ? (
@@ -941,7 +937,10 @@ export function AssignmentStageSection({
                       <option value="">No models available</option>
                     ) : null}
                     {generationModelsForProvider.map((modelOption) => (
-                      <option key={`${modelOption.provider}:${modelOption.id}`} value={modelOption.id}>
+                      <option
+                        key={`${modelOption.provider}:${modelOption.id}`}
+                        value={modelOption.id}
+                      >
                         {modelOption.id}
                       </option>
                     ))}
@@ -971,7 +970,8 @@ export function AssignmentStageSection({
                       <div className="minimal-meta">
                         <span>Source: {generationQuotaSourceLabel}</span>
                         <span>
-                          Updated: {generationQuotaUpdatedRelative} ({generationQuotaUpdatedAbsolute})
+                          Updated: {generationQuotaUpdatedRelative} (
+                          {generationQuotaUpdatedAbsolute})
                         </span>
                       </div>
                       {generationQuotaHasNumericValues ? (
@@ -1047,7 +1047,11 @@ export function AssignmentStageSection({
                         <p className="minimal-muted">No numeric limits available for this model.</p>
                       )}
                       {activeGenerationQuota.dashboardUrl ? (
-                        <a href={activeGenerationQuota.dashboardUrl} target="_blank" rel="noreferrer">
+                        <a
+                          href={activeGenerationQuota.dashboardUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
                           View provider limits
                         </a>
                       ) : null}
@@ -1181,7 +1185,9 @@ export function ReviewStageSection({
             Share to
             <select
               value={publishTarget}
-              onChange={(event) => onPublishTargetChange(event.target.value as MinimalPublishTarget)}
+              onChange={(event) =>
+                onPublishTargetChange(event.target.value as MinimalPublishTarget)
+              }
             >
               <option value="notion">Notion</option>
               <option value="anytype">Anytype</option>
@@ -1267,7 +1273,11 @@ export function ReviewStageSection({
           {previewHtml ? (
             <details className="minimal-preview" open>
               <summary>Preview panel</summary>
-              <iframe className="minimal-preview-frame" srcDoc={previewHtml} title="Draft preview" />
+              <iframe
+                className="minimal-preview-frame"
+                srcDoc={previewHtml}
+                title="Draft preview"
+              />
             </details>
           ) : null}
           {publishError ? <p className="minimal-error">{publishError}</p> : null}
