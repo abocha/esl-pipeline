@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [6.1.1] - 2026-04-10
+
+### Changed
+
+- Automated release from PR #62: Harden deps and streamline MinimalAssignment workflow (https://github.com/abocha/esl-pipeline/pull/62)
+
 ## [6.1.0] - 2026-04-09
 
 ### Changed
