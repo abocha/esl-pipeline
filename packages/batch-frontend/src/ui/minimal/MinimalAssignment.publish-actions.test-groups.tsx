@@ -438,6 +438,191 @@ export function registerJobActionTests() {
     );
 
     it(
+      'falls back to eleven_multilingual_v2 for tts strategy when only eleven_v3 is configured',
+      async () => {
+        vi.mocked(api.fetchJobOptions).mockResolvedValueOnce({
+          presets: ['b1-default', 'b2-default'],
+          cefrLevels: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'],
+          cefrDefault: 'B1',
+          generation: {
+            providers: ['openai'],
+            defaultProvider: 'openai',
+            modelOptions: [
+              {
+                provider: 'openai',
+                id: 'gpt-5.2',
+                tier: 'primary',
+                fallbackRank: 0,
+                defaultSelected: true,
+                enabled: true,
+              },
+            ],
+            defaultModelByProvider: {
+              openai: 'gpt-5.2',
+            },
+            quota: {
+              source: 'hybrid',
+              lastUpdatedAt: '2026-02-18T00:00:00.000Z',
+              requestsPerMinute: 5,
+              tokensPerMinute: 250000,
+              requestsPerDay: 20,
+            },
+          },
+          voiceAccents: ['american'],
+          voices: [{ id: 'voice-a', name: 'Voice A', accent: 'american' }],
+          notionDatabases: [{ id: 'db-1', name: 'DB One' }],
+          sttProviders: ['deepgram', 'elevenlabs', 'google'],
+          defaultSttProvider: 'deepgram',
+          sttModelOptionsByProvider: {
+            deepgram: ['nova-3'],
+            elevenlabs: ['scribe_v2'],
+            google: ['latest_long'],
+          },
+          defaultSttModelByProvider: {
+            deepgram: 'nova-3',
+            elevenlabs: 'scribe_v2',
+            google: 'latest_long',
+          },
+          ttsStrategies: ['auto', 'dialogue', 'tts'],
+          ttsProviders: ['elevenlabs', 'google'],
+          ttsModelOptionsByProvider: {
+            elevenlabs: ['eleven_v3'],
+            google: ['chirp3_hd'],
+          },
+          defaultTtsProvider: 'elevenlabs',
+          defaultTtsModelByProvider: {
+            elevenlabs: 'eleven_v3',
+            google: 'chirp3_hd',
+          },
+          supportedActions: [
+            {
+              type: 'rerun',
+              label: 'Rerun',
+              description: 'Republish current draft or selectively regenerate audio families',
+              implemented: true,
+            },
+            {
+              type: 'cancel',
+              label: 'Cancel',
+              description: 'Cancel active job',
+              implemented: true,
+            },
+          ],
+        });
+
+        await renderPublishedAssignment();
+
+        openPublishingSettings();
+        const strategySelect = screen.getByRole('combobox', { name: /Reading style/i });
+        const modelSelect = screen.getByRole('combobox', { name: /Voice model/i });
+
+        fireEvent.change(strategySelect, { target: { value: 'tts' } });
+
+        await waitFor(() => {
+          expect((modelSelect as HTMLSelectElement).value).toBe('eleven_multilingual_v2');
+        });
+        expect(
+          within(modelSelect)
+            .getAllByRole('option')
+            .map((option) => option.textContent),
+        ).toEqual(['eleven_multilingual_v2']);
+      },
+      INTEGRATION_TEST_TIMEOUT_MS,
+    );
+
+    it(
+      'prefers eleven_multilingual_v2 for tts strategy when no elevenlabs default is configured',
+      async () => {
+        vi.mocked(api.fetchJobOptions).mockResolvedValueOnce({
+          presets: ['b1-default', 'b2-default'],
+          cefrLevels: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'],
+          cefrDefault: 'B1',
+          generation: {
+            providers: ['openai'],
+            defaultProvider: 'openai',
+            modelOptions: [
+              {
+                provider: 'openai',
+                id: 'gpt-5.2',
+                tier: 'primary',
+                fallbackRank: 0,
+                defaultSelected: true,
+                enabled: true,
+              },
+            ],
+            defaultModelByProvider: {
+              openai: 'gpt-5.2',
+            },
+            quota: {
+              source: 'hybrid',
+              lastUpdatedAt: '2026-02-18T00:00:00.000Z',
+              requestsPerMinute: 5,
+              tokensPerMinute: 250000,
+              requestsPerDay: 20,
+            },
+          },
+          voiceAccents: ['american'],
+          voices: [{ id: 'voice-a', name: 'Voice A', accent: 'american' }],
+          notionDatabases: [{ id: 'db-1', name: 'DB One' }],
+          sttProviders: ['deepgram', 'elevenlabs', 'google'],
+          defaultSttProvider: 'deepgram',
+          sttModelOptionsByProvider: {
+            deepgram: ['nova-3'],
+            elevenlabs: ['scribe_v2'],
+            google: ['latest_long'],
+          },
+          defaultSttModelByProvider: {
+            deepgram: 'nova-3',
+            elevenlabs: 'scribe_v2',
+            google: 'latest_long',
+          },
+          ttsStrategies: ['auto', 'dialogue', 'tts'],
+          ttsProviders: ['elevenlabs', 'google'],
+          ttsModelOptionsByProvider: {
+            elevenlabs: ['eleven_flash_v2_5', 'eleven_multilingual_v2'],
+            google: ['chirp3_hd'],
+          },
+          defaultTtsProvider: 'elevenlabs',
+          defaultTtsModelByProvider: {
+            google: 'chirp3_hd',
+          },
+          supportedActions: [
+            {
+              type: 'rerun',
+              label: 'Rerun',
+              description: 'Republish current draft or selectively regenerate audio families',
+              implemented: true,
+            },
+            {
+              type: 'cancel',
+              label: 'Cancel',
+              description: 'Cancel active job',
+              implemented: true,
+            },
+          ],
+        });
+
+        await renderPublishedAssignment();
+
+        openPublishingSettings();
+        const strategySelect = screen.getByRole('combobox', { name: /Reading style/i });
+        const modelSelect = screen.getByRole('combobox', { name: /Voice model/i });
+
+        fireEvent.change(strategySelect, { target: { value: 'tts' } });
+
+        await waitFor(() => {
+          expect((modelSelect as HTMLSelectElement).value).toBe('eleven_multilingual_v2');
+        });
+        expect(
+          within(modelSelect)
+            .getAllByRole('option')
+            .map((option) => option.textContent),
+        ).toEqual(['eleven_flash_v2_5', 'eleven_multilingual_v2']);
+      },
+      INTEGRATION_TEST_TIMEOUT_MS,
+    );
+
+    it(
       'publishes explicit dialogue strategy with eleven_v3 and google strategy with google model',
       async () => {
         const { user } = await renderPreviewReadyAssignment();
