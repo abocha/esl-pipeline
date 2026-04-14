@@ -139,6 +139,36 @@ function normalizeCancellationReason(reason: unknown): string | undefined {
   return undefined;
 }
 
+function normalizePronunciationProviderFromManifest(
+  provider?: string | null,
+): 'elevenlabs' | 'google' | 'edge-tts' | undefined {
+  if (!provider) return undefined;
+  if (provider === 'elevenlabs' || provider === 'google') return provider;
+  if (provider === 'edge') return 'edge-tts';
+  return undefined;
+}
+
+function normalizePrimaryPronunciationProviderFromManifest(
+  provider?: string | null,
+): 'elevenlabs' | 'google' | undefined {
+  if (provider === 'elevenlabs' || provider === 'google') {
+    return provider;
+  }
+  return undefined;
+}
+
+function resolvePronunciationGoogleModelFromManifest(modelId?: string | null) {
+  if (
+    modelId === 'chirp3_hd' ||
+    modelId === 'studio' ||
+    modelId === 'neural2' ||
+    modelId === 'wavenet'
+  ) {
+    return modelId;
+  }
+  return undefined;
+}
+
 export class PipelineCancelledError extends Error {
   readonly stage: AssignmentStage;
   readonly code = 'PIPELINE_CANCELLED';
@@ -1238,6 +1268,23 @@ export async function rerunAssignment(
       rerunPlan.detectedPronunciationMode ??
       null;
     const audioArtifacts = resolveAudioArtifactsFromManifest(manifest);
+    const previousPrimaryClip = audioArtifacts.pronunciation?.primaryClip;
+    const previousChunkClip = audioArtifacts.pronunciation?.itemClips?.[0];
+    const effectiveStudyTextTtsStrategy = flags.studyTextTtsStrategy ?? manifest.ttsStrategy;
+    const effectiveStudyTextDialogueLanguage =
+      flags.studyTextDialogueLanguage ?? manifest.dialogueLanguage;
+    const effectiveStudyTextDialogueStability =
+      flags.studyTextDialogueStability ?? manifest.dialogueStability;
+    const effectiveStudyTextDialogueSeed = flags.studyTextDialogueSeed ?? manifest.dialogueSeed;
+    const effectiveStudyTextTitleFallback = basename(manifestMd).replace(/\.[^.]+$/, '');
+    const previousPrimaryProvider = normalizePrimaryPronunciationProviderFromManifest(
+      previousPrimaryClip?.tts?.provider,
+    );
+    const previousChunkProvider = normalizePronunciationProviderFromManifest(
+      previousChunkClip?.tts?.provider,
+    );
+    const previousPrimaryModelId = previousPrimaryClip?.tts?.modelId;
+    const previousChunkModelId = previousChunkClip?.tts?.modelId;
     let audioPath = audioArtifacts.studyText?.path;
     let audioUrl = audioArtifacts.studyText?.url;
     let audioHash = audioArtifacts.studyText?.hash;
@@ -1277,10 +1324,10 @@ export async function rerunAssignment(
           level: 'info',
           message: `Using TTS strategy: ${flags.studyTextTtsStrategy}`,
           detail: {
-            ttsStrategy: flags.studyTextTtsStrategy,
-            dialogueLanguage: flags.studyTextDialogueLanguage,
-            dialogueStability: flags.studyTextDialogueStability,
-            dialogueSeed: flags.studyTextDialogueSeed,
+            ttsStrategy: effectiveStudyTextTtsStrategy,
+            dialogueLanguage: effectiveStudyTextDialogueLanguage,
+            dialogueStability: effectiveStudyTextDialogueStability,
+            dialogueSeed: effectiveStudyTextDialogueSeed,
           },
         });
       }
@@ -1303,10 +1350,10 @@ export async function rerunAssignment(
               modelId: flags.studyTextElevenlabsModel,
               ttsProvider: flags.studyTextTtsProvider,
               googleTtsModel: flags.studyTextGoogleTtsModel,
-              ttsStrategy: flags.studyTextTtsStrategy,
-              dialogueLanguage: flags.studyTextDialogueLanguage,
-              dialogueStability: flags.studyTextDialogueStability,
-              dialogueSeed: flags.studyTextDialogueSeed,
+              ttsStrategy: effectiveStudyTextTtsStrategy,
+              dialogueLanguage: effectiveStudyTextDialogueLanguage,
+              dialogueStability: effectiveStudyTextDialogueStability,
+              dialogueSeed: effectiveStudyTextDialogueSeed,
               logger,
             },
           );
@@ -1387,7 +1434,9 @@ export async function rerunAssignment(
           audioArtifacts.pronunciation?.primaryClip?.voiceId;
         const pronunciationTitle = resolveMarkdownTitle(
           mdContents,
-          basename(flags.md).replace(/\.[^.]+$/, ''),
+          effectiveStudyTextTitleFallback,
+          null,
+          true,
         );
         const generatedPronunciation = await synthesizePronunciationAudio({
           context: markdownContext,
@@ -1398,17 +1447,33 @@ export async function rerunAssignment(
           force: true,
           regeneratePrimary: flags.regeneratePronunciationMainAudio,
           regenerateItems: flags.regeneratePronunciationChunkAudio,
-          primaryTtsProvider: flags.pronunciationMainTtsProvider,
-          primaryGoogleTtsModel: flags.pronunciationMainGoogleTtsModel,
-          primaryModelId: flags.pronunciationMainElevenlabsModel,
-          primaryVoiceId: flags.pronunciationMainVoiceId ?? fallbackVoiceId,
+          primaryTtsProvider: flags.pronunciationMainTtsProvider ?? previousPrimaryProvider,
+          primaryGoogleTtsModel:
+            flags.pronunciationMainGoogleTtsModel ??
+            (previousPrimaryProvider === 'google'
+              ? resolvePronunciationGoogleModelFromManifest(previousPrimaryModelId)
+              : undefined),
+          primaryModelId:
+            flags.pronunciationMainElevenlabsModel ??
+            (previousPrimaryProvider === 'elevenlabs' ? previousPrimaryModelId : undefined),
+          primaryVoiceId:
+            flags.pronunciationMainVoiceId ?? previousPrimaryClip?.voiceId ?? fallbackVoiceId,
           chunkTtsProvider:
             flags.pronunciationChunkTtsProvider ??
+            previousChunkProvider ??
             resolveDefaultChunkProvider(detectedPronunciationMode),
-          chunkGoogleTtsModel: flags.pronunciationChunkGoogleTtsModel,
-          chunkModelId: flags.pronunciationChunkElevenlabsModel,
-          chunkVoiceId: flags.pronunciationChunkVoiceId ?? fallbackVoiceId,
-          chunkEdgeVoice: flags.pronunciationChunkEdgeVoice,
+          chunkGoogleTtsModel:
+            flags.pronunciationChunkGoogleTtsModel ??
+            (previousChunkProvider === 'google'
+              ? resolvePronunciationGoogleModelFromManifest(previousChunkModelId)
+              : undefined),
+          chunkModelId:
+            flags.pronunciationChunkElevenlabsModel ??
+            (previousChunkProvider === 'elevenlabs' ? previousChunkModelId : undefined),
+          chunkVoiceId: flags.pronunciationChunkVoiceId ?? previousChunkClip?.voiceId ?? fallbackVoiceId,
+          chunkEdgeVoice:
+            flags.pronunciationChunkEdgeVoice ??
+            (previousChunkProvider === 'edge-tts' ? previousChunkClip?.voiceId : undefined),
           logger,
         });
         audioArtifacts.pronunciation = generatedPronunciation
@@ -1450,18 +1515,32 @@ export async function rerunAssignment(
       const rerunArtifactEntries: {
         kind: AudioArtifactKind;
         artifact: AudioArtifact | undefined;
+        regenerated: boolean;
       }[] = [
-        { kind: 'study_text', artifact: audioArtifacts.studyText },
+        {
+          kind: 'study_text',
+          artifact: audioArtifacts.studyText,
+          regenerated: flags.regenerateStudyTextAudio === true,
+        },
         {
           kind: 'pronunciation_primary',
           artifact: audioArtifacts.pronunciation?.primaryClip ?? undefined,
+          regenerated: flags.regeneratePronunciationMainAudio === true,
         },
         ...(audioArtifacts.pronunciation?.itemClips ?? []).map((artifact) => ({
           kind: 'pronunciation_item' as const,
           artifact,
+          regenerated: flags.regeneratePronunciationChunkAudio === true,
         })),
       ];
-      const uploadable = rerunArtifactEntries.filter((entry) => entry.artifact?.path);
+      const uploadable = rerunArtifactEntries.filter((entry) => {
+        const artifact = entry.artifact;
+        if (!artifact?.path) {
+          return false;
+        }
+
+        return entry.regenerated || !artifact.url;
+      });
       if (uploadable.length === 0) {
         throw new Error(
           'Cannot upload audio: no audio path found. Re-run TTS or provide a manifest with audio.path.',
@@ -1500,7 +1579,9 @@ export async function rerunAssignment(
             backend: 's3',
             key: deterministicKey,
             sha256: artifact.hash,
-            skipIfExists: true,
+            // Regenerated artifacts must overwrite the published object even if the
+            // semantic artifact hash/key is unchanged. Unchecked artifacts keep reuse semantics.
+            skipIfExists: entry.regenerated ? false : true,
             prefix: flags.prefix,
             public: flags.publicRead,
             presignExpiresIn: flags.presign,
@@ -1627,8 +1708,9 @@ export async function rerunAssignment(
           });
           const publishTitle = resolveMarkdownTitle(
             mdContents,
-            basename(flags.md).replace(/\.[^.]+$/, ''),
+            effectiveStudyTextTitleFallback,
             null,
+            true,
           );
 
           const publishResult = await sharePageToS3(targetSpaceId, targetPageId, {
@@ -1670,8 +1752,9 @@ export async function rerunAssignment(
           });
           const publishTitle = resolveMarkdownTitle(
             mdContents,
-            basename(flags.md).replace(/\.[^.]+$/, ''),
+            effectiveStudyTextTitleFallback,
             null,
+            true,
           );
           const publishResult = await renderAndPublishMarkdownToS3({
             headingTheme,
@@ -1726,10 +1809,10 @@ export async function rerunAssignment(
       },
 
       // Preserve prior TTS metadata unless explicitly overridden
-      ttsStrategy: flags.studyTextTtsStrategy ?? manifest.ttsStrategy,
-      dialogueLanguage: flags.studyTextDialogueLanguage ?? manifest.dialogueLanguage,
-      dialogueStability: flags.studyTextDialogueStability ?? manifest.dialogueStability,
-      dialogueSeed: flags.studyTextDialogueSeed ?? manifest.dialogueSeed,
+      ttsStrategy: effectiveStudyTextTtsStrategy,
+      dialogueLanguage: effectiveStudyTextDialogueLanguage,
+      dialogueStability: effectiveStudyTextDialogueStability,
+      dialogueSeed: effectiveStudyTextDialogueSeed,
 
       timestamp: new Date().toISOString(),
     };

@@ -1,3 +1,7 @@
+import { access, copyFile, mkdir, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+
+import { manifestPathFor, type AssignmentManifest } from '@esl-pipeline/orchestrator';
 import { z } from 'zod';
 
 import type { JobActionResult, RerunAction } from '../../domain/job-actions.js';
@@ -12,6 +16,10 @@ const elevenLabsModelSchema = z.enum([
   'eleven_flash_v2_5',
   'eleven_flash_v2',
 ]);
+
+type PronunciationManifestArtifacts = NonNullable<
+  NonNullable<AssignmentManifest['audioArtifacts']>['pronunciation']
+>;
 
 const rerunSchema = z
   .object({
@@ -180,6 +188,113 @@ function collectEffectiveValidationErrors(
   return issues;
 }
 
+async function fileExists(targetPath: string): Promise<boolean> {
+  try {
+    await access(targetPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function sanitizeRecoveredAudioArtifacts(
+  pronunciation: PronunciationManifestArtifacts | undefined,
+): PronunciationManifestArtifacts | undefined {
+  if (!pronunciation) {
+    return pronunciation;
+  }
+
+  return {
+    ...pronunciation,
+    primaryClip: pronunciation.primaryClip
+      ? (() => {
+          const { path: _path, ...clipWithoutPath } = pronunciation.primaryClip;
+          return clipWithoutPath;
+        })()
+      : pronunciation.primaryClip,
+    itemClips: pronunciation.itemClips?.map((clip) => {
+      const { path: _path, ...clipWithoutPath } = clip;
+      return clipWithoutPath;
+    }),
+  };
+}
+
+function extractStudyTextAudioUrl(html: string): string | undefined {
+  const anchoredMatch = html.match(
+    /<a[^>]+href="([^"]+)"[^>]*>\s*Audio recording:\s*Study Text\s*<\/a>/i,
+  );
+  if (anchoredMatch?.[1]) {
+    return anchoredMatch[1].trim();
+  }
+
+  const figureMatch = html.match(/<figure class="audio-figure">[\s\S]*?<audio[^>]+src="([^"]+)"/i);
+  return figureMatch?.[1]?.trim() || undefined;
+}
+
+function extractPronunciationAudioPayload(
+  html: string,
+): PronunciationManifestArtifacts | undefined {
+  const match = html.match(
+    /<script[^>]+id=["']esl-pronunciation-audio["'][^>]*>([\s\S]*?)<\/script>/i,
+  );
+  if (!match?.[1]) {
+    return undefined;
+  }
+
+  try {
+    return sanitizeRecoveredAudioArtifacts(JSON.parse(match[1]) as never);
+  } catch {
+    return undefined;
+  }
+}
+
+async function recoverDurableHtmlManifest(job: Awaited<ReturnType<typeof getJobById>>): Promise<void> {
+  if (!job?.md || job.publishTarget !== 'html' || !job.htmlUrl) {
+    return;
+  }
+
+  const durableManifestPath = manifestPathFor(job.md);
+  if (await fileExists(durableManifestPath)) {
+    return;
+  }
+
+  if (
+    job.manifestPath &&
+    !job.manifestPath.startsWith('s3://') &&
+    (await fileExists(job.manifestPath))
+  ) {
+    await mkdir(path.dirname(durableManifestPath), { recursive: true });
+    await copyFile(job.manifestPath, durableManifestPath);
+    return;
+  }
+
+  const response = await fetch(job.htmlUrl);
+  if (!response.ok) {
+    throw new Error(
+      `Failed to recover durable manifest from published HTML (${response.status} ${response.statusText}).`,
+    );
+  }
+
+  const html = await response.text();
+  const studyTextUrl = extractStudyTextAudioUrl(html);
+  const pronunciation = extractPronunciationAudioPayload(html);
+  const recoveredManifest: AssignmentManifest = {
+    schemaVersion: 3,
+    mdHash: `recovered:${job.id}`,
+    publishTarget: 'html',
+    htmlUrl: job.htmlUrl,
+    preset: job.preset ?? undefined,
+    audioArtifacts: {
+      studyText: studyTextUrl ? { url: studyTextUrl } : undefined,
+      pronunciation,
+    },
+    timestamp: new Date().toISOString(),
+  };
+
+  await mkdir(path.dirname(durableManifestPath), { recursive: true });
+  await writeFile(durableManifestPath, JSON.stringify(recoveredManifest, null, 2), 'utf8');
+}
+
 export async function rerun(jobId: string, action: RerunAction): Promise<JobActionResult> {
   const job = await getJobById(jobId);
   if (!job) {
@@ -215,6 +330,8 @@ export async function rerun(jobId: string, action: RerunAction): Promise<JobActi
     };
   }
 
+  await recoverDurableHtmlManifest(job);
+
   const parsed = rerunSchema.safeParse(action.payload ?? {});
   if (!parsed.success) {
     return {
@@ -240,43 +357,47 @@ export async function rerun(jobId: string, action: RerunAction): Promise<JobActi
     };
   }
 
+  const persistStudyTextSettings = payload.regenerateStudyTextAudio === true;
+  const persistedVoiceId = persistStudyTextSettings
+    ? (payload.studyTextVoiceId ?? job.voiceId ?? undefined)
+    : (job.voiceId ?? undefined);
+  const persistedVoiceAccent = persistStudyTextSettings
+    ? (payload.studyTextVoiceAccent ?? job.voiceAccent ?? undefined)
+    : (job.voiceAccent ?? undefined);
+  const persistedTtsStrategy = persistStudyTextSettings
+    ? (payload.studyTextTtsStrategy ?? job.ttsStrategy ?? undefined)
+    : (job.ttsStrategy ?? undefined);
+  const persistedTtsProvider = persistStudyTextSettings
+    ? (payload.studyTextTtsProvider ?? job.ttsProvider ?? undefined)
+    : (job.ttsProvider ?? undefined);
+  const persistedStudyTextElevenlabsModel =
+    persistStudyTextSettings && persistedTtsProvider === 'elevenlabs'
+      ? (payload.studyTextElevenlabsModel ?? job.studyTextElevenlabsModel ?? undefined)
+      : persistStudyTextSettings && persistedTtsProvider === 'google'
+        ? undefined
+        : (job.studyTextElevenlabsModel ?? undefined);
+  const persistedGoogleTtsModel =
+    persistStudyTextSettings && persistedTtsProvider === 'google'
+      ? (payload.studyTextGoogleTtsModel ?? job.googleTtsModel ?? undefined)
+      : persistStudyTextSettings && persistedTtsProvider === 'elevenlabs'
+        ? undefined
+        : (job.googleTtsModel ?? undefined);
+
   const rerunJob = await insertJob({
     md: job.md,
     mdStorageUri: job.mdStorageUri ?? undefined,
     preset: job.preset ?? undefined,
     withTts: payload.republishOnly ? (job.withTts ?? true) : true,
     upload: 's3',
-    voiceId:
-      payload.studyTextVoiceId ??
-      payload.pronunciationMainVoiceId ??
-      payload.pronunciationChunkVoiceId ??
-      job.voiceId ??
-      undefined,
-    voiceAccent:
-      payload.studyTextVoiceAccent ??
-      payload.pronunciationMainVoiceAccent ??
-      payload.pronunciationChunkVoiceAccent ??
-      job.voiceAccent ??
-      undefined,
+    voiceId: persistedVoiceId,
+    voiceAccent: persistedVoiceAccent,
     forceTts: payload.republishOnly ? false : true,
     notionDatabase: job.notionDatabase ?? undefined,
     publishTarget: job.publishTarget ?? undefined,
-    ttsStrategy: payload.studyTextTtsStrategy ?? job.ttsStrategy ?? undefined,
-    ttsProvider:
-      payload.studyTextTtsProvider ??
-      payload.pronunciationMainTtsProvider ??
-      (payload.pronunciationChunkTtsProvider === 'elevenlabs' ||
-      payload.pronunciationChunkTtsProvider === 'google'
-        ? payload.pronunciationChunkTtsProvider
-        : undefined) ??
-      job.ttsProvider ??
-      undefined,
-    googleTtsModel:
-      payload.studyTextGoogleTtsModel ??
-      payload.pronunciationMainGoogleTtsModel ??
-      payload.pronunciationChunkGoogleTtsModel ??
-      job.googleTtsModel ??
-      undefined,
+    ttsStrategy: persistedTtsStrategy,
+    ttsProvider: persistedTtsProvider,
+    studyTextElevenlabsModel: persistedStudyTextElevenlabsModel,
+    googleTtsModel: persistedGoogleTtsModel,
     userId: job.userId ?? undefined,
     autoPublish: job.autoPublish ?? undefined,
     sourceJobId: jobId,
@@ -298,7 +419,8 @@ export async function rerun(jobId: string, action: RerunAction): Promise<JobActi
       studyTextVoiceAccent: payload.studyTextVoiceAccent ?? job.voiceAccent ?? undefined,
       studyTextVoiceId: payload.studyTextVoiceId ?? job.voiceId ?? undefined,
       studyTextTtsProvider: payload.studyTextTtsProvider ?? job.ttsProvider ?? undefined,
-      studyTextElevenlabsModel: payload.studyTextElevenlabsModel,
+      studyTextElevenlabsModel:
+        payload.studyTextElevenlabsModel ?? job.studyTextElevenlabsModel ?? undefined,
       studyTextGoogleTtsModel: payload.studyTextGoogleTtsModel ?? job.googleTtsModel ?? undefined,
       studyTextTtsStrategy: payload.studyTextTtsStrategy ?? job.ttsStrategy ?? undefined,
       studyTextDialogueLanguage: payload.studyTextDialogueLanguage,

@@ -23,6 +23,7 @@ export interface AudioArtifactManifest {
   notionBlockId?: string;
   tts?: {
     provider?: string;
+    modelId?: string;
     generatedCharacters?: number;
     cachedCharacters?: number;
     costPer1kCharsUsd?: number;

@@ -227,7 +227,7 @@ export function registerPromptStudentSelectionTests() {
       renderMinimalAssignment();
 
       await waitFor(() => {
-        expect(screen.getByRole('option', { name: /Audio regeneration/i })).toBeTruthy();
+        expect(screen.getByRole('option', { name: /Audio refresh/i })).toBeTruthy();
       });
     });
 

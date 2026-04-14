@@ -22,6 +22,29 @@ function findVoiceByToken(token: string, catalog: VoiceCatalog) {
   );
 }
 
+function normalizeAccentToken(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replaceAll(/[\s-]+/g, '_');
+}
+
+function findVoiceByAccent(token: string, catalog: VoiceCatalog) {
+  const normalized = normalizeAccentToken(token);
+  return catalog.voices.find((voice) => {
+    const accentLabel = voice.labels?.accent;
+    if (typeof accentLabel === 'string') {
+      return normalizeAccentToken(accentLabel) === normalized;
+    }
+    if (Array.isArray(accentLabel)) {
+      return accentLabel.some(
+        (value) => typeof value === 'string' && normalizeAccentToken(value) === normalized,
+      );
+    }
+    return false;
+  });
+}
+
 export async function applyVoicePreferences(flags: VoicePreferenceFlags): Promise<void> {
   const needsResolution = Boolean(flags.voiceId || flags.accentPreference);
   if (!needsResolution) return;
@@ -39,7 +62,9 @@ export async function applyVoicePreferences(flags: VoicePreferenceFlags): Promis
   }
 
   if (flags.accentPreference) {
-    const match = findVoiceByToken(flags.accentPreference, catalog);
+    const match =
+      findVoiceByToken(flags.accentPreference, catalog) ??
+      findVoiceByAccent(flags.accentPreference, catalog);
     if (match) {
       flags.voiceId = match.id;
       if (typeof match.labels?.accent === 'string') {
