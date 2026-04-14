@@ -162,7 +162,9 @@ export function registerResumeBasicTests() {
 
       const resumeList = await screen.findByRole('listbox', { name: /Recent assignments/i });
       expect(within(resumeList).getAllByRole('option')).toHaveLength(4);
-      expect(within(resumeList).getByRole('option', { name: /Alex \(Audio refresh\)/i })).toBeTruthy();
+      expect(
+        within(resumeList).getByRole('option', { name: /Alex \(Audio refresh\)/i }),
+      ).toBeTruthy();
       expect(screen.getByText(/Needs attention/i)).toBeTruthy();
       expect(screen.getByText(/ID job-reru/i)).toBeTruthy();
       expect(screen.queryByText(/gateway timeout/i)).toBeNull();

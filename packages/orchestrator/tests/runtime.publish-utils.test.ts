@@ -108,7 +108,9 @@ describe('runtime/publish-utils', () => {
   });
 
   it('prefers frontmatter title when requested before falling back to a temp filename', () => {
-    const markdown = ['---', 'title: "Mission Title"', '---', '', 'Body without heading'].join('\n');
+    const markdown = ['---', 'title: "Mission Title"', '---', '', 'Body without heading'].join(
+      '\n',
+    );
 
     expect(resolveMarkdownTitle(markdown, 'assignment', null, true)).toBe('Mission Title');
     expect(resolveMarkdownTitle(markdown, 'assignment', null, false)).toBe('assignment');

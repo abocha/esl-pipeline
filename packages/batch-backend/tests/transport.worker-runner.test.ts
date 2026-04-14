@@ -1,8 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-let capturedProcessor:
-  | ((job: { data: Record<string, unknown> }) => Promise<void>)
-  | undefined;
+let capturedProcessor: ((job: { data: Record<string, unknown> }) => Promise<void>) | undefined;
 
 const worker = {
   on: vi.fn(),

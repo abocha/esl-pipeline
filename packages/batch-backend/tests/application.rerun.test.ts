@@ -1,9 +1,9 @@
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { manifestPathFor } from '@esl-pipeline/orchestrator';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { JobActionType } from '../src/domain/job-actions.js';
 
