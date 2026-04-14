@@ -108,7 +108,7 @@ export function registerPublishValidationTests() {
       });
 
       await screen.findAllByText(/Job ID: job-1/i);
-      expect(screen.getAllByText(/Status: succeeded/i).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/Ready/i).length).toBeGreaterThan(0);
     }, 30_000);
   });
 }
@@ -360,9 +360,7 @@ export function registerJobActionTests() {
           actions: [],
         } as never);
 
-        fireEvent.change(screen.getByRole('combobox', { name: /Recent assignments/i }), {
-          target: { value: 'job-b' },
-        });
+        fireEvent.click(screen.getByRole('option', { name: /job-b/i }));
         await user.click(screen.getByRole('button', { name: /Resume selected assignment/i }));
 
         await waitFor(() => {

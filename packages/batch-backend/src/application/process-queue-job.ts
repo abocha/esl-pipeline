@@ -11,6 +11,8 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
+import { manifestPathFor } from '@esl-pipeline/orchestrator';
+
 import { type BatchBackendConfig, loadConfig } from '../config/env.js';
 import { publishJobEvent } from '../domain/job-events.js';
 import { getJobById, updateJobStateAndResult } from '../domain/job-repository.js';
@@ -72,6 +74,12 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
   registerRunningJob(jobId, cancellationController);
 
   try {
+    if (running.sourceJobId && (payload.executionMode !== 'rerun' || !payload.rerun)) {
+      throw new Error(
+        'Corrupted rerun queue payload: rerun jobs must include executionMode="rerun" and rerun metadata.',
+      );
+    }
+
     const config = loadConfig();
 
     try {
@@ -147,17 +155,18 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
       config.worker.ttsCacheMaintenanceIntervalMinutes > 0 &&
       (isRerunExecution ? rerunRequestsGeneration : running.withTts === true);
 
+    const canonicalManifestMd = isRerunExecution
+      ? await resolveManifestMdPath(payload.rerun?.manifestMd, markdownInput.mdPath)
+      : await resolveManifestMdPath(running.md, markdownInput.mdPath);
+
     const executePipeline = async () => {
       try {
-        const manifestMd = isRerunExecution
-          ? await resolveManifestMdPath(payload.rerun?.manifestMd, markdownInput.mdPath)
-          : undefined;
         return isRerunExecution
           ? await runRerunAssignmentJob(
               {
                 jobId,
                 md: markdownInput.mdPath,
-                manifestMd,
+                manifestMd: canonicalManifestMd,
                 upload: payload.rerun?.upload ?? 's3',
                 republishOnly: payload.rerun?.republishOnly ?? false,
                 regenerateStudyTextAudio: payload.rerun?.regenerateStudyTextAudio ?? false,
@@ -178,19 +187,26 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
                   running.ttsProvider ??
                   userSettingsTtsProvider ??
                   undefined,
-                studyTextElevenlabsModel: payload.rerun?.studyTextElevenlabsModel,
+                studyTextElevenlabsModel:
+                  payload.rerun?.studyTextElevenlabsModel ??
+                  running.studyTextElevenlabsModel ??
+                  undefined,
                 studyTextGoogleTtsModel:
                   payload.rerun?.studyTextGoogleTtsModel ?? running.googleTtsModel ?? undefined,
                 studyTextDialogueLanguage: payload.rerun?.studyTextDialogueLanguage,
                 studyTextDialogueStability: payload.rerun?.studyTextDialogueStability,
                 studyTextDialogueSeed: payload.rerun?.studyTextDialogueSeed,
-                pronunciationMainVoiceAccent: payload.rerun?.pronunciationMainVoiceAccent,
-                pronunciationMainVoiceId: payload.rerun?.pronunciationMainVoiceId,
+                pronunciationMainVoiceAccent:
+                  payload.rerun?.pronunciationMainVoiceAccent ?? running.voiceAccent ?? undefined,
+                pronunciationMainVoiceId:
+                  payload.rerun?.pronunciationMainVoiceId ?? running.voiceId ?? undefined,
                 pronunciationMainTtsProvider: payload.rerun?.pronunciationMainTtsProvider,
                 pronunciationMainElevenlabsModel: payload.rerun?.pronunciationMainElevenlabsModel,
                 pronunciationMainGoogleTtsModel: payload.rerun?.pronunciationMainGoogleTtsModel,
-                pronunciationChunkVoiceAccent: payload.rerun?.pronunciationChunkVoiceAccent,
-                pronunciationChunkVoiceId: payload.rerun?.pronunciationChunkVoiceId,
+                pronunciationChunkVoiceAccent:
+                  payload.rerun?.pronunciationChunkVoiceAccent ?? running.voiceAccent ?? undefined,
+                pronunciationChunkVoiceId:
+                  payload.rerun?.pronunciationChunkVoiceId ?? running.voiceId ?? undefined,
                 pronunciationChunkTtsProvider: payload.rerun?.pronunciationChunkTtsProvider,
                 pronunciationChunkElevenlabsModel: payload.rerun?.pronunciationChunkElevenlabsModel,
                 pronunciationChunkGoogleTtsModel: payload.rerun?.pronunciationChunkGoogleTtsModel,
@@ -234,12 +250,20 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
       }
     };
 
-    const result = shouldHoldTtsCacheActivityLock
+    const rawResult = shouldHoldTtsCacheActivityLock
       ? await withTtsCacheActivitySharedLock(
           { lockKey: config.worker.ttsCacheMaintenanceLockKey },
           executePipeline,
         )
       : await executePipeline();
+    const durableManifestPath =
+      config.orchestrator.manifestStore === 'filesystem'
+        ? await promoteFilesystemManifestPath(rawResult.manifestPath, canonicalManifestMd)
+        : rawResult.manifestPath;
+    const result = {
+      ...rawResult,
+      manifestPath: durableManifestPath,
+    };
 
     const succeeded = await updateJobStateAndResult({
       id: jobId,
@@ -392,6 +416,29 @@ async function resolveManifestMdPath(
   }
 
   return candidates[0] ?? fallbackMdPath;
+}
+
+async function promoteFilesystemManifestPath(
+  rawManifestPath: string | null | undefined,
+  canonicalManifestMd: string,
+): Promise<string | undefined> {
+  const manifestPath = rawManifestPath?.trim();
+  if (!manifestPath || manifestPath.startsWith('s3://')) {
+    return manifestPath ?? undefined;
+  }
+
+  const durableManifestPath = manifestPathFor(canonicalManifestMd);
+  if (manifestPath === durableManifestPath) {
+    return manifestPath;
+  }
+
+  if (!(await fileExists(manifestPath))) {
+    return manifestPath;
+  }
+
+  await fs.mkdir(path.dirname(durableManifestPath), { recursive: true });
+  await fs.copyFile(manifestPath, durableManifestPath);
+  return durableManifestPath;
 }
 
 interface ResolvedMarkdownInput {

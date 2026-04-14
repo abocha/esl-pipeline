@@ -54,6 +54,9 @@
   - study-text audio
   - pronunciation primary/sentence-anchor audio
   - pronunciation item/chunk audio
+- Family-aware rerun execution preserves the publish contract:
+  - unchecked families reuse prior published artifacts and keep their existing persisted defaults
+  - checked families overwrite the published artifact even when deterministic upload keys or semantic hashes are unchanged
 
 ### Stable Contracts
 

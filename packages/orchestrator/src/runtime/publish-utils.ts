@@ -25,11 +25,13 @@ export function resolveMarkdownTitle(
   mdContents: string,
   fallback: string,
   metaTitle?: string | null,
+  preferFrontmatterTitle?: boolean,
 ): string {
   return resolveMarkdownTitleShared({
     markdown: mdContents,
     fallback,
     metaTitle,
+    preferFrontmatterTitle,
   });
 }
 

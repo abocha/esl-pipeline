@@ -116,6 +116,65 @@ export function registerResumeBasicTests() {
       expect(screen.queryByText(/Current assignment/i)).toBeNull();
     });
 
+    it('renders recent work as selectable rows with friendly labels and progressive disclosure', async () => {
+      const user = createMinimalUser();
+      vi.mocked(api.listUserJobs).mockResolvedValueOnce({
+        jobs: [
+          makeJobStatus({
+            jobId: 'job-ready-1',
+            studentId: 'student-alex',
+            state: 'succeeded',
+            finishedAt: now,
+          }),
+          makeJobStatus({
+            jobId: 'job-rerun-2',
+            studentId: 'student-alex',
+            state: 'failed',
+            sourceJobId: 'job-ready-1',
+            error: 'gateway timeout',
+            finishedAt: now,
+          }),
+          makeJobStatus({
+            jobId: 'job-ready-3',
+            studentId: 'student-default',
+            state: 'succeeded',
+            finishedAt: now,
+          }),
+          makeJobStatus({
+            jobId: 'job-ready-4',
+            studentId: 'student-default',
+            state: 'queued',
+            finishedAt: null,
+          }),
+          makeJobStatus({
+            jobId: 'job-ready-5',
+            studentId: 'student-default',
+            state: 'succeeded',
+            finishedAt: now,
+          }),
+        ],
+        total: 5,
+        limit: 20,
+        offset: 0,
+      });
+
+      renderMinimalAssignment();
+
+      const resumeList = await screen.findByRole('listbox', { name: /Recent assignments/i });
+      expect(within(resumeList).getAllByRole('option')).toHaveLength(4);
+      expect(
+        within(resumeList).getByRole('option', { name: /Alex \(Audio refresh\)/i }),
+      ).toBeTruthy();
+      expect(screen.getByText(/Needs attention/i)).toBeTruthy();
+      expect(screen.getByText(/ID job-reru/i)).toBeTruthy();
+      expect(screen.queryByText(/gateway timeout/i)).toBeNull();
+
+      await user.click(screen.getByRole('button', { name: /Show more assignments/i }));
+
+      expect(within(resumeList).getAllByRole('option')).toHaveLength(5);
+      expect(screen.getByRole('button', { name: /Show fewer assignments/i })).toBeTruthy();
+    });
+
     it('prefers an active job when refreshing recent work and the old selection disappears', async () => {
       vi.mocked(api.listUserJobs)
         .mockResolvedValueOnce({
@@ -172,8 +231,11 @@ export function registerResumeBasicTests() {
         expect(api.listUserJobs).toHaveBeenCalledTimes(2);
       });
       expect(
-        (screen.getByRole('combobox', { name: /Recent assignments/i }) as HTMLSelectElement).value,
-      ).toBe('job-running');
+        screen.getByRole('option', {
+          name: /ID job-runn/i,
+          selected: true,
+        }),
+      ).toBeTruthy();
 
       await user.click(screen.getByRole('button', { name: /Resume selected assignment/i }));
 
@@ -306,11 +368,11 @@ export function registerResumeBasicTests() {
       await waitFor(() => {
         expect(api.fetchJobProvenance).toHaveBeenCalledTimes(1);
       });
-      expect(api.fetchJobProvenance).toHaveBeenLastCalledWith('job-resume');
+      expect(api.fetchJobProvenance).toHaveBeenCalledWith('job-resume');
 
-      const resumeSelect = screen.getByRole('combobox', { name: /Recent assignments/i });
-      expect(within(resumeSelect).getByRole('option', { name: /Alex/i })).toBeTruthy();
-      expect(within(resumeSelect).queryByRole('option', { name: /No saved jobs yet/i })).toBeNull();
+      const resumeList = screen.getByRole('listbox', { name: /Recent assignments/i });
+      expect(within(resumeList).getByRole('option', { name: /Alex/i })).toBeTruthy();
+      expect(within(resumeList).queryByText(/No saved assignments yet/i)).toBeNull();
 
       expect(await screen.findByDisplayValue('Recovered transcript')).toBeTruthy();
       expect(await screen.findByDisplayValue('Recovered prompt')).toBeTruthy();

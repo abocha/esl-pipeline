@@ -50,6 +50,8 @@ vi.mock('../src/runtime/pronunciation-audio.js', () => ({
   synthesizePronunciationAudio: vi.fn(),
 }));
 
+import { uploadFile } from '@esl-pipeline/storage-uploader';
+
 import { synthesizePronunciationAudio } from '../src/runtime/pronunciation-audio.js';
 
 describe('orchestrator observability', () => {
@@ -263,6 +265,117 @@ describe('orchestrator observability', () => {
     const successCounters = increments.filter((i) => i.metric === 'esl.pipeline.stage.success');
     expect(successCounters.map((c) => c.tags?.stage)).toEqual(
       expect.arrayContaining(executedStages),
+    );
+  }, 20_000);
+
+  it('forces upload replacement for regenerated rerun artifacts while reusing unchecked audio', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'orchestrator-rerun-upload-'));
+    const mdPath = join(dir, 'assignment.md');
+    const audioPath = join(dir, 'lesson.mp3');
+
+    const markdown = await readFile(
+      join(import.meta.dirname, '../../md-validator/fixtures/ok.md'),
+      'utf8',
+    );
+    await writeFile(mdPath, markdown);
+    await writeFile(audioPath, 'dummy audio');
+
+    process.env.S3_BUCKET = 'observability-bucket';
+    process.env.AWS_REGION = 'us-east-1';
+
+    const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-core');
+    vi.mocked(buildStudyTextMp3).mockResolvedValue({
+      path: audioPath,
+      hash: 'study-hash',
+      voices: [{ speaker: 'Anna', voiceId: 'voice_id_default', source: 'default' }],
+    });
+    vi.mocked(synthesizePronunciationAudio)
+      .mockResolvedValueOnce({
+        mode: 'shadow_sentence',
+        primaryClip: {
+          id: 'pron-primary',
+          kind: 'shadow_sentence',
+          engine: 'provider',
+          text: 'Hello there.',
+          path: join(dir, 'pron-primary.mp3'),
+          hash: 'pron-primary-hash',
+        },
+        itemClips: [
+          {
+            id: 'pron-item-1',
+            itemIndex: 0,
+            kind: 'sentence_item',
+            engine: 'provider',
+            text: 'Hello',
+            path: join(dir, 'pron-item-1.mp3'),
+            hash: 'pron-item-hash',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        mode: 'shadow_sentence',
+        primaryClip: {
+          id: 'pron-primary',
+          kind: 'shadow_sentence',
+          engine: 'provider',
+          text: 'Hello there.',
+          path: join(dir, 'pron-primary.mp3'),
+          hash: 'pron-primary-hash',
+        },
+        itemClips: [
+          {
+            id: 'pron-item-1',
+            itemIndex: 0,
+            kind: 'sentence_item',
+            engine: 'provider',
+            text: 'Hello',
+            path: join(dir, 'pron-item-1.mp3'),
+            hash: 'pron-item-hash',
+          },
+        ],
+      });
+
+    const { newAssignment, rerunAssignment } = await import('../src/index.js');
+    await newAssignment(
+      {
+        md: mdPath,
+        preset: 'default',
+        withTts: true,
+        upload: 's3',
+        voices: 'packages/orchestrator/configs/voices.yml',
+        dryRun: false,
+      },
+      {},
+      { runId: 'run-initial' },
+    );
+
+    vi.mocked(uploadFile).mockClear();
+    vi.mocked(buildStudyTextMp3).mockClear();
+
+    await rerunAssignment(
+      {
+        md: mdPath,
+        regeneratePronunciationChunkAudio: true,
+        upload: 's3',
+        dryRun: false,
+      },
+      { runId: 'run-rerun' },
+    );
+
+    expect(buildStudyTextMp3).not.toHaveBeenCalled();
+
+    const studyUploadCall = vi
+      .mocked(uploadFile)
+      .mock.calls.find((call) => call[1]?.key === 'audio/final/study-hash.mp3');
+    const itemUploadCall = vi
+      .mocked(uploadFile)
+      .mock.calls.find((call) => call[1]?.key === 'audio/pronunciation-item/pron-item-hash.mp3');
+
+    expect(studyUploadCall).toBeUndefined();
+    expect(itemUploadCall?.[1]).toEqual(
+      expect.objectContaining({
+        skipIfExists: false,
+      }),
     );
   }, 20_000);
 });

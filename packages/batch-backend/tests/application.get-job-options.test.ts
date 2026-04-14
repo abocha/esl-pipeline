@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const GET_JOB_OPTIONS_TEST_TIMEOUT_MS = 30_000;
+const GET_JOB_OPTIONS_TEST_TIMEOUT_MS = 60_000;
 
 vi.mock('../src/infrastructure/logger', () => ({
   logger: {

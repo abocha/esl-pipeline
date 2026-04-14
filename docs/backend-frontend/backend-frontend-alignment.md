@@ -5,7 +5,7 @@
 - Audience: AI agents and maintainers coordinating backend/frontend delivery.
 - Read Time: 5 minutes.
 - Authority Level: canonical status tracker.
-- Last Verified Against: 2026-03-13 repo state.
+- Last Verified Against: 2026-04-14 repo state.
 - Owner: backend/frontend maintainers + automation agents.
 - Review Cadence: weekly while active roadmap work continues.
 - Status: `active`.
@@ -75,6 +75,8 @@ Provider-specific generation details stay in:
   - main pronunciation regeneration
   - pronunciation chunk regeneration
 - Regeneration intent derives the runtime stage chain automatically; operators do not select `tts` / `upload` / `add-audio` directly.
+- Unchecked rerun families must keep the previously published audio and their existing persisted provider/model defaults.
+- Checked rerun families must replace the published audio for that family, even if regeneration produces the same deterministic object key.
 - Pronunciation chunk provider defaults are mode-aware:
   - `edge-tts` for most modes
   - `elevenlabs` for `connected_speech`
