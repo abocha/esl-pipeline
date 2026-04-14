@@ -31,6 +31,27 @@ export interface WorkflowSummaryItem {
   note?: string;
 }
 
+export interface ResumeJobListItem {
+  jobId: string;
+  title: string;
+  subtitle: string;
+  statusLabel: string;
+  statusTone: 'success' | 'progress' | 'warning' | 'neutral';
+  timeLabel: string;
+  publishLabel: string;
+  supportLabel: string;
+  selected: boolean;
+}
+
+export interface CurrentAssignmentCard {
+  title: string;
+  subtitle: string;
+  statusLabel: string;
+  statusTone: ResumeJobListItem['statusTone'];
+  meta: string[];
+  supportLabel: string;
+}
+
 interface WorkflowOverviewProps {
   currentStageTitle: string;
   stages: WorkflowStage[];
@@ -51,12 +72,14 @@ interface StartStageSectionProps {
   resumeLoading: boolean;
   selectedResumeJobId: string;
   onSelectedResumeJobIdChange: (value: string) => void;
-  resumeJobs: JobStatus[];
+  resumeJobItems: ResumeJobListItem[];
+  totalResumeJobs: number;
+  canToggleResumeJobs: boolean;
+  showAllResumeJobs: boolean;
+  onToggleShowAllResumeJobs: () => void;
   resumeError: string | null;
-  selectedResumeJob: JobStatus | null;
-  formatResumeJobLabel: (job: JobStatus) => string;
-  describeResumeJobStudent: (job: JobStatus) => string;
   currentJobStatus: JobStatus | null;
+  currentAssignmentCard: CurrentAssignmentCard | null;
   publishUrl: string | null | undefined;
   publishLabel: string;
   publishPending: string;
@@ -290,12 +313,14 @@ export function StartStageSection({
   resumeLoading,
   selectedResumeJobId,
   onSelectedResumeJobIdChange,
-  resumeJobs,
+  resumeJobItems,
+  totalResumeJobs,
+  canToggleResumeJobs,
+  showAllResumeJobs,
+  onToggleShowAllResumeJobs,
   resumeError,
-  selectedResumeJob,
-  formatResumeJobLabel,
-  describeResumeJobStudent,
   currentJobStatus,
+  currentAssignmentCard,
   publishUrl,
   publishLabel,
   publishPending,
@@ -322,7 +347,7 @@ export function StartStageSection({
           <div className="minimal-stage-panel-header">
             <div className="minimal-stage-panel-title">
               <h3>Resume recent work</h3>
-              <p>Pick up where you left off, or refresh the list if a new job finished recently.</p>
+              <p>Choose a recent assignment to reopen, then jump back into editing or sharing.</p>
             </div>
             <div className="minimal-inline">
               <button
@@ -339,43 +364,86 @@ export function StartStageSection({
                 onClick={onResumeSelectedAssignment}
                 disabled={!selectedResumeJobId || resumeLoading}
               >
-                Resume selected assignment
+                {resumeLoading ? 'Opening assignment...' : 'Resume selected assignment'}
               </button>
             </div>
           </div>
-          <label className="minimal-select">
-            Recent assignments
-            <select
-              value={selectedResumeJobId}
-              onChange={(event) => onSelectedResumeJobIdChange(event.target.value)}
-              disabled={resumeJobs.length === 0 || resumeLoading}
-            >
-              {resumeJobs.length === 0 ? <option value="">No saved assignments yet</option> : null}
-              {resumeJobs.map((job) => (
-                <option key={job.jobId} value={job.jobId}>
-                  {formatResumeJobLabel(job)}
-                </option>
-              ))}
-            </select>
-          </label>
+          {resumeJobItems.length > 0 ? (
+            <div className="minimal-resume-list-block">
+              <div className="minimal-list-heading">
+                <span>Recent assignments</span>
+                <span className="minimal-muted">
+                  {resumeJobItems.length === totalResumeJobs
+                    ? `${totalResumeJobs} ${totalResumeJobs === 1 ? 'assignment' : 'assignments'}`
+                    : `${resumeJobItems.length} of ${totalResumeJobs} assignments`}
+                </span>
+              </div>
+              <div
+                className="minimal-resume-list"
+                role="listbox"
+                aria-label="Recent assignments"
+                aria-busy={resumeLoading}
+              >
+                {resumeJobItems.map((job) => (
+                  <button
+                    key={job.jobId}
+                    type="button"
+                    role="option"
+                    aria-selected={job.selected}
+                    className={`minimal-resume-card minimal-resume-card--${job.statusTone}${
+                      job.selected ? ' minimal-resume-card--selected' : ''
+                    }`}
+                    onClick={() => onSelectedResumeJobIdChange(job.jobId)}
+                  >
+                    <span className="minimal-resume-card-leading" aria-hidden="true" />
+                    <span className="minimal-resume-card-main">
+                      <span className="minimal-resume-card-head">
+                        <span className="minimal-resume-card-title">{job.title}</span>
+                        <span
+                          className={`minimal-status-pill minimal-status-pill--${job.statusTone}`}
+                        >
+                          {job.statusLabel}
+                        </span>
+                      </span>
+                      <span className="minimal-resume-card-subtitle">{job.subtitle}</span>
+                      <span className="minimal-resume-card-meta">
+                        <span>{job.timeLabel}</span>
+                        <span>{job.publishLabel}</span>
+                        <span className="minimal-muted">{job.supportLabel}</span>
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+              {canToggleResumeJobs ? (
+                <button
+                  type="button"
+                  className="minimal-text-action"
+                  onClick={onToggleShowAllResumeJobs}
+                >
+                  {showAllResumeJobs ? 'Show fewer assignments' : 'Show more assignments'}
+                </button>
+              ) : null}
+            </div>
+          ) : (
+            <p className="minimal-muted">No saved assignments yet.</p>
+          )}
           {resumeError ? <p className="minimal-error">{resumeError}</p> : null}
-          {selectedResumeJob ? (
-            <p className="minimal-muted">
-              Selected assignment: {selectedResumeJob.jobId} ({selectedResumeJob.state} •{' '}
-              {describeResumeJobStudent(selectedResumeJob)})
-            </p>
-          ) : null}
         </div>
 
-        {currentJobStatus?.jobId ? (
+        {currentJobStatus?.jobId && currentAssignmentCard ? (
           <div className="minimal-pinned-job">
             <div className="minimal-stage-panel-header">
               <div className="minimal-stage-panel-title">
-                <h3>Current assignment</h3>
-                <p>
-                  Keep an eye on the latest shared output and jump back into advanced controls when
-                  needed.
-                </p>
+                <div className="minimal-pinned-job-headline">
+                  <h3>{currentAssignmentCard.title}</h3>
+                  <span
+                    className={`minimal-status-pill minimal-status-pill--${currentAssignmentCard.statusTone}`}
+                  >
+                    {currentAssignmentCard.statusLabel}
+                  </span>
+                </div>
+                <p>{currentAssignmentCard.subtitle}</p>
               </div>
               <button
                 type="button"
@@ -385,9 +453,11 @@ export function StartStageSection({
                 {pinnedJobExpanded ? 'Hide details' : 'Show details'}
               </button>
             </div>
-            <div className="minimal-meta">
-              <span>Job ID: {currentJobStatus.jobId}</span>
-              <span>Status: {currentJobStatus.state}</span>
+            <div className="minimal-pinned-job-meta">
+              {currentAssignmentCard.meta.map((item) => (
+                <span key={item}>{item}</span>
+              ))}
+              <span className="minimal-muted">{currentAssignmentCard.supportLabel}</span>
               {publishUrl ? (
                 <a href={publishUrl} target="_blank" rel="noreferrer">
                   {publishLabel}

@@ -38,11 +38,23 @@ describe('runtime/voice-preferences', () => {
 
   it('resolves accent token to a voice id', async () => {
     ttsMocks.loadVoicesCatalog.mockResolvedValue({
-      voices: [{ id: 'voice-2', name: 'british', labels: { accent: 'british' } }],
+      voices: [{ id: 'voice-2', name: 'Narrator', labels: { accent: 'british' } }],
     });
     const flags = { accentPreference: 'british' };
     await applyVoicePreferences(flags);
     expect(flags).toEqual({ accentPreference: 'british', voiceId: 'voice-2' });
+  });
+
+  it('resolves accent-only preferences from voice labels when the accent is not a voice name', async () => {
+    ttsMocks.loadVoicesCatalog.mockResolvedValue({
+      voices: [
+        { id: 'voice-3', name: 'Narrator', labels: { accent: 'american' } },
+        { id: 'voice-4', name: 'Guide', labels: { accent: 'british' } },
+      ],
+    });
+    const flags = { accentPreference: 'american' };
+    await applyVoicePreferences(flags);
+    expect(flags).toEqual({ accentPreference: 'american', voiceId: 'voice-3' });
   });
 
   it('falls back to empty catalog when voice catalog load fails', async () => {

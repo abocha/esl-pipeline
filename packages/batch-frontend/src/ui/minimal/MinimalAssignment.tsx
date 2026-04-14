@@ -16,13 +16,19 @@ import {
   isTerminalJobState,
 } from './MinimalAssignment.polling';
 import {
+  buildCurrentAssignmentCard,
+  buildResumeJobItems,
+} from './MinimalAssignment.resume-presentation';
+import {
   type HydratedAssignmentSnapshot,
   useMinimalAssignmentResume,
 } from './MinimalAssignment.resume';
 import { useMinimalAssignmentSourceController } from './MinimalAssignment.source';
 import {
   AssignmentStageSection,
+  type CurrentAssignmentCard,
   ContextStageSection,
+  type ResumeJobListItem,
   ReviewStageSection,
   SourceStageSection,
   StartStageSection,
@@ -105,6 +111,10 @@ function describeJobFailureReason(job: Pick<JobStatus, 'publishTarget' | 'error'
   return reason;
 }
 
+function formatShortJobId(jobId: string | null | undefined): string {
+  return jobId ? jobId.slice(0, 8) : '';
+}
+
 function getDefaultPronunciationChunkProviderForMode(
   mode: PronunciationMode | null,
 ): UiPronunciationChunkTtsProvider {
@@ -142,6 +152,7 @@ export const MinimalAssignment: React.FC = () => {
   const [jobStatus, setJobStatusState] = useState<JobStatus | null>(null);
   const [jobOptions, setJobOptions] = useState<JobOptionsResponse | null>(null);
   const [jobOptionsError, setJobOptionsError] = useState<string | null>(null);
+  const [showAllResumeJobs, setShowAllResumeJobs] = useState(false);
 
   const [rerunTargetPronunciationMode, setRerunTargetPronunciationMode] =
     useState<PronunciationMode | null>(null);
@@ -419,39 +430,26 @@ export const MinimalAssignment: React.FC = () => {
     setAuthoringPublishError,
   ]);
 
+  useEffect(() => {
+    if (resume.resumeJobs.length <= 4 && showAllResumeJobs) {
+      setShowAllResumeJobs(false);
+    }
+  }, [resume.resumeJobs.length, showAllResumeJobs]);
+
   const transcriptReady = source.transcriptReady;
   const jobReady = Boolean(jobStatus?.jobId);
-  const selectedResumeJob = useMemo(
-    () => resume.resumeJobs.find((job) => job.jobId === resume.selectedResumeJobId) ?? null,
-    [resume.resumeJobs, resume.selectedResumeJobId],
-  );
   const studentNameById = useMemo(
     () => new Map(source.studentOptions.map((student) => [student.id, student.name])),
     [source.studentOptions],
   );
-  const describeResumeJobStudent = useCallback(
-    (job: JobStatus): string => {
-      const isAudioRerun = Boolean(job.sourceJobId && job.withTts);
-      const baseName = job.studentId
-        ? (studentNameById.get(job.studentId) ?? `Student ${job.studentId.slice(0, 8)}`)
-        : 'No student';
-      if (isAudioRerun) {
-        if (!job.studentId) {
-          return 'Audio regeneration';
-        }
-        return `${baseName} (Audio regeneration)`;
-      }
-      return baseName;
-    },
-    [studentNameById],
-  );
-  const formatResumeJobLabel = useCallback(
-    (job: JobStatus): string =>
-      `${job.jobId.slice(0, 8)} • ${job.state} • ${describeResumeJobStudent(job)} • ${new Date(
-        job.createdAt,
-      ).toLocaleString()}`,
-    [describeResumeJobStudent],
-  );
+  const resumeJobItems = useMemo<ResumeJobListItem[]>(() => {
+    const jobsToRender = showAllResumeJobs ? resume.resumeJobs : resume.resumeJobs.slice(0, 4);
+    return buildResumeJobItems(jobsToRender, resume.selectedResumeJobId, studentNameById);
+  }, [resume.resumeJobs, resume.selectedResumeJobId, showAllResumeJobs, studentNameById]);
+  const canToggleResumeJobs = resume.resumeJobs.length > 4;
+  const currentAssignmentCard = useMemo<CurrentAssignmentCard | null>(() => {
+    return buildCurrentAssignmentCard(jobStatus, studentNameById);
+  }, [jobStatus, studentNameById]);
   const jobPublishTarget = jobStatus?.publishTarget ?? authoring.publishTarget;
   const publishUrl =
     jobPublishTarget === 'anytype'
@@ -518,7 +516,7 @@ export const MinimalAssignment: React.FC = () => {
         id: 'start',
         title: 'Resume or start',
         description: jobReady
-          ? `Working with assignment ${jobStatus?.jobId ?? ''}.`
+          ? `Working with assignment ${formatShortJobId(jobStatus?.jobId)}.`
           : 'Open recent work or begin a new assignment.',
         status: startStatus,
       },
@@ -660,12 +658,14 @@ export const MinimalAssignment: React.FC = () => {
         resumeLoading={resume.resumeLoading}
         selectedResumeJobId={resume.selectedResumeJobId}
         onSelectedResumeJobIdChange={resume.setSelectedResumeJobId}
-        resumeJobs={resume.resumeJobs}
+        resumeJobItems={resumeJobItems}
+        totalResumeJobs={resume.resumeJobs.length}
+        canToggleResumeJobs={canToggleResumeJobs}
+        showAllResumeJobs={showAllResumeJobs}
+        onToggleShowAllResumeJobs={() => setShowAllResumeJobs((current) => !current)}
         resumeError={resume.resumeError}
-        selectedResumeJob={selectedResumeJob}
-        formatResumeJobLabel={formatResumeJobLabel}
-        describeResumeJobStudent={describeResumeJobStudent}
         currentJobStatus={jobStatus}
+        currentAssignmentCard={currentAssignmentCard}
         publishUrl={publishUrl}
         publishLabel={publishLabel}
         publishPending={publishPending}

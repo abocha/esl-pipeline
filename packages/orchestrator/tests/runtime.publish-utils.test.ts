@@ -107,6 +107,13 @@ describe('runtime/publish-utils', () => {
     expect(resolveMarkdownTitle('No heading', 'Fallback', null)).toBe('Fallback');
   });
 
+  it('prefers frontmatter title when requested before falling back to a temp filename', () => {
+    const markdown = ['---', 'title: "Mission Title"', '---', '', 'Body without heading'].join('\n');
+
+    expect(resolveMarkdownTitle(markdown, 'assignment', null, true)).toBe('Mission Title');
+    expect(resolveMarkdownTitle(markdown, 'assignment', null, false)).toBe('assignment');
+  });
+
   it('maps notion preset colors into heading theme hex values', () => {
     const theme = resolveHeadingTheme({ h2: 'blue', h3: 'green' });
     expect(theme).toEqual({ h2: '#2d9cdb', h3: '#27ae60' });

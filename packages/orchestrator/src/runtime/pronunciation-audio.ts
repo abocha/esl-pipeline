@@ -146,6 +146,7 @@ async function synthesizeProviderClip(
     voiceId: result.voiceId,
     tts: {
       provider: result.provider,
+      modelId: result.modelId,
       generatedCharacters: result.generatedCharacters,
       cachedCharacters: result.cachedCharacters,
     },
@@ -169,6 +170,7 @@ async function synthesizeEdgeClip(
   return toPrimaryClip(clip, {
     path: result.path,
     hash: result.hash,
+    voiceId: result.voice,
     tts: {
       provider: 'edge',
       generatedCharacters: result.generatedCharacters,
@@ -257,6 +259,7 @@ async function synthesizeShadowPrimary(
     voiceId: result.voiceId,
     tts: {
       provider: result.provider,
+      modelId: result.modelId,
       generatedCharacters: result.generatedCharacters,
       cachedCharacters: result.cachedCharacters,
     },

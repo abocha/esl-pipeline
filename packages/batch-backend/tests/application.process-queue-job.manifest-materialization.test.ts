@@ -1,6 +1,8 @@
 import fs from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+
+import { manifestPathFor } from '@esl-pipeline/orchestrator';
 import { describe, expect, it, vi } from 'vitest';
 
 import { processQueueJob } from '../src/application/process-queue-job.js';
@@ -225,5 +227,82 @@ describe('application/process-queue-job', () => {
     expect(path.isAbsolute(payload.md)).toBe(true);
 
     await expect(fs.access(payload.md)).rejects.toThrow();
+  });
+
+  it('promotes new-assignment manifests from worker temp paths to the durable job markdown path', async () => {
+    const uploadDir = await fs.mkdtemp(path.join(tmpdir(), 'esl-process-queue-durable-manifest-'));
+    const lessonPath = path.join(uploadDir, 'lesson-from-storage.md');
+    const durableManifestPath = manifestPathFor(lessonPath);
+    const workerTempDir = await fs.mkdtemp(path.join(tmpdir(), 'esl-process-queue-worker-manifest-'));
+    const tempManifestPath = path.join(workerTempDir, 'assignment.manifest.json');
+    await fs.writeFile(lessonPath, '# Lesson from storage', 'utf8');
+    await fs.writeFile(
+      tempManifestPath,
+      JSON.stringify({
+        schemaVersion: 3,
+        mdHash: 'temp-hash',
+        publishTarget: 'html',
+        timestamp: '2026-04-14T00:00:00.000Z',
+      }),
+      'utf8',
+    );
+
+    const prevUploadDir = process.env.FILESYSTEM_UPLOAD_DIR;
+    process.env.FILESYSTEM_UPLOAD_DIR = uploadDir;
+
+    const initial = makeJob({
+      state: 'queued',
+      md: 'lesson-from-storage.md',
+      mdStorageUri: 's3://esl-notion-tts/drafts/lesson-from-storage.md',
+    });
+    getJobByIdSpy.mockResolvedValue(initial);
+
+    const running = makeJob({
+      state: 'running',
+      md: 'lesson-from-storage.md',
+      mdStorageUri: 's3://esl-notion-tts/drafts/lesson-from-storage.md',
+      startedAt: new Date('2024-01-01T10:01:00Z'),
+    });
+    const succeeded = {
+      ...running,
+      state: 'succeeded',
+      manifestPath: durableManifestPath,
+      finishedAt: new Date('2024-01-01T10:02:00Z'),
+      notionUrl: 'https://notion.so/job-durable-manifest',
+      anytypeUrl: null,
+    };
+    updateJobStateAndResultSpy
+      .mockResolvedValueOnce(running as any)
+      .mockResolvedValueOnce(succeeded as any);
+
+    createTranscriptionStorageForUriSpy.mockReturnValue({
+      getText: vi.fn().mockResolvedValue('# Draft from S3'),
+    } as unknown as ReturnType<typeof transcriptionStorage.createTranscriptionStorageForUri>);
+
+    runAssignmentJobSpy.mockResolvedValue({
+      manifestPath: tempManifestPath,
+      notionUrl: 'https://notion.so/job-durable-manifest',
+    });
+
+    try {
+      await processQueueJob({ jobId: 'job-1' });
+
+      expect(updateJobStateAndResultSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          id: 'job-1',
+          nextState: 'succeeded',
+          manifestPath: durableManifestPath,
+        }),
+      );
+      await expect(fs.readFile(durableManifestPath, 'utf8')).resolves.toContain('"mdHash":"temp-hash"');
+    } finally {
+      if (prevUploadDir == null) {
+        delete process.env.FILESYSTEM_UPLOAD_DIR;
+      } else {
+        process.env.FILESYSTEM_UPLOAD_DIR = prevUploadDir;
+      }
+      await fs.rm(uploadDir, { recursive: true, force: true });
+      await fs.rm(workerTempDir, { recursive: true, force: true });
+    }
   });
 });

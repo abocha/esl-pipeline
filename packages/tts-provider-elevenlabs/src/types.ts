@@ -84,6 +84,7 @@ export interface BuildStudyTextResult {
   duration?: number;
   hash: string;
   provider?: string;
+  modelId?: string;
   voices: {
     speaker: string;
     voiceId: string;
@@ -147,6 +148,7 @@ export interface BuildPronunciationShadowSentenceResult {
   duration?: number;
   hash: string;
   provider?: string;
+  modelId?: string;
   voiceId: string;
   generatedCharacters?: number;
   cachedCharacters?: number;
@@ -157,6 +159,7 @@ export interface BuildPronunciationTextResult {
   duration?: number;
   hash: string;
   provider?: string;
+  modelId?: string;
   voiceId: string;
   generatedCharacters?: number;
   cachedCharacters?: number;

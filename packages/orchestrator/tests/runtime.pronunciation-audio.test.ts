@@ -165,6 +165,7 @@ describe('runtime/pronunciation-audio', () => {
       hash: `hash-${String(text).replaceAll(/\s+/g, '-')}`,
       voiceId,
       provider: 'google',
+      modelId: 'studio',
       generatedCharacters: String(text).length,
       cachedCharacters: 0,
     }));
@@ -181,8 +182,10 @@ describe('runtime/pronunciation-audio', () => {
 
     expect(result?.mode).toBe('sentence_stress');
     expect(result?.primaryClip?.voiceId).toBe('voice-primary');
+    expect(result?.primaryClip?.tts?.modelId).toBe('studio');
     expect(result?.itemClips).toHaveLength(1);
     expect(result?.itemClips?.[0]?.voiceId).toBe('voice-primary');
+    expect(result?.itemClips?.[0]?.tts?.modelId).toBe('studio');
     expect(vi.mocked(buildPronunciationTextMp3)).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
@@ -194,5 +197,39 @@ describe('runtime/pronunciation-audio', () => {
         googleTtsModel: 'studio',
       }),
     );
+  });
+
+  it('persists the resolved edge voice on chunk artifacts for future reruns', async () => {
+    vi.mocked(extractPronunciationFocus).mockReturnValue({
+      mode: 'minimal_pair',
+      pairs: [
+        {
+          line: 1,
+          left: { text: 'ship', transcription: '/ʃɪp/', line: 1 },
+          right: { text: 'sheep', transcription: '/ʃiːp/', line: 1 },
+        },
+      ],
+      sectionStartLine: 1,
+      issues: [],
+    });
+    vi.mocked(synthesizeEdgeTtsClip).mockImplementation(async ({ text, voice }) => ({
+      path: `/tmp/${String(text).replaceAll(/\s+/g, '-')}.mp3`,
+      hash: `edge-hash-${String(text).replaceAll(/\s+/g, '-')}`,
+      voice: voice ?? 'en-US-AriaNeural',
+      generatedCharacters: String(text).length,
+      cachedCharacters: 0,
+    }));
+
+    const result = await synthesizePronunciationAudio({
+      context: {} as never,
+      mdPath: '/tmp/example.md',
+      outPath: '/tmp',
+      title: 'Pronunciation',
+      chunkEdgeVoice: 'en-GB-SoniaNeural',
+    });
+
+    expect(result?.itemClips).toHaveLength(2);
+    expect(result?.itemClips?.every((clip) => clip.voiceId === 'en-GB-SoniaNeural')).toBe(true);
+    expect(result?.itemClips?.every((clip) => clip.tts?.provider === 'edge')).toBe(true);
   });
 });
