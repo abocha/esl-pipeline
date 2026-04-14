@@ -182,7 +182,11 @@ describe('application/process-queue-job', () => {
   });
 
   it('defaults pronunciation rerun voice settings to the persisted job voice preferences', async () => {
-    const initial = makeJob({ state: 'queued', voiceId: 'voice_job_default', voiceAccent: 'british' });
+    const initial = makeJob({
+      state: 'queued',
+      voiceId: 'voice_job_default',
+      voiceAccent: 'british',
+    });
     getJobByIdSpy.mockResolvedValue(initial);
 
     const running = makeJob({

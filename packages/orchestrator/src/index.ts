@@ -1470,7 +1470,8 @@ export async function rerunAssignment(
           chunkModelId:
             flags.pronunciationChunkElevenlabsModel ??
             (previousChunkProvider === 'elevenlabs' ? previousChunkModelId : undefined),
-          chunkVoiceId: flags.pronunciationChunkVoiceId ?? previousChunkClip?.voiceId ?? fallbackVoiceId,
+          chunkVoiceId:
+            flags.pronunciationChunkVoiceId ?? previousChunkClip?.voiceId ?? fallbackVoiceId,
           chunkEdgeVoice:
             flags.pronunciationChunkEdgeVoice ??
             (previousChunkProvider === 'edge-tts' ? previousChunkClip?.voiceId : undefined),

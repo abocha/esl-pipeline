@@ -1,9 +1,9 @@
 import fs from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { describe, expect, it, vi } from 'vitest';
 
 import { manifestPathFor } from '@esl-pipeline/orchestrator';
-import { describe, expect, it, vi } from 'vitest';
 
 import { processQueueJob } from '../src/application/process-queue-job.js';
 import * as transcriptionStorage from '../src/infrastructure/transcription-storage.js';
@@ -233,7 +233,9 @@ describe('application/process-queue-job', () => {
     const uploadDir = await fs.mkdtemp(path.join(tmpdir(), 'esl-process-queue-durable-manifest-'));
     const lessonPath = path.join(uploadDir, 'lesson-from-storage.md');
     const durableManifestPath = manifestPathFor(lessonPath);
-    const workerTempDir = await fs.mkdtemp(path.join(tmpdir(), 'esl-process-queue-worker-manifest-'));
+    const workerTempDir = await fs.mkdtemp(
+      path.join(tmpdir(), 'esl-process-queue-worker-manifest-'),
+    );
     const tempManifestPath = path.join(workerTempDir, 'assignment.manifest.json');
     await fs.writeFile(lessonPath, '# Lesson from storage', 'utf8');
     await fs.writeFile(
@@ -294,7 +296,9 @@ describe('application/process-queue-job', () => {
           manifestPath: durableManifestPath,
         }),
       );
-      await expect(fs.readFile(durableManifestPath, 'utf8')).resolves.toContain('"mdHash":"temp-hash"');
+      await expect(fs.readFile(durableManifestPath, 'utf8')).resolves.toContain(
+        '"mdHash":"temp-hash"',
+      );
     } finally {
       if (prevUploadDir == null) {
         delete process.env.FILESYSTEM_UPLOAD_DIR;

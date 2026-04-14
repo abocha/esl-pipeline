@@ -51,6 +51,7 @@ vi.mock('../src/runtime/pronunciation-audio.js', () => ({
 }));
 
 import { uploadFile } from '@esl-pipeline/storage-uploader';
+
 import { synthesizePronunciationAudio } from '../src/runtime/pronunciation-audio.js';
 
 describe('orchestrator observability', () => {

@@ -16,18 +16,18 @@ import {
   isTerminalJobState,
 } from './MinimalAssignment.polling';
 import {
-  buildCurrentAssignmentCard,
-  buildResumeJobItems,
-} from './MinimalAssignment.resume-presentation';
-import {
   type HydratedAssignmentSnapshot,
   useMinimalAssignmentResume,
 } from './MinimalAssignment.resume';
+import {
+  buildCurrentAssignmentCard,
+  buildResumeJobItems,
+} from './MinimalAssignment.resume-presentation';
 import { useMinimalAssignmentSourceController } from './MinimalAssignment.source';
 import {
   AssignmentStageSection,
-  type CurrentAssignmentCard,
   ContextStageSection,
+  type CurrentAssignmentCard,
   type ResumeJobListItem,
   ReviewStageSection,
   SourceStageSection,

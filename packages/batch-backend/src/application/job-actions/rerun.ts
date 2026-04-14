@@ -1,8 +1,8 @@
 import { access, copyFile, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-
-import { manifestPathFor, type AssignmentManifest } from '@esl-pipeline/orchestrator';
 import { z } from 'zod';
+
+import { type AssignmentManifest, manifestPathFor } from '@esl-pipeline/orchestrator';
 
 import type { JobActionResult, RerunAction } from '../../domain/job-actions.js';
 import { JobActionType } from '../../domain/job-actions.js';
@@ -248,7 +248,9 @@ function extractPronunciationAudioPayload(
   }
 }
 
-async function recoverDurableHtmlManifest(job: Awaited<ReturnType<typeof getJobById>>): Promise<void> {
+async function recoverDurableHtmlManifest(
+  job: Awaited<ReturnType<typeof getJobById>>,
+): Promise<void> {
   if (!job?.md || job.publishTarget !== 'html' || !job.htmlUrl) {
     return;
   }
