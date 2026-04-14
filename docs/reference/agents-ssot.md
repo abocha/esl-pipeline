@@ -4,7 +4,7 @@
 
 - Audience: maintainers and AI agents implementing or reviewing repo behavior.
 - Authority Level: authoritative contracts and invariants.
-- Last Verified Against: 2026-03-13 repo state.
+- Last Verified Against: 2026-04-14 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: monthly and after contract-level changes.
 - Status: `reference`.
@@ -54,6 +54,9 @@ For deep system maps, prefer the linked docs rather than growing this file again
 - Do not bypass orchestrator contracts for pipeline behavior changes.
 - Do not silently change stage order or meaning for validate/import/colorize/tts/upload/add-audio/manifest.
 - Manifest behavior is contract-level; changes must be coordinated with tests and docs.
+- Rerun family selection is contract-level:
+  - unchecked study-text / pronunciation families must preserve prior published artifacts and persisted family defaults
+  - checked families must replace the published artifact for that family even when deterministic upload keys or hashes are unchanged
 - `batch-backend` may orchestrate and persist work, but it must not invent alternate pipeline semantics.
 
 ### Contracts and compatibility

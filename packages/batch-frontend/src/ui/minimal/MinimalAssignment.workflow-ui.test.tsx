@@ -2,6 +2,7 @@ import { fireEvent } from '@testing-library/react';
 import { afterEach, beforeEach, describe, it } from 'vitest';
 
 import {
+  testApi as api,
   createMinimalUser,
   testExpect as expect,
   INTEGRATION_TEST_TIMEOUT_MS,
@@ -97,6 +98,15 @@ describe('MinimalAssignment - staged workflow UI', () => {
 
   it('keeps advanced actions tucked away until a shared assignment exists', async () => {
     renderMinimalAssignment();
+
+    await waitFor(() => {
+      expect(api.fetchPromptOptions).toHaveBeenCalledTimes(1);
+      expect(api.fetchJobOptions).toHaveBeenCalledTimes(1);
+      expect(api.fetchStudentOptions).toHaveBeenCalledTimes(1);
+      expect(api.listProfileContents).toHaveBeenCalledTimes(1);
+    });
+    await screen.findByRole('option', { name: 'Alex' });
+    await screen.findByRole('option', { name: /Default Profile/i });
 
     expect(
       screen.getByText(

@@ -5,7 +5,7 @@
 //
 // The worker:
 // - Listens to the configured BullMQ queue.
-// - For each message { jobId }, calls processQueueJob.
+// - For each message, forwards the full queue payload to processQueueJob.
 // - Logs lifecycle events and shuts down gracefully on SIGINT/SIGTERM.
 import { fileURLToPath } from 'node:url';
 
@@ -38,8 +38,7 @@ export async function startWorker(): Promise<void> {
   await runMigrationsIfConfigured();
   await enableRedisJobEventBridge();
   const worker = createJobWorker(async (bullJob) => {
-    const { jobId } = bullJob.data;
-    await processQueueJob({ jobId });
+    await processQueueJob(bullJob.data);
   });
 
   worker.on('error', (err: Error) => {
