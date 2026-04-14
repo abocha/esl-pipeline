@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [6.1.2] - 2026-04-14
+
+### Changed
+
+- Automated release from PR #63: [codex] Harden reruns and polish the batch assignment workspace (https://github.com/abocha/esl-pipeline/pull/63)
+
 ## [6.1.1] - 2026-04-10
 
 ### Changed
