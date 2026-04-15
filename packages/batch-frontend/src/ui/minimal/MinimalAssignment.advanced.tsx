@@ -1,5 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 
+import type { Ref } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { JobOptionsResponse, JobProvenanceResponse, JobStatus } from '../../utils/api';
@@ -497,6 +498,8 @@ export function useAdvancedActionsController({
 
 interface AdvancedActionsStageProps {
   stage: WorkflowStage;
+  sectionRef?: Ref<HTMLElement>;
+  headingRef?: Ref<HTMLHeadingElement>;
   jobReady: boolean;
   jobStatus: JobStatus | null;
   controller: AdvancedActionsController;
@@ -511,6 +514,8 @@ interface AdvancedActionsStageProps {
 
 export function AdvancedActionsStage({
   stage,
+  sectionRef,
+  headingRef,
   jobReady,
   jobStatus,
   controller,
@@ -525,6 +530,8 @@ export function AdvancedActionsStage({
   return (
     <StageSection
       stage={stage}
+      sectionRef={sectionRef}
+      headingRef={headingRef}
       actions={
         jobReady ? (
           <button

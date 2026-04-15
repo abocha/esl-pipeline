@@ -40,6 +40,12 @@ export function registerPublishValidationTests() {
 
       renderMinimalAssignment();
 
+      await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
+      await screen.findByRole('option', { name: 'Alex' });
+      await user.selectOptions(
+        screen.getByRole('combobox', { name: /^Student$/i }),
+        'student-alex',
+      );
       await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
 
       await screen.findByText('Upload failed at gateway');
@@ -360,7 +366,9 @@ export function registerJobActionTests() {
           actions: [],
         } as never);
 
-        fireEvent.click(screen.getByRole('option', { name: /job-b/i }));
+        await user.click(screen.getByRole('button', { name: /Switch to resume/i }));
+        const resumeList = await screen.findByRole('listbox', { name: /Recent assignments/i });
+        fireEvent.click(within(resumeList).getByRole('option', { name: /ID job-b/i }));
         await user.click(screen.getByRole('button', { name: /Resume selected assignment/i }));
 
         await waitFor(() => {

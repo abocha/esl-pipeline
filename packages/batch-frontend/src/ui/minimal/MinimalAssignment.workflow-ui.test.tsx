@@ -38,9 +38,20 @@ describe('MinimalAssignment - staged workflow UI', () => {
         screen.getByRole('heading', { name: /Build and share a lesson assignment/i }),
       ).toBeTruthy();
       expect(screen.getByText(/Current focus: Resume or start/i)).toBeTruthy();
+      expect(screen.queryByRole('listbox', { name: /Recent assignments/i })).toBeNull();
       expect(screen.getByRole('combobox', { name: /Transcript engine/i })).toBeTruthy();
       expect(screen.queryByText(/STT provider/i)).toBeNull();
 
+      await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
+      await waitFor(() => {
+        expect(screen.getByText(/Current focus: Add lesson source/i)).toBeTruthy();
+      });
+      expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalled();
+      await screen.findByRole('option', { name: 'Alex' });
+      await user.selectOptions(
+        screen.getByRole('combobox', { name: /^Student$/i }),
+        'student-alex',
+      );
       await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
       await screen.findByDisplayValue('Student transcript text');
       await waitFor(() => {
@@ -94,6 +105,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
     expect(within(progressList).getByText('Advanced actions')).toBeTruthy();
     expect(within(progressList).getAllByText('Done').length).toBeGreaterThan(0);
     expect(within(progressList).getByText('Available')).toBeTruthy();
+    expect(within(progressList).queryByText('Locked')).toBeNull();
   });
 
   it('keeps advanced actions tucked away until a shared assignment exists', async () => {
@@ -106,7 +118,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
       expect(api.listProfileContents).toHaveBeenCalledTimes(1);
     });
     await screen.findByRole('option', { name: 'Alex' });
-    await screen.findByRole('option', { name: /Default Profile/i });
+    await screen.findByRole('option', { name: /Alex Profile/i });
 
     expect(
       screen.getByText(

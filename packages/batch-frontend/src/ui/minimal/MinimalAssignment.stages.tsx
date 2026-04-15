@@ -17,6 +17,7 @@ import type { MinimalPublishTarget } from './MinimalAssignment.logic';
 
 export type WorkflowStageId = 'start' | 'source' | 'context' | 'assignment' | 'review' | 'advanced';
 export type WorkflowStageStatus = 'current' | 'complete' | 'available' | 'locked';
+export type StartStageMode = 'idle' | 'resume' | 'start';
 
 export interface WorkflowStage {
   id: WorkflowStageId;
@@ -61,12 +62,19 @@ interface WorkflowOverviewProps {
 interface StageSectionProps {
   stage: WorkflowStage;
   actions?: React.ReactNode;
+  sectionRef?: React.Ref<HTMLElement>;
+  headingRef?: React.Ref<HTMLHeadingElement>;
+  guidance?: React.ReactNode;
   children: React.ReactNode;
 }
 
 interface StartStageSectionProps {
   stage: WorkflowStage;
+  sectionRef?: React.Ref<HTMLElement>;
+  headingRef?: React.Ref<HTMLHeadingElement>;
+  mode: StartStageMode;
   onStartNewAssignment: () => void;
+  onShowResumeChoice: () => void;
   onRefreshRecentWork: () => void;
   onResumeSelectedAssignment: () => void;
   resumeLoading: boolean;
@@ -95,6 +103,9 @@ interface StartStageSectionProps {
 
 interface SourceStageSectionProps {
   stage: WorkflowStage;
+  sectionRef?: React.Ref<HTMLElement>;
+  headingRef?: React.Ref<HTMLHeadingElement>;
+  studentSelectRef?: React.Ref<HTMLSelectElement>;
   onRefreshStudents: () => void;
   studentOptions: StudentOption[];
   studentOptionsError: string | null;
@@ -131,6 +142,9 @@ interface SourceStageSectionProps {
 
 interface ContextStageSectionProps {
   stage: WorkflowStage;
+  sectionRef?: React.Ref<HTMLElement>;
+  headingRef?: React.Ref<HTMLHeadingElement>;
+  profileSelectRef?: React.Ref<HTMLSelectElement>;
   onRefreshProfiles: () => void;
   onSaveProfile: () => void;
   profileBusy: 'loading' | 'saving' | 'creating' | 'restoring' | null;
@@ -154,6 +168,9 @@ interface ContextStageSectionProps {
 
 interface AssignmentStageSectionProps {
   stage: WorkflowStage;
+  sectionRef?: React.Ref<HTMLElement>;
+  headingRef?: React.Ref<HTMLHeadingElement>;
+  generateDraftButtonRef?: React.Ref<HTMLButtonElement>;
   transcriptReady: boolean;
   promptLoading: boolean;
   promptReady: boolean;
@@ -196,6 +213,9 @@ interface AssignmentStageSectionProps {
 
 interface ReviewStageSectionProps {
   stage: WorkflowStage;
+  sectionRef?: React.Ref<HTMLElement>;
+  headingRef?: React.Ref<HTMLHeadingElement>;
+  previewButtonRef?: React.Ref<HTMLButtonElement>;
   onPublish: () => void;
   canPublishWithPreview: boolean;
   publishing: boolean;
@@ -285,12 +305,29 @@ export function WorkflowOverview({
   );
 }
 
-export function StageSection({ stage, actions, children }: StageSectionProps) {
+function StageGuidance({ children }: { children: React.ReactNode }) {
   return (
-    <section className={`minimal-section minimal-stage-card is-${stage.status}`}>
+    <div className="minimal-stage-guidance" role="note">
+      {children}
+    </div>
+  );
+}
+
+export function StageSection({
+  stage,
+  actions,
+  sectionRef,
+  headingRef,
+  guidance,
+  children,
+}: StageSectionProps) {
+  return (
+    <section ref={sectionRef} className={`minimal-section minimal-stage-card is-${stage.status}`}>
       <div className="minimal-stage-header">
         <div className="minimal-stage-header-copy">
-          <h2>{stage.title}</h2>
+          <h2 ref={headingRef} tabIndex={-1}>
+            {stage.title}
+          </h2>
           <p>{stage.description}</p>
         </div>
         <div className="minimal-stage-header-actions">
@@ -300,6 +337,7 @@ export function StageSection({ stage, actions, children }: StageSectionProps) {
           {actions}
         </div>
       </div>
+      {guidance ? <StageGuidance>{guidance}</StageGuidance> : null}
       {children}
     </section>
   );
@@ -307,7 +345,11 @@ export function StageSection({ stage, actions, children }: StageSectionProps) {
 
 export function StartStageSection({
   stage,
+  sectionRef,
+  headingRef,
+  mode,
   onStartNewAssignment,
+  onShowResumeChoice,
   onRefreshRecentWork,
   onResumeSelectedAssignment,
   resumeLoading,
@@ -333,101 +375,155 @@ export function StartStageSection({
   cancelEnabled,
   actionBusy,
 }: StartStageSectionProps) {
+  const showResumePanel = mode === 'resume';
+  const showStartedSummary = mode === 'start';
+
   return (
-    <StageSection
-      stage={stage}
-      actions={
-        <button type="button" className="minimal-secondary" onClick={onStartNewAssignment}>
-          Start new assignment
-        </button>
-      }
-    >
+    <StageSection stage={stage} sectionRef={sectionRef} headingRef={headingRef}>
       <div className="minimal-stage-layout">
         <div className="minimal-stage-panel">
-          <div className="minimal-stage-panel-header">
-            <div className="minimal-stage-panel-title">
-              <h3>Resume recent work</h3>
-              <p>Choose a recent assignment to reopen, then jump back into editing or sharing.</p>
-            </div>
-            <div className="minimal-inline">
-              <button
-                type="button"
-                className="minimal-secondary"
-                onClick={onRefreshRecentWork}
-                disabled={resumeLoading}
-              >
-                {resumeLoading ? 'Refreshing...' : 'Refresh recent work'}
-              </button>
-              <button
-                type="button"
-                className="minimal-primary"
-                onClick={onResumeSelectedAssignment}
-                disabled={!selectedResumeJobId || resumeLoading}
-              >
-                {resumeLoading ? 'Opening assignment...' : 'Resume selected assignment'}
-              </button>
-            </div>
+          <div className="minimal-stage-panel-title">
+            <h3>Choose how you want to continue</h3>
+            <p>Pick a lane once, then we will steer you to the next useful step automatically.</p>
           </div>
-          {resumeJobItems.length > 0 ? (
-            <div className="minimal-resume-list-block">
-              <div className="minimal-list-heading">
-                <span>Recent assignments</span>
-                <span className="minimal-muted">
-                  {resumeJobItems.length === totalResumeJobs
-                    ? `${totalResumeJobs} ${totalResumeJobs === 1 ? 'assignment' : 'assignments'}`
-                    : `${resumeJobItems.length} of ${totalResumeJobs} assignments`}
-                </span>
+          <div className="minimal-choice-grid" aria-label="Assignment start options">
+            <button
+              type="button"
+              aria-pressed={showResumePanel}
+              className={`minimal-choice-card${showResumePanel ? ' is-selected' : ''}`}
+              onClick={onShowResumeChoice}
+            >
+              <span className="minimal-choice-eyebrow">Resume</span>
+              <span className="minimal-choice-title">Resume recent work</span>
+              <span className="minimal-choice-copy">
+                Reopen an existing assignment and jump back into editing or sharing.
+              </span>
+            </button>
+            <button
+              type="button"
+              aria-pressed={showStartedSummary}
+              className={`minimal-choice-card${showStartedSummary ? ' is-selected' : ''}`}
+              onClick={onStartNewAssignment}
+            >
+              <span className="minimal-choice-eyebrow">New</span>
+              <span className="minimal-choice-title">Start new assignment</span>
+              <span className="minimal-choice-copy">
+                Begin clean and move straight into student selection and recording upload.
+              </span>
+            </button>
+          </div>
+
+          {showStartedSummary ? (
+            <div className="minimal-start-summary">
+              <div>
+                <strong>New assignment ready.</strong>
+                <p className="minimal-help">
+                  Next up: choose the student and upload the lesson recording in the next section.
+                </p>
               </div>
-              <div
-                className="minimal-resume-list"
-                role="listbox"
-                aria-label="Recent assignments"
-                aria-busy={resumeLoading}
-              >
-                {resumeJobItems.map((job) => (
-                  <button
-                    key={job.jobId}
-                    type="button"
-                    role="option"
-                    aria-selected={job.selected}
-                    className={`minimal-resume-card minimal-resume-card--${job.statusTone}${
-                      job.selected ? ' minimal-resume-card--selected' : ''
-                    }`}
-                    onClick={() => onSelectedResumeJobIdChange(job.jobId)}
-                  >
-                    <span className="minimal-resume-card-leading" aria-hidden="true" />
-                    <span className="minimal-resume-card-main">
-                      <span className="minimal-resume-card-head">
-                        <span className="minimal-resume-card-title">{job.title}</span>
-                        <span
-                          className={`minimal-status-pill minimal-status-pill--${job.statusTone}`}
-                        >
-                          {job.statusLabel}
-                        </span>
-                      </span>
-                      <span className="minimal-resume-card-subtitle">{job.subtitle}</span>
-                      <span className="minimal-resume-card-meta">
-                        <span>{job.timeLabel}</span>
-                        <span>{job.publishLabel}</span>
-                        <span className="minimal-muted">{job.supportLabel}</span>
-                      </span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-              {canToggleResumeJobs ? (
-                <button
-                  type="button"
-                  className="minimal-text-action"
-                  onClick={onToggleShowAllResumeJobs}
-                >
-                  {showAllResumeJobs ? 'Show fewer assignments' : 'Show more assignments'}
-                </button>
-              ) : null}
+              <button type="button" className="minimal-secondary" onClick={onShowResumeChoice}>
+                Switch to resume
+              </button>
             </div>
-          ) : (
-            <p className="minimal-muted">No saved assignments yet.</p>
-          )}
+          ) : null}
+
+          {showResumePanel ? (
+            <div className="minimal-resume-list-block">
+              <div className="minimal-stage-panel-header">
+                <div className="minimal-stage-panel-title">
+                  <h3>Recent assignments</h3>
+                  <p>Choose one assignment to reopen, then continue exactly where you left off.</p>
+                </div>
+                <div className="minimal-inline">
+                  <button
+                    type="button"
+                    className="minimal-secondary"
+                    onClick={onRefreshRecentWork}
+                    disabled={resumeLoading}
+                  >
+                    {resumeLoading ? 'Refreshing...' : 'Refresh recent work'}
+                  </button>
+                  <button
+                    type="button"
+                    className="minimal-primary minimal-guided-button"
+                    onClick={onResumeSelectedAssignment}
+                    disabled={!selectedResumeJobId || resumeLoading}
+                  >
+                    {resumeLoading ? 'Opening assignment...' : 'Resume selected assignment'}
+                  </button>
+                </div>
+              </div>
+              {resumeJobItems.length > 0 ? (
+                <>
+                  <div className="minimal-list-heading">
+                    <span>Recent assignments</span>
+                    <span className="minimal-muted">
+                      {resumeJobItems.length === totalResumeJobs
+                        ? `${totalResumeJobs} ${totalResumeJobs === 1 ? 'assignment' : 'assignments'}`
+                        : `${resumeJobItems.length} of ${totalResumeJobs} assignments`}
+                    </span>
+                  </div>
+                  <div
+                    className="minimal-resume-list"
+                    role="listbox"
+                    aria-label="Recent assignments"
+                    aria-busy={resumeLoading}
+                  >
+                    {resumeJobItems.map((job) => (
+                      <button
+                        key={job.jobId}
+                        type="button"
+                        role="option"
+                        aria-selected={job.selected}
+                        className={`minimal-resume-card minimal-resume-card--${job.statusTone}${
+                          job.selected ? ' minimal-resume-card--selected' : ''
+                        }`}
+                        onClick={() => onSelectedResumeJobIdChange(job.jobId)}
+                      >
+                        <span className="minimal-resume-card-leading" aria-hidden="true" />
+                        <span className="minimal-resume-card-main">
+                          <span className="minimal-resume-card-head">
+                            <span className="minimal-resume-card-title">{job.title}</span>
+                            <span
+                              className={`minimal-status-pill minimal-status-pill--${job.statusTone}`}
+                            >
+                              {job.statusLabel}
+                            </span>
+                          </span>
+                          <span className="minimal-resume-card-subtitle">{job.subtitle}</span>
+                          <span className="minimal-resume-card-meta">
+                            <span>{job.timeLabel}</span>
+                            <span>{job.publishLabel}</span>
+                            <span className="minimal-muted">{job.supportLabel}</span>
+                          </span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                  {canToggleResumeJobs ? (
+                    <button
+                      type="button"
+                      className="minimal-text-action"
+                      onClick={onToggleShowAllResumeJobs}
+                    >
+                      {showAllResumeJobs ? 'Show fewer assignments' : 'Show more assignments'}
+                    </button>
+                  ) : null}
+                </>
+              ) : (
+                <p className="minimal-muted">No saved assignments yet.</p>
+              )}
+              <button type="button" className="minimal-text-action" onClick={onStartNewAssignment}>
+                Start new instead
+              </button>
+            </div>
+          ) : null}
+
+          {mode === 'idle' ? (
+            <p className="minimal-help">
+              Pick one path to unlock the next recommended step in the builder.
+            </p>
+          ) : null}
           {resumeError ? <p className="minimal-error">{resumeError}</p> : null}
         </div>
 
@@ -503,6 +599,9 @@ export function StartStageSection({
 
 export function SourceStageSection({
   stage,
+  sectionRef,
+  headingRef,
+  studentSelectRef,
   onRefreshStudents,
   studentOptions,
   studentOptionsError,
@@ -536,8 +635,26 @@ export function SourceStageSection({
   transcriptSaving,
   onSaveTranscript,
 }: SourceStageSectionProps) {
+  const sourceGuidance =
+    stage.status === 'current'
+      ? !selectedStudentId
+        ? 'Next step: choose the student for this lesson.'
+        : !recording
+          ? 'Next step: upload the lesson recording.'
+          : !transcriptReady && transcriptStatus === 'failed'
+            ? 'Next step: retry the transcript so you can keep moving.'
+            : !transcriptReady
+              ? 'Next step: wait for the transcript, then review it here.'
+              : null
+      : null;
+
   return (
-    <StageSection stage={stage}>
+    <StageSection
+      stage={stage}
+      sectionRef={sectionRef}
+      headingRef={headingRef}
+      guidance={sourceGuidance}
+    >
       <div className="minimal-stage-layout">
         <div className="minimal-stage-panel">
           <div className="minimal-stage-panel-header">
@@ -553,11 +670,18 @@ export function SourceStageSection({
             </button>
           </div>
           <label className="minimal-select">
-            Student (optional)
+            Student
             <select
+              ref={studentSelectRef}
+              className={
+                stage.status === 'current' && !selectedStudentId
+                  ? 'minimal-guided-field'
+                  : undefined
+              }
               value={selectedStudentId}
               onChange={(event) => onSelectedStudentIdChange(event.target.value)}
             >
+              <option value="">Select a student</option>
               {studentOptions.map((student) => (
                 <option key={student.id} value={student.id}>
                   {student.name}
@@ -570,7 +694,9 @@ export function SourceStageSection({
               Selected: {selectedStudent.name}
               {selectedStudent.profileId ? ` (profile: ${selectedStudent.profileId})` : ''}
             </p>
-          ) : null}
+          ) : (
+            <p className="minimal-help">Select a student before uploading a recording.</p>
+          )}
           {studentOptionsError ? <p className="minimal-error">{studentOptionsError}</p> : null}
           <details className="minimal-details">
             <summary>Recording settings</summary>
@@ -589,15 +715,27 @@ export function SourceStageSection({
               </select>
             </label>
           </details>
-          <DropZone
-            title={uploading ? 'Uploading...' : 'Drop audio file'}
-            description="Drag a recording here or click to browse"
-            hint="Single file upload"
-            accept={{ 'audio/*': [...audioExtensions] }}
-            multiple={false}
-            disabled={uploading}
-            onFiles={onFiles}
-          />
+          <div
+            className={
+              stage.status === 'current' && selectedStudentId && !recording
+                ? 'minimal-guided-surface'
+                : undefined
+            }
+          >
+            <DropZone
+              title={uploading ? 'Uploading...' : 'Drop audio file'}
+              description={
+                selectedStudentId
+                  ? 'Drag a recording here or click to browse'
+                  : 'Choose a student first to unlock recording upload'
+              }
+              hint="Single file upload"
+              accept={{ 'audio/*': [...audioExtensions] }}
+              multiple={false}
+              disabled={uploading || !selectedStudentId}
+              onFiles={onFiles}
+            />
+          </div>
           {uploading ? (
             <UploadProgress
               fileName={selectedFileName}
@@ -691,6 +829,9 @@ export function SourceStageSection({
 
 export function ContextStageSection({
   stage,
+  sectionRef,
+  headingRef,
+  profileSelectRef,
   onRefreshProfiles,
   onSaveProfile,
   profileBusy,
@@ -711,8 +852,18 @@ export function ContextStageSection({
   teacherNotes,
   onTeacherNotesChange,
 }: ContextStageSectionProps) {
+  const contextGuidance =
+    stage.status === 'current'
+      ? 'Next step: add any learner profile tweaks or lesson goals here, then generate instructions in the next section.'
+      : null;
+
   return (
-    <StageSection stage={stage}>
+    <StageSection
+      stage={stage}
+      sectionRef={sectionRef}
+      headingRef={headingRef}
+      guidance={contextGuidance}
+    >
       <div className="minimal-stage-layout">
         <div className="minimal-stage-panel">
           <div className="minimal-stage-panel-header">
@@ -745,6 +896,8 @@ export function ContextStageSection({
           <label className="minimal-select">
             Learner profile
             <select
+              ref={profileSelectRef}
+              className={stage.status === 'current' ? 'minimal-guided-field' : undefined}
               value={selectedProfileId}
               onChange={(event) => onSelectedProfileIdChange(event.target.value)}
             >
@@ -840,6 +993,9 @@ export function ContextStageSection({
 
 export function AssignmentStageSection({
   stage,
+  sectionRef,
+  headingRef,
+  generateDraftButtonRef,
   transcriptReady,
   promptLoading,
   promptReady,
@@ -879,8 +1035,21 @@ export function AssignmentStageSection({
   validationError,
   draftError,
 }: AssignmentStageSectionProps) {
+  const instructionsReadyToGenerate = transcriptReady && !promptReady;
+  const assignmentGuidance =
+    stage.status === 'current'
+      ? 'Next step: generate the assignment content or paste your own version, then save the draft.'
+      : stage.status === 'available' && instructionsReadyToGenerate
+        ? 'Ready when you are: generate instructions here after you finish reviewing the teaching context.'
+        : null;
+
   return (
-    <StageSection stage={stage}>
+    <StageSection
+      stage={stage}
+      sectionRef={sectionRef}
+      headingRef={headingRef}
+      guidance={assignmentGuidance}
+    >
       <div className="minimal-stage-layout">
         <div className="minimal-stage-panel">
           <div className="minimal-stage-panel-header">
@@ -894,7 +1063,9 @@ export function AssignmentStageSection({
             <div className="minimal-inline">
               <button
                 type="button"
-                className="minimal-primary"
+                className={`minimal-primary${
+                  instructionsReadyToGenerate ? ' minimal-guided-button' : ''
+                }`}
                 onClick={onGeneratePrompt}
                 disabled={!transcriptReady || promptLoading || !promptOptionsReady}
               >
@@ -1017,8 +1188,13 @@ export function AssignmentStageSection({
                   </select>
                 </label>
                 <button
+                  ref={generateDraftButtonRef}
                   type="button"
-                  className="minimal-secondary"
+                  className={`minimal-secondary${
+                    stage.status === 'current'
+                      ? ' minimal-guided-button minimal-guided-button--secondary'
+                      : ''
+                  }`}
                   onClick={onGenerateDraft}
                   disabled={
                     !promptReady ||
@@ -1178,6 +1354,9 @@ export function AssignmentStageSection({
 
 export function ReviewStageSection({
   stage,
+  sectionRef,
+  headingRef,
+  previewButtonRef,
   onPublish,
   canPublishWithPreview,
   publishing,
@@ -1212,13 +1391,27 @@ export function ReviewStageSection({
   publishLabel,
   publishPending,
 }: ReviewStageSectionProps) {
+  const reviewGuidance =
+    stage.status === 'current'
+      ? previewReadyForCurrentDraft
+        ? 'Next step: share the assignment when you are happy with the preview.'
+        : 'Next step: preview the current draft, then share the assignment.'
+      : null;
+
   return (
     <StageSection
       stage={stage}
+      sectionRef={sectionRef}
+      headingRef={headingRef}
+      guidance={reviewGuidance}
       actions={
         <button
           type="button"
-          className="minimal-primary"
+          className={`minimal-primary${
+            stage.status === 'current' && previewReadyForCurrentDraft
+              ? ' minimal-guided-button'
+              : ''
+          }`}
           onClick={onPublish}
           disabled={!canPublishWithPreview}
         >
@@ -1237,8 +1430,13 @@ export function ReviewStageSection({
             </div>
             <div className="minimal-inline">
               <button
+                ref={previewButtonRef}
                 type="button"
-                className="minimal-secondary"
+                className={`minimal-secondary${
+                  stage.status === 'current' && !previewReadyForCurrentDraft
+                    ? ' minimal-guided-button minimal-guided-button--secondary'
+                    : ''
+                }`}
                 onClick={onPreviewDraft}
                 disabled={previewing || !draftHasContent}
               >

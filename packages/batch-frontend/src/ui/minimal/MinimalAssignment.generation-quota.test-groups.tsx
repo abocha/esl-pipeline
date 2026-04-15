@@ -226,7 +226,13 @@ export function registerGenerationThrottleTests() {
           });
 
           await waitFor(() => {
-            expect((generateDraftButton as HTMLButtonElement).disabled).toBe(false);
+            expect(
+              (
+                screen.getByRole('button', {
+                  name: /Generate assignment content/i,
+                }) as HTMLButtonElement
+              ).disabled,
+            ).toBe(false);
           });
           expect(screen.queryByText(/Per-minute request budget exhausted/i)).toBeNull();
         } finally {

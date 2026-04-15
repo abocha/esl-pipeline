@@ -130,19 +130,8 @@ function toTitleCaseLabel(value: string): string {
     .join(' ');
 }
 
-function isDefaultStudentName(name: string): boolean {
-  return name.trim().toLowerCase() === 'default';
-}
-
 function sortStudentsForPicker(items: StudentProfile[]): StudentProfile[] {
   return [...items].sort((left, right) => {
-    const leftIsDefault = isDefaultStudentName(left.student);
-    const rightIsDefault = isDefaultStudentName(right.student);
-
-    if (leftIsDefault !== rightIsDefault) {
-      return leftIsDefault ? -1 : 1;
-    }
-
     const byName = left.student.localeCompare(right.student, undefined, { sensitivity: 'base' });
     if (byName !== 0) return byName;
 
@@ -366,7 +355,7 @@ export const StudentWorkspace: React.FC = () => {
       setStudents(items);
       setSelectedStudentId((current) => {
         if (current && items.some((item) => item.id === current)) return current;
-        return items.find((item) => isDefaultStudentName(item.student))?.id ?? items[0]?.id ?? '';
+        return items[0]?.id ?? '';
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to load students.';
