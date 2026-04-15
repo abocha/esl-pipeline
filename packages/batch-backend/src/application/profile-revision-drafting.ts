@@ -110,6 +110,7 @@ export interface GenerateProfileRevisionDraftResult {
   model: string;
   providerRequestId?: string;
   usage?: ProviderExecutionResult['usage'];
+  finishReason?: string;
 }
 
 export async function generateProfileRevisionDraft(args: {
@@ -256,10 +257,29 @@ export async function generateProfileRevisionDraft(args: {
     provider: execution.candidate.provider,
     model: execution.candidate.model,
     ...(execution.result.usage ? { usage: execution.result.usage } : {}),
+    ...(execution.result.finishReason ? { finishReason: execution.result.finishReason } : {}),
     ...(execution.result.providerRequestId
       ? { providerRequestId: execution.result.providerRequestId }
       : {}),
   };
+}
+
+export function isCompleteTextGenerationFinishReason(finishReason?: string | null): boolean {
+  if (typeof finishReason !== 'string') {
+    return true;
+  }
+
+  const normalized = finishReason.trim().toLowerCase();
+  if (!normalized) {
+    return true;
+  }
+
+  return (
+    normalized === 'stop' ||
+    normalized === 'completed' ||
+    normalized === 'complete' ||
+    normalized === 'end_turn'
+  );
 }
 
 function retryMaxForProvider(

@@ -41,6 +41,11 @@ function makeCandidate(
 
 describe('application/profile-candidate-promotion', () => {
   it('creates a draft revision from an explicit approved candidate subset', async () => {
+    const generate = vi.fn(async () => ({
+      text: '# Draft profile',
+      provider: 'google_ai_studio' as const,
+      model: 'gemini-3-flash-preview',
+    }));
     const saveRevision = vi.fn(async () => ({
       id: 'revision-draft-1',
       profileId: 'profiles/students/tolik.md',
@@ -112,11 +117,7 @@ describe('application/profile-candidate-promotion', () => {
           linkToDraft: async () => {},
         },
         drafting: {
-          generate: async () => ({
-            text: '# Draft profile',
-            provider: 'google_ai_studio',
-            model: 'gemini-3-flash-preview',
-          }),
+          generate,
         },
         profileContent: {
           saveRevision,
@@ -134,6 +135,14 @@ describe('application/profile-candidate-promotion', () => {
         source: 'candidate_promotion',
         status: 'draft',
         createdBy: 'teacher-1',
+      }),
+    );
+    expect(generate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        request: expect.objectContaining({
+          operation: 'candidate_promotion',
+          maxOutputTokens: loadConfig().generation.maxOutputTokensHard,
+        }),
       }),
     );
   });
@@ -213,5 +222,142 @@ describe('application/profile-candidate-promotion', () => {
     ).rejects.toMatchObject({
       code: 'profile_candidate_not_approved',
     });
+  });
+
+  it('rejects incomplete promotion drafts when the provider reports a non-complete finish reason', async () => {
+    await expect(
+      promoteStudentProfileCandidates({
+        request: {
+          studentId: 'tolik',
+          reviewerId: 'teacher-1',
+          candidateIds: ['candidate-1'],
+        },
+        overrides: {
+          config: loadConfig(),
+          students: {
+            getById: async () => ({
+              id: 'tolik',
+              student: 'Tolik',
+              profileId: 'profiles/students/tolik.md',
+              voices: {},
+            }),
+          },
+          profiles: {
+            getById: async () => ({
+              id: 'profiles/students/tolik.md',
+              label: 'Tolik',
+              activeRevisionId: 'revision-active-1',
+              createdAt: new Date('2026-01-01T00:00:00.000Z'),
+              updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+            }),
+          },
+          revisions: {
+            getActive: async () => ({
+              id: 'revision-active-1',
+              profileId: 'profiles/students/tolik.md',
+              content: '# Existing profile\n\nLong enough to matter.',
+              contentHash: 'hash-1',
+              source: 'starter_profile_form',
+              status: 'active',
+              versionNumber: 1,
+              versionLabel: 'v1',
+              activatedAt: new Date('2026-01-01T00:00:00.000Z'),
+              deprecatedAt: null,
+              createdAt: new Date('2026-01-01T00:00:00.000Z'),
+              createdBy: 'teacher-1',
+              restoredFromRevisionId: null,
+            }),
+            getById: async () => null,
+          },
+          candidates: {
+            listByIds: async () => [makeCandidate({ id: 'candidate-1' })],
+            linkToDraft: async () => {},
+          },
+          drafting: {
+            generate: async () => ({
+              text: '# Draft profile',
+              provider: 'google_ai_studio',
+              model: 'gemini-3-flash-preview',
+              finishReason: 'MAX_TOKENS',
+            }),
+          },
+          profileContent: {
+            saveRevision: vi.fn(),
+          },
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: 'profile_candidate_draft_incomplete',
+    });
+  });
+
+  it('rejects suspiciously short promotion drafts even when finish metadata is missing', async () => {
+    const saveRevision = vi.fn();
+
+    await expect(
+      promoteStudentProfileCandidates({
+        request: {
+          studentId: 'tolik',
+          reviewerId: 'teacher-1',
+          candidateIds: ['candidate-1'],
+        },
+        overrides: {
+          config: loadConfig(),
+          students: {
+            getById: async () => ({
+              id: 'tolik',
+              student: 'Tolik',
+              profileId: 'profiles/students/tolik.md',
+              voices: {},
+            }),
+          },
+          profiles: {
+            getById: async () => ({
+              id: 'profiles/students/tolik.md',
+              label: 'Tolik',
+              activeRevisionId: 'revision-active-1',
+              createdAt: new Date('2026-01-01T00:00:00.000Z'),
+              updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+            }),
+          },
+          revisions: {
+            getActive: async () => ({
+              id: 'revision-active-1',
+              profileId: 'profiles/students/tolik.md',
+              content: '# Existing profile\n\n' + 'A'.repeat(2_000),
+              contentHash: 'hash-1',
+              source: 'starter_profile_form',
+              status: 'active',
+              versionNumber: 1,
+              versionLabel: 'v1',
+              activatedAt: new Date('2026-01-01T00:00:00.000Z'),
+              deprecatedAt: null,
+              createdAt: new Date('2026-01-01T00:00:00.000Z'),
+              createdBy: 'teacher-1',
+              restoredFromRevisionId: null,
+            }),
+            getById: async () => null,
+          },
+          candidates: {
+            listByIds: async () => [makeCandidate({ id: 'candidate-1' })],
+            linkToDraft: async () => {},
+          },
+          drafting: {
+            generate: async () => ({
+              text: '# Draft profile\n\nToo short',
+              provider: 'google_ai_studio',
+              model: 'gemini-3-flash-preview',
+            }),
+          },
+          profileContent: {
+            saveRevision,
+          },
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: 'profile_candidate_draft_truncated',
+    });
+
+    expect(saveRevision).not.toHaveBeenCalled();
   });
 });

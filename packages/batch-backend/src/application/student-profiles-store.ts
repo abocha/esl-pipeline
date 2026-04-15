@@ -95,14 +95,10 @@ export class StudentProfileStoreError extends Error {
   }
 }
 
-const DEFAULT_STUDENT_NAME = 'Default';
-const DEFAULT_COLOR_PRESET = 'b1-default';
 const MAX_PAGE_LIMIT = 500;
 const PROFILE_EXTENSIONS = new Set(['.md', '.txt']);
 
-interface StudentProfileEntry extends StudentProfileData {
-  isSynthetic?: boolean;
-}
+interface StudentProfileEntry extends StudentProfileData {}
 
 function getDependencies(overrides?: StudentStoreOverrides): StudentStoreDependencies {
   return {
@@ -195,28 +191,6 @@ function sanitizeProfileInput(input: Partial<StudentProfileInput>): Partial<Stud
     sanitized.starterProfile = input.starterProfile ?? null;
   }
   return sanitized;
-}
-
-function buildDefaultProfileEntry(): StudentProfileEntry {
-  return {
-    id: deriveStudentId(DEFAULT_STUDENT_NAME),
-    student: DEFAULT_STUDENT_NAME,
-    dbId: null,
-    pageParentId: null,
-    colorPreset: DEFAULT_COLOR_PRESET,
-    accentPreference: null,
-    manifestPreset: null,
-    profileId: null,
-    voices: {},
-    isSynthetic: true,
-  };
-}
-
-function ensureDefaultProfileEntry(entries: StudentProfileEntry[]): StudentProfileEntry[] {
-  if (entries.some((entry) => entry.id === deriveStudentId(DEFAULT_STUDENT_NAME))) {
-    return entries;
-  }
-  return [...entries, buildDefaultProfileEntry()];
 }
 
 function toStudentProfileData(entry: StudentProfileEntry): StudentProfileData {
@@ -498,9 +472,7 @@ export async function listStudentProfiles(
     order: 'asc',
   });
 
-  const entries = ensureDefaultProfileEntry(
-    dbResult.items.map((item) => mapStudentRecordToEntry(item)),
-  );
+  const entries = dbResult.items.map((item) => mapStudentRecordToEntry(item));
   return applyListFilters(entries, params);
 }
 
@@ -517,10 +489,6 @@ export async function getStudentProfileById(
   const record = await dependencies.students.getById(id);
   if (record) {
     return toStudentProfileData(mapStudentRecordToEntry(record));
-  }
-
-  if (id === deriveStudentId(DEFAULT_STUDENT_NAME)) {
-    return toStudentProfileData(buildDefaultProfileEntry());
   }
 
   return null;

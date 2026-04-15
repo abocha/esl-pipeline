@@ -143,8 +143,9 @@ export function registerResumeBasicTests() {
           makeJobStatus({
             jobId: 'job-ready-4',
             studentId: 'student-default',
-            state: 'queued',
-            finishedAt: null,
+            state: 'failed',
+            finishedAt: now,
+            error: 'publish failed',
           }),
           makeJobStatus({
             jobId: 'job-ready-5',
@@ -160,12 +161,14 @@ export function registerResumeBasicTests() {
 
       renderMinimalAssignment();
 
+      expect(screen.queryByRole('listbox', { name: /Recent assignments/i })).toBeNull();
+      await user.click(screen.getByRole('button', { name: /Resume recent work/i }));
       const resumeList = await screen.findByRole('listbox', { name: /Recent assignments/i });
       expect(within(resumeList).getAllByRole('option')).toHaveLength(4);
       expect(
         within(resumeList).getByRole('option', { name: /Alex \(Audio refresh\)/i }),
       ).toBeTruthy();
-      expect(screen.getByText(/Needs attention/i)).toBeTruthy();
+      expect(screen.getAllByText(/Needs attention/i).length).toBeGreaterThan(0);
       expect(screen.getByText(/ID job-reru/i)).toBeTruthy();
       expect(screen.queryByText(/gateway timeout/i)).toBeNull();
 
@@ -225,6 +228,7 @@ export function registerResumeBasicTests() {
         expect(api.listUserJobs).toHaveBeenCalledTimes(1);
       });
 
+      await user.click(screen.getByRole('button', { name: /Resume recent work/i }));
       await user.click(screen.getByRole('button', { name: /Refresh recent work/i }));
 
       await waitFor(() => {
@@ -369,10 +373,7 @@ export function registerResumeBasicTests() {
         expect(api.fetchJobProvenance).toHaveBeenCalledTimes(1);
       });
       expect(api.fetchJobProvenance).toHaveBeenCalledWith('job-resume');
-
-      const resumeList = screen.getByRole('listbox', { name: /Recent assignments/i });
-      expect(within(resumeList).getByRole('option', { name: /Alex/i })).toBeTruthy();
-      expect(within(resumeList).queryByText(/No saved assignments yet/i)).toBeNull();
+      expect(screen.queryByRole('listbox', { name: /Recent assignments/i })).toBeNull();
 
       expect(await screen.findByDisplayValue('Recovered transcript')).toBeTruthy();
       expect(await screen.findByDisplayValue('Recovered prompt')).toBeTruthy();
