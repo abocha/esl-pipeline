@@ -210,7 +210,7 @@ function createInMemoryDeps(initial: StudentRecord[] = []) {
 }
 
 describe('student-profiles-store', () => {
-  it('lists DB-backed student profiles and injects the default profile', async () => {
+  it('lists only DB-backed student profiles', async () => {
     const deps = createInMemoryDeps([
       makeRecord({ id: deriveStudentId('Anna'), student: 'Anna', dbId: 'db-1' }),
     ]);
@@ -219,7 +219,7 @@ describe('student-profiles-store', () => {
 
     const ids = result.items.map((item) => item.id);
     expect(ids).toContain(deriveStudentId('Anna'));
-    expect(ids).toContain(deriveStudentId('Default'));
+    expect(ids).not.toContain(deriveStudentId('Default'));
   });
 
   it('creates, updates, gets, and deletes a DB-backed student profile', async () => {

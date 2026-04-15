@@ -103,6 +103,7 @@ vi.mock('../shared/UploadProgress', () => ({
 const now = '2026-02-05T00:00:00.000Z';
 const UI_WAIT_TIMEOUT_MS = 3_000;
 const INTEGRATION_TEST_TIMEOUT_MS = 15_000;
+const scrollIntoViewMock = vi.fn();
 configure({ asyncUtilTimeout: UI_WAIT_TIMEOUT_MS });
 
 export function makeJobStatus(overrides: Partial<api.JobStatus> = {}): api.JobStatus {
@@ -208,6 +209,11 @@ export async function previewCurrentDraft(_user: ReturnType<typeof userEvent.set
 }
 
 export async function preparePromptReady(_user: ReturnType<typeof userEvent.setup>) {
+  fireEvent.click(screen.getByRole('button', { name: /Start new assignment/i }));
+  await screen.findByRole('option', { name: 'Alex' }, { timeout: UI_WAIT_TIMEOUT_MS });
+  fireEvent.change(screen.getByRole('combobox', { name: /^Student$/i }), {
+    target: { value: 'student-alex' },
+  });
   fireEvent.click(screen.getByRole('button', { name: /Drop audio file/i }));
   await screen.findByDisplayValue('Student transcript text', {}, { timeout: UI_WAIT_TIMEOUT_MS });
 
@@ -456,8 +462,13 @@ export async function renderPublishedAssignment(
 
 export function setupMinimalAssignmentTest() {
   vi.useRealTimers();
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   globalThis.history.replaceState(null, '', '/');
+  scrollIntoViewMock.mockReset();
+  Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+    configurable: true,
+    value: scrollIntoViewMock,
+  });
 
   vi.mocked(api.fetchPromptOptions).mockResolvedValue({
     templates: [{ id: 'tpl-default', label: 'Default Template' }],
@@ -538,8 +549,8 @@ export function setupMinimalAssignmentTest() {
   });
   vi.mocked(api.fetchStudentOptions).mockResolvedValue({
     students: [
-      { id: 'student-default', name: 'Default', profileId: 'profile-default.md' },
       { id: 'student-alex', name: 'Alex', profileId: 'profiles/alex.md' },
+      { id: 'student-bella', name: 'Bella', profileId: 'profiles/bella.md' },
     ],
   });
   vi.mocked(api.listUserJobs).mockResolvedValue({
@@ -549,11 +560,14 @@ export function setupMinimalAssignmentTest() {
     offset: 0,
   });
   vi.mocked(api.listProfileContents).mockResolvedValue({
-    profiles: [{ id: 'profile-default.md', label: 'Default Profile' }],
+    profiles: [
+      { id: 'profiles/alex.md', label: 'Alex Profile' },
+      { id: 'profiles/bella.md', label: 'Bella Profile' },
+    ],
   });
   vi.mocked(api.getProfileContent).mockResolvedValue({
-    id: 'profile-default.md',
-    label: 'Default Profile',
+    id: 'profiles/alex.md',
+    label: 'Alex Profile',
     content: 'PROFILE CONTENT',
     currentRevisionId: 'revision-1',
     updatedAt: now,
@@ -562,7 +576,7 @@ export function setupMinimalAssignmentTest() {
     items: [
       {
         id: 'revision-1',
-        profileId: 'profile-default.md',
+        profileId: 'profiles/alex.md',
         contentHash: 'hash-1',
         source: 'create',
         createdAt: now,
@@ -576,15 +590,15 @@ export function setupMinimalAssignmentTest() {
     order: 'desc',
   });
   vi.mocked(api.upsertProfileContent).mockResolvedValue({
-    id: 'profile-default.md',
-    label: 'Default Profile',
+    id: 'profiles/alex.md',
+    label: 'Alex Profile',
     content: 'PROFILE CONTENT',
     currentRevisionId: 'revision-1',
     updatedAt: now,
   });
   vi.mocked(api.restoreProfileRevision).mockResolvedValue({
-    id: 'profile-default.md',
-    label: 'Default Profile',
+    id: 'profiles/alex.md',
+    label: 'Alex Profile',
     content: 'PROFILE CONTENT',
     currentRevisionId: 'revision-1',
     updatedAt: now,

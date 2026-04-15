@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type {
   JobOptionsResponse,
@@ -31,9 +31,11 @@ import {
   type ResumeJobListItem,
   ReviewStageSection,
   SourceStageSection,
+  type StartStageMode,
   StartStageSection,
   WorkflowOverview,
   type WorkflowStage,
+  type WorkflowStageId,
   type WorkflowStageStatus,
   type WorkflowSummaryItem,
 } from './MinimalAssignment.stages';
@@ -153,9 +155,29 @@ export const MinimalAssignment: React.FC = () => {
   const [jobOptions, setJobOptions] = useState<JobOptionsResponse | null>(null);
   const [jobOptionsError, setJobOptionsError] = useState<string | null>(null);
   const [showAllResumeJobs, setShowAllResumeJobs] = useState(false);
+  const [startStageMode, setStartStageMode] = useState<StartStageMode>('idle');
 
   const [rerunTargetPronunciationMode, setRerunTargetPronunciationMode] =
     useState<PronunciationMode | null>(null);
+
+  const startSectionRef = useRef<HTMLElement | null>(null);
+  const startHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  const sourceSectionRef = useRef<HTMLElement | null>(null);
+  const sourceHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  const sourceStudentSelectRef = useRef<HTMLSelectElement | null>(null);
+  const contextSectionRef = useRef<HTMLElement | null>(null);
+  const contextHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  const contextProfileSelectRef = useRef<HTMLSelectElement | null>(null);
+  const assignmentSectionRef = useRef<HTMLElement | null>(null);
+  const assignmentHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  const assignmentGenerateDraftButtonRef = useRef<HTMLButtonElement | null>(null);
+  const reviewSectionRef = useRef<HTMLElement | null>(null);
+  const reviewHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  const reviewPreviewButtonRef = useRef<HTMLButtonElement | null>(null);
+  const advancedSectionRef = useRef<HTMLElement | null>(null);
+  const advancedHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  const guidedStageIdsRef = useRef<Set<WorkflowStageId>>(new Set());
+  const hasInitializedGuidedFlowRef = useRef(false);
 
   const generationOptions = jobOptions?.generation ?? null;
   const ttsProviders = useMemo<UiTtsProvider[]>(() => {
@@ -294,6 +316,13 @@ export const MinimalAssignment: React.FC = () => {
     resetJobShell();
   }, [invalidateAuthoringGeneration, resetAuthoring, resetJobShell, resetSourceFlow]);
 
+  const handleStartNewAssignment = useCallback(() => {
+    guidedStageIdsRef.current.clear();
+    setShowAllResumeJobs(false);
+    resetFlow();
+    setStartStageMode('start');
+  }, [resetFlow]);
+
   const loadPromptOptions = useCallback(async () => {
     try {
       const response = await fetchPromptOptions();
@@ -379,6 +408,10 @@ export const MinimalAssignment: React.FC = () => {
   const resumeSetPinnedJobExpanded = resume.setPinnedJobExpanded;
   const resumeSetSelectedResumeJobId = resume.setSelectedResumeJobId;
 
+  const handleShowResumeChoice = useCallback(() => {
+    setStartStageMode('resume');
+  }, []);
+
   useEffect(() => {
     void loadPromptOptions();
     void loadJobOptions();
@@ -438,6 +471,15 @@ export const MinimalAssignment: React.FC = () => {
 
   const transcriptReady = source.transcriptReady;
   const jobReady = Boolean(jobStatus?.jobId);
+  const hasAssignmentContent = authoring.draftText.trim().length > 0;
+  const hasStartedFlow =
+    startStageMode === 'start' ||
+    source.selectedStudentId.trim().length > 0 ||
+    source.recording !== null ||
+    transcriptReady ||
+    authoring.promptReady ||
+    hasAssignmentContent ||
+    jobReady;
   const studentNameById = useMemo(
     () => new Map(source.studentOptions.map((student) => [student.id, student.name])),
     [source.studentOptions],
@@ -469,7 +511,6 @@ export const MinimalAssignment: React.FC = () => {
       : jobPublishTarget === 'html'
         ? 'HTML link pending...'
         : 'Notion link pending...';
-  const hasAssignmentContent = authoring.draftText.trim().length > 0;
   const hasTeachingContext = Boolean(
     context.selectedProfileId || teacherNotes.trim() || authoring.promptReady,
   );
@@ -477,29 +518,30 @@ export const MinimalAssignment: React.FC = () => {
     hasAssignmentContent &&
     (!authoring.draftPreviewGate.previewRequired || authoring.previewReadyForCurrentDraft);
 
+  useEffect(() => {
+    if (!hasStartedFlow || startStageMode !== 'idle') return;
+    setStartStageMode('start');
+  }, [hasStartedFlow, startStageMode]);
+
   const workflowStages = useMemo<WorkflowStage[]>(() => {
-    const startStatus: WorkflowStageStatus =
-      source.recording !== null ||
-      authoring.promptReady ||
-      hasAssignmentContent ||
-      Boolean(jobReady)
+    const startStatus: WorkflowStageStatus = hasStartedFlow ? 'complete' : 'current';
+    const sourceStatus: WorkflowStageStatus = !hasStartedFlow
+      ? 'locked'
+      : transcriptReady
         ? 'complete'
         : 'current';
-    const sourceStatus: WorkflowStageStatus = transcriptReady
-      ? 'complete'
-      : source.recording
-        ? 'current'
-        : 'locked';
-    const contextStatus: WorkflowStageStatus = authoring.promptReady
-      ? 'complete'
-      : transcriptReady
-        ? 'current'
-        : 'locked';
-    const assignmentStatus: WorkflowStageStatus = hasAssignmentContent
-      ? 'complete'
+    const contextStatus: WorkflowStageStatus = !transcriptReady
+      ? 'locked'
       : authoring.promptReady
-        ? 'current'
-        : 'locked';
+        ? 'complete'
+        : 'current';
+    const assignmentStatus: WorkflowStageStatus = !transcriptReady
+      ? 'locked'
+      : hasAssignmentContent
+        ? 'complete'
+        : authoring.promptReady
+          ? 'current'
+          : 'available';
     const reviewStatus: WorkflowStageStatus = jobReady
       ? 'complete'
       : hasAssignmentContent
@@ -517,7 +559,11 @@ export const MinimalAssignment: React.FC = () => {
         title: 'Resume or start',
         description: jobReady
           ? `Working with assignment ${formatShortJobId(jobStatus?.jobId)}.`
-          : 'Open recent work or begin a new assignment.',
+          : startStageMode === 'resume'
+            ? 'Choose a recent assignment to reopen.'
+            : hasStartedFlow
+              ? 'Fresh assignment flow is active.'
+              : 'Open recent work or begin a new assignment.',
         status: startStatus,
       },
       {
@@ -538,7 +584,7 @@ export const MinimalAssignment: React.FC = () => {
           : transcriptReady
             ? hasTeachingContext
               ? 'Context is ready. Generate instructions when you are happy with it.'
-              : 'Choose a learner profile and add lesson guidance.'
+              : 'Choose a learner profile or add lesson guidance for this lesson.'
             : 'Unlocks after the transcript is ready.',
         status: contextStatus,
       },
@@ -549,7 +595,9 @@ export const MinimalAssignment: React.FC = () => {
           ? 'Assignment content is ready to review.'
           : authoring.promptReady
             ? 'Generate or edit the assignment content.'
-            : 'Unlocks after instructions are ready.',
+            : transcriptReady
+              ? 'Generate instructions after you finish reviewing teaching context.'
+              : 'Unlocks after the transcript is ready.',
         status: assignmentStatus,
       },
       {
@@ -576,21 +624,79 @@ export const MinimalAssignment: React.FC = () => {
   }, [
     authoring.promptReady,
     hasAssignmentContent,
+    hasStartedFlow,
     jobReady,
     jobStatus?.jobId,
     jobStatus?.state,
     hasTeachingContext,
     source.recording,
+    startStageMode,
     reviewReady,
     advancedActions.showAdvancedActions,
     transcriptReady,
   ]);
+
+  const actionableStageId =
+    workflowStages.find((stage) => stage.status === 'current')?.id ??
+    workflowStages.find((stage) => stage.status === 'available')?.id ??
+    null;
 
   const currentStageTitle =
     workflowStages.find((stage) => stage.status === 'current')?.title ??
     workflowStages.find((stage) => stage.status === 'available')?.title ??
     workflowStages[workflowStages.length - 1]?.title ??
     'Assignment builder';
+
+  useEffect(() => {
+    if (!actionableStageId) return;
+    if (!hasInitializedGuidedFlowRef.current) {
+      hasInitializedGuidedFlowRef.current = true;
+      guidedStageIdsRef.current.add(actionableStageId);
+      return;
+    }
+    if (guidedStageIdsRef.current.has(actionableStageId)) {
+      return;
+    }
+
+    guidedStageIdsRef.current.add(actionableStageId);
+
+    const sectionTarget =
+      actionableStageId === 'start'
+        ? startSectionRef.current
+        : actionableStageId === 'source'
+          ? sourceSectionRef.current
+          : actionableStageId === 'context'
+            ? contextSectionRef.current
+            : actionableStageId === 'assignment'
+              ? assignmentSectionRef.current
+              : actionableStageId === 'review'
+                ? reviewSectionRef.current
+                : advancedSectionRef.current;
+
+    const focusTarget =
+      actionableStageId === 'start'
+        ? startHeadingRef.current
+        : actionableStageId === 'source'
+          ? (sourceStudentSelectRef.current ?? sourceHeadingRef.current)
+          : actionableStageId === 'context'
+            ? (contextProfileSelectRef.current ?? contextHeadingRef.current)
+            : actionableStageId === 'assignment'
+              ? (assignmentGenerateDraftButtonRef.current ?? assignmentHeadingRef.current)
+              : actionableStageId === 'review'
+                ? (reviewPreviewButtonRef.current ?? reviewHeadingRef.current)
+                : advancedHeadingRef.current;
+
+    sectionTarget?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const focusTimer = globalThis.window?.setTimeout(() => {
+      focusTarget?.focus({ preventScroll: true });
+    }, 0);
+
+    return () => {
+      if (focusTimer !== undefined) {
+        globalThis.window?.clearTimeout(focusTimer);
+      }
+    };
+  }, [actionableStageId]);
 
   const workflowSummaryItems = useMemo<WorkflowSummaryItem[]>(
     () => [
@@ -599,7 +705,7 @@ export const MinimalAssignment: React.FC = () => {
         value: source.selectedStudent?.name ?? 'No student yet',
         note: context.selectedProfileId
           ? `Profile: ${context.selectedProfileId}`
-          : 'You can keep this optional.',
+          : 'Select a student to unlock recording upload.',
       },
       {
         label: 'Transcript',
@@ -652,7 +758,11 @@ export const MinimalAssignment: React.FC = () => {
 
       <StartStageSection
         stage={startStage}
-        onStartNewAssignment={resetFlow}
+        sectionRef={startSectionRef}
+        headingRef={startHeadingRef}
+        mode={startStageMode}
+        onStartNewAssignment={handleStartNewAssignment}
+        onShowResumeChoice={handleShowResumeChoice}
         onRefreshRecentWork={() => void resume.loadResumeJobs()}
         onResumeSelectedAssignment={() => void resume.handleResumeSelectedJob()}
         resumeLoading={resume.resumeLoading}
@@ -683,6 +793,9 @@ export const MinimalAssignment: React.FC = () => {
 
       <SourceStageSection
         stage={sourceStage}
+        sectionRef={sourceSectionRef}
+        headingRef={sourceHeadingRef}
+        studentSelectRef={sourceStudentSelectRef}
         onRefreshStudents={() => void loadStudentOptions()}
         studentOptions={source.studentOptions}
         studentOptionsError={source.studentOptionsError}
@@ -719,6 +832,9 @@ export const MinimalAssignment: React.FC = () => {
 
       <ContextStageSection
         stage={contextStage}
+        sectionRef={contextSectionRef}
+        headingRef={contextHeadingRef}
+        profileSelectRef={contextProfileSelectRef}
         onRefreshProfiles={() => void loadProfileOptions()}
         onSaveProfile={() => void handleSaveProfile()}
         profileBusy={context.profileBusy}
@@ -742,6 +858,9 @@ export const MinimalAssignment: React.FC = () => {
 
       <AssignmentStageSection
         stage={assignmentStage}
+        sectionRef={assignmentSectionRef}
+        headingRef={assignmentHeadingRef}
+        generateDraftButtonRef={assignmentGenerateDraftButtonRef}
         transcriptReady={transcriptReady}
         promptLoading={authoring.promptLoading}
         promptReady={authoring.promptReady}
@@ -784,6 +903,9 @@ export const MinimalAssignment: React.FC = () => {
 
       <ReviewStageSection
         stage={reviewStage}
+        sectionRef={reviewSectionRef}
+        headingRef={reviewHeadingRef}
+        previewButtonRef={reviewPreviewButtonRef}
         onPublish={() =>
           void authoring.publishAssignment({
             onPublishedJob: resume.applyJobStatusTransition,
@@ -830,6 +952,8 @@ export const MinimalAssignment: React.FC = () => {
 
       <AdvancedActionsStage
         stage={advancedStage}
+        sectionRef={advancedSectionRef}
+        headingRef={advancedHeadingRef}
         jobReady={Boolean(jobReady)}
         jobStatus={jobStatus}
         controller={advancedActions}
