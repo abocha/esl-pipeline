@@ -33,12 +33,10 @@ export function registerPromptEditorTests() {
         const user = createTimerAwareMinimalUser();
         renderMinimalAssignment();
 
-        const studentSelect = await screen.findByRole('combobox', {
-          name: /Student \(optional\)/i,
-        });
-        await waitFor(() => {
-          expect((studentSelect as HTMLSelectElement).value).toBe('student-default');
-        });
+        await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
+        const studentSelect = await screen.findByRole('combobox', { name: /^Student$/i });
+        await screen.findByRole('option', { name: 'Alex' });
+        await user.selectOptions(studentSelect, 'student-alex');
         await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
 
         await waitFor(() => {
@@ -46,7 +44,7 @@ export function registerPromptEditorTests() {
         });
         expect(api.uploadRecording).toHaveBeenCalledWith(
           expect.any(File),
-          expect.objectContaining({ studentId: 'student-default', sttProvider: 'deepgram' }),
+          expect.objectContaining({ studentId: 'student-alex', sttProvider: 'deepgram' }),
         );
 
         await waitFor(() => {
@@ -70,11 +68,17 @@ export function registerPromptEditorTests() {
       const user = createMinimalUser();
       renderMinimalAssignment();
 
+      await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
       openRecordingSettings();
       const sttProviderSelect = await screen.findByRole('combobox', { name: /Transcript engine/i });
       await waitFor(() => {
         expect((sttProviderSelect as HTMLSelectElement).value).toBe('google');
       });
+      await screen.findByRole('option', { name: 'Alex' });
+      await user.selectOptions(
+        screen.getByRole('combobox', { name: /^Student$/i }),
+        'student-alex',
+      );
       await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
 
       await waitFor(() => {
@@ -96,6 +100,12 @@ export function registerPromptEditorTests() {
       );
       renderMinimalAssignment();
 
+      await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
+      await screen.findByRole('option', { name: 'Alex' });
+      await user.selectOptions(
+        screen.getByRole('combobox', { name: /^Student$/i }),
+        'student-alex',
+      );
       await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
 
       await waitFor(() => {
@@ -107,6 +117,12 @@ export function registerPromptEditorTests() {
       const user = createMinimalUser();
       renderMinimalAssignment();
 
+      await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
+      await screen.findByRole('option', { name: 'Alex' });
+      await user.selectOptions(
+        screen.getByRole('combobox', { name: /^Student$/i }),
+        'student-alex',
+      );
       const profileEditor = await screen.findByRole('textbox', { name: /Profile content/i });
       await waitFor(() => {
         expect((profileEditor as HTMLTextAreaElement).disabled).toBe(false);
@@ -116,11 +132,11 @@ export function registerPromptEditorTests() {
 
       await waitFor(() => {
         expect(api.upsertProfileContent).toHaveBeenCalledWith(
-          'profile-default.md',
+          'profiles/alex.md',
           expect.stringContaining('Updated profile content'),
         );
       });
-      expect(api.listProfileRevisions).toHaveBeenCalledWith('profile-default.md', {
+      expect(api.listProfileRevisions).toHaveBeenCalledWith('profiles/alex.md', {
         limit: 20,
         offset: 0,
         order: 'desc',
@@ -133,7 +149,7 @@ export function registerPromptEditorTests() {
       await waitFor(() => {
         expect(api.createPromptPackage).toHaveBeenCalledWith('rec-1', {
           templateId: 'tpl-default',
-          profileId: 'profile-default.md',
+          profileId: 'profiles/alex.md',
         });
       });
       expect(screen.getByDisplayValue('Prompt package output')).toBeTruthy();
@@ -143,6 +159,12 @@ export function registerPromptEditorTests() {
       const user = createMinimalUser();
       renderMinimalAssignment();
 
+      await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
+      await screen.findByRole('option', { name: 'Alex' });
+      await user.selectOptions(
+        screen.getByRole('combobox', { name: /^Student$/i }),
+        'student-alex',
+      );
       await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
       await screen.findByDisplayValue('Student transcript text');
 
@@ -156,7 +178,7 @@ export function registerPromptEditorTests() {
         expect(api.createPromptPackage).toHaveBeenCalledWith('rec-1', {
           notes: 'Focus on article usage and stress patterns.',
           templateId: 'tpl-default',
-          profileId: 'profile-default.md',
+          profileId: 'profiles/alex.md',
         });
       });
     });
@@ -171,20 +193,15 @@ export function registerPromptStudentSelectionTests() {
       setupMinimalAssignmentTest();
     });
 
-    it('uses Default student selection for upload on fresh load', async () => {
-      const user = createMinimalUser();
+    it('requires explicit student selection before upload', async () => {
       renderMinimalAssignment();
 
-      await screen.findByRole('combobox', { name: /Student \(optional\)/i });
-      await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
-
-      await waitFor(() => {
-        expect(api.uploadRecording).toHaveBeenCalledTimes(1);
-      });
-      expect(api.uploadRecording).toHaveBeenCalledWith(
-        expect.any(File),
-        expect.objectContaining({ studentId: 'student-default', sttProvider: 'deepgram' }),
-      );
+      const studentSelect = await screen.findByRole('combobox', { name: /^Student$/i });
+      expect((studentSelect as HTMLSelectElement).value).toBe('');
+      expect(
+        (screen.getByRole('button', { name: /Drop audio file/i }) as HTMLButtonElement).disabled,
+      ).toBe(true);
+      expect(api.uploadRecording).not.toHaveBeenCalled();
     });
 
     it('labels audio rerun jobs as audio regeneration in recent jobs', async () => {
@@ -209,11 +226,11 @@ export function registerPromptStudentSelectionTests() {
             autoPublish: false,
             notionUrl: null,
             anytypeUrl: null,
-            state: 'queued',
+            state: 'succeeded',
             createdAt: now,
             updatedAt: now,
-            startedAt: null,
-            finishedAt: null,
+            startedAt: now,
+            finishedAt: now,
             sourceJobId: 'job-source-1',
             error: null,
             manifestPath: null,
@@ -225,6 +242,10 @@ export function registerPromptStudentSelectionTests() {
       });
 
       renderMinimalAssignment();
+      await waitFor(() => {
+        expect(screen.queryByRole('listbox', { name: /Recent assignments/i })).toBeNull();
+      });
+      fireEvent.click(screen.getByRole('button', { name: /Resume recent work/i }));
 
       await waitFor(() => {
         expect(screen.getByRole('option', { name: /Audio refresh/i })).toBeTruthy();
@@ -235,7 +256,9 @@ export function registerPromptStudentSelectionTests() {
       const user = createMinimalUser();
       renderMinimalAssignment();
 
-      const studentSelect = await screen.findByRole('combobox', { name: /Student \(optional\)/i });
+      await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
+      const studentSelect = await screen.findByRole('combobox', { name: /^Student$/i });
+      await screen.findByRole('option', { name: 'Alex' });
       await user.selectOptions(studentSelect, 'student-alex');
       await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
 

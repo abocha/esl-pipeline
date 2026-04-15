@@ -808,7 +808,7 @@ function seedStudentWorkspaceMocks() {
 }
 
 export function setupStudentWorkspaceTest() {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   seedStudentWorkspaceMocks();
 }
 

@@ -19,10 +19,9 @@ import { saveProfileRevisionContent } from './profile-content.js';
 import {
   type GenerateProfileRevisionDraftResult,
   generateProfileRevisionDraft,
+  isCompleteTextGenerationFinishReason,
 } from './profile-revision-drafting.js';
 import { getStudentProfileById } from './student-profiles-store.js';
-
-const DEFAULT_PROMOTION_MAX_OUTPUT_TOKENS = 2_400;
 
 export interface ProfilePromotionCandidate {
   id: string;
@@ -162,11 +161,18 @@ export async function promoteStudentProfileCandidates(args: {
     request: {
       prompt,
       operation: 'candidate_promotion',
-      maxOutputTokens: request.maxOutputTokens ?? DEFAULT_PROMOTION_MAX_OUTPUT_TOKENS,
+      maxOutputTokens:
+        request.maxOutputTokens ?? dependencies.config.generation.maxOutputTokensHard,
     },
     overrides: {
       config: dependencies.config,
     },
+  });
+
+  assertCandidatePromotionDraftIsComplete({
+    draftText: drafting.text,
+    finishReason: drafting.finishReason,
+    baseProfileContent: baseRevision?.content ?? '',
   });
 
   const draftRevision = await dependencies.profileContent.saveRevision(
@@ -330,4 +336,41 @@ function buildPromotionPrompt(args: {
     '',
     'Output only the revised profile markdown.',
   ].join('\n');
+}
+
+function assertCandidatePromotionDraftIsComplete(args: {
+  draftText: string;
+  finishReason?: string;
+  baseProfileContent: string;
+}): void {
+  if (!isCompleteTextGenerationFinishReason(args.finishReason)) {
+    throw new ProfileCandidatePromotionError(
+      `Profile draft generation returned incomplete output (${args.finishReason}). No draft was saved.`,
+      'profile_candidate_draft_incomplete',
+      502,
+    );
+  }
+
+  const draftText = args.draftText.trim();
+  const baseProfileContent = args.baseProfileContent.trim();
+  if (!draftText) {
+    throw new ProfileCandidatePromotionError(
+      'Profile draft generation returned empty output. No draft was saved.',
+      'profile_candidate_draft_empty',
+      502,
+    );
+  }
+
+  // Promotions should preserve most of the base profile. A dramatic collapse in output length
+  // is a strong signal that the generation stopped early even if the provider omitted metadata.
+  if (
+    baseProfileContent.length >= 1_500 &&
+    draftText.length < Math.floor(baseProfileContent.length * 0.4)
+  ) {
+    throw new ProfileCandidatePromotionError(
+      'Profile draft generation appears truncated compared with the base profile. No draft was saved.',
+      'profile_candidate_draft_truncated',
+      502,
+    );
+  }
 }

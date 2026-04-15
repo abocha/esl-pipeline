@@ -22,19 +22,8 @@ const FALLBACK_STT_PROVIDERS: SttProvider[] = ['deepgram', 'elevenlabs', 'google
 
 export type TranscriptUiStatus = 'idle' | 'loading' | 'processing' | 'ready' | 'failed';
 
-function isDefaultStudentName(name: string): boolean {
-  return name.trim().toLowerCase() === 'default';
-}
-
 function sortStudentsForPicker(students: StudentOption[]): StudentOption[] {
   return [...students].sort((left, right) => {
-    const leftIsDefault = isDefaultStudentName(left.name);
-    const rightIsDefault = isDefaultStudentName(right.name);
-
-    if (leftIsDefault !== rightIsDefault) {
-      return leftIsDefault ? -1 : 1;
-    }
-
     const byName = left.name.localeCompare(right.name, undefined, { sensitivity: 'base' });
     if (byName !== 0) return byName;
 
@@ -186,8 +175,10 @@ export function useMinimalAssignmentSourceController({
       const sortedStudents = sortStudentsForPicker(response.students ?? []);
       setStudentOptions(sortedStudents);
       setSelectedStudentId((current) => {
-        if (current) return current;
-        return sortedStudents.find((student) => isDefaultStudentName(student.name))?.id ?? '';
+        if (current && sortedStudents.some((student) => student.id === current)) {
+          return current;
+        }
+        return '';
       });
       setStudentOptionsError(null);
     } catch (error) {
@@ -208,6 +199,10 @@ export function useMinimalAssignmentSourceController({
   const handleUpload = useCallback(
     async (file: File) => {
       if (uploading) return;
+      if (!selectedStudentId) {
+        setUploadError('Select a student before uploading a recording.');
+        return;
+      }
       onBeforeUploadReset();
       resetSourceFlow();
       setSelectedFileName(file.name);
