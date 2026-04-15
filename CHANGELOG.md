@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [6.1.3] - 2026-04-15
+
+### Changed
+
+- Automated release from PR #64: fix: guide minimal assignment flow and remove default student (https://github.com/abocha/esl-pipeline/pull/64)
+
 ## [6.1.2] - 2026-04-14
 
 ### Changed
