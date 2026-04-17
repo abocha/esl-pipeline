@@ -1,16 +1,25 @@
-import { loadVoicesCatalog, type VoiceCatalog } from '@esl-pipeline/tts-core';
+import {
+  loadVoicesCatalog,
+  type TtsProviderId,
+  type VoiceCatalog,
+} from '@esl-pipeline/tts-core';
 
 interface VoicePreferenceFlags {
   voiceId?: string;
   accentPreference?: string;
+  provider?: TtsProviderId;
+  ttsProvider?: TtsProviderId;
 }
 
-let cachedVoiceCatalog: VoiceCatalog | null = null;
+const cachedVoiceCatalogs = new Map<string, VoiceCatalog>();
 
-async function getVoiceCatalog(): Promise<VoiceCatalog> {
-  if (cachedVoiceCatalog) return cachedVoiceCatalog;
-  cachedVoiceCatalog = await loadVoicesCatalog().catch<VoiceCatalog>(() => ({ voices: [] }));
-  return cachedVoiceCatalog;
+async function getVoiceCatalog(provider?: TtsProviderId): Promise<VoiceCatalog> {
+  const cacheKey = provider ?? 'all';
+  const cachedCatalog = cachedVoiceCatalogs.get(cacheKey);
+  if (cachedCatalog) return cachedCatalog;
+  const catalog = await loadVoicesCatalog(provider).catch<VoiceCatalog>(() => ({ voices: [] }));
+  cachedVoiceCatalogs.set(cacheKey, catalog);
+  return catalog;
 }
 
 function findVoiceByToken(token: string, catalog: VoiceCatalog) {
@@ -49,7 +58,7 @@ export async function applyVoicePreferences(flags: VoicePreferenceFlags): Promis
   const needsResolution = Boolean(flags.voiceId || flags.accentPreference);
   if (!needsResolution) return;
 
-  const catalog = await getVoiceCatalog();
+  const catalog = await getVoiceCatalog(flags.provider ?? flags.ttsProvider);
   if (flags.voiceId) {
     const match = findVoiceByToken(flags.voiceId, catalog);
     if (match) {
@@ -75,5 +84,5 @@ export async function applyVoicePreferences(flags: VoicePreferenceFlags): Promis
 }
 
 export function resetVoiceCatalogCache(): void {
-  cachedVoiceCatalog = null;
+  cachedVoiceCatalogs.clear();
 }
