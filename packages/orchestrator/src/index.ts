@@ -169,6 +169,77 @@ function resolvePronunciationGoogleModelFromManifest(modelId?: string | null) {
   return undefined;
 }
 
+function resolveProviderCompatibleVoiceId(args: {
+  explicitVoiceId?: string;
+  effectiveProvider?: 'elevenlabs' | 'google';
+  previousVoiceId?: string;
+  previousProvider?: 'elevenlabs' | 'google';
+  fallbackCandidates?: Array<{
+    voiceId?: string;
+    provider?: string | null;
+  }>;
+}): string | undefined {
+  if (args.explicitVoiceId !== undefined) {
+    return args.explicitVoiceId;
+  }
+
+  if (
+    args.effectiveProvider !== undefined &&
+    args.previousProvider === args.effectiveProvider &&
+    args.previousVoiceId
+  ) {
+    return args.previousVoiceId;
+  }
+
+  if (args.effectiveProvider === undefined) {
+    return args.fallbackCandidates?.find((candidate) => candidate.voiceId)?.voiceId;
+  }
+
+  return args.fallbackCandidates?.find(
+    (candidate) => candidate.voiceId && candidate.provider === args.effectiveProvider,
+  )?.voiceId;
+}
+
+function resolveProviderCompatibleEdgeVoice(args: {
+  explicitEdgeVoice?: string;
+  effectiveProvider?: 'edge-tts' | 'elevenlabs' | 'google';
+  previousVoiceId?: string;
+  previousProvider?: 'edge-tts' | 'elevenlabs' | 'google';
+}): string | undefined {
+  if (args.explicitEdgeVoice !== undefined) {
+    return args.explicitEdgeVoice;
+  }
+
+  if (args.effectiveProvider === 'edge-tts' && args.previousProvider === 'edge-tts') {
+    return args.previousVoiceId;
+  }
+
+  return undefined;
+}
+
+interface RerunTtsWarning {
+  code: string;
+  message: string;
+}
+
+function pushRerunTtsWarning(
+  warnings: RerunTtsWarning[],
+  logger: typeof fallbackLogger,
+  warning: RerunTtsWarning,
+  detail?: Record<string, unknown>,
+): void {
+  warnings.push(warning);
+  logger.log({
+    level: 'warn',
+    stage: 'tts',
+    message: warning.message,
+    detail: {
+      code: warning.code,
+      ...detail,
+    },
+  });
+}
+
 export class PipelineCancelledError extends Error {
   readonly stage: AssignmentStage;
   readonly code = 'PIPELINE_CANCELLED';
@@ -230,6 +301,7 @@ async function applyRerunVoicePreferences(flags: RerunFlags): Promise<void> {
   const studyTextPreferences = {
     voiceId: flags.studyTextVoiceId,
     accentPreference: flags.studyTextVoiceAccent,
+    provider: flags.studyTextTtsProvider,
   };
   await applyVoicePreferences(studyTextPreferences);
   flags.studyTextVoiceId = studyTextPreferences.voiceId;
@@ -238,6 +310,7 @@ async function applyRerunVoicePreferences(flags: RerunFlags): Promise<void> {
   const pronunciationMainPreferences = {
     voiceId: flags.pronunciationMainVoiceId,
     accentPreference: flags.pronunciationMainVoiceAccent,
+    provider: flags.pronunciationMainTtsProvider,
   };
   await applyVoicePreferences(pronunciationMainPreferences);
   flags.pronunciationMainVoiceId = pronunciationMainPreferences.voiceId;
@@ -246,6 +319,11 @@ async function applyRerunVoicePreferences(flags: RerunFlags): Promise<void> {
   const pronunciationChunkPreferences = {
     voiceId: flags.pronunciationChunkVoiceId,
     accentPreference: flags.pronunciationChunkVoiceAccent,
+    provider:
+      flags.pronunciationChunkTtsProvider === 'elevenlabs' ||
+      flags.pronunciationChunkTtsProvider === 'google'
+        ? flags.pronunciationChunkTtsProvider
+        : undefined,
   };
   await applyVoicePreferences(pronunciationChunkPreferences);
   flags.pronunciationChunkVoiceId = pronunciationChunkPreferences.voiceId;
@@ -1427,17 +1505,116 @@ export async function rerunAssignment(
 
       if (flags.regeneratePronunciationMainAudio || flags.regeneratePronunciationChunkAudio) {
         const narratorVoiceId = ttsResult?.voiceAssignments?.Narrator;
-        const fallbackVoiceId =
-          narratorVoiceId ??
-          ttsResult?.voices[0]?.voiceId ??
-          audioArtifacts.studyText?.voices?.[0]?.voiceId ??
-          audioArtifacts.pronunciation?.primaryClip?.voiceId;
+        const fallbackVoiceCandidates = [
+          { voiceId: narratorVoiceId, provider: ttsResult?.provider },
+          { voiceId: ttsResult?.voices[0]?.voiceId, provider: ttsResult?.provider },
+          {
+            voiceId: audioArtifacts.studyText?.voices?.[0]?.voiceId,
+            provider: audioArtifacts.studyText?.tts?.provider,
+          },
+          {
+            voiceId: audioArtifacts.pronunciation?.primaryClip?.voiceId,
+            provider: audioArtifacts.pronunciation?.primaryClip?.tts?.provider,
+          },
+        ];
         const pronunciationTitle = resolveMarkdownTitle(
           mdContents,
           effectiveStudyTextTitleFallback,
           null,
           true,
         );
+        const effectivePrimaryProvider =
+          flags.pronunciationMainTtsProvider ?? previousPrimaryProvider;
+        const effectiveChunkProvider =
+          flags.pronunciationChunkTtsProvider ??
+          previousChunkProvider ??
+          resolveDefaultChunkProvider(detectedPronunciationMode);
+        const rerunTtsWarnings: RerunTtsWarning[] = [];
+        const resolvedPrimaryVoiceId = resolveProviderCompatibleVoiceId({
+          explicitVoiceId: flags.pronunciationMainVoiceId,
+          effectiveProvider: effectivePrimaryProvider,
+          previousVoiceId: previousPrimaryClip?.voiceId,
+          previousProvider: previousPrimaryProvider,
+          fallbackCandidates: fallbackVoiceCandidates,
+        });
+        const resolvedChunkVoiceId =
+          effectiveChunkProvider === 'edge-tts'
+            ? undefined
+            : resolveProviderCompatibleVoiceId({
+                explicitVoiceId: flags.pronunciationChunkVoiceId,
+                effectiveProvider: effectiveChunkProvider,
+                previousVoiceId: previousChunkClip?.voiceId,
+                previousProvider:
+                  previousChunkProvider === 'elevenlabs' || previousChunkProvider === 'google'
+                    ? previousChunkProvider
+                    : undefined,
+                fallbackCandidates: fallbackVoiceCandidates,
+              });
+        const resolvedChunkEdgeVoice = resolveProviderCompatibleEdgeVoice({
+          explicitEdgeVoice: flags.pronunciationChunkEdgeVoice,
+          effectiveProvider: effectiveChunkProvider,
+          previousVoiceId: previousChunkClip?.voiceId,
+          previousProvider: previousChunkProvider,
+        });
+
+        if (
+          flags.regeneratePronunciationMainAudio &&
+          previousPrimaryClip?.voiceId &&
+          !previousPrimaryProvider &&
+          flags.pronunciationMainVoiceId === undefined
+        ) {
+          pushRerunTtsWarning(rerunTtsWarnings, logger, {
+            code: 'rerun_pronunciation_main_unknown_previous_provider',
+            message:
+              'Pronunciation main rerun could not confirm the previous clip provider; using provider-scoped fallback resolution instead.',
+          });
+        }
+        if (
+          flags.regeneratePronunciationChunkAudio &&
+          previousChunkClip?.voiceId &&
+          !previousChunkProvider &&
+          flags.pronunciationChunkVoiceId === undefined &&
+          flags.pronunciationChunkEdgeVoice === undefined
+        ) {
+          pushRerunTtsWarning(rerunTtsWarnings, logger, {
+            code: 'rerun_pronunciation_chunk_unknown_previous_provider',
+            message:
+              'Pronunciation chunk rerun could not confirm the previous clip provider; using provider-scoped fallback resolution instead.',
+          });
+        }
+        if (
+          flags.regeneratePronunciationMainAudio &&
+          effectivePrimaryProvider !== undefined &&
+          resolvedPrimaryVoiceId === undefined
+        ) {
+          pushRerunTtsWarning(
+            rerunTtsWarnings,
+            logger,
+            {
+              code: 'rerun_pronunciation_main_voice_unresolved',
+              message:
+                'Pronunciation main rerun could not resolve a provider-compatible voice and may produce no regenerated primary clip.',
+            },
+            { provider: effectivePrimaryProvider },
+          );
+        }
+        if (
+          flags.regeneratePronunciationChunkAudio &&
+          effectiveChunkProvider !== 'edge-tts' &&
+          effectiveChunkProvider !== null &&
+          resolvedChunkVoiceId === undefined
+        ) {
+          pushRerunTtsWarning(
+            rerunTtsWarnings,
+            logger,
+            {
+              code: 'rerun_pronunciation_chunk_voice_unresolved',
+              message:
+                'Pronunciation chunk rerun could not resolve a provider-compatible voice and may produce no regenerated chunk clips.',
+            },
+            { provider: effectiveChunkProvider },
+          );
+        }
         const generatedPronunciation = await synthesizePronunciationAudio({
           context: markdownContext,
           mdPath: flags.md,
@@ -1447,7 +1624,7 @@ export async function rerunAssignment(
           force: true,
           regeneratePrimary: flags.regeneratePronunciationMainAudio,
           regenerateItems: flags.regeneratePronunciationChunkAudio,
-          primaryTtsProvider: flags.pronunciationMainTtsProvider ?? previousPrimaryProvider,
+          primaryTtsProvider: effectivePrimaryProvider,
           primaryGoogleTtsModel:
             flags.pronunciationMainGoogleTtsModel ??
             (previousPrimaryProvider === 'google'
@@ -1456,12 +1633,8 @@ export async function rerunAssignment(
           primaryModelId:
             flags.pronunciationMainElevenlabsModel ??
             (previousPrimaryProvider === 'elevenlabs' ? previousPrimaryModelId : undefined),
-          primaryVoiceId:
-            flags.pronunciationMainVoiceId ?? previousPrimaryClip?.voiceId ?? fallbackVoiceId,
-          chunkTtsProvider:
-            flags.pronunciationChunkTtsProvider ??
-            previousChunkProvider ??
-            resolveDefaultChunkProvider(detectedPronunciationMode),
+          primaryVoiceId: resolvedPrimaryVoiceId,
+          chunkTtsProvider: effectiveChunkProvider,
           chunkGoogleTtsModel:
             flags.pronunciationChunkGoogleTtsModel ??
             (previousChunkProvider === 'google'
@@ -1470,11 +1643,8 @@ export async function rerunAssignment(
           chunkModelId:
             flags.pronunciationChunkElevenlabsModel ??
             (previousChunkProvider === 'elevenlabs' ? previousChunkModelId : undefined),
-          chunkVoiceId:
-            flags.pronunciationChunkVoiceId ?? previousChunkClip?.voiceId ?? fallbackVoiceId,
-          chunkEdgeVoice:
-            flags.pronunciationChunkEdgeVoice ??
-            (previousChunkProvider === 'edge-tts' ? previousChunkClip?.voiceId : undefined),
+          chunkVoiceId: resolvedChunkVoiceId,
+          chunkEdgeVoice: resolvedChunkEdgeVoice,
           logger,
         });
         audioArtifacts.pronunciation = generatedPronunciation
@@ -1491,6 +1661,15 @@ export async function rerunAssignment(
             }
           : audioArtifacts.pronunciation;
         emitPronunciationProviderCharacterMetrics(metrics, generatedPronunciation);
+        if (rerunTtsWarnings.length > 0) {
+          const existingWarnings = audioArtifacts.pronunciation?.warnings ?? [];
+          audioArtifacts.pronunciation = audioArtifacts.pronunciation
+            ? {
+                ...audioArtifacts.pronunciation,
+                warnings: [...existingWarnings, ...rerunTtsWarnings],
+              }
+            : audioArtifacts.pronunciation;
+        }
       }
 
       emitStage('tts', 'success', {
@@ -1504,6 +1683,7 @@ export async function rerunAssignment(
         cachedCharacters: ttsResult?.cachedCharacters,
         ttsProvider: audioTts?.provider,
         estimatedSpendUsd: audioTts?.estimatedSpendUsd,
+        rerunWarnings: audioArtifacts.pronunciation?.warnings,
       });
       executed.push('tts');
     } else {

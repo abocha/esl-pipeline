@@ -188,6 +188,26 @@ function collectEffectiveValidationErrors(
   return issues;
 }
 
+function resolveInheritedVoiceIdForProviderChange(args: {
+  explicitVoiceId?: string;
+  explicitProvider?: 'elevenlabs' | 'google';
+  persistedProvider?: string | null;
+  persistedVoiceId?: string | null;
+}): string | undefined {
+  if (args.explicitVoiceId !== undefined) {
+    return args.explicitVoiceId;
+  }
+
+  if (
+    args.explicitProvider !== undefined &&
+    args.explicitProvider !== args.persistedProvider
+  ) {
+    return undefined;
+  }
+
+  return args.persistedVoiceId ?? undefined;
+}
+
 async function fileExists(targetPath: string): Promise<boolean> {
   try {
     await access(targetPath);
@@ -360,8 +380,14 @@ export async function rerun(jobId: string, action: RerunAction): Promise<JobActi
   }
 
   const persistStudyTextSettings = payload.regenerateStudyTextAudio === true;
+  const studyTextVoiceId = resolveInheritedVoiceIdForProviderChange({
+    explicitVoiceId: payload.studyTextVoiceId,
+    explicitProvider: payload.studyTextTtsProvider,
+    persistedProvider: job.ttsProvider,
+    persistedVoiceId: job.voiceId,
+  });
   const persistedVoiceId = persistStudyTextSettings
-    ? (payload.studyTextVoiceId ?? job.voiceId ?? undefined)
+    ? studyTextVoiceId
     : (job.voiceId ?? undefined);
   const persistedVoiceAccent = persistStudyTextSettings
     ? (payload.studyTextVoiceAccent ?? job.voiceAccent ?? undefined)
@@ -419,7 +445,7 @@ export async function rerun(jobId: string, action: RerunAction): Promise<JobActi
       regeneratePronunciationMainAudio: payload.regeneratePronunciationMainAudio ?? false,
       regeneratePronunciationChunkAudio: payload.regeneratePronunciationChunkAudio ?? false,
       studyTextVoiceAccent: payload.studyTextVoiceAccent ?? job.voiceAccent ?? undefined,
-      studyTextVoiceId: payload.studyTextVoiceId ?? job.voiceId ?? undefined,
+      studyTextVoiceId,
       studyTextTtsProvider: payload.studyTextTtsProvider ?? job.ttsProvider ?? undefined,
       studyTextElevenlabsModel:
         payload.studyTextElevenlabsModel ?? job.studyTextElevenlabsModel ?? undefined,
