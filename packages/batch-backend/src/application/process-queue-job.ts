@@ -42,10 +42,7 @@ function resolveInheritedVoiceIdForProviderChange(args: {
     return args.explicitVoiceId;
   }
 
-  if (
-    args.explicitProvider !== undefined &&
-    args.explicitProvider !== args.persistedProvider
-  ) {
+  if (args.explicitProvider !== undefined && args.explicitProvider !== args.persistedProvider) {
     return undefined;
   }
 

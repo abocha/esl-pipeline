@@ -151,7 +151,12 @@ describe('StudentWorkspace loading and inspection', () => {
       sourceJob: null,
       recording: null,
       transcript: null,
-      promptPackage: { id: 'pkg-1', studentId: 'student-default', createdAt: null, updatedAt: null },
+      promptPackage: {
+        id: 'pkg-1',
+        studentId: 'student-default',
+        createdAt: null,
+        updatedAt: null,
+      },
       draft: null,
       tts: null,
       pronunciationWarnings: [
@@ -175,8 +180,6 @@ describe('StudentWorkspace loading and inspection', () => {
     await user.click(inspectButton);
 
     expect(await screen.findByText(/Audio notices/i)).toBeTruthy();
-    expect(
-      screen.getByText(/using provider-scoped fallback resolution instead/i),
-    ).toBeTruthy();
+    expect(screen.getByText(/using provider-scoped fallback resolution instead/i)).toBeTruthy();
   });
 });

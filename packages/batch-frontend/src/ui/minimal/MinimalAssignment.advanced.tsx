@@ -42,7 +42,7 @@ function createDefaultCustomRerunInput(
     rerunPronunciationMainModel: selectedTtsProvider === 'google' ? persistedStudyTextModel : '',
     rerunPronunciationMainVoiceId: '',
     rerunPronunciationMainVoiceAccent: '',
-    rerunPronunciationChunkProvider: 'edge-tts',
+    rerunPronunciationChunkProvider: 'google',
     rerunPronunciationChunkModel: '',
     rerunPronunciationChunkVoiceId: '',
     rerunPronunciationChunkVoiceAccent: '',
@@ -611,8 +611,8 @@ export function AdvancedActionsStage({
               </button>
             </div>
             <p className="minimal-help">
-              Pronunciation chunks default to `edge-tts`, except `connected_speech`, which defaults
-              to ElevenLabs.
+              Pronunciation chunks default to Google. You can still force ElevenLabs or `edge-tts`
+              for a rerun when needed.
             </p>
             {controller.showCustomRerun ? (
               <div className="minimal-block">

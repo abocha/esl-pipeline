@@ -240,9 +240,7 @@ export async function getJobProvenance(jobId: string): Promise<JobProvenanceResp
   };
 }
 
-async function readManifestAudioDiagnostics(
-  manifestPath: string | null | undefined,
-): Promise<{
+async function readManifestAudioDiagnostics(manifestPath: string | null | undefined): Promise<{
   tts: {
     provider: string | null;
     generatedCharacters: number | null;
@@ -317,10 +315,8 @@ async function readManifestAudioDiagnostics(
         cachedCharacters,
         totalCharacters,
         cacheHitRatio,
-        costPer1kCharsUsd:
-          typeof tts.costPer1kCharsUsd === 'number' ? tts.costPer1kCharsUsd : null,
-        estimatedSpendUsd:
-          typeof tts.estimatedSpendUsd === 'number' ? tts.estimatedSpendUsd : null,
+        costPer1kCharsUsd: typeof tts.costPer1kCharsUsd === 'number' ? tts.costPer1kCharsUsd : null,
+        estimatedSpendUsd: typeof tts.estimatedSpendUsd === 'number' ? tts.estimatedSpendUsd : null,
       },
       pronunciationWarnings,
     };

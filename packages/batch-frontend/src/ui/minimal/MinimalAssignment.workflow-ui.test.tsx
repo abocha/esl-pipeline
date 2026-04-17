@@ -177,8 +177,6 @@ describe('MinimalAssignment - staged workflow UI', () => {
     openAdvancedActions();
 
     expect(await screen.findByText(/Audio notices/i)).toBeTruthy();
-    expect(
-      screen.getByText(/using provider-scoped fallback resolution instead/i),
-    ).toBeTruthy();
+    expect(screen.getByText(/using provider-scoped fallback resolution instead/i)).toBeTruthy();
   });
 });

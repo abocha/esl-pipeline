@@ -198,10 +198,7 @@ function resolveInheritedVoiceIdForProviderChange(args: {
     return args.explicitVoiceId;
   }
 
-  if (
-    args.explicitProvider !== undefined &&
-    args.explicitProvider !== args.persistedProvider
-  ) {
+  if (args.explicitProvider !== undefined && args.explicitProvider !== args.persistedProvider) {
     return undefined;
   }
 
@@ -386,9 +383,7 @@ export async function rerun(jobId: string, action: RerunAction): Promise<JobActi
     persistedProvider: job.ttsProvider,
     persistedVoiceId: job.voiceId,
   });
-  const persistedVoiceId = persistStudyTextSettings
-    ? studyTextVoiceId
-    : (job.voiceId ?? undefined);
+  const persistedVoiceId = persistStudyTextSettings ? studyTextVoiceId : (job.voiceId ?? undefined);
   const persistedVoiceAccent = persistStudyTextSettings
     ? (payload.studyTextVoiceAccent ?? job.voiceAccent ?? undefined)
     : (job.voiceAccent ?? undefined);

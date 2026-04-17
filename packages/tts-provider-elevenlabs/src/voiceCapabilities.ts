@@ -25,17 +25,31 @@ const CANONICAL_AGE: SpeakerAge[] = [
 ];
 
 const STYLE_ALLOWLIST = new Set([
+  'advertisement',
   'professional',
-  'social',
   'calm',
-  'energetic',
-  'creative',
-  'practical',
-  'thoughtful',
+  'casual',
+  'chill',
+  'classy',
+  'confident',
+  'crisp',
+  'cute',
+  'deep',
+  'formal',
+  'gentle',
+  'hyped',
+  'mature',
+  'pleasant',
+  'relaxed',
+  'rough',
+  'sassy',
+  'upbeat',
   'conversational',
-  'narration',
-  'news',
-  'characters',
+  'narrative_story',
+  'informative_educational',
+  'social_media',
+  'characters_animation',
+  'entertainment_tv',
 ]);
 
 function normalizeToken(value: string): string {
@@ -76,8 +90,11 @@ function normalizeStyle(value: string): string {
   const normalized = normalizeToken(value).replaceAll('-', '_');
   if (!normalized) return '';
   if (normalized.includes('conversation')) return 'conversational';
-  if (normalized.includes('narrat')) return 'narration';
-  if (normalized.includes('character')) return 'characters';
+  if (normalized.includes('narrative') || normalized.includes('story')) return 'narrative_story';
+  if (normalized.includes('informative')) return 'informative_educational';
+  if (normalized.includes('social') && normalized.includes('media')) return 'social_media';
+  if (normalized.includes('character')) return 'characters_animation';
+  if (normalized.includes('entertainment')) return 'entertainment_tv';
   return normalized;
 }
 
