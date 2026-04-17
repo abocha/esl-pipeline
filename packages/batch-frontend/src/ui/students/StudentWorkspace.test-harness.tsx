@@ -443,6 +443,7 @@ function seedStudentWorkspaceMocks() {
       updatedAt: now,
     },
     tts: null,
+    pronunciationWarnings: [],
     lineage: null,
     actions: [
       {
@@ -1144,6 +1145,7 @@ const DEFAULT_INSPECTION_PANEL_PROPS: WorkspaceInspectionPanelProps = {
       updatedAt: now,
     },
     tts: null,
+    pronunciationWarnings: [],
     lineage: null,
     actions: [
       {

@@ -438,6 +438,7 @@ describeHttpServerIntegrationSuite(
         promptPackage: null,
         draft: null,
         tts: null,
+        pronunciationWarnings: [],
         lineage: null,
         actions: [],
       });

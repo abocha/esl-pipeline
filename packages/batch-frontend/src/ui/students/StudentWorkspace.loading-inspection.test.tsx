@@ -131,4 +131,52 @@ describe('StudentWorkspace loading and inspection', () => {
       { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
     );
   });
+
+  it('shows provenance audio notices without requiring log access', async () => {
+    const user = userEvent.setup();
+    studentWorkspaceApiMocks.fetchJobProvenance.mockResolvedValueOnce({
+      job: {
+        id: 'job-1',
+        state: 'succeeded',
+        createdAt: '2024-01-01T00:00:00.000Z',
+        updatedAt: '2024-01-01T00:01:00.000Z',
+        startedAt: '2024-01-01T00:00:10.000Z',
+        finishedAt: '2024-01-01T00:01:00.000Z',
+        sourceJobId: 'job-0',
+        manifestPath: '/tmp/manifest.json',
+        notionUrl: null,
+        anytypeUrl: null,
+        error: null,
+      },
+      sourceJob: null,
+      recording: null,
+      transcript: null,
+      promptPackage: { id: 'pkg-1', studentId: 'student-default', createdAt: null, updatedAt: null },
+      draft: null,
+      tts: null,
+      pronunciationWarnings: [
+        {
+          code: 'rerun_pronunciation_chunk_unknown_previous_provider',
+          message:
+            'Pronunciation chunk rerun could not confirm the previous clip provider; using provider-scoped fallback resolution instead.',
+        },
+      ],
+      lineage: null,
+      actions: [],
+    });
+
+    await renderWorkspaceInspectionReady();
+
+    const inspectButton = await screen.findByRole(
+      'button',
+      { name: /Inspect/i },
+      { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+    );
+    await user.click(inspectButton);
+
+    expect(await screen.findByText(/Audio notices/i)).toBeTruthy();
+    expect(
+      screen.getByText(/using provider-scoped fallback resolution instead/i),
+    ).toBeTruthy();
+  });
 });

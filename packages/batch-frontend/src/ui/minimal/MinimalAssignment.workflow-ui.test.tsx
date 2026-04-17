@@ -140,4 +140,45 @@ describe('MinimalAssignment - staged workflow UI', () => {
     expect(screen.getByRole('button', { name: /Refresh actions/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /Republish current draft/i })).toBeTruthy();
   });
+
+  it('shows support-facing audio notices in advanced lineage details', async () => {
+    vi.mocked(api.fetchJobProvenance).mockResolvedValueOnce({
+      job: {
+        id: 'job-1',
+        state: 'succeeded',
+        createdAt: '2024-01-01T00:00:00.000Z',
+        updatedAt: '2024-01-01T00:01:00.000Z',
+        startedAt: '2024-01-01T00:00:10.000Z',
+        finishedAt: '2024-01-01T00:01:00.000Z',
+        sourceJobId: 'job-0',
+        manifestPath: '/tmp/manifest.json',
+        notionUrl: null,
+        anytypeUrl: null,
+        error: null,
+      },
+      sourceJob: null,
+      recording: null,
+      transcript: null,
+      promptPackage: null,
+      draft: null,
+      tts: null,
+      pronunciationWarnings: [
+        {
+          code: 'rerun_pronunciation_chunk_unknown_previous_provider',
+          message:
+            'Pronunciation chunk rerun could not confirm the previous clip provider; using provider-scoped fallback resolution instead.',
+        },
+      ],
+      lineage: null,
+      actions: [],
+    });
+
+    await renderPublishedAssignment();
+    openAdvancedActions();
+
+    expect(await screen.findByText(/Audio notices/i)).toBeTruthy();
+    expect(
+      screen.getByText(/using provider-scoped fallback resolution instead/i),
+    ).toBeTruthy();
+  });
 });

@@ -74,6 +74,26 @@ export function WorkspaceInspectionPanel({
         </div>
       ) : null}
 
+      {(jobProvenance?.pronunciationWarnings ?? []).length ? (
+        <div className="workspace-list">
+          <div className="workspace-list-item workspace-list-item-stack">
+            <div>
+              <strong>Audio notices</strong>
+              <div className="workspace-muted">
+                This rerun completed with fallback audio resolution details worth checking.
+              </div>
+            </div>
+            <div>
+              {(jobProvenance?.pronunciationWarnings ?? []).map((warning) => (
+                <div key={warning.code} className="workspace-muted">
+                  {warning.message}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {jobProvenance?.actions.length ? (
         <div className="workspace-list">
           {jobProvenance.actions.slice(0, 8).map((action) => (

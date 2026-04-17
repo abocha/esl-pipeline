@@ -118,5 +118,79 @@ describe('application/get-job-provenance', () => {
       costPer1kCharsUsd: 0.3,
       estimatedSpendUsd: 0.45,
     });
+    expect(result?.pronunciationWarnings).toEqual([]);
+  });
+
+  it('reads pronunciation warnings from the manifest for support-facing provenance', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'job-provenance-'));
+    const manifestPath = join(dir, 'job.manifest.json');
+    await writeFile(
+      manifestPath,
+      JSON.stringify(
+        {
+          audioArtifacts: {
+            pronunciation: {
+              warnings: [
+                {
+                  code: 'rerun_pronunciation_chunk_unknown_previous_provider',
+                  message:
+                    'Pronunciation chunk rerun could not confirm the previous clip provider; using provider-scoped fallback resolution instead.',
+                },
+              ],
+            },
+          },
+        },
+        null,
+        2,
+      ),
+      'utf8',
+    );
+
+    mockGetJobById.mockResolvedValueOnce({
+      id: 'job-3',
+      state: 'succeeded',
+      createdAt: new Date('2024-03-01T00:00:00.000Z'),
+      updatedAt: new Date('2024-03-01T00:02:00.000Z'),
+      startedAt: new Date('2024-03-01T00:00:30.000Z'),
+      finishedAt: new Date('2024-03-01T00:02:00.000Z'),
+      sourceJobId: 'job-2',
+      manifestPath,
+      notionUrl: null,
+      anytypeUrl: null,
+      htmlUrl: null,
+      error: null,
+    });
+    mockGetJobById.mockResolvedValueOnce({
+      id: 'job-2',
+      state: 'succeeded',
+      createdAt: new Date('2024-03-01T00:00:00.000Z'),
+      updatedAt: new Date('2024-03-01T00:01:00.000Z'),
+      startedAt: new Date('2024-03-01T00:00:10.000Z'),
+      finishedAt: new Date('2024-03-01T00:01:00.000Z'),
+      sourceJobId: null,
+      manifestPath: null,
+      notionUrl: null,
+      anytypeUrl: null,
+      htmlUrl: null,
+      error: null,
+    });
+    mockListJobActionHistoryForJob.mockResolvedValue([]);
+    mockWithPgClient.mockImplementation(async (fn: (client: { query: () => unknown }) => unknown) =>
+      fn({
+        query: vi.fn().mockResolvedValue({ rows: [] }),
+      }),
+    );
+    mockGetPromptPackageLineage.mockResolvedValue(null);
+
+    const { getJobProvenance } = await import('../src/application/get-job-provenance.js');
+    const result = await getJobProvenance('job-3');
+
+    expect(result?.pronunciationWarnings).toEqual([
+      {
+        code: 'rerun_pronunciation_chunk_unknown_previous_provider',
+        message:
+          'Pronunciation chunk rerun could not confirm the previous clip provider; using provider-scoped fallback resolution instead.',
+      },
+    ]);
   });
 });
