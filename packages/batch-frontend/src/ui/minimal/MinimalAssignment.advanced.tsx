@@ -1045,6 +1045,19 @@ export function AdvancedActionsStage({
                       </span>
                     </div>
                   ) : null}
+                  {(controller.jobProvenance.pronunciationWarnings ?? []).length ? (
+                    <div className="minimal-alert warning" role="status" aria-live="polite">
+                      <strong>Audio notices</strong>
+                      <p className="minimal-help">
+                        This rerun completed with fallback audio resolution details worth checking.
+                      </p>
+                      <ul>
+                        {(controller.jobProvenance.pronunciationWarnings ?? []).map((warning) => (
+                          <li key={warning.code}>{warning.message}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
                   {controller.jobProvenance.lineage?.profile?.snapshot?.revisionId ||
                   controller.jobProvenance.lineage?.template?.snapshot?.revisionId ? (
                     <div className="minimal-meta">

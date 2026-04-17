@@ -37,6 +37,7 @@ Provider-specific generation details stay in:
 - prompt catalog runtime is DB-canonical
 - STT provider architecture now mirrors TTS
 - student-memory backend surfaces, prompt runtime packaging, provenance, replay tooling, and minimal workspace inspection UI are live
+- support-facing provenance surfaces now show rerun audio fallback notices without requiring worker-log access
 - Telegram ops control surface is live for operator workflows
 - rerun is now a single regeneration-intent workflow with explicit study-text / pronunciation-main / pronunciation-chunk controls
 
@@ -51,7 +52,7 @@ Provider-specific generation details stay in:
 | Draft save/materialize/publish approve     | Done    | Done     | none                                                                                                      |
 | Job status and core job actions            | Done    | Done     | rerun is a single action; chunk defaults remain mode-aware                                                |
 | Student summary/profile/bindings           | Done    | Partial  | workspace hardening continues                                                                             |
-| Student timeline + provenance              | Done    | Done     | continue ergonomics pass                                                                                  |
+| Student timeline + provenance              | Done    | Done     | support-facing provenance now includes rerun audio fallback notices; continue ergonomics pass             |
 | Student memory inspection + replay tooling | Done    | Done     | backend routes, prompt-package provenance, replay tools, and the minimal workspace inspection UI are live |
 | Direct generation provider/model selection | Done    | Done     | keep quota semantics aligned                                                                              |
 | Generation safety guardrails               | Done    | Done     | continue battle-testing telemetry                                                                         |
@@ -77,6 +78,7 @@ Provider-specific generation details stay in:
 - Regeneration intent derives the runtime stage chain automatically; operators do not select `tts` / `upload` / `add-audio` directly.
 - Unchecked rerun families must keep the previously published audio and their existing persisted provider/model defaults.
 - Checked rerun families must replace the published audio for that family, even if regeneration produces the same deterministic object key.
+- Provider-specific voice IDs must not be inherited across rerun provider changes. When a family switches providers, the runtime may keep the accent preference but must resolve any replacement voice from that provider's own catalog.
 - Pronunciation chunk provider defaults are mode-aware:
   - `edge-tts` for most modes
   - `elevenlabs` for `connected_speech`

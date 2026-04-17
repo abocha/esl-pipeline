@@ -95,6 +95,10 @@ export interface JobProvenanceResponse {
     costPer1kCharsUsd: number | null;
     estimatedSpendUsd: number | null;
   } | null;
+  pronunciationWarnings: {
+    code: string;
+    message: string;
+  }[];
   lineage: PromptPackageLineageResponse | null;
   actions: {
     id: string;
@@ -158,7 +162,7 @@ export async function getJobProvenance(jobId: string): Promise<JobProvenanceResp
 
   const promptPackageId = row?.prompt_package_id ?? null;
   const lineage = promptPackageId ? await getPromptPackageLineage(promptPackageId) : null;
-  const tts = await readTtsMetadataFromManifest(job.manifestPath);
+  const manifestAudioDiagnostics = await readManifestAudioDiagnostics(job.manifestPath);
 
   return {
     job: {
@@ -220,7 +224,8 @@ export async function getJobProvenance(jobId: string): Promise<JobProvenanceResp
           updatedAt: row.draft_updated_at ? row.draft_updated_at.toISOString() : null,
         }
       : null,
-    tts,
+    tts: manifestAudioDiagnostics?.tts ?? null,
+    pronunciationWarnings: manifestAudioDiagnostics?.pronunciationWarnings ?? [],
     lineage,
     actions: actions.map((event) => ({
       id: event.id,
@@ -235,14 +240,22 @@ export async function getJobProvenance(jobId: string): Promise<JobProvenanceResp
   };
 }
 
-async function readTtsMetadataFromManifest(manifestPath: string | null | undefined): Promise<{
-  provider: string | null;
-  generatedCharacters: number | null;
-  cachedCharacters: number | null;
-  totalCharacters: number | null;
-  cacheHitRatio: number | null;
-  costPer1kCharsUsd: number | null;
-  estimatedSpendUsd: number | null;
+async function readManifestAudioDiagnostics(
+  manifestPath: string | null | undefined,
+): Promise<{
+  tts: {
+    provider: string | null;
+    generatedCharacters: number | null;
+    cachedCharacters: number | null;
+    totalCharacters: number | null;
+    cacheHitRatio: number | null;
+    costPer1kCharsUsd: number | null;
+    estimatedSpendUsd: number | null;
+  } | null;
+  pronunciationWarnings: {
+    code: string;
+    message: string;
+  }[];
 } | null> {
   if (!manifestPath || manifestPath.startsWith('s3://')) {
     return null;
@@ -261,10 +274,29 @@ async function readTtsMetadataFromManifest(manifestPath: string | null | undefin
             estimatedSpendUsd?: unknown;
           };
         };
+        pronunciation?: {
+          warnings?: Array<{
+            code?: unknown;
+            message?: unknown;
+          }>;
+        };
       };
     };
     const tts = parsed.audioArtifacts?.studyText?.tts;
-    if (!tts || typeof tts !== 'object') return null;
+    const pronunciationWarnings = Array.isArray(parsed.audioArtifacts?.pronunciation?.warnings)
+      ? parsed.audioArtifacts.pronunciation.warnings.flatMap((warning) => {
+          const code = typeof warning?.code === 'string' ? warning.code : null;
+          const message = typeof warning?.message === 'string' ? warning.message : null;
+          return code && message ? [{ code, message }] : [];
+        })
+      : [];
+
+    if (!tts || typeof tts !== 'object') {
+      return {
+        tts: null,
+        pronunciationWarnings,
+      };
+    }
 
     const generatedCharacters =
       typeof tts.generatedCharacters === 'number' ? tts.generatedCharacters : null;
@@ -279,13 +311,18 @@ async function readTtsMetadataFromManifest(manifestPath: string | null | undefin
         : null;
 
     return {
-      provider: typeof tts.provider === 'string' ? tts.provider : null,
-      generatedCharacters,
-      cachedCharacters,
-      totalCharacters,
-      cacheHitRatio,
-      costPer1kCharsUsd: typeof tts.costPer1kCharsUsd === 'number' ? tts.costPer1kCharsUsd : null,
-      estimatedSpendUsd: typeof tts.estimatedSpendUsd === 'number' ? tts.estimatedSpendUsd : null,
+      tts: {
+        provider: typeof tts.provider === 'string' ? tts.provider : null,
+        generatedCharacters,
+        cachedCharacters,
+        totalCharacters,
+        cacheHitRatio,
+        costPer1kCharsUsd:
+          typeof tts.costPer1kCharsUsd === 'number' ? tts.costPer1kCharsUsd : null,
+        estimatedSpendUsd:
+          typeof tts.estimatedSpendUsd === 'number' ? tts.estimatedSpendUsd : null,
+      },
+      pronunciationWarnings,
     };
   } catch {
     return null;

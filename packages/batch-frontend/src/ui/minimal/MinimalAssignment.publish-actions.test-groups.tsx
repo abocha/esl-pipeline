@@ -362,6 +362,7 @@ export function registerJobActionTests() {
           promptPackage: { id: 'pkg-1' },
           draft: { id: 'draft-1' },
           tts: null,
+          pronunciationWarnings: [],
           lineage: {},
           actions: [],
         } as never);
