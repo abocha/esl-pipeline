@@ -330,8 +330,8 @@ async function applyRerunVoicePreferences(flags: RerunFlags): Promise<void> {
   flags.pronunciationChunkVoiceAccent = pronunciationChunkPreferences.accentPreference;
 }
 
-function resolveDefaultChunkProvider(mode?: string | null): 'edge-tts' | 'elevenlabs' {
-  return mode === 'connected_speech' ? 'elevenlabs' : 'edge-tts';
+function resolveDefaultChunkProvider(_mode?: string | null): 'edge-tts' | 'elevenlabs' | 'google' {
+  return 'google';
 }
 
 export {
@@ -823,6 +823,8 @@ export async function newAssignment(
 
         const narratorVoiceId = ttsResult.voiceAssignments?.Narrator;
         const fallbackVoiceId = narratorVoiceId ?? ttsResult.voices[0]?.voiceId;
+        const detectedPronunciationFocus = extractPronunciationFocus(markdownContext);
+        const defaultChunkProvider = resolveDefaultChunkProvider(detectedPronunciationFocus?.mode);
         audioArtifacts.pronunciation = await synthesizePronunciationAudio({
           context: markdownContext,
           mdPath: flags.md,
@@ -834,6 +836,8 @@ export async function newAssignment(
           primaryGoogleTtsModel: flags.googleTtsModel,
           logger,
           primaryVoiceId: fallbackVoiceId,
+          chunkTtsProvider: defaultChunkProvider,
+          chunkGoogleTtsModel: defaultChunkProvider === 'google' ? flags.googleTtsModel : undefined,
         });
         emitPronunciationProviderCharacterMetrics(metrics, audioArtifacts.pronunciation);
       }

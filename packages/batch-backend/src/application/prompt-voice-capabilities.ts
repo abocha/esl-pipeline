@@ -316,8 +316,11 @@ function normalizeStyle(value: string): string {
   const normalized = normalizeToken(value);
   if (!normalized) return '';
   if (normalized.includes('conversation')) return 'conversational';
-  if (normalized.includes('narrat')) return 'narration';
-  if (normalized.includes('character')) return 'characters';
+  if (normalized.includes('narrative') || normalized.includes('story')) return 'narrative_story';
+  if (normalized.includes('informative')) return 'informative_educational';
+  if (normalized.includes('social') && normalized.includes('media')) return 'social_media';
+  if (normalized.includes('character')) return 'characters_animation';
+  if (normalized.includes('entertainment')) return 'entertainment_tv';
   return normalized;
 }
 

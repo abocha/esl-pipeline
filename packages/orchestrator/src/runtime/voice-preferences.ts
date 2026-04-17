@@ -1,14 +1,14 @@
-import {
-  loadVoicesCatalog,
-  type TtsProviderId,
-  type VoiceCatalog,
-} from '@esl-pipeline/tts-core';
+import { loadVoicesCatalog, type TtsProviderId, type VoiceCatalog } from '@esl-pipeline/tts-core';
 
 interface VoicePreferenceFlags {
   voiceId?: string;
   accentPreference?: string;
   provider?: TtsProviderId;
   ttsProvider?: TtsProviderId;
+}
+
+interface ApplyVoicePreferenceOptions {
+  fallbackToFirstCatalogVoice?: boolean;
 }
 
 const cachedVoiceCatalogs = new Map<string, VoiceCatalog>();
@@ -54,18 +54,31 @@ function findVoiceByAccent(token: string, catalog: VoiceCatalog) {
   });
 }
 
-export async function applyVoicePreferences(flags: VoicePreferenceFlags): Promise<void> {
-  const needsResolution = Boolean(flags.voiceId || flags.accentPreference);
+function applyResolvedVoice(
+  flags: VoicePreferenceFlags,
+  voice: VoiceCatalog['voices'][number] | undefined,
+): boolean {
+  if (!voice?.id) return false;
+  flags.voiceId = voice.id;
+  if (typeof voice.labels?.accent === 'string') {
+    flags.accentPreference = voice.labels.accent;
+  }
+  return true;
+}
+
+export async function applyVoicePreferences(
+  flags: VoicePreferenceFlags,
+  options: ApplyVoicePreferenceOptions = {},
+): Promise<void> {
+  const needsResolution = Boolean(
+    flags.voiceId || flags.accentPreference || options.fallbackToFirstCatalogVoice,
+  );
   if (!needsResolution) return;
 
   const catalog = await getVoiceCatalog(flags.provider ?? flags.ttsProvider);
   if (flags.voiceId) {
     const match = findVoiceByToken(flags.voiceId, catalog);
-    if (match) {
-      flags.voiceId = match.id;
-      if (!flags.accentPreference && typeof match.labels?.accent === 'string') {
-        flags.accentPreference = match.labels.accent;
-      }
+    if (applyResolvedVoice(flags, match)) {
       return;
     }
   }
@@ -74,12 +87,16 @@ export async function applyVoicePreferences(flags: VoicePreferenceFlags): Promis
     const match =
       findVoiceByToken(flags.accentPreference, catalog) ??
       findVoiceByAccent(flags.accentPreference, catalog);
-    if (match) {
-      flags.voiceId = match.id;
-      if (typeof match.labels?.accent === 'string') {
-        flags.accentPreference = match.labels.accent;
-      }
+    if (applyResolvedVoice(flags, match)) {
+      return;
     }
+  }
+
+  if (options.fallbackToFirstCatalogVoice) {
+    applyResolvedVoice(
+      flags,
+      catalog.voices.find((voice) => typeof voice.id === 'string'),
+    );
   }
 }
 

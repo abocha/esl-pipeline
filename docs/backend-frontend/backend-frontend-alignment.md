@@ -80,8 +80,8 @@ Provider-specific generation details stay in:
 - Checked rerun families must replace the published audio for that family, even if regeneration produces the same deterministic object key.
 - Provider-specific voice IDs must not be inherited across rerun provider changes. When a family switches providers, the runtime may keep the accent preference but must resolve any replacement voice from that provider's own catalog.
 - Pronunciation chunk provider defaults are mode-aware:
-  - `edge-tts` for most modes
-  - `elevenlabs` for `connected_speech`
+  - `google` for all pronunciation chunk modes by default
+  - explicit reruns can still force `elevenlabs` or `edge-tts`
 - Study-text ElevenLabs reruns preserve original-run defaults unless the user explicitly selects another model:
   - `dialogue` -> `eleven_v3`
   - `tts` -> `eleven_multilingual_v2`

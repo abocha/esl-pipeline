@@ -604,7 +604,8 @@ describe('orchestrator observability', () => {
     );
 
     const warnLog = logs.find(
-      (entry) => entry.message ===
+      (entry) =>
+        entry.message ===
         'Pronunciation chunk rerun could not confirm the previous clip provider; using provider-scoped fallback resolution instead.',
     );
     expect(warnLog).toBeDefined();

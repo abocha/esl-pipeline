@@ -84,7 +84,7 @@ const catalogMock: VoiceCatalog = {
       category: 'premade',
       labels: {
         gender: 'female',
-        use_case: 'narration',
+        use_case: 'narrative_story',
         accent: 'american',
         age: 'adult',
         descriptive: 'professional',
@@ -99,7 +99,7 @@ const catalogMock: VoiceCatalog = {
         use_case: 'conversational',
         accent: 'british',
         age: 'young',
-        descriptive: 'social',
+        descriptive: 'casual',
       },
     },
     {
@@ -111,7 +111,7 @@ const catalogMock: VoiceCatalog = {
         use_case: 'conversational',
         accent: 'canadian',
         age: 'teen',
-        descriptive: 'thoughtful',
+        descriptive: 'calm',
       },
     },
     {
