@@ -36,6 +36,20 @@ describe('runtime/voice-preferences', () => {
     expect(flags).toEqual({ voiceId: 'voice-1', accentPreference: 'american' });
   });
 
+  it('loads a provider-scoped catalog when provider is supplied', async () => {
+    ttsMocks.loadVoicesCatalog.mockResolvedValue({
+      voices: [{ id: 'google-voice-1', name: 'Narrator', labels: { accent: 'american' } }],
+    });
+    const flags = { voiceId: 'Narrator', provider: 'google' as const };
+    await applyVoicePreferences(flags);
+    expect(ttsMocks.loadVoicesCatalog).toHaveBeenCalledWith('google');
+    expect(flags).toEqual({
+      voiceId: 'google-voice-1',
+      accentPreference: 'american',
+      provider: 'google',
+    });
+  });
+
   it('resolves accent token to a voice id', async () => {
     ttsMocks.loadVoicesCatalog.mockResolvedValue({
       voices: [{ id: 'voice-2', name: 'Narrator', labels: { accent: 'british' } }],
@@ -62,5 +76,22 @@ describe('runtime/voice-preferences', () => {
     const flags = { voiceId: 'Narrator' };
     await expect(applyVoicePreferences(flags)).resolves.toBeUndefined();
     expect(flags.voiceId).toBe('Narrator');
+  });
+
+  it('can fall back to the first provider-scoped catalog voice when requested', async () => {
+    ttsMocks.loadVoicesCatalog.mockResolvedValue({
+      voices: [
+        { id: 'google-voice-1', name: 'Achernar', labels: { accent: 'american' } },
+        { id: 'google-voice-2', name: 'Charon', labels: { accent: 'british' } },
+      ],
+    });
+    const flags = { provider: 'google' as const };
+    await applyVoicePreferences(flags, { fallbackToFirstCatalogVoice: true });
+    expect(ttsMocks.loadVoicesCatalog).toHaveBeenCalledWith('google');
+    expect(flags).toEqual({
+      provider: 'google',
+      voiceId: 'google-voice-1',
+      accentPreference: 'american',
+    });
   });
 });

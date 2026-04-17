@@ -5,7 +5,7 @@
 - Audience: maintainers and AI agents planning orchestrator refactors.
 - Read Time: 10 minutes.
 - Authority Level: reference map + implementation baseline.
-- Last Verified Against: 2026-03-09 repo state.
+- Last Verified Against: 2026-04-17 repo state.
 - Owner: orchestrator + batch-backend maintainers.
 - Review Cadence: monthly and before major refactor slices.
 - Status: `active`.
@@ -57,10 +57,12 @@
 - Family-aware rerun execution preserves the publish contract:
   - unchecked families reuse prior published artifacts and keep their existing persisted defaults
   - checked families overwrite the published artifact even when deterministic upload keys or semantic hashes are unchanged
+  - provider-specific voice identifiers are only reusable when the rerun stays on the same provider family; provider changes must fall back to provider-scoped voice resolution instead of inheriting stale foreign voice IDs
 
 ### Stable Contracts
 
 - Public API surface remains centered on `createPipeline` and orchestrator runtime methods.
+- Voice/accent preference resolution is provider-scoped when a provider is known; reruns must not resolve Google voices from ElevenLabs catalogs or vice versa.
 - Additive API v2 surface is available for explicit DTO/result envelopes:
   - `executeNewAssignmentV2`
   - `executeRerunAssignmentV2`

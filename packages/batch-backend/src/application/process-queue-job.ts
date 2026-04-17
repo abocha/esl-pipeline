@@ -32,6 +32,23 @@ import {
 } from '../infrastructure/tts-cache-maintenance-coordinator.js';
 import { requestHomeworkMemoryGeneration } from './request-homework-memory-generation.js';
 
+function resolveInheritedVoiceIdForProviderChange(args: {
+  explicitVoiceId?: string;
+  explicitProvider?: 'elevenlabs' | 'google' | 'edge-tts';
+  persistedProvider?: 'elevenlabs' | 'google';
+  persistedVoiceId?: string | null;
+}): string | undefined {
+  if (args.explicitVoiceId !== undefined) {
+    return args.explicitVoiceId;
+  }
+
+  if (args.explicitProvider !== undefined && args.explicitProvider !== args.persistedProvider) {
+    return undefined;
+  }
+
+  return args.persistedVoiceId ?? undefined;
+}
+
 // processQueueJob.declaration()
 export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
   const { jobId } = payload;
@@ -142,6 +159,10 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
       userSettings?.ttsProvider === 'elevenlabs' || userSettings?.ttsProvider === 'google'
         ? userSettings.ttsProvider
         : undefined;
+    const persistedStudyTextProvider =
+      running.ttsProvider === 'elevenlabs' || running.ttsProvider === 'google'
+        ? running.ttsProvider
+        : userSettingsTtsProvider;
 
     const isRerunExecution = payload.executionMode === 'rerun';
     const rerunRequestsGeneration =
@@ -179,7 +200,12 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
                 presign: payload.rerun?.presign,
                 studyTextVoiceAccent:
                   payload.rerun?.studyTextVoiceAccent ?? running.voiceAccent ?? undefined,
-                studyTextVoiceId: payload.rerun?.studyTextVoiceId ?? running.voiceId ?? undefined,
+                studyTextVoiceId: resolveInheritedVoiceIdForProviderChange({
+                  explicitVoiceId: payload.rerun?.studyTextVoiceId,
+                  explicitProvider: payload.rerun?.studyTextTtsProvider,
+                  persistedProvider: persistedStudyTextProvider,
+                  persistedVoiceId: running.voiceId,
+                }),
                 studyTextTtsStrategy:
                   payload.rerun?.studyTextTtsStrategy ?? running.ttsStrategy ?? undefined,
                 studyTextTtsProvider:
@@ -198,15 +224,23 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
                 studyTextDialogueSeed: payload.rerun?.studyTextDialogueSeed,
                 pronunciationMainVoiceAccent:
                   payload.rerun?.pronunciationMainVoiceAccent ?? running.voiceAccent ?? undefined,
-                pronunciationMainVoiceId:
-                  payload.rerun?.pronunciationMainVoiceId ?? running.voiceId ?? undefined,
+                pronunciationMainVoiceId: resolveInheritedVoiceIdForProviderChange({
+                  explicitVoiceId: payload.rerun?.pronunciationMainVoiceId,
+                  explicitProvider: payload.rerun?.pronunciationMainTtsProvider,
+                  persistedProvider: persistedStudyTextProvider,
+                  persistedVoiceId: running.voiceId,
+                }),
                 pronunciationMainTtsProvider: payload.rerun?.pronunciationMainTtsProvider,
                 pronunciationMainElevenlabsModel: payload.rerun?.pronunciationMainElevenlabsModel,
                 pronunciationMainGoogleTtsModel: payload.rerun?.pronunciationMainGoogleTtsModel,
                 pronunciationChunkVoiceAccent:
                   payload.rerun?.pronunciationChunkVoiceAccent ?? running.voiceAccent ?? undefined,
-                pronunciationChunkVoiceId:
-                  payload.rerun?.pronunciationChunkVoiceId ?? running.voiceId ?? undefined,
+                pronunciationChunkVoiceId: resolveInheritedVoiceIdForProviderChange({
+                  explicitVoiceId: payload.rerun?.pronunciationChunkVoiceId,
+                  explicitProvider: payload.rerun?.pronunciationChunkTtsProvider,
+                  persistedProvider: persistedStudyTextProvider,
+                  persistedVoiceId: running.voiceId,
+                }),
                 pronunciationChunkTtsProvider: payload.rerun?.pronunciationChunkTtsProvider,
                 pronunciationChunkElevenlabsModel: payload.rerun?.pronunciationChunkElevenlabsModel,
                 pronunciationChunkGoogleTtsModel: payload.rerun?.pronunciationChunkGoogleTtsModel,

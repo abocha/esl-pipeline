@@ -33,7 +33,7 @@ const GENERIC_VOICE_PRIORITY = [
 
 const ROLE_FALLBACK_BY_MODE: Record<'monologue' | 'dialogue', SpeakerMeta['role']> = {
   monologue: 'narrator',
-  dialogue: 'student',
+  dialogue: 'dialogue',
 };
 
 function normalize(str: string | undefined | null): string {
@@ -158,8 +158,10 @@ function buildDiagnostics(
   const mismatches: string[] = [];
   if (profile && catalogEntry) {
     const normalizedRole = normalizeSpeakerRole(profile.role) ?? profile.role;
+    const capabilityRole =
+      normalizedRole === 'narrator' || normalizedRole === 'system' ? normalizedRole : undefined;
     const checks: [label: string, expected: unknown, actual: string][] = [
-      ['role', normalizedRole, getVoiceLabel(catalogEntry, 'use_case')],
+      ['role', capabilityRole, getVoiceLabel(catalogEntry, 'use_case')],
       ['gender', profile.gender, getVoiceLabel(catalogEntry, 'gender')],
       ['age', profile.age, getVoiceLabel(catalogEntry, 'age')],
       ['accent', profile.accent, getVoiceLabel(catalogEntry, 'accent')],
@@ -258,9 +260,7 @@ export async function resolveSpeakerVoices(opts: {
           ? undefined
           : normalizedSpeaker === 'narrator'
             ? 'narrator'
-            : normalizedSpeaker.includes('teacher')
-              ? 'teacher'
-              : ROLE_FALLBACK_BY_MODE[opts.mode]);
+            : ROLE_FALLBACK_BY_MODE[opts.mode]);
       const profileAccent =
         typeof profile?.accent === 'string' && profile.accent.trim().length > 0
           ? profile.accent.trim().toLowerCase()

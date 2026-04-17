@@ -30,7 +30,7 @@ export interface Voice {
 
 export interface SpeakerMeta {
   gender?: 'male' | 'female' | 'child' | 'neutral';
-  role?: 'narrator' | 'teacher' | 'student' | 'system';
+  role?: 'narrator' | 'teacher' | 'student' | 'system' | 'dialogue';
   age?: 'child' | 'teen' | 'young' | 'adult' | 'middle_aged' | 'senior' | 'universal';
   accent?: string;
   style?: string;
@@ -162,29 +162,45 @@ function getLabel(voice: Voice, key: string): string {
   return '';
 }
 
-const ROLE_USE_CASE_HINTS: Record<NonNullable<SpeakerMeta['role']>, string[]> = {
-  narrator: ['narration', 'narrative', 'audiobook', 'news'],
-  teacher: ['narration', 'news', 'conversational', 'audiobook'],
-  student: ['conversational', 'social', 'social_media', 'characters', 'dialogue'],
-  system: ['narration', 'news', 'conversational'],
+type ScoringRole = 'narrator' | 'dialogue' | 'system' | '';
+
+const ROLE_USE_CASE_HINTS: Record<Exclude<ScoringRole, ''>, string[]> = {
+  narrator: ['narrative_story', 'informative_educational', 'advertisement'],
+  dialogue: ['conversational', 'social_media', 'characters_animation', 'entertainment_tv'],
+  system: ['informative_educational', 'advertisement', 'conversational'],
 };
 
 const STYLE_HINTS: Record<string, string[]> = {
-  professional: ['professional', 'narration', 'news'],
-  social: ['social', 'conversational', 'casual'],
-  calm: ['calm', 'relaxed', 'soothing'],
-  energetic: ['energetic', 'hyped', 'excited'],
-  creative: ['creative', 'expressive'],
-  practical: ['practical', 'clear', 'confident'],
-  thoughtful: ['thoughtful', 'calm', 'narration'],
+  professional: ['professional', 'formal', 'confident', 'informative_educational'],
+  calm: ['calm', 'relaxed', 'gentle', 'pleasant'],
+  energetic: ['upbeat', 'hyped', 'confident', 'social_media'],
+  casual: ['casual', 'conversational', 'relaxed', 'pleasant'],
+  confident: ['confident', 'professional', 'deep'],
+  formal: ['formal', 'professional', 'informative_educational'],
+  gentle: ['gentle', 'calm', 'pleasant'],
+  relaxed: ['relaxed', 'calm', 'casual'],
+  upbeat: ['upbeat', 'hyped', 'casual', 'social_media'],
+  mature: ['mature', 'deep', 'professional'],
+  pleasant: ['pleasant', 'gentle', 'calm'],
+  deep: ['deep', 'mature', 'confident'],
+  social: ['casual', 'conversational', 'upbeat', 'social_media'],
+  thoughtful: ['calm', 'gentle', 'mature', 'narrative_story'],
+  creative: ['characters_animation', 'upbeat', 'sassy', 'cute'],
+  practical: ['professional', 'confident', 'informative_educational', 'conversational'],
 };
+
+function normalizeScoringRole(role: SpeakerMeta['role'] | undefined): ScoringRole {
+  if (role === 'narrator' || role === 'system') return role;
+  if (role === 'teacher' || role === 'student' || role === 'dialogue') return 'dialogue';
+  return '';
+}
 
 function score(voice: Voice, need: SpeakerMeta): number {
   // higher is better
   let s = 0;
 
   const gender = (need.gender || '').toLowerCase();
-  const role = normalizeSpeakerRole(need.role) ?? '';
+  const role = normalizeScoringRole(normalizeSpeakerRole(need.role) ?? need.role);
   const desiredAge = (need.age || '').toLowerCase();
   const accent = (need.accent || '').toLowerCase();
   const style = (need.style || '').toLowerCase();
@@ -214,23 +230,20 @@ function score(voice: Voice, need: SpeakerMeta): number {
 
   switch (role) {
     case 'narrator': {
-      if (vUse.includes('narration') || vCat.includes('narration')) s += 30;
-      if (vUse.includes('news')) s += 10;
+      if (vUse.includes('narrative_story') || vCat.includes('narration')) s += 30;
+      if (vUse.includes('informative_educational')) s += 12;
 
       break;
     }
-    case 'teacher': {
-      // prefer “narration”, “news” or “conversational” tones for clarity
-      if (vUse.includes('narration') || vUse.includes('news') || vUse.includes('conversation'))
-        s += 20;
-
+    case 'dialogue': {
+      if (vUse.includes('conversational')) s += 18;
+      if (vUse.includes('social_media') || vUse.includes('characters_animation')) s += 6;
+      if (vDesc.includes('casual') || vDesc.includes('relaxed')) s += 4;
       break;
     }
-    case 'student': {
-      // neutral/conversational is fine
-      if (vUse.includes('conversation')) s += 10;
-      if (vUse.includes('social')) s += 5;
-
+    case 'system': {
+      if (vUse.includes('informative_educational')) s += 18;
+      if (vDesc.includes('professional') || vDesc.includes('formal')) s += 6;
       break;
     }
     // No default
@@ -239,7 +252,7 @@ function score(voice: Voice, need: SpeakerMeta): number {
   // small bonus if there's an accent label (variety), but not critical
   if (getLabel(voice, 'accent')) s += 3;
 
-  if (role && ROLE_USE_CASE_HINTS[role as keyof typeof ROLE_USE_CASE_HINTS]) {
+  if (role && role in ROLE_USE_CASE_HINTS) {
     const hints = ROLE_USE_CASE_HINTS[role as keyof typeof ROLE_USE_CASE_HINTS];
     if (hints.some((h) => vUse.includes(h))) s += 10;
   }
@@ -249,7 +262,10 @@ function score(voice: Voice, need: SpeakerMeta): number {
     else if (vDesc.includes(style)) s += 10;
     else if (STYLE_HINTS[style]) {
       const hints = STYLE_HINTS[style]!;
-      if (hints.some((h) => vDesc.includes(h) || vUse.includes(h))) s += 8;
+      if (hints.some((h) => vDesc.includes(h) || vUse.includes(h))) s += 12;
+      else if (vDesc || vUse) s -= 10;
+    } else if (vDesc || vUse) {
+      s -= 10;
     }
   }
 
@@ -281,11 +297,13 @@ export async function pickVoiceForSpeaker(
 
   const explicitGender = normalizeGender(meta.gender);
   const guessedGender = explicitGender || guessGenderFromName(speakerName);
+  const normalizedRole = normalizeScoringRole(
+    normalizeSpeakerRole(meta.role) ??
+      (speakerName.toLowerCase() === 'narrator' ? 'narrator' : meta.role),
+  );
   const guessed: SpeakerMeta = {
     gender: guessedGender || undefined,
-    role:
-      normalizeSpeakerRole(meta.role) ??
-      (speakerName.toLowerCase() === 'narrator' ? 'narrator' : undefined),
+    role: normalizedRole || undefined,
     age: meta.age,
     accent: meta.accent,
     style: meta.style,

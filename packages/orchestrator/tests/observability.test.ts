@@ -378,4 +378,255 @@ describe('orchestrator observability', () => {
       }),
     );
   }, 20_000);
+
+  it('does not reuse a previous provider voice id when rerun chunk synthesis switches providers', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'orchestrator-rerun-provider-switch-'));
+    const mdPath = join(dir, 'assignment.md');
+    const audioPath = join(dir, 'lesson.mp3');
+
+    const markdown = await readFile(
+      join(import.meta.dirname, '../../md-validator/fixtures/ok.md'),
+      'utf8',
+    );
+    await writeFile(mdPath, markdown);
+    await writeFile(audioPath, 'dummy audio');
+
+    process.env.S3_BUCKET = 'observability-bucket';
+    process.env.AWS_REGION = 'us-east-1';
+
+    const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-core');
+    vi.mocked(buildStudyTextMp3).mockResolvedValue({
+      path: audioPath,
+      hash: 'study-hash',
+      provider: 'elevenlabs',
+      voices: [{ speaker: 'Anna', voiceId: 'pNInz6obpgDQGcFmaJgB', source: 'default' }],
+    });
+    vi.mocked(synthesizePronunciationAudio)
+      .mockResolvedValueOnce({
+        mode: 'shadow_sentence',
+        primaryClip: {
+          id: 'pron-primary',
+          kind: 'shadow_sentence',
+          engine: 'provider',
+          text: 'Hello there.',
+          path: join(dir, 'pron-primary.mp3'),
+          hash: 'pron-primary-hash',
+          voiceId: 'pNInz6obpgDQGcFmaJgB',
+          tts: {
+            provider: 'elevenlabs',
+            modelId: 'eleven_flash_v2_5',
+          },
+        },
+        itemClips: [
+          {
+            id: 'pron-item-1',
+            itemIndex: 0,
+            kind: 'sentence_item',
+            engine: 'provider',
+            text: 'pull',
+            path: join(dir, 'pron-item-1.mp3'),
+            hash: 'pron-item-hash',
+            voiceId: 'pNInz6obpgDQGcFmaJgB',
+            tts: {
+              provider: 'elevenlabs',
+              modelId: 'eleven_flash_v2_5',
+            },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        mode: 'shadow_sentence',
+        primaryClip: {
+          id: 'pron-primary',
+          kind: 'shadow_sentence',
+          engine: 'provider',
+          text: 'Hello there.',
+          path: join(dir, 'pron-primary-rerun.mp3'),
+          hash: 'pron-primary-rerun-hash',
+          voiceId: 'en-US-Chirp3-HD-Achernar',
+          tts: {
+            provider: 'google',
+            modelId: 'chirp3_hd',
+          },
+        },
+        itemClips: [
+          {
+            id: 'pron-item-1',
+            itemIndex: 0,
+            kind: 'sentence_item',
+            engine: 'provider',
+            text: 'pull',
+            path: join(dir, 'pron-item-rerun.mp3'),
+            hash: 'pron-item-rerun-hash',
+            voiceId: 'en-US-Chirp3-HD-Achernar',
+            tts: {
+              provider: 'google',
+              modelId: 'chirp3_hd',
+            },
+          },
+        ],
+      });
+
+    const { newAssignment, rerunAssignment } = await import('../src/index.js');
+    await newAssignment(
+      {
+        md: mdPath,
+        preset: 'default',
+        withTts: true,
+        upload: 's3',
+        voices: 'packages/orchestrator/configs/voices.yml',
+        dryRun: true,
+        ttsProvider: 'elevenlabs',
+      },
+      {},
+      { runId: 'run-initial' },
+    );
+
+    await rerunAssignment(
+      {
+        md: mdPath,
+        regeneratePronunciationChunkAudio: true,
+        upload: 's3',
+        dryRun: true,
+        pronunciationChunkTtsProvider: 'google',
+        pronunciationChunkGoogleTtsModel: 'chirp3_hd',
+      },
+      { runId: 'run-rerun' },
+    );
+
+    const rerunInvocation = vi.mocked(synthesizePronunciationAudio).mock.calls[1]?.[0];
+    expect(rerunInvocation).toEqual(
+      expect.objectContaining({
+        chunkTtsProvider: 'google',
+        chunkGoogleTtsModel: 'chirp3_hd',
+        chunkVoiceId: undefined,
+      }),
+    );
+  }, 20_000);
+
+  it('warns when rerun chunk provider metadata is missing and voice fallback becomes ambiguous', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'orchestrator-rerun-provider-warning-'));
+    const mdPath = join(dir, 'assignment.md');
+    const audioPath = join(dir, 'lesson.mp3');
+
+    const markdown = await readFile(
+      join(import.meta.dirname, '../../md-validator/fixtures/ok.md'),
+      'utf8',
+    );
+    await writeFile(mdPath, markdown);
+    await writeFile(audioPath, 'dummy audio');
+
+    process.env.S3_BUCKET = 'observability-bucket';
+    process.env.AWS_REGION = 'us-east-1';
+
+    const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-core');
+    vi.mocked(buildStudyTextMp3).mockResolvedValue({
+      path: audioPath,
+      hash: 'study-hash',
+      provider: 'elevenlabs',
+      voices: [{ speaker: 'Anna', voiceId: 'voice_id_default', source: 'default' }],
+    });
+    vi.mocked(synthesizePronunciationAudio)
+      .mockResolvedValueOnce({
+        mode: 'shadow_sentence',
+        primaryClip: {
+          id: 'pron-primary',
+          kind: 'shadow_sentence',
+          engine: 'provider',
+          text: 'Hello there.',
+          path: join(dir, 'pron-primary.mp3'),
+          hash: 'pron-primary-hash',
+        },
+        itemClips: [
+          {
+            id: 'pron-item-1',
+            itemIndex: 0,
+            kind: 'sentence_item',
+            engine: 'provider',
+            text: 'pull',
+            path: join(dir, 'pron-item-1.mp3'),
+            hash: 'pron-item-hash',
+            voiceId: 'legacy-voice-without-provider',
+            tts: {
+              modelId: 'eleven_flash_v2_5',
+            },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        mode: 'shadow_sentence',
+        itemClips: [
+          {
+            id: 'pron-item-rerun-1',
+            itemIndex: 0,
+            kind: 'sentence_item',
+            engine: 'provider',
+            text: 'pull',
+            path: join(dir, 'pron-item-rerun.mp3'),
+            hash: 'pron-item-rerun-hash',
+            voiceId: 'resolved-google-voice',
+            tts: {
+              provider: 'google',
+              modelId: 'chirp3_hd',
+            },
+          },
+        ],
+      });
+
+    const logs: PipelineLogEvent[] = [];
+    const logger: PipelineLogger = { log: (event) => logs.push(event) };
+
+    const { newAssignment, rerunAssignment } = await import('../src/index.js');
+    await newAssignment(
+      {
+        md: mdPath,
+        preset: 'default',
+        withTts: true,
+        upload: 's3',
+        voices: 'packages/orchestrator/configs/voices.yml',
+        dryRun: true,
+        ttsProvider: 'elevenlabs',
+      },
+      {},
+      { runId: 'run-initial' },
+    );
+
+    await rerunAssignment(
+      {
+        md: mdPath,
+        regeneratePronunciationChunkAudio: true,
+        upload: 's3',
+        dryRun: true,
+        pronunciationChunkTtsProvider: 'google',
+        pronunciationChunkGoogleTtsModel: 'chirp3_hd',
+      },
+      { runId: 'run-rerun', logger },
+    );
+
+    const warnLog = logs.find(
+      (entry) =>
+        entry.message ===
+        'Pronunciation chunk rerun could not confirm the previous clip provider; using provider-scoped fallback resolution instead.',
+    );
+    expect(warnLog).toBeDefined();
+    expect(warnLog?.detail).toEqual(
+      expect.objectContaining({
+        code: 'rerun_pronunciation_chunk_unknown_previous_provider',
+      }),
+    );
+
+    const ttsSuccessLog = logs.find((entry) => entry.message === 'stage.tts.success');
+    expect(ttsSuccessLog?.detail).toEqual(
+      expect.objectContaining({
+        rerunWarnings: expect.arrayContaining([
+          expect.objectContaining({
+            code: 'rerun_pronunciation_chunk_unknown_previous_provider',
+          }),
+          expect.objectContaining({
+            code: 'rerun_pronunciation_chunk_voice_unresolved',
+          }),
+        ]),
+      }),
+    );
+  }, 20_000);
 });

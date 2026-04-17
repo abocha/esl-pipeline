@@ -256,6 +256,39 @@ describe('application/job-actions/rerun', () => {
     );
   });
 
+  it('does not inherit study-text voice ids across provider changes', async () => {
+    const result = await rerun('job-1', {
+      type: JobActionType.RERUN,
+      requestedAt,
+      payload: {
+        regenerateStudyTextAudio: true,
+        studyTextTtsProvider: 'google',
+      },
+    });
+
+    expect(result.success).toBe(true);
+    expect(vi.mocked(insertJob)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        voiceId: undefined,
+        voiceAccent: 'american',
+        ttsProvider: 'google',
+        googleTtsModel: 'chirp3_hd',
+      }),
+    );
+
+    const enqueueSpy = vi.mocked(createJobQueue).mock.results[0]?.value.enqueue;
+    expect(enqueueSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        rerun: expect.objectContaining({
+          regenerateStudyTextAudio: true,
+          studyTextTtsProvider: 'google',
+          studyTextVoiceAccent: 'american',
+          studyTextVoiceId: undefined,
+        }),
+      }),
+    );
+  });
+
   it('recovers a durable html manifest from the published artifact when the source manifest is missing', async () => {
     await rm(durableManifestPath, { force: true });
     vi.stubGlobal(

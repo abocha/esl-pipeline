@@ -974,6 +974,10 @@ export interface JobProvenanceResponse {
     costPer1kCharsUsd: number | null;
     estimatedSpendUsd: number | null;
   } | null;
+  pronunciationWarnings: {
+    code: string;
+    message: string;
+  }[];
   lineage: PromptPackageLineageResponse | null;
   actions: {
     id: string;

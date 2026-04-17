@@ -53,6 +53,7 @@ describe('runtime/pronunciation-audio', () => {
       mdPath: '/tmp/example.md',
       outPath: '/tmp',
       title: 'Pronunciation',
+      chunkTtsProvider: 'edge-tts',
       chunkVoiceId: 'voice-1',
       logger: {
         log: (entry: unknown) => logs.push(entry),
@@ -80,6 +81,55 @@ describe('runtime/pronunciation-audio', () => {
             'edge-tts was unavailable for word/pair pronunciation clips, so provider pronunciation audio was used instead.',
         }),
       ]),
+    );
+  });
+
+  it('defaults pronunciation chunk clips to google without invoking edge-tts', async () => {
+    vi.mocked(extractPronunciationFocus).mockReturnValue({
+      mode: 'minimal_pair',
+      pairs: [
+        {
+          line: 1,
+          left: { text: 'pull', transcription: '/pʊl/', line: 1 },
+          right: { text: 'pool', transcription: '/puːl/', line: 1 },
+        },
+      ],
+      sectionStartLine: 1,
+      issues: [],
+    });
+    vi.mocked(buildPronunciationTextMp3).mockImplementation(async ({ text, voiceId }) => ({
+      path: `/tmp/${String(text).replaceAll(/\s+/g, '-')}.mp3`,
+      hash: `hash-${String(text).replaceAll(/\s+/g, '-')}`,
+      voiceId,
+      provider: 'google',
+      modelId: 'chirp3_hd',
+      generatedCharacters: String(text).length,
+      cachedCharacters: 0,
+    }));
+
+    const result = await synthesizePronunciationAudio({
+      context: {} as never,
+      mdPath: '/tmp/example.md',
+      outPath: '/tmp',
+      title: 'Pronunciation',
+      primaryTtsProvider: 'elevenlabs',
+      primaryVoiceId: 'eleven-voice-1',
+      chunkVoiceId: 'en-US-Chirp3-HD-Achernar',
+    });
+
+    expect(result?.mode).toBe('minimal_pair');
+    expect(result?.itemClips).toHaveLength(2);
+    expect(vi.mocked(synthesizeEdgeTtsClip)).not.toHaveBeenCalled();
+    expect(vi.mocked(buildPronunciationTextMp3)).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(buildPronunciationTextMp3)).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        text: 'pull',
+        voiceId: 'en-US-Chirp3-HD-Achernar',
+      }),
+      expect.objectContaining({
+        ttsProvider: 'google',
+      }),
     );
   });
 
@@ -147,7 +197,7 @@ describe('runtime/pronunciation-audio', () => {
     );
   });
 
-  it('reuses the primary provider voice for sentence-level item clips when no chunk voice override is provided', async () => {
+  it('uses the Google chunk default voice for sentence-level item clips when no chunk voice override is provided', async () => {
     vi.mocked(extractPronunciationFocus).mockReturnValue({
       mode: 'sentence_stress',
       naturalSentence: 'We really need to leave now before traffic gets worse.',
@@ -160,15 +210,17 @@ describe('runtime/pronunciation-audio', () => {
       sectionStartLine: 1,
       issues: [],
     });
-    vi.mocked(buildPronunciationTextMp3).mockImplementation(async ({ text, voiceId }) => ({
-      path: `/tmp/${String(text).replaceAll(/\s+/g, '-')}.mp3`,
-      hash: `hash-${String(text).replaceAll(/\s+/g, '-')}`,
-      voiceId,
-      provider: 'google',
-      modelId: 'studio',
-      generatedCharacters: String(text).length,
-      cachedCharacters: 0,
-    }));
+    vi.mocked(buildPronunciationTextMp3).mockImplementation(
+      async ({ text, voiceId }, providerConfig) => ({
+        path: `/tmp/${String(text).replaceAll(/\s+/g, '-')}.mp3`,
+        hash: `hash-${String(text).replaceAll(/\s+/g, '-')}`,
+        voiceId,
+        provider: 'google',
+        modelId: providerConfig.googleTtsModel,
+        generatedCharacters: String(text).length,
+        cachedCharacters: 0,
+      }),
+    );
 
     const result = await synthesizePronunciationAudio({
       context: {} as never,
@@ -184,17 +236,17 @@ describe('runtime/pronunciation-audio', () => {
     expect(result?.primaryClip?.voiceId).toBe('voice-primary');
     expect(result?.primaryClip?.tts?.modelId).toBe('studio');
     expect(result?.itemClips).toHaveLength(1);
-    expect(result?.itemClips?.[0]?.voiceId).toBe('voice-primary');
-    expect(result?.itemClips?.[0]?.tts?.modelId).toBe('studio');
+    expect(result?.itemClips?.[0]?.voiceId).toBe('en-US-Chirp3-HD-Charon');
+    expect(result?.itemClips?.[0]?.tts?.modelId).toBe('chirp3_hd');
     expect(vi.mocked(buildPronunciationTextMp3)).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
         text: 'We REALLY need to leave now.',
-        voiceId: 'voice-primary',
+        voiceId: 'en-US-Chirp3-HD-Charon',
       }),
       expect.objectContaining({
         ttsProvider: 'google',
-        googleTtsModel: 'studio',
+        googleTtsModel: 'chirp3_hd',
       }),
     );
   });
@@ -225,6 +277,7 @@ describe('runtime/pronunciation-audio', () => {
       mdPath: '/tmp/example.md',
       outPath: '/tmp',
       title: 'Pronunciation',
+      chunkTtsProvider: 'edge-tts',
       chunkEdgeVoice: 'en-GB-SoniaNeural',
     });
 
