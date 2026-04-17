@@ -81,11 +81,19 @@ describe('tts elevenlabs gender-aware voice selection', () => {
     expect(pickedAny?.id).toBe('male_1');
   });
 
-  it('maps dialogue-role aliases to canonical scoring hints', async () => {
+  it('maps dialogue-role aliases into the peer-dialogue scoring path', async () => {
     const catalog = {
       voices: [
-        { id: 'voice_social', name: 'Social', labels: { gender: 'female', use_case: 'social' } },
-        { id: 'voice_formal', name: 'Formal', labels: { gender: 'female', use_case: 'news' } },
+        {
+          id: 'voice_dialogue',
+          name: 'Dialogue',
+          labels: { gender: 'female', use_case: 'conversational', descriptive: 'casual' },
+        },
+        {
+          id: 'voice_narrative',
+          name: 'Narrative',
+          labels: { gender: 'female', use_case: 'narrative_story', descriptive: 'formal' },
+        },
       ],
     };
 
@@ -95,7 +103,63 @@ describe('tts elevenlabs gender-aware voice selection', () => {
       { catalog: catalog as any },
     );
 
-    expect(picked?.id).toBe('voice_formal');
+    expect(picked?.id).toBe('voice_dialogue');
+  });
+
+  it('treats teacher and student dialogue roles the same for study-text voice scoring', async () => {
+    const catalog = {
+      voices: [
+        {
+          id: 'voice_dialogue',
+          name: 'Dialogue',
+          labels: { gender: 'female', use_case: 'conversational', descriptive: 'casual' },
+        },
+        {
+          id: 'voice_narrative',
+          name: 'Narrative',
+          labels: { gender: 'female', use_case: 'narrative_story', descriptive: 'formal' },
+        },
+      ],
+    };
+
+    const studentPick = await pickVoiceForSpeaker(
+      'Ava',
+      { gender: 'female', role: 'student', style: 'social' },
+      { catalog: catalog as any },
+    );
+    const teacherPick = await pickVoiceForSpeaker(
+      'Ava',
+      { gender: 'female', role: 'teacher', style: 'social' },
+      { catalog: catalog as any },
+    );
+
+    expect(studentPick?.id).toBe('voice_dialogue');
+    expect(teacherPick?.id).toBe('voice_dialogue');
+  });
+
+  it('maps legacy thoughtful style hints onto catalog-backed calm or mature voices', async () => {
+    const catalog = {
+      voices: [
+        {
+          id: 'voice_thoughtful',
+          name: 'Thoughtful',
+          labels: { gender: 'male', use_case: 'narrative_story', descriptive: 'mature' },
+        },
+        {
+          id: 'voice_hyped',
+          name: 'Hyped',
+          labels: { gender: 'male', use_case: 'social_media', descriptive: 'upbeat' },
+        },
+      ],
+    };
+
+    const picked = await pickVoiceForSpeaker(
+      'Mark',
+      { gender: 'male', role: 'student', style: 'thoughtful' },
+      { catalog: catalog as any },
+    );
+
+    expect(picked?.id).toBe('voice_thoughtful');
   });
 
   it('treats unknown explicit role as zero role score (no mode fallback role bias)', async () => {

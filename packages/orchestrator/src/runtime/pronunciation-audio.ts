@@ -52,6 +52,16 @@ const EDGE_TTS_PROVIDER_FALLBACK_WARNING: PronunciationAudioWarning = {
     'edge-tts was unavailable for word/pair pronunciation clips, so provider pronunciation audio was used instead.',
 };
 const IPA_TRANSCRIPTION_ONLY_REGEX = /^\/[^/\n]+\/$/;
+const DEFAULT_GOOGLE_CHUNK_MODEL: BuildPronunciationTextOptions['googleTtsModel'] = 'chirp3_hd';
+const DEFAULT_GOOGLE_CHUNK_VOICE_BY_MODEL: Record<
+  NonNullable<BuildPronunciationTextOptions['googleTtsModel']>,
+  string
+> = {
+  chirp3_hd: 'en-US-Chirp3-HD-Charon',
+  studio: 'en-US-Studio-O',
+  neural2: 'en-US-Neural2-F',
+  wavenet: 'en-US-Wavenet-F',
+};
 
 function normalizeSpeechText(value: string): string {
   return String(value || '')
@@ -292,14 +302,12 @@ function resolveChunkProvider(
   if (requested) return requested;
   switch (focus.mode) {
     case 'shadow_sentence':
-    case 'minimal_pair': {
-      return 'edge-tts';
-    }
+    case 'minimal_pair':
     case 'connected_speech':
     case 'intonation':
     case 'rhythm_chunking':
     case 'sentence_stress': {
-      return null;
+      return 'google';
     }
   }
 }
@@ -319,14 +327,29 @@ export async function synthesizePronunciationAudio(
   const shouldGeneratePrimary = options.regeneratePrimary !== false;
   const shouldGenerateItems = options.regenerateItems !== false;
   const chunkProvider = resolveChunkProvider(focus, options.chunkTtsProvider);
+  const googleChunkModel =
+    chunkProvider === 'google'
+      ? (options.chunkGoogleTtsModel ?? DEFAULT_GOOGLE_CHUNK_MODEL)
+      : undefined;
+  const resolvedChunkGoogleModel =
+    googleChunkModel ?? options.chunkGoogleTtsModel ?? options.primaryGoogleTtsModel;
+  const resolvedChunkGoogleVoice =
+    googleChunkModel !== undefined
+      ? DEFAULT_GOOGLE_CHUNK_VOICE_BY_MODEL[googleChunkModel]
+      : undefined;
   const chunkProviderConfig: ProviderClipSynthesisConfig = {
     ttsProvider:
       chunkProvider === 'edge-tts'
         ? options.primaryTtsProvider
         : (chunkProvider ?? options.primaryTtsProvider),
-    googleTtsModel: options.chunkGoogleTtsModel ?? options.primaryGoogleTtsModel,
+    googleTtsModel: resolvedChunkGoogleModel,
     modelId: options.chunkModelId ?? options.primaryModelId,
-    voiceId: options.chunkVoiceId ?? options.primaryVoiceId,
+    voiceId:
+      options.chunkVoiceId ??
+      (chunkProvider === 'google' ? resolvedChunkGoogleVoice : undefined) ??
+      (chunkProvider === null || chunkProvider === options.primaryTtsProvider
+        ? options.primaryVoiceId
+        : undefined),
   };
   const primaryProviderConfig: ProviderClipSynthesisConfig = {
     ttsProvider: options.primaryTtsProvider,

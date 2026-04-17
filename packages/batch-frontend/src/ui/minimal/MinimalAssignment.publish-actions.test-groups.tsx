@@ -186,7 +186,7 @@ export function registerJobActionTests() {
         await renderPublishedAssignment();
         openAdvancedActions();
 
-        await user.click(screen.getByRole('button', { name: /Custom rerun/i }));
+        await user.click(screen.getByRole('button', { name: /^Custom rerun$/i }));
         await user.click(screen.getByRole('checkbox', { name: /Study-text audio/i }));
         fireEvent.change(screen.getByRole('textbox', { name: /Study-text voice ID/i }), {
           target: { value: 'voice-new' },
@@ -253,7 +253,7 @@ export function registerJobActionTests() {
           },
         });
 
-        await user.click(screen.getByRole('button', { name: /Custom rerun/i }));
+        await user.click(screen.getByRole('button', { name: /^Custom rerun$/i }));
         await user.click(screen.getByRole('checkbox', { name: /Pronunciation chunk audio/i }));
 
         expect(
@@ -262,7 +262,7 @@ export function registerJobActionTests() {
               name: /Pronunciation chunk provider/i,
             }) as HTMLSelectElement
           ).value,
-        ).toBe('elevenlabs');
+        ).toBe('google');
       },
       INTEGRATION_TEST_TIMEOUT_MS,
     );
@@ -279,7 +279,7 @@ export function registerJobActionTests() {
         });
         openAdvancedActions();
 
-        await user.click(screen.getByRole('button', { name: /Custom rerun/i }));
+        await user.click(screen.getByRole('button', { name: /^Custom rerun$/i }));
         await user.click(screen.getByRole('checkbox', { name: /Pronunciation chunk audio/i }));
 
         expect(
@@ -288,7 +288,7 @@ export function registerJobActionTests() {
               name: /Pronunciation chunk provider/i,
             }) as HTMLSelectElement
           ).value,
-        ).toBe('elevenlabs');
+        ).toBe('google');
       },
       INTEGRATION_TEST_TIMEOUT_MS,
     );
@@ -300,7 +300,7 @@ export function registerJobActionTests() {
         await renderPublishedAssignment();
         openAdvancedActions();
 
-        await user.click(screen.getByRole('button', { name: /Custom rerun/i }));
+        await user.click(screen.getByRole('button', { name: /^Custom rerun$/i }));
         await user.click(screen.getByRole('checkbox', { name: /Study-text audio/i }));
         await user.click(screen.getByRole('checkbox', { name: /Main pronunciation audio/i }));
         await user.click(screen.getByRole('checkbox', { name: /Pronunciation chunk audio/i }));
@@ -347,7 +347,7 @@ export function registerJobActionTests() {
         });
         openAdvancedActions();
 
-        await user.click(screen.getByRole('button', { name: /Custom rerun/i }));
+        await user.click(screen.getByRole('button', { name: /^Custom rerun$/i }));
         await user.click(screen.getByRole('checkbox', { name: /Study-text audio/i }));
         fireEvent.change(screen.getByRole('textbox', { name: /Study-text voice ID/i }), {
           target: { value: 'voice-from-a' },
@@ -362,6 +362,7 @@ export function registerJobActionTests() {
           promptPackage: { id: 'pkg-1' },
           draft: { id: 'draft-1' },
           tts: null,
+          pronunciationWarnings: [],
           lineage: {},
           actions: [],
         } as never);
@@ -376,7 +377,7 @@ export function registerJobActionTests() {
         });
 
         openAdvancedActions();
-        await user.click(screen.getByRole('button', { name: /Custom rerun/i }));
+        await user.click(screen.getByRole('button', { name: /^Custom rerun$/i }));
         await user.click(screen.getByRole('checkbox', { name: /Study-text audio/i }));
 
         expect(

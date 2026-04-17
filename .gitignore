@@ -1,37 +1,46 @@
+# Build output
 node_modules/
 dist/
 coverage/
 /configs/
 
+# Generated metadata
 *.tsbuildinfo
 *.log
 .DS_Store
 
-packages/orchestrator/configs/wizard.defaults.json
+# Package-specific generated configs
 packages/orchestrator/configs/elevenlabs.voices.json
 packages/orchestrator/configs/students/*.json
 !packages/orchestrator/configs/students/default.json
-docs/templates/*
-!docs/templates/hw_prompt_v4-3_voice-aligned.md
-!docs/templates/hw_prompt_v4-4_voice-aligned.md
-!docs/templates/hw_prompt_v4-5_voice-aligned.md
 
+# Local environment and tooling
 .kilocode
 .pnpm-store
 .roo
 .vscode
 .agent
+.agents
+.changeset
+.claude
+.tmp
+.venv
+
+# Skill-related artifacts
+skills
+skills-lock.json
 .codex
 .artifacts
 
+# Secrets and env
 .env
 .env.batch-backend
 .secrets
 
+# Runtime artifacts
 /uploads
 /tmp
 /out
 *.mp3
 packages/orchestrator/examples/service/fixtures/lesson.manifest.json
 fixtures/*.opus
-packages/md-validator/test-results.json

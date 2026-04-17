@@ -44,7 +44,7 @@ import './MinimalAssignment.css';
 const AUDIO_EXTENSIONS = ['.wav', '.mp3', '.m4a', '.aac', '.ogg', '.opus'];
 const POLL_INTERVAL_MS = 3000;
 const FALLBACK_TTS_PROVIDERS = ['elevenlabs', 'google'] as const;
-const FALLBACK_PRONUNCIATION_CHUNK_TTS_PROVIDERS = ['edge-tts', 'elevenlabs', 'google'] as const;
+const FALLBACK_PRONUNCIATION_CHUNK_TTS_PROVIDERS = ['google', 'elevenlabs', 'edge-tts'] as const;
 const FALLBACK_GOOGLE_TTS_MODELS = ['chirp3_hd', 'studio', 'neural2', 'wavenet'] as const;
 const FALLBACK_ELEVENLABS_MODEL = 'eleven_multilingual_v2';
 const FALLBACK_ELEVENLABS_MODELS = [
@@ -118,9 +118,9 @@ function formatShortJobId(jobId: string | null | undefined): string {
 }
 
 function getDefaultPronunciationChunkProviderForMode(
-  mode: PronunciationMode | null,
+  _mode: PronunciationMode | null,
 ): UiPronunciationChunkTtsProvider {
-  return mode === 'connected_speech' ? 'elevenlabs' : 'edge-tts';
+  return 'google';
 }
 
 interface SelectablePresetOption {

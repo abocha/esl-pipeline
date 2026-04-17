@@ -181,7 +181,7 @@ describe('application/process-queue-job', () => {
     );
   });
 
-  it('defaults pronunciation rerun voice settings to the persisted job voice preferences', async () => {
+  it('defaults pronunciation rerun voice settings to the persisted job voice preferences when the provider stays compatible', async () => {
     const initial = makeJob({
       state: 'queued',
       voiceId: 'voice_job_default',
@@ -235,6 +235,68 @@ describe('application/process-queue-job', () => {
         pronunciationChunkVoiceAccent: 'british',
         pronunciationChunkTtsProvider: 'elevenlabs',
         pronunciationChunkElevenlabsModel: 'eleven_multilingual_v2',
+      }),
+      expect.any(String),
+      expect.objectContaining({
+        signal: expect.any(AbortSignal),
+      }),
+    );
+  });
+
+  it('does not inherit provider-specific pronunciation voice ids when the rerun provider changes', async () => {
+    const initial = makeJob({
+      state: 'queued',
+      ttsProvider: 'elevenlabs',
+      voiceId: 'pNInz6obpgDQGcFmaJgB',
+      voiceAccent: 'american',
+    });
+    getJobByIdSpy.mockResolvedValue(initial);
+
+    const running = makeJob({
+      state: 'running',
+      ttsProvider: 'elevenlabs',
+      voiceId: 'pNInz6obpgDQGcFmaJgB',
+      voiceAccent: 'american',
+      startedAt: new Date('2024-01-01T10:01:00Z'),
+    });
+    const succeeded = {
+      ...running,
+      state: 'succeeded',
+      manifestPath: '/manifests/job-rerun-provider-switch.json',
+      finishedAt: new Date('2024-01-01T10:02:00Z'),
+      notionUrl: 'https://notion.so/job-rerun-provider-switch',
+      anytypeUrl: null,
+    };
+    updateJobStateAndResultSpy
+      .mockResolvedValueOnce(running as any)
+      .mockResolvedValueOnce(succeeded as any);
+
+    runRerunAssignmentJobSpy.mockResolvedValue({
+      manifestPath: '/manifests/job-rerun-provider-switch.json',
+      notionUrl: 'https://notion.so/job-rerun-provider-switch',
+    });
+
+    await processQueueJob({
+      jobId: 'job-1',
+      executionMode: 'rerun',
+      sourceJobId: 'job-source',
+      rerun: {
+        regeneratePronunciationChunkAudio: true,
+        manifestMd: '/tmp/source-assignment.md',
+        upload: 's3',
+        pronunciationChunkTtsProvider: 'google',
+        pronunciationChunkGoogleTtsModel: 'chirp3_hd',
+      },
+    });
+
+    expect(runRerunAssignmentJobSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jobId: 'job-1',
+        regeneratePronunciationChunkAudio: true,
+        pronunciationChunkTtsProvider: 'google',
+        pronunciationChunkGoogleTtsModel: 'chirp3_hd',
+        pronunciationChunkVoiceAccent: 'american',
+        pronunciationChunkVoiceId: undefined,
       }),
       expect.any(String),
       expect.objectContaining({
