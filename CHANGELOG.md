@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [6.1.4] - 2026-04-17
+
+### Changed
+
+- Automated release from PR #65: fix: harden rerun voice fallbacks and realign voice defaults (https://github.com/abocha/esl-pipeline/pull/65)
+
 ## [6.1.3] - 2026-04-15
 
 ### Changed
