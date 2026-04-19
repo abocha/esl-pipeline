@@ -7,7 +7,7 @@ Shared cross-package TypeScript contracts for the ESL monorepo.
 - Job/request DTOs (`SubmitJobRequest`, `JobStatusDto`, summaries, events)
 - Shared enums/unions (`JobState`, `TtsStrategy`, `JobUploadOption`, `PublishTarget`)
 - Job action types (`JobActionType`, `JobActionRequest`, `JobActionResponse`, `ActionCapability`)
-- Job options metadata payload types (`JobOptionsPayload`, `VoiceOption`, `NotionDatabaseOption`)
+- Job options metadata payload types (`JobOptionsPayload`, `VoiceOption`)
 - WS2B generation DTOs (`GenerateDraftRequest`, `GenerateDraftResponse`, provider/model/quota types)
 - Shared errors (`PipelineError`, `ConfigurationError`, etc.)
 - Shared observability shapes (`PipelineLogEvent`, `PipelineLogger`, `noopLogger`)
@@ -19,5 +19,5 @@ Shared cross-package TypeScript contracts for the ESL monorepo.
   - `@esl-pipeline/orchestrator`
   - `@esl-pipeline/batch-backend`
   - `@esl-pipeline/batch-frontend`
-  - adapters and infrastructure packages
+  - publishing and infrastructure packages
 - Keep runtime behavior out of this package; contracts should remain stable and serializable.

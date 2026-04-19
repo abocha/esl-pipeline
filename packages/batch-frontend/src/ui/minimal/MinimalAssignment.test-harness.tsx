@@ -124,15 +124,13 @@ export function makeJobStatus(overrides: Partial<api.JobStatus> = {}): api.JobSt
     upload: 's3',
     voiceAccent: null,
     forceTts: false,
-    notionDatabase: null,
     publishTarget: 'html',
     ttsStrategy: 'auto',
     ttsProvider: 'elevenlabs',
     studyTextElevenlabsModel: null,
     googleTtsModel: null,
     autoPublish: false,
-    notionUrl: null,
-    anytypeUrl: null,
+    htmlUrl: null,
     state: 'queued',
     createdAt: now,
     updatedAt: now,
@@ -508,7 +506,6 @@ export function setupMinimalAssignmentTest() {
     },
     voiceAccents: ['american'],
     voices: [{ id: 'voice-a', name: 'Voice A', accent: 'american' }],
-    notionDatabases: [{ id: 'db-1', name: 'DB One' }],
     sttProviders: ['deepgram', 'elevenlabs', 'google'],
     defaultSttProvider: 'deepgram',
     sttModelOptionsByProvider: {
@@ -698,8 +695,8 @@ export function setupMinimalAssignmentTest() {
   vi.mocked(api.getJobStatus).mockResolvedValue({
     jobId: 'job-1',
     state: 'succeeded',
-    publishTarget: 'notion',
-    notionUrl: 'https://www.notion.so/published-assignment',
+    publishTarget: 'html',
+    htmlUrl: 'https://example.com/published-assignment.html',
   } as never);
   vi.mocked(api.fetchJobProvenance).mockResolvedValue({
     job: {
@@ -711,8 +708,7 @@ export function setupMinimalAssignmentTest() {
       finishedAt: now,
       sourceJobId: null,
       manifestPath: null,
-      notionUrl: 'https://www.notion.so/published-assignment',
-      anytypeUrl: null,
+      htmlUrl: 'https://example.com/published-assignment.html',
       error: null,
     },
     sourceJob: null,

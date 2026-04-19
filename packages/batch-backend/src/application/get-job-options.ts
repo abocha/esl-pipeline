@@ -11,15 +11,11 @@ import type {
   GenerationOptionsPayload,
   GoogleTtsModel,
   JobOptionsPayload,
-  NotionDatabaseOption,
   SttProviderId,
   TtsProviderId,
   VoiceOption,
 } from '@esl-pipeline/contracts';
-import {
-  normalizeVoiceCatalogToOptions,
-  resolveNotionDatabasesFromEnv,
-} from '@esl-pipeline/shared-infrastructure';
+import { normalizeVoiceCatalogToOptions } from '@esl-pipeline/shared-infrastructure';
 
 import { loadConfig } from '../config/env.js';
 import { logger } from '../infrastructure/logger.js';
@@ -61,10 +57,6 @@ const STATIC_OPTIONS: Omit<JobOptionsResponse, 'supportedActions'> = {
   voices: [],
   cefrLevels: DEFAULT_CEFR_LEVELS,
   cefrDefault: DEFAULT_CEFR_DEFAULT,
-  notionDatabases: [
-    { id: 'notion-db-b1', name: 'B1 Lessons' },
-    { id: 'notion-db-b2', name: 'B2 Lessons' },
-  ],
   uploadOptions: ['auto', 's3', 'none'],
   ttsStrategies: ['auto'],
 };
@@ -87,10 +79,6 @@ export async function getJobOptions(): Promise<JobOptionsResponse> {
     const runtimeConfig = loadConfig();
     try {
       const result = await getJobOptionsFromOrchestrator();
-      const notionDatabases =
-        result.notionDatabases && result.notionDatabases.length > 0
-          ? result.notionDatabases
-          : resolveNotionDatabases();
 
       // Add supported actions to orchestrator response
       const actionMetadata = getActionMetadata();
@@ -129,7 +117,6 @@ export async function getJobOptions(): Promise<JobOptionsResponse> {
         cefrLevels: result.cefrLevels ?? [...DEFAULT_CEFR_LEVELS],
         cefrDefault: result.cefrDefault ?? DEFAULT_CEFR_DEFAULT,
         generation,
-        notionDatabases,
         learningPresets,
         ...sttMetadata,
         ...ttsMetadata,
@@ -172,7 +159,6 @@ export async function getJobOptions(): Promise<JobOptionsResponse> {
 async function loadStaticJobOptions(
   runtimeConfig: ReturnType<typeof loadConfig>,
 ): Promise<JobOptionsResponse> {
-  const notionDatabases = resolveNotionDatabases();
   const voices = await loadVoiceOptions();
   const voiceAccents =
     voices.length > 0
@@ -202,7 +188,6 @@ async function loadStaticJobOptions(
       buildGenerationOptionsPayload({ config: runtimeConfig.generation }),
       runtimeConfig,
     ),
-    notionDatabases,
     learningPresets: [...STATIC_OPTIONS.learningPresets],
     uploadOptions: [...STATIC_OPTIONS.uploadOptions],
     ttsStrategies: [...STATIC_OPTIONS.ttsStrategies],
@@ -418,13 +403,6 @@ async function withQuotaUsage(
   }
 }
 
-function resolveNotionDatabases(): NotionDatabaseOption[] {
-  return resolveNotionDatabasesFromEnv({
-    singleDbId: process.env.NOTION_DB_ID?.trim(),
-    fallback: STATIC_OPTIONS.notionDatabases,
-  });
-}
-
 const VOICE_CATALOG_RELATIVE_PATH = 'packages/orchestrator/configs/elevenlabs.voices.json';
 
 async function loadVoiceOptions(): Promise<VoiceOption[]> {
@@ -480,7 +458,6 @@ function cloneJobOptions(value: JobOptionsResponse): JobOptionsResponse {
     voices: value.voices.map((voice) => ({ ...voice })),
     cefrLevels: value.cefrLevels ? [...value.cefrLevels] : [...DEFAULT_CEFR_LEVELS],
     cefrDefault: value.cefrDefault ?? DEFAULT_CEFR_DEFAULT,
-    notionDatabases: value.notionDatabases.map((option) => ({ ...option })),
     uploadOptions: [...value.uploadOptions],
     ttsStrategies: [...value.ttsStrategies],
     ...(value.ttsProviders ? { ttsProviders: [...value.ttsProviders] } : {}),

@@ -72,16 +72,12 @@ describe('metadata/job-options', () => {
     });
   });
 
-  it('returns orchestrator-backed presets, voices, and notion databases', async () => {
+  it('returns orchestrator-backed presets and voices without retired notion metadata', async () => {
     const configProvider = createConfigProvider({
       loadPresets: vi.fn().mockResolvedValue({
         'b1-default': {},
         'b2-alt': {},
       }),
-      loadStudentProfiles: vi.fn().mockResolvedValue([
-        { student: 'Anna', dbId: 'db-123' },
-        { student: 'Leo', dbId: 'db-456' },
-      ]),
     });
 
     vi.mocked(loadVoicesCatalog).mockResolvedValue({
@@ -103,14 +99,10 @@ describe('metadata/job-options', () => {
     const result = await resolveJobOptions({ configProvider, configPaths });
 
     expect(configProvider.loadPresets).toHaveBeenCalledWith(configPaths.presetsPath);
-    expect(configProvider.loadStudentProfiles).toHaveBeenCalledWith(configPaths.studentsDir);
     expect(loadVoicesCatalog).toHaveBeenCalledTimes(1);
 
     expect(result.presets).toEqual(['b1-default', 'b2-alt']);
-    expect(result.notionDatabases).toEqual([
-      { id: 'db-123', name: 'Anna' },
-      { id: 'db-456', name: 'Leo' },
-    ]);
+    expect(result).not.toHaveProperty('notionDatabases');
     expect(result.uploadOptions).toEqual(['auto', 's3', 'none']);
     expect(result.ttsStrategies).toEqual(['auto', 'dialogue', 'tts']);
     expect(result.ttsProviders).toEqual(['elevenlabs', 'google']);
@@ -142,22 +134,15 @@ describe('metadata/job-options', () => {
     expect(result.voiceAccents).toEqual(['american_female', 'british_male']);
   });
 
-  it('omits duplicate/missing databases and tolerates empty voice catalogs', async () => {
+  it('tolerates empty voice catalogs', async () => {
     const configProvider = createConfigProvider({
       loadPresets: vi.fn().mockResolvedValue({}),
-      loadStudentProfiles: vi
-        .fn()
-        .mockResolvedValue([
-          { student: 'Anna', dbId: 'db-123' },
-          { student: 'Duplicate', dbId: 'db-123' },
-          { student: 'No DB' },
-        ]),
     });
     vi.mocked(loadVoicesCatalog).mockResolvedValue({ voices: [] });
 
     const result = await resolveJobOptions({ configProvider, configPaths });
 
-    expect(result.notionDatabases).toEqual([{ id: 'db-123', name: 'Anna' }]);
+    expect(result).not.toHaveProperty('notionDatabases');
     expect(result.voices).toEqual([]);
     expect(result.voiceAccents).toEqual([]);
   });

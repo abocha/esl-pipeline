@@ -81,7 +81,6 @@ describe('application/get-job-options', () => {
       generation: buildGenerationOptions(),
       voiceAccents: ['accent_one'],
       voices: [{ id: 'voice-1', name: 'Voice One', accent: 'accent_one', gender: 'female' }],
-      notionDatabases: [{ id: 'db-1', name: 'DB One' }],
       uploadOptions: ['auto', 's3', 'none'],
       ttsStrategies: ['auto', 'dialogue', 'tts'],
       ttsProviders: ['elevenlabs', 'google'],
@@ -115,7 +114,6 @@ describe('application/get-job-options', () => {
       cefrDefault: 'B1',
       voiceAccents: ['accent_one'],
       voices: [{ id: 'voice-1', name: 'Voice One', accent: 'accent_one', gender: 'female' }],
-      notionDatabases: [{ id: 'db-1', name: 'DB One' }],
       uploadOptions: ['auto', 's3', 'none'],
       ttsStrategies: ['auto', 'dialogue', 'tts'],
       ttsProviders: ['elevenlabs', 'google'],
@@ -140,6 +138,7 @@ describe('application/get-job-options', () => {
         },
       ],
     });
+    expect(result).not.toHaveProperty('notionDatabases');
     expect(result.generation).toEqual(
       expect.objectContaining({
         providers: buildGenerationOptions().providers,
@@ -230,10 +229,7 @@ describe('application/get-job-options', () => {
         promptSnapshotVersion: 'hw_prompt_definitive',
       },
     ]);
-    expect(result.notionDatabases).toEqual([
-      { id: 'notion-db-b1', name: 'B1 Lessons' },
-      { id: 'notion-db-b2', name: 'B2 Lessons' },
-    ]);
+    expect(result).not.toHaveProperty('notionDatabases');
     expect(
       result.generation?.modelOptions
         .filter((option) => option.provider === 'google_ai_studio')
@@ -287,7 +283,6 @@ describe('application/get-job-options', () => {
       generation: buildGenerationOptions(),
       voiceAccents: ['accent_one'],
       voices: [{ id: 'voice-1', name: 'Voice One', accent: 'accent_one', gender: 'female' }],
-      notionDatabases: [{ id: 'db-1', name: 'DB One' }],
       uploadOptions: ['auto', 's3', 'none'],
       ttsStrategies: ['auto', 'dialogue', 'tts'],
       ttsProviders: ['elevenlabs', 'google'],
@@ -338,7 +333,6 @@ describe('application/get-job-options', () => {
       generation: buildGenerationOptions(),
       voiceAccents: ['accent_one'],
       voices: [{ id: 'voice-1', name: 'Voice One', accent: 'accent_one', gender: 'female' }],
-      notionDatabases: [{ id: 'db-1', name: 'DB One' }],
       uploadOptions: ['auto', 's3', 'none'],
       ttsStrategies: ['auto', 'dialogue', 'tts'],
       ttsProviders: ['elevenlabs', 'google'],

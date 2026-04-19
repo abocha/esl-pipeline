@@ -5,7 +5,6 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { CONTRACT_VERSIONS, DB_MIGRATION_HEAD } from '@esl-pipeline/contracts';
 import { validateMarkdown } from '@esl-pipeline/md-validator';
-import * as notionAdapterModule from '@esl-pipeline/notion-adapter';
 
 import * as approveJobModule from '../src/application/approve-job.js';
 import * as createDraftModule from '../src/application/create-draft.js';
@@ -131,7 +130,6 @@ vi.mock('../src/infrastructure/orchestrator-service', () => {
     },
     voiceAccents: ['american_female'],
     voices: [{ id: 'voice-1', name: 'Voice One', accent: 'american_female', gender: 'female' }],
-    notionDatabases: [{ id: 'db-1', name: 'DB One' }],
     uploadOptions: ['auto', 's3', 'none'] as const,
     ttsStrategies: ['auto', 'dialogue', 'tts'] as const,
   };
@@ -712,8 +710,7 @@ export function describeHttpServerIntegrationSuite(
           finishedAt: '2024-01-01T00:01:00.000Z',
           sourceJobId: null,
           manifestPath: '/tmp/manifest.json',
-          notionUrl: null,
-          anytypeUrl: null,
+          htmlUrl: null,
           error: null,
         },
         sourceJob: null,
@@ -777,7 +774,6 @@ export function describeHttpServerIntegrationSuite(
       httpRequest,
       Readable,
       validateMarkdown,
-      notionAdapterModule,
       CONTRACT_VERSIONS,
       DB_MIGRATION_HEAD,
       approveJobModule,

@@ -95,7 +95,7 @@ export interface OrchestratorV2ExecutionContext {
   onStageEvent?: (event: AssignmentStageEventV2) => void;
 }
 
-export type PublishTarget = 'notion' | 'anytype' | 'html';
+export type PublishTarget = 'html';
 
 export interface NewAssignmentFlags {
   md: string;
@@ -110,7 +110,6 @@ export interface NewAssignmentFlags {
   studyTextElevenlabsModel?: ElevenLabsTtsModelId;
   googleTtsModel?: GoogleTtsModel;
   publishTarget?: PublishTarget;
-  anytypeSpaceId?: string;
 
   // TTS strategy fields
   ttsStrategy?: 'auto' | 'dialogue' | 'tts';
@@ -143,9 +142,6 @@ export interface NewAssignmentRequestV2 {
 }
 
 export interface NewAssignmentResult {
-  pageId?: string;
-  pageUrl?: string;
-  anytypeUrl?: string;
   htmlUrl?: string;
   publishTarget?: PublishTarget;
   audio?: AudioArtifactManifest;
@@ -210,9 +206,6 @@ export interface RerunAssignmentRequestV2 {
 export interface RerunAssignmentResult {
   steps: string[];
   audio?: AudioArtifactManifest;
-  pageId?: string;
-  pageUrl?: string;
-  anytypeUrl?: string;
   htmlUrl?: string;
   publishTarget?: PublishTarget;
   manifestPath: string;

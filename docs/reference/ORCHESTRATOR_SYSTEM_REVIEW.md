@@ -37,8 +37,6 @@
   - Markdown content cache/read lifecycle for manifest/hash/validation pathways.
 - `packages/orchestrator/src/runtime/publish-utils.ts`
   - Markdown audio-link insertion, heading color mapping, title resolution.
-- `packages/orchestrator/src/runtime/publish-target-anytype.ts`
-  - Anytype object/space resolution and optional collection-link helper behavior.
 - `packages/orchestrator/src/runtime/tts-telemetry.ts`
   - TTS spend summary, provider error categorization, voice telemetry helpers.
 - `packages/orchestrator/src/runtime/voice-preferences.ts`

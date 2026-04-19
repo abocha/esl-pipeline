@@ -22,7 +22,6 @@ interface UserSettingsRow {
   id: string;
   user_id: string;
   elevenlabs_key_encrypted: string | null;
-  notion_token_encrypted: string | null;
   tts_provider: string;
   default_preset: string;
   default_voice_accent: string;
@@ -52,7 +51,6 @@ function mapRowToSettings(row: UserSettingsRow): UserSettingsRecord {
     id: row.id,
     userId: row.user_id,
     elevenLabsKeyEncrypted: row.elevenlabs_key_encrypted,
-    notionTokenEncrypted: row.notion_token_encrypted,
     ttsProvider: normalizeStoredTtsProvider(row.tts_provider, row.user_id),
     defaultPreset: row.default_preset,
     defaultVoiceAccent: row.default_voice_accent,
@@ -71,7 +69,7 @@ export async function getSettingsByUserId(userId: string): Promise<UserSettingsR
   const row = await withPgClient(async (client: PoolClient) => {
     const result = await client.query<UserSettingsRow>(
       `
-      SELECT id, user_id, elevenlabs_key_encrypted, notion_token_encrypted,
+      SELECT id, user_id, elevenlabs_key_encrypted,
              tts_provider, default_preset, default_voice_accent, default_tts_strategy,
              enable_notifications, created_at, updated_at
       FROM user_settings
@@ -99,14 +97,14 @@ export async function createDefaultSettings(userId: string): Promise<UserSetting
     const result = await client.query<UserSettingsRow>(
       `
       INSERT INTO user_settings (
-        id, user_id, elevenlabs_key_encrypted, notion_token_encrypted,
+        id, user_id, elevenlabs_key_encrypted,
         tts_provider, default_preset, default_voice_accent, default_tts_strategy,
         enable_notifications
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       ON CONFLICT (user_id) DO UPDATE SET
         updated_at = user_settings.updated_at  -- No-op update to return the row
-      RETURNING id, user_id, elevenlabs_key_encrypted, notion_token_encrypted,
+      RETURNING id, user_id, elevenlabs_key_encrypted,
                 tts_provider, default_preset, default_voice_accent, default_tts_strategy,
                 enable_notifications, created_at, updated_at
       `,
@@ -114,7 +112,6 @@ export async function createDefaultSettings(userId: string): Promise<UserSetting
         id,
         userId,
         defaults.elevenLabsKeyEncrypted,
-        defaults.notionTokenEncrypted,
         defaults.ttsProvider,
         defaults.defaultPreset,
         defaults.defaultVoiceAccent,
@@ -143,7 +140,6 @@ export async function upsertSettings(
 
   // Encrypt API keys if provided
   let elevenLabsKeyEncrypted: string | null | undefined;
-  let notionTokenEncrypted: string | null | undefined;
 
   // Handle ElevenLabs key
   if (input.elevenLabsKey !== undefined) {
@@ -151,14 +147,6 @@ export async function upsertSettings(
       input.elevenLabsKey === null || input.elevenLabsKey === ''
         ? null
         : encryptionService.encrypt(input.elevenLabsKey);
-  }
-
-  // Handle Notion token
-  if (input.notionToken !== undefined) {
-    notionTokenEncrypted =
-      input.notionToken === null || input.notionToken === ''
-        ? null
-        : encryptionService.encrypt(input.notionToken);
   }
 
   const row = await withPgClient(async (client: PoolClient) => {
@@ -171,42 +159,38 @@ export async function upsertSettings(
     const result = await client.query<UserSettingsRow>(
       `
       INSERT INTO user_settings (
-        id, user_id, elevenlabs_key_encrypted, notion_token_encrypted,
+        id, user_id, elevenlabs_key_encrypted,
         tts_provider, default_preset, default_voice_accent, default_tts_strategy,
         enable_notifications
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       ON CONFLICT (user_id) DO UPDATE SET
         elevenlabs_key_encrypted = CASE 
-          WHEN $10 THEN EXCLUDED.elevenlabs_key_encrypted 
+          WHEN $9 THEN EXCLUDED.elevenlabs_key_encrypted 
           ELSE user_settings.elevenlabs_key_encrypted 
         END,
-        notion_token_encrypted = CASE 
-          WHEN $11 THEN EXCLUDED.notion_token_encrypted 
-          ELSE user_settings.notion_token_encrypted 
-        END,
         tts_provider = CASE 
-          WHEN $12 THEN EXCLUDED.tts_provider 
+          WHEN $10 THEN EXCLUDED.tts_provider 
           ELSE user_settings.tts_provider 
         END,
         default_preset = CASE 
-          WHEN $13 THEN EXCLUDED.default_preset 
+          WHEN $11 THEN EXCLUDED.default_preset 
           ELSE user_settings.default_preset 
         END,
         default_voice_accent = CASE 
-          WHEN $14 THEN EXCLUDED.default_voice_accent 
+          WHEN $12 THEN EXCLUDED.default_voice_accent 
           ELSE user_settings.default_voice_accent 
         END,
         default_tts_strategy = CASE 
-          WHEN $15 THEN EXCLUDED.default_tts_strategy 
+          WHEN $13 THEN EXCLUDED.default_tts_strategy 
           ELSE user_settings.default_tts_strategy 
         END,
         enable_notifications = CASE 
-          WHEN $16 THEN EXCLUDED.enable_notifications 
+          WHEN $14 THEN EXCLUDED.enable_notifications 
           ELSE user_settings.enable_notifications 
         END,
         updated_at = NOW()
-      RETURNING id, user_id, elevenlabs_key_encrypted, notion_token_encrypted,
+      RETURNING id, user_id, elevenlabs_key_encrypted,
                 tts_provider, default_preset, default_voice_accent, default_tts_strategy,
                 enable_notifications, created_at, updated_at
       `,
@@ -215,7 +199,6 @@ export async function upsertSettings(
         userId,
         // Values for INSERT (use input if provided, else defaults)
         elevenLabsKeyEncrypted ?? defaults.elevenLabsKeyEncrypted,
-        notionTokenEncrypted ?? defaults.notionTokenEncrypted,
         input.ttsProvider ?? defaults.ttsProvider,
         input.defaultPreset ?? defaults.defaultPreset,
         input.defaultVoiceAccent ?? defaults.defaultVoiceAccent,
@@ -223,7 +206,6 @@ export async function upsertSettings(
         input.enableNotifications ?? defaults.enableNotifications,
         // Boolean flags for CASE expressions (true = update this field)
         input.elevenLabsKey !== undefined,
-        input.notionToken !== undefined,
         input.ttsProvider !== undefined,
         input.defaultPreset !== undefined,
         input.defaultVoiceAccent !== undefined,
@@ -256,18 +238,4 @@ export async function getDecryptedElevenLabsKey(userId: string): Promise<string 
 
   const encryptionService = getEncryptionService();
   return encryptionService.decrypt(settings.elevenLabsKeyEncrypted);
-}
-
-/**
- * Get decrypted Notion token for a user.
- * Returns null if no token is stored.
- */
-export async function getDecryptedNotionToken(userId: string): Promise<string | null> {
-  const settings = await getSettingsByUserId(userId);
-  if (!settings?.notionTokenEncrypted) {
-    return null;
-  }
-
-  const encryptionService = getEncryptionService();
-  return encryptionService.decrypt(settings.notionTokenEncrypted);
 }

@@ -68,28 +68,6 @@ importers:
         specifier: ^4.1.4
         version: 4.1.4(@types/node@25.5.2)(@vitest/coverage-v8@4.1.4)(jsdom@29.0.2)(vite@8.0.8(@types/node@25.5.2)(esbuild@0.27.4)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3))
 
-  packages/anytype-adapter:
-    dependencies:
-      '@esl-pipeline/contracts':
-        specifier: workspace:*
-        version: link:../contracts
-      '@esl-pipeline/html-publisher':
-        specifier: workspace:*
-        version: link:../html-publisher
-    devDependencies:
-      '@types/node':
-        specifier: ^25.5.2
-        version: 25.5.2
-      tsx:
-        specifier: ^4.21.0
-        version: 4.21.0
-      typescript:
-        specifier: ^6.0.2
-        version: 6.0.2
-      vitest:
-        specifier: ^4.1.4
-        version: 4.1.4(@types/node@25.5.2)(@vitest/coverage-v8@4.1.4)(jsdom@29.0.2)(vite@8.0.8(@types/node@25.5.2)(esbuild@0.27.4)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3))
-
   packages/batch-backend:
     dependencies:
       '@aws-sdk/client-s3':
@@ -113,9 +91,6 @@ importers:
       '@esl-pipeline/md-validator':
         specifier: workspace:*
         version: link:../md-validator
-      '@esl-pipeline/notion-adapter':
-        specifier: workspace:*
-        version: link:../notion-adapter
       '@esl-pipeline/orchestrator':
         specifier: workspace:*
         version: link:../orchestrator
@@ -346,40 +321,6 @@ importers:
         specifier: ^4.1.4
         version: 4.1.4(@types/node@25.5.2)(@vitest/coverage-v8@4.1.4)(jsdom@29.0.2)(vite@8.0.8(@types/node@25.5.2)(esbuild@0.27.4)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3))
 
-  packages/notion-adapter:
-    dependencies:
-      '@esl-pipeline/contracts':
-        specifier: workspace:*
-        version: link:../contracts
-      '@esl-pipeline/md-validator':
-        specifier: workspace:*
-        version: link:../md-validator
-      '@esl-pipeline/pmd':
-        specifier: workspace:*
-        version: link:../pmd
-      '@notionhq/client':
-        specifier: ^5.17.0
-        version: 5.17.0
-      gray-matter:
-        specifier: ^4.0.3
-        version: 4.0.3
-      zod:
-        specifier: ^4.1.13
-        version: 4.3.6
-    devDependencies:
-      '@types/node':
-        specifier: ^25.5.2
-        version: 25.5.2
-      tsx:
-        specifier: ^4.21.0
-        version: 4.21.0
-      typescript:
-        specifier: ^6.0.2
-        version: 6.0.2
-      vitest:
-        specifier: ^4.1.4
-        version: 4.1.4(@types/node@25.5.2)(@vitest/coverage-v8@4.1.4)(jsdom@29.0.2)(vite@8.0.8(@types/node@25.5.2)(esbuild@0.27.4)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3))
-
   packages/orchestrator:
     dependencies:
       '@aws-sdk/client-s3':
@@ -388,9 +329,6 @@ importers:
       '@elevenlabs/elevenlabs-js':
         specifier: ^2.42.0
         version: 2.42.0
-      '@notionhq/client':
-        specifier: ^5.17.0
-        version: 5.17.0
       gray-matter:
         specifier: ^4.0.3
         version: 4.0.3
@@ -407,9 +345,6 @@ importers:
         specifier: ^4.1.13
         version: 4.3.6
     devDependencies:
-      '@esl-pipeline/anytype-adapter':
-        specifier: workspace:*
-        version: link:../anytype-adapter
       '@esl-pipeline/contracts':
         specifier: workspace:*
         version: link:../contracts
@@ -419,9 +354,6 @@ importers:
       '@esl-pipeline/md-validator':
         specifier: workspace:*
         version: link:../md-validator
-      '@esl-pipeline/notion-adapter':
-        specifier: workspace:*
-        version: link:../notion-adapter
       '@esl-pipeline/pmd':
         specifier: workspace:*
         version: link:../pmd
@@ -1488,10 +1420,6 @@ packages:
   '@nodelib/fs.walk@1.2.8':
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
-
-  '@notionhq/client@5.17.0':
-    resolution: {integrity: sha512-hSNm3VUW5+Qs9vPOmegS6r1RT8O1jtTE/22wmSmiJc9kkb2YyddWr8SBQruvp06rALn2r2RAh9mLPirUUonsvw==}
-    engines: {node: '>=18'}
 
   '@oxc-parser/binding-android-arm-eabi@0.121.0':
     resolution: {integrity: sha512-n07FQcySwOlzap424/PLMtOkbS7xOu8nsJduKL8P3COGHKgKoDYXwoAHCbChfgFpHnviehrLWIPX0lKGtbEk/A==}
@@ -5958,8 +5886,6 @@ snapshots:
     dependencies:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.20.1
-
-  '@notionhq/client@5.17.0': {}
 
   '@oxc-parser/binding-android-arm-eabi@0.121.0':
     optional: true

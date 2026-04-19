@@ -114,6 +114,7 @@ default: voice_id_default
       'skip:import',
       'skip:tts',
       'skip:upload',
+      'add-audio',
       'manifest',
     ]);
     expect(buildStudyTextMp3).not.toHaveBeenCalled();

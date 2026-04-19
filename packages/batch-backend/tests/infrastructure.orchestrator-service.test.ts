@@ -333,7 +333,6 @@ describe('infrastructure/orchestrator-service', () => {
       presets: ['alpha'],
       voiceAccents: [],
       voices: [],
-      notionDatabases: [],
       uploadOptions: ['auto', 's3', 'none'],
       ttsStrategies: ['auto'],
     });

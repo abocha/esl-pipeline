@@ -193,9 +193,6 @@ function classifyEnvSurface(key) {
   }
 
   if (
-    key === 'NOTION_TOKEN' ||
-    key.startsWith('NOTION_') ||
-    key.startsWith('ANYTYPE_') ||
     key.startsWith('S3_') ||
     key.startsWith('AWS_') ||
     key.startsWith('STORAGE_') ||

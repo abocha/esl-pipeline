@@ -29,16 +29,7 @@ This document captures the canonical schema so remote stores and services can va
   "mdHash": "<sha256 hash of the Markdown study text>",
   "timestamp": "2024-07-19T12:34:56.789Z",
   "preset": "b1-default", // optional, last applied heading preset
-  "notionColorization": {
-    // optional, persisted when Notion preset colorization is applied
-    "preset": "b1-default",
-    "presetHash": "<sha256 hash of normalized preset payload>",
-    "pageId": "<notion-page-id>",
-    "mdHash": "<sha256 hash of markdown used for colorization>",
-    "appliedAt": "2024-07-19T12:30:00.000Z",
-  },
-  "pageId": "<notion-page-id>", // optional, populated after Notion import
-  "pageUrl": "https://www.notion.so/...", // optional, populated after Notion import
+  "publishTarget": "html",
   "audioArtifacts": {
     // optional multi-artifact map (canonical in schema v2)
     "studyText": {
@@ -69,8 +60,7 @@ This document captures the canonical schema so remote stores and services can va
         "cachedCharacters": 480,
         "costPer1kCharsUsd": 0.3,
         "estimatedSpendUsd": 0.396,
-      },
-      "notionBlockId": "<notion-block-id>",
+      }
     },
     "pronunciation": {
       "mode": "shadow_sentence",
@@ -83,8 +73,7 @@ This document captures the canonical schema so remote stores and services can va
         "url": "https://...",
         "hash": "<sha256 pronunciation sentence hash>",
         "key": "audio/pronunciation/<sha256>.mp3",
-        "voiceId": "<provider-voice-id>",
-        "notionBlockId": "<notion-block-id>",
+        "voiceId": "<provider-voice-id>"
       },
       "itemClips": [
         {
@@ -126,12 +115,7 @@ This document captures the canonical schema so remote stores and services can va
 - `audioArtifacts` stores per-target audio artifacts:
   - `audioArtifacts.studyText` for primary study-text audio.
   - `audioArtifacts.pronunciation` for canonical pronunciation audio, including the primary section clip and optional item clips.
-- `audioArtifacts.*.notionBlockId` is optional and lets reruns replace only previously inserted
-  generated audio blocks near semantic anchors.
-- `notionColorization` captures the Notion preset fingerprint used for idempotent colorization skip
-  decisions. Consumers SHOULD treat the object as optional and additive.
-- When `notionColorization.presetHash`/`mdHash` still match the current run context, orchestrator may
-  skip colorization calls to avoid redundant Notion API churn while preserving manifest provenance.
+- `publishTarget` is now html-only and retained for explicit manifest provenance.
 - `audioArtifacts.studyText.voices[*].selectionReason`, `capabilityMatches`, and `capabilityMismatches` are additive
   explainability fields for voice-alignment v2. Consumers SHOULD treat them as optional.
 - `ttsStrategy` and related dialogue fields capture the TTS strategy used for reproducibility. These fields

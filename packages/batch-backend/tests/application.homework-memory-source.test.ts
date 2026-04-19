@@ -9,7 +9,7 @@ import {
   resolveHomeworkMemorySourceFromSucceededJob,
 } from '../src/application/homework-memory-source.js';
 import { insertCanonicalReadyHomeworkMemoryEntry } from '../src/domain/homework-memory-repository.js';
-import { closePgPool, withPgClient } from '../src/infrastructure/db.js';
+import { closePgPool, withPgClientSessionContext } from '../src/infrastructure/db.js';
 import { requirePgTestEnv } from './support/test-env.js';
 
 const hasPgTestEnv = Boolean(process.env.BATCH_BACKEND_TEST_PG?.trim());
@@ -20,7 +20,7 @@ if (hasPgTestEnv) {
 let tempDir: string;
 
 async function truncateHomeworkMemoryScope() {
-  await withPgClient(async (client) => {
+  await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
     await client.query(
       'TRUNCATE TABLE homework_memory_entries, drafts, prompt_packages, lesson_memory_entries, transcripts, recordings, jobs, students, users RESTART IDENTITY CASCADE',
     );
@@ -61,7 +61,7 @@ describeIfPg('application/homework-memory-source', () => {
       'utf8',
     );
 
-    await withPgClient(async (client) => {
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
       await client.query(
         `INSERT INTO students (id, student, created_at, updated_at) VALUES ($1, 'Nadia', NOW(), NOW())`,
         [studentId],
@@ -102,9 +102,9 @@ describeIfPg('application/homework-memory-source', () => {
         `
         INSERT INTO jobs (
           id, state, md, student_id, recording_id, transcript_id, prompt_package_id, draft_id,
-          publish_target, notion_url, finished_at, created_at, updated_at
+          publish_target, html_url, finished_at, created_at, updated_at
         )
-        VALUES ($1, 'succeeded', $2, $3, $4, $5, $6, $7, 'notion', 'https://notion.so/root', NOW(), NOW(), NOW())
+        VALUES ($1, 'succeeded', $2, $3, $4, $5, $6, $7, 'html', 'https://example.test/root', NOW(), NOW(), NOW())
         `,
         [rootJobId, markdownPath, studentId, recordingId, transcriptId, promptPackageId, draftId],
       );
@@ -132,7 +132,7 @@ describeIfPg('application/homework-memory-source', () => {
     const source = await resolveHomeworkMemorySourceFromSucceededJob(rerunJobId);
 
     expect(source.assignmentLineageKey).toBe(rootJobId);
-    expect(source.publishTargets.map((target) => target.target)).toEqual(['html', 'notion']);
+    expect(source.publishTargets.map((target) => target.target)).toEqual(['html']);
     expect(source.contentHash).toHaveLength(64);
     expect(
       source.normalizedMarkdown.sections.some((section) =>
@@ -151,7 +151,7 @@ describeIfPg('application/homework-memory-source', () => {
 
     await writeFile(markdownPath, '### F. Your Mission\nRetell and advise.\n', 'utf8');
 
-    await withPgClient(async (client) => {
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
       await client.query(
         `INSERT INTO students (id, student, created_at, updated_at) VALUES ($1, 'Mila', NOW(), NOW())`,
         [studentId],
@@ -175,9 +175,9 @@ describeIfPg('application/homework-memory-source', () => {
       await client.query(
         `
         INSERT INTO jobs (
-          id, state, md, student_id, recording_id, transcript_id, publish_target, notion_url, finished_at, created_at, updated_at
+          id, state, md, student_id, recording_id, transcript_id, publish_target, html_url, finished_at, created_at, updated_at
         )
-        VALUES ($1, 'succeeded', $2, $3, $4, $5, 'notion', 'https://notion.so/root', NOW(), NOW(), NOW())
+        VALUES ($1, 'succeeded', $2, $3, $4, $5, 'html', 'https://example.test/root', NOW(), NOW(), NOW())
         `,
         [rootJobId, markdownPath, studentId, recordingId, transcriptId],
       );
@@ -216,16 +216,13 @@ describeIfPg('application/homework-memory-source', () => {
       communicativeOutcome: 'Retell and advise.',
       teacherFollowUpCues: [],
       publishedAt: initialSource.publishedAt,
-      publishTargets: initialSource.publishTargets.filter((target) => target.target === 'notion'),
+      publishTargets: initialSource.publishTargets.filter((target) => target.target === 'html'),
     });
 
     const decision = await evaluateHomeworkMemoryGenerationForSucceededJob(rerunJobId);
 
     expect(decision.shouldGenerate).toBe(false);
     expect(decision.reason).toBe('no_material_change');
-    expect(decision.source.publishTargets.map((target) => target.target)).toEqual([
-      'html',
-      'notion',
-    ]);
+    expect(decision.source.publishTargets.map((target) => target.target)).toEqual(['html']);
   });
 });

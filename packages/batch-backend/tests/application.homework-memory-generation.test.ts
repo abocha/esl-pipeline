@@ -94,8 +94,8 @@ describe('application/homework-memory-generation', () => {
           contentHash: 'sha-123',
           publishTargets: [
             {
-              target: 'notion',
-              url: 'https://notion.so/example',
+              target: 'html',
+              url: 'https://example.test/homework',
               jobId: 'job-1',
               publishedAt: '2026-03-20T15:30:00.000Z',
             },

@@ -57,10 +57,6 @@ function describeJobFailureReason(job: Pick<JobStatus, 'publishTarget' | 'error'
   if (!reason) {
     return 'Publishing failed. Check service availability and retry.';
   }
-  const normalized = reason.toLowerCase();
-  if (job.publishTarget === 'anytype' && normalized.includes('fetch failed')) {
-    return 'Anytype server unreachable. Start Anytype Desktop app and retry publish.';
-  }
   return reason;
 }
 
