@@ -30,8 +30,7 @@ export interface SubmitJobRequest {
   voiceId?: string;
   voiceAccent?: string;
   forceTts?: boolean;
-  notionDatabase?: string;
-  publishTarget?: 'notion' | 'anytype' | 'html';
+  publishTarget?: 'html';
   ttsStrategy?: TtsStrategy;
   ttsProvider?: TtsProvider;
   studyTextElevenlabsModel?: ElevenLabsTtsModelId;
@@ -114,24 +113,9 @@ function validateSubmitJobRequest(req: SubmitJobRequest): void {
     throw new ValidationError('forceTts must be a boolean when provided', 'invalid_force_tts');
   }
 
-  if (
-    req.notionDatabase !== undefined &&
-    (typeof req.notionDatabase !== 'string' || req.notionDatabase.trim().length === 0)
-  ) {
+  if (req.publishTarget !== undefined && req.publishTarget !== 'html') {
     throw new ValidationError(
-      'notionDatabase must be a non-empty string when provided',
-      'invalid_notion_database',
-    );
-  }
-
-  if (
-    req.publishTarget !== undefined &&
-    req.publishTarget !== 'notion' &&
-    req.publishTarget !== 'anytype' &&
-    req.publishTarget !== 'html'
-  ) {
-    throw new ValidationError(
-      'publishTarget must be "notion", "anytype", or "html" when provided',
+      'publishTarget must be "html" when provided',
       'invalid_publish_target',
     );
   }
@@ -207,8 +191,7 @@ export async function submitJob(req: SubmitJobRequest): Promise<SubmitJobRespons
     voiceId: req.voiceId,
     voiceAccent: req.voiceAccent,
     forceTts: req.forceTts,
-    notionDatabase: req.notionDatabase,
-    publishTarget: req.publishTarget ?? 'notion',
+    publishTarget: req.publishTarget ?? 'html',
     ttsStrategy: req.ttsStrategy,
     ttsProvider: req.ttsProvider,
     studyTextElevenlabsModel: req.studyTextElevenlabsModel,

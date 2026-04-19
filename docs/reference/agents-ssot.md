@@ -36,7 +36,7 @@ For deep system maps, prefer the linked docs rather than growing this file again
   - operator UI over `batch-backend`
 - supporting implementation packages
   - validation/parsing: `md-validator`, `pmd`
-  - adapters/providers: `notion-adapter`, `tts-*`, `stt-*`, `storage-uploader`
+  - adapters/providers: `html-publisher`, `tts-*`, `stt-*`, `storage-uploader`
   - shared runtime utilities: `provider-runtime`, `shared-infrastructure`, `contracts`
 
 ### Source-of-truth rules

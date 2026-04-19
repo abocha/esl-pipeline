@@ -11,7 +11,6 @@ Shared infrastructure utilities reused across backend/orchestrator packages.
   - storage provider config resolution (`s3` / `filesystem`)
   - manifest store config resolution helpers
 - `job-options`
-  - shared normalization for Notion DB option parsing
   - shared voice catalog normalization for UI/job-option payloads
 
 ## Why this package exists

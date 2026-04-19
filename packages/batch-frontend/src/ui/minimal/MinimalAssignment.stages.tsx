@@ -1457,8 +1457,6 @@ export function ReviewStageSection({
                 onPublishTargetChange(event.target.value as MinimalPublishTarget)
               }
             >
-              <option value="notion">Notion</option>
-              <option value="anytype">Anytype</option>
               <option value="html">HTML page</option>
             </select>
           </label>

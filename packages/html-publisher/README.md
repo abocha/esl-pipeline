@@ -1,6 +1,6 @@
 # @esl-pipeline/html-publisher
 
-Shared HTML renderer/publisher used by multiple publish targets (direct `html` and Anytype export path).
+Shared HTML renderer/publisher for the pipeline's html-only publish path.
 
 ## Exports
 

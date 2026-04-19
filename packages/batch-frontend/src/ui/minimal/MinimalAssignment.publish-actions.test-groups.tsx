@@ -476,7 +476,6 @@ export function registerJobActionTests() {
           },
           voiceAccents: ['american'],
           voices: [{ id: 'voice-a', name: 'Voice A', accent: 'american' }],
-          notionDatabases: [{ id: 'db-1', name: 'DB One' }],
           sttProviders: ['deepgram', 'elevenlabs', 'google'],
           defaultSttProvider: 'deepgram',
           sttModelOptionsByProvider: {
@@ -569,7 +568,6 @@ export function registerJobActionTests() {
           },
           voiceAccents: ['american'],
           voices: [{ id: 'voice-a', name: 'Voice A', accent: 'american' }],
-          notionDatabases: [{ id: 'db-1', name: 'DB One' }],
           sttProviders: ['deepgram', 'elevenlabs', 'google'],
           defaultSttProvider: 'deepgram',
           sttModelOptionsByProvider: {
@@ -766,8 +764,8 @@ export function registerJobActionTests() {
         const publishedAssignment = await renderPublishedAssignment({
           status: {
             state: 'running',
-            publishTarget: 'notion',
-            notionUrl: null,
+            publishTarget: 'html',
+            htmlUrl: null,
           },
         });
         const runningStatus = publishedAssignment.status;

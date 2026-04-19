@@ -128,15 +128,7 @@ export function WorkspaceHistoryPanel({
                     </td>
                     <td>{job.state}</td>
                     <td>{new Date(job.createdAt).toLocaleString()}</td>
-                    <td>
-                      {job.notionUrl
-                        ? 'Notion'
-                        : job.anytypeUrl
-                          ? 'Anytype'
-                          : job.htmlUrl
-                            ? 'HTML'
-                            : 'Pending'}
-                    </td>
+                    <td>{job.htmlUrl ? 'HTML' : 'Pending'}</td>
                     <td>
                       <div className="workspace-inline">
                         <Link

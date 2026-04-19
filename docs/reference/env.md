@@ -38,12 +38,10 @@
 
 Primary groups:
 
-- Notion / publishing:
-  - `NOTION_*`, `ANYTYPE_*`
+- HTML publishing / manifests:
+  - `AWS_*`, `S3_*`, `STORAGE_*`, `ESL_PIPELINE_MANIFEST_*`
 - Speech runtime:
   - `ESL_TTS_*`, `ESL_STT_*`, `ESL_EDGE_TTS_*`, `VOICE_ALIGNMENT_V2_*`
-- Storage / uploads / manifests:
-  - `AWS_*`, `S3_*`, `STORAGE_*`, `ESL_PIPELINE_MANIFEST_*`
 - Remote config:
   - `ESL_PIPELINE_CONFIG_*`
 - Optional logging/debug:

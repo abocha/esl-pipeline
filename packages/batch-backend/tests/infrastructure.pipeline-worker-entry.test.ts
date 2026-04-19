@@ -11,7 +11,6 @@ import { toWorkerV2FailureError } from '../src/infrastructure/pipeline-worker-v2
 
 const ORIGINAL_ELEVEN_KEY = process.env.ESL_TTS_PROVIDER_ELEVENLABS_API_KEY;
 const ORIGINAL_DEFAULT_PROVIDER = process.env.ESL_TTS_DEFAULT_PROVIDER;
-const ORIGINAL_NOTION_TOKEN = process.env.NOTION_TOKEN;
 
 describe('infrastructure/pipeline-worker-entry', () => {
   afterEach(() => {
@@ -27,11 +26,6 @@ describe('infrastructure/pipeline-worker-entry', () => {
       process.env.ESL_TTS_DEFAULT_PROVIDER = ORIGINAL_DEFAULT_PROVIDER;
     }
 
-    if (ORIGINAL_NOTION_TOKEN === undefined) {
-      delete process.env.NOTION_TOKEN;
-    } else {
-      process.env.NOTION_TOKEN = ORIGINAL_NOTION_TOKEN;
-    }
   });
 
   it('resolves configured key when user override is absent', () => {
@@ -55,14 +49,12 @@ describe('infrastructure/pipeline-worker-entry', () => {
     applyUserSettingsToEnv(
       {
         elevenLabsApiKey: 'user-eleven-key',
-        notionToken: 'user-notion-token',
         ttsProvider: 'google',
       },
       'configured-eleven-key',
     );
 
     expect(process.env.ESL_TTS_PROVIDER_ELEVENLABS_API_KEY).toBe('user-eleven-key');
-    expect(process.env.NOTION_TOKEN).toBe('user-notion-token');
     expect(process.env.ESL_TTS_DEFAULT_PROVIDER).toBe('google');
   });
 

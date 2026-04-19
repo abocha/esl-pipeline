@@ -204,34 +204,6 @@ export function CreateStudentDialog({
             <summary>Advanced fields</summary>
             <div className="workspace-grid">
               <label className="workspace-field">
-                Notion DB ID
-                <input
-                  aria-label="Notion DB ID"
-                  value={createStudentForm.dbId}
-                  onChange={(event) =>
-                    setCreateStudentForm((current) => ({
-                      ...current,
-                      dbId: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-
-              <label className="workspace-field">
-                Notion Parent ID
-                <input
-                  aria-label="Notion Parent ID"
-                  value={createStudentForm.pageParentId}
-                  onChange={(event) =>
-                    setCreateStudentForm((current) => ({
-                      ...current,
-                      pageParentId: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-
-              <label className="workspace-field">
                 Color Preset
                 <input
                   aria-label="Color Preset"

@@ -53,7 +53,7 @@ Main entrypoints:
 - Postgres (`PG_*`): primary durable store.
 - Redis (`REDIS_*`): queue backing via BullMQ.
 - Optional object storage / manifest store via orchestrator env/config.
-- External provider credentials (Notion, ElevenLabs, generation providers) as required by active workflows.
+- External provider credentials (ElevenLabs, generation providers) as required by active workflows.
 
 Env reference: [`docs/reference/env.md`](../reference/env.md)
 

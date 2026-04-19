@@ -8,7 +8,7 @@ import {
   listRecentReadyHomeworkMemoryByStudentId,
   markHomeworkMemoryEntryFailed,
 } from '../src/domain/homework-memory-repository.js';
-import { closePgPool, withPgClient } from '../src/infrastructure/db.js';
+import { closePgPool, withPgClientSessionContext } from '../src/infrastructure/db.js';
 import { requirePgTestEnv } from './support/test-env.js';
 
 const hasPgTestEnv = Boolean(process.env.BATCH_BACKEND_TEST_PG?.trim());
@@ -17,7 +17,7 @@ if (hasPgTestEnv) {
 }
 
 async function truncateHomeworkMemoryTables() {
-  await withPgClient(async (client) => {
+  await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
     await client.query(
       'TRUNCATE TABLE homework_memory_entries, drafts, prompt_packages, lesson_memory_entries, transcripts, recordings, jobs, students, users RESTART IDENTITY CASCADE',
     );
@@ -49,7 +49,7 @@ describeIfPg('domain/homework-memory-repository', () => {
     const rootJobId = randomUUID();
     const rerunJobId = randomUUID();
 
-    await withPgClient(async (client) => {
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
       await client.query(
         `INSERT INTO students (id, student, created_at, updated_at) VALUES ($1, 'Lena', NOW(), NOW())`,
         [studentId],
@@ -92,7 +92,7 @@ describeIfPg('domain/homework-memory-repository', () => {
           id, state, md, student_id, recording_id, transcript_id, prompt_package_id, draft_id,
           publish_target, finished_at, created_at, updated_at
         )
-        VALUES ($1, 'succeeded', 'lesson.md', $2, $3, $4, $5, $6, 'notion', NOW(), NOW(), NOW())
+        VALUES ($1, 'succeeded', 'lesson.md', $2, $3, $4, $5, $6, 'html', NOW(), NOW(), NOW())
         `,
         [rootJobId, studentId, recordingId, transcriptId, promptPackageId, draftId],
       );
@@ -135,8 +135,8 @@ describeIfPg('domain/homework-memory-repository', () => {
       contentHash: 'sha-1',
       publishTargets: [
         {
-          target: 'notion',
-          url: 'https://notion.so/root',
+          target: 'html',
+          url: 'https://example.test/root',
           jobId: rootJobId,
           publishedAt: '2026-03-20T10:00:00.000Z',
         },
@@ -176,8 +176,8 @@ describeIfPg('domain/homework-memory-repository', () => {
           publishedAt: '2026-03-20T11:00:00.000Z',
         },
         {
-          target: 'notion',
-          url: 'https://notion.so/root',
+          target: 'html',
+          url: 'https://example.test/root',
           jobId: rootJobId,
           publishedAt: '2026-03-20T10:00:00.000Z',
         },
@@ -193,7 +193,7 @@ describeIfPg('domain/homework-memory-repository', () => {
     expect(latest?.contentHash).toBe('sha-2');
     expect(recent).toHaveLength(1);
 
-    const supersededFirst = await withPgClient(async (client) => {
+    const supersededFirst = await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
       const result = await client.query<{ status: string; superseded_by_id: string | null }>(
         `SELECT status, superseded_by_id FROM homework_memory_entries WHERE id = $1`,
         [first.id],
@@ -214,7 +214,7 @@ describeIfPg('domain/homework-memory-repository', () => {
     const rootJobId = randomUUID();
     const rerunJobId = randomUUID();
 
-    await withPgClient(async (client) => {
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
       await client.query(
         `INSERT INTO students (id, student, created_at, updated_at) VALUES ($1, 'Lena', NOW(), NOW())`,
         [studentId],
@@ -257,7 +257,7 @@ describeIfPg('domain/homework-memory-repository', () => {
           id, state, md, student_id, recording_id, transcript_id, prompt_package_id, draft_id,
           publish_target, finished_at, created_at, updated_at
         )
-        VALUES ($1, 'succeeded', 'lesson.md', $2, $3, $4, $5, $6, 'notion', NOW(), NOW(), NOW())
+        VALUES ($1, 'succeeded', 'lesson.md', $2, $3, $4, $5, $6, 'html', NOW(), NOW(), NOW())
         `,
         [rootJobId, studentId, recordingId, transcriptId, promptPackageId, draftId],
       );
@@ -300,8 +300,8 @@ describeIfPg('domain/homework-memory-repository', () => {
       contentHash: 'sha-1',
       publishTargets: [
         {
-          target: 'notion',
-          url: 'https://notion.so/root',
+          target: 'html',
+          url: 'https://example.test/root',
           jobId: rootJobId,
           publishedAt: '2026-03-20T10:00:00.000Z',
         },
@@ -333,7 +333,7 @@ describeIfPg('domain/homework-memory-repository', () => {
       ],
     });
 
-    const rowCount = await withPgClient(async (client) => {
+    const rowCount = await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
       const result = await client.query<{ count: string }>(
         `SELECT COUNT(*)::text AS count FROM homework_memory_entries WHERE assignment_lineage_key = $1`,
         [rootJobId],
@@ -355,7 +355,7 @@ describeIfPg('domain/homework-memory-repository', () => {
     const rootJobId = randomUUID();
     const replayJobId = randomUUID();
 
-    await withPgClient(async (client) => {
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
       await client.query(
         `INSERT INTO students (id, student, created_at, updated_at) VALUES ($1, 'Lena', NOW(), NOW())`,
         [studentId],
@@ -398,7 +398,7 @@ describeIfPg('domain/homework-memory-repository', () => {
           id, state, md, student_id, recording_id, transcript_id, prompt_package_id, draft_id,
           publish_target, finished_at, created_at, updated_at
         )
-        VALUES ($1, 'succeeded', 'lesson.md', $2, $3, $4, $5, $6, 'notion', NOW(), NOW(), NOW())
+        VALUES ($1, 'succeeded', 'lesson.md', $2, $3, $4, $5, $6, 'html', NOW(), NOW(), NOW())
         `,
         [rootJobId, studentId, recordingId, transcriptId, promptPackageId, draftId],
       );
@@ -474,7 +474,7 @@ describeIfPg('domain/homework-memory-repository', () => {
     const draftId = randomUUID();
     const rootJobId = randomUUID();
 
-    await withPgClient(async (client) => {
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
       await client.query(
         `INSERT INTO students (id, student, created_at, updated_at) VALUES ($1, 'Marta', NOW(), NOW())`,
         [studentId],
@@ -517,7 +517,7 @@ describeIfPg('domain/homework-memory-repository', () => {
           id, state, md, student_id, recording_id, transcript_id, prompt_package_id, draft_id,
           publish_target, finished_at, created_at, updated_at
         )
-        VALUES ($1, 'succeeded', 'lesson.md', $2, $3, $4, $5, $6, 'notion', NOW(), NOW(), NOW())
+        VALUES ($1, 'succeeded', 'lesson.md', $2, $3, $4, $5, $6, 'html', NOW(), NOW(), NOW())
         `,
         [rootJobId, studentId, recordingId, transcriptId, promptPackageId, draftId],
       );

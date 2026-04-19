@@ -33,7 +33,6 @@ export const getDecryptedElevenLabsKeySpy = vi.spyOn(
   settingsRepository,
   'getDecryptedElevenLabsKey',
 );
-export const getDecryptedNotionTokenSpy = vi.spyOn(settingsRepository, 'getDecryptedNotionToken');
 export const createTranscriptionStorageForUriSpy = vi.spyOn(
   transcriptionStorage,
   'createTranscriptionStorageForUri',
@@ -78,8 +77,7 @@ export function makeJob(overrides: Partial<JobRecord> = {}): JobRecord {
     voiceId: 'voice_amanda',
     voiceAccent: 'american_female',
     forceTts: false,
-    notionDatabase: 'db-123',
-    publishTarget: 'notion',
+    publishTarget: 'html',
     ttsStrategy: 'auto',
     ttsProvider: 'elevenlabs',
     studyTextElevenlabsModel: null,

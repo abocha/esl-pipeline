@@ -32,8 +32,6 @@ let currentAbortController: AbortController | null = null;
 
 interface PipelineRunResult {
   manifestPath?: string;
-  pageUrl?: string;
-  anytypeUrl?: string;
   htmlUrl?: string;
 }
 
@@ -82,14 +80,12 @@ async function executePipeline(
             pipeline,
             payload as RunRerunAssignmentPayload,
             config.worker.ttsCacheDir,
-            config.orchestrator.notionDatabaseId,
             signal,
           )
         : await runAssignmentPipeline(
             pipeline,
             payload as RunAssignmentPayload,
             config.worker.ttsCacheDir,
-            config.orchestrator.notionDatabaseId,
             signal,
           );
     const duration = Date.now() - started;
@@ -101,8 +97,6 @@ async function executePipeline(
 
     return {
       manifestPath: result.manifestPath,
-      notionUrl: result.pageUrl,
-      anytypeUrl: result.anytypeUrl,
       htmlUrl: result.htmlUrl,
     };
   } finally {
@@ -118,7 +112,6 @@ async function runAssignmentPipeline(
   pipeline: ReturnType<typeof getPipeline>,
   payload: RunAssignmentPayload,
   ttsOutDir: string,
-  defaultNotionDatabaseId?: string,
   signal?: AbortSignal,
 ): Promise<PipelineRunResult> {
   const flags: NewAssignmentFlags = {
@@ -130,12 +123,6 @@ async function runAssignmentPipeline(
     publishTarget: payload.publishTarget,
     out: ttsOutDir,
   };
-
-  if (payload.notionDatabase) {
-    flags.dbId = payload.notionDatabase;
-  } else if (defaultNotionDatabaseId) {
-    flags.dbId = defaultNotionDatabaseId;
-  }
 
   if (payload.forceTts) {
     flags.redoTts = payload.forceTts;
@@ -183,7 +170,6 @@ async function runRerunPipeline(
   pipeline: ReturnType<typeof getPipeline>,
   payload: RunRerunAssignmentPayload,
   ttsOutDir: string,
-  _defaultNotionDatabaseId?: string,
   signal?: AbortSignal,
 ): Promise<PipelineRunResult> {
   const flags: RerunFlags = {
@@ -275,9 +261,6 @@ async function main() {
     // Apply user settings overrides
     if (payload.settings?.elevenLabsApiKey) {
       config.orchestrator.elevenLabsApiKey = payload.settings.elevenLabsApiKey;
-    }
-    if (payload.settings?.notionToken) {
-      config.orchestrator.notionToken = payload.settings.notionToken;
     }
 
     applyUserSettingsToEnv(payload.settings, config.orchestrator.elevenLabsApiKey);

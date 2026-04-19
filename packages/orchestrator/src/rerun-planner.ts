@@ -90,36 +90,7 @@ export function computeRerunPlan(input: PlannerInput): RerunPlanResult {
     stage,
     reason: 'not requested',
   }));
-  const publishTarget = input.manifest.publishTarget ?? 'notion';
   const audioArtifacts = resolveAudioArtifactsFromManifest(input.manifest);
-  const hasStudyTextUrl = Boolean(audioArtifacts.studyText?.url);
-  const hasPronunciationPrimaryUrl = Boolean(audioArtifacts.pronunciation?.primaryClip?.url);
-  const hasPronunciationItemUrl = Boolean(
-    audioArtifacts.pronunciation?.itemClips?.some((clip) => Boolean(clip?.url)),
-  );
-  const hasAnyAudioUrl = hasStudyTextUrl || hasPronunciationPrimaryUrl || hasPronunciationItemUrl;
-
-  if (
-    requested.republishOnly &&
-    (publishTarget === 'notion' || publishTarget === 'anytype') &&
-    !hasAnyAudioUrl
-  ) {
-    missingManifestFields.add('audio.url');
-    errors.push('Republish requires existing audio URLs in the manifest for this publish target.');
-  }
-
-  if (executable.includes('add-audio')) {
-    if (publishTarget === 'anytype') {
-      if (!input.manifest.anytypePageId) {
-        missingManifestFields.add('anytypePageId');
-      }
-      if (!input.manifest.anytypeSpaceId) {
-        missingManifestFields.add('anytypeSpaceId');
-      }
-    } else if (publishTarget === 'notion' && !input.manifest.pageId) {
-      missingManifestFields.add('pageId');
-    }
-  }
 
   if (missingManifestFields.size > 0 && errors.length === 0) {
     errors.push(

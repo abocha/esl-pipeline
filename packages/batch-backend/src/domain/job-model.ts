@@ -32,14 +32,11 @@ export interface JobRecord {
   voiceId?: string | null;
   voiceAccent?: string | null;
   forceTts?: boolean | null;
-  notionDatabase?: string | null;
   publishTarget?: PublishTarget | null;
   ttsStrategy?: TtsStrategy | null;
   ttsProvider?: TtsProviderId | null;
   studyTextElevenlabsModel?: ElevenLabsTtsModelId | null;
   googleTtsModel?: GoogleTtsModel | null;
-  notionUrl?: string | null;
-  anytypeUrl?: string | null;
   htmlUrl?: string | null;
   autoPublish?: boolean | null;
   createdAt: Date;

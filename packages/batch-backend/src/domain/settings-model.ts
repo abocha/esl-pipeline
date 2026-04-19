@@ -20,7 +20,6 @@ export interface UserSettingsRecord {
   userId: string;
   // Encrypted API keys (raw encrypted values from DB)
   elevenLabsKeyEncrypted: string | null;
-  notionTokenEncrypted: string | null;
   // TTS provider
   ttsProvider: TtsProvider;
   // Preferences
@@ -39,7 +38,6 @@ export interface UserSettingsRecord {
 export interface UserSettingsInput {
   // Plain text API keys (will be encrypted before storage)
   elevenLabsKey?: string | null;
-  notionToken?: string | null;
   // TTS provider
   ttsProvider?: TtsProvider;
   // Preferences
@@ -55,7 +53,6 @@ export interface UserSettingsInput {
 export interface UserSettingsOutput {
   // Masked indicators (true = has key, false = no key)
   hasElevenLabsKey: boolean;
-  hasNotionToken: boolean;
   // TTS provider
   ttsProvider: TtsProvider;
   // Preferences
@@ -98,7 +95,6 @@ export function isValidTtsStrategy(strategy: string): strategy is UserTtsStrateg
 export function sanitizeSettings(record: UserSettingsRecord): UserSettingsOutput {
   return {
     hasElevenLabsKey: record.elevenLabsKeyEncrypted !== null,
-    hasNotionToken: record.notionTokenEncrypted !== null,
     ttsProvider: record.ttsProvider,
     defaultPreset: record.defaultPreset,
     defaultVoiceAccent: record.defaultVoiceAccent,
@@ -118,7 +114,6 @@ export function getDefaultSettings(): Omit<
 > {
   return {
     elevenLabsKeyEncrypted: null,
-    notionTokenEncrypted: null,
     ttsProvider: 'elevenlabs',
     defaultPreset: 'b1-default',
     defaultVoiceAccent: 'american',
