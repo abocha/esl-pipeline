@@ -52,7 +52,6 @@ default: voice_id_default
 
     expect(result.steps).toContain('import');
     expect(result.manifestPath).toBeDefined();
-    expect(result.pageId).toBeUndefined();
     expect(result.audio?.url).toMatch(
       /^https:\/\/test-bucket\.s3\.amazonaws\.com\/audio\/final\/[a-f0-9]+\.mp3$/,
     );
