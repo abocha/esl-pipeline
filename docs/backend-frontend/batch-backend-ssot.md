@@ -5,7 +5,7 @@
 - Audience: maintainers and implementing agents.
 - Read Time: 8 minutes.
 - Authority Level: Backend architecture and service-boundary reference.
-- Last Verified Against: 2026-03-04 repo state.
+- Last Verified Against: 2026-04-19 repo state.
 - Owner: backend/frontend maintainers + automation agents.
 - Review Cadence: monthly or after major backend workflow changes.
 - Status: `reference`.

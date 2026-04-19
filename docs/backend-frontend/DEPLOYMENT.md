@@ -5,7 +5,7 @@
 - Audience: maintainers/operators deploying batch services.
 - Read Time: 6 minutes.
 - Authority Level: Deployment runbook.
-- Last Verified Against: 2026-03-04 repo state.
+- Last Verified Against: 2026-04-19 repo state.
 - Owner: backend/frontend maintainers + automation agents.
 - Review Cadence: monthly or after deployment workflow changes.
 - Status: `runbook`.
