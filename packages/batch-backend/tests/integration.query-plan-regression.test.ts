@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
-import { closePgPool, withPgClientSessionContext } from '../src/infrastructure/db.js';
+import { closePgPool, withPgClient, withPgClientSessionContext } from '../src/infrastructure/db.js';
 import { requirePgTestEnv, resolveTestTimeout, writeTestArtifact } from './support/test-env.js';
 
 requirePgTestEnv();

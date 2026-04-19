@@ -45,7 +45,6 @@ describe('rerun planner', () => {
       regenerateStudyTextAudio: true,
       manifest: {
         mdHash: 'hash',
-        pageId: 'page-1',
         timestamp: '2026-01-01T00:00:00.000Z',
       },
     });
@@ -110,7 +109,6 @@ describe('rerun planner', () => {
       regeneratePronunciationChunkAudio: true,
       manifest: {
         mdHash: 'hash',
-        pageId: 'page-1',
         audioArtifacts: {
           pronunciation: {
             mode: 'connected_speech',
