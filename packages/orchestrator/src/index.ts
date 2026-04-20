@@ -483,7 +483,7 @@ export async function newAssignment(
   let htmlEtag = previousManifest?.htmlEtag;
   let htmlReused = previousManifest?.htmlReused;
 
-  let colorized = false;
+  const colorized = false;
 
   logger.log({
     level: 'info',
@@ -1505,51 +1505,46 @@ export async function rerunAssignment(
       throwIfCancelled(signal, 'add-audio');
       const studyTextAudioUrl = audioArtifacts.studyText?.url;
       const pronunciationAudioUrl = audioArtifacts.pronunciation?.primaryClip?.url;
-      {
-        if (!flags.dryRun) {
-          let headingTheme: { h2?: string; h3?: string } | undefined;
-          if (manifest.preset) {
-            headingTheme = await loadHeadingThemeForPreset(
-              manifest.preset,
-              DEFAULT_PRESETS_PATH,
-            );
-          }
-
-          const publishMarkdown = insertGeneratedAudioLinks(mdContents, {
-            studyTextUrl: studyTextAudioUrl,
-            pronunciationAudioUrl,
-            pronunciationAudio: audioArtifacts.pronunciation,
-          });
-          const publishTitle = resolveMarkdownTitle(
-            mdContents,
-            effectiveStudyTextTitleFallback,
-            null,
-            true,
-          );
-          const publishResult = await renderAndPublishMarkdownToS3({
-            headingTheme,
-            title: publishTitle,
-            markdown: publishMarkdown,
-            pronunciationAudio: audioArtifacts.pronunciation,
-          });
-          throwIfCancelled(signal, 'add-audio');
-          htmlUrl = publishResult.url;
-          htmlHash = publishResult.renderHash;
-          htmlKey = publishResult.key;
-          htmlEtag = publishResult.etag;
-          htmlReused = publishResult.reused;
-          emitArtifactReuseMetric(metrics, 'html', undefined, publishResult.reused);
+      if (!flags.dryRun) {
+        let headingTheme: { h2?: string; h3?: string } | undefined;
+        if (manifest.preset) {
+          headingTheme = await loadHeadingThemeForPreset(manifest.preset, DEFAULT_PRESETS_PATH);
         }
-        emitStage('add-audio', 'success', {
+
+        const publishMarkdown = insertGeneratedAudioLinks(mdContents, {
           studyTextUrl: studyTextAudioUrl,
-          pronunciationUrl: pronunciationAudioUrl,
-          publishUrl: htmlUrl,
-          publishKey: htmlKey,
-          publishHash: htmlHash,
-          publishReused: htmlReused,
-          dryRun: flags.dryRun,
+          pronunciationAudioUrl,
+          pronunciationAudio: audioArtifacts.pronunciation,
         });
+        const publishTitle = resolveMarkdownTitle(
+          mdContents,
+          effectiveStudyTextTitleFallback,
+          null,
+          true,
+        );
+        const publishResult = await renderAndPublishMarkdownToS3({
+          headingTheme,
+          title: publishTitle,
+          markdown: publishMarkdown,
+          pronunciationAudio: audioArtifacts.pronunciation,
+        });
+        throwIfCancelled(signal, 'add-audio');
+        htmlUrl = publishResult.url;
+        htmlHash = publishResult.renderHash;
+        htmlKey = publishResult.key;
+        htmlEtag = publishResult.etag;
+        htmlReused = publishResult.reused;
+        emitArtifactReuseMetric(metrics, 'html', undefined, publishResult.reused);
       }
+      emitStage('add-audio', 'success', {
+        studyTextUrl: studyTextAudioUrl,
+        pronunciationUrl: pronunciationAudioUrl,
+        publishUrl: htmlUrl,
+        publishKey: htmlKey,
+        publishHash: htmlHash,
+        publishReused: htmlReused,
+        dryRun: flags.dryRun,
+      });
 
       executed.push('add-audio');
     } else {

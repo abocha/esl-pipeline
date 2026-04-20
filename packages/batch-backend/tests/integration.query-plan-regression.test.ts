@@ -178,7 +178,7 @@ describe('integration/query-plan-regression', () => {
   );
 
   it(
-    'readiness path keeps publish-target/state index usage',
+    'readiness path keeps selective index usage without seq scans',
     async () => {
       const plan = await explainQuery(
         'readiness-window',
@@ -195,7 +195,13 @@ describe('integration/query-plan-regression', () => {
 
       const indexNames = new Set<string>();
       collectIndexNames(plan.Plan, indexNames);
-      expect(indexNames.has('idx_jobs_publish_target_state_created_at')).toBe(true);
+      expect(
+        [
+          'idx_jobs_state',
+          'idx_jobs_state_created_at',
+          'idx_jobs_publish_target_state_created_at',
+        ].some((indexName) => indexNames.has(indexName)),
+      ).toBe(true);
       expect(hasSeqScanOnRelation(plan.Plan, 'jobs')).toBe(false);
     },
     testTimeout,

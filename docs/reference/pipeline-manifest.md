@@ -60,7 +60,7 @@ This document captures the canonical schema so remote stores and services can va
         "cachedCharacters": 480,
         "costPer1kCharsUsd": 0.3,
         "estimatedSpendUsd": 0.396,
-      }
+      },
     },
     "pronunciation": {
       "mode": "shadow_sentence",
@@ -73,7 +73,7 @@ This document captures the canonical schema so remote stores and services can va
         "url": "https://...",
         "hash": "<sha256 pronunciation sentence hash>",
         "key": "audio/pronunciation/<sha256>.mp3",
-        "voiceId": "<provider-voice-id>"
+        "voiceId": "<provider-voice-id>",
       },
       "itemClips": [
         {

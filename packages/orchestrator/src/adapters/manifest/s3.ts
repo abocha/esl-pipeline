@@ -2,10 +2,10 @@ import { basename, extname, isAbsolute, posix as posixPath, relative } from 'nod
 import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 
 import {
-  normalizeManifestPublishTarget,
-  sanitizeAssignmentManifest,
   type AssignmentManifest,
   type ManifestStore,
+  normalizeManifestPublishTarget,
+  sanitizeAssignmentManifest,
 } from '../../manifest.js';
 
 export interface S3ManifestStoreOptions {

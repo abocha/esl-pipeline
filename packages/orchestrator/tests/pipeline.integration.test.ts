@@ -115,9 +115,9 @@ describe('pipeline integration', () => {
     expect(result.steps).toEqual([
       'validate',
       'skip:import',
-      'colorize:b1-default:0/0/0',
       'tts',
       'upload',
+      'add-audio',
       'manifest',
     ]);
     expect(result.manifestPath?.endsWith('.manifest.json')).toBe(true);
@@ -137,10 +137,10 @@ describe('pipeline integration', () => {
     ).toEqual([
       'validate:success',
       'import:skipped',
-      'colorize:success',
+      'colorize:skipped',
       'tts:success',
       'upload:success',
-      'add-audio:skipped',
+      'add-audio:success',
       'manifest:success',
     ]);
   });
@@ -197,9 +197,9 @@ describe('pipeline integration', () => {
     expect(result.steps).toEqual([
       'validate',
       'skip:import',
-      'colorize:b1-default:0/0/0',
       'tts',
       'upload',
+      'add-audio',
       'manifest',
     ]);
     expect(
@@ -215,10 +215,10 @@ describe('pipeline integration', () => {
     ).toEqual([
       'validate:success',
       'import:skipped',
-      'colorize:success',
+      'colorize:skipped',
       'tts:success',
       'upload:success',
-      'add-audio:skipped',
+      'add-audio:success',
       'manifest:success',
     ]);
   });

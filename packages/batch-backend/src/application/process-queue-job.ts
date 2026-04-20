@@ -16,10 +16,7 @@ import { manifestPathFor } from '@esl-pipeline/orchestrator';
 import { type BatchBackendConfig, loadConfig } from '../config/env.js';
 import { publishJobEvent } from '../domain/job-events.js';
 import { getJobById, updateJobStateAndResult } from '../domain/job-repository.js';
-import {
-  getDecryptedElevenLabsKey,
-  getSettingsByUserId,
-} from '../domain/settings-repository.js';
+import { getDecryptedElevenLabsKey, getSettingsByUserId } from '../domain/settings-repository.js';
 import { registerRunningJob, unregisterRunningJob } from '../infrastructure/job-cancellation.js';
 import { createJobLogger } from '../infrastructure/logger.js';
 import { runAssignmentJob, runRerunAssignmentJob } from '../infrastructure/orchestrator-service.js';

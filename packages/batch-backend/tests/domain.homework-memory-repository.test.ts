@@ -193,13 +193,16 @@ describeIfPg('domain/homework-memory-repository', () => {
     expect(latest?.contentHash).toBe('sha-2');
     expect(recent).toHaveLength(1);
 
-    const supersededFirst = await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
-      const result = await client.query<{ status: string; superseded_by_id: string | null }>(
-        `SELECT status, superseded_by_id FROM homework_memory_entries WHERE id = $1`,
-        [first.id],
-      );
-      return result.rows[0];
-    });
+    const supersededFirst = await withPgClientSessionContext(
+      { rlsBypass: true },
+      async (client) => {
+        const result = await client.query<{ status: string; superseded_by_id: string | null }>(
+          `SELECT status, superseded_by_id FROM homework_memory_entries WHERE id = $1`,
+          [first.id],
+        );
+        return result.rows[0];
+      },
+    );
 
     expect(supersededFirst?.status).toBe('superseded');
     expect(supersededFirst?.superseded_by_id).toBe(second.id);

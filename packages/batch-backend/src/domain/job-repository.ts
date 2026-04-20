@@ -730,16 +730,7 @@ export async function updateJobStateAndResult(args: {
         source_job_id,
         user_id
       `,
-      [
-        nextState,
-        error,
-        manifestPath,
-        htmlUrl,
-        startedAt,
-        finishedAt,
-        id,
-        expectedState,
-      ],
+      [nextState, error, manifestPath, htmlUrl, startedAt, finishedAt, id, expectedState],
     );
     return result.rows[0];
   });
