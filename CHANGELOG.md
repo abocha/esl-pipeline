@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [6.1.5] - 2026-04-20
+
+### Changed
+
+- Automated release from PR #66: refactor(publish): retire notion and anytype outputs (https://github.com/abocha/esl-pipeline/pull/66)
+
 ## [6.1.4] - 2026-04-17
 
 ### Changed
