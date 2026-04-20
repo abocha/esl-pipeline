@@ -25,8 +25,6 @@ interface HomeworkSourceJobRow {
   transcript_id: string | null;
   source_job_id: string | null;
   publish_target: string | null;
-  notion_url: string | null;
-  anytype_url: string | null;
   html_url: string | null;
   state: string;
   finished_at: Date | null;
@@ -142,8 +140,6 @@ async function loadSucceededJob(jobId: string): Promise<HomeworkSourceJobRow | n
         transcript_id,
         source_job_id,
         publish_target,
-        notion_url,
-        anytype_url,
         html_url,
         state,
         finished_at,
@@ -202,8 +198,6 @@ async function listSucceededLineageJobs(
           transcript_id,
           source_job_id,
           publish_target,
-          notion_url,
-          anytype_url,
           html_url,
           state,
           finished_at,
@@ -224,8 +218,6 @@ async function listSucceededLineageJobs(
           j.transcript_id,
           j.source_job_id,
           j.publish_target,
-          j.notion_url,
-          j.anytype_url,
           j.html_url,
           j.state,
           j.finished_at,
@@ -283,27 +275,14 @@ function mergePublishTargets(rows: HomeworkSourceJobRow[]): HomeworkMemoryPublis
 }
 
 function normalizePublishTarget(value: string | null): PublishTarget | null {
-  if (value === 'notion' || value === 'anytype' || value === 'html') {
+  if (value === 'html') {
     return value;
   }
   return null;
 }
 
 function resolvePublishUrl(row: HomeworkSourceJobRow, target: PublishTarget): string | null {
-  switch (target) {
-    case 'notion': {
-      return row.notion_url ?? null;
-    }
-    case 'anytype': {
-      return row.anytype_url ?? null;
-    }
-    case 'html': {
-      return row.html_url ?? null;
-    }
-    default: {
-      return null;
-    }
-  }
+  return target === 'html' ? (row.html_url ?? null) : null;
 }
 
 function sha256(input: string): string {

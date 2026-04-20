@@ -18,7 +18,6 @@ describeHttpServerIntegrationSuite(
     generateDraftModule,
     it,
     materializeDraftModule,
-    notionAdapterModule,
     settingsRepositoryModule,
     validateMarkdown,
     vi,
@@ -319,7 +318,7 @@ describeHttpServerIntegrationSuite(
       const payload = {
         jobOverrides: {
           learningPresetId: 'general-english',
-          notionDatabase: 'notion-db',
+          publishTarget: 'html',
           withTts: true,
           ttsProvider: 'elevenlabs',
           studyTextElevenlabsModel: 'eleven_v3',
@@ -677,10 +676,6 @@ describeHttpServerIntegrationSuite(
           defaultPreset: 'b1-default',
         } as Awaited<ReturnType<typeof settingsRepositoryModule.getSettingsByUserId>>);
       const createDefaultSpy = vi.spyOn(settingsRepositoryModule, 'createDefaultSettings');
-      const loadPresetSpy = vi.spyOn(notionAdapterModule, 'loadPreset').mockResolvedValue({
-        h2: 'blue',
-        h3: 'green',
-      });
 
       try {
         const response = await app.inject({
@@ -695,15 +690,13 @@ describeHttpServerIntegrationSuite(
         expect(response.statusCode).toBe(200);
         expect(getSettingsSpy).toHaveBeenCalledWith('test-user-id');
         expect(createDefaultSpy).not.toHaveBeenCalled();
-        expect(loadPresetSpy).toHaveBeenCalledWith('b1-default', expect.any(String));
 
         const payload = response.json() as { html: string };
-        expect(payload.html).toContain('--theme-h2: #2d9cdb;');
-        expect(payload.html).toContain('--theme-h3: #27ae60;');
+        expect(payload.html).toContain('--theme-h2: #d8e5f2;');
+        expect(payload.html).toContain('--theme-h3: #e7dbe9;');
       } finally {
         getSettingsSpy.mockRestore();
         createDefaultSpy.mockRestore();
-        loadPresetSpy.mockRestore();
       }
     });
 

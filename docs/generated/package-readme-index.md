@@ -11,13 +11,11 @@
 
 | Package                                 | README Title                          | Enforced | Path                                         |
 | --------------------------------------- | ------------------------------------- | -------- | -------------------------------------------- |
-| `@esl-pipeline/anytype-adapter`         | @esl-pipeline/anytype-adapter         | no       | `packages/anytype-adapter/README.md`         |
 | `@esl-pipeline/batch-backend`           | @esl-pipeline/batch-backend           | yes      | `packages/batch-backend/README.md`           |
 | `@esl-pipeline/batch-frontend`          | @esl-pipeline/batch-frontend          | yes      | `packages/batch-frontend/README.md`          |
 | `@esl-pipeline/contracts`               | @esl-pipeline/contracts               | no       | `packages/contracts/README.md`               |
 | `@esl-pipeline/html-publisher`          | @esl-pipeline/html-publisher          | no       | `packages/html-publisher/README.md`          |
 | `@esl-pipeline/md-validator`            | @esl-pipeline/md-validator            | no       | `packages/md-validator/README.md`            |
-| `@esl-pipeline/notion-adapter`          | @esl-pipeline/notion-adapter          | no       | `packages/notion-adapter/README.md`          |
 | `@esl-pipeline/orchestrator`            | @esl-pipeline/orchestrator            | yes      | `packages/orchestrator/README.md`            |
 | `@esl-pipeline/pmd`                     | @esl-pipeline/pmd                     | no       | `packages/pmd/README.md`                     |
 | `@esl-pipeline/provider-runtime`        | @esl-pipeline/provider-runtime        | yes      | `packages/provider-runtime/README.md`        |

@@ -2,10 +2,10 @@
   "name": "esl-pipeline",
   "version": "6.1.4",
   "private": true,
-  "description": "ESL assignment pipeline tooling (validation, Notion import, TTS, S3 upload).",
+  "description": "ESL assignment pipeline tooling (validation, HTML publishing, TTS, S3 upload).",
   "keywords": [
     "esl",
-    "notion",
+    "html",
     "tts",
     "cli",
     "pipeline"

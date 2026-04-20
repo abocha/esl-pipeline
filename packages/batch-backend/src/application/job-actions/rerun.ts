@@ -415,7 +415,6 @@ export async function rerun(jobId: string, action: RerunAction): Promise<JobActi
     voiceId: persistedVoiceId,
     voiceAccent: persistedVoiceAccent,
     forceTts: payload.republishOnly ? false : true,
-    notionDatabase: job.notionDatabase ?? undefined,
     publishTarget: job.publishTarget ?? undefined,
     ttsStrategy: persistedTtsStrategy,
     ttsProvider: persistedTtsProvider,

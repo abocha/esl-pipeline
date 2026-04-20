@@ -57,7 +57,6 @@
     "@esl-pipeline/contracts": "workspace:*",
     "@esl-pipeline/html-publisher": "workspace:*",
     "@esl-pipeline/md-validator": "workspace:*",
-    "@esl-pipeline/notion-adapter": "workspace:*",
     "@esl-pipeline/orchestrator": "workspace:*",
     "@esl-pipeline/pmd": "workspace:*",
     "@esl-pipeline/provider-runtime": "workspace:*",

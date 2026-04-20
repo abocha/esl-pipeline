@@ -1,9 +1,9 @@
+import { readFile } from 'node:fs/promises';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import { createStaticPageHtml } from '@esl-pipeline/html-publisher';
 import { validateMarkdown } from '@esl-pipeline/md-validator';
-import { loadPreset } from '@esl-pipeline/notion-adapter';
 import { resolveConfigPaths } from '@esl-pipeline/orchestrator';
 import { extractPronunciationFocus, parseMarkdownContext } from '@esl-pipeline/pmd';
 import {
@@ -32,6 +32,17 @@ const PRONUNCIATION_HEADING_REGEX = /^###\s+.*pronunciation.*micro.*focus/i;
 const GENERATED_STUDY_PLACEHOLDER_MARKER = '<!-- esl-generated-study-text-audio-placeholder -->';
 const GENERATED_PRONUNCIATION_PLACEHOLDER_MARKER =
   '<!-- esl-generated-pronunciation-audio-placeholder -->';
+
+async function loadPresetFromFile(
+  presetName: string,
+  presetsPath: string,
+): Promise<{ h2?: string; h3?: string } | null> {
+  const parsed = JSON.parse(await readFile(presetsPath, 'utf8')) as Record<
+    string,
+    { h2?: string; h3?: string }
+  >;
+  return parsed[presetName] ?? null;
+}
 
 function parsePronunciationMode(markdown: string): string | null {
   const lines = markdown.split('\n');
@@ -816,7 +827,7 @@ export function registerConfigRoutes(app: FastifyInstance, context: ExtendedRout
             cwd: process.env.PIPELINE_CWD || process.cwd(),
           });
           try {
-            const preset = await loadPreset(presetName, configPaths.presetsPath);
+            const preset = await loadPresetFromFile(presetName, configPaths.presetsPath);
             headingTheme = resolveHeadingThemeFromPreset(preset);
           } catch (error) {
             logger.warn(

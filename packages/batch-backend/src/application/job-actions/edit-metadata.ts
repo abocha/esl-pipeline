@@ -18,8 +18,7 @@ import {
 
 const editMetadataSchema = z.object({
   learningPresetId: z.string().min(1).optional(),
-  notionDatabase: z.string().min(1).optional(),
-  publishTarget: z.enum(['notion', 'anytype', 'html']).optional(),
+  publishTarget: z.literal('html').optional(),
   withTts: z.boolean().optional(),
   forceTts: z.boolean().optional(),
   ttsStrategy: publishTtsStrategySchema.optional(),
@@ -48,7 +47,6 @@ function getEffectiveMetadataOverrides(
   };
 
   assignIfChanged('learningPresetId', job.learningPresetId ?? null);
-  assignIfChanged('notionDatabase', job.notionDatabase ?? null);
   assignIfChanged('publishTarget', job.publishTarget ?? null);
   assignIfChanged('withTts', job.withTts ?? null);
   assignIfChanged('forceTts', job.forceTts ?? null);
@@ -217,7 +215,6 @@ export async function editMetadata(
     id: jobId,
     expectedState: 'awaiting_approval',
     learningPresetId: normalizedOverrides.learningPresetId,
-    notionDatabase: normalizedOverrides.notionDatabase,
     publishTarget: normalizedOverrides.publishTarget,
     withTts: normalizedOverrides.withTts,
     forceTts: normalizedOverrides.forceTts,

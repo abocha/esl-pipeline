@@ -7,8 +7,6 @@ import type {
 export interface CreateStudentFormState {
   student: string;
   profileId: string;
-  dbId: string;
-  pageParentId: string;
   colorPreset: string;
   accentPreference: string;
   manifestPreset: string;
@@ -24,8 +22,6 @@ export interface CreateStudentFormState {
 export const INITIAL_CREATE_STUDENT_FORM: CreateStudentFormState = {
   student: '',
   profileId: '',
-  dbId: '',
-  pageParentId: '',
   colorPreset: '',
   accentPreference: '',
   manifestPreset: '',
@@ -256,8 +252,6 @@ export function buildCreateStudentPayload(
   const payload: StudentProfileInput = {
     student,
     ...(!starterProfile.starterProfile && form.profileId ? { profileId: form.profileId } : {}),
-    ...(form.dbId ? { dbId: form.dbId } : {}),
-    ...(form.pageParentId ? { pageParentId: form.pageParentId } : {}),
     ...(form.colorPreset ? { colorPreset: form.colorPreset } : {}),
     ...(form.accentPreference ? { accentPreference: form.accentPreference } : {}),
     ...(form.manifestPreset ? { manifestPreset: form.manifestPreset } : {}),

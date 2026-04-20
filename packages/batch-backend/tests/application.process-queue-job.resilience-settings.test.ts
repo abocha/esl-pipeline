@@ -11,7 +11,6 @@ const {
   maybeRunTtsCacheMaintenanceWithPgLockSpy,
   getSettingsByUserIdSpy,
   getDecryptedElevenLabsKeySpy,
-  getDecryptedNotionTokenSpy,
 } = h;
 
 describe('application/process-queue-job', () => {
@@ -25,8 +24,7 @@ describe('application/process-queue-job', () => {
       state: 'succeeded',
       manifestPath: '/manifests/job-maintenance-failure.json',
       finishedAt: new Date('2024-01-01T10:02:00Z'),
-      notionUrl: 'https://notion.so/job-maintenance-failure',
-      anytypeUrl: null,
+      htmlUrl: 'https://cdn.example.com/job-maintenance-failure.html',
     };
     updateJobStateAndResultSpy
       .mockResolvedValueOnce(running as any)
@@ -35,7 +33,7 @@ describe('application/process-queue-job', () => {
     maybeRunTtsCacheMaintenanceWithPgLockSpy.mockRejectedValueOnce(new Error('maintenance failed'));
     runAssignmentJobSpy.mockResolvedValue({
       manifestPath: '/manifests/job-maintenance-failure.json',
-      notionUrl: 'https://notion.so/job-maintenance-failure',
+      htmlUrl: 'https://cdn.example.com/job-maintenance-failure.html',
     });
 
     await expect(processQueueJob({ jobId: 'job-1' })).resolves.toBeUndefined();
@@ -67,19 +65,16 @@ describe('application/process-queue-job', () => {
     // Mock settings repository
     getSettingsByUserIdSpy.mockResolvedValue({ id: 'settings-1', userId: 'user-123' } as any);
     getDecryptedElevenLabsKeySpy.mockResolvedValue('user-eleven-key');
-    getDecryptedNotionTokenSpy.mockResolvedValue('user-notion-token');
 
     await processQueueJob({ jobId: 'job-1' });
 
     expect(getSettingsByUserIdSpy).toHaveBeenCalledWith('user-123');
     expect(getDecryptedElevenLabsKeySpy).toHaveBeenCalledWith('user-123');
-    expect(getDecryptedNotionTokenSpy).toHaveBeenCalledWith('user-123');
 
     expect(runAssignmentJobSpy).toHaveBeenCalledTimes(1);
     const [payload] = runAssignmentJobSpy.mock.calls[0]!;
     expect(payload.settings).toEqual({
       elevenLabsApiKey: 'user-eleven-key',
-      notionToken: 'user-notion-token',
     });
   });
 });

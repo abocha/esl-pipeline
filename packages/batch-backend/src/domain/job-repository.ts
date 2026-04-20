@@ -55,14 +55,11 @@ interface JobRow {
   result_path: string | null;
   voice_accents: string | null;
   voice_persona: string | null;
-  notion_database: string | null;
   publish_target: string | null;
   mode: string | null;
   tts_provider: string | null;
   study_text_elevenlabs_model: string | null;
   google_tts_model: string | null;
-  notion_url: string | null;
-  anytype_url: string | null;
   html_url: string | null;
   auto_publish: boolean | null;
   started_at: Date | null;
@@ -90,7 +87,6 @@ export interface InsertJobParams {
   voiceId?: string;
   voiceAccent?: string;
   forceTts?: boolean;
-  notionDatabase?: string;
   publishTarget?: PublishTarget;
   ttsStrategy?: TtsStrategy;
   ttsProvider?: TtsProviderId;
@@ -168,7 +164,6 @@ export interface UpdateJobMetadataParams {
   expectedState?: JobState;
   preset?: string;
   learningPresetId?: string;
-  notionDatabase?: string;
   publishTarget?: PublishTarget;
   withTts?: boolean;
   forceTts?: boolean;
@@ -215,7 +210,6 @@ async function insertJobWithState(params: InsertJobParams, state: JobState): Pro
         voice_id,
         voice_accent,
         force_tts,
-        notion_database,
         publish_target,
         mode,
         tts_provider,
@@ -229,7 +223,7 @@ async function insertJobWithState(params: InsertJobParams, state: JobState): Pro
       )
       VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
-        $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29
+        $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28
       )
       RETURNING
         id,
@@ -252,14 +246,11 @@ async function insertJobWithState(params: InsertJobParams, state: JobState): Pro
         voice_id,
         voice_accent,
         force_tts,
-        notion_database,
         publish_target,
         mode,
         tts_provider,
         study_text_elevenlabs_model,
         google_tts_model,
-        notion_url,
-        anytype_url,
         html_url,
         auto_publish,
         created_at,
@@ -290,7 +281,6 @@ async function insertJobWithState(params: InsertJobParams, state: JobState): Pro
         params.voiceId ?? null,
         params.voiceAccent ?? null,
         params.forceTts ?? null,
-        params.notionDatabase ?? null,
         params.publishTarget ?? null,
         params.ttsStrategy ?? null,
         params.ttsProvider ?? null,
@@ -337,14 +327,11 @@ export async function getJobById(id: string): Promise<JobRecord | null> {
         j.voice_id,
         j.voice_accent,
         j.force_tts,
-        j.notion_database,
         j.publish_target,
         j.mode,
         j.tts_provider,
         j.study_text_elevenlabs_model,
         j.google_tts_model,
-        j.notion_url,
-        j.anytype_url,
         j.html_url,
         j.auto_publish,
         j.created_at,
@@ -401,14 +388,11 @@ export async function listJobs(options: JobListOptions): Promise<JobRecord[]> {
         j.voice_id,
         j.voice_accent,
         j.force_tts,
-        j.notion_database,
         j.publish_target,
         j.mode,
         j.tts_provider,
         j.study_text_elevenlabs_model,
         j.google_tts_model,
-        j.notion_url,
-        j.anytype_url,
         j.html_url,
         j.auto_publish,
         j.created_at,
@@ -512,7 +496,7 @@ export async function getReadinessMetrics(
       publish_jobs AS (
         SELECT *
         FROM window_jobs
-        WHERE publish_target IN ('notion', 'anytype', 'html')
+        WHERE publish_target = 'html'
       ),
       terminal_publish_jobs AS (
         SELECT *
@@ -678,8 +662,6 @@ export async function updateJobStateAndResult(args: {
   nextState: JobState;
   error?: string | null;
   manifestPath?: string | null;
-  notionUrl?: string | null;
-  anytypeUrl?: string | null;
   htmlUrl?: string | null;
   startedAt?: Date | null;
   finishedAt?: Date | null;
@@ -692,8 +674,6 @@ export async function updateJobStateAndResult(args: {
     manifestPath = null,
     startedAt = null,
     finishedAt = null,
-    notionUrl = null,
-    anytypeUrl = null,
     htmlUrl = null,
   } = args;
 
@@ -707,14 +687,12 @@ export async function updateJobStateAndResult(args: {
         state = $1,
         error = COALESCE($2, error),
         manifest_path = COALESCE($3, manifest_path),
-        notion_url = COALESCE($4, notion_url),
-        anytype_url = COALESCE($5, anytype_url),
-        html_url = COALESCE($6, html_url),
-        started_at = COALESCE($7, started_at),
-        finished_at = COALESCE($8, finished_at),
+        html_url = COALESCE($4, html_url),
+        started_at = COALESCE($5, started_at),
+        finished_at = COALESCE($6, finished_at),
         updated_at = now()
-      WHERE id = $9
-        AND state = $10
+      WHERE id = $7
+        AND state = $8
       RETURNING
         id,
         student_id,
@@ -736,14 +714,11 @@ export async function updateJobStateAndResult(args: {
         voice_id,
         voice_accent,
         force_tts,
-        notion_database,
         publish_target,
         mode,
         tts_provider,
         study_text_elevenlabs_model,
         google_tts_model,
-        notion_url,
-        anytype_url,
         html_url,
         auto_publish,
         created_at,
@@ -755,18 +730,7 @@ export async function updateJobStateAndResult(args: {
         source_job_id,
         user_id
       `,
-      [
-        nextState,
-        error,
-        manifestPath,
-        notionUrl,
-        anytypeUrl,
-        htmlUrl,
-        startedAt,
-        finishedAt,
-        id,
-        expectedState,
-      ],
+      [nextState, error, manifestPath, htmlUrl, startedAt, finishedAt, id, expectedState],
     );
     return result.rows[0];
   });
@@ -821,14 +785,11 @@ export async function updateJobDraftLink(args: {
         voice_id,
         voice_accent,
         force_tts,
-        notion_database,
         publish_target,
         mode,
         tts_provider,
         study_text_elevenlabs_model,
         google_tts_model,
-        notion_url,
-        anytype_url,
         html_url,
         auto_publish,
         created_at,
@@ -879,11 +840,6 @@ export async function updateJobMetadata(
 
     values.push(provenance.promptAlias);
     updates.push(`prompt_alias = $${values.length}`);
-  }
-
-  if (params.notionDatabase !== undefined) {
-    values.push(params.notionDatabase);
-    updates.push(`notion_database = $${values.length}`);
   }
 
   if (params.publishTarget !== undefined) {
@@ -978,14 +934,11 @@ export async function updateJobMetadata(
         voice_id,
         voice_accent,
         force_tts,
-        notion_database,
         publish_target,
         mode,
         tts_provider,
         study_text_elevenlabs_model,
         google_tts_model,
-        notion_url,
-        anytype_url,
         html_url,
         auto_publish,
         created_at,
@@ -1037,8 +990,6 @@ export async function approveJob(args: {
         started_at = NULL,
         finished_at = NULL,
         manifest_path = NULL,
-        notion_url = NULL,
-        anytype_url = NULL,
         html_url = NULL,
         updated_at = now()
       WHERE id = $3
@@ -1065,14 +1016,11 @@ export async function approveJob(args: {
         voice_id,
         voice_accent,
         force_tts,
-        notion_database,
         publish_target,
         mode,
         tts_provider,
         study_text_elevenlabs_model,
         google_tts_model,
-        notion_url,
-        anytype_url,
         html_url,
         auto_publish,
         created_at,
@@ -1148,7 +1096,6 @@ function mapRowToJob(row: JobRow): JobRecord {
     voiceId: row.voice_id ?? null,
     voiceAccent: row.voice_accent ?? null,
     forceTts: row.force_tts ?? null,
-    notionDatabase: row.notion_database ?? null,
     publishTarget: normalizePublishTarget(row.publish_target),
     ttsStrategy: normalizeTtsStrategy(row.mode, { jobId: row.id }),
     ttsProvider: normalizeTtsProvider(row.tts_provider, { jobId: row.id }),
@@ -1156,8 +1103,6 @@ function mapRowToJob(row: JobRow): JobRecord {
       jobId: row.id,
     }),
     googleTtsModel: normalizeGoogleTtsModel(row.google_tts_model, { jobId: row.id }),
-    notionUrl: row.notion_url ?? null,
-    anytypeUrl: row.anytype_url ?? null,
     htmlUrl: row.html_url ?? null,
     autoPublish: row.auto_publish ?? false,
     createdAt: row.created_at,
@@ -1206,7 +1151,7 @@ function buildJobFilterClauses(
 }
 
 function normalizePublishTarget(value: string | null | undefined): PublishTarget | null {
-  if (value === 'notion' || value === 'anytype' || value === 'html') {
+  if (value === 'html') {
     return value;
   }
   return null;

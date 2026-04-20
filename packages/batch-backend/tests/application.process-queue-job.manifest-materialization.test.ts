@@ -38,8 +38,7 @@ describe('application/process-queue-job', () => {
       state: 'succeeded',
       manifestPath: '/manifests/job-rerun-publish-storage.json',
       finishedAt: new Date('2024-01-01T10:02:00Z'),
-      anytypeUrl: 'https://anytype.io/page',
-      notionUrl: null,
+      htmlUrl: 'https://example.com/job-rerun-publish-storage',
     };
     updateJobStateAndResultSpy
       .mockResolvedValueOnce(running as any)
@@ -51,7 +50,7 @@ describe('application/process-queue-job', () => {
 
     runRerunAssignmentJobSpy.mockResolvedValue({
       manifestPath: '/manifests/job-rerun-publish-storage.json',
-      anytypeUrl: 'https://anytype.io/page',
+      htmlUrl: 'https://example.com/job-rerun-publish-storage',
     });
 
     await processQueueJob({
@@ -91,8 +90,7 @@ describe('application/process-queue-job', () => {
       state: 'succeeded',
       manifestPath: '/manifests/job-rerun-manifest-normalized.json',
       finishedAt: new Date('2024-01-01T10:02:00Z'),
-      notionUrl: 'https://notion.so/job-rerun-manifest-normalized',
-      anytypeUrl: null,
+      htmlUrl: 'https://example.com/job-rerun-manifest-normalized',
     };
     updateJobStateAndResultSpy
       .mockResolvedValueOnce(running as any)
@@ -100,7 +98,7 @@ describe('application/process-queue-job', () => {
 
     runRerunAssignmentJobSpy.mockResolvedValue({
       manifestPath: '/manifests/job-rerun-manifest-normalized.json',
-      notionUrl: 'https://notion.so/job-rerun-manifest-normalized',
+      htmlUrl: 'https://example.com/job-rerun-manifest-normalized',
     });
 
     try {
@@ -149,8 +147,7 @@ describe('application/process-queue-job', () => {
       state: 'succeeded',
       manifestPath: '/manifests/job-rerun-manifest-fallback.json',
       finishedAt: new Date('2024-01-01T10:02:00Z'),
-      notionUrl: 'https://notion.so/job-rerun-manifest-fallback',
-      anytypeUrl: null,
+      htmlUrl: 'https://example.com/job-rerun-manifest-fallback',
     };
     updateJobStateAndResultSpy
       .mockResolvedValueOnce(running as any)
@@ -158,7 +155,7 @@ describe('application/process-queue-job', () => {
 
     runRerunAssignmentJobSpy.mockResolvedValue({
       manifestPath: '/manifests/job-rerun-manifest-fallback.json',
-      notionUrl: 'https://notion.so/job-rerun-manifest-fallback',
+      htmlUrl: 'https://example.com/job-rerun-manifest-fallback',
     });
 
     try {
@@ -204,8 +201,7 @@ describe('application/process-queue-job', () => {
       state: 'succeeded',
       manifestPath: '/manifests/job-1.json',
       finishedAt: new Date('2024-01-01T10:02:00Z'),
-      notionUrl: 'https://notion.so/job-1',
-      anytypeUrl: null,
+      htmlUrl: 'https://example.com/job-1',
     };
     updateJobStateAndResultSpy
       .mockResolvedValueOnce(running as any)
@@ -217,7 +213,7 @@ describe('application/process-queue-job', () => {
 
     runAssignmentJobSpy.mockResolvedValue({
       manifestPath: '/manifests/job-1.json',
-      notionUrl: 'https://notion.so/job-1',
+      htmlUrl: 'https://example.com/job-1',
     });
 
     await processQueueJob({ jobId: 'job-1' });
@@ -270,8 +266,7 @@ describe('application/process-queue-job', () => {
       state: 'succeeded',
       manifestPath: durableManifestPath,
       finishedAt: new Date('2024-01-01T10:02:00Z'),
-      notionUrl: 'https://notion.so/job-durable-manifest',
-      anytypeUrl: null,
+      htmlUrl: 'https://example.com/job-durable-manifest',
     };
     updateJobStateAndResultSpy
       .mockResolvedValueOnce(running as any)
@@ -283,7 +278,7 @@ describe('application/process-queue-job', () => {
 
     runAssignmentJobSpy.mockResolvedValue({
       manifestPath: tempManifestPath,
-      notionUrl: 'https://notion.so/job-durable-manifest',
+      htmlUrl: 'https://example.com/job-durable-manifest',
     });
 
     try {

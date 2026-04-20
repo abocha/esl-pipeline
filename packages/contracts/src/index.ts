@@ -17,14 +17,9 @@ export type CefrLevel = 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2';
 
 export type JobUploadOption = 'auto' | 's3' | 'none';
 export type UploadOption = JobUploadOption;
-export type PublishTarget = 'notion' | 'anytype' | 'html';
+export type PublishTarget = 'html';
 
 export type RecordingStatus = 'ingested' | 'queued' | 'transcribing' | 'transcribed' | 'failed';
-
-export interface NotionDatabaseOption {
-  id: string;
-  name: string;
-}
 
 export interface VoiceOption {
   id: string;
@@ -112,7 +107,6 @@ export interface JobOptionsPayload {
   presets: string[];
   voiceAccents: string[];
   voices: VoiceOption[];
-  notionDatabases: NotionDatabaseOption[];
   uploadOptions: UploadOption[];
   ttsStrategies: TtsStrategyOption[];
   sttProviders?: SttProviderId[];
@@ -140,7 +134,6 @@ export interface SubmitJobRequest {
   learningPresetId?: string;
   withTts?: boolean;
   forceTts?: boolean;
-  notionDatabase?: string;
   publishTarget?: PublishTarget;
   upload?: JobUploadOption;
   ttsStrategy?: TtsStrategy;
@@ -154,7 +147,6 @@ export interface SubmitJobRequest {
 
 export interface JobConfigOverrides {
   learningPresetId?: string;
-  notionDatabase?: string;
   publishTarget?: PublishTarget;
   withTts?: boolean;
   forceTts?: boolean;
@@ -196,16 +188,13 @@ export interface JobStatusDto {
   upload: JobUploadOption | null;
   voiceAccent: string | null;
   forceTts: boolean | null;
-  notionDatabase: string | null;
   publishTarget: PublishTarget | null;
   ttsStrategy: TtsStrategy | null;
   ttsProvider?: TtsProviderId | null;
   studyTextElevenlabsModel?: ElevenLabsTtsModelId | null;
   googleTtsModel?: GoogleTtsModel | null;
   autoPublish: boolean | null;
-  notionUrl: string | null;
-  anytypeUrl: string | null;
-  htmlUrl?: string | null;
+  htmlUrl: string | null;
   state: JobState;
   createdAt: string;
   updatedAt: string;
@@ -658,8 +647,6 @@ export interface JobEventPayload {
   learningPresetId?: string | null;
   md?: string | null;
   mdStorageUri?: string | null;
-  notionUrl?: string | null;
-  anytypeUrl?: string | null;
   htmlUrl?: string | null;
   publishTarget?: PublishTarget | null;
   recordingId?: string | null;

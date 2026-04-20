@@ -34,13 +34,10 @@ describe('telegram commands - share and approval', () => {
       upload: null,
       voiceAccent: null,
       forceTts: null,
-      notionDatabase: null,
       publishTarget: null,
       ttsStrategy: null,
       autoPublish: null,
-      notionUrl: 'https://notion.so/assignment',
-      anytypeUrl: null,
-      htmlUrl: null,
+      htmlUrl: 'https://example.com/assignment',
       state: 'succeeded',
       createdAt: '2026-03-11T00:00:00Z',
       updatedAt: '2026-03-11T00:00:00Z',
@@ -59,7 +56,7 @@ describe('telegram commands - share and approval', () => {
     expect(sendMock.mock.calls[1]?.[0].html).toContain('<b>Share package</b>');
     expect(sendMock.mock.calls[2]?.[0].disableLinkPreview).toBe(true);
     expect(sendMock.mock.calls[2]?.[0].html).toContain(
-      '<a href="https://notion.so/assignment">Homework Assignment',
+      '<a href="https://example.com/assignment">Homework Assignment',
     );
     expect(sendMock.mock.calls[3]?.[0].disableLinkPreview).toBe(false);
     expect(sendMock.mock.calls[3]?.[0].html).toContain('🎧 Listen 1: Study Text');
@@ -106,12 +103,9 @@ describe('telegram commands - share and approval', () => {
       upload: null,
       voiceAccent: null,
       forceTts: null,
-      notionDatabase: null,
       publishTarget: null,
       ttsStrategy: null,
       autoPublish: null,
-      notionUrl: null,
-      anytypeUrl: null,
       htmlUrl: 'https://example.com/assignment.html',
       state: 'succeeded',
       createdAt: '2026-03-11T00:00:00Z',
@@ -178,13 +172,10 @@ describe('telegram commands - share and approval', () => {
       upload: null,
       voiceAccent: null,
       forceTts: null,
-      notionDatabase: null,
       publishTarget: null,
       ttsStrategy: null,
       autoPublish: null,
-      notionUrl: 'https://notion.so/assignment-101',
-      anytypeUrl: null,
-      htmlUrl: 'https://example.com/fallback-only-if-needed.html',
+      htmlUrl: null,
       state: 'succeeded',
       createdAt: '2026-03-11T00:00:00Z',
       updatedAt: '2026-03-11T00:00:00Z',
@@ -201,7 +192,7 @@ describe('telegram commands - share and approval', () => {
     const sendMock = context.messenger.sendHtmlMessage as ReturnType<typeof vi.fn>;
     expect(sendMock).toHaveBeenCalledTimes(5);
     expect(sendMock.mock.calls[2]?.[0].html).toContain(
-      '<a href="https://example.com/fallback-only-if-needed.html">Homework Assignment: Office Rules &amp; Modal Verbs</a>',
+      '<a href="https://app.example.com/jobs/job-101">Homework Assignment: Office Rules &amp; Modal Verbs</a>',
     );
     expect(sendMock.mock.calls[3]?.[0].html).toContain('audio/final/from-md-study.mp3');
     expect(sendMock.mock.calls[4]?.[0].html).toContain('audio/pronunciation/from-md-pron.mp3');
@@ -239,13 +230,10 @@ describe('telegram commands - share and approval', () => {
       upload: null,
       voiceAccent: null,
       forceTts: null,
-      notionDatabase: null,
       publishTarget: null,
       ttsStrategy: null,
       autoPublish: null,
-      notionUrl: 'https://notion.so/assignment-102',
-      anytypeUrl: null,
-      htmlUrl: null,
+      htmlUrl: 'https://example.com/assignment-102',
       state: 'succeeded',
       createdAt: '2026-03-11T00:00:00Z',
       updatedAt: '2026-03-11T00:00:00Z',
@@ -291,13 +279,10 @@ describe('telegram commands - share and approval', () => {
       upload: null,
       voiceAccent: null,
       forceTts: null,
-      notionDatabase: null,
       publishTarget: null,
       ttsStrategy: null,
       autoPublish: null,
-      notionUrl: 'https://notion.so/share-assignment',
-      anytypeUrl: null,
-      htmlUrl: null,
+      htmlUrl: 'https://example.com/share-assignment',
       state: 'succeeded',
       createdAt: '2026-03-11T00:00:00Z',
       updatedAt: '2026-03-11T00:00:00Z',
@@ -314,7 +299,7 @@ describe('telegram commands - share and approval', () => {
     expect(sendMock.mock.calls[0]?.[0].html).toContain('<b>Share package</b>');
     expect(sendMock.mock.calls[0]?.[0].html).toContain('<b>Student</b> Margarita (72444fdf)');
     expect(sendMock.mock.calls[1]?.[0].html).toContain(
-      '<a href="https://notion.so/share-assignment">Homework Assignment',
+      '<a href="https://example.com/share-assignment">Homework Assignment',
     );
     expect(sendMock.mock.calls[2]?.[0].html).toContain('🎧 Listen 1: Study Text');
 

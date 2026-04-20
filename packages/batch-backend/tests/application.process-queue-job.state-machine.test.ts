@@ -46,8 +46,7 @@ describe('application/process-queue-job', () => {
       state: 'succeeded',
       manifestPath: '/manifests/job-1.json',
       finishedAt: new Date('2024-01-01T10:02:00Z'),
-      notionUrl: 'https://notion.so/job-1',
-      anytypeUrl: null,
+      htmlUrl: 'https://cdn.example.com/job-1.html',
     };
     updateJobStateAndResultSpy
       .mockResolvedValueOnce(running as any) // queued -> running
@@ -55,7 +54,7 @@ describe('application/process-queue-job', () => {
 
     runAssignmentJobSpy.mockResolvedValue({
       manifestPath: '/manifests/job-1.json',
-      notionUrl: 'https://notion.so/job-1',
+      htmlUrl: 'https://cdn.example.com/job-1.html',
     });
 
     await processQueueJob({ jobId: 'job-1' });
@@ -79,7 +78,6 @@ describe('application/process-queue-job', () => {
       withTts: initial.withTts!,
       upload: 's3',
       forceTts: initial.forceTts,
-      notionDatabase: initial.notionDatabase,
       publishTarget: initial.publishTarget,
       ttsStrategy: initial.ttsStrategy,
       ttsProvider: initial.ttsProvider,
@@ -103,9 +101,7 @@ describe('application/process-queue-job', () => {
       expectedState: 'running',
       nextState: 'succeeded',
       manifestPath: '/manifests/job-1.json',
-      notionUrl: 'https://notion.so/job-1',
-      anytypeUrl: null,
-      htmlUrl: null,
+      htmlUrl: 'https://cdn.example.com/job-1.html',
       finishedAt: expect.any(Date),
     });
 
@@ -224,7 +220,7 @@ describe('application/process-queue-job', () => {
 
     runAssignmentJobSpy.mockResolvedValue({
       manifestPath: '/manifests/job-1.json',
-      notionUrl: 'https://notion.so/job-1',
+      htmlUrl: 'https://cdn.example.com/job-1.html',
     });
 
     await expect(processQueueJob({ jobId: 'job-1' })).resolves.toBeUndefined();
@@ -235,9 +231,7 @@ describe('application/process-queue-job', () => {
       expectedState: 'running',
       nextState: 'succeeded',
       manifestPath: '/manifests/job-1.json',
-      notionUrl: 'https://notion.so/job-1',
-      anytypeUrl: null,
-      htmlUrl: null,
+      htmlUrl: 'https://cdn.example.com/job-1.html',
       finishedAt: expect.any(Date),
     });
     expect(publishJobEventSpy).toHaveBeenCalledTimes(1);

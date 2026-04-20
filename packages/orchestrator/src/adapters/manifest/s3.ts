@@ -1,7 +1,12 @@
 import { basename, extname, isAbsolute, posix as posixPath, relative } from 'node:path';
 import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 
-import type { AssignmentManifest, ManifestStore } from '../../manifest.js';
+import {
+  type AssignmentManifest,
+  type ManifestStore,
+  normalizeManifestPublishTarget,
+  sanitizeAssignmentManifest,
+} from '../../manifest.js';
 
 export interface S3ManifestStoreOptions {
   bucket: string;
@@ -43,7 +48,14 @@ export class S3ManifestStore implements ManifestStore {
       new PutObjectCommand({
         Bucket: this.bucket,
         Key: key,
-        Body: JSON.stringify(manifest, null, 2),
+        Body: JSON.stringify(
+          sanitizeAssignmentManifest({
+            ...manifest,
+            publishTarget: normalizeManifestPublishTarget(manifest.publishTarget),
+          }),
+          null,
+          2,
+        ),
         ContentType: 'application/json',
       }),
     );
@@ -58,7 +70,11 @@ export class S3ManifestStore implements ManifestStore {
       );
       const body = await response.Body?.transformToString();
       if (!body) return null;
-      return JSON.parse(body) as AssignmentManifest;
+      const parsed = JSON.parse(body) as AssignmentManifest;
+      return sanitizeAssignmentManifest({
+        ...parsed,
+        publishTarget: normalizeManifestPublishTarget(parsed.publishTarget),
+      });
     } catch (error: unknown) {
       const maybe = error as { $metadata?: { httpStatusCode?: number }; name?: string };
       const status = maybe?.$metadata?.httpStatusCode;

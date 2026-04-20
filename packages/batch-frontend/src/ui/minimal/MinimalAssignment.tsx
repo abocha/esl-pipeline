@@ -106,10 +106,6 @@ function describeJobFailureReason(job: Pick<JobStatus, 'publishTarget' | 'error'
   if (!reason) {
     return 'Publishing failed. Check service availability and retry.';
   }
-  const normalized = reason.toLowerCase();
-  if (job.publishTarget === 'anytype' && normalized.includes('fetch failed')) {
-    return 'Anytype server unreachable. Start Anytype Desktop app and retry publish.';
-  }
   return reason;
 }
 
@@ -492,25 +488,9 @@ export const MinimalAssignment: React.FC = () => {
   const currentAssignmentCard = useMemo<CurrentAssignmentCard | null>(() => {
     return buildCurrentAssignmentCard(jobStatus, studentNameById);
   }, [jobStatus, studentNameById]);
-  const jobPublishTarget = jobStatus?.publishTarget ?? authoring.publishTarget;
-  const publishUrl =
-    jobPublishTarget === 'anytype'
-      ? (jobStatus?.anytypeUrl ?? jobStatus?.htmlUrl)
-      : jobPublishTarget === 'html'
-        ? jobStatus?.htmlUrl
-        : jobStatus?.notionUrl;
-  const publishLabel =
-    jobPublishTarget === 'anytype'
-      ? 'Open published page'
-      : jobPublishTarget === 'html'
-        ? 'Open published HTML'
-        : 'Open in Notion';
-  const publishPending =
-    jobPublishTarget === 'anytype'
-      ? 'Publish link pending...'
-      : jobPublishTarget === 'html'
-        ? 'HTML link pending...'
-        : 'Notion link pending...';
+  const publishUrl = jobStatus?.htmlUrl;
+  const publishLabel = 'Open published HTML';
+  const publishPending = 'HTML link pending...';
   const hasTeachingContext = Boolean(
     context.selectedProfileId || teacherNotes.trim() || authoring.promptReady,
   );

@@ -12,12 +12,6 @@
 | Key                                                  | Example File                 | Surface            | Details                                         |
 | ---------------------------------------------------- | ---------------------------- | ------------------ | ----------------------------------------------- |
 | `ALLOWED_MIME_TYPES`                                 | `.env.batch-backend.example` | batch_backend      | `packages/batch-backend/README.md`              |
-| `ANYTYPE_API_URL`                                    | `.env.batch-backend.example` | shared_runtime     | `docs/reference/env.md`                         |
-| `ANYTYPE_API_VERSION`                                | `.env.batch-backend.example` | shared_runtime     | `docs/reference/env.md`                         |
-| `ANYTYPE_COLLECTION_ID`                              | `.env.batch-backend.example` | shared_runtime     | `docs/reference/env.md`                         |
-| `ANYTYPE_SPACE_ID`                                   | `.env.batch-backend.example` | shared_runtime     | `docs/reference/env.md`                         |
-| `ANYTYPE_SPACE_NAME`                                 | `.env.batch-backend.example` | shared_runtime     | `docs/reference/env.md`                         |
-| `ANYTYPE_TOKEN`                                      | `.env.batch-backend.example` | shared_runtime     | `docs/reference/env.md`                         |
 | `APP_ROOT`                                           | `.env.batch-backend.example` | misc               | `docs/reference/env.md`                         |
 | `AWS_ACCESS_KEY_ID`                                  | `.env.batch-backend.example` | shared_runtime     | `docs/reference/env.md`                         |
 | `AWS_ACCESS_KEY_ID`                                  | `.env.example`               | shared_runtime     | `docs/reference/env.md`                         |
@@ -245,23 +239,6 @@
 | `MAX_FILE_SIZE`                                      | `.env.batch-backend.example` | batch_backend      | `packages/batch-backend/README.md`              |
 | `MAX_MULTIPART_SIZE`                                 | `.env.batch-backend.example` | misc               | `docs/reference/env.md`                         |
 | `NODE_ENV`                                           | `.env.batch-backend.example` | batch_backend      | `packages/batch-backend/README.md`              |
-| `NOTION_CLIENT_TIMEOUT`                              | `.env.batch-backend.example` | shared_runtime     | `docs/reference/env.md`                         |
-| `NOTION_CLIENT_TIMEOUT`                              | `.env.example`               | shared_runtime     | `docs/reference/env.md`                         |
-| `NOTION_COLORIZER_MAX_RETRIES`                       | `.env.batch-backend.example` | shared_runtime     | `docs/reference/env.md`                         |
-| `NOTION_COLORIZER_MAX_RETRIES`                       | `.env.example`               | shared_runtime     | `docs/reference/env.md`                         |
-| `NOTION_COLORIZER_RETRY_DELAY_MS`                    | `.env.batch-backend.example` | shared_runtime     | `docs/reference/env.md`                         |
-| `NOTION_COLORIZER_RETRY_DELAY_MS`                    | `.env.example`               | shared_runtime     | `docs/reference/env.md`                         |
-| `NOTION_COLORIZER_THROTTLE_MS`                       | `.env.batch-backend.example` | shared_runtime     | `docs/reference/env.md`                         |
-| `NOTION_COLORIZER_THROTTLE_MS`                       | `.env.example`               | shared_runtime     | `docs/reference/env.md`                         |
-| `NOTION_DATABASE_ID`                                 | `.env.batch-backend.example` | shared_runtime     | `docs/reference/env.md`                         |
-| `NOTION_DATABASE_ID`                                 | `.env.example`               | shared_runtime     | `docs/reference/env.md`                         |
-| `NOTION_DB_ID`                                       | `.env.batch-backend.example` | shared_runtime     | `docs/reference/env.md`                         |
-| `NOTION_DB_ID`                                       | `.env.example`               | shared_runtime     | `docs/reference/env.md`                         |
-| `NOTION_DB_LABEL`                                    | `.env.batch-backend.example` | shared_runtime     | `docs/reference/env.md`                         |
-| `NOTION_DB_NAME`                                     | `.env.batch-backend.example` | shared_runtime     | `docs/reference/env.md`                         |
-| `NOTION_DB_OPTIONS`                                  | `.env.batch-backend.example` | shared_runtime     | `docs/reference/env.md`                         |
-| `NOTION_TOKEN`                                       | `.env.batch-backend.example` | shared_runtime     | `docs/reference/env.md`                         |
-| `NOTION_TOKEN`                                       | `.env.example`               | shared_runtime     | `docs/reference/env.md`                         |
 | `OPENAI_API_KEY`                                     | `.env.batch-backend.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md`  |
 | `OPENAI_API_KEY`                                     | `.env.example`               | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md`  |
 | `OPENROUTER_API_KEY`                                 | `.env.batch-backend.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md`  |
@@ -350,7 +327,6 @@
 | `STORAGE_PATH_PREFIX`                                | `.env.batch-backend.example` | shared_runtime     | `docs/reference/env.md`                         |
 | `STORAGE_PROVIDER`                                   | `.env.batch-backend.example` | shared_runtime     | `docs/reference/env.md`                         |
 | `STT_PROVIDER`                                       | `.env.batch-backend.example` | speech_runtime     | `docs/reference/env.md`                         |
-| `STUDENTS_DB_ID`                                     | `.env.example`               | misc               | `docs/reference/env.md`                         |
 | `TELEGRAM_OPS_BOT_ALLOWED_USER_IDS`                  | `.env.batch-backend.example` | telegram_ops       | `docs/operations/telegram-ops-control-panel.md` |
 | `TELEGRAM_OPS_BOT_API_BASE_URL`                      | `.env.batch-backend.example` | telegram_ops       | `docs/operations/telegram-ops-control-panel.md` |
 | `TELEGRAM_OPS_BOT_APP_BASE_URL`                      | `.env.batch-backend.example` | telegram_ops       | `docs/operations/telegram-ops-control-panel.md` |

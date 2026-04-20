@@ -107,7 +107,6 @@ export function registerGenerationDefaultsTests() {
         },
         voiceAccents: ['american'],
         voices: [{ id: 'voice-a', name: 'Voice A', accent: 'american' }],
-        notionDatabases: [{ id: 'db-1', name: 'DB One' }],
         ttsStrategies: ['auto', 'dialogue', 'tts'],
         supportedActions: [],
       });

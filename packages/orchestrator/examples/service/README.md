@@ -2,7 +2,7 @@
 
 This Fastify-based example exposes a simple `/jobs` endpoint that invokes the orchestrator pipeline.
 It always runs with `dryRun: true` and skips import/TTS/upload so you can exercise the job flow
-without Notion or AWS credentials. Point `PIPELINE_CWD` at a directory with Markdown lessons (the
+without publish-service or cloud-storage credentials. Point `PIPELINE_CWD` at a directory with Markdown lessons (the
 fixtures provided in this workspace work out of the box).
 
 ## Run locally

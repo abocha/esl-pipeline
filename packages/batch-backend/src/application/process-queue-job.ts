@@ -16,11 +16,7 @@ import { manifestPathFor } from '@esl-pipeline/orchestrator';
 import { type BatchBackendConfig, loadConfig } from '../config/env.js';
 import { publishJobEvent } from '../domain/job-events.js';
 import { getJobById, updateJobStateAndResult } from '../domain/job-repository.js';
-import {
-  getDecryptedElevenLabsKey,
-  getDecryptedNotionToken,
-  getSettingsByUserId,
-} from '../domain/settings-repository.js';
+import { getDecryptedElevenLabsKey, getSettingsByUserId } from '../domain/settings-repository.js';
 import { registerRunningJob, unregisterRunningJob } from '../infrastructure/job-cancellation.js';
 import { createJobLogger } from '../infrastructure/logger.js';
 import { runAssignmentJob, runRerunAssignmentJob } from '../infrastructure/orchestrator-service.js';
@@ -128,7 +124,6 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
     let userSettings:
       | {
           elevenLabsApiKey?: string | null;
-          notionToken?: string | null;
           ttsProvider?: 'elevenlabs' | 'google' | null;
         }
       | undefined;
@@ -136,12 +131,10 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
       const settings = await getSettingsByUserId(running.userId);
       if (settings) {
         const elevenLabsApiKey = await getDecryptedElevenLabsKey(running.userId);
-        const notionToken = await getDecryptedNotionToken(running.userId);
 
-        if (elevenLabsApiKey || notionToken || settings.ttsProvider) {
+        if (elevenLabsApiKey || settings.ttsProvider) {
           userSettings = {
             elevenLabsApiKey: elevenLabsApiKey ?? null,
-            notionToken: notionToken ?? null,
           };
           if (settings.ttsProvider) {
             userSettings.ttsProvider = settings.ttsProvider;
@@ -149,7 +142,6 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
           log.info('Using user-specific settings for job', {
             userId: running.userId,
             hasElevenLabsKey: !!elevenLabsApiKey,
-            hasNotionToken: !!notionToken,
             ttsProvider: settings.ttsProvider,
           });
         }
@@ -261,8 +253,6 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
                 // Any other persisted value (e.g. 'none' or null) is treated as "no override".
                 upload: uploadFlag,
                 forceTts: running.forceTts ?? undefined,
-                notionDatabase:
-                  running.notionDatabase ?? config.orchestrator.notionDatabaseId ?? undefined,
                 publishTarget: running.publishTarget ?? undefined,
                 ttsStrategy: running.ttsStrategy ?? undefined,
                 ttsProvider: running.ttsProvider ?? userSettingsTtsProvider ?? undefined,
@@ -304,8 +294,6 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
       expectedState: 'running',
       nextState: 'succeeded',
       manifestPath: result.manifestPath ?? null,
-      notionUrl: result.notionUrl ?? null,
-      anytypeUrl: result.anytypeUrl ?? null,
       htmlUrl: result.htmlUrl ?? null,
       finishedAt: new Date(),
     });

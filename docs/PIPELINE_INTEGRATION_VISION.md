@@ -55,7 +55,7 @@
 - Large recording limits (`RECORDINGS_MAX_FILE_SIZE`).
 - Storage path/root configuration mismatch.
 - Student ID churn when naming conventions change.
-- External provider availability (Deepgram/Notion/TTS/S3).
+- External provider availability (Deepgram/TTS/S3).
 
 ## Do / Don't
 

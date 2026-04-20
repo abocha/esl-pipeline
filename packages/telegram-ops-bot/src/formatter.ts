@@ -462,8 +462,7 @@ export function formatJobLinks(
     assignmentEmoji?: string | null;
   },
 ): string {
-  const assignmentUrl =
-    job.htmlUrl ?? job.notionUrl ?? job.anytypeUrl ?? resolveAppJobUrl(job.jobId, appBaseUrl);
+  const assignmentUrl = job.htmlUrl ?? resolveAppJobUrl(job.jobId, appBaseUrl);
   const includeAudioLinks = options?.includeAudioLinks ?? true;
   const assignmentTitle = normalizeAssignmentTitle(options?.assignmentTitle);
   const headingText =

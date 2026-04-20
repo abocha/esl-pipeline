@@ -20,7 +20,6 @@ export interface AudioArtifactManifest {
   reused?: boolean;
   voices?: BuildStudyTextResult['voices'];
   voiceId?: string;
-  notionBlockId?: string;
   tts?: {
     provider?: string;
     modelId?: string;
@@ -41,12 +40,7 @@ type PronunciationAudioArtifactManifest = PronunciationAudioClip & AudioArtifact
 export interface AssignmentManifest {
   schemaVersion?: number;
   mdHash: string;
-  pageId?: string;
-  pageUrl?: string;
-  publishTarget?: 'notion' | 'anytype' | 'html';
-  anytypePageId?: string;
-  anytypeSpaceId?: string;
-  anytypeUrl?: string;
+  publishTarget?: 'html';
   htmlUrl?: string;
   htmlHash?: string;
   htmlKey?: string;
@@ -62,13 +56,6 @@ export interface AssignmentManifest {
     };
   };
   preset?: string;
-  notionColorization?: {
-    preset: string;
-    presetHash: string;
-    pageId: string;
-    mdHash: string;
-    appliedAt: string;
-  };
 
   // TTS strategy information for reproducibility
   ttsStrategy?: 'auto' | 'dialogue' | 'tts';
@@ -85,6 +72,99 @@ export interface ManifestStore {
   readManifest(mdPath: string): Promise<AssignmentManifest | null>;
 }
 
+export function normalizeManifestPublishTarget(
+  _value: AssignmentManifest['publishTarget'] | string | null | undefined,
+): 'html' {
+  return 'html';
+}
+
+function sanitizeAudioArtifactManifest(
+  artifact: AudioArtifactManifest | null | undefined,
+): AudioArtifactManifest | undefined {
+  if (!artifact) {
+    return undefined;
+  }
+
+  return {
+    ...(artifact.path !== undefined ? { path: artifact.path } : {}),
+    ...(artifact.url !== undefined ? { url: artifact.url } : {}),
+    ...(artifact.hash !== undefined ? { hash: artifact.hash } : {}),
+    ...(artifact.key !== undefined ? { key: artifact.key } : {}),
+    ...(artifact.etag !== undefined ? { etag: artifact.etag } : {}),
+    ...(artifact.sizeBytes !== undefined ? { sizeBytes: artifact.sizeBytes } : {}),
+    ...(artifact.reused !== undefined ? { reused: artifact.reused } : {}),
+    ...(artifact.voices !== undefined ? { voices: artifact.voices } : {}),
+    ...(artifact.voiceId !== undefined ? { voiceId: artifact.voiceId } : {}),
+    ...(artifact.tts !== undefined ? { tts: artifact.tts } : {}),
+  };
+}
+
+export function sanitizeAssignmentManifest(manifest: AssignmentManifest): AssignmentManifest {
+  const audioArtifacts = manifest.audioArtifacts
+    ? {
+        ...(manifest.audioArtifacts.studyText
+          ? {
+              studyText: sanitizeAudioArtifactManifest(manifest.audioArtifacts.studyText),
+            }
+          : {}),
+        ...(manifest.audioArtifacts.pronunciationShadowSentence
+          ? {
+              pronunciationShadowSentence: sanitizeAudioArtifactManifest(
+                manifest.audioArtifacts.pronunciationShadowSentence,
+              ),
+            }
+          : {}),
+        ...(manifest.audioArtifacts.pronunciation
+          ? {
+              pronunciation: {
+                ...manifest.audioArtifacts.pronunciation,
+                ...(manifest.audioArtifacts.pronunciation.primaryClip
+                  ? {
+                      primaryClip: {
+                        ...manifest.audioArtifacts.pronunciation.primaryClip,
+                        ...sanitizeAudioArtifactManifest(
+                          manifest.audioArtifacts.pronunciation.primaryClip,
+                        ),
+                      },
+                    }
+                  : {}),
+                ...(manifest.audioArtifacts.pronunciation.itemClips
+                  ? {
+                      itemClips: manifest.audioArtifacts.pronunciation.itemClips.map((clip) => ({
+                        ...clip,
+                        ...sanitizeAudioArtifactManifest(clip),
+                      })),
+                    }
+                  : {}),
+              },
+            }
+          : {}),
+      }
+    : undefined;
+
+  return {
+    ...(manifest.schemaVersion !== undefined ? { schemaVersion: manifest.schemaVersion } : {}),
+    mdHash: manifest.mdHash,
+    publishTarget: normalizeManifestPublishTarget(manifest.publishTarget),
+    ...(manifest.htmlUrl !== undefined ? { htmlUrl: manifest.htmlUrl } : {}),
+    ...(manifest.htmlHash !== undefined ? { htmlHash: manifest.htmlHash } : {}),
+    ...(manifest.htmlKey !== undefined ? { htmlKey: manifest.htmlKey } : {}),
+    ...(manifest.htmlEtag !== undefined ? { htmlEtag: manifest.htmlEtag } : {}),
+    ...(manifest.htmlReused !== undefined ? { htmlReused: manifest.htmlReused } : {}),
+    ...(audioArtifacts !== undefined ? { audioArtifacts } : {}),
+    ...(manifest.preset !== undefined ? { preset: manifest.preset } : {}),
+    ...(manifest.ttsStrategy !== undefined ? { ttsStrategy: manifest.ttsStrategy } : {}),
+    ...(manifest.dialogueLanguage !== undefined
+      ? { dialogueLanguage: manifest.dialogueLanguage }
+      : {}),
+    ...(manifest.dialogueStability !== undefined
+      ? { dialogueStability: manifest.dialogueStability }
+      : {}),
+    ...(manifest.dialogueSeed !== undefined ? { dialogueSeed: manifest.dialogueSeed } : {}),
+    timestamp: manifest.timestamp,
+  };
+}
+
 export function createFilesystemManifestStore(): ManifestStore {
   const manifestPathFor = (mdPath: string): string => {
     const dir = dirname(mdPath);
@@ -98,18 +178,7 @@ export function createFilesystemManifestStore(): ManifestStore {
       const target = manifestPathFor(mdPath);
       await mkdir(dirname(target), { recursive: true });
 
-      // Only include optional TTS fields if they exist
-      const compatibleManifest = {
-        ...manifest,
-        ...(manifest.ttsStrategy && { ttsStrategy: manifest.ttsStrategy }),
-        ...(manifest.dialogueLanguage && { dialogueLanguage: manifest.dialogueLanguage }),
-        ...(manifest.dialogueStability !== undefined && {
-          dialogueStability: manifest.dialogueStability,
-        }),
-        ...(manifest.dialogueSeed !== undefined && { dialogueSeed: manifest.dialogueSeed }),
-      };
-
-      await writeFile(target, JSON.stringify(compatibleManifest, null, 2));
+      await writeFile(target, JSON.stringify(sanitizeAssignmentManifest(manifest), null, 2));
       return target;
     },
     async readManifest(mdPath) {
@@ -119,7 +188,7 @@ export function createFilesystemManifestStore(): ManifestStore {
         if (parsed.schemaVersion === undefined) {
           parsed.schemaVersion = LEGACY_MANIFEST_SCHEMA_VERSION;
         }
-        return parsed;
+        return sanitizeAssignmentManifest(parsed);
       } catch {
         return null;
       }

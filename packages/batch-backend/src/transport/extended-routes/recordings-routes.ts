@@ -958,8 +958,7 @@ export function registerRecordingRoutes(
       const jobOverridesSchema = z
         .object({
           learningPresetId: z.string().min(1).optional(),
-          notionDatabase: z.string().min(1).optional(),
-          publishTarget: z.enum(['notion', 'anytype', 'html']).optional(),
+          publishTarget: z.literal('html').optional(),
           withTts: z.boolean().optional(),
           forceTts: z.boolean().optional(),
           ttsStrategy: publishTtsStrategySchema.optional(),

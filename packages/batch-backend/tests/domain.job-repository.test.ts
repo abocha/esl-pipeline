@@ -13,7 +13,7 @@ import {
   updateJobMetadata,
   updateJobStateAndResult,
 } from '../src/domain/job-repository.js';
-import { withPgClient } from '../src/infrastructure/db.js';
+import { withPgClient, withPgClientSessionContext } from '../src/infrastructure/db.js';
 import { requirePgTestEnv } from './support/test-env.js';
 
 /**
@@ -30,13 +30,13 @@ import { requirePgTestEnv } from './support/test-env.js';
 requirePgTestEnv();
 
 async function truncateJobs() {
-  await withPgClient(async (client) => {
+  await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
     await client.query('TRUNCATE TABLE users, job_action_history, jobs RESTART IDENTITY CASCADE');
   });
 }
 
 async function ensureUsers(userIds: string[]) {
-  await withPgClient(async (client) => {
+  await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
     for (const userId of userIds) {
       await client.query(
         `
@@ -77,10 +77,10 @@ describe('domain/job-repository', () => {
       expect(job.voiceId).toBeNull();
       expect(job.voiceAccent).toBeNull();
       expect(job.forceTts).toBeNull();
-      expect(job.notionDatabase).toBeNull();
+      expect(job.publishTarget).toBeNull();
       expect(job.ttsStrategy).toBeNull();
       expect(job.studyTextElevenlabsModel).toBeNull();
-      expect(job.notionUrl).toBeNull();
+      expect(job.htmlUrl).toBeNull();
       expect(job.recordingId).toBeNull();
       expect(job.transcriptId).toBeNull();
       expect(job.promptPackageId).toBeNull();
@@ -95,7 +95,7 @@ describe('domain/job-repository', () => {
       expect(loaded!.md).toBe('fixtures/ok.md');
       expect(loaded!.voiceAccent).toBeNull();
       expect(loaded!.voiceId).toBeNull();
-      expect(loaded!.notionDatabase).toBeNull();
+      expect(loaded!.publishTarget).toBeNull();
     });
 
     it('persists optional metadata fields when provided', async () => {
@@ -116,7 +116,7 @@ describe('domain/job-repository', () => {
         voiceId: 'voice_amanda',
         voiceAccent: 'american_female',
         forceTts: true,
-        notionDatabase: 'db-123',
+        publishTarget: 'html',
         ttsStrategy: 'dialogue',
         ttsProvider: 'elevenlabs',
         studyTextElevenlabsModel: 'eleven_v3',
@@ -125,11 +125,11 @@ describe('domain/job-repository', () => {
       expect(job.voiceId).toBe('voice_amanda');
       expect(job.voiceAccent).toBe('american_female');
       expect(job.forceTts).toBe(true);
-      expect(job.notionDatabase).toBe('db-123');
+      expect(job.publishTarget).toBe('html');
       expect(job.ttsStrategy).toBe('dialogue');
       expect(job.ttsProvider).toBe('elevenlabs');
       expect(job.studyTextElevenlabsModel).toBe('eleven_v3');
-      expect(job.notionUrl).toBeNull();
+      expect(job.htmlUrl).toBeNull();
       expect(job.recordingId).toBe(recordingId);
       expect(job.transcriptId).toBe(transcriptId);
       expect(job.promptPackageId).toBe(promptPackageId);
@@ -147,7 +147,7 @@ describe('domain/job-repository', () => {
       const jobId = randomUUID();
       const now = new Date('2024-06-01T00:00:00.000Z');
 
-      await withPgClient(async (client) => {
+      await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
         await client.query(
           `
           INSERT INTO recordings (
@@ -234,7 +234,7 @@ describe('domain/job-repository', () => {
   });
 
   describe('updateJobStateAndResult', () => {
-    it('performs queued -> running -> succeeded transitions with timestamps, Notion URL, and manifestPath', async () => {
+    it('performs queued -> running -> succeeded transitions with timestamps, htmlUrl, and manifestPath', async () => {
       const job = await insertJob({
         md: 'fixtures/ok.md',
         preset: 'b1-default',
@@ -259,7 +259,7 @@ describe('domain/job-repository', () => {
         expectedState: 'running',
         nextState: 'succeeded',
         manifestPath: '/manifests/test.json',
-        notionUrl: 'https://notion.so/job',
+        htmlUrl: 'https://example.com/job',
         finishedAt: new Date(),
       });
 
@@ -267,7 +267,7 @@ describe('domain/job-repository', () => {
       expect(succeeded!.state).toBe('succeeded');
       expect(succeeded!.manifestPath).toBe('/manifests/test.json');
       expect(succeeded!.finishedAt).toBeInstanceOf(Date);
-      expect(succeeded!.notionUrl).toBe('https://notion.so/job');
+      expect(succeeded!.htmlUrl).toBe('https://example.com/job');
     });
 
     it('returns null when expectedState does not match (optimistic concurrency / race)', async () => {
@@ -317,15 +317,15 @@ describe('domain/job-repository', () => {
       const base = new Date('2024-04-01T00:00:00.000Z');
       await ensureUsers([userA, userB]);
 
-      await withPgClient(async (client) => {
+      await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
         await client.query(
           `
           INSERT INTO jobs (id, state, publish_target, user_id, created_at, updated_at, finished_at)
           VALUES
             ($1, 'succeeded', 'html', $5, $7, $7, $8),
             ($2, 'failed', 'html', $5, $9, $9, $10),
-            ($3, 'succeeded', 'notion', $6, $11, $11, $12),
-            ($4, 'queued', 'anytype', $6, $13, $13, NULL)
+            ($3, 'succeeded', 'html', $6, $11, $11, $12),
+            ($4, 'queued', 'html', $6, $13, $13, NULL)
           `,
           [
             randomUUID(),
@@ -368,7 +368,7 @@ describe('domain/job-repository', () => {
       const base = new Date('2024-04-01T00:00:00.000Z');
       await ensureUsers([userA, userB]);
 
-      await withPgClient(async (client) => {
+      await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
         await client.query(
           `
           INSERT INTO jobs (id, state, publish_target, user_id, created_at, updated_at, error)
@@ -378,7 +378,7 @@ describe('domain/job-repository', () => {
             ($3, 'failed', 'html', $7, $12, $12, ''),
             ($4, 'failed', NULL, $7, $10, $10, $15),
             ($5, 'succeeded', 'html', $7, $10, $10, $16),
-            ($6, 'failed', 'notion', $8, $10, $10, $17),
+            ($6, 'failed', 'html', $8, $10, $10, $17),
             ($9, 'failed', 'html', $7, $18, $18, $19),
             ($20, 'failed', 'html', $7, $21, $21, $22),
             ($23, 'failed', 'html', $7, $24, $24, $25)
@@ -436,13 +436,13 @@ describe('domain/job-repository', () => {
       const createdAt = new Date('2024-05-01T00:00:10.000Z');
       await ensureUsers([userA, userB]);
 
-      await withPgClient(async (client) => {
+      await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
         await client.query(
           `
           INSERT INTO jobs (id, state, publish_target, user_id, created_at, updated_at, error)
           VALUES
             ($1, 'failed', 'html', $3, $5, $5, $7),
-            ($2, 'failed', 'notion', $4, $6, $6, $8)
+            ($2, 'failed', 'html', $4, $6, $6, $8)
           `,
           [
             randomUUID(),

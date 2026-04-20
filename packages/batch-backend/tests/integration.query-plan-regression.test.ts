@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
-import { closePgPool, withPgClient } from '../src/infrastructure/db.js';
+import { closePgPool, withPgClient, withPgClientSessionContext } from '../src/infrastructure/db.js';
 import { requirePgTestEnv, resolveTestTimeout, writeTestArtifact } from './support/test-env.js';
 
 requirePgTestEnv();
@@ -71,7 +71,7 @@ async function explainQuery(
 }
 
 async function seedJobsForPlanChecks(): Promise<void> {
-  await withPgClient(async (client) => {
+  await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
     await client.query('TRUNCATE TABLE users, job_action_history, jobs RESTART IDENTITY CASCADE');
     await client.query(
       `
@@ -114,9 +114,8 @@ async function seedJobsForPlanChecks(): Promise<void> {
           ELSE $5::uuid
         END,
         CASE
-          WHEN gs % 3 = 0 THEN 'html'
-          WHEN gs % 3 = 1 THEN 'notion'
-          ELSE 'anytype'
+          WHEN gs % 5 = 0 THEN NULL
+          ELSE 'html'
         END,
         NOW() - ((gs + 10)::text || ' minutes')::interval,
         NOW() - (gs::text || ' minutes')::interval,
@@ -140,7 +139,7 @@ describe('integration/query-plan-regression', () => {
   }, testTimeout);
 
   beforeEach(async () => {
-    await withPgClient(async (client) => {
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
       await client.query('ANALYZE jobs');
     });
   }, testTimeout);
@@ -179,7 +178,7 @@ describe('integration/query-plan-regression', () => {
   );
 
   it(
-    'readiness path keeps publish-target/state index usage',
+    'readiness path keeps selective index usage without seq scans',
     async () => {
       const plan = await explainQuery(
         'readiness-window',
@@ -196,7 +195,13 @@ describe('integration/query-plan-regression', () => {
 
       const indexNames = new Set<string>();
       collectIndexNames(plan.Plan, indexNames);
-      expect(indexNames.has('idx_jobs_publish_target_state_created_at')).toBe(true);
+      expect(
+        [
+          'idx_jobs_state',
+          'idx_jobs_state_created_at',
+          'idx_jobs_publish_target_state_created_at',
+        ].some((indexName) => indexNames.has(indexName)),
+      ).toBe(true);
       expect(hasSeqScanOnRelation(plan.Plan, 'jobs')).toBe(false);
     },
     testTimeout,

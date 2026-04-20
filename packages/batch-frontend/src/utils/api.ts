@@ -926,9 +926,7 @@ export interface JobProvenanceResponse {
     finishedAt: string | null;
     sourceJobId: string | null;
     manifestPath: string | null;
-    notionUrl: string | null;
-    anytypeUrl: string | null;
-    htmlUrl?: string | null;
+    htmlUrl: string | null;
     error: string | null;
   };
   sourceJob: {
@@ -1147,25 +1145,9 @@ export interface AuthResponse {
   expiresIn?: number;
 }
 
-const NOTION_DB_ID_REGEX = /^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/i;
-
-function normalizeNotionDatabase(value?: string | null): string | undefined {
-  if (!value) return undefined;
-  const trimmed = value.trim();
-  if (!trimmed) return undefined;
-  return NOTION_DB_ID_REGEX.test(trimmed) ? trimmed : undefined;
-}
-
 function sanitizeJobOverrides(overrides?: JobConfigOverrides): JobConfigOverrides | undefined {
   if (!overrides) return undefined;
-  const next: JobConfigOverrides = { ...overrides };
-  const normalized = normalizeNotionDatabase(next.notionDatabase);
-  if (normalized) {
-    next.notionDatabase = normalized;
-  } else {
-    delete next.notionDatabase;
-  }
-  return next;
+  return { ...overrides };
 }
 
 export interface UserProfile {
@@ -1281,7 +1263,6 @@ export interface JobOptionsResponse {
   defaultTtsModelByProvider?: ContractJobOptionsPayload['defaultTtsModelByProvider'];
   voiceAccents: ContractJobOptionsPayload['voiceAccents'];
   voices: ContractJobOptionsPayload['voices'];
-  notionDatabases: ContractJobOptionsPayload['notionDatabases'];
   ttsStrategies: ContractJobOptionsPayload['ttsStrategies'];
   supportedActions?: ActionCapability[];
 }
@@ -1605,12 +1586,6 @@ export async function getUserFiles(): Promise<UserFile[]> {
 export async function createJob(body: SubmitJobRequest): Promise<SubmitJobResponse> {
   try {
     const payload: SubmitJobRequest = { ...body };
-    const normalizedDb = normalizeNotionDatabase(body.notionDatabase);
-    if (normalizedDb) {
-      payload.notionDatabase = normalizedDb;
-    } else {
-      delete payload.notionDatabase;
-    }
     const response = await apiClient.post(buildApiProxyPath('/jobs'), payload);
     return response.data;
   } catch (error: unknown) {
