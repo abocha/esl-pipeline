@@ -37,9 +37,10 @@ async function loadPresetFromFile(
   presetName: string,
   presetsPath: string,
 ): Promise<{ h2?: string; h3?: string } | null> {
-  const parsed = JSON.parse(
-    await readFile(presetsPath, 'utf8'),
-  ) as Record<string, { h2?: string; h3?: string }>;
+  const parsed = JSON.parse(await readFile(presetsPath, 'utf8')) as Record<
+    string,
+    { h2?: string; h3?: string }
+  >;
   return parsed[presetName] ?? null;
 }
 

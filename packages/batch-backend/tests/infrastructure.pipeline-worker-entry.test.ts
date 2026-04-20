@@ -25,7 +25,6 @@ describe('infrastructure/pipeline-worker-entry', () => {
     } else {
       process.env.ESL_TTS_DEFAULT_PROVIDER = ORIGINAL_DEFAULT_PROVIDER;
     }
-
   });
 
   it('resolves configured key when user override is absent', () => {

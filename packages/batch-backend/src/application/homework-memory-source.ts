@@ -282,7 +282,7 @@ function normalizePublishTarget(value: string | null): PublishTarget | null {
 }
 
 function resolvePublishUrl(row: HomeworkSourceJobRow, target: PublishTarget): string | null {
-  return target === 'html' ? row.html_url ?? null : null;
+  return target === 'html' ? (row.html_url ?? null) : null;
 }
 
 function sha256(input: string): string {

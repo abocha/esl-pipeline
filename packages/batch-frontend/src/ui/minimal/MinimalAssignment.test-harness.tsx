@@ -284,7 +284,14 @@ async function waitForJobActionsReady(jobId = 'job-1') {
     { name: /Advanced actions/i },
     { timeout: UI_WAIT_TIMEOUT_MS },
   );
-  fireEvent.click(screen.getByRole('button', { name: /Show advanced actions/i }));
+  const trigger = await screen.findByRole(
+    'button',
+    { name: /(Show|Hide) advanced actions/i },
+    { timeout: UI_WAIT_TIMEOUT_MS },
+  );
+  if (/show advanced actions/i.test(trigger.textContent ?? '')) {
+    fireEvent.click(trigger);
+  }
   await waitFor(
     () => {
       expect(screen.getAllByText(new RegExp(`Job ID: ${jobId}`, 'i')).length).toBeGreaterThan(0);
@@ -322,8 +329,10 @@ export function openPublishingSettings() {
 }
 
 export function openAdvancedActions() {
-  const trigger = screen.queryByRole('button', { name: /Show advanced actions/i });
-  if (trigger) {
+  const trigger =
+    screen.queryByRole('button', { name: /Show advanced actions/i }) ??
+    screen.queryByRole('button', { name: /Hide advanced actions/i });
+  if (trigger && /show advanced actions/i.test(trigger.textContent ?? '')) {
     fireEvent.click(trigger);
   }
 }

@@ -130,7 +130,14 @@ describe('MinimalAssignment - staged workflow UI', () => {
   });
 
   it('keeps advanced controls collapsed until the teacher opens them', async () => {
-    await renderPublishedAssignment();
+    await renderResumedAssignment(
+      {
+        status: {
+          state: 'succeeded',
+        },
+      },
+      { waitFor: 'promptReady' },
+    );
 
     expect(screen.getByRole('button', { name: /Show advanced actions/i })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Refresh actions/i })).toBeNull();
