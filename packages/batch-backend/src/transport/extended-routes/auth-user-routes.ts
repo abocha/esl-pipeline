@@ -634,19 +634,6 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
         });
       }
 
-      if (
-        body.notionToken !== undefined &&
-        body.notionToken !== null &&
-        body.notionToken !== '' &&
-        (typeof body.notionToken !== 'string' || body.notionToken.length < 10)
-      ) {
-        return reply.code(400).send({
-          error: 'validation_failed',
-          message: 'Invalid Notion token format',
-          code: 'invalid_notion_token',
-        });
-      }
-
       const updatedSettings = await upsertSettings(authenticatedUser.id, body);
 
       logger.info('User settings updated', {
@@ -850,7 +837,6 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
       voiceAccent: z.string().min(1).optional(),
       voiceId: z.string().min(1).optional(),
       forceTts: z.boolean().optional(),
-      notionDatabase: z.string().min(1).optional(),
       ttsStrategy: publishTtsStrategySchema.optional(),
       ttsProvider: publishTtsProviderSchema.optional(),
       studyTextElevenlabsModel: publishElevenLabsModelSchema.optional(),
@@ -867,7 +853,6 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
         voiceId: validatedData.voiceId,
         voiceAccent: validatedData.voiceAccent,
         forceTts: validatedData.forceTts,
-        notionDatabase: validatedData.notionDatabase,
         ttsStrategy: validatedData.ttsStrategy,
         ttsProvider: validatedData.ttsProvider,
         studyTextElevenlabsModel: validatedData.studyTextElevenlabsModel,

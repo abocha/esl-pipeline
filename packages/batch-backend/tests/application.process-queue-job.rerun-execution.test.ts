@@ -24,8 +24,7 @@ describe('application/process-queue-job', () => {
       state: 'succeeded',
       manifestPath: '/manifests/job-rerun.json',
       finishedAt: new Date('2024-01-01T10:02:00Z'),
-      notionUrl: 'https://notion.so/job-rerun',
-      anytypeUrl: null,
+      htmlUrl: 'https://example.com/job-rerun',
     };
     updateJobStateAndResultSpy
       .mockResolvedValueOnce(running as any)
@@ -33,7 +32,7 @@ describe('application/process-queue-job', () => {
 
     runRerunAssignmentJobSpy.mockResolvedValue({
       manifestPath: '/manifests/job-rerun.json',
-      notionUrl: 'https://notion.so/job-rerun',
+      htmlUrl: 'https://example.com/job-rerun',
     });
 
     await processQueueJob({
@@ -93,8 +92,7 @@ describe('application/process-queue-job', () => {
       state: 'succeeded',
       manifestPath: '/manifests/job-rerun-default-force.json',
       finishedAt: new Date('2024-01-01T10:02:00Z'),
-      notionUrl: 'https://notion.so/job-rerun-default-force',
-      anytypeUrl: null,
+      htmlUrl: 'https://example.com/job-rerun-default-force',
     };
     updateJobStateAndResultSpy
       .mockResolvedValueOnce(running as any)
@@ -102,7 +100,7 @@ describe('application/process-queue-job', () => {
 
     runRerunAssignmentJobSpy.mockResolvedValue({
       manifestPath: '/manifests/job-rerun-default-force.json',
-      notionUrl: 'https://notion.so/job-rerun-default-force',
+      htmlUrl: 'https://example.com/job-rerun-default-force',
     });
 
     await processQueueJob({
@@ -142,8 +140,7 @@ describe('application/process-queue-job', () => {
       state: 'succeeded',
       manifestPath: '/manifests/job-rerun-publish.json',
       finishedAt: new Date('2024-01-01T10:02:00Z'),
-      notionUrl: null,
-      anytypeUrl: 'https://anytype.io/page',
+      htmlUrl: 'https://example.com/job-rerun-publish',
     };
     updateJobStateAndResultSpy
       .mockResolvedValueOnce(running as any)
@@ -151,7 +148,7 @@ describe('application/process-queue-job', () => {
 
     runRerunAssignmentJobSpy.mockResolvedValue({
       manifestPath: '/manifests/job-rerun-publish.json',
-      anytypeUrl: 'https://anytype.io/page',
+      htmlUrl: 'https://example.com/job-rerun-publish',
     });
 
     await processQueueJob({
@@ -200,8 +197,7 @@ describe('application/process-queue-job', () => {
       state: 'succeeded',
       manifestPath: '/manifests/job-rerun-pronunciation-voice-defaults.json',
       finishedAt: new Date('2024-01-01T10:02:00Z'),
-      notionUrl: 'https://notion.so/job-rerun-pronunciation-voice-defaults',
-      anytypeUrl: null,
+      htmlUrl: 'https://example.com/job-rerun-pronunciation-voice-defaults',
     };
     updateJobStateAndResultSpy
       .mockResolvedValueOnce(running as any)
@@ -209,7 +205,7 @@ describe('application/process-queue-job', () => {
 
     runRerunAssignmentJobSpy.mockResolvedValue({
       manifestPath: '/manifests/job-rerun-pronunciation-voice-defaults.json',
-      notionUrl: 'https://notion.so/job-rerun-pronunciation-voice-defaults',
+      htmlUrl: 'https://example.com/job-rerun-pronunciation-voice-defaults',
     });
 
     await processQueueJob({
@@ -264,8 +260,7 @@ describe('application/process-queue-job', () => {
       state: 'succeeded',
       manifestPath: '/manifests/job-rerun-provider-switch.json',
       finishedAt: new Date('2024-01-01T10:02:00Z'),
-      notionUrl: 'https://notion.so/job-rerun-provider-switch',
-      anytypeUrl: null,
+      htmlUrl: 'https://example.com/job-rerun-provider-switch',
     };
     updateJobStateAndResultSpy
       .mockResolvedValueOnce(running as any)
@@ -273,7 +268,7 @@ describe('application/process-queue-job', () => {
 
     runRerunAssignmentJobSpy.mockResolvedValue({
       manifestPath: '/manifests/job-rerun-provider-switch.json',
-      notionUrl: 'https://notion.so/job-rerun-provider-switch',
+      htmlUrl: 'https://example.com/job-rerun-provider-switch',
     });
 
     await processQueueJob({
@@ -326,8 +321,7 @@ describe('application/process-queue-job', () => {
       state: 'succeeded',
       manifestPath: '/manifests/job-rerun-study-text-defaults.json',
       finishedAt: new Date('2024-01-01T10:02:00Z'),
-      notionUrl: 'https://notion.so/job-rerun-study-text-defaults',
-      anytypeUrl: null,
+      htmlUrl: 'https://example.com/job-rerun-study-text-defaults',
     };
     updateJobStateAndResultSpy
       .mockResolvedValueOnce(running as any)
@@ -335,7 +329,7 @@ describe('application/process-queue-job', () => {
 
     runRerunAssignmentJobSpy.mockResolvedValue({
       manifestPath: '/manifests/job-rerun-study-text-defaults.json',
-      notionUrl: 'https://notion.so/job-rerun-study-text-defaults',
+      htmlUrl: 'https://example.com/job-rerun-study-text-defaults',
     });
 
     await processQueueJob({
@@ -412,8 +406,7 @@ describe('application/process-queue-job', () => {
       state: 'succeeded',
       manifestPath: '/manifests/job-no-tts.json',
       finishedAt: new Date('2024-01-01T10:02:00Z'),
-      notionUrl: 'https://notion.so/job-no-tts',
-      anytypeUrl: null,
+      htmlUrl: 'https://example.com/job-no-tts',
     };
     updateJobStateAndResultSpy
       .mockResolvedValueOnce(running as any)
@@ -421,7 +414,7 @@ describe('application/process-queue-job', () => {
 
     runAssignmentJobSpy.mockResolvedValue({
       manifestPath: '/manifests/job-no-tts.json',
-      notionUrl: 'https://notion.so/job-no-tts',
+      htmlUrl: 'https://example.com/job-no-tts',
     });
 
     await processQueueJob({ jobId: 'job-1' });

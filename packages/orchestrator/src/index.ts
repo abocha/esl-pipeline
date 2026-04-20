@@ -3,7 +3,6 @@ import { constants as FS } from 'node:fs';
 import { access } from 'node:fs/promises';
 import { basename, dirname } from 'node:path';
 
-import { createAnytypeClient, sharePageToS3 } from '@esl-pipeline/anytype-adapter';
 import {
   FfmpegNotFoundError,
   InfrastructureError,
@@ -12,13 +11,6 @@ import {
 } from '@esl-pipeline/contracts';
 import { renderAndPublishMarkdownToS3 } from '@esl-pipeline/html-publisher';
 import { validateMarkdown } from '@esl-pipeline/md-validator';
-import {
-  addOrReplaceAudio,
-  applyHeadingPreset,
-  hashColorPreset,
-  loadPreset,
-  runImport,
-} from '@esl-pipeline/notion-adapter';
 import { extractPronunciationFocus, parseMarkdownContext } from '@esl-pipeline/pmd';
 import { deriveS3UploadAddress, uploadFile } from '@esl-pipeline/storage-uploader';
 import { buildStudyTextMp3, hashStudyText } from '@esl-pipeline/tts-core';
@@ -32,11 +24,12 @@ import {
   type RerunAssignmentOperationResultV2,
   successResultV2,
 } from './api-v2.js';
-import { DEFAULT_PRESETS_PATH, DEFAULT_VOICES_PATH } from './config.js';
+import { DEFAULT_PRESETS_PATH, DEFAULT_VOICES_PATH, loadPresets } from './config.js';
 import {
   type AssignmentManifest,
   CURRENT_MANIFEST_SCHEMA_VERSION,
   createFilesystemManifestStore,
+  normalizeManifestPublishTarget,
 } from './manifest.js';
 import { noopLogger, noopMetrics } from './observability.js';
 import { computeRerunPlan } from './rerun-planner.js';
@@ -51,11 +44,6 @@ import {
 } from './runtime/audio-artifacts.js';
 import { readMarkdownCached } from './runtime/markdown-cache.js';
 import { synthesizePronunciationAudio } from './runtime/pronunciation-audio.js';
-import {
-  addAnytypePageToCollection,
-  resolveAnytypeObjectId,
-  resolveAnytypeSpaceId,
-} from './runtime/publish-target-anytype.js';
 import {
   insertGeneratedAudioLinks,
   resolveHeadingTheme,
@@ -124,6 +112,15 @@ const fallbackLogger = noopLogger;
 const fallbackMetrics = noopMetrics;
 
 ensureTtsProvidersRegistered();
+
+async function loadHeadingThemeForPreset(
+  presetName: string,
+  presetsPath = DEFAULT_PRESETS_PATH,
+): Promise<{ h2?: string; h3?: string } | undefined> {
+  const presets = await loadPresets(presetsPath);
+  const preset = presets[presetName];
+  return preset ? resolveHeadingTheme(preset) : undefined;
+}
 
 function normalizeCancellationReason(reason: unknown): string | undefined {
   if (typeof reason === 'string') {
@@ -358,7 +355,6 @@ export {
 } from './manifest.js';
 export {
   type JobOptionsPayload,
-  type NotionDatabaseOption as JobNotionDatabaseOption,
   resolveJobOptions,
   type VoiceOption as JobVoiceOption,
 } from './metadata/job-options.js';
@@ -478,41 +474,16 @@ export async function newAssignment(
   const mdContents = await readMarkdownCached(flags.md);
   const markdownHash = hashStudyText(mdContents);
   const previousManifest = await manifestStore.readManifest(flags.md);
-  let notionColorization = previousManifest?.notionColorization;
-
-  const publishTarget = flags.publishTarget ?? previousManifest?.publishTarget ?? 'notion';
-  let pageId = previousManifest?.pageId;
-  let pageUrl = previousManifest?.pageUrl;
-  let anytypePageId = previousManifest?.anytypePageId;
-  let anytypeSpaceId = flags.anytypeSpaceId ?? previousManifest?.anytypeSpaceId;
-  let anytypeUrl = previousManifest?.anytypeUrl;
+  const publishTarget = normalizeManifestPublishTarget(
+    flags.publishTarget ?? previousManifest?.publishTarget,
+  );
   let htmlUrl = previousManifest?.htmlUrl;
   let htmlHash = previousManifest?.htmlHash;
   let htmlKey = previousManifest?.htmlKey;
   let htmlEtag = previousManifest?.htmlEtag;
   let htmlReused = previousManifest?.htmlReused;
 
-  let colorized = false;
-
-  if (publishTarget === 'anytype') {
-    pageId = undefined;
-    pageUrl = undefined;
-  } else if (publishTarget === 'notion') {
-    anytypePageId = undefined;
-    anytypeSpaceId = undefined;
-    anytypeUrl = undefined;
-    htmlUrl = undefined;
-    htmlHash = undefined;
-    htmlKey = undefined;
-    htmlEtag = undefined;
-    htmlReused = undefined;
-  } else {
-    pageId = undefined;
-    pageUrl = undefined;
-    anytypePageId = undefined;
-    anytypeSpaceId = undefined;
-    anytypeUrl = undefined;
-  }
+  const colorized = false;
 
   logger.log({
     level: 'info',
@@ -554,144 +525,14 @@ export async function newAssignment(
     if (flags.skipImport) {
       recordSkip('import', 'skip-import flag set');
       steps.push('skip:import');
-      if (publishTarget === 'notion' && !pageId && !flags.dryRun) {
-        throw new ValidationError(
-          'Cannot skip import because no existing Notion pageId was found. Run a full pipeline first.',
-        );
-      }
-      if (publishTarget === 'anytype' && !anytypePageId && !flags.dryRun) {
-        throw new ValidationError(
-          'Cannot skip import because no existing Anytype pageId was found. Run a full pipeline first.',
-        );
-      }
     } else {
       emitStage('import', 'start');
       steps.push('import');
-      if (publishTarget === 'notion') {
-        throwIfCancelled(signal, 'import');
-        const importResult = await runImport({
-          context: markdownContext,
-          mdPath: flags.md,
-          dbId: flags.dbId,
-          dbName: flags.db,
-          dataSourceId: flags.dataSourceId,
-          dataSourceName: flags.dataSource,
-          student: flags.student,
-          dryRun: flags.dryRun,
-          validationResult: validation,
-          strictValidation: false,
-          logger,
-        });
-        throwIfCancelled(signal, 'import');
-        pageId = importResult.page_id;
-        pageUrl = importResult.url;
-        emitStage('import', 'success', {
-          pageUrl,
-          studentLinked: importResult.studentLinked ?? undefined,
-        });
-      } else if (publishTarget === 'anytype') {
-        throwIfCancelled(signal, 'import');
-        const client = createAnytypeClient();
-        const spaceId = await resolveAnytypeSpaceId(client, anytypeSpaceId);
-        throwIfCancelled(signal, 'import');
-        anytypeSpaceId = spaceId;
-
-        const title = resolveMarkdownTitle(
-          mdContents,
-          basename(flags.md).replace(/\.[^.]+$/, ''),
-          validation.meta?.title ?? null,
-        );
-
-        if (anytypePageId) {
-          await client.updateObject(spaceId, anytypePageId, {
-            name: title,
-            body: mdContents,
-          });
-        } else {
-          const created = await client.createObject(spaceId, {
-            name: title,
-            type_key: 'page',
-            body: mdContents,
-          });
-          anytypePageId = resolveAnytypeObjectId(created);
-          if (!anytypePageId) {
-            throw new ValidationError(
-              'Anytype createObject did not return an object id. Cannot continue.',
-            );
-          }
-        }
-
-        if (anytypePageId) {
-          await addAnytypePageToCollection(client, spaceId, anytypePageId, logger, runId);
-        }
-        throwIfCancelled(signal, 'import');
-
-        emitStage('import', 'success', {
-          pageId: anytypePageId,
-          spaceId: anytypeSpaceId,
-        });
-      } else {
-        emitStage('import', 'success', { publishTarget: 'html', remoteImport: false });
-      }
+      emitStage('import', 'success', { publishTarget: 'html', remoteImport: false });
     }
 
     if (flags.preset) {
-      if (publishTarget !== 'notion') {
-        recordSkip('colorize', `${publishTarget} uses static HTML theming`);
-      } else if (flags.dryRun) {
-        emitStage('colorize', 'start');
-        steps.push(`colorize:${flags.preset}:0/0/0`);
-        emitStage('colorize', 'success', {
-          preset: flags.preset,
-          dryRun: true,
-          counts: { h2: 0, h3: 0, toggles: 0 },
-        });
-        colorized = true;
-      } else {
-        if (!pageId) {
-          throw new ValidationError(
-            'Cannot apply color preset because no Notion pageId is available. Run import first.',
-          );
-        }
-        const presetHash = hashColorPreset(
-          await loadPreset(flags.preset, flags.presetsPath ?? DEFAULT_PRESETS_PATH),
-        );
-        const canSkipColorize =
-          !flags.force &&
-          notionColorization?.preset === flags.preset &&
-          notionColorization.presetHash === presetHash &&
-          notionColorization.pageId === pageId &&
-          notionColorization.mdHash === markdownHash;
-
-        if (canSkipColorize) {
-          recordSkip('colorize', 'preset hash unchanged for current page/content');
-        } else {
-          emitStage('colorize', 'start');
-          steps.push('colorize');
-          throwIfCancelled(signal, 'colorize');
-          const color = await applyHeadingPreset(
-            pageId,
-            flags.preset,
-            flags.presetsPath ?? DEFAULT_PRESETS_PATH,
-          );
-          throwIfCancelled(signal, 'colorize');
-          steps.push(
-            `colorize:${flags.preset}:${color.counts.h2}/${color.counts.h3}/${color.counts.toggles}`,
-          );
-          emitStage('colorize', 'success', {
-            preset: flags.preset,
-            counts: color.counts,
-          });
-          colorized = true;
-          notionColorization = {
-            preset: flags.preset,
-            presetHash,
-            pageId,
-            mdHash: markdownHash,
-            appliedAt: new Date().toISOString(),
-          };
-        }
-      }
+      recordSkip('colorize', `${publishTarget} uses static HTML theming`);
     } else {
       recordSkip('colorize', 'no preset selected');
     }
@@ -927,139 +768,17 @@ export async function newAssignment(
     const studyTextAudioUrl = audioArtifacts.studyText?.url;
     const pronunciationAudioUrl = audioArtifacts.pronunciation?.primaryClip?.url;
 
-    if (publishTarget === 'notion') {
-      if ((studyTextAudioUrl || pronunciationAudioUrl) && pageId) {
-        if (flags.skipUpload) {
-          recordSkip('add-audio', 'skip-upload flag set');
-          steps.push('skip:add-audio');
-        } else if (flags.dryRun) {
-          emitStage('add-audio', 'start');
-          steps.push('add-audio');
-          emitStage('add-audio', 'success', { dryRun: true });
-        } else {
-          emitStage('add-audio', 'start');
-          steps.push('add-audio');
-          throwIfCancelled(signal, 'add-audio');
-
-          if (studyTextAudioUrl) {
-            const result = await addOrReplaceAudio(pageId, studyTextAudioUrl, {
-              replace: flags.force,
-              target: 'study-text',
-              previousBlockId: audioArtifacts.studyText?.notionBlockId,
-            });
-            if (result.blockId) {
-              audioArtifacts.studyText = {
-                ...audioArtifacts.studyText,
-                notionBlockId: result.blockId,
-              };
-            }
-          }
-
-          if (pronunciationAudioUrl) {
-            const result = await addOrReplaceAudio(pageId, pronunciationAudioUrl, {
-              replace: flags.force,
-              target: 'pronunciation-practice',
-              previousBlockId: audioArtifacts.pronunciation?.primaryClip?.notionBlockId,
-            });
-            if (result.blockId && audioArtifacts.pronunciation?.primaryClip) {
-              audioArtifacts.pronunciation.primaryClip = {
-                ...audioArtifacts.pronunciation.primaryClip,
-                notionBlockId: result.blockId,
-              };
-            }
-          }
-
-          throwIfCancelled(signal, 'add-audio');
-          emitStage('add-audio', 'success', {
-            pageId,
-            studyTextUrl: studyTextAudioUrl,
-            pronunciationUrl: pronunciationAudioUrl,
-          });
-        }
-      } else {
-        recordSkip(
-          'add-audio',
-          studyTextAudioUrl || pronunciationAudioUrl ? 'missing pageId' : 'no audio url available',
-        );
-      }
-    } else if (publishTarget === 'anytype' && anytypePageId && anytypeSpaceId) {
-      if (flags.skipUpload) {
-        recordSkip('add-audio', 'skip-upload flag set');
-        steps.push('skip:add-audio');
-      } else if (flags.dryRun) {
-        emitStage('add-audio', 'start');
-        steps.push('add-audio');
-        emitStage('add-audio', 'success', { dryRun: true });
-      } else {
-        emitStage('add-audio', 'start');
-        steps.push('add-audio');
-        throwIfCancelled(signal, 'add-audio');
-
-        const client = createAnytypeClient();
-        const page = await client.getObject(anytypeSpaceId, anytypePageId);
-        throwIfCancelled(signal, 'add-audio');
-        const updatedBody = insertGeneratedAudioLinks(page.body ?? '', {
-          studyTextUrl: studyTextAudioUrl,
-          pronunciationAudioUrl,
-          pronunciationAudio: audioArtifacts.pronunciation,
-        });
-        if (updatedBody !== page.body) {
-          await client.updateObject(anytypeSpaceId, anytypePageId, {
-            body: updatedBody,
-          });
-          throwIfCancelled(signal, 'add-audio');
-        }
-
-        let headingTheme: { h2?: string; h3?: string } | undefined;
-        if (flags.preset) {
-          const preset = await loadPreset(flags.preset, flags.presetsPath ?? DEFAULT_PRESETS_PATH);
-          headingTheme = resolveHeadingTheme(preset);
-        }
-
-        const publishMarkdown = insertGeneratedAudioLinks(mdContents, {
-          studyTextUrl: studyTextAudioUrl,
-          pronunciationAudioUrl,
-          pronunciationAudio: audioArtifacts.pronunciation,
-        });
-        const publishTitle = resolveMarkdownTitle(
-          mdContents,
-          basename(flags.md).replace(/\.[^.]+$/, ''),
-          validation.meta?.title ?? null,
-        );
-
-        const publishResult = await sharePageToS3(anytypeSpaceId, anytypePageId, {
-          headingTheme,
-          title: publishTitle,
-          markdown: publishMarkdown,
-        });
-        throwIfCancelled(signal, 'add-audio');
-        anytypeUrl = publishResult.url;
-        htmlUrl = publishResult.url;
-        htmlHash = publishResult.renderHash;
-        htmlKey = publishResult.key;
-        htmlEtag = publishResult.etag;
-        htmlReused = publishResult.reused;
-        emitArtifactReuseMetric(metrics, 'html', undefined, publishResult.reused);
-
-        emitStage('add-audio', 'success', {
-          pageId: anytypePageId,
-          studyTextUrl: studyTextAudioUrl,
-          pronunciationUrl: pronunciationAudioUrl,
-          publishUrl: anytypeUrl,
-          publishKey: htmlKey,
-          publishHash: htmlHash,
-          publishReused: htmlReused,
-        });
-      }
-    } else if (publishTarget === 'html') {
+    if (publishTarget === 'html') {
       emitStage('add-audio', 'start');
       steps.push('add-audio');
       throwIfCancelled(signal, 'add-audio');
       if (!flags.dryRun) {
         let headingTheme: { h2?: string; h3?: string } | undefined;
         if (flags.preset) {
-          const preset = await loadPreset(flags.preset, flags.presetsPath ?? DEFAULT_PRESETS_PATH);
-          headingTheme = resolveHeadingTheme(preset);
+          headingTheme = await loadHeadingThemeForPreset(
+            flags.preset,
+            flags.presetsPath ?? DEFAULT_PRESETS_PATH,
+          );
         }
 
         const publishMarkdown = insertGeneratedAudioLinks(mdContents, {
@@ -1095,19 +814,12 @@ export async function newAssignment(
         publishReused: htmlReused,
         dryRun: flags.dryRun,
       });
-    } else {
-      recordSkip('add-audio', 'missing Anytype pageId/spaceId');
     }
 
     const manifest: AssignmentManifest = {
       schemaVersion: CURRENT_MANIFEST_SCHEMA_VERSION,
       mdHash: markdownHash,
-      pageId,
-      pageUrl,
       publishTarget,
-      anytypePageId,
-      anytypeSpaceId,
-      anytypeUrl,
       htmlUrl,
       htmlHash,
       htmlKey,
@@ -1118,7 +830,6 @@ export async function newAssignment(
         pronunciation: audioArtifacts.pronunciation,
       },
       preset: flags.preset,
-      notionColorization,
 
       // Preserve TTS metadata from previous runs when flags are omitted
       ttsStrategy: flags.ttsStrategy ?? previousManifest?.ttsStrategy,
@@ -1148,9 +859,6 @@ export async function newAssignment(
     metrics.increment('esl.pipeline.new_assignment.success', 1, {});
 
     return {
-      pageId,
-      pageUrl,
-      anytypeUrl,
       htmlUrl,
       publishTarget,
       audio: audioArtifacts.studyText,
@@ -1376,22 +1084,12 @@ export async function rerunAssignment(
     let audioReused = audioArtifacts.studyText?.reused;
     let audioVoices = audioArtifacts.studyText?.voices;
     let audioTts = audioArtifacts.studyText?.tts;
-    const publishTarget = manifest.publishTarget ?? 'notion';
-    let anytypeUrl = manifest.anytypeUrl;
+    const publishTarget = normalizeManifestPublishTarget(manifest.publishTarget);
     let htmlUrl = manifest.htmlUrl;
     let htmlHash = manifest.htmlHash;
     let htmlKey = manifest.htmlKey;
     let htmlEtag = manifest.htmlEtag;
     let htmlReused = manifest.htmlReused;
-    if (publishTarget === 'notion') {
-      htmlUrl = undefined;
-      htmlHash = undefined;
-      htmlKey = undefined;
-      htmlEtag = undefined;
-      htmlReused = undefined;
-    } else if (publishTarget === 'html') {
-      anytypeUrl = undefined;
-    }
 
     if (stepsToRun.has('tts')) {
       emitStage('tts', 'start');
@@ -1491,7 +1189,6 @@ export async function rerunAssignment(
           reused: audioReused,
           voices: audioVoices,
           tts: audioTts,
-          notionBlockId: audioArtifacts.studyText?.notionBlockId,
         };
         emitVoiceSelectionMetrics(metrics, ttsResult.voices);
 
@@ -1808,163 +1505,46 @@ export async function rerunAssignment(
       throwIfCancelled(signal, 'add-audio');
       const studyTextAudioUrl = audioArtifacts.studyText?.url;
       const pronunciationAudioUrl = audioArtifacts.pronunciation?.primaryClip?.url;
-      if (publishTarget === 'notion') {
-        const targetPageId = manifest.pageId;
-        if (!targetPageId) {
-          throw new Error(
-            'Cannot add audio: manifest does not have a pageId. Re-run the import step first.',
-          );
-        }
-        if (!studyTextAudioUrl && !pronunciationAudioUrl) {
-          throw new Error('Cannot add audio: no audio URL available. Rerun upload first.');
+      if (!flags.dryRun) {
+        let headingTheme: { h2?: string; h3?: string } | undefined;
+        if (manifest.preset) {
+          headingTheme = await loadHeadingThemeForPreset(manifest.preset, DEFAULT_PRESETS_PATH);
         }
 
-        if (!flags.dryRun) {
-          if (studyTextAudioUrl) {
-            const result = await addOrReplaceAudio(targetPageId, studyTextAudioUrl, {
-              replace: true,
-              target: 'study-text',
-              previousBlockId: audioArtifacts.studyText?.notionBlockId,
-            });
-            if (result.blockId) {
-              audioArtifacts.studyText = {
-                ...audioArtifacts.studyText,
-                notionBlockId: result.blockId,
-              };
-            }
-          }
-          if (pronunciationAudioUrl) {
-            const result = await addOrReplaceAudio(targetPageId, pronunciationAudioUrl, {
-              replace: true,
-              target: 'pronunciation-practice',
-              previousBlockId: audioArtifacts.pronunciation?.primaryClip?.notionBlockId,
-            });
-            if (result.blockId && audioArtifacts.pronunciation?.primaryClip) {
-              audioArtifacts.pronunciation.primaryClip = {
-                ...audioArtifacts.pronunciation.primaryClip,
-                notionBlockId: result.blockId,
-              };
-            }
-          }
-          throwIfCancelled(signal, 'add-audio');
-        }
-
-        emitStage('add-audio', 'success', {
-          pageId: targetPageId,
+        const publishMarkdown = insertGeneratedAudioLinks(mdContents, {
           studyTextUrl: studyTextAudioUrl,
-          pronunciationUrl: pronunciationAudioUrl,
+          pronunciationAudioUrl,
+          pronunciationAudio: audioArtifacts.pronunciation,
         });
-      } else if (publishTarget === 'anytype') {
-        const targetPageId = manifest.anytypePageId;
-        const targetSpaceId = manifest.anytypeSpaceId;
-        if (!targetPageId || !targetSpaceId) {
-          throw new Error(
-            'Cannot add audio: manifest does not have an Anytype page/space id. Re-run import first.',
-          );
-        }
-        if (!studyTextAudioUrl && !pronunciationAudioUrl) {
-          throw new Error('Cannot add audio: no audio URL available. Rerun upload first.');
-        }
-
-        if (!flags.dryRun) {
-          const client = createAnytypeClient();
-          const page = await client.getObject(targetSpaceId, targetPageId);
-          throwIfCancelled(signal, 'add-audio');
-          const updatedBody = insertGeneratedAudioLinks(page.body ?? '', {
-            studyTextUrl: studyTextAudioUrl,
-            pronunciationAudioUrl,
-            pronunciationAudio: audioArtifacts.pronunciation,
-          });
-          if (updatedBody !== page.body) {
-            await client.updateObject(targetSpaceId, targetPageId, { body: updatedBody });
-            throwIfCancelled(signal, 'add-audio');
-          }
-
-          let headingTheme: { h2?: string; h3?: string } | undefined;
-          if (manifest.preset) {
-            const preset = await loadPreset(manifest.preset, DEFAULT_PRESETS_PATH);
-            headingTheme = resolveHeadingTheme(preset);
-          }
-
-          const publishMarkdown = insertGeneratedAudioLinks(mdContents, {
-            studyTextUrl: studyTextAudioUrl,
-            pronunciationAudioUrl,
-            pronunciationAudio: audioArtifacts.pronunciation,
-          });
-          const publishTitle = resolveMarkdownTitle(
-            mdContents,
-            effectiveStudyTextTitleFallback,
-            null,
-            true,
-          );
-
-          const publishResult = await sharePageToS3(targetSpaceId, targetPageId, {
-            headingTheme,
-            title: publishTitle,
-            markdown: publishMarkdown,
-          });
-          throwIfCancelled(signal, 'add-audio');
-          anytypeUrl = publishResult.url;
-          htmlUrl = publishResult.url;
-          htmlHash = publishResult.renderHash;
-          htmlKey = publishResult.key;
-          htmlEtag = publishResult.etag;
-          htmlReused = publishResult.reused;
-          emitArtifactReuseMetric(metrics, 'html', undefined, publishResult.reused);
-        }
-
-        emitStage('add-audio', 'success', {
-          pageId: targetPageId,
-          studyTextUrl: studyTextAudioUrl,
-          pronunciationUrl: pronunciationAudioUrl,
-          publishUrl: anytypeUrl,
-          publishKey: htmlKey,
-          publishHash: htmlHash,
-          publishReused: htmlReused,
+        const publishTitle = resolveMarkdownTitle(
+          mdContents,
+          effectiveStudyTextTitleFallback,
+          null,
+          true,
+        );
+        const publishResult = await renderAndPublishMarkdownToS3({
+          headingTheme,
+          title: publishTitle,
+          markdown: publishMarkdown,
+          pronunciationAudio: audioArtifacts.pronunciation,
         });
-      } else {
-        if (!flags.dryRun) {
-          let headingTheme: { h2?: string; h3?: string } | undefined;
-          if (manifest.preset) {
-            const preset = await loadPreset(manifest.preset, DEFAULT_PRESETS_PATH);
-            headingTheme = resolveHeadingTheme(preset);
-          }
-
-          const publishMarkdown = insertGeneratedAudioLinks(mdContents, {
-            studyTextUrl: studyTextAudioUrl,
-            pronunciationAudioUrl,
-            pronunciationAudio: audioArtifacts.pronunciation,
-          });
-          const publishTitle = resolveMarkdownTitle(
-            mdContents,
-            effectiveStudyTextTitleFallback,
-            null,
-            true,
-          );
-          const publishResult = await renderAndPublishMarkdownToS3({
-            headingTheme,
-            title: publishTitle,
-            markdown: publishMarkdown,
-            pronunciationAudio: audioArtifacts.pronunciation,
-          });
-          throwIfCancelled(signal, 'add-audio');
-          htmlUrl = publishResult.url;
-          htmlHash = publishResult.renderHash;
-          htmlKey = publishResult.key;
-          htmlEtag = publishResult.etag;
-          htmlReused = publishResult.reused;
-          emitArtifactReuseMetric(metrics, 'html', undefined, publishResult.reused);
-        }
-        emitStage('add-audio', 'success', {
-          studyTextUrl: studyTextAudioUrl,
-          pronunciationUrl: pronunciationAudioUrl,
-          publishUrl: htmlUrl,
-          publishKey: htmlKey,
-          publishHash: htmlHash,
-          publishReused: htmlReused,
-          dryRun: flags.dryRun,
-        });
+        throwIfCancelled(signal, 'add-audio');
+        htmlUrl = publishResult.url;
+        htmlHash = publishResult.renderHash;
+        htmlKey = publishResult.key;
+        htmlEtag = publishResult.etag;
+        htmlReused = publishResult.reused;
+        emitArtifactReuseMetric(metrics, 'html', undefined, publishResult.reused);
       }
+      emitStage('add-audio', 'success', {
+        studyTextUrl: studyTextAudioUrl,
+        pronunciationUrl: pronunciationAudioUrl,
+        publishUrl: htmlUrl,
+        publishKey: htmlKey,
+        publishHash: htmlHash,
+        publishReused: htmlReused,
+        dryRun: flags.dryRun,
+      });
 
       executed.push('add-audio');
     } else {
@@ -1982,7 +1562,6 @@ export async function rerunAssignment(
       schemaVersion: CURRENT_MANIFEST_SCHEMA_VERSION,
       mdHash: hashStudyText(mdContents),
       publishTarget,
-      anytypeUrl,
       htmlUrl,
       htmlHash,
       htmlKey,
@@ -2022,9 +1601,6 @@ export async function rerunAssignment(
     return {
       steps: executed,
       audio: updatedManifest.audioArtifacts?.studyText,
-      pageId: updatedManifest.pageId,
-      pageUrl: updatedManifest.pageUrl,
-      anytypeUrl: updatedManifest.anytypeUrl,
       htmlUrl: updatedManifest.htmlUrl,
       publishTarget: updatedManifest.publishTarget,
       manifestPath,

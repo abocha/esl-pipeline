@@ -44,7 +44,6 @@ describe('domain/settings-model', () => {
       const defaults = getDefaultSettings();
 
       expect(defaults.elevenLabsKeyEncrypted).toBeNull();
-      expect(defaults.notionTokenEncrypted).toBeNull();
       expect(defaults.ttsProvider).toBe('elevenlabs');
       expect(defaults.defaultPreset).toBe('b1-default');
       expect(defaults.defaultVoiceAccent).toBe('american');
@@ -58,7 +57,6 @@ describe('domain/settings-model', () => {
       id: 'test-id',
       userId: 'user-123',
       elevenLabsKeyEncrypted: 'encrypted-key-data',
-      notionTokenEncrypted: 'encrypted-token-data',
       ttsProvider: 'elevenlabs',
       defaultPreset: 'b2-intermediate',
       defaultVoiceAccent: 'british',
@@ -72,14 +70,12 @@ describe('domain/settings-model', () => {
       const sanitized = sanitizeSettings(mockRecord);
 
       expect(sanitized.hasElevenLabsKey).toBe(true);
-      expect(sanitized.hasNotionToken).toBe(true);
     });
 
     it('does not expose encrypted values', () => {
       const sanitized = sanitizeSettings(mockRecord);
 
       expect(sanitized).not.toHaveProperty('elevenLabsKeyEncrypted');
-      expect(sanitized).not.toHaveProperty('notionTokenEncrypted');
       expect(sanitized).not.toHaveProperty('id');
       expect(sanitized).not.toHaveProperty('userId');
     });
@@ -105,13 +101,11 @@ describe('domain/settings-model', () => {
       const recordWithoutKeys: UserSettingsRecord = {
         ...mockRecord,
         elevenLabsKeyEncrypted: null,
-        notionTokenEncrypted: null,
       };
 
       const sanitized = sanitizeSettings(recordWithoutKeys);
 
       expect(sanitized.hasElevenLabsKey).toBe(false);
-      expect(sanitized.hasNotionToken).toBe(false);
     });
   });
 

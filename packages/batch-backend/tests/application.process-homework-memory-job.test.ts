@@ -124,8 +124,8 @@ describe('application/process-homework-memory-job', () => {
           contentHash: 'hash-1',
           publishTargets: [
             {
-              target: 'notion',
-              url: 'https://example.com/notion',
+              target: 'html',
+              url: 'https://example.com/homework',
               jobId: 'job-1',
               publishedAt: '2026-03-20T00:00:00.000Z',
             },

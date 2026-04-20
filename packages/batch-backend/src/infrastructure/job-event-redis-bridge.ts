@@ -36,13 +36,10 @@ interface SerializedJobRecord {
   withTts: boolean | null;
   upload: JobUploadOption | null;
   publishTarget: string | null;
-  notionDatabase: string | null;
   ttsStrategy: string | null;
   ttsProvider: string | null;
   studyTextElevenlabsModel: string | null;
   googleTtsModel: string | null;
-  notionUrl: string | null;
-  anytypeUrl: string | null;
   htmlUrl: string | null;
   autoPublish: boolean | null;
   createdAt: string;
@@ -300,13 +297,10 @@ function serializeJobRecord(job: JobRecord): SerializedJobRecord {
     withTts: job.withTts ?? null,
     upload: job.upload ?? null,
     publishTarget: job.publishTarget ?? null,
-    notionDatabase: job.notionDatabase ?? null,
     ttsStrategy: job.ttsStrategy ?? null,
     ttsProvider: job.ttsProvider ?? null,
     studyTextElevenlabsModel: job.studyTextElevenlabsModel ?? null,
     googleTtsModel: job.googleTtsModel ?? null,
-    notionUrl: job.notionUrl ?? null,
-    anytypeUrl: job.anytypeUrl ?? null,
     htmlUrl: job.htmlUrl ?? null,
     autoPublish: job.autoPublish ?? null,
     createdAt: job.createdAt.toISOString(),
@@ -333,13 +327,10 @@ function deserializeJobRecord(serialized: SerializedJobRecord): JobRecord {
     withTts: serialized.withTts ?? null,
     upload: serialized.upload ?? null,
     publishTarget: normalizePublishTarget(serialized.publishTarget),
-    notionDatabase: serialized.notionDatabase ?? null,
     ttsStrategy: normalizeTtsStrategy(serialized.ttsStrategy),
     ttsProvider: normalizeTtsProvider(serialized.ttsProvider),
     studyTextElevenlabsModel: normalizeElevenLabsTtsModel(serialized.studyTextElevenlabsModel),
     googleTtsModel: normalizeGoogleTtsModel(serialized.googleTtsModel),
-    notionUrl: serialized.notionUrl ?? null,
-    anytypeUrl: serialized.anytypeUrl ?? null,
     htmlUrl: serialized.htmlUrl ?? null,
     autoPublish: serialized.autoPublish ?? null,
     createdAt: new Date(serialized.createdAt),
@@ -353,7 +344,7 @@ function deserializeJobRecord(serialized: SerializedJobRecord): JobRecord {
 }
 
 function normalizePublishTarget(value: string | null | undefined): JobRecord['publishTarget'] {
-  if (value === 'notion' || value === 'anytype' || value === 'html') return value;
+  if (value === 'html') return value;
   return null;
 }
 

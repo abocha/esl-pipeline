@@ -88,7 +88,6 @@ When implementing from a plan file, re-read that exact plan file after every con
 - Supporting core packages:
   - `@esl-pipeline/md-validator`
   - `@esl-pipeline/pmd`
-  - `@esl-pipeline/notion-adapter`
   - `@esl-pipeline/tts-core`
   - `@esl-pipeline/tts-provider-elevenlabs`
   - `@esl-pipeline/tts-provider-google`

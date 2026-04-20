@@ -130,7 +130,14 @@ describe('MinimalAssignment - staged workflow UI', () => {
   });
 
   it('keeps advanced controls collapsed until the teacher opens them', async () => {
-    await renderPublishedAssignment();
+    await renderResumedAssignment(
+      {
+        status: {
+          state: 'succeeded',
+        },
+      },
+      { waitFor: 'promptReady' },
+    );
 
     expect(screen.getByRole('button', { name: /Show advanced actions/i })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Refresh actions/i })).toBeNull();
@@ -152,8 +159,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
         finishedAt: '2024-01-01T00:01:00.000Z',
         sourceJobId: 'job-0',
         manifestPath: '/tmp/manifest.json',
-        notionUrl: null,
-        anytypeUrl: null,
+        htmlUrl: null,
         error: null,
       },
       sourceJob: null,

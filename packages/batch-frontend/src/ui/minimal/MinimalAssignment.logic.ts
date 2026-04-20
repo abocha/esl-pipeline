@@ -6,7 +6,7 @@ import type {
   RerunJobPayload,
 } from '../../utils/api';
 
-export type MinimalPublishTarget = 'notion' | 'anytype' | 'html';
+export type MinimalPublishTarget = 'html';
 
 export interface PublishJobOverridesInput {
   publishTarget: MinimalPublishTarget;

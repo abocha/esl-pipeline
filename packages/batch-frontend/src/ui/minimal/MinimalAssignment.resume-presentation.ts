@@ -46,19 +46,10 @@ function getResumeStatusPresentation(
 
 function getPublishSurfaceLabel(job: JobStatus): string {
   if (job.state === 'failed') {
-    return job.publishTarget === 'html' || job.htmlUrl ? 'Publish failed' : 'Processing failed';
+    return job.htmlUrl ? 'Publish failed' : 'Processing failed';
   }
-  if (job.publishTarget === 'anytype' && (job.anytypeUrl || job.htmlUrl)) {
-    return 'Published to Anytype';
-  }
-  if (job.publishTarget === 'html' && job.htmlUrl) {
+  if (job.htmlUrl) {
     return 'Published to HTML';
-  }
-  if (job.publishTarget === 'notion' && job.notionUrl) {
-    return 'Published to Notion';
-  }
-  if (job.anytypeUrl || job.htmlUrl) {
-    return 'Published';
   }
   return 'Not published yet';
 }

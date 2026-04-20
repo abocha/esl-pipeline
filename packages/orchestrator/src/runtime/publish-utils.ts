@@ -1,10 +1,11 @@
-import type { ColorPreset } from '@esl-pipeline/notion-adapter';
 import {
   insertGeneratedAudioLinks as insertGeneratedAudioLinksShared,
   type PronunciationAudioPayload,
   resolveHeadingTheme as resolveHeadingThemeShared,
   resolveMarkdownTitle as resolveMarkdownTitleShared,
 } from '@esl-pipeline/shared-infrastructure';
+
+import type { PresetMap } from '../config.js';
 
 export function insertGeneratedAudioLinks(
   markdown: string,
@@ -36,7 +37,7 @@ export function resolveMarkdownTitle(
 }
 
 export function resolveHeadingTheme(
-  preset?: ColorPreset,
+  preset?: PresetMap[string],
 ): { h2?: string; h3?: string } | undefined {
   return resolveHeadingThemeShared(preset);
 }

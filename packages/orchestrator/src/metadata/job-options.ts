@@ -2,24 +2,19 @@ import type {
   ElevenLabsTtsModelId,
   GoogleTtsModel,
   JobOptionsPayload,
-  NotionDatabaseOption,
   TtsProviderId,
   TtsStrategyOption,
   UploadOption,
 } from '@esl-pipeline/contracts';
-import {
-  normalizeVoiceCatalogToOptions,
-  resolveNotionDatabasesFromEnv as resolveNotionDatabasesFromEnvShared,
-} from '@esl-pipeline/shared-infrastructure';
+import { normalizeVoiceCatalogToOptions } from '@esl-pipeline/shared-infrastructure';
 import { getRegisteredTtsProvider, loadVoicesCatalog } from '@esl-pipeline/tts-core';
 
-import type { ConfigProvider, StudentProfile } from '../config.js';
+import type { ConfigProvider } from '../config.js';
 import type { OrchestratorPipeline, ResolvedConfigPaths } from '../pipeline.js';
 import { ensureTtsProvidersRegistered } from '../tts-provider-registry.js';
 
 export type {
   JobOptionsPayload,
-  NotionDatabaseOption,
   TtsStrategyOption,
   UploadOption,
   VoiceOption,
@@ -48,20 +43,12 @@ export async function resolveJobOptions(
   ensureTtsProvidersRegistered();
   const { configProvider, configPaths } = source;
 
-  const [presetsMap, studentProfiles, voiceCatalog] = await Promise.all([
+  const [presetsMap, voiceCatalog] = await Promise.all([
     configProvider.loadPresets(configPaths.presetsPath),
-    configProvider.loadStudentProfiles(configPaths.studentsDir),
     loadVoicesCatalog(),
   ]);
 
   const presets = Object.keys(presetsMap ?? {}).sort((a, b) => a.localeCompare(b));
-  const notionDatabasesFromProfiles = extractNotionDatabases(studentProfiles);
-  const notionDatabases =
-    notionDatabasesFromProfiles.length > 0
-      ? notionDatabasesFromProfiles
-      : resolveNotionDatabasesFromEnvShared({
-          singleDbId: process.env.NOTION_DATABASE_ID?.trim() || process.env.NOTION_DB_ID?.trim(),
-        });
   const { voices, voiceAccents } = normalizeVoiceCatalogToOptions(voiceCatalog);
   const ttsProviders = resolveRegisteredTtsProviders();
   const defaultTtsProvider = resolveDefaultTtsProvider(ttsProviders);
@@ -72,7 +59,6 @@ export async function resolveJobOptions(
     presets,
     voiceAccents,
     voices,
-    notionDatabases,
     uploadOptions: [...DEFAULT_UPLOAD_OPTIONS],
     ttsStrategies: [...DEFAULT_TTS_STRATEGIES],
     ttsProviders,
@@ -132,23 +118,4 @@ function buildTtsModelMetadata(availableProviders: TtsProviderId[]): {
   }
 
   return { ttsModelOptionsByProvider, defaultTtsModelByProvider };
-}
-
-function extractNotionDatabases(profiles: StudentProfile[]): NotionDatabaseOption[] {
-  const seen = new Set<string>();
-  const options: NotionDatabaseOption[] = [];
-
-  for (const profile of profiles ?? []) {
-    const raw = typeof profile.dbId === 'string' ? profile.dbId.trim() : '';
-    if (!raw) continue;
-    if (seen.has(raw)) continue;
-    seen.add(raw);
-    const label =
-      typeof profile.student === 'string' && profile.student.trim().length > 0
-        ? profile.student.trim()
-        : raw;
-    options.push({ id: raw, name: label });
-  }
-
-  return options.sort((a, b) => a.name.localeCompare(b.name));
 }

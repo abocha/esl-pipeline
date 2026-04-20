@@ -55,9 +55,8 @@ describe('application/submit-job', () => {
       voiceId: null,
       voiceAccent: null,
       forceTts: null,
-      notionDatabase: null,
       ttsStrategy: null,
-      notionUrl: null,
+      htmlUrl: null,
       createdAt: new Date(),
       updatedAt: new Date(),
       startedAt: null,
@@ -92,8 +91,7 @@ describe('application/submit-job', () => {
       voiceId: request.voiceId,
       voiceAccent: request.voiceAccent,
       forceTts: request.forceTts,
-      notionDatabase: request.notionDatabase,
-      publishTarget: 'notion',
+      publishTarget: 'html',
       ttsStrategy: request.ttsStrategy,
       ttsProvider: request.ttsProvider,
       studyTextElevenlabsModel: request.studyTextElevenlabsModel,
@@ -126,9 +124,8 @@ describe('application/submit-job', () => {
       voiceId: 'voice_amanda',
       voiceAccent: 'american_female',
       forceTts: true,
-      notionDatabase: 'db-123',
       ttsStrategy: 'dialogue',
-      notionUrl: null,
+      htmlUrl: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -151,7 +148,6 @@ describe('application/submit-job', () => {
       voiceId: fakeJob.voiceId,
       voiceAccent: fakeJob.voiceAccent,
       forceTts: fakeJob.forceTts,
-      notionDatabase: fakeJob.notionDatabase,
       ttsStrategy: fakeJob.ttsStrategy as 'dialogue',
     });
 
@@ -169,8 +165,7 @@ describe('application/submit-job', () => {
       ttsProvider: undefined,
       studyTextElevenlabsModel: undefined,
       googleTtsModel: undefined,
-      notionDatabase: fakeJob.notionDatabase,
-      publishTarget: 'notion',
+      publishTarget: 'html',
       ttsStrategy: fakeJob.ttsStrategy,
       autoPublish: undefined,
       userId: undefined,
@@ -189,9 +184,8 @@ describe('application/submit-job', () => {
       voiceId: null,
       voiceAccent: null,
       forceTts: null,
-      notionDatabase: null,
       ttsStrategy: null,
-      notionUrl: null,
+      htmlUrl: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -225,8 +219,7 @@ describe('application/submit-job', () => {
       ttsProvider: undefined,
       studyTextElevenlabsModel: undefined,
       googleTtsModel: undefined,
-      notionDatabase: undefined,
-      publishTarget: 'notion',
+      publishTarget: 'html',
       ttsStrategy: undefined,
       autoPublish: undefined,
       userId: undefined,
@@ -282,5 +275,32 @@ describe('application/submit-job', () => {
     ).rejects.toThrow('studyTextElevenlabsModel must be omitted');
 
     expect(insertJobSpy).not.toHaveBeenCalled();
+  });
+
+  it('rejects retired non-html publish targets', async () => {
+    const enqueue = vi.fn().mockResolvedValue(void 0);
+    createJobQueueSpy.mockReturnValue({
+      queue: {} as any,
+      queueEvents: {} as any,
+      enqueue,
+      cancelQueuedJob: vi.fn(),
+    });
+
+    await expect(
+      submitJob({
+        md: 'fixtures/ok.md',
+        publishTarget: 'notion' as any,
+      }),
+    ).rejects.toThrow('publishTarget must be "html" when provided');
+
+    await expect(
+      submitJob({
+        md: 'fixtures/ok.md',
+        publishTarget: 'anytype' as any,
+      }),
+    ).rejects.toThrow('publishTarget must be "html" when provided');
+
+    expect(insertJobSpy).not.toHaveBeenCalled();
+    expect(enqueue).not.toHaveBeenCalled();
   });
 });

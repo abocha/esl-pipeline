@@ -36,6 +36,7 @@ describe('rerun planner', () => {
       pronunciationMainAudio: true,
       pronunciationChunkAudio: true,
     });
+    expect(plan.errors).toEqual([]);
   });
 
   it('uses full chain for regeneration reruns', () => {
@@ -44,7 +45,6 @@ describe('rerun planner', () => {
       regenerateStudyTextAudio: true,
       manifest: {
         mdHash: 'hash',
-        pageId: 'page-1',
         timestamp: '2026-01-01T00:00:00.000Z',
       },
     });
@@ -68,7 +68,7 @@ describe('rerun planner', () => {
     expect(plan.errors).toContain('No manifest found for /tmp/lesson.md. Run the pipeline first.');
   });
 
-  it('reports missing notion page prerequisites for republish-only reruns', () => {
+  it('does not require retired notion or anytype fields for republish-only reruns', () => {
     const plan = computeRerunPlan({
       md: '/tmp/lesson.md',
       republishOnly: true,
@@ -83,8 +83,24 @@ describe('rerun planner', () => {
       },
     });
 
-    expect(plan.requires.missingManifestFields).toContain('pageId');
-    expect(plan.errors).toContain('Missing manifest fields for requested rerun steps: pageId');
+    expect(plan.requires.missingManifestFields).toEqual([]);
+    expect(plan.errors).toEqual([]);
+  });
+
+  it('normalizes legacy manifest publish targets to html without requiring retired fields', () => {
+    const plan = computeRerunPlan({
+      md: '/tmp/lesson.md',
+      republishOnly: true,
+      manifest: {
+        mdHash: 'hash',
+        publishTarget: 'notion' as never,
+        timestamp: '2026-01-01T00:00:00.000Z',
+      },
+    });
+
+    expect(plan.executable).toEqual(['add-audio']);
+    expect(plan.requires.missingManifestFields).toEqual([]);
+    expect(plan.errors).toEqual([]);
   });
 
   it('detects canonical pronunciation mode from manifest artifacts', () => {
@@ -93,7 +109,6 @@ describe('rerun planner', () => {
       regeneratePronunciationChunkAudio: true,
       manifest: {
         mdHash: 'hash',
-        pageId: 'page-1',
         audioArtifacts: {
           pronunciation: {
             mode: 'connected_speech',

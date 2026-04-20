@@ -3,17 +3,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@esl-pipeline/notion-adapter', () => ({
-  runImport: vi.fn().mockResolvedValue({ page_id: 'page-123', url: 'https://notion.so/page-123' }),
-  loadPreset: vi.fn().mockResolvedValue({ h2: 'blue', h3: 'green', toggleMap: { h2: 'yellow' } }),
-  applyHeadingPreset: vi
-    .fn()
-    .mockResolvedValue({ applied: true, counts: { h2: 1, h3: 1, toggles: 0 } }),
-  hashColorPreset: vi.fn().mockReturnValue('preset-hash-default'),
-  addOrReplaceAudio: vi.fn().mockResolvedValue({ replaced: false, appended: true }),
-  addOrReplaceAudioUnderStudyText: vi.fn().mockResolvedValue({ replaced: false, appended: true }),
-}));
-
 vi.mock('@esl-pipeline/tts-core', async () => {
   const actual =
     await vi.importActual<typeof import('@esl-pipeline/tts-core')>('@esl-pipeline/tts-core');
@@ -73,28 +62,17 @@ describe('orchestrator smoke', () => {
       withTts: true,
       upload: 's3',
       voices: 'packages/orchestrator/configs/voices.yml',
-      dbId: 'db-123',
       dryRun: false,
     });
 
-    expect(result.steps).toEqual([
-      'validate',
-      'import',
-      'colorize',
-      'colorize:default:1/1/0',
-      'tts',
-      'upload',
-      'add-audio',
-      'manifest',
-    ]);
-    expect(result.pageId).toBe('page-123');
+    expect(result.steps).toEqual(['validate', 'import', 'tts', 'upload', 'add-audio', 'manifest']);
     expect(result.audio?.url).toBe('https://s3.amazonaws.com/audio/file.mp3');
     expect(result.manifestPath).toBeTruthy();
     const manifestContents = await readFile(result.manifestPath!, 'utf8');
-    expect(manifestContents).toContain('"pageId": "page-123"');
+    expect(manifestContents).toContain('"publishTarget": "html"');
 
     const statusBefore = await getAssignmentStatus(mdPath);
-    expect(statusBefore.manifest?.pageId).toBe('page-123');
+    expect(statusBefore.manifest?.publishTarget).toBe('html');
     expect(statusBefore.mdHashMatches).toBe(true);
     const initialTimestamp = statusBefore.manifest?.timestamp;
 
@@ -116,7 +94,7 @@ describe('orchestrator smoke', () => {
     expect(statusAfter.manifest!.timestamp >= initialTimestamp!).toBe(true);
   }, 30000);
 
-  it('skips notion colorize when preset hash, page, and markdown hash are unchanged', async () => {
+  it('keeps HTML publishing on the static theme path even when rerunning the same preset', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orchestrator-colorize-skip-'));
     const mdPath = join(dir, 'assignment.md');
     const okFixturePath = join(import.meta.dirname, '../../md-validator/fixtures/ok.md');
@@ -124,10 +102,6 @@ describe('orchestrator smoke', () => {
     await writeFile(mdPath, okDoc);
 
     const { newAssignment } = await import('../src/index.js');
-    const { applyHeadingPreset, hashColorPreset } = await import('@esl-pipeline/notion-adapter');
-
-    vi.mocked(applyHeadingPreset).mockClear();
-    vi.mocked(hashColorPreset).mockClear();
 
     const first = await newAssignment({
       md: mdPath,
@@ -135,7 +109,7 @@ describe('orchestrator smoke', () => {
       withTts: false,
       dryRun: false,
     });
-    expect(first.steps).toContain('colorize');
+    expect(first.steps).not.toContain('colorize');
 
     const second = await newAssignment({
       md: mdPath,
@@ -145,16 +119,9 @@ describe('orchestrator smoke', () => {
     });
 
     expect(second.steps).not.toContain('colorize');
-    expect(vi.mocked(applyHeadingPreset)).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(hashColorPreset)).toHaveBeenCalledTimes(2);
     const secondManifest = JSON.parse(await readFile(second.manifestPath!, 'utf8'));
-    expect(secondManifest.notionColorization).toEqual(
-      expect.objectContaining({
-        preset: 'default',
-        presetHash: 'preset-hash-default',
-        pageId: 'page-123',
-      }),
-    );
+    expect(secondManifest.publishTarget).toBe('html');
+    expect(secondManifest).not.toHaveProperty('notionColorization');
   }, 30000);
 
   it('preserves TTS metadata when rerun without passing TTS flags', async () => {
@@ -299,5 +266,51 @@ describe('orchestrator smoke', () => {
     expect(manifestAfter.audioArtifacts?.studyText?.url).toBe(
       'https://s3.amazonaws.com/audio/file.mp3',
     );
+  }, 30000);
+
+  it('normalizes a legacy manifest publish target to html during republish reruns', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'orchestrator-legacy-publish-target-'));
+    const mdPath = join(dir, 'assignment.md');
+    const audioPath = join(dir, 'lesson.mp3');
+
+    const okFixturePath = join(import.meta.dirname, '../../md-validator/fixtures/ok.md');
+    const okDoc = await readFile(okFixturePath, 'utf8');
+    await writeFile(mdPath, okDoc);
+    await writeFile(audioPath, 'dummy audio');
+
+    const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-core');
+    vi.mocked(buildStudyTextMp3).mockResolvedValue({
+      path: audioPath,
+      hash: 'abc123',
+      voices: [{ speaker: 'Anna', voiceId: 'voice_id_default', source: 'default' }],
+    });
+
+    const { newAssignment, rerunAssignment, getAssignmentStatus } = await import('../src/index.js');
+    const initial = await newAssignment({
+      md: mdPath,
+      preset: 'default',
+      withTts: true,
+      upload: 's3',
+      voices: 'packages/orchestrator/configs/voices.yml',
+      dryRun: false,
+    });
+
+    const manifest = JSON.parse(await readFile(initial.manifestPath!, 'utf8'));
+    manifest.publishTarget = 'anytype';
+    await writeFile(initial.manifestPath!, JSON.stringify(manifest, null, 2));
+
+    const statusBefore = await getAssignmentStatus(mdPath);
+    expect(statusBefore.manifest?.publishTarget).toBe('html');
+
+    const rerun = await rerunAssignment({
+      md: mdPath,
+      republishOnly: true,
+      upload: 's3',
+      dryRun: false,
+    });
+
+    expect(rerun.publishTarget).toBe('html');
+    const manifestAfter = JSON.parse(await readFile(initial.manifestPath!, 'utf8'));
+    expect(manifestAfter.publishTarget).toBe('html');
   }, 30000);
 });

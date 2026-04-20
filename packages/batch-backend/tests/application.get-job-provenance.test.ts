@@ -35,8 +35,6 @@ describe('application/get-job-provenance', () => {
       finishedAt: new Date('2024-03-01T00:01:00.000Z'),
       sourceJobId: null,
       manifestPath: null,
-      notionUrl: null,
-      anytypeUrl: null,
       htmlUrl: null,
       error: 'Voice generation timed out while calling provider for this lesson',
     });
@@ -93,8 +91,6 @@ describe('application/get-job-provenance', () => {
       finishedAt: new Date('2024-03-01T00:02:00.000Z'),
       sourceJobId: null,
       manifestPath,
-      notionUrl: null,
-      anytypeUrl: null,
       htmlUrl: null,
       error: null,
     });
@@ -155,8 +151,6 @@ describe('application/get-job-provenance', () => {
       finishedAt: new Date('2024-03-01T00:02:00.000Z'),
       sourceJobId: 'job-2',
       manifestPath,
-      notionUrl: null,
-      anytypeUrl: null,
       htmlUrl: null,
       error: null,
     });
@@ -169,8 +163,6 @@ describe('application/get-job-provenance', () => {
       finishedAt: new Date('2024-03-01T00:01:00.000Z'),
       sourceJobId: null,
       manifestPath: null,
-      notionUrl: null,
-      anytypeUrl: null,
       htmlUrl: null,
       error: null,
     });

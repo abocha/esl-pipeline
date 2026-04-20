@@ -46,9 +46,7 @@ export interface JobProvenanceResponse {
     finishedAt: string | null;
     sourceJobId: string | null;
     manifestPath: string | null;
-    notionUrl: string | null;
-    anytypeUrl: string | null;
-    htmlUrl?: string | null;
+    htmlUrl: string | null;
     error: string | null;
     providerError?: VoiceProviderErrorDetails | null;
   };
@@ -174,9 +172,7 @@ export async function getJobProvenance(jobId: string): Promise<JobProvenanceResp
       finishedAt: job.finishedAt ? job.finishedAt.toISOString() : null,
       sourceJobId: job.sourceJobId ?? null,
       manifestPath: job.manifestPath ?? null,
-      notionUrl: job.notionUrl ?? null,
-      anytypeUrl: job.anytypeUrl ?? null,
-      ...(job.htmlUrl ? { htmlUrl: job.htmlUrl } : {}),
+      htmlUrl: job.htmlUrl ?? null,
       error: job.error ?? null,
       providerError: parseVoiceProviderError(job.error),
     },

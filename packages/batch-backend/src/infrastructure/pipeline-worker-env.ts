@@ -1,6 +1,5 @@
 export interface WorkerUserSettingsOverride {
   elevenLabsApiKey?: string | null;
-  notionToken?: string | null;
   ttsProvider?: 'elevenlabs' | 'google' | null;
 }
 
@@ -28,10 +27,6 @@ export function applyUserSettingsToEnv(
   }
 
   if (!settings) return;
-
-  if (settings.notionToken?.trim()) {
-    process.env.NOTION_TOKEN = settings.notionToken;
-  }
 
   if (settings.ttsProvider === 'google') {
     process.env.ESL_TTS_DEFAULT_PROVIDER = 'google';

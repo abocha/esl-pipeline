@@ -140,8 +140,7 @@ export interface RunAssignmentPayload {
   // currently only 's3' is supported as an explicit option.
   upload?: 's3';
   forceTts?: boolean | null;
-  notionDatabase?: string | null;
-  publishTarget?: 'notion' | 'anytype' | 'html';
+  publishTarget?: 'html';
   ttsStrategy?: TtsStrategy | null;
   ttsProvider?: 'elevenlabs' | 'google' | null;
   studyTextElevenlabsModel?:
@@ -156,7 +155,6 @@ export interface RunAssignmentPayload {
 
 interface RunJobSettings {
   elevenLabsApiKey?: string | null;
-  notionToken?: string | null;
   ttsProvider?: TtsProvider | null;
 }
 
@@ -242,7 +240,7 @@ export async function runAssignmentJob(
   payload: RunAssignmentPayload,
   runId: string,
   options: RunPipelineOptions = {},
-): Promise<{ manifestPath?: string; notionUrl?: string; anytypeUrl?: string; htmlUrl?: string }> {
+): Promise<{ manifestPath?: string; htmlUrl?: string }> {
   return runPipelineWorker('new_assignment', payload, runId, options);
 }
 
@@ -250,7 +248,7 @@ export async function runRerunAssignmentJob(
   payload: RunRerunAssignmentPayload,
   runId: string,
   options: RunPipelineOptions = {},
-): Promise<{ manifestPath?: string; notionUrl?: string; anytypeUrl?: string; htmlUrl?: string }> {
+): Promise<{ manifestPath?: string; htmlUrl?: string }> {
   return runPipelineWorker('rerun', payload, runId, options);
 }
 
@@ -259,7 +257,7 @@ async function runPipelineWorker(
   payload: RunAssignmentPayload | RunRerunAssignmentPayload,
   runId: string,
   options: RunPipelineOptions = {},
-): Promise<{ manifestPath?: string; notionUrl?: string; anytypeUrl?: string; htmlUrl?: string }> {
+): Promise<{ manifestPath?: string; htmlUrl?: string }> {
   const log = rootLogger.child({ jobId: payload.jobId, runId });
   const { signal } = options;
   if (signal?.aborted) {
@@ -341,8 +339,6 @@ async function runPipelineWorker(
         resolve(
           message.result as {
             manifestPath?: string;
-            notionUrl?: string;
-            anytypeUrl?: string;
             htmlUrl?: string;
           },
         );

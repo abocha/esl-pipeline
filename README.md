@@ -20,7 +20,7 @@ This monorepo currently provides:
 
 Primary integrations:
 
-- Notion (publishing)
+- HTML file publishing
 - ElevenLabs (TTS)
 - AWS/S3 (upload/storage)
 - Google GenAI and OpenRouter (generation providers in batch flow)
@@ -90,7 +90,6 @@ Key exports:
 | `packages/orchestrator`            | Pipeline library API                | `packages/orchestrator/README.md`            |
 | `packages/md-validator`            | Markdown validation                 | `packages/md-validator/README.md`            |
 | `packages/pmd`                     | PMD parsing + study-text extraction | `packages/pmd/README.md`                     |
-| `packages/notion-adapter`          | Notion publishing adapter           | `packages/notion-adapter/README.md`          |
 | `packages/tts-core`                | TTS core contracts/registry         | `packages/tts-core/README.md`                |
 | `packages/tts-provider-elevenlabs` | ElevenLabs TTS provider adapter     | `packages/tts-provider-elevenlabs/README.md` |
 | `packages/tts-provider-google`     | Google Cloud TTS provider adapter   | `packages/tts-provider-google/README.md`     |
@@ -101,7 +100,6 @@ Key exports:
 | `packages/batch-frontend`          | Batch web UI                        | `packages/batch-frontend/README.md`          |
 | `packages/contracts`               | Shared backend/frontend contracts   | `packages/contracts/README.md`               |
 | `packages/shared-infrastructure`   | Shared infra utilities              | `packages/shared-infrastructure/README.md`   |
-| `packages/anytype-adapter`         | Anytype adapter support             | `packages/anytype-adapter/README.md`         |
 
 ## Documentation Path (Agents + Maintainers)
 

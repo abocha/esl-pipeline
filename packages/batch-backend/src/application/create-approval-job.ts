@@ -107,8 +107,7 @@ export async function createApprovalJobFromDraft(
     voiceAccent: jobOverrides.voiceAccent ?? voiceAccent,
     voiceId: jobOverrides.voiceId,
     forceTts: jobOverrides.forceTts,
-    notionDatabase: jobOverrides.notionDatabase,
-    publishTarget: jobOverrides.publishTarget ?? 'notion',
+    publishTarget: jobOverrides.publishTarget ?? 'html',
     upload: jobOverrides.upload ?? 'auto',
     autoPublish: jobOverrides.autoPublish,
   });

@@ -110,8 +110,6 @@ export interface BatchBackendConfig {
     secure: boolean;
   };
   orchestrator: {
-    notionToken?: string;
-    notionDatabaseId?: string;
     elevenLabsApiKey?: string;
     manifestStore: 'filesystem' | 's3';
     manifestBucket?: string;
@@ -488,8 +486,6 @@ export function loadConfig(): BatchBackendConfig {
   }
 
   // Orchestrator-related envs
-  const notionToken = readString('NOTION_TOKEN');
-  const notionDatabaseId = readString('NOTION_DATABASE_ID');
   const elevenLabsApiKey =
     readString('ESL_TTS_PROVIDER_ELEVENLABS_API_KEY') ?? readString('ELEVENLABS_API_KEY');
 
@@ -832,8 +828,6 @@ export function loadConfig(): BatchBackendConfig {
       secure: mailSecure,
     },
     orchestrator: {
-      notionToken,
-      notionDatabaseId,
       elevenLabsApiKey,
       manifestStore: manifestStoreEnv,
       manifestBucket,

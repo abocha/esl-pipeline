@@ -35,7 +35,7 @@ describe('MinimalAssignment logic helpers', () => {
   it('omits invalid preset and blank elevenlabs model overrides in auto mode', () => {
     expect(
       buildPublishJobOverrides({
-        publishTarget: 'notion',
+        publishTarget: 'html',
         selectedTtsProvider: 'elevenlabs',
         selectedTtsStrategy: 'auto',
         selectedTtsModel: '  ',
@@ -44,7 +44,7 @@ describe('MinimalAssignment logic helpers', () => {
         learningPresetCatalogEnabled: true,
       }),
     ).toEqual({
-      publishTarget: 'notion',
+      publishTarget: 'html',
       withTts: true,
       ttsProvider: 'elevenlabs',
       ttsStrategy: 'auto',
