@@ -1,3 +1,5 @@
+import './support/bootstrap-pg-test-env.js';
+
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { closePgPool, withPgClient, withPgClientSessionContext } from '../src/infrastructure/db.js';

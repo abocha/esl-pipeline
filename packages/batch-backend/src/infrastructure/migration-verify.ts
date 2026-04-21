@@ -93,6 +93,7 @@ const OPTIONAL_PG_TRGM_INDEXES = [
 ];
 const REQUIRED_COLUMNS: { table: string; column: string }[] = [
   { table: 'jobs', column: 'student_id' },
+  { table: 'profile_revisions', column: 'structured_content' },
 ];
 
 async function verifyTables(client: PoolClient, errors: string[]): Promise<void> {

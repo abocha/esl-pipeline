@@ -1,3 +1,5 @@
+import './support/bootstrap-pg-test-env.js';
+
 import { randomUUID } from 'node:crypto';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';

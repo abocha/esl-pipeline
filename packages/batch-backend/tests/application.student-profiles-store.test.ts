@@ -276,6 +276,21 @@ describe('student-profiles-store', () => {
 
   it('creates a starter profile revision and derived profile binding when starterProfile is supplied', async () => {
     const deps = createInMemoryDeps();
+    const saveRevisionCalls: Array<{
+      profileId: string;
+      content: string;
+      options?: {
+        source?: string;
+        status?: 'draft' | 'active' | 'deprecated';
+        createdBy?: string | null;
+        structuredContent?: unknown;
+      };
+    }> = [];
+    const originalSaveRevision = deps.profiles.saveRevision;
+    deps.profiles.saveRevision = async (profileId, content, options) => {
+      saveRevisionCalls.push({ profileId, content, options });
+      return originalSaveRevision(profileId, content, options);
+    };
 
     const created = await createStudentProfile(
       {
@@ -297,6 +312,19 @@ describe('student-profiles-store', () => {
 
     const loaded = await getStudentProfileById(created.id, { deps });
     expect(loaded?.profileId).toBe(`profiles/students/${created.id}.md`);
+    expect(saveRevisionCalls).toHaveLength(1);
+    expect(saveRevisionCalls[0]?.options?.structuredContent).toEqual({
+      schemaVersion: 'foundational_profile_v1',
+      overallLevel: null,
+      primaryGoals: ['Speak more confidently in client calls.'],
+      communicationContexts: ['Works as a product manager in IT.'],
+      interestsAndUsefulThemes: ['Pickleball and music production.'],
+      stableStrengths: [],
+      persistentChallenges: ['Needs clearer tense control under pressure.'],
+      studyPreferences: ['Prefers structured explanations and short review loops.'],
+      durableConstraints: [],
+      teacherNotes: 'Likes practical work scenarios.',
+    });
   });
 
   it('rejects starterProfile create requests that point at an already active profile', async () => {
