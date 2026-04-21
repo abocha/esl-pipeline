@@ -9,6 +9,7 @@ describeHttpServerIntegrationSuite(
     it,
     mockActivateProfileRevisionForProfile,
     mockDeleteProfileContent,
+    mockSaveProfileRevisionContent,
     mockDeleteTemplateContent,
   }) => {
     it('GET /students returns student profiles', async () => {
@@ -360,6 +361,57 @@ describeHttpServerIntegrationSuite(
 
       expect(response.statusCode).toBe(204);
       expect(mockDeleteProfileContent).toHaveBeenCalledWith('profile.md');
+    });
+
+    it('POST /profiles/:id/revisions saves a structured draft revision', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/profiles/profile.md/revisions',
+        payload: {
+          structuredContent: {
+            schemaVersion: 'foundational_profile_v1',
+            overallLevel: 'B2',
+            primaryGoals: ['Lead project updates confidently.'],
+            communicationContexts: ['Sprint demos'],
+            interestsAndUsefulThemes: ['Design systems'],
+            stableStrengths: ['Strong listening'],
+            persistentChallenges: ['Sentence rhythm'],
+            studyPreferences: ['Prefers concise correction'],
+            durableConstraints: ['Short homework windows'],
+            teacherNotes: 'Needs practical speaking rehearsal.',
+          },
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(response.json()).toEqual({
+        id: 'revision-2',
+        profileId: 'profile.md',
+        contentHash: 'hash-2',
+        source: 'update',
+        status: 'draft',
+        versionNumber: 2,
+        versionLabel: 'v2',
+        activatedAt: null,
+        deprecatedAt: null,
+        createdAt: '2024-01-02T00:00:00.000Z',
+        createdBy: 'test-user-id',
+        restoredFromRevisionId: null,
+        content: '# Foundational Profile\n\nStructured draft content',
+        structuredContent: {
+          schemaVersion: 'foundational_profile_v1',
+          overallLevel: 'B2',
+          primaryGoals: ['Lead project updates confidently.'],
+          communicationContexts: ['Sprint demos'],
+          interestsAndUsefulThemes: ['Design systems'],
+          stableStrengths: ['Strong listening'],
+          persistentChallenges: ['Sentence rhythm'],
+          studyPreferences: ['Prefers concise correction'],
+          durableConstraints: ['Short homework windows'],
+          teacherNotes: 'Needs practical speaking rehearsal.',
+        },
+      });
+      expect(mockSaveProfileRevisionContent).toHaveBeenCalled();
     });
 
     it('GET /profiles/:id/revisions returns profile revision list', async () => {

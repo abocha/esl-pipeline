@@ -193,20 +193,22 @@ export interface ProfileContentResponse {
   id: string;
   label: string;
   content: string;
-  structuredContent?: {
-    schemaVersion: 'foundational_profile_v1';
-    overallLevel: string | null;
-    primaryGoals: string[];
-    communicationContexts: string[];
-    interestsAndUsefulThemes: string[];
-    stableStrengths: string[];
-    persistentChallenges: string[];
-    studyPreferences: string[];
-    durableConstraints: string[];
-    teacherNotes: string | null;
-  } | null;
+  structuredContent?: FoundationalProfile | null;
   currentRevisionId: string | null;
   updatedAt: string | null;
+}
+
+export interface FoundationalProfile {
+  schemaVersion: 'foundational_profile_v1';
+  overallLevel: string | null;
+  primaryGoals: string[];
+  communicationContexts: string[];
+  interestsAndUsefulThemes: string[];
+  stableStrengths: string[];
+  persistentChallenges: string[];
+  studyPreferences: string[];
+  durableConstraints: string[];
+  teacherNotes: string | null;
 }
 
 export interface ProfileRevisionSummaryResponse {
@@ -233,6 +235,11 @@ export interface ProfileRevisionSummaryResponse {
 export interface ProfileRevisionDetailResponse extends ProfileRevisionSummaryResponse {
   content: string;
   structuredContent?: ProfileContentResponse['structuredContent'];
+}
+
+export interface SaveProfileDraftRevisionRequest {
+  content?: string;
+  structuredContent?: FoundationalProfile;
 }
 
 export interface ProfileRevisionListResponse {
@@ -1936,6 +1943,25 @@ export async function restoreProfileRevision(
     const axiosError = toAxiosError(error);
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to restore profile revisions.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function saveProfileDraftRevision(
+  profileId: string,
+  payload: SaveProfileDraftRevisionRequest,
+): Promise<ProfileRevisionDetailResponse> {
+  try {
+    const response = await apiClient.post(
+      buildApiProxyPath(`/profiles/${encodeURIComponent(profileId)}/revisions`),
+      payload,
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to save profile drafts.');
     }
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }

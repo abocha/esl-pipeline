@@ -163,6 +163,7 @@ vi.mock('../src/application/profile-content', () => {
     listProfileContents: vi.fn(),
     getProfileContent: vi.fn(),
     upsertProfileContent: vi.fn(),
+    saveProfileRevisionContent: vi.fn(),
     deleteProfileContent: vi.fn(),
     listProfileRevisionsForProfile: vi.fn(),
     getProfileRevisionForProfile: vi.fn(),
@@ -272,6 +273,9 @@ export function describeHttpServerIntegrationSuite(
     const mockListProfileContents = vi.mocked(profileContentModule.listProfileContents);
     const mockGetProfileContent = vi.mocked(profileContentModule.getProfileContent);
     const mockUpsertProfileContent = vi.mocked(profileContentModule.upsertProfileContent);
+    const mockSaveProfileRevisionContent = vi.mocked(
+      profileContentModule.saveProfileRevisionContent,
+    );
     const mockDeleteProfileContent = vi.mocked(profileContentModule.deleteProfileContent);
     const mockListProfileRevisionsForProfile = vi.mocked(
       profileContentModule.listProfileRevisionsForProfile,
@@ -439,6 +443,33 @@ export function describeHttpServerIntegrationSuite(
         },
         currentRevisionId: 'revision-latest',
         updatedAt: '2024-01-01T00:00:00.000Z',
+      });
+      mockSaveProfileRevisionContent.mockResolvedValue({
+        id: 'revision-2',
+        profileId: 'profile.md',
+        contentHash: 'hash-2',
+        source: 'update',
+        status: 'draft',
+        versionNumber: 2,
+        versionLabel: 'v2',
+        activatedAt: null,
+        deprecatedAt: null,
+        createdAt: '2024-01-02T00:00:00.000Z',
+        createdBy: 'test-user-id',
+        restoredFromRevisionId: null,
+        content: '# Foundational Profile\n\nStructured draft content',
+        structuredContent: {
+          schemaVersion: 'foundational_profile_v1',
+          overallLevel: 'B2',
+          primaryGoals: ['Lead project updates confidently.'],
+          communicationContexts: ['Sprint demos'],
+          interestsAndUsefulThemes: ['Design systems'],
+          stableStrengths: ['Strong listening'],
+          persistentChallenges: ['Sentence rhythm'],
+          studyPreferences: ['Prefers concise correction'],
+          durableConstraints: ['Short homework windows'],
+          teacherNotes: 'Needs practical speaking rehearsal.',
+        },
       });
       mockDeleteProfileContent.mockResolvedValue(true);
       mockListProfileRevisionsForProfile.mockResolvedValue({
@@ -866,6 +897,7 @@ export function describeHttpServerIntegrationSuite(
       mockListProfileContents,
       mockGetProfileContent,
       mockUpsertProfileContent,
+      mockSaveProfileRevisionContent,
       mockDeleteProfileContent,
       mockListProfileRevisionsForProfile,
       mockGetProfileRevisionForProfile,

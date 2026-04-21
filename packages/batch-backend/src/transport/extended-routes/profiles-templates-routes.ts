@@ -10,8 +10,13 @@ import {
   listProfileRevisionsForProfile,
   ProfileContentError,
   restoreProfileRevision,
+  saveProfileRevisionContent,
   upsertProfileContent,
 } from '../../application/profile-content.js';
+import {
+  FOUNDATIONAL_PROFILE_SCHEMA_VERSION,
+  renderFoundationalProfileContent,
+} from '../../application/foundational-profile.js';
 import {
   activateTemplateRevisionForTemplate,
   deleteTemplateContent,
@@ -33,6 +38,18 @@ export function registerProfileTemplateRoutes(
   context: ExtendedRoutesContext,
 ): void {
   const { authenticate } = context;
+  const foundationalProfileSchema = z.object({
+    schemaVersion: z.literal(FOUNDATIONAL_PROFILE_SCHEMA_VERSION),
+    overallLevel: z.string().nullable(),
+    primaryGoals: z.array(z.string()),
+    communicationContexts: z.array(z.string()),
+    interestsAndUsefulThemes: z.array(z.string()),
+    stableStrengths: z.array(z.string()),
+    persistentChallenges: z.array(z.string()),
+    studyPreferences: z.array(z.string()),
+    durableConstraints: z.array(z.string()),
+    teacherNotes: z.string().nullable(),
+  });
 
   app.get(
     '/profiles',
@@ -156,6 +173,80 @@ export function registerProfileTemplateRoutes(
         });
 
         return reply.send(updated);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid request body',
+            details: error.issues,
+          });
+        }
+        if (error instanceof ProfileContentError) {
+          return reply.code(error.status).send({
+            error: error.code,
+            message: error.message,
+            code: error.code,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.post(
+    '/profiles/:id/revisions',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'POST /profiles/:id/revisions');
+      const paramsSchema = z.object({
+        id: z.string().min(1),
+      });
+      const schema = z
+        .object({
+          content: z.string().optional(),
+          structuredContent: foundationalProfileSchema.optional(),
+        })
+        .refine((body) => typeof body.content === 'string' || body.structuredContent, {
+          message: 'Either content or structuredContent is required.',
+          path: ['content'],
+        });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const body = schema.parse(request.body ?? {});
+        const structuredContent = body.structuredContent ?? null;
+        const content =
+          typeof body.content === 'string'
+            ? body.content
+            : structuredContent
+              ? renderFoundationalProfileContent(structuredContent)
+              : '';
+
+        const saved = await saveProfileRevisionContent(params.id, content, {
+          source: 'update',
+          status: 'draft',
+          createdBy: getAuthenticatedUser(request)?.id ?? null,
+          structuredContent,
+        });
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 201,
+          profileId: params.id,
+        });
+
+        return reply.code(201).send(saved);
       } catch (error: unknown) {
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
