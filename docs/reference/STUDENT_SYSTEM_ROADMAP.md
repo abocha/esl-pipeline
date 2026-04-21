@@ -20,7 +20,8 @@
 - profile revisions and binding history are live
 - prompt lineage and drift metadata are live
 - student timeline and job provenance are live
-- student workspace route is live, but still needs polish
+- student workspace route is live, but it is still an interim all-in-one surface rather than the
+  long-term student-area architecture
 
 ## Return-To-Track Checklist
 
@@ -85,15 +86,17 @@
   - profile/binding management is live
   - assignment history, timeline, and provenance panels are live
 - remaining focus:
-  - UX hardening
+  - keep the current workspace operational while the future student area is designed and built
   - destructive-action guardrails
-  - smoother tutor workflow ergonomics
+  - smoother tutor workflow ergonomics until the new page model replaces the current surface
   - operator-facing chronology cleanup in memory overview panels
     - current `Recent homework memory` can look misleading after backfills because the backend
       overview selects by homework-memory generation recency while the UI displays assignment
       `publishedAt`
     - future UI pass should either sort that overview by `publishedAt DESC` or label the displayed
       timestamp semantics more explicitly
+- active docs:
+  - [`docs/plans/student-area-redesign/README.md`](../plans/student-area-redesign/README.md)
 
 ### Phase F: Teacher-verified profile enrichment
 
@@ -104,6 +107,8 @@
   - teacher review before promotion into foundational profile revisions
 - active plan:
   - [`docs/plans/student-profile-enrichment/README.md`](../plans/student-profile-enrichment/README.md)
+  - [`docs/plans/student-area-redesign/phase-2-learning-page-and-structured-profile.md`](../plans/student-area-redesign/phase-2-learning-page-and-structured-profile.md)
+  - [`docs/plans/student-area-redesign/phase-3-profile-generation-migration-and-prompt-packaging.md`](../plans/student-area-redesign/phase-3-profile-generation-migration-and-prompt-packaging.md)
 
 ### Phase G: Live transition and operator adoption
 
@@ -117,6 +122,26 @@
 - active docs:
   - [`docs/plans/student-profile-enrichment/phase-5-live-transition-and-operator-adoption.md`](../plans/student-profile-enrichment/phase-5-live-transition-and-operator-adoption.md)
   - [`docs/operations/legacy-profile-normalization.md`](../operations/legacy-profile-normalization.md)
+
+### Phase H: Student area redesign and operational expansion
+
+- status: planned
+- target outcome:
+  - dedicated student-area page model:
+    - `Overview`
+    - `Learning`
+    - `Schedule & Billing`
+    - `History`
+  - structured canonical learner profile replacing markdown authoring as the long-term product
+    model
+  - cleaner separation between pedagogy, operations, and business state
+  - future-ready scheduling, reminder, and accounting surfaces without overloading the learning
+    profile
+- active docs:
+  - [`docs/plans/student-area-redesign/README.md`](../plans/student-area-redesign/README.md)
+  - [`docs/plans/student-area-redesign/phase-1-information-architecture-and-domain-boundaries.md`](../plans/student-area-redesign/phase-1-information-architecture-and-domain-boundaries.md)
+  - [`docs/plans/student-area-redesign/phase-4-overview-page-and-cross-domain-summaries.md`](../plans/student-area-redesign/phase-4-overview-page-and-cross-domain-summaries.md)
+  - [`docs/plans/student-area-redesign/phase-5-scheduling-billing-reminders-and-history.md`](../plans/student-area-redesign/phase-5-scheduling-billing-reminders-and-history.md)
 
 ## Cross-Phase Rules
 

@@ -93,6 +93,7 @@
 - Student system roadmap and migration runbook:
   - [`docs/reference/STUDENT_SYSTEM_ROADMAP.md`](reference/STUDENT_SYSTEM_ROADMAP.md)
   - [`docs/reference/STUDENT_SYSTEM_PHASE_A_RUNBOOK.md`](reference/STUDENT_SYSTEM_PHASE_A_RUNBOOK.md)
+  - [`docs/plans/student-area-redesign/README.md`](plans/student-area-redesign/README.md)
 - Product readiness and review cadence:
   - [`docs/reference/PRODUCT_NORTH_STAR_AND_READINESS.md`](reference/PRODUCT_NORTH_STAR_AND_READINESS.md)
   - [`docs/playbooks/WEEKLY_PRODUCT_REVIEW_TEMPLATE.md`](playbooks/WEEKLY_PRODUCT_REVIEW_TEMPLATE.md)

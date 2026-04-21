@@ -12,7 +12,7 @@ therefore contain a mixture of:
 2. recent lesson continuity
 3. unresolved short-term issues
 4. tactical pedagogic reminders
-5. profile-like prose generated under the old “LLM magic” approach
+5. profile-like content generated under the old overloaded approach
 
 This phase provides temporary transition workflows so those students can be migrated gradually with
 low operator friction and low runtime risk.
@@ -22,7 +22,8 @@ low operator friction and low runtime risk.
 1. Legacy overloaded profiles remain valid runtime inputs until each student is deliberately
    migrated.
 2. Migration is one student at a time, not one big global rewrite.
-3. Legacy-profile normalization should be LLM-assisted because prose quality matters.
+3. Legacy-profile normalization should be LLM-assisted because durable-vs-tactical separation
+   requires bounded synthesis.
 4. Normalization must produce a draft profile revision and never auto-activate.
 5. Mixed-state operation is allowed during adoption:
    - some students may still use legacy overloaded profiles
