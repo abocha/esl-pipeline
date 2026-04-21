@@ -193,6 +193,18 @@ export interface ProfileContentResponse {
   id: string;
   label: string;
   content: string;
+  structuredContent?: {
+    schemaVersion: 'foundational_profile_v1';
+    overallLevel: string | null;
+    primaryGoals: string[];
+    communicationContexts: string[];
+    interestsAndUsefulThemes: string[];
+    stableStrengths: string[];
+    persistentChallenges: string[];
+    studyPreferences: string[];
+    durableConstraints: string[];
+    teacherNotes: string | null;
+  } | null;
   currentRevisionId: string | null;
   updatedAt: string | null;
 }
@@ -220,6 +232,7 @@ export interface ProfileRevisionSummaryResponse {
 
 export interface ProfileRevisionDetailResponse extends ProfileRevisionSummaryResponse {
   content: string;
+  structuredContent?: ProfileContentResponse['structuredContent'];
 }
 
 export interface ProfileRevisionListResponse {

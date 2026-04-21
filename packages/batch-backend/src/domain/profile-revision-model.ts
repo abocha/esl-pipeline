@@ -1,3 +1,5 @@
+import type { FoundationalProfile } from '../application/foundational-profile.js';
+
 export type ProfileRevisionSource =
   | 'create'
   | 'update'
@@ -11,6 +13,7 @@ export interface ProfileRevisionRecord {
   id: string;
   profileId: string;
   content: string;
+  structuredContent?: FoundationalProfile | null;
   contentHash: string;
   source: ProfileRevisionSource;
   status: RevisionStatus;

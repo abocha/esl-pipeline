@@ -335,6 +335,18 @@ describeHttpServerIntegrationSuite(
         id: 'profile.md',
         label: 'Profile',
         content: 'Profile content',
+        structuredContent: {
+          schemaVersion: 'foundational_profile_v1',
+          overallLevel: 'B1',
+          primaryGoals: ['Speak more confidently in meetings.'],
+          communicationContexts: ['Client calls'],
+          interestsAndUsefulThemes: ['Travel'],
+          stableStrengths: ['High motivation'],
+          persistentChallenges: ['Article usage'],
+          studyPreferences: ['Prefers structured explanations'],
+          durableConstraints: ['Short homework windows'],
+          teacherNotes: 'Responds well to practical scenarios.',
+        },
         currentRevisionId: 'revision-1',
         updatedAt: '2024-01-01T00:00:00.000Z',
       });
@@ -402,6 +414,18 @@ describeHttpServerIntegrationSuite(
         createdBy: null,
         restoredFromRevisionId: null,
         content: 'Profile content',
+        structuredContent: {
+          schemaVersion: 'foundational_profile_v1',
+          overallLevel: 'B1',
+          primaryGoals: ['Speak more confidently in meetings.'],
+          communicationContexts: ['Client calls'],
+          interestsAndUsefulThemes: ['Travel'],
+          stableStrengths: ['High motivation'],
+          persistentChallenges: ['Article usage'],
+          studyPreferences: ['Prefers structured explanations'],
+          durableConstraints: ['Short homework windows'],
+          teacherNotes: 'Responds well to practical scenarios.',
+        },
       });
     });
 
@@ -416,6 +440,18 @@ describeHttpServerIntegrationSuite(
         id: 'profile.md',
         label: 'Profile',
         content: 'Restored content',
+        structuredContent: {
+          schemaVersion: 'foundational_profile_v1',
+          overallLevel: 'B1',
+          primaryGoals: ['Speak more confidently in meetings.'],
+          communicationContexts: ['Client calls'],
+          interestsAndUsefulThemes: ['Travel'],
+          stableStrengths: ['High motivation'],
+          persistentChallenges: ['Article usage'],
+          studyPreferences: ['Prefers structured explanations'],
+          durableConstraints: ['Short homework windows'],
+          teacherNotes: 'Responds well to practical scenarios.',
+        },
         currentRevisionId: 'revision-2',
         updatedAt: '2024-01-02T00:00:00.000Z',
       });

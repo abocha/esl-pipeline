@@ -89,13 +89,15 @@ For `@esl-pipeline/batch-backend`:
 - DB safety invariant:
   - `BATCH_BACKEND_TEST_PG` must point to a database name ending in `_test`; non-`_test` targets are rejected by the test env helper to prevent destructive test SQL from hitting dev/runtime data.
 - Local Docker/Postgres note:
-  - `.env.batch-backend` may define `BATCH_BACKEND_TEST_PG` for the host-accessible test database, but current PG-backed suites import the DB layer before `requirePgTestEnv()` rewrites `PG_CONNECTION_STRING`.
-  - `pnpm test:backend:db:worker` and `pnpm check` now normalize host-run env automatically:
+  - `packages/batch-backend` PG-backed suites now bootstrap `.env.batch-backend` automatically before importing the DB layer.
+  - `BATCH_BACKEND_TEST_PG` remains the canonical explicit override, but host-run suites can also derive it from `PG_CONNECTION_STRING` or `PG_DATABASE` in `.env.batch-backend`.
+  - Package lanes like `pnpm --filter @esl-pipeline/batch-backend test:db:migrations` and `test:db:postgres` should now work directly against the local host Postgres when the dev stack is running.
+  - `pnpm test:backend:db:worker` and `pnpm check` still normalize host-run env automatically:
     - load `.env.batch-backend` when present
     - map Docker DNS hosts like `postgres` / `redis` to `127.0.0.1` for host execution
     - set `PG_CONNECTION_STRING` from `BATCH_BACKEND_TEST_PG`
     - set safe temp envs on WSL/Linux host runs
-  - For one-off host-run PG-backed tests outside those wrappers, export `PG_CONNECTION_STRING="$BATCH_BACKEND_TEST_PG"` in the shell before invoking Vitest or package test scripts.
+  - For custom one-off Vitest commands outside the package lanes, import `tests/support/bootstrap-pg-test-env.ts` before DB-layer imports or export `PG_CONNECTION_STRING="$BATCH_BACKEND_TEST_PG"` manually.
   - On WSL/Linux host-run `tsx` commands, also set safe temp envs such as `TMPDIR=/tmp/codex-tmp`, `TMP=/tmp/codex-tmp`, and `TEMP=/tmp/codex-tmp` to avoid IPC socket failures on mounted temp paths.
   - Example flow:
 

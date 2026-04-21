@@ -4,6 +4,10 @@ import path from 'node:path';
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
 import {
+  normalizeFoundationalProfile,
+  type FoundationalProfile,
+} from './foundational-profile.js';
+import {
   getProfileById,
   listProfiles,
   setProfileActiveRevision,
@@ -36,6 +40,7 @@ export interface ProfileContentResponse {
   id: string;
   label: string;
   content: string;
+  structuredContent?: FoundationalProfile | null;
   currentRevisionId: string | null;
   updatedAt: string | null;
 }
@@ -57,6 +62,7 @@ export interface ProfileRevisionSummaryResponse {
 
 export interface ProfileRevisionDetailResponse extends ProfileRevisionSummaryResponse {
   content: string;
+  structuredContent?: FoundationalProfile | null;
 }
 
 export interface ProfileRevisionListResponse {
@@ -94,6 +100,7 @@ interface UpsertProfileContentOptions {
   source?: ProfileRevisionSource;
   createdBy?: string | null;
   restoredFromRevisionId?: string | null;
+  structuredContent?: FoundationalProfile | null;
 }
 
 export interface SaveProfileRevisionContentOptions extends UpsertProfileContentOptions {
@@ -227,6 +234,7 @@ async function upsertProfileContentWithRevision(
     source: options.source,
     createdBy: options.createdBy ?? null,
     restoredFromRevisionId: options.restoredFromRevisionId ?? null,
+    structuredContent: options.structuredContent ?? null,
     status: 'active',
     dedupeByHash: options.source !== 'restore',
   });
@@ -235,6 +243,7 @@ async function upsertProfileContentWithRevision(
     id: normalizedProfileId,
     label,
     content: revision.content,
+    structuredContent: revision.structuredContent,
     currentRevisionId: revision.id,
     updatedAt: revision.createdAt,
   };
@@ -261,6 +270,9 @@ async function saveProfileRevision(
   const hash = hashProfileContent(normalizedContent);
   const source = options.source ?? (existingProfile ? 'update' : 'create');
   const status = options.status ?? 'active';
+  const structuredContent = options.structuredContent
+    ? normalizeFoundationalProfile(options.structuredContent)
+    : null;
 
   const existingRevision =
     options.dedupeByHash === false || source === 'restore'
@@ -272,6 +284,7 @@ async function saveProfileRevision(
     (await dependencies.revisions.insert({
       profileId: normalizedProfileId,
       content: normalizedContent,
+      structuredContent,
       contentHash: hash,
       source,
       status,
@@ -290,6 +303,7 @@ async function saveProfileRevision(
     ...toProfileRevisionSummary(revision),
     profileId: normalizedProfileId,
     content: revision.content,
+    structuredContent: revision.structuredContent,
   };
 }
 
@@ -320,6 +334,7 @@ export async function getProfileContent(
     id: profile.id,
     label: profile.label,
     content: revision.content,
+    structuredContent: revision.structuredContent,
     currentRevisionId: revision.id,
     updatedAt: revision.createdAt.toISOString(),
   };
@@ -409,6 +424,7 @@ export async function getProfileRevisionForProfile(
   return {
     ...toProfileRevisionSummary(revision),
     content: revision.content,
+    structuredContent: revision.structuredContent,
   };
 }
 
@@ -429,6 +445,7 @@ export async function restoreProfileRevision(
     source: 'restore',
     createdBy: overrides?.createdBy ?? null,
     restoredFromRevisionId: revision.id,
+    structuredContent: revision.structuredContent,
   });
 }
 
@@ -453,5 +470,6 @@ export async function activateProfileRevisionForProfile(
   return {
     ...toProfileRevisionSummary(activated),
     content: activated.content,
+    structuredContent: activated.structuredContent,
   };
 }

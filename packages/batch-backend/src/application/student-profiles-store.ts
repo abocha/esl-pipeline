@@ -18,6 +18,7 @@ import {
 import { deriveStudentId, normalizeStudentName } from '../domain/student-utils.js';
 import { saveProfileRevisionContent } from './profile-content.js';
 import {
+  buildStarterProfileStructuredContent,
   renderStarterProfileContent,
   type StarterProfileInput,
 } from './starter-profile-content.js';
@@ -354,6 +355,7 @@ async function createStudentProfileDb(
 
   try {
     if (starterProfile && profileId) {
+      const starterProfileStructuredContent = buildStarterProfileStructuredContent(starterProfile);
       const starterProfileContent = renderStarterProfileContent({
         studentName: student,
         starterProfile,
@@ -363,6 +365,7 @@ async function createStudentProfileDb(
         source: 'starter_profile_form',
         status: 'active',
         createdBy: options?.bindingAudit?.changedBy ?? null,
+        structuredContent: starterProfileStructuredContent,
       });
     }
   } catch (error) {

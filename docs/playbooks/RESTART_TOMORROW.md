@@ -1,5 +1,29 @@
 # Restart Tomorrow (ADHD-Friendly, ELI5)
 
+## Current Handoff (2026-04-21)
+
+- What I finished:
+  - Structured foundational profile storage is now live in the backend.
+  - `profile_revisions` now supports `structured_content` with migration `0022`.
+  - Starter profiles now create both rendered profile text and canonical structured profile data.
+  - Profile DTOs expose additive `structuredContent` for current reads/restores.
+  - PG-backed backend tests now self-bootstrap from `.env.batch-backend`, so `test:db:migrations` and other DB lanes work without manually exporting `BATCH_BACKEND_TEST_PG`.
+  - Live verification passed for:
+    - `pnpm --filter @esl-pipeline/batch-backend test -- tests/application.profile-content.test.ts tests/application.student-profiles-store.test.ts tests/transport.http-server.integration.students-content.test.ts`
+    - `pnpm --filter @esl-pipeline/batch-backend exec vitest run --config ../../vitest.config.ts --reporter=dot --maxWorkers=1 ../../packages/batch-backend/tests/transport.http-server.integration.students-content.test.ts`
+    - `pnpm --filter @esl-pipeline/batch-backend run typecheck`
+    - `pnpm --filter @esl-pipeline/batch-backend run test:db:migrations`
+    - `pnpm --filter @esl-pipeline/batch-backend run test:db:postgres`
+
+- First step for next session:
+  - Start the new student-area implementation from the `Learning` page path, using the new structured profile as the canonical backend surface.
+
+- Current blocker:
+  - No technical blocker right now. The next decision is just rollout order:
+    - backend write/update APIs for structured profiles
+    - workspace `Learning` UI
+    - minimal-flow profile preview
+
 ## Purpose
 
 Use this when your brain feels scattered and you want to restart without re-reading everything.
