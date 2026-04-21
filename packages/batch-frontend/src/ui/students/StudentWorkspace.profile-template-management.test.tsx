@@ -34,6 +34,37 @@ describe('StudentWorkspace profile and template management', () => {
     });
   });
 
+  it('saves a structured foundational profile draft from the learning form', async () => {
+    const user = userEvent.setup();
+    await renderLoadedWorkspace();
+
+    await user.clear(screen.getByLabelText(/Current level/i));
+    await user.type(screen.getByLabelText(/Current level/i), 'B2');
+    await user.clear(screen.getByLabelText(/Primary goals/i));
+    await user.type(screen.getByLabelText(/Primary goals/i), 'Lead project updates confidently.');
+    await user.click(screen.getByRole('button', { name: /Save Profile Draft/i }));
+
+    await waitFor(() => {
+      expect(studentWorkspaceApiMocks.saveProfileDraftRevision).toHaveBeenCalledWith(
+        'profile-default.md',
+        {
+          structuredContent: {
+            schemaVersion: 'foundational_profile_v1',
+            overallLevel: 'B2',
+            primaryGoals: ['Lead project updates confidently.'],
+            communicationContexts: ['Client calls'],
+            interestsAndUsefulThemes: ['Travel'],
+            stableStrengths: ['High motivation'],
+            persistentChallenges: ['Article usage'],
+            studyPreferences: ['Prefers structured explanations'],
+            durableConstraints: ['Short homework windows'],
+            teacherNotes: 'Responds well to practical scenarios.',
+          },
+        },
+      );
+    });
+  });
+
   it('saves template content from template gallery panel', async () => {
     const user = userEvent.setup();
     await renderLoadedWorkspace();

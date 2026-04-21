@@ -1,4 +1,5 @@
 import type {
+  FoundationalProfile,
   StarterProfileInput,
   StudentProfileCandidate,
   StudentProfileInput,
@@ -19,6 +20,18 @@ export interface CreateStudentFormState {
   starterTeacherNotes: string;
 }
 
+export interface FoundationalProfileFormState {
+  overallLevel: string;
+  primaryGoals: string;
+  communicationContexts: string;
+  interestsAndUsefulThemes: string;
+  stableStrengths: string;
+  persistentChallenges: string;
+  studyPreferences: string;
+  durableConstraints: string;
+  teacherNotes: string;
+}
+
 export const INITIAL_CREATE_STUDENT_FORM: CreateStudentFormState = {
   student: '',
   profileId: '',
@@ -32,6 +45,18 @@ export const INITIAL_CREATE_STUDENT_FORM: CreateStudentFormState = {
   starterLongRunningChallenges: '',
   starterStudyPreferencesOrConstraints: '',
   starterTeacherNotes: '',
+};
+
+export const INITIAL_FOUNDATIONAL_PROFILE_FORM: FoundationalProfileFormState = {
+  overallLevel: '',
+  primaryGoals: '',
+  communicationContexts: '',
+  interestsAndUsefulThemes: '',
+  stableStrengths: '',
+  persistentChallenges: '',
+  studyPreferences: '',
+  durableConstraints: '',
+  teacherNotes: '',
 };
 
 export const CREATE_STUDENT_NAME_REQUIRED_MESSAGE = 'Student name is required.';
@@ -107,6 +132,57 @@ export type ProfileCandidateFilter =
   | typeof PROFILE_CANDIDATE_PENDING_FILTER
   | typeof PROFILE_CANDIDATE_REVIEWED_FILTER;
 export type CandidateActionKind = 'approve' | 'reject' | 'defer';
+
+function splitProfileListField(value: string): string[] {
+  return value
+    .split('\n')
+    .map((line) => line.replace(/^[-*]\s+/, '').trim())
+    .filter((line) => line.length > 0);
+}
+
+function joinProfileListField(values: readonly string[]): string {
+  return values.join('\n');
+}
+
+export function foundationalProfileToFormState(
+  profile: FoundationalProfile | null | undefined,
+): FoundationalProfileFormState {
+  if (!profile) {
+    return INITIAL_FOUNDATIONAL_PROFILE_FORM;
+  }
+
+  return {
+    overallLevel: profile.overallLevel ?? '',
+    primaryGoals: joinProfileListField(profile.primaryGoals),
+    communicationContexts: joinProfileListField(profile.communicationContexts),
+    interestsAndUsefulThemes: joinProfileListField(profile.interestsAndUsefulThemes),
+    stableStrengths: joinProfileListField(profile.stableStrengths),
+    persistentChallenges: joinProfileListField(profile.persistentChallenges),
+    studyPreferences: joinProfileListField(profile.studyPreferences),
+    durableConstraints: joinProfileListField(profile.durableConstraints),
+    teacherNotes: profile.teacherNotes ?? '',
+  };
+}
+
+export function foundationalProfileFormToStructuredContent(
+  form: FoundationalProfileFormState,
+): FoundationalProfile {
+  const overallLevel = form.overallLevel.trim();
+  const teacherNotes = form.teacherNotes.trim();
+
+  return {
+    schemaVersion: 'foundational_profile_v1',
+    overallLevel: overallLevel.length > 0 ? overallLevel : null,
+    primaryGoals: splitProfileListField(form.primaryGoals),
+    communicationContexts: splitProfileListField(form.communicationContexts),
+    interestsAndUsefulThemes: splitProfileListField(form.interestsAndUsefulThemes),
+    stableStrengths: splitProfileListField(form.stableStrengths),
+    persistentChallenges: splitProfileListField(form.persistentChallenges),
+    studyPreferences: splitProfileListField(form.studyPreferences),
+    durableConstraints: splitProfileListField(form.durableConstraints),
+    teacherNotes: teacherNotes.length > 0 ? teacherNotes : null,
+  };
+}
 
 export function isPendingCandidate(candidate: StudentProfileCandidate): boolean {
   return candidate.status === 'pending_review' && candidate.reviewState === 'unreviewed';

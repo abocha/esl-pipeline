@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom';
 
 import type {
+  FoundationalProfile,
   JobListResponse,
   JobProvenanceResponse,
   JobState,
@@ -40,9 +41,9 @@ import {
   promoteStudentProfileCandidates,
   rejectStudentProfileCandidate,
   restoreProfileRevision,
+  saveProfileDraftRevision,
   restoreTemplateRevision,
   updateStudentProfile,
-  upsertProfileContent,
   upsertTemplateContent,
 } from '../../utils/api';
 import { CreateStudentDialog } from './CreateStudentDialog';
@@ -50,10 +51,14 @@ import {
   buildCreateStudentPayload,
   type CandidateActionKind,
   type CreateStudentFormState,
+  foundationalProfileFormToStructuredContent,
+  foundationalProfileToFormState,
   formatCandidateSectionLabel,
   formatCandidateStateLabel,
+  type FoundationalProfileFormState,
   type HistoryFilters,
   INITIAL_CREATE_STUDENT_FORM,
+  INITIAL_FOUNDATIONAL_PROFILE_FORM,
   INITIAL_HISTORY_FILTERS,
   INITIAL_TIMELINE_FILTERS,
   isPendingCandidate,
@@ -146,6 +151,23 @@ function formatDateTime(value?: string | null): string {
   return date.toLocaleString();
 }
 
+function getFoundationalProfileSnapshot(form: FoundationalProfileFormState): string {
+  return JSON.stringify(foundationalProfileFormToStructuredContent(form));
+}
+
+function getLegacyProfileNotice(profile: {
+  content?: string | null;
+  structuredContent?: FoundationalProfile | null;
+}): string | null {
+  if (profile.structuredContent) {
+    return null;
+  }
+
+  return profile.content?.trim()
+    ? 'This profile is still legacy markdown-only. Saving a draft from this form will create the new structured revision.'
+    : null;
+}
+
 export const StudentWorkspace: React.FC = () => {
   const [students, setStudents] = useState<StudentProfile[]>([]);
   const [studentsLoading, setStudentsLoading] = useState(false);
@@ -167,13 +189,18 @@ export const StudentWorkspace: React.FC = () => {
   const [profileOptionsError, setProfileOptionsError] = useState<string | null>(null);
   const [selectedProfileId, setSelectedProfileId] = useState('');
 
-  const [profileEditorText, setProfileEditorText] = useState('');
-  const [loadedProfileContent, setLoadedProfileContent] = useState('');
+  const [profileForm, setProfileForm] = useState<FoundationalProfileFormState>(
+    INITIAL_FOUNDATIONAL_PROFILE_FORM,
+  );
+  const [loadedProfileForm, setLoadedProfileForm] = useState<FoundationalProfileFormState>(
+    INITIAL_FOUNDATIONAL_PROFILE_FORM,
+  );
   const [profileBusy, setProfileBusy] = useState<
     'loading' | 'saving' | 'restoring' | 'activating' | null
   >(null);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
+  const [profileLegacyNotice, setProfileLegacyNotice] = useState<string | null>(null);
   const [profileRevisions, setProfileRevisions] = useState<ProfileRevisionSummaryResponse[]>([]);
 
   const [templateOptions, setTemplateOptions] = useState<{ id: string; label: string }[]>([]);
@@ -265,8 +292,10 @@ export const StudentWorkspace: React.FC = () => {
   );
 
   const profileDirty = useMemo(
-    () => profileEditorText.trim() !== loadedProfileContent.trim(),
-    [loadedProfileContent, profileEditorText],
+    () =>
+      getFoundationalProfileSnapshot(profileForm) !==
+      getFoundationalProfileSnapshot(loadedProfileForm),
+    [loadedProfileForm, profileForm],
   );
 
   const templateDirty = useMemo(
@@ -399,10 +428,11 @@ export const StudentWorkspace: React.FC = () => {
 
   const loadSelectedProfile = useCallback(async (profileId: string) => {
     if (!profileId) {
-      setProfileEditorText('');
-      setLoadedProfileContent('');
+      setProfileForm(INITIAL_FOUNDATIONAL_PROFILE_FORM);
+      setLoadedProfileForm(INITIAL_FOUNDATIONAL_PROFILE_FORM);
       setProfileRevisions([]);
       setProfileError(null);
+      setProfileLegacyNotice(null);
       return;
     }
 
@@ -413,15 +443,18 @@ export const StudentWorkspace: React.FC = () => {
         getProfileContent(profileId),
         listProfileRevisions(profileId, { limit: 25, offset: 0, order: 'desc' }),
       ]);
-      setProfileEditorText(profile.content ?? '');
-      setLoadedProfileContent(profile.content ?? '');
+      const nextProfileForm = foundationalProfileToFormState(profile.structuredContent);
+      setProfileForm(nextProfileForm);
+      setLoadedProfileForm(nextProfileForm);
+      setProfileLegacyNotice(getLegacyProfileNotice(profile));
       setProfileRevisions(revisions.items ?? []);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to load selected profile.';
       setProfileError(message);
-      setProfileEditorText('');
-      setLoadedProfileContent('');
+      setProfileForm(INITIAL_FOUNDATIONAL_PROFILE_FORM);
+      setLoadedProfileForm(INITIAL_FOUNDATIONAL_PROFILE_FORM);
       setProfileRevisions([]);
+      setProfileLegacyNotice(null);
     } finally {
       setProfileBusy(null);
     }
@@ -731,7 +764,7 @@ export const StudentWorkspace: React.FC = () => {
 
   const handleSaveProfile = async () => {
     if (!selectedProfileId) {
-      setProfileError('Select a profile before saving content.');
+      setProfileError('Select a profile before saving a draft.');
       return;
     }
 
@@ -739,18 +772,23 @@ export const StudentWorkspace: React.FC = () => {
     setProfileError(null);
     setProfileSuccess(null);
     try {
-      const saved = await upsertProfileContent(selectedProfileId, profileEditorText);
-      setLoadedProfileContent(saved.content ?? '');
-      const revisions = await listProfileRevisions(saved.id, {
+      const saved = await saveProfileDraftRevision(selectedProfileId, {
+        structuredContent: foundationalProfileFormToStructuredContent(profileForm),
+      });
+      const savedForm = foundationalProfileToFormState(saved.structuredContent);
+      setProfileForm(savedForm);
+      setLoadedProfileForm(savedForm);
+      setProfileLegacyNotice(null);
+      const revisions = await listProfileRevisions(saved.profileId, {
         limit: 25,
         offset: 0,
         order: 'desc',
       });
       setProfileRevisions(revisions.items ?? []);
-      setProfileSuccess('Profile content saved.');
+      setProfileSuccess('Profile draft saved.');
       await loadTimeline(selectedStudentId, timelineFiltersAppliedRef.current);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to save profile content.';
+      const message = error instanceof Error ? error.message : 'Unable to save profile draft.';
       setProfileError(message);
     } finally {
       setProfileBusy(null);
@@ -764,8 +802,10 @@ export const StudentWorkspace: React.FC = () => {
     setProfileSuccess(null);
     try {
       const restored = await restoreProfileRevision(selectedProfileId, revisionId);
-      setProfileEditorText(restored.content ?? '');
-      setLoadedProfileContent(restored.content ?? '');
+      const restoredForm = foundationalProfileToFormState(restored.structuredContent);
+      setProfileForm(restoredForm);
+      setLoadedProfileForm(restoredForm);
+      setProfileLegacyNotice(getLegacyProfileNotice(restored));
       const revisions = await listProfileRevisions(restored.id, {
         limit: 25,
         offset: 0,
@@ -801,6 +841,16 @@ export const StudentWorkspace: React.FC = () => {
       setProfileBusy(null);
     }
   };
+
+  const handleProfileFormFieldChange = useCallback(
+    (field: keyof FoundationalProfileFormState, value: string) => {
+      setProfileForm((current) => ({
+        ...current,
+        [field]: value,
+      }));
+    },
+    [],
+  );
 
   const handleReviewProfileCandidate = async (
     candidate: StudentProfileCandidate,
@@ -1246,17 +1296,131 @@ export const StudentWorkspace: React.FC = () => {
       <section className="workspace-grid workspace-grid-wide">
         <article className="workspace-card card">
           <header>
-            <h2>Profile Editor & Revisions</h2>
-            <p>Edit profile content, then restore or activate older revisions.</p>
+            <h2>Foundational Profile & Revisions</h2>
+            <p>
+              Update the learner&apos;s structured teaching context here, then restore or activate
+              older revisions when needed.
+            </p>
           </header>
 
-          <textarea
-            value={profileEditorText}
-            onChange={(event) => setProfileEditorText(event.target.value)}
-            rows={14}
-            placeholder="Select or bind a profile to start editing..."
-            disabled={!selectedProfileId}
-          />
+          <div className="workspace-grid">
+            <label className="workspace-field">
+              <span>Current level</span>
+              <input
+                type="text"
+                value={profileForm.overallLevel}
+                onChange={(event) =>
+                  handleProfileFormFieldChange('overallLevel', event.target.value)
+                }
+                placeholder="B1, B2, C1..."
+                disabled={!selectedProfileId}
+              />
+            </label>
+
+            <label className="workspace-field workspace-field-span-2">
+              <span>Primary goals</span>
+              <textarea
+                value={profileForm.primaryGoals}
+                onChange={(event) =>
+                  handleProfileFormFieldChange('primaryGoals', event.target.value)
+                }
+                rows={4}
+                placeholder="One durable goal per line"
+                disabled={!selectedProfileId}
+              />
+            </label>
+
+            <label className="workspace-field">
+              <span>Communication contexts</span>
+              <textarea
+                value={profileForm.communicationContexts}
+                onChange={(event) =>
+                  handleProfileFormFieldChange('communicationContexts', event.target.value)
+                }
+                rows={4}
+                placeholder="Client calls, demos, presentations..."
+                disabled={!selectedProfileId}
+              />
+            </label>
+
+            <label className="workspace-field">
+              <span>Interests and useful themes</span>
+              <textarea
+                value={profileForm.interestsAndUsefulThemes}
+                onChange={(event) =>
+                  handleProfileFormFieldChange('interestsAndUsefulThemes', event.target.value)
+                }
+                rows={4}
+                placeholder="Travel, design systems, films..."
+                disabled={!selectedProfileId}
+              />
+            </label>
+
+            <label className="workspace-field">
+              <span>Stable strengths</span>
+              <textarea
+                value={profileForm.stableStrengths}
+                onChange={(event) =>
+                  handleProfileFormFieldChange('stableStrengths', event.target.value)
+                }
+                rows={4}
+                placeholder="Strong listening, high motivation..."
+                disabled={!selectedProfileId}
+              />
+            </label>
+
+            <label className="workspace-field">
+              <span>Persistent challenges</span>
+              <textarea
+                value={profileForm.persistentChallenges}
+                onChange={(event) =>
+                  handleProfileFormFieldChange('persistentChallenges', event.target.value)
+                }
+                rows={4}
+                placeholder="Article usage, sentence rhythm..."
+                disabled={!selectedProfileId}
+              />
+            </label>
+
+            <label className="workspace-field">
+              <span>Study preferences</span>
+              <textarea
+                value={profileForm.studyPreferences}
+                onChange={(event) =>
+                  handleProfileFormFieldChange('studyPreferences', event.target.value)
+                }
+                rows={4}
+                placeholder="One preference or constraint per line"
+                disabled={!selectedProfileId}
+              />
+            </label>
+
+            <label className="workspace-field">
+              <span>Durable constraints</span>
+              <textarea
+                value={profileForm.durableConstraints}
+                onChange={(event) =>
+                  handleProfileFormFieldChange('durableConstraints', event.target.value)
+                }
+                rows={4}
+                placeholder="Short homework windows, device limitations..."
+                disabled={!selectedProfileId}
+              />
+            </label>
+
+            <label className="workspace-field workspace-field-span-2">
+              <span>Teacher notes</span>
+              <textarea
+                value={profileForm.teacherNotes}
+                onChange={(event) =>
+                  handleProfileFormFieldChange('teacherNotes', event.target.value)
+                }
+                rows={4}
+                placeholder="Durable notes that help shape future lessons"
+                disabled={!selectedProfileId}
+              />
+            </label>
+          </div>
 
           <div className="workspace-inline">
             <button
@@ -1265,13 +1429,14 @@ export const StudentWorkspace: React.FC = () => {
               onClick={() => void handleSaveProfile()}
               disabled={!selectedProfileId || profileBusy !== null || !profileDirty}
             >
-              {profileBusy === 'saving' ? 'Saving...' : 'Save Profile Content'}
+              {profileBusy === 'saving' ? 'Saving...' : 'Save Profile Draft'}
             </button>
             {profileDirty ? <span className="workspace-muted">Unsaved changes</span> : null}
           </div>
 
           {profileError ? <p className="workspace-error">{profileError}</p> : null}
           {profileSuccess ? <p className="workspace-success">{profileSuccess}</p> : null}
+          {profileLegacyNotice ? <p className="workspace-muted">{profileLegacyNotice}</p> : null}
 
           {profileRevisions.length > 0 ? (
             <div className="workspace-list">
