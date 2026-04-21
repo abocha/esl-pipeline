@@ -85,4 +85,27 @@ describe('StudentWorkspace candidates', () => {
 
     expect(onPromoteProfileCandidates).toHaveBeenCalled();
   }, 10000);
+
+  it('loads the generated draft revision into the foundational profile editor', async () => {
+    const user = userEvent.setup();
+    await renderWorkspaceWithProfileCandidates();
+
+    await user.selectOptions(screen.getByLabelText(/Profile Candidate Review Bucket/i), 'reviewed');
+    await user.click(screen.getByLabelText(/Select candidate candidate-approved for promotion/i));
+    await user.click(screen.getByRole('button', { name: /Generate Draft Revision/i }));
+
+    await waitFor(() => {
+      expect(studentWorkspaceApiMocks.getProfileRevision).toHaveBeenCalledWith(
+        'profile-default.md',
+        'revision-draft-2',
+      );
+    });
+
+    await waitFor(() => {
+      expect((screen.getByLabelText(/Current level/i) as HTMLInputElement).value).toBe('B2');
+    });
+    expect((screen.getByLabelText(/Primary goals/i) as HTMLTextAreaElement).value).toBe(
+      'Lead product demos with more confidence.',
+    );
+  });
 });

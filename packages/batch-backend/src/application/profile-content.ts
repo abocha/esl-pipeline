@@ -4,6 +4,7 @@ import path from 'node:path';
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
 import {
+  deriveFoundationalProfileFromMarkdown,
   normalizeFoundationalProfile,
   type FoundationalProfile,
 } from './foundational-profile.js';
@@ -175,6 +176,17 @@ function hashProfileContent(content: string): string {
   return createHash('sha256').update(content, 'utf8').digest('hex');
 }
 
+function resolveStructuredContent(
+  structuredContent: FoundationalProfile | null | undefined,
+  content: string,
+): FoundationalProfile | null {
+  if (structuredContent) {
+    return structuredContent;
+  }
+
+  return deriveFoundationalProfileFromMarkdown(content);
+}
+
 function toProfileRevisionSummary(revision: ProfileRevisionRecord): ProfileRevisionSummaryResponse {
   return {
     id: revision.id,
@@ -243,7 +255,7 @@ async function upsertProfileContentWithRevision(
     id: normalizedProfileId,
     label,
     content: revision.content,
-    structuredContent: revision.structuredContent,
+    structuredContent: resolveStructuredContent(revision.structuredContent, revision.content),
     currentRevisionId: revision.id,
     updatedAt: revision.createdAt,
   };
@@ -303,7 +315,7 @@ async function saveProfileRevision(
     ...toProfileRevisionSummary(revision),
     profileId: normalizedProfileId,
     content: revision.content,
-    structuredContent: revision.structuredContent,
+    structuredContent: resolveStructuredContent(revision.structuredContent, revision.content),
   };
 }
 
@@ -334,7 +346,7 @@ export async function getProfileContent(
     id: profile.id,
     label: profile.label,
     content: revision.content,
-    structuredContent: revision.structuredContent,
+    structuredContent: resolveStructuredContent(revision.structuredContent, revision.content),
     currentRevisionId: revision.id,
     updatedAt: revision.createdAt.toISOString(),
   };
@@ -424,7 +436,7 @@ export async function getProfileRevisionForProfile(
   return {
     ...toProfileRevisionSummary(revision),
     content: revision.content,
-    structuredContent: revision.structuredContent,
+    structuredContent: resolveStructuredContent(revision.structuredContent, revision.content),
   };
 }
 
@@ -470,6 +482,6 @@ export async function activateProfileRevisionForProfile(
   return {
     ...toProfileRevisionSummary(activated),
     content: activated.content,
-    structuredContent: activated.structuredContent,
+    structuredContent: resolveStructuredContent(activated.structuredContent, activated.content),
   };
 }

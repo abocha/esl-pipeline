@@ -13,6 +13,21 @@ export interface FoundationalProfile {
   teacherNotes: string | null;
 }
 
+const EMPTY_SECTION_MESSAGES = new Set([
+  'No durable goals recorded yet.',
+  'No durable communication contexts recorded yet.',
+  'No engagement themes recorded yet.',
+  'No stable strengths recorded yet.',
+  'No persistent challenges recorded yet.',
+  'No study preferences recorded yet.',
+  'No durable constraints recorded yet.',
+]);
+
+const EMPTY_TEACHER_NOTE_MESSAGES = new Set([
+  'No additional teacher notes yet.',
+  'No additional teacher-authored notes yet.',
+]);
+
 function renderSectionLines(values: readonly string[], emptyMessage: string): string[] {
   return values.length > 0 ? values.map((value) => `- ${value}`) : [`- ${emptyMessage}`];
 }
@@ -65,6 +80,135 @@ export function createEmptyFoundationalProfile(): FoundationalProfile {
     durableConstraints: [],
     teacherNotes: null,
   };
+}
+
+function normalizeHeadingLabel(line: string): string {
+  return line
+    .replace(/^##\s+/, '')
+    .replace(/^\d+[\.)]?\s+/, '')
+    .replace(/&/g, 'and')
+    .replace(/-/g, ' ')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function getStructuredSectionKey(
+  heading: string,
+):
+  | 'primaryGoals'
+  | 'communicationContexts'
+  | 'interestsAndUsefulThemes'
+  | 'stableStrengths'
+  | 'persistentChallenges'
+  | 'studyPreferences'
+  | 'durableConstraints'
+  | 'teacherNotes'
+  | null {
+  switch (heading) {
+    case 'goals and motivation':
+      return 'primaryGoals';
+    case 'communication contexts':
+    case 'work and communication context':
+      return 'communicationContexts';
+    case 'interests and useful themes':
+    case 'interests and personal context':
+      return 'interestsAndUsefulThemes';
+    case 'stable strengths':
+      return 'stableStrengths';
+    case 'persistent challenges':
+    case 'long running challenges':
+      return 'persistentChallenges';
+    case 'study preferences':
+    case 'study preferences and constraints':
+      return 'studyPreferences';
+    case 'durable constraints':
+      return 'durableConstraints';
+    case 'teacher notes':
+      return 'teacherNotes';
+    default:
+      return null;
+  }
+}
+
+function normalizeParsedItems(lines: readonly string[]): string[] {
+  return splitStructuredProfileItems(lines.join('\n')).filter(
+    (item) => !EMPTY_SECTION_MESSAGES.has(item),
+  );
+}
+
+function normalizeTeacherNotes(lines: readonly string[]): string | null {
+  const normalized = lines
+    .map((line) => line.trimEnd())
+    .join('\n')
+    .trim();
+
+  if (!normalized || EMPTY_TEACHER_NOTE_MESSAGES.has(normalized)) {
+    return null;
+  }
+
+  return normalized;
+}
+
+export function deriveFoundationalProfileFromMarkdown(content: string): FoundationalProfile | null {
+  const normalizedContent = content.trim();
+  if (!normalizedContent) {
+    return null;
+  }
+
+  const lines = normalizedContent.split('\n');
+  const sectionBuckets = new Map<string, string[]>();
+  let currentSection: ReturnType<typeof getStructuredSectionKey> = null;
+
+  for (const line of lines) {
+    if (/^##\s+/.test(line)) {
+      currentSection = getStructuredSectionKey(normalizeHeadingLabel(line));
+      if (currentSection && !sectionBuckets.has(currentSection)) {
+        sectionBuckets.set(currentSection, []);
+      }
+      continue;
+    }
+
+    if (!currentSection) {
+      continue;
+    }
+
+    sectionBuckets.get(currentSection)?.push(line);
+  }
+
+  const currentLevelMatch =
+    normalizedContent.match(/\*\*Current Level:\*\*\s*([^\n|]+)/i) ??
+    normalizedContent.match(/Current Level:\s*([^\n|]+)/i);
+  const overallLevel = currentLevelMatch?.[1]?.trim() ?? null;
+
+  const derived = normalizeFoundationalProfile({
+    schemaVersion: FOUNDATIONAL_PROFILE_SCHEMA_VERSION,
+    overallLevel: overallLevel && overallLevel.toLowerCase() !== 'unknown' ? overallLevel : null,
+    primaryGoals: normalizeParsedItems(sectionBuckets.get('primaryGoals') ?? []),
+    communicationContexts: normalizeParsedItems(sectionBuckets.get('communicationContexts') ?? []),
+    interestsAndUsefulThemes: normalizeParsedItems(
+      sectionBuckets.get('interestsAndUsefulThemes') ?? [],
+    ),
+    stableStrengths: normalizeParsedItems(sectionBuckets.get('stableStrengths') ?? []),
+    persistentChallenges: normalizeParsedItems(sectionBuckets.get('persistentChallenges') ?? []),
+    studyPreferences: normalizeParsedItems(sectionBuckets.get('studyPreferences') ?? []),
+    durableConstraints: normalizeParsedItems(sectionBuckets.get('durableConstraints') ?? []),
+    teacherNotes: normalizeTeacherNotes(sectionBuckets.get('teacherNotes') ?? []),
+  });
+
+  const hasMeaningfulContent =
+    Boolean(derived.overallLevel) ||
+    derived.primaryGoals.length > 0 ||
+    derived.communicationContexts.length > 0 ||
+    derived.interestsAndUsefulThemes.length > 0 ||
+    derived.stableStrengths.length > 0 ||
+    derived.persistentChallenges.length > 0 ||
+    derived.studyPreferences.length > 0 ||
+    derived.durableConstraints.length > 0 ||
+    Boolean(derived.teacherNotes);
+
+  return hasMeaningfulContent ? derived : null;
 }
 
 export function renderFoundationalProfileContent(profile: FoundationalProfile): string {
