@@ -38,6 +38,7 @@ interface StudentWorkspaceApiMocks {
   fetchJobProvenance: MockFn;
   fetchPromptPackageLineage: MockFn;
   getProfileContent: MockFn;
+  getProfileRevision: MockFn;
   getStudentMemoryOverview: MockFn;
   getStudentProfile: MockFn;
   getStudentTimeline: MockFn;
@@ -70,6 +71,7 @@ const studentWorkspaceApiMocks: StudentWorkspaceApiMocks = vi.hoisted(() => ({
   fetchJobProvenance: vi.fn(),
   fetchPromptPackageLineage: vi.fn(),
   getProfileContent: vi.fn(),
+  getProfileRevision: vi.fn(),
   getStudentMemoryOverview: vi.fn(),
   getStudentProfile: vi.fn(),
   getStudentTimeline: vi.fn(),
@@ -591,6 +593,34 @@ function seedStudentWorkspaceMocks() {
       studyPreferences: ['Prefers concise correction'],
       durableConstraints: ['Short homework windows'],
       teacherNotes: 'Needs practical speaking rehearsal.',
+    },
+  });
+
+  studentWorkspaceApiMocks.getProfileRevision.mockResolvedValue({
+    id: 'revision-draft-2',
+    profileId: 'profile-default.md',
+    contentHash: 'draft-hash-2',
+    source: 'candidate_promotion',
+    status: 'draft',
+    versionNumber: 2,
+    versionLabel: 'v2',
+    activatedAt: null,
+    deprecatedAt: null,
+    createdAt: now,
+    createdBy: 'user-1',
+    restoredFromRevisionId: null,
+    content: '# Foundational Profile\n\nGenerated draft content',
+    structuredContent: {
+      schemaVersion: 'foundational_profile_v1',
+      overallLevel: 'B2',
+      primaryGoals: ['Lead product demos with more confidence.'],
+      communicationContexts: ['Sprint demos', 'Client calls'],
+      interestsAndUsefulThemes: ['Travel'],
+      stableStrengths: ['High motivation'],
+      persistentChallenges: ['Article usage'],
+      studyPreferences: ['Prefers structured explanations'],
+      durableConstraints: ['Short homework windows'],
+      teacherNotes: 'Generated from approved profile candidates.',
     },
   });
 

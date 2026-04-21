@@ -26,6 +26,7 @@ import {
   fetchJobProvenance,
   fetchPromptPackageLineage,
   getProfileContent,
+  getProfileRevision,
   getStudentMemoryOverview,
   getStudentProfile,
   getStudentTimeline,
@@ -459,6 +460,17 @@ export const StudentWorkspace: React.FC = () => {
       setProfileBusy(null);
     }
   }, []);
+
+  const loadProfileRevisionIntoEditor = useCallback(
+    async (profileId: string, revisionId: string) => {
+      const revision = await getProfileRevision(profileId, revisionId);
+      const nextProfileForm = foundationalProfileToFormState(revision.structuredContent);
+      setProfileForm(nextProfileForm);
+      setLoadedProfileForm(nextProfileForm);
+      setProfileLegacyNotice(getLegacyProfileNotice(revision));
+    },
+    [],
+  );
 
   const loadSelectedTemplate = useCallback(async (templateId: string) => {
     if (!templateId) {
@@ -930,7 +942,12 @@ export const StudentWorkspace: React.FC = () => {
       setProfileCandidatePromotionNote('');
       await Promise.all([
         loadProfileCandidates(selectedStudentId),
-        selectedProfileId ? loadSelectedProfile(selectedProfileId) : Promise.resolve(),
+        selectedProfileId || response.profileId
+          ? loadProfileRevisionIntoEditor(
+              selectedProfileId || response.profileId,
+              response.draftRevisionId,
+            )
+          : Promise.resolve(),
         loadTimeline(selectedStudentId, timelineFiltersAppliedRef.current),
       ]);
     } catch (error) {
