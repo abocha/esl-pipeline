@@ -72,6 +72,7 @@ Student-memory operator workflows:
 - lesson memory replay: `pnpm --filter @esl-pipeline/batch-backend lesson-memory:refresh`
 - homework memory replay: `pnpm --filter @esl-pipeline/batch-backend exec tsx --tsconfig tsconfig.json src/tools/refresh-homework-memory.ts`
 - student-memory snapshot replay: `pnpm --filter @esl-pipeline/batch-backend exec tsx --tsconfig tsconfig.json src/tools/refresh-student-memory-snapshots.ts`
+- student lesson artifact export: `pnpm --filter @esl-pipeline/batch-backend student-artifacts:export -- --student-id <student-id> [--out tmp/student-artifacts/<student-id>.zip]`
 - focused runbook: [`docs/operations/student-memory-replay-backfill.md`](../../docs/operations/student-memory-replay-backfill.md)
 
 ## Validation
