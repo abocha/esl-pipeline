@@ -33,7 +33,8 @@ function createInMemoryDependencies(seed?: {
       | 'restore'
       | 'starter_profile_form'
       | 'candidate_promotion'
-      | 'legacy_normalization';
+      | 'legacy_normalization'
+      | 'lesson_population';
     status?: 'draft' | 'active' | 'deprecated';
     createdBy?: string | null;
     restoredFromRevisionId?: string | null;
@@ -172,7 +173,8 @@ function createInMemoryDependencies(seed?: {
           | 'restore'
           | 'starter_profile_form'
           | 'candidate_promotion'
-          | 'legacy_normalization';
+          | 'legacy_normalization'
+          | 'lesson_population';
         status?: 'draft' | 'active' | 'deprecated';
         createdBy?: string | null;
         restoredFromRevisionId?: string | null;

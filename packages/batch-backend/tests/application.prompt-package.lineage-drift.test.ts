@@ -5,6 +5,8 @@ import {
   getPromptPackage,
   getPromptPackageLineage,
 } from '../src/application/get-prompt-package.js';
+import { renderFoundationalProfileContent } from '../src/application/foundational-profile.js';
+import { hashPromptProfileContent } from '../src/application/create-prompt-package.js';
 import type { PromptPackageRecord } from '../src/domain/prompt-package-model.js';
 import {
   createProfileRevisionRepositoryStub,
@@ -133,6 +135,74 @@ describe('application/prompt-package', () => {
     });
   });
 
+  it('does not flag profile drift when the stored revision re-renders to the same canonical profile text', async () => {
+    const structuredProfile = {
+      schemaVersion: 'foundational_profile_v1' as const,
+      overallLevel: 'B1',
+      primaryGoals: ['Lead updates clearly.'],
+      communicationContexts: ['Standups'],
+      interestsAndUsefulThemes: [],
+      stableStrengths: ['Strong listening'],
+      persistentChallenges: ['Articles'],
+      studyPreferences: [],
+      durableConstraints: [],
+      teacherNotes: 'Keep examples practical.',
+    };
+    const renderedProfile = renderFoundationalProfileContent(structuredProfile);
+    const snapshotHash = createHash('sha256').update(renderedProfile, 'utf8').digest('hex');
+
+    const storage = createStorageStub({
+      getText: async () => 'Prompt package text',
+    });
+
+    const promptPackages = {
+      getById: async (): Promise<PromptPackageRecord | null> => ({
+        id: 'prompt-1',
+        recordingId: 'recording-1',
+        transcriptId: 'transcript-1',
+        studentId: 'student-1',
+        profilePath: '/profiles/p1.md',
+        resolvedProfileId: 'profile.md',
+        resolvedProfileHash: snapshotHash,
+        resolvedProfileRevisionId: 'revision-snapshot',
+        resolvedProfileUpdatedAt: new Date('2024-01-01T00:00:00Z'),
+        templateVersion: 't1.md',
+        notes: 'Notes',
+        storageUri: 'local://prompt-packages/prompt-1.txt',
+        createdAt: new Date('2024-01-01T00:00:00Z'),
+        updatedAt: new Date('2024-01-01T00:10:00Z'),
+      }),
+    };
+
+    const result = await getPromptPackage('prompt-1', {
+      storage,
+      promptPackages,
+      profileRevisions: createProfileRevisionRepositoryStub({
+        getActive: async (_profileId) => ({
+          id: 'revision-current',
+          profileId: 'profile.md',
+          content: '# Legacy markdown that re-renders to the same structured profile',
+          contentHash: createHash('sha256')
+            .update('# Legacy markdown that re-renders to the same structured profile', 'utf8')
+            .digest('hex'),
+          structuredContent: structuredProfile,
+          source: 'update',
+          status: 'active',
+          versionNumber: 2,
+          versionLabel: 'v2',
+          activatedAt: new Date('2024-01-02T00:00:00Z'),
+          deprecatedAt: null,
+          createdAt: new Date('2024-01-02T00:00:00Z'),
+          createdBy: null,
+          restoredFromRevisionId: null,
+        }),
+      }),
+      templateRevisions: createTemplateRevisionRepositoryStub(),
+    });
+
+    expect(result?.profileDrift).toBeUndefined();
+  });
+
   it('returns prompt lineage with snapshot and current revision metadata', async () => {
     const snapshotProfileHash = createHash('sha256')
       .update('SNAPSHOT PROFILE', 'utf8')
@@ -217,5 +287,76 @@ describe('application/prompt-package', () => {
     expect(lineage?.template.current.revisionId).toBe('template-revision-v1');
     expect(lineage?.template.drift).toBeNull();
     expect(lineage?.bindingAtCreation ?? null).toBeNull();
+  });
+
+  it('uses canonical rendered profile hashes in lineage current metadata', async () => {
+    const structuredProfile = {
+      schemaVersion: 'foundational_profile_v1' as const,
+      overallLevel: 'B1',
+      primaryGoals: ['Lead updates clearly.'],
+      communicationContexts: ['Standups'],
+      interestsAndUsefulThemes: [],
+      stableStrengths: ['Strong listening'],
+      persistentChallenges: ['Articles'],
+      studyPreferences: [],
+      durableConstraints: [],
+      teacherNotes: 'Keep examples practical.',
+    };
+    const currentProfile = {
+      id: 'profile-revision-v2',
+      profileId: 'profile.md',
+      content: '# Legacy markdown payload',
+      contentHash: createHash('sha256').update('# Legacy markdown payload', 'utf8').digest('hex'),
+      structuredContent: structuredProfile,
+      source: 'update' as const,
+      status: 'active' as const,
+      versionNumber: 2,
+      versionLabel: 'v2',
+      activatedAt: new Date('2024-01-02T00:00:00Z'),
+      deprecatedAt: null,
+      createdAt: new Date('2024-01-02T00:00:00Z'),
+      createdBy: null,
+      restoredFromRevisionId: null,
+    };
+
+    const lineage = await getPromptPackageLineage('prompt-1', {
+      promptPackages: {
+        getById: async () => ({
+          id: 'prompt-1',
+          recordingId: 'recording-1',
+          transcriptId: 'transcript-1',
+          studentId: 'student-1',
+          profilePath: '/profiles/p1.md',
+          resolvedProfileId: 'profile.md',
+          resolvedProfileHash: hashPromptProfileContent(currentProfile),
+          resolvedProfileRevisionId: 'profile-revision-v1',
+          resolvedProfileUpdatedAt: new Date('2024-01-01T00:00:00Z'),
+          resolvedProfileVersionLabel: 'v1',
+          resolvedProfileStatus: 'active',
+          resolvedTemplateId: null,
+          resolvedTemplateHash: null,
+          resolvedTemplateRevisionId: null,
+          resolvedTemplateUpdatedAt: null,
+          resolvedTemplateVersionLabel: null,
+          resolvedTemplateStatus: null,
+          templateVersion: 'template.md',
+          notes: null,
+          storageUri: 'local://prompt-packages/prompt-1.txt',
+          createdAt: new Date('2024-01-01T00:00:00Z'),
+          updatedAt: new Date('2024-01-01T00:05:00Z'),
+        }),
+      },
+      profileRevisions: createProfileRevisionRepositoryStub({
+        getActive: async () => currentProfile,
+      }),
+      templateRevisions: createTemplateRevisionRepositoryStub(),
+      bindings: {
+        getAt: async () => null,
+      },
+      storage: createStorageStub(),
+    });
+
+    expect(lineage?.profile.current.hash).toBe(hashPromptProfileContent(currentProfile));
+    expect(lineage?.profile.current.hash).not.toBe(currentProfile.contentHash);
   });
 });

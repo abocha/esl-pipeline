@@ -1,10 +1,10 @@
 import React from 'react';
+import { Link, useInRouterContext } from 'react-router-dom';
 
 import type {
   GenerateDraftResponse,
   JobStatus,
   MarkdownValidationResponse,
-  ProfileRevisionSummaryResponse,
   PromptPackageResponse,
   RecordingListItem,
   RecordingStatus,
@@ -144,24 +144,17 @@ interface ContextStageSectionProps {
   stage: WorkflowStage;
   sectionRef?: React.Ref<HTMLElement>;
   headingRef?: React.Ref<HTMLHeadingElement>;
-  profileSelectRef?: React.Ref<HTMLSelectElement>;
-  onRefreshProfiles: () => void;
-  onSaveProfile: () => void;
-  profileBusy: 'loading' | 'saving' | 'creating' | 'restoring' | null;
+  studentId: string;
   selectedProfileId: string;
-  onSelectedProfileIdChange: (value: string) => void;
-  profileOptions: { id: string; label: string }[];
-  newProfileId: string;
-  onNewProfileIdChange: (value: string) => void;
-  onCreateProfile: () => void;
-  profileEditorText: string;
-  onProfileEditorTextChange: (value: string) => void;
-  profileDirty: boolean;
-  profileOptionsError: string | null;
+  profilePreview: {
+    profileId: string;
+    overallLevel: string | null;
+    goalsAndContexts: string[];
+    strengthsAndChallenges: string[];
+    teacherNoteSnippet: string | null;
+    updatedAt: string | null;
+  } | null;
   profileRevisionError: string | null;
-  profileSuccess: string | null;
-  profileRevisions: ProfileRevisionSummaryResponse[];
-  onRestoreRevision: (revisionId: string) => void;
   teacherNotes: string;
   onTeacherNotesChange: (value: string) => void;
 }
@@ -831,30 +824,17 @@ export function ContextStageSection({
   stage,
   sectionRef,
   headingRef,
-  profileSelectRef,
-  onRefreshProfiles,
-  onSaveProfile,
-  profileBusy,
+  studentId,
   selectedProfileId,
-  onSelectedProfileIdChange,
-  profileOptions,
-  newProfileId,
-  onNewProfileIdChange,
-  onCreateProfile,
-  profileEditorText,
-  onProfileEditorTextChange,
-  profileDirty,
-  profileOptionsError,
+  profilePreview,
   profileRevisionError,
-  profileSuccess,
-  profileRevisions,
-  onRestoreRevision,
   teacherNotes,
   onTeacherNotesChange,
 }: ContextStageSectionProps) {
+  const isInRouterContext = useInRouterContext();
   const contextGuidance =
     stage.status === 'current'
-      ? 'Next step: add any learner profile tweaks or lesson goals here, then generate instructions in the next section.'
+      ? 'Next step: review the learner context, add lesson goals here, then generate instructions in the next section.'
       : null;
 
   return (
@@ -868,103 +848,86 @@ export function ContextStageSection({
         <div className="minimal-stage-panel">
           <div className="minimal-stage-panel-header">
             <div className="minimal-stage-panel-title">
-              <h3>Learner profile</h3>
+              <h3>Current learner profile</h3>
               <p>
-                Use a saved learner profile to shape the assignment instructions, or edit the
-                profile when needed.
+                Review the durable learner context that will be injected into prompt packaging. Use
+                the dedicated Learning page for any profile edits.
               </p>
             </div>
-            <div className="minimal-inline">
-              <button
-                type="button"
-                className="minimal-secondary"
-                onClick={onRefreshProfiles}
-                disabled={profileBusy !== null}
-              >
-                Refresh profiles
-              </button>
-              <button
-                type="button"
-                className="minimal-primary"
-                onClick={onSaveProfile}
-                disabled={!selectedProfileId || profileBusy !== null || !profileDirty}
-              >
-                {profileBusy === 'saving' ? 'Saving...' : 'Save profile'}
-              </button>
-            </div>
           </div>
-          <label className="minimal-select">
-            Learner profile
-            <select
-              ref={profileSelectRef}
-              className={stage.status === 'current' ? 'minimal-guided-field' : undefined}
-              value={selectedProfileId}
-              onChange={(event) => onSelectedProfileIdChange(event.target.value)}
-            >
-              <option value="">Select profile</option>
-              {profileOptions.map((profile) => (
-                <option key={profile.id} value={profile.id}>
-                  {profile.label} ({profile.id})
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="minimal-inline">
-            <label className="minimal-field grow">
-              <span>New profile file</span>
-              <input
-                value={newProfileId}
-                onChange={(event) => onNewProfileIdChange(event.target.value)}
-                placeholder="profiles/new-student.md"
-              />
-            </label>
-            <button
-              type="button"
-              className="minimal-secondary"
-              onClick={onCreateProfile}
-              disabled={profileBusy !== null}
-            >
-              {profileBusy === 'creating' ? 'Creating...' : 'Create profile'}
-            </button>
-          </div>
-          <textarea
-            aria-label="Profile content"
-            value={profileEditorText}
-            onChange={(event) => onProfileEditorTextChange(event.target.value)}
-            rows={10}
-            placeholder="Profile content..."
-            disabled={!selectedProfileId && !newProfileId.trim()}
-          />
-          {profileDirty ? <p className="minimal-muted">Unsaved profile edits</p> : null}
-          {profileOptionsError ? <p className="minimal-error">{profileOptionsError}</p> : null}
           {profileRevisionError ? <p className="minimal-error">{profileRevisionError}</p> : null}
-          {profileSuccess ? <p className="minimal-success">{profileSuccess}</p> : null}
-          {selectedProfileId ? (
-            <details className="minimal-details">
-              <summary>Profile history</summary>
-              {profileRevisions.length > 0 ? (
-                <div className="minimal-list">
-                  {profileRevisions.map((revision) => (
-                    <div key={revision.id} className="minimal-list-item">
-                      <span>
-                        {revision.source} • {new Date(revision.createdAt).toLocaleString()}
-                      </span>
-                      <button
-                        type="button"
-                        className="minimal-secondary"
-                        onClick={() => onRestoreRevision(revision.id)}
-                        disabled={profileBusy !== null}
-                      >
-                        {profileBusy === 'restoring' ? 'Restoring...' : 'Restore'}
-                      </button>
-                    </div>
-                  ))}
+          {selectedProfileId && profilePreview ? (
+            <div className="minimal-block">
+              <div className="minimal-list">
+                <div className="minimal-list-item">
+                  <strong>Profile</strong>
+                  <span>{profilePreview.profileId}</span>
                 </div>
-              ) : (
-                <p className="minimal-muted">No revisions yet.</p>
-              )}
-            </details>
+                <div className="minimal-list-item">
+                  <strong>Level</strong>
+                  <span>{profilePreview.overallLevel ?? 'Not set yet'}</span>
+                </div>
+                {profilePreview.goalsAndContexts.map((item) => (
+                  <div key={`goal-${item}`} className="minimal-list-item">
+                    <strong>Goal / context</strong>
+                    <span>{item}</span>
+                  </div>
+                ))}
+                {profilePreview.strengthsAndChallenges.map((item) => (
+                  <div key={`signal-${item}`} className="minimal-list-item">
+                    <strong>Strength / challenge</strong>
+                    <span>{item}</span>
+                  </div>
+                ))}
+                {profilePreview.teacherNoteSnippet ? (
+                  <div className="minimal-list-item">
+                    <strong>Teacher note</strong>
+                    <span>{profilePreview.teacherNoteSnippet}</span>
+                  </div>
+                ) : null}
+                {profilePreview.updatedAt ? (
+                  <div className="minimal-list-item">
+                    <strong>Last updated</strong>
+                    <span>{new Date(profilePreview.updatedAt).toLocaleString()}</span>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : selectedProfileId ? (
+            <p className="minimal-muted">
+              This learner profile has not been structured yet. Open the Learning page to review it
+              there.
+            </p>
           ) : null}
+          {!selectedProfileId ? (
+            <p className="minimal-muted">
+              No learner profile is bound to this student yet. Open the Learning page to create or
+              bind the canonical profile before generating instructions.
+            </p>
+          ) : null}
+          <div className="minimal-inline">
+            {studentId ? (
+              isInRouterContext ? (
+                <Link
+                  className="minimal-primary"
+                  to={`/students/${encodeURIComponent(studentId)}/learning`}
+                >
+                  Open Learning page
+                </Link>
+              ) : (
+                <a
+                  className="minimal-primary"
+                  href={`/students/${encodeURIComponent(studentId)}/learning`}
+                >
+                  Open Learning page
+                </a>
+              )
+            ) : (
+              <span className="minimal-primary" aria-disabled="true">
+                Open Learning page
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="minimal-stage-panel">

@@ -37,7 +37,7 @@ export function registerResumeBasicTests() {
       });
       expect(api.fetchJobOptions).toHaveBeenCalledTimes(1);
       expect(api.fetchStudentOptions).toHaveBeenCalledTimes(1);
-      expect(api.listProfileContents).toHaveBeenCalledTimes(1);
+      expect(api.listProfileContents).not.toHaveBeenCalled();
 
       expect(screen.getByRole('heading', { name: /Add lesson source/i })).toBeTruthy();
       expect(screen.getByRole('heading', { name: /Review and share/i })).toBeTruthy();

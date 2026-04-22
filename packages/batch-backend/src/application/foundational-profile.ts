@@ -1,4 +1,9 @@
+import { z } from 'zod';
+
 export const FOUNDATIONAL_PROFILE_SCHEMA_VERSION = 'foundational_profile_v1';
+export const FOUNDATIONAL_PROFILE_RESPONSE_SCHEMA_NAME = 'foundational_profile_v1';
+export const FOUNDATIONAL_PROFILE_RESPONSE_SCHEMA_DESCRIPTION =
+  'Canonical structured foundational learner profile for durable teaching context.';
 
 export interface FoundationalProfile {
   schemaVersion: typeof FOUNDATIONAL_PROFILE_SCHEMA_VERSION;
@@ -27,6 +32,78 @@ const EMPTY_TEACHER_NOTE_MESSAGES = new Set([
   'No additional teacher notes yet.',
   'No additional teacher-authored notes yet.',
 ]);
+
+const IGNORED_UNKNOWN_SECTION_HEADINGS = new Set(['profile governance notes']);
+
+const FoundationalProfileSchema = z.object({
+  schemaVersion: z.literal(FOUNDATIONAL_PROFILE_SCHEMA_VERSION),
+  overallLevel: z.string().nullable(),
+  primaryGoals: z.array(z.string()),
+  communicationContexts: z.array(z.string()),
+  interestsAndUsefulThemes: z.array(z.string()),
+  stableStrengths: z.array(z.string()),
+  persistentChallenges: z.array(z.string()),
+  studyPreferences: z.array(z.string()),
+  durableConstraints: z.array(z.string()),
+  teacherNotes: z.string().nullable(),
+});
+
+export const FOUNDATIONAL_PROFILE_JSON_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: [
+    'schemaVersion',
+    'overallLevel',
+    'primaryGoals',
+    'communicationContexts',
+    'interestsAndUsefulThemes',
+    'stableStrengths',
+    'persistentChallenges',
+    'studyPreferences',
+    'durableConstraints',
+    'teacherNotes',
+  ],
+  properties: {
+    schemaVersion: {
+      type: 'string',
+      const: FOUNDATIONAL_PROFILE_SCHEMA_VERSION,
+    },
+    overallLevel: {
+      type: ['string', 'null'],
+    },
+    primaryGoals: {
+      type: 'array',
+      items: { type: 'string' },
+    },
+    communicationContexts: {
+      type: 'array',
+      items: { type: 'string' },
+    },
+    interestsAndUsefulThemes: {
+      type: 'array',
+      items: { type: 'string' },
+    },
+    stableStrengths: {
+      type: 'array',
+      items: { type: 'string' },
+    },
+    persistentChallenges: {
+      type: 'array',
+      items: { type: 'string' },
+    },
+    studyPreferences: {
+      type: 'array',
+      items: { type: 'string' },
+    },
+    durableConstraints: {
+      type: 'array',
+      items: { type: 'string' },
+    },
+    teacherNotes: {
+      type: ['string', 'null'],
+    },
+  },
+} as const satisfies Record<string, unknown>;
 
 function renderSectionLines(values: readonly string[], emptyMessage: string): string[] {
   return values.length > 0 ? values.map((value) => `- ${value}`) : [`- ${emptyMessage}`];
@@ -85,7 +162,7 @@ export function createEmptyFoundationalProfile(): FoundationalProfile {
 function normalizeHeadingLabel(line: string): string {
   return line
     .replace(/^##\s+/, '')
-    .replace(/^\d+[\.)]?\s+/, '')
+    .replace(/^\d+[.)]?\s+/, '')
     .replace(/&/g, 'and')
     .replace(/-/g, ' ')
     .replace(/[^\p{L}\p{N}\s]/gu, ' ')
@@ -159,14 +236,47 @@ export function deriveFoundationalProfileFromMarkdown(content: string): Foundati
 
   const lines = normalizedContent.split('\n');
   const sectionBuckets = new Map<string, string[]>();
+  const unknownSectionBlocks: string[] = [];
   let currentSection: ReturnType<typeof getStructuredSectionKey> = null;
+  let currentUnknownSectionHeading: string | null = null;
+  let currentUnknownSectionLines: string[] = [];
+
+  function flushUnknownSection(): void {
+    if (!currentUnknownSectionHeading) {
+      currentUnknownSectionLines = [];
+      return;
+    }
+
+    const block = [currentUnknownSectionHeading, ...currentUnknownSectionLines]
+      .join('\n')
+      .trim();
+    if (block.length > 0) {
+      unknownSectionBlocks.push(block);
+    }
+
+    currentUnknownSectionHeading = null;
+    currentUnknownSectionLines = [];
+  }
 
   for (const line of lines) {
     if (/^##\s+/.test(line)) {
+      flushUnknownSection();
       currentSection = getStructuredSectionKey(normalizeHeadingLabel(line));
       if (currentSection && !sectionBuckets.has(currentSection)) {
         sectionBuckets.set(currentSection, []);
+      } else if (!currentSection) {
+        const normalizedHeading = normalizeHeadingLabel(line);
+        if (IGNORED_UNKNOWN_SECTION_HEADINGS.has(normalizedHeading)) {
+          currentUnknownSectionHeading = null;
+          continue;
+        }
+        currentUnknownSectionHeading = line.replace(/^##\s+/, '').trim();
       }
+      continue;
+    }
+
+    if (currentUnknownSectionHeading) {
+      currentUnknownSectionLines.push(line);
       continue;
     }
 
@@ -177,10 +287,16 @@ export function deriveFoundationalProfileFromMarkdown(content: string): Foundati
     sectionBuckets.get(currentSection)?.push(line);
   }
 
+  flushUnknownSection();
+
   const currentLevelMatch =
     normalizedContent.match(/\*\*Current Level:\*\*\s*([^\n|]+)/i) ??
     normalizedContent.match(/Current Level:\s*([^\n|]+)/i);
   const overallLevel = currentLevelMatch?.[1]?.trim() ?? null;
+  const teacherNotesLines = [
+    ...(sectionBuckets.get('teacherNotes') ?? []),
+    ...(unknownSectionBlocks.length > 0 ? ['', ...unknownSectionBlocks] : []),
+  ];
 
   const derived = normalizeFoundationalProfile({
     schemaVersion: FOUNDATIONAL_PROFILE_SCHEMA_VERSION,
@@ -194,7 +310,7 @@ export function deriveFoundationalProfileFromMarkdown(content: string): Foundati
     persistentChallenges: normalizeParsedItems(sectionBuckets.get('persistentChallenges') ?? []),
     studyPreferences: normalizeParsedItems(sectionBuckets.get('studyPreferences') ?? []),
     durableConstraints: normalizeParsedItems(sectionBuckets.get('durableConstraints') ?? []),
-    teacherNotes: normalizeTeacherNotes(sectionBuckets.get('teacherNotes') ?? []),
+    teacherNotes: normalizeTeacherNotes(teacherNotesLines),
   });
 
   const hasMeaningfulContent =
@@ -255,4 +371,33 @@ export function renderFoundationalProfileContent(profile: FoundationalProfile): 
     '## Teacher Notes',
     ...teacherNotesLines,
   ].join('\n');
+}
+
+function stripJsonFences(text: string): string {
+  const trimmed = text.trim();
+  const fencedMatch = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  if (fencedMatch?.[1]) {
+    return fencedMatch[1].trim();
+  }
+  return trimmed;
+}
+
+function extractJsonObject(text: string): string {
+  const stripped = stripJsonFences(text);
+  const firstBrace = stripped.indexOf('{');
+  const lastBrace = stripped.lastIndexOf('}');
+  if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+    return stripped;
+  }
+  return stripped.slice(firstBrace, lastBrace + 1);
+}
+
+export function parseFoundationalProfileJson(text: string): FoundationalProfile {
+  const candidate = extractJsonObject(text);
+  const parsed = JSON.parse(candidate) as unknown;
+  return validateFoundationalProfileOutput(parsed);
+}
+
+export function validateFoundationalProfileOutput(output: unknown): FoundationalProfile {
+  return normalizeFoundationalProfile(FoundationalProfileSchema.parse(output));
 }

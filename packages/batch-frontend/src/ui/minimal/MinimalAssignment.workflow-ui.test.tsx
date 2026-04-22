@@ -115,10 +115,8 @@ describe('MinimalAssignment - staged workflow UI', () => {
       expect(api.fetchPromptOptions).toHaveBeenCalledTimes(1);
       expect(api.fetchJobOptions).toHaveBeenCalledTimes(1);
       expect(api.fetchStudentOptions).toHaveBeenCalledTimes(1);
-      expect(api.listProfileContents).toHaveBeenCalledTimes(1);
     });
     await screen.findByRole('option', { name: 'Alex' });
-    await screen.findByRole('option', { name: /Alex Profile/i });
 
     expect(
       screen.getByText(

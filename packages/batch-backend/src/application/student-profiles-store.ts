@@ -75,7 +75,7 @@ interface StudentStoreDependencies {
   };
 }
 
-interface StudentStoreOverrides {
+export interface StudentStoreOverrides {
   config?: BatchBackendConfig;
   bindingAudit?: {
     reason?: string | null;
@@ -258,7 +258,7 @@ function profileLabelFromId(profileId: string): string {
   return normalized.length > 0 ? normalized : profileId;
 }
 
-function deriveStarterProfileId(studentId: string): string {
+export function deriveStarterProfileId(studentId: string): string {
   return `profiles/students/${studentId}.md`;
 }
 
@@ -523,6 +523,30 @@ export async function updateStudentProfile(
     dependencies: getDependencies(overrides),
     bindingAudit: overrides?.bindingAudit,
   });
+}
+
+export async function ensureStudentCanonicalProfileBinding(
+  id: string,
+  overrides?: StudentStoreOverrides,
+): Promise<StudentProfileData | null> {
+  if (!id) return null;
+
+  const existing = await getStudentProfileById(id, overrides);
+  if (!existing) {
+    return null;
+  }
+  if (existing.profileId) {
+    return existing;
+  }
+
+  return updateStudentProfile(
+    id,
+    { profileId: deriveStarterProfileId(id) },
+    {
+      ...overrides,
+      bindingAudit: overrides?.bindingAudit,
+    },
+  );
 }
 
 export async function deleteStudentProfile(

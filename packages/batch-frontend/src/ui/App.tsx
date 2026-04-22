@@ -12,9 +12,34 @@ const AuthDialog = lazy(async () => {
   return { default: module.AuthDialog };
 });
 
-const StudentWorkspace = lazy(async () => {
-  const module = await import('./students/StudentWorkspace');
-  return { default: module.StudentWorkspace };
+const StudentDirectoryPage = lazy(async () => {
+  const module = await import('./students/StudentDirectoryPage');
+  return { default: module.StudentDirectoryPage };
+});
+
+const StudentAreaShell = lazy(async () => {
+  const module = await import('./students/StudentAreaShell');
+  return { default: module.StudentAreaShell };
+});
+
+const StudentOverviewPage = lazy(async () => {
+  const module = await import('./students/StudentOverviewPage');
+  return { default: module.StudentOverviewPage };
+});
+
+const StudentLearningPage = lazy(async () => {
+  const module = await import('./students/StudentLearningPage');
+  return { default: module.StudentLearningPage };
+});
+
+const StudentHistoryPage = lazy(async () => {
+  const module = await import('./students/StudentHistoryPage');
+  return { default: module.StudentHistoryPage };
+});
+
+const StudentScheduleBillingPage = lazy(async () => {
+  const module = await import('./students/StudentScheduleBillingPage');
+  return { default: module.StudentScheduleBillingPage };
 });
 
 export const App: React.FC = () => {
@@ -101,13 +126,55 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ user, onLogout }) =
       <Route element={<MinimalShell user={user} onLogout={onLogout} />}>
         <Route path="/" element={<MinimalAssignment />} />
         <Route
-          path="/students/workspace"
+          path="/students"
           element={
             <Suspense fallback={<RouteLoadingFallback />}>
-              <StudentWorkspace />
+              <StudentDirectoryPage />
             </Suspense>
           }
         />
+        <Route
+          path="/students/:studentId"
+          element={
+            <Suspense fallback={<RouteLoadingFallback />}>
+              <StudentAreaShell />
+            </Suspense>
+          }
+        >
+          <Route index element={<Navigate to="overview" replace />} />
+          <Route
+            path="overview"
+            element={
+              <Suspense fallback={<RouteLoadingFallback />}>
+                <StudentOverviewPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="learning"
+            element={
+              <Suspense fallback={<RouteLoadingFallback />}>
+                <StudentLearningPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="history"
+            element={
+              <Suspense fallback={<RouteLoadingFallback />}>
+                <StudentHistoryPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="schedule-billing"
+            element={
+              <Suspense fallback={<RouteLoadingFallback />}>
+                <StudentScheduleBillingPage />
+              </Suspense>
+            }
+          />
+        </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

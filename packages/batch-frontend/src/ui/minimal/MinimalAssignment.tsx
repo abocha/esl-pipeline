@@ -265,13 +265,6 @@ export const MinimalAssignment: React.FC = () => {
   } = source;
   const {
     applyHydratedSnapshot: applyContextHydration,
-    loadProfileOptions,
-    handleSelectedProfileChange,
-    handleCreateProfile,
-    handleSaveProfile,
-    handleRestoreRevision,
-    setNewProfileId,
-    setProfileEditorText,
   } = context;
 
   const authoring = useMinimalAssignmentAuthoringController({
@@ -412,8 +405,7 @@ export const MinimalAssignment: React.FC = () => {
     void loadPromptOptions();
     void loadJobOptions();
     void loadStudentOptions();
-    void loadProfileOptions();
-  }, [loadJobOptions, loadProfileOptions, loadPromptOptions, loadStudentOptions]);
+  }, [loadJobOptions, loadPromptOptions, loadStudentOptions]);
 
   useEffect(() => {
     if (!jobStatus?.jobId || !isActivelyProcessingJobState(jobStatus.state)) return;
@@ -814,24 +806,10 @@ export const MinimalAssignment: React.FC = () => {
         stage={contextStage}
         sectionRef={contextSectionRef}
         headingRef={contextHeadingRef}
-        profileSelectRef={contextProfileSelectRef}
-        onRefreshProfiles={() => void loadProfileOptions()}
-        onSaveProfile={() => void handleSaveProfile()}
-        profileBusy={context.profileBusy}
+        studentId={source.selectedStudentId}
         selectedProfileId={context.selectedProfileId}
-        onSelectedProfileIdChange={handleSelectedProfileChange}
-        profileOptions={context.profileOptions}
-        newProfileId={context.newProfileId}
-        onNewProfileIdChange={setNewProfileId}
-        onCreateProfile={() => void handleCreateProfile()}
-        profileEditorText={context.profileEditorText}
-        onProfileEditorTextChange={setProfileEditorText}
-        profileDirty={context.profileDirty}
-        profileOptionsError={context.profileOptionsError}
+        profilePreview={context.profilePreview}
         profileRevisionError={context.profileRevisionError}
-        profileSuccess={context.profileSuccess}
-        profileRevisions={context.profileRevisions}
-        onRestoreRevision={(revisionId) => void handleRestoreRevision(revisionId)}
         teacherNotes={teacherNotes}
         onTeacherNotesChange={setTeacherNotes}
       />

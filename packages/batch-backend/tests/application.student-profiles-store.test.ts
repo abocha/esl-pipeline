@@ -276,7 +276,7 @@ describe('student-profiles-store', () => {
 
   it('creates a starter profile revision and derived profile binding when starterProfile is supplied', async () => {
     const deps = createInMemoryDeps();
-    const saveRevisionCalls: Array<{
+    const saveRevisionCalls: {
       profileId: string;
       content: string;
       options?: {
@@ -285,7 +285,7 @@ describe('student-profiles-store', () => {
         createdBy?: string | null;
         structuredContent?: unknown;
       };
-    }> = [];
+    }[] = [];
     const originalSaveRevision = deps.profiles.saveRevision;
     deps.profiles.saveRevision = async (profileId, content, options) => {
       saveRevisionCalls.push({ profileId, content, options });

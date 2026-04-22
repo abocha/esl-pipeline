@@ -97,7 +97,20 @@ describe('application/legacy-profile-normalization', () => {
         },
         drafting: {
           generate: async () => ({
-            text: '# Normalized profile',
+            structuredProfile: {
+              schemaVersion: 'foundational_profile_v1',
+              overallLevel: 'B1',
+              primaryGoals: ['Lead updates more confidently.'],
+              communicationContexts: ['Weekly work meetings'],
+              interestsAndUsefulThemes: ['Travel examples'],
+              stableStrengths: ['Strong listening'],
+              persistentChallenges: ['Verb tense stability'],
+              studyPreferences: ['Structured explanations'],
+              durableConstraints: [],
+              teacherNotes: 'Keep the profile practical and durable.',
+            },
+            rawOutput: {},
+            rawText: '# Normalized profile',
             provider: 'google_ai_studio',
             model: 'gemini-3-flash-preview',
           }),
@@ -113,11 +126,14 @@ describe('application/legacy-profile-normalization', () => {
     expect(result.draftRevision.status).toBe('draft');
     expect(saveRevision).toHaveBeenCalledWith(
       'profiles/students/tolik.md',
-      '# Normalized profile',
+      expect.stringContaining('# Foundational Profile'),
       expect.objectContaining({
         source: 'legacy_normalization',
         status: 'draft',
         createdBy: 'teacher-1',
+        structuredContent: expect.objectContaining({
+          schemaVersion: 'foundational_profile_v1',
+        }),
       }),
     );
   });

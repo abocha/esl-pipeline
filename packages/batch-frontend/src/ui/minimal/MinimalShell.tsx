@@ -31,12 +31,12 @@ export const MinimalShell: React.FC<MinimalShellProps> = ({ user, onLogout, chil
             Minimal Flow
           </NavLink>
           <NavLink
-            to="/students/workspace"
+            to="/students"
             className={({ isActive }) =>
               isActive ? 'minimal-nav-link active' : 'minimal-nav-link'
             }
           >
-            Student Workspace
+            Students
           </NavLink>
         </nav>
         <div className="minimal-actions">

@@ -32,12 +32,12 @@ export function CreateStudentDialog({
     <>
       <header>
         <div className="workspace-inline workspace-header-row">
-          <h2>Student Context</h2>
+          <h2>Create student</h2>
           <button type="button" className="workspace-secondary-btn" onClick={onToggleOpen}>
             {isOpen ? 'Close Create Form' : 'Create Student'}
           </button>
         </div>
-        <p>Choose the student context for all workspace panels.</p>
+        <p>Create a student record and optionally seed the first learner profile.</p>
       </header>
 
       {success ? <p className="workspace-success">{success}</p> : null}
