@@ -264,6 +264,80 @@ describeHttpServerIntegrationSuite(
         includedCandidateIds: ['candidate-1'],
         excludedCandidateIds: [],
         contentHash: 'profile-draft-hash',
+        draftRevision: {
+          id: 'profile-revision-draft',
+          profileId: 'profiles/anna.md',
+          contentHash: 'profile-draft-hash',
+          source: 'candidate_promotion',
+          status: 'draft',
+          versionNumber: 3,
+          versionLabel: 'v3',
+          activatedAt: null,
+          deprecatedAt: null,
+          createdAt: '2024-01-01T00:00:00.000Z',
+          createdBy: 'test-user-id',
+          restoredFromRevisionId: null,
+          content: '# Draft profile',
+        },
+      });
+    });
+
+    it('POST /students/:id/profile-drafts/populate-first-from-lesson creates the initial structured draft', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: `/students/${deriveStudentId('Anna')}/profile-drafts/populate-first-from-lesson`,
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({
+        draftRevisionId: 'profile-revision-first-draft',
+        profileId: 'profiles/anna.md',
+        snapshotId: 'snapshot-1',
+        lessonMemoryIds: ['lesson-1'],
+        homeworkMemoryIds: [],
+        draftRevision: {
+          id: 'profile-revision-first-draft',
+          profileId: 'profiles/anna.md',
+          contentHash: 'profile-first-draft-hash',
+          source: 'lesson_population',
+          status: 'draft',
+          versionNumber: 1,
+          versionLabel: 'v1',
+          activatedAt: null,
+          deprecatedAt: null,
+          createdAt: '2024-01-01T00:00:00.000Z',
+          createdBy: 'test-user-id',
+          restoredFromRevisionId: null,
+          content: '# Foundational Profile',
+        },
+      });
+    });
+
+    it('POST /students/:id/profile-drafts/initialize creates an empty canonical draft', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: `/students/${deriveStudentId('Anna')}/profile-drafts/initialize`,
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({
+        draftRevisionId: 'profile-revision-empty-draft',
+        profileId: 'profiles/anna.md',
+        draftRevision: {
+          id: 'profile-revision-empty-draft',
+          profileId: 'profiles/anna.md',
+          contentHash: 'profile-empty-draft-hash',
+          source: 'create',
+          status: 'draft',
+          versionNumber: 1,
+          versionLabel: 'v1',
+          activatedAt: null,
+          deprecatedAt: null,
+          createdAt: '2024-01-01T00:00:00.000Z',
+          createdBy: 'test-user-id',
+          restoredFromRevisionId: null,
+          content: '# Foundational Profile',
+        },
       });
     });
 

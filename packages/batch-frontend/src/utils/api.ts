@@ -221,7 +221,8 @@ export interface ProfileRevisionSummaryResponse {
     | 'restore'
     | 'starter_profile_form'
     | 'candidate_promotion'
-    | 'legacy_normalization';
+    | 'legacy_normalization'
+    | 'lesson_population';
   status?: 'draft' | 'active' | 'deprecated';
   versionNumber?: number;
   versionLabel?: string;
@@ -725,6 +726,22 @@ export interface StudentProfileCandidatePromotionResponse {
   includedCandidateIds: string[];
   excludedCandidateIds: string[];
   contentHash?: string | null;
+  draftRevision?: ProfileRevisionDetailResponse;
+}
+
+export interface PopulateFirstProfileFromLessonResponse {
+  draftRevisionId: string;
+  profileId: string;
+  snapshotId: string | null;
+  lessonMemoryIds: string[];
+  homeworkMemoryIds: string[];
+  draftRevision: ProfileRevisionDetailResponse;
+}
+
+export interface InitializeStudentProfileDraftResponse {
+  draftRevisionId: string;
+  profileId: string;
+  draftRevision: ProfileRevisionDetailResponse;
 }
 
 function buildCandidateSourceSummary(record: StudentProfileCandidateApiRecord): string | null {
@@ -2382,6 +2399,46 @@ export async function promoteStudentProfileCandidates(
     const axiosError = toAxiosError(error);
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to promote profile candidates.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function populateFirstProfileFromLesson(
+  studentId: string,
+  payload: { reviewerNote?: string } = {},
+): Promise<PopulateFirstProfileFromLessonResponse> {
+  try {
+    const response = await apiClient.post(
+      buildApiProxyPath(
+        `/students/${encodeURIComponent(studentId)}/profile-drafts/populate-first-from-lesson`,
+      ),
+      payload,
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to populate the learner profile.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function initializeStudentProfileDraft(
+  studentId: string,
+): Promise<InitializeStudentProfileDraftResponse> {
+  try {
+    const response = await apiClient.post(
+      buildApiProxyPath(`/students/${encodeURIComponent(studentId)}/profile-drafts/initialize`),
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error(
+        'Authentication required. Please login to initialize the learner profile.',
+      );
     }
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }

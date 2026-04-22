@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import type { VoiceCapabilitiesSnapshot } from '@esl-pipeline/contracts';
 
@@ -25,6 +25,10 @@ import {
   createTranscriptionStorageForUri,
 } from '../infrastructure/transcription-storage.js';
 import { stitchPromptPayload } from './prompt-assembly.js';
+import {
+  deriveFoundationalProfileFromMarkdown,
+  renderFoundationalProfileContent,
+} from './foundational-profile.js';
 import { PromptOptionError, resolvePromptSelection } from './prompt-options.js';
 import { materializePromptTemplateWithCapabilities } from './prompt-voice-capabilities.js';
 import { requestLessonMemoryGeneration } from './request-lesson-memory-generation.js';
@@ -476,9 +480,10 @@ async function resolveProfileArtifact(params: {
   const { selection, activeProfileRevision } = params;
 
   if (activeProfileRevision) {
+    const renderedContent = renderPromptProfileContent(activeProfileRevision);
     return {
-      content: activeProfileRevision.content,
-      hash: activeProfileRevision.contentHash,
+      content: renderedContent,
+      hash: hashPromptProfileContent(activeProfileRevision),
       revision: activeProfileRevision,
     };
   }
@@ -487,6 +492,16 @@ async function resolveProfileArtifact(params: {
     `No active profile revision for "${selection.profileId}". Run prompt-assets bootstrap before generation.`,
     'profile_revision_missing',
   );
+}
+
+export function renderPromptProfileContent(revision: ProfileRevisionRecord): string {
+  const structuredContent =
+    revision.structuredContent ?? deriveFoundationalProfileFromMarkdown(revision.content);
+  return structuredContent ? renderFoundationalProfileContent(structuredContent) : revision.content;
+}
+
+export function hashPromptProfileContent(revision: ProfileRevisionRecord): string {
+  return createHash('sha256').update(renderPromptProfileContent(revision), 'utf8').digest('hex');
 }
 
 async function resolveTemplateArtifact(params: {

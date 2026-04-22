@@ -891,7 +891,8 @@ BEGIN
         'restore',
         'starter_profile_form',
         'candidate_promotion',
-        'legacy_normalization'
+        'legacy_normalization',
+        'lesson_population'
       )
     );
 END $$;`,

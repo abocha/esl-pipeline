@@ -20,6 +20,80 @@ import {
 } from './application.prompt-package.test-harness.js';
 
 describe('application/prompt-package', () => {
+  it('renders the foundational profile block from structured content when the active revision has canonical JSON', async () => {
+    const allowedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-prompt-structured-'));
+    const templatePath = path.join(allowedDir, 'template.md');
+    const profilePath = path.join(allowedDir, 'profile.md');
+    await fs.writeFile(templatePath, 'DB TEMPLATE\nEND\n', 'utf8');
+    await fs.writeFile(profilePath, 'LEGACY PROFILE\n', 'utf8');
+
+    const transcript = createTranscriptRecord();
+    const storage = createStorageStub({
+      getText: async () => 'TRANSCRIPT BODY',
+      putPromptPackage: async ({ promptPackageId, text }) => {
+        expect(text).toContain('[FOUNDATIONAL_PROFILE]\n# Foundational Profile');
+        expect(text).toContain('**Current Level:** B2');
+        expect(text).toContain('- Lead product demos with more confidence.');
+        expect(text).not.toContain('LEGACY PROFILE');
+        return { uri: `local://prompt-packages/${promptPackageId}.txt`, bytes: text.length };
+      },
+    });
+
+    await createPromptPackage(
+      {
+        recordingId: transcript.recordingId,
+        templateId: 'template.md',
+        profileId: 'profile.md',
+      },
+      {
+        config: createConfig(templatePath, profilePath),
+        storage,
+        transcripts: {
+          getByRecordingId: async () => transcript,
+        },
+        recordings: {
+          getById: async () => null,
+        },
+        students: {
+          getById: async () => null,
+        },
+        promptPackages: createPromptPackageRepositoryStub(),
+        profileRevisions: createProfileRevisionRepositoryStub({
+          getActive: async () => ({
+            id: 'profile-revision-active',
+            profileId: 'profile.md',
+            content: 'LEGACY PROFILE',
+            contentHash: createHash('sha256').update('LEGACY PROFILE', 'utf8').digest('hex'),
+            source: 'update',
+            status: 'active',
+            versionNumber: 2,
+            versionLabel: 'v2',
+            activatedAt: new Date('2024-01-02T00:00:00Z'),
+            deprecatedAt: null,
+            createdAt: new Date('2024-01-02T00:00:00Z'),
+            createdBy: null,
+            restoredFromRevisionId: null,
+            structuredContent: {
+              schemaVersion: 'foundational_profile_v1',
+              overallLevel: 'B2',
+              primaryGoals: ['Lead product demos with more confidence.'],
+              communicationContexts: ['Works across product and engineering.'],
+              interestsAndUsefulThemes: [],
+              stableStrengths: [],
+              persistentChallenges: [],
+              studyPreferences: [],
+              durableConstraints: [],
+              teacherNotes: null,
+            },
+          }),
+        }),
+        templateRevisions: createTemplateRevisionRepositoryStub(),
+        bindings: createBindingResolverStub(),
+        promptOptions: createPromptOptionsStub(),
+      },
+    );
+  });
+
   it('prefers active profile/template revisions over filesystem files when available', async () => {
     const allowedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-prompt-allowed-'));
     const templatePath = path.join(allowedDir, 'template.md');

@@ -10,6 +10,7 @@ import type { TranscriptionStorage } from '../infrastructure/transcription-stora
 import { createTranscriptionStorageForUri } from '../infrastructure/transcription-storage.js';
 import {
   getPromptPackageMemoryLayerAvailability,
+  hashPromptProfileContent,
   type PromptPackageMemoryLayerAvailability,
   type PromptPackageResponse,
   toPromptPackageResponse,
@@ -220,7 +221,7 @@ export async function getPromptPackageLineage(
       current: {
         profileId: promptPackage.resolvedProfileId ?? null,
         revisionId: currentProfile?.id ?? null,
-        hash: currentProfile?.contentHash ?? null,
+        hash: currentProfile ? hashPromptProfileContent(currentProfile) : null,
         versionLabel: currentProfile?.versionLabel ?? null,
         status: currentProfile?.status ?? null,
         updatedAt: currentProfile?.createdAt ? currentProfile.createdAt.toISOString() : null,
@@ -313,14 +314,15 @@ async function detectPromptPackageProfileDrift(
     };
   }
 
-  if (currentRevision.contentHash === resolvedProfileHash) {
+  const currentProfileHash = hashPromptProfileContent(currentRevision);
+  if (currentProfileHash === resolvedProfileHash) {
     return null;
   }
 
   return {
     detected: true,
     reason: 'profile_content_changed',
-    currentProfileHash: currentRevision.contentHash,
+    currentProfileHash,
     currentProfileRevisionId: currentRevision.id,
     currentProfileUpdatedAt: currentRevision.createdAt.toISOString(),
   };

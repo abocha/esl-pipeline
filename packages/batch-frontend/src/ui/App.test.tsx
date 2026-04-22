@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Outlet } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AuthContextType } from '../context/AuthContext';
@@ -20,8 +20,33 @@ vi.mock('./minimal/MinimalAssignment', () => ({
   MinimalAssignment: () => <div>Minimal assignment content</div>,
 }));
 
-vi.mock('./students/StudentWorkspace', () => ({
-  StudentWorkspace: () => <div>Student workspace content</div>,
+vi.mock('./students/StudentDirectoryPage', () => ({
+  StudentDirectoryPage: () => <div>Student directory content</div>,
+}));
+
+vi.mock('./students/StudentAreaShell', () => ({
+  StudentAreaShell: () => (
+    <div>
+      Student area shell
+      <Outlet />
+    </div>
+  ),
+}));
+
+vi.mock('./students/StudentOverviewPage', () => ({
+  StudentOverviewPage: () => <div>Student overview content</div>,
+}));
+
+vi.mock('./students/StudentLearningPage', () => ({
+  StudentLearningPage: () => <div>Student learning content</div>,
+}));
+
+vi.mock('./students/StudentHistoryPage', () => ({
+  StudentHistoryPage: () => <div>Student history content</div>,
+}));
+
+vi.mock('./students/StudentScheduleBillingPage', () => ({
+  StudentScheduleBillingPage: () => <div>Student schedule content</div>,
 }));
 
 vi.mock('react-hot-toast', () => ({
@@ -43,9 +68,9 @@ function createAuthState(overrides: Partial<AuthContextType> = {}): AuthContextT
   };
 }
 
-function renderApp() {
+function renderApp(initialEntries: string[] = ['/']) {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={initialEntries}>
       <App />
     </MemoryRouter>,
   );
@@ -74,7 +99,7 @@ describe('App', () => {
 
     await user.click(screen.getByRole('button', { name: /Login to your account/i }));
 
-    expect(screen.getByRole('heading', { name: /Welcome back/i })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: /Welcome back/i })).toBeTruthy();
   });
 
   it('renders the authenticated shell and assignment route', () => {
@@ -96,7 +121,7 @@ describe('App', () => {
     expect(screen.getByText('Minimal assignment content')).toBeTruthy();
   });
 
-  it('navigates to the student workspace route from shell navigation', async () => {
+  it('navigates to the student directory route from shell navigation', async () => {
     const user = userEvent.setup();
     useAuthMock.mockReturnValue(
       createAuthState({
@@ -112,9 +137,45 @@ describe('App', () => {
 
     renderApp();
 
-    await user.click(screen.getByRole('link', { name: /Student Workspace/i }));
+    await user.click(screen.getByRole('link', { name: /Students/i }));
 
-    expect(await screen.findByText('Student workspace content')).toBeTruthy();
+    expect(await screen.findByText('Student directory content')).toBeTruthy();
+  });
+
+  it('redirects /students/:studentId to the overview page', async () => {
+    useAuthMock.mockReturnValue(
+      createAuthState({
+        user: {
+          id: 'user-1',
+          email: 'teacher@example.com',
+          role: 'user',
+          isActive: true,
+        },
+        isAuthenticated: true,
+      }),
+    );
+
+    renderApp(['/students/student-1']);
+
+    expect(await screen.findByText('Student overview content')).toBeTruthy();
+  });
+
+  it('renders the dedicated learning route', async () => {
+    useAuthMock.mockReturnValue(
+      createAuthState({
+        user: {
+          id: 'user-1',
+          email: 'teacher@example.com',
+          role: 'user',
+          isActive: true,
+        },
+        isAuthenticated: true,
+      }),
+    );
+
+    renderApp(['/students/student-1/learning']);
+
+    expect(await screen.findByText('Student learning content')).toBeTruthy();
   });
 
   it('logs out and shows a success toast', async () => {

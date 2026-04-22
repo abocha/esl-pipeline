@@ -20,7 +20,9 @@ import * as jobSummaryModule from '../src/application/job-summary.js';
 import * as listJobsModule from '../src/application/list-jobs.js';
 import * as listRecordingsModule from '../src/application/list-recordings.js';
 import * as materializeDraftModule from '../src/application/materialize-draft.js';
+import * as initializeStudentProfileDraftModule from '../src/application/initialize-student-profile-draft.js';
 import * as profileCandidatePromotionModule from '../src/application/profile-candidate-promotion.js';
+import * as populateFirstProfileModule from '../src/application/populate-first-profile-from-lesson.js';
 import * as profileContentModule from '../src/application/profile-content.js';
 import { ProfilePathError } from '../src/application/profile-path.js';
 import * as readinessMetricsModule from '../src/application/readiness-metrics.js';
@@ -235,6 +237,38 @@ vi.mock('../src/application/profile-candidate-promotion', () => {
   };
 });
 
+vi.mock('../src/application/populate-first-profile-from-lesson', () => {
+  return {
+    populateFirstProfileFromLesson: vi.fn(),
+    PopulateFirstProfileFromLessonError: class PopulateFirstProfileFromLessonError extends Error {
+      code: string;
+      status: number;
+
+      constructor(message: string, code = 'populate_first_profile_error', status = 400) {
+        super(message);
+        this.code = code;
+        this.status = status;
+      }
+    },
+  };
+});
+
+vi.mock('../src/application/initialize-student-profile-draft', () => {
+  return {
+    initializeStudentProfileDraft: vi.fn(),
+    InitializeStudentProfileDraftError: class InitializeStudentProfileDraftError extends Error {
+      code: string;
+      status: number;
+
+      constructor(message: string, code = 'initialize_student_profile_draft_error', status = 400) {
+        super(message);
+        this.code = code;
+        this.status = status;
+      }
+    },
+  };
+});
+
 vi.mock('../src/application/student-profile-bindings', () => {
   return {
     listStudentProfileBindingsForStudent: vi.fn(),
@@ -328,6 +362,12 @@ export function describeHttpServerIntegrationSuite(
     );
     const mockPromoteStudentProfileCandidates = vi.mocked(
       profileCandidatePromotionModule.promoteStudentProfileCandidates,
+    );
+    const mockPopulateFirstProfileFromLesson = vi.mocked(
+      populateFirstProfileModule.populateFirstProfileFromLesson,
+    );
+    const mockInitializeStudentProfileDraft = vi.mocked(
+      initializeStudentProfileDraftModule.initializeStudentProfileDraft,
     );
     const mockListStudentProfileBindingsForStudent = vi.mocked(
       studentBindingsModule.listStudentProfileBindingsForStudent,
@@ -779,6 +819,50 @@ export function describeHttpServerIntegrationSuite(
         provider: 'google_ai_studio',
         model: 'gemini-3-flash-preview',
       });
+      mockPopulateFirstProfileFromLesson.mockResolvedValue({
+        studentId: deriveStudentId('Anna'),
+        profileId: 'profiles/anna.md',
+        baseRevisionId: 'profile-revision-active',
+        snapshotId: 'snapshot-1',
+        lessonMemoryIds: ['lesson-1'],
+        homeworkMemoryIds: [],
+        draftRevision: {
+          id: 'profile-revision-first-draft',
+          profileId: 'profiles/anna.md',
+          contentHash: 'profile-first-draft-hash',
+          source: 'lesson_population',
+          status: 'draft',
+          versionNumber: 1,
+          versionLabel: 'v1',
+          activatedAt: null,
+          deprecatedAt: null,
+          createdAt: '2024-01-01T00:00:00.000Z',
+          createdBy: 'test-user-id',
+          restoredFromRevisionId: null,
+          content: '# Foundational Profile',
+        },
+        provider: 'google_ai_studio',
+        model: 'gemini-3-flash-preview',
+      });
+      mockInitializeStudentProfileDraft.mockResolvedValue({
+        studentId: deriveStudentId('Anna'),
+        profileId: 'profiles/anna.md',
+        draftRevision: {
+          id: 'profile-revision-empty-draft',
+          profileId: 'profiles/anna.md',
+          contentHash: 'profile-empty-draft-hash',
+          source: 'create',
+          status: 'draft',
+          versionNumber: 1,
+          versionLabel: 'v1',
+          activatedAt: null,
+          deprecatedAt: null,
+          createdAt: '2024-01-01T00:00:00.000Z',
+          createdBy: 'test-user-id',
+          restoredFromRevisionId: null,
+          content: '# Foundational Profile',
+        },
+      });
       mockGetJobProvenance.mockResolvedValue({
         job: {
           id: 'test-job-1',
@@ -921,6 +1005,8 @@ export function describeHttpServerIntegrationSuite(
       mockRejectStudentProfileCandidate,
       mockDeferStudentProfileCandidate,
       mockPromoteStudentProfileCandidates,
+      mockPopulateFirstProfileFromLesson,
+      mockInitializeStudentProfileDraft,
       mockListStudentProfileBindingsForStudent,
       mockGetActiveStudentProfileBindingForStudent,
       mockGetJobProvenance,

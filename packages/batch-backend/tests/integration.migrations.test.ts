@@ -146,6 +146,7 @@ async function assertSchemaHealthy(scenario: string): Promise<void> {
     expect(definition).toContain('starter_profile_form');
     expect(definition).toContain('candidate_promotion');
     expect(definition).toContain('legacy_normalization');
+    expect(definition).toContain('lesson_population');
 
     const actionTypeConstraint = await pool.query<{ definition: string }>(
       `
