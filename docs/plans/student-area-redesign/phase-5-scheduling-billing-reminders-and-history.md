@@ -141,6 +141,10 @@ Recommended behaviors:
 3. allow drill-in to provenance details
 4. show enough summary to scan without opening every event
 
+Detailed visual and product decisions for the History page are locked in
+[`history-page-design-lock.md`](history-page-design-lock.md). That companion doc should guide
+implementation of the new History surface.
+
 This page should be where the teacher goes to answer:
 
 1. what happened

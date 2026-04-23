@@ -76,6 +76,16 @@ page model, ownership boundaries, or profile authority rules.
    - lesson-credit accounting
    - reminders
    - chronology and provenance
+6. [overview-page-design-lock.md](overview-page-design-lock.md)
+   - Overview visual direction
+   - loading and stability rules
+   - operations rail model
+   - Telegram avatar and 24-hour-time decisions
+7. [history-page-design-lock.md](history-page-design-lock.md)
+   - History visual direction
+   - event-category language
+   - timeline hierarchy
+   - Telegram avatar and 24-hour-time decisions
 
 ## Recommended Delivery Sequence
 
