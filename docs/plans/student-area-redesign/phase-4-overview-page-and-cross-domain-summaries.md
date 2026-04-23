@@ -12,6 +12,10 @@ Its job is not to replicate the whole product. Its job is to answer:
 
 The page should be fast to scan, emotionally calm, and rich in good next actions.
 
+Detailed visual and product decisions for the Overview page are locked in
+[`overview-page-design-lock.md`](overview-page-design-lock.md). That companion doc should guide
+polish and future implementation work beyond the first rough pass.
+
 ## Locked Decisions
 
 1. `Overview` is summary-first and action-oriented.
