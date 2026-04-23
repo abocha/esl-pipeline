@@ -134,7 +134,7 @@ export function registerPromptEditorTests() {
       ).toBe('/students/student-alex/learning');
     });
 
-    it('shows a useful empty state when the selected student has no bound learner profile', async () => {
+    it('shows a useful empty state when the selected student has no learner profile', async () => {
       const user = createMinimalUser();
       vi.mocked(api.fetchStudentOptions).mockResolvedValueOnce({
         students: [
@@ -152,7 +152,7 @@ export function registerPromptEditorTests() {
         'student-alex',
       );
 
-      await screen.findByText(/No learner profile is bound to this student yet\./i);
+      await screen.findByText(/No learner profile is selected for this student yet\./i);
       expect(screen.queryByText(/Lead project updates clearly\./i)).toBeNull();
     });
 

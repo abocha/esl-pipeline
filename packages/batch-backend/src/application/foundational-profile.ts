@@ -33,7 +33,11 @@ const EMPTY_TEACHER_NOTE_MESSAGES = new Set([
   'No additional teacher-authored notes yet.',
 ]);
 
-const IGNORED_UNKNOWN_SECTION_HEADINGS = new Set(['profile governance notes']);
+const IGNORED_UNKNOWN_SECTION_HEADINGS = new Set([
+  'profile governance notes',
+  'language profile',
+  'linguistic foundational truths',
+]);
 
 const FoundationalProfileSchema = z.object({
   schemaVersion: z.literal(FOUNDATIONAL_PROFILE_SCHEMA_VERSION),
@@ -140,7 +144,14 @@ export function normalizeFoundationalProfile(profile: FoundationalProfile): Foun
 export function splitStructuredProfileItems(text: string): string[] {
   return text
     .split('\n')
-    .map((line) => line.replace(/^[-*]\s+/, '').trim())
+    .map((line) =>
+      line
+        .trim()
+        .replace(/^[-*]\s+/, '')
+        .replace(/^\d+[.)]\s+/, '')
+        .replace(/^\*\*([^*]+?)[:]?\*\*\s*/, '')
+        .trim(),
+    )
     .filter((line) => line.length > 0);
 }
 
@@ -161,7 +172,8 @@ export function createEmptyFoundationalProfile(): FoundationalProfile {
 
 function normalizeHeadingLabel(line: string): string {
   return line
-    .replace(/^##\s+/, '')
+    .replace(/^#{2,3}\s+/, '')
+    .replace(/\*\*/g, '')
     .replace(/^\d+[.)]?\s+/, '')
     .replace(/&/g, 'and')
     .replace(/-/g, ' ')
@@ -183,30 +195,183 @@ function getStructuredSectionKey(
   | 'durableConstraints'
   | 'teacherNotes'
   | null {
+  if (heading.startsWith('pedagogical strategy')) {
+    return 'studyPreferences';
+  }
+  if (heading.startsWith('profile summary')) {
+    return 'teacherNotes';
+  }
+  if (heading.startsWith('student snapshot')) {
+    return 'teacherNotes';
+  }
+  if (heading.startsWith('professional context')) {
+    return 'communicationContexts';
+  }
+  if (heading.startsWith('durable themes and interests')) {
+    return 'interestsAndUsefulThemes';
+  }
+  if (heading.startsWith('recurring fossilized errors')) {
+    return 'persistentChallenges';
+  }
+
   switch (heading) {
     case 'goals and motivation':
       return 'primaryGoals';
     case 'communication contexts':
     case 'work and communication context':
       return 'communicationContexts';
+    case 'professional personal context':
+    case 'professional and personal context':
+    case 'professional context':
+      return 'communicationContexts';
     case 'interests and useful themes':
     case 'interests and personal context':
+    case 'durable themes and interests':
+    case 'key interests':
       return 'interestsAndUsefulThemes';
     case 'stable strengths':
+    case 'core strengths':
+    case 'strengths':
       return 'stableStrengths';
     case 'persistent challenges':
     case 'long running challenges':
+    case 'recurring fossilized errors':
+    case 'recurring fossilized errors l1 russian interference':
+    case 'fossilized challenges':
+    case 'challenges':
       return 'persistentChallenges';
     case 'study preferences':
     case 'study preferences and constraints':
+    case 'learning habits and preferences':
+    case 'pedagogical strategy':
       return 'studyPreferences';
     case 'durable constraints':
       return 'durableConstraints';
     case 'teacher notes':
+    case 'profile summary':
+    case 'student snapshot':
       return 'teacherNotes';
     default:
       return null;
   }
+}
+
+function pushUniqueValue(target: string[], value: string): void {
+  const normalized = value.trim();
+  if (!normalized || target.includes(normalized)) {
+    return;
+  }
+  target.push(normalized);
+}
+
+function splitInlineLegacyItems(value: string): string[] {
+  return value
+    .split(/(?:,|;)/i)
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+}
+
+function normalizeInlineLabel(label: string): string {
+  return label
+    .replace(/\*\*/g, '')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function deriveLevelFromLegacySummary(content: string): string | null {
+  const explicitLevelMatch =
+    content.match(/\*\*Current Level:\*\*\s*([^\n|]+)/i) ??
+    content.match(/Current Level:\s*([^\n|]+)/i) ??
+    content.match(/\*\*Assessed Level:\*\*\s*([^\n|]+)/i) ??
+    content.match(/Assessed Level:\s*([^\n|]+)/i);
+
+  const explicitLevel = explicitLevelMatch?.[1]?.trim() ?? null;
+  if (explicitLevel && explicitLevel.toLowerCase() !== 'unknown') {
+    return explicitLevel;
+  }
+
+  const inlineLevelMatch = content.match(/\b([ABC][12](?:\+)?)\b(?:-level|\s+level)/i);
+  return inlineLevelMatch?.[1]?.toUpperCase() ?? null;
+}
+
+function applyLegacyInlineLabel(
+  label: string,
+  value: string,
+  derived: FoundationalProfile,
+): boolean {
+  const normalizedLabel = normalizeInlineLabel(label);
+  const normalizedValue = value.trim();
+  if (!normalizedValue) {
+    return false;
+  }
+
+  if (normalizedLabel.includes('level')) {
+    derived.overallLevel = normalizedValue;
+    return true;
+  }
+
+  if (
+    normalizedLabel.includes('goal') ||
+    normalizedLabel.includes('aspiration') ||
+    normalizedLabel.includes('aim')
+  ) {
+    for (const item of splitInlineLegacyItems(normalizedValue)) {
+      pushUniqueValue(derived.primaryGoals, item);
+    }
+    return true;
+  }
+
+  if (
+    normalizedLabel.includes('professional context') ||
+    normalizedLabel === 'role' ||
+    normalizedLabel.includes('work context') ||
+    normalizedLabel.includes('background')
+  ) {
+    pushUniqueValue(derived.communicationContexts, normalizedValue);
+    return true;
+  }
+
+  if (
+    normalizedLabel.includes('interest') ||
+    normalizedLabel.includes('theme') ||
+    normalizedLabel.includes('preference')
+  ) {
+    for (const item of splitInlineLegacyItems(normalizedValue)) {
+      pushUniqueValue(derived.interestsAndUsefulThemes, item);
+    }
+    return true;
+  }
+
+  if (normalizedLabel.includes('strength')) {
+    pushUniqueValue(derived.stableStrengths, normalizedValue);
+    return true;
+  }
+
+  if (
+    normalizedLabel.includes('challenge') ||
+    normalizedLabel.includes('error') ||
+    normalizedLabel.includes('issue') ||
+    normalizedLabel.includes('grammar') ||
+    normalizedLabel.includes('pronunciation')
+  ) {
+    pushUniqueValue(derived.persistentChallenges, normalizedValue);
+    return true;
+  }
+
+  if (
+    normalizedLabel.includes('homework') ||
+    normalizedLabel.includes('coaching') ||
+    normalizedLabel.includes('lesson vibe') ||
+    normalizedLabel.includes('strategy') ||
+    normalizedLabel.includes('habit')
+  ) {
+    pushUniqueValue(derived.studyPreferences, `${label.trim()}: ${normalizedValue}`);
+    return true;
+  }
+
+  return false;
 }
 
 function normalizeParsedItems(lines: readonly string[]): string[] {
@@ -237,12 +402,19 @@ export function deriveFoundationalProfileFromMarkdown(content: string): Foundati
   const lines = normalizedContent.split('\n');
   const sectionBuckets = new Map<string, string[]>();
   const unknownSectionBlocks: string[] = [];
+  const inlineDerived = createEmptyFoundationalProfile();
   let currentSection: ReturnType<typeof getStructuredSectionKey> = null;
   let currentUnknownSectionHeading: string | null = null;
   let currentUnknownSectionLines: string[] = [];
 
   function flushUnknownSection(): void {
     if (!currentUnknownSectionHeading) {
+      currentUnknownSectionLines = [];
+      return;
+    }
+
+    if (!currentUnknownSectionLines.some((line) => line.trim().length > 0)) {
+      currentUnknownSectionHeading = null;
       currentUnknownSectionLines = [];
       return;
     }
@@ -259,7 +431,29 @@ export function deriveFoundationalProfileFromMarkdown(content: string): Foundati
   }
 
   for (const line of lines) {
-    if (/^##\s+/.test(line)) {
+    const inlineLabelMatch = line.match(/^\s*[-*]\s+\*\*([^*]+?)[:]?\*\*\s*(.+)$/);
+    if (inlineLabelMatch?.[1] && inlineLabelMatch[2]) {
+      if (currentUnknownSectionHeading) {
+        flushUnknownSection();
+      }
+      if (applyLegacyInlineLabel(inlineLabelMatch[1], inlineLabelMatch[2], inlineDerived)) {
+        continue;
+      }
+    }
+
+    const sectionLabelMatch = line.match(/^\s*[-*]\s+\*\*([^*]+?)[:]?\*\*\s*$/);
+    if (sectionLabelMatch?.[1]) {
+      if (currentUnknownSectionHeading) {
+        flushUnknownSection();
+      }
+      currentSection = getStructuredSectionKey(normalizeInlineLabel(sectionLabelMatch[1]));
+      if (currentSection && !sectionBuckets.has(currentSection)) {
+        sectionBuckets.set(currentSection, []);
+      }
+      continue;
+    }
+
+    if (/^#{2,3}\s+/.test(line)) {
       flushUnknownSection();
       currentSection = getStructuredSectionKey(normalizeHeadingLabel(line));
       if (currentSection && !sectionBuckets.has(currentSection)) {
@@ -270,7 +464,7 @@ export function deriveFoundationalProfileFromMarkdown(content: string): Foundati
           currentUnknownSectionHeading = null;
           continue;
         }
-        currentUnknownSectionHeading = line.replace(/^##\s+/, '').trim();
+        currentUnknownSectionHeading = line.replace(/^#{2,3}\s+/, '').trim();
       }
       continue;
     }
@@ -289,10 +483,6 @@ export function deriveFoundationalProfileFromMarkdown(content: string): Foundati
 
   flushUnknownSection();
 
-  const currentLevelMatch =
-    normalizedContent.match(/\*\*Current Level:\*\*\s*([^\n|]+)/i) ??
-    normalizedContent.match(/Current Level:\s*([^\n|]+)/i);
-  const overallLevel = currentLevelMatch?.[1]?.trim() ?? null;
   const teacherNotesLines = [
     ...(sectionBuckets.get('teacherNotes') ?? []),
     ...(unknownSectionBlocks.length > 0 ? ['', ...unknownSectionBlocks] : []),
@@ -300,15 +490,31 @@ export function deriveFoundationalProfileFromMarkdown(content: string): Foundati
 
   const derived = normalizeFoundationalProfile({
     schemaVersion: FOUNDATIONAL_PROFILE_SCHEMA_VERSION,
-    overallLevel: overallLevel && overallLevel.toLowerCase() !== 'unknown' ? overallLevel : null,
-    primaryGoals: normalizeParsedItems(sectionBuckets.get('primaryGoals') ?? []),
-    communicationContexts: normalizeParsedItems(sectionBuckets.get('communicationContexts') ?? []),
-    interestsAndUsefulThemes: normalizeParsedItems(
-      sectionBuckets.get('interestsAndUsefulThemes') ?? [],
-    ),
-    stableStrengths: normalizeParsedItems(sectionBuckets.get('stableStrengths') ?? []),
-    persistentChallenges: normalizeParsedItems(sectionBuckets.get('persistentChallenges') ?? []),
-    studyPreferences: normalizeParsedItems(sectionBuckets.get('studyPreferences') ?? []),
+    overallLevel: inlineDerived.overallLevel ?? deriveLevelFromLegacySummary(normalizedContent),
+    primaryGoals: [
+      ...inlineDerived.primaryGoals,
+      ...normalizeParsedItems(sectionBuckets.get('primaryGoals') ?? []),
+    ],
+    communicationContexts: [
+      ...inlineDerived.communicationContexts,
+      ...normalizeParsedItems(sectionBuckets.get('communicationContexts') ?? []),
+    ],
+    interestsAndUsefulThemes: [
+      ...inlineDerived.interestsAndUsefulThemes,
+      ...normalizeParsedItems(sectionBuckets.get('interestsAndUsefulThemes') ?? []),
+    ],
+    stableStrengths: [
+      ...inlineDerived.stableStrengths,
+      ...normalizeParsedItems(sectionBuckets.get('stableStrengths') ?? []),
+    ],
+    persistentChallenges: [
+      ...inlineDerived.persistentChallenges,
+      ...normalizeParsedItems(sectionBuckets.get('persistentChallenges') ?? []),
+    ],
+    studyPreferences: [
+      ...inlineDerived.studyPreferences,
+      ...normalizeParsedItems(sectionBuckets.get('studyPreferences') ?? []),
+    ],
     durableConstraints: normalizeParsedItems(sectionBuckets.get('durableConstraints') ?? []),
     teacherNotes: normalizeTeacherNotes(teacherNotesLines),
   });

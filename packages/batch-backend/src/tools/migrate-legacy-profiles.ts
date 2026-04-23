@@ -1,15 +1,24 @@
+import { mkdir, writeFile } from 'node:fs/promises';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { loadBatchBackendEnv } from '../bootstrap/env.js';
+import { configureHostRunPgRuntimeEnv } from '../bootstrap/pg-host-run-env.js';
 import { loadConfig } from '../config/env.js';
 import { closePgPool } from '../infrastructure/db.js';
-import { migrateLegacyProfiles } from '../application/legacy-profile-migration.js';
+import {
+  createLegacyProfileMigrationReport,
+  migrateLegacyProfiles,
+  renderLegacyProfileMigrationItemMarkdown,
+  renderLegacyProfileMigrationSummaryMarkdown,
+} from '../application/legacy-profile-migration.js';
 
 interface CliOptions {
   apply: boolean;
   changedBy: string | null;
   limit: number | null;
   profileId: string | null;
+  reportDir: string | null;
   status: 'draft' | 'active';
 }
 
@@ -18,6 +27,7 @@ function parseArgs(argv: string[]): CliOptions {
   let changedBy: string | null = null;
   let limit: number | null = null;
   let profileId: string | null = null;
+  let reportDir: string | null = null;
   let status: 'draft' | 'active' = 'draft';
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -62,6 +72,12 @@ function parseArgs(argv: string[]): CliOptions {
       continue;
     }
 
+    if (arg === '--report-dir') {
+      reportDir = argv[index + 1] ?? null;
+      index += 1;
+      continue;
+    }
+
     throw new Error(`Unknown argument: ${arg}`);
   }
 
@@ -70,12 +86,55 @@ function parseArgs(argv: string[]): CliOptions {
     changedBy: changedBy?.trim() || null,
     limit,
     profileId: profileId?.trim() || null,
+    reportDir: reportDir?.trim() || null,
     status,
   };
 }
 
+function createTimestampSuffix(now = new Date()): string {
+  return now.toISOString().replaceAll(':', '-').replaceAll('.', '-');
+}
+
+function slugifyProfileId(profileId: string): string {
+  return profileId.replaceAll(/[^a-zA-Z0-9]+/g, '-').replaceAll(/^-+|-+$/g, '').toLowerCase();
+}
+
+async function writeMigrationReportFiles(args: {
+  reportDir: string;
+  report: ReturnType<typeof createLegacyProfileMigrationReport>;
+}): Promise<void> {
+  const profilesDir = path.join(args.reportDir, 'profiles');
+  await mkdir(profilesDir, { recursive: true });
+
+  await writeFile(
+    path.join(args.reportDir, 'summary.json'),
+    `${JSON.stringify(args.report, null, 2)}\n`,
+    'utf8',
+  );
+  await writeFile(
+    path.join(args.reportDir, 'summary.md'),
+    renderLegacyProfileMigrationSummaryMarkdown(args.report),
+    'utf8',
+  );
+
+  for (const item of args.report.items) {
+    const baseName = slugifyProfileId(item.profileId) || 'profile';
+    await writeFile(
+      path.join(profilesDir, `${baseName}.json`),
+      `${JSON.stringify(item, null, 2)}\n`,
+      'utf8',
+    );
+    await writeFile(
+      path.join(profilesDir, `${baseName}.md`),
+      renderLegacyProfileMigrationItemMarkdown(item),
+      'utf8',
+    );
+  }
+}
+
 async function run(): Promise<void> {
   loadBatchBackendEnv(import.meta.url, 'batch-backend-tool-migrate-legacy-profiles');
+  configureHostRunPgRuntimeEnv();
   const options = parseArgs(process.argv.slice(2));
   const config = loadConfig();
 
@@ -95,10 +154,34 @@ async function run(): Promise<void> {
       config,
     },
   });
+  const report = createLegacyProfileMigrationReport({
+    request: {
+      apply: options.apply,
+      reviewerId: options.changedBy,
+      limit: options.limit ?? undefined,
+      profileId: options.profileId,
+      status: options.status,
+    },
+    result,
+  });
+  const reportDir =
+    options.reportDir && options.reportDir.length > 0
+      ? path.resolve(process.cwd(), options.reportDir)
+      : path.resolve(
+          process.cwd(),
+          'tmp',
+          'legacy-profile-migration',
+          createTimestampSuffix(new Date(report.metadata.generatedAt)),
+        );
+  await writeMigrationReportFiles({
+    reportDir,
+    report,
+  });
 
   console.log(
     `[legacy-profile-migration] mode=${options.apply ? `apply:${options.status}` : 'dry-run'}`,
   );
+  console.log(`[legacy-profile-migration] reportDir=${reportDir}`);
   console.log(`[legacy-profile-migration] profilesScanned=${result.profilesScanned}`);
   console.log(`[legacy-profile-migration] planned=${result.plannedCount}`);
   console.log(`[legacy-profile-migration] migrated=${result.migratedCount}`);

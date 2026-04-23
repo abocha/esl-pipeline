@@ -14,6 +14,7 @@ import {
   type CreateStudentFormState,
 } from './StudentWorkspace.logic';
 import { CreateStudentDialog } from './CreateStudentDialog';
+import { formatStudentShortId } from './studentIdentity';
 
 export const StudentDirectoryPage: React.FC = () => {
   const navigate = useNavigate();
@@ -141,7 +142,7 @@ export const StudentDirectoryPage: React.FC = () => {
             <article key={student.id} className="student-directory-card">
               <div>
                 <h3>{student.student}</h3>
-                <p>{student.profileId ? `Profile: ${student.profileId}` : 'No learner profile bound yet'}</p>
+                <p>{formatStudentShortId(student.id)}</p>
               </div>
               <div className="student-directory-actions">
                 <Link to={`/students/${encodeURIComponent(student.id)}/overview`}>Open Overview</Link>

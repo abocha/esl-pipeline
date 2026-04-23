@@ -39,8 +39,9 @@ skills-lock.json
 
 # Runtime artifacts
 /uploads
-/tmp
+tmp
 /out
 *.mp3
 packages/orchestrator/examples/service/fixtures/lesson.manifest.json
 fixtures/*.opus
+*/tmp

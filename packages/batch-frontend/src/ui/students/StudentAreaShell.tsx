@@ -2,11 +2,11 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useParams } from 'react-router-dom';
 
 import { getStudentProfile, type StudentProfile } from '../../utils/api';
+import { formatStudentShortId } from './studentIdentity';
 
 function formatStudentSubtitle(student: StudentProfile | null): string {
   if (!student) return 'Loading student record';
-  if (student.profileId) return `Bound profile: ${student.profileId}`;
-  return 'No learner profile bound yet';
+  return formatStudentShortId(student.id);
 }
 
 export const StudentAreaShell: React.FC = () => {

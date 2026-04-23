@@ -71,7 +71,7 @@ export function CreateStudentDialog({
                 }))
               }
             >
-              <option value="">No profile binding</option>
+              <option value="">No learner profile selected</option>
               {profileOptions.map((profile) => (
                 <option key={profile.id} value={profile.id}>
                   {profile.label} ({profile.id})
@@ -83,8 +83,8 @@ export function CreateStudentDialog({
           <details className="workspace-advanced">
             <summary>Starter profile (optional)</summary>
             <p className="workspace-muted">
-              Use this when you want the system to create an initial bound profile from teacher
-              input. If you fill this in, it takes precedence over the Initial Profile picker.
+              Use this when you want the system to create the initial learner profile from teacher
+              input. If you fill this in, it takes precedence over the existing-profile picker.
             </p>
             <div className="workspace-grid">
               <label className="workspace-field">
