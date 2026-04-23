@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { loadConfig } from '../src/config/env.js';
-import { migrateLegacyProfiles } from '../src/application/legacy-profile-migration.js';
+import {
+  createLegacyProfileMigrationReport,
+  migrateLegacyProfiles,
+  renderLegacyProfileMigrationItemMarkdown,
+  renderLegacyProfileMigrationSummaryMarkdown,
+} from '../src/application/legacy-profile-migration.js';
 
 describe('application/legacy-profile-migration', () => {
   it('plans and applies structured migrations for markdown-only active revisions', async () => {
@@ -41,13 +46,19 @@ describe('application/legacy-profile-migration', () => {
       },
       overrides: {
         config: loadConfig(),
-        profiles: {
+        students: {
           list: async () => ({
             items: [
               {
-                id: 'profiles/students/alex.md',
-                label: 'Alex',
-                activeRevisionId: 'revision-legacy-1',
+                id: 'student-alex',
+                student: 'Alex',
+                profileId: 'profiles/students/alex.md',
+                dbId: null,
+                pageParentId: null,
+                colorPreset: null,
+                voices: {},
+                manifestPreset: null,
+                accentPreference: null,
                 createdAt: new Date('2026-01-01T00:00:00.000Z'),
                 updatedAt: new Date('2026-01-01T00:00:00.000Z'),
               },
@@ -56,6 +67,15 @@ describe('application/legacy-profile-migration', () => {
             limit: 200,
             offset: 0,
             order: 'asc',
+          }),
+        },
+        profiles: {
+          getById: async () => ({
+            id: 'profiles/students/alex.md',
+            label: 'Alex',
+            activeRevisionId: 'revision-legacy-1',
+            createdAt: new Date('2026-01-01T00:00:00.000Z'),
+            updatedAt: new Date('2026-01-01T00:00:00.000Z'),
           }),
         },
         revisions: {
@@ -96,6 +116,8 @@ describe('application/legacy-profile-migration', () => {
     expect(result.items).toHaveLength(1);
     expect(result.items[0]).toEqual(
       expect.objectContaining({
+        studentId: 'student-alex',
+        studentName: 'Alex',
         profileId: 'profiles/students/alex.md',
         sourceRevisionId: 'revision-legacy-1',
         action: 'migrated',
@@ -124,13 +146,19 @@ describe('application/legacy-profile-migration', () => {
       request: {},
       overrides: {
         config: loadConfig(),
-        profiles: {
+        students: {
           list: async () => ({
             items: [
               {
-                id: 'profiles/students/alex.md',
-                label: 'Alex',
-                activeRevisionId: 'revision-structured-1',
+                id: 'student-alex',
+                student: 'Alex',
+                profileId: 'profiles/students/alex.md',
+                dbId: null,
+                pageParentId: null,
+                colorPreset: null,
+                voices: {},
+                manifestPreset: null,
+                accentPreference: null,
                 createdAt: new Date('2026-01-01T00:00:00.000Z'),
                 updatedAt: new Date('2026-01-01T00:00:00.000Z'),
               },
@@ -139,6 +167,15 @@ describe('application/legacy-profile-migration', () => {
             limit: 200,
             offset: 0,
             order: 'asc',
+          }),
+        },
+        profiles: {
+          getById: async () => ({
+            id: 'profiles/students/alex.md',
+            label: 'Alex',
+            activeRevisionId: 'revision-structured-1',
+            createdAt: new Date('2026-01-01T00:00:00.000Z'),
+            updatedAt: new Date('2026-01-01T00:00:00.000Z'),
           }),
         },
         revisions: {
@@ -193,9 +230,15 @@ describe('application/legacy-profile-migration', () => {
       .fn()
       .mockResolvedValueOnce({
         items: Array.from({ length: 200 }, (_, index) => ({
-          id: `profiles/students/student-${index}.md`,
-          label: `Student ${index}`,
-          activeRevisionId: `revision-${index}`,
+          id: `student-${index}`,
+          student: `Student ${index}`,
+          profileId: `profiles/students/student-${index}.md`,
+          dbId: null,
+          pageParentId: null,
+          colorPreset: null,
+          voices: {},
+          manifestPreset: null,
+          accentPreference: null,
           createdAt: new Date('2026-01-01T00:00:00.000Z'),
           updatedAt: new Date('2026-01-01T00:00:00.000Z'),
         })),
@@ -207,9 +250,15 @@ describe('application/legacy-profile-migration', () => {
       .mockResolvedValueOnce({
         items: [
           {
-            id: 'profiles/students/target.md',
-            label: 'Target',
-            activeRevisionId: 'revision-target',
+            id: 'student-target',
+            student: 'Target',
+            profileId: 'profiles/students/target.md',
+            dbId: null,
+            pageParentId: null,
+            colorPreset: null,
+            voices: {},
+            manifestPreset: null,
+            accentPreference: null,
             createdAt: new Date('2026-01-01T00:00:00.000Z'),
             updatedAt: new Date('2026-01-01T00:00:00.000Z'),
           },
@@ -226,8 +275,17 @@ describe('application/legacy-profile-migration', () => {
       },
       overrides: {
         config: loadConfig(),
-        profiles: {
+        students: {
           list,
+        },
+        profiles: {
+          getById: async () => ({
+            id: 'profiles/students/target.md',
+            label: 'Target',
+            activeRevisionId: 'revision-target',
+            createdAt: new Date('2026-01-01T00:00:00.000Z'),
+            updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+          }),
         },
         revisions: {
           getById: async () => ({
@@ -264,6 +322,141 @@ describe('application/legacy-profile-migration', () => {
       expect.objectContaining({
         profileId: 'profiles/students/target.md',
         action: 'planned',
+      }),
+    );
+  });
+
+  it('renders migration report summaries and item detail for review artifacts', () => {
+    const report = createLegacyProfileMigrationReport({
+      request: {
+        apply: false,
+        profileId: 'profiles/students/alex.md',
+        reviewerId: 'teacher-1',
+        limit: 1,
+      },
+      generatedAt: '2026-04-22T12:00:00.000Z',
+      result: {
+        profilesScanned: 1,
+        migratedCount: 0,
+        plannedCount: 1,
+        skippedCount: 0,
+        items: [
+          {
+            studentId: 'student-alex',
+            studentName: 'Alex',
+            profileId: 'profiles/students/alex.md',
+            label: 'Alex',
+            sourceRevisionId: 'revision-legacy-1',
+            originalMarkdown: '# Foundational Profile\n\n## Goals & Motivation\n- Speak more clearly.\n',
+            structuredContent: {
+              schemaVersion: 'foundational_profile_v1',
+              overallLevel: 'B1',
+              primaryGoals: ['Speak more clearly.'],
+              communicationContexts: [],
+              interestsAndUsefulThemes: [],
+              stableStrengths: [],
+              persistentChallenges: [],
+              studyPreferences: [],
+              durableConstraints: [],
+              teacherNotes: null,
+            },
+            renderedContent:
+              '# Foundational Profile\n\n**Current Level:** B1\n\n## Goals & Motivation\n- Speak more clearly.\n',
+            action: 'planned',
+            reason: null,
+            migratedRevision: null,
+          },
+        ],
+      },
+    });
+
+    const summary = renderLegacyProfileMigrationSummaryMarkdown(report);
+    const detail = renderLegacyProfileMigrationItemMarkdown(report.items[0]!);
+
+    expect(summary).toContain('Legacy Profile Migration Report');
+    expect(summary).toContain('Mode: dry-run');
+    expect(summary).toContain('profiles/students/alex.md');
+    expect(detail).toContain('Structured Content');
+    expect(detail).toContain('"overallLevel": "B1"');
+    expect(detail).toContain('Original Markdown');
+  });
+
+  it('prefers curated canonical profile data for known live legacy profiles', async () => {
+    const result = await migrateLegacyProfiles({
+      request: {
+        profileId: 'dasha.md',
+      },
+      overrides: {
+        config: loadConfig(),
+        students: {
+          list: async () => ({
+            items: [
+              {
+                id: 'student-dasha',
+                student: 'Daria',
+                profileId: 'dasha.md',
+                dbId: null,
+                pageParentId: null,
+                colorPreset: null,
+                voices: {},
+                manifestPreset: null,
+                accentPreference: null,
+                createdAt: new Date('2026-01-01T00:00:00.000Z'),
+                updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+              },
+            ],
+            total: 1,
+            limit: 200,
+            offset: 0,
+            order: 'asc',
+          }),
+        },
+        profiles: {
+          getById: async () => ({
+            id: 'dasha.md',
+            label: 'Daria',
+            activeRevisionId: 'revision-legacy-dasha',
+            createdAt: new Date('2026-01-01T00:00:00.000Z'),
+            updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+          }),
+        },
+        revisions: {
+          getById: async () => ({
+            id: 'revision-legacy-dasha',
+            profileId: 'dasha.md',
+            content: '# Minimal markdown that would not be enough on its own',
+            structuredContent: null,
+            contentHash: 'hash-dasha',
+            source: 'update',
+            status: 'active',
+            versionNumber: 1,
+            versionLabel: 'v1',
+            activatedAt: new Date('2026-04-01T00:00:00.000Z'),
+            deprecatedAt: null,
+            createdAt: new Date('2026-04-01T00:00:00.000Z'),
+            createdBy: 'teacher-1',
+            restoredFromRevisionId: null,
+          }),
+        },
+        profileContent: {
+          saveRevision: async () => {
+            throw new Error('saveRevision should not be called during dry-run');
+          },
+        },
+      },
+    });
+
+    expect(result.items[0]).toEqual(
+      expect.objectContaining({
+        studentName: 'Daria',
+        profileId: 'dasha.md',
+        action: 'planned',
+        structuredContent: expect.objectContaining({
+          overallLevel: 'A2',
+          primaryGoals: [
+            'Transition photography into her main professional pursuit and source of income.',
+          ],
+        }),
       }),
     );
   });

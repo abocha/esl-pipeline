@@ -295,7 +295,7 @@ describe('StudentLearningPage', () => {
 
     renderLearningPage();
 
-    expect(await screen.findByText(/does not have a bound learner profile yet/i)).toBeTruthy();
+    expect(await screen.findByText(/does not have a canonical learner profile yet/i)).toBeTruthy();
     expect(screen.queryByRole('link', { name: /Open legacy workspace/i })).toBeNull();
 
     await user.click(screen.getByRole('button', { name: /Start Empty Profile/i }));
@@ -580,7 +580,7 @@ describe('StudentLearningPage', () => {
 
     expect(await screen.findByDisplayValue('B2')).toBeTruthy();
     expect(screen.getByText('Student B memory summary.')).toBeTruthy();
-    expect(screen.getAllByText(/profiles\/students\/bora\.md/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Student ID: bora/).length).toBeGreaterThan(0);
     expect(screen.getByText(/candidate-b/)).toBeTruthy();
 
     await act(async () => {
@@ -689,8 +689,8 @@ describe('StudentLearningPage', () => {
       expect(screen.queryByDisplayValue('A2')).toBeNull();
       expect(screen.getByText('Student B memory summary.')).toBeTruthy();
       expect(screen.queryByText('Student A memory summary.')).toBeNull();
-      expect(screen.getAllByText(/profiles\/students\/bora\.md/).length).toBeGreaterThan(0);
-      expect(screen.queryByText(/profiles\/students\/alex\.md/)).toBeNull();
+      expect(screen.getAllByText(/Student ID: bora/).length).toBeGreaterThan(0);
+      expect(screen.queryByText(/Student ID: alex/)).toBeNull();
       expect(screen.getByText(/candidate-b/)).toBeTruthy();
       expect(screen.queryByText(/candidate-a/)).toBeNull();
     });

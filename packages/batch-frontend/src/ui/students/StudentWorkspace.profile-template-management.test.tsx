@@ -19,7 +19,7 @@ describe('StudentWorkspace profile and template management', () => {
     await renderLoadedWorkspace();
 
     await user.selectOptions(
-      screen.getByRole('combobox', { name: /Bound profile/i }),
+      screen.getByRole('combobox', { name: /Learner profile/i }),
       'profile-alt.md',
     );
     await user.click(screen.getByRole('button', { name: /Save Student Binding/i }));

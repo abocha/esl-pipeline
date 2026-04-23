@@ -1258,18 +1258,18 @@ export const StudentWorkspace: React.FC = () => {
 
         <article className="workspace-card card">
           <header>
-            <h2>Profile Binding</h2>
-            <p>Bind the selected student to an active profile ID.</p>
+            <h2>Profile Selection</h2>
+            <p>Select the learner profile used by the legacy workspace.</p>
           </header>
 
           <label className="workspace-field">
-            Bound profile
+            Learner profile
             <select
               value={selectedProfileId}
               onChange={(event) => setSelectedProfileId(event.target.value)}
               disabled={!selectedStudentId || profileOptions.length === 0}
             >
-              <option value="">No profile binding</option>
+              <option value="">No learner profile selected</option>
               {profileOptions.map((profile) => (
                 <option key={profile.id} value={profile.id}>
                   {profile.label} ({profile.id})

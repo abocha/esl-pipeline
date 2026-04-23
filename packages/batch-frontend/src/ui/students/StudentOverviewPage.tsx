@@ -2,11 +2,12 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 
 import { useStudentAreaContext } from './StudentAreaContext';
+import { formatStudentShortId } from './studentIdentity';
 
 const CARD_DEFS = [
   {
     title: 'Profile Health',
-    description: 'See whether the learner profile is bound and ready for lesson authoring.',
+    description: 'See whether the learner profile is ready for lesson authoring.',
     ctaLabel: 'Open Learning',
     ctaPath: 'learning',
   },
@@ -54,7 +55,7 @@ export const StudentOverviewPage: React.FC = () => {
             ? studentError
             : studentLoading
               ? 'Loading overview context...'
-              : `${student?.student ?? 'This student'} now has a dedicated routed home. These cards keep the control-tower shape while deeper domains mature.`}
+              : `${student?.student ?? 'This student'} • ${formatStudentShortId(studentId)}. These cards keep the control-tower shape while deeper domains mature.`}
         </p>
       </header>
 
