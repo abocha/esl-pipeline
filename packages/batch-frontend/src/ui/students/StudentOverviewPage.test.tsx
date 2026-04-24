@@ -167,8 +167,9 @@ describe('StudentOverviewPage', () => {
   it('renders a calm overview from structured learner profile and memory data', async () => {
     renderOverview();
 
-    expect(await screen.findByRole('heading', { name: 'Alex Rivera' })).toBeTruthy();
-    expect(screen.getByText('Student ID: alex')).toBeTruthy();
+    expect(await screen.findByText('On track')).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Alex Rivera' })).toBeNull();
+    expect(screen.queryByText('Student ID: alex')).toBeNull();
     expect(screen.getByText('B1')).toBeTruthy();
     expect(screen.getAllByText('Speak confidently in workplace meetings.')).toHaveLength(2);
     expect(screen.getByText('Clear ideas')).toBeTruthy();

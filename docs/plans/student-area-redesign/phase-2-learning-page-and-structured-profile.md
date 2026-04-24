@@ -42,15 +42,19 @@ language that later pages can follow.
 
 Recommended vertical layout:
 
-### 1. Learning Header
+### 1. Learning Status And Actions
+
+The shared student masthead owns student identity, short ID, back navigation, and student-area
+tabs. The top of the `Learning` page itself should start with pedagogical state and actions.
 
 Shows:
 
-1. student identity
-2. active profile status
-3. draft-present or no-draft state
-4. last updated time
-5. clear primary actions
+1. active profile status
+2. draft-present or no-draft state
+3. last updated time
+4. memory snapshot state
+5. promotion queue state
+6. clear profile workflow actions
 
 Primary header actions:
 

@@ -86,22 +86,54 @@ page model, ownership boundaries, or profile authority rules.
    - event-category language
    - timeline hierarchy
    - Telegram avatar and 24-hour-time decisions
+8. [phase-6-shared-student-masthead-and-density-system.md](phase-6-shared-student-masthead-and-density-system.md)
+   - shared student masthead
+   - removal of duplicated page-local identity heroes
+   - route-aware body density variants
+   - directory-to-student identity continuity
+9. [phase-7-unified-student-area-design-language.md](phase-7-unified-student-area-design-language.md)
+   - shared student-area visual primitives
+   - unified editorial teaching-studio styling
+   - Learning and Schedule & Billing visual convergence
+   - browser-level visual acceptance
+
+## Current Authority Chain
+
+Use the docs in this order when making student-area UX decisions:
+
+1. Phase 1 owns page architecture and domain boundaries.
+2. Phase 6 owns shared shell, masthead, tabs, route-level page density, and removal of duplicated
+   page-local identity heroes.
+3. Phase 7 owns the next visual convergence pass: shared design tokens, reusable primitives, and a
+   unified look across all student-area pages.
+4. The page-specific phase docs and design locks still own content contracts, but any older
+   `header`, `hero`, `portrait`, or `back link` wording should be interpreted through Phase 6.
 
 ## Recommended Delivery Sequence
 
 The product should be built in this order:
 
-1. `Learning`
+0. `Shared student masthead`
+   - normalize the shell before further page polish
+   - remove duplicated student identity heroes from routed pages
+   - introduce route-aware body density for `Overview`, `Learning`, `History`, and
+     `Schedule & Billing`
+1. `Unified design language`
+   - extract or centralize shared student-area visual primitives
+   - bring `Learning` and `Schedule & Billing` into the same warm editorial system as `Overview`
+     and `History`
+   - verify the pages together in a browser, not just in isolated component tests
+2. `Learning`
    - structured profile
    - manual editing
    - generated-draft helpers
    - minimal-flow preview integration
-2. `Overview`
+3. `Overview`
    - status cards
    - deep links into learning and future ops work
-3. `History`
+4. `History`
    - the least ambiguous future home for provenance that is currently cluttering the workspace
-4. `Schedule & Billing`
+5. `Schedule & Billing`
    - start with lesson credits, next-lesson planning, and reminder state
    - expand later into invoices, attendance, and communication log
 

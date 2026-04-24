@@ -316,6 +316,9 @@ describe('StudentLearningPage', () => {
     renderLearningPage();
 
     expect(await screen.findByDisplayValue('B1')).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: /Pedagogical Home/i })).toBeNull();
+    expect(screen.getByText('Revision State')).toBeTruthy();
+    expect(screen.getByText('Profile Readiness')).toBeTruthy();
 
     await user.click(
       await screen.findByRole('button', { name: /Populate First Profile From Lesson/i }),

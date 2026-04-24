@@ -141,6 +141,10 @@ Recommended behaviors:
 3. allow drill-in to provenance details
 4. show enough summary to scan without opening every event
 
+History uses the shared student masthead from Phase 6. The page itself should own only
+history-specific explanation, filters, timeline, empty states, and provenance affordances. It should
+not re-render student identity, a page-local portrait, or a separate back link.
+
 Detailed visual and product decisions for the History page are locked in
 [`history-page-design-lock.md`](history-page-design-lock.md). That companion doc should guide
 implementation of the new History surface.

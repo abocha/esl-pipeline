@@ -15,7 +15,6 @@ import {
   type StudentTimelineItem,
 } from '../../utils/api';
 import { useStudentAreaContext } from './StudentAreaContext';
-import { formatStudentShortId, getShortStudentId } from './studentIdentity';
 
 interface OverviewData {
   profile: ProfileContentResponse | null;
@@ -101,16 +100,6 @@ function countProfileCoverage(profile: FoundationalProfile | null | undefined): 
     ...profile.durableConstraints,
     profile.teacherNotes,
   ].filter((value) => value?.trim()).length;
-}
-
-function getStudentInitials(name: string): string {
-  const parts = name
-    .trim()
-    .split(/\s+/)
-    .map((part) => part[0])
-    .filter(Boolean)
-    .slice(0, 2);
-  return parts.join('').toUpperCase() || 'ST';
 }
 
 function getStudentSummary(profile: FoundationalProfile | null | undefined): string {
@@ -438,8 +427,6 @@ export const StudentOverviewPage: React.FC = () => {
   }, [student?.profileId, studentId, studentLoading]);
 
   const overviewReady = loadedOverviewKey === currentOverviewKey && !overviewLoading;
-  const studentName = student?.student ?? 'Student record';
-  const studentInitials = getStudentInitials(studentName);
   const shellLoading = studentLoading || !overviewReady;
   const studentAreaPath = (section: 'learning' | 'history' | 'schedule-billing'): string =>
     `/students/${encodeURIComponent(studentId)}/${section}`;
@@ -471,18 +458,15 @@ export const StudentOverviewPage: React.FC = () => {
   return (
     <section className="student-overview-page" aria-busy={shellLoading}>
       <div className="student-overview-frame">
-        <div className="student-overview-back">
-          <Link to="/students">Back to all students</Link>
-        </div>
+        {studentError || overviewError ? (
+          <p className="student-overview-error" role="alert">
+            {studentError ?? overviewError}
+          </p>
+        ) : null}
 
-        <div className="student-overview-hero">
-          <div className="student-overview-portrait" aria-hidden="true">
-            <span>{studentInitials}</span>
-          </div>
-
-          <div className="student-overview-identity">
-            <p className="student-overview-kicker">{formatStudentShortId(studentId)}</p>
-            <h2>{studentName}</h2>
+        <div className="student-overview-control-row">
+          <article className="student-overview-status-panel">
+            <p className="student-overview-section-label">Learning State</p>
             <p>{getStudentSummary(profile)}</p>
             <Link
               className={`student-overview-status status-${profileStatus.tone}`}
@@ -492,7 +476,7 @@ export const StudentOverviewPage: React.FC = () => {
               <strong>{profileStatus.label}</strong>
               <span>{profileStatus.detail}</span>
             </Link>
-          </div>
+          </article>
 
           <aside className="student-overview-operations" aria-label="Operations snapshot">
             <p className="student-overview-section-label">Operations</p>
@@ -538,12 +522,6 @@ export const StudentOverviewPage: React.FC = () => {
             </Link>
           </aside>
         </div>
-
-        {studentError || overviewError ? (
-          <p className="student-overview-error" role="alert">
-            {studentError ?? overviewError}
-          </p>
-        ) : null}
 
         <div className="student-overview-body">
           <article className="student-overview-panel learner-snapshot">
@@ -893,6 +871,31 @@ const studentOverviewStyles = `
     font-family: Georgia, 'Times New Roman', serif;
     font-size: clamp(1.05rem, 2vw, 1.42rem);
     line-height: 1.45;
+  }
+
+  .student-overview-control-row {
+    display: grid;
+    gap: clamp(1rem, 3vw, 2rem);
+    grid-template-columns: minmax(280px, 0.95fr) minmax(280px, 0.72fr);
+    align-items: start;
+    padding-bottom: 0.35rem;
+  }
+
+  .student-overview-status-panel {
+    display: grid;
+    gap: 1rem;
+    min-height: 100%;
+    padding-right: clamp(1rem, 3vw, 2.2rem);
+    border-right: 1px solid var(--overview-line);
+  }
+
+  .student-overview-status-panel > p:not(.student-overview-section-label) {
+    max-width: 36rem;
+    margin: 0;
+    color: #2c2923;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: clamp(1.05rem, 2vw, 1.38rem);
+    line-height: 1.48;
   }
 
   .student-overview-status {
@@ -1252,6 +1255,7 @@ const studentOverviewStyles = `
 
   @media (max-width: 1120px) {
     .student-overview-hero,
+    .student-overview-control-row,
     .student-overview-body {
       grid-template-columns: 1fr;
     }
@@ -1265,6 +1269,13 @@ const studentOverviewStyles = `
       border-left: 0;
       border-top: 1px solid var(--overview-line);
       padding-top: 1rem;
+    }
+
+    .student-overview-status-panel {
+      padding-right: 0;
+      padding-bottom: 1rem;
+      border-right: 0;
+      border-bottom: 1px solid var(--overview-line);
     }
   }
 

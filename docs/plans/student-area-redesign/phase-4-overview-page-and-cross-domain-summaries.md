@@ -26,17 +26,20 @@ polish and future implementation work beyond the first rough pass.
 
 ## Recommended Page Layout
 
-### 1. Student Header
+### 1. Overview Status Row
+
+The shared student masthead owns student identity, short ID, back navigation, page summary, and
+student-area tabs. `Overview` should begin immediately with control-surface content.
 
 Shows:
 
-1. student name
-2. timezone
-3. preferred contact channel
-4. next lesson state when known
+1. compact profile or learning status
+2. one-sentence current learner story
+3. next lesson state when known
+4. preferred contact or reminder readiness when known
 5. compact alert badge or missing-data state
 
-Primary header actions may include:
+Primary actions may include:
 
 1. `Open Learning`
 2. `Schedule Lesson`

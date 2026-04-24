@@ -14,7 +14,7 @@ import {
   type CreateStudentFormState,
 } from './StudentWorkspace.logic';
 import { CreateStudentDialog } from './CreateStudentDialog';
-import { formatStudentShortId } from './studentIdentity';
+import { formatStudentShortId, getStudentInitials } from './studentIdentity';
 
 export const StudentDirectoryPage: React.FC = () => {
   const navigate = useNavigate();
@@ -140,13 +140,28 @@ export const StudentDirectoryPage: React.FC = () => {
         <div className="student-directory-grid">
           {students.map((student) => (
             <article key={student.id} className="student-directory-card">
-              <div>
-                <h3>{student.student}</h3>
-                <p>{formatStudentShortId(student.id)}</p>
+              <div className="student-directory-identity">
+                <div className="student-directory-avatar" aria-hidden="true">
+                  {getStudentInitials(student.student)}
+                </div>
+                <div>
+                  <h3>{student.student}</h3>
+                  <p>{formatStudentShortId(student.id)}</p>
+                </div>
               </div>
               <div className="student-directory-actions">
-                <Link to={`/students/${encodeURIComponent(student.id)}/overview`}>Open Overview</Link>
-                <Link to={`/students/${encodeURIComponent(student.id)}/learning`}>Open Learning</Link>
+                <Link
+                  className="student-directory-primary-action"
+                  to={`/students/${encodeURIComponent(student.id)}/overview`}
+                >
+                  Open student
+                </Link>
+                <Link
+                  className="student-directory-secondary-action"
+                  to={`/students/${encodeURIComponent(student.id)}/learning`}
+                >
+                  Open Learning
+                </Link>
               </div>
             </article>
           ))}
@@ -192,7 +207,31 @@ export const StudentDirectoryPage: React.FC = () => {
           padding: 1rem;
           display: grid;
           gap: 0.75rem;
-          background: var(--bg-secondary, rgba(248, 250, 252, 0.85));
+          background:
+            radial-gradient(circle at top right, rgba(232, 238, 247, 0.9), transparent 36%),
+            var(--bg-secondary, rgba(248, 250, 252, 0.85));
+        }
+
+        .student-directory-identity {
+          display: grid;
+          grid-template-columns: auto minmax(0, 1fr);
+          gap: 0.85rem;
+          align-items: center;
+        }
+
+        .student-directory-avatar {
+          width: 3.3rem;
+          aspect-ratio: 1;
+          border-radius: 30% 70% 62% 38% / 42% 46% 54% 58%;
+          display: grid;
+          place-items: center;
+          border: 1px solid rgba(20, 63, 115, 0.14);
+          background:
+            radial-gradient(circle at 34% 28%, rgba(255, 255, 255, 0.82), transparent 32%),
+            linear-gradient(145deg, #f4eadb, #e8eef7);
+          color: #143f73;
+          font-weight: 800;
+          letter-spacing: 0.04em;
         }
 
         .student-directory-actions {
@@ -205,10 +244,18 @@ export const StudentDirectoryPage: React.FC = () => {
           width: fit-content;
           padding: 0.65rem 0.95rem;
           border-radius: 999px;
-          background: rgba(37, 99, 235, 0.1);
-          color: var(--color-primary-600, #1d4ed8);
           text-decoration: none;
           font-weight: 600;
+        }
+
+        .student-directory-primary-action {
+          background: #143f73;
+          color: #fffaf1;
+        }
+
+        .student-directory-secondary-action {
+          background: rgba(37, 99, 235, 0.1);
+          color: var(--color-primary-600, #1d4ed8);
         }
       `}</style>
     </section>
