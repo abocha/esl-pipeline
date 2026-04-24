@@ -92,9 +92,10 @@ page model, ownership boundaries, or profile authority rules.
    - route-aware body density variants
    - directory-to-student identity continuity
 9. [phase-7-unified-student-area-design-language.md](phase-7-unified-student-area-design-language.md)
-   - shared student-area visual primitives
-   - unified editorial teaching-studio styling
+   - shared global app tokens and student-area visual primitives
+   - unified editorial teaching-studio styling across the authenticated app shell and student area
    - Learning and Schedule & Billing visual convergence
+   - shared student-route canvas ownership with page-specific density inside the canvas
    - browser-level visual acceptance
 
 ## Current Authority Chain
@@ -102,10 +103,11 @@ page model, ownership boundaries, or profile authority rules.
 Use the docs in this order when making student-area UX decisions:
 
 1. Phase 1 owns page architecture and domain boundaries.
-2. Phase 6 owns shared shell, masthead, tabs, route-level page density, and removal of duplicated
-   page-local identity heroes.
-3. Phase 7 owns the next visual convergence pass: shared design tokens, reusable primitives, and a
-   unified look across all student-area pages.
+2. Phase 6 owns the original shared student masthead, tabs, and removal of duplicated page-local
+   identity heroes.
+3. Phase 7 owns the current visual convergence pass: authenticated app shell styling, shared global
+   design tokens, reusable student-area primitives, the shared student-route paper canvas, and a
+   unified look across the student-area pages.
 4. The page-specific phase docs and design locks still own content contracts, but any older
    `header`, `hero`, `portrait`, or `back link` wording should be interpreted through Phase 6.
 

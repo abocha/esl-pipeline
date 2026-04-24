@@ -332,6 +332,8 @@ describe('StudentHistoryPage', () => {
     renderHistory();
 
     expect(screen.getByTestId('student-history-pending-canvas')).toBeTruthy();
+    expect(document.querySelector('.student-history-pending-hero')).toBeNull();
+    expect(document.querySelector('.skeleton-portrait')).toBeNull();
     expect(screen.queryByText('Loading history')).toBeNull();
     expect(screen.queryByText('No history yet')).toBeNull();
     expect(screen.queryByText('Lesson memory created')).toBeNull();

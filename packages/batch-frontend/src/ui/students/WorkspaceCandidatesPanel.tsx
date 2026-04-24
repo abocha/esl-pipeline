@@ -12,6 +12,7 @@ import {
 } from './StudentWorkspace.logic';
 
 export interface WorkspaceCandidatesPanelProps {
+  className?: string;
   selectedStudentId: string;
   profileCandidates: StudentProfileCandidate[];
   profileCandidatesLoading: boolean;
@@ -40,6 +41,7 @@ export interface WorkspaceCandidatesPanelProps {
 }
 
 export function WorkspaceCandidatesPanel({
+  className,
   selectedStudentId,
   profileCandidates,
   profileCandidatesLoading,
@@ -68,7 +70,7 @@ export function WorkspaceCandidatesPanel({
   );
 
   return (
-    <article className="workspace-card card">
+    <article className={['workspace-card card', className].filter(Boolean).join(' ')}>
       <header>
         <h2>Profile Candidates</h2>
         <p>

@@ -14,6 +14,7 @@ import {
   type CreateStudentFormState,
 } from './StudentWorkspace.logic';
 import { CreateStudentDialog } from './CreateStudentDialog';
+import { StudentAreaDesignSystemStyles } from './StudentAreaDesignSystem';
 import { formatStudentShortId, getStudentInitials } from './studentIdentity';
 
 export const StudentDirectoryPage: React.FC = () => {
@@ -84,8 +85,9 @@ export const StudentDirectoryPage: React.FC = () => {
   }, [createStudentForm, loadStudents, navigate]);
 
   return (
-    <section className="student-directory-layout">
-      <article className="card student-directory-hero">
+    <section className="student-directory-layout student-area-theme">
+      <StudentAreaDesignSystemStyles />
+      <article className="student-area-panel card student-directory-hero">
         <div>
           <span className="student-area-eyebrow">Students</span>
           <h1>Student area</h1>
@@ -93,7 +95,7 @@ export const StudentDirectoryPage: React.FC = () => {
         </div>
       </article>
 
-      <article className="card">
+      <article className="student-area-panel card">
         <CreateStudentDialog
           isOpen={createOpen}
           isBusy={createBusy}
@@ -115,7 +117,7 @@ export const StudentDirectoryPage: React.FC = () => {
         />
       </article>
 
-      <article className="card student-directory-list">
+      <article className="student-area-panel card student-directory-list">
         <header className="student-directory-list-header">
           <div>
             <h2>Students</h2>
@@ -139,7 +141,7 @@ export const StudentDirectoryPage: React.FC = () => {
 
         <div className="student-directory-grid">
           {students.map((student) => (
-            <article key={student.id} className="student-directory-card">
+            <article key={student.id} className="student-area-panel student-directory-card">
               <div className="student-directory-identity">
                 <div className="student-directory-avatar" aria-hidden="true">
                   {getStudentInitials(student.student)}
@@ -174,6 +176,13 @@ export const StudentDirectoryPage: React.FC = () => {
           gap: 1rem;
         }
 
+        .student-directory-layout > .card {
+          border: 1px solid var(--student-area-line);
+          border-radius: var(--student-area-radius-md);
+          background: var(--student-area-panel);
+          box-shadow: var(--student-area-shadow-soft);
+        }
+
         .student-directory-hero h1,
         .student-directory-list h2,
         .student-directory-card h3,
@@ -202,14 +211,15 @@ export const StudentDirectoryPage: React.FC = () => {
         }
 
         .student-directory-card {
-          border: 1px solid var(--border-light, rgba(15, 23, 42, 0.12));
-          border-radius: 1rem;
+          border: 1px solid var(--student-area-line);
+          border-radius: var(--student-area-radius-md);
           padding: 1rem;
           display: grid;
           gap: 0.75rem;
           background:
             radial-gradient(circle at top right, rgba(232, 238, 247, 0.9), transparent 36%),
-            var(--bg-secondary, rgba(248, 250, 252, 0.85));
+            var(--student-area-panel);
+          box-shadow: var(--student-area-shadow-soft);
         }
 
         .student-directory-identity {
@@ -228,8 +238,8 @@ export const StudentDirectoryPage: React.FC = () => {
           border: 1px solid rgba(20, 63, 115, 0.14);
           background:
             radial-gradient(circle at 34% 28%, rgba(255, 255, 255, 0.82), transparent 32%),
-            linear-gradient(145deg, #f4eadb, #e8eef7);
-          color: #143f73;
+            linear-gradient(145deg, var(--student-area-paper-deep), var(--student-area-blue-soft));
+          color: var(--student-area-blue);
           font-weight: 800;
           letter-spacing: 0.04em;
         }
@@ -249,13 +259,13 @@ export const StudentDirectoryPage: React.FC = () => {
         }
 
         .student-directory-primary-action {
-          background: #143f73;
+          background: var(--student-area-blue);
           color: #fffaf1;
         }
 
         .student-directory-secondary-action {
-          background: rgba(37, 99, 235, 0.1);
-          color: var(--color-primary-600, #1d4ed8);
+          background: var(--student-area-blue-soft);
+          color: var(--student-area-blue);
         }
       `}</style>
     </section>

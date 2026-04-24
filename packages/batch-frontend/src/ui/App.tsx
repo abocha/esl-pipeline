@@ -182,9 +182,34 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ user, onLogout }) =
 };
 
 const RouteLoadingFallback: React.FC = () => (
-  <div className="auth-shell">
-    <LoadingPanel />
-  </div>
+  <section className="route-loading-panel" aria-live="polite">
+    <span className="loading-eyebrow">Opening page…</span>
+    <h2>Preparing the studio surface</h2>
+    <p>Loading the next teaching room without changing your session.</p>
+
+    <style>{`
+      .route-loading-panel {
+        width: min(100%, 42rem);
+        margin: 0 auto;
+        padding: clamp(2rem, 5vw, 3.5rem);
+        border: 1px solid var(--app-line);
+        border-radius: var(--app-radius-lg);
+        background: var(--app-panel);
+        box-shadow: var(--app-shadow-soft);
+        color: var(--app-ink);
+      }
+
+      .route-loading-panel h2 {
+        margin: 0.35rem 0 0;
+        color: var(--app-ink);
+      }
+
+      .route-loading-panel p {
+        margin: 0.5rem 0 0;
+        color: var(--app-muted);
+      }
+    `}</style>
+  </section>
 );
 
 const LoadingPanel: React.FC = () => (
@@ -331,7 +356,7 @@ const UnauthenticatedNotice: React.FC<{ onLogin: () => void; onRegister: () => v
       .circle {
         position: absolute;
         border-radius: 999px;
-        background: rgba(43, 81, 255, 0.08);
+        background: rgba(20, 63, 115, 0.08);
       }
 
       .circle-1 {

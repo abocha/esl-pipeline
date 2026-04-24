@@ -302,8 +302,10 @@ function LearningMetricCard({
   tone = 'default',
 }: LearningMetricCardProps): React.JSX.Element {
   return (
-    <article className={`student-learning-metric student-learning-metric-${tone}`}>
-      <span className="student-learning-card-eyebrow">{eyebrow}</span>
+    <article
+      className={`student-area-metric-card student-learning-metric student-learning-metric-${tone}`}
+    >
+      <span className="student-area-section-label student-learning-card-eyebrow">{eyebrow}</span>
       <strong>{value}</strong>
       <p>{detail}</p>
     </article>
@@ -957,7 +959,10 @@ export const StudentLearningPage: React.FC = () => {
 
   if (studentLoading) {
     return (
-      <section className="card student-learning-status-panel" aria-live="polite">
+      <section
+        className="student-learning-layout student-area-theme student-learning-standalone-state"
+        aria-live="polite"
+      >
         <span className="student-learning-eyebrow">Learning</span>
         <h2>Loading learning workspace…</h2>
         <p>Restoring the canonical learner profile, revision history, and teaching signals.</p>
@@ -967,7 +972,10 @@ export const StudentLearningPage: React.FC = () => {
 
   if (studentError) {
     return (
-      <section className="card student-learning-status-panel" aria-live="polite">
+      <section
+        className="student-learning-layout student-area-theme student-learning-standalone-state"
+        aria-live="polite"
+      >
         <span className="student-learning-eyebrow">Learning</span>
         <h2>We couldn’t load this student.</h2>
         <p>{studentError}</p>
@@ -977,7 +985,10 @@ export const StudentLearningPage: React.FC = () => {
 
   if (!student) {
     return (
-      <section className="card student-learning-status-panel" aria-live="polite">
+      <section
+        className="student-learning-layout student-area-theme student-learning-standalone-state"
+        aria-live="polite"
+      >
         <span className="student-learning-eyebrow">Learning</span>
         <h2>Student not found.</h2>
         <p>This student record could not be resolved from the current route.</p>
@@ -987,7 +998,7 @@ export const StudentLearningPage: React.FC = () => {
 
   if (!profileId) {
     return (
-      <section className="card student-learning-bootstrap">
+      <section className="student-learning-layout student-area-theme student-learning-bootstrap">
         <div className="student-learning-bootstrap-copy">
           <span className="student-learning-eyebrow">Learning</span>
           <h2>Build the first foundational profile</h2>
@@ -1059,8 +1070,8 @@ export const StudentLearningPage: React.FC = () => {
   const recentHomework = memoryOverview?.recentReadyHomeworkMemory ?? [];
 
   return (
-    <section className="student-learning-layout">
-      <article className="card student-learning-hero">
+    <section className="student-learning-layout student-area-theme">
+      <article className="student-area-panel card student-learning-hero">
         <div className="student-learning-hero-copy">
           <span className="student-learning-eyebrow">Learning</span>
           <p>
@@ -1175,7 +1186,7 @@ export const StudentLearningPage: React.FC = () => {
 
       <div className="student-learning-main">
         <div className="student-learning-primary-column">
-          <article className="workspace-card card student-learning-profile-card">
+          <article className="student-area-panel workspace-card card student-learning-profile-card">
             <header className="student-learning-block-header">
               <div>
                 <span className="student-learning-card-eyebrow">Foundational Profile</span>
@@ -1233,7 +1244,7 @@ export const StudentLearningPage: React.FC = () => {
             </footer>
           </article>
 
-          <article className="workspace-card card student-learning-memory-card">
+          <article className="student-area-panel workspace-card card student-learning-memory-card">
             <header className="student-learning-block-header">
               <div>
                 <span className="student-learning-card-eyebrow">Memory & Signals</span>
@@ -1338,6 +1349,7 @@ export const StudentLearningPage: React.FC = () => {
           </article>
 
           <WorkspaceCandidatesPanel
+            className="student-area-panel student-learning-candidates-card"
             selectedStudentId={studentId}
             profileCandidates={profileCandidates}
             profileCandidatesLoading={profileCandidatesLoading}
@@ -1360,7 +1372,7 @@ export const StudentLearningPage: React.FC = () => {
           />
         </div>
 
-        <aside className="workspace-card card student-learning-sidebar">
+        <aside className="student-area-panel workspace-card card student-learning-sidebar">
           <header className="student-learning-block-header">
             <div>
               <span className="student-learning-card-eyebrow">Revision Rail</span>
@@ -1455,12 +1467,22 @@ export const StudentLearningPage: React.FC = () => {
 const learningPageStyles = `
   .student-learning-layout {
     display: grid;
-    gap: 1rem;
+    gap: clamp(1rem, 2vw, 1.35rem);
   }
 
   .student-learning-main {
     display: grid;
     gap: 1rem;
+  }
+
+  .student-learning-layout .card,
+  .student-learning-layout .workspace-card {
+    border: 1px solid var(--student-area-line);
+    border-radius: var(--student-area-radius-md);
+    background:
+      radial-gradient(circle at top right, rgba(20, 63, 115, 0.06), transparent 34%),
+      var(--student-area-panel);
+    box-shadow: var(--student-area-shadow-soft);
   }
 
   .student-learning-primary-column {
@@ -1472,18 +1494,23 @@ const learningPageStyles = `
   .student-learning-hero,
   .workspace-card,
   .student-learning-bootstrap,
-  .student-learning-status-panel {
+  .student-learning-status-panel,
+  .student-learning-standalone-state {
     display: grid;
     gap: 1rem;
   }
 
   .student-learning-hero,
   .student-learning-bootstrap,
-  .student-learning-status-panel {
-    padding: 1.5rem;
+  .student-learning-status-panel,
+  .student-learning-standalone-state {
+    padding: clamp(1.25rem, 3vw, 1.8rem);
+    border: 1px solid var(--student-area-line);
+    border-radius: var(--student-area-radius-md);
     background:
-      radial-gradient(circle at top right, rgba(59, 130, 246, 0.12), transparent 32%),
-      linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(250, 248, 243, 0.98));
+      radial-gradient(circle at top right, rgba(20, 63, 115, 0.09), transparent 32%),
+      linear-gradient(180deg, rgba(255, 253, 248, 0.96), rgba(244, 234, 219, 0.76));
+    box-shadow: var(--student-area-shadow-soft);
   }
 
   .student-learning-hero-copy h2,
@@ -1519,7 +1546,7 @@ const learningPageStyles = `
   }
 
   .student-learning-card-eyebrow {
-    color: rgba(29, 78, 216, 0.82);
+    color: var(--student-area-blue);
   }
 
   .student-learning-status-grid,
@@ -1536,9 +1563,7 @@ const learningPageStyles = `
     display: grid;
     gap: 0.3rem;
     padding: 1rem;
-    border: 1px solid rgba(15, 23, 42, 0.08);
     border-radius: 18px;
-    background: rgba(255, 255, 255, 0.8);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
   }
 
@@ -1551,17 +1576,18 @@ const learningPageStyles = `
   }
 
   .student-learning-metric p {
-    color: var(--text-secondary, #52606d);
+    color: var(--student-area-muted);
     font-size: 0.92rem;
     line-height: 1.45;
   }
 
   .student-learning-metric-success {
-    background: linear-gradient(180deg, rgba(236, 253, 245, 0.92), rgba(255, 255, 255, 0.85));
+    background: var(--student-area-sage-soft);
   }
 
   .student-learning-metric-accent {
-    background: linear-gradient(180deg, rgba(238, 242, 255, 0.98), rgba(255, 255, 255, 0.86));
+    border-color: rgba(145, 98, 12, 0.18);
+    background: var(--student-area-amber-soft);
   }
 
   .student-learning-action-grid {
@@ -1574,9 +1600,9 @@ const learningPageStyles = `
     display: grid;
     gap: 0.65rem;
     padding: 1rem;
-    border: 1px solid rgba(15, 23, 42, 0.08);
+    border: 1px solid var(--student-area-line);
     border-radius: 18px;
-    background: rgba(255, 255, 255, 0.72);
+    background: rgba(255, 253, 248, 0.72);
   }
 
   .student-learning-action-row,
@@ -1593,8 +1619,8 @@ const learningPageStyles = `
     gap: 0.35rem;
     padding: 0.95rem 1rem;
     border-radius: 18px;
-    background: rgba(15, 23, 42, 0.04);
-    color: var(--text-secondary, #52606d);
+    background: rgba(42, 36, 26, 0.045);
+    color: var(--student-area-muted);
   }
 
   .student-learning-system-note code,
@@ -1619,7 +1645,6 @@ const learningPageStyles = `
   .student-learning-section-grid {
     display: grid;
     gap: 1rem;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   }
 
   .student-learning-section-card {
@@ -1627,10 +1652,10 @@ const learningPageStyles = `
     gap: 0.9rem;
     padding: 1.1rem;
     border-radius: 22px;
-    border: 1px solid rgba(15, 23, 42, 0.08);
+    border: 1px solid var(--student-area-line);
     background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.9)),
-      radial-gradient(circle at top right, rgba(59, 130, 246, 0.08), transparent 28%);
+      radial-gradient(circle at top right, rgba(20, 63, 115, 0.055), transparent 28%),
+      rgba(255, 253, 248, 0.82);
     min-width: 0;
   }
 
@@ -1694,10 +1719,10 @@ const learningPageStyles = `
   .student-learning-field textarea:focus-visible,
   .workspace-primary-btn:focus-visible,
   .workspace-secondary-btn:focus-visible,
-  .student-directory-actions a:focus-visible {
+  .student-learning-binding a:focus-visible {
     outline: 2px solid transparent;
-    border-color: rgba(29, 78, 216, 0.45);
-    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.16);
+    border-color: rgba(20, 63, 115, 0.45);
+    box-shadow: 0 0 0 4px rgba(20, 63, 115, 0.14);
   }
 
   .workspace-primary-btn,
@@ -1735,24 +1760,24 @@ const learningPageStyles = `
   }
 
   .workspace-primary-btn {
-    background: linear-gradient(135deg, #3156f5, #5475ff);
+    background: linear-gradient(135deg, var(--student-area-blue), #245a97);
     color: white;
-    box-shadow: 0 12px 24px rgba(49, 86, 245, 0.18);
+    box-shadow: 0 12px 24px rgba(20, 63, 115, 0.18);
   }
 
   .workspace-primary-btn:hover:not(:disabled) {
-    box-shadow: 0 14px 28px rgba(49, 86, 245, 0.24);
+    box-shadow: 0 14px 28px rgba(20, 63, 115, 0.24);
   }
 
   .workspace-secondary-btn,
   .student-learning-empty a,
   .student-learning-binding a {
-    background: rgba(49, 86, 245, 0.1);
-    color: var(--color-primary-600, #3156f5);
+    background: var(--student-area-blue-soft);
+    color: var(--student-area-blue);
   }
 
   .workspace-secondary-btn:hover:not(:disabled) {
-    background: rgba(49, 86, 245, 0.16);
+    background: rgba(20, 63, 115, 0.14);
   }
 
   .workspace-muted {
@@ -1837,7 +1862,7 @@ const learningPageStyles = `
     gap: 0.45rem;
     padding: 1rem;
     border-radius: 18px;
-    background: rgba(15, 23, 42, 0.04);
+    background: rgba(42, 36, 26, 0.045);
   }
 
   .student-learning-memory-highlight strong,
@@ -1849,7 +1874,6 @@ const learningPageStyles = `
   .student-learning-memory-columns {
     display: grid;
     gap: 0.9rem;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   }
 
   .student-learning-memory-column {
@@ -1857,9 +1881,9 @@ const learningPageStyles = `
     gap: 0.6rem;
     min-width: 0;
     padding: 1rem;
-    border: 1px solid rgba(15, 23, 42, 0.08);
+    border: 1px solid var(--student-area-line);
     border-radius: 18px;
-    background: rgba(255, 255, 255, 0.74);
+    background: rgba(255, 253, 248, 0.76);
   }
 
   .student-learning-memory-column ul {
@@ -1892,8 +1916,8 @@ const learningPageStyles = `
     gap: 0.75rem;
     padding: 1.1rem;
     border-radius: 22px;
-    border: 1px solid rgba(15, 23, 42, 0.08);
-    background: rgba(255, 255, 255, 0.88);
+    border: 1px solid var(--student-area-line);
+    background: rgba(255, 253, 248, 0.88);
   }
 
   .student-learning-bootstrap-card h3,
@@ -1927,7 +1951,8 @@ const learningPageStyles = `
     .student-learning-hero,
     .workspace-card,
     .student-learning-bootstrap,
-    .student-learning-status-panel {
+    .student-learning-status-panel,
+    .student-learning-standalone-state {
       padding: 1.1rem;
     }
   }

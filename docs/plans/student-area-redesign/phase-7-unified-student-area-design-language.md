@@ -1,22 +1,31 @@
-# Phase 7: Unified Student Area Design Language
+# Phase 7: Unified App And Student Area Design Language
+
+Implementation status: the expanded Phase 7 implementation is in place on the current branch. The
+student-area visual system now sits on global app tokens, the authenticated shell has replaced the
+temporary `Minimal Flow` header with `Assignments` and `Students` navigation, direct-route auth
+hydration is covered, browser screenshots have been captured under `tmp/`, and automatic dark-mode
+startup is deferred to light mode until the editorial surfaces receive a complete dark-theme audit.
+The authenticated shell background is a solid paper base with a fixed viewport ambience layer, so
+long routes such as `History` cannot change the apparent page color while data finishes loading.
 
 ## Summary
 
-This phase turns the student area from a set of aligned pages into one coherent product surface.
+This phase turns the authenticated app and student area from a set of aligned pages into one
+coherent product surface.
 
 Phase 6 fixed the structural problem: student identity, local navigation, and page density now live
 in the shared student-area shell. The remaining risk is visual drift. `Overview` and `History` are
 closest to the intended warm editorial teaching-studio style, while `Learning`, `Schedule &
 Billing`, and parts of the student directory still carry more of the older workspace/card language.
 
-The goal of Phase 7 is to create one student-area design language that every page can share without
-weakening each page's product job.
+The goal of Phase 7 is to create one app-wide design language that every authenticated surface can
+share without weakening each page's product job.
 
 ## Product Goal
 
-When a teacher moves between `Overview`, `Learning`, `History`, and `Schedule & Billing`, the
-student area should feel like one private teaching notebook with different rooms, not four
-interfaces wearing related colors.
+When a teacher moves between `Assignments`, `Students`, `Overview`, `Learning`, `History`, and
+`Schedule & Billing`, the app should feel like one private teaching notebook with different rooms,
+not separate interfaces wearing related colors.
 
 The desired feel is:
 
@@ -43,9 +52,9 @@ The desired feel is:
 
 ### Partial Alignment
 
-`StudentAreaShell` now owns the correct product structure and uses the right visual direction, but
-its styling is still embedded locally. It should become the source for shared tokens and primitives
-rather than a one-off style island.
+`StudentAreaShell` now owns the correct product structure and uses the right visual direction. Phase
+7 promotes the stable parts of that direction into global app tokens, then lets student-area
+primitives consume those tokens rather than becoming a one-off style island.
 
 `StudentDirectoryPage` now visually foreshadows the masthead through initials and short IDs, but it
 still uses generic card scaffolding in places.
@@ -67,29 +76,38 @@ mature operations page.
 
 1. Do not collapse all pages into one layout. Unified language means shared primitives and tone, not
    identical composition.
-2. Keep route-aware density from Phase 6:
-   - `Overview`: wide control surface
-   - `Learning`: form-wide editing surface
-   - `History`: narrower reading ledger
-   - `Schedule & Billing`: medium operations surface
+2. The student route canvas is shared and stable. The app shell owns safe outer gutters, the
+   student masthead and route body share one visual paper width, and page-specific density happens
+   inside that canvas rather than changing the canvas color or horizontal position:
+   - `Overview`: comfortable editorial control surface inside the shared paper
+   - `Learning`: form-and-revision editing surface inside the shared paper
+   - `History`: readable ledger inside the shared paper
+   - `Schedule & Billing`: medium operations board inside the shared paper
+   - `Directory`: standalone shelf/grid entry route that foreshadows the same identity system
+   The app-shell ambience must be viewport-fixed rather than document-height-scaled, because
+   route-specific content height otherwise changes the perceived background color during navigation.
 3. Keep the shared masthead as the only full identity surface.
 4. Keep `Learning` as the only profile editing surface.
 5. Keep `Schedule & Billing` honest until real scheduling, credit, reminder, invoice, and calendar
    data exists.
 6. Move toward shared primitives before adding new visual flourishes.
 7. Browser verification is required before calling this phase done.
+8. Dark mode is not currently an acceptance surface. Browsers that prefer dark color schemes should
+   still start in the safe light theme until every app and student-area surface has dark-token
+   coverage.
 
-## Shared Design System Target
+## Global And Student-Area Design System Target
 
-The student area should define a small design system, either as shared CSS or focused React
-primitives depending on what fits the existing frontend best.
+The app should define stable global tokens in `index.css`, with student-area aliases and focused
+React primitives layered on top. This keeps `Assignments` and `Students` in one authenticated app
+language while avoiding a large redesign of the older assignment builder body.
 
 ### Tokens
 
 Recommended shared tokens:
 
-1. paper background: warm ivory
-2. paper-deep background: parchment/sand
+1. app paper background: warm ivory
+2. app paper-deep background: parchment/sand
 3. ink text: near-black warm brown
 4. muted text: warm gray/brown
 5. link/nav accent: muted navy
@@ -101,7 +119,8 @@ Recommended shared tokens:
 11. major radius: `22px` to `30px`
 12. small radius: `10px` to `14px`
 13. editorial shadow: soft, low-opacity warm shadow
-14. serif heading family: existing Georgia fallback unless a broader font decision is made later
+14. serif heading family: existing display token and Georgia fallback unless a broader font
+    decision is made later
 15. support text family: inherit existing app sans stack unless global typography changes later
 
 ### Primitives
@@ -212,9 +231,8 @@ Phase 7 should:
 
 **Files:**
 
-1. create or modify `packages/batch-frontend/src/ui/students/StudentAreaDesignSystem.tsx` if
-   component primitives are chosen
-2. create or modify a shared CSS surface if CSS primitives are chosen
+1. create or modify `packages/batch-frontend/src/ui/students/StudentAreaDesignSystem.tsx`
+2. modify `packages/batch-frontend/src/index.css` for global app tokens and compatibility aliases
 3. update `packages/batch-frontend/src/ui/students/studentIdentity.ts` only if identity helpers need
    small additions
 
@@ -236,9 +254,31 @@ Steps:
 
 Acceptance checks:
 
-1. shared tokens exist in one obvious place
+1. shared global tokens exist in one obvious place
 2. the primitive API is small enough to understand quickly
 3. existing student-area tests still pass
+
+### Task 1A: Replace The Temporary Authenticated App Header
+
+**Files:**
+
+1. modify `packages/batch-frontend/src/ui/minimal/MinimalShell.tsx`
+2. modify `packages/batch-frontend/src/ui/App.test.tsx`
+
+Steps:
+
+1. Replace the fixed `Minimal Flow` header with an editorial app shell.
+2. Rename `Minimal Flow` to `Assignments`.
+3. Keep top-level navigation limited to `Assignments` and `Students`.
+4. Add a skip link and semantic `<main id="main-content">`.
+5. Use `NavLink`, visible focus states, safe-area-aware padding, and explicit transitions.
+
+Acceptance checks:
+
+1. authenticated app routes render inside the shared shell
+2. primary nav labels are `Assignments` and `Students`
+3. the skip link targets `#main-content`
+4. no new app sections are invented
 
 ### Task 2: Apply Shared Primitives To The Shell, Overview, And History
 
@@ -377,14 +417,24 @@ pnpm docs:check
 
 For visual work, also perform browser verification and save temporary screenshots under `tmp/`.
 
+Also verify direct full-page loads after login for `/`, `/students`, `/students/:studentId/overview`,
+`/students/:studentId/learning`, `/students/:studentId/history`, and
+`/students/:studentId/schedule-billing`.
+
+Also verify a browser context with `prefers-color-scheme: dark` and/or a stored dark preference. The
+expected Phase 7 behavior is a readable light startup, not automatic dark mode.
+
 ## Risks And Guardrails
 
 1. Do not refactor profile workflows while doing visual convergence.
 2. Do not invent real schedule, billing, reminder, calendar, or avatar data.
-3. Do not replace route-aware density with one global max width.
+3. Do not let page-appropriate density change the outer student-route paper. Vary interior grids,
+   not the shared canvas color or horizontal position.
 4. Do not make all pages look identical; preserve page purpose.
 5. Do not over-abstract before two or three pages prove the primitive shape.
 6. Do not rely only on unit tests for a visual-language phase.
+7. Do not re-enable automatic system dark mode until the app shell, assignment builder, auth dialog,
+   and every student-area route have first-class dark surfaces.
 
 ## Relationship To Earlier Phases
 
@@ -392,5 +442,7 @@ For visual work, also perform browser verification and save temporary screenshot
 2. Phase 2 remains the authority for learner profile behavior.
 3. Phase 4 remains the authority for Overview content and next-action behavior.
 4. Phase 5 remains the authority for Schedule & Billing and History domain ownership.
-5. Phase 6 remains the authority for shell, masthead, and density ownership.
-6. Phase 7 is the authority for shared visual primitives and cross-page look-and-feel convergence.
+5. Phase 6 remains the authority for the original shared student masthead structure and removal of
+   duplicated page-local identity heroes.
+6. Phase 7 supersedes Phase 6 for app shell styling, shared student-route canvas ownership, shared
+   visual primitives, and cross-page look-and-feel convergence.

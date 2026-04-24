@@ -8,7 +8,7 @@
 
 .minimal-overview {
   background:
-    radial-gradient(circle at top right, rgba(43, 81, 255, 0.14), transparent 34%),
+    radial-gradient(circle at top right, rgba(20, 63, 115, 0.14), transparent 34%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(255, 255, 255, 0.98));
   border: 1px solid var(--border-light);
   border-radius: var(--radius-2xl);
@@ -120,7 +120,7 @@
 }
 
 .minimal-stage-item.is-current {
-  border-color: rgba(43, 81, 255, 0.32);
+  border-color: rgba(20, 63, 115, 0.32);
   box-shadow: var(--shadow-glow);
 }
 
@@ -186,7 +186,7 @@
 }
 
 .minimal-stage-state.is-current {
-  background: rgba(43, 81, 255, 0.12);
+  background: rgba(20, 63, 115, 0.12);
   color: var(--color-primary-700);
 }
 
@@ -220,7 +220,7 @@
 }
 
 .minimal-stage-card.is-current {
-  border-color: rgba(43, 81, 255, 0.28);
+  border-color: rgba(20, 63, 115, 0.28);
   box-shadow: var(--shadow-glow);
 }
 
@@ -271,10 +271,10 @@
 }
 
 .minimal-stage-guidance {
-  border: 1px solid rgba(43, 81, 255, 0.18);
+  border: 1px solid rgba(20, 63, 115, 0.18);
   border-radius: var(--radius-xl);
   background:
-    linear-gradient(135deg, rgba(43, 81, 255, 0.08), rgba(43, 81, 255, 0.03)), var(--bg-primary);
+    linear-gradient(135deg, rgba(20, 63, 115, 0.08), rgba(20, 63, 115, 0.03)), var(--bg-primary);
   padding: var(--space-3) var(--space-4);
   color: var(--color-primary-700);
   font-size: var(--text-sm);
@@ -332,7 +332,7 @@
   border: 1px solid var(--border-medium);
   border-radius: var(--radius-2xl);
   background:
-    radial-gradient(circle at top right, rgba(43, 81, 255, 0.06), transparent 38%),
+    radial-gradient(circle at top right, rgba(20, 63, 115, 0.06), transparent 38%),
     var(--bg-primary);
   padding: var(--space-4);
   display: flex;
@@ -348,11 +348,11 @@
 
 .minimal-choice-card:hover {
   transform: translateY(-1px);
-  border-color: rgba(43, 81, 255, 0.28);
+  border-color: rgba(20, 63, 115, 0.28);
 }
 
 .minimal-choice-card.is-selected {
-  border-color: rgba(43, 81, 255, 0.34);
+  border-color: rgba(20, 63, 115, 0.34);
   box-shadow: var(--shadow-glow);
 }
 
@@ -377,9 +377,9 @@
 }
 
 .minimal-start-summary {
-  border: 1px solid rgba(43, 81, 255, 0.16);
+  border: 1px solid rgba(20, 63, 115, 0.16);
   border-radius: var(--radius-xl);
-  background: rgba(43, 81, 255, 0.05);
+  background: rgba(20, 63, 115, 0.05);
   padding: var(--space-3) var(--space-4);
   display: flex;
   align-items: center;
@@ -501,13 +501,13 @@
 }
 
 .minimal-guided-button {
-  box-shadow: 0 0 0 4px rgba(43, 81, 255, 0.12);
+  box-shadow: 0 0 0 4px rgba(20, 63, 115, 0.12);
 }
 
 .minimal-guided-button--secondary {
-  border-color: rgba(43, 81, 255, 0.3);
+  border-color: rgba(20, 63, 115, 0.3);
   background:
-    linear-gradient(180deg, rgba(43, 81, 255, 0.08), rgba(43, 81, 255, 0.04)), var(--bg-secondary);
+    linear-gradient(180deg, rgba(20, 63, 115, 0.08), rgba(20, 63, 115, 0.04)), var(--bg-secondary);
 }
 
 .minimal-inline {
@@ -604,15 +604,15 @@
 }
 
 .minimal-guided-field {
-  border-color: rgba(43, 81, 255, 0.34) !important;
-  box-shadow: 0 0 0 4px rgba(43, 81, 255, 0.1);
+  border-color: rgba(20, 63, 115, 0.34) !important;
+  box-shadow: 0 0 0 4px rgba(20, 63, 115, 0.1);
 }
 
 .minimal-guided-surface {
-  border: 1px solid rgba(43, 81, 255, 0.18);
+  border: 1px solid rgba(20, 63, 115, 0.18);
   border-radius: var(--radius-xl);
   padding: var(--space-2);
-  background: rgba(43, 81, 255, 0.04);
+  background: rgba(20, 63, 115, 0.04);
 }
 
 .minimal-checkbox {

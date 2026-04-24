@@ -177,7 +177,7 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({
   return (
     <div className="dialog-overlay" onClick={onClose}>
       <div className="dialog-container animate-scale-in" onClick={(e) => e.stopPropagation()}>
-        <button type="button" onClick={onClose} className="dialog-close">
+        <button type="button" onClick={onClose} className="dialog-close" aria-label="Close dialog">
           <XIcon />
         </button>
 
@@ -266,6 +266,8 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 className="input-toggle"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                aria-pressed={showPassword}
               >
                 {showPassword ? <EyeOffIcon /> : <EyeIcon />}
               </button>
@@ -356,7 +358,9 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({
           align-items: center;
           justify-content: center;
           cursor: pointer;
-          transition: all var(--transition-fast);
+          transition:
+            background-color var(--transition-fast),
+            color var(--transition-fast);
         }
 
         .dialog-close:hover {
@@ -453,7 +457,9 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({
           color: var(--text-tertiary);
           cursor: pointer;
           border-radius: var(--radius-md);
-          transition: all var(--transition-fast);
+          transition:
+            background-color var(--transition-fast),
+            color var(--transition-fast);
         }
 
         .input-toggle:hover {
@@ -475,7 +481,10 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({
           align-items: center;
           justify-content: center;
           gap: var(--space-2);
-          transition: all var(--transition-fast);
+          transition:
+            box-shadow var(--transition-fast),
+            opacity var(--transition-fast),
+            transform var(--transition-fast);
           box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
         }
 

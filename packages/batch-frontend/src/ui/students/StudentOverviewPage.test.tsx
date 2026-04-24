@@ -200,6 +200,9 @@ describe('StudentOverviewPage', () => {
     renderOverview();
 
     expect(screen.getByTestId('student-overview-pending-canvas')).toBeTruthy();
+    expect(document.querySelector('.student-overview-pending-hero')).toBeNull();
+    expect(document.querySelector('.student-overview-pending-portrait')).toBeNull();
+    expect(screen.queryByRole('link', { name: /Back to all students/i })).toBeNull();
     expect(screen.queryByText('Loading overview')).toBeNull();
     expect(screen.queryByText('Gathering learner profile, memory, and recent activity.')).toBeNull();
     expect(screen.queryByText('Loading strengths')).toBeNull();

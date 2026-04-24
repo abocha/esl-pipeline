@@ -362,8 +362,11 @@ function StudentHistoryPendingCanvas({
   errorMessage: string | null;
 }): React.JSX.Element {
   return (
-    <section className="student-history-page" aria-busy="true">
-      <div className="student-history-frame" data-testid="student-history-pending-canvas">
+    <section className="student-history-page student-area-theme" aria-busy="true">
+      <div
+        className="student-area-frame student-history-frame"
+        data-testid="student-history-pending-canvas"
+      >
         <span className="student-history-sr-only" role="status">
           Loading student history
         </span>
@@ -372,13 +375,8 @@ function StudentHistoryPendingCanvas({
             {errorMessage}
           </p>
         ) : null}
-        <div className="student-history-pending-hero" aria-hidden="true">
-          <span className="student-history-skeleton skeleton-portrait" />
-          <span>
-            <span className="student-history-skeleton skeleton-title" />
-            <span className="student-history-skeleton skeleton-copy skeleton-copy-wide" />
-            <span className="student-history-skeleton skeleton-copy" />
-          </span>
+        <div className="student-history-pending-about" aria-hidden="true">
+          <span className="student-history-skeleton skeleton-kicker" />
           <span className="student-history-skeleton skeleton-about" />
         </div>
         <div className="student-history-pending-filters" aria-hidden="true">
@@ -531,9 +529,9 @@ export const StudentHistoryPage: React.FC = () => {
   }
 
   return (
-    <section className="student-history-page" aria-busy={studentLoading || !historyReady}>
-      <div className="student-history-frame">
-        <article className="student-history-about">
+    <section className="student-history-page student-area-theme" aria-busy={studentLoading || !historyReady}>
+      <div className="student-area-frame student-history-frame">
+        <article className="student-area-panel student-history-about">
           <p className="student-history-section-label">About this history</p>
           <p>
             This timeline includes lessons, homework, materials, profile updates, and important
@@ -577,7 +575,7 @@ export const StudentHistoryPage: React.FC = () => {
             ))}
           </div>
         ) : (
-          <article className="student-history-empty">
+          <article className="student-area-empty-state student-history-empty">
             <h3>History will collect here</h3>
             <p>
               Lesson, homework, profile, material, and operations events will appear as this student
@@ -595,19 +593,19 @@ export const StudentHistoryPage: React.FC = () => {
 
 const studentHistoryStyles = `
   .student-history-page {
-    --history-paper: #fbf7ee;
-    --history-paper-deep: #f4eadb;
-    --history-ink: #151412;
-    --history-muted: #6f665a;
-    --history-blue: #143f73;
-    --history-blue-soft: #e8eef7;
-    --history-sage: #315c3a;
-    --history-sage-soft: #edf4e7;
-    --history-amber: #91620c;
-    --history-amber-soft: #fff5dd;
-    --history-rose: #8f3f32;
-    --history-rose-soft: #fae8e2;
-    --history-line: rgba(42, 36, 26, 0.13);
+    --history-paper: var(--student-area-paper);
+    --history-paper-deep: var(--student-area-paper-deep);
+    --history-ink: var(--student-area-ink);
+    --history-muted: var(--student-area-muted);
+    --history-blue: var(--student-area-blue);
+    --history-blue-soft: var(--student-area-blue-soft);
+    --history-sage: var(--student-area-sage);
+    --history-sage-soft: var(--student-area-sage-soft);
+    --history-amber: var(--student-area-amber);
+    --history-amber-soft: var(--student-area-amber-soft);
+    --history-rose: var(--student-area-rose);
+    --history-rose-soft: var(--student-area-rose-soft);
+    --history-line: var(--student-area-line);
     color: var(--history-ink);
   }
 
@@ -615,28 +613,16 @@ const studentHistoryStyles = `
     position: relative;
     display: grid;
     gap: 1.6rem;
-    padding: clamp(1.25rem, 3vw, 2.4rem);
+    padding: 0;
     overflow: hidden;
-    border: 1px solid var(--history-line);
-    border-radius: 30px;
-    background:
-      radial-gradient(circle at 10% 0%, rgba(20, 63, 115, 0.07), transparent 34%),
-      radial-gradient(circle at 88% 28%, rgba(49, 92, 58, 0.08), transparent 30%),
-      linear-gradient(135deg, rgba(255, 252, 245, 0.98), rgba(247, 239, 226, 0.92));
-    box-shadow: 0 18px 48px rgba(42, 36, 26, 0.08);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
   }
 
   .student-history-frame::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    opacity: 0.32;
-    background-image:
-      linear-gradient(rgba(42, 36, 26, 0.035) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(42, 36, 26, 0.025) 1px, transparent 1px);
-    background-size: 44px 44px;
-    mask-image: linear-gradient(180deg, black, transparent 88%);
+    content: none;
   }
 
   .student-history-frame > * {
@@ -668,8 +654,7 @@ const studentHistoryStyles = `
     text-decoration: underline;
   }
 
-  .student-history-hero,
-  .student-history-pending-hero {
+  .student-history-hero {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) minmax(16rem, 0.48fr);
     align-items: center;
@@ -859,7 +844,8 @@ const studentHistoryStyles = `
     border: 1px solid var(--history-line);
     border-radius: 18px;
     background: rgba(255, 252, 245, 0.64);
-    box-shadow: 0 12px 28px rgba(42, 36, 26, 0.045);
+    content-visibility: auto;
+    contain-intrinsic-size: 180px;
   }
 
   .event-rich .student-history-event-card {
@@ -1002,27 +988,6 @@ const studentHistoryStyles = `
     animation: history-skeleton-breathe 1.8s ease-in-out infinite;
   }
 
-  .skeleton-portrait {
-    width: clamp(8rem, 18vw, 12rem);
-    aspect-ratio: 1;
-  }
-
-  .skeleton-title {
-    width: min(30rem, 70vw);
-    height: 4rem;
-    margin-bottom: 1rem;
-  }
-
-  .skeleton-copy {
-    width: 16rem;
-    height: 0.9rem;
-    margin-top: 0.55rem;
-  }
-
-  .skeleton-copy-wide {
-    width: min(26rem, 62vw);
-  }
-
   .skeleton-about {
     width: 100%;
     min-height: 9rem;
@@ -1054,7 +1019,6 @@ const studentHistoryStyles = `
 
   @media (max-width: 900px) {
     .student-history-hero,
-    .student-history-pending-hero,
     .student-history-date-group {
       grid-template-columns: 1fr;
     }
