@@ -54,6 +54,10 @@ function renderStudentAreaShell(initialPath: string) {
             path: 'overview',
             element: <StudentShellProbe />,
           },
+          {
+            path: 'history',
+            element: <StudentShellProbe />,
+          },
         ],
       },
     ],
@@ -69,6 +73,32 @@ function renderStudentAreaShell(initialPath: string) {
 describe('StudentAreaShell', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('renders the shared student masthead, active page summary, and density wrapper', async () => {
+    apiMocks.getStudentProfile.mockResolvedValue({
+      id: 'student-alex-rivera',
+      student: 'Alex Rivera',
+      profileId: 'profiles/students/alex.md',
+    });
+
+    renderStudentAreaShell('/students/student-alex-rivera/history');
+
+    expect(
+      (await screen.findByRole('link', { name: /Back to all students/i })).getAttribute('href'),
+    ).toBe('/students');
+    expect(screen.getByText('AR')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Alex Rivera' })).toBeTruthy();
+    expect(screen.getByText('Student ID: alex-riv')).toBeTruthy();
+    expect(
+      screen.getByText('A chronological teaching ledger for lessons, materials, and profile changes.'),
+    ).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'History' }).getAttribute('aria-current')).toBe(
+      'page',
+    );
+    expect(screen.getByTestId('student-area-body').className).toContain(
+      'student-area-body-reading',
+    );
   });
 
   it('ignores stale student responses after route navigation', async () => {

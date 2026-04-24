@@ -1063,10 +1063,8 @@ export const StudentLearningPage: React.FC = () => {
       <article className="card student-learning-hero">
         <div className="student-learning-hero-copy">
           <span className="student-learning-eyebrow">Learning</span>
-          <h2>Pedagogical Home</h2>
           <p>
-            This is the canonical pedagogical home for {student.student}. Review durable truth,
-            memory signals, and candidate facts in one calm editing surface.
+            Review durable truth, memory signals, and candidate facts in one calm editing surface.
           </p>
         </div>
 

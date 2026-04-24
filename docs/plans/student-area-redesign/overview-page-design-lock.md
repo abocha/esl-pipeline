@@ -75,8 +75,8 @@ The page should not look like:
 
 The preferred visual reference had these durable traits:
 
-1. a spacious header with a student portrait, name, and short student ID
-2. one clear hero story before secondary data
+1. a shared student masthead with portrait/initials, name, short student ID, and local navigation
+2. one clear learning-state story before secondary data
 3. a calm status note such as `On track`
 4. a compact operations rail for future scheduling, credits, reminders, and invoices
 5. a learner snapshot card with level, goal, strengths, and challenges
@@ -92,7 +92,7 @@ needed to orient the teacher.
 
 ## Student Identity
 
-The header should show:
+The shared student masthead should show:
 
 1. student name
 2. short student ID
@@ -114,20 +114,19 @@ for students with similar names.
 
 The intended page composition is:
 
-1. back link to all students
-2. hero identity area
-3. profile/learning status note
-4. operations rail
-5. learner snapshot
-6. current focus
-7. attention cue
-8. recent activity preview
-9. optional handwritten-style closing note
+1. shared student masthead from `StudentAreaShell`
+2. profile/learning status note
+3. operations rail
+4. learner snapshot
+5. current focus
+6. attention cue
+7. recent activity preview
+8. optional handwritten-style closing note
 
 The page may evolve, but these regions preserve the right mental model:
 
-1. identity first
-2. learning signal second
+1. identity once in the shared shell
+2. learning signal first in the page body
 3. operations as a quiet side rail
 4. deep work delegated to owning pages
 
@@ -338,9 +337,10 @@ text, muted navy links and navigation, sage green for healthy learning state, am
 and soft clay/rose for warnings. The mood should be calm, personal, organized, humane, and
 teacher-owned.
 
-The page should tell one clear student story first: student name, short student ID, portrait
-placeholder, a concise learning/profile status, and a short description of where the learner is
-right now. It should feel like opening a carefully maintained private teaching notebook.
+The shared masthead should tell the identity story first: student name, short student ID, portrait
+placeholder, active page context, and student-area navigation. The Overview body should then begin
+with a concise learning/profile status and a short description of where the learner is right now. It
+should feel like opening a carefully maintained private teaching notebook.
 
 Include a compact learner snapshot with level, main goal, stable strengths, and persistent
 challenges. Include a current teaching focus that feels pedagogical and memory-informed. Include

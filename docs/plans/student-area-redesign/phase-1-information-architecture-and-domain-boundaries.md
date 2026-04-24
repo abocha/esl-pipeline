@@ -109,9 +109,14 @@ The student should be selected once, then remain in context across the four page
 
 Recommended behavior:
 
-1. a persistent student header with identity, contact, and quick status
-2. tabs or sub-navigation within the student area
+1. a persistent shared student masthead with identity and quick context, owned by
+   `StudentAreaShell`
+2. tabs or sub-navigation inside the shared student masthead
 3. direct deep links from overview cards into the specific page and section that owns the work
+
+Phase 6 supersedes any older page-local header interpretation. Student identity, the back link,
+initials/avatar, short ID, and student-area tabs should appear once in the shared shell, not be
+rebuilt separately by `Overview`, `Learning`, `History`, or `Schedule & Billing`.
 
 ### Cross-Surface Links
 

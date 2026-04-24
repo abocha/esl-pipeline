@@ -10,7 +10,6 @@ import {
   type StudentTimelineItem,
 } from '../../utils/api';
 import { useStudentAreaContext } from './StudentAreaContext';
-import { formatStudentShortId } from './studentIdentity';
 
 type HistoryFilter = 'all' | 'lessons' | 'homework' | 'profile' | 'materials' | 'operations';
 type HistoryEventDensity = 'rich' | 'compact';
@@ -107,16 +106,6 @@ function detailValue(value: unknown): string | null {
 
 function detailsRecord(item: StudentTimelineItem): Record<string, unknown> {
   return item.details ?? {};
-}
-
-function getStudentInitials(name: string): string {
-  const parts = name
-    .trim()
-    .split(/\s+/)
-    .map((part) => part[0])
-    .filter(Boolean)
-    .slice(0, 2);
-  return parts.join('').toUpperCase() || 'ST';
 }
 
 function makeEventId(prefix: string, id: string, createdAt: string): string {
@@ -461,7 +450,7 @@ function HistoryEventCard({ event }: { event: HistoryEvent }): React.JSX.Element
 }
 
 export const StudentHistoryPage: React.FC = () => {
-  const { student, studentId, studentLoading, studentError } = useStudentAreaContext();
+  const { studentId, studentLoading, studentError } = useStudentAreaContext();
   const [historyData, setHistoryData] = useState<HistoryData>(EMPTY_HISTORY_DATA);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState<string | null>(null);
@@ -536,8 +525,6 @@ export const StudentHistoryPage: React.FC = () => {
   const events = useMemo(() => buildHistoryEvents(historyData), [historyData]);
   const filteredEvents = activeFilter === 'all' ? events : events.filter((event) => event.category === activeFilter);
   const groupedEvents = groupEvents(filteredEvents);
-  const studentName = student?.student ?? 'Student record';
-  const studentInitials = getStudentInitials(studentName);
 
   if (!historyReady) {
     return <StudentHistoryPendingCanvas errorMessage={studentError} />;
@@ -546,28 +533,14 @@ export const StudentHistoryPage: React.FC = () => {
   return (
     <section className="student-history-page" aria-busy={studentLoading || !historyReady}>
       <div className="student-history-frame">
-        <Link className="student-history-back" to="/students">
-          Back to all students
-        </Link>
-
-        <header className="student-history-hero">
-          <div className="student-history-portrait" aria-hidden="true">
-            <span>{studentInitials}</span>
-          </div>
-          <div className="student-history-identity">
-            <p>{formatStudentShortId(studentId)}</p>
-            <h2>{studentName}</h2>
-            <span>A chronological record of our learning journey together.</span>
-          </div>
-          <aside className="student-history-about">
-            <p className="student-history-section-label">About this history</p>
-            <p>
-              This timeline includes lessons, homework, materials, profile updates, and important
-              operations.
-            </p>
-            <Link to={`/students/${encodeURIComponent(studentId)}/overview`}>How history works</Link>
-          </aside>
-        </header>
+        <article className="student-history-about">
+          <p className="student-history-section-label">About this history</p>
+          <p>
+            This timeline includes lessons, homework, materials, profile updates, and important
+            operations.
+          </p>
+          <Link to={`/students/${encodeURIComponent(studentId)}/overview`}>How history works</Link>
+        </article>
 
         {studentError || historyError ? (
           <p className="student-history-error" role="alert">

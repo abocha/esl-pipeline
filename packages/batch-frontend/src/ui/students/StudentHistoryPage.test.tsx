@@ -250,8 +250,9 @@ describe('StudentHistoryPage', () => {
   it('renders a teacher-readable chronological ledger from memory and timeline sources', async () => {
     renderHistory();
 
-    expect(await screen.findByRole('heading', { name: 'Daria' })).toBeTruthy();
-    expect(screen.getByText('Student ID: daria')).toBeTruthy();
+    expect(await screen.findByText('About this history')).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Daria' })).toBeNull();
+    expect(screen.queryByText('Student ID: daria')).toBeNull();
     expect(screen.getByText('About this history')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'All' }).getAttribute('aria-pressed')).toBe('true');
     expect(screen.getByRole('button', { name: 'Lessons' })).toBeTruthy();

@@ -69,9 +69,9 @@ The page should not look like:
 
 The approved visual reference has these durable traits:
 
-1. a spacious student header with name and short student ID
-2. a student portrait area using initials for now
-3. a future path to Telegram avatars once the student-facing bot and Telegram binding exist
+1. a shared student masthead with name, short student ID, initials/avatar, page context, and tabs
+2. a future path to Telegram avatars once the student-facing bot and Telegram binding exist
+3. no duplicated page-local identity hero inside the History body
 4. a quiet explanatory card such as `About this history`
 5. soft filter pills for event domains
 6. a reverse-chronological vertical timeline
@@ -84,9 +84,9 @@ The approved visual reference has these durable traits:
 13. provenance hidden behind secondary details rather than exposed by default
 14. a small handwritten-style footer note may remain as a product motif
 
-The initials portrait is not a final identity decision. It is the correct placeholder until the
-student-facing Telegram bot can bind a Telegram account to the student record. When that exists,
-the Telegram avatar should become the preferred portrait source.
+The initials portrait in the shared masthead is not a final identity decision. It is the correct
+placeholder until the student-facing Telegram bot can bind a Telegram account to the student
+record. When that exists, the Telegram avatar should become the preferred portrait source.
 
 Avatar ownership belongs to the broader student identity/contact domain, not to the learner
 profile. The learner profile remains pedagogical.
@@ -389,10 +389,11 @@ The page belongs to a multi-page student area with Overview, Learning, History, 
 Billing. History should feel connected to those pages but not like an editing screen. It is for
 explainability, continuity, and confidence.
 
-Use initials as the student portrait placeholder for now. Leave the visual system ready for real
-Telegram avatars later, once the student-facing Telegram bot can bind a Telegram account to the
-student record. Use 24-hour time throughout. Reserve a quiet lesson metadata slot for future
-scheduling details, but do not pretend duration or format data already exists.
+Use the shared student masthead for student identity and initials/avatar treatment. Leave the
+visual system ready for real Telegram avatars later, once the student-facing Telegram bot can bind a
+Telegram account to the student record. Use 24-hour time throughout. Reserve a quiet lesson
+metadata slot for future scheduling details, but do not pretend duration or format data already
+exists.
 
 Avoid: dense card grids, admin tables as the main layout, bright saturated colors, generic startup
 dashboard styling, purple gradients, dark mode, fake analytics overload, 12-hour time, and too many

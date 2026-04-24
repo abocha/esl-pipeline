@@ -18,3 +18,15 @@ export function getShortStudentId(studentId: string | null | undefined): string 
 export function formatStudentShortId(studentId: string | null | undefined): string {
   return `Student ID: ${getShortStudentId(studentId)}`;
 }
+
+export function getStudentInitials(name: string | null | undefined): string {
+  const parts =
+    name
+      ?.trim()
+      .split(/\s+/)
+      .map((part) => part[0])
+      .filter(Boolean)
+      .slice(0, 2) ?? [];
+
+  return parts.join('').toUpperCase() || 'ST';
+}
