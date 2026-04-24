@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useParams } from 'react-router-dom';
 
 import { getStudentProfile, type StudentProfile } from '../../utils/api';
+import { StudentAreaDesignSystemStyles } from './StudentAreaDesignSystem';
 import { formatStudentShortId, getStudentInitials } from './studentIdentity';
 
 type StudentAreaPageKey = 'overview' | 'learning' | 'history' | 'schedule-billing';
@@ -108,7 +109,8 @@ export const StudentAreaShell: React.FC = () => {
   }, [loadStudent]);
 
   return (
-    <section className="student-area-shell">
+    <section className="student-area-shell student-area-theme">
+      <StudentAreaDesignSystemStyles />
       <header className="student-area-masthead">
         <Link className="student-area-back" to="/students">
           Back to all students
@@ -154,22 +156,21 @@ export const StudentAreaShell: React.FC = () => {
         .student-area-shell {
           display: grid;
           gap: 1.35rem;
-          color: #151412;
+          color: var(--app-ink);
         }
 
         .student-area-masthead {
           display: grid;
           gap: 1.15rem;
-          max-width: 1120px;
+          max-width: 1240px;
           width: 100%;
           margin: 0 auto;
           padding: clamp(1.1rem, 2vw, 1.65rem);
-          border: 1px solid rgba(42, 36, 26, 0.13);
-          border-radius: 28px;
+          border: 1px solid var(--app-line);
+          border-radius: var(--app-radius-lg);
           background:
-            radial-gradient(circle at top right, rgba(232, 238, 247, 0.95), transparent 34%),
             linear-gradient(135deg, rgba(251, 247, 238, 0.98), rgba(244, 234, 219, 0.84));
-          box-shadow: 0 20px 48px rgba(42, 36, 26, 0.08);
+          box-shadow: var(--app-shadow-soft);
           position: relative;
           overflow: hidden;
         }
@@ -192,7 +193,7 @@ export const StudentAreaShell: React.FC = () => {
 
         .student-area-back {
           width: fit-content;
-          color: #143f73;
+          color: var(--app-blue);
           font-weight: 700;
           text-decoration: none;
         }
@@ -218,8 +219,8 @@ export const StudentAreaShell: React.FC = () => {
           border: 1px solid rgba(20, 63, 115, 0.16);
           background:
             radial-gradient(circle at 34% 28%, rgba(255, 255, 255, 0.82), transparent 32%),
-            linear-gradient(145deg, #f4eadb, #e8eef7);
-          color: #143f73;
+            linear-gradient(145deg, var(--app-paper-deep), var(--app-blue-soft));
+          color: var(--app-blue);
           font-size: clamp(1.35rem, 3vw, 2rem);
           font-weight: 800;
           letter-spacing: 0.04em;
@@ -231,7 +232,7 @@ export const StudentAreaShell: React.FC = () => {
 
         .student-area-masthead h1 {
           margin: 0.25rem 0;
-          font-family: Georgia, 'Times New Roman', serif;
+          font-family: var(--app-serif);
           font-size: clamp(2rem, 5vw, 4rem);
           line-height: 0.98;
           letter-spacing: -0.04em;
@@ -239,7 +240,7 @@ export const StudentAreaShell: React.FC = () => {
 
         .student-area-masthead p {
           margin: 0;
-          color: #6f665a;
+          color: var(--app-muted);
         }
 
         .student-area-eyebrow {
@@ -248,7 +249,7 @@ export const StudentAreaShell: React.FC = () => {
           font-weight: 700;
           letter-spacing: 0.08em;
           text-transform: uppercase;
-          color: #143f73;
+          color: var(--app-blue);
         }
 
         .student-area-page-summary {
@@ -269,38 +270,71 @@ export const StudentAreaShell: React.FC = () => {
           border-radius: 999px;
           text-decoration: none;
           background: rgba(255, 255, 255, 0.52);
-          color: #151412;
+          color: var(--app-ink);
           font-weight: 700;
+          transition:
+            background-color var(--transition-fast),
+            border-color var(--transition-fast),
+            color var(--transition-fast),
+            transform var(--transition-fast);
+        }
+
+        .student-area-nav a:hover {
+          transform: translateY(-1px);
         }
 
         .student-area-nav a.active {
           border-color: transparent;
-          background: #143f73;
+          background: var(--app-blue);
           color: #fffaf1;
         }
 
         .student-area-body {
+          position: relative;
+          display: grid;
+          gap: 1.35rem;
           width: 100%;
+          max-width: 1240px;
           margin: 0 auto;
+          overflow: hidden;
+          padding: clamp(1.25rem, 3vw, 2.4rem);
+          border: 1px solid var(--app-line);
+          border-radius: var(--app-radius-lg);
+          background: linear-gradient(135deg, rgba(255, 252, 245, 0.98), rgba(247, 239, 226, 0.92));
+          box-shadow: var(--app-shadow-soft);
         }
 
-        .student-area-body-overview {
-          max-width: 1120px;
+        .student-area-body::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          opacity: 0.34;
+          background-image:
+            linear-gradient(rgba(42, 36, 26, 0.035) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(42, 36, 26, 0.025) 1px, transparent 1px);
+          background-size: 44px 44px;
         }
 
-        .student-area-body-learning {
-          max-width: 1180px;
+        .student-area-body > * {
+          position: relative;
         }
 
-        .student-area-body-reading {
-          max-width: 920px;
-        }
+        @media (prefers-reduced-motion: reduce) {
+          .student-area-nav a {
+            transition: none;
+          }
 
-        .student-area-body-operations {
-          max-width: 1040px;
+          .student-area-nav a:hover {
+            transform: none;
+          }
         }
 
         @media (max-width: 720px) {
+          .student-area-body {
+            padding: 1rem;
+          }
+
           .student-area-identity-row {
             grid-template-columns: 1fr;
           }

@@ -102,7 +102,8 @@ describe('App', () => {
     expect(await screen.findByRole('heading', { name: /Welcome back/i })).toBeTruthy();
   });
 
-  it('renders the authenticated shell and assignment route', () => {
+  it('renders the authenticated shell and assignment route', async () => {
+    const user = userEvent.setup();
     useAuthMock.mockReturnValue(
       createAuthState({
         user: {
@@ -117,8 +118,21 @@ describe('App', () => {
 
     renderApp();
 
+    expect(screen.getByRole('link', { name: /Skip to main content/i }).getAttribute('href')).toBe(
+      '#main-content',
+    );
+    expect(screen.getByRole('link', { name: /Assignments/i })).toBeTruthy();
     expect(screen.getByText('teacher@example.com')).toBeTruthy();
     expect(screen.getByText('Minimal assignment content')).toBeTruthy();
+    const shellStyles = [...document.querySelectorAll('style')]
+      .map((style) => style.textContent ?? '')
+      .join('\n');
+    expect(shellStyles).toContain('.app-shell::before');
+    expect(shellStyles).toContain('position: fixed;');
+
+    await user.click(screen.getByRole('link', { name: /Skip to main content/i }));
+
+    expect(document.activeElement).toBe(document.getElementById('main-content'));
   });
 
   it('navigates to the student directory route from shell navigation', async () => {

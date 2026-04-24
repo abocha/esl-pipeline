@@ -1,4 +1,12 @@
-import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from 'react';
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 
 import type { UserRole as ApiUserRole, RegisterRole, UserProfile } from '../utils/api';
 import {
@@ -12,6 +20,16 @@ import { setApiAuthToken } from '../utils/api-client';
 export type UserRole = ApiUserRole;
 export type User = Pick<UserProfile, 'id' | 'email' | 'role' | 'isActive'> &
   Partial<Pick<UserProfile, 'createdAt' | 'updatedAt'>>;
+type AuthRefreshResponse = Awaited<ReturnType<typeof refreshTokenRequest>>;
+
+let pendingAuthRefresh: Promise<AuthRefreshResponse> | null = null;
+
+function refreshSessionOnce(): Promise<AuthRefreshResponse> {
+  pendingAuthRefresh ??= refreshTokenRequest().finally(() => {
+    pendingAuthRefresh = null;
+  });
+  return pendingAuthRefresh;
+}
 
 export interface AuthContextType {
   user: User | null;
@@ -34,6 +52,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [accessTokenValue, setAccessTokenValue] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const sessionGenerationRef = useRef(0);
 
   const persistSession = useCallback((nextUser: User | null, nextAccessToken: string | null) => {
     setUser(nextUser);
@@ -47,14 +66,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   useEffect(() => {
     let isMounted = true;
+    const generation = sessionGenerationRef.current;
     const hydrate = async () => {
       try {
-        const response = await refreshTokenRequest();
-        if (isMounted) {
+        const response = await refreshSessionOnce();
+        if (isMounted && sessionGenerationRef.current === generation) {
           persistSession(response.user ?? null, response.accessToken ?? null);
         }
       } catch {
-        if (isMounted) {
+        if (isMounted && sessionGenerationRef.current === generation) {
           persistSession(null, null);
         }
       } finally {
@@ -72,8 +92,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const login = useCallback(
     async (email: string, password: string) => {
+      sessionGenerationRef.current += 1;
       const normalizedEmail = email.trim().toLowerCase();
       const response = await loginRequest({ email: normalizedEmail, password });
+      sessionGenerationRef.current += 1;
       persistSession(response.user, response.accessToken ?? null);
     },
     [persistSession],
@@ -88,6 +110,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   );
 
   const logout = useCallback(async () => {
+    sessionGenerationRef.current += 1;
     try {
       await logoutSession();
     } catch (error) {
@@ -98,8 +121,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [persistSession]);
 
   const refresh = useCallback(async () => {
-    const response = await refreshTokenRequest();
-    persistSession(response.user ?? user, response.accessToken ?? accessTokenValue);
+    const generation = sessionGenerationRef.current;
+    const response = await refreshSessionOnce();
+    if (sessionGenerationRef.current === generation) {
+      persistSession(response.user ?? user, response.accessToken ?? accessTokenValue);
+    }
   }, [persistSession, user, accessTokenValue]);
 
   const setUserFromProfile = useCallback(

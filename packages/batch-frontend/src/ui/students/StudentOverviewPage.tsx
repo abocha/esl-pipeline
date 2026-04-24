@@ -260,17 +260,15 @@ function StudentOverviewPendingCanvas({
 }: {
   errorMessage: string | null;
 }): React.JSX.Element {
-  const operationRows = ['one', 'two', 'three', 'four'];
-
   return (
-    <section className="student-overview-page" aria-busy="true">
-      <div className="student-overview-frame" data-testid="student-overview-pending-canvas">
+    <section className="student-overview-page student-area-theme" aria-busy="true">
+      <div
+        className="student-area-frame student-overview-frame"
+        data-testid="student-overview-pending-canvas"
+      >
         <span className="student-overview-sr-only" role="status">
           Loading student overview
         </span>
-        <div className="student-overview-back">
-          <Link to="/students">Back to all students</Link>
-        </div>
 
         {errorMessage ? (
           <p className="student-overview-error" role="alert">
@@ -278,11 +276,9 @@ function StudentOverviewPendingCanvas({
           </p>
         ) : null}
 
-        <div className="student-overview-hero student-overview-pending-hero" aria-hidden="true">
-          <div className="student-overview-portrait student-overview-pending-portrait" />
-          <div className="student-overview-pending-identity">
+        <div className="student-overview-control-row" aria-hidden="true">
+          <div className="student-overview-status-panel">
             <span className="student-overview-skeleton skeleton-kicker" />
-            <span className="student-overview-skeleton skeleton-title" />
             <span className="student-overview-skeleton skeleton-copy skeleton-copy-wide" />
             <span className="student-overview-skeleton skeleton-copy" />
             <div className="student-overview-pending-status">
@@ -293,7 +289,7 @@ function StudentOverviewPendingCanvas({
 
           <aside className="student-overview-operations student-overview-pending-operations">
             <span className="student-overview-skeleton skeleton-kicker" />
-            {operationRows.map((row) => (
+            {['one', 'two', 'three', 'four'].map((row) => (
               <div key={row} className="student-overview-pending-operation-row">
                 <span className="student-overview-skeleton skeleton-operation-icon" />
                 <span>
@@ -306,13 +302,13 @@ function StudentOverviewPendingCanvas({
         </div>
 
         <div className="student-overview-body student-overview-pending-body" aria-hidden="true">
-          <div className="student-overview-panel student-overview-pending-panel pending-large">
+          <div className="student-area-panel student-overview-panel student-overview-pending-panel pending-large">
             <span className="student-overview-skeleton skeleton-kicker" />
             <span className="student-overview-skeleton skeleton-copy skeleton-copy-wide" />
             <span className="student-overview-skeleton skeleton-copy" />
             <span className="student-overview-skeleton skeleton-copy skeleton-copy-short" />
           </div>
-          <div className="student-overview-panel student-overview-pending-panel">
+          <div className="student-area-panel student-overview-panel student-overview-pending-panel">
             <span className="student-overview-skeleton skeleton-kicker" />
             <span className="student-overview-skeleton skeleton-heading" />
             <span className="student-overview-skeleton skeleton-copy skeleton-copy-wide" />
@@ -323,7 +319,7 @@ function StudentOverviewPendingCanvas({
               <span className="student-overview-skeleton skeleton-dot" />
               <span className="student-overview-skeleton skeleton-copy skeleton-copy-wide" />
             </div>
-            <div className="student-overview-panel student-overview-pending-panel">
+            <div className="student-area-panel student-overview-panel student-overview-pending-panel">
               <span className="student-overview-skeleton skeleton-kicker" />
               <span className="student-overview-skeleton skeleton-copy skeleton-copy-wide" />
               <span className="student-overview-skeleton skeleton-copy" />
@@ -456,8 +452,8 @@ export const StudentOverviewPage: React.FC = () => {
   const profileUpdatedAt = formatDate(renderedOverviewData.profile?.updatedAt);
 
   return (
-    <section className="student-overview-page" aria-busy={shellLoading}>
-      <div className="student-overview-frame">
+    <section className="student-overview-page student-area-theme" aria-busy={shellLoading}>
+      <div className="student-area-frame student-overview-frame">
         {studentError || overviewError ? (
           <p className="student-overview-error" role="alert">
             {studentError ?? overviewError}
@@ -524,7 +520,7 @@ export const StudentOverviewPage: React.FC = () => {
         </div>
 
         <div className="student-overview-body">
-          <article className="student-overview-panel learner-snapshot">
+          <article className="student-area-panel student-overview-panel learner-snapshot">
             <header>
               <p className="student-overview-section-label">Learner Snapshot</p>
               <Link to={studentAreaPath('learning')}>View full profile</Link>
@@ -568,7 +564,7 @@ export const StudentOverviewPage: React.FC = () => {
             <p className="student-overview-meta">Profile updated {profileUpdatedAt}</p>
           </article>
 
-          <article className="student-overview-panel current-focus">
+          <article className="student-area-panel student-overview-panel current-focus">
             <header>
               <p className="student-overview-section-label">Current Focus</p>
               <span>{currentFocus.badge}</span>
@@ -592,7 +588,7 @@ export const StudentOverviewPage: React.FC = () => {
               </span>
             </Link>
 
-            <article className="student-overview-panel recent-activity">
+            <article className="student-area-panel student-overview-panel recent-activity">
               <header>
                 <p className="student-overview-section-label">Recent Activity</p>
                 <Link to={studentAreaPath('history')}>View history</Link>
@@ -628,18 +624,18 @@ export const StudentOverviewPage: React.FC = () => {
 
 const studentOverviewStyles = `
   .student-overview-page {
-    --overview-paper: #fbf7ee;
-    --overview-paper-deep: #f4eadb;
-    --overview-ink: #151412;
-    --overview-muted: #6f665a;
-    --overview-blue: #143f73;
-    --overview-blue-soft: #e8eef7;
-    --overview-sage: #315c3a;
-    --overview-sage-soft: #edf4e7;
-    --overview-amber: #91620c;
-    --overview-amber-soft: #fff5dd;
-    --overview-rose: #8f3f32;
-    --overview-line: rgba(42, 36, 26, 0.13);
+    --overview-paper: var(--student-area-paper);
+    --overview-paper-deep: var(--student-area-paper-deep);
+    --overview-ink: var(--student-area-ink);
+    --overview-muted: var(--student-area-muted);
+    --overview-blue: var(--student-area-blue);
+    --overview-blue-soft: var(--student-area-blue-soft);
+    --overview-sage: var(--student-area-sage);
+    --overview-sage-soft: var(--student-area-sage-soft);
+    --overview-amber: var(--student-area-amber);
+    --overview-amber-soft: var(--student-area-amber-soft);
+    --overview-rose: var(--student-area-rose);
+    --overview-line: var(--student-area-line);
     color: var(--overview-ink);
   }
 
@@ -647,28 +643,16 @@ const studentOverviewStyles = `
     position: relative;
     display: grid;
     gap: 1.6rem;
-    padding: clamp(1.25rem, 3vw, 2.4rem);
+    padding: 0;
     overflow: hidden;
-    border: 1px solid var(--overview-line);
-    border-radius: 30px;
-    background:
-      radial-gradient(circle at 10% 0%, rgba(20, 63, 115, 0.07), transparent 34%),
-      radial-gradient(circle at 88% 28%, rgba(49, 92, 58, 0.08), transparent 30%),
-      linear-gradient(135deg, rgba(255, 252, 245, 0.98), rgba(247, 239, 226, 0.92));
-    box-shadow: 0 18px 48px rgba(42, 36, 26, 0.08);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
   }
 
   .student-overview-frame::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    opacity: 0.34;
-    background-image:
-      linear-gradient(rgba(42, 36, 26, 0.035) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(42, 36, 26, 0.025) 1px, transparent 1px);
-    background-size: 44px 44px;
-    mask-image: linear-gradient(180deg, black, transparent 85%);
+    content: none;
   }
 
   .student-overview-frame > * {
@@ -698,25 +682,9 @@ const studentOverviewStyles = `
     animation: overview-skeleton-breathe 1900ms ease-in-out infinite;
   }
 
-  .student-overview-pending-portrait {
-    opacity: 0.78;
-  }
-
-  .student-overview-pending-identity {
-    display: grid;
-    gap: 1rem;
-    max-width: 36rem;
-  }
-
   .skeleton-kicker {
     width: 8.5rem;
     height: 0.8rem;
-  }
-
-  .skeleton-title {
-    width: min(100%, 24rem);
-    height: clamp(3rem, 6vw, 6rem);
-    border-radius: 26px;
   }
 
   .skeleton-heading {
@@ -875,7 +843,6 @@ const studentOverviewStyles = `
 
   .student-overview-control-row {
     display: grid;
-    gap: clamp(1rem, 3vw, 2rem);
     grid-template-columns: minmax(280px, 0.95fr) minmax(280px, 0.72fr);
     align-items: start;
     padding-bottom: 0.35rem;

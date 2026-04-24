@@ -89,7 +89,10 @@ export const DropZone: React.FC<DropZoneProps> = ({
           text-align: center;
           background: var(--bg-primary);
           cursor: pointer;
-          transition: all var(--transition-fast);
+          transition:
+            border-color var(--transition-fast),
+            box-shadow var(--transition-fast),
+            opacity var(--transition-fast);
         }
 
         .dropzone-shell.active {

@@ -1,4 +1,4 @@
-import { createContext, ReactNode, useEffect, useState } from 'react';
+import { createContext, type ReactNode, useEffect, useState } from 'react';
 
 type Theme = 'light' | 'dark';
 
@@ -15,17 +15,13 @@ const THEME_STORAGE_KEY = 'esl-batch-theme';
 function getInitialTheme(): Theme {
   if (globalThis.window === undefined) return 'light';
 
-  // Check localStorage first
   const stored = localStorage.getItem(THEME_STORAGE_KEY);
-  if (stored === 'dark' || stored === 'light') {
+  if (stored === 'light') {
     return stored;
   }
 
-  // Fall back to system preference
-  if (globalThis.matchMedia?.('(prefers-color-scheme: dark)').matches) {
-    return 'dark';
-  }
-
+  // Dark mode is not product-ready for the editorial Phase 7 surfaces yet.
+  // Prefer a safe light default over inheriting an unusable browser/OS dark preference.
   return 'light';
 }
 
@@ -42,28 +38,12 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
     localStorage.setItem(THEME_STORAGE_KEY, theme);
   }, [theme]);
 
-  // Listen for system preference changes
-  useEffect(() => {
-    const mediaQuery = globalThis.matchMedia('(prefers-color-scheme: dark)');
-
-    const handleChange = (e: MediaQueryListEvent) => {
-      const stored = localStorage.getItem(THEME_STORAGE_KEY);
-      // Only auto-switch if user hasn't set a preference
-      if (!stored) {
-        setThemeState(e.matches ? 'dark' : 'light');
-      }
-    };
-
-    mediaQuery.addEventListener('change', handleChange);
-    return () => mediaQuery.removeEventListener('change', handleChange);
-  }, []);
-
   const toggleTheme = () => {
-    setThemeState((prev) => (prev === 'light' ? 'dark' : 'light'));
+    setThemeState('light');
   };
 
   const setTheme = (newTheme: Theme) => {
-    setThemeState(newTheme);
+    setThemeState(newTheme === 'dark' ? 'light' : newTheme);
   };
 
   return (
