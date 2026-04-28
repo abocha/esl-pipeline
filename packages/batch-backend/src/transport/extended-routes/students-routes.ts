@@ -2,9 +2,21 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import {
+  InitializeStudentProfileDraftError,
+  initializeStudentProfileDraft,
+} from '../../application/initialize-student-profile-draft.js';
+import {
+  PopulateFirstProfileFromLessonError,
+  populateFirstProfileFromLesson,
+} from '../../application/populate-first-profile-from-lesson.js';
+import {
   ProfileCandidatePromotionError,
   promoteStudentProfileCandidates,
 } from '../../application/profile-candidate-promotion.js';
+import {
+  getProfileContent,
+  listProfileRevisionsForProfile,
+} from '../../application/profile-content.js';
 import {
   getStudentMemoryOverview,
   listStudentHomeworkMemory,
@@ -59,6 +71,275 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
     studyPreferencesOrConstraints: z.string().min(1),
     teacherNotes: z.string().nullable().optional(),
   });
+
+  const emptyProfileRevisions = {
+    items: [],
+    total: 0,
+    limit: 0,
+    offset: 0,
+    order: 'desc' as const,
+  };
+
+  async function resolveStudentSurfaceProfile(studentId: string) {
+    const student = await getStudentProfileById(studentId, { config: context.config });
+    if (!student) return null;
+
+    const activeBinding = student.profileId
+      ? null
+      : await getActiveStudentProfileBindingForStudent(studentId);
+    const profileId = student.profileId ?? activeBinding?.profileId ?? null;
+    if (!profileId) {
+      return {
+        profile: null,
+        revisions: emptyProfileRevisions,
+      };
+    }
+
+    const [profile, revisions] = await Promise.all([
+      getProfileContent(profileId),
+      listProfileRevisionsForProfile(profileId, { limit: 20, offset: 0, order: 'desc' }),
+    ]);
+
+    return {
+      profile,
+      revisions: revisions ?? emptyProfileRevisions,
+    };
+  }
+
+  app.get(
+    '/students/:id/surfaces/overview',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'GET /students/:id/surfaces/overview');
+      const paramsSchema = z.object({
+        id: z.string().min(1),
+      });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const profilePayload = await resolveStudentSurfaceProfile(params.id);
+        if (!profilePayload) {
+          return errorResponse(reply, 'not_found');
+        }
+
+        const [memory, pendingCandidates, recentTimeline] = await Promise.all([
+          getStudentMemoryOverview({
+            studentId: params.id,
+            lessonLimit: 3,
+            homeworkLimit: 2,
+            config: context.config,
+          }),
+          listStudentProfileCandidatesForStudent({
+            studentId: params.id,
+            statuses: ['pending_review'],
+            reviewStates: ['unreviewed', 'deferred'],
+            limit: 10,
+            offset: 0,
+            order: 'desc',
+            config: context.config,
+          }),
+          getStudentTimeline(params.id, {
+            limit: 8,
+            offset: 0,
+            order: 'desc',
+          }),
+        ]);
+
+        if (!memory || !pendingCandidates) {
+          return errorResponse(reply, 'not_found');
+        }
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          studentId: params.id,
+        });
+
+        return reply.send({
+          ...profilePayload,
+          memory,
+          pendingCandidates,
+          recentTimeline,
+        });
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid student id',
+            details: error.issues,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.get(
+    '/students/:id/surfaces/learning',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'GET /students/:id/surfaces/learning');
+      const paramsSchema = z.object({
+        id: z.string().min(1),
+      });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const profilePayload = await resolveStudentSurfaceProfile(params.id);
+        if (!profilePayload) {
+          return errorResponse(reply, 'not_found');
+        }
+
+        const [memory, bindings, candidates] = await Promise.all([
+          getStudentMemoryOverview({
+            studentId: params.id,
+            lessonLimit: 5,
+            homeworkLimit: 3,
+            config: context.config,
+          }),
+          listStudentProfileBindingsForStudent(params.id, {
+            limit: 20,
+            offset: 0,
+            order: 'desc',
+          }),
+          listStudentProfileCandidatesForStudent({
+            studentId: params.id,
+            limit: 50,
+            offset: 0,
+            order: 'desc',
+            config: context.config,
+          }),
+        ]);
+
+        if (!memory || !candidates) {
+          return errorResponse(reply, 'not_found');
+        }
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          studentId: params.id,
+        });
+
+        return reply.send({
+          ...profilePayload,
+          memory,
+          bindings,
+          candidates,
+        });
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid student id',
+            details: error.issues,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.get(
+    '/students/:id/surfaces/history',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'GET /students/:id/surfaces/history');
+      const paramsSchema = z.object({
+        id: z.string().min(1),
+      });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const student = await getStudentProfileById(params.id, { config: context.config });
+        if (!student) {
+          return errorResponse(reply, 'not_found');
+        }
+
+        const [timeline, lessonMemory, homeworkMemory] = await Promise.all([
+          getStudentTimeline(params.id, {
+            limit: 80,
+            offset: 0,
+            order: 'desc',
+          }),
+          listStudentLessonMemory({
+            studentId: params.id,
+            statuses: ['ready'],
+            limit: 50,
+            offset: 0,
+            order: 'desc',
+            config: context.config,
+          }),
+          listStudentHomeworkMemory({
+            studentId: params.id,
+            statuses: ['ready'],
+            limit: 50,
+            offset: 0,
+            order: 'desc',
+            config: context.config,
+          }),
+        ]);
+
+        if (!lessonMemory || !homeworkMemory) {
+          return errorResponse(reply, 'not_found');
+        }
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          studentId: params.id,
+        });
+
+        return reply.send({
+          timeline,
+          lessonMemory,
+          homeworkMemory,
+        });
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid student id',
+            details: error.issues,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
 
   app.get(
     '/students/:id/profile-candidates',
@@ -389,6 +670,7 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
             (candidateId) => !result.includedCandidateIds.includes(candidateId),
           ),
           contentHash: result.draftRevision.contentHash,
+          draftRevision: result.draftRevision,
         });
       } catch (error: unknown) {
         if (error instanceof z.ZodError) {
@@ -399,6 +681,145 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
           });
         }
         if (error instanceof ProfileCandidatePromotionError) {
+          return reply.code(error.status).send({
+            error: error.code,
+            message: error.message,
+            code: error.code,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.post(
+    '/students/:id/profile-drafts/initialize',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'POST /students/:id/profile-drafts/initialize');
+      const paramsSchema = z.object({
+        id: z.string().min(1),
+      });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const authenticatedUser = getAuthenticatedUser(request);
+        const result = await initializeStudentProfileDraft({
+          request: {
+            studentId: params.id,
+            reviewerId: authenticatedUser?.id ?? null,
+          },
+          overrides: {
+            config: context.config,
+          },
+        });
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          studentId: params.id,
+        });
+
+        return reply.send({
+          draftRevisionId: result.draftRevision.id,
+          profileId: result.profileId,
+          draftRevision: result.draftRevision,
+        });
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid request parameters',
+            details: error.issues,
+          });
+        }
+        if (error instanceof InitializeStudentProfileDraftError) {
+          return reply.code(error.status).send({
+            error: error.code,
+            message: error.message,
+            code: error.code,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.post(
+    '/students/:id/profile-drafts/populate-first-from-lesson',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(
+        request,
+        'POST /students/:id/profile-drafts/populate-first-from-lesson',
+      );
+      const paramsSchema = z.object({
+        id: z.string().min(1),
+      });
+      const bodySchema = z.object({
+        reviewerNote: z.string().trim().min(1).optional(),
+      });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const body = bodySchema.parse(request.body ?? {});
+        const authenticatedUser = getAuthenticatedUser(request);
+        const result = await populateFirstProfileFromLesson({
+          request: {
+            studentId: params.id,
+            reviewerId: authenticatedUser?.id ?? null,
+            reviewerNote: body.reviewerNote ?? null,
+          },
+          overrides: {
+            config: context.config,
+          },
+        });
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          studentId: params.id,
+        });
+
+        return reply.send({
+          draftRevisionId: result.draftRevision.id,
+          profileId: result.profileId,
+          snapshotId: result.snapshotId,
+          lessonMemoryIds: result.lessonMemoryIds,
+          homeworkMemoryIds: result.homeworkMemoryIds,
+          draftRevision: result.draftRevision,
+        });
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid request body',
+            details: error.issues,
+          });
+        }
+        if (error instanceof PopulateFirstProfileFromLessonError) {
           return reply.code(error.status).send({
             error: error.code,
             message: error.message,

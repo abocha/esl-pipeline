@@ -16,7 +16,7 @@ This phase improves the beginning of the product loop:
 1. Student creation should collect enough information to generate a useful first foundational
    profile revision.
 2. Starter profile capture is human-authored, not generated.
-3. Advanced freeform profile editing remains available after creation.
+3. Advanced teacher-directed profile editing remains available after creation.
 4. The workspace can remain operationally plain; complete workflow matters more than visual polish.
 5. Backend-created profile revisions from the starter flow must use the same canonical revision
    system as every other profile update.
@@ -72,7 +72,8 @@ Suggested service behavior:
 1. one canonical create flow that can:
    - create a student without starter profile when needed
    - or create student + starter profile bundle when fields are supplied
-2. starter profile content should be rendered into the existing foundational-profile format
+2. starter profile content should populate the canonical foundational-profile shape used by the
+   future structured profile system
 3. the created profile revision should be a normal revision with provenance indicating starter-flow
    origin
 

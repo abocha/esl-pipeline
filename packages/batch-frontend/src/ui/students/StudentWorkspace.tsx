@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom';
 
 import type {
+  FoundationalProfile,
   JobListResponse,
   JobProvenanceResponse,
   JobState,
@@ -25,6 +26,7 @@ import {
   fetchJobProvenance,
   fetchPromptPackageLineage,
   getProfileContent,
+  getProfileRevision,
   getStudentMemoryOverview,
   getStudentProfile,
   getStudentTimeline,
@@ -41,8 +43,8 @@ import {
   rejectStudentProfileCandidate,
   restoreProfileRevision,
   restoreTemplateRevision,
+  saveProfileDraftRevision,
   updateStudentProfile,
-  upsertProfileContent,
   upsertTemplateContent,
 } from '../../utils/api';
 import { CreateStudentDialog } from './CreateStudentDialog';
@@ -50,10 +52,14 @@ import {
   buildCreateStudentPayload,
   type CandidateActionKind,
   type CreateStudentFormState,
+  type FoundationalProfileFormState,
   formatCandidateSectionLabel,
   formatCandidateStateLabel,
+  foundationalProfileFormToStructuredContent,
+  foundationalProfileToFormState,
   type HistoryFilters,
   INITIAL_CREATE_STUDENT_FORM,
+  INITIAL_FOUNDATIONAL_PROFILE_FORM,
   INITIAL_HISTORY_FILTERS,
   INITIAL_TIMELINE_FILTERS,
   isPendingCandidate,
@@ -65,6 +71,7 @@ import {
   type TimelineFilters,
 } from './StudentWorkspace.logic';
 import { WorkspaceInspectionPanel } from './WorkspaceInspectionPanel';
+import './StudentWorkspace.css';
 
 const HISTORY_LIMIT = 25;
 const BINDING_LIMIT = 20;
@@ -146,6 +153,23 @@ function formatDateTime(value?: string | null): string {
   return date.toLocaleString();
 }
 
+function getFoundationalProfileSnapshot(form: FoundationalProfileFormState): string {
+  return JSON.stringify(foundationalProfileFormToStructuredContent(form));
+}
+
+function getLegacyProfileNotice(profile: {
+  content?: string | null;
+  structuredContent?: FoundationalProfile | null;
+}): string | null {
+  if (profile.structuredContent) {
+    return null;
+  }
+
+  return profile.content?.trim()
+    ? 'This profile is still legacy markdown-only. Saving a draft from this form will create the new structured revision.'
+    : null;
+}
+
 export const StudentWorkspace: React.FC = () => {
   const [students, setStudents] = useState<StudentProfile[]>([]);
   const [studentsLoading, setStudentsLoading] = useState(false);
@@ -167,13 +191,18 @@ export const StudentWorkspace: React.FC = () => {
   const [profileOptionsError, setProfileOptionsError] = useState<string | null>(null);
   const [selectedProfileId, setSelectedProfileId] = useState('');
 
-  const [profileEditorText, setProfileEditorText] = useState('');
-  const [loadedProfileContent, setLoadedProfileContent] = useState('');
+  const [profileForm, setProfileForm] = useState<FoundationalProfileFormState>(
+    INITIAL_FOUNDATIONAL_PROFILE_FORM,
+  );
+  const [loadedProfileForm, setLoadedProfileForm] = useState<FoundationalProfileFormState>(
+    INITIAL_FOUNDATIONAL_PROFILE_FORM,
+  );
   const [profileBusy, setProfileBusy] = useState<
     'loading' | 'saving' | 'restoring' | 'activating' | null
   >(null);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
+  const [profileLegacyNotice, setProfileLegacyNotice] = useState<string | null>(null);
   const [profileRevisions, setProfileRevisions] = useState<ProfileRevisionSummaryResponse[]>([]);
 
   const [templateOptions, setTemplateOptions] = useState<{ id: string; label: string }[]>([]);
@@ -265,8 +294,10 @@ export const StudentWorkspace: React.FC = () => {
   );
 
   const profileDirty = useMemo(
-    () => profileEditorText.trim() !== loadedProfileContent.trim(),
-    [loadedProfileContent, profileEditorText],
+    () =>
+      getFoundationalProfileSnapshot(profileForm) !==
+      getFoundationalProfileSnapshot(loadedProfileForm),
+    [loadedProfileForm, profileForm],
   );
 
   const templateDirty = useMemo(
@@ -399,10 +430,11 @@ export const StudentWorkspace: React.FC = () => {
 
   const loadSelectedProfile = useCallback(async (profileId: string) => {
     if (!profileId) {
-      setProfileEditorText('');
-      setLoadedProfileContent('');
+      setProfileForm(INITIAL_FOUNDATIONAL_PROFILE_FORM);
+      setLoadedProfileForm(INITIAL_FOUNDATIONAL_PROFILE_FORM);
       setProfileRevisions([]);
       setProfileError(null);
+      setProfileLegacyNotice(null);
       return;
     }
 
@@ -413,19 +445,33 @@ export const StudentWorkspace: React.FC = () => {
         getProfileContent(profileId),
         listProfileRevisions(profileId, { limit: 25, offset: 0, order: 'desc' }),
       ]);
-      setProfileEditorText(profile.content ?? '');
-      setLoadedProfileContent(profile.content ?? '');
+      const nextProfileForm = foundationalProfileToFormState(profile.structuredContent);
+      setProfileForm(nextProfileForm);
+      setLoadedProfileForm(nextProfileForm);
+      setProfileLegacyNotice(getLegacyProfileNotice(profile));
       setProfileRevisions(revisions.items ?? []);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to load selected profile.';
       setProfileError(message);
-      setProfileEditorText('');
-      setLoadedProfileContent('');
+      setProfileForm(INITIAL_FOUNDATIONAL_PROFILE_FORM);
+      setLoadedProfileForm(INITIAL_FOUNDATIONAL_PROFILE_FORM);
       setProfileRevisions([]);
+      setProfileLegacyNotice(null);
     } finally {
       setProfileBusy(null);
     }
   }, []);
+
+  const loadProfileRevisionIntoEditor = useCallback(
+    async (profileId: string, revisionId: string) => {
+      const revision = await getProfileRevision(profileId, revisionId);
+      const nextProfileForm = foundationalProfileToFormState(revision.structuredContent);
+      setProfileForm(nextProfileForm);
+      setLoadedProfileForm(nextProfileForm);
+      setProfileLegacyNotice(getLegacyProfileNotice(revision));
+    },
+    [],
+  );
 
   const loadSelectedTemplate = useCallback(async (templateId: string) => {
     if (!templateId) {
@@ -731,7 +777,7 @@ export const StudentWorkspace: React.FC = () => {
 
   const handleSaveProfile = async () => {
     if (!selectedProfileId) {
-      setProfileError('Select a profile before saving content.');
+      setProfileError('Select a profile before saving a draft.');
       return;
     }
 
@@ -739,18 +785,23 @@ export const StudentWorkspace: React.FC = () => {
     setProfileError(null);
     setProfileSuccess(null);
     try {
-      const saved = await upsertProfileContent(selectedProfileId, profileEditorText);
-      setLoadedProfileContent(saved.content ?? '');
-      const revisions = await listProfileRevisions(saved.id, {
+      const saved = await saveProfileDraftRevision(selectedProfileId, {
+        structuredContent: foundationalProfileFormToStructuredContent(profileForm),
+      });
+      const savedForm = foundationalProfileToFormState(saved.structuredContent);
+      setProfileForm(savedForm);
+      setLoadedProfileForm(savedForm);
+      setProfileLegacyNotice(null);
+      const revisions = await listProfileRevisions(saved.profileId, {
         limit: 25,
         offset: 0,
         order: 'desc',
       });
       setProfileRevisions(revisions.items ?? []);
-      setProfileSuccess('Profile content saved.');
+      setProfileSuccess('Profile draft saved.');
       await loadTimeline(selectedStudentId, timelineFiltersAppliedRef.current);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to save profile content.';
+      const message = error instanceof Error ? error.message : 'Unable to save profile draft.';
       setProfileError(message);
     } finally {
       setProfileBusy(null);
@@ -764,8 +815,10 @@ export const StudentWorkspace: React.FC = () => {
     setProfileSuccess(null);
     try {
       const restored = await restoreProfileRevision(selectedProfileId, revisionId);
-      setProfileEditorText(restored.content ?? '');
-      setLoadedProfileContent(restored.content ?? '');
+      const restoredForm = foundationalProfileToFormState(restored.structuredContent);
+      setProfileForm(restoredForm);
+      setLoadedProfileForm(restoredForm);
+      setProfileLegacyNotice(getLegacyProfileNotice(restored));
       const revisions = await listProfileRevisions(restored.id, {
         limit: 25,
         offset: 0,
@@ -801,6 +854,16 @@ export const StudentWorkspace: React.FC = () => {
       setProfileBusy(null);
     }
   };
+
+  const handleProfileFormFieldChange = useCallback(
+    (field: keyof FoundationalProfileFormState, value: string) => {
+      setProfileForm((current) => ({
+        ...current,
+        [field]: value,
+      }));
+    },
+    [],
+  );
 
   const handleReviewProfileCandidate = async (
     candidate: StudentProfileCandidate,
@@ -880,7 +943,12 @@ export const StudentWorkspace: React.FC = () => {
       setProfileCandidatePromotionNote('');
       await Promise.all([
         loadProfileCandidates(selectedStudentId),
-        selectedProfileId ? loadSelectedProfile(selectedProfileId) : Promise.resolve(),
+        selectedProfileId || response.profileId
+          ? loadProfileRevisionIntoEditor(
+              selectedProfileId || response.profileId,
+              response.draftRevisionId,
+            )
+          : Promise.resolve(),
         loadTimeline(selectedStudentId, timelineFiltersAppliedRef.current),
       ]);
     } catch (error) {
@@ -1191,18 +1259,18 @@ export const StudentWorkspace: React.FC = () => {
 
         <article className="workspace-card card">
           <header>
-            <h2>Profile Binding</h2>
-            <p>Bind the selected student to an active profile ID.</p>
+            <h2>Profile Selection</h2>
+            <p>Select the learner profile used by the legacy workspace.</p>
           </header>
 
           <label className="workspace-field">
-            Bound profile
+            Learner profile
             <select
               value={selectedProfileId}
               onChange={(event) => setSelectedProfileId(event.target.value)}
               disabled={!selectedStudentId || profileOptions.length === 0}
             >
-              <option value="">No profile binding</option>
+              <option value="">No learner profile selected</option>
               {profileOptions.map((profile) => (
                 <option key={profile.id} value={profile.id}>
                   {profile.label} ({profile.id})
@@ -1246,17 +1314,131 @@ export const StudentWorkspace: React.FC = () => {
       <section className="workspace-grid workspace-grid-wide">
         <article className="workspace-card card">
           <header>
-            <h2>Profile Editor & Revisions</h2>
-            <p>Edit profile content, then restore or activate older revisions.</p>
+            <h2>Foundational Profile & Revisions</h2>
+            <p>
+              Update the learner&apos;s structured teaching context here, then restore or activate
+              older revisions when needed.
+            </p>
           </header>
 
-          <textarea
-            value={profileEditorText}
-            onChange={(event) => setProfileEditorText(event.target.value)}
-            rows={14}
-            placeholder="Select or bind a profile to start editing..."
-            disabled={!selectedProfileId}
-          />
+          <div className="workspace-grid">
+            <label className="workspace-field">
+              <span>Current level</span>
+              <input
+                type="text"
+                value={profileForm.overallLevel}
+                onChange={(event) =>
+                  handleProfileFormFieldChange('overallLevel', event.target.value)
+                }
+                placeholder="B1, B2, C1..."
+                disabled={!selectedProfileId}
+              />
+            </label>
+
+            <label className="workspace-field workspace-field-span-2">
+              <span>Primary goals</span>
+              <textarea
+                value={profileForm.primaryGoals}
+                onChange={(event) =>
+                  handleProfileFormFieldChange('primaryGoals', event.target.value)
+                }
+                rows={4}
+                placeholder="One durable goal per line"
+                disabled={!selectedProfileId}
+              />
+            </label>
+
+            <label className="workspace-field">
+              <span>Communication contexts</span>
+              <textarea
+                value={profileForm.communicationContexts}
+                onChange={(event) =>
+                  handleProfileFormFieldChange('communicationContexts', event.target.value)
+                }
+                rows={4}
+                placeholder="Client calls, demos, presentations..."
+                disabled={!selectedProfileId}
+              />
+            </label>
+
+            <label className="workspace-field">
+              <span>Interests and useful themes</span>
+              <textarea
+                value={profileForm.interestsAndUsefulThemes}
+                onChange={(event) =>
+                  handleProfileFormFieldChange('interestsAndUsefulThemes', event.target.value)
+                }
+                rows={4}
+                placeholder="Travel, design systems, films..."
+                disabled={!selectedProfileId}
+              />
+            </label>
+
+            <label className="workspace-field">
+              <span>Stable strengths</span>
+              <textarea
+                value={profileForm.stableStrengths}
+                onChange={(event) =>
+                  handleProfileFormFieldChange('stableStrengths', event.target.value)
+                }
+                rows={4}
+                placeholder="Strong listening, high motivation..."
+                disabled={!selectedProfileId}
+              />
+            </label>
+
+            <label className="workspace-field">
+              <span>Persistent challenges</span>
+              <textarea
+                value={profileForm.persistentChallenges}
+                onChange={(event) =>
+                  handleProfileFormFieldChange('persistentChallenges', event.target.value)
+                }
+                rows={4}
+                placeholder="Article usage, sentence rhythm..."
+                disabled={!selectedProfileId}
+              />
+            </label>
+
+            <label className="workspace-field">
+              <span>Study preferences</span>
+              <textarea
+                value={profileForm.studyPreferences}
+                onChange={(event) =>
+                  handleProfileFormFieldChange('studyPreferences', event.target.value)
+                }
+                rows={4}
+                placeholder="One preference or constraint per line"
+                disabled={!selectedProfileId}
+              />
+            </label>
+
+            <label className="workspace-field">
+              <span>Durable constraints</span>
+              <textarea
+                value={profileForm.durableConstraints}
+                onChange={(event) =>
+                  handleProfileFormFieldChange('durableConstraints', event.target.value)
+                }
+                rows={4}
+                placeholder="Short homework windows, device limitations..."
+                disabled={!selectedProfileId}
+              />
+            </label>
+
+            <label className="workspace-field workspace-field-span-2">
+              <span>Teacher notes</span>
+              <textarea
+                value={profileForm.teacherNotes}
+                onChange={(event) =>
+                  handleProfileFormFieldChange('teacherNotes', event.target.value)
+                }
+                rows={4}
+                placeholder="Durable notes that help shape future lessons"
+                disabled={!selectedProfileId}
+              />
+            </label>
+          </div>
 
           <div className="workspace-inline">
             <button
@@ -1265,13 +1447,14 @@ export const StudentWorkspace: React.FC = () => {
               onClick={() => void handleSaveProfile()}
               disabled={!selectedProfileId || profileBusy !== null || !profileDirty}
             >
-              {profileBusy === 'saving' ? 'Saving...' : 'Save Profile Content'}
+              {profileBusy === 'saving' ? 'Saving...' : 'Save Profile Draft'}
             </button>
             {profileDirty ? <span className="workspace-muted">Unsaved changes</span> : null}
           </div>
 
           {profileError ? <p className="workspace-error">{profileError}</p> : null}
           {profileSuccess ? <p className="workspace-success">{profileSuccess}</p> : null}
+          {profileLegacyNotice ? <p className="workspace-muted">{profileLegacyNotice}</p> : null}
 
           {profileRevisions.length > 0 ? (
             <div className="workspace-list">
@@ -1965,269 +2148,6 @@ export const StudentWorkspace: React.FC = () => {
           )}
         </article>
       </section>
-
-      <style>{`
-        .workspace-root {
-          display: grid;
-          gap: var(--space-5);
-        }
-
-        .workspace-hero {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: var(--space-4);
-          flex-wrap: wrap;
-        }
-
-        .workspace-hero h1 {
-          margin-bottom: var(--space-1);
-        }
-
-        .workspace-hero p {
-          color: var(--text-tertiary);
-        }
-
-        .workspace-hero-actions {
-          display: flex;
-          align-items: center;
-          gap: var(--space-2);
-          flex-wrap: wrap;
-        }
-
-        .workspace-grid {
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: var(--space-5);
-        }
-
-        .workspace-grid-wide {
-          grid-template-columns: 1.3fr 1fr;
-        }
-
-        .workspace-card {
-          display: grid;
-          gap: var(--space-3);
-        }
-
-        .workspace-card header {
-          display: grid;
-          gap: var(--space-1);
-        }
-
-        .workspace-field {
-          display: grid;
-          gap: var(--space-1);
-          font-size: var(--text-sm);
-          color: var(--text-tertiary);
-        }
-
-        .workspace-field-span-2 {
-          grid-column: span 2;
-        }
-
-        .workspace-field select,
-        .workspace-field input,
-        .workspace-card textarea {
-          border: 1px solid var(--border-light);
-          background: var(--bg-primary);
-          border-radius: var(--radius-md);
-          padding: var(--space-2) var(--space-3);
-          color: var(--text-primary);
-          font-family: var(--font-sans);
-          font-size: var(--text-sm);
-        }
-
-        .workspace-card textarea {
-          resize: vertical;
-          min-height: 160px;
-          line-height: 1.5;
-          font-family: var(--font-mono);
-        }
-
-        .workspace-primary-btn,
-        .workspace-secondary-btn {
-          border-radius: var(--radius-full);
-          padding: var(--space-2) var(--space-4);
-          border: 1px solid var(--border-medium);
-          cursor: pointer;
-          font-size: var(--text-sm);
-          text-decoration: none;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: var(--space-1);
-        }
-
-        .workspace-primary-btn {
-          background: var(--color-primary-600);
-          color: white;
-          border-color: transparent;
-        }
-
-        .workspace-secondary-btn {
-          background: var(--bg-secondary);
-          color: var(--text-primary);
-        }
-
-        .workspace-primary-btn:disabled,
-        .workspace-secondary-btn:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
-
-        .workspace-inline {
-          display: flex;
-          align-items: center;
-          gap: var(--space-2);
-          flex-wrap: wrap;
-        }
-
-        .workspace-header-row {
-          justify-content: space-between;
-        }
-
-        .workspace-create-panel {
-          border: 1px solid var(--border-light);
-          border-radius: var(--radius-lg);
-          background: var(--bg-secondary);
-          padding: var(--space-3);
-          display: grid;
-          gap: var(--space-3);
-        }
-
-        .workspace-advanced {
-          display: grid;
-          gap: var(--space-2);
-        }
-
-        .workspace-advanced summary {
-          cursor: pointer;
-          font-size: var(--text-sm);
-          color: var(--text-tertiary);
-        }
-
-        .workspace-filter-row {
-          align-items: end;
-        }
-
-        .workspace-meta {
-          display: grid;
-          gap: var(--space-1);
-          font-size: var(--text-sm);
-        }
-
-        .workspace-list {
-          display: grid;
-          gap: var(--space-2);
-          max-height: 280px;
-          overflow: auto;
-          padding-right: var(--space-1);
-        }
-
-        .workspace-list-item {
-          border: 1px solid var(--border-light);
-          border-radius: var(--radius-md);
-          padding: var(--space-2) var(--space-3);
-          background: var(--bg-secondary);
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: var(--space-2);
-        }
-
-        .workspace-list-item-stack {
-          align-items: start;
-        }
-
-        .workspace-pill {
-          border-radius: var(--radius-full);
-          border: 1px solid var(--border-medium);
-          padding: 0.125rem 0.5rem;
-          font-size: var(--text-xs);
-          background: var(--bg-primary);
-          color: var(--text-secondary);
-        }
-
-        .workspace-candidate-group {
-          display: grid;
-          gap: var(--space-2);
-        }
-
-        .workspace-candidate-details {
-          border: 1px solid var(--border-light);
-          border-radius: var(--radius-md);
-          background: var(--bg-secondary);
-          padding: var(--space-2) var(--space-3);
-        }
-
-        .workspace-candidate-summary {
-          list-style: none;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: var(--space-2);
-        }
-
-        .workspace-candidate-summary::-webkit-details-marker {
-          display: none;
-        }
-
-        .workspace-candidate-body {
-          display: grid;
-          gap: var(--space-3);
-          padding-top: var(--space-3);
-        }
-
-        .workspace-table-wrap {
-          overflow-x: auto;
-        }
-
-        .workspace-table {
-          width: 100%;
-          border-collapse: collapse;
-          font-size: var(--text-sm);
-        }
-
-        .workspace-table th,
-        .workspace-table td {
-          text-align: left;
-          padding: var(--space-2);
-          border-bottom: 1px solid var(--border-light);
-          vertical-align: top;
-        }
-
-        .workspace-selected-row {
-          background: var(--color-primary-50);
-        }
-
-        .workspace-muted {
-          color: var(--text-tertiary);
-          font-size: var(--text-xs);
-        }
-
-        .workspace-success {
-          color: var(--color-success-600);
-          font-size: var(--text-sm);
-        }
-
-        .workspace-error {
-          color: var(--color-error-600);
-          font-size: var(--text-sm);
-        }
-
-        @media (max-width: 1080px) {
-          .workspace-grid,
-          .workspace-grid-wide {
-            grid-template-columns: 1fr;
-          }
-
-          .workspace-field-span-2 {
-            grid-column: span 1;
-          }
-        }
-      `}</style>
     </div>
   );
 };

@@ -38,6 +38,7 @@ interface StudentWorkspaceApiMocks {
   fetchJobProvenance: MockFn;
   fetchPromptPackageLineage: MockFn;
   getProfileContent: MockFn;
+  getProfileRevision: MockFn;
   getStudentMemoryOverview: MockFn;
   getStudentProfile: MockFn;
   getStudentTimeline: MockFn;
@@ -53,6 +54,7 @@ interface StudentWorkspaceApiMocks {
   promoteStudentProfileCandidates: MockFn;
   rejectStudentProfileCandidate: MockFn;
   restoreProfileRevision: MockFn;
+  saveProfileDraftRevision: MockFn;
   restoreTemplateRevision: MockFn;
   updateStudentProfile: MockFn;
   upsertProfileContent: MockFn;
@@ -69,6 +71,7 @@ const studentWorkspaceApiMocks: StudentWorkspaceApiMocks = vi.hoisted(() => ({
   fetchJobProvenance: vi.fn(),
   fetchPromptPackageLineage: vi.fn(),
   getProfileContent: vi.fn(),
+  getProfileRevision: vi.fn(),
   getStudentMemoryOverview: vi.fn(),
   getStudentProfile: vi.fn(),
   getStudentTimeline: vi.fn(),
@@ -84,6 +87,7 @@ const studentWorkspaceApiMocks: StudentWorkspaceApiMocks = vi.hoisted(() => ({
   promoteStudentProfileCandidates: vi.fn(),
   rejectStudentProfileCandidate: vi.fn(),
   restoreProfileRevision: vi.fn(),
+  saveProfileDraftRevision: vi.fn(),
   restoreTemplateRevision: vi.fn(),
   updateStudentProfile: vi.fn(),
   upsertProfileContent: vi.fn(),
@@ -155,6 +159,18 @@ function seedStudentWorkspaceMocks() {
     id: 'profile-default.md',
     label: 'Default Profile',
     content: 'PROFILE CONTENT',
+    structuredContent: {
+      schemaVersion: 'foundational_profile_v1',
+      overallLevel: 'B1',
+      primaryGoals: ['Speak more confidently in meetings.'],
+      communicationContexts: ['Client calls'],
+      interestsAndUsefulThemes: ['Travel'],
+      stableStrengths: ['High motivation'],
+      persistentChallenges: ['Article usage'],
+      studyPreferences: ['Prefers structured explanations'],
+      durableConstraints: ['Short homework windows'],
+      teacherNotes: 'Responds well to practical scenarios.',
+    },
     currentRevisionId: 'revision-1',
     updatedAt: now,
   });
@@ -536,14 +552,94 @@ function seedStudentWorkspaceMocks() {
     id: 'profile-default.md',
     label: 'Default Profile',
     content: 'PROFILE CONTENT',
+    structuredContent: {
+      schemaVersion: 'foundational_profile_v1',
+      overallLevel: 'B1',
+      primaryGoals: ['Speak more confidently in meetings.'],
+      communicationContexts: ['Client calls'],
+      interestsAndUsefulThemes: ['Travel'],
+      stableStrengths: ['High motivation'],
+      persistentChallenges: ['Article usage'],
+      studyPreferences: ['Prefers structured explanations'],
+      durableConstraints: ['Short homework windows'],
+      teacherNotes: 'Responds well to practical scenarios.',
+    },
     currentRevisionId: 'revision-1',
     updatedAt: now,
+  });
+
+  studentWorkspaceApiMocks.saveProfileDraftRevision.mockResolvedValue({
+    id: 'revision-2',
+    profileId: 'profile-default.md',
+    contentHash: 'hash-2',
+    source: 'update',
+    status: 'draft',
+    versionNumber: 2,
+    versionLabel: 'v2',
+    activatedAt: null,
+    deprecatedAt: null,
+    createdAt: now,
+    createdBy: 'user-1',
+    restoredFromRevisionId: null,
+    content: '# Foundational Profile\n\nStructured draft content',
+    structuredContent: {
+      schemaVersion: 'foundational_profile_v1',
+      overallLevel: 'B2',
+      primaryGoals: ['Lead project updates confidently.'],
+      communicationContexts: ['Sprint demos'],
+      interestsAndUsefulThemes: ['Design systems'],
+      stableStrengths: ['Strong listening'],
+      persistentChallenges: ['Sentence rhythm'],
+      studyPreferences: ['Prefers concise correction'],
+      durableConstraints: ['Short homework windows'],
+      teacherNotes: 'Needs practical speaking rehearsal.',
+    },
+  });
+
+  studentWorkspaceApiMocks.getProfileRevision.mockResolvedValue({
+    id: 'revision-draft-2',
+    profileId: 'profile-default.md',
+    contentHash: 'draft-hash-2',
+    source: 'candidate_promotion',
+    status: 'draft',
+    versionNumber: 2,
+    versionLabel: 'v2',
+    activatedAt: null,
+    deprecatedAt: null,
+    createdAt: now,
+    createdBy: 'user-1',
+    restoredFromRevisionId: null,
+    content: '# Foundational Profile\n\nGenerated draft content',
+    structuredContent: {
+      schemaVersion: 'foundational_profile_v1',
+      overallLevel: 'B2',
+      primaryGoals: ['Lead product demos with more confidence.'],
+      communicationContexts: ['Sprint demos', 'Client calls'],
+      interestsAndUsefulThemes: ['Travel'],
+      stableStrengths: ['High motivation'],
+      persistentChallenges: ['Article usage'],
+      studyPreferences: ['Prefers structured explanations'],
+      durableConstraints: ['Short homework windows'],
+      teacherNotes: 'Generated from approved profile candidates.',
+    },
   });
 
   studentWorkspaceApiMocks.restoreProfileRevision.mockResolvedValue({
     id: 'profile-default.md',
     label: 'Default Profile',
     content: 'PROFILE CONTENT',
+    structuredContent: {
+      schemaVersion: 'foundational_profile_v1',
+      overallLevel: 'B1',
+      primaryGoals: ['Speak more confidently in meetings.'],
+      communicationContexts: ['Client calls'],
+      interestsAndUsefulThemes: ['Travel'],
+      stableStrengths: ['High motivation'],
+      persistentChallenges: ['Article usage'],
+      studyPreferences: ['Prefers structured explanations'],
+      durableConstraints: ['Short homework windows'],
+      teacherNotes: 'Responds well to practical scenarios.',
+    },
     currentRevisionId: 'revision-1',
     updatedAt: now,
   });
@@ -552,6 +648,18 @@ function seedStudentWorkspaceMocks() {
     id: 'profile-default.md',
     label: 'Default Profile',
     content: 'PROFILE CONTENT',
+    structuredContent: {
+      schemaVersion: 'foundational_profile_v1',
+      overallLevel: 'B1',
+      primaryGoals: ['Speak more confidently in meetings.'],
+      communicationContexts: ['Client calls'],
+      interestsAndUsefulThemes: ['Travel'],
+      stableStrengths: ['High motivation'],
+      persistentChallenges: ['Article usage'],
+      studyPreferences: ['Prefers structured explanations'],
+      durableConstraints: ['Short homework windows'],
+      teacherNotes: 'Responds well to practical scenarios.',
+    },
     currentRevisionId: 'revision-1',
     updatedAt: now,
   });
@@ -1517,7 +1625,21 @@ export async function renderWorkspaceCandidatesReady(): Promise<RenderResult> {
 }
 
 export async function renderLoadedWorkspace(): Promise<RenderResult> {
-  return renderWorkspaceInspectionReady();
+  const result = await renderWorkspaceInspectionReady();
+  await waitFor(
+    () => {
+      const levelInput = screen.getByLabelText(/Current level/i);
+      if (
+        !(levelInput instanceof HTMLInputElement) ||
+        levelInput.disabled ||
+        levelInput.value !== 'B1'
+      ) {
+        throw new Error('Expected foundational profile form to finish loading.');
+      }
+    },
+    { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+  );
+  return result;
 }
 
 export async function renderWorkspaceWithTimelineFilters(): Promise<RenderResult> {

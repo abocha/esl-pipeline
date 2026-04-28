@@ -1,3 +1,5 @@
+import './support/bootstrap-pg-test-env.js';
+
 import { execFile as execFileCallback } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -144,6 +146,7 @@ async function assertSchemaHealthy(scenario: string): Promise<void> {
     expect(definition).toContain('starter_profile_form');
     expect(definition).toContain('candidate_promotion');
     expect(definition).toContain('legacy_normalization');
+    expect(definition).toContain('lesson_population');
 
     const actionTypeConstraint = await pool.query<{ definition: string }>(
       `

@@ -27,7 +27,7 @@ This is the phase that converts reviewed enrichment into live prompt-generation 
 Approval and promotion are different product responsibilities:
 
 1. review says which facts are trustworthy enough
-2. promotion says how those facts become coherent profile prose
+2. promotion says how those facts become a coherent profile draft
 
 Keeping them separate protects revision quality and keeps the backend architecture explainable.
 
@@ -50,18 +50,19 @@ The resulting revision should be:
 Version 1 should use a constrained LLM-assisted drafting strategy rather than either:
 
 1. fully autonomous free-form rewriting
-2. bland deterministic string stitching that reduces the profile to tagged fragments
+2. bland deterministic field stitching that reduces the profile to tagged fragments
 
 Recommended approach:
 
 1. treat the current active profile as the canonical base
 2. pass only teacher-selected approved facts into the drafting step
 3. constrain drafting to explicit target sections and explicit rewrite rules
-4. preserve unrelated profile wording whenever possible
-5. allow prose smoothing and coherence improvements where needed
-6. avoid broad stylistic rewrites that make diffs harder to trust
+4. preserve unrelated profile content whenever possible
+5. allow coherence improvements where needed without broad unrelated rewrites
+6. avoid stylistic churn that makes teacher review harder to trust
 
-This phase should optimize for teacher trust, diff readability, and genuinely good profile prose.
+This phase should optimize for teacher trust, diff readability, and a genuinely usable structured
+profile draft.
 
 ## Drafting Rules
 
@@ -76,10 +77,10 @@ Required drafting inputs:
 
 Required drafting behavior:
 
-1. integrate approved facts into coherent prose
+1. integrate approved facts into a coherent profile draft
 2. deduplicate overlapping statements
-3. preserve the profile's useful structure and tone where possible
-4. avoid rephrasing unrelated sections just for style
+3. preserve the profile's useful structure where possible
+4. avoid rewriting unrelated sections just for style
 5. avoid inventing new durable facts beyond the approved candidate set
 
 Prohibited drafting behavior:
@@ -112,7 +113,7 @@ Suggested follow-on existing operations:
 Suggested backend implementation shape:
 
 1. deterministic selection and constraint building
-2. one bounded LLM drafting call to produce the candidate revision prose
+2. one bounded LLM drafting call to produce the candidate revision draft
 3. normal profile revision persistence and activation lifecycle
 
 ## Candidate Lifecycle After Promotion

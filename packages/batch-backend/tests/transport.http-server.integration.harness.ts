@@ -16,10 +16,12 @@ import * as getJobStatusModule from '../src/application/get-job-status.js';
 import * as getPromptPackageModule from '../src/application/get-prompt-package.js';
 import * as getRecordingModule from '../src/application/get-recording.js';
 import * as getRecordingTranscriptModule from '../src/application/get-recording-transcript.js';
+import * as initializeStudentProfileDraftModule from '../src/application/initialize-student-profile-draft.js';
 import * as jobSummaryModule from '../src/application/job-summary.js';
 import * as listJobsModule from '../src/application/list-jobs.js';
 import * as listRecordingsModule from '../src/application/list-recordings.js';
 import * as materializeDraftModule from '../src/application/materialize-draft.js';
+import * as populateFirstProfileModule from '../src/application/populate-first-profile-from-lesson.js';
 import * as profileCandidatePromotionModule from '../src/application/profile-candidate-promotion.js';
 import * as profileContentModule from '../src/application/profile-content.js';
 import { ProfilePathError } from '../src/application/profile-path.js';
@@ -163,6 +165,7 @@ vi.mock('../src/application/profile-content', () => {
     listProfileContents: vi.fn(),
     getProfileContent: vi.fn(),
     upsertProfileContent: vi.fn(),
+    saveProfileRevisionContent: vi.fn(),
     deleteProfileContent: vi.fn(),
     listProfileRevisionsForProfile: vi.fn(),
     getProfileRevisionForProfile: vi.fn(),
@@ -234,6 +237,38 @@ vi.mock('../src/application/profile-candidate-promotion', () => {
   };
 });
 
+vi.mock('../src/application/populate-first-profile-from-lesson', () => {
+  return {
+    populateFirstProfileFromLesson: vi.fn(),
+    PopulateFirstProfileFromLessonError: class PopulateFirstProfileFromLessonError extends Error {
+      code: string;
+      status: number;
+
+      constructor(message: string, code = 'populate_first_profile_error', status = 400) {
+        super(message);
+        this.code = code;
+        this.status = status;
+      }
+    },
+  };
+});
+
+vi.mock('../src/application/initialize-student-profile-draft', () => {
+  return {
+    initializeStudentProfileDraft: vi.fn(),
+    InitializeStudentProfileDraftError: class InitializeStudentProfileDraftError extends Error {
+      code: string;
+      status: number;
+
+      constructor(message: string, code = 'initialize_student_profile_draft_error', status = 400) {
+        super(message);
+        this.code = code;
+        this.status = status;
+      }
+    },
+  };
+});
+
 vi.mock('../src/application/student-profile-bindings', () => {
   return {
     listStudentProfileBindingsForStudent: vi.fn(),
@@ -272,6 +307,9 @@ export function describeHttpServerIntegrationSuite(
     const mockListProfileContents = vi.mocked(profileContentModule.listProfileContents);
     const mockGetProfileContent = vi.mocked(profileContentModule.getProfileContent);
     const mockUpsertProfileContent = vi.mocked(profileContentModule.upsertProfileContent);
+    const mockSaveProfileRevisionContent = vi.mocked(
+      profileContentModule.saveProfileRevisionContent,
+    );
     const mockDeleteProfileContent = vi.mocked(profileContentModule.deleteProfileContent);
     const mockListProfileRevisionsForProfile = vi.mocked(
       profileContentModule.listProfileRevisionsForProfile,
@@ -324,6 +362,12 @@ export function describeHttpServerIntegrationSuite(
     );
     const mockPromoteStudentProfileCandidates = vi.mocked(
       profileCandidatePromotionModule.promoteStudentProfileCandidates,
+    );
+    const mockPopulateFirstProfileFromLesson = vi.mocked(
+      populateFirstProfileModule.populateFirstProfileFromLesson,
+    );
+    const mockInitializeStudentProfileDraft = vi.mocked(
+      initializeStudentProfileDraftModule.initializeStudentProfileDraft,
     );
     const mockListStudentProfileBindingsForStudent = vi.mocked(
       studentBindingsModule.listStudentProfileBindingsForStudent,
@@ -406,6 +450,18 @@ export function describeHttpServerIntegrationSuite(
         id: 'profile.md',
         label: 'Profile',
         content: 'Profile content',
+        structuredContent: {
+          schemaVersion: 'foundational_profile_v1',
+          overallLevel: 'B1',
+          primaryGoals: ['Speak more confidently in meetings.'],
+          communicationContexts: ['Client calls'],
+          interestsAndUsefulThemes: ['Travel'],
+          stableStrengths: ['High motivation'],
+          persistentChallenges: ['Article usage'],
+          studyPreferences: ['Prefers structured explanations'],
+          durableConstraints: ['Short homework windows'],
+          teacherNotes: 'Responds well to practical scenarios.',
+        },
         currentRevisionId: 'revision-1',
         updatedAt: '2024-01-01T00:00:00.000Z',
       });
@@ -413,8 +469,47 @@ export function describeHttpServerIntegrationSuite(
         id: 'profile.md',
         label: 'Profile',
         content: 'Updated content',
+        structuredContent: {
+          schemaVersion: 'foundational_profile_v1',
+          overallLevel: 'B1',
+          primaryGoals: ['Updated goal'],
+          communicationContexts: ['Client calls'],
+          interestsAndUsefulThemes: ['Travel'],
+          stableStrengths: ['High motivation'],
+          persistentChallenges: ['Article usage'],
+          studyPreferences: ['Prefers structured explanations'],
+          durableConstraints: ['Short homework windows'],
+          teacherNotes: 'Responds well to practical scenarios.',
+        },
         currentRevisionId: 'revision-latest',
         updatedAt: '2024-01-01T00:00:00.000Z',
+      });
+      mockSaveProfileRevisionContent.mockResolvedValue({
+        id: 'revision-2',
+        profileId: 'profile.md',
+        contentHash: 'hash-2',
+        source: 'update',
+        status: 'draft',
+        versionNumber: 2,
+        versionLabel: 'v2',
+        activatedAt: null,
+        deprecatedAt: null,
+        createdAt: '2024-01-02T00:00:00.000Z',
+        createdBy: 'test-user-id',
+        restoredFromRevisionId: null,
+        content: '# Foundational Profile\n\nStructured draft content',
+        structuredContent: {
+          schemaVersion: 'foundational_profile_v1',
+          overallLevel: 'B2',
+          primaryGoals: ['Lead project updates confidently.'],
+          communicationContexts: ['Sprint demos'],
+          interestsAndUsefulThemes: ['Design systems'],
+          stableStrengths: ['Strong listening'],
+          persistentChallenges: ['Sentence rhythm'],
+          studyPreferences: ['Prefers concise correction'],
+          durableConstraints: ['Short homework windows'],
+          teacherNotes: 'Needs practical speaking rehearsal.',
+        },
       });
       mockDeleteProfileContent.mockResolvedValue(true);
       mockListProfileRevisionsForProfile.mockResolvedValue({
@@ -453,11 +548,35 @@ export function describeHttpServerIntegrationSuite(
         createdBy: null,
         restoredFromRevisionId: null,
         content: 'Profile content',
+        structuredContent: {
+          schemaVersion: 'foundational_profile_v1',
+          overallLevel: 'B1',
+          primaryGoals: ['Speak more confidently in meetings.'],
+          communicationContexts: ['Client calls'],
+          interestsAndUsefulThemes: ['Travel'],
+          stableStrengths: ['High motivation'],
+          persistentChallenges: ['Article usage'],
+          studyPreferences: ['Prefers structured explanations'],
+          durableConstraints: ['Short homework windows'],
+          teacherNotes: 'Responds well to practical scenarios.',
+        },
       });
       mockRestoreProfileRevision.mockResolvedValue({
         id: 'profile.md',
         label: 'Profile',
         content: 'Restored content',
+        structuredContent: {
+          schemaVersion: 'foundational_profile_v1',
+          overallLevel: 'B1',
+          primaryGoals: ['Speak more confidently in meetings.'],
+          communicationContexts: ['Client calls'],
+          interestsAndUsefulThemes: ['Travel'],
+          stableStrengths: ['High motivation'],
+          persistentChallenges: ['Article usage'],
+          studyPreferences: ['Prefers structured explanations'],
+          durableConstraints: ['Short homework windows'],
+          teacherNotes: 'Responds well to practical scenarios.',
+        },
         currentRevisionId: 'revision-2',
         updatedAt: '2024-01-02T00:00:00.000Z',
       });
@@ -700,6 +819,50 @@ export function describeHttpServerIntegrationSuite(
         provider: 'google_ai_studio',
         model: 'gemini-3-flash-preview',
       });
+      mockPopulateFirstProfileFromLesson.mockResolvedValue({
+        studentId: deriveStudentId('Anna'),
+        profileId: 'profiles/anna.md',
+        baseRevisionId: 'profile-revision-active',
+        snapshotId: 'snapshot-1',
+        lessonMemoryIds: ['lesson-1'],
+        homeworkMemoryIds: [],
+        draftRevision: {
+          id: 'profile-revision-first-draft',
+          profileId: 'profiles/anna.md',
+          contentHash: 'profile-first-draft-hash',
+          source: 'lesson_population',
+          status: 'draft',
+          versionNumber: 1,
+          versionLabel: 'v1',
+          activatedAt: null,
+          deprecatedAt: null,
+          createdAt: '2024-01-01T00:00:00.000Z',
+          createdBy: 'test-user-id',
+          restoredFromRevisionId: null,
+          content: '# Foundational Profile',
+        },
+        provider: 'google_ai_studio',
+        model: 'gemini-3-flash-preview',
+      });
+      mockInitializeStudentProfileDraft.mockResolvedValue({
+        studentId: deriveStudentId('Anna'),
+        profileId: 'profiles/anna.md',
+        draftRevision: {
+          id: 'profile-revision-empty-draft',
+          profileId: 'profiles/anna.md',
+          contentHash: 'profile-empty-draft-hash',
+          source: 'create',
+          status: 'draft',
+          versionNumber: 1,
+          versionLabel: 'v1',
+          activatedAt: null,
+          deprecatedAt: null,
+          createdAt: '2024-01-01T00:00:00.000Z',
+          createdBy: 'test-user-id',
+          restoredFromRevisionId: null,
+          content: '# Foundational Profile',
+        },
+      });
       mockGetJobProvenance.mockResolvedValue({
         job: {
           id: 'test-job-1',
@@ -818,6 +981,7 @@ export function describeHttpServerIntegrationSuite(
       mockListProfileContents,
       mockGetProfileContent,
       mockUpsertProfileContent,
+      mockSaveProfileRevisionContent,
       mockDeleteProfileContent,
       mockListProfileRevisionsForProfile,
       mockGetProfileRevisionForProfile,
@@ -841,6 +1005,8 @@ export function describeHttpServerIntegrationSuite(
       mockRejectStudentProfileCandidate,
       mockDeferStudentProfileCandidate,
       mockPromoteStudentProfileCandidates,
+      mockPopulateFirstProfileFromLesson,
+      mockInitializeStudentProfileDraft,
       mockListStudentProfileBindingsForStudent,
       mockGetActiveStudentProfileBindingForStudent,
       mockGetJobProvenance,

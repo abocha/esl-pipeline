@@ -10,6 +10,13 @@ import { loadConfig } from '../config/env.js';
 import type { GenerationBudgetUsage } from '../domain/generation-budget-repository.js';
 import { logger } from '../infrastructure/logger.js';
 import {
+  FOUNDATIONAL_PROFILE_JSON_SCHEMA,
+  FOUNDATIONAL_PROFILE_RESPONSE_SCHEMA_DESCRIPTION,
+  FOUNDATIONAL_PROFILE_RESPONSE_SCHEMA_NAME,
+  type FoundationalProfile,
+  validateFoundationalProfileOutput,
+} from './foundational-profile.js';
+import {
   enforceGenerationBudgetBeforeAttempt,
   GenerationBudgetExceededError,
   type GenerationBudgetGuardDependencies,
@@ -18,23 +25,23 @@ import {
 } from './generation-budget-guard.js';
 import { resolveGenerationCandidates } from './generation-policy.js';
 import {
-  executeGoogleGeneration,
-  executeOpenAiGeneration,
-  executeOpenRouterGeneration,
+  executeGoogleStructuredGeneration,
+  executeOpenAiStructuredGeneration,
+  executeOpenRouterStructuredGeneration,
   ProviderExecutionError,
-  type ProviderExecutionRequest,
-  type ProviderExecutionResult,
+  type ProviderStructuredExecutionRequest,
+  type ProviderStructuredExecutionResult,
 } from './generation-providers.js';
 
 type ProviderExecutor = (args: {
   config: BatchBackendConfig['generation'];
-  request: ProviderExecutionRequest;
-}) => Promise<ProviderExecutionResult>;
+  request: ProviderStructuredExecutionRequest;
+}) => Promise<ProviderStructuredExecutionResult>;
 
 const DEFAULT_EXECUTORS: Record<GenerationProvider, ProviderExecutor> = {
-  openai: executeOpenAiGeneration,
-  google_ai_studio: executeGoogleGeneration,
-  openrouter: executeOpenRouterGeneration,
+  openai: executeOpenAiStructuredGeneration,
+  google_ai_studio: executeGoogleStructuredGeneration,
+  openrouter: executeOpenRouterStructuredGeneration,
 };
 
 const GENERATION_RUNTIME_CLASSIFICATION_RULES: ProviderRuntimeClassificationRules = {
@@ -53,7 +60,10 @@ const GENERATION_RUNTIME_CLASSIFICATION_RULES: ProviderRuntimeClassificationRule
   },
 };
 
-export type ProfileDraftingOperation = 'candidate_promotion' | 'legacy_normalization';
+export type ProfileDraftingOperation =
+  | 'candidate_promotion'
+  | 'legacy_normalization'
+  | 'lesson_population';
 
 export class ProfileRevisionDraftingError extends Error {
   readonly category: GenerationErrorCategory;
@@ -105,11 +115,13 @@ export interface GenerateProfileRevisionDraftRequest {
 }
 
 export interface GenerateProfileRevisionDraftResult {
-  text: string;
+  structuredProfile: FoundationalProfile;
+  rawOutput: unknown;
+  rawText: string;
   provider: GenerationProvider;
   model: string;
   providerRequestId?: string;
-  usage?: ProviderExecutionResult['usage'];
+  usage?: ProviderStructuredExecutionResult['usage'];
   finishReason?: string;
 }
 
@@ -151,7 +163,7 @@ export async function generateProfileRevisionDraft(args: {
     (typeof candidates)[number],
     {
       candidate: (typeof candidates)[number];
-      result: ProviderExecutionResult;
+      result: ProviderStructuredExecutionResult;
       quotaUsage: GenerationBudgetUsage;
     },
     ProfileRevisionDraftingError
@@ -184,7 +196,12 @@ export async function generateProfileRevisionDraft(args: {
           model: candidate.model,
           prompt: args.request.prompt,
           maxOutputTokens: args.request.maxOutputTokens,
-          stream: false,
+          responseSchema: {
+            name: FOUNDATIONAL_PROFILE_RESPONSE_SCHEMA_NAME,
+            description: FOUNDATIONAL_PROFILE_RESPONSE_SCHEMA_DESCRIPTION,
+            schema: FOUNDATIONAL_PROFILE_JSON_SCHEMA,
+            strict: true,
+          },
         },
       });
 
@@ -253,7 +270,9 @@ export async function generateProfileRevisionDraft(args: {
   });
 
   return {
-    text: execution.result.text,
+    structuredProfile: validateFoundationalProfileOutput(execution.result.output),
+    rawOutput: execution.result.output,
+    rawText: execution.result.rawText,
     provider: execution.candidate.provider,
     model: execution.candidate.model,
     ...(execution.result.usage ? { usage: execution.result.usage } : {}),

@@ -24,6 +24,13 @@ The current architecture already distinguishes:
 This plan keeps that split intact while adding a safe promotion path from generated memory into the
 foundational profile.
 
+Workspace/product-shape note:
+
+1. learner-profile UX, page architecture, and the future student-area surface are now governed by
+   [`docs/plans/student-area-redesign/README.md`](../student-area-redesign/README.md)
+2. this topic remains the enrichment workstream for candidate facts, review, promotion, and
+   migration support inside that broader student-area blueprint
+
 ## Problem Statement
 
 The current system can already extract profile-like facts from lessons and long-term rollups, but
@@ -59,8 +66,8 @@ would blur the line between curated truth and inferred memory.
    repeatability and review criteria; they must not be promoted opportunistically.
 10. Rejected facts may be re-proposed only when the evidence set materially changed.
 11. Starter profile level may be unknown at creation time; CEFR level is optional in version 1.
-12. The system should use LLMs for bounded synthesis and drafting where prose quality matters, but
-    not as the final authority for what becomes profile truth.
+12. The system should use LLMs for bounded synthesis and drafting where structured profile quality
+    and rendered readability matter, but not as the final authority for what becomes profile truth.
 
 ## Goals
 
@@ -247,7 +254,7 @@ Use LLMs for:
 
 1. extracting lesson, homework, and snapshot memory
 2. synthesizing candidate fact proposals from canonical memory
-3. drafting coherent profile prose from teacher-selected approved facts
+3. drafting coherent structured profile revisions from teacher-selected approved facts
 
 Do not use LLMs as the final authority for:
 
@@ -258,7 +265,8 @@ Do not use LLMs as the final authority for:
 Version-1 balance:
 
 1. deterministic or rule-based selection and eligibility
-2. constrained LLM-assisted drafting where readable prose matters
+2. constrained LLM-assisted drafting where structured fidelity matters and readable rendered output
+   still matters
 3. teacher approval at the final authority boundary
 
 ## Drift-Control Rules

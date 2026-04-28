@@ -765,5 +765,96 @@ describeHttpServerIntegrationSuite(
       expect(eventPayload.source).toBe('upload');
       expect(eventPayload.bytes).toBe(12);
     });
+
+    it('GET /jobs/events streams directly targeted recording events without a jobId', {
+      timeout: 10_000,
+    }, async () => {
+      const getJobStatus = vi.spyOn(getJobStatusModule, 'getJobStatus');
+      getJobStatus.mockClear();
+
+      const streamingApp = await createHttpServer();
+      const address = (await streamingApp.listen({ port: 0, host: '127.0.0.1' })) as string;
+      const url = new URL('/jobs/events', address);
+      url.searchParams.set('recordingId', 'recording-direct');
+
+      const recording: RecordingRecord = {
+        id: 'recording-direct',
+        source: 'upload',
+        studentId: 'student-1',
+        sourcePath: '/tmp/recording.opus',
+        storageUri: 'local://recordings/recording.opus',
+        sha256: 'hash',
+        bytes: 12,
+        durationSec: 120,
+        channels: 2,
+        status: 'transcribed',
+        error: null,
+        createdAt: new Date('2024-01-01T10:00:00Z'),
+        updatedAt: new Date('2024-01-01T10:01:00Z'),
+      };
+
+      const eventPayload = await new Promise<any>((resolve, reject) => {
+        let resRef: IncomingMessage | null = null;
+        let settled = false;
+        let buffer = '';
+        let published = false;
+        let requestRef: ClientRequest | null = null;
+        let timeout: ReturnType<typeof setTimeout> | null = null;
+        let publishTimer: ReturnType<typeof setTimeout> | null = null;
+
+        const cleanup = (err?: Error, result?: any) => {
+          if (settled) return;
+          settled = true;
+          requestRef?.destroy();
+          resRef?.destroy();
+          if (timeout) clearTimeout(timeout);
+          if (publishTimer) clearTimeout(publishTimer);
+          void streamingApp.close();
+          if (err) {
+            reject(err);
+          } else {
+            resolve(result);
+          }
+        };
+
+        const req = httpRequest(url, (res: IncomingMessage) => {
+          resRef = res;
+          res.setEncoding('utf8');
+          res.on('data', (chunk: string) => {
+            buffer += chunk;
+
+            if (!published && buffer.includes(': connected')) {
+              published = true;
+              publishTimer = setTimeout(() => {
+                publishRecordingEvent({
+                  type: 'recording_state_changed',
+                  recording,
+                  transcriptId: 'transcript-direct',
+                });
+              }, 0);
+            }
+
+            const dataMatch = buffer.match(/data: (.+)\n\n/);
+            if (dataMatch) {
+              cleanup(undefined, JSON.parse(dataMatch[1]!));
+            }
+          });
+          res.on('error', (err: Error) => cleanup(err));
+        });
+
+        requestRef = req;
+        req.on('error', (err: Error) => cleanup(err));
+        req.end();
+
+        timeout = setTimeout(() => {
+          cleanup(new Error('Timed out waiting for targeted recording SSE payload'));
+        }, 10_000);
+      });
+
+      expect(getJobStatus).not.toHaveBeenCalled();
+      expect(eventPayload.type).toBe('recording_state_changed');
+      expect(eventPayload.recordingId).toBe('recording-direct');
+      expect(eventPayload.transcriptId).toBe('transcript-direct');
+    });
   },
 );

@@ -2,6 +2,7 @@ import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
 import { getProfileById } from '../domain/profile-repository.js';
 import { getActiveProfileRevision } from '../domain/profile-revision-repository.js';
+import { renderFoundationalProfileContent } from './foundational-profile.js';
 import type { ProfileRevisionDetailResponse } from './profile-content.js';
 import { saveProfileRevisionContent } from './profile-content.js';
 import {
@@ -140,12 +141,13 @@ export async function normalizeLegacyStudentProfile(args: {
 
   const draftRevision = await dependencies.profileContent.saveRevision(
     profileId,
-    drafting.text.trim(),
+    renderFoundationalProfileContent(drafting.structuredProfile),
     {
       source: 'legacy_normalization',
       status: 'draft',
       createdBy: request.reviewerId ?? null,
       dedupeByHash: false,
+      structuredContent: drafting.structuredProfile,
     },
   );
 

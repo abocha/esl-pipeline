@@ -5,7 +5,7 @@
 - Audience: operator-maintainer using the live student system during transition.
 - Read Time: 6 minutes.
 - Authority Level: temporary adoption runbook.
-- Last Verified Against: 2026-03-22 repo state.
+- Last Verified Against: 2026-04-22 repo state.
 - Owner: founder-maintainer + batch-backend maintainers.
 - Review Cadence: after profile-enrichment transition tooling changes.
 - Status: `active`.
@@ -64,6 +64,27 @@ Do not use this runbook when:
 7. Create a fresh prompt package for the student.
 8. Inspect prompt-package lineage and verify the new profile revision is used.
 9. Generate one real assignment and sanity-check whether the result still feels personalized.
+
+## Batch Migration Workflow
+
+Use this when you want to convert the remaining small set of markdown-backed profiles into
+structured revisions with a review artifact before writing anything.
+
+1. Run a dry-run first:
+   `pnpm --filter @esl-pipeline/batch-backend run profile:migrate-legacy -- --report-dir tmp/legacy-profile-migration/<run-name>`
+2. Review the generated artifacts:
+   - `summary.md`
+   - `summary.json`
+   - `profiles/*.md`
+   - `profiles/*.json`
+3. Spot-check that each profile preserved durable truth and did not dump obviously tactical noise
+   into the structured fields.
+4. Only after review, apply the migration as draft revisions:
+   `pnpm --filter @esl-pipeline/batch-backend run profile:migrate-legacy -- --apply --status draft --changed-by <operator-id> --report-dir tmp/legacy-profile-migration/<run-name>-apply`
+5. Review the resulting draft revisions in the `Learning` page before activating them.
+
+The migration tool is host-run safe: it normalizes Docker-style Postgres hostnames for local shell
+execution and always writes a report directory so the conversion is auditable.
 
 ## Mixed-State Safety
 

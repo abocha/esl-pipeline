@@ -7,14 +7,40 @@ import type { AuthMode } from './auth/AuthDialog';
 import { MinimalAssignment } from './minimal/MinimalAssignment';
 import { MinimalShell } from './minimal/MinimalShell';
 
+import './AppShell.css';
 const AuthDialog = lazy(async () => {
   const module = await import('./auth/AuthDialog');
   return { default: module.AuthDialog };
 });
 
-const StudentWorkspace = lazy(async () => {
-  const module = await import('./students/StudentWorkspace');
-  return { default: module.StudentWorkspace };
+const StudentDirectoryPage = lazy(async () => {
+  const module = await import('./students/StudentDirectoryPage');
+  return { default: module.StudentDirectoryPage };
+});
+
+const StudentAreaShell = lazy(async () => {
+  const module = await import('./students/StudentAreaShell');
+  return { default: module.StudentAreaShell };
+});
+
+const StudentOverviewPage = lazy(async () => {
+  const module = await import('./students/StudentOverviewPage');
+  return { default: module.StudentOverviewPage };
+});
+
+const StudentLearningPage = lazy(async () => {
+  const module = await import('./students/StudentLearningPage');
+  return { default: module.StudentLearningPage };
+});
+
+const StudentHistoryPage = lazy(async () => {
+  const module = await import('./students/StudentHistoryPage');
+  return { default: module.StudentHistoryPage };
+});
+
+const StudentScheduleBillingPage = lazy(async () => {
+  const module = await import('./students/StudentScheduleBillingPage');
+  return { default: module.StudentScheduleBillingPage };
 });
 
 export const App: React.FC = () => {
@@ -101,13 +127,55 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ user, onLogout }) =
       <Route element={<MinimalShell user={user} onLogout={onLogout} />}>
         <Route path="/" element={<MinimalAssignment />} />
         <Route
-          path="/students/workspace"
+          path="/students"
           element={
             <Suspense fallback={<RouteLoadingFallback />}>
-              <StudentWorkspace />
+              <StudentDirectoryPage />
             </Suspense>
           }
         />
+        <Route
+          path="/students/:studentId"
+          element={
+            <Suspense fallback={<RouteLoadingFallback />}>
+              <StudentAreaShell />
+            </Suspense>
+          }
+        >
+          <Route index element={<Navigate to="overview" replace />} />
+          <Route
+            path="overview"
+            element={
+              <Suspense fallback={<RouteLoadingFallback />}>
+                <StudentOverviewPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="learning"
+            element={
+              <Suspense fallback={<RouteLoadingFallback />}>
+                <StudentLearningPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="history"
+            element={
+              <Suspense fallback={<RouteLoadingFallback />}>
+                <StudentHistoryPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="schedule-billing"
+            element={
+              <Suspense fallback={<RouteLoadingFallback />}>
+                <StudentScheduleBillingPage />
+              </Suspense>
+            }
+          />
+        </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
@@ -115,9 +183,11 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ user, onLogout }) =
 };
 
 const RouteLoadingFallback: React.FC = () => (
-  <div className="auth-shell">
-    <LoadingPanel />
-  </div>
+  <section className="route-loading-panel" aria-live="polite">
+    <span className="loading-eyebrow">Opening page…</span>
+    <h2>Preparing the studio surface</h2>
+    <p>Loading the next teaching room without changing your session.</p>
+  </section>
 );
 
 const LoadingPanel: React.FC = () => (
@@ -132,59 +202,6 @@ const LoadingPanel: React.FC = () => (
         <p>We&apos;re verifying your authentication with the server.</p>
       </div>
     </div>
-
-    <style>{`
-      .loading-panel {
-        padding: var(--space-12) var(--space-8);
-        text-align: center;
-      }
-
-      .loading-content {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: var(--space-6);
-      }
-
-      .loading-spinner {
-        width: 64px;
-        height: 64px;
-        position: relative;
-      }
-
-      .spinner-ring {
-        width: 100%;
-        height: 100%;
-        border: 3px solid var(--border-light);
-        border-top-color: var(--color-primary-500);
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-      }
-
-      .loading-text {
-        display: flex;
-        flex-direction: column;
-        gap: var(--space-2);
-      }
-
-      .loading-eyebrow {
-        font-size: var(--text-xs);
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-        color: var(--text-tertiary);
-      }
-
-      .loading-text h2 {
-        font-size: var(--text-xl);
-        margin: 0;
-      }
-
-      .loading-text p {
-        font-size: var(--text-sm);
-        margin: 0;
-      }
-    `}</style>
   </section>
 );
 
@@ -234,114 +251,5 @@ const UnauthenticatedNotice: React.FC<{ onLogin: () => void; onRegister: () => v
         </button>
       </div>
     </div>
-
-    <style>{`
-      .unauth-panel {
-        max-width: 640px;
-        display: grid;
-        grid-template-columns: minmax(0, 1fr);
-        gap: var(--space-6);
-        padding: var(--space-8);
-      }
-
-      .unauth-graphic {
-        position: relative;
-        padding: var(--space-6);
-        background: var(--bg-secondary);
-        border-radius: var(--radius-2xl);
-        border: 1px solid var(--border-light);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        overflow: hidden;
-      }
-
-      .graphic-circles {
-        position: absolute;
-        inset: 0;
-      }
-
-      .circle {
-        position: absolute;
-        border-radius: 999px;
-        background: rgba(43, 81, 255, 0.08);
-      }
-
-      .circle-1 {
-        width: 120px;
-        height: 120px;
-        top: -20px;
-        left: -10px;
-      }
-
-      .circle-2 {
-        width: 180px;
-        height: 180px;
-        bottom: -60px;
-        right: -40px;
-      }
-
-      .circle-3 {
-        width: 90px;
-        height: 90px;
-        bottom: 20px;
-        left: 40px;
-      }
-
-      .graphic-icon {
-        position: relative;
-        width: 72px;
-        height: 72px;
-        border-radius: 24px;
-        background: var(--bg-primary);
-        border: 1px solid var(--border-light);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: var(--color-primary-500);
-        box-shadow: var(--shadow-sm);
-      }
-
-      .unauth-content {
-        display: flex;
-        flex-direction: column;
-        gap: var(--space-3);
-      }
-
-      .unauth-eyebrow {
-        font-size: var(--text-xs);
-        text-transform: uppercase;
-        letter-spacing: 0.12em;
-        color: var(--text-tertiary);
-        font-weight: 600;
-      }
-
-      .unauth-content h2 {
-        margin: 0;
-        font-size: var(--text-2xl);
-      }
-
-      .unauth-content p {
-        margin: 0;
-        color: var(--text-secondary);
-      }
-
-      .unauth-buttons {
-        display: flex;
-        flex-wrap: wrap;
-        gap: var(--space-3);
-      }
-
-      .btn-large {
-        padding: var(--space-3) var(--space-6);
-        font-size: var(--text-sm);
-      }
-
-      @media (max-width: 720px) {
-        .unauth-panel {
-          padding: var(--space-6);
-        }
-      }
-    `}</style>
   </section>
 );

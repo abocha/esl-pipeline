@@ -466,7 +466,8 @@ CREATE TABLE public.profile_revisions (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     created_by uuid,
     restored_from_revision_id uuid,
-    CONSTRAINT profile_revisions_source_check CHECK ((source = ANY (ARRAY['create'::text, 'update'::text, 'restore'::text, 'starter_profile_form'::text, 'candidate_promotion'::text, 'legacy_normalization'::text]))),
+    structured_content jsonb,
+    CONSTRAINT profile_revisions_source_check CHECK ((source = ANY (ARRAY['create'::text, 'update'::text, 'restore'::text, 'starter_profile_form'::text, 'candidate_promotion'::text, 'legacy_normalization'::text, 'lesson_population'::text]))),
     CONSTRAINT profile_revisions_status_check CHECK ((status = ANY (ARRAY['draft'::text, 'active'::text, 'deprecated'::text]))),
     CONSTRAINT profile_revisions_version_number_check CHECK (((version_number IS NULL) OR (version_number > 0)))
 );
@@ -818,6 +819,8 @@ CREATE INDEX idx_homework_memory_entries_status_generated_at ON public.homework_
 
 CREATE INDEX idx_homework_memory_entries_student_generated_at ON public.homework_memory_entries USING btree (student_id, generated_at DESC, id DESC);
 
+CREATE INDEX idx_homework_memory_entries_student_ready_generated_at ON public.homework_memory_entries USING btree (student_id, generated_at DESC, created_at DESC, id DESC) WHERE (status = 'ready'::text);
+
 CREATE INDEX idx_job_action_history_action_type ON public.job_action_history USING btree (action_type);
 
 CREATE INDEX idx_job_action_history_created_job_id ON public.job_action_history USING btree (created_job_id);
@@ -855,6 +858,8 @@ CREATE INDEX idx_lesson_memory_entries_recording_generated_at ON public.lesson_m
 CREATE INDEX idx_lesson_memory_entries_status_generated_at ON public.lesson_memory_entries USING btree (status, generated_at DESC, id DESC);
 
 CREATE INDEX idx_lesson_memory_entries_student_generated_at ON public.lesson_memory_entries USING btree (student_id, generated_at DESC, id DESC);
+
+CREATE INDEX idx_lesson_memory_entries_student_ready_generated_at ON public.lesson_memory_entries USING btree (student_id, generated_at DESC, created_at DESC, id DESC) WHERE (status = 'ready'::text);
 
 CREATE INDEX idx_lesson_memory_entries_transcript_generated_at ON public.lesson_memory_entries USING btree (transcript_id, generated_at DESC, id DESC);
 
@@ -923,6 +928,8 @@ CREATE INDEX idx_student_profile_candidates_student_created_at ON public.student
 CREATE INDEX idx_student_profile_candidates_student_review_state_created_at ON public.student_profile_candidates USING btree (student_id, review_state, created_at DESC, id DESC);
 
 CREATE INDEX idx_student_profile_candidates_student_status_created_at ON public.student_profile_candidates USING btree (student_id, status, created_at DESC, id DESC);
+
+CREATE INDEX idx_student_profile_candidates_student_status_review_created_at ON public.student_profile_candidates USING btree (student_id, status, review_state, created_at DESC, id DESC);
 
 CREATE INDEX idx_students_created_at ON public.students USING btree (created_at);
 
@@ -1204,5 +1211,8 @@ VALUES
   ('0018_profile_revision_source_expansion', 'cc12fb7fd63205e5dee24c04ba10342b8d9016f057786955d3912d0a2ef606bf', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0019_job_action_rerun_unification', '51d0adb87f2327b9b638404ed18765c1e5271eefc57463c1352852031c9d634c', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0020_jobs_lifecycle_timestamps_backfill', '17acde111d3c46287ee8d819bd2814d4ae4b706bcfd5c1d0fd9a131658599e82', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0021_jobs_publish_study_text_elevenlabs_model', '3f927aa802ae8d49a78556a53c276d28b40fb847e1d86f6faf69adf8c18b6aaf', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0021_jobs_publish_study_text_elevenlabs_model', '3f927aa802ae8d49a78556a53c276d28b40fb847e1d86f6faf69adf8c18b6aaf', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0022_profile_revision_structured_content', 'a4153ae99387ea7b9d11ef8750f0899ab8ff7f294fc9c6d1a3749defb89bbde6', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0023_profile_revision_lesson_population_source', '8fcba883ef201a06fc88025b41e8a5141c10d824cd5706a1d7fa91a2d462050c', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0024_student_surface_read_path_indexes', '6c35b4e0f01bfb0f9de0c8161618dfbfdd5904b6eba76f4dae1e34d386576ec6', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;

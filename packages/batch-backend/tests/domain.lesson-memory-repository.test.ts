@@ -1,3 +1,5 @@
+import './support/bootstrap-pg-test-env.js';
+
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 

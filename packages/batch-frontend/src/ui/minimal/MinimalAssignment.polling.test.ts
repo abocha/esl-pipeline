@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import {
   getJobPollingDecision,
+  getNextFallbackPollingDelay,
   getRecordingPollingDecision,
+  INITIAL_FALLBACK_POLL_MS,
   isActivelyProcessingJobState,
   isTerminalJobState,
+  MAX_FALLBACK_POLL_MS,
 } from './MinimalAssignment.polling';
 
 describe('MinimalAssignment polling helpers', () => {
@@ -79,5 +82,13 @@ describe('MinimalAssignment polling helpers', () => {
     expect(isActivelyProcessingJobState('succeeded')).toBe(false);
     expect(isTerminalJobState('failed')).toBe(true);
     expect(isTerminalJobState('running')).toBe(false);
+  });
+
+  it('backs fallback polling off and caps it at the maximum delay', () => {
+    expect(getNextFallbackPollingDelay(0)).toBe(INITIAL_FALLBACK_POLL_MS * 2);
+    expect(getNextFallbackPollingDelay(INITIAL_FALLBACK_POLL_MS)).toBe(
+      INITIAL_FALLBACK_POLL_MS * 2,
+    );
+    expect(getNextFallbackPollingDelay(MAX_FALLBACK_POLL_MS)).toBe(MAX_FALLBACK_POLL_MS);
   });
 });

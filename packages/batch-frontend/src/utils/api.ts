@@ -193,8 +193,22 @@ export interface ProfileContentResponse {
   id: string;
   label: string;
   content: string;
+  structuredContent?: FoundationalProfile | null;
   currentRevisionId: string | null;
   updatedAt: string | null;
+}
+
+export interface FoundationalProfile {
+  schemaVersion: 'foundational_profile_v1';
+  overallLevel: string | null;
+  primaryGoals: string[];
+  communicationContexts: string[];
+  interestsAndUsefulThemes: string[];
+  stableStrengths: string[];
+  persistentChallenges: string[];
+  studyPreferences: string[];
+  durableConstraints: string[];
+  teacherNotes: string | null;
 }
 
 export interface ProfileRevisionSummaryResponse {
@@ -207,7 +221,8 @@ export interface ProfileRevisionSummaryResponse {
     | 'restore'
     | 'starter_profile_form'
     | 'candidate_promotion'
-    | 'legacy_normalization';
+    | 'legacy_normalization'
+    | 'lesson_population';
   status?: 'draft' | 'active' | 'deprecated';
   versionNumber?: number;
   versionLabel?: string;
@@ -220,6 +235,12 @@ export interface ProfileRevisionSummaryResponse {
 
 export interface ProfileRevisionDetailResponse extends ProfileRevisionSummaryResponse {
   content: string;
+  structuredContent?: ProfileContentResponse['structuredContent'];
+}
+
+export interface SaveProfileDraftRevisionRequest {
+  content?: string;
+  structuredContent?: FoundationalProfile;
 }
 
 export interface ProfileRevisionListResponse {
@@ -705,6 +726,22 @@ export interface StudentProfileCandidatePromotionResponse {
   includedCandidateIds: string[];
   excludedCandidateIds: string[];
   contentHash?: string | null;
+  draftRevision?: ProfileRevisionDetailResponse;
+}
+
+export interface PopulateFirstProfileFromLessonResponse {
+  draftRevisionId: string;
+  profileId: string;
+  snapshotId: string | null;
+  lessonMemoryIds: string[];
+  homeworkMemoryIds: string[];
+  draftRevision: ProfileRevisionDetailResponse;
+}
+
+export interface InitializeStudentProfileDraftResponse {
+  draftRevisionId: string;
+  profileId: string;
+  draftRevision: ProfileRevisionDetailResponse;
 }
 
 function buildCandidateSourceSummary(record: StudentProfileCandidateApiRecord): string | null {
@@ -770,6 +807,28 @@ export interface StudentProfileBindingListResponse {
   limit: number;
   offset: number;
   order: 'asc' | 'desc';
+}
+
+export interface StudentOverviewSurfaceResponse {
+  profile: ProfileContentResponse | null;
+  revisions: ProfileRevisionListResponse;
+  memory: StudentMemoryOverviewResponse;
+  pendingCandidates: StudentProfileCandidateListResponse;
+  recentTimeline: StudentTimelineResponse;
+}
+
+export interface StudentLearningSurfaceResponse {
+  profile: ProfileContentResponse | null;
+  revisions: ProfileRevisionListResponse;
+  memory: StudentMemoryOverviewResponse;
+  bindings: StudentProfileBindingListResponse;
+  candidates: StudentProfileCandidateListResponse;
+}
+
+export interface StudentHistorySurfaceResponse {
+  timeline: StudentTimelineResponse;
+  lessonMemory: StudentLessonMemoryListResponse;
+  homeworkMemory: StudentHomeworkMemoryListResponse;
 }
 
 export interface PromptOption {
@@ -1411,6 +1470,9 @@ export interface JobEventsOptions {
   signal?: AbortSignal;
   onError?: (event: Event) => void;
   onOpen?: (event: Event) => void;
+  jobIds?: string[];
+  recordingIds?: string[];
+  allJobs?: boolean;
 }
 
 const toAxiosError = (error: unknown): AxiosError | null => (isAxiosError(error) ? error : null);
@@ -1928,6 +1990,25 @@ export async function restoreProfileRevision(
   }
 }
 
+export async function saveProfileDraftRevision(
+  profileId: string,
+  payload: SaveProfileDraftRevisionRequest,
+): Promise<ProfileRevisionDetailResponse> {
+  try {
+    const response = await apiClient.post(
+      buildApiProxyPath(`/profiles/${encodeURIComponent(profileId)}/revisions`),
+      payload,
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to save profile drafts.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
 export async function activateProfileRevision(
   profileId: string,
   revisionId: string,
@@ -2206,6 +2287,84 @@ export async function getStudentMemoryOverview(
   }
 }
 
+function mapCandidateListResponse(
+  data: StudentProfileCandidateListResponse & {
+    items?: StudentProfileCandidateApiRecord[];
+  },
+): StudentProfileCandidateListResponse {
+  return {
+    ...data,
+    items: (data.items ?? []).map((item) => mapStudentProfileCandidate(item)),
+  };
+}
+
+export async function getStudentOverviewSurface(
+  studentId: string,
+): Promise<StudentOverviewSurfaceResponse> {
+  try {
+    const response = await apiClient.get(
+      buildApiProxyPath(`/students/${encodeURIComponent(studentId)}/surfaces/overview`),
+    );
+    const data = response.data as StudentOverviewSurfaceResponse & {
+      pendingCandidates: StudentProfileCandidateListResponse & {
+        items?: StudentProfileCandidateApiRecord[];
+      };
+    };
+    return {
+      ...data,
+      pendingCandidates: mapCandidateListResponse(data.pendingCandidates),
+    };
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to view the student overview.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function getStudentLearningSurface(
+  studentId: string,
+): Promise<StudentLearningSurfaceResponse> {
+  try {
+    const response = await apiClient.get(
+      buildApiProxyPath(`/students/${encodeURIComponent(studentId)}/surfaces/learning`),
+    );
+    const data = response.data as StudentLearningSurfaceResponse & {
+      candidates: StudentProfileCandidateListResponse & {
+        items?: StudentProfileCandidateApiRecord[];
+      };
+    };
+    return {
+      ...data,
+      candidates: mapCandidateListResponse(data.candidates),
+    };
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to view student learning data.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function getStudentHistorySurface(
+  studentId: string,
+): Promise<StudentHistorySurfaceResponse> {
+  try {
+    const response = await apiClient.get(
+      buildApiProxyPath(`/students/${encodeURIComponent(studentId)}/surfaces/history`),
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to view student history.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
 export async function listStudentProfileCandidates(
   studentId: string,
   params: {
@@ -2244,10 +2403,7 @@ export async function listStudentProfileCandidates(
     const data = response.data as StudentProfileCandidateListResponse & {
       items?: StudentProfileCandidateApiRecord[];
     };
-    return {
-      ...data,
-      items: (data.items ?? []).map((item) => mapStudentProfileCandidate(item)),
-    };
+    return mapCandidateListResponse(data);
   } catch (error: unknown) {
     const axiosError = toAxiosError(error);
     if (axiosError && isAuthError(axiosError)) {
@@ -2343,6 +2499,44 @@ export async function promoteStudentProfileCandidates(
     const axiosError = toAxiosError(error);
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to promote profile candidates.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function populateFirstProfileFromLesson(
+  studentId: string,
+  payload: { reviewerNote?: string } = {},
+): Promise<PopulateFirstProfileFromLessonResponse> {
+  try {
+    const response = await apiClient.post(
+      buildApiProxyPath(
+        `/students/${encodeURIComponent(studentId)}/profile-drafts/populate-first-from-lesson`,
+      ),
+      payload,
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to populate the learner profile.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function initializeStudentProfileDraft(
+  studentId: string,
+): Promise<InitializeStudentProfileDraftResponse> {
+  try {
+    const response = await apiClient.post(
+      buildApiProxyPath(`/students/${encodeURIComponent(studentId)}/profile-drafts/initialize`),
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to initialize the learner profile.');
     }
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }
@@ -2731,17 +2925,30 @@ export function subscribeToJobEvents(
   onEvent: (event: JobEvent) => void,
   options: JobEventsOptions = {},
 ): EventSource {
-  const url = buildApiProxyPath('/jobs/events');
+  const baseUrl = buildApiProxyPath('/jobs/events');
   const accessToken = getApiAuthToken();
 
-  // Add jobId=* to subscribe to all jobs
-  const separator = url.includes('?') ? '&' : '?';
-  const urlWithJobId = `${url}${separator}jobId=*`;
+  const search = new URLSearchParams();
+  if (options.allJobs) {
+    search.set('jobId', '*');
+  } else {
+    const jobIds = [...new Set((options.jobIds ?? []).map((id) => id.trim()).filter(Boolean))];
+    const recordingIds = [
+      ...new Set((options.recordingIds ?? []).map((id) => id.trim()).filter(Boolean)),
+    ];
+    if (jobIds.length > 0) {
+      search.set('jobId', jobIds.join(','));
+    }
+    if (recordingIds.length > 0) {
+      search.set('recordingId', recordingIds.join(','));
+    }
+  }
+
+  const query = search.toString();
+  const url = query ? `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}${query}` : baseUrl;
 
   const tokenizedUrl =
-    accessToken && accessToken.length > 0
-      ? appendTokenQueryParam(urlWithJobId, accessToken)
-      : urlWithJobId;
+    accessToken && accessToken.length > 0 ? appendTokenQueryParam(url, accessToken) : url;
 
   const eventSource = new EventSource(tokenizedUrl, { withCredentials: true });
 

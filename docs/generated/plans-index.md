@@ -60,6 +60,12 @@
 | phase/detail | Phase 6 - Frontend, Docs, and Operations                                                    | `docs/plans/stt-multi-provider-refactor/phase-6-frontend-docs-and-ops.md`                           |
 | topic        | STT Multi-Provider Refactor                                                                 | `docs/plans/stt-multi-provider-refactor/README.md`                                                  |
 | phase/detail | Verification, Acceptance, and Assumptions                                                   | `docs/plans/stt-multi-provider-refactor/verification-acceptance-and-assumptions.md`                 |
+| phase/detail | Phase 1: Information Architecture And Domain Boundaries                                     | `docs/plans/student-area-redesign/phase-1-information-architecture-and-domain-boundaries.md`        |
+| phase/detail | Phase 2: Learning Page And Structured Profile                                               | `docs/plans/student-area-redesign/phase-2-learning-page-and-structured-profile.md`                  |
+| phase/detail | Phase 3: Profile Generation, Migration, And Prompt Packaging                                | `docs/plans/student-area-redesign/phase-3-profile-generation-migration-and-prompt-packaging.md`     |
+| phase/detail | Phase 4: Overview Page And Cross-Domain Summaries                                           | `docs/plans/student-area-redesign/phase-4-overview-page-and-cross-domain-summaries.md`              |
+| phase/detail | Phase 5: Scheduling, Billing, Reminders, And History                                        | `docs/plans/student-area-redesign/phase-5-scheduling-billing-reminders-and-history.md`              |
+| topic        | Student Area Redesign Blueprint                                                             | `docs/plans/student-area-redesign/README.md`                                                        |
 | phase/detail | Phase 1 - Requirements, Contracts, and Schema Boundaries                                    | `docs/plans/student-memory-system-upgrade/phase-1-requirements-contracts-and-schema-boundaries.md`  |
 | phase/detail | Phase 2 - Lesson Memory Pipeline                                                            | `docs/plans/student-memory-system-upgrade/phase-2-lesson-memory-pipeline.md`                        |
 | phase/detail | Phase 3 - Homework Memory Pipeline                                                          | `docs/plans/student-memory-system-upgrade/phase-3-homework-memory-pipeline.md`                      |

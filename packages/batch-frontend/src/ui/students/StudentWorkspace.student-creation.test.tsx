@@ -19,7 +19,7 @@ describe('StudentWorkspace student creation', () => {
 
     renderCreateStudentDialogOpen();
 
-    expect(screen.getByRole('heading', { name: /Student Context/i })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: /Create student/i })).toBeTruthy();
     await user.click(screen.getByRole('button', { name: /Cancel/i }));
     expect(screen.queryByLabelText(/Student Name/i)).toBeNull();
   });

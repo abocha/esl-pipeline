@@ -40,9 +40,23 @@ function makeCandidate(
 }
 
 describe('application/profile-candidate-promotion', () => {
-  it('creates a draft revision from an explicit approved candidate subset', async () => {
+  it('creates a structured draft revision from an explicit approved candidate subset', async () => {
+    const structuredProfile = {
+      schemaVersion: 'foundational_profile_v1' as const,
+      overallLevel: 'B2',
+      primaryGoals: ['Lead product demos with more confidence.'],
+      communicationContexts: ['Uses English with product, engineering, and client teams.'],
+      interestsAndUsefulThemes: ['Enjoys practical sports examples.'],
+      stableStrengths: ['Strong listening in meetings.'],
+      persistentChallenges: ['Needs smoother transitions during demos.'],
+      studyPreferences: ['Prefers structured review blocks.'],
+      durableConstraints: [],
+      teacherNotes: 'Keep examples tied to real product launches.',
+    };
     const generate = vi.fn(async () => ({
-      text: '# Draft profile',
+      structuredProfile,
+      rawOutput: structuredProfile,
+      rawText: JSON.stringify(structuredProfile),
       provider: 'google_ai_studio' as const,
       model: 'gemini-3-flash-preview',
     }));
@@ -59,7 +73,19 @@ describe('application/profile-candidate-promotion', () => {
       createdAt: '2026-03-22T00:00:00.000Z',
       createdBy: 'teacher-1',
       restoredFromRevisionId: null,
-      content: '# Draft profile',
+      content: '# Foundational Profile',
+      structuredContent: {
+        schemaVersion: 'foundational_profile_v1' as const,
+        overallLevel: 'B2',
+        primaryGoals: ['Lead product demos with more confidence.'],
+        communicationContexts: ['Uses English with product, engineering, and client teams.'],
+        interestsAndUsefulThemes: ['Enjoys practical sports examples.'],
+        stableStrengths: ['Strong listening in meetings.'],
+        persistentChallenges: ['Needs smoother transitions during demos.'],
+        studyPreferences: ['Prefers structured review blocks.'],
+        durableConstraints: [],
+        teacherNotes: 'Keep examples tied to real product launches.',
+      },
     }));
 
     const result = await promoteStudentProfileCandidates({
@@ -130,11 +156,15 @@ describe('application/profile-candidate-promotion', () => {
     expect(result.includedCandidateIds).toEqual(['candidate-1']);
     expect(saveRevision).toHaveBeenCalledWith(
       'profiles/students/tolik.md',
-      '# Draft profile',
+      expect.stringContaining('# Foundational Profile'),
       expect.objectContaining({
         source: 'candidate_promotion',
         status: 'draft',
         createdBy: 'teacher-1',
+        structuredContent: expect.objectContaining({
+          schemaVersion: 'foundational_profile_v1',
+          overallLevel: 'B2',
+        }),
       }),
     );
     expect(generate).toHaveBeenCalledWith(
@@ -275,7 +305,20 @@ describe('application/profile-candidate-promotion', () => {
           },
           drafting: {
             generate: async () => ({
-              text: '# Draft profile',
+              structuredProfile: {
+                schemaVersion: 'foundational_profile_v1',
+                overallLevel: 'B1',
+                primaryGoals: ['Lead project updates more confidently.'],
+                communicationContexts: ['Weekly syncs'],
+                interestsAndUsefulThemes: ['Travel'],
+                stableStrengths: ['Prepared notes'],
+                persistentChallenges: ['Spoken transitions'],
+                studyPreferences: ['Short practical tasks'],
+                durableConstraints: [],
+                teacherNotes: null,
+              },
+              rawOutput: {},
+              rawText: '# Draft profile',
               provider: 'google_ai_studio',
               model: 'gemini-3-flash-preview',
               finishReason: 'MAX_TOKENS',
@@ -344,7 +387,20 @@ describe('application/profile-candidate-promotion', () => {
           },
           drafting: {
             generate: async () => ({
-              text: '# Draft profile\n\nToo short',
+              structuredProfile: {
+                schemaVersion: 'foundational_profile_v1',
+                overallLevel: 'B1',
+                primaryGoals: ['Lead project updates more confidently.'],
+                communicationContexts: ['Weekly syncs'],
+                interestsAndUsefulThemes: ['Travel'],
+                stableStrengths: ['Prepared notes'],
+                persistentChallenges: ['Spoken transitions'],
+                studyPreferences: ['Short practical tasks'],
+                durableConstraints: [],
+                teacherNotes: null,
+              },
+              rawOutput: {},
+              rawText: '# Draft profile\n\nToo short',
               provider: 'google_ai_studio',
               model: 'gemini-3-flash-preview',
             }),

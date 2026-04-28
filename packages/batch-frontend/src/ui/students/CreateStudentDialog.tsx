@@ -32,12 +32,12 @@ export function CreateStudentDialog({
     <>
       <header>
         <div className="workspace-inline workspace-header-row">
-          <h2>Student Context</h2>
+          <h2>Create student</h2>
           <button type="button" className="workspace-secondary-btn" onClick={onToggleOpen}>
             {isOpen ? 'Close Create Form' : 'Create Student'}
           </button>
         </div>
-        <p>Choose the student context for all workspace panels.</p>
+        <p>Create a student record and optionally seed the first learner profile.</p>
       </header>
 
       {success ? <p className="workspace-success">{success}</p> : null}
@@ -71,7 +71,7 @@ export function CreateStudentDialog({
                 }))
               }
             >
-              <option value="">No profile binding</option>
+              <option value="">No learner profile selected</option>
               {profileOptions.map((profile) => (
                 <option key={profile.id} value={profile.id}>
                   {profile.label} ({profile.id})
@@ -83,8 +83,8 @@ export function CreateStudentDialog({
           <details className="workspace-advanced">
             <summary>Starter profile (optional)</summary>
             <p className="workspace-muted">
-              Use this when you want the system to create an initial bound profile from teacher
-              input. If you fill this in, it takes precedence over the Initial Profile picker.
+              Use this when you want the system to create the initial learner profile from teacher
+              input. If you fill this in, it takes precedence over the existing-profile picker.
             </p>
             <div className="workspace-grid">
               <label className="workspace-field">

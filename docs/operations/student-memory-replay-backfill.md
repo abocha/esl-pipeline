@@ -93,6 +93,29 @@ Example:
 pnpm --filter @esl-pipeline/batch-backend exec tsx --tsconfig tsconfig.json src/tools/refresh-student-memory-snapshots.ts --selection missing --limit 20
 ```
 
+## Student Lesson Artifact Export
+
+Use this host-run tool when you need a human-readable zip bundle for one student that includes:
+
+- lesson transcripts
+- lesson memory text exports
+- homework memory text exports when available for the same lesson context
+- readable `00-summary.txt` files per lesson plus a top-level `LESSON_INDEX.txt`
+
+Host-run command:
+
+```bash
+pnpm --filter @esl-pipeline/batch-backend student-artifacts:export -- --student-id <student-id> [--out tmp/student-artifacts/<student-id>.zip]
+```
+
+Operator notes:
+
+1. The tool loads `.env.batch-backend` and normalizes host Postgres access automatically for Linux
+   host runs.
+2. The export defaults to canonical ready lesson-memory and homework-memory artifacts only.
+3. Homework memory that cannot be tied back to a transcript or recording is placed under an
+   `unmatched-homework-memory/` folder in the zip instead of being dropped silently.
+
 ## Sampled Rollout Verification
 
 Use this workflow after replay or before trusting a broader rollout on a few representative

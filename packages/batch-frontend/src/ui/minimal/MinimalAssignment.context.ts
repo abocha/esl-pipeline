@@ -1,13 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
-import type { ProfileRevisionSummaryResponse } from '../../utils/api';
-import {
-  getProfileContent,
-  listProfileContents,
-  listProfileRevisions,
-  restoreProfileRevision,
-  upsertProfileContent,
-} from '../../utils/api';
+import type { FoundationalProfile, ProfileContentResponse } from '../../utils/api';
+import { getProfileContent } from '../../utils/api';
 
 export interface ContextHydrationSnapshot {
   selectedProfileId: string;
@@ -20,95 +14,71 @@ interface UseMinimalAssignmentContextControllerParams {
 }
 
 export interface ContextController extends ContextHydrationSnapshot {
-  profileOptions: { id: string; label: string }[];
-  profileOptionsError: string | null;
-  newProfileId: string;
-  profileEditorText: string;
-  loadedProfileContent: string;
-  profileRevisions: ProfileRevisionSummaryResponse[];
   profileRevisionError: string | null;
-  profileBusy: 'loading' | 'saving' | 'creating' | 'restoring' | null;
-  profileSuccess: string | null;
-  profileDirty: boolean;
-  setNewProfileId: (value: string) => void;
-  setProfileEditorText: (value: string) => void;
-  loadProfileOptions: () => Promise<void>;
-  handleSelectedProfileChange: (nextProfileId: string) => void;
-  handleCreateProfile: () => Promise<void>;
-  handleSaveProfile: () => Promise<void>;
-  handleRestoreRevision: (revisionId: string) => Promise<void>;
+  profilePreview: LearnerProfilePreview | null;
   applyHydratedSnapshot: (snapshot: ContextHydrationSnapshot) => void;
+}
+
+export interface LearnerProfilePreview {
+  profileId: string;
+  overallLevel: string | null;
+  goalsAndContexts: string[];
+  strengthsAndChallenges: string[];
+  teacherNoteSnippet: string | null;
+  updatedAt: string | null;
+}
+
+function compactPreviewList(values: readonly string[]): string[] {
+  return values
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .slice(0, 3);
+}
+
+function compactPreviewGoals(profile: FoundationalProfile): string[] {
+  return compactPreviewList([...profile.primaryGoals, ...profile.communicationContexts]);
+}
+
+function compactPreviewStrengths(profile: FoundationalProfile): string[] {
+  return compactPreviewList([...profile.stableStrengths, ...profile.persistentChallenges]);
+}
+
+function compactTeacherNote(note: string | null): string | null {
+  const trimmed = note?.trim();
+  if (!trimmed) return null;
+  return trimmed.length > 140 ? `${trimmed.slice(0, 137)}...` : trimmed;
+}
+
+function buildProfilePreview(
+  profileId: string,
+  profile: Pick<ProfileContentResponse, 'structuredContent' | 'updatedAt'>,
+): LearnerProfilePreview | null {
+  const structured = profile.structuredContent;
+  if (!structured) return null;
+
+  return {
+    profileId,
+    overallLevel: structured.overallLevel ?? null,
+    goalsAndContexts: compactPreviewGoals(structured),
+    strengthsAndChallenges: compactPreviewStrengths(structured),
+    teacherNoteSnippet: compactTeacherNote(structured.teacherNotes),
+    updatedAt: profile.updatedAt ?? null,
+  };
 }
 
 export function useMinimalAssignmentContextController({
   selectedStudentId,
   resolveBoundProfileId,
 }: UseMinimalAssignmentContextControllerParams): ContextController {
-  const [profileOptions, setProfileOptions] = useState<{ id: string; label: string }[]>([]);
-  const [profileOptionsError, setProfileOptionsError] = useState<string | null>(null);
   const [selectedProfileId, setSelectedProfileId] = useState('');
   const [profileSelectionMode, setProfileSelectionMode] = useState<'auto' | 'manual'>('auto');
-  const [newProfileId, setNewProfileId] = useState('');
-  const [profileEditorText, setProfileEditorText] = useState('');
-  const [loadedProfileContent, setLoadedProfileContent] = useState('');
-  const [profileRevisions, setProfileRevisions] = useState<ProfileRevisionSummaryResponse[]>([]);
   const [profileRevisionError, setProfileRevisionError] = useState<string | null>(null);
-  const [profileBusy, setProfileBusy] = useState<
-    'loading' | 'saving' | 'creating' | 'restoring' | null
-  >(null);
-  const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
-
-  const profileDirty = useMemo(
-    () => profileEditorText.trim() !== loadedProfileContent.trim(),
-    [loadedProfileContent, profileEditorText],
-  );
+  const [profilePreview, setProfilePreview] = useState<LearnerProfilePreview | null>(null);
 
   const applyHydratedSnapshot = useCallback((snapshot: ContextHydrationSnapshot) => {
     setSelectedProfileId(snapshot.selectedProfileId);
     setProfileSelectionMode(snapshot.profileSelectionMode);
   }, []);
-
-  const loadProfileOptions = useCallback(async () => {
-    try {
-      const response = await listProfileContents();
-      setProfileOptions(response.profiles ?? []);
-      setProfileOptionsError(null);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to load profiles.';
-      setProfileOptionsError(message);
-    }
-  }, []);
-
-  const loadSelectedProfile = useCallback(async () => {
-    if (!selectedProfileId) {
-      setProfileEditorText('');
-      setLoadedProfileContent('');
-      setProfileRevisions([]);
-      setProfileRevisionError(null);
-      return;
-    }
-
-    setProfileBusy('loading');
-    setProfileRevisionError(null);
-    try {
-      const [profile, revisions] = await Promise.all([
-        getProfileContent(selectedProfileId),
-        listProfileRevisions(selectedProfileId, { limit: 20, offset: 0, order: 'desc' }),
-      ]);
-      setProfileEditorText(profile.content ?? '');
-      setLoadedProfileContent(profile.content ?? '');
-      setProfileRevisions(revisions.items ?? []);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to load selected profile.';
-      setProfileRevisionError(message);
-    } finally {
-      setProfileBusy(null);
-    }
-  }, [selectedProfileId]);
-
-  useEffect(() => {
-    void loadSelectedProfile();
-  }, [loadSelectedProfile]);
 
   useEffect(() => {
     if (profileSelectionMode !== 'auto') {
@@ -122,120 +92,42 @@ export function useMinimalAssignmentContextController({
     setSelectedProfileId((current) => (current === boundProfileId ? current : boundProfileId));
   }, [profileSelectionMode, resolveBoundProfileId, selectedStudentId]);
 
-  const handleSelectedProfileChange = useCallback(
-    (nextProfileId: string) => {
-      if (!nextProfileId) {
-        setProfileSelectionMode('auto');
-        setSelectedProfileId(selectedStudentId ? resolveBoundProfileId(selectedStudentId) : '');
+  useEffect(() => {
+    let active = true;
+
+    const loadSelectedProfile = async () => {
+      if (!selectedProfileId) {
+        if (!active) return;
+        setProfilePreview(null);
+        setProfileRevisionError(null);
         return;
       }
-      setProfileSelectionMode('manual');
-      setSelectedProfileId(nextProfileId);
-    },
-    [resolveBoundProfileId, selectedStudentId],
-  );
 
-  const handleCreateProfile = useCallback(async () => {
-    const candidate = newProfileId.trim();
-    if (!candidate) {
-      setProfileRevisionError('Profile ID is required (for example: profiles/new-student.md).');
-      return;
-    }
-
-    setProfileBusy('creating');
-    setProfileRevisionError(null);
-    setProfileSuccess(null);
-    try {
-      const created = await upsertProfileContent(candidate, profileEditorText);
-      await loadProfileOptions();
-      setProfileSelectionMode('manual');
-      setSelectedProfileId(created.id);
-      setNewProfileId('');
-      setProfileSuccess(`Created profile ${created.id}.`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to create profile.';
-      setProfileRevisionError(message);
-    } finally {
-      setProfileBusy(null);
-    }
-  }, [loadProfileOptions, newProfileId, profileEditorText]);
-
-  const handleSaveProfile = useCallback(async () => {
-    if (!selectedProfileId) {
-      setProfileRevisionError('Select a profile to save.');
-      return;
-    }
-
-    setProfileBusy('saving');
-    setProfileRevisionError(null);
-    setProfileSuccess(null);
-    try {
-      const saved = await upsertProfileContent(selectedProfileId, profileEditorText);
-      setLoadedProfileContent(saved.content);
-      const revisions = await listProfileRevisions(saved.id, {
-        limit: 20,
-        offset: 0,
-        order: 'desc',
-      });
-      setProfileRevisions(revisions.items ?? []);
-      setProfileSuccess(`Saved ${saved.id}.`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to save profile.';
-      setProfileRevisionError(message);
-    } finally {
-      setProfileBusy(null);
-    }
-  }, [profileEditorText, selectedProfileId]);
-
-  const handleRestoreRevision = useCallback(
-    async (revisionId: string) => {
-      if (!selectedProfileId || !revisionId) return;
-
-      setProfileBusy('restoring');
-      setProfileRevisionError(null);
-      setProfileSuccess(null);
       try {
-        const restored = await restoreProfileRevision(selectedProfileId, revisionId);
-        setProfileEditorText(restored.content);
-        setLoadedProfileContent(restored.content);
-        const revisions = await listProfileRevisions(restored.id, {
-          limit: 20,
-          offset: 0,
-          order: 'desc',
-        });
-        setProfileRevisions(revisions.items ?? []);
-        setProfileSuccess('Profile restored from revision.');
+        const profile = await getProfileContent(selectedProfileId);
+        if (!active) return;
+        setProfilePreview(buildProfilePreview(selectedProfileId, profile));
+        setProfileRevisionError(null);
       } catch (error) {
-        const message =
-          error instanceof Error ? error.message : 'Unable to restore profile revision.';
+        if (!active) return;
+        const message = error instanceof Error ? error.message : 'Unable to load selected profile.';
+        setProfilePreview(null);
         setProfileRevisionError(message);
-      } finally {
-        setProfileBusy(null);
       }
-    },
-    [selectedProfileId],
-  );
+    };
+
+    void loadSelectedProfile();
+
+    return () => {
+      active = false;
+    };
+  }, [selectedProfileId]);
 
   return {
-    profileOptions,
-    profileOptionsError,
     selectedProfileId,
     profileSelectionMode,
-    newProfileId,
-    profileEditorText,
-    loadedProfileContent,
-    profileRevisions,
     profileRevisionError,
-    profileBusy,
-    profileSuccess,
-    profileDirty,
-    setNewProfileId,
-    setProfileEditorText,
-    loadProfileOptions,
-    handleSelectedProfileChange,
-    handleCreateProfile,
-    handleSaveProfile,
-    handleRestoreRevision,
+    profilePreview,
     applyHydratedSnapshot,
   };
 }

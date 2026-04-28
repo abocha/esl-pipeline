@@ -1,3 +1,10 @@
+import {
+  FOUNDATIONAL_PROFILE_SCHEMA_VERSION,
+  type FoundationalProfile,
+  normalizeFoundationalProfile,
+  splitStructuredProfileItems,
+} from './foundational-profile.js';
+
 export interface StarterProfileInput {
   level?: string | null;
   goals: string;
@@ -109,4 +116,23 @@ export function renderStarterProfileContent(args: {
     '- This is the teacher-authored foundational profile baseline for this student.',
     '- Recent lesson continuity, homework continuity, and unresolved short-term issues belong in canonical student memory rather than this profile.',
   ].join('\n');
+}
+
+export function buildStarterProfileStructuredContent(
+  starterProfile: StarterProfileInput,
+): FoundationalProfile {
+  const normalized = normalizeStarterProfileInput(starterProfile);
+
+  return normalizeFoundationalProfile({
+    schemaVersion: FOUNDATIONAL_PROFILE_SCHEMA_VERSION,
+    overallLevel: normalized.level,
+    primaryGoals: splitStructuredProfileItems(normalized.goals),
+    communicationContexts: splitStructuredProfileItems(normalized.professionOrContext),
+    interestsAndUsefulThemes: splitStructuredProfileItems(normalized.interests),
+    stableStrengths: [],
+    persistentChallenges: splitStructuredProfileItems(normalized.longRunningChallenges),
+    studyPreferences: splitStructuredProfileItems(normalized.studyPreferencesOrConstraints),
+    durableConstraints: [],
+    teacherNotes: normalized.teacherNotes,
+  });
 }
