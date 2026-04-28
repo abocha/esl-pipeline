@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [6.2.0] - 2026-04-28
+
+### Changed
+
+- Automated release from PR #67: feat(batch): harden student surfaces and SSE (https://github.com/abocha/esl-pipeline/pull/67)
+
 ## [6.1.5] - 2026-04-20
 
 ### Changed
