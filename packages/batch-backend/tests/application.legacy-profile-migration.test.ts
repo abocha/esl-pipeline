@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { loadConfig } from '../src/config/env.js';
 import {
   createLegacyProfileMigrationReport,
   migrateLegacyProfiles,
   renderLegacyProfileMigrationItemMarkdown,
   renderLegacyProfileMigrationSummaryMarkdown,
 } from '../src/application/legacy-profile-migration.js';
+import { loadConfig } from '../src/config/env.js';
 
 describe('application/legacy-profile-migration', () => {
   it('plans and applies structured migrations for markdown-only active revisions', async () => {
@@ -347,7 +347,8 @@ describe('application/legacy-profile-migration', () => {
             profileId: 'profiles/students/alex.md',
             label: 'Alex',
             sourceRevisionId: 'revision-legacy-1',
-            originalMarkdown: '# Foundational Profile\n\n## Goals & Motivation\n- Speak more clearly.\n',
+            originalMarkdown:
+              '# Foundational Profile\n\n## Goals & Motivation\n- Speak more clearly.\n',
             structuredContent: {
               schemaVersion: 'foundational_profile_v1',
               overallLevel: 'B1',

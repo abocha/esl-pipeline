@@ -1,6 +1,5 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-
 import { describe, expect, it } from 'vitest';
 
 import { DB_MIGRATION_HEAD } from '../../contracts/src/contract-versions.js';

@@ -7,11 +7,6 @@ import type {
 } from '../domain/lesson-memory-model.js';
 import { getProfileById } from '../domain/profile-repository.js';
 import {
-  deriveFoundationalProfileFromMarkdown,
-  renderFoundationalProfileContent,
-  type FoundationalProfile,
-} from './foundational-profile.js';
-import {
   getActiveProfileRevision,
   getProfileRevisionById,
 } from '../domain/profile-revision-repository.js';
@@ -19,6 +14,11 @@ import {
   linkStudentProfileCandidatesToDraftRevision,
   listStudentProfileCandidatesByIds,
 } from '../domain/student-profile-candidate-repository.js';
+import {
+  deriveFoundationalProfileFromMarkdown,
+  type FoundationalProfile,
+  renderFoundationalProfileContent,
+} from './foundational-profile.js';
 import type { ProfileRevisionDetailResponse } from './profile-content.js';
 import { saveProfileRevisionContent } from './profile-content.js';
 import {
@@ -156,7 +156,8 @@ export async function promoteStudentProfileCandidates(args: {
   validateCandidateSelection(request.studentId, request.candidateIds, selectedCandidates);
 
   const baseStructuredProfile =
-    baseRevision?.structuredContent ?? deriveFoundationalProfileFromMarkdown(baseRevision?.content ?? '');
+    baseRevision?.structuredContent ??
+    deriveFoundationalProfileFromMarkdown(baseRevision?.content ?? '');
 
   const prompt = buildPromotionPrompt({
     studentName: student.student,
@@ -187,17 +188,13 @@ export async function promoteStudentProfileCandidates(args: {
   const structuredDraft = drafting.structuredProfile;
   const renderedDraft = renderFoundationalProfileContent(structuredDraft);
 
-  const draftRevision = await dependencies.profileContent.saveRevision(
-    profileId,
-    renderedDraft,
-    {
-      source: 'candidate_promotion',
-      status: 'draft',
-      createdBy: request.reviewerId ?? null,
-      dedupeByHash: false,
-      structuredContent: structuredDraft,
-    },
-  );
+  const draftRevision = await dependencies.profileContent.saveRevision(profileId, renderedDraft, {
+    source: 'candidate_promotion',
+    status: 'draft',
+    createdBy: request.reviewerId ?? null,
+    dedupeByHash: false,
+    structuredContent: structuredDraft,
+  });
 
   await dependencies.candidates.linkToDraft({
     studentId: request.studentId,
@@ -389,8 +386,6 @@ function assertCandidatePromotionDraftIsComplete(args: {
   }
 }
 
-function renderStructuredProfileForComparison(
-  profile: FoundationalProfile | null,
-): string | null {
+function renderStructuredProfileForComparison(profile: FoundationalProfile | null): string | null {
   return profile ? renderFoundationalProfileContent(profile) : null;
 }

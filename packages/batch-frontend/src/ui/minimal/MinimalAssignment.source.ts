@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type {
+  JobEvent,
   RecordingListItem,
   RecordingStatus,
   RecordingTranscriptResponse,
@@ -12,12 +13,18 @@ import {
   fetchStudentOptions,
   getRecording as getRecordingStatus,
   retryRecordingTranscription,
+  subscribeToJobEvents,
   updateRecordingTranscript,
   uploadRecording,
 } from '../../utils/api';
-import { getRecordingPollingDecision } from './MinimalAssignment.polling';
+import {
+  getNextFallbackPollingDelay,
+  getRecordingPollingDecision,
+  INITIAL_FALLBACK_POLL_MS,
+  isFallbackPollingPaused,
+  SSE_STALE_TIMEOUT_MS,
+} from './MinimalAssignment.polling';
 
-const POLL_INTERVAL_MS = 3000;
 const FALLBACK_STT_PROVIDERS: SttProvider[] = ['deepgram', 'elevenlabs', 'google'];
 
 export type TranscriptUiStatus = 'idle' | 'loading' | 'processing' | 'ready' | 'failed';
@@ -106,6 +113,16 @@ export function useMinimalAssignmentSourceController({
   const [studentOptionsError, setStudentOptionsError] = useState<string | null>(null);
   const [selectedStudentId, setSelectedStudentId] = useState('');
   const [uploadCacheNotice, setUploadCacheNotice] = useState<string | null>(null);
+  const latestRecordingRef = useRef<RecordingListItem | null>(null);
+  const latestTranscriptIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    latestRecordingRef.current = recording;
+  }, [recording]);
+
+  useEffect(() => {
+    latestTranscriptIdRef.current = transcript?.transcriptId ?? null;
+  }, [transcript?.transcriptId]);
 
   const sttProviders = useMemo<SttProvider[]>(() => {
     const providers = (configuredSttProviders ?? [])
@@ -255,72 +272,190 @@ export function useMinimalAssignmentSourceController({
     uploadAbortRef.current.abort();
   }, []);
 
+  const loadTranscriptForRecording = useCallback(
+    async (recordingId: string, currentRecordingStatus: RecordingStatus | null) => {
+      setTranscriptStatus('loading');
+      setTranscriptError(null);
+
+      try {
+        const response = await fetchRecordingTranscript(recordingId);
+        setTranscript(response);
+        setTranscriptText(response.text ?? '');
+        setTranscriptStatus('ready');
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unable to load transcript.';
+        if (currentRecordingStatus && currentRecordingStatus !== 'transcribed') {
+          setTranscriptStatus('processing');
+          setTranscriptError(null);
+        } else {
+          setTranscriptStatus('failed');
+          setTranscriptError(message);
+        }
+      }
+    },
+    [],
+  );
+
   const loadTranscript = useCallback(async () => {
     if (!recording?.recordingId) return;
-    setTranscriptStatus('loading');
-    setTranscriptError(null);
-
-    try {
-      const response = await fetchRecordingTranscript(recording.recordingId);
-      setTranscript(response);
-      setTranscriptText(response.text ?? '');
-      setTranscriptStatus('ready');
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to load transcript.';
-      if (recordingStatus && recordingStatus !== 'transcribed') {
-        setTranscriptStatus('processing');
-        setTranscriptError(null);
-      } else {
-        setTranscriptStatus('failed');
-        setTranscriptError(message);
-      }
-    }
-  }, [recording?.recordingId, recordingStatus]);
+    await loadTranscriptForRecording(recording.recordingId, recordingStatus);
+  }, [loadTranscriptForRecording, recording?.recordingId, recordingStatus]);
 
   useEffect(() => {
     if (!recording?.recordingId) return;
+    const recordingId = recording.recordingId;
     let active = true;
-    let interval: ReturnType<typeof setInterval> | null = null;
+    let fallbackDelay = INITIAL_FALLBACK_POLL_MS;
+    let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
+    let staleTimer: ReturnType<typeof setTimeout> | null = null;
+    let fallbackStarted = false;
+    let eventSource: EventSource | null = null;
 
-    const pollRecording = async () => {
+    const clearFallbackTimer = () => {
+      if (fallbackTimer) {
+        clearTimeout(fallbackTimer);
+        fallbackTimer = null;
+      }
+    };
+
+    const clearStaleTimer = () => {
+      if (staleTimer) {
+        clearTimeout(staleTimer);
+        staleTimer = null;
+      }
+    };
+
+    const documentRef = globalThis.document;
+
+    const stopMonitoring = () => {
+      active = false;
+      clearFallbackTimer();
+      clearStaleTimer();
+      eventSource?.close();
+      documentRef?.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+
+    const applyRecordingTransition = (updated: RecordingListItem) => {
+      latestRecordingRef.current = updated;
+      setRecording(updated);
+      setRecordingStatus(updated.status);
+      setRecordingError(updated.error ?? null);
+      const decision = getRecordingPollingDecision({
+        status: updated.status,
+        error: updated.error,
+        hasTranscriptId: Boolean(latestTranscriptIdRef.current),
+      });
+      if (decision.shouldLoadTranscript) {
+        void loadTranscriptForRecording(recordingId, updated.status);
+      }
+      if (decision.shouldMarkTranscriptFailed) {
+        setTranscriptStatus('failed');
+        setTranscriptError(decision.transcriptFailureMessage);
+      }
+      if (!decision.shouldContinuePolling) {
+        stopMonitoring();
+        return false;
+      }
+      return true;
+    };
+
+    const scheduleFallbackPoll = (delayMs = fallbackDelay) => {
+      if (!active) return;
+      clearFallbackTimer();
+      if (isFallbackPollingPaused()) return;
+      fallbackTimer = setTimeout(() => {
+        void pollRecording();
+      }, delayMs);
+    };
+
+    const startFallbackPolling = () => {
+      if (!active || fallbackStarted) return;
+      fallbackStarted = true;
+      clearStaleTimer();
+      eventSource?.close();
+      scheduleFallbackPoll(fallbackDelay);
+    };
+
+    const armSseStaleTimeout = () => {
+      if (!active || fallbackStarted) return;
+      clearStaleTimer();
+      staleTimer = setTimeout(() => {
+        startFallbackPolling();
+      }, SSE_STALE_TIMEOUT_MS);
+    };
+
+    const pollRecording = async (scheduleNext = true) => {
       try {
-        const updated = await getRecordingStatus(recording.recordingId);
+        const updated = await getRecordingStatus(recordingId);
         if (!active) return;
-        setRecording(updated);
-        setRecordingStatus(updated.status);
-        setRecordingError(updated.error ?? null);
-        const decision = getRecordingPollingDecision({
-          status: updated.status,
-          error: updated.error,
-          hasTranscriptId: Boolean(transcript?.transcriptId),
-        });
-        if (decision.shouldLoadTranscript) {
-          void loadTranscript();
-        }
-        if (decision.shouldMarkTranscriptFailed) {
-          setTranscriptStatus('failed');
-          setTranscriptError(decision.transcriptFailureMessage);
-        }
-        if (!decision.shouldContinuePolling) {
-          if (interval) clearInterval(interval);
-          interval = null;
+        const shouldContinue = applyRecordingTransition(updated);
+        if (shouldContinue && scheduleNext) {
+          fallbackDelay = getNextFallbackPollingDelay(fallbackDelay);
+          scheduleFallbackPoll(fallbackDelay);
         }
       } catch (error) {
         if (!active) return;
         const message =
           error instanceof Error ? error.message : 'Unable to refresh recording status.';
         setRecordingError(message);
+        if (scheduleNext) {
+          fallbackDelay = getNextFallbackPollingDelay(fallbackDelay);
+          scheduleFallbackPoll(fallbackDelay);
+        }
       }
     };
 
-    void pollRecording();
-    interval = setInterval(pollRecording, POLL_INTERVAL_MS);
+    function handleVisibilityChange() {
+      if (!active || !fallbackStarted) return;
+      if (isFallbackPollingPaused()) {
+        clearFallbackTimer();
+        return;
+      }
+      scheduleFallbackPoll(0);
+    }
+
+    const applyRecordingEvent = (event: JobEvent) => {
+      if (event.type !== 'recording_state_changed') return;
+      if (event.recordingId !== recordingId) return;
+      if (!active) return;
+      const currentRecording = latestRecordingRef.current;
+      if (!currentRecording || currentRecording.recordingId !== recordingId) return;
+      armSseStaleTimeout();
+      applyRecordingTransition({
+        ...currentRecording,
+        status: event.status,
+        transcriptId: event.transcriptId ?? currentRecording.transcriptId,
+        error: event.error ?? null,
+        studentId: event.studentId ?? currentRecording.studentId,
+        source: event.source ?? currentRecording.source,
+        displayName: event.displayName ?? currentRecording.displayName,
+        durationSec: event.durationSec ?? currentRecording.durationSec,
+        channels: event.channels ?? currentRecording.channels,
+        bytes: event.bytes ?? currentRecording.bytes,
+        createdAt: event.createdAt ?? currentRecording.createdAt,
+        updatedAt: event.updatedAt ?? currentRecording.updatedAt,
+      });
+    };
+
+    documentRef?.addEventListener('visibilitychange', handleVisibilityChange);
+
+    try {
+      eventSource = subscribeToJobEvents(applyRecordingEvent, {
+        recordingIds: [recordingId],
+        onOpen: armSseStaleTimeout,
+        onError: startFallbackPolling,
+      });
+      armSseStaleTimeout();
+      void pollRecording(false);
+    } catch {
+      startFallbackPolling();
+    }
 
     return () => {
-      active = false;
-      if (interval) clearInterval(interval);
+      stopMonitoring();
+      documentRef?.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [loadTranscript, recording?.recordingId, transcript?.transcriptId]);
+  }, [loadTranscriptForRecording, recording?.recordingId]);
 
   useEffect(() => {
     if (transcriptText.trim()) {

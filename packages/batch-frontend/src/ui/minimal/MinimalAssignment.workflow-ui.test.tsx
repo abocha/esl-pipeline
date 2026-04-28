@@ -2,10 +2,12 @@ import { fireEvent } from '@testing-library/react';
 import { afterEach, beforeEach, describe, it } from 'vitest';
 
 import {
+  testAct as act,
   testApi as api,
   createMinimalUser,
   testExpect as expect,
   INTEGRATION_TEST_TIMEOUT_MS,
+  makeRecording,
   openAdvancedActions,
   openPublishingSettings,
   previewCurrentDraft,
@@ -125,6 +127,41 @@ describe('MinimalAssignment - staged workflow UI', () => {
     ).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Show advanced actions/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /Refresh actions/i })).toBeNull();
+  });
+
+  it('keeps one recording SSE subscription alive across status refreshes', async () => {
+    const user = createMinimalUser();
+    const closeSse = vi.fn();
+    vi.mocked(api.subscribeToJobEvents).mockReturnValue({ close: closeSse } as never);
+    vi.mocked(api.uploadRecording).mockResolvedValueOnce(
+      makeRecording({
+        status: 'transcribing',
+        transcriptId: null,
+      }),
+    );
+    vi.mocked(api.getRecording).mockResolvedValue(
+      makeRecording({
+        status: 'transcribing',
+        transcriptId: null,
+        updatedAt: '2026-02-05T00:00:01.000Z',
+      }),
+    );
+
+    renderMinimalAssignment();
+    await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
+    await screen.findByRole('option', { name: 'Alex' });
+    await user.selectOptions(screen.getByRole('combobox', { name: /^Student$/i }), 'student-alex');
+    await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+
+    await waitFor(() => {
+      expect(api.getRecording).toHaveBeenCalledTimes(1);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(api.subscribeToJobEvents).toHaveBeenCalledTimes(1);
+    expect(closeSse).not.toHaveBeenCalled();
   });
 
   it('keeps advanced controls collapsed until the teacher opens them', async () => {

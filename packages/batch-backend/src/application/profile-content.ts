@@ -4,11 +4,6 @@ import path from 'node:path';
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
 import {
-  deriveFoundationalProfileFromMarkdown,
-  normalizeFoundationalProfile,
-  type FoundationalProfile,
-} from './foundational-profile.js';
-import {
   getProfileById,
   listProfiles,
   setProfileActiveRevision,
@@ -28,6 +23,11 @@ import {
   listProfileRevisions,
 } from '../domain/profile-revision-repository.js';
 import { markStudentProfileCandidatesPromotedByRevision } from '../domain/student-profile-candidate-repository.js';
+import {
+  deriveFoundationalProfileFromMarkdown,
+  type FoundationalProfile,
+  normalizeFoundationalProfile,
+} from './foundational-profile.js';
 import type { PromptOption } from './prompt-options.js';
 
 const PROFILE_EXTENSIONS = new Set(['.md', '.txt']);

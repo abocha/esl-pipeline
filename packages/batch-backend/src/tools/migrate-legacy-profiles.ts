@@ -2,16 +2,16 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { loadBatchBackendEnv } from '../bootstrap/env.js';
-import { configureHostRunPgRuntimeEnv } from '../bootstrap/pg-host-run-env.js';
-import { loadConfig } from '../config/env.js';
-import { closePgPool } from '../infrastructure/db.js';
 import {
   createLegacyProfileMigrationReport,
   migrateLegacyProfiles,
   renderLegacyProfileMigrationItemMarkdown,
   renderLegacyProfileMigrationSummaryMarkdown,
 } from '../application/legacy-profile-migration.js';
+import { loadBatchBackendEnv } from '../bootstrap/env.js';
+import { configureHostRunPgRuntimeEnv } from '../bootstrap/pg-host-run-env.js';
+import { loadConfig } from '../config/env.js';
+import { closePgPool } from '../infrastructure/db.js';
 
 interface CliOptions {
   apply: boolean;
@@ -96,7 +96,10 @@ function createTimestampSuffix(now = new Date()): string {
 }
 
 function slugifyProfileId(profileId: string): string {
-  return profileId.replaceAll(/[^a-zA-Z0-9]+/g, '-').replaceAll(/^-+|-+$/g, '').toLowerCase();
+  return profileId
+    .replaceAll(/[^a-zA-Z0-9]+/g, '-')
+    .replaceAll(/^-+|-+$/g, '')
+    .toLowerCase();
 }
 
 async function writeMigrationReportFiles(args: {

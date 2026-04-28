@@ -1,10 +1,12 @@
 import {
   FOUNDATIONAL_PROFILE_SCHEMA_VERSION,
-  normalizeFoundationalProfile,
   type FoundationalProfile,
+  normalizeFoundationalProfile,
 } from './foundational-profile.js';
 
-function createCuratedProfile(profile: Omit<FoundationalProfile, 'schemaVersion'>): FoundationalProfile {
+function createCuratedProfile(
+  profile: Omit<FoundationalProfile, 'schemaVersion'>,
+): FoundationalProfile {
   return normalizeFoundationalProfile({
     schemaVersion: FOUNDATIONAL_PROFILE_SCHEMA_VERSION,
     ...profile,
@@ -55,10 +57,7 @@ const CURATED_LEGACY_PROFILES: Record<string, FoundationalProfile> = {
     communicationContexts: [
       'Co-founder and manager of a coffee shop in Saint Petersburg serving international customers.',
     ],
-    interestsAndUsefulThemes: [
-      'Photography',
-      'Coffee-shop and hospitality situations',
-    ],
+    interestsAndUsefulThemes: ['Photography', 'Coffee-shop and hospitality situations'],
     stableStrengths: [
       'Confident speaker with high communicative fluency.',
       'Good metalinguistic awareness of her own article omission and literal translation habits.',
@@ -129,9 +128,7 @@ const CURATED_LEGACY_PROFILES: Record<string, FoundationalProfile> = {
   'margarita_PROFILE_2026-01-26.md': createCuratedProfile({
     overallLevel: 'A2+ (Pre-Intermediate), bridging into B1',
     primaryGoals: [],
-    communicationContexts: [
-      'Interior design and freelance book illustration / design.',
-    ],
+    communicationContexts: ['Interior design and freelance book illustration / design.'],
     interestsAndUsefulThemes: [
       'Book illustration and adult fiction covers',
       'Harry Potter',
@@ -164,9 +161,7 @@ const CURATED_LEGACY_PROFILES: Record<string, FoundationalProfile> = {
   'NEW PROFILE.md': createCuratedProfile({
     overallLevel: null,
     primaryGoals: [],
-    communicationContexts: [
-      'IT work as an expert at Northsoft, a subsidiary of Nornickel.',
-    ],
+    communicationContexts: ['IT work as an expert at Northsoft, a subsidiary of Nornickel.'],
     interestsAndUsefulThemes: [
       'Cross-country cycling',
       'Snowboarding',
@@ -193,10 +188,7 @@ const CURATED_LEGACY_PROFILES: Record<string, FoundationalProfile> = {
   }),
   'oleg_PROFILE_2026-01-13.md': createCuratedProfile({
     overallLevel: 'Beginner (A1 Emerging)',
-    primaryGoals: [
-      'Use survival English for travel.',
-      'Improve memory retention for English.',
-    ],
+    primaryGoals: ['Use survival English for travel.', 'Improve memory retention for English.'],
     communicationContexts: [
       'Running a small coffee bar / cafe and describing daily business operations.',
     ],
@@ -231,9 +223,7 @@ const CURATED_LEGACY_PROFILES: Record<string, FoundationalProfile> = {
   }),
   'svetlana_PROFILE_2026-01-19.md': createCuratedProfile({
     overallLevel: 'Solid B2',
-    primaryGoals: [
-      'Transition into AI-related product management roles.',
-    ],
+    primaryGoals: ['Transition into AI-related product management roles.'],
     communicationContexts: [
       'Entrepreneurial and accounting contexts.',
       'AI-assisted CV and job-market navigation.',
@@ -274,9 +264,7 @@ const CURATED_LEGACY_PROFILES: Record<string, FoundationalProfile> = {
   'tolik_PROFILE_2026-01-13.md': createCuratedProfile({
     overallLevel: null,
     primaryGoals: [],
-    communicationContexts: [
-      'IT product management and transition into data analysis.',
-    ],
+    communicationContexts: ['IT product management and transition into data analysis.'],
     interestsAndUsefulThemes: [
       'Gaming and Steam Deck use',
       'Electronic music production and analog synth hardware',
@@ -413,9 +401,7 @@ const CURATED_LEGACY_PROFILES: Record<string, FoundationalProfile> = {
       'Prefers concise homework (15-25 minutes) with voice-note missions and short shadowing.',
       'Appreciates verified collocations and natural word pairings.',
     ],
-    durableConstraints: [
-      'Uses AI tools for language research but access can be unstable.',
-    ],
+    durableConstraints: ['Uses AI tools for language research but access can be unstable.'],
     teacherNotes: null,
   }),
 };

@@ -2,17 +2,17 @@ import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
 import { getActiveProfileRevision } from '../domain/profile-revision-repository.js';
 import {
-  ensureStudentCanonicalProfileBinding,
-  getStudentProfileById,
-  type StudentStoreOverrides,
-} from './student-profiles-store.js';
-import type { ProfileRevisionDetailResponse } from './profile-content.js';
-import { saveProfileRevisionContent } from './profile-content.js';
-import {
   createEmptyFoundationalProfile,
   normalizeFoundationalProfile,
   renderFoundationalProfileContent,
 } from './foundational-profile.js';
+import type { ProfileRevisionDetailResponse } from './profile-content.js';
+import { saveProfileRevisionContent } from './profile-content.js';
+import {
+  ensureStudentCanonicalProfileBinding,
+  getStudentProfileById,
+  type StudentStoreOverrides,
+} from './student-profiles-store.js';
 
 export interface InitializeStudentProfileDraftRequest {
   studentId: string;
@@ -83,13 +83,16 @@ export async function initializeStudentProfileDraft(args: {
     throw new InitializeStudentProfileDraftError('Student not found', 'student_not_found', 404);
   }
 
-  const ensuredStudent = await dependencies.students.ensureCanonicalProfileBinding(request.studentId, {
-    config: dependencies.config,
-    bindingAudit: {
-      reason: 'student_area_profile_initialize',
-      changedBy: request.reviewerId ?? null,
-    },
-  } satisfies StudentStoreOverrides);
+  const ensuredStudent = await dependencies.students.ensureCanonicalProfileBinding(
+    request.studentId,
+    {
+      config: dependencies.config,
+      bindingAudit: {
+        reason: 'student_area_profile_initialize',
+        changedBy: request.reviewerId ?? null,
+      },
+    } satisfies StudentStoreOverrides,
+  );
 
   const profileId = ensuredStudent?.profileId ?? null;
   if (!profileId) {

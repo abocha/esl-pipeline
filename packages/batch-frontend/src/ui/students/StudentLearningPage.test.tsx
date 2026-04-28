@@ -11,6 +11,7 @@ const apiMocks = vi.hoisted(() => ({
   deferStudentProfileCandidate: vi.fn(),
   getProfileContent: vi.fn(),
   getProfileRevision: vi.fn(),
+  getStudentLearningSurface: vi.fn(),
   getStudentMemoryOverview: vi.fn(),
   initializeStudentProfileDraft: vi.fn(),
   listProfileRevisions: vi.fn(),
@@ -33,7 +34,10 @@ vi.mock('./StudentAreaContext', () => ({
 
 vi.mock('./WorkspaceCandidatesPanel', () => ({
   WorkspaceCandidatesPanel: (props: { profileCandidates: { id: string }[] }) => (
-    <div>Profile candidates panel: {props.profileCandidates.map((candidate) => candidate.id).join(', ')}</div>
+    <div>
+      Profile candidates panel:{' '}
+      {props.profileCandidates.map((candidate) => candidate.id).join(', ')}
+    </div>
   ),
 }));
 
@@ -184,6 +188,31 @@ function seedLearningPageMocks() {
     order: 'desc',
   });
 
+  apiMocks.getStudentLearningSurface.mockImplementation(async (studentId: string) => {
+    const context = useStudentAreaContextMock();
+    const profileId = context.student?.profileId ?? null;
+    const [profile, revisions, memory, bindings, candidates] = await Promise.all([
+      profileId ? apiMocks.getProfileContent(profileId) : Promise.resolve(null),
+      profileId
+        ? apiMocks.listProfileRevisions(profileId, {
+            limit: 25,
+            offset: 0,
+            order: 'desc',
+          })
+        : Promise.resolve({ items: [], total: 0, limit: 0, offset: 0, order: 'desc' }),
+      apiMocks.getStudentMemoryOverview(studentId, { lessonLimit: 3, homeworkLimit: 2 }),
+      apiMocks.listStudentProfileBindings(studentId, { limit: 5, offset: 0, order: 'desc' }),
+      apiMocks.listStudentProfileCandidates(studentId, { limit: 200, offset: 0, order: 'desc' }),
+    ]);
+    return {
+      profile,
+      revisions,
+      memory,
+      bindings,
+      candidates,
+    };
+  });
+
   apiMocks.populateFirstProfileFromLesson.mockResolvedValue({
     draftRevisionId: 'revision-draft-2',
     profileId: 'profiles/students/alex.md',
@@ -258,6 +287,74 @@ function renderLearningPage() {
       <StudentLearningPage />
     </MemoryRouter>,
   );
+}
+
+function makeLearningSurface(overrides: Record<string, unknown> = {}) {
+  return {
+    profile: {
+      id: 'profiles/students/alex.md',
+      label: 'Alex',
+      content: '# Foundational Profile',
+      structuredContent: {
+        schemaVersion: 'foundational_profile_v1',
+        overallLevel: 'B1',
+        primaryGoals: ['Lead standups clearly.'],
+        communicationContexts: ['Team updates'],
+        interestsAndUsefulThemes: ['Product work'],
+        stableStrengths: ['High motivation'],
+        persistentChallenges: ['Article usage'],
+        studyPreferences: ['Short practical review loops'],
+        durableConstraints: ['Limited evening time'],
+        teacherNotes: 'Responds well to practical speaking tasks.',
+      },
+      currentRevisionId: 'revision-active-1',
+      updatedAt: NOW,
+    },
+    revisions: {
+      items: [
+        {
+          id: 'revision-active-1',
+          profileId: 'profiles/students/alex.md',
+          contentHash: 'hash-1',
+          source: 'update',
+          status: 'active',
+          versionNumber: 1,
+          versionLabel: 'v1',
+          activatedAt: NOW,
+          deprecatedAt: null,
+          createdAt: NOW,
+          createdBy: 'teacher-1',
+          restoredFromRevisionId: null,
+        },
+      ],
+      total: 1,
+      limit: 20,
+      offset: 0,
+      order: 'desc',
+    },
+    memory: {
+      studentId: 'student-alex',
+      latestReadyStudentMemorySnapshot: null,
+      recentReadyLessonMemory: [],
+      recentReadyHomeworkMemory: [],
+      unresolvedIssues: [],
+    },
+    bindings: {
+      items: [],
+      total: 0,
+      limit: 20,
+      offset: 0,
+      order: 'desc',
+    },
+    candidates: {
+      items: [{ id: 'candidate-alex' }],
+      total: 1,
+      limit: 50,
+      offset: 0,
+      order: 'desc',
+    },
+    ...overrides,
+  };
 }
 
 describe('StudentLearningPage', () => {
@@ -696,6 +793,54 @@ describe('StudentLearningPage', () => {
       expect(screen.queryByText(/Student ID: alex/)).toBeNull();
       expect(screen.getByText(/candidate-b/)).toBeTruthy();
       expect(screen.queryByText(/candidate-a/)).toBeNull();
+    });
+  });
+
+  it('clears the previous student surface when the next student load fails', async () => {
+    apiMocks.getStudentLearningSurface
+      .mockResolvedValueOnce(makeLearningSurface())
+      .mockRejectedValueOnce(new Error('Learning surface failed'));
+
+    let contextValue = {
+      student: {
+        id: 'student-alex',
+        student: 'Alex',
+        profileId: 'profiles/students/alex.md',
+      },
+      studentId: 'student-alex',
+      studentLoading: false,
+      studentError: null,
+      refreshStudent: vi.fn(async () => {}),
+    };
+    useStudentAreaContextMock.mockImplementation(() => contextValue);
+
+    const view = renderLearningPage();
+
+    expect(await screen.findByDisplayValue('B1')).toBeTruthy();
+    expect(screen.getByText(/candidate-alex/)).toBeTruthy();
+
+    contextValue = {
+      student: {
+        id: 'student-bora',
+        student: 'Bora',
+        profileId: 'profiles/students/bora.md',
+      },
+      studentId: 'student-bora',
+      studentLoading: false,
+      studentError: null,
+      refreshStudent: vi.fn(async () => {}),
+    };
+
+    view.rerender(
+      <MemoryRouter>
+        <StudentLearningPage />
+      </MemoryRouter>,
+    );
+
+    expect((await screen.findAllByText('Learning surface failed')).length).toBeGreaterThan(0);
+    await waitFor(() => {
+      expect(screen.queryByDisplayValue('B1')).toBeNull();
+      expect(screen.queryByText(/candidate-alex/)).toBeNull();
     });
   });
 });

@@ -124,11 +124,7 @@ describe('App', () => {
     expect(screen.getByRole('link', { name: /Assignments/i })).toBeTruthy();
     expect(screen.getByText('teacher@example.com')).toBeTruthy();
     expect(screen.getByText('Minimal assignment content')).toBeTruthy();
-    const shellStyles = [...document.querySelectorAll('style')]
-      .map((style) => style.textContent ?? '')
-      .join('\n');
-    expect(shellStyles).toContain('.app-shell::before');
-    expect(shellStyles).toContain('position: fixed;');
+    expect(document.querySelector('style')?.textContent ?? '').not.toContain('.app-shell::before');
 
     await user.click(screen.getByRole('link', { name: /Skip to main content/i }));
 

@@ -8,9 +8,14 @@ describeHttpServerIntegrationSuite(
     expect,
     it,
     mockGetStudentMemoryOverview,
+    mockGetProfileContent,
+    mockGetStudentTimeline,
     mockListStudentHomeworkMemory,
     mockListStudentLessonMemory,
     mockListStudentMemorySnapshotsForStudent,
+    mockListStudentProfileBindingsForStudent,
+    mockListStudentProfileCandidatesForStudent,
+    mockListProfileRevisionsForProfile,
   }) => {
     it('GET /students/:id/memory returns the overview payload for authenticated inspection', async () => {
       const studentId = deriveStudentId('Anna');
@@ -67,6 +72,101 @@ describeHttpServerIntegrationSuite(
           status: 'ready',
           snapshotSummary: 'Summary',
         },
+      });
+    });
+
+    it('GET /students/:id/surfaces/overview composes the overview route payload', async () => {
+      const studentId = deriveStudentId('Anna');
+      mockGetProfileContent.mockClear();
+      mockListProfileRevisionsForProfile.mockClear();
+      mockGetStudentMemoryOverview.mockClear();
+      mockListStudentProfileCandidatesForStudent.mockClear();
+      mockGetStudentTimeline.mockClear();
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/students/${studentId}/surfaces/overview`,
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(mockGetStudentMemoryOverview).toHaveBeenCalledWith(
+        expect.objectContaining({ studentId, lessonLimit: 3, homeworkLimit: 2 }),
+      );
+      expect(mockListStudentProfileCandidatesForStudent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          studentId,
+          statuses: ['pending_review'],
+          reviewStates: ['unreviewed', 'deferred'],
+          limit: 10,
+        }),
+      );
+      expect(mockGetStudentTimeline).toHaveBeenCalledWith(
+        studentId,
+        expect.objectContaining({ limit: 8 }),
+      );
+      expect(response.json()).toMatchObject({
+        profile: { id: 'profile.md' },
+        revisions: { items: [{ id: 'revision-1' }] },
+        memory: { studentId },
+        pendingCandidates: { items: [] },
+        recentTimeline: { items: [{ type: 'recording_ingested' }] },
+      });
+    });
+
+    it('GET /students/:id/surfaces/learning composes profile, memory, binding, and candidate data', async () => {
+      const studentId = deriveStudentId('Anna');
+      mockGetStudentMemoryOverview.mockClear();
+      mockListStudentProfileBindingsForStudent.mockClear();
+      mockListStudentProfileCandidatesForStudent.mockClear();
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/students/${studentId}/surfaces/learning`,
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(mockGetStudentMemoryOverview).toHaveBeenCalledWith(
+        expect.objectContaining({ studentId, lessonLimit: 5, homeworkLimit: 3 }),
+      );
+      expect(mockListStudentProfileBindingsForStudent).toHaveBeenCalledWith(
+        studentId,
+        expect.objectContaining({ limit: 20 }),
+      );
+      expect(response.json()).toMatchObject({
+        profile: { id: 'profile.md' },
+        revisions: { items: [{ id: 'revision-1' }] },
+        memory: { studentId },
+        bindings: { items: [{ id: 'binding-1' }] },
+        candidates: { items: [] },
+      });
+    });
+
+    it('GET /students/:id/surfaces/history composes timeline and memory lists', async () => {
+      const studentId = deriveStudentId('Anna');
+      mockGetStudentTimeline.mockClear();
+      mockListStudentLessonMemory.mockClear();
+      mockListStudentHomeworkMemory.mockClear();
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/students/${studentId}/surfaces/history`,
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(mockGetStudentTimeline).toHaveBeenCalledWith(
+        studentId,
+        expect.objectContaining({ limit: 80 }),
+      );
+      expect(mockListStudentLessonMemory).toHaveBeenCalledWith(
+        expect.objectContaining({ studentId, statuses: ['ready'], limit: 50 }),
+      );
+      expect(mockListStudentHomeworkMemory).toHaveBeenCalledWith(
+        expect.objectContaining({ studentId, statuses: ['ready'], limit: 50 }),
+      );
+      expect(response.json()).toMatchObject({
+        timeline: { items: [{ type: 'recording_ingested' }] },
+        lessonMemory: { items: [] },
+        homeworkMemory: { items: [] },
       });
     });
 

@@ -84,8 +84,8 @@ mature operations page.
    - `History`: readable ledger inside the shared paper
    - `Schedule & Billing`: medium operations board inside the shared paper
    - `Directory`: standalone shelf/grid entry route that foreshadows the same identity system
-   The app-shell ambience must be viewport-fixed rather than document-height-scaled, because
-   route-specific content height otherwise changes the perceived background color during navigation.
+     The app-shell ambience must be viewport-fixed rather than document-height-scaled, because
+     route-specific content height otherwise changes the perceived background color during navigation.
 3. Keep the shared masthead as the only full identity surface.
 4. Keep `Learning` as the only profile editing surface.
 5. Keep `Schedule & Billing` honest until real scheduling, credit, reminder, invoice, and calendar

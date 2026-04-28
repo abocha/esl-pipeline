@@ -1,19 +1,29 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type {
+  JobEvent,
   JobOptionsResponse,
   JobStatus,
   PromptOptionsResponse,
   SttProvider,
 } from '../../utils/api';
-import { fetchJobOptions, fetchPromptOptions, getJobStatus } from '../../utils/api';
+import {
+  fetchJobOptions,
+  fetchPromptOptions,
+  getJobStatus,
+  subscribeToJobEvents,
+} from '../../utils/api';
 import { AdvancedActionsStage, useAdvancedActionsController } from './MinimalAssignment.advanced';
 import { useMinimalAssignmentAuthoringController } from './MinimalAssignment.authoring';
 import { useMinimalAssignmentContextController } from './MinimalAssignment.context';
 import {
   getJobPollingDecision,
+  getNextFallbackPollingDelay,
+  INITIAL_FALLBACK_POLL_MS,
   isActivelyProcessingJobState,
+  isFallbackPollingPaused,
   isTerminalJobState,
+  SSE_STALE_TIMEOUT_MS,
 } from './MinimalAssignment.polling';
 import {
   type HydratedAssignmentSnapshot,
@@ -42,7 +52,6 @@ import {
 import './MinimalAssignment.css';
 
 const AUDIO_EXTENSIONS = ['.wav', '.mp3', '.m4a', '.aac', '.ogg', '.opus'];
-const POLL_INTERVAL_MS = 3000;
 const FALLBACK_TTS_PROVIDERS = ['elevenlabs', 'google'] as const;
 const FALLBACK_PRONUNCIATION_CHUNK_TTS_PROVIDERS = ['google', 'elevenlabs', 'edge-tts'] as const;
 const FALLBACK_GOOGLE_TTS_MODELS = ['chirp3_hd', 'studio', 'neural2', 'wavenet'] as const;
@@ -263,9 +272,7 @@ export const MinimalAssignment: React.FC = () => {
     handleCancelUpload,
     setTranscriptText,
   } = source;
-  const {
-    applyHydratedSnapshot: applyContextHydration,
-  } = context;
+  const { applyHydratedSnapshot: applyContextHydration } = context;
 
   const authoring = useMinimalAssignmentAuthoringController({
     recordingId: source.recording?.recordingId ?? null,
@@ -409,29 +416,153 @@ export const MinimalAssignment: React.FC = () => {
 
   useEffect(() => {
     if (!jobStatus?.jobId || !isActivelyProcessingJobState(jobStatus.state)) return;
+    const jobId = jobStatus.jobId;
     let active = true;
-    const interval = setInterval(async () => {
+    let fallbackDelay = INITIAL_FALLBACK_POLL_MS;
+    let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
+    let staleTimer: ReturnType<typeof setTimeout> | null = null;
+    let fallbackStarted = false;
+    let eventSource: EventSource | null = null;
+
+    const clearFallbackTimer = () => {
+      if (fallbackTimer) {
+        clearTimeout(fallbackTimer);
+        fallbackTimer = null;
+      }
+    };
+
+    const clearStaleTimer = () => {
+      if (staleTimer) {
+        clearTimeout(staleTimer);
+        staleTimer = null;
+      }
+    };
+
+    const documentRef = globalThis.document;
+
+    const stopMonitoring = () => {
+      active = false;
+      clearFallbackTimer();
+      clearStaleTimer();
+      eventSource?.close();
+      documentRef?.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+
+    const applyStatusTransition = (refreshed: JobStatus) => {
+      setJobStatusState(refreshed);
+      const decision = getJobPollingDecision(refreshed.state);
+      if (!decision.shouldContinuePolling) {
+        if (decision.shouldRefreshResumeJobs) {
+          void resumeLoadResumeJobs();
+        }
+        stopMonitoring();
+        return false;
+      }
+      return true;
+    };
+
+    const scheduleFallbackPoll = (delayMs = fallbackDelay) => {
+      if (!active) return;
+      clearFallbackTimer();
+      if (isFallbackPollingPaused()) return;
+      fallbackTimer = setTimeout(() => {
+        void pollFallback();
+      }, delayMs);
+    };
+
+    const startFallbackPolling = () => {
+      if (!active || fallbackStarted) return;
+      fallbackStarted = true;
+      clearStaleTimer();
+      eventSource?.close();
+      scheduleFallbackPoll(fallbackDelay);
+    };
+
+    const armSseStaleTimeout = () => {
+      if (!active || fallbackStarted) return;
+      clearStaleTimer();
+      staleTimer = setTimeout(() => {
+        startFallbackPolling();
+      }, SSE_STALE_TIMEOUT_MS);
+    };
+
+    const pollFallback = async (scheduleNext = true) => {
       try {
-        const refreshed = await getJobStatus(jobStatus.jobId);
+        const refreshed = await getJobStatus(jobId);
         if (!active) return;
-        setJobStatusState(refreshed);
-        const decision = getJobPollingDecision(refreshed.state);
-        if (!decision.shouldContinuePolling) {
-          clearInterval(interval);
-          if (decision.shouldRefreshResumeJobs) {
-            void resumeLoadResumeJobs();
-          }
+        const shouldContinue = applyStatusTransition(refreshed);
+        if (shouldContinue && scheduleNext) {
+          fallbackDelay = getNextFallbackPollingDelay(fallbackDelay);
+          scheduleFallbackPoll(fallbackDelay);
         }
       } catch (error) {
         if (!active) return;
         const message = error instanceof Error ? error.message : 'Unable to refresh job status.';
         setAuthoringPublishError(message);
+        if (scheduleNext) {
+          fallbackDelay = getNextFallbackPollingDelay(fallbackDelay);
+          scheduleFallbackPoll(fallbackDelay);
+        }
       }
-    }, POLL_INTERVAL_MS);
+    };
+
+    function handleVisibilityChange() {
+      if (!active || !fallbackStarted) return;
+      if (isFallbackPollingPaused()) {
+        clearFallbackTimer();
+        return;
+      }
+      scheduleFallbackPoll(0);
+    }
+
+    const applyJobEvent = (event: JobEvent) => {
+      if (event.type !== 'job_created' && event.type !== 'job_state_changed') return;
+      if (event.jobId !== jobId) return;
+      if (!active) return;
+      armSseStaleTimeout();
+      setJobStatusState((current) => {
+        if (!current || current.jobId !== event.jobId) return current;
+        return {
+          ...current,
+          state: event.state,
+          error: event.payload?.error ?? current.error,
+          finishedAt: event.payload?.finishedAt ?? current.finishedAt,
+          htmlUrl: event.payload?.htmlUrl ?? current.htmlUrl,
+          manifestPath: event.payload?.manifestPath ?? current.manifestPath,
+          md: event.payload?.md ?? current.md,
+          mdStorageUri: event.payload?.mdStorageUri ?? current.mdStorageUri,
+          publishTarget: event.payload?.publishTarget ?? current.publishTarget,
+          recordingId: event.payload?.recordingId ?? current.recordingId,
+          transcriptId: event.payload?.transcriptId ?? current.transcriptId,
+          ttsStrategy: event.payload?.ttsStrategy ?? current.ttsStrategy,
+        };
+      });
+
+      const decision = getJobPollingDecision(event.state);
+      if (!decision.shouldContinuePolling) {
+        if (decision.shouldRefreshResumeJobs) {
+          void resumeLoadResumeJobs();
+        }
+        stopMonitoring();
+      }
+    };
+
+    documentRef?.addEventListener('visibilitychange', handleVisibilityChange);
+
+    try {
+      eventSource = subscribeToJobEvents(applyJobEvent, {
+        jobIds: [jobId],
+        onOpen: armSseStaleTimeout,
+        onError: startFallbackPolling,
+      });
+      armSseStaleTimeout();
+    } catch {
+      startFallbackPolling();
+    }
 
     return () => {
-      active = false;
-      clearInterval(interval);
+      stopMonitoring();
+      documentRef?.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [jobStatus?.jobId, jobStatus?.state, resumeLoadResumeJobs, setAuthoringPublishError]);
 

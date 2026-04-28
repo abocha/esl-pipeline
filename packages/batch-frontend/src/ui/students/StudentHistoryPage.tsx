@@ -2,14 +2,16 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import {
+  getStudentHistorySurface,
   getStudentTimeline,
-  listStudentHomeworkMemoryEntries,
-  listStudentLessonMemoryEntries,
   type HomeworkMemoryRecord,
   type LessonMemoryRecord,
+  listStudentHomeworkMemoryEntries,
+  listStudentLessonMemoryEntries,
   type StudentTimelineItem,
 } from '../../utils/api';
 import { useStudentAreaContext } from './StudentAreaContext';
+import './StudentHistoryPage.css';
 
 type HistoryFilter = 'all' | 'lessons' | 'homework' | 'profile' | 'materials' | 'operations';
 type HistoryEventDensity = 'rich' | 'compact';
@@ -115,9 +117,18 @@ function makeEventId(prefix: string, id: string, createdAt: string): string {
 function lessonToEvent(record: LessonMemoryRecord): HistoryEvent {
   const title = record.topicsDiscussed[0]?.topic?.trim() || 'Lesson memory created';
   const tags = [
-    ...compactList(record.topicsDiscussed.map((topic) => topic.topic), 2),
-    ...compactList(record.grammarReviewed.map((item) => item.name), 1),
-    ...compactList(record.vocabularyFocus.map((item) => item.text), 1),
+    ...compactList(
+      record.topicsDiscussed.map((topic) => topic.topic),
+      2,
+    ),
+    ...compactList(
+      record.grammarReviewed.map((item) => item.name),
+      1,
+    ),
+    ...compactList(
+      record.vocabularyFocus.map((item) => item.text),
+      1,
+    ),
   ];
   const followUp = record.followUpRecommendations[0];
 
@@ -265,7 +276,11 @@ function timelineToEvent(item: StudentTimelineItem): HistoryEvent | null {
   const source = detailValue(details.source);
 
   return {
-    id: makeEventId(item.type, item.jobId ?? item.draftId ?? item.promptPackageId ?? item.recordingId ?? item.displayName, item.createdAt),
+    id: makeEventId(
+      item.type,
+      item.jobId ?? item.draftId ?? item.promptPackageId ?? item.recordingId ?? item.displayName,
+      item.createdAt,
+    ),
     category,
     createdAt: item.createdAt,
     title: getTimelineLabel(item),
@@ -282,7 +297,9 @@ function timelineToEvent(item: StudentTimelineItem): HistoryEvent | null {
       ...(source ? [{ label: 'Source', value: source }] : []),
       ...(item.recordingId ? [{ label: 'Recording ID', value: item.recordingId }] : []),
       ...(item.transcriptId ? [{ label: 'Transcript ID', value: item.transcriptId }] : []),
-      ...(item.promptPackageId ? [{ label: 'Prompt package ID', value: item.promptPackageId }] : []),
+      ...(item.promptPackageId
+        ? [{ label: 'Prompt package ID', value: item.promptPackageId }]
+        : []),
       ...(item.draftId ? [{ label: 'Draft ID', value: item.draftId }] : []),
       ...(item.jobId ? [{ label: 'Job ID', value: item.jobId }] : []),
       ...(detailValue(details.profileRevisionId)
@@ -309,8 +326,12 @@ function buildHistoryEvents(data: HistoryData): HistoryEvent[] {
   const timelineEvents = data.timeline
     .filter((item) => {
       if (
-        (item.type === 'recording_ingested' && item.recordingId && coveredRecordingIds.has(item.recordingId)) ||
-        (item.type === 'transcript_ready' && item.transcriptId && coveredTranscriptIds.has(item.transcriptId))
+        (item.type === 'recording_ingested' &&
+          item.recordingId &&
+          coveredRecordingIds.has(item.recordingId)) ||
+        (item.type === 'transcript_ready' &&
+          item.transcriptId &&
+          coveredTranscriptIds.has(item.transcriptId))
       ) {
         return false;
       }
@@ -342,7 +363,9 @@ function buildHistoryEvents(data: HistoryData): HistoryEvent[] {
   });
 }
 
-function groupEvents(events: readonly HistoryEvent[]): { dateKey: string; label: string; events: HistoryEvent[] }[] {
+function groupEvents(
+  events: readonly HistoryEvent[],
+): { dateKey: string; label: string; events: HistoryEvent[] }[] {
   const groups = new Map<string, HistoryEvent[]>();
   for (const event of events) {
     const key = getDateKey(event.createdAt);
@@ -390,7 +413,6 @@ function StudentHistoryPendingCanvas({
           ))}
         </div>
       </div>
-      <style>{studentHistoryStyles}</style>
     </section>
   );
 }
@@ -478,38 +500,62 @@ export const StudentHistoryPage: React.FC = () => {
     setHistoryError(null);
 
     const loadHistory = async () => {
-      const [timelineResult, lessonResult, homeworkResult] = await Promise.allSettled([
-        getStudentTimeline(studentId, { limit: 100, offset: 0, order: 'desc' }),
-        listStudentLessonMemoryEntries(studentId, {
-          status: 'ready',
-          limit: 60,
-          offset: 0,
-          order: 'desc',
-        }),
-        listStudentHomeworkMemoryEntries(studentId, {
-          status: 'ready',
-          limit: 60,
-          offset: 0,
-          order: 'desc',
-        }),
-      ]);
+      try {
+        const surface = await getStudentHistorySurface(studentId);
 
-      if (latestHistoryRequestRef.current !== requestId) {
-        return;
+        if (latestHistoryRequestRef.current !== requestId) {
+          return;
+        }
+
+        setHistoryData({
+          timeline: surface.timeline.items,
+          lessons: surface.lessonMemory.items,
+          homework: surface.homeworkMemory.items,
+        });
+        setLoadedStudentId(studentId);
+        setHistoryError(null);
+      } catch (error: unknown) {
+        if (latestHistoryRequestRef.current !== requestId) {
+          return;
+        }
+        const [timelineResult, lessonResult, homeworkResult] = await Promise.allSettled([
+          getStudentTimeline(studentId, { limit: 100, offset: 0, order: 'desc' }),
+          listStudentLessonMemoryEntries(studentId, {
+            status: 'ready',
+            limit: 60,
+            offset: 0,
+            order: 'desc',
+          }),
+          listStudentHomeworkMemoryEntries(studentId, {
+            status: 'ready',
+            limit: 60,
+            offset: 0,
+            order: 'desc',
+          }),
+        ]);
+        if (latestHistoryRequestRef.current !== requestId) {
+          return;
+        }
+        setHistoryData({
+          timeline: timelineResult.status === 'fulfilled' ? timelineResult.value.items : [],
+          lessons: lessonResult.status === 'fulfilled' ? lessonResult.value.items : [],
+          homework: homeworkResult.status === 'fulfilled' ? homeworkResult.value.items : [],
+        });
+        setLoadedStudentId(studentId);
+        setHistoryError(
+          [timelineResult, lessonResult, homeworkResult].some(
+            (result) => result.status === 'rejected',
+          )
+            ? 'Some history context could not be loaded.'
+            : error instanceof Error
+              ? error.message
+              : 'Some history context could not be loaded.',
+        );
+      } finally {
+        if (latestHistoryRequestRef.current === requestId) {
+          setHistoryLoading(false);
+        }
       }
-
-      setHistoryData({
-        timeline: timelineResult.status === 'fulfilled' ? timelineResult.value.items : [],
-        lessons: lessonResult.status === 'fulfilled' ? lessonResult.value.items : [],
-        homework: homeworkResult.status === 'fulfilled' ? homeworkResult.value.items : [],
-      });
-      setLoadedStudentId(studentId);
-      setHistoryError(
-        [timelineResult, lessonResult, homeworkResult].some((result) => result.status === 'rejected')
-          ? 'Some history context could not be loaded.'
-          : null,
-      );
-      setHistoryLoading(false);
     };
 
     void loadHistory();
@@ -521,7 +567,8 @@ export const StudentHistoryPage: React.FC = () => {
 
   const historyReady = loadedStudentId === studentId && !historyLoading;
   const events = useMemo(() => buildHistoryEvents(historyData), [historyData]);
-  const filteredEvents = activeFilter === 'all' ? events : events.filter((event) => event.category === activeFilter);
+  const filteredEvents =
+    activeFilter === 'all' ? events : events.filter((event) => event.category === activeFilter);
   const groupedEvents = groupEvents(filteredEvents);
 
   if (!historyReady) {
@@ -529,7 +576,10 @@ export const StudentHistoryPage: React.FC = () => {
   }
 
   return (
-    <section className="student-history-page student-area-theme" aria-busy={studentLoading || !historyReady}>
+    <section
+      className="student-history-page student-area-theme"
+      aria-busy={studentLoading || !historyReady}
+    >
       <div className="student-area-frame student-history-frame">
         <article className="student-area-panel student-history-about">
           <p className="student-history-section-label">About this history</p>
@@ -586,460 +636,6 @@ export const StudentHistoryPage: React.FC = () => {
 
         <p className="student-history-note">Small, regular steps create real progress.</p>
       </div>
-      <style>{studentHistoryStyles}</style>
     </section>
   );
 };
-
-const studentHistoryStyles = `
-  .student-history-page {
-    --history-paper: var(--student-area-paper);
-    --history-paper-deep: var(--student-area-paper-deep);
-    --history-ink: var(--student-area-ink);
-    --history-muted: var(--student-area-muted);
-    --history-blue: var(--student-area-blue);
-    --history-blue-soft: var(--student-area-blue-soft);
-    --history-sage: var(--student-area-sage);
-    --history-sage-soft: var(--student-area-sage-soft);
-    --history-amber: var(--student-area-amber);
-    --history-amber-soft: var(--student-area-amber-soft);
-    --history-rose: var(--student-area-rose);
-    --history-rose-soft: var(--student-area-rose-soft);
-    --history-line: var(--student-area-line);
-    color: var(--history-ink);
-  }
-
-  .student-history-frame {
-    position: relative;
-    display: grid;
-    gap: 1.6rem;
-    padding: 0;
-    overflow: hidden;
-    border: 0;
-    border-radius: 0;
-    background: transparent;
-    box-shadow: none;
-  }
-
-  .student-history-frame::before {
-    content: none;
-  }
-
-  .student-history-frame > * {
-    position: relative;
-  }
-
-  .student-history-sr-only {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
-  }
-
-  .student-history-back,
-  .student-history-about a,
-  .student-history-event-card a {
-    color: var(--history-blue);
-    font-weight: 700;
-    text-decoration: none;
-  }
-
-  .student-history-back:hover,
-  .student-history-about a:hover,
-  .student-history-event-card a:hover {
-    text-decoration: underline;
-  }
-
-  .student-history-hero {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) minmax(16rem, 0.48fr);
-    align-items: center;
-    gap: clamp(1.5rem, 4vw, 3rem);
-    padding-bottom: 1.5rem;
-    border-bottom: 1px solid var(--history-line);
-  }
-
-  .student-history-portrait {
-    display: grid;
-    place-items: center;
-    width: clamp(8rem, 18vw, 12rem);
-    aspect-ratio: 1;
-    border: 1px solid rgba(42, 36, 26, 0.12);
-    border-radius: 999px;
-    background:
-      radial-gradient(circle at 32% 25%, rgba(255, 255, 255, 0.72), transparent 30%),
-      linear-gradient(135deg, rgba(20, 63, 115, 0.13), rgba(49, 92, 58, 0.16));
-    color: var(--history-blue);
-    font-family: Georgia, 'Times New Roman', serif;
-    font-size: clamp(3rem, 8vw, 5rem);
-  }
-
-  .student-history-identity p,
-  .student-history-section-label {
-    margin: 0;
-    color: var(--history-blue);
-    font-size: 0.75rem;
-    font-weight: 800;
-    letter-spacing: 0.22em;
-    text-transform: uppercase;
-  }
-
-  .student-history-identity h2 {
-    margin: 0.15rem 0 0.7rem;
-    font-family: Georgia, 'Times New Roman', serif;
-    font-size: clamp(3rem, 7vw, 5.8rem);
-    font-weight: 500;
-    letter-spacing: -0.055em;
-    line-height: 0.95;
-  }
-
-  .student-history-identity span {
-    display: block;
-    max-width: 32rem;
-    color: var(--history-ink);
-    font-family: Georgia, 'Times New Roman', serif;
-    font-size: clamp(1.1rem, 2vw, 1.4rem);
-    line-height: 1.6;
-  }
-
-  .student-history-about {
-    display: grid;
-    gap: 0.75rem;
-    padding: 1.25rem;
-    border: 1px solid var(--history-line);
-    border-radius: 20px;
-    background: rgba(255, 252, 245, 0.58);
-  }
-
-  .student-history-about p {
-    margin: 0;
-    color: var(--history-muted);
-    line-height: 1.6;
-  }
-
-  .student-history-error {
-    margin: 0;
-    padding: 0.9rem 1rem;
-    border: 1px solid rgba(145, 98, 12, 0.24);
-    border-radius: 16px;
-    background: var(--history-amber-soft);
-    color: var(--history-amber);
-    font-weight: 700;
-  }
-
-  .student-history-filters,
-  .student-history-pending-filters {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-  }
-
-  .student-history-filters span {
-    color: var(--history-muted);
-    font-size: 0.72rem;
-    font-weight: 800;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-  }
-
-  .student-history-filters button {
-    padding: 0.65rem 1rem;
-    border: 1px solid var(--history-line);
-    border-radius: 12px;
-    background: rgba(255, 252, 245, 0.62);
-    color: var(--history-ink);
-    cursor: pointer;
-    font: inherit;
-    font-weight: 700;
-  }
-
-  .student-history-filters button.active {
-    background: var(--history-blue-soft);
-    border-color: rgba(20, 63, 115, 0.2);
-    color: var(--history-blue);
-  }
-
-  .student-history-timeline {
-    display: grid;
-    gap: 1.7rem;
-  }
-
-  .student-history-date-group {
-    display: grid;
-    grid-template-columns: minmax(7rem, 10rem) minmax(0, 1fr);
-    gap: clamp(1rem, 3vw, 2rem);
-  }
-
-  .student-history-date-group > h3 {
-    margin: 0.3rem 0 0;
-    font-family: Georgia, 'Times New Roman', serif;
-    font-size: 1.25rem;
-    font-weight: 500;
-  }
-
-  .student-history-date-events {
-    position: relative;
-    display: grid;
-    gap: 0.85rem;
-  }
-
-  .student-history-date-events::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 1.45rem;
-    width: 1px;
-    background: var(--history-line);
-  }
-
-  .student-history-event {
-    position: relative;
-    display: grid;
-    grid-template-columns: 3rem minmax(0, 1fr);
-    gap: 1rem;
-    align-items: start;
-  }
-
-  .student-history-event-marker {
-    position: relative;
-    z-index: 1;
-    display: grid;
-    place-items: center;
-    width: 2.9rem;
-    height: 2.9rem;
-    border: 1px solid var(--history-line);
-    border-radius: 999px;
-    background: var(--history-paper);
-    color: var(--history-blue);
-    font-size: 0.68rem;
-    font-weight: 900;
-    letter-spacing: 0.06em;
-  }
-
-  .event-green .student-history-event-marker {
-    background: var(--history-sage-soft);
-    color: var(--history-sage);
-  }
-
-  .event-amber .student-history-event-marker {
-    background: var(--history-amber-soft);
-    color: var(--history-amber);
-  }
-
-  .event-rose .student-history-event-marker {
-    background: var(--history-rose-soft);
-    color: var(--history-rose);
-  }
-
-  .student-history-event-card {
-    display: grid;
-    gap: 0.7rem;
-    padding: 1.05rem 1.25rem;
-    border: 1px solid var(--history-line);
-    border-radius: 18px;
-    background: rgba(255, 252, 245, 0.64);
-    content-visibility: auto;
-    contain-intrinsic-size: 180px;
-  }
-
-  .event-rich .student-history-event-card {
-    padding: 1.25rem 1.45rem;
-  }
-
-  .student-history-event-card header,
-  .student-history-event-card footer {
-    display: flex;
-    align-items: start;
-    justify-content: space-between;
-    gap: 1rem;
-  }
-
-  .student-history-event-title {
-    margin: 0 0 0.2rem;
-    color: var(--history-muted);
-    font-size: 0.75rem;
-    font-weight: 800;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-  }
-
-  .student-history-event-card h3 {
-    margin: 0;
-    font-family: Georgia, 'Times New Roman', serif;
-    font-size: clamp(1.15rem, 2vw, 1.55rem);
-    font-weight: 500;
-    line-height: 1.2;
-  }
-
-  .student-history-event-summary {
-    margin: 0;
-    color: var(--history-ink);
-    line-height: 1.6;
-  }
-
-  .student-history-event-meta {
-    display: grid;
-    justify-items: end;
-    gap: 0.35rem;
-    min-width: max-content;
-    color: var(--history-muted);
-    font-weight: 700;
-  }
-
-  .student-history-event-meta time {
-    color: var(--history-ink);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .student-history-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.45rem;
-  }
-
-  .student-history-tags span {
-    padding: 0.35rem 0.65rem;
-    border: 1px solid rgba(49, 92, 58, 0.14);
-    border-radius: 8px;
-    background: rgba(237, 244, 231, 0.76);
-    color: var(--history-sage);
-    font-size: 0.82rem;
-  }
-
-  .student-history-event-card details {
-    color: var(--history-muted);
-  }
-
-  .student-history-event-card summary {
-    cursor: pointer;
-    color: var(--history-blue);
-    font-weight: 700;
-  }
-
-  .student-history-event-card dl {
-    display: grid;
-    grid-template-columns: max-content minmax(0, 1fr);
-    gap: 0.35rem 0.8rem;
-    margin: 0.75rem 0 0;
-    font-size: 0.82rem;
-  }
-
-  .student-history-event-card dt {
-    color: var(--history-muted);
-    font-weight: 800;
-  }
-
-  .student-history-event-card dd {
-    margin: 0;
-    overflow-wrap: anywhere;
-  }
-
-  .student-history-empty {
-    padding: clamp(2rem, 6vw, 4rem);
-    border: 1px dashed var(--history-line);
-    border-radius: 22px;
-    background: rgba(255, 252, 245, 0.48);
-    text-align: center;
-  }
-
-  .student-history-empty h3 {
-    margin: 0 0 0.5rem;
-    font-family: Georgia, 'Times New Roman', serif;
-    font-size: clamp(1.5rem, 3vw, 2.1rem);
-    font-weight: 500;
-  }
-
-  .student-history-empty p {
-    max-width: 34rem;
-    margin: 0 auto;
-    color: var(--history-muted);
-    line-height: 1.6;
-  }
-
-  .student-history-note {
-    justify-self: center;
-    margin: 0;
-    color: var(--history-blue);
-    font-family: Georgia, 'Times New Roman', serif;
-    font-style: italic;
-    letter-spacing: 0.08em;
-  }
-
-  .student-history-skeleton {
-    display: block;
-    position: relative;
-    overflow: hidden;
-    border-radius: 999px;
-    background: rgba(42, 36, 26, 0.1);
-  }
-
-  .student-history-skeleton::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    transform: translateX(-100%);
-    background: linear-gradient(90deg, transparent, rgba(255, 252, 245, 0.55), transparent);
-    animation: history-skeleton-breathe 1.8s ease-in-out infinite;
-  }
-
-  .skeleton-about {
-    width: 100%;
-    min-height: 9rem;
-    border-radius: 20px;
-  }
-
-  .skeleton-filter {
-    width: 6rem;
-    height: 2.6rem;
-    border-radius: 12px;
-  }
-
-  .student-history-pending-list {
-    display: grid;
-    gap: 0.8rem;
-    padding-left: clamp(4rem, 16vw, 12rem);
-  }
-
-  .skeleton-card {
-    height: 6.5rem;
-    border-radius: 18px;
-  }
-
-  @keyframes history-skeleton-breathe {
-    100% {
-      transform: translateX(100%);
-    }
-  }
-
-  @media (max-width: 900px) {
-    .student-history-hero,
-    .student-history-date-group {
-      grid-template-columns: 1fr;
-    }
-
-    .student-history-portrait {
-      width: 8rem;
-    }
-
-    .student-history-event-card header,
-    .student-history-event-card footer {
-      display: grid;
-    }
-
-    .student-history-event-meta {
-      justify-items: start;
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .student-history-skeleton::after {
-      animation: none;
-    }
-  }
-`;

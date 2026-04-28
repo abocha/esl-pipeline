@@ -67,6 +67,7 @@ vi.mock('../../utils/api', () => ({
   renderHtmlPreview: vi
     .fn()
     .mockResolvedValue({ html: '<html><body><h1>Preview</h1></body></html>' }),
+  subscribeToJobEvents: vi.fn().mockReturnValue({ close: vi.fn() }),
   upsertProfileContent: vi.fn(),
   updateDraft: vi.fn(),
   updateRecordingTranscript: vi.fn(),
@@ -767,6 +768,7 @@ export function setupMinimalAssignmentTest() {
   vi.mocked(api.renderHtmlPreview).mockResolvedValue({
     html: '<html><body><h1>Preview</h1></body></html>',
   });
+  vi.mocked(api.subscribeToJobEvents).mockReturnValue({ close: vi.fn() } as never);
 }
 
 export const testAct = act;

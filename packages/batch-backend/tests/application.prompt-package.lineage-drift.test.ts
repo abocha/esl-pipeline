@@ -1,12 +1,12 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
+import { hashPromptProfileContent } from '../src/application/create-prompt-package.js';
+import { renderFoundationalProfileContent } from '../src/application/foundational-profile.js';
 import {
   getPromptPackage,
   getPromptPackageLineage,
 } from '../src/application/get-prompt-package.js';
-import { renderFoundationalProfileContent } from '../src/application/foundational-profile.js';
-import { hashPromptProfileContent } from '../src/application/create-prompt-package.js';
 import type { PromptPackageRecord } from '../src/domain/prompt-package-model.js';
 import {
   createProfileRevisionRepositoryStub,

@@ -4,7 +4,7 @@
 
 - Audience: maintainers and implementing agents.
 - Authority Level: package entrypoint and operational usage guide.
-- Last Verified Against: 2026-03-13 repo state.
+- Last Verified Against: 2026-04-28 repo state.
 - Owner: batch-backend maintainers + automation agents.
 - Review Cadence: monthly or after major API/worker changes.
 - Status: `active`.
@@ -30,7 +30,9 @@ It does not redefine orchestrator behavior. Contract and architecture detail sta
 Core surfaces:
 
 - jobs, drafts, prompt packages, recordings, students, auth
+- student-area route payloads under `/students/:id/surfaces/overview`, `/students/:id/surfaces/learning`, and `/students/:id/surfaces/history`
 - student-memory inspection under `/students/:id/memory`, `/students/:id/lesson-memory`, `/students/:id/homework-memory`, and `/students/:id/memory-snapshots`
+- targeted job/recording SSE under `/jobs/events?jobId=<id>&recordingId=<id>`; wildcard streams use `jobId=*`
 - optional ops control under `/ops/*`
 - API server + worker processes sharing the same config
 

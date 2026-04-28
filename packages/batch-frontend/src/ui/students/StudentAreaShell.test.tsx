@@ -1,10 +1,5 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
-import {
-  createMemoryRouter,
-  Outlet,
-  RouterProvider,
-  useOutletContext,
-} from 'react-router-dom';
+import { createMemoryRouter, Outlet, RouterProvider, useOutletContext } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { StudentAreaShell } from './StudentAreaShell';
@@ -91,11 +86,11 @@ describe('StudentAreaShell', () => {
     expect(screen.getByRole('heading', { name: 'Alex Rivera' })).toBeTruthy();
     expect(screen.getByText('Student ID: alex-riv')).toBeTruthy();
     expect(
-      screen.getByText('A chronological teaching ledger for lessons, materials, and profile changes.'),
+      screen.getByText(
+        'A chronological teaching ledger for lessons, materials, and profile changes.',
+      ),
     ).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'History' }).getAttribute('aria-current')).toBe(
-      'page',
-    );
+    expect(screen.getByRole('link', { name: 'History' }).getAttribute('aria-current')).toBe('page');
     expect(screen.getByTestId('student-area-body').className).toContain(
       'student-area-body-reading',
     );

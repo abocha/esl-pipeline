@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { StudentHistoryPage } from './StudentHistoryPage';
 
 const apiMocks = vi.hoisted(() => ({
+  getStudentHistorySurface: vi.fn(),
   getStudentTimeline: vi.fn(),
   listStudentHomeworkMemoryEntries: vi.fn(),
   listStudentLessonMemoryEntries: vi.fn(),
@@ -51,6 +52,25 @@ function seedHistoryContext() {
 }
 
 function seedHistoryMocks() {
+  apiMocks.getStudentHistorySurface.mockImplementation(async (studentId: string) => {
+    const [timeline, lessonMemory, homeworkMemory] = await Promise.all([
+      apiMocks.getStudentTimeline(studentId, { limit: 100, offset: 0, order: 'desc' }),
+      apiMocks.listStudentLessonMemoryEntries(studentId, {
+        status: 'ready',
+        limit: 60,
+        offset: 0,
+        order: 'desc',
+      }),
+      apiMocks.listStudentHomeworkMemoryEntries(studentId, {
+        status: 'ready',
+        limit: 60,
+        offset: 0,
+        order: 'desc',
+      }),
+    ]);
+    return { timeline, lessonMemory, homeworkMemory };
+  });
+
   apiMocks.listStudentLessonMemoryEntries.mockResolvedValue({
     studentId: 'student-daria',
     items: [
@@ -126,12 +146,24 @@ function seedHistoryMocks() {
         homeworkSummary:
           'A speaking practice assignment about telling a personal story with clearer sentence openers.',
         topic: 'Speaking practice: Tell a personal story',
-        grammarTargets: [{ name: 'Past tense anchors', note: 'Keep the timeline clear.', targetKind: 'review' }],
+        grammarTargets: [
+          { name: 'Past tense anchors', note: 'Keep the timeline clear.', targetKind: 'review' },
+        ],
         vocabularyTargets: [],
         reviewTargets: [{ label: 'Sentence openers', note: 'Vary first words in longer turns.' }],
         taskList: [
-          { section: 'Warm-up', task: 'Retell the story in four steps.', taskType: 'roadmap', review: true },
-          { section: 'Mission', task: 'Record a two-minute version.', taskType: 'mission', review: false },
+          {
+            section: 'Warm-up',
+            task: 'Retell the story in four steps.',
+            taskType: 'roadmap',
+            review: true,
+          },
+          {
+            section: 'Mission',
+            task: 'Record a two-minute version.',
+            taskType: 'mission',
+            review: false,
+          },
         ],
         pronunciationFocus: [],
         studyTextType: 'monologue',
@@ -262,7 +294,11 @@ describe('StudentHistoryPage', () => {
     expect(screen.getByRole('button', { name: 'Operations' })).toBeTruthy();
 
     expect(screen.getByText('Lesson memory created')).toBeTruthy();
-    expect(screen.getByText('Practiced expanding ideas with connectors and natural phrasing in workplace stories.')).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Practiced expanding ideas with connectors and natural phrasing in workplace stories.',
+      ),
+    ).toBeTruthy();
     expect(screen.getAllByText('Fluency with natural expression').length).toBeGreaterThan(0);
     expect(screen.getByText('duration pending · format pending')).toBeTruthy();
     expect(screen.getByText('Homework assigned')).toBeTruthy();
@@ -326,7 +362,8 @@ describe('StudentHistoryPage', () => {
   });
 
   it('shows a non-readable pending canvas while history sources resolve', async () => {
-    const lessonDeferred = createDeferred<Awaited<ReturnType<typeof apiMocks.listStudentLessonMemoryEntries>>>();
+    const lessonDeferred =
+      createDeferred<Awaited<ReturnType<typeof apiMocks.listStudentLessonMemoryEntries>>>();
     apiMocks.listStudentLessonMemoryEntries.mockReturnValue(lessonDeferred.promise);
 
     renderHistory();
@@ -389,7 +426,9 @@ describe('StudentHistoryPage', () => {
 
     expect(await screen.findByText('History will collect here')).toBeTruthy();
     expect(
-      screen.getByText('Lesson, homework, profile, material, and operations events will appear as this student works through the new flow.'),
+      screen.getByText(
+        'Lesson, homework, profile, material, and operations events will appear as this student works through the new flow.',
+      ),
     ).toBeTruthy();
   });
 });

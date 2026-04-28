@@ -29,7 +29,10 @@ export interface LearnerProfilePreview {
 }
 
 function compactPreviewList(values: readonly string[]): string[] {
-  return values.map((value) => value.trim()).filter(Boolean).slice(0, 3);
+  return values
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .slice(0, 3);
 }
 
 function compactPreviewGoals(profile: FoundationalProfile): string[] {

@@ -129,9 +129,9 @@ export function registerPromptEditorTests() {
       expect(screen.queryByRole('button', { name: /Save profile/i })).toBeNull();
       expect(screen.getByText(/Lead project updates clearly\./i)).toBeTruthy();
       expect(screen.getByText(/Strong listening comprehension\./i)).toBeTruthy();
-      expect(
-        screen.getByRole('link', { name: /Open Learning page/i }).getAttribute('href'),
-      ).toBe('/students/student-alex/learning');
+      expect(screen.getByRole('link', { name: /Open Learning page/i }).getAttribute('href')).toBe(
+        '/students/student-alex/learning',
+      );
     });
 
     it('shows a useful empty state when the selected student has no learner profile', async () => {

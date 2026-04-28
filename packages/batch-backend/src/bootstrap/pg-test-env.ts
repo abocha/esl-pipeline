@@ -107,9 +107,7 @@ export function tryConfigurePgTestRuntimeEnv(
   };
 }
 
-export function requirePgTestRuntimeEnv(
-  env: NodeJS.ProcessEnv = process.env,
-): PgTestRuntimeEnv {
+export function requirePgTestRuntimeEnv(env: NodeJS.ProcessEnv = process.env): PgTestRuntimeEnv {
   const resolved = tryConfigurePgTestRuntimeEnv(env);
   if (resolved) {
     return resolved;

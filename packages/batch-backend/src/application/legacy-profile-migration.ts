@@ -5,8 +5,8 @@ import { getProfileRevisionById } from '../domain/profile-revision-repository.js
 import { listStudents } from '../domain/student-repository.js';
 import {
   deriveFoundationalProfileFromMarkdown,
-  renderFoundationalProfileContent,
   type FoundationalProfile,
+  renderFoundationalProfileContent,
 } from './foundational-profile.js';
 import { getCuratedLegacyFoundationalProfile } from './legacy-profile-curation.js';
 import type { ProfileRevisionDetailResponse } from './profile-content.js';
@@ -117,7 +117,9 @@ async function listMigrationCandidates(
   }[] = [];
   let offset = 0;
   const requestedLimit =
-    typeof request.limit === 'number' && request.limit > 0 ? request.limit : Number.POSITIVE_INFINITY;
+    typeof request.limit === 'number' && request.limit > 0
+      ? request.limit
+      : Number.POSITIVE_INFINITY;
   const seenProfileIds = new Set<string>();
 
   while (items.length < requestedLimit) {
