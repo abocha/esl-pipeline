@@ -34,6 +34,7 @@ import {
   foundationalProfileToFormState,
   getApprovedCandidatesReadyForPromotion,
   INITIAL_FOUNDATIONAL_PROFILE_FORM,
+  isSelectableForPromotion,
   PROFILE_CANDIDATE_PENDING_FILTER,
   type ProfileCandidateFilter,
 } from './StudentWorkspace.logic';
@@ -447,6 +448,10 @@ export const StudentLearningPage: React.FC = () => {
     () => getApprovedCandidatesReadyForPromotion(profileCandidates),
     [profileCandidates],
   );
+  const approvedCandidateIdsReadyForPromotion = useMemo(
+    () => new Set(approvedCandidatesReadyForPromotion.map((candidate) => candidate.id)),
+    [approvedCandidatesReadyForPromotion],
+  );
 
   const populatedProfileFields = useMemo(
     () => countFilledProfileSections(profileForm),
@@ -465,12 +470,23 @@ export const StudentLearningPage: React.FC = () => {
     setMemoryOverview(null);
     setBindingHistory([]);
     setProfileCandidates([]);
+    setProfileCandidateDrafts({});
+    setSelectedCandidateIds([]);
+    setProfileCandidatePromotionNote('');
+    setProfileCandidatePromotionError(null);
+    setProfileCandidatePromotionSuccess(null);
   }, []);
 
   useEffect(() => {
     setBootstrapProfileId(null);
     clearLoadedLearningSurface();
   }, [clearLoadedLearningSurface, studentId]);
+
+  useEffect(() => {
+    setSelectedCandidateIds((current) =>
+      current.filter((candidateId) => approvedCandidateIdsReadyForPromotion.has(candidateId)),
+    );
+  }, [approvedCandidateIdsReadyForPromotion]);
 
   useEffect(() => {
     if (!profileDirty) return undefined;
@@ -1009,6 +1025,9 @@ export const StudentLearningPage: React.FC = () => {
       setProfileCandidates((current) =>
         current.map((item) => (item.id === updated.id ? updated : item)),
       );
+      if (!isSelectableForPromotion(updated)) {
+        setSelectedCandidateIds((current) => current.filter((item) => item !== updated.id));
+      }
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Unable to update the candidate review.';
