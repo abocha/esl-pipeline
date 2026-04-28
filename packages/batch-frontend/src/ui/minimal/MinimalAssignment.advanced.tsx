@@ -1076,11 +1076,11 @@ export function AdvancedActionsStage({
                   {controller.jobProvenance.lineage?.bindingAtCreation ? (
                     <div className="minimal-meta">
                       <span>
-                        Bound profile at creation:{' '}
+                        Learner profile at creation:{' '}
                         {controller.jobProvenance.lineage.bindingAtCreation.profileId}
                       </span>
                       <span>
-                        Bound from:{' '}
+                        Active from:{' '}
                         {new Date(
                           controller.jobProvenance.lineage.bindingAtCreation.effectiveFrom,
                         ).toLocaleString()}

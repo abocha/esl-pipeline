@@ -77,6 +77,28 @@ wait_for_messages() {
   return 1
 }
 
+wait_for_answered_callbacks() {
+  local expected_count="$1"
+  local timeout_seconds="${2:-120}"
+  local attempt=1
+
+  while (( attempt <= timeout_seconds )); do
+    if curl -fsS "${API_URL}/_test/state" | EXPECTED_COUNT="${expected_count}" node -e "const fs=require('node:fs'); const s=JSON.parse(fs.readFileSync(0,'utf8')); const n=(s.answeredCallbacks||[]).length; process.exit(n>=Number(process.env.EXPECTED_COUNT)?0:1);" ; then
+      return 0
+    fi
+
+    sleep 1
+    attempt=$((attempt + 1))
+  done
+
+  echo "ERROR: expected at least ${expected_count} answered callbacks, timeout reached" >&2
+  return 1
+}
+
+count_sent_messages() {
+  curl -fsS "${API_URL}/_test/state" | node -e "const fs=require('node:fs'); const s=JSON.parse(fs.readFileSync(0,'utf8')); process.stdout.write(String((s.sentMessages||[]).length));"
+}
+
 cleanup() {
   local exit_code="$?"
   set +e
@@ -260,6 +282,8 @@ cat <<JSON | curl -fsS -X POST -H 'Content-Type: application/json' "${API_URL}/_
 }
 JSON
 
+wait_for_answered_callbacks 6
+SENT_MESSAGES_BEFORE_FALLBACK="$(count_sent_messages)"
 curl -fsS -X POST -H 'Content-Type: application/json' "${API_URL}/_test/fail-next-edit" -d '{}' >/dev/null
 
 cat <<JSON | curl -fsS -X POST -H 'Content-Type: application/json' "${API_URL}/_test/enqueue-updates" -d @- >/dev/null
@@ -285,7 +309,8 @@ cat <<JSON | curl -fsS -X POST -H 'Content-Type: application/json' "${API_URL}/_
 }
 JSON
 
-wait_for_messages 5
+wait_for_answered_callbacks 7
+wait_for_messages "$((SENT_MESSAGES_BEFORE_FALLBACK + 1))"
 
 curl -fsS "${API_URL}/_test/state" >"${ARTIFACT_DIR}/telegram-api-state.final.json"
 curl -fsS "${BACKEND_URL}/_test/state" >"${ARTIFACT_DIR}/fake-backend-state.final.json"

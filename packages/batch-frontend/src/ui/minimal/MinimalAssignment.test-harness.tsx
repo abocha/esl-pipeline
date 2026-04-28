@@ -67,6 +67,7 @@ vi.mock('../../utils/api', () => ({
   renderHtmlPreview: vi
     .fn()
     .mockResolvedValue({ html: '<html><body><h1>Preview</h1></body></html>' }),
+  subscribeToJobEvents: vi.fn().mockReturnValue({ close: vi.fn() }),
   upsertProfileContent: vi.fn(),
   updateDraft: vi.fn(),
   updateRecordingTranscript: vi.fn(),
@@ -575,6 +576,18 @@ export function setupMinimalAssignmentTest() {
     id: 'profiles/alex.md',
     label: 'Alex Profile',
     content: 'PROFILE CONTENT',
+    structuredContent: {
+      schemaVersion: 'foundational_profile_v1',
+      overallLevel: 'B1',
+      primaryGoals: ['Lead project updates clearly.'],
+      communicationContexts: ['Weekly team syncs.'],
+      interestsAndUsefulThemes: ['Travel and films.'],
+      stableStrengths: ['Strong listening comprehension.'],
+      persistentChallenges: ['Needs more confident spoken transitions.'],
+      studyPreferences: ['Prefers concise, practical homework.'],
+      durableConstraints: [],
+      teacherNotes: 'Keep examples grounded in real workplace situations.',
+    },
     currentRevisionId: 'revision-1',
     updatedAt: now,
   });
@@ -755,6 +768,7 @@ export function setupMinimalAssignmentTest() {
   vi.mocked(api.renderHtmlPreview).mockResolvedValue({
     html: '<html><body><h1>Preview</h1></body></html>',
   });
+  vi.mocked(api.subscribeToJobEvents).mockReturnValue({ close: vi.fn() } as never);
 }
 
 export const testAct = act;

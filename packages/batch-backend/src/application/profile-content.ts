@@ -23,6 +23,11 @@ import {
   listProfileRevisions,
 } from '../domain/profile-revision-repository.js';
 import { markStudentProfileCandidatesPromotedByRevision } from '../domain/student-profile-candidate-repository.js';
+import {
+  deriveFoundationalProfileFromMarkdown,
+  type FoundationalProfile,
+  normalizeFoundationalProfile,
+} from './foundational-profile.js';
 import type { PromptOption } from './prompt-options.js';
 
 const PROFILE_EXTENSIONS = new Set(['.md', '.txt']);
@@ -36,6 +41,7 @@ export interface ProfileContentResponse {
   id: string;
   label: string;
   content: string;
+  structuredContent?: FoundationalProfile | null;
   currentRevisionId: string | null;
   updatedAt: string | null;
 }
@@ -57,6 +63,7 @@ export interface ProfileRevisionSummaryResponse {
 
 export interface ProfileRevisionDetailResponse extends ProfileRevisionSummaryResponse {
   content: string;
+  structuredContent?: FoundationalProfile | null;
 }
 
 export interface ProfileRevisionListResponse {
@@ -94,6 +101,7 @@ interface UpsertProfileContentOptions {
   source?: ProfileRevisionSource;
   createdBy?: string | null;
   restoredFromRevisionId?: string | null;
+  structuredContent?: FoundationalProfile | null;
 }
 
 export interface SaveProfileRevisionContentOptions extends UpsertProfileContentOptions {
@@ -168,6 +176,17 @@ function hashProfileContent(content: string): string {
   return createHash('sha256').update(content, 'utf8').digest('hex');
 }
 
+function resolveStructuredContent(
+  structuredContent: FoundationalProfile | null | undefined,
+  content: string,
+): FoundationalProfile | null {
+  if (structuredContent) {
+    return structuredContent;
+  }
+
+  return deriveFoundationalProfileFromMarkdown(content);
+}
+
 function toProfileRevisionSummary(revision: ProfileRevisionRecord): ProfileRevisionSummaryResponse {
   return {
     id: revision.id,
@@ -227,6 +246,7 @@ async function upsertProfileContentWithRevision(
     source: options.source,
     createdBy: options.createdBy ?? null,
     restoredFromRevisionId: options.restoredFromRevisionId ?? null,
+    structuredContent: options.structuredContent ?? null,
     status: 'active',
     dedupeByHash: options.source !== 'restore',
   });
@@ -235,6 +255,7 @@ async function upsertProfileContentWithRevision(
     id: normalizedProfileId,
     label,
     content: revision.content,
+    structuredContent: resolveStructuredContent(revision.structuredContent, revision.content),
     currentRevisionId: revision.id,
     updatedAt: revision.createdAt,
   };
@@ -261,6 +282,9 @@ async function saveProfileRevision(
   const hash = hashProfileContent(normalizedContent);
   const source = options.source ?? (existingProfile ? 'update' : 'create');
   const status = options.status ?? 'active';
+  const structuredContent = options.structuredContent
+    ? normalizeFoundationalProfile(options.structuredContent)
+    : null;
 
   const existingRevision =
     options.dedupeByHash === false || source === 'restore'
@@ -272,6 +296,7 @@ async function saveProfileRevision(
     (await dependencies.revisions.insert({
       profileId: normalizedProfileId,
       content: normalizedContent,
+      structuredContent,
       contentHash: hash,
       source,
       status,
@@ -290,6 +315,7 @@ async function saveProfileRevision(
     ...toProfileRevisionSummary(revision),
     profileId: normalizedProfileId,
     content: revision.content,
+    structuredContent: resolveStructuredContent(revision.structuredContent, revision.content),
   };
 }
 
@@ -320,6 +346,7 @@ export async function getProfileContent(
     id: profile.id,
     label: profile.label,
     content: revision.content,
+    structuredContent: resolveStructuredContent(revision.structuredContent, revision.content),
     currentRevisionId: revision.id,
     updatedAt: revision.createdAt.toISOString(),
   };
@@ -409,6 +436,7 @@ export async function getProfileRevisionForProfile(
   return {
     ...toProfileRevisionSummary(revision),
     content: revision.content,
+    structuredContent: resolveStructuredContent(revision.structuredContent, revision.content),
   };
 }
 
@@ -429,6 +457,7 @@ export async function restoreProfileRevision(
     source: 'restore',
     createdBy: overrides?.createdBy ?? null,
     restoredFromRevisionId: revision.id,
+    structuredContent: revision.structuredContent,
   });
 }
 
@@ -453,5 +482,6 @@ export async function activateProfileRevisionForProfile(
   return {
     ...toProfileRevisionSummary(activated),
     content: activated.content,
+    structuredContent: resolveStructuredContent(activated.structuredContent, activated.content),
   };
 }

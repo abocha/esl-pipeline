@@ -5,7 +5,7 @@
 - Audience: maintainers and implementing agents.
 - Read Time: 6 minutes.
 - Authority Level: canonical manifest schema reference.
-- Last Verified Against: 2026-03-10 repo state.
+- Last Verified Against: 2026-04-28 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: monthly or after manifest schema changes.
 - Status: `reference`.

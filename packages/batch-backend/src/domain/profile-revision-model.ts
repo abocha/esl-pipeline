@@ -1,16 +1,20 @@
+import type { FoundationalProfile } from '../application/foundational-profile.js';
+
 export type ProfileRevisionSource =
   | 'create'
   | 'update'
   | 'restore'
   | 'starter_profile_form'
   | 'candidate_promotion'
-  | 'legacy_normalization';
+  | 'legacy_normalization'
+  | 'lesson_population';
 export type RevisionStatus = 'draft' | 'active' | 'deprecated';
 
 export interface ProfileRevisionRecord {
   id: string;
   profileId: string;
   content: string;
+  structuredContent?: FoundationalProfile | null;
   contentHash: string;
   source: ProfileRevisionSource;
   status: RevisionStatus;

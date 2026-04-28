@@ -55,7 +55,8 @@
 5. `docs/plans/telegram-ops-control-panel-hardening/README.md`
 6. `docs/plans/student-memory-system-upgrade/README.md`
 7. `docs/plans/student-profile-enrichment/README.md`
-8. `docs/plans/backlog/README.md`
+8. `docs/plans/student-area-redesign/README.md`
+9. `docs/plans/backlog/README.md`
 
 ### Standalone active plans
 

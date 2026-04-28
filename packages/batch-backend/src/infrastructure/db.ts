@@ -313,6 +313,7 @@ CREATE TABLE IF NOT EXISTS profile_revisions (
   id UUID PRIMARY KEY,
   profile_id TEXT NOT NULL,
   content TEXT NOT NULL,
+  structured_content JSONB NULL,
   content_hash TEXT NOT NULL,
   source TEXT NOT NULL DEFAULT 'update',
   status TEXT NOT NULL DEFAULT 'active',
@@ -329,6 +330,7 @@ CREATE TABLE IF NOT EXISTS profile_revisions (
 const PROFILE_REVISIONS_SCHEMA_PATCHES: string[] = [
   'ALTER TABLE profile_revisions ADD COLUMN IF NOT EXISTS profile_id TEXT NULL',
   'ALTER TABLE profile_revisions ADD COLUMN IF NOT EXISTS content TEXT NULL',
+  'ALTER TABLE profile_revisions ADD COLUMN IF NOT EXISTS structured_content JSONB NULL',
   'ALTER TABLE profile_revisions ADD COLUMN IF NOT EXISTS content_hash TEXT NULL',
   'ALTER TABLE profile_revisions ADD COLUMN IF NOT EXISTS source TEXT NULL',
   "ALTER TABLE profile_revisions ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active'",
@@ -878,10 +880,21 @@ BEGIN
 END $$;`,
   `DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'profile_revisions_source_check') THEN
-    ALTER TABLE profile_revisions
-      ADD CONSTRAINT profile_revisions_source_check CHECK (source IN ('create', 'update', 'restore'));
+  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'profile_revisions_source_check') THEN
+    ALTER TABLE profile_revisions DROP CONSTRAINT profile_revisions_source_check;
   END IF;
+  ALTER TABLE profile_revisions
+    ADD CONSTRAINT profile_revisions_source_check CHECK (
+      source IN (
+        'create',
+        'update',
+        'restore',
+        'starter_profile_form',
+        'candidate_promotion',
+        'legacy_normalization',
+        'lesson_population'
+      )
+    );
 END $$;`,
   `DO $$
 BEGIN

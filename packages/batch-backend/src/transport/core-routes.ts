@@ -240,18 +240,33 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
 
   app.get('/jobs/events', jobEventsRouteOptions, async (request, reply) => {
     const routePath = resolveRoutePath(request, 'GET /jobs/events');
-    const jobIdParam = (request.query as { jobId?: unknown })?.jobId as string | undefined;
+    const query = request.query as { jobId?: unknown; recordingId?: unknown };
+    const jobIdParam = query.jobId as string | undefined;
+    const recordingIdParam = query.recordingId as string | undefined;
     const rawIds =
       jobIdParam
         ?.split(',')
         .map((id) => id.trim())
         .filter(Boolean) ?? [];
-    const wantsAll = jobIdParam === '*' || rawIds.includes('*') || rawIds.includes('all');
+    const rawRecordingIds =
+      recordingIdParam
+        ?.split(',')
+        .map((id) => id.trim())
+        .filter(Boolean) ?? [];
+    const wantsAll =
+      jobIdParam === '*' ||
+      recordingIdParam === '*' ||
+      rawIds.includes('*') ||
+      rawIds.includes('all') ||
+      rawRecordingIds.includes('*') ||
+      rawRecordingIds.includes('all');
     const jobIds = wantsAll ? [] : rawIds;
+    const requestedRecordingIds = wantsAll ? [] : rawRecordingIds;
 
-    if (!wantsAll && jobIds.length === 0) {
+    if (!wantsAll && jobIds.length === 0 && requestedRecordingIds.length === 0) {
       return reply.code(400).send({
-        error: 'jobId query param is required (use jobId=<id>[,id2] or jobId=* for all events)',
+        error:
+          'jobId or recordingId query param is required (use jobId=<id>[,id2], recordingId=<id>[,id2], or jobId=* for all events)',
       });
     }
 
@@ -286,7 +301,7 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
       }
     }, 25_000);
 
-    const recordingIds = new Set<string>();
+    const recordingIds = new Set<string>(requestedRecordingIds);
     const addRecordingId = (recordingId?: string | null) => {
       if (!recordingId || wantsAll) return false;
       if (recordingIds.has(recordingId)) return false;
@@ -394,49 +409,57 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
 
     subscribeRecordings();
 
-    const unsubscribeJobs = subscribeJobEvents(
-      (event: unknown) => {
-        try {
-          // Type guard: Check if event has expected structure
-          if (!event || typeof event !== 'object' || !('job' in event) || !('type' in event)) {
-            return;
-          }
-          // Cast to JobEvent-like structure (job-events.ts defines the actual type)
-          const typedEvent = event as { job: unknown; type: string };
-          const dto = jobRecordToDto(typedEvent.job as Parameters<typeof jobRecordToDto>[0]);
-          if (addRecordingId(dto.recordingId)) {
-            subscribeRecordings();
-          }
-          const payload: JobEventMessage = {
-            type: typedEvent.type as JobEventMessage['type'],
-            jobId: dto.jobId,
-            state: dto.state,
-            payload: {
-              manifestPath: dto.manifestPath,
-              error: dto.error,
-              finishedAt: dto.finishedAt,
-              ttsStrategy: dto.ttsStrategy,
-              learningPresetId: dto.learningPresetId,
-              md: dto.md,
-              mdStorageUri: dto.mdStorageUri,
-              htmlUrl: dto.htmlUrl,
-              publishTarget: dto.publishTarget,
-              recordingId: dto.recordingId,
-              transcriptId: dto.transcriptId,
+    const unsubscribeJobs =
+      wantsAll || jobIds.length > 0
+        ? subscribeJobEvents(
+            (event: unknown) => {
+              try {
+                // Type guard: Check if event has expected structure
+                if (
+                  !event ||
+                  typeof event !== 'object' ||
+                  !('job' in event) ||
+                  !('type' in event)
+                ) {
+                  return;
+                }
+                // Cast to JobEvent-like structure (job-events.ts defines the actual type)
+                const typedEvent = event as { job: unknown; type: string };
+                const dto = jobRecordToDto(typedEvent.job as Parameters<typeof jobRecordToDto>[0]);
+                if (addRecordingId(dto.recordingId)) {
+                  subscribeRecordings();
+                }
+                const payload: JobEventMessage = {
+                  type: typedEvent.type as JobEventMessage['type'],
+                  jobId: dto.jobId,
+                  state: dto.state,
+                  payload: {
+                    manifestPath: dto.manifestPath,
+                    error: dto.error,
+                    finishedAt: dto.finishedAt,
+                    ttsStrategy: dto.ttsStrategy,
+                    learningPresetId: dto.learningPresetId,
+                    md: dto.md,
+                    mdStorageUri: dto.mdStorageUri,
+                    htmlUrl: dto.htmlUrl,
+                    publishTarget: dto.publishTarget,
+                    recordingId: dto.recordingId,
+                    transcriptId: dto.transcriptId,
+                  },
+                };
+                reply.raw.write(`event: ${typedEvent.type}\n`);
+                reply.raw.write(`data: ${JSON.stringify(payload)}\n\n`);
+              } catch (error: unknown) {
+                logger.warn('Failed to publish SSE job event', {
+                  event: 'job_events_sse_publish_failed',
+                  route: routePath,
+                  error: error instanceof Error ? error.message : String(error),
+                });
+              }
             },
-          };
-          reply.raw.write(`event: ${typedEvent.type}\n`);
-          reply.raw.write(`data: ${JSON.stringify(payload)}\n\n`);
-        } catch (error: unknown) {
-          logger.warn('Failed to publish SSE job event', {
-            event: 'job_events_sse_publish_failed',
-            route: routePath,
-            error: error instanceof Error ? error.message : String(error),
-          });
-        }
-      },
-      wantsAll ? { allJobs: true } : { jobIds },
-    );
+            wantsAll ? { allJobs: true } : { jobIds },
+          )
+        : () => {};
 
     const cleanup = () => {
       if (closed) return;

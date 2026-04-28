@@ -113,7 +113,7 @@ export function registerPromptEditorTests() {
       });
     });
 
-    it('saves profile edits and refreshes revisions', async () => {
+    it('shows a read-only learner profile preview and deep link instead of inline editing', async () => {
       const user = createMinimalUser();
       renderMinimalAssignment();
 
@@ -123,24 +123,37 @@ export function registerPromptEditorTests() {
         screen.getByRole('combobox', { name: /^Student$/i }),
         'student-alex',
       );
-      const profileEditor = await screen.findByRole('textbox', { name: /Profile content/i });
-      await waitFor(() => {
-        expect((profileEditor as HTMLTextAreaElement).disabled).toBe(false);
-      });
-      fireEvent.change(profileEditor, { target: { value: 'Updated profile content' } });
-      await user.click(screen.getByRole('button', { name: /Save profile/i }));
+      await screen.findByRole('heading', { name: /Current learner profile/i });
 
-      await waitFor(() => {
-        expect(api.upsertProfileContent).toHaveBeenCalledWith(
-          'profiles/alex.md',
-          expect.stringContaining('Updated profile content'),
-        );
+      expect(screen.queryByRole('textbox', { name: /Profile content/i })).toBeNull();
+      expect(screen.queryByRole('button', { name: /Save profile/i })).toBeNull();
+      expect(screen.getByText(/Lead project updates clearly\./i)).toBeTruthy();
+      expect(screen.getByText(/Strong listening comprehension\./i)).toBeTruthy();
+      expect(screen.getByRole('link', { name: /Open Learning page/i }).getAttribute('href')).toBe(
+        '/students/student-alex/learning',
+      );
+    });
+
+    it('shows a useful empty state when the selected student has no learner profile', async () => {
+      const user = createMinimalUser();
+      vi.mocked(api.fetchStudentOptions).mockResolvedValueOnce({
+        students: [
+          { id: 'student-alex', name: 'Alex', profileId: null },
+          { id: 'student-bella', name: 'Bella', profileId: 'profiles/bella.md' },
+        ],
       });
-      expect(api.listProfileRevisions).toHaveBeenCalledWith('profiles/alex.md', {
-        limit: 20,
-        offset: 0,
-        order: 'desc',
-      });
+
+      renderMinimalAssignment();
+
+      await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
+      await screen.findByRole('option', { name: 'Alex' });
+      await user.selectOptions(
+        screen.getByRole('combobox', { name: /^Student$/i }),
+        'student-alex',
+      );
+
+      await screen.findByText(/No learner profile is selected for this student yet\./i);
+      expect(screen.queryByText(/Lead project updates clearly\./i)).toBeNull();
     });
 
     it('generates a prompt after transcript is ready', async () => {

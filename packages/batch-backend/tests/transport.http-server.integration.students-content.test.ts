@@ -9,6 +9,7 @@ describeHttpServerIntegrationSuite(
     it,
     mockActivateProfileRevisionForProfile,
     mockDeleteProfileContent,
+    mockSaveProfileRevisionContent,
     mockDeleteTemplateContent,
   }) => {
     it('GET /students returns student profiles', async () => {
@@ -263,6 +264,80 @@ describeHttpServerIntegrationSuite(
         includedCandidateIds: ['candidate-1'],
         excludedCandidateIds: [],
         contentHash: 'profile-draft-hash',
+        draftRevision: {
+          id: 'profile-revision-draft',
+          profileId: 'profiles/anna.md',
+          contentHash: 'profile-draft-hash',
+          source: 'candidate_promotion',
+          status: 'draft',
+          versionNumber: 3,
+          versionLabel: 'v3',
+          activatedAt: null,
+          deprecatedAt: null,
+          createdAt: '2024-01-01T00:00:00.000Z',
+          createdBy: 'test-user-id',
+          restoredFromRevisionId: null,
+          content: '# Draft profile',
+        },
+      });
+    });
+
+    it('POST /students/:id/profile-drafts/populate-first-from-lesson creates the initial structured draft', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: `/students/${deriveStudentId('Anna')}/profile-drafts/populate-first-from-lesson`,
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({
+        draftRevisionId: 'profile-revision-first-draft',
+        profileId: 'profiles/anna.md',
+        snapshotId: 'snapshot-1',
+        lessonMemoryIds: ['lesson-1'],
+        homeworkMemoryIds: [],
+        draftRevision: {
+          id: 'profile-revision-first-draft',
+          profileId: 'profiles/anna.md',
+          contentHash: 'profile-first-draft-hash',
+          source: 'lesson_population',
+          status: 'draft',
+          versionNumber: 1,
+          versionLabel: 'v1',
+          activatedAt: null,
+          deprecatedAt: null,
+          createdAt: '2024-01-01T00:00:00.000Z',
+          createdBy: 'test-user-id',
+          restoredFromRevisionId: null,
+          content: '# Foundational Profile',
+        },
+      });
+    });
+
+    it('POST /students/:id/profile-drafts/initialize creates an empty canonical draft', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: `/students/${deriveStudentId('Anna')}/profile-drafts/initialize`,
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({
+        draftRevisionId: 'profile-revision-empty-draft',
+        profileId: 'profiles/anna.md',
+        draftRevision: {
+          id: 'profile-revision-empty-draft',
+          profileId: 'profiles/anna.md',
+          contentHash: 'profile-empty-draft-hash',
+          source: 'create',
+          status: 'draft',
+          versionNumber: 1,
+          versionLabel: 'v1',
+          activatedAt: null,
+          deprecatedAt: null,
+          createdAt: '2024-01-01T00:00:00.000Z',
+          createdBy: 'test-user-id',
+          restoredFromRevisionId: null,
+          content: '# Foundational Profile',
+        },
       });
     });
 
@@ -335,6 +410,18 @@ describeHttpServerIntegrationSuite(
         id: 'profile.md',
         label: 'Profile',
         content: 'Profile content',
+        structuredContent: {
+          schemaVersion: 'foundational_profile_v1',
+          overallLevel: 'B1',
+          primaryGoals: ['Speak more confidently in meetings.'],
+          communicationContexts: ['Client calls'],
+          interestsAndUsefulThemes: ['Travel'],
+          stableStrengths: ['High motivation'],
+          persistentChallenges: ['Article usage'],
+          studyPreferences: ['Prefers structured explanations'],
+          durableConstraints: ['Short homework windows'],
+          teacherNotes: 'Responds well to practical scenarios.',
+        },
         currentRevisionId: 'revision-1',
         updatedAt: '2024-01-01T00:00:00.000Z',
       });
@@ -348,6 +435,57 @@ describeHttpServerIntegrationSuite(
 
       expect(response.statusCode).toBe(204);
       expect(mockDeleteProfileContent).toHaveBeenCalledWith('profile.md');
+    });
+
+    it('POST /profiles/:id/revisions saves a structured draft revision', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/profiles/profile.md/revisions',
+        payload: {
+          structuredContent: {
+            schemaVersion: 'foundational_profile_v1',
+            overallLevel: 'B2',
+            primaryGoals: ['Lead project updates confidently.'],
+            communicationContexts: ['Sprint demos'],
+            interestsAndUsefulThemes: ['Design systems'],
+            stableStrengths: ['Strong listening'],
+            persistentChallenges: ['Sentence rhythm'],
+            studyPreferences: ['Prefers concise correction'],
+            durableConstraints: ['Short homework windows'],
+            teacherNotes: 'Needs practical speaking rehearsal.',
+          },
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(response.json()).toEqual({
+        id: 'revision-2',
+        profileId: 'profile.md',
+        contentHash: 'hash-2',
+        source: 'update',
+        status: 'draft',
+        versionNumber: 2,
+        versionLabel: 'v2',
+        activatedAt: null,
+        deprecatedAt: null,
+        createdAt: '2024-01-02T00:00:00.000Z',
+        createdBy: 'test-user-id',
+        restoredFromRevisionId: null,
+        content: '# Foundational Profile\n\nStructured draft content',
+        structuredContent: {
+          schemaVersion: 'foundational_profile_v1',
+          overallLevel: 'B2',
+          primaryGoals: ['Lead project updates confidently.'],
+          communicationContexts: ['Sprint demos'],
+          interestsAndUsefulThemes: ['Design systems'],
+          stableStrengths: ['Strong listening'],
+          persistentChallenges: ['Sentence rhythm'],
+          studyPreferences: ['Prefers concise correction'],
+          durableConstraints: ['Short homework windows'],
+          teacherNotes: 'Needs practical speaking rehearsal.',
+        },
+      });
+      expect(mockSaveProfileRevisionContent).toHaveBeenCalled();
     });
 
     it('GET /profiles/:id/revisions returns profile revision list', async () => {
@@ -402,6 +540,18 @@ describeHttpServerIntegrationSuite(
         createdBy: null,
         restoredFromRevisionId: null,
         content: 'Profile content',
+        structuredContent: {
+          schemaVersion: 'foundational_profile_v1',
+          overallLevel: 'B1',
+          primaryGoals: ['Speak more confidently in meetings.'],
+          communicationContexts: ['Client calls'],
+          interestsAndUsefulThemes: ['Travel'],
+          stableStrengths: ['High motivation'],
+          persistentChallenges: ['Article usage'],
+          studyPreferences: ['Prefers structured explanations'],
+          durableConstraints: ['Short homework windows'],
+          teacherNotes: 'Responds well to practical scenarios.',
+        },
       });
     });
 
@@ -416,6 +566,18 @@ describeHttpServerIntegrationSuite(
         id: 'profile.md',
         label: 'Profile',
         content: 'Restored content',
+        structuredContent: {
+          schemaVersion: 'foundational_profile_v1',
+          overallLevel: 'B1',
+          primaryGoals: ['Speak more confidently in meetings.'],
+          communicationContexts: ['Client calls'],
+          interestsAndUsefulThemes: ['Travel'],
+          stableStrengths: ['High motivation'],
+          persistentChallenges: ['Article usage'],
+          studyPreferences: ['Prefers structured explanations'],
+          durableConstraints: ['Short homework windows'],
+          teacherNotes: 'Responds well to practical scenarios.',
+        },
         currentRevisionId: 'revision-2',
         updatedAt: '2024-01-02T00:00:00.000Z',
       });

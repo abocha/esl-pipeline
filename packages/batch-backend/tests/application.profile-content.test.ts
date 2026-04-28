@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import type { FoundationalProfile } from '../src/application/foundational-profile.js';
 import {
   activateProfileRevisionForProfile,
   deleteProfileContent,
@@ -11,6 +12,7 @@ import {
   saveProfileRevisionContent,
   upsertProfileContent,
 } from '../src/application/profile-content.js';
+import { renderStarterProfileContent } from '../src/application/starter-profile-content.js';
 import type { ProfileRecord } from '../src/domain/profile-model.js';
 import type { ProfileRevisionRecord } from '../src/domain/profile-revision-model.js';
 
@@ -23,6 +25,7 @@ function createInMemoryDependencies(seed?: {
   const createRevision = (params: {
     profileId: string;
     content: string;
+    structuredContent?: ProfileRevisionRecord['structuredContent'];
     contentHash: string;
     source:
       | 'create'
@@ -30,7 +33,8 @@ function createInMemoryDependencies(seed?: {
       | 'restore'
       | 'starter_profile_form'
       | 'candidate_promotion'
-      | 'legacy_normalization';
+      | 'legacy_normalization'
+      | 'lesson_population';
     status?: 'draft' | 'active' | 'deprecated';
     createdBy?: string | null;
     restoredFromRevisionId?: string | null;
@@ -41,6 +45,7 @@ function createInMemoryDependencies(seed?: {
       id: `revision-${params.profileId}-${versionNumber}`,
       profileId: params.profileId,
       content: params.content,
+      structuredContent: params.structuredContent ?? null,
       contentHash: params.contentHash,
       source: params.source,
       status: params.status ?? 'active',
@@ -151,6 +156,7 @@ function createInMemoryDependencies(seed?: {
       insert: async ({
         profileId,
         content,
+        structuredContent,
         contentHash,
         source,
         status,
@@ -159,6 +165,7 @@ function createInMemoryDependencies(seed?: {
       }: {
         profileId: string;
         content: string;
+        structuredContent?: ProfileRevisionRecord['structuredContent'];
         contentHash: string;
         source?:
           | 'create'
@@ -166,7 +173,8 @@ function createInMemoryDependencies(seed?: {
           | 'restore'
           | 'starter_profile_form'
           | 'candidate_promotion'
-          | 'legacy_normalization';
+          | 'legacy_normalization'
+          | 'lesson_population';
         status?: 'draft' | 'active' | 'deprecated';
         createdBy?: string | null;
         restoredFromRevisionId?: string | null;
@@ -174,6 +182,7 @@ function createInMemoryDependencies(seed?: {
         const revision = createRevision({
           profileId,
           content,
+          structuredContent,
           contentHash,
           source: source ?? 'update',
           status,
@@ -361,6 +370,94 @@ describe('application/profile-content (DB-only)', () => {
     const revisions = await listProfileRevisionsForProfile('default.md', { order: 'desc' }, deps);
     expect(revisions?.items[0]?.status).toBe('draft');
     expect(revisions?.items[1]?.status).toBe('active');
+  });
+
+  it('persists structured profile content alongside rendered profile text', async () => {
+    const deps = createInMemoryDependencies({
+      profiles: [{ id: 'default.md', label: 'Default Profile', content: 'Version 1' }],
+    });
+    const structuredContent: FoundationalProfile = {
+      schemaVersion: 'foundational_profile_v1',
+      overallLevel: 'B1',
+      primaryGoals: ['Speak more confidently in meetings.'],
+      communicationContexts: ['Client calls and internal status updates.'],
+      interestsAndUsefulThemes: ['Travel'],
+      stableStrengths: ['High motivation'],
+      persistentChallenges: ['Article usage'],
+      studyPreferences: ['Prefers structured explanations'],
+      durableConstraints: ['Short homework windows'],
+      teacherNotes: 'Responds well to practical business scenarios.',
+    };
+
+    const draft = await saveProfileRevisionContent(
+      'default.md',
+      'Rendered profile text',
+      {
+        source: 'starter_profile_form',
+        status: 'draft',
+        structuredContent,
+      },
+      deps,
+    );
+
+    expect(draft.content).toBe('Rendered profile text');
+    expect(draft.structuredContent).toEqual(structuredContent);
+
+    const detail = await getProfileRevisionForProfile('default.md', draft.id, deps);
+    expect(detail?.structuredContent).toEqual(structuredContent);
+
+    await activateProfileRevisionForProfile('default.md', draft.id, deps);
+    const active = await getProfileContent('default.md', deps);
+    expect(active?.structuredContent).toEqual(structuredContent);
+  });
+
+  it('derives structured content from legacy starter-profile markdown when stored JSON is missing', async () => {
+    const deps = createInMemoryDependencies({
+      profiles: [
+        {
+          id: 'legacy.md',
+          label: 'Legacy Profile',
+          content: renderStarterProfileContent({
+            studentName: 'Anna',
+            starterProfile: {
+              level: 'B1',
+              goals: 'Speak more confidently in meetings.\nHandle follow-up questions clearly.',
+              professionOrContext: 'Client calls\nInternal updates',
+              interests: 'Travel\nFilms',
+              longRunningChallenges: 'Article usage\nVerb tense control',
+              studyPreferencesOrConstraints:
+                'Prefers structured explanations\nShort homework windows',
+              teacherNotes: 'Responds well to practical scenarios.',
+            },
+          }),
+        },
+      ],
+    });
+
+    const active = await getProfileContent('legacy.md', deps);
+    expect(active?.structuredContent).toEqual({
+      schemaVersion: 'foundational_profile_v1',
+      overallLevel: 'B1',
+      primaryGoals: ['Speak more confidently in meetings.', 'Handle follow-up questions clearly.'],
+      communicationContexts: ['Client calls', 'Internal updates'],
+      interestsAndUsefulThemes: ['Travel', 'Films'],
+      stableStrengths: [],
+      persistentChallenges: ['Article usage', 'Verb tense control'],
+      studyPreferences: ['Prefers structured explanations', 'Short homework windows'],
+      durableConstraints: [],
+      teacherNotes: 'Responds well to practical scenarios.',
+    });
+
+    const revisions = await listProfileRevisionsForProfile('legacy.md', { order: 'desc' }, deps);
+    const revisionId = revisions?.items[0]?.id;
+    expect(revisionId).toBeTruthy();
+    if (!revisionId) throw new Error('Expected a legacy revision id');
+
+    const detail = await getProfileRevisionForProfile('legacy.md', revisionId, deps);
+    expect(detail?.structuredContent?.communicationContexts).toEqual([
+      'Client calls',
+      'Internal updates',
+    ]);
   });
 
   it('marks linked approved candidates as promoted when a candidate-promotion revision is activated', async () => {

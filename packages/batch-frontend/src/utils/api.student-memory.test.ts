@@ -3,7 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   approveStudentProfileCandidate,
+  getStudentHistorySurface,
+  getStudentLearningSurface,
   getStudentMemoryOverview,
+  getStudentOverviewSurface,
   listStudentHomeworkMemoryEntries,
   listStudentLessonMemoryEntries,
   listStudentMemorySnapshots,
@@ -71,6 +74,43 @@ describe('utils/api student memory fetchers', () => {
       },
     });
     expect(result).toEqual(response);
+  });
+
+  it('loads additive student surface payloads from dedicated BFF endpoints', async () => {
+    vi.mocked(apiClient.get)
+      .mockResolvedValueOnce({
+        data: {
+          profile: null,
+          revisions: { items: [], total: 0, limit: 20, offset: 0, order: 'desc' },
+          memory: { studentId: 'student-1' },
+          pendingCandidates: { items: [], total: 0, limit: 10, offset: 0, order: 'desc' },
+          recentTimeline: { items: [], total: 0, limit: 8, offset: 0, order: 'desc' },
+        },
+      } as never)
+      .mockResolvedValueOnce({
+        data: {
+          profile: null,
+          revisions: { items: [], total: 0, limit: 20, offset: 0, order: 'desc' },
+          memory: { studentId: 'student-1' },
+          bindings: { items: [], total: 0, limit: 20, offset: 0, order: 'desc' },
+          candidates: { items: [], total: 0, limit: 50, offset: 0, order: 'desc' },
+        },
+      } as never)
+      .mockResolvedValueOnce({
+        data: {
+          timeline: { items: [], total: 0, limit: 80, offset: 0, order: 'desc' },
+          lessonMemory: { items: [], limit: 50, offset: 0, order: 'desc', statuses: ['ready'] },
+          homeworkMemory: { items: [], limit: 50, offset: 0, order: 'desc', statuses: ['ready'] },
+        },
+      } as never);
+
+    await getStudentOverviewSurface('student-1');
+    await getStudentLearningSurface('student-1');
+    await getStudentHistorySurface('student-1');
+
+    expect(buildApiProxyPath).toHaveBeenNthCalledWith(1, '/students/student-1/surfaces/overview');
+    expect(buildApiProxyPath).toHaveBeenNthCalledWith(2, '/students/student-1/surfaces/learning');
+    expect(buildApiProxyPath).toHaveBeenNthCalledWith(3, '/students/student-1/surfaces/history');
   });
 
   it('builds student lesson-memory list URLs with status filters', async () => {

@@ -14,6 +14,11 @@ import {
   linkStudentProfileCandidatesToDraftRevision,
   listStudentProfileCandidatesByIds,
 } from '../domain/student-profile-candidate-repository.js';
+import {
+  deriveFoundationalProfileFromMarkdown,
+  type FoundationalProfile,
+  renderFoundationalProfileContent,
+} from './foundational-profile.js';
 import type { ProfileRevisionDetailResponse } from './profile-content.js';
 import { saveProfileRevisionContent } from './profile-content.js';
 import {
@@ -150,9 +155,13 @@ export async function promoteStudentProfileCandidates(args: {
   );
   validateCandidateSelection(request.studentId, request.candidateIds, selectedCandidates);
 
+  const baseStructuredProfile =
+    baseRevision?.structuredContent ??
+    deriveFoundationalProfileFromMarkdown(baseRevision?.content ?? '');
+
   const prompt = buildPromotionPrompt({
     studentName: student.student,
-    baseProfileContent: baseRevision?.content ?? '',
+    baseStructuredProfile,
     selectedCandidates,
     reviewerNote: request.reviewerNote ?? null,
   });
@@ -170,21 +179,22 @@ export async function promoteStudentProfileCandidates(args: {
   });
 
   assertCandidatePromotionDraftIsComplete({
-    draftText: drafting.text,
+    draftText: drafting.rawText,
     finishReason: drafting.finishReason,
-    baseProfileContent: baseRevision?.content ?? '',
+    baseProfileContent:
+      renderStructuredProfileForComparison(baseStructuredProfile) ?? baseRevision?.content ?? '',
   });
 
-  const draftRevision = await dependencies.profileContent.saveRevision(
-    profileId,
-    drafting.text.trim(),
-    {
-      source: 'candidate_promotion',
-      status: 'draft',
-      createdBy: request.reviewerId ?? null,
-      dedupeByHash: false,
-    },
-  );
+  const structuredDraft = drafting.structuredProfile;
+  const renderedDraft = renderFoundationalProfileContent(structuredDraft);
+
+  const draftRevision = await dependencies.profileContent.saveRevision(profileId, renderedDraft, {
+    source: 'candidate_promotion',
+    status: 'draft',
+    createdBy: request.reviewerId ?? null,
+    dedupeByHash: false,
+    structuredContent: structuredDraft,
+  });
 
   await dependencies.candidates.linkToDraft({
     studentId: request.studentId,
@@ -293,7 +303,7 @@ function validateCandidateSelection(
 
 function buildPromotionPrompt(args: {
   studentName: string;
-  baseProfileContent: string;
+  baseStructuredProfile: FoundationalProfile | null;
   selectedCandidates: ProfilePromotionCandidate[];
   reviewerNote: string | null;
 }): string {
@@ -312,21 +322,22 @@ function buildPromotionPrompt(args: {
 
   return [
     'You are drafting a foundational student profile revision for an ESL homework system.',
-    'You must produce only the revised profile markdown. Do not add commentary, JSON, or fences.',
+    'Return only one JSON object matching the foundational_profile_v1 schema.',
     'This is a bounded promotion pass, not a full rewrite from scratch.',
-    'Preserve unrelated profile wording and structure whenever possible.',
+    'Preserve unrelated teacher-authored truths whenever possible.',
     'Integrate only the selected approved candidate facts below.',
     'Do not invent new durable facts beyond the selected candidate set.',
+    'Favor omission over invention.',
     'You may smooth wording and deduplicate overlap where that improves coherence.',
-    'If the base profile is empty, create a compact foundational profile with clear sections for goals, context, interests, strengths, challenges, and study preferences.',
+    'Keep arrays concise and durable. Teacher-only ambiguity belongs in teacherNotes.',
     '',
     '[STUDENT_NAME]',
     args.studentName,
     '',
-    '[BASE_PROFILE_CONTENT]',
-    args.baseProfileContent.trim().length > 0
-      ? args.baseProfileContent
-      : 'No existing active profile content. Build a compact foundational profile from the approved facts only.',
+    '[BASE_STRUCTURED_PROFILE]',
+    args.baseStructuredProfile
+      ? JSON.stringify(args.baseStructuredProfile, null, 2)
+      : 'No existing structured profile. Build the first durable profile from the approved facts only.',
     '',
     '[SELECTED_APPROVED_CANDIDATES]',
     JSON.stringify(candidatePayload, null, 2),
@@ -334,7 +345,7 @@ function buildPromotionPrompt(args: {
     '[REVIEWER_NOTE]',
     args.reviewerNote ?? 'No reviewer note provided.',
     '',
-    'Output only the revised profile markdown.',
+    'Output only valid JSON.',
   ].join('\n');
 }
 
@@ -373,4 +384,8 @@ function assertCandidatePromotionDraftIsComplete(args: {
       502,
     );
   }
+}
+
+function renderStructuredProfileForComparison(profile: FoundationalProfile | null): string | null {
+  return profile ? renderFoundationalProfileContent(profile) : null;
 }

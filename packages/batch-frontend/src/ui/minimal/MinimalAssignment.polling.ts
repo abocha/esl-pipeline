@@ -4,6 +4,10 @@ const TERMINAL_JOB_STATES = new Set<JobStatus['state']>(['succeeded', 'failed'])
 const ACTIVE_JOB_STATES = new Set<JobStatus['state']>(['queued', 'running']);
 const TERMINAL_RECORDING_STATUSES = new Set<RecordingStatus>(['transcribed', 'failed']);
 
+export const INITIAL_FALLBACK_POLL_MS = 3000;
+export const MAX_FALLBACK_POLL_MS = 30_000;
+export const SSE_STALE_TIMEOUT_MS = 45_000;
+
 export interface RecordingPollingDecision {
   shouldContinuePolling: boolean;
   shouldLoadTranscript: boolean;
@@ -51,4 +55,12 @@ export function getJobPollingDecision(
     shouldContinuePolling,
     shouldRefreshResumeJobs: Boolean(state) && !shouldContinuePolling,
   };
+}
+
+export function getNextFallbackPollingDelay(delayMs: number): number {
+  return Math.min(Math.max(delayMs, INITIAL_FALLBACK_POLL_MS) * 2, MAX_FALLBACK_POLL_MS);
+}
+
+export function isFallbackPollingPaused(): boolean {
+  return globalThis.document?.hidden === true;
 }

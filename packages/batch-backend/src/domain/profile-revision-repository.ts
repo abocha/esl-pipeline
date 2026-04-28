@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 
+import type { FoundationalProfile } from '../application/foundational-profile.js';
 import { withPgClient } from '../infrastructure/db.js';
 import type {
   ProfileRevisionListResult,
@@ -13,6 +14,7 @@ interface ProfileRevisionRow {
   id: string;
   profile_id: string;
   content: string;
+  structured_content: FoundationalProfile | null;
   content_hash: string;
   source: ProfileRevisionSource;
   status: RevisionStatus;
@@ -29,6 +31,7 @@ export interface InsertProfileRevisionParams {
   id?: string;
   profileId: string;
   content: string;
+  structuredContent?: FoundationalProfile | null;
   contentHash: string;
   source?: ProfileRevisionSource;
   status?: RevisionStatus;
@@ -49,6 +52,7 @@ const SELECT_COLUMNS = `
   id,
   profile_id,
   content,
+  structured_content,
   content_hash,
   source,
   status,
@@ -98,6 +102,7 @@ export async function insertProfileRevision(
           id,
           profile_id,
           content,
+          structured_content,
           content_hash,
           source,
           status,
@@ -116,13 +121,14 @@ export async function insertProfileRevision(
           $4,
           $5,
           $6,
+          $7,
           next_version.version_number,
           CONCAT('v', next_version.version_number::text),
-          CASE WHEN $6 = 'active' THEN NOW() ELSE NULL END,
-          CASE WHEN $6 = 'deprecated' THEN NOW() ELSE NULL END,
+          CASE WHEN $7 = 'active' THEN NOW() ELSE NULL END,
+          CASE WHEN $7 = 'deprecated' THEN NOW() ELSE NULL END,
           NOW(),
-          $7,
-          $8
+          $8,
+          $9
         FROM next_version
         RETURNING ${SELECT_COLUMNS}
         `,
@@ -130,6 +136,7 @@ export async function insertProfileRevision(
           id,
           params.profileId,
           params.content,
+          JSON.stringify(params.structuredContent ?? null),
           params.contentHash,
           params.source ?? 'update',
           status,
@@ -369,6 +376,7 @@ function mapRow(row: ProfileRevisionRow): ProfileRevisionRecord {
     id: row.id,
     profileId: row.profile_id,
     content: row.content,
+    structuredContent: row.structured_content ?? null,
     contentHash: row.content_hash,
     source: row.source,
     status: row.status,

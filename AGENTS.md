@@ -143,6 +143,33 @@ Dependency hygiene when touching deps:
 3. `pnpm deps:audit:strict`
 4. `pnpm check:fast`
 
+## Frontend Browser Verification (Playwright)
+
+When you need to inspect the real batch frontend with a browser instead of relying only on code:
+
+- Prefer the existing local stack if it is already running:
+  - frontend: `http://127.0.0.1:5173`
+  - backend: `http://127.0.0.1:8080`
+  - check with `pnpm docker:dev:ps`
+- This repo currently does **not** include the generic `scripts/with_server.py` helper expected by
+  some external testing workflows. Use the repo's real dev stack directly instead of assuming that
+  helper exists.
+- Prefer the project-local Python environment for Playwright:
+  - interpreter: `/home/abocha/code/esl-pipeline/.venv/bin/python`
+  - package install: `UV_CACHE_DIR=$PWD/tmp/.uv-cache uv pip install --python .venv/bin/python playwright`
+  - browser install: `PLAYWRIGHT_BROWSERS_PATH=$PWD/tmp/playwright-browsers .venv/bin/python -m playwright install chromium`
+- Keep browser binaries repo-local:
+  - `PLAYWRIGHT_BROWSERS_PATH=$PWD/tmp/playwright-browsers`
+- Prefer disposable local admin accounts for UI verification instead of guessing or reusing real
+  credentials:
+  - create with `POST /auth/register`
+  - log in with `POST /auth/login`
+  - use a throwaway email and strong password
+- Save screenshots and one-off probes under `tmp/` so future agents can inspect or rerun them
+  without polluting package source trees.
+- If a Playwright script hangs after screenshots are already written, inspect the artifacts first;
+  cleanup can usually be handled with `pkill -f 'playwright|chrome-headless-shell'`.
+
 ## Host vs Container Env Context (Mandatory)
 
 When working with scripts/commands that read environment:
