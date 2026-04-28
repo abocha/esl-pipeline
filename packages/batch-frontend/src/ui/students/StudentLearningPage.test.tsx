@@ -33,10 +33,45 @@ vi.mock('./StudentAreaContext', () => ({
 }));
 
 vi.mock('./WorkspaceCandidatesPanel', () => ({
-  WorkspaceCandidatesPanel: (props: { profileCandidates: { id: string }[] }) => (
+  WorkspaceCandidatesPanel: (props: {
+    profileCandidates: { id: string; status?: string }[];
+    selectedCandidateIds: string[];
+    setSelectedCandidateIds: (next: string[] | ((current: string[]) => string[])) => void;
+    onPromoteProfileCandidates: () => void | Promise<void>;
+    onReviewProfileCandidate: (
+      candidate: { id: string; status?: string },
+      action: 'approve' | 'reject' | 'defer',
+    ) => void | Promise<void>;
+  }) => (
     <div>
       Profile candidates panel:{' '}
       {props.profileCandidates.map((candidate) => candidate.id).join(', ')}
+      <div>{props.selectedCandidateIds.length} selected for draft revision generation</div>
+      {props.profileCandidates.map((candidate) => (
+        <div key={candidate.id}>
+          {candidate.status === 'approved' ? (
+            <button
+              type="button"
+              onClick={() =>
+                props.setSelectedCandidateIds((current) =>
+                  current.includes(candidate.id) ? current : [...current, candidate.id],
+                )
+              }
+            >
+              Select {candidate.id}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => void props.onReviewProfileCandidate(candidate, 'reject')}
+          >
+            Reject {candidate.id}
+          </button>
+        </div>
+      ))}
+      <button type="button" onClick={() => void props.onPromoteProfileCandidates()}>
+        Generate Draft Revision
+      </button>
     </div>
   ),
 }));
@@ -353,6 +388,34 @@ function makeLearningSurface(overrides: Record<string, unknown> = {}) {
       offset: 0,
       order: 'desc',
     },
+    ...overrides,
+  };
+}
+
+function makeProfileCandidate(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'candidate-alex',
+    studentId: 'student-alex',
+    proposedFact: 'Uses English for product planning.',
+    approvedFactText: 'Uses English for product planning.',
+    category: 'work context',
+    targetSection: 'work_communication_context',
+    sourceSummary: 'Latest student-memory snapshot',
+    authority: 'teacher_confirmed',
+    confidence: 'high',
+    evidence: [],
+    sourceSnapshotId: 'snapshot-1',
+    sourceLessonMemoryIds: [],
+    status: 'approved',
+    reviewState: 'approved',
+    reviewerId: 'teacher-1',
+    reviewerNote: null,
+    reviewedAt: NOW,
+    promotedRevisionId: null,
+    promotedAt: null,
+    supersededById: null,
+    createdAt: NOW,
+    updatedAt: NOW,
     ...overrides,
   };
 }
@@ -681,7 +744,7 @@ describe('StudentLearningPage', () => {
     expect(await screen.findByDisplayValue('B2')).toBeTruthy();
     expect(screen.getByText('Student B memory summary.')).toBeTruthy();
     expect(screen.getAllByText(/Student ID: bora/).length).toBeGreaterThan(0);
-    expect(screen.getByText(/candidate-b/)).toBeTruthy();
+    expect(screen.getAllByText(/candidate-b/).length).toBeGreaterThan(0);
 
     await act(async () => {
       studentAProfile.resolve({
@@ -791,7 +854,7 @@ describe('StudentLearningPage', () => {
       expect(screen.queryByText('Student A memory summary.')).toBeNull();
       expect(screen.getAllByText(/Student ID: bora/).length).toBeGreaterThan(0);
       expect(screen.queryByText(/Student ID: alex/)).toBeNull();
-      expect(screen.getByText(/candidate-b/)).toBeTruthy();
+      expect(screen.getAllByText(/candidate-b/).length).toBeGreaterThan(0);
       expect(screen.queryByText(/candidate-a/)).toBeNull();
     });
   });
@@ -817,7 +880,7 @@ describe('StudentLearningPage', () => {
     const view = renderLearningPage();
 
     expect(await screen.findByDisplayValue('B1')).toBeTruthy();
-    expect(screen.getByText(/candidate-alex/)).toBeTruthy();
+    expect(screen.getAllByText(/candidate-alex/).length).toBeGreaterThan(0);
 
     contextValue = {
       student: {
@@ -842,5 +905,133 @@ describe('StudentLearningPage', () => {
       expect(screen.queryByDisplayValue('B1')).toBeNull();
       expect(screen.queryByText(/candidate-alex/)).toBeNull();
     });
+  });
+
+  it('clears selected profile candidates when switching students', async () => {
+    const user = userEvent.setup();
+    apiMocks.getStudentLearningSurface
+      .mockResolvedValueOnce(
+        makeLearningSurface({
+          candidates: {
+            items: [makeProfileCandidate()],
+            total: 1,
+            limit: 50,
+            offset: 0,
+            order: 'desc',
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        makeLearningSurface({
+          profile: {
+            id: 'profiles/students/bora.md',
+            label: 'Bora',
+            content: '# Foundational Profile',
+            structuredContent: {
+              schemaVersion: 'foundational_profile_v1',
+              overallLevel: 'B1',
+              primaryGoals: ['Student B goal'],
+              communicationContexts: ['Student B context'],
+              interestsAndUsefulThemes: [],
+              stableStrengths: [],
+              persistentChallenges: [],
+              studyPreferences: [],
+              durableConstraints: [],
+              teacherNotes: null,
+            },
+            currentRevisionId: null,
+            updatedAt: NOW,
+          },
+          revisions: { items: [], total: 0, limit: 20, offset: 0, order: 'desc' },
+          candidates: {
+            items: [],
+            total: 0,
+            limit: 50,
+            offset: 0,
+            order: 'desc',
+          },
+        }),
+      );
+
+    let contextValue = {
+      student: {
+        id: 'student-alex',
+        student: 'Alex',
+        profileId: 'profiles/students/alex.md',
+      },
+      studentId: 'student-alex',
+      studentLoading: false,
+      studentError: null,
+      refreshStudent: vi.fn(async () => {}),
+    };
+    useStudentAreaContextMock.mockImplementation(() => contextValue);
+
+    const view = renderLearningPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Select candidate-alex' }));
+    expect(screen.getByText('1 selected for draft revision generation')).toBeTruthy();
+
+    contextValue = {
+      student: {
+        id: 'student-bora',
+        student: 'Bora',
+        profileId: 'profiles/students/bora.md',
+      },
+      studentId: 'student-bora',
+      studentLoading: false,
+      studentError: null,
+      refreshStudent: vi.fn(async () => {}),
+    };
+
+    view.rerender(
+      <MemoryRouter>
+        <StudentLearningPage />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('0 selected for draft revision generation')).toBeTruthy();
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Generate Draft Revision' }));
+
+    expect(apiMocks.promoteStudentProfileCandidates).not.toHaveBeenCalled();
+  });
+
+  it('removes reviewed candidates from the promotion selection when they are no longer approved', async () => {
+    const user = userEvent.setup();
+    apiMocks.getStudentLearningSurface.mockResolvedValueOnce(
+      makeLearningSurface({
+        candidates: {
+          items: [makeProfileCandidate()],
+          total: 1,
+          limit: 50,
+          offset: 0,
+          order: 'desc',
+        },
+      }),
+    );
+    apiMocks.rejectStudentProfileCandidate.mockResolvedValueOnce(
+      makeProfileCandidate({
+        status: 'rejected',
+        reviewState: 'rejected',
+        reviewedAt: NOW,
+      }),
+    );
+
+    renderLearningPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Select candidate-alex' }));
+    expect(screen.getByText('1 selected for draft revision generation')).toBeTruthy();
+
+    await user.click(screen.getByRole('button', { name: 'Reject candidate-alex' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('0 selected for draft revision generation')).toBeTruthy();
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Generate Draft Revision' }));
+
+    expect(apiMocks.promoteStudentProfileCandidates).not.toHaveBeenCalled();
   });
 });
