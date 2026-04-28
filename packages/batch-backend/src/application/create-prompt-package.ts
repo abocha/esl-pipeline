@@ -24,11 +24,11 @@ import {
   createTranscriptionStorage,
   createTranscriptionStorageForUri,
 } from '../infrastructure/transcription-storage.js';
-import { stitchPromptPayload } from './prompt-assembly.js';
 import {
   deriveFoundationalProfileFromMarkdown,
   renderFoundationalProfileContent,
 } from './foundational-profile.js';
+import { stitchPromptPayload } from './prompt-assembly.js';
 import { PromptOptionError, resolvePromptSelection } from './prompt-options.js';
 import { materializePromptTemplateWithCapabilities } from './prompt-voice-capabilities.js';
 import { requestLessonMemoryGeneration } from './request-lesson-memory-generation.js';

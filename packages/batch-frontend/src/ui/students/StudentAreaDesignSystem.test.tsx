@@ -30,7 +30,9 @@ describe('StudentAreaDesignSystem', () => {
         </StudentAreaEmptyState>
         <StudentAreaSkeleton className="skeleton-line" />
         <StudentAreaNote>Small, regular steps create real progress.</StudentAreaNote>
-        <StudentAreaActionLink to="/students/student-alex/learning">Open Learning</StudentAreaActionLink>
+        <StudentAreaActionLink to="/students/student-alex/learning">
+          Open Learning
+        </StudentAreaActionLink>
       </MemoryRouter>,
     );
 
@@ -41,7 +43,9 @@ describe('StudentAreaDesignSystem', () => {
     expect(screen.getByText('Revision')).toBeTruthy();
     expect(screen.getByText('Active')).toBeTruthy();
     expect(screen.getByText('v1')).toBeTruthy();
-    expect(screen.getByText('Needs review').className).toContain('student-area-status-pill-warning');
+    expect(screen.getByText('Needs review').className).toContain(
+      'student-area-status-pill-warning',
+    );
     expect(screen.getByText('Nothing here yet').parentElement?.className).toContain(
       'student-area-empty-state',
     );

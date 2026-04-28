@@ -4,7 +4,7 @@
 
 - Audience: maintainers and implementing agents.
 - Authority Level: package entrypoint and operational usage guide.
-- Last Verified Against: 2026-03-13 repo state.
+- Last Verified Against: 2026-04-28 repo state.
 - Owner: batch-frontend maintainers + automation agents.
 - Review Cadence: monthly or after major UI/workflow changes.
 - Status: `active`.
@@ -30,6 +30,8 @@ Canonical behavior and current status live in:
 - API traffic goes through `src/utils/api.ts` and `@esl-pipeline/contracts`.
 - Base URL resolution uses runtime override first, then Vite env, then `/api`.
 - The app assumes the extended backend API is enabled.
+- Student-area pages prefer route-level payloads under `/students/:id/surfaces/*`, with granular student APIs retained as compatibility/fallback paths.
+- Job-event SSE subscriptions should target known `jobId` and `recordingId` values; wildcard all-job streams are explicit.
 
 Use these for deeper detail:
 

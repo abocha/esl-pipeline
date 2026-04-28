@@ -2,6 +2,10 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import {
+  FOUNDATIONAL_PROFILE_SCHEMA_VERSION,
+  renderFoundationalProfileContent,
+} from '../../application/foundational-profile.js';
+import {
   activateProfileRevisionForProfile,
   deleteProfileContent,
   getProfileContent,
@@ -13,10 +17,6 @@ import {
   saveProfileRevisionContent,
   upsertProfileContent,
 } from '../../application/profile-content.js';
-import {
-  FOUNDATIONAL_PROFILE_SCHEMA_VERSION,
-  renderFoundationalProfileContent,
-} from '../../application/foundational-profile.js';
 import {
   activateTemplateRevisionForTemplate,
   deleteTemplateContent,

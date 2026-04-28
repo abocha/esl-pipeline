@@ -10,6 +10,13 @@ import { loadConfig } from '../config/env.js';
 import type { GenerationBudgetUsage } from '../domain/generation-budget-repository.js';
 import { logger } from '../infrastructure/logger.js';
 import {
+  FOUNDATIONAL_PROFILE_JSON_SCHEMA,
+  FOUNDATIONAL_PROFILE_RESPONSE_SCHEMA_DESCRIPTION,
+  FOUNDATIONAL_PROFILE_RESPONSE_SCHEMA_NAME,
+  type FoundationalProfile,
+  validateFoundationalProfileOutput,
+} from './foundational-profile.js';
+import {
   enforceGenerationBudgetBeforeAttempt,
   GenerationBudgetExceededError,
   type GenerationBudgetGuardDependencies,
@@ -25,13 +32,6 @@ import {
   type ProviderStructuredExecutionRequest,
   type ProviderStructuredExecutionResult,
 } from './generation-providers.js';
-import {
-  FOUNDATIONAL_PROFILE_JSON_SCHEMA,
-  FOUNDATIONAL_PROFILE_RESPONSE_SCHEMA_DESCRIPTION,
-  FOUNDATIONAL_PROFILE_RESPONSE_SCHEMA_NAME,
-  type FoundationalProfile,
-  validateFoundationalProfileOutput,
-} from './foundational-profile.js';
 
 type ProviderExecutor = (args: {
   config: BatchBackendConfig['generation'];

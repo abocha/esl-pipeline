@@ -6,6 +6,7 @@ import {
   StudentAreaPanel,
   StudentAreaSectionLabel,
 } from './StudentAreaDesignSystem';
+import './StudentScheduleBillingPage.css';
 
 export const StudentScheduleBillingPage: React.FC = () => {
   const { student } = useStudentAreaContext();
@@ -45,34 +46,6 @@ export const StudentScheduleBillingPage: React.FC = () => {
           detail="Payment records will live in the business domain."
         />
       </div>
-
-      <style>{`
-        .student-schedule-billing-page {
-          display: grid;
-          gap: 1rem;
-        }
-
-        .student-schedule-billing-note,
-        .student-schedule-billing-grid .student-area-metric-card {
-          padding: 1.2rem;
-        }
-
-        .student-schedule-billing-note {
-          padding: 1.35rem;
-        }
-
-        .student-schedule-billing-note p {
-          margin: 0;
-          color: var(--student-area-muted);
-          line-height: 1.55;
-        }
-
-        .student-schedule-billing-grid {
-          display: grid;
-          gap: 1rem;
-          grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        }
-      `}</style>
     </section>
   );
 };

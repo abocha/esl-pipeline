@@ -5,11 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { StudentOverviewPage } from './StudentOverviewPage';
 
 const apiMocks = vi.hoisted(() => ({
-  getProfileContent: vi.fn(),
-  getStudentMemoryOverview: vi.fn(),
-  getStudentTimeline: vi.fn(),
-  listProfileRevisions: vi.fn(),
-  listStudentProfileCandidates: vi.fn(),
+  getStudentOverviewSurface: vi.fn(),
 }));
 
 const useStudentAreaContextMock = vi.hoisted(() => vi.fn());
@@ -48,106 +44,109 @@ function seedOverviewMocks() {
     refreshStudent: vi.fn(),
   });
 
-  apiMocks.getProfileContent.mockResolvedValue({
-    id: 'profiles/students/alex.md',
-    label: 'Alex',
-    content: '# Profile',
-    structuredContent: {
-      schemaVersion: 'foundational_profile_v1',
-      overallLevel: 'B1',
-      primaryGoals: ['Speak confidently in workplace meetings.'],
-      communicationContexts: ['Product team updates'],
-      interestsAndUsefulThemes: ['Design critique'],
-      stableStrengths: ['Clear ideas', 'High curiosity'],
-      persistentChallenges: ['Pronunciation', 'Phrasal verbs'],
-      studyPreferences: ['Short practical speaking loops'],
-      durableConstraints: ['Limited evening energy'],
-      teacherNotes: 'Works best with precise, confidence-building speaking tasks.',
-    },
-    currentRevisionId: 'revision-active-1',
-    updatedAt: NOW,
-  });
+  apiMocks.getStudentOverviewSurface.mockResolvedValue(makeOverviewSurface());
+}
 
-  apiMocks.listProfileRevisions.mockResolvedValue({
-    items: [
-      {
-        id: 'revision-active-1',
-        profileId: 'profiles/students/alex.md',
-        contentHash: 'hash-1',
-        source: 'update',
-        status: 'active',
-        versionNumber: 1,
-        versionLabel: 'v1',
-        activatedAt: NOW,
-        deprecatedAt: null,
-        createdAt: NOW,
-        createdBy: 'teacher-1',
-        restoredFromRevisionId: null,
+function makeOverviewSurface(overrides: Record<string, unknown> = {}) {
+  return {
+    profile: {
+      id: 'profiles/students/alex.md',
+      label: 'Alex',
+      content: '# Profile',
+      structuredContent: {
+        schemaVersion: 'foundational_profile_v1',
+        overallLevel: 'B1',
+        primaryGoals: ['Speak confidently in workplace meetings.'],
+        communicationContexts: ['Product team updates'],
+        interestsAndUsefulThemes: ['Design critique'],
+        stableStrengths: ['Clear ideas', 'High curiosity'],
+        persistentChallenges: ['Pronunciation', 'Phrasal verbs'],
+        studyPreferences: ['Short practical speaking loops'],
+        durableConstraints: ['Limited evening energy'],
+        teacherNotes: 'Works best with precise, confidence-building speaking tasks.',
       },
-    ],
-    total: 1,
-    limit: 8,
-    offset: 0,
-    order: 'desc',
-  });
-
-  apiMocks.getStudentMemoryOverview.mockResolvedValue({
-    studentId: 'student-alex',
-    latestReadyStudentMemorySnapshot: {
-      id: 'snapshot-1',
-      studentId: 'student-alex',
-      schemaVersion: 'student_memory_snapshot_v1',
-      generatedAt: NOW,
-      provider: 'openai',
-      model: 'gpt-test',
-      status: 'ready',
-      sourceKind: 'student_memory_rollup',
-      lessonMemoryEntryIds: ['lesson-1'],
-      homeworkMemoryEntryIds: ['homework-1'],
-      stableStrengths: [],
-      recurringIssues: [],
-      activeReviewBacklog: [],
-      recentProgress: [],
-      personalFacts: [],
-      recommendedAssignmentDirections: [
-        {
-          direction: 'Fluency with natural expression',
-          rationale: 'Expand vocabulary while keeping speech precise and flowing.',
-        },
-      ],
-      unresolvedIssues: [],
-      createdAt: NOW,
+      currentRevisionId: 'revision-active-1',
       updatedAt: NOW,
     },
-    recentReadyLessonMemory: [],
-    recentReadyHomeworkMemory: [],
-    unresolvedIssues: [],
-  });
-
-  apiMocks.listStudentProfileCandidates.mockResolvedValue({
-    studentId: 'student-alex',
-    items: [],
-    total: 0,
-    limit: 12,
-    offset: 0,
-    order: 'desc',
-  });
-
-  apiMocks.getStudentTimeline.mockResolvedValue({
-    items: [
-      {
-        type: 'profile_revision_activated',
+    revisions: {
+      items: [
+        {
+          id: 'revision-active-1',
+          profileId: 'profiles/students/alex.md',
+          contentHash: 'hash-1',
+          source: 'update',
+          status: 'active',
+          versionNumber: 1,
+          versionLabel: 'v1',
+          activatedAt: NOW,
+          deprecatedAt: null,
+          createdAt: NOW,
+          createdBy: 'teacher-1',
+          restoredFromRevisionId: null,
+        },
+      ],
+      total: 1,
+      limit: 20,
+      offset: 0,
+      order: 'desc',
+    },
+    memory: {
+      studentId: 'student-alex',
+      latestReadyStudentMemorySnapshot: {
+        id: 'snapshot-1',
         studentId: 'student-alex',
-        status: 'active',
+        schemaVersion: 'student_memory_snapshot_v1',
+        generatedAt: NOW,
+        provider: 'openai',
+        model: 'gpt-test',
+        status: 'ready',
+        sourceKind: 'student_memory_rollup',
+        lessonMemoryEntryIds: ['lesson-1'],
+        homeworkMemoryEntryIds: ['homework-1'],
+        stableStrengths: [],
+        recurringIssues: [],
+        activeReviewBacklog: [],
+        recentProgress: [],
+        personalFacts: [],
+        recommendedAssignmentDirections: [
+          {
+            direction: 'Fluency with natural expression',
+            rationale: 'Expand vocabulary while keeping speech precise and flowing.',
+          },
+        ],
+        unresolvedIssues: [],
         createdAt: NOW,
-        displayName: 'Profile revision activated',
+        updatedAt: NOW,
       },
-    ],
-    total: 1,
-    limit: 4,
-    offset: 0,
-    order: 'desc',
-  });
+      recentReadyLessonMemory: [],
+      recentReadyHomeworkMemory: [],
+      unresolvedIssues: [],
+    },
+    pendingCandidates: {
+      studentId: 'student-alex',
+      items: [],
+      total: 0,
+      limit: 10,
+      offset: 0,
+      order: 'desc',
+    },
+    recentTimeline: {
+      items: [
+        {
+          type: 'profile_revision_activated',
+          studentId: 'student-alex',
+          status: 'active',
+          createdAt: NOW,
+          displayName: 'Profile revision activated',
+        },
+      ],
+      total: 1,
+      limit: 8,
+      offset: 0,
+      order: 'desc',
+    },
+    ...overrides,
+  };
 }
 
 function renderOverview() {
@@ -186,16 +185,13 @@ describe('StudentOverviewPage', () => {
       '/students/student-alex/history',
     );
 
-    expect(apiMocks.getProfileContent).toHaveBeenCalledWith('profiles/students/alex.md');
-    expect(apiMocks.getStudentMemoryOverview).toHaveBeenCalledWith('student-alex', {
-      lessonLimit: 1,
-      homeworkLimit: 1,
-    });
+    expect(apiMocks.getStudentOverviewSurface).toHaveBeenCalledWith('student-alex');
   });
 
   it('shows a non-readable pending canvas while overview data resolves', async () => {
-    const profileDeferred = createDeferred<Awaited<ReturnType<typeof apiMocks.getProfileContent>>>();
-    apiMocks.getProfileContent.mockReturnValue(profileDeferred.promise);
+    const overviewDeferred =
+      createDeferred<Awaited<ReturnType<typeof apiMocks.getStudentOverviewSurface>>>();
+    apiMocks.getStudentOverviewSurface.mockReturnValue(overviewDeferred.promise);
 
     renderOverview();
 
@@ -204,58 +200,46 @@ describe('StudentOverviewPage', () => {
     expect(document.querySelector('.student-overview-pending-portrait')).toBeNull();
     expect(screen.queryByRole('link', { name: /Back to all students/i })).toBeNull();
     expect(screen.queryByText('Loading overview')).toBeNull();
-    expect(screen.queryByText('Gathering learner profile, memory, and recent activity.')).toBeNull();
+    expect(
+      screen.queryByText('Gathering learner profile, memory, and recent activity.'),
+    ).toBeNull();
     expect(screen.queryByText('Loading strengths')).toBeNull();
     expect(screen.queryByText('Needs first profile')).toBeNull();
     expect(screen.queryByText('Profile needed')).toBeNull();
     expect(screen.queryByText('Not set')).toBeNull();
 
-    profileDeferred.resolve({
-      id: 'profiles/students/alex.md',
-      label: 'Alex',
-      content: '# Profile',
-      structuredContent: {
-        schemaVersion: 'foundational_profile_v1',
-        overallLevel: 'B1',
-        primaryGoals: ['Speak confidently in workplace meetings.'],
-        communicationContexts: ['Product team updates'],
-        interestsAndUsefulThemes: ['Design critique'],
-        stableStrengths: ['Clear ideas', 'High curiosity'],
-        persistentChallenges: ['Pronunciation', 'Phrasal verbs'],
-        studyPreferences: ['Short practical speaking loops'],
-        durableConstraints: ['Limited evening energy'],
-        teacherNotes: 'Works best with precise, confidence-building speaking tasks.',
-      },
-      currentRevisionId: 'revision-active-1',
-      updatedAt: NOW,
-    });
+    overviewDeferred.resolve(makeOverviewSurface());
 
     expect(await screen.findByText('On track')).toBeTruthy();
   });
 
   it('surfaces pending profile suggestions as the one attention cue', async () => {
-    apiMocks.listStudentProfileCandidates.mockResolvedValue({
-      studentId: 'student-alex',
-      items: [
-        {
-          id: 'candidate-1',
+    apiMocks.getStudentOverviewSurface.mockResolvedValue(
+      makeOverviewSurface({
+        pendingCandidates: {
           studentId: 'student-alex',
-          proposedFact: 'Needs more pronunciation work.',
-          category: 'learning',
-          targetSection: 'persistentChallenges',
-          evidence: [],
-          sourceLessonMemoryIds: [],
-          status: 'pending_review',
-          reviewState: 'unreviewed',
-          createdAt: NOW,
-          updatedAt: NOW,
+          items: [
+            {
+              id: 'candidate-1',
+              studentId: 'student-alex',
+              proposedFact: 'Needs more pronunciation work.',
+              category: 'learning',
+              targetSection: 'persistentChallenges',
+              evidence: [],
+              sourceLessonMemoryIds: [],
+              status: 'pending_review',
+              reviewState: 'unreviewed',
+              createdAt: NOW,
+              updatedAt: NOW,
+            },
+          ],
+          total: 1,
+          limit: 10,
+          offset: 0,
+          order: 'desc',
         },
-      ],
-      total: 1,
-      limit: 12,
-      offset: 0,
-      order: 'desc',
-    });
+      }),
+    );
 
     renderOverview();
 
@@ -265,6 +249,26 @@ describe('StudentOverviewPage', () => {
   });
 
   it('handles students without a canonical learner profile', async () => {
+    apiMocks.getStudentOverviewSurface.mockResolvedValue(
+      makeOverviewSurface({
+        profile: null,
+        revisions: {
+          items: [],
+          total: 0,
+          limit: 0,
+          offset: 0,
+          order: 'desc',
+        },
+        pendingCandidates: {
+          studentId: 'student-no-profile',
+          items: [],
+          total: 0,
+          limit: 10,
+          offset: 0,
+          order: 'desc',
+        },
+      }),
+    );
     useStudentAreaContextMock.mockReturnValue({
       student: {
         id: 'student-no-profile',
@@ -282,13 +286,8 @@ describe('StudentOverviewPage', () => {
     expect(await screen.findByText('Needs first profile')).toBeTruthy();
     expect(screen.getByText('Profile needed')).toBeTruthy();
     expect(screen.getByText('Not set')).toBeTruthy();
-    expect(apiMocks.getProfileContent).not.toHaveBeenCalled();
     await waitFor(() => {
-      expect(apiMocks.getStudentTimeline).toHaveBeenCalledWith('student-no-profile', {
-        limit: 4,
-        offset: 0,
-        order: 'desc',
-      });
+      expect(apiMocks.getStudentOverviewSurface).toHaveBeenCalledWith('student-no-profile');
     });
   });
 });

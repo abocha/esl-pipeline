@@ -7,10 +7,12 @@ import {
 } from '../src/application/student-lesson-artifact-export.js';
 import type { HomeworkMemoryRecord } from '../src/domain/homework-memory-model.js';
 import type { LessonMemoryRecord } from '../src/domain/lesson-memory-model.js';
-import type { RecordingRecord } from '../src/domain/recording-model.js';
+import type { RecordingWithTranscript } from '../src/domain/recording-repository.js';
 import type { TranscriptRecord } from '../src/domain/transcript-model.js';
 
-function createRecording(overrides: Partial<RecordingRecord> = {}): RecordingRecord {
+function createRecording(
+  overrides: Partial<RecordingWithTranscript> = {},
+): RecordingWithTranscript {
   return {
     id: 'recording-1',
     source: 'upload',
@@ -22,6 +24,7 @@ function createRecording(overrides: Partial<RecordingRecord> = {}): RecordingRec
     durationSec: 1800,
     channels: 1,
     status: 'transcribed',
+    transcriptId: 'transcript-1',
     error: null,
     createdAt: new Date('2026-04-01T09:00:00.000Z'),
     updatedAt: new Date('2026-04-01T09:00:00.000Z'),
@@ -178,11 +181,13 @@ describe('application/student-lesson-artifact-export', () => {
     });
 
     expect(plan.lessons).toHaveLength(2);
-    expect(plan.lessons[0]).toMatchObject({
+    const firstLesson = plan.lessons[0];
+    expect(firstLesson).toBeDefined();
+    expect(firstLesson).toMatchObject({
       transcript: { id: 'transcript-1' },
       lessonMemory: { id: 'lesson-memory-1' },
     });
-    expect(plan.lessons[0].homeworkMemories.map((item) => item.id)).toEqual(['homework-memory-1']);
+    expect(firstLesson?.homeworkMemories.map((item) => item.id)).toEqual(['homework-memory-1']);
     expect(plan.unmatchedHomeworkMemories.map((item) => item.id)).toEqual([
       'homework-memory-unmatched',
     ]);

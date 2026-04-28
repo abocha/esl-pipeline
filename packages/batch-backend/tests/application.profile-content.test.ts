@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import type { FoundationalProfile } from '../src/application/foundational-profile.js';
 import {
   activateProfileRevisionForProfile,
   deleteProfileContent,
@@ -11,7 +12,6 @@ import {
   saveProfileRevisionContent,
   upsertProfileContent,
 } from '../src/application/profile-content.js';
-import type { FoundationalProfile } from '../src/application/foundational-profile.js';
 import { renderStarterProfileContent } from '../src/application/starter-profile-content.js';
 import type { ProfileRecord } from '../src/domain/profile-model.js';
 import type { ProfileRevisionRecord } from '../src/domain/profile-revision-model.js';

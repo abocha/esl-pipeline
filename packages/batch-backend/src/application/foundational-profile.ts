@@ -419,9 +419,7 @@ export function deriveFoundationalProfileFromMarkdown(content: string): Foundati
       return;
     }
 
-    const block = [currentUnknownSectionHeading, ...currentUnknownSectionLines]
-      .join('\n')
-      .trim();
+    const block = [currentUnknownSectionHeading, ...currentUnknownSectionLines].join('\n').trim();
     if (block.length > 0) {
       unknownSectionBlocks.push(block);
     }

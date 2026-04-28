@@ -2,13 +2,13 @@ import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
 import { getProfileById } from '../domain/profile-repository.js';
 import { getActiveProfileRevision } from '../domain/profile-revision-repository.js';
-import type { ProfileRevisionDetailResponse } from './profile-content.js';
-import { saveProfileRevisionContent } from './profile-content.js';
 import {
   deriveFoundationalProfileFromMarkdown,
-  renderFoundationalProfileContent,
   type FoundationalProfile,
+  renderFoundationalProfileContent,
 } from './foundational-profile.js';
+import type { ProfileRevisionDetailResponse } from './profile-content.js';
+import { saveProfileRevisionContent } from './profile-content.js';
 import {
   type GenerateProfileRevisionDraftResult,
   generateProfileRevisionDraft,
@@ -96,13 +96,16 @@ export async function populateFirstProfileFromLesson(args: {
   }
 
   if (!student.profileId) {
-    const ensuredStudent = await dependencies.students.ensureCanonicalProfileBinding(request.studentId, {
-      config: dependencies.config,
-      bindingAudit: {
-        reason: 'student_area_profile_initialize',
-        changedBy: request.reviewerId ?? null,
-      },
-    } satisfies StudentStoreOverrides);
+    const ensuredStudent = await dependencies.students.ensureCanonicalProfileBinding(
+      request.studentId,
+      {
+        config: dependencies.config,
+        bindingAudit: {
+          reason: 'student_area_profile_initialize',
+          changedBy: request.reviewerId ?? null,
+        },
+      } satisfies StudentStoreOverrides,
+    );
 
     if (!ensuredStudent?.profileId) {
       throw new PopulateFirstProfileFromLessonError(
@@ -147,7 +150,8 @@ export async function populateFirstProfileFromLesson(args: {
   const prompt = buildPopulatePrompt({
     studentName: student.student,
     baseStructuredProfile:
-      activeRevision?.structuredContent ?? deriveFoundationalProfileFromMarkdown(activeRevision?.content ?? ''),
+      activeRevision?.structuredContent ??
+      deriveFoundationalProfileFromMarkdown(activeRevision?.content ?? ''),
     memoryOverview: overview,
     reviewerNote: request.reviewerNote ?? null,
   });

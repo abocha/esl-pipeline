@@ -604,7 +604,7 @@
 }
 
 .minimal-guided-field {
-  border-color: rgba(20, 63, 115, 0.34) !important;
+  border-color: rgba(20, 63, 115, 0.34);
   box-shadow: 0 0 0 4px rgba(20, 63, 115, 0.1);
 }
 

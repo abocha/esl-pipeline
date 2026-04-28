@@ -155,11 +155,12 @@ Steps:
    - `Schedule & Billing`
 9. Wrap `<Outlet />` in a body element with a density class from the metadata map.
 10. Keep the outlet context shape unchanged:
-   - `student`
-   - `studentId`
-   - `studentLoading`
-   - `studentError`
-   - `refreshStudent`
+
+- `student`
+- `studentId`
+- `studentLoading`
+- `studentError`
+- `refreshStudent`
 
 Recommended page metadata:
 

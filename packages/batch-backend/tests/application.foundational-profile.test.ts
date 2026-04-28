@@ -63,12 +63,7 @@ Avoid imaginative roleplay.
       expect.arrayContaining(['Medical Representative in the Pharmaceutical sector.']),
     );
     expect(derived?.interestsAndUsefulThemes).toEqual(
-      expect.arrayContaining([
-        'Media criticism',
-        'knitting',
-        'Film analysis.',
-        'Knitting.',
-      ]),
+      expect.arrayContaining(['Media criticism', 'knitting', 'Film analysis.', 'Knitting.']),
     );
     expect(derived?.interestsAndUsefulThemes.some((item) => item.includes('AI technology'))).toBe(
       true,
@@ -77,10 +72,7 @@ Avoid imaginative roleplay.
       expect.arrayContaining(['Reading fluency.', 'Analytical logic.']),
     );
     expect(derived?.persistentChallenges).toEqual(
-      expect.arrayContaining([
-        'Omits third-person singular -s.',
-        'Uses will in time clauses.',
-      ]),
+      expect.arrayContaining(['Omits third-person singular -s.', 'Uses will in time clauses.']),
     );
     expect(derived?.studyPreferences).toEqual(
       expect.arrayContaining([

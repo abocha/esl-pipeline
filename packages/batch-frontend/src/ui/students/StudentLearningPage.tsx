@@ -5,8 +5,8 @@ import type {
   ProfileRevisionDetailResponse,
   ProfileRevisionSummaryResponse,
   StudentMemoryOverviewResponse,
-  StudentProfileCandidate,
   StudentProfileBindingListResponse,
+  StudentProfileCandidate,
 } from '../../utils/api';
 import {
   activateProfileRevision,
@@ -14,6 +14,7 @@ import {
   deferStudentProfileCandidate,
   getProfileContent,
   getProfileRevision,
+  getStudentLearningSurface,
   getStudentMemoryOverview,
   initializeStudentProfileDraft,
   listProfileRevisions,
@@ -27,17 +28,18 @@ import {
 } from '../../utils/api';
 import { useStudentAreaContext } from './StudentAreaContext';
 import {
+  type CandidateActionKind,
+  type FoundationalProfileFormState,
   foundationalProfileFormToStructuredContent,
   foundationalProfileToFormState,
   getApprovedCandidatesReadyForPromotion,
   INITIAL_FOUNDATIONAL_PROFILE_FORM,
   PROFILE_CANDIDATE_PENDING_FILTER,
-  type CandidateActionKind,
-  type FoundationalProfileFormState,
   type ProfileCandidateFilter,
 } from './StudentWorkspace.logic';
-import { WorkspaceCandidatesPanel } from './WorkspaceCandidatesPanel';
 import { formatStudentShortId } from './studentIdentity';
+import { WorkspaceCandidatesPanel } from './WorkspaceCandidatesPanel';
+import './StudentLearningPage.css';
 
 const DATE_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
   dateStyle: 'medium',
@@ -280,7 +282,9 @@ function getProfileReadinessDetail(form: FoundationalProfileFormState): string {
   return `${populatedFields}/9 durable fields populated`;
 }
 
-function getSnapshotLabel(snapshot: StudentMemoryOverviewResponse['latestReadyStudentMemorySnapshot']): string {
+function getSnapshotLabel(
+  snapshot: StudentMemoryOverviewResponse['latestReadyStudentMemorySnapshot'],
+): string {
   if (!snapshot) return 'No Snapshot Yet';
   return `Ready • ${snapshot.lessonMemoryEntryIds.length} lesson signal${
     snapshot.lessonMemoryEntryIds.length === 1 ? '' : 's'
@@ -312,11 +316,7 @@ function LearningMetricCard({
   );
 }
 
-function LearningField({
-  config,
-  value,
-  onChange,
-}: LearningFieldProps): React.JSX.Element {
+function LearningField({ config, value, onChange }: LearningFieldProps): React.JSX.Element {
   const inputId = `learning-${config.key}`;
   const helpId = `${inputId}-help`;
   const fieldClassName =
@@ -382,7 +382,8 @@ function LearningSectionCard({
 }
 
 export const StudentLearningPage: React.FC = () => {
-  const { student, studentId, studentLoading, studentError, refreshStudent } = useStudentAreaContext();
+  const { student, studentId, studentLoading, studentError, refreshStudent } =
+    useStudentAreaContext();
   const latestPageLoadRequestRef = useRef(0);
   const [bootstrapProfileId, setBootstrapProfileId] = useState<string | null>(null);
   const profileId = student?.profileId ?? bootstrapProfileId ?? '';
@@ -393,7 +394,9 @@ export const StudentLearningPage: React.FC = () => {
   const [loadedProfileForm, setLoadedProfileForm] = useState<FoundationalProfileFormState>(
     INITIAL_FOUNDATIONAL_PROFILE_FORM,
   );
-  const [currentRevision, setCurrentRevision] = useState<ProfileRevisionDetailResponse | null>(null);
+  const [currentRevision, setCurrentRevision] = useState<ProfileRevisionDetailResponse | null>(
+    null,
+  );
   const [profileRevisions, setProfileRevisions] = useState<ProfileRevisionSummaryResponse[]>([]);
   const [profileBusy, setProfileBusy] = useState<
     'loading' | 'saving' | 'restoring' | 'activating' | 'populating' | 'promoting' | null
@@ -406,15 +409,18 @@ export const StudentLearningPage: React.FC = () => {
   const [memoryOverviewLoading, setMemoryOverviewLoading] = useState(false);
   const [memoryOverviewError, setMemoryOverviewError] = useState<string | null>(null);
 
-  const [bindingHistory, setBindingHistory] = useState<StudentProfileBindingListResponse['items']>([]);
+  const [bindingHistory, setBindingHistory] = useState<StudentProfileBindingListResponse['items']>(
+    [],
+  );
   const [bindingHistoryLoading, setBindingHistoryLoading] = useState(false);
   const [bindingHistoryError, setBindingHistoryError] = useState<string | null>(null);
 
   const [profileCandidates, setProfileCandidates] = useState<StudentProfileCandidate[]>([]);
   const [profileCandidatesLoading, setProfileCandidatesLoading] = useState(false);
   const [profileCandidatesError, setProfileCandidatesError] = useState<string | null>(null);
-  const [profileCandidateFilter, setProfileCandidateFilter] =
-    useState<ProfileCandidateFilter>(PROFILE_CANDIDATE_PENDING_FILTER);
+  const [profileCandidateFilter, setProfileCandidateFilter] = useState<ProfileCandidateFilter>(
+    PROFILE_CANDIDATE_PENDING_FILTER,
+  );
   const [profileCandidateAction, setProfileCandidateAction] = useState<{
     candidateId: string;
     action: CandidateActionKind;
@@ -447,14 +453,24 @@ export const StudentLearningPage: React.FC = () => {
     [profileForm],
   );
 
-  const profileHealthDetail = useMemo(
-    () => getProfileReadinessDetail(profileForm),
-    [profileForm],
-  );
+  const profileHealthDetail = useMemo(() => getProfileReadinessDetail(profileForm), [profileForm]);
+
+  const clearLoadedLearningSurface = useCallback(() => {
+    setBootstrapProfileId(null);
+    setCurrentRevision(null);
+    setProfileRevisions([]);
+    setProfileForm(INITIAL_FOUNDATIONAL_PROFILE_FORM);
+    setLoadedProfileForm(INITIAL_FOUNDATIONAL_PROFILE_FORM);
+    setProfileLegacyNotice(null);
+    setMemoryOverview(null);
+    setBindingHistory([]);
+    setProfileCandidates([]);
+  }, []);
 
   useEffect(() => {
     setBootstrapProfileId(null);
-  }, [studentId]);
+    clearLoadedLearningSurface();
+  }, [clearLoadedLearningSurface, studentId]);
 
   useEffect(() => {
     if (!profileDirty) return undefined;
@@ -670,23 +686,76 @@ export const StudentLearningPage: React.FC = () => {
     latestPageLoadRequestRef.current = requestId;
 
     if (!studentId) return undefined;
-    void Promise.all([
-      loadProfileSurface(requestId),
-      loadMemoryOverview(requestId),
-      loadBindingHistory(requestId),
-      loadProfileCandidates(requestId),
-    ]);
+
+    setProfileBusy('loading');
+    setMemoryOverviewLoading(true);
+    setBindingHistoryLoading(true);
+    setProfileCandidatesLoading(true);
+    setProfileError(null);
+    setMemoryOverviewError(null);
+    setBindingHistoryError(null);
+    setProfileCandidatesError(null);
+    clearLoadedLearningSurface();
+
+    const loadLearningSurface = async () => {
+      try {
+        const surface = await getStudentLearningSurface(studentId);
+        if (!isCurrentPageLoadRequest(requestId)) {
+          return;
+        }
+
+        if (surface.profile) {
+          setBootstrapProfileId(surface.profile.id);
+          const revision =
+            surface.profile.currentRevisionId && surface.profile.currentRevisionId.trim()
+              ? buildRevisionDetailFromProfile(surface.profile.id, surface.profile)
+              : null;
+          const form = foundationalProfileToFormState(
+            revision?.structuredContent ?? surface.profile.structuredContent,
+          );
+          setCurrentRevision(revision);
+          setProfileForm(form);
+          setLoadedProfileForm(form);
+          setProfileRevisions(surface.revisions.items ?? []);
+          setProfileLegacyNotice(getLegacyProfileNotice(revision ?? surface.profile));
+        } else {
+          setCurrentRevision(null);
+          setProfileRevisions([]);
+          setProfileForm(INITIAL_FOUNDATIONAL_PROFILE_FORM);
+          setLoadedProfileForm(INITIAL_FOUNDATIONAL_PROFILE_FORM);
+          setProfileLegacyNotice(null);
+        }
+
+        setMemoryOverview(surface.memory);
+        setBindingHistory(surface.bindings.items ?? []);
+        setProfileCandidates(surface.candidates.items ?? []);
+      } catch (error: unknown) {
+        if (!isCurrentPageLoadRequest(requestId)) {
+          return;
+        }
+        const message =
+          error instanceof Error ? error.message : 'Unable to load the learning surface.';
+        clearLoadedLearningSurface();
+        setProfileError(message);
+        setMemoryOverviewError(message);
+        setBindingHistoryError(message);
+        setProfileCandidatesError(message);
+      } finally {
+        if (isCurrentPageLoadRequest(requestId)) {
+          setProfileBusy(null);
+          setMemoryOverviewLoading(false);
+          setBindingHistoryLoading(false);
+          setProfileCandidatesLoading(false);
+        }
+      }
+    };
+
+    void loadLearningSurface();
 
     return () => {
       latestPageLoadRequestRef.current += 1;
     };
-  }, [
-    loadBindingHistory,
-    loadMemoryOverview,
-    loadProfileCandidates,
-    loadProfileSurface,
-    studentId,
-  ]);
+  }, [clearLoadedLearningSurface, isCurrentPageLoadRequest, studentId]);
 
   const handleProfileFieldChange = useCallback(
     (field: keyof FoundationalProfileFormState, value: string) => {
@@ -760,9 +829,12 @@ export const StudentLearningPage: React.FC = () => {
         },
       ]);
       await refreshStudent();
-      setProfileSuccess('Empty draft created. Add the durable learner context, then save when ready.');
+      setProfileSuccess(
+        'Empty draft created. Add the durable learner context, then save when ready.',
+      );
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to start the learner profile.';
+      const message =
+        error instanceof Error ? error.message : 'Unable to start the learner profile.';
       setProfileError(message);
     } finally {
       setProfileBusy(null);
@@ -899,7 +971,9 @@ export const StudentLearningPage: React.FC = () => {
       setProfileSuccess('Draft revision opened in the editor.');
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : 'Unable to refresh the draft from approved candidates.';
+        error instanceof Error
+          ? error.message
+          : 'Unable to refresh the draft from approved candidates.';
       setProfileCandidatePromotionError(message);
       setProfileError(message);
     } finally {
@@ -1039,9 +1113,7 @@ export const StudentLearningPage: React.FC = () => {
               onClick={() => void handlePopulateFirstProfile()}
               disabled={profileBusy !== null}
             >
-              {profileBusy === 'populating'
-                ? 'Populating…'
-                : 'Populate First Profile From Lesson'}
+              {profileBusy === 'populating' ? 'Populating…' : 'Populate First Profile From Lesson'}
             </button>
           </article>
         </div>
@@ -1056,8 +1128,6 @@ export const StudentLearningPage: React.FC = () => {
             {profileSuccess}
           </p>
         ) : null}
-
-        <style>{learningPageStyles}</style>
       </section>
     );
   }
@@ -1193,8 +1263,8 @@ export const StudentLearningPage: React.FC = () => {
                 <h2>Foundational Profile</h2>
               </div>
               <p>
-                Structured edits here drive the rendered prompt-package profile block and should stay
-                focused on durable pedagogical truth.
+                Structured edits here drive the rendered prompt-package profile block and should
+                stay focused on durable pedagogical truth.
               </p>
             </header>
 
@@ -1240,7 +1310,9 @@ export const StudentLearningPage: React.FC = () => {
                   canonical truth looks right.
                 </p>
               </div>
-              {profileLegacyNotice ? <p className="workspace-muted">{profileLegacyNotice}</p> : null}
+              {profileLegacyNotice ? (
+                <p className="workspace-muted">{profileLegacyNotice}</p>
+              ) : null}
             </footer>
           </article>
 
@@ -1367,7 +1439,9 @@ export const StudentLearningPage: React.FC = () => {
             profileCandidatePromotionError={profileCandidatePromotionError}
             profileCandidatePromotionSuccess={profileCandidatePromotionSuccess}
             onRefreshCandidates={() => reloadCurrentLearningSurface()}
-            onPromoteProfileCandidates={() => handleRefreshDraftFromCandidates(selectedCandidateIds)}
+            onPromoteProfileCandidates={() =>
+              handleRefreshDraftFromCandidates(selectedCandidateIds)
+            }
             onReviewProfileCandidate={handleReviewProfileCandidate}
           />
         </div>
@@ -1458,514 +1532,6 @@ export const StudentLearningPage: React.FC = () => {
           </div>
         </aside>
       </div>
-
-      <style>{learningPageStyles}</style>
     </section>
   );
 };
-
-const learningPageStyles = `
-  .student-learning-layout {
-    display: grid;
-    gap: clamp(1rem, 2vw, 1.35rem);
-  }
-
-  .student-learning-main {
-    display: grid;
-    gap: 1rem;
-  }
-
-  .student-learning-layout .card,
-  .student-learning-layout .workspace-card {
-    border: 1px solid var(--student-area-line);
-    border-radius: var(--student-area-radius-md);
-    background:
-      radial-gradient(circle at top right, rgba(20, 63, 115, 0.06), transparent 34%),
-      var(--student-area-panel);
-    box-shadow: var(--student-area-shadow-soft);
-  }
-
-  .student-learning-primary-column {
-    display: grid;
-    gap: 1rem;
-    min-width: 0;
-  }
-
-  .student-learning-hero,
-  .workspace-card,
-  .student-learning-bootstrap,
-  .student-learning-status-panel,
-  .student-learning-standalone-state {
-    display: grid;
-    gap: 1rem;
-  }
-
-  .student-learning-hero,
-  .student-learning-bootstrap,
-  .student-learning-status-panel,
-  .student-learning-standalone-state {
-    padding: clamp(1.25rem, 3vw, 1.8rem);
-    border: 1px solid var(--student-area-line);
-    border-radius: var(--student-area-radius-md);
-    background:
-      radial-gradient(circle at top right, rgba(20, 63, 115, 0.09), transparent 32%),
-      linear-gradient(180deg, rgba(255, 253, 248, 0.96), rgba(244, 234, 219, 0.76));
-    box-shadow: var(--student-area-shadow-soft);
-  }
-
-  .student-learning-hero-copy h2,
-  .student-learning-block-header h2,
-  .student-learning-bootstrap h2,
-  .student-learning-section-header h3,
-  .student-learning-memory-column h3,
-  .workspace-card h2,
-  .workspace-card h3 {
-    margin: 0;
-    text-wrap: balance;
-  }
-
-  .student-learning-hero-copy p,
-  .student-learning-block-header p,
-  .student-learning-bootstrap p,
-  .student-learning-section-header p,
-  .student-learning-system-note p,
-  .workspace-card p {
-    margin: 0;
-  }
-
-  .student-learning-eyebrow,
-  .student-learning-card-eyebrow {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.45rem;
-    font-size: 0.75rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--text-tertiary, #6b7280);
-  }
-
-  .student-learning-card-eyebrow {
-    color: var(--student-area-blue);
-  }
-
-  .student-learning-status-grid,
-  .student-learning-profile-summary,
-  .student-learning-memory-summary,
-  .student-learning-rail-summary {
-    display: grid;
-    gap: 0.85rem;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  }
-
-  .student-learning-metric {
-    min-width: 0;
-    display: grid;
-    gap: 0.3rem;
-    padding: 1rem;
-    border-radius: 18px;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
-  }
-
-  .student-learning-metric strong {
-    font-size: 1.05rem;
-    line-height: 1.25;
-    min-width: 0;
-    overflow-wrap: anywhere;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .student-learning-metric p {
-    color: var(--student-area-muted);
-    font-size: 0.92rem;
-    line-height: 1.45;
-  }
-
-  .student-learning-metric-success {
-    background: var(--student-area-sage-soft);
-  }
-
-  .student-learning-metric-accent {
-    border-color: rgba(145, 98, 12, 0.18);
-    background: var(--student-area-amber-soft);
-  }
-
-  .student-learning-action-grid {
-    display: grid;
-    gap: 0.85rem;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  }
-
-  .student-learning-action-cluster {
-    display: grid;
-    gap: 0.65rem;
-    padding: 1rem;
-    border: 1px solid var(--student-area-line);
-    border-radius: 18px;
-    background: rgba(255, 253, 248, 0.72);
-  }
-
-  .student-learning-action-row,
-  .student-learning-inline,
-  .workspace-inline {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-    align-items: center;
-  }
-
-  .student-learning-system-note {
-    display: grid;
-    gap: 0.35rem;
-    padding: 0.95rem 1rem;
-    border-radius: 18px;
-    background: rgba(42, 36, 26, 0.045);
-    color: var(--student-area-muted);
-  }
-
-  .student-learning-system-note code,
-  .student-learning-binding code {
-    font-size: 0.92rem;
-    background: rgba(255, 255, 255, 0.7);
-    padding: 0.2rem 0.45rem;
-    border-radius: 8px;
-  }
-
-  .student-learning-block-header {
-    display: grid;
-    gap: 0.5rem;
-  }
-
-  .student-learning-profile-card,
-  .student-learning-memory-card,
-  .student-learning-sidebar {
-    gap: 1.25rem;
-  }
-
-  .student-learning-section-grid {
-    display: grid;
-    gap: 1rem;
-  }
-
-  .student-learning-section-card {
-    display: grid;
-    gap: 0.9rem;
-    padding: 1.1rem;
-    border-radius: 22px;
-    border: 1px solid var(--student-area-line);
-    background:
-      radial-gradient(circle at top right, rgba(20, 63, 115, 0.055), transparent 28%),
-      rgba(255, 253, 248, 0.82);
-    min-width: 0;
-  }
-
-  .student-learning-section-header {
-    display: grid;
-    gap: 0.35rem;
-  }
-
-  .student-learning-section-fields {
-    display: grid;
-    gap: 0.85rem;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  }
-
-  .student-learning-field {
-    display: grid;
-    gap: 0.35rem;
-    min-width: 0;
-  }
-
-  .student-learning-field-full {
-    grid-column: 1 / -1;
-  }
-
-  .student-learning-field label {
-    font-weight: 600;
-    color: var(--text-primary, #0f172a);
-  }
-
-  .student-learning-field p {
-    color: var(--text-secondary, #52606d);
-    font-size: 0.92rem;
-    line-height: 1.4;
-  }
-
-  .workspace-field input,
-  .workspace-field textarea,
-  .workspace-field select,
-  .student-learning-field input,
-  .student-learning-field textarea {
-    width: 100%;
-    min-width: 0;
-    border: 1px solid rgba(15, 23, 42, 0.12);
-    border-radius: 16px;
-    padding: 0.85rem 0.95rem;
-    font: inherit;
-    color: inherit;
-    background: rgba(255, 255, 255, 0.92);
-    transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
-  }
-
-  .workspace-field textarea,
-  .student-learning-field textarea {
-    resize: vertical;
-  }
-
-  .workspace-field input:focus-visible,
-  .workspace-field textarea:focus-visible,
-  .workspace-field select:focus-visible,
-  .student-learning-field input:focus-visible,
-  .student-learning-field textarea:focus-visible,
-  .workspace-primary-btn:focus-visible,
-  .workspace-secondary-btn:focus-visible,
-  .student-learning-binding a:focus-visible {
-    outline: 2px solid transparent;
-    border-color: rgba(20, 63, 115, 0.45);
-    box-shadow: 0 0 0 4px rgba(20, 63, 115, 0.14);
-  }
-
-  .workspace-primary-btn,
-  .workspace-secondary-btn,
-  .student-learning-empty a,
-  .student-learning-binding a {
-    width: fit-content;
-    border: 0;
-    border-radius: 999px;
-    padding: 0.8rem 1.05rem;
-    font: inherit;
-    font-weight: 600;
-    text-decoration: none;
-    cursor: pointer;
-    transition:
-      transform 160ms ease,
-      box-shadow 160ms ease,
-      background-color 160ms ease,
-      color 160ms ease;
-    touch-action: manipulation;
-    -webkit-tap-highlight-color: transparent;
-  }
-
-  .workspace-primary-btn:hover:not(:disabled),
-  .workspace-secondary-btn:hover:not(:disabled) {
-    transform: translateY(-1px);
-  }
-
-  .workspace-primary-btn:disabled,
-  .workspace-secondary-btn:disabled {
-    cursor: not-allowed;
-    opacity: 0.55;
-    transform: none;
-    box-shadow: none;
-  }
-
-  .workspace-primary-btn {
-    background: linear-gradient(135deg, var(--student-area-blue), #245a97);
-    color: white;
-    box-shadow: 0 12px 24px rgba(20, 63, 115, 0.18);
-  }
-
-  .workspace-primary-btn:hover:not(:disabled) {
-    box-shadow: 0 14px 28px rgba(20, 63, 115, 0.24);
-  }
-
-  .workspace-secondary-btn,
-  .student-learning-empty a,
-  .student-learning-binding a {
-    background: var(--student-area-blue-soft);
-    color: var(--student-area-blue);
-  }
-
-  .workspace-secondary-btn:hover:not(:disabled) {
-    background: rgba(20, 63, 115, 0.14);
-  }
-
-  .workspace-muted {
-    color: var(--text-secondary, #52606d);
-  }
-
-  .workspace-error,
-  .workspace-success {
-    margin: 0;
-    padding: 0.95rem 1rem;
-    border-radius: 18px;
-    line-height: 1.5;
-  }
-
-  .workspace-error {
-    color: #991b1b;
-    background: rgba(254, 242, 242, 0.92);
-    border: 1px solid rgba(248, 113, 113, 0.2);
-  }
-
-  .workspace-success {
-    color: #065f46;
-    background: rgba(236, 253, 245, 0.94);
-    border: 1px solid rgba(16, 185, 129, 0.18);
-  }
-
-  .workspace-list {
-    display: grid;
-    gap: 0.75rem;
-  }
-
-  .workspace-list-item {
-    display: flex;
-    justify-content: space-between;
-    gap: 0.75rem;
-    padding: 0.9rem 1rem;
-    border-radius: 18px;
-    background: rgba(15, 23, 42, 0.03);
-    min-width: 0;
-  }
-
-  .workspace-list-item-stack {
-    flex-direction: column;
-  }
-
-  .workspace-create-panel,
-  .workspace-candidate-group,
-  .workspace-candidate-body,
-  .workspace-candidate-details {
-    display: grid;
-    gap: 0.85rem;
-  }
-
-  .workspace-header-row {
-    justify-content: space-between;
-  }
-
-  .workspace-pill {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.25rem 0.6rem;
-    border-radius: 999px;
-    background: rgba(15, 23, 42, 0.08);
-    font-size: 0.85rem;
-    font-weight: 600;
-  }
-
-  .workspace-candidate-summary {
-    cursor: pointer;
-    list-style: none;
-  }
-
-  .workspace-candidate-summary::-webkit-details-marker {
-    display: none;
-  }
-
-  .student-learning-editor-footer,
-  .student-learning-empty-block,
-  .student-learning-binding,
-  .student-learning-memory-highlight {
-    display: grid;
-    gap: 0.45rem;
-    padding: 1rem;
-    border-radius: 18px;
-    background: rgba(42, 36, 26, 0.045);
-  }
-
-  .student-learning-memory-highlight strong,
-  .student-learning-editor-footer strong,
-  .student-learning-binding strong {
-    font-size: 0.98rem;
-  }
-
-  .student-learning-memory-columns {
-    display: grid;
-    gap: 0.9rem;
-  }
-
-  .student-learning-memory-column {
-    display: grid;
-    gap: 0.6rem;
-    min-width: 0;
-    padding: 1rem;
-    border: 1px solid var(--student-area-line);
-    border-radius: 18px;
-    background: rgba(255, 253, 248, 0.76);
-  }
-
-  .student-learning-memory-column ul {
-    margin: 0;
-    padding-left: 1.15rem;
-    display: grid;
-    gap: 0.5rem;
-  }
-
-  .student-learning-revision-list {
-    max-height: 720px;
-    overflow: auto;
-    padding-right: 0.25rem;
-  }
-
-  .student-learning-sidebar {
-    align-self: start;
-    position: sticky;
-    top: 1rem;
-  }
-
-  .student-learning-bootstrap-grid {
-    display: grid;
-    gap: 1rem;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  }
-
-  .student-learning-bootstrap-card {
-    display: grid;
-    gap: 0.75rem;
-    padding: 1.1rem;
-    border-radius: 22px;
-    border: 1px solid var(--student-area-line);
-    background: rgba(255, 253, 248, 0.88);
-  }
-
-  .student-learning-bootstrap-card h3,
-  .student-learning-bootstrap-card p {
-    margin: 0;
-  }
-
-  .student-learning-status-panel h2,
-  .student-learning-status-panel p {
-    margin: 0;
-  }
-
-  @media (min-width: 1120px) {
-    .student-learning-main {
-      grid-template-columns: minmax(0, 1.65fr) minmax(300px, 0.95fr);
-      align-items: start;
-    }
-  }
-
-  @media (max-width: 920px) {
-    .student-learning-sidebar {
-      position: static;
-    }
-  }
-
-  @media (max-width: 720px) {
-    .student-learning-layout {
-      gap: 0.85rem;
-    }
-
-    .student-learning-hero,
-    .workspace-card,
-    .student-learning-bootstrap,
-    .student-learning-status-panel,
-    .student-learning-standalone-state {
-      padding: 1.1rem;
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .workspace-primary-btn,
-    .workspace-secondary-btn,
-    .workspace-field input,
-    .workspace-field textarea,
-    .workspace-field select,
-    .student-learning-field input,
-    .student-learning-field textarea {
-      transition: none;
-    }
-  }
-`;

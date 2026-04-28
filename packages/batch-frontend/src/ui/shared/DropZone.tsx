@@ -1,6 +1,8 @@
 import React, { useCallback } from 'react';
 import { type Accept, type FileRejection, useDropzone } from 'react-dropzone';
 
+import './SharedControls.css';
+
 interface DropZoneProps {
   title: string;
   description?: string;
@@ -80,84 +82,6 @@ export const DropZone: React.FC<DropZoneProps> = ({
           ))}
         </div>
       ) : null}
-
-      <style>{`
-        .dropzone-shell {
-          border: 1px dashed var(--border-medium);
-          border-radius: var(--radius-2xl);
-          padding: var(--space-6);
-          text-align: center;
-          background: var(--bg-primary);
-          cursor: pointer;
-          transition:
-            border-color var(--transition-fast),
-            box-shadow var(--transition-fast),
-            opacity var(--transition-fast);
-        }
-
-        .dropzone-shell.active {
-          border-color: var(--color-primary-400);
-          box-shadow: var(--shadow-md);
-        }
-
-        .dropzone-shell.disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
-
-        .dropzone-content {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: var(--space-2);
-        }
-
-        .dropzone-content h4 {
-          margin: 0;
-          font-size: var(--text-base);
-        }
-
-        .dropzone-content p {
-          margin: 0;
-          color: var(--text-tertiary);
-          font-size: var(--text-sm);
-        }
-
-        .dropzone-icon {
-          width: 54px;
-          height: 54px;
-          border-radius: var(--radius-xl);
-          background: var(--bg-secondary);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: var(--color-primary-500);
-        }
-
-        .dropzone-icon.bounce {
-          animation: pulse 1s ease-in-out infinite;
-        }
-
-        .dropzone-hint {
-          font-size: var(--text-xs);
-          color: var(--text-tertiary);
-          letter-spacing: 0.05em;
-          text-transform: uppercase;
-        }
-
-        .dropzone-errors {
-          margin-top: var(--space-3);
-          display: grid;
-          gap: var(--space-1);
-          text-align: center;
-        }
-
-        .dropzone-error {
-          margin: 0;
-          font-size: var(--text-xs);
-          color: var(--color-error-500);
-        }
-      `}</style>
     </div>
   );
 };

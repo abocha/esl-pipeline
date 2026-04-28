@@ -68,7 +68,8 @@ describe('AuthProvider', () => {
   });
 
   it('does not restore a stale refresh result after logout wins the session generation', async () => {
-    let resolveRefresh: (value: Awaited<ReturnType<typeof apiMocks.refreshToken>>) => void = () => {};
+    let resolveRefresh: (value: Awaited<ReturnType<typeof apiMocks.refreshToken>>) => void =
+      () => {};
     apiMocks.refreshToken.mockImplementation(
       () =>
         new Promise((resolve) => {
