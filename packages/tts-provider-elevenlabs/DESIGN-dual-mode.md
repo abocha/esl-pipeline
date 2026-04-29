@@ -46,7 +46,7 @@ Voice assignment uses:
 
 - `voices.yml` overrides (per-speaker / default)
 - optional `speaker_profiles` metadata (gender/role/accent/style)
-- a voice catalog (`packages/orchestrator/configs/elevenlabs.voices.json` or `ELEVENLABS_VOICES_PATH`)
+- a voice catalog (`packages/orchestrator/configs/elevenlabs.voices.json` or `ESL_TTS_PROVIDER_ELEVENLABS_VOICES_PATH`)
 
 ### Gender policy (strict for explicit male/female)
 

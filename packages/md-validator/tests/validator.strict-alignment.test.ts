@@ -14,6 +14,8 @@ describeMdValidatorSuite(
     withStrictReadyFrontmatter,
     writeFile,
   }) => {
+    const retiredElevenLabsVoicesEnv = ['ELEVENLABS', 'VOICES', 'PATH'].join('_');
+
     it('warns when column-list has no columns', async () => {
       const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
       const file = path.join(tempDir, 'column-list-empty.md');
@@ -281,11 +283,19 @@ describeMdValidatorSuite(
 
       const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
       const voicesPath = path.join(tempDir, 'voices.json');
-      process.env.ELEVENLABS_VOICES_PATH = voicesPath;
+      const legacyVoicesPath = path.join(tempDir, 'legacy-voices.json');
+      process.env.ESL_TTS_PROVIDER_ELEVENLABS_VOICES_PATH = voicesPath;
+      process.env[retiredElevenLabsVoicesEnv] = legacyVoicesPath;
       await writeFile(
         voicesPath,
         JSON.stringify({
           voices: [{ id: 'voice_1', name: 'Friendly Voice', labels: { accent: 'american' } }],
+        }),
+      );
+      await writeFile(
+        legacyVoicesPath,
+        JSON.stringify({
+          voices: [{ id: 'missing-voice-id', name: 'Retired Legacy Voice' }],
         }),
       );
 

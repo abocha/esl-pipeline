@@ -115,6 +115,9 @@ importers:
       '@esl-pipeline/stt-provider-google':
         specifier: workspace:*
         version: link:../stt-provider-google
+      '@esl-pipeline/tts-provider-elevenlabs':
+        specifier: workspace:*
+        version: link:../tts-provider-elevenlabs
       '@esl-pipeline/tts-provider-google':
         specifier: workspace:*
         version: link:../tts-provider-google

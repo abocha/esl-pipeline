@@ -1,11 +1,9 @@
 import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
 
 import type { VoiceCapabilitiesSnapshot } from '@esl-pipeline/contracts';
+import { loadVoicesCatalog as loadElevenLabsVoicesCatalog } from '@esl-pipeline/tts-provider-elevenlabs';
 import { loadGoogleVoicesCatalog } from '@esl-pipeline/tts-provider-google';
 
-const VOICE_CATALOG_RELATIVE_PATH = 'packages/orchestrator/configs/elevenlabs.voices.json';
 const CAPABILITY_BLOCK_PATTERN = /```yaml\s*\n# CAPABILITY SNAPSHOT[^\n]*\n[\s\S]*?\n```/m;
 const CANONICAL_ROLE: VoiceCapabilitiesSnapshot['role'] = [
   'narrator',
@@ -82,22 +80,12 @@ export async function materializePromptTemplateWithCapabilities(params: {
 }
 
 async function loadElevenLabsVoiceCapabilitiesSnapshot(): Promise<VoiceCapabilitiesSnapshot | null> {
-  const candidates = getVoiceCatalogCandidates();
-  for (const candidate of candidates) {
-    try {
-      const raw = await readFile(candidate, 'utf8');
-      const parsed = JSON.parse(raw) as VoiceCatalogLike;
-      if (!parsed || typeof parsed !== 'object') continue;
-
-      const snapshot = parseCapabilitiesSnapshot(parsed);
-      if (snapshot) return snapshot;
-    } catch (error: unknown) {
-      const err = error as NodeJS.ErrnoException;
-      if (err?.code === 'ENOENT' || err?.code === 'EISDIR') continue;
-      continue;
-    }
+  try {
+    const catalog = await loadElevenLabsVoicesCatalog();
+    return parseCapabilitiesSnapshot(catalog as VoiceCatalogLike);
+  } catch {
+    return null;
   }
-  return null;
 }
 
 async function loadGoogleVoiceCapabilitiesSnapshot(): Promise<VoiceCapabilitiesSnapshot | null> {
@@ -185,7 +173,7 @@ function parseCapabilitiesSnapshot(catalog: VoiceCatalogLike): VoiceCapabilities
     }
   }
 
-  if (!Array.isArray(catalog.voices)) return null;
+  if (!Array.isArray(catalog.voices) || catalog.voices.length === 0) return null;
 
   const accents = new Set<string>();
   const styles = new Set<string>();
@@ -330,22 +318,4 @@ function splitValues(value: unknown): string[] {
     .split(/[;,/|]/g)
     .map((item) => item.trim())
     .filter((item) => item.length > 0);
-}
-
-function getVoiceCatalogCandidates(): string[] {
-  const cwd = process.cwd();
-  const roots = [cwd, resolve(cwd, '..'), resolve(cwd, '..', '..')];
-  const overridePath = process.env.ELEVENLABS_VOICES_PATH
-    ? resolve(process.env.ELEVENLABS_VOICES_PATH)
-    : null;
-  const repoRootEnv = process.env.REPO_ROOT || process.env.APP_ROOT || process.env.PROJECT_ROOT;
-  if (repoRootEnv) {
-    roots.push(resolve(repoRootEnv));
-  }
-  const paths = [
-    overridePath,
-    ...roots.map((root) => resolve(root, VOICE_CATALOG_RELATIVE_PATH)),
-  ].filter(Boolean);
-
-  return [...new Set(paths)] as string[];
 }

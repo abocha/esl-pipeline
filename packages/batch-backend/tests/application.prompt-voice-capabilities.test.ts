@@ -18,19 +18,32 @@ const TEMPLATE = [
   'style: [<provider-backed values>]',
   '```',
 ].join('\n');
+const CANONICAL_ELEVENLABS_VOICES_ENV = 'ESL_TTS_PROVIDER_ELEVENLABS_VOICES_PATH';
+const RETIRED_ELEVENLABS_VOICES_ENV = ['ELEVENLABS', 'VOICES', 'PATH'].join('_');
 
-async function writeElevenCatalog(filePath: string) {
+async function writeElevenCatalog(
+  filePath: string,
+  capabilities: {
+    generatedAt?: string;
+    accent: string[];
+    style: string[];
+  } = {
+    accent: ['american', 'british'],
+    style: ['conversational', 'professional'],
+  },
+) {
+  const generatedAt = capabilities.generatedAt ?? '2026-01-05T00:00:00.000Z';
   await fs.writeFile(
     filePath,
     JSON.stringify({
-      generatedAt: '2026-01-05T00:00:00.000Z',
+      generatedAt,
       capabilities: {
-        generatedAt: '2026-01-05T00:00:00.000Z',
+        generatedAt,
         role: ['narrator', 'teacher', 'student', 'system'],
         gender: ['male', 'female', 'neutral', 'child'],
         age: ['child', 'teen', 'young', 'adult', 'middle_aged', 'senior', 'universal'],
-        accent: ['american', 'british'],
-        style: ['conversational', 'professional'],
+        accent: capabilities.accent,
+        style: capabilities.style,
       },
       voices: [],
     }),
@@ -44,8 +57,8 @@ describe('application/prompt-voice-capabilities', () => {
     const voicesPath = path.join(dir, 'voices.json');
     await writeElevenCatalog(voicesPath);
 
-    const previousVoicesPath = process.env.ELEVENLABS_VOICES_PATH;
-    process.env.ELEVENLABS_VOICES_PATH = voicesPath;
+    const previousVoicesPath = process.env[CANONICAL_ELEVENLABS_VOICES_ENV];
+    process.env[CANONICAL_ELEVENLABS_VOICES_ENV] = voicesPath;
     vi.spyOn(googleProvider, 'loadGoogleVoicesCatalog').mockResolvedValue({
       generatedAt: '2026-01-06T00:00:00.000Z',
       capabilities: {
@@ -74,9 +87,57 @@ describe('application/prompt-voice-capabilities', () => {
       expect(result.materializedTemplate).toContain('accent: [american, australian, british]');
     } finally {
       if (previousVoicesPath === undefined) {
-        delete process.env.ELEVENLABS_VOICES_PATH;
+        delete process.env[CANONICAL_ELEVENLABS_VOICES_ENV];
       } else {
-        process.env.ELEVENLABS_VOICES_PATH = previousVoicesPath;
+        process.env[CANONICAL_ELEVENLABS_VOICES_ENV] = previousVoicesPath;
+      }
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('uses canonical ElevenLabs provider catalog env and ignores the retired legacy env', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-voice-cap-canonical-'));
+    const canonicalVoicesPath = path.join(dir, 'canonical-voices.json');
+    const legacyVoicesPath = path.join(dir, 'legacy-voices.json');
+    await writeElevenCatalog(canonicalVoicesPath, {
+      generatedAt: '2026-01-07T00:00:00.000Z',
+      accent: ['canonical_accent'],
+      style: ['canonical_style'],
+    });
+    await writeElevenCatalog(legacyVoicesPath, {
+      generatedAt: '2026-01-08T00:00:00.000Z',
+      accent: ['legacy_accent'],
+      style: ['legacy_style'],
+    });
+
+    const previousCanonicalPath = process.env[CANONICAL_ELEVENLABS_VOICES_ENV];
+    const previousRetiredPath = process.env[RETIRED_ELEVENLABS_VOICES_ENV];
+    process.env[CANONICAL_ELEVENLABS_VOICES_ENV] = canonicalVoicesPath;
+    process.env[RETIRED_ELEVENLABS_VOICES_ENV] = legacyVoicesPath;
+    vi.spyOn(googleProvider, 'loadGoogleVoicesCatalog').mockRejectedValue(new Error('adc missing'));
+
+    try {
+      const result = await materializePromptTemplateWithCapabilities({
+        templateId: 'hw_prompt_definitive.md',
+        templateContent: TEMPLATE,
+      });
+
+      expect(result.capabilitiesSnapshot?.generatedAt).toBe('2026-01-07T00:00:00.000Z');
+      expect(result.capabilitiesSnapshot?.accent).toEqual(['canonical_accent']);
+      expect(result.capabilitiesSnapshot?.style).toEqual(['canonical_style']);
+      expect(result.materializedTemplate).toContain('accent: [canonical_accent]');
+      expect(result.materializedTemplate).not.toContain('legacy_accent');
+      expect(result.materializedTemplate.length).toBeLessThan(2000);
+    } finally {
+      if (previousCanonicalPath === undefined) {
+        delete process.env[CANONICAL_ELEVENLABS_VOICES_ENV];
+      } else {
+        process.env[CANONICAL_ELEVENLABS_VOICES_ENV] = previousCanonicalPath;
+      }
+      if (previousRetiredPath === undefined) {
+        delete process.env[RETIRED_ELEVENLABS_VOICES_ENV];
+      } else {
+        process.env[RETIRED_ELEVENLABS_VOICES_ENV] = previousRetiredPath;
       }
       vi.restoreAllMocks();
     }
@@ -87,8 +148,8 @@ describe('application/prompt-voice-capabilities', () => {
     const voicesPath = path.join(dir, 'voices.json');
     await writeElevenCatalog(voicesPath);
 
-    const previousVoicesPath = process.env.ELEVENLABS_VOICES_PATH;
-    process.env.ELEVENLABS_VOICES_PATH = voicesPath;
+    const previousVoicesPath = process.env[CANONICAL_ELEVENLABS_VOICES_ENV];
+    process.env[CANONICAL_ELEVENLABS_VOICES_ENV] = voicesPath;
     vi.spyOn(googleProvider, 'loadGoogleVoicesCatalog').mockRejectedValue(new Error('adc missing'));
 
     try {
@@ -101,9 +162,9 @@ describe('application/prompt-voice-capabilities', () => {
       expect(result.materializedTemplate).toContain('accent: [american, british]');
     } finally {
       if (previousVoicesPath === undefined) {
-        delete process.env.ELEVENLABS_VOICES_PATH;
+        delete process.env[CANONICAL_ELEVENLABS_VOICES_ENV];
       } else {
-        process.env.ELEVENLABS_VOICES_PATH = previousVoicesPath;
+        process.env[CANONICAL_ELEVENLABS_VOICES_ENV] = previousVoicesPath;
       }
       vi.restoreAllMocks();
     }
