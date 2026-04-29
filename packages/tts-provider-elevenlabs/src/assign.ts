@@ -41,14 +41,16 @@ export interface PickedVoice {
   score: number;
 }
 
-let cachedCatalog: VoiceCatalog | null = null;
+const cachedCatalogs = new Map<string, VoiceCatalog>();
 
 export async function loadVoicesCatalog(
   file = 'packages/orchestrator/configs/elevenlabs.voices.json',
 ): Promise<VoiceCatalog> {
+  const candidates = getVoiceCatalogCandidates(file);
+  const cacheKey = candidates.filter(Boolean).join('\0');
+  const cachedCatalog = cachedCatalogs.get(cacheKey);
   if (cachedCatalog) return cachedCatalog;
 
-  const candidates = getVoiceCatalogCandidates(file);
   for (const candidate of candidates) {
     if (!candidate) continue;
     try {
@@ -61,18 +63,19 @@ export async function loadVoicesCatalog(
             `Invalid ElevenLabs voices catalog JSON at "${candidate}": missing "voices" array`,
           );
         }
-        cachedCatalog = {
+        const catalog = {
           generatedAt: parsed.generatedAt,
           capabilities: parsed.capabilities,
           voices,
         };
+        cachedCatalogs.set(cacheKey, catalog);
+        return catalog;
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
         throw new ConfigurationError(
           `Invalid ElevenLabs voices catalog JSON at "${candidate}": ${message}`,
         );
       }
-      return cachedCatalog;
     } catch (error: unknown) {
       const code = (error as NodeJS.ErrnoException | undefined)?.code;
       if (code === 'ENOENT') {

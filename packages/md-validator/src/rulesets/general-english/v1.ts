@@ -726,7 +726,7 @@ async function findWorkspaceRoot(startDir: string): Promise<string | null> {
 }
 
 async function resolveVoiceCatalogCandidates(rawFile: string): Promise<string[]> {
-  const overridePath = process.env.ELEVENLABS_VOICES_PATH?.trim();
+  const overridePath = process.env.ESL_TTS_PROVIDER_ELEVENLABS_VOICES_PATH?.trim();
   const absoluteRawFile = resolve(rawFile);
   const workspaceRoot = await findWorkspaceRoot(dirname(absoluteRawFile));
 

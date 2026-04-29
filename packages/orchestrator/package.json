@@ -45,13 +45,13 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1027.0",
-    "@elevenlabs/elevenlabs-js": "^2.42.0",
+    "@aws-sdk/client-s3": "^3.1038.0",
+    "@elevenlabs/elevenlabs-js": "^2.45.0",
     "gray-matter": "^4.0.3",
     "js-yaml": "^4.1.1",
     "remark-parse": "^11.0.0",
     "unified": "^11.0.5",
-    "zod": "^4.1.13"
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@esl-pipeline/contracts": "workspace:*",
@@ -63,10 +63,10 @@
     "@esl-pipeline/tts-core": "workspace:*",
     "@esl-pipeline/tts-provider-elevenlabs": "workspace:*",
     "@esl-pipeline/tts-provider-google": "workspace:*",
-    "@types/node": "^25.5.2",
+    "@types/node": "^25.6.0",
     "tsup": "8.5.1",
-    "typescript": "^6.0.2",
-    "vitest": "^4.1.4"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.5"
   },
   "engines": {
     "node": ">=24.11.1"
