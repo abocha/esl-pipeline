@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [6.2.1] - 2026-04-29
+
+### Changed
+
+- Automated release from PR #68: Fix provider-backed TTS capabilities and upgrade dependencies (https://github.com/abocha/esl-pipeline/pull/68)
+
 ## [6.2.0] - 2026-04-28
 
 ### Changed
