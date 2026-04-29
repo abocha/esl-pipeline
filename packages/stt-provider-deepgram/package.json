@@ -28,14 +28,14 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@deepgram/sdk": "^5.0.0",
+    "@deepgram/sdk": "^5.1.0",
     "@esl-pipeline/provider-runtime": "workspace:*",
     "@esl-pipeline/stt-core": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^25.5.2",
-    "typescript": "^6.0.2",
-    "vitest": "^4.1.4"
+    "@types/node": "^25.6.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.5"
   },
   "engines": {
     "node": ">=24.11.1"
