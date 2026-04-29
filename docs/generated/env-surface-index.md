@@ -30,6 +30,7 @@
 | `BATCH_BACKEND_OPS_CONTROL_BOT_SECRET`               | `.env.batch-backend.example` | telegram_ops       | `docs/operations/telegram-ops-control-panel.md` |
 | `BATCH_BACKEND_OPS_CONTROL_RESTORE_DRILL_COMMAND`    | `.env.batch-backend.example` | telegram_ops       | `docs/operations/telegram-ops-control-panel.md` |
 | `BATCH_BACKEND_OPS_CONTROL_STATUS_COMMAND`           | `.env.batch-backend.example` | telegram_ops       | `docs/operations/telegram-ops-control-panel.md` |
+| `BATCH_BACKEND_TEST_PG`                              | `.env.batch-backend.example` | misc               | `docs/reference/env.md`                         |
 | `BATCH_JOBS_QUEUE_NAME`                              | `.env.batch-backend.example` | batch_backend      | `packages/batch-backend/README.md`              |
 | `BATCH_TTS_CACHE_DIR`                                | `.env.batch-backend.example` | misc               | `docs/reference/env.md`                         |
 | `BATCH_TTS_CACHE_MAINTENANCE_INTERVAL_MINUTES`       | `.env.batch-backend.example` | misc               | `docs/reference/env.md`                         |
@@ -40,7 +41,6 @@
 | `CORS_CREDENTIALS`                                   | `.env.batch-backend.example` | batch_backend      | `packages/batch-backend/README.md`              |
 | `CORS_ORIGIN`                                        | `.env.batch-backend.example` | batch_backend      | `packages/batch-backend/README.md`              |
 | `DRAFT_LOCAL_EXPORT`                                 | `.env.batch-backend.example` | batch_backend      | `packages/batch-backend/README.md`              |
-| `ELEVENLABS_VOICES_PATH`                             | `.env.batch-backend.example` | speech_runtime     | `docs/reference/env.md`                         |
 | `ENABLE_CORS`                                        | `.env.batch-backend.example` | batch_backend      | `packages/batch-backend/README.md`              |
 | `ENABLE_FILE_SANITIZATION`                           | `.env.batch-backend.example` | batch_backend      | `packages/batch-backend/README.md`              |
 | `ENABLE_FILE_VALIDATION`                             | `.env.batch-backend.example` | batch_backend      | `packages/batch-backend/README.md`              |

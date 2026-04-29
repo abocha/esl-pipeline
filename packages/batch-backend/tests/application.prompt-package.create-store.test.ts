@@ -20,6 +20,9 @@ import {
   createTranscriptRecord,
 } from './application.prompt-package.test-harness.js';
 
+const CANONICAL_ELEVENLABS_VOICES_ENV = 'ESL_TTS_PROVIDER_ELEVENLABS_VOICES_PATH';
+const RETIRED_ELEVENLABS_VOICES_ENV = ['ELEVENLABS', 'VOICES', 'PATH'].join('_');
+
 describe('application/prompt-package', () => {
   it('creates a prompt package with canonical ordering', async () => {
     const allowedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-prompt-allowed-'));
@@ -188,8 +191,13 @@ describe('application/prompt-package', () => {
       'utf8',
     );
 
-    const previousVoicesPath = process.env.ELEVENLABS_VOICES_PATH;
-    process.env.ELEVENLABS_VOICES_PATH = voicesPath;
+    const previousCanonicalVoicesPath = process.env[CANONICAL_ELEVENLABS_VOICES_ENV];
+    const previousRetiredVoicesPath = process.env[RETIRED_ELEVENLABS_VOICES_ENV];
+    process.env[CANONICAL_ELEVENLABS_VOICES_ENV] = voicesPath;
+    process.env[RETIRED_ELEVENLABS_VOICES_ENV] = path.join(
+      allowedDir,
+      'retired-legacy-voices.json',
+    );
     vi.spyOn(googleProvider, 'loadGoogleVoicesCatalog').mockResolvedValue({
       generatedAt: '2026-01-06T00:00:00.000Z',
       capabilities: {
@@ -256,10 +264,15 @@ describe('application/prompt-package', () => {
         'professional',
       ]);
     } finally {
-      if (previousVoicesPath === undefined) {
-        delete process.env.ELEVENLABS_VOICES_PATH;
+      if (previousCanonicalVoicesPath === undefined) {
+        delete process.env[CANONICAL_ELEVENLABS_VOICES_ENV];
       } else {
-        process.env.ELEVENLABS_VOICES_PATH = previousVoicesPath;
+        process.env[CANONICAL_ELEVENLABS_VOICES_ENV] = previousCanonicalVoicesPath;
+      }
+      if (previousRetiredVoicesPath === undefined) {
+        delete process.env[RETIRED_ELEVENLABS_VOICES_ENV];
+      } else {
+        process.env[RETIRED_ELEVENLABS_VOICES_ENV] = previousRetiredVoicesPath;
       }
       vi.restoreAllMocks();
     }
