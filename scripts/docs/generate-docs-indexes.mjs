@@ -151,11 +151,7 @@ function classifyEnvSurface(key) {
     };
   }
 
-  if (
-    key.startsWith('ESL_TTS_') ||
-    key.startsWith('VOICE_ALIGNMENT_') ||
-    key === 'ELEVENLABS_VOICES_PATH'
-  ) {
+  if (key.startsWith('ESL_TTS_') || key.startsWith('VOICE_ALIGNMENT_')) {
     return {
       surface: 'speech_runtime',
       details: 'docs/reference/env.md',

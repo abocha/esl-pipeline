@@ -1,6 +1,11 @@
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const GET_JOB_OPTIONS_TEST_TIMEOUT_MS = 60_000;
+const CANONICAL_ELEVENLABS_VOICES_ENV = 'ESL_TTS_PROVIDER_ELEVENLABS_VOICES_PATH';
+const RETIRED_ELEVENLABS_VOICES_ENV = ['ELEVENLABS', 'VOICES', 'PATH'].join('_');
 
 vi.mock('../src/infrastructure/logger', () => ({
   logger: {
@@ -64,6 +69,8 @@ describe('application/get-job-options', () => {
     delete process.env.NOTION_DB_LABEL;
     delete process.env.NOTION_DB_OPTIONS;
     delete process.env.BATCH_BACKEND_JOB_OPTIONS_ALLOW_STATIC_FALLBACK;
+    delete process.env[CANONICAL_ELEVENLABS_VOICES_ENV];
+    delete process.env[RETIRED_ELEVENLABS_VOICES_ENV];
   });
 
   it('returns orchestrator metadata when helper succeeds', {
@@ -193,6 +200,39 @@ describe('application/get-job-options', () => {
     timeout: GET_JOB_OPTIONS_TEST_TIMEOUT_MS,
   }, async () => {
     process.env.BATCH_BACKEND_JOB_OPTIONS_ALLOW_STATIC_FALLBACK = 'true';
+    const dir = await mkdtemp(join(tmpdir(), 'job-options-voices-'));
+    const canonicalVoicesPath = join(dir, 'canonical-voices.json');
+    const legacyVoicesPath = join(dir, 'legacy-voices.json');
+    await writeFile(
+      canonicalVoicesPath,
+      JSON.stringify({
+        voices: [
+          {
+            id: 'canonical-voice',
+            name: 'Canonical Voice',
+            category: 'professional',
+            labels: { accent: 'canonical', gender: 'female' },
+          },
+        ],
+      }),
+      'utf8',
+    );
+    await writeFile(
+      legacyVoicesPath,
+      JSON.stringify({
+        voices: [
+          {
+            id: 'legacy-voice',
+            name: 'Legacy Voice',
+            category: 'professional',
+            labels: { accent: 'legacy', gender: 'male' },
+          },
+        ],
+      }),
+      'utf8',
+    );
+    process.env[CANONICAL_ELEVENLABS_VOICES_ENV] = canonicalVoicesPath;
+    process.env[RETIRED_ELEVENLABS_VOICES_ENV] = legacyVoicesPath;
     const { getJobOptions } = await import('../src/application/get-job-options.js');
     const { getJobOptionsFromOrchestrator } = await import(
       '../src/infrastructure/orchestrator-service.js'
@@ -206,6 +246,16 @@ describe('application/get-job-options', () => {
     expect(result.presets).toEqual(['b1-default']);
     expect(result.cefrLevels).toEqual(['A1', 'A2', 'B1', 'B2', 'C1', 'C2']);
     expect(result.cefrDefault).toEqual('B1');
+    expect(result.voiceAccents).toEqual(['canonical_female']);
+    expect(result.voices).toEqual([
+      {
+        id: 'canonical-voice',
+        name: 'Canonical Voice',
+        category: 'professional',
+        accent: 'canonical_female',
+        gender: 'female',
+      },
+    ]);
     expect(result.uploadOptions).toEqual(['auto', 's3', 'none']);
     expect(result.ttsStrategies).toEqual(['auto']);
     expect(result.ttsProviders).toEqual(['elevenlabs', 'google']);

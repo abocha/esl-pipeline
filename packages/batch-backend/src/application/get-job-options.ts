@@ -2,8 +2,6 @@
 //
 // Batch frontend metadata endpoint. Primarily proxies orchestrator config.
 // Static metadata fallback is available only when explicitly enabled via env.
-import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
 
 import type {
   ActionCapability,
@@ -16,6 +14,7 @@ import type {
   VoiceOption,
 } from '@esl-pipeline/contracts';
 import { normalizeVoiceCatalogToOptions } from '@esl-pipeline/shared-infrastructure';
+import { loadVoicesCatalog as loadElevenLabsVoicesCatalog } from '@esl-pipeline/tts-provider-elevenlabs';
 
 import { loadConfig } from '../config/env.js';
 import { logger } from '../infrastructure/logger.js';
@@ -403,51 +402,14 @@ async function withQuotaUsage(
   }
 }
 
-const VOICE_CATALOG_RELATIVE_PATH = 'packages/orchestrator/configs/elevenlabs.voices.json';
-
 async function loadVoiceOptions(): Promise<VoiceOption[]> {
-  const candidates = getVoiceCatalogCandidates();
-  for (const voiceFile of candidates) {
-    try {
-      const raw = await readFile(voiceFile, 'utf8');
-      const parsed = JSON.parse(raw) as { voices?: Record<string, unknown>[] };
-      if (!parsed?.voices || !Array.isArray(parsed.voices)) {
-        continue;
-      }
-
-      return normalizeVoiceCatalogToOptions(parsed).voices;
-    } catch (error: unknown) {
-      if (
-        error &&
-        typeof error === 'object' &&
-        'code' in error &&
-        (error.code === 'ENOENT' || error.code === 'EISDIR')
-      ) {
-        continue;
-      }
-      // Swallow other errors so the API can continue serving fallback options.
-      continue;
-    }
+  try {
+    const catalog = await loadElevenLabsVoicesCatalog();
+    return normalizeVoiceCatalogToOptions(catalog).voices;
+  } catch {
+    // Swallow provider catalog errors so the API can continue serving fallback options.
+    return [];
   }
-  return [];
-}
-
-function getVoiceCatalogCandidates(): string[] {
-  const cwd = process.cwd();
-  const roots = [cwd, resolve(cwd, '..'), resolve(cwd, '..', '..')];
-  const overridePath = process.env.ELEVENLABS_VOICES_PATH
-    ? resolve(process.env.ELEVENLABS_VOICES_PATH)
-    : null;
-  const repoRootEnv = process.env.REPO_ROOT || process.env.APP_ROOT || process.env.PROJECT_ROOT;
-  if (repoRootEnv) {
-    roots.push(resolve(repoRootEnv));
-  }
-  const paths = [
-    overridePath,
-    ...roots.map((root) => resolve(root, VOICE_CATALOG_RELATIVE_PATH)),
-  ].filter(Boolean);
-
-  return [...new Set(paths)] as string[];
 }
 
 function cloneJobOptions(value: JobOptionsResponse): JobOptionsResponse {
