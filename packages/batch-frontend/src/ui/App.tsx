@@ -43,6 +43,11 @@ const StudentScheduleBillingPage = lazy(async () => {
   return { default: module.StudentScheduleBillingPage };
 });
 
+const PromptTemplatesPage = lazy(async () => {
+  const module = await import('./prompts/PromptTemplatesPage');
+  return { default: module.PromptTemplatesPage };
+});
+
 export const App: React.FC = () => {
   const { user, isAuthenticated, isLoading, logout } = useAuth();
   const [authMode, setAuthMode] = useState<AuthMode | null>(null);
@@ -126,6 +131,14 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ user, onLogout }) =
     <Routes>
       <Route element={<MinimalShell user={user} onLogout={onLogout} />}>
         <Route path="/" element={<MinimalAssignment />} />
+        <Route
+          path="/prompts"
+          element={
+            <Suspense fallback={<RouteLoadingFallback />}>
+              <PromptTemplatesPage />
+            </Suspense>
+          }
+        />
         <Route
           path="/students"
           element={

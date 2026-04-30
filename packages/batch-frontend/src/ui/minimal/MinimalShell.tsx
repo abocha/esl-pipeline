@@ -47,6 +47,12 @@ export const MinimalShell: React.FC<MinimalShellProps> = ({ user, onLogout, chil
           >
             Students
           </NavLink>
+          <NavLink
+            to="/prompts"
+            className={({ isActive }) => (isActive ? 'app-nav-link active' : 'app-nav-link')}
+          >
+            Prompts
+          </NavLink>
         </nav>
         <div className="app-actions">
           <span className="app-user" translate="no">

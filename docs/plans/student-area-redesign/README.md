@@ -97,6 +97,9 @@ page model, ownership boundaries, or profile authority rules.
    - Learning and Schedule & Billing visual convergence
    - shared student-route canvas ownership with page-specific density inside the canvas
    - browser-level visual acceptance
+10. [mvp-tomorrow-2026-05-01.md](mvp-tomorrow-2026-05-01.md)
+    - next MVP backlog captured for scheduling, billing, student continuity, UI repair, account
+      expansion, hosting, email, and signup research
 
 ## Current Authority Chain
 
