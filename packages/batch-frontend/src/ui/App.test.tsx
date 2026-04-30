@@ -49,6 +49,10 @@ vi.mock('./students/StudentScheduleBillingPage', () => ({
   StudentScheduleBillingPage: () => <div>Student schedule content</div>,
 }));
 
+vi.mock('./prompts/PromptTemplatesPage', () => ({
+  PromptTemplatesPage: () => <div>Prompt templates content</div>,
+}));
+
 vi.mock('react-hot-toast', () => ({
   toast: toastMock,
   default: toastMock,
@@ -124,6 +128,7 @@ describe('App', () => {
     expect(screen.getByRole('link', { name: /Assignments/i })).toBeTruthy();
     expect(screen.getByText('teacher@example.com')).toBeTruthy();
     expect(screen.getByText('Minimal assignment content')).toBeTruthy();
+    expect(screen.getByRole('link', { name: /Prompts/i })).toBeTruthy();
     expect(document.querySelector('style')?.textContent ?? '').not.toContain('.app-shell::before');
 
     await user.click(screen.getByRole('link', { name: /Skip to main content/i }));
@@ -150,6 +155,27 @@ describe('App', () => {
     await user.click(screen.getByRole('link', { name: /Students/i }));
 
     expect(await screen.findByText('Student directory content')).toBeTruthy();
+  });
+
+  it('renders the prompt templates route from shell navigation', async () => {
+    const user = userEvent.setup();
+    useAuthMock.mockReturnValue(
+      createAuthState({
+        user: {
+          id: 'user-1',
+          email: 'teacher@example.com',
+          role: 'user',
+          isActive: true,
+        },
+        isAuthenticated: true,
+      }),
+    );
+
+    renderApp();
+
+    await user.click(screen.getByRole('link', { name: /Prompts/i }));
+
+    expect(await screen.findByText('Prompt templates content')).toBeTruthy();
   });
 
   it('redirects /students/:studentId to the overview page', async () => {
