@@ -40,7 +40,9 @@ validation, and TTS execution.
 2. Confirm snapshot recency:
    - Compare `capabilities.generatedAt` with expected refresh cadence.
 3. Validate prompt packaging behavior:
-   - Run a v4.5 prompt package generation and ensure capability placeholders are replaced.
+   - Confirm the active `hw_prompt_definitive.md` template revision is `v10` or newer.
+   - Run a prompt package generation and ensure the stored prompt package contains a
+     `[VOICE_CAPABILITIES]` block after the static template and before `[FOUNDATIONAL_PROFILE]`.
    - Confirm prompt package response includes capability provenance metadata (generatedAt + hash).
 
 ## 3) Validation Progression Playbook
@@ -59,7 +61,8 @@ Progress flags in this order:
 3. Steady state:
    - `VOICE_ALIGNMENT_V2_ENABLED=true`
    - `VOICE_ALIGNMENT_V2_STRICT_VALIDATION=true`
-   - Expected: the current homework prompt is selected and capability enums are injected at package time.
+   - Expected: the current homework prompt is selected and capability enums are appended as
+     `[VOICE_CAPABILITIES]` at package time.
 
 Rollback:
 
@@ -95,9 +98,9 @@ Also watch metric streams/logs:
 
 ### Unsupported style/accent (`unsupported_voice_capability`)
 
-1. Compare requested `accent`/`style` with current capability snapshot.
+1. Compare requested `accent`/`style` with the `[VOICE_CAPABILITIES]` block in the prompt package.
 2. Update profile metadata to supported values.
-3. Regenerate prompt package to ensure new capability block is injected.
+3. Regenerate prompt package to ensure a fresh capability block and provenance are stored.
 
 ### Strict quality guard no-match
 
@@ -117,6 +120,6 @@ Also watch metric streams/logs:
 2. Validate one canary assignment in each mode:
    - compatibility shadow
    - strict validation
-   - strict + v4.5 prompt
+   - strict + active v10 prompt
 3. Confirm readiness endpoint and logs emit expected voice-alignment counters.
 4. Document rollout decision and rollback condition in deployment notes.

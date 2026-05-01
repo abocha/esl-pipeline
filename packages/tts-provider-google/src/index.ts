@@ -376,6 +376,15 @@ async function loadGoogleCatalogSnapshot(): Promise<GoogleCatalogSnapshot> {
     return googleCatalogCache.snapshot;
   }
 
+  if (!hasGoogleVoiceCatalogLiveSource()) {
+    const snapshot = buildFallbackGoogleCatalogSnapshot();
+    googleCatalogCache = {
+      expiresAtMs: now + GOOGLE_VOICE_CATALOG_TTL_MS,
+      snapshot,
+    };
+    return snapshot;
+  }
+
   try {
     const apiEndpoint = resolveGoogleApiEndpoint();
     const rawVoices = await listGoogleVoices(apiEndpoint ? { apiEndpoint } : undefined);
@@ -393,6 +402,16 @@ async function loadGoogleCatalogSnapshot(): Promise<GoogleCatalogSnapshot> {
     };
     return snapshot;
   }
+}
+
+function hasGoogleVoiceCatalogLiveSource(): boolean {
+  return [
+    'GOOGLE_APPLICATION_CREDENTIALS',
+    'GOOGLE_CLOUD_PROJECT',
+    'GCLOUD_PROJECT',
+    'GOOGLE_PROJECT_ID',
+    'ESL_TTS_PROVIDER_GOOGLE_API_ENDPOINT',
+  ].some((name) => typeof process.env[name] === 'string' && process.env[name]?.trim());
 }
 
 function buildVoiceLookupByName(
