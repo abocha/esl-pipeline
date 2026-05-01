@@ -165,14 +165,7 @@ export function createTemplateRevisionRepositoryStub(
           'template.md': 'Hello\nFooter\n',
           'hw_prompt_definitive.md': [
             'Header',
-            '```yaml',
-            '# CAPABILITY SNAPSHOT (injected dynamically per voice catalog refresh)',
-            'role: [narrator, teacher, student, system]',
-            'gender: [male, female, neutral, child]',
-            'age: [child, teen, young, adult, middle_aged, senior, universal]',
-            'accent: [<provider-backed values>]',
-            'style: [<provider-backed values>]',
-            '```',
+            'Use exact values from [VOICE_CAPABILITIES] when writing speaker_profiles.',
           ].join('\n'),
         };
         const content = contentByTemplateId[templateId] ?? 'Hello\nFooter\n';

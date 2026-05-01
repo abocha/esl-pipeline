@@ -4,7 +4,6 @@ import type { VoiceCapabilitiesSnapshot } from '@esl-pipeline/contracts';
 import { loadVoicesCatalog as loadElevenLabsVoicesCatalog } from '@esl-pipeline/tts-provider-elevenlabs';
 import { loadGoogleVoicesCatalog } from '@esl-pipeline/tts-provider-google';
 
-const CAPABILITY_BLOCK_PATTERN = /```yaml\s*\n# CAPABILITY SNAPSHOT[^\n]*\n[\s\S]*?\n```/m;
 const CANONICAL_ROLE: VoiceCapabilitiesSnapshot['role'] = [
   'narrator',
   'teacher',
@@ -37,45 +36,38 @@ interface VoiceCatalogLike {
 }
 
 export interface PromptVoiceCapabilitiesResolution {
-  materializedTemplate: string;
-  capabilitiesSnapshot: VoiceCapabilitiesSnapshot | null;
-  capabilitiesHash: string | null;
-  capabilitiesGeneratedAt: Date | null;
+  blockText: string;
+  capabilitiesSnapshot: VoiceCapabilitiesSnapshot;
+  capabilitiesHash: string;
+  capabilitiesGeneratedAt: Date;
 }
 
-export async function materializePromptTemplateWithCapabilities(params: {
+export async function resolvePromptVoiceCapabilities(params: {
   templateId: string;
-  templateContent: string;
 }): Promise<PromptVoiceCapabilitiesResolution> {
-  const includesCapabilityBlock = CAPABILITY_BLOCK_PATTERN.test(params.templateContent);
-  if (!includesCapabilityBlock) {
-    return {
-      materializedTemplate: params.templateContent,
-      capabilitiesSnapshot: null,
-      capabilitiesHash: null,
-      capabilitiesGeneratedAt: null,
-    };
-  }
-
   const snapshot = await loadMergedVoiceCapabilitiesSnapshot();
   if (!snapshot) {
     throw new Error(
-      'Voice-aligned prompt templates require a voice capabilities snapshot. ' +
+      `Voice-aligned prompt packages require a voice capabilities snapshot for "${params.templateId}". ` +
         'Sync ElevenLabs voices or configure Google TTS credentials.',
     );
   }
 
-  const materializedTemplate = injectCapabilitiesBlock(params.templateContent, snapshot);
   const capabilitiesHash = createHash('sha256')
     .update(JSON.stringify(snapshot), 'utf8')
     .digest('hex');
   const generatedAt = new Date(snapshot.generatedAt);
+  if (Number.isNaN(generatedAt.getTime())) {
+    throw new Error(
+      `Voice capabilities snapshot for "${params.templateId}" has an invalid generatedAt value.`,
+    );
+  }
 
   return {
-    materializedTemplate,
+    blockText: formatVoiceCapabilitiesBlock(snapshot),
     capabilitiesSnapshot: snapshot,
     capabilitiesHash,
-    capabilitiesGeneratedAt: Number.isNaN(generatedAt.getTime()) ? null : generatedAt,
+    capabilitiesGeneratedAt: generatedAt,
   };
 }
 
@@ -243,30 +235,16 @@ function normalizeSnapshot(snapshot: VoiceCapabilitiesSnapshot): VoiceCapabiliti
   };
 }
 
-function injectCapabilitiesBlock(
-  templateContent: string,
-  snapshot: VoiceCapabilitiesSnapshot,
-): string {
-  if (!templateContent.includes('# CAPABILITY SNAPSHOT')) {
-    throw new Error('Voice-aligned prompt template is missing the capability snapshot marker.');
-  }
-
-  const replacement = [
-    '```yaml',
-    '# CAPABILITY SNAPSHOT (injected dynamically per voice catalog refresh)',
+function formatVoiceCapabilitiesBlock(snapshot: VoiceCapabilitiesSnapshot): string {
+  return [
+    '[VOICE_CAPABILITIES]',
+    `generated_at: ${snapshot.generatedAt}`,
     `role: ${formatInlineList(snapshot.role)}`,
     `gender: ${formatInlineList(snapshot.gender)}`,
     `age: ${formatInlineList(snapshot.age)}`,
     `accent: ${formatInlineList(snapshot.accent)}`,
     `style: ${formatInlineList(snapshot.style)}`,
-    '```',
   ].join('\n');
-
-  if (CAPABILITY_BLOCK_PATTERN.test(templateContent)) {
-    return templateContent.replace(CAPABILITY_BLOCK_PATTERN, replacement);
-  }
-
-  throw new Error('Voice-aligned prompt template capability snapshot block format is invalid.');
 }
 
 function formatInlineList(values: readonly string[]): string {

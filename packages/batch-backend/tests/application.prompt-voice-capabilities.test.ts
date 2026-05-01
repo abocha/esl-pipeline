@@ -3,23 +3,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
+import * as elevenLabsProvider from '@esl-pipeline/tts-provider-elevenlabs';
 import * as googleProvider from '@esl-pipeline/tts-provider-google';
 
-import { materializePromptTemplateWithCapabilities } from '../src/application/prompt-voice-capabilities.js';
+import { resolvePromptVoiceCapabilities } from '../src/application/prompt-voice-capabilities.js';
 
-const TEMPLATE = [
-  'Header',
-  '```yaml',
-  '# CAPABILITY SNAPSHOT (injected dynamically per voice catalog refresh)',
-  'role: [narrator, teacher, student, system]',
-  'gender: [male, female, neutral, child]',
-  'age: [child, teen, young, adult, middle_aged, senior, universal]',
-  'accent: [<provider-backed values>]',
-  'style: [<provider-backed values>]',
-  '```',
-].join('\n');
 const CANONICAL_ELEVENLABS_VOICES_ENV = 'ESL_TTS_PROVIDER_ELEVENLABS_VOICES_PATH';
 const RETIRED_ELEVENLABS_VOICES_ENV = ['ELEVENLABS', 'VOICES', 'PATH'].join('_');
+const GOOGLE_CREDENTIALS_ENV = 'GOOGLE_APPLICATION_CREDENTIALS';
 
 async function writeElevenCatalog(
   filePath: string,
@@ -58,7 +49,9 @@ describe('application/prompt-voice-capabilities', () => {
     await writeElevenCatalog(voicesPath);
 
     const previousVoicesPath = process.env[CANONICAL_ELEVENLABS_VOICES_ENV];
+    const previousGoogleCredentials = process.env[GOOGLE_CREDENTIALS_ENV];
     process.env[CANONICAL_ELEVENLABS_VOICES_ENV] = voicesPath;
+    process.env[GOOGLE_CREDENTIALS_ENV] = path.join(dir, 'mock-google-credentials.json');
     vi.spyOn(googleProvider, 'loadGoogleVoicesCatalog').mockResolvedValue({
       generatedAt: '2026-01-06T00:00:00.000Z',
       capabilities: {
@@ -73,9 +66,8 @@ describe('application/prompt-voice-capabilities', () => {
     });
 
     try {
-      const result = await materializePromptTemplateWithCapabilities({
+      const result = await resolvePromptVoiceCapabilities({
         templateId: 'hw_prompt_definitive.md',
-        templateContent: TEMPLATE,
       });
 
       expect(result.capabilitiesSnapshot?.accent).toEqual(['american', 'australian', 'british']);
@@ -84,12 +76,23 @@ describe('application/prompt-voice-capabilities', () => {
         'conversational',
         'professional',
       ]);
-      expect(result.materializedTemplate).toContain('accent: [american, australian, british]');
+      expect(result.blockText).toContain('[VOICE_CAPABILITIES]');
+      expect(result.blockText).toContain('generated_at: 2026-01-06T00:00:00.000Z');
+      expect(result.blockText).toContain('accent: [american, australian, british]');
+      expect(result.blockText).toContain('style: [chirp3_hd, conversational, professional]');
+      expect(result.blockText).not.toContain('# CAPABILITY SNAPSHOT');
+      expect(result.blockText).not.toContain('```');
+      expect(result.blockText).not.toContain('<provider-backed values>');
     } finally {
       if (previousVoicesPath === undefined) {
         delete process.env[CANONICAL_ELEVENLABS_VOICES_ENV];
       } else {
         process.env[CANONICAL_ELEVENLABS_VOICES_ENV] = previousVoicesPath;
+      }
+      if (previousGoogleCredentials === undefined) {
+        delete process.env[GOOGLE_CREDENTIALS_ENV];
+      } else {
+        process.env[GOOGLE_CREDENTIALS_ENV] = previousGoogleCredentials;
       }
       vi.restoreAllMocks();
     }
@@ -117,17 +120,16 @@ describe('application/prompt-voice-capabilities', () => {
     vi.spyOn(googleProvider, 'loadGoogleVoicesCatalog').mockRejectedValue(new Error('adc missing'));
 
     try {
-      const result = await materializePromptTemplateWithCapabilities({
+      const result = await resolvePromptVoiceCapabilities({
         templateId: 'hw_prompt_definitive.md',
-        templateContent: TEMPLATE,
       });
 
       expect(result.capabilitiesSnapshot?.generatedAt).toBe('2026-01-07T00:00:00.000Z');
       expect(result.capabilitiesSnapshot?.accent).toEqual(['canonical_accent']);
       expect(result.capabilitiesSnapshot?.style).toEqual(['canonical_style']);
-      expect(result.materializedTemplate).toContain('accent: [canonical_accent]');
-      expect(result.materializedTemplate).not.toContain('legacy_accent');
-      expect(result.materializedTemplate.length).toBeLessThan(2000);
+      expect(result.blockText).toContain('accent: [canonical_accent]');
+      expect(result.blockText).not.toContain('legacy_accent');
+      expect(result.blockText.length).toBeLessThan(2000);
     } finally {
       if (previousCanonicalPath === undefined) {
         delete process.env[CANONICAL_ELEVENLABS_VOICES_ENV];
@@ -153,18 +155,48 @@ describe('application/prompt-voice-capabilities', () => {
     vi.spyOn(googleProvider, 'loadGoogleVoicesCatalog').mockRejectedValue(new Error('adc missing'));
 
     try {
-      const result = await materializePromptTemplateWithCapabilities({
+      const result = await resolvePromptVoiceCapabilities({
         templateId: 'hw_prompt_definitive.md',
-        templateContent: TEMPLATE,
       });
 
       expect(result.capabilitiesSnapshot?.accent).toEqual(['american', 'british']);
-      expect(result.materializedTemplate).toContain('accent: [american, british]');
+      expect(result.blockText).toContain('accent: [american, british]');
     } finally {
       if (previousVoicesPath === undefined) {
         delete process.env[CANONICAL_ELEVENLABS_VOICES_ENV];
       } else {
         process.env[CANONICAL_ELEVENLABS_VOICES_ENV] = previousVoicesPath;
+      }
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('fails when no provider capability snapshot is available', async () => {
+    const previousVoicesPath = process.env[CANONICAL_ELEVENLABS_VOICES_ENV];
+    const previousGoogleCredentials = process.env[GOOGLE_CREDENTIALS_ENV];
+    delete process.env[CANONICAL_ELEVENLABS_VOICES_ENV];
+    delete process.env[GOOGLE_CREDENTIALS_ENV];
+    vi.spyOn(elevenLabsProvider, 'loadVoicesCatalog').mockRejectedValue(
+      new Error('catalog missing'),
+    );
+    vi.spyOn(googleProvider, 'loadGoogleVoicesCatalog').mockRejectedValue(new Error('adc missing'));
+
+    try {
+      await expect(
+        resolvePromptVoiceCapabilities({
+          templateId: 'hw_prompt_definitive.md',
+        }),
+      ).rejects.toThrow(/Voice-aligned prompt packages require a voice capabilities snapshot/);
+    } finally {
+      if (previousVoicesPath === undefined) {
+        delete process.env[CANONICAL_ELEVENLABS_VOICES_ENV];
+      } else {
+        process.env[CANONICAL_ELEVENLABS_VOICES_ENV] = previousVoicesPath;
+      }
+      if (previousGoogleCredentials === undefined) {
+        delete process.env[GOOGLE_CREDENTIALS_ENV];
+      } else {
+        process.env[GOOGLE_CREDENTIALS_ENV] = previousGoogleCredentials;
       }
       vi.restoreAllMocks();
     }

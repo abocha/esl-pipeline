@@ -58,7 +58,7 @@ Every generated draft should retain:
 
 The default `general-english` preset uses `hw_prompt_definitive`.
 
-- inject capability enums from the current voice catalog snapshot
+- append `[VOICE_CAPABILITIES]` from the current merged provider voice catalog snapshot
 - persist capability provenance
 - fail fast if the capability snapshot cannot be resolved
 
