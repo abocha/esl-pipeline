@@ -3,6 +3,7 @@ import path from 'node:path';
 
 export interface PromptStitchOptions {
   template: string;
+  voiceCapabilities: string;
   profile: string;
   studentMemorySnapshot: string;
   recentLessonMemory: string;
@@ -15,6 +16,7 @@ export interface PromptStitchOptions {
 export function stitchPromptPayload(options: PromptStitchOptions): string {
   return [
     options.template.trimEnd(),
+    options.voiceCapabilities.trim(),
     formatLabeledBlock('FOUNDATIONAL_PROFILE', options.profile),
     formatLabeledBlock('STUDENT_MEMORY_SNAPSHOT', options.studentMemorySnapshot),
     formatLabeledBlock('RECENT_LESSON_MEMORY', options.recentLessonMemory),

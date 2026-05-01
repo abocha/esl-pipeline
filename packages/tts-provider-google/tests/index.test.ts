@@ -17,6 +17,7 @@ import {
 } from '../src/index.js';
 
 function mockGoogleVoiceList(voices: GoogleVoiceListEntry[]) {
+  process.env.ESL_TTS_PROVIDER_GOOGLE_API_ENDPOINT = 'test-texttospeech.googleapis.com';
   vi.spyOn(googleApi, 'listGoogleVoices').mockResolvedValue(voices);
 }
 
@@ -62,6 +63,7 @@ beforeEach(() => {
 
 afterEach(() => {
   delete process.env.ESL_TTS_PROVIDER_GOOGLE_SILENCE_TAIL_SECONDS;
+  delete process.env.ESL_TTS_PROVIDER_GOOGLE_API_ENDPOINT;
   resetGoogleVoiceCatalogCacheForTests();
   vi.useRealTimers();
   vi.restoreAllMocks();
@@ -88,9 +90,20 @@ describe('google provider adapter basics', () => {
     expect(catalog.capabilities?.style).toEqual(['chirp3_hd', 'neural2', 'studio', 'wavenet']);
   });
 
+  it('uses fallback catalog without live Google listing when no live capability source is configured', async () => {
+    const spy = vi.spyOn(googleApi, 'listGoogleVoices');
+
+    const catalog = await loadGoogleVoicesCatalog();
+
+    expect(spy).not.toHaveBeenCalled();
+    expect(catalog.capabilities?.style).toEqual(['chirp3_hd', 'neural2', 'studio', 'wavenet']);
+    expect(catalog.voices.some((voice) => voice.id === 'en-US-Chirp3-HD-Charon')).toBe(true);
+  });
+
   it('caches Google voice catalog for 15 minutes', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-03-09T00:00:00.000Z'));
+    process.env.ESL_TTS_PROVIDER_GOOGLE_API_ENDPOINT = 'test-texttospeech.googleapis.com';
     const spy = vi
       .spyOn(googleApi, 'listGoogleVoices')
       .mockResolvedValue(createRichEnglishMockVoices());
