@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [6.3.1] - 2026-05-01
+
+### Changed
+
+- Automated release from PR #70: fix(batch-backend): stitch voice capabilities as runtime block (https://github.com/abocha/esl-pipeline/pull/70)
+
 ## [6.3.0] - 2026-04-30
 
 ### Changed
