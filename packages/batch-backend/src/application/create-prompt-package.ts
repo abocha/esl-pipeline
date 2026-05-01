@@ -30,13 +30,14 @@ import {
 } from './foundational-profile.js';
 import { stitchPromptPayload } from './prompt-assembly.js';
 import { PromptOptionError, resolvePromptSelection } from './prompt-options.js';
-import { materializePromptTemplateWithCapabilities } from './prompt-voice-capabilities.js';
+import { resolvePromptVoiceCapabilities } from './prompt-voice-capabilities.js';
 import { requestLessonMemoryGeneration } from './request-lesson-memory-generation.js';
 import { buildStudentMemoryPackageContext } from './student-memory-package.js';
 import { resolveStudentProfileBindingAt } from './student-profile-bindings.js';
 import { getStudentProfileById } from './student-profiles-store.js';
 
 const LEGACY_PROFILE_MARKER = 'INSERT PROFILE HERE';
+const LEGACY_VOICE_CAPABILITY_MARKER = '# CAPABILITY SNAPSHOT';
 
 export interface CreatePromptPackageParams {
   recordingId: string;
@@ -242,13 +243,13 @@ export async function createPromptPackage(
     currentTranscriptId: transcript.id,
     config,
   });
-  const templateMaterialization = await materializePromptTemplateWithCapabilities({
+  const voiceCapabilities = await resolvePromptVoiceCapabilities({
     templateId: selection.templateId,
-    templateContent: artifacts.template.content,
   });
 
   const payload = stitchPromptPayload({
-    template: templateMaterialization.materializedTemplate,
+    template: artifacts.template.content,
+    voiceCapabilities: voiceCapabilities.blockText,
     profile: artifacts.profile.content,
     studentMemorySnapshot: memoryContext.studentMemorySnapshotBlock,
     recentLessonMemory: memoryContext.recentLessonMemoryBlock,
@@ -287,9 +288,9 @@ export async function createPromptPackage(
     resolvedTemplateUpdatedAt: artifacts.template.revision.createdAt,
     resolvedTemplateVersionLabel: artifacts.template.revision.versionLabel,
     resolvedTemplateStatus: artifacts.template.revision.status,
-    resolvedVoiceCapabilitiesHash: templateMaterialization.capabilitiesHash,
-    resolvedVoiceCapabilitiesGeneratedAt: templateMaterialization.capabilitiesGeneratedAt,
-    resolvedVoiceCapabilitiesSnapshot: templateMaterialization.capabilitiesSnapshot,
+    resolvedVoiceCapabilitiesHash: voiceCapabilities.capabilitiesHash,
+    resolvedVoiceCapabilitiesGeneratedAt: voiceCapabilities.capabilitiesGeneratedAt,
+    resolvedVoiceCapabilitiesSnapshot: voiceCapabilities.capabilitiesSnapshot,
     templateVersion: selection.templateId,
     notes: params.notes ?? null,
     storageUri: stored.uri,
@@ -515,6 +516,12 @@ async function resolveTemplateArtifact(params: {
       throw new PromptOptionError(
         `Active template "${selection.templateId}" still uses retired legacy marker ${LEGACY_PROFILE_MARKER}. Migrate or replace the template revision before generation.`,
         'template_revision_legacy_marker',
+      );
+    }
+    if (activeTemplateRevision.content.includes(LEGACY_VOICE_CAPABILITY_MARKER)) {
+      throw new PromptOptionError(
+        `Active template "${selection.templateId}" still uses retired voice capability marker ${LEGACY_VOICE_CAPABILITY_MARKER}. Activate the v10 template revision before generation.`,
+        'template_revision_legacy_voice_capability_marker',
       );
     }
     return {
