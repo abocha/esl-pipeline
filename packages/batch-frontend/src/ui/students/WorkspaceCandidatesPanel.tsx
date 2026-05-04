@@ -64,6 +64,12 @@ export function WorkspaceCandidatesPanel({
 }: WorkspaceCandidatesPanelProps) {
   const approvedCandidatesReadyForPromotion =
     getApprovedCandidatesReadyForPromotion(profileCandidates);
+  const approvedCandidateIdsReadyForPromotion = new Set(
+    approvedCandidatesReadyForPromotion.map((candidate) => candidate.id),
+  );
+  const selectedApprovedCandidateCount = selectedCandidateIds.filter((candidateId) =>
+    approvedCandidateIdsReadyForPromotion.has(candidateId),
+  ).length;
   const groupedProfileCandidates = groupVisibleCandidatesBySection(
     profileCandidates,
     profileCandidateFilter,
@@ -143,13 +149,17 @@ export function WorkspaceCandidatesPanel({
 
         <div className="workspace-inline">
           <span className="workspace-muted">
-            {selectedCandidateIds.length} selected for draft revision generation
+            {selectedApprovedCandidateCount} selected for draft revision generation
           </span>
           <button
             type="button"
             className="workspace-primary-btn"
             onClick={() => void onPromoteProfileCandidates()}
-            disabled={!selectedStudentId || profileCandidatePromotionBusy}
+            disabled={
+              !selectedStudentId ||
+              profileCandidatePromotionBusy ||
+              selectedApprovedCandidateCount === 0
+            }
           >
             {profileCandidatePromotionBusy ? 'Generating Draft...' : 'Generate Draft Revision'}
           </button>
@@ -192,9 +202,9 @@ export function WorkspaceCandidatesPanel({
                   return (
                     <details
                       key={candidate.id}
-                      className="workspace-list-item workspace-candidate-item"
+                      className="workspace-list-item workspace-candidate-item workspace-candidate-details"
                     >
-                      <summary>
+                      <summary className="workspace-candidate-summary">
                         <div className="workspace-inline workspace-header-row">
                           <div>
                             <strong>{candidate.proposedFact}</strong>
@@ -206,6 +216,7 @@ export function WorkspaceCandidatesPanel({
                             {isSelectableForPromotion(candidate) ? (
                               <label className="workspace-inline">
                                 <input
+                                  aria-label={`Select candidate ${candidate.id} for promotion`}
                                   type="checkbox"
                                   checked={isSelected}
                                   onChange={(event) =>
@@ -219,7 +230,7 @@ export function WorkspaceCandidatesPanel({
                                     })
                                   }
                                 />
-                                Select
+                                Use in draft
                               </label>
                             ) : null}
                             <span className="workspace-pill">

@@ -143,7 +143,6 @@
   background: rgba(255, 253, 248, 0.66);
 }
 
-.student-overview-back a,
 .student-overview-panel a,
 .student-overview-status,
 .student-overview-operation-row,
@@ -152,48 +151,6 @@
   text-decoration: none;
 }
 
-.student-overview-back a {
-  font-weight: 650;
-  font-size: 0.94rem;
-}
-
-.student-overview-hero {
-  display: grid;
-  gap: clamp(1.5rem, 4vw, 3rem);
-  grid-template-columns: minmax(120px, 0.42fr) minmax(0, 0.84fr) minmax(280px, 0.72fr);
-  align-items: start;
-}
-
-.student-overview-portrait {
-  aspect-ratio: 1;
-  display: grid;
-  place-items: center;
-  width: min(100%, 260px);
-  margin-top: clamp(2.4rem, 4vw, 3.2rem);
-  border-radius: 50%;
-  justify-self: center;
-  background:
-    radial-gradient(circle at 36% 26%, rgba(255, 255, 255, 0.92), transparent 24%),
-    linear-gradient(145deg, rgba(20, 63, 115, 0.18), rgba(49, 92, 58, 0.16)),
-    var(--overview-paper-deep);
-  border: 1px solid rgba(42, 36, 26, 0.1);
-  box-shadow: inset 0 0 0 12px rgba(255, 255, 255, 0.32);
-}
-
-.student-overview-portrait span {
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(2.3rem, 6vw, 5.8rem);
-  color: rgba(20, 63, 115, 0.82);
-  letter-spacing: 0.04em;
-}
-
-.student-overview-identity {
-  display: grid;
-  gap: 1rem;
-  max-width: 36rem;
-}
-
-.student-overview-kicker,
 .student-overview-section-label {
   margin: 0;
   color: var(--overview-blue);
@@ -203,29 +160,15 @@
   text-transform: uppercase;
 }
 
-.student-overview-identity h2 {
-  margin: 0;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(3rem, 6vw, 6.2rem);
-  font-weight: 500;
-  line-height: 0.95;
-  letter-spacing: -0.06em;
-}
-
-.student-overview-identity > p:not(.student-overview-kicker) {
-  max-width: 30rem;
-  margin: 0;
-  color: #2c2923;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(1.05rem, 2vw, 1.42rem);
-  line-height: 1.45;
-}
-
 .student-overview-control-row {
   display: grid;
   grid-template-columns: minmax(280px, 0.95fr) minmax(280px, 0.72fr);
+  gap: clamp(1rem, 3vw, 2rem);
   align-items: start;
-  padding-bottom: 0.35rem;
+  padding: 1.25rem;
+  border: 1px solid var(--overview-line);
+  border-radius: 18px;
+  background: rgba(255, 253, 248, 0.58);
 }
 
 .student-overview-status-panel {
@@ -309,8 +252,6 @@
 .student-overview-operations {
   display: grid;
   gap: 0.35rem;
-  padding-left: clamp(1rem, 3vw, 2.2rem);
-  border-left: 1px solid var(--overview-line);
 }
 
 .student-overview-operation-row {
@@ -609,19 +550,12 @@
 }
 
 @media (max-width: 1120px) {
-  .student-overview-hero,
   .student-overview-control-row,
   .student-overview-body {
     grid-template-columns: 1fr;
   }
 
-  .student-overview-portrait {
-    display: none;
-  }
-
   .student-overview-operations {
-    padding-left: 0;
-    border-left: 0;
     border-top: 1px solid var(--overview-line);
     padding-top: 1rem;
   }
@@ -638,10 +572,6 @@
   .student-overview-frame {
     border-radius: 22px;
     padding: 1rem;
-  }
-
-  .student-overview-identity h2 {
-    font-size: clamp(2.6rem, 18vw, 4rem);
   }
 
   .student-overview-profile-grid,

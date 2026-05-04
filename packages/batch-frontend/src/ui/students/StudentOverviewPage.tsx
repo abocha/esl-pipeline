@@ -442,7 +442,11 @@ export const StudentOverviewPage: React.FC = () => {
         ) : null}
 
         <div className="student-overview-control-row">
-          <article className="student-overview-status-panel">
+          <article
+            className="student-overview-status-panel"
+            role="region"
+            aria-label="Learning State"
+          >
             <p className="student-overview-section-label">Learning State</p>
             <p>{getStudentSummary(profile)}</p>
             <Link
@@ -455,7 +459,7 @@ export const StudentOverviewPage: React.FC = () => {
             </Link>
           </article>
 
-          <aside className="student-overview-operations" aria-label="Operations snapshot">
+          <aside className="student-overview-operations" role="region" aria-label="Operations">
             <p className="student-overview-section-label">Operations</p>
             <Link
               to={studentAreaPath('schedule-billing')}
@@ -501,7 +505,11 @@ export const StudentOverviewPage: React.FC = () => {
         </div>
 
         <div className="student-overview-body">
-          <article className="student-area-panel student-overview-panel learner-snapshot">
+          <article
+            className="student-area-panel student-overview-panel learner-snapshot"
+            role="region"
+            aria-label="Learner Snapshot"
+          >
             <header>
               <p className="student-overview-section-label">Learner Snapshot</p>
               <Link to={studentAreaPath('learning')}>View full profile</Link>
@@ -545,7 +553,11 @@ export const StudentOverviewPage: React.FC = () => {
             <p className="student-overview-meta">Profile updated {profileUpdatedAt}</p>
           </article>
 
-          <article className="student-area-panel student-overview-panel current-focus">
+          <article
+            className="student-area-panel student-overview-panel current-focus"
+            role="region"
+            aria-label="Current Focus"
+          >
             <header>
               <p className="student-overview-section-label">Current Focus</p>
               <span>{currentFocus.badge}</span>
@@ -569,7 +581,11 @@ export const StudentOverviewPage: React.FC = () => {
               </span>
             </Link>
 
-            <article className="student-area-panel student-overview-panel recent-activity">
+            <article
+              className="student-area-panel student-overview-panel recent-activity"
+              role="region"
+              aria-label="Recent Activity"
+            >
               <header>
                 <p className="student-overview-section-label">Recent Activity</p>
                 <Link to={studentAreaPath('history')}>View history</Link>

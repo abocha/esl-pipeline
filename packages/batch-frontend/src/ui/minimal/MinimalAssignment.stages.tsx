@@ -13,7 +13,6 @@ import type {
 } from '../../utils/api';
 import { DropZone } from '../shared/DropZone';
 import { UploadProgress } from '../shared/UploadProgress';
-import type { MinimalPublishTarget } from './MinimalAssignment.logic';
 
 export type WorkflowStageId = 'start' | 'source' | 'context' | 'assignment' | 'review' | 'advanced';
 export type WorkflowStageStatus = 'current' | 'complete' | 'available' | 'locked';
@@ -216,8 +215,6 @@ interface ReviewStageSectionProps {
   onPreviewDraft: () => void;
   draftHasContent: boolean;
   previewReadyForCurrentDraft: boolean;
-  publishTarget: MinimalPublishTarget;
-  onPublishTargetChange: (value: MinimalPublishTarget) => void;
   selectedPreset: string;
   onSelectedPresetChange: (value: string) => void;
   presetOptions: { id: string; label: string }[];
@@ -1327,8 +1324,6 @@ export function ReviewStageSection({
   onPreviewDraft,
   draftHasContent,
   previewReadyForCurrentDraft,
-  publishTarget,
-  onPublishTargetChange,
   selectedPreset,
   onSelectedPresetChange,
   presetOptions,
@@ -1412,17 +1407,7 @@ export function ReviewStageSection({
               </span>
             </div>
           </div>
-          <label className="minimal-select">
-            Share to
-            <select
-              value={publishTarget}
-              onChange={(event) =>
-                onPublishTargetChange(event.target.value as MinimalPublishTarget)
-              }
-            >
-              <option value="html">HTML page</option>
-            </select>
-          </label>
+          <p className="minimal-help">Assignments publish as HTML pages.</p>
           <details className="minimal-details">
             <summary>Audio and publishing settings</summary>
             <div className="minimal-grid">

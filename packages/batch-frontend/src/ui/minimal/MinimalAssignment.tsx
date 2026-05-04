@@ -1007,8 +1007,6 @@ export const MinimalAssignment: React.FC = () => {
         onPreviewDraft={() => void authoring.previewDraft()}
         draftHasContent={authoring.draftText.trim().length > 0}
         previewReadyForCurrentDraft={authoring.previewReadyForCurrentDraft}
-        publishTarget={authoring.publishTarget}
-        onPublishTargetChange={authoring.setPublishTarget}
         selectedPreset={authoring.selectedPreset}
         onSelectedPresetChange={authoring.setSelectedPreset}
         presetOptions={presetOptions}
