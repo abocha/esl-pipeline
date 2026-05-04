@@ -188,6 +188,26 @@ describe('StudentOverviewPage', () => {
     expect(apiMocks.getStudentOverviewSurface).toHaveBeenCalledWith('student-alex');
   });
 
+  it('exposes the overview as named control-tower regions with stable operations links', async () => {
+    renderOverview();
+
+    expect(await screen.findByRole('region', { name: /Learning State/i })).toBeTruthy();
+    expect(screen.getByRole('region', { name: /Operations/i })).toBeTruthy();
+    expect(screen.getByRole('region', { name: /Learner Snapshot/i })).toBeTruthy();
+    expect(screen.getByRole('region', { name: /Current Focus/i })).toBeTruthy();
+    expect(screen.getByRole('region', { name: /Recent Activity/i })).toBeTruthy();
+
+    const operations = screen.getByRole('region', { name: /Operations/i });
+    const operationLinks = Array.from(operations.querySelectorAll('a'));
+    expect(operationLinks).toHaveLength(4);
+    expect(operationLinks.map((link) => link.getAttribute('href'))).toEqual([
+      '/students/student-alex/schedule-billing',
+      '/students/student-alex/schedule-billing',
+      '/students/student-alex/schedule-billing',
+      '/students/student-alex/schedule-billing',
+    ]);
+  });
+
   it('shows a non-readable pending canvas while overview data resolves', async () => {
     const overviewDeferred =
       createDeferred<Awaited<ReturnType<typeof apiMocks.getStudentOverviewSurface>>>();

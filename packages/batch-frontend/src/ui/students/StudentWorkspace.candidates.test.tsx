@@ -86,6 +86,28 @@ describe('StudentWorkspace candidates', () => {
     expect(onPromoteProfileCandidates).toHaveBeenCalled();
   }, 10000);
 
+  it('keeps draft generation unavailable until an approved candidate is selected', async () => {
+    const user = userEvent.setup();
+    const onPromoteProfileCandidates = vi.fn();
+    renderWorkspaceCandidatesPanel({
+      profileCandidateFilter: 'reviewed',
+      selectedCandidateIds: [],
+      onPromoteProfileCandidates,
+    });
+
+    const generateButton = screen.getByRole('button', {
+      name: /Generate Draft Revision/i,
+    }) as HTMLButtonElement;
+    expect(generateButton.disabled).toBe(true);
+    expect(screen.getAllByLabelText(/Select candidate .* for promotion/i)).toHaveLength(1);
+
+    await user.click(screen.getByLabelText(/Select candidate candidate-approved for promotion/i));
+
+    expect(generateButton.disabled).toBe(false);
+    await user.click(generateButton);
+    expect(onPromoteProfileCandidates).toHaveBeenCalledTimes(1);
+  });
+
   it('loads the generated draft revision into the foundational profile editor', async () => {
     const user = userEvent.setup();
     await renderWorkspaceWithProfileCandidates();

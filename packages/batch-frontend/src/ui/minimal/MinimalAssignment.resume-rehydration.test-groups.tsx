@@ -41,9 +41,8 @@ export function registerResumeBasicTests() {
 
       expect(screen.getByRole('heading', { name: /Add lesson source/i })).toBeTruthy();
       expect(screen.getByRole('heading', { name: /Review and share/i })).toBeTruthy();
-      expect((screen.getByRole('combobox', { name: /Share to/i }) as HTMLSelectElement).value).toBe(
-        'html',
-      );
+      expect(screen.queryByRole('combobox', { name: /Share to/i })).toBeNull();
+      expect(screen.getByText(/Assignments publish as HTML pages/i)).toBeTruthy();
     });
 
     it('auto-resumes queued/running jobs and skips terminal jobs on initial load', async () => {
