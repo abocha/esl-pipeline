@@ -1,4 +1,4 @@
-import type { Dispatch, SetStateAction } from 'react';
+import { type Dispatch, type SetStateAction, useState } from 'react';
 
 import type { StudentProfileCandidate } from '../../utils/api';
 import {
@@ -40,6 +40,18 @@ export interface WorkspaceCandidatesPanelProps {
   ) => void | Promise<void>;
 }
 
+function formatEvidenceCount(count: number): string {
+  return `${count} evidence excerpt${count === 1 ? '' : 's'}`;
+}
+
+function formatConfidenceLabel(confidence: StudentProfileCandidate['confidence']): string {
+  return confidence ? `${confidence} confidence` : 'confidence n/a';
+}
+
+function formatAuthorityLabel(authority: StudentProfileCandidate['authority']): string {
+  return authority ? authority.replaceAll('_', ' ') : 'authority n/a';
+}
+
 export function WorkspaceCandidatesPanel({
   className,
   selectedStudentId,
@@ -62,6 +74,7 @@ export function WorkspaceCandidatesPanel({
   onPromoteProfileCandidates,
   onReviewProfileCandidate,
 }: WorkspaceCandidatesPanelProps) {
+  const [openCandidateIds, setOpenCandidateIds] = useState<string[]>([]);
   const approvedCandidatesReadyForPromotion =
     getApprovedCandidatesReadyForPromotion(profileCandidates);
   const approvedCandidateIdsReadyForPromotion = new Set(
@@ -74,6 +87,13 @@ export function WorkspaceCandidatesPanel({
     profileCandidates,
     profileCandidateFilter,
   );
+  const toggleCandidateDetails = (candidateId: string) => {
+    setOpenCandidateIds((current) =>
+      current.includes(candidateId)
+        ? current.filter((item) => item !== candidateId)
+        : [...current, candidateId],
+    );
+  };
 
   return (
     <article className={['workspace-card card', className].filter(Boolean).join(' ')}>
@@ -188,7 +208,7 @@ export function WorkspaceCandidatesPanel({
                 </span>
               </div>
 
-              <div className="workspace-list">
+              <div className="workspace-list workspace-candidate-list">
                 {candidates.map((candidate) => {
                   const draft = profileCandidateDrafts[candidate.id];
                   const approvedFactText =
@@ -198,178 +218,205 @@ export function WorkspaceCandidatesPanel({
                   const isTerminal =
                     candidate.status === 'promoted' || candidate.status === 'superseded';
                   const isSelected = selectedCandidateIds.includes(candidate.id);
+                  const isDetailsOpen = openCandidateIds.includes(candidate.id);
 
                   return (
-                    <details
+                    <article
                       key={candidate.id}
                       className="workspace-list-item workspace-candidate-item workspace-candidate-details"
+                      data-testid={`profile-candidate-card-${candidate.id}`}
                     >
-                      <summary className="workspace-candidate-summary">
-                        <div className="workspace-inline workspace-header-row">
-                          <div>
-                            <strong>{candidate.proposedFact}</strong>
-                            <div className="workspace-muted">
-                              {formatCandidateSectionLabel(candidate.targetSection)}
-                            </div>
-                          </div>
-                          <div className="workspace-inline">
-                            {isSelectableForPromotion(candidate) ? (
-                              <label className="workspace-inline">
-                                <input
-                                  aria-label={`Select candidate ${candidate.id} for promotion`}
-                                  type="checkbox"
-                                  checked={isSelected}
-                                  onChange={(event) =>
-                                    setSelectedCandidateIds((current) => {
-                                      if (event.target.checked) {
-                                        return current.includes(candidate.id)
-                                          ? current
-                                          : [...current, candidate.id];
-                                      }
-                                      return current.filter((item) => item !== candidate.id);
-                                    })
-                                  }
-                                />
-                                Use in draft
-                              </label>
-                            ) : null}
-                            <span className="workspace-pill">
-                              {formatCandidateStateLabel(candidate)}
-                            </span>
-                          </div>
-                        </div>
-                      </summary>
-
-                      <div className="workspace-candidate-body">
-                        <div className="workspace-meta">
-                          <span>
-                            <strong>Target section:</strong>{' '}
+                      <div className="workspace-candidate-summary">
+                        <div className="workspace-candidate-copy">
+                          <strong>{approvedFactText}</strong>
+                          <div className="workspace-muted">
                             {formatCandidateSectionLabel(candidate.targetSection)}
-                          </span>
-                          <span>
-                            <strong>Authority:</strong> {candidate.authority ?? 'n/a'}
-                          </span>
-                          <span>
-                            <strong>Confidence:</strong> {candidate.confidence ?? 'n/a'}
-                          </span>
-                          <span>
-                            <strong>Source summary:</strong> {candidate.sourceSummary ?? 'n/a'}
-                          </span>
-                          <span>
-                            <strong>Snapshot:</strong> {candidate.sourceSnapshotId ?? 'none'}
-                          </span>
-                          <span>
-                            <strong>Lesson memory IDs:</strong>{' '}
-                            {candidate.sourceLessonMemoryIds.length > 0
-                              ? candidate.sourceLessonMemoryIds.join(', ')
-                              : 'none'}
-                          </span>
-                          <span>
-                            <strong>Promoted revision:</strong>{' '}
-                            {candidate.promotedRevisionId ?? 'not yet promoted'}
-                          </span>
+                          </div>
+                          {candidate.sourceSummary ? (
+                            <p className="workspace-candidate-source">{candidate.sourceSummary}</p>
+                          ) : null}
                         </div>
 
-                        <div>
-                          <strong>Original proposal</strong>
-                          <p>{candidate.proposedFact}</p>
-                        </div>
-
-                        <label className="workspace-field">
-                          Approved Fact Text
-                          <textarea
-                            aria-label={`Approved Fact Text ${candidate.id}`}
-                            value={approvedFactText}
-                            onChange={(event) =>
-                              updateProfileCandidateDraft(candidate.id, {
-                                approvedFactText: event.target.value,
-                              })
-                            }
-                            rows={3}
-                            disabled={isTerminal || isBusy}
-                          />
-                        </label>
-
-                        <label className="workspace-field">
-                          Reviewer Note
-                          <textarea
-                            aria-label={`Reviewer Note ${candidate.id}`}
-                            value={reviewerNote}
-                            onChange={(event) =>
-                              updateProfileCandidateDraft(candidate.id, {
-                                reviewerNote: event.target.value,
-                              })
-                            }
-                            rows={2}
-                            disabled={isTerminal || isBusy}
-                          />
-                        </label>
-
-                        <div>
-                          <strong>Evidence</strong>
-                          {candidate.evidence.length > 0 ? (
-                            <div className="workspace-list">
-                              {candidate.evidence.map((evidence, index) => (
-                                <div
-                                  key={`${candidate.id}-evidence-${index}`}
-                                  className="workspace-list-item workspace-list-item-stack"
-                                >
-                                  <div>
-                                    <strong>{evidence.quote}</strong>
-                                    <div className="workspace-muted">
-                                      {evidence.speakerRole ?? 'unknown'}
-                                      {evidence.transcriptSpan
-                                        ? ` · ${evidence.transcriptSpan}`
-                                        : ''}
-                                      {evidence.sourceKind ? ` · ${evidence.sourceKind}` : ''}
-                                    </div>
-                                    {evidence.evidenceNote ? (
-                                      <div className="workspace-muted">{evidence.evidenceNote}</div>
-                                    ) : null}
-                                  </div>
-                                  <span>{evidence.sourceArtifactId ?? 'n/a'}</span>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <p className="workspace-muted">No evidence excerpts provided.</p>
-                          )}
-                        </div>
-
-                        <div className="workspace-inline">
-                          <button
-                            type="button"
-                            className="workspace-primary-btn"
-                            onClick={() => void onReviewProfileCandidate(candidate, 'approve')}
-                            disabled={isTerminal || isBusy}
-                          >
-                            {isBusy && profileCandidateAction?.action === 'approve'
-                              ? 'Saving...'
-                              : 'Approve'}
-                          </button>
-                          <button
-                            type="button"
-                            className="workspace-secondary-btn"
-                            onClick={() => void onReviewProfileCandidate(candidate, 'defer')}
-                            disabled={isTerminal || isBusy}
-                          >
-                            {isBusy && profileCandidateAction?.action === 'defer'
-                              ? 'Saving...'
-                              : 'Defer'}
-                          </button>
-                          <button
-                            type="button"
-                            className="workspace-secondary-btn"
-                            onClick={() => void onReviewProfileCandidate(candidate, 'reject')}
-                            disabled={isTerminal || isBusy}
-                          >
-                            {isBusy && profileCandidateAction?.action === 'reject'
-                              ? 'Saving...'
-                              : 'Reject'}
-                          </button>
+                        <div className="workspace-candidate-status">
+                          <span className="workspace-pill">
+                            {formatCandidateStateLabel(candidate)}
+                          </span>
+                          {isSelectableForPromotion(candidate) ? (
+                            <label className="workspace-inline workspace-candidate-select">
+                              <input
+                                aria-label={`Select candidate ${candidate.id} for promotion`}
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={(event) =>
+                                  setSelectedCandidateIds((current) => {
+                                    if (event.target.checked) {
+                                      return current.includes(candidate.id)
+                                        ? current
+                                        : [...current, candidate.id];
+                                    }
+                                    return current.filter((item) => item !== candidate.id);
+                                  })
+                                }
+                              />
+                              Use in draft
+                            </label>
+                          ) : null}
                         </div>
                       </div>
-                    </details>
+
+                      <div className="workspace-candidate-meta-row">
+                        <span>{formatConfidenceLabel(candidate.confidence)}</span>
+                        <span>{formatEvidenceCount(candidate.evidence.length)}</span>
+                        <span>{formatAuthorityLabel(candidate.authority)}</span>
+                      </div>
+
+                      <div className="workspace-inline workspace-candidate-actions">
+                        <button
+                          type="button"
+                          className="workspace-secondary-btn"
+                          onClick={() => toggleCandidateDetails(candidate.id)}
+                          aria-expanded={isDetailsOpen}
+                          aria-label={
+                            isDetailsOpen
+                              ? `Hide details for ${candidate.id}`
+                              : `Review details for ${candidate.id}`
+                          }
+                        >
+                          {isDetailsOpen ? 'Hide details' : `Review details for ${candidate.id}`}
+                        </button>
+                        <button
+                          type="button"
+                          className="workspace-primary-btn"
+                          onClick={() => void onReviewProfileCandidate(candidate, 'approve')}
+                          disabled={isTerminal || isBusy}
+                        >
+                          {isBusy && profileCandidateAction?.action === 'approve'
+                            ? 'Saving...'
+                            : 'Approve'}
+                        </button>
+                        <button
+                          type="button"
+                          className="workspace-secondary-btn"
+                          onClick={() => void onReviewProfileCandidate(candidate, 'defer')}
+                          disabled={isTerminal || isBusy}
+                        >
+                          {isBusy && profileCandidateAction?.action === 'defer'
+                            ? 'Saving...'
+                            : 'Defer'}
+                        </button>
+                        <button
+                          type="button"
+                          className="workspace-secondary-btn"
+                          onClick={() => void onReviewProfileCandidate(candidate, 'reject')}
+                          disabled={isTerminal || isBusy}
+                        >
+                          {isBusy && profileCandidateAction?.action === 'reject'
+                            ? 'Saving...'
+                            : 'Reject'}
+                        </button>
+                      </div>
+
+                      {isDetailsOpen ? (
+                        <div className="workspace-candidate-body">
+                          <div className="workspace-meta">
+                            <span>
+                              <strong>Target section:</strong>{' '}
+                              {formatCandidateSectionLabel(candidate.targetSection)}
+                            </span>
+                            <span>
+                              <strong>Authority:</strong> {candidate.authority ?? 'n/a'}
+                            </span>
+                            <span>
+                              <strong>Confidence:</strong> {candidate.confidence ?? 'n/a'}
+                            </span>
+                            <span>
+                              <strong>Source summary:</strong> {candidate.sourceSummary ?? 'n/a'}
+                            </span>
+                            <span>
+                              <strong>Snapshot:</strong> {candidate.sourceSnapshotId ?? 'none'}
+                            </span>
+                            <span>
+                              <strong>Lesson memory IDs:</strong>{' '}
+                              {candidate.sourceLessonMemoryIds.length > 0
+                                ? candidate.sourceLessonMemoryIds.join(', ')
+                                : 'none'}
+                            </span>
+                            <span>
+                              <strong>Promoted revision:</strong>{' '}
+                              {candidate.promotedRevisionId ?? 'not yet promoted'}
+                            </span>
+                          </div>
+
+                          <div>
+                            <strong>Original proposal</strong>
+                            <p>{candidate.proposedFact}</p>
+                          </div>
+
+                          <label className="workspace-field">
+                            Approved Fact Text
+                            <textarea
+                              aria-label={`Approved Fact Text ${candidate.id}`}
+                              value={approvedFactText}
+                              onChange={(event) =>
+                                updateProfileCandidateDraft(candidate.id, {
+                                  approvedFactText: event.target.value,
+                                })
+                              }
+                              rows={3}
+                              disabled={isTerminal || isBusy}
+                            />
+                          </label>
+
+                          <label className="workspace-field">
+                            Reviewer Note
+                            <textarea
+                              aria-label={`Reviewer Note ${candidate.id}`}
+                              value={reviewerNote}
+                              onChange={(event) =>
+                                updateProfileCandidateDraft(candidate.id, {
+                                  reviewerNote: event.target.value,
+                                })
+                              }
+                              rows={2}
+                              disabled={isTerminal || isBusy}
+                            />
+                          </label>
+
+                          <div>
+                            <strong>Evidence</strong>
+                            {candidate.evidence.length > 0 ? (
+                              <div className="workspace-list">
+                                {candidate.evidence.map((evidence, index) => (
+                                  <div
+                                    key={`${candidate.id}-evidence-${index}`}
+                                    className="workspace-list-item workspace-list-item-stack"
+                                  >
+                                    <div>
+                                      <strong>{evidence.quote}</strong>
+                                      <div className="workspace-muted">
+                                        {evidence.speakerRole ?? 'unknown'}
+                                        {evidence.transcriptSpan
+                                          ? ` · ${evidence.transcriptSpan}`
+                                          : ''}
+                                        {evidence.sourceKind ? ` · ${evidence.sourceKind}` : ''}
+                                      </div>
+                                      {evidence.evidenceNote ? (
+                                        <div className="workspace-muted">
+                                          {evidence.evidenceNote}
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                    <span>{evidence.sourceArtifactId ?? 'n/a'}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="workspace-muted">No evidence excerpts provided.</p>
+                            )}
+                          </div>
+                        </div>
+                      ) : null}
+                    </article>
                   );
                 })}
               </div>
