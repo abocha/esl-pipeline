@@ -82,9 +82,10 @@
 
 .student-directory-identity {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 0.85rem;
   align-items: center;
+  position: relative;
 }
 
 .student-directory-avatar {
@@ -131,6 +132,66 @@
 }
 
 .student-directory-actions button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.student-directory-card-menu {
+  position: relative;
+  align-self: start;
+}
+
+.student-directory-menu-trigger {
+  width: 2.1rem;
+  aspect-ratio: 1;
+  border: 1px solid var(--student-area-line);
+  border-radius: 999px;
+  background: var(--student-area-paper);
+  color: var(--student-area-ink);
+  font: inherit;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.student-directory-menu-trigger:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.student-directory-menu {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  z-index: 2;
+  min-width: 11rem;
+  padding: 0.35rem;
+  border: 1px solid var(--student-area-line);
+  border-radius: var(--student-area-radius-sm);
+  background: var(--student-area-panel);
+  box-shadow: var(--student-area-shadow-soft);
+}
+
+.student-directory-menu button {
+  width: 100%;
+  border: 0;
+  border-radius: 0.45rem;
+  padding: 0.6rem 0.7rem;
+  background: transparent;
+  color: var(--student-area-ink);
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.student-directory-menu button:hover,
+.student-directory-menu button:focus-visible {
+  background: var(--student-area-blue-soft);
+  color: var(--student-area-blue);
+}
+
+.student-directory-menu button:disabled {
   cursor: wait;
   opacity: 0.7;
 }

@@ -119,10 +119,15 @@ describe('StudentDirectoryPage', () => {
     );
     if (!alexCard) throw new Error('Expected Alex card');
 
-    await user.click(within(alexCard).getByRole('button', { name: /Archive student/i }));
+    expect(within(alexCard).queryByRole('button', { name: /^Archive student$/i })).toBeNull();
+
+    await user.click(
+      within(alexCard).getByRole('button', { name: /Student actions for Alex Rivera/i }),
+    );
+    await user.click(within(alexCard).getByRole('menuitem', { name: /Archive student/i }));
 
     expect(confirmSpy).toHaveBeenCalledWith(
-      'Archive Alex Rivera? Lesson history and profile audit records will be preserved.',
+      'Are you sure you want to archive Alex Rivera? Lesson history and profile audit records will be preserved.',
     );
     expect(apiMocks.archiveStudentProfile).toHaveBeenCalledWith('student-alex-rivera', {
       reason: 'Archived from the student directory.',
@@ -152,6 +157,46 @@ describe('StudentDirectoryPage', () => {
       order: 'asc',
       status: 'archived',
     });
+
+    confirmSpy.mockRestore();
+  });
+
+  it('keeps archive behind the student actions menu and cancels when the user is unsure', async () => {
+    const user = userEvent.setup();
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    apiMocks.listStudents.mockResolvedValueOnce({
+      items: [
+        {
+          id: 'student-alex-rivera',
+          student: 'Alex Rivera',
+          profileId: 'profiles/students/alex.md',
+          archivedAt: null,
+        },
+      ],
+      total: 1,
+      limit: 200,
+      offset: 0,
+      order: 'asc',
+    });
+
+    renderDirectory();
+
+    const alexCard = (await screen.findByRole('heading', { name: 'Alex Rivera' })).closest(
+      'article',
+    );
+    if (!alexCard) throw new Error('Expected Alex card');
+
+    expect(within(alexCard).queryByRole('button', { name: /^Archive student$/i })).toBeNull();
+
+    await user.click(
+      within(alexCard).getByRole('button', { name: /Student actions for Alex Rivera/i }),
+    );
+    await user.click(within(alexCard).getByRole('menuitem', { name: /Archive student/i }));
+
+    expect(confirmSpy).toHaveBeenCalledWith(
+      'Are you sure you want to archive Alex Rivera? Lesson history and profile audit records will be preserved.',
+    );
+    expect(apiMocks.archiveStudentProfile).not.toHaveBeenCalled();
 
     confirmSpy.mockRestore();
   });

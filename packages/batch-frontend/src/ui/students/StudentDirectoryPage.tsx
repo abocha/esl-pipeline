@@ -30,6 +30,7 @@ export const StudentDirectoryPage: React.FC = () => {
   const [studentActionError, setStudentActionError] = useState<string | null>(null);
   const [studentStatus, setStudentStatus] = useState<StudentDirectoryStatus>('active');
   const [busyStudentId, setBusyStudentId] = useState<string | null>(null);
+  const [openActionsStudentId, setOpenActionsStudentId] = useState<string | null>(null);
   const [profileOptions, setProfileOptions] = useState<ProfileContentOption[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [createBusy, setCreateBusy] = useState(false);
@@ -99,8 +100,9 @@ export const StudentDirectoryPage: React.FC = () => {
 
   const handleArchiveStudent = useCallback(
     async (student: StudentProfile) => {
+      setOpenActionsStudentId(null);
       const confirmed = window.confirm(
-        `Archive ${student.student}? Lesson history and profile audit records will be preserved.`,
+        `Are you sure you want to archive ${student.student}? Lesson history and profile audit records will be preserved.`,
       );
       if (!confirmed) return;
 
@@ -238,6 +240,37 @@ export const StudentDirectoryPage: React.FC = () => {
                     </p>
                   ) : null}
                 </div>
+                {studentStatus === 'active' ? (
+                  <div className="student-directory-card-menu">
+                    <button
+                      type="button"
+                      className="student-directory-menu-trigger"
+                      aria-label={`Student actions for ${student.student}`}
+                      aria-haspopup="menu"
+                      aria-expanded={openActionsStudentId === student.id}
+                      disabled={busyStudentId === student.id}
+                      onClick={() =>
+                        setOpenActionsStudentId((current) =>
+                          current === student.id ? null : student.id,
+                        )
+                      }
+                    >
+                      ...
+                    </button>
+                    {openActionsStudentId === student.id ? (
+                      <div className="student-directory-menu" role="menu">
+                        <button
+                          type="button"
+                          role="menuitem"
+                          disabled={busyStudentId === student.id}
+                          onClick={() => void handleArchiveStudent(student)}
+                        >
+                          {busyStudentId === student.id ? 'Archiving...' : 'Archive student'}
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
               <div className="student-directory-actions">
                 {studentStatus === 'active' ? (
@@ -254,14 +287,6 @@ export const StudentDirectoryPage: React.FC = () => {
                     >
                       Open Learning
                     </Link>
-                    <button
-                      type="button"
-                      className="student-directory-secondary-action"
-                      disabled={busyStudentId === student.id}
-                      onClick={() => void handleArchiveStudent(student)}
-                    >
-                      {busyStudentId === student.id ? 'Archiving...' : 'Archive student'}
-                    </button>
                   </>
                 ) : (
                   <button
