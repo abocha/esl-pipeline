@@ -6,6 +6,7 @@ import {
   buildPublishJobOverrides,
   getDraftPreviewGate,
   getNextGenerationQuotaSnapshot,
+  getPresetRerunActions,
   hasActiveGenerationQuotaSelection,
   hashDraftText,
 } from './MinimalAssignment.logic';
@@ -83,6 +84,42 @@ describe('MinimalAssignment logic helpers', () => {
       regeneratePronunciationMainAudio: true,
       regeneratePronunciationChunkAudio: true,
     });
+  });
+
+  it('describes preset rerun actions with labels that match their payloads', () => {
+    expect(getPresetRerunActions()).toEqual([
+      {
+        kind: 'republish',
+        label: 'Republish current draft',
+        description: 'Refresh the HTML page without regenerating any audio.',
+        payload: { republishOnly: true },
+      },
+      {
+        kind: 'studyText',
+        label: 'Regenerate study-text audio',
+        description: 'Replace only the study-text narration.',
+        payload: { regenerateStudyTextAudio: true },
+      },
+      {
+        kind: 'pronunciation',
+        label: 'Regenerate pronunciation audio',
+        description: 'Replace main pronunciation and pronunciation chunk clips.',
+        payload: {
+          regeneratePronunciationMainAudio: true,
+          regeneratePronunciationChunkAudio: true,
+        },
+      },
+      {
+        kind: 'allAudio',
+        label: 'Regenerate all audio',
+        description: 'Replace study-text, main pronunciation, and pronunciation chunk audio.',
+        payload: {
+          regenerateStudyTextAudio: true,
+          regeneratePronunciationMainAudio: true,
+          regeneratePronunciationChunkAudio: true,
+        },
+      },
+    ]);
   });
 
   it('builds custom rerun payloads and validates dialogue controls', () => {

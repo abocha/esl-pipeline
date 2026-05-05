@@ -179,7 +179,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
 
     openAdvancedActions();
 
-    expect(screen.getByRole('button', { name: /Refresh actions/i })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: /Refresh actions/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /Republish current draft/i })).toBeTruthy();
   });
 
