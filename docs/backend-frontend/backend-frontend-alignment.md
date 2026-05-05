@@ -41,6 +41,7 @@ Provider-specific generation details stay in:
 - Telegram ops control surface is live for operator workflows
 - rerun is now a single regeneration-intent workflow with explicit study-text / pronunciation-main / pronunciation-chunk controls
 - student-area overview/learning/history route-level payloads are live, and job/recording SSE subscriptions can now target specific IDs instead of requiring wildcard streams
+- student retirement is archive-first: `/students/:id/archive` and `/students/:id/restore` preserve audit/history, while default student reads hide archived learners
 
 ## Capability Matrix
 
@@ -52,7 +53,7 @@ Provider-specific generation details stay in:
 | Prompt options / prompt package flow       | Done    | Done     | keep allowlists aligned                                                                                   |
 | Draft save/materialize/publish approve     | Done    | Done     | none                                                                                                      |
 | Job status and core job actions            | Done    | Done     | rerun is a single action; chunk defaults remain mode-aware                                                |
-| Student summary/profile/bindings           | Done    | Partial  | student-area route payloads are live; workspace hardening continues                                       |
+| Student summary/profile/bindings           | Done    | Partial  | student archive/restore is live; broader workspace hardening continues                                    |
 | Student timeline + provenance              | Done    | Done     | support-facing provenance now includes rerun audio fallback notices; continue ergonomics pass             |
 | Student memory inspection + replay tooling | Done    | Done     | backend routes, prompt-package provenance, replay tools, and the minimal workspace inspection UI are live |
 | Direct generation provider/model selection | Done    | Done     | keep quota semantics aligned                                                                              |

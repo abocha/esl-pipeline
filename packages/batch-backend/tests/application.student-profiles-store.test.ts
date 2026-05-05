@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  archiveStudentProfile,
   createStudentProfile,
-  deleteStudentProfile,
   getStudentProfileById,
   listStudentProfiles,
+  restoreStudentProfile,
   StudentProfileStoreError,
   updateStudentProfile,
 } from '../src/application/student-profiles-store.js';
@@ -26,6 +27,9 @@ function makeRecord(
     manifestPreset: overrides.manifestPreset ?? null,
     accentPreference: overrides.accentPreference ?? null,
     profileId: overrides.profileId ?? null,
+    archivedAt: overrides.archivedAt ?? null,
+    archivedBy: overrides.archivedBy ?? null,
+    archiveReason: overrides.archiveReason ?? null,
     createdAt: overrides.createdAt ?? now,
     updatedAt: overrides.updatedAt ?? now,
   };
@@ -44,9 +48,20 @@ function createInMemoryDeps(initial: StudentRecord[] = []) {
 
   return {
     students: {
-      list: async (params?: { limit?: number; offset?: number; order?: 'asc' | 'desc' }) => {
+      list: async (params?: {
+        limit?: number;
+        offset?: number;
+        order?: 'asc' | 'desc';
+        status?: 'active' | 'archived' | 'all';
+      }) => {
         const order = params?.order ?? 'asc';
-        const sorted = [...store.values()].sort((a, b) =>
+        const status = params?.status ?? 'active';
+        const filtered = [...store.values()].filter((record) => {
+          if (status === 'all') return true;
+          if (status === 'archived') return Boolean(record.archivedAt);
+          return !record.archivedAt;
+        });
+        const sorted = filtered.sort((a, b) =>
           order === 'asc' ? a.student.localeCompare(b.student) : b.student.localeCompare(a.student),
         );
         const offset = params?.offset ?? 0;
@@ -59,7 +74,12 @@ function createInMemoryDeps(initial: StudentRecord[] = []) {
           order,
         };
       },
-      getById: async (id: string) => store.get(id) ?? null,
+      getById: async (id: string, params?: { includeArchived?: boolean }) => {
+        const record = store.get(id) ?? null;
+        if (!record) return null;
+        if (!params?.includeArchived && record.archivedAt) return null;
+        return record;
+      },
       insert: async (params: {
         id?: string;
         student: string;
@@ -124,6 +144,40 @@ function createInMemoryDeps(initial: StudentRecord[] = []) {
         return record;
       },
       remove: async (id: string) => store.delete(id),
+      archive: async ({
+        id,
+        archivedBy,
+        archiveReason,
+      }: {
+        id: string;
+        archivedBy?: string | null;
+        archiveReason?: string | null;
+      }) => {
+        const existing = store.get(id);
+        if (!existing) return null;
+        const archived = makeRecord({
+          ...existing,
+          archivedAt: existing.archivedAt ?? new Date('2026-01-03T00:00:00.000Z'),
+          archivedBy: archivedBy ?? null,
+          archiveReason: archiveReason ?? null,
+          updatedAt: new Date('2026-01-03T00:00:00.000Z'),
+        });
+        store.set(id, archived);
+        return archived;
+      },
+      restore: async (id: string) => {
+        const existing = store.get(id);
+        if (!existing) return null;
+        const restored = makeRecord({
+          ...existing,
+          archivedAt: null,
+          archivedBy: null,
+          archiveReason: null,
+          updatedAt: new Date('2026-01-04T00:00:00.000Z'),
+        });
+        store.set(id, restored);
+        return restored;
+      },
     },
     profiles: {
       getById: async (id: string) => {
@@ -194,17 +248,26 @@ function createInMemoryDeps(initial: StudentRecord[] = []) {
       },
     },
     bindings: {
-      setActive: async () => ({
+      setActive: async (params: {
+        studentId: string;
+        profileId: string;
+        effectiveFrom?: Date | null;
+        reason?: string | null;
+        changedBy?: string | null;
+      }) => ({
         id: 'binding-1',
-        studentId: 'student-id',
-        profileId: 'profiles/default.md',
-        effectiveFrom: new Date('2026-01-01T00:00:00.000Z'),
+        studentId: params.studentId,
+        profileId: params.profileId,
+        effectiveFrom: params.effectiveFrom ?? new Date('2026-01-01T00:00:00.000Z'),
         effectiveTo: null,
-        reason: null,
-        changedBy: null,
+        reason: params.reason ?? null,
+        changedBy: params.changedBy ?? null,
         createdAt: new Date('2026-01-01T00:00:00.000Z'),
       }),
-      clearActive: async () => {},
+      clearActive: async (
+        _studentId: string,
+        _options?: Date | { reason?: string | null; changedBy?: string | null },
+      ) => {},
     },
   };
 }
@@ -222,8 +285,49 @@ describe('student-profiles-store', () => {
     expect(ids).not.toContain(deriveStudentId('Default'));
   });
 
-  it('creates, updates, gets, and deletes a DB-backed student profile', async () => {
+  it('archives a DB-backed student profile without deleting its audit record', async () => {
     const deps = createInMemoryDeps();
+    const clearActiveCalls: {
+      studentId: string;
+      options: { reason?: string | null; changedBy?: string | null };
+    }[] = [];
+    const setActiveCalls: {
+      studentId: string;
+      profileId: string;
+      reason?: string | null;
+      changedBy?: string | null;
+    }[] = [];
+    deps.bindings.clearActive = async (studentId, options) => {
+      const normalized =
+        options instanceof Date
+          ? { reason: null, changedBy: null }
+          : {
+              reason: options?.reason ?? null,
+              changedBy: options?.changedBy ?? null,
+            };
+      clearActiveCalls.push({
+        studentId,
+        options: normalized,
+      });
+    };
+    deps.bindings.setActive = async (params) => {
+      setActiveCalls.push({
+        studentId: params.studentId,
+        profileId: params.profileId,
+        reason: params.reason ?? null,
+        changedBy: params.changedBy ?? null,
+      });
+      return {
+        id: 'binding-1',
+        studentId: params.studentId,
+        profileId: params.profileId,
+        effectiveFrom: params.effectiveFrom ?? new Date('2026-01-01T00:00:00.000Z'),
+        effectiveTo: null,
+        reason: params.reason ?? null,
+        changedBy: params.changedBy ?? null,
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      };
+    };
 
     const created = await createStudentProfile(
       {
@@ -235,18 +339,54 @@ describe('student-profiles-store', () => {
       { deps },
     );
     expect(created.student).toBe('New Student');
+    setActiveCalls.length = 0;
 
-    const loaded = await getStudentProfileById(created.id, { deps });
-    expect(loaded?.student).toBe('New Student');
+    const restoredLoaded = await getStudentProfileById(created.id, { deps });
+    expect(restoredLoaded?.student).toBe('New Student');
 
     const updated = await updateStudentProfile(created.id, { colorPreset: 'b2-default' }, { deps });
     expect(updated?.colorPreset).toBe('b2-default');
+    setActiveCalls.length = 0;
 
-    const deleted = await deleteStudentProfile(created.id, { deps });
-    expect(deleted).toBe(true);
+    const archived = await archiveStudentProfile(
+      created.id,
+      { archivedBy: 'user-1', archiveReason: 'Student paused lessons.' },
+      { deps },
+    );
+    expect(archived?.archivedAt).toBeTruthy();
+    expect(archived?.archivedBy).toBe('user-1');
+    expect(archived?.archiveReason).toBe('Student paused lessons.');
+    expect(clearActiveCalls).toEqual([
+      {
+        studentId: created.id,
+        options: {
+          reason: 'student_archive',
+          changedBy: 'user-1',
+        },
+      },
+    ]);
 
     const missing = await getStudentProfileById(created.id, { deps });
     expect(missing).toBeNull();
+
+    const archivedList = await listStudentProfiles({ status: 'archived', limit: 10 }, { deps });
+    expect(archivedList.items.map((item) => item.id)).toEqual([created.id]);
+
+    const restored = await restoreStudentProfile(created.id, { restoredBy: 'user-2' }, { deps });
+    expect(restored?.archivedAt).toBeNull();
+    expect(restored?.archivedBy).toBeNull();
+    expect(restored?.archiveReason).toBeNull();
+    expect(setActiveCalls).toEqual([
+      {
+        studentId: created.id,
+        profileId: 'profile.md',
+        reason: 'student_restore',
+        changedBy: 'user-2',
+      },
+    ]);
+
+    const loaded = await getStudentProfileById(created.id, { deps });
+    expect(loaded?.student).toBe('New Student');
   });
 
   it('creates an active starter profile revision when starterProfile is provided', async () => {
@@ -471,6 +611,8 @@ describe('student-profiles-store', () => {
               throw new Error('upsert should not be called for create');
             },
             remove: async () => false,
+            archive: async () => null,
+            restore: async () => null,
           },
           profiles: {
             getById: async () => null,
@@ -556,6 +698,8 @@ describe('student-profiles-store', () => {
                 profileId: params.profileId ?? null,
               }),
             remove: async () => false,
+            archive: async () => null,
+            restore: async () => null,
           },
           profiles: {
             getById: async () => null,

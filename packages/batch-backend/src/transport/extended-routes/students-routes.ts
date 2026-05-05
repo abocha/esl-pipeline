@@ -36,10 +36,11 @@ import {
   StudentProfileCandidateServiceError,
 } from '../../application/student-profile-candidates.js';
 import {
+  archiveStudentProfile,
   createStudentProfile,
-  deleteStudentProfile,
   getStudentProfileById,
   listStudentProfiles,
+  restoreStudentProfile,
   StudentProfileStoreError,
   updateStudentProfile,
 } from '../../application/student-profiles-store.js';
@@ -851,6 +852,7 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
         limit: z.coerce.number().int().min(1).max(500).optional(),
         offset: z.coerce.number().int().min(0).optional(),
         order: z.enum(['asc', 'desc']).optional(),
+        status: z.enum(['active', 'archived', 'all']).optional(),
       });
 
       try {
@@ -860,6 +862,7 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
           limit: query.limit,
           offset: query.offset,
           order: query.order,
+          status: query.status,
         });
 
         logger.info('HTTP request handled', {
@@ -1407,6 +1410,127 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
     },
   );
 
+  app.post(
+    '/students/:id/archive',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'POST /students/:id/archive');
+      const paramsSchema = z.object({
+        id: z.string().min(1),
+      });
+      const bodySchema = z.object({
+        reason: z.string().trim().min(1).max(500).nullable().optional(),
+      });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const body = bodySchema.parse(request.body ?? {});
+        const authenticatedUser = getAuthenticatedUser(request);
+        const archived = await archiveStudentProfile(params.id, {
+          archivedBy: authenticatedUser?.id ?? null,
+          archiveReason: body.reason ?? null,
+        });
+
+        if (!archived) {
+          return errorResponse(reply, 'not_found');
+        }
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          studentId: params.id,
+        });
+
+        return reply.send(archived);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid request body',
+            details: error.issues,
+          });
+        }
+        if (error instanceof StudentProfileStoreError) {
+          return reply.code(error.status).send({
+            error: error.code,
+            message: error.message,
+            code: error.code,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.post(
+    '/students/:id/restore',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'POST /students/:id/restore');
+      const paramsSchema = z.object({
+        id: z.string().min(1),
+      });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const authenticatedUser = getAuthenticatedUser(request);
+        const restored = await restoreStudentProfile(params.id, {
+          restoredBy: authenticatedUser?.id ?? null,
+        });
+
+        if (!restored) {
+          return errorResponse(reply, 'not_found');
+        }
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          studentId: params.id,
+        });
+
+        return reply.send(restored);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid student id',
+            details: error.issues,
+          });
+        }
+        if (error instanceof StudentProfileStoreError) {
+          return reply.code(error.status).send({
+            error: error.code,
+            message: error.message,
+            code: error.code,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
   app.delete(
     '/students/:id',
     {
@@ -1420,7 +1544,11 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
 
       try {
         const params = paramsSchema.parse(request.params ?? {});
-        const removed = await deleteStudentProfile(params.id);
+        const authenticatedUser = getAuthenticatedUser(request);
+        const removed = await archiveStudentProfile(params.id, {
+          archivedBy: authenticatedUser?.id ?? null,
+          archiveReason: 'Archived through legacy DELETE /students/:id route.',
+        });
 
         if (!removed) {
           return errorResponse(reply, 'not_found');
@@ -1481,6 +1609,11 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
       try {
         const params = paramsSchema.parse(request.params ?? {});
         const query = querySchema.parse(request.query ?? {});
+        const student = await getStudentProfileById(params.id);
+        if (!student) {
+          return errorResponse(reply, 'not_found');
+        }
+
         const bindings = await listStudentProfileBindingsForStudent(params.id, query);
 
         logger.info('HTTP request handled', {
@@ -1529,6 +1662,11 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
       try {
         const params = paramsSchema.parse(request.params ?? {});
         const query = querySchema.parse(request.query ?? {});
+        const student = await getStudentProfileById(params.id);
+        if (!student) {
+          return errorResponse(reply, 'not_found');
+        }
+
         const binding = query.at
           ? await resolveStudentProfileBindingAt(params.id, new Date(query.at))
           : await getActiveStudentProfileBindingForStudent(params.id);
@@ -1589,6 +1727,11 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
       try {
         const params = paramsSchema.parse(request.params ?? {});
         const query = querySchema.parse(request.query ?? {});
+        const student = await getStudentProfileById(params.id);
+        if (!student) {
+          return errorResponse(reply, 'not_found');
+        }
+
         const types = query.type
           ? (query.type
               .split(',')

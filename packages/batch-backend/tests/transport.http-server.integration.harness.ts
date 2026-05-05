@@ -157,6 +157,8 @@ vi.mock('../src/application/student-profiles-store', async () => {
     createStudentProfile: vi.fn(),
     updateStudentProfile: vi.fn(),
     deleteStudentProfile: vi.fn(),
+    archiveStudentProfile: vi.fn(),
+    restoreStudentProfile: vi.fn(),
   };
 });
 
@@ -304,6 +306,8 @@ export function describeHttpServerIntegrationSuite(
     const mockCreateStudentProfile = vi.mocked(studentStoreModule.createStudentProfile);
     const mockUpdateStudentProfile = vi.mocked(studentStoreModule.updateStudentProfile);
     const mockDeleteStudentProfile = vi.mocked(studentStoreModule.deleteStudentProfile);
+    const mockArchiveStudentProfile = vi.mocked(studentStoreModule.archiveStudentProfile);
+    const mockRestoreStudentProfile = vi.mocked(studentStoreModule.restoreStudentProfile);
     const mockListProfileContents = vi.mocked(profileContentModule.listProfileContents);
     const mockGetProfileContent = vi.mocked(profileContentModule.getProfileContent);
     const mockUpsertProfileContent = vi.mocked(profileContentModule.upsertProfileContent);
@@ -443,6 +447,34 @@ export function describeHttpServerIntegrationSuite(
         profileId: 'profile.md',
       });
       mockDeleteStudentProfile.mockResolvedValue(true);
+      mockArchiveStudentProfile.mockResolvedValue({
+        id: deriveStudentId('Anna'),
+        student: 'Anna',
+        dbId: null,
+        pageParentId: null,
+        colorPreset: null,
+        accentPreference: null,
+        voices: {},
+        manifestPreset: null,
+        profileId: null,
+        archivedAt: '2026-01-03T00:00:00.000Z',
+        archivedBy: 'auth-user-1',
+        archiveReason: 'Student paused lessons.',
+      });
+      mockRestoreStudentProfile.mockResolvedValue({
+        id: deriveStudentId('Anna'),
+        student: 'Anna',
+        dbId: null,
+        pageParentId: null,
+        colorPreset: null,
+        accentPreference: null,
+        voices: {},
+        manifestPreset: null,
+        profileId: null,
+        archivedAt: null,
+        archivedBy: null,
+        archiveReason: null,
+      });
       mockListProfileContents.mockResolvedValue({
         profiles: [{ id: 'profile.md', label: 'Profile' }],
       });
@@ -978,6 +1010,8 @@ export function describeHttpServerIntegrationSuite(
       mockCreateStudentProfile,
       mockUpdateStudentProfile,
       mockDeleteStudentProfile,
+      mockArchiveStudentProfile,
+      mockRestoreStudentProfile,
       mockListProfileContents,
       mockGetProfileContent,
       mockUpsertProfileContent,
