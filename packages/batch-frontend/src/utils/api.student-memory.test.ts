@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   approveStudentProfileCandidate,
+  archiveStudentProfile,
   getStudentHistorySurface,
   getStudentLearningSurface,
   getStudentMemoryOverview,
@@ -11,6 +12,7 @@ import {
   listStudentLessonMemoryEntries,
   listStudentMemorySnapshots,
   listStudentProfileCandidates,
+  restoreStudentProfile,
 } from './api';
 import apiClient, { buildApiProxyPath, handleApiError, isAuthError } from './api-client';
 
@@ -265,5 +267,37 @@ describe('utils/api student memory fetchers', () => {
     );
 
     await expect(listStudentMemorySnapshots('student-1')).rejects.toThrow('Snapshots unavailable');
+  });
+
+  it('archives and restores student profiles through explicit retirement routes', async () => {
+    vi.mocked(apiClient.post)
+      .mockResolvedValueOnce({
+        data: {
+          id: 'student-1',
+          student: 'Alex Rivera',
+          archivedAt: '2026-01-03T00:00:00.000Z',
+        },
+      } as never)
+      .mockResolvedValueOnce({
+        data: {
+          id: 'student-1',
+          student: 'Alex Rivera',
+          archivedAt: null,
+        },
+      } as never);
+
+    const archived = await archiveStudentProfile('student-1', {
+      reason: 'Student paused lessons.',
+    });
+    const restored = await restoreStudentProfile('student-1');
+
+    expect(buildApiProxyPath).toHaveBeenNthCalledWith(1, '/students/student-1/archive');
+    expect(apiClient.post).toHaveBeenNthCalledWith(1, '/api/students/student-1/archive', {
+      reason: 'Student paused lessons.',
+    });
+    expect(buildApiProxyPath).toHaveBeenNthCalledWith(2, '/students/student-1/restore');
+    expect(apiClient.post).toHaveBeenNthCalledWith(2, '/api/students/student-1/restore');
+    expect(archived.archivedAt).toBe('2026-01-03T00:00:00.000Z');
+    expect(restored.archivedAt).toBeNull();
   });
 });

@@ -629,7 +629,10 @@ CREATE TABLE public.students (
     accent_preference text,
     profile_id text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    archived_at timestamp with time zone,
+    archived_by uuid,
+    archive_reason text
 );
 
 CREATE TABLE public.template_revisions (
@@ -931,6 +934,10 @@ CREATE INDEX idx_student_profile_candidates_student_status_created_at ON public.
 
 CREATE INDEX idx_student_profile_candidates_student_status_review_created_at ON public.student_profile_candidates USING btree (student_id, status, review_state, created_at DESC, id DESC);
 
+CREATE INDEX idx_students_active_student ON public.students USING btree (student, id) WHERE (archived_at IS NULL);
+
+CREATE INDEX idx_students_archived_at ON public.students USING btree (archived_at DESC, id DESC) WHERE (archived_at IS NOT NULL);
+
 CREATE INDEX idx_students_created_at ON public.students USING btree (created_at);
 
 CREATE INDEX idx_students_profile_id ON public.students USING btree (profile_id);
@@ -1109,6 +1116,9 @@ ALTER TABLE ONLY public.student_profile_candidates
     ADD CONSTRAINT student_profile_candidates_superseded_by_id_fkey FOREIGN KEY (superseded_by_id) REFERENCES public.student_profile_candidates(id) ON DELETE SET NULL;
 
 ALTER TABLE ONLY public.students
+    ADD CONSTRAINT students_archived_by_fkey FOREIGN KEY (archived_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.students
     ADD CONSTRAINT students_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.profiles(id) ON DELETE SET NULL;
 
 ALTER TABLE ONLY public.template_revisions
@@ -1214,5 +1224,6 @@ VALUES
   ('0021_jobs_publish_study_text_elevenlabs_model', '3f927aa802ae8d49a78556a53c276d28b40fb847e1d86f6faf69adf8c18b6aaf', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0022_profile_revision_structured_content', 'a4153ae99387ea7b9d11ef8750f0899ab8ff7f294fc9c6d1a3749defb89bbde6', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0023_profile_revision_lesson_population_source', '8fcba883ef201a06fc88025b41e8a5141c10d824cd5706a1d7fa91a2d462050c', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0024_student_surface_read_path_indexes', '6c35b4e0f01bfb0f9de0c8161618dfbfdd5904b6eba76f4dae1e34d386576ec6', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0024_student_surface_read_path_indexes', '6c35b4e0f01bfb0f9de0c8161618dfbfdd5904b6eba76f4dae1e34d386576ec6', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0025_student_archive_status', 'db8363e4010fc34933a1f83d619931ebf6cf3287169cb92be0d920ed1f57354b', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;

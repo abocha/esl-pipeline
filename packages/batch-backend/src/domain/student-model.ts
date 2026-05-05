@@ -8,6 +8,9 @@ export interface StudentRecord {
   manifestPreset: string | null;
   accentPreference: string | null;
   profileId: string | null;
+  archivedAt: Date | null;
+  archivedBy: string | null;
+  archiveReason: string | null;
   createdAt: Date;
   updatedAt: Date;
 }

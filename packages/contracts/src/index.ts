@@ -370,6 +370,9 @@ export interface StudentProfileDto {
   manifestPreset?: string | null;
   accentPreference?: string | null;
   profileId?: string | null;
+  archivedAt?: string | null;
+  archivedBy?: string | null;
+  archiveReason?: string | null;
 }
 
 export interface StudentProfileListResponse {

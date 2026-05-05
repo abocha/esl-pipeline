@@ -9,10 +9,12 @@ import {
   setActiveStudentProfileBinding,
 } from '../domain/student-profile-binding-repository.js';
 import {
+  archiveStudent,
   deleteStudent,
   getStudentById,
   insertStudent,
   listStudents,
+  restoreStudent,
   upsertStudent,
 } from '../domain/student-repository.js';
 import { deriveStudentId, normalizeStudentName } from '../domain/student-utils.js';
@@ -33,6 +35,9 @@ export interface StudentProfileData {
   manifestPreset?: string | null;
   accentPreference?: string | null;
   profileId?: string | null;
+  archivedAt?: string | null;
+  archivedBy?: string | null;
+  archiveReason?: string | null;
 }
 
 export interface StudentProfileCreateInput extends Omit<StudentProfileData, 'id'> {
@@ -54,6 +59,16 @@ export interface StudentProfileListParams {
   limit?: number;
   offset?: number;
   order?: 'asc' | 'desc';
+  status?: 'active' | 'archived' | 'all';
+}
+
+export interface StudentArchiveInput {
+  archivedBy?: string | null;
+  archiveReason?: string | null;
+}
+
+export interface StudentRestoreInput {
+  restoredBy?: string | null;
 }
 
 interface StudentStoreDependencies {
@@ -63,6 +78,8 @@ interface StudentStoreDependencies {
     insert: typeof insertStudent;
     upsert: typeof upsertStudent;
     remove: typeof deleteStudent;
+    archive: typeof archiveStudent;
+    restore: typeof restoreStudent;
   };
   profiles: {
     getById: typeof getProfileById;
@@ -109,6 +126,8 @@ function getDependencies(overrides?: StudentStoreOverrides): StudentStoreDepende
       insert: overrides?.deps?.students?.insert ?? insertStudent,
       upsert: overrides?.deps?.students?.upsert ?? upsertStudent,
       remove: overrides?.deps?.students?.remove ?? deleteStudent,
+      archive: overrides?.deps?.students?.archive ?? archiveStudent,
+      restore: overrides?.deps?.students?.restore ?? restoreStudent,
     },
     profiles: {
       getById: overrides?.deps?.profiles?.getById ?? getProfileById,
@@ -205,6 +224,9 @@ function toStudentProfileData(entry: StudentProfileEntry): StudentProfileData {
     manifestPreset: entry.manifestPreset ?? null,
     profileId: entry.profileId ?? null,
     voices: entry.voices ?? {},
+    archivedAt: entry.archivedAt ?? null,
+    archivedBy: entry.archivedBy ?? null,
+    archiveReason: entry.archiveReason ?? null,
   };
 }
 
@@ -219,6 +241,9 @@ function mapStudentRecordToEntry(record: StudentRecord): StudentProfileEntry {
     manifestPreset: normalizeOptionalString(record.manifestPreset),
     profileId: normalizeOptionalString(record.profileId),
     voices: record.voices ? { ...record.voices } : {},
+    archivedAt: record.archivedAt ? record.archivedAt.toISOString() : null,
+    archivedBy: normalizeOptionalString(record.archivedBy),
+    archiveReason: normalizeOptionalString(record.archiveReason),
   };
 }
 
@@ -227,12 +252,18 @@ function applyListFilters(
   params: StudentProfileListParams,
 ): StudentProfileListResult {
   const query = params.search?.trim().toLowerCase();
+  const status = params.status ?? 'active';
+  const statusFiltered = profiles.filter((profile) => {
+    if (status === 'all') return true;
+    if (status === 'archived') return Boolean(profile.archivedAt);
+    return !profile.archivedAt;
+  });
   const filtered = query
-    ? profiles.filter(
+    ? statusFiltered.filter(
         (profile) =>
           profile.student.toLowerCase().includes(query) || profile.id.toLowerCase().includes(query),
       )
-    : profiles;
+    : statusFiltered;
 
   const order = params.order ?? 'asc';
   const sorted = [...filtered].sort((a, b) =>
@@ -473,6 +504,7 @@ export async function listStudentProfiles(
     limit: MAX_PAGE_LIMIT,
     offset: 0,
     order: 'asc',
+    status: params.status ?? 'active',
   });
 
   const entries = dbResult.items.map((item) => mapStudentRecordToEntry(item));
@@ -489,7 +521,7 @@ export async function getStudentProfileById(
   assertDbEnabled(config);
 
   const dependencies = getDependencies(overrides);
-  const record = await dependencies.students.getById(id);
+  const record = await dependencies.students.getById(id, { includeArchived: false });
   if (record) {
     return toStudentProfileData(mapStudentRecordToEntry(record));
   }
@@ -559,5 +591,61 @@ export async function deleteStudentProfile(
   assertDbEnabled(config);
 
   const dependencies = getDependencies(overrides);
-  return dependencies.students.remove(id);
+  const archived = await dependencies.students.archive({
+    id,
+    archivedBy: null,
+    archiveReason: 'Archived through legacy delete operation.',
+  });
+  return Boolean(archived);
+}
+
+export async function archiveStudentProfile(
+  id: string,
+  input: StudentArchiveInput = {},
+  overrides?: StudentStoreOverrides,
+): Promise<StudentProfileData | null> {
+  if (!id) return null;
+
+  const config = overrides?.config ?? loadConfig();
+  assertDbEnabled(config);
+
+  const dependencies = getDependencies(overrides);
+  const archived = await dependencies.students.archive({
+    id,
+    archivedBy: normalizeOptionalString(input.archivedBy),
+    archiveReason: normalizeOptionalString(input.archiveReason),
+  });
+  if (!archived) return null;
+
+  await dependencies.bindings.clearActive(id, {
+    reason: 'student_archive',
+    changedBy: normalizeOptionalString(input.archivedBy),
+  });
+
+  return toStudentProfileData(mapStudentRecordToEntry(archived));
+}
+
+export async function restoreStudentProfile(
+  id: string,
+  input: StudentRestoreInput = {},
+  overrides?: StudentStoreOverrides,
+): Promise<StudentProfileData | null> {
+  if (!id) return null;
+
+  const config = overrides?.config ?? loadConfig();
+  assertDbEnabled(config);
+
+  const dependencies = getDependencies(overrides);
+  const restored = await dependencies.students.restore(id);
+  if (!restored) return null;
+
+  await syncBindingForStudent(
+    restored.id,
+    restored.profileId,
+    dependencies,
+    'student_restore',
+    normalizeOptionalString(input.restoredBy),
+  );
+
+  return toStudentProfileData(mapStudentRecordToEntry(restored));
 }

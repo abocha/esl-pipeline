@@ -31,6 +31,37 @@
   flex-wrap: wrap;
 }
 
+.student-directory-list-tools {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.student-directory-status-tabs {
+  display: inline-flex;
+  gap: 0.25rem;
+  padding: 0.2rem;
+  border: 1px solid var(--student-area-line);
+  border-radius: 999px;
+  background: var(--student-area-paper);
+}
+
+.student-directory-status-tabs button {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.5rem 0.8rem;
+  background: transparent;
+  color: var(--student-area-muted);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.student-directory-status-tabs button.is-active {
+  background: var(--student-area-blue);
+  color: #fffaf1;
+}
+
 .student-directory-grid {
   display: grid;
   gap: 0.75rem;
@@ -77,12 +108,16 @@
   flex-wrap: wrap;
 }
 
-.student-directory-actions a {
+.student-directory-actions a,
+.student-directory-actions button {
+  font: inherit;
   width: fit-content;
   padding: 0.65rem 0.95rem;
   border-radius: 999px;
   text-decoration: none;
   font-weight: 600;
+  border: 0;
+  cursor: pointer;
 }
 
 .student-directory-primary-action {
@@ -93,4 +128,15 @@
 .student-directory-secondary-action {
   background: var(--student-area-blue-soft);
   color: var(--student-area-blue);
+}
+
+.student-directory-actions button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.student-directory-archive-note {
+  margin-top: 0.35rem;
+  color: var(--student-area-muted);
+  font-size: 0.9rem;
 }
