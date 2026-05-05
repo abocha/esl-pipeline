@@ -9,6 +9,8 @@ import {
   buildCustomRerunPayload,
   buildPresetRerunPayload,
   type CustomRerunInput,
+  getPresetRerunActions,
+  type PresetRerunKind,
 } from './MinimalAssignment.logic';
 import { StageSection, type WorkflowStage } from './MinimalAssignment.stages';
 
@@ -74,6 +76,7 @@ export interface AdvancedActionsController {
   setFormField: <K extends keyof CustomRerunInput>(field: K, value: CustomRerunInput[K]) => void;
   setPronunciationChunkProvider: (provider: UiPronunciationChunkTtsProvider) => void;
   refreshLineage: () => Promise<void>;
+  handlePresetRerun: (kind: PresetRerunKind) => Promise<void>;
   handleRepublishCurrentDraft: () => Promise<void>;
   handleRegeneratePronunciationAudio: () => Promise<void>;
   handleRegenerateStudyTextAudio: () => Promise<void>;
@@ -399,21 +402,28 @@ export function useAdvancedActionsController({
     [applyJobStatusTransition, jobStatus?.jobId, loadJobProvenance, refreshResumeJobs],
   );
 
+  const handlePresetRerun = useCallback(
+    async (kind: PresetRerunKind) => {
+      await queueRerun(buildPresetRerunPayload(kind), 'Rerun queued.');
+    },
+    [queueRerun],
+  );
+
   const handleRepublishCurrentDraft = useCallback(async () => {
-    await queueRerun(buildPresetRerunPayload('republish'), 'Republish queued.');
-  }, [queueRerun]);
+    await handlePresetRerun('republish');
+  }, [handlePresetRerun]);
 
   const handleRegeneratePronunciationAudio = useCallback(async () => {
-    await queueRerun(buildPresetRerunPayload('pronunciation'), 'Pronunciation rerun queued.');
-  }, [queueRerun]);
+    await handlePresetRerun('pronunciation');
+  }, [handlePresetRerun]);
 
   const handleRegenerateStudyTextAudio = useCallback(async () => {
-    await queueRerun(buildPresetRerunPayload('studyText'), 'Study-text rerun queued.');
-  }, [queueRerun]);
+    await handlePresetRerun('studyText');
+  }, [handlePresetRerun]);
 
   const handleRegenerateAllAudio = useCallback(async () => {
-    await queueRerun(buildPresetRerunPayload('allAudio'), 'Full audio rerun queued.');
-  }, [queueRerun]);
+    await handlePresetRerun('allAudio');
+  }, [handlePresetRerun]);
 
   const handleCustomRerun = useCallback(async () => {
     if (!jobStatus?.jobId) return;
@@ -487,6 +497,7 @@ export function useAdvancedActionsController({
     setFormField,
     setPronunciationChunkProvider,
     refreshLineage,
+    handlePresetRerun,
     handleRepublishCurrentDraft,
     handleRegeneratePronunciationAudio,
     handleRegenerateStudyTextAudio,
@@ -527,6 +538,8 @@ export function AdvancedActionsStage({
   pronunciationChunkProviders,
   studyTextStrategies,
 }: AdvancedActionsStageProps) {
+  const presetRerunActions = getPresetRerunActions();
+
   return (
     <StageSection
       stage={stage}
@@ -564,43 +577,28 @@ export function AdvancedActionsStage({
               <span>Job ID: {jobStatus?.jobId}</span>
               <span>State: {jobStatus?.state}</span>
             </div>
-            <div className="minimal-grid">
-              <button
-                type="button"
-                className="minimal-primary"
-                onClick={() => void controller.handleRepublishCurrentDraft()}
-                disabled={!controller.rerunEnabled}
-              >
-                {controller.actionBusy === 'rerun' ? 'Queuing rerun...' : 'Republish current draft'}
-              </button>
-              <button
-                type="button"
-                className="minimal-primary"
-                onClick={() => void controller.handleRegeneratePronunciationAudio()}
-                disabled={!controller.rerunEnabled}
-              >
-                {controller.actionBusy === 'rerun'
-                  ? 'Queuing rerun...'
-                  : 'Regenerate pronunciation audio'}
-              </button>
-              <button
-                type="button"
-                className="minimal-primary"
-                onClick={() => void controller.handleRegenerateStudyTextAudio()}
-                disabled={!controller.rerunEnabled}
-              >
-                {controller.actionBusy === 'rerun'
-                  ? 'Queuing rerun...'
-                  : 'Regenerate study-text audio'}
-              </button>
-              <button
-                type="button"
-                className="minimal-primary"
-                onClick={() => void controller.handleRegenerateAllAudio()}
-                disabled={!controller.rerunEnabled}
-              >
-                {controller.actionBusy === 'rerun' ? 'Queuing rerun...' : 'Regenerate all audio'}
-              </button>
+            <section className="minimal-rerun-quick" aria-label="Quick reruns">
+              <div className="minimal-list-heading">
+                <strong>Quick reruns</strong>
+                <span className="minimal-muted">Each action changes only what it says.</span>
+              </div>
+              <div className="minimal-rerun-action-grid">
+                {presetRerunActions.map((action) => (
+                  <div key={action.kind} className="minimal-rerun-action-card">
+                    <button
+                      type="button"
+                      className="minimal-primary"
+                      onClick={() => void controller.handlePresetRerun(action.kind)}
+                      disabled={!controller.rerunEnabled}
+                    >
+                      {controller.actionBusy === 'rerun' ? 'Queuing rerun...' : action.label}
+                    </button>
+                    <p className="minimal-muted">{action.description}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+            <div className="minimal-inline">
               <button
                 type="button"
                 className="minimal-secondary"
@@ -615,7 +613,13 @@ export function AdvancedActionsStage({
               for a rerun when needed.
             </p>
             {controller.showCustomRerun ? (
-              <div className="minimal-block">
+              <section className="minimal-custom-rerun" aria-label="Custom rerun selection">
+                <div className="minimal-list-heading">
+                  <strong>Custom rerun</strong>
+                  <span className="minimal-muted">
+                    Select individual audio families and overrides.
+                  </span>
+                </div>
                 <div className="minimal-grid">
                   <label className="minimal-checkbox">
                     <input
@@ -950,7 +954,7 @@ export function AdvancedActionsStage({
                   `eleven_v3` is dialogue-only. `eleven_flash_v2` is the only ElevenLabs model that
                   supports IPA. `eleven_flash_v2_5` is the fast, cheap pronunciation option.
                 </p>
-              </div>
+              </section>
             ) : null}
           </div>
 
