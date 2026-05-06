@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   archiveStudentProfile,
   createStudentProfile,
+  deleteStudentProfile,
   getStudentProfileById,
   listStudentProfiles,
   restoreStudentProfile,
@@ -387,6 +388,54 @@ describe('student-profiles-store', () => {
 
     const loaded = await getStudentProfileById(created.id, { deps });
     expect(loaded?.student).toBe('New Student');
+  });
+
+  it('clears active profile binding when legacy delete archives a student', async () => {
+    const deps = createInMemoryDeps();
+    const clearActiveCalls: {
+      studentId: string;
+      options: {
+        reason?: string | null;
+        changedBy?: string | null;
+      };
+    }[] = [];
+    deps.bindings.clearActive = async (studentId, options) => {
+      const normalized =
+        options instanceof Date
+          ? { reason: null, changedBy: null }
+          : {
+              reason: options?.reason ?? null,
+              changedBy: options?.changedBy ?? null,
+            };
+      clearActiveCalls.push({
+        studentId,
+        options: normalized,
+      });
+    };
+
+    const created = await createStudentProfile(
+      {
+        student: 'Legacy Delete Student',
+        colorPreset: 'b1-default',
+        profileId: 'profiles/legacy-delete.md',
+        voices: {},
+      },
+      { deps },
+    );
+
+    const removed = await deleteStudentProfile(created.id, { deps });
+
+    expect(removed).toBe(true);
+    expect(clearActiveCalls).toEqual([
+      {
+        studentId: created.id,
+        options: {
+          reason: 'student_archive',
+          changedBy: null,
+        },
+      },
+    ]);
+    expect(await getStudentProfileById(created.id, { deps })).toBeNull();
   });
 
   it('creates an active starter profile revision when starterProfile is provided', async () => {
