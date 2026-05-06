@@ -596,7 +596,14 @@ export async function deleteStudentProfile(
     archivedBy: null,
     archiveReason: 'Archived through legacy delete operation.',
   });
-  return Boolean(archived);
+  if (!archived) return false;
+
+  await dependencies.bindings.clearActive(id, {
+    reason: 'student_archive',
+    changedBy: null,
+  });
+
+  return true;
 }
 
 export async function archiveStudentProfile(
