@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [6.4.0] - 2026-05-06
+
+### Changed
+
+- Automated release from PR #71: Student area MVP repairs and archive flow (https://github.com/abocha/esl-pipeline/pull/71)
+
 ## [6.3.1] - 2026-05-01
 
 ### Changed
