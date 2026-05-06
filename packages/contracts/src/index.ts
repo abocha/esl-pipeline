@@ -360,6 +360,151 @@ export interface StudentSummaryResponse {
   offset: number;
 }
 
+export type StudentLessonStatus = 'scheduled' | 'completed' | 'canceled' | 'no_show';
+export type StudentCreditEventType = 'credit_added' | 'credit_consumed' | 'credit_adjusted';
+export type StudentReminderType = 'no_next_lesson' | 'low_balance' | 'payment_followup';
+export type StudentReminderChannel = 'manual' | 'telegram' | 'email';
+
+export interface StudentLessonPlanDto {
+  studentId: string;
+  workspaceId: string | null;
+  timezone: string;
+  defaultDurationMinutes: number;
+  cadence: string | null;
+  preferredTimes: string | null;
+  schedulingNotes: string | null;
+  updatedAt: string | null;
+}
+
+export interface UpdateStudentLessonPlanRequest {
+  timezone?: string;
+  defaultDurationMinutes?: number;
+  cadence?: string | null;
+  preferredTimes?: string | null;
+  schedulingNotes?: string | null;
+}
+
+export interface StudentLessonDto {
+  id: string;
+  studentId: string;
+  workspaceId: string | null;
+  startsAt: string;
+  timezone: string;
+  durationMinutes: number;
+  status: StudentLessonStatus;
+  consumesCredit: boolean;
+  title: string | null;
+  notes: string | null;
+  creditEventId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateStudentLessonRequest {
+  startsAt: string;
+  timezone?: string;
+  durationMinutes?: number;
+  status?: StudentLessonStatus;
+  consumesCredit?: boolean;
+  title?: string | null;
+  notes?: string | null;
+}
+
+export interface UpdateStudentLessonRequest {
+  startsAt?: string;
+  timezone?: string;
+  durationMinutes?: number;
+  status?: StudentLessonStatus;
+  consumesCredit?: boolean;
+  title?: string | null;
+  notes?: string | null;
+}
+
+export interface StudentCreditEventDto {
+  id: string;
+  studentId: string;
+  workspaceId: string | null;
+  eventType: StudentCreditEventType;
+  quantityDelta: number;
+  sourceLessonId: string | null;
+  sourcePaymentId: string | null;
+  note: string | null;
+  voidedAt: string | null;
+  createdAt: string;
+}
+
+export interface AddStudentPackageRequest {
+  lessons: number;
+  note?: string | null;
+  payment?: {
+    amountMinor: number;
+    currency: string;
+    method?: string | null;
+    receivedAt?: string;
+    externalUrl?: string | null;
+    note?: string | null;
+  } | null;
+}
+
+export interface AdjustStudentCreditsRequest {
+  quantityDelta: number;
+  note?: string | null;
+}
+
+export interface StudentPaymentRecordDto {
+  id: string;
+  studentId: string;
+  workspaceId: string | null;
+  amountMinor: number;
+  currency: string;
+  method: string | null;
+  receivedAt: string;
+  externalUrl: string | null;
+  note: string | null;
+  voidedAt: string | null;
+  createdAt: string;
+}
+
+export interface RecordStudentPaymentRequest {
+  amountMinor: number;
+  currency: string;
+  method?: string | null;
+  receivedAt?: string;
+  externalUrl?: string | null;
+  note?: string | null;
+}
+
+export interface StudentCreditSummaryDto {
+  purchased: number;
+  consumed: number;
+  adjustments: number;
+  remaining: number;
+  lowBalanceThreshold: number;
+  isLow: boolean;
+  isNegative: boolean;
+}
+
+export interface StudentReminderRecommendationDto {
+  type: StudentReminderType;
+  channel: StudentReminderChannel;
+  severity: 'info' | 'attention' | 'urgent';
+  title: string;
+  message: string;
+  copyText: string;
+}
+
+export interface StudentScheduleBillingSurfaceResponse {
+  studentId: string;
+  workspaceId: string | null;
+  lessonPlan: StudentLessonPlanDto;
+  nextLesson: StudentLessonDto | null;
+  lessons: StudentLessonDto[];
+  creditSummary: StudentCreditSummaryDto;
+  creditEvents: StudentCreditEventDto[];
+  payments: StudentPaymentRecordDto[];
+  reminders: StudentReminderRecommendationDto[];
+}
+
 export interface StudentProfileDto {
   id: string;
   student: string;

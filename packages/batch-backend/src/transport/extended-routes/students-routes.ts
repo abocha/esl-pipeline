@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 
 import {
@@ -44,6 +44,16 @@ import {
   StudentProfileStoreError,
   updateStudentProfile,
 } from '../../application/student-profiles-store.js';
+import {
+  addStudentPackage,
+  adjustStudentCredits,
+  createStudentLesson,
+  getStudentScheduleBillingSurface,
+  recordStudentPayment,
+  StudentScheduleBillingError,
+  updateStudentLesson,
+  updateStudentLessonPlan,
+} from '../../application/student-schedule-billing.js';
 import { getStudentSummaryWithDefaults } from '../../application/student-summary.js';
 import {
   getStudentTimeline,
@@ -71,6 +81,69 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
     longRunningChallenges: z.string().min(1),
     studyPreferencesOrConstraints: z.string().min(1),
     teacherNotes: z.string().nullable().optional(),
+  });
+  const lessonStatusSchema = z.enum(['scheduled', 'completed', 'canceled', 'no_show']);
+  const optionalTextSchema = z.string().trim().max(2000).nullable().optional();
+  const currencySchema = z
+    .string()
+    .trim()
+    .regex(/^[A-Z]{3}$/);
+  const paymentSchema = z.object({
+    amountMinor: z.number().int().positive(),
+    currency: currencySchema,
+    method: z.string().trim().max(100).nullable().optional(),
+    receivedAt: z
+      .string()
+      .trim()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
+    externalUrl: z.string().trim().url().max(2000).nullable().optional(),
+    note: optionalTextSchema,
+  });
+  const lessonPlanBodySchema = z.object({
+    timezone: z.string().trim().min(1).max(100).optional(),
+    defaultDurationMinutes: z
+      .number()
+      .int()
+      .positive()
+      .max(24 * 60)
+      .optional(),
+    cadence: optionalTextSchema,
+    preferredTimes: optionalTextSchema,
+    schedulingNotes: optionalTextSchema,
+  });
+  const createLessonBodySchema = z.object({
+    startsAt: z.string().trim().datetime({ offset: true }),
+    timezone: z.string().trim().min(1).max(100).optional(),
+    durationMinutes: z
+      .number()
+      .int()
+      .positive()
+      .max(24 * 60)
+      .optional(),
+    status: lessonStatusSchema.optional(),
+    consumesCredit: z.boolean().optional(),
+    title: optionalTextSchema,
+    notes: optionalTextSchema,
+  });
+  const updateLessonBodySchema = createLessonBodySchema
+    .partial()
+    .refine((value) => Object.keys(value).length > 0, 'At least one lesson field is required');
+  const packageBodySchema = z.object({
+    lessons: z.number().int().positive().max(500),
+    note: optionalTextSchema,
+    payment: paymentSchema.nullable().optional(),
+  });
+  const creditAdjustmentBodySchema = z.object({
+    quantityDelta: z
+      .number()
+      .int()
+      .min(-500)
+      .max(500)
+      .refine((value) => value !== 0, {
+        message: 'Credit adjustment must not be zero',
+      }),
+    note: optionalTextSchema,
   });
 
   const emptyProfileRevisions = {
@@ -125,7 +198,7 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
           return errorResponse(reply, 'not_found');
         }
 
-        const [memory, pendingCandidates, recentTimeline] = await Promise.all([
+        const [memory, pendingCandidates, recentTimeline, scheduleBilling] = await Promise.all([
           getStudentMemoryOverview({
             studentId: params.id,
             lessonLimit: 3,
@@ -146,9 +219,10 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
             offset: 0,
             order: 'desc',
           }),
+          getStudentScheduleBillingSurface(params.id),
         ]);
 
-        if (!memory || !pendingCandidates) {
+        if (!memory || !pendingCandidates || !scheduleBilling) {
           return errorResponse(reply, 'not_found');
         }
 
@@ -164,6 +238,7 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
           memory,
           pendingCandidates,
           recentTimeline,
+          scheduleBilling,
         });
       } catch (error: unknown) {
         if (error instanceof z.ZodError) {
@@ -338,6 +413,193 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
         });
 
         return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.get(
+    '/students/:id/surfaces/schedule-billing',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'GET /students/:id/surfaces/schedule-billing');
+      const paramsSchema = z.object({
+        id: z.string().min(1),
+      });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const surface = await getStudentScheduleBillingSurface(params.id);
+        if (!surface) {
+          return errorResponse(reply, 'not_found');
+        }
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          studentId: params.id,
+        });
+
+        return reply.send(surface);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid student id',
+            details: error.issues,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.put(
+    '/students/:id/operations/lesson-plan',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'PUT /students/:id/operations/lesson-plan');
+      const paramsSchema = z.object({ id: z.string().min(1) });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const body = lessonPlanBodySchema.parse(request.body ?? {});
+        const authenticatedUser = getAuthenticatedUser(request);
+        return reply.send(
+          await updateStudentLessonPlan(params.id, body, authenticatedUser?.id ?? null),
+        );
+      } catch (error: unknown) {
+        return handleScheduleBillingRouteError(reply, routePath, error);
+      }
+    },
+  );
+
+  app.post(
+    '/students/:id/lessons',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'POST /students/:id/lessons');
+      const paramsSchema = z.object({ id: z.string().min(1) });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const body = createLessonBodySchema.parse(request.body ?? {});
+        const authenticatedUser = getAuthenticatedUser(request);
+        return reply
+          .code(201)
+          .send(await createStudentLesson(params.id, body, authenticatedUser?.id ?? null));
+      } catch (error: unknown) {
+        return handleScheduleBillingRouteError(reply, routePath, error);
+      }
+    },
+  );
+
+  app.patch(
+    '/students/:id/lessons/:lessonId',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'PATCH /students/:id/lessons/:lessonId');
+      const paramsSchema = z.object({
+        id: z.string().min(1),
+        lessonId: z.string().min(1),
+      });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const body = updateLessonBodySchema.parse(request.body ?? {});
+        const authenticatedUser = getAuthenticatedUser(request);
+        return reply.send(
+          await updateStudentLesson(
+            params.id,
+            params.lessonId,
+            body,
+            authenticatedUser?.id ?? null,
+          ),
+        );
+      } catch (error: unknown) {
+        return handleScheduleBillingRouteError(reply, routePath, error);
+      }
+    },
+  );
+
+  app.post(
+    '/students/:id/packages',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'POST /students/:id/packages');
+      const paramsSchema = z.object({ id: z.string().min(1) });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const body = packageBodySchema.parse(request.body ?? {});
+        const authenticatedUser = getAuthenticatedUser(request);
+        return reply
+          .code(201)
+          .send(await addStudentPackage(params.id, body, authenticatedUser?.id ?? null));
+      } catch (error: unknown) {
+        return handleScheduleBillingRouteError(reply, routePath, error);
+      }
+    },
+  );
+
+  app.post(
+    '/students/:id/credits/adjustments',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'POST /students/:id/credits/adjustments');
+      const paramsSchema = z.object({ id: z.string().min(1) });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const body = creditAdjustmentBodySchema.parse(request.body ?? {});
+        const authenticatedUser = getAuthenticatedUser(request);
+        return reply
+          .code(201)
+          .send(await adjustStudentCredits(params.id, body, authenticatedUser?.id ?? null));
+      } catch (error: unknown) {
+        return handleScheduleBillingRouteError(reply, routePath, error);
+      }
+    },
+  );
+
+  app.post(
+    '/students/:id/payments',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'POST /students/:id/payments');
+      const paramsSchema = z.object({ id: z.string().min(1) });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const body = paymentSchema.parse(request.body ?? {});
+        const authenticatedUser = getAuthenticatedUser(request);
+        return reply
+          .code(201)
+          .send(await recordStudentPayment(params.id, body, authenticatedUser?.id ?? null));
+      } catch (error: unknown) {
+        return handleScheduleBillingRouteError(reply, routePath, error);
       }
     },
   );
@@ -1783,4 +2045,31 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
       }
     },
   );
+}
+
+function handleScheduleBillingRouteError(reply: FastifyReply, routePath: string, error: unknown) {
+  if (error instanceof z.ZodError) {
+    return reply.code(400).send({
+      error: 'validation_failed',
+      message: 'Invalid schedule and billing request',
+      details: error.issues,
+    });
+  }
+
+  if (error instanceof StudentScheduleBillingError) {
+    return reply.code(error.status).send({
+      error: error.code,
+      message: error.message,
+      code: error.code,
+    });
+  }
+
+  logger.error(error instanceof Error ? error : String(error), {
+    event: 'http_request',
+    route: routePath,
+    statusCode: 500,
+    error: 'internal_error',
+  });
+
+  return errorResponse(reply, 'internal_error');
 }

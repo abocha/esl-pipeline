@@ -31,6 +31,7 @@ import * as studentMemoryInspectionModule from '../src/application/student-memor
 import * as studentBindingsModule from '../src/application/student-profile-bindings.js';
 import * as studentProfileCandidatesModule from '../src/application/student-profile-candidates.js';
 import * as studentStoreModule from '../src/application/student-profiles-store.js';
+import * as studentScheduleBillingModule from '../src/application/student-schedule-billing.js';
 import * as studentSummaryModule from '../src/application/student-summary.js';
 import * as studentTimelineModule from '../src/application/student-timeline.js';
 import * as submitJobModule from '../src/application/submit-job.js';
@@ -279,6 +280,28 @@ vi.mock('../src/application/student-profile-bindings', () => {
   };
 });
 
+vi.mock('../src/application/student-schedule-billing', () => {
+  return {
+    getStudentScheduleBillingSurface: vi.fn(),
+    updateStudentLessonPlan: vi.fn(),
+    createStudentLesson: vi.fn(),
+    updateStudentLesson: vi.fn(),
+    addStudentPackage: vi.fn(),
+    adjustStudentCredits: vi.fn(),
+    recordStudentPayment: vi.fn(),
+    StudentScheduleBillingError: class StudentScheduleBillingError extends Error {
+      code: string;
+      status: number;
+
+      constructor(code: string, status: number, message: string) {
+        super(message);
+        this.code = code;
+        this.status = status;
+      }
+    },
+  };
+});
+
 vi.mock('../src/application/get-job-provenance.js', () => {
   return {
     getJobProvenance: vi.fn(),
@@ -378,6 +401,9 @@ export function describeHttpServerIntegrationSuite(
     );
     const mockGetActiveStudentProfileBindingForStudent = vi.mocked(
       studentBindingsModule.getActiveStudentProfileBindingForStudent,
+    );
+    const mockGetStudentScheduleBillingSurface = vi.mocked(
+      studentScheduleBillingModule.getStudentScheduleBillingSurface,
     );
     const mockGetJobProvenance = vi.mocked(getJobProvenanceModule.getJobProvenance);
 
@@ -946,6 +972,34 @@ export function describeHttpServerIntegrationSuite(
         changedBy: null,
         createdAt: '2024-01-01T00:00:00.000Z',
       });
+      mockGetStudentScheduleBillingSurface.mockResolvedValue({
+        studentId: deriveStudentId('Anna'),
+        workspaceId: '00000000-0000-4000-8000-000000000001',
+        lessonPlan: {
+          studentId: deriveStudentId('Anna'),
+          workspaceId: '00000000-0000-4000-8000-000000000001',
+          timezone: 'UTC',
+          defaultDurationMinutes: 60,
+          cadence: null,
+          preferredTimes: null,
+          schedulingNotes: null,
+          updatedAt: null,
+        },
+        nextLesson: null,
+        lessons: [],
+        creditSummary: {
+          purchased: 0,
+          consumed: 0,
+          adjustments: 0,
+          remaining: 0,
+          lowBalanceThreshold: 2,
+          isLow: true,
+          isNegative: false,
+        },
+        creditEvents: [],
+        payments: [],
+        reminders: [],
+      });
 
       app = await createHttpServer();
     });
@@ -1043,6 +1097,7 @@ export function describeHttpServerIntegrationSuite(
       mockInitializeStudentProfileDraft,
       mockListStudentProfileBindingsForStudent,
       mockGetActiveStudentProfileBindingForStudent,
+      mockGetStudentScheduleBillingSurface,
       mockGetJobProvenance,
     });
   });

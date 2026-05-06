@@ -25,6 +25,13 @@ const REQUIRED_TABLES = [
   'generation_budget_counters',
   'user_settings',
   'uploaded_files',
+  'workspaces',
+  'workspace_memberships',
+  'student_lesson_plans',
+  'student_lessons',
+  'student_credit_events',
+  'student_payment_records',
+  'student_reminder_preferences',
 ];
 
 const REQUIRED_CONSTRAINTS = [
@@ -62,6 +69,16 @@ const REQUIRED_CONSTRAINTS = [
   'uploaded_files_file_size_check',
   'user_settings_tts_strategy_check',
   'user_settings_tts_provider_check',
+  'workspace_memberships_role_check',
+  'students_workspace_id_fkey',
+  'student_lesson_plans_student_id_fkey',
+  'student_lesson_plans_workspace_id_fkey',
+  'student_lessons_student_id_fkey',
+  'student_lessons_status_check',
+  'student_credit_events_type_check',
+  'student_credit_events_nonzero_check',
+  'student_payment_records_currency_check',
+  'student_reminder_preferences_channel_check',
 ];
 
 const REQUIRED_INDEXES = [
@@ -83,6 +100,11 @@ const REQUIRED_INDEXES = [
   'idx_generation_budget_counters_provider_model',
   'idx_user_settings_user_id',
   'idx_uploaded_files_user_id',
+  'idx_students_workspace_id',
+  'idx_workspace_memberships_user_id',
+  'idx_student_lessons_student_starts_at',
+  'idx_student_credit_events_student_active',
+  'idx_student_payment_records_student_received_at',
 ];
 
 const REQUIRED_EXTENSIONS = ['uuid-ossp'];
@@ -94,6 +116,7 @@ const OPTIONAL_PG_TRGM_INDEXES = [
 const REQUIRED_COLUMNS: { table: string; column: string }[] = [
   { table: 'jobs', column: 'student_id' },
   { table: 'profile_revisions', column: 'structured_content' },
+  { table: 'students', column: 'workspace_id' },
 ];
 
 async function verifyTables(client: PoolClient, errors: string[]): Promise<void> {

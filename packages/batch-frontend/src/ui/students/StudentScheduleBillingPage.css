@@ -3,23 +3,153 @@
   gap: 1rem;
 }
 
-.student-schedule-billing-note,
-.student-schedule-billing-grid .student-area-metric-card {
-  padding: 1.2rem;
-}
-
-.student-schedule-billing-note {
-  padding: 1.35rem;
-}
-
-.student-schedule-billing-note p {
+.student-schedule-billing-error {
   margin: 0;
-  color: var(--student-area-muted);
-  line-height: 1.55;
+  padding: 0.85rem 1rem;
+  border: 1px solid rgba(143, 63, 50, 0.24);
+  border-radius: var(--student-area-radius-sm);
+  background: var(--student-area-rose-soft);
+  color: var(--student-area-rose);
+  font-weight: 700;
 }
 
 .student-schedule-billing-grid {
   display: grid;
   gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
+.student-schedule-billing-columns {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.student-schedule-billing-panel {
+  padding: 1.2rem;
+}
+
+.student-schedule-billing-panel header {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.student-schedule-billing-panel header p {
+  margin: 0;
+  color: var(--student-area-muted);
+  line-height: 1.45;
+}
+
+.student-schedule-billing-form {
+  display: grid;
+  gap: 0.85rem;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.student-schedule-billing-form label {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--student-area-muted);
+  font-size: 0.83rem;
+  font-weight: 800;
+}
+
+.student-schedule-billing-form input,
+.student-schedule-billing-form textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--student-area-line);
+  border-radius: var(--student-area-radius-sm);
+  background: rgba(255, 253, 248, 0.88);
+  color: var(--student-area-ink);
+  font: inherit;
+  padding: 0.62rem 0.7rem;
+}
+
+.student-schedule-billing-form textarea {
+  min-height: 5rem;
+  resize: vertical;
+}
+
+.student-schedule-billing-wide {
+  grid-column: 1 / -1;
+}
+
+.student-schedule-billing-form button,
+.student-schedule-billing-list-row button {
+  width: fit-content;
+  border: 1px solid rgba(20, 63, 115, 0.16);
+  border-radius: var(--student-area-radius-sm);
+  background: var(--student-area-blue);
+  color: #fff;
+  cursor: pointer;
+  font-weight: 800;
+  padding: 0.62rem 0.9rem;
+}
+
+.student-schedule-billing-form button:disabled,
+.student-schedule-billing-list-row button:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
+.student-schedule-billing-list {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.student-schedule-billing-list-row,
+.student-schedule-billing-reminder {
+  display: grid;
+  align-items: center;
+  gap: 0.75rem;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  padding: 0.85rem;
+  border: 1px solid var(--student-area-line);
+  border-radius: var(--student-area-radius-sm);
+  background: rgba(255, 253, 248, 0.64);
+}
+
+.student-schedule-billing-list-row span,
+.student-schedule-billing-reminder span {
+  display: grid;
+  gap: 0.22rem;
+  min-width: 0;
+}
+
+.student-schedule-billing-list-row strong,
+.student-schedule-billing-reminder strong {
+  color: var(--student-area-ink);
+  font-family: var(--student-area-serif);
+  font-size: 1.02rem;
+  font-weight: 500;
+}
+
+.student-schedule-billing-list-row small,
+.student-schedule-billing-reminder small {
+  color: var(--student-area-muted);
+}
+
+.student-schedule-billing-reminder {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.student-schedule-billing-reminder textarea {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-height: 4.5rem;
+  border: 1px solid var(--student-area-line);
+  border-radius: var(--student-area-radius-sm);
+  background: rgba(255, 253, 248, 0.82);
+  color: var(--student-area-ink);
+  font: inherit;
+  padding: 0.7rem;
+  resize: vertical;
+}
+
+@media (max-width: 760px) {
+  .student-schedule-billing-list-row {
+    align-items: start;
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

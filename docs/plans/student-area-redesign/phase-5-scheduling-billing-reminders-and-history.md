@@ -34,6 +34,11 @@ It should answer:
    teaching business.
 6. The billing domain belongs to the broader student record, not the learner profile.
 
+The durable MVP product decision record is
+[`docs/reference/SCHEDULE_BILLING_PRODUCT_DECISIONS.md`](../../reference/SCHEDULE_BILLING_PRODUCT_DECISIONS.md).
+Use that reference before implementing or revising schedule, billing, credit, reminder, payment, or
+future account-boundary behavior.
+
 ## Recommended Subsections For Schedule & Billing
 
 ### 1. Lesson Planning
