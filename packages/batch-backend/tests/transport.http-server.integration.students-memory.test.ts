@@ -16,6 +16,7 @@ describeHttpServerIntegrationSuite(
     mockListStudentProfileBindingsForStudent,
     mockListStudentProfileCandidatesForStudent,
     mockListProfileRevisionsForProfile,
+    mockGetStudentScheduleBillingSurface,
   }) => {
     it('GET /students/:id/memory returns the overview payload for authenticated inspection', async () => {
       const studentId = deriveStudentId('Anna');
@@ -82,6 +83,7 @@ describeHttpServerIntegrationSuite(
       mockGetStudentMemoryOverview.mockClear();
       mockListStudentProfileCandidatesForStudent.mockClear();
       mockGetStudentTimeline.mockClear();
+      mockGetStudentScheduleBillingSurface.mockClear();
 
       const response = await app.inject({
         method: 'GET',
@@ -104,12 +106,14 @@ describeHttpServerIntegrationSuite(
         studentId,
         expect.objectContaining({ limit: 8 }),
       );
+      expect(mockGetStudentScheduleBillingSurface).toHaveBeenCalledWith(studentId);
       expect(response.json()).toMatchObject({
         profile: { id: 'profile.md' },
         revisions: { items: [{ id: 'revision-1' }] },
         memory: { studentId },
         pendingCandidates: { items: [] },
         recentTimeline: { items: [{ type: 'recording_ingested' }] },
+        scheduleBilling: { studentId },
       });
     });
 

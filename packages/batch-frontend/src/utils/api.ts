@@ -31,6 +31,8 @@ import { type AxiosError, type AxiosProgressEvent, isAxiosError } from 'axios';
 
 import type {
   ActionCapability,
+  AddStudentPackageRequest,
+  AdjustStudentCreditsRequest,
   ElevenLabsTtsModelId as ContractElevenLabsTtsModelId,
   GenerateDraftRequest as ContractGenerateDraftRequest,
   GenerateDraftResponse as ContractGenerateDraftResponse,
@@ -52,12 +54,17 @@ import type {
   TtsProviderId as ContractTtsProviderId,
   TtsStrategy as ContractTtsStrategy,
   VoiceOption as ContractVoiceOption,
+  CreateStudentLessonRequest,
   GenerationErrorCategory,
   GenerationProvider,
   JobActionRequest,
   JobStatusDto,
   PublishTarget,
+  RecordStudentPaymentRequest,
   StreamEventMessage,
+  StudentScheduleBillingSurfaceResponse,
+  UpdateStudentLessonPlanRequest,
+  UpdateStudentLessonRequest,
 } from '@esl-pipeline/contracts';
 import { JobActionType } from '@esl-pipeline/contracts';
 
@@ -818,6 +825,7 @@ export interface StudentOverviewSurfaceResponse {
   memory: StudentMemoryOverviewResponse;
   pendingCandidates: StudentProfileCandidateListResponse;
   recentTimeline: StudentTimelineResponse;
+  scheduleBilling?: StudentScheduleBillingSurfaceResponse;
 }
 
 export interface StudentLearningSurfaceResponse {
@@ -833,6 +841,14 @@ export interface StudentHistorySurfaceResponse {
   lessonMemory: StudentLessonMemoryListResponse;
   homeworkMemory: StudentHomeworkMemoryListResponse;
 }
+
+export type StudentScheduleBillingSurface = StudentScheduleBillingSurfaceResponse;
+export type StudentLessonPlanUpdate = UpdateStudentLessonPlanRequest;
+export type StudentLessonCreate = CreateStudentLessonRequest;
+export type StudentLessonUpdate = UpdateStudentLessonRequest;
+export type StudentPackageCreate = AddStudentPackageRequest;
+export type StudentCreditAdjustmentCreate = AdjustStudentCreditsRequest;
+export type StudentPaymentCreate = RecordStudentPaymentRequest;
 
 export interface PromptOption {
   id: string;
@@ -2404,6 +2420,122 @@ export async function getStudentHistorySurface(
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to view student history.');
     }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function getStudentScheduleBillingSurface(
+  studentId: string,
+): Promise<StudentScheduleBillingSurface> {
+  try {
+    const response = await apiClient.get(
+      buildApiProxyPath(`/students/${encodeURIComponent(studentId)}/surfaces/schedule-billing`),
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to view schedule and billing.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function updateStudentLessonPlan(
+  studentId: string,
+  body: StudentLessonPlanUpdate,
+): Promise<StudentScheduleBillingSurface> {
+  try {
+    const response = await apiClient.put(
+      buildApiProxyPath(`/students/${encodeURIComponent(studentId)}/operations/lesson-plan`),
+      body,
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function createStudentLesson(
+  studentId: string,
+  body: StudentLessonCreate,
+): Promise<StudentScheduleBillingSurface> {
+  try {
+    const response = await apiClient.post(
+      buildApiProxyPath(`/students/${encodeURIComponent(studentId)}/lessons`),
+      body,
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function updateStudentLesson(
+  studentId: string,
+  lessonId: string,
+  body: StudentLessonUpdate,
+): Promise<StudentScheduleBillingSurface> {
+  try {
+    const response = await apiClient.patch(
+      buildApiProxyPath(
+        `/students/${encodeURIComponent(studentId)}/lessons/${encodeURIComponent(lessonId)}`,
+      ),
+      body,
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function addStudentPackage(
+  studentId: string,
+  body: StudentPackageCreate,
+): Promise<StudentScheduleBillingSurface> {
+  try {
+    const response = await apiClient.post(
+      buildApiProxyPath(`/students/${encodeURIComponent(studentId)}/packages`),
+      body,
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function adjustStudentCredits(
+  studentId: string,
+  body: StudentCreditAdjustmentCreate,
+): Promise<StudentScheduleBillingSurface> {
+  try {
+    const response = await apiClient.post(
+      buildApiProxyPath(`/students/${encodeURIComponent(studentId)}/credits/adjustments`),
+      body,
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function recordStudentPayment(
+  studentId: string,
+  body: StudentPaymentCreate,
+): Promise<StudentScheduleBillingSurface> {
+  try {
+    const response = await apiClient.post(
+      buildApiProxyPath(`/students/${encodeURIComponent(studentId)}/payments`),
+      body,
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }
 }

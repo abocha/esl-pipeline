@@ -18,62 +18,79 @@ notes.
 
 ## MVP Backlog
 
-0. Restore prompt editing and prompt versioning.
-   - A prompt editing/versioning feature existed before the transition to the current student area.
-   - First slice: restore template editing/versioning as a top-level `/prompts` page.
-   - Scope the rescue surface to prompt templates only; learner profile editing remains in the
-     student Learning page.
-   - Preserve version history, reviewability, rollback/reuse, and clear teacher/operator authority.
-   - Keep the page aligned with prompt packages and the DB-canonical prompt-gallery/runtime prompt
-     source.
+- [x] 0. Restore prompt editing and prompt versioning.
+  - A prompt editing/versioning feature existed before the transition to the current student area.
+  - First slice: restore template editing/versioning as a top-level `/prompts` page.
+  - Scope the rescue surface to prompt templates only; learner profile editing remains in the
+    student Learning page.
+  - Preserve version history, reviewability, rollback/reuse, and clear teacher/operator authority.
+  - Keep the page aligned with prompt packages and the DB-canonical prompt-gallery/runtime prompt
+    source.
 
-1. Implement real scheduling and billing.
-   - Define the minimum useful scheduling model, billing/accounting model, and where those states
-     live.
-   - Keep scheduling and billing outside the pedagogical learner profile.
+- [x] 1. Implement real scheduling and billing.
+  - Define the minimum useful scheduling model, billing/accounting model, and where those states
+    live.
+  - Keep scheduling and billing outside the pedagogical learner profile.
+  - Durable product decisions are recorded in
+    [`docs/reference/SCHEDULE_BILLING_PRODUCT_DECISIONS.md`](../../reference/SCHEDULE_BILLING_PRODUCT_DECISIONS.md).
 
-2. Fix the student area overview page layout.
-   - Review the current overview route against the student-area design locks.
-   - Improve scanability, spacing, and page hierarchy.
+- [x] 2. Fix the student area overview page layout.
+  - Review the current overview route against the student-area design locks.
+  - Improve scanability, spacing, and page hierarchy.
 
-3. Design the student continuity model for open threads and persistent challenges.
-   - Decide how student "open threads" are formed, carried forward, reviewed, and resolved.
-   - Decide how persistent challenges are formed, carried forward, reviewed, and addressed in
-     assignments.
-   - Define how both concepts enter prompt packages without becoming noisy or stale.
+- [ ] 3. Design the student continuity model for open threads and persistent challenges.
+  - Decide how student "open threads" are formed, carried forward, reviewed, and resolved.
+  - Decide how persistent challenges are formed, carried forward, reviewed, and addressed in
+    assignments.
+  - Define how both concepts enter prompt packages without becoming noisy or stale.
 
-4. Clean up the profile candidates section on the student learning page.
-   - Make candidate review less cluttered and easier to act on.
-   - Preserve the rule that pending or rejected candidates do not affect live prompt packages.
+- [x] 4. Clean up the profile candidates section on the student learning page.
+  - Make candidate review less cluttered and easier to act on.
+  - Preserve the rule that pending or rejected candidates do not affect live prompt packages.
 
-5. Redesign advanced actions and reruns in the minimal assignment flow.
-   - Current advanced actions are too technical and visually rough.
-   - Bring generalized rerun buttons up to the same correctness standard as custom mode with manual
-     checkbox selection.
-   - Verify that every rerun action does exactly what its label promises.
+- [x] 5. Redesign advanced actions and reruns in the minimal assignment flow.
+  - Current advanced actions are too technical and visually rough.
+  - Bring generalized rerun buttons up to the same correctness standard as custom mode with manual
+    checkbox selection.
+  - Verify that every rerun action does exactly what its label promises.
 
-6. Eliminate the choice of share destination.
-   - HTML page publishing is the only target for now.
-   - Retire or hide older Notion/Anytype-era destination choice from the active flow.
+- [x] 6. Eliminate the choice of share destination.
+  - HTML page publishing is the only target for now.
+  - Retire or hide older Notion/Anytype-era destination choice from the active flow.
 
-7. Implement student archive or delete.
-   - Decide whether MVP needs archive, hard delete, or both.
-   - Preserve auditability and avoid accidental destructive deletes.
+- [x] 7. Implement student archive or delete.
+  - Decide whether MVP needs archive, hard delete, or both.
+  - Preserve auditability and avoid accidental destructive deletes.
 
-8. Broaden teacher accounts and student attachment.
-   - Expand the account model beyond the current narrow teacher assumption.
-   - Define how students are attached to teachers and how ownership/visibility should work.
+- [ ] 8. Broaden teacher accounts and student attachment.
+  - Expand the account model beyond the current narrow teacher assumption.
+  - Define how students are attached to teachers and how ownership/visibility should work.
 
-9. Research hosting options.
-   - Assess Vercel, Cloudflare, and Google Cloud Platform as realistic deployment targets.
-   - Include both technical fit and financial fit.
-   - Pay special attention to backend/runtime needs, database hosting, storage, queues, workers,
-     secrets, and operational complexity.
+- [ ] 9. Research hosting options.
+  - Assess Vercel, Cloudflare, and Google Cloud Platform as realistic deployment targets.
+  - Include both technical fit and financial fit.
+  - Pay special attention to backend/runtime needs, database hosting, storage, queues, workers,
+    secrets, and operational complexity.
 
-10. Add email service and social signup research to the account expansion track.
-    - Identify an email provider path for signup, transactional messages, and future reminders.
-    - Research Google signup and similar identity-provider options.
-    - Connect this decision to hosting and account model choices.
+- [ ] 10. Add email service and social signup research to the account expansion track.
+  - Identify an email provider path for signup, transactional messages, and future reminders.
+  - Research Google signup and similar identity-provider options.
+  - Connect this decision to hosting and account model choices.
+
+- [ ] 11. Suppress review-needed overview notifications for superseded profile drafts.
+  - Superseded profile drafts should not surface a student overview notification that they need
+    review.
+  - Only current actionable profile drafts or candidates should contribute to review-needed
+    overview signals.
+
+- [ ] 12. Plan a teacher-wide schedule and stats hub.
+  - Add a "My Schedule" page adjacent to the future teacher profile/account revamp where the
+    teacher can see all scheduled lessons, reminders, payments, and related operations in one
+    place.
+  - Add a "Stats" page for monthly income, taught lessons/work hours, expected income adjusted for
+    incoming payments and likely no-shows, and other teacher business-health signals.
+  - Treat this as planning-only for now; implementation should follow a dedicated product/design
+    discussion.
 
 ## Suggested Workstream Split
 
@@ -92,6 +109,7 @@ notes.
 3. Business operations:
    - scheduling
    - billing
+   - teacher-wide schedule and stats
    - archive/delete students
 
 4. Accounts and hosting:
