@@ -4,7 +4,7 @@
 
 - Audience: maintainers and AI agents.
 - Authority Level: reference.
-- Last Verified Against: 2026-04-05 repo state.
+- Last Verified Against: 2026-05-06 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: monthly or after release workflow changes.
 - Status: `reference`.
