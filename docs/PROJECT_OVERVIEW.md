@@ -5,7 +5,7 @@
 - Audience: AI agents, maintainers.
 - Read Time: 3 minutes.
 - Authority Level: Context baseline.
-- Last Verified Against: 2026-04-05 repo state.
+- Last Verified Against: 2026-05-06 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: monthly.
 - Status: `active`.

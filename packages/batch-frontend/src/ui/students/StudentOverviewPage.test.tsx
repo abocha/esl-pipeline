@@ -178,14 +178,76 @@ describe('StudentOverviewPage', () => {
     expect(screen.getAllByText('Not configured yet')).toHaveLength(1);
     expect(screen.getByText('Telegram and email pending')).toBeTruthy();
     expect(screen.getByText('Profile revision activated')).toBeTruthy();
-    expect(screen.getByRole('link', { name: /Open Learning/i }).getAttribute('href')).toBe(
-      '/students/student-alex/learning',
-    );
+    expect(
+      screen
+        .getAllByRole('link', { name: /Open Learning/i })
+        .map((link) => link.getAttribute('href')),
+    ).toEqual(['/students/student-alex/learning', '/students/student-alex/learning']);
     expect(screen.getByRole('link', { name: /View history/i }).getAttribute('href')).toBe(
       '/students/student-alex/history',
     );
 
     expect(apiMocks.getStudentOverviewSurface).toHaveBeenCalledWith('student-alex');
+  });
+
+  it('exposes the overview as named control-tower regions with stable operations links', async () => {
+    renderOverview();
+
+    expect(await screen.findByRole('region', { name: /Learning State/i })).toBeTruthy();
+    expect(screen.getByRole('region', { name: /Operations/i })).toBeTruthy();
+    expect(screen.getByRole('region', { name: /Learner Snapshot/i })).toBeTruthy();
+    expect(screen.getByRole('region', { name: /Current Focus/i })).toBeTruthy();
+    expect(screen.getByRole('region', { name: /Recent Activity/i })).toBeTruthy();
+
+    const operations = screen.getByRole('region', { name: /Operations/i });
+    const operationLinks = Array.from(operations.querySelectorAll('a'));
+    expect(operationLinks).toHaveLength(4);
+    expect(operationLinks.map((link) => link.getAttribute('href'))).toEqual([
+      '/students/student-alex/schedule-billing',
+      '/students/student-alex/schedule-billing',
+      '/students/student-alex/schedule-billing',
+      '/students/student-alex/schedule-billing',
+    ]);
+  });
+
+  it('keeps the teacher scan path in the locked overview layout order', async () => {
+    renderOverview();
+
+    await screen.findByRole('region', { name: /Learning State/i });
+
+    const layout = screen.getByTestId('student-overview-layout');
+    expect(
+      Array.from(layout.querySelectorAll('[data-overview-section]')).map((element) =>
+        element.getAttribute('data-overview-section'),
+      ),
+    ).toEqual([
+      'learning-state',
+      'operations',
+      'learner-snapshot',
+      'current-focus',
+      'attention',
+      'recent-activity',
+    ]);
+
+    expect(
+      screen.getByTestId('student-overview-primary-story').contains(screen.getByText('On track')),
+    ).toBe(true);
+    expect(
+      screen
+        .getByTestId('student-overview-secondary-operations')
+        .getAttribute('data-overview-emphasis'),
+    ).toBe('secondary');
+  });
+
+  it('renders the learning status as a text callout without a standalone icon mark', async () => {
+    renderOverview();
+
+    await screen.findByText('On track');
+
+    const status = screen.getByTestId('student-overview-status-callout');
+    expect(status.querySelector('.student-overview-status-mark')).toBeNull();
+    expect(status.textContent).toContain('On track');
+    expect(status.textContent).toContain('Keep building fluency and precision.');
   });
 
   it('shows a non-readable pending canvas while overview data resolves', async () => {

@@ -30,6 +30,7 @@ It does not redefine orchestrator behavior. Contract and architecture detail sta
 Core surfaces:
 
 - jobs, drafts, prompt packages, recordings, students, auth
+- student archive/restore under `/students/:id/archive` and `/students/:id/restore`; archived students are hidden from default student reads without deleting history
 - student-area route payloads under `/students/:id/surfaces/overview`, `/students/:id/surfaces/learning`, and `/students/:id/surfaces/history`
 - student-memory inspection under `/students/:id/memory`, `/students/:id/lesson-memory`, `/students/:id/homework-memory`, and `/students/:id/memory-snapshots`
 - targeted job/recording SSE under `/jobs/events?jobId=<id>&recordingId=<id>`; wildcard streams use `jobId=*`

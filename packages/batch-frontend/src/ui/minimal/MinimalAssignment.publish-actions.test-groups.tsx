@@ -178,6 +178,50 @@ export function registerJobActionTests() {
       INTEGRATION_TEST_TIMEOUT_MS,
     );
 
+    it.each([
+      {
+        label: 'Republish current draft',
+        description: 'Refresh the HTML page without regenerating any audio.',
+        payload: { republishOnly: true },
+      },
+      {
+        label: 'Regenerate study-text audio',
+        description: 'Replace only the study-text narration.',
+        payload: { regenerateStudyTextAudio: true },
+      },
+      {
+        label: 'Regenerate pronunciation audio',
+        description: 'Replace main pronunciation and pronunciation chunk clips.',
+        payload: {
+          regeneratePronunciationMainAudio: true,
+          regeneratePronunciationChunkAudio: true,
+        },
+      },
+      {
+        label: 'Regenerate all audio',
+        description: 'Replace study-text, main pronunciation, and pronunciation chunk audio.',
+        payload: {
+          regenerateStudyTextAudio: true,
+          regeneratePronunciationMainAudio: true,
+          regeneratePronunciationChunkAudio: true,
+        },
+      },
+    ])('queues the $label quick rerun payload', async ({ label, description, payload }) => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const user = createTimerAwareMinimalUser();
+      await renderPublishedActionsAssignment({ status: { state: 'succeeded' } });
+      openAdvancedActions();
+
+      const quickReruns = screen.getByRole('region', { name: /Quick reruns/i });
+      expect(within(quickReruns).getByText(description)).toBeTruthy();
+
+      await user.click(within(quickReruns).getByRole('button', { name: label }));
+
+      await waitFor(() => {
+        expect(api.rerunJob).toHaveBeenCalledWith('job-1', payload);
+      });
+    });
+
     it(
       'submits custom rerun payload values',
       async () => {

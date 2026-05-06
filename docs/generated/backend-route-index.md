@@ -66,6 +66,7 @@
 | DELETE | `/students/:id`                                           | `packages/batch-backend/src/transport/extended-routes/students-routes.ts`           |
 | GET    | `/students/:id`                                           | `packages/batch-backend/src/transport/extended-routes/students-routes.ts`           |
 | PUT    | `/students/:id`                                           | `packages/batch-backend/src/transport/extended-routes/students-routes.ts`           |
+| POST   | `/students/:id/archive`                                   | `packages/batch-backend/src/transport/extended-routes/students-routes.ts`           |
 | GET    | `/students/:id/bindings`                                  | `packages/batch-backend/src/transport/extended-routes/students-routes.ts`           |
 | GET    | `/students/:id/bindings/active`                           | `packages/batch-backend/src/transport/extended-routes/students-routes.ts`           |
 | GET    | `/students/:id/homework-memory`                           | `packages/batch-backend/src/transport/extended-routes/students-routes.ts`           |
@@ -79,6 +80,7 @@
 | POST   | `/students/:id/profile-candidates/promote`                | `packages/batch-backend/src/transport/extended-routes/students-routes.ts`           |
 | POST   | `/students/:id/profile-drafts/initialize`                 | `packages/batch-backend/src/transport/extended-routes/students-routes.ts`           |
 | POST   | `/students/:id/profile-drafts/populate-first-from-lesson` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts`           |
+| POST   | `/students/:id/restore`                                   | `packages/batch-backend/src/transport/extended-routes/students-routes.ts`           |
 | GET    | `/students/:id/surfaces/history`                          | `packages/batch-backend/src/transport/extended-routes/students-routes.ts`           |
 | GET    | `/students/:id/surfaces/learning`                         | `packages/batch-backend/src/transport/extended-routes/students-routes.ts`           |
 | GET    | `/students/:id/surfaces/overview`                         | `packages/batch-backend/src/transport/extended-routes/students-routes.ts`           |

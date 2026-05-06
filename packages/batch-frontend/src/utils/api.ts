@@ -155,6 +155,9 @@ export interface StudentProfile {
   voices?: Record<string, string>;
   manifestPreset?: string | null;
   profileId?: string | null;
+  archivedAt?: string | null;
+  archivedBy?: string | null;
+  archiveReason?: string | null;
 }
 
 export interface StarterProfileInput {
@@ -1796,7 +1799,13 @@ export async function fetchStudentOptions(): Promise<StudentOptionsResponse> {
 }
 
 export async function listStudents(
-  params: { q?: string; limit?: number; offset?: number; order?: 'asc' | 'desc' } = {},
+  params: {
+    q?: string;
+    limit?: number;
+    offset?: number;
+    order?: 'asc' | 'desc';
+    status?: 'active' | 'archived' | 'all';
+  } = {},
 ): Promise<StudentProfileListResponse> {
   try {
     const response = await apiClient.get(buildApiProxyPath('/students'), {
@@ -1807,6 +1816,40 @@ export async function listStudents(
     const axiosError = toAxiosError(error);
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to view students.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function archiveStudentProfile(
+  studentId: string,
+  payload: { reason?: string | null } = {},
+): Promise<StudentProfile> {
+  try {
+    const response = await apiClient.post(
+      buildApiProxyPath(`/students/${encodeURIComponent(studentId)}/archive`),
+      payload,
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to archive students.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function restoreStudentProfile(studentId: string): Promise<StudentProfile> {
+  try {
+    const response = await apiClient.post(
+      buildApiProxyPath(`/students/${encodeURIComponent(studentId)}/restore`),
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to restore students.');
     }
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }

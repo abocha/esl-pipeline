@@ -367,6 +367,20 @@
   gap: 0.85rem;
 }
 
+.workspace-candidate-list {
+  max-height: none;
+  overflow: visible;
+  padding-right: 0;
+}
+
+.workspace-candidate-details {
+  padding: 1rem;
+  border: 1px solid rgba(20, 63, 115, 0.12);
+  background:
+    radial-gradient(circle at top right, rgba(20, 63, 115, 0.055), transparent 30%),
+    rgba(255, 253, 248, 0.82);
+}
+
 .workspace-header-row {
   justify-content: space-between;
 }
@@ -382,12 +396,89 @@
 }
 
 .workspace-candidate-summary {
+  display: grid;
+  gap: 0.9rem;
+  align-items: start;
+}
+
+details > .workspace-candidate-summary {
   cursor: pointer;
   list-style: none;
 }
 
-.workspace-candidate-summary::-webkit-details-marker {
+details > .workspace-candidate-summary::-webkit-details-marker {
   display: none;
+}
+
+.workspace-candidate-copy {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.workspace-candidate-copy strong {
+  font-family: var(--student-area-serif);
+  font-size: clamp(1.05rem, 1.6vw, 1.24rem);
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.workspace-candidate-source {
+  color: var(--student-area-muted);
+  line-height: 1.45;
+}
+
+.workspace-candidate-status,
+.workspace-candidate-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.workspace-candidate-select {
+  padding: 0.35rem 0.55rem;
+  border: 1px solid rgba(20, 63, 115, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.68);
+  color: var(--student-area-blue);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.workspace-candidate-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.workspace-candidate-meta-row span {
+  display: inline-flex;
+  width: fit-content;
+  padding: 0.32rem 0.55rem;
+  border: 1px solid rgba(42, 36, 26, 0.08);
+  border-radius: 999px;
+  background: rgba(42, 36, 26, 0.045);
+  color: var(--student-area-muted);
+  font-size: 0.84rem;
+  font-weight: 650;
+}
+
+.workspace-candidate-body {
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--student-area-line);
+}
+
+.student-learning-layout .workspace-meta {
+  display: grid;
+  gap: 0.45rem;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.student-learning-layout .workspace-meta span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .student-learning-editor-footer,
@@ -471,6 +562,10 @@
     grid-template-columns: minmax(0, 1.65fr) minmax(300px, 0.95fr);
     align-items: start;
   }
+
+  .workspace-candidate-summary {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
 }
 
 @media (max-width: 920px) {
@@ -490,6 +585,10 @@
   .student-learning-status-panel,
   .student-learning-standalone-state {
     padding: 1.1rem;
+  }
+
+  .workspace-candidate-summary {
+    grid-template-columns: 1fr;
   }
 }
 

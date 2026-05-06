@@ -14,6 +14,9 @@ interface StudentRow {
   manifest_preset: string | null;
   accent_preference: string | null;
   profile_id: string | null;
+  archived_at: Date | null;
+  archived_by: string | null;
+  archive_reason: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -47,6 +50,17 @@ export interface ListStudentsParams {
   limit?: number;
   offset?: number;
   order?: 'asc' | 'desc';
+  status?: 'active' | 'archived' | 'all';
+}
+
+export interface ArchiveStudentParams {
+  id: string;
+  archivedBy?: string | null;
+  archiveReason?: string | null;
+}
+
+export interface GetStudentParams {
+  includeArchived?: boolean;
 }
 
 const MAX_PAGE_LIMIT = 500;
@@ -78,6 +92,9 @@ export async function insertStudent(params: InsertStudentParams): Promise<Studen
         manifest_preset,
         accent_preference,
         profile_id,
+        archived_at,
+        archived_by,
+        archive_reason,
         created_at,
         updated_at
       `,
@@ -136,6 +153,9 @@ export async function upsertStudent(params: InsertStudentParams): Promise<Studen
         manifest_preset,
         accent_preference,
         profile_id,
+        archived_at,
+        archived_by,
+        archive_reason,
         created_at,
         updated_at
       `,
@@ -157,7 +177,10 @@ export async function upsertStudent(params: InsertStudentParams): Promise<Studen
   return mapRow(row);
 }
 
-export async function getStudentById(id: string): Promise<StudentRecord | null> {
+export async function getStudentById(
+  id: string,
+  params: GetStudentParams = {},
+): Promise<StudentRecord | null> {
   const row = await withPgClient(async (client: PoolClient) => {
     const result = await client.query(
       `
@@ -171,12 +194,16 @@ export async function getStudentById(id: string): Promise<StudentRecord | null> 
         manifest_preset,
         accent_preference,
         profile_id,
+        archived_at,
+        archived_by,
+        archive_reason,
         created_at,
         updated_at
       FROM students
       WHERE id = $1
+        AND ($2::boolean OR archived_at IS NULL)
       `,
-      [id],
+      [id, params.includeArchived ?? false],
     );
     return result.rows[0] as StudentRow | undefined;
   });
@@ -188,9 +215,16 @@ export async function listStudents(params: ListStudentsParams = {}): Promise<Stu
   const limit = Math.min(Math.max(params.limit ?? 50, 1), MAX_PAGE_LIMIT);
   const offset = Math.max(params.offset ?? 0, 0);
   const order = params.order === 'desc' ? 'desc' : 'asc';
+  const status = params.status ?? 'active';
   const values: (string | number)[] = [];
   const filters: string[] = [];
   let index = 1;
+
+  if (status === 'active') {
+    filters.push('archived_at IS NULL');
+  } else if (status === 'archived') {
+    filters.push('archived_at IS NOT NULL');
+  }
 
   if (params.search?.trim()) {
     const search = `%${params.search.trim()}%`;
@@ -219,6 +253,9 @@ export async function listStudents(params: ListStudentsParams = {}): Promise<Stu
         manifest_preset,
         accent_preference,
         profile_id,
+        archived_at,
+        archived_by,
+        archive_reason,
         created_at,
         updated_at
       FROM students
@@ -268,6 +305,9 @@ export async function updateStudent(params: UpdateStudentParams): Promise<Studen
         manifest_preset,
         accent_preference,
         profile_id,
+        archived_at,
+        archived_by,
+        archive_reason,
         created_at,
         updated_at
       `,
@@ -298,6 +338,74 @@ export async function deleteStudent(id: string): Promise<boolean> {
   return deleted;
 }
 
+export async function archiveStudent(params: ArchiveStudentParams): Promise<StudentRecord | null> {
+  const row = await withPgClient(async (client: PoolClient) => {
+    const result = await client.query(
+      `
+      UPDATE students
+      SET
+        archived_at = COALESCE(archived_at, NOW()),
+        archived_by = $2,
+        archive_reason = $3
+      WHERE id = $1
+      RETURNING
+        id,
+        student,
+        db_id,
+        page_parent_id,
+        color_preset,
+        voices,
+        manifest_preset,
+        accent_preference,
+        profile_id,
+        archived_at,
+        archived_by,
+        archive_reason,
+        created_at,
+        updated_at
+      `,
+      [params.id, params.archivedBy ?? null, params.archiveReason ?? null],
+    );
+    return result.rows[0] as StudentRow | undefined;
+  });
+
+  return row ? mapRow(row) : null;
+}
+
+export async function restoreStudent(id: string): Promise<StudentRecord | null> {
+  const row = await withPgClient(async (client: PoolClient) => {
+    const result = await client.query(
+      `
+      UPDATE students
+      SET
+        archived_at = NULL,
+        archived_by = NULL,
+        archive_reason = NULL
+      WHERE id = $1
+      RETURNING
+        id,
+        student,
+        db_id,
+        page_parent_id,
+        color_preset,
+        voices,
+        manifest_preset,
+        accent_preference,
+        profile_id,
+        archived_at,
+        archived_by,
+        archive_reason,
+        created_at,
+        updated_at
+      `,
+      [id],
+    );
+    return result.rows[0] as StudentRow | undefined;
+  });
+
+  return row ? mapRow(row) : null;
+}
+
 function mapRow(row: StudentRow): StudentRecord {
   return {
     id: row.id,
@@ -309,6 +417,9 @@ function mapRow(row: StudentRow): StudentRecord {
     manifestPreset: row.manifest_preset ?? null,
     accentPreference: row.accent_preference ?? null,
     profileId: row.profile_id ?? null,
+    archivedAt: row.archived_at ?? null,
+    archivedBy: row.archived_by ?? null,
+    archiveReason: row.archive_reason ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

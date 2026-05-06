@@ -26,6 +26,29 @@ describe('StudentWorkspace candidates', () => {
     ).toBeNull();
   });
 
+  it('renders pending candidates as compact review cards with details collapsed by default', async () => {
+    const user = userEvent.setup();
+    renderWorkspaceCandidatesPanel();
+
+    const card = screen.getByTestId('profile-candidate-card-candidate-pending');
+    expect(card.textContent).toContain('Uses English with product and engineering teams at work.');
+    expect(card.textContent).toContain('Work and communication context');
+    expect(card.textContent).toContain('Pending review');
+    expect(card.textContent).toContain('high confidence');
+    expect(card.textContent).toContain('1 evidence excerpt');
+    expect(card.textContent).toContain('Repeatedly mentioned sprint planning and client calls.');
+    expect(screen.queryByText(/Lesson memory IDs/i)).toBeNull();
+    expect(screen.queryByLabelText(/Approved Fact Text candidate-pending/i)).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: /Review details for candidate-pending/i }));
+
+    expect(
+      screen.getByRole('button', { name: /Hide details for candidate-pending/i }),
+    ).toBeTruthy();
+    expect(screen.getByText(/Lesson memory IDs/i)).toBeTruthy();
+    expect(screen.getByLabelText(/Approved Fact Text candidate-pending/i)).toBeTruthy();
+  });
+
   it('shows reviewed profile candidates including deferred items', async () => {
     const user = userEvent.setup();
     renderWorkspaceCandidatesPanel();
@@ -85,6 +108,32 @@ describe('StudentWorkspace candidates', () => {
 
     expect(onPromoteProfileCandidates).toHaveBeenCalled();
   }, 10000);
+
+  it('keeps draft generation unavailable until an approved candidate is selected', async () => {
+    const user = userEvent.setup();
+    const onPromoteProfileCandidates = vi.fn();
+    renderWorkspaceCandidatesPanel({
+      profileCandidateFilter: 'reviewed',
+      selectedCandidateIds: [],
+      onPromoteProfileCandidates,
+    });
+
+    const generateButton = screen.getByRole('button', {
+      name: /Generate Draft Revision/i,
+    }) as HTMLButtonElement;
+    expect(generateButton.disabled).toBe(true);
+    expect(screen.getAllByLabelText(/Select candidate .* for promotion/i)).toHaveLength(1);
+    expect(
+      screen.queryByLabelText(/Select candidate candidate-deferred for promotion/i),
+    ).toBeNull();
+    expect(screen.queryByLabelText(/Select candidate candidate-pending for promotion/i)).toBeNull();
+
+    await user.click(screen.getByLabelText(/Select candidate candidate-approved for promotion/i));
+
+    expect(generateButton.disabled).toBe(false);
+    await user.click(generateButton);
+    expect(onPromoteProfileCandidates).toHaveBeenCalledTimes(1);
+  });
 
   it('loads the generated draft revision into the foundational profile editor', async () => {
     const user = userEvent.setup();
