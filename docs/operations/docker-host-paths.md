@@ -4,7 +4,7 @@
 
 - Audience: maintainers and AI agents operating local Docker workflows.
 - Authority Level: operations runbook.
-- Last Verified Against: 2026-03-17 repo state.
+- Last Verified Against: 2026-05-06 repo state.
 - Owner: ops maintainer + automation agents.
 - Review Cadence: monthly or after Docker workflow changes.
 - Status: `runbook`.

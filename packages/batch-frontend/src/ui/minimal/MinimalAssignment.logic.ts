@@ -38,6 +38,15 @@ export interface DraftPreviewGate {
 
 export type RerunPayload = RerunJobPayload;
 
+export type PresetRerunKind = 'republish' | 'pronunciation' | 'studyText' | 'allAudio';
+
+export interface PresetRerunAction {
+  kind: PresetRerunKind;
+  label: string;
+  description: string;
+  payload: RerunPayload;
+}
+
 export interface CustomRerunInput {
   rerunStudyTextAudio: boolean;
   rerunPronunciationMainAudio: boolean;
@@ -128,26 +137,46 @@ export function buildPublishJobOverrides(input: PublishJobOverridesInput): Publi
   return overrides;
 }
 
-export function buildPresetRerunPayload(
-  kind: 'republish' | 'pronunciation' | 'studyText' | 'allAudio',
-): RerunPayload {
-  if (kind === 'republish') {
-    return { republishOnly: true };
-  }
-  if (kind === 'pronunciation') {
-    return {
+const PRESET_RERUN_ACTIONS: readonly PresetRerunAction[] = [
+  {
+    kind: 'republish',
+    label: 'Republish current draft',
+    description: 'Refresh the HTML page without regenerating any audio.',
+    payload: { republishOnly: true },
+  },
+  {
+    kind: 'studyText',
+    label: 'Regenerate study-text audio',
+    description: 'Replace only the study-text narration.',
+    payload: { regenerateStudyTextAudio: true },
+  },
+  {
+    kind: 'pronunciation',
+    label: 'Regenerate pronunciation audio',
+    description: 'Replace main pronunciation and pronunciation chunk clips.',
+    payload: {
       regeneratePronunciationMainAudio: true,
       regeneratePronunciationChunkAudio: true,
-    };
-  }
-  if (kind === 'studyText') {
-    return { regenerateStudyTextAudio: true };
-  }
-  return {
-    regenerateStudyTextAudio: true,
-    regeneratePronunciationMainAudio: true,
-    regeneratePronunciationChunkAudio: true,
-  };
+    },
+  },
+  {
+    kind: 'allAudio',
+    label: 'Regenerate all audio',
+    description: 'Replace study-text, main pronunciation, and pronunciation chunk audio.',
+    payload: {
+      regenerateStudyTextAudio: true,
+      regeneratePronunciationMainAudio: true,
+      regeneratePronunciationChunkAudio: true,
+    },
+  },
+];
+
+export function getPresetRerunActions(): readonly PresetRerunAction[] {
+  return PRESET_RERUN_ACTIONS;
+}
+
+export function buildPresetRerunPayload(kind: PresetRerunKind): RerunPayload {
+  return PRESET_RERUN_ACTIONS.find((action) => action.kind === kind)!.payload;
 }
 
 export function buildCustomRerunPayload(input: CustomRerunInput): CustomRerunPayloadResult {

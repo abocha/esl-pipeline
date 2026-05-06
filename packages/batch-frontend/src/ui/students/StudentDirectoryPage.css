@@ -31,6 +31,37 @@
   flex-wrap: wrap;
 }
 
+.student-directory-list-tools {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.student-directory-status-tabs {
+  display: inline-flex;
+  gap: 0.25rem;
+  padding: 0.2rem;
+  border: 1px solid var(--student-area-line);
+  border-radius: 999px;
+  background: var(--student-area-paper);
+}
+
+.student-directory-status-tabs button {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.5rem 0.8rem;
+  background: transparent;
+  color: var(--student-area-muted);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.student-directory-status-tabs button.is-active {
+  background: var(--student-area-blue);
+  color: #fffaf1;
+}
+
 .student-directory-grid {
   display: grid;
   gap: 0.75rem;
@@ -51,9 +82,10 @@
 
 .student-directory-identity {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 0.85rem;
   align-items: center;
+  position: relative;
 }
 
 .student-directory-avatar {
@@ -77,12 +109,16 @@
   flex-wrap: wrap;
 }
 
-.student-directory-actions a {
+.student-directory-actions a,
+.student-directory-actions button {
+  font: inherit;
   width: fit-content;
   padding: 0.65rem 0.95rem;
   border-radius: 999px;
   text-decoration: none;
   font-weight: 600;
+  border: 0;
+  cursor: pointer;
 }
 
 .student-directory-primary-action {
@@ -93,4 +129,75 @@
 .student-directory-secondary-action {
   background: var(--student-area-blue-soft);
   color: var(--student-area-blue);
+}
+
+.student-directory-actions button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.student-directory-card-menu {
+  position: relative;
+  align-self: start;
+}
+
+.student-directory-menu-trigger {
+  width: 2.1rem;
+  aspect-ratio: 1;
+  border: 1px solid var(--student-area-line);
+  border-radius: 999px;
+  background: var(--student-area-paper);
+  color: var(--student-area-ink);
+  font: inherit;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.student-directory-menu-trigger:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.student-directory-menu {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  z-index: 2;
+  min-width: 11rem;
+  padding: 0.35rem;
+  border: 1px solid var(--student-area-line);
+  border-radius: var(--student-area-radius-sm);
+  background: var(--student-area-panel);
+  box-shadow: var(--student-area-shadow-soft);
+}
+
+.student-directory-menu button {
+  width: 100%;
+  border: 0;
+  border-radius: 0.45rem;
+  padding: 0.6rem 0.7rem;
+  background: transparent;
+  color: var(--student-area-ink);
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.student-directory-menu button:hover,
+.student-directory-menu button:focus-visible {
+  background: var(--student-area-blue-soft);
+  color: var(--student-area-blue);
+}
+
+.student-directory-menu button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.student-directory-archive-note {
+  margin-top: 0.35rem;
+  color: var(--student-area-muted);
+  font-size: 0.9rem;
 }

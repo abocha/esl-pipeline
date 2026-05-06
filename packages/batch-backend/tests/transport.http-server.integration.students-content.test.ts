@@ -8,9 +8,16 @@ describeHttpServerIntegrationSuite(
     expect,
     it,
     mockActivateProfileRevisionForProfile,
+    mockArchiveStudentProfile,
+    mockGetActiveStudentProfileBindingForStudent,
+    mockGetStudentProfileById,
+    mockGetStudentTimeline,
+    mockListStudentProfileBindingsForStudent,
+    mockListStudentProfiles,
     mockDeleteProfileContent,
     mockSaveProfileRevisionContent,
     mockDeleteTemplateContent,
+    mockRestoreStudentProfile,
   }) => {
     it('GET /students returns student profiles', async () => {
       const response = await app.inject({
@@ -140,13 +147,91 @@ describeHttpServerIntegrationSuite(
       });
     });
 
-    it('DELETE /students/:id removes a student profile', async () => {
+    it('GET /students?status=archived returns archived student profiles', async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/students?status=archived',
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(mockListStudentProfiles).toHaveBeenCalledWith({
+        search: undefined,
+        limit: undefined,
+        offset: undefined,
+        order: undefined,
+        status: 'archived',
+      });
+    });
+
+    it('POST /students/:id/archive archives a student profile with audit context', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: `/students/${deriveStudentId('Anna')}/archive`,
+        payload: {
+          reason: 'Student paused lessons.',
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(mockArchiveStudentProfile).toHaveBeenCalledWith(
+        deriveStudentId('Anna'),
+        expect.objectContaining({
+          archiveReason: 'Student paused lessons.',
+        }),
+      );
+      expect(response.json()).toMatchObject({
+        id: deriveStudentId('Anna'),
+        archivedAt: expect.any(String),
+        archivedBy: expect.any(String),
+        archiveReason: 'Student paused lessons.',
+      });
+    });
+
+    it('POST /students/:id/restore restores an archived student profile', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: `/students/${deriveStudentId('Anna')}/restore`,
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(mockRestoreStudentProfile).toHaveBeenCalledWith(
+        deriveStudentId('Anna'),
+        expect.objectContaining({
+          restoredBy: expect.any(String),
+        }),
+      );
+      expect(response.json()).toMatchObject({
+        id: deriveStudentId('Anna'),
+        archivedAt: null,
+      });
+    });
+
+    it('GET /students/:id/timeline hides archived or missing students', async () => {
+      mockGetStudentProfileById.mockResolvedValueOnce(null);
+      mockGetStudentTimeline.mockClear();
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/students/${deriveStudentId('Anna')}/timeline`,
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(mockGetStudentTimeline).not.toHaveBeenCalled();
+    });
+
+    it('DELETE /students/:id archives a student profile as a compatibility alias', async () => {
       const response = await app.inject({
         method: 'DELETE',
         url: `/students/${deriveStudentId('Anna')}`,
       });
 
       expect(response.statusCode).toBe(204);
+      expect(mockArchiveStudentProfile).toHaveBeenCalledWith(
+        deriveStudentId('Anna'),
+        expect.objectContaining({
+          archiveReason: 'Archived through legacy DELETE /students/:id route.',
+        }),
+      );
     });
 
     it('GET /students/:id/timeline returns timeline entries', async () => {
@@ -368,6 +453,19 @@ describeHttpServerIntegrationSuite(
       });
     });
 
+    it('GET /students/:id/bindings hides archived or missing students', async () => {
+      mockGetStudentProfileById.mockResolvedValueOnce(null);
+      mockListStudentProfileBindingsForStudent.mockClear();
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/students/${deriveStudentId('Anna')}/bindings?limit=10&offset=0&order=desc`,
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(mockListStudentProfileBindingsForStudent).not.toHaveBeenCalled();
+    });
+
     it('GET /students/:id/bindings/active returns active binding', async () => {
       const response = await app.inject({
         method: 'GET',
@@ -385,6 +483,19 @@ describeHttpServerIntegrationSuite(
         changedBy: null,
         createdAt: '2024-01-01T00:00:00.000Z',
       });
+    });
+
+    it('GET /students/:id/bindings/active hides archived or missing students', async () => {
+      mockGetStudentProfileById.mockResolvedValueOnce(null);
+      mockGetActiveStudentProfileBindingForStudent.mockClear();
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/students/${deriveStudentId('Anna')}/bindings/active`,
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(mockGetActiveStudentProfileBindingForStudent).not.toHaveBeenCalled();
     });
 
     it('GET /profiles returns profile list', async () => {

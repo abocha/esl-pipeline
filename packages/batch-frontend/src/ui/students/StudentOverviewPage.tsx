@@ -434,7 +434,10 @@ export const StudentOverviewPage: React.FC = () => {
 
   return (
     <section className="student-overview-page student-area-theme" aria-busy={shellLoading}>
-      <div className="student-area-frame student-overview-frame">
+      <div
+        className="student-area-frame student-overview-frame"
+        data-testid="student-overview-layout"
+      >
         {studentError || overviewError ? (
           <p className="student-overview-error" role="alert">
             {studentError ?? overviewError}
@@ -442,20 +445,36 @@ export const StudentOverviewPage: React.FC = () => {
         ) : null}
 
         <div className="student-overview-control-row">
-          <article className="student-overview-status-panel">
+          <article
+            className="student-overview-status-panel"
+            role="region"
+            aria-label="Learning State"
+            data-overview-section="learning-state"
+            data-testid="student-overview-primary-story"
+          >
             <p className="student-overview-section-label">Learning State</p>
             <p>{getStudentSummary(profile)}</p>
             <Link
               className={`student-overview-status status-${profileStatus.tone}`}
               to={studentAreaPath('learning')}
+              data-testid="student-overview-status-callout"
             >
-              <span className="student-overview-status-mark" aria-hidden="true" />
-              <strong>{profileStatus.label}</strong>
-              <span>{profileStatus.detail}</span>
+              <span>
+                <strong>{profileStatus.label}</strong>
+                <small>{profileStatus.detail}</small>
+              </span>
+              <span className="student-overview-status-action">Open Learning</span>
             </Link>
           </article>
 
-          <aside className="student-overview-operations" aria-label="Operations snapshot">
+          <aside
+            className="student-overview-operations"
+            role="region"
+            aria-label="Operations"
+            data-overview-section="operations"
+            data-overview-emphasis="secondary"
+            data-testid="student-overview-secondary-operations"
+          >
             <p className="student-overview-section-label">Operations</p>
             <Link
               to={studentAreaPath('schedule-billing')}
@@ -501,7 +520,12 @@ export const StudentOverviewPage: React.FC = () => {
         </div>
 
         <div className="student-overview-body">
-          <article className="student-area-panel student-overview-panel learner-snapshot">
+          <article
+            className="student-area-panel student-overview-panel learner-snapshot"
+            role="region"
+            aria-label="Learner Snapshot"
+            data-overview-section="learner-snapshot"
+          >
             <header>
               <p className="student-overview-section-label">Learner Snapshot</p>
               <Link to={studentAreaPath('learning')}>View full profile</Link>
@@ -545,7 +569,12 @@ export const StudentOverviewPage: React.FC = () => {
             <p className="student-overview-meta">Profile updated {profileUpdatedAt}</p>
           </article>
 
-          <article className="student-area-panel student-overview-panel current-focus">
+          <article
+            className="student-area-panel student-overview-panel current-focus"
+            role="region"
+            aria-label="Current Focus"
+            data-overview-section="current-focus"
+          >
             <header>
               <p className="student-overview-section-label">Current Focus</p>
               <span>{currentFocus.badge}</span>
@@ -561,6 +590,7 @@ export const StudentOverviewPage: React.FC = () => {
               className={`student-overview-attention ${
                 attentionItem.label === 'No urgent review' ? 'attention-calm' : ''
               }`}
+              data-overview-section="attention"
             >
               <span aria-hidden="true">!</span>
               <span>
@@ -569,7 +599,12 @@ export const StudentOverviewPage: React.FC = () => {
               </span>
             </Link>
 
-            <article className="student-area-panel student-overview-panel recent-activity">
+            <article
+              className="student-area-panel student-overview-panel recent-activity"
+              role="region"
+              aria-label="Recent Activity"
+              data-overview-section="recent-activity"
+            >
               <header>
                 <p className="student-overview-section-label">Recent Activity</p>
                 <Link to={studentAreaPath('history')}>View history</Link>
