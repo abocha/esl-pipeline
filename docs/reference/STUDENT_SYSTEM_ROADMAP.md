@@ -140,6 +140,7 @@
 - active docs:
   - [`docs/plans/student-area-redesign/README.md`](../plans/student-area-redesign/README.md)
   - [`docs/reference/SCHEDULE_BILLING_PRODUCT_DECISIONS.md`](SCHEDULE_BILLING_PRODUCT_DECISIONS.md)
+  - [`docs/reference/TEACHER_BUSINESS_DASHBOARD_PRODUCT_DRAFT.md`](TEACHER_BUSINESS_DASHBOARD_PRODUCT_DRAFT.md)
   - [`docs/plans/student-area-redesign/phase-1-information-architecture-and-domain-boundaries.md`](../plans/student-area-redesign/phase-1-information-architecture-and-domain-boundaries.md)
   - [`docs/plans/student-area-redesign/phase-4-overview-page-and-cross-domain-summaries.md`](../plans/student-area-redesign/phase-4-overview-page-and-cross-domain-summaries.md)
   - [`docs/plans/student-area-redesign/phase-5-scheduling-billing-reminders-and-history.md`](../plans/student-area-redesign/phase-5-scheduling-billing-reminders-and-history.md)
