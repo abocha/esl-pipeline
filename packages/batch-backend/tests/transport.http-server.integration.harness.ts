@@ -35,6 +35,7 @@ import * as studentScheduleBillingModule from '../src/application/student-schedu
 import * as studentSummaryModule from '../src/application/student-summary.js';
 import * as studentTimelineModule from '../src/application/student-timeline.js';
 import * as submitJobModule from '../src/application/submit-job.js';
+import * as teacherBusinessDashboardModule from '../src/application/teacher-business-dashboard.js';
 import * as templateContentModule from '../src/application/template-content.js';
 import * as updateRecordingTranscriptModule from '../src/application/update-recording-transcript.js';
 import { getVersionMeta } from '../src/application/version-meta.js';
@@ -302,6 +303,25 @@ vi.mock('../src/application/student-schedule-billing', () => {
   };
 });
 
+vi.mock('../src/application/teacher-business-dashboard', () => {
+  return {
+    getBusinessSettings: vi.fn(),
+    updateBusinessSettings: vi.fn(),
+    getBusinessScheduleSurface: vi.fn(),
+    getBusinessStatsSurface: vi.fn(),
+    TeacherBusinessDashboardError: class TeacherBusinessDashboardError extends Error {
+      code: string;
+      status: number;
+
+      constructor(code: string, status: number, message: string) {
+        super(message);
+        this.code = code;
+        this.status = status;
+      }
+    },
+  };
+});
+
 vi.mock('../src/application/get-job-provenance.js', () => {
   return {
     getJobProvenance: vi.fn(),
@@ -404,6 +424,16 @@ export function describeHttpServerIntegrationSuite(
     );
     const mockGetStudentScheduleBillingSurface = vi.mocked(
       studentScheduleBillingModule.getStudentScheduleBillingSurface,
+    );
+    const mockGetBusinessSettings = vi.mocked(teacherBusinessDashboardModule.getBusinessSettings);
+    const mockUpdateBusinessSettings = vi.mocked(
+      teacherBusinessDashboardModule.updateBusinessSettings,
+    );
+    const mockGetBusinessScheduleSurface = vi.mocked(
+      teacherBusinessDashboardModule.getBusinessScheduleSurface,
+    );
+    const mockGetBusinessStatsSurface = vi.mocked(
+      teacherBusinessDashboardModule.getBusinessStatsSurface,
     );
     const mockGetJobProvenance = vi.mocked(getJobProvenanceModule.getJobProvenance);
 
@@ -1000,6 +1030,65 @@ export function describeHttpServerIntegrationSuite(
         payments: [],
         reminders: [],
       });
+      mockGetBusinessSettings.mockResolvedValue({
+        workspaceId: '00000000-0000-4000-8000-000000000001',
+        defaultCurrency: 'USD',
+        defaultLessonRateMinor: 4000,
+        defaultLessonDurationMinutes: 60,
+        timezone: 'UTC',
+        forecastHorizonDays: 45,
+        noShowRateBasisPoints: 0,
+        cancellationRateBasisPoints: 0,
+        topUpThreshold: 2,
+        updatedAt: null,
+      });
+      mockUpdateBusinessSettings.mockImplementation(async (body) => ({
+        workspaceId: '00000000-0000-4000-8000-000000000001',
+        defaultCurrency: body.defaultCurrency ?? 'USD',
+        defaultLessonRateMinor: body.defaultLessonRateMinor ?? 4000,
+        defaultLessonDurationMinutes: body.defaultLessonDurationMinutes ?? 60,
+        timezone: body.timezone ?? 'UTC',
+        forecastHorizonDays: body.forecastHorizonDays ?? 45,
+        noShowRateBasisPoints: body.noShowRateBasisPoints ?? 0,
+        cancellationRateBasisPoints: body.cancellationRateBasisPoints ?? 0,
+        topUpThreshold: body.topUpThreshold ?? 2,
+        updatedAt: '2026-05-07T00:00:00.000Z',
+      }));
+      mockGetBusinessScheduleSurface.mockResolvedValue({
+        workspaceId: '00000000-0000-4000-8000-000000000001',
+        from: '2026-05-07',
+        to: '2026-05-14',
+        generatedAt: '2026-05-07T00:00:00.000Z',
+        settings: await mockGetBusinessSettings(),
+        today: [],
+        lessons: [],
+        reminders: [],
+        creditAlerts: [],
+        recentPayments: [],
+      });
+      mockGetBusinessStatsSurface.mockResolvedValue({
+        workspaceId: '00000000-0000-4000-8000-000000000001',
+        month: '2026-05',
+        generatedAt: '2026-05-07T00:00:00.000Z',
+        settings: await mockGetBusinessSettings(),
+        currency: 'USD',
+        collectedMinor: 12000,
+        earnedMinor: 4000,
+        scheduledGrossMinor: 8000,
+        forecastMinor: 8000,
+        riskAdjustmentMinor: 0,
+        completedLessons: 1,
+        taughtMinutes: 60,
+        scheduledLessons: 2,
+        scheduledMinutes: 120,
+        noShowLessons: 0,
+        canceledLessons: 0,
+        forecastFrom: '2026-05-07',
+        forecastTo: '2026-06-21',
+        excludedCurrencies: [],
+        pipeline: [],
+        risks: [],
+      });
 
       app = await createHttpServer();
     });
@@ -1098,6 +1187,10 @@ export function describeHttpServerIntegrationSuite(
       mockListStudentProfileBindingsForStudent,
       mockGetActiveStudentProfileBindingForStudent,
       mockGetStudentScheduleBillingSurface,
+      mockGetBusinessSettings,
+      mockUpdateBusinessSettings,
+      mockGetBusinessScheduleSurface,
+      mockGetBusinessStatsSurface,
       mockGetJobProvenance,
     });
   });

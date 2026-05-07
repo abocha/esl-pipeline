@@ -505,6 +505,114 @@ export interface StudentScheduleBillingSurfaceResponse {
   reminders: StudentReminderRecommendationDto[];
 }
 
+export interface BusinessSettingsDto {
+  workspaceId: string;
+  defaultCurrency: string;
+  defaultLessonRateMinor: number;
+  defaultLessonDurationMinutes: number;
+  timezone: string;
+  forecastHorizonDays: number;
+  noShowRateBasisPoints: number;
+  cancellationRateBasisPoints: number;
+  topUpThreshold: number;
+  updatedAt: string | null;
+}
+
+export interface UpdateBusinessSettingsRequest {
+  defaultCurrency?: string;
+  defaultLessonRateMinor?: number;
+  defaultLessonDurationMinutes?: number;
+  timezone?: string;
+  forecastHorizonDays?: number;
+  noShowRateBasisPoints?: number;
+  cancellationRateBasisPoints?: number;
+  topUpThreshold?: number;
+}
+
+export interface BusinessLessonDto extends StudentLessonDto {
+  studentName: string;
+  studentScheduleBillingPath: string;
+}
+
+export interface BusinessReminderDto extends StudentReminderRecommendationDto {
+  studentId: string;
+  studentName: string;
+  studentScheduleBillingPath: string;
+  remainingCredits: number;
+}
+
+export interface BusinessCreditAlertDto {
+  studentId: string;
+  studentName: string;
+  studentScheduleBillingPath: string;
+  remainingCredits: number;
+  lowBalanceThreshold: number;
+  severity: 'attention' | 'urgent';
+  upcomingChargeableLessons: number;
+}
+
+export interface BusinessPaymentSummaryDto {
+  studentId: string;
+  studentName: string;
+  studentScheduleBillingPath: string;
+  amountMinor: number;
+  currency: string;
+  receivedAt: string;
+  method: string | null;
+}
+
+export interface BusinessScheduleSurfaceResponse {
+  workspaceId: string;
+  from: string;
+  to: string;
+  generatedAt: string;
+  settings: BusinessSettingsDto;
+  today: BusinessLessonDto[];
+  lessons: BusinessLessonDto[];
+  reminders: BusinessReminderDto[];
+  creditAlerts: BusinessCreditAlertDto[];
+  recentPayments: BusinessPaymentSummaryDto[];
+}
+
+export interface BusinessStatsCurrencyExclusionDto {
+  currency: string;
+  amountMinor: number;
+  paymentCount: number;
+}
+
+export interface BusinessStatsPipelineItemDto {
+  studentId: string;
+  studentName: string;
+  studentScheduleBillingPath: string;
+  remainingCredits: number;
+  upcomingChargeableLessons: number;
+  severity: 'attention' | 'urgent';
+}
+
+export interface BusinessStatsSurfaceResponse {
+  workspaceId: string;
+  month: string;
+  generatedAt: string;
+  settings: BusinessSettingsDto;
+  currency: string;
+  collectedMinor: number;
+  earnedMinor: number;
+  scheduledGrossMinor: number;
+  forecastMinor: number;
+  riskAdjustmentMinor: number;
+  completedLessons: number;
+  taughtMinutes: number;
+  scheduledLessons: number;
+  scheduledMinutes: number;
+  noShowLessons: number;
+  canceledLessons: number;
+  forecastFrom: string;
+  forecastTo: string;
+  excludedCurrencies: BusinessStatsCurrencyExclusionDto[];
+  pipeline: BusinessStatsPipelineItemDto[];
+  risks: BusinessStatsPipelineItemDto[];
+}
+
 export interface StudentProfileDto {
   id: string;
   student: string;

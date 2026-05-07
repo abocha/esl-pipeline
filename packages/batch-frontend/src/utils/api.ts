@@ -33,6 +33,9 @@ import type {
   ActionCapability,
   AddStudentPackageRequest,
   AdjustStudentCreditsRequest,
+  BusinessScheduleSurfaceResponse,
+  BusinessSettingsDto,
+  BusinessStatsSurfaceResponse,
   ElevenLabsTtsModelId as ContractElevenLabsTtsModelId,
   GenerateDraftRequest as ContractGenerateDraftRequest,
   GenerateDraftResponse as ContractGenerateDraftResponse,
@@ -63,6 +66,7 @@ import type {
   RecordStudentPaymentRequest,
   StreamEventMessage,
   StudentScheduleBillingSurfaceResponse,
+  UpdateBusinessSettingsRequest,
   UpdateStudentLessonPlanRequest,
   UpdateStudentLessonRequest,
 } from '@esl-pipeline/contracts';
@@ -100,6 +104,10 @@ export type GenerateDraftRequest = ContractGenerateDraftRequest;
 export type GenerateDraftResponse = ContractGenerateDraftResponse;
 export type GenerationDraftErrorCode = GenerationErrorCategory;
 export type RerunJobPayload = ContractRerunJobPayload;
+export type BusinessScheduleSurface = BusinessScheduleSurfaceResponse;
+export type BusinessSettings = BusinessSettingsDto;
+export type BusinessStatsSurface = BusinessStatsSurfaceResponse;
+export type BusinessSettingsUpdate = UpdateBusinessSettingsRequest;
 
 const GENERATE_DRAFT_REQUEST_TIMEOUT_MS = 240_000;
 
@@ -2532,6 +2540,63 @@ export async function recordStudentPayment(
     const response = await apiClient.post(
       buildApiProxyPath(`/students/${encodeURIComponent(studentId)}/payments`),
       body,
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function getBusinessSettings(): Promise<BusinessSettings> {
+  try {
+    const response = await apiClient.get(buildApiProxyPath('/business/settings'));
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function updateBusinessSettings(
+  body: BusinessSettingsUpdate,
+): Promise<BusinessSettings> {
+  try {
+    const response = await apiClient.put(buildApiProxyPath('/business/settings'), body);
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function getBusinessScheduleSurface(
+  params: { from?: string; to?: string } = {},
+): Promise<BusinessScheduleSurface> {
+  try {
+    const search = new URLSearchParams();
+    if (params.from) search.set('from', params.from);
+    if (params.to) search.set('to', params.to);
+    const query = search.toString();
+    const response = await apiClient.get(
+      buildApiProxyPath(`/business/schedule${query ? `?${query}` : ''}`),
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function getBusinessStatsSurface(
+  params: { month?: string } = {},
+): Promise<BusinessStatsSurface> {
+  try {
+    const search = new URLSearchParams();
+    if (params.month) search.set('month', params.month);
+    const query = search.toString();
+    const response = await apiClient.get(
+      buildApiProxyPath(`/business/stats${query ? `?${query}` : ''}`),
     );
     return response.data;
   } catch (error: unknown) {

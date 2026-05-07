@@ -61,6 +61,7 @@
 | topic        | STT Multi-Provider Refactor                                                                 | `docs/plans/stt-multi-provider-refactor/README.md`                                                  |
 | phase/detail | Verification, Acceptance, and Assumptions                                                   | `docs/plans/stt-multi-provider-refactor/verification-acceptance-and-assumptions.md`                 |
 | phase/detail | History Page Design Lock                                                                    | `docs/plans/student-area-redesign/history-page-design-lock.md`                                      |
+| phase/detail | Student Area MVP - Tomorrow Start Note                                                      | `docs/plans/student-area-redesign/mvp-tomorrow-2026-05-01.md`                                       |
 | phase/detail | Overview Page Design Lock                                                                   | `docs/plans/student-area-redesign/overview-page-design-lock.md`                                     |
 | phase/detail | Phase 1: Information Architecture And Domain Boundaries                                     | `docs/plans/student-area-redesign/phase-1-information-architecture-and-domain-boundaries.md`        |
 | phase/detail | Phase 2: Learning Page And Structured Profile                                               | `docs/plans/student-area-redesign/phase-2-learning-page-and-structured-profile.md`                  |

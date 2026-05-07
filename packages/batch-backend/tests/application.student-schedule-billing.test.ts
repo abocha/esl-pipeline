@@ -10,6 +10,12 @@ import {
   getStudentScheduleBillingSurface,
   updateStudentLesson,
 } from '../src/application/student-schedule-billing.js';
+import {
+  getBusinessScheduleSurface,
+  getBusinessSettings,
+  getBusinessStatsSurface,
+  updateBusinessSettings,
+} from '../src/application/teacher-business-dashboard.js';
 import { closePgPool, withPgClientSessionContext } from '../src/infrastructure/db.js';
 import { requirePgTestEnv } from './support/test-env.js';
 
@@ -26,6 +32,7 @@ async function resetScheduleBillingTables() {
     await client.query(
       `
       TRUNCATE TABLE
+        workspace_business_settings,
         student_reminder_preferences,
         student_payment_records,
         student_credit_events,
@@ -98,6 +105,116 @@ async function seedStudentWithoutWorkspace() {
     );
   });
   return { studentId, userId };
+}
+
+async function seedAdditionalStudent(name: string, archived = false) {
+  const studentId = randomUUID();
+  await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+    await client.query(
+      `
+      INSERT INTO students (id, student, workspace_id, archived_at, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, NOW(), NOW())
+      `,
+      [studentId, name, DEFAULT_WORKSPACE_ID, archived ? new Date().toISOString() : null],
+    );
+  });
+  return studentId;
+}
+
+async function insertBusinessLesson(params: {
+  studentId: string;
+  startsAt: string;
+  status?: 'scheduled' | 'completed' | 'canceled' | 'no_show';
+  consumesCredit?: boolean;
+  durationMinutes?: number;
+}) {
+  const id = randomUUID();
+  await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+    await client.query(
+      `
+      INSERT INTO student_lessons (
+        id,
+        student_id,
+        workspace_id,
+        starts_at,
+        duration_minutes,
+        status,
+        consumes_credit
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `,
+      [
+        id,
+        params.studentId,
+        DEFAULT_WORKSPACE_ID,
+        params.startsAt,
+        params.durationMinutes ?? 60,
+        params.status ?? 'scheduled',
+        params.consumesCredit ?? false,
+      ],
+    );
+  });
+  return id;
+}
+
+async function insertBusinessCreditEvent(studentId: string, quantityDelta: number) {
+  await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+    await client.query(
+      `
+      INSERT INTO student_credit_events (
+        id,
+        student_id,
+        workspace_id,
+        event_type,
+        quantity_delta
+      )
+      VALUES ($1, $2, $3, $4, $5)
+      `,
+      [
+        randomUUID(),
+        studentId,
+        DEFAULT_WORKSPACE_ID,
+        quantityDelta > 0 ? 'credit_added' : 'credit_consumed',
+        quantityDelta,
+      ],
+    );
+  });
+}
+
+async function insertBusinessPayment(params: {
+  studentId: string;
+  amountMinor: number;
+  currency: string;
+  receivedAt: string;
+}) {
+  await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+    await client.query(
+      `
+      INSERT INTO student_payment_records (
+        id,
+        student_id,
+        workspace_id,
+        amount_minor,
+        currency,
+        received_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6)
+      `,
+      [
+        randomUUID(),
+        params.studentId,
+        DEFAULT_WORKSPACE_ID,
+        params.amountMinor,
+        params.currency,
+        params.receivedAt,
+      ],
+    );
+  });
+}
+
+function addDays(days: number): string {
+  const date = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+  return date.toISOString();
 }
 
 describeIfPg('application/student-schedule-billing', () => {
@@ -275,5 +392,185 @@ describeIfPg('application/student-schedule-billing', () => {
       type: 'low_balance',
       channel: 'email',
     });
+  });
+
+  it('self-heals workspace business settings and updates forecast defaults', async () => {
+    const settings = await getBusinessSettings();
+
+    expect(settings).toMatchObject({
+      workspaceId: DEFAULT_WORKSPACE_ID,
+      defaultCurrency: 'USD',
+      defaultLessonRateMinor: 0,
+      forecastHorizonDays: 45,
+    });
+
+    const updated = await updateBusinessSettings({
+      defaultCurrency: 'EUR',
+      defaultLessonRateMinor: 3500,
+      noShowRateBasisPoints: 1000,
+      topUpThreshold: 1,
+    });
+
+    expect(updated).toMatchObject({
+      defaultCurrency: 'EUR',
+      defaultLessonRateMinor: 3500,
+      noShowRateBasisPoints: 1000,
+      topUpThreshold: 1,
+    });
+
+    await expect(updateBusinessSettings({ timezone: 'Not/A_Timezone' })).rejects.toThrow(
+      'Invalid timezone',
+    );
+  });
+
+  it('aggregates active-student business schedule, reminders, alerts, and payments', async () => {
+    const { studentId: alexId } = await seedStudent();
+    const beaId = await seedAdditionalStudent('Bea');
+    const archivedId = await seedAdditionalStudent('Archived', true);
+    await insertBusinessLesson({
+      studentId: alexId,
+      startsAt: '2026-05-08T10:00:00.000Z',
+      consumesCredit: true,
+    });
+    await insertBusinessLesson({
+      studentId: archivedId,
+      startsAt: '2026-05-08T12:00:00.000Z',
+    });
+    await insertBusinessCreditEvent(alexId, 3);
+    await insertBusinessCreditEvent(beaId, -1);
+    await insertBusinessPayment({
+      studentId: alexId,
+      amountMinor: 12000,
+      currency: 'USD',
+      receivedAt: '2026-05-07',
+    });
+    await updateBusinessSettings({ topUpThreshold: 4 });
+
+    const surface = await getBusinessScheduleSurface({
+      from: '2026-05-07',
+      to: '2026-05-09',
+    });
+
+    expect(surface.lessons.map((lesson) => lesson.studentName)).toEqual(['Alex']);
+    expect(surface.recentPayments).toHaveLength(1);
+    expect(surface.creditAlerts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          studentId: beaId,
+          severity: 'urgent',
+          remainingCredits: -1,
+        }),
+        expect.objectContaining({
+          studentId: alexId,
+          lowBalanceThreshold: 4,
+          remainingCredits: 3,
+        }),
+      ]),
+    );
+    expect(surface.reminders.map((reminder) => reminder.studentName)).toContain('Bea');
+    expect(surface.reminders.map((reminder) => reminder.studentName)).toContain('Alex');
+  });
+
+  it('uses the configured business timezone for schedule day ranges', async () => {
+    const { studentId } = await seedStudent();
+    await updateBusinessSettings({ timezone: 'Asia/Bangkok' });
+    await insertBusinessLesson({
+      studentId,
+      startsAt: '2026-05-06T18:30:00.000Z',
+      consumesCredit: true,
+    });
+
+    const surface = await getBusinessScheduleSurface({
+      from: '2026-05-07',
+      to: '2026-05-07',
+    });
+
+    expect(surface.lessons).toHaveLength(1);
+    expect(surface.lessons[0]).toMatchObject({
+      studentId,
+      startsAt: '2026-05-06T18:30:00.000Z',
+    });
+  });
+
+  it('computes business stats from payments, taught lessons, forecasts, and excluded currencies', async () => {
+    const { studentId: alexId } = await seedStudent();
+    const beaId = await seedAdditionalStudent('Bea');
+    const archivedId = await seedAdditionalStudent('Archived', true);
+    await updateBusinessSettings({
+      defaultCurrency: 'USD',
+      defaultLessonRateMinor: 4000,
+      noShowRateBasisPoints: 1000,
+      cancellationRateBasisPoints: 500,
+    });
+    await insertBusinessLesson({
+      studentId: alexId,
+      startsAt: '2026-05-03T10:00:00.000Z',
+      status: 'completed',
+      consumesCredit: true,
+      durationMinutes: 75,
+    });
+    await insertBusinessLesson({
+      studentId: alexId,
+      startsAt: '2026-05-04T10:00:00.000Z',
+      status: 'no_show',
+    });
+    await insertBusinessLesson({
+      studentId: archivedId,
+      startsAt: '2026-05-05T10:00:00.000Z',
+      status: 'completed',
+      consumesCredit: true,
+    });
+    await insertBusinessLesson({
+      studentId: beaId,
+      startsAt: addDays(3),
+      status: 'scheduled',
+    });
+    await insertBusinessPayment({
+      studentId: alexId,
+      amountMinor: 12000,
+      currency: 'USD',
+      receivedAt: '2026-05-02',
+    });
+    await insertBusinessPayment({
+      studentId: beaId,
+      amountMinor: 5000,
+      currency: 'EUR',
+      receivedAt: '2026-05-02',
+    });
+
+    const stats = await getBusinessStatsSurface({ month: '2026-05' });
+
+    expect(stats.collectedMinor).toBe(12000);
+    expect(stats.earnedMinor).toBe(4000);
+    expect(stats.completedLessons).toBe(1);
+    expect(stats.taughtMinutes).toBe(75);
+    expect(stats.noShowLessons).toBe(1);
+    expect(stats.scheduledGrossMinor).toBe(4000);
+    expect(stats.riskAdjustmentMinor).toBe(600);
+    expect(stats.forecastMinor).toBe(3400);
+    expect(stats.excludedCurrencies).toEqual([
+      { currency: 'EUR', amountMinor: 5000, paymentCount: 1 },
+    ]);
+  });
+
+  it('uses the configured business timezone for monthly lesson stats', async () => {
+    const { studentId } = await seedStudent();
+    await updateBusinessSettings({
+      defaultLessonRateMinor: 4000,
+      timezone: 'Asia/Bangkok',
+    });
+    await insertBusinessLesson({
+      studentId,
+      startsAt: '2026-04-30T18:30:00.000Z',
+      status: 'completed',
+      consumesCredit: true,
+      durationMinutes: 60,
+    });
+
+    const stats = await getBusinessStatsSurface({ month: '2026-05' });
+
+    expect(stats.completedLessons).toBe(1);
+    expect(stats.earnedMinor).toBe(4000);
+    expect(stats.taughtMinutes).toBe(60);
   });
 });

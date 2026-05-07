@@ -32,6 +32,7 @@ const REQUIRED_TABLES = [
   'student_credit_events',
   'student_payment_records',
   'student_reminder_preferences',
+  'workspace_business_settings',
 ];
 
 const REQUIRED_CONSTRAINTS = [
@@ -79,6 +80,9 @@ const REQUIRED_CONSTRAINTS = [
   'student_credit_events_nonzero_check',
   'student_payment_records_currency_check',
   'student_reminder_preferences_channel_check',
+  'workspace_business_settings_currency_check',
+  'workspace_business_settings_rate_check',
+  'workspace_business_settings_horizon_check',
 ];
 
 const REQUIRED_INDEXES = [
@@ -105,6 +109,9 @@ const REQUIRED_INDEXES = [
   'idx_student_lessons_student_starts_at',
   'idx_student_credit_events_student_active',
   'idx_student_payment_records_student_received_at',
+  'idx_student_lessons_workspace_starts_at',
+  'idx_student_payment_records_workspace_received_at',
+  'idx_student_credit_events_workspace_active',
 ];
 
 const REQUIRED_EXTENSIONS = ['uuid-ossp'];
