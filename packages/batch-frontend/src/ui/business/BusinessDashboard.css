@@ -94,7 +94,8 @@
 }
 
 .business-toolbar input,
-.business-settings-form input {
+.business-settings-form input,
+.business-settings-form select {
   min-height: 2.55rem;
   border: 1px solid var(--app-line);
   border-radius: var(--app-radius-sm);
