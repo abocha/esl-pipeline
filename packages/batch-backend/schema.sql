@@ -810,6 +810,28 @@ CREATE TABLE public.users (
     CONSTRAINT users_role_check CHECK ((role = ANY (ARRAY['admin'::text, 'user'::text, 'viewer'::text])))
 );
 
+CREATE TABLE public.workspace_business_settings (
+    workspace_id uuid NOT NULL,
+    default_currency character(3) DEFAULT 'USD'::bpchar NOT NULL,
+    default_lesson_rate_minor integer DEFAULT 0 NOT NULL,
+    default_lesson_duration_minutes integer DEFAULT 60 CONSTRAINT workspace_business_settings_default_lesson_duration_mi_not_null NOT NULL,
+    timezone text DEFAULT 'UTC'::text NOT NULL,
+    forecast_horizon_days integer DEFAULT 45 NOT NULL,
+    no_show_rate_basis_points integer DEFAULT 0 NOT NULL,
+    cancellation_rate_basis_points integer DEFAULT 0 CONSTRAINT workspace_business_settings_cancellation_rate_basis_po_not_null NOT NULL,
+    top_up_threshold integer DEFAULT 2 NOT NULL,
+    updated_by uuid,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT workspace_business_settings_cancellation_rate_check CHECK (((cancellation_rate_basis_points >= 0) AND (cancellation_rate_basis_points <= 10000))),
+    CONSTRAINT workspace_business_settings_currency_check CHECK ((default_currency ~ '^[A-Z]{3}$'::text)),
+    CONSTRAINT workspace_business_settings_duration_check CHECK ((default_lesson_duration_minutes > 0)),
+    CONSTRAINT workspace_business_settings_horizon_check CHECK (((forecast_horizon_days >= 7) AND (forecast_horizon_days <= 180))),
+    CONSTRAINT workspace_business_settings_no_show_rate_check CHECK (((no_show_rate_basis_points >= 0) AND (no_show_rate_basis_points <= 10000))),
+    CONSTRAINT workspace_business_settings_rate_check CHECK ((default_lesson_rate_minor >= 0)),
+    CONSTRAINT workspace_business_settings_top_up_threshold_check CHECK ((top_up_threshold >= 0))
+);
+
 CREATE TABLE public.workspace_memberships (
     workspace_id uuid NOT NULL,
     user_id uuid NOT NULL,
@@ -917,6 +939,9 @@ ALTER TABLE ONLY public.users
 
 ALTER TABLE ONLY public.users
     ADD CONSTRAINT users_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.workspace_business_settings
+    ADD CONSTRAINT workspace_business_settings_pkey PRIMARY KEY (workspace_id);
 
 ALTER TABLE ONLY public.workspace_memberships
     ADD CONSTRAINT workspace_memberships_pkey PRIMARY KEY (workspace_id, user_id);
@@ -1034,9 +1059,13 @@ CREATE INDEX idx_student_credit_events_student_active ON public.student_credit_e
 
 CREATE INDEX idx_student_credit_events_student_created_at ON public.student_credit_events USING btree (student_id, created_at DESC, id DESC);
 
+CREATE INDEX idx_student_credit_events_workspace_active ON public.student_credit_events USING btree (workspace_id, student_id, created_at DESC, id DESC) WHERE (voided_at IS NULL);
+
 CREATE INDEX idx_student_lessons_student_next ON public.student_lessons USING btree (student_id, starts_at, id) WHERE (status = 'scheduled'::text);
 
 CREATE INDEX idx_student_lessons_student_starts_at ON public.student_lessons USING btree (student_id, starts_at DESC, id DESC);
+
+CREATE INDEX idx_student_lessons_workspace_starts_at ON public.student_lessons USING btree (workspace_id, starts_at, id);
 
 CREATE INDEX idx_student_memory_snapshots_status_generated_at ON public.student_memory_snapshots USING btree (status, generated_at DESC, id DESC);
 
@@ -1045,6 +1074,8 @@ CREATE INDEX idx_student_memory_snapshots_student_generated_at ON public.student
 CREATE INDEX idx_student_memory_snapshots_student_ready_lookup ON public.student_memory_snapshots USING btree (student_id, generated_at DESC, id DESC) WHERE (status = 'ready'::text);
 
 CREATE INDEX idx_student_payment_records_student_received_at ON public.student_payment_records USING btree (student_id, received_at DESC, created_at DESC, id DESC) WHERE (voided_at IS NULL);
+
+CREATE INDEX idx_student_payment_records_workspace_received_at ON public.student_payment_records USING btree (workspace_id, received_at DESC, created_at DESC, id DESC) WHERE (voided_at IS NULL);
 
 CREATE INDEX idx_student_profile_bindings_effective_from ON public.student_profile_bindings USING btree (effective_from DESC);
 
@@ -1347,6 +1378,12 @@ ALTER TABLE ONLY public.uploaded_files
 ALTER TABLE ONLY public.user_settings
     ADD CONSTRAINT user_settings_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
 
+ALTER TABLE ONLY public.workspace_business_settings
+    ADD CONSTRAINT workspace_business_settings_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.workspace_business_settings
+    ADD CONSTRAINT workspace_business_settings_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
+
 ALTER TABLE ONLY public.workspace_memberships
     ADD CONSTRAINT workspace_memberships_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
 
@@ -1437,5 +1474,6 @@ VALUES
   ('0023_profile_revision_lesson_population_source', '8fcba883ef201a06fc88025b41e8a5141c10d824cd5706a1d7fa91a2d462050c', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0024_student_surface_read_path_indexes', '6c35b4e0f01bfb0f9de0c8161618dfbfdd5904b6eba76f4dae1e34d386576ec6', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0025_student_archive_status', 'db8363e4010fc34933a1f83d619931ebf6cf3287169cb92be0d920ed1f57354b', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0026_schedule_billing_foundations', '503e66dae2e95b23028708636942fce28fce3b0c7e734b1cfb689abeb10ccc49', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0026_schedule_billing_foundations', '503e66dae2e95b23028708636942fce28fce3b0c7e734b1cfb689abeb10ccc49', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0027_teacher_business_dashboard_foundations', 'b82df4ed56daa006bdee71a0a56e1c3f584d89eb467aa7aaf5c68cc764c60d01', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;

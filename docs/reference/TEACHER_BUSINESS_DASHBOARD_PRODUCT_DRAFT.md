@@ -37,16 +37,24 @@ and risk in one place, with enough confidence labeling that the teacher can trus
 Create a top-level teacher/business area, adjacent to the future teacher profile and account model,
 rather than embedding this inside any one student page.
 
-Recommended first pages:
+Locked MVP pages:
 
 1. `My Schedule`
    - agenda and action surface for all students
    - shows scheduled lessons, reminders, payment follow-ups, and quick operational actions
 2. `Stats`
    - business-health surface for income, taught hours, lesson volume, forecast, and risk
-3. future `Business Settings` or teacher-profile settings
+3. `Business Settings`
    - owns defaults used by schedule and stats, such as currency, lesson rate, default duration,
      forecast assumptions, and reminder thresholds
+
+The MVP route family is `/business/*`:
+
+1. `/business/schedule`
+2. `/business/stats`
+3. `/business/settings`
+
+`/business` redirects to `/business/schedule`.
 
 Student-level schedule and billing pages remain the place for editing a specific student's records.
 The teacher-wide pages aggregate across students and link back to those student surfaces for detail
@@ -93,10 +101,9 @@ Primary month-level metrics:
 1. Collected
    - payment records received in the selected month
 2. Expected
-   - likely incoming payments based on scheduled lessons, current credit balances, known top-up
-     needs, and payment patterns where available
+   - likely incoming value based on scheduled lessons and the configured default lesson rate
 3. Forecast
-   - projected next 30-45 days, including the next month
+   - projected over the configured rolling horizon, defaulting to 45 days
    - corrected by explicit forecast assumptions such as no-show or cancellation risk
 4. Taught
    - completed lessons and completed lesson hours in the selected month
@@ -148,8 +155,8 @@ forecast.
 
 ## Required Business Settings
 
-The current schedule/billing model records operational facts. The teacher-wide stats surface will
-need a small business-settings layer before forecasts can feel reliable.
+The current schedule/billing model records operational facts. The teacher-wide stats surface uses a
+workspace-owned business-settings layer before forecasts can feel reliable.
 
 Likely MVP settings:
 
@@ -168,16 +175,27 @@ Future settings:
 4. learned no-show/cancellation risk
 5. tax/accounting export preferences
 
+## Locked MVP Forecast Decisions
+
+1. Forecasts use the workspace default lesson rate, not package/payment inference.
+2. Stats aggregate only the configured default currency.
+3. Nonmatching payment currencies are not converted. They must be surfaced as excluded-currency
+   warnings so the teacher can see what the reported total omits.
+4. If the default lesson rate is zero, money forecasts show a setup-needed state while lesson counts
+   and hours still render.
+5. Inline schedule status actions are allowed on `My Schedule`, but detailed edits remain on student
+   Schedule & Billing pages.
+
 ## Architecture Direction
 
 The teacher-wide dashboard should read from workspace-owned operational records.
 
-Likely additive backend surfaces:
+Additive backend surfaces:
 
-1. `GET /teacher/schedule?from=&to=`
-2. `GET /teacher/operations`
-3. `GET /teacher/stats?month=YYYY-MM`
-4. future `GET/PUT /teacher/business-settings`
+1. `GET /business/settings`
+2. `PUT /business/settings`
+3. `GET /business/schedule?from=&to=`
+4. `GET /business/stats?month=YYYY-MM`
 
 In the single-workspace bridge, these can aggregate over the default workspace. In the future account
 model, they should aggregate over the authenticated user's selected workspace and respect membership
@@ -205,6 +223,26 @@ and role constraints.
 5. external calendar sync
 6. drag-and-drop rescheduling
 7. learned forecasting without enough history
+
+## MVP Follow-Up Notes
+
+The first implementation slice intentionally leaves these areas unfinished:
+
+1. Student-specific pricing, package size, payment lag, and risk assumptions are not modeled yet.
+2. Forecasting uses explicit workspace defaults only; it does not infer from payment history or
+   learned no-show/cancellation behavior.
+3. Reminder output is manual copy text and dashboard prioritization; Telegram/email delivery is not
+   wired to this surface.
+4. Calendar operations are still record/status operations, not recurring lesson generation,
+   drag-and-drop rescheduling, or external calendar sync.
+5. Billing is still operational tracking. It does not create invoices, collect payments, reconcile
+   bank transfers, calculate tax, or export accounting reports.
+6. The `/business/*` backend uses the default-workspace bridge while preserving workspace-owned data
+   boundaries for the future account model.
+7. Schedule and stats use the business timezone for aggregate day/month boundaries, but there is no
+   per-student timezone policy or calendar-conflict handling yet.
+8. The dashboard links to student Schedule & Billing for detailed edits; teacher-wide edit flows
+   beyond lesson status actions remain future work.
 
 ## Related
 
