@@ -30,7 +30,7 @@ describe('BusinessSettingsPage', () => {
       defaultCurrency: 'USD',
       defaultLessonRateMinor: 4500,
       defaultLessonDurationMinutes: 60,
-      timezone: 'UTC',
+      timezone: 'Asia/Bangkok',
       forecastHorizonDays: 45,
       noShowRateBasisPoints: 1000,
       cancellationRateBasisPoints: 0,
@@ -44,6 +44,7 @@ describe('BusinessSettingsPage', () => {
 
     expect(await screen.findByText('Forecast defaults')).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Lesson rate'), { target: { value: '45' } });
+    fireEvent.change(screen.getByLabelText('Timezone'), { target: { value: 'Asia/Bangkok' } });
     fireEvent.change(screen.getByLabelText('No-show correction %'), { target: { value: '10' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save settings' }));
 
@@ -52,6 +53,7 @@ describe('BusinessSettingsPage', () => {
         expect.objectContaining({
           defaultCurrency: 'USD',
           defaultLessonRateMinor: 4500,
+          timezone: 'Asia/Bangkok',
           noShowRateBasisPoints: 1000,
         }),
       );

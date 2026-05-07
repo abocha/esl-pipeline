@@ -185,6 +185,9 @@ Future settings:
    and hours still render.
 5. Inline schedule status actions are allowed on `My Schedule`, but detailed edits remain on student
    Schedule & Billing pages.
+6. Business timezone settings should be selected from a minimal city-based picker that submits
+   canonical IANA timezone identifiers. Offset-like legacy values such as `UTC+7` are normalized
+   before schedule and stats calculations.
 
 ## Architecture Direction
 

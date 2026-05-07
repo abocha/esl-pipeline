@@ -418,6 +418,9 @@ describeIfPg('application/student-schedule-billing', () => {
       topUpThreshold: 1,
     });
 
+    await expect(updateBusinessSettings({ timezone: 'UTC+7' })).resolves.toMatchObject({
+      timezone: 'Asia/Bangkok',
+    });
     await expect(updateBusinessSettings({ timezone: 'Not/A_Timezone' })).rejects.toThrow(
       'Invalid timezone',
     );
@@ -490,6 +493,34 @@ describeIfPg('application/student-schedule-billing', () => {
       studentId,
       startsAt: '2026-05-06T18:30:00.000Z',
     });
+  });
+
+  it('normalizes legacy offset timezone settings before reading schedule surfaces', async () => {
+    const { studentId } = await seedStudent();
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      await client.query(
+        `
+        INSERT INTO workspace_business_settings (workspace_id, timezone)
+        VALUES ($1, 'UTC+7')
+        ON CONFLICT (workspace_id) DO UPDATE
+        SET timezone = EXCLUDED.timezone
+        `,
+        [DEFAULT_WORKSPACE_ID],
+      );
+    });
+    await insertBusinessLesson({
+      studentId,
+      startsAt: '2026-05-06T18:30:00.000Z',
+      consumesCredit: true,
+    });
+
+    const surface = await getBusinessScheduleSurface({
+      from: '2026-05-07',
+      to: '2026-05-07',
+    });
+
+    expect(surface.settings.timezone).toBe('Asia/Bangkok');
+    expect(surface.lessons).toHaveLength(1);
   });
 
   it('computes business stats from payments, taught lessons, forecasts, and excluded currencies', async () => {

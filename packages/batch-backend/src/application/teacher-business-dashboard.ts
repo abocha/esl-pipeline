@@ -23,6 +23,11 @@ const DEFAULT_TIMEZONE = 'UTC';
 const DEFAULT_FORECAST_HORIZON_DAYS = 45;
 const DEFAULT_TOP_UP_THRESHOLD = 2;
 const DAY_MS = 24 * 60 * 60 * 1000;
+const TIMEZONE_ALIASES = new Map<string, string>([
+  ['GMT', 'UTC'],
+  ['UTC+7', 'Asia/Bangkok'],
+  ['GMT+7', 'Asia/Bangkok'],
+]);
 
 interface BusinessSettingsRow {
   workspace_id: string;
@@ -109,7 +114,7 @@ export async function updateBusinessSettings(
       defaultLessonRateMinor: params.defaultLessonRateMinor ?? current.defaultLessonRateMinor,
       defaultLessonDurationMinutes:
         params.defaultLessonDurationMinutes ?? current.defaultLessonDurationMinutes,
-      timezone: params.timezone ?? current.timezone,
+      timezone: normalizeBusinessTimezone(params.timezone ?? current.timezone),
       forecastHorizonDays: params.forecastHorizonDays ?? current.forecastHorizonDays,
       noShowRateBasisPoints: params.noShowRateBasisPoints ?? current.noShowRateBasisPoints,
       cancellationRateBasisPoints:
@@ -299,7 +304,7 @@ async function getBusinessSettingsForWorkspace(
     defaultCurrency: row?.default_currency ?? DEFAULT_CURRENCY,
     defaultLessonRateMinor: row?.default_lesson_rate_minor ?? 0,
     defaultLessonDurationMinutes: row?.default_lesson_duration_minutes ?? DEFAULT_DURATION_MINUTES,
-    timezone: row?.timezone ?? DEFAULT_TIMEZONE,
+    timezone: normalizeBusinessTimezone(row?.timezone ?? DEFAULT_TIMEZONE),
     forecastHorizonDays: row?.forecast_horizon_days ?? DEFAULT_FORECAST_HORIZON_DAYS,
     noShowRateBasisPoints: row?.no_show_rate_basis_points ?? 0,
     cancellationRateBasisPoints: row?.cancellation_rate_basis_points ?? 0,
@@ -748,11 +753,36 @@ function addDays(value: Date, days: number): Date {
 }
 
 function validateBusinessTimezone(timezone: string): void {
+  normalizeBusinessTimezone(timezone);
+}
+
+function normalizeBusinessTimezone(timezone: string): string {
+  const trimmed = timezone.trim();
+  const alias = TIMEZONE_ALIASES.get(trimmed.toUpperCase());
+  const normalized = alias ?? normalizeFixedOffsetTimezone(trimmed) ?? trimmed;
   try {
-    toDateInputInTimeZone(new Date(), timezone);
+    toDateInputInTimeZone(new Date(), normalized);
+    return normalized;
   } catch {
     throw new TeacherBusinessDashboardError('invalid_request', 400, 'Invalid timezone');
   }
+}
+
+function normalizeFixedOffsetTimezone(timezone: string): string | null {
+  const match = /^(?:UTC|GMT)([+-])(\d{1,2})(?::?00)?$/i.exec(timezone.trim());
+  if (!match) {
+    return null;
+  }
+  const sign = match[1];
+  const hours = Number(match[2]);
+  if (!Number.isInteger(hours) || hours > 14) {
+    return null;
+  }
+  if (hours === 0) {
+    return 'UTC';
+  }
+  const etcSign = sign === '+' ? '-' : '+';
+  return `Etc/GMT${etcSign}${hours}`;
 }
 
 function severityRank(value: 'info' | 'attention' | 'urgent'): number {
