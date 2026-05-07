@@ -91,6 +91,8 @@ notes.
     incoming payments and likely no-shows, and other teacher business-health signals.
   - Treat this as planning-only for now; implementation should follow a dedicated product/design
     discussion.
+  - Core draft:
+    [`docs/reference/TEACHER_BUSINESS_DASHBOARD_PRODUCT_DRAFT.md`](../../reference/TEACHER_BUSINESS_DASHBOARD_PRODUCT_DRAFT.md).
 
 ## Suggested Workstream Split
 
