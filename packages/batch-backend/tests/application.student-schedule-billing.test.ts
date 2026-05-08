@@ -322,6 +322,25 @@ describeIfPg('application/student-schedule-billing', () => {
       studentId,
       lessonId,
       {
+        status: 'scheduled',
+        consumesCredit: false,
+      },
+      userId,
+    );
+    expect(surface.creditSummary.remaining).toBe(1);
+    expect(surface.lessons.find((candidate) => candidate.id === lessonId)).toMatchObject({
+      status: 'scheduled',
+      consumesCredit: false,
+      creditEventId: null,
+    });
+    expect(
+      surface.creditEvents.filter((event) => event.eventType === 'credit_consumed'),
+    ).toHaveLength(0);
+
+    surface = await updateStudentLesson(
+      studentId,
+      lessonId,
+      {
         status: 'completed',
         consumesCredit: false,
       },

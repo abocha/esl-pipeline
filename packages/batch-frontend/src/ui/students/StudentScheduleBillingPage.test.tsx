@@ -369,4 +369,49 @@ describe('StudentScheduleBillingPage', () => {
       );
     });
   });
+
+  it('restores completed, no-show, and canceled lessons back to scheduled', async () => {
+    apiMocks.getStudentScheduleBillingSurface.mockResolvedValue(
+      makeSurface({
+        lessons: [
+          {
+            ...(makeSurface().lessons[0] as Record<string, unknown>),
+            id: 'lesson-completed',
+            status: 'completed',
+            consumesCredit: true,
+            creditEventId: 'credit-event-1',
+          },
+          {
+            ...(makeSurface().lessons[0] as Record<string, unknown>),
+            id: 'lesson-no-show',
+            status: 'no_show',
+            consumesCredit: false,
+          },
+          {
+            ...(makeSurface().lessons[0] as Record<string, unknown>),
+            id: 'lesson-canceled',
+            status: 'canceled',
+            consumesCredit: false,
+          },
+        ],
+      }),
+    );
+    renderPage();
+
+    const restoreButtons = await screen.findAllByRole('button', { name: 'Restore' });
+    expect(restoreButtons).toHaveLength(3);
+    expect(screen.getAllByRole('button', { name: 'Edit' })).toHaveLength(3);
+    fireEvent.click(restoreButtons[0] as HTMLElement);
+
+    await waitFor(() => {
+      expect(apiMocks.updateStudentLesson).toHaveBeenCalledWith(
+        'student-alex',
+        'lesson-completed',
+        {
+          status: 'scheduled',
+          consumesCredit: false,
+        },
+      );
+    });
+  });
 });
