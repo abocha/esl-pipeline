@@ -55,6 +55,7 @@
 }
 
 .student-schedule-billing-form input,
+.student-schedule-billing-form select,
 .student-schedule-billing-form textarea {
   width: 100%;
   min-width: 0;
@@ -76,7 +77,8 @@
 }
 
 .student-schedule-billing-form button,
-.student-schedule-billing-list-row button {
+.student-schedule-billing-list-row button,
+.student-schedule-billing-weekdays button {
   width: fit-content;
   border: 1px solid rgba(20, 63, 115, 0.16);
   border-radius: var(--student-area-radius-sm);
@@ -88,7 +90,8 @@
 }
 
 .student-schedule-billing-form button:disabled,
-.student-schedule-billing-list-row button:disabled {
+.student-schedule-billing-list-row button:disabled,
+.student-schedule-billing-weekdays button:disabled {
   cursor: wait;
   opacity: 0.62;
 }
@@ -108,6 +111,76 @@
   border: 1px solid var(--student-area-line);
   border-radius: var(--student-area-radius-sm);
   background: rgba(255, 253, 248, 0.64);
+}
+
+.student-schedule-billing-list-row.compact {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.student-schedule-billing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+.student-schedule-billing-actions button {
+  padding: 0.5rem 0.65rem;
+}
+
+.student-schedule-billing-edit-form {
+  grid-column: 1 / -1;
+  display: grid;
+  align-items: end;
+  gap: 0.65rem;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--student-area-line);
+}
+
+.student-schedule-billing-edit-form label {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--student-area-muted);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.student-schedule-billing-edit-form input {
+  min-width: 0;
+  border: 1px solid var(--student-area-line);
+  border-radius: var(--student-area-radius-sm);
+  background: rgba(255, 253, 248, 0.88);
+  color: var(--student-area-ink);
+  font: inherit;
+  padding: 0.55rem 0.65rem;
+}
+
+.student-schedule-billing-weekdays {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.student-schedule-billing-weekdays legend {
+  width: 100%;
+  color: var(--student-area-muted);
+  font-size: 0.83rem;
+  font-weight: 800;
+}
+
+.student-schedule-billing-weekdays button {
+  background: var(--student-area-blue-soft);
+  color: var(--student-area-blue);
+}
+
+.student-schedule-billing-weekdays button.selected {
+  background: var(--student-area-blue);
+  color: #fff;
 }
 
 .student-schedule-billing-list-row span,

@@ -53,6 +53,7 @@ import {
   StudentScheduleBillingError,
   updateStudentLesson,
   updateStudentLessonPlan,
+  upsertPrimaryStudentLessonRecurrence,
 } from '../../application/student-schedule-billing.js';
 import { getStudentSummaryWithDefaults } from '../../application/student-summary.js';
 import {
@@ -111,6 +112,39 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
     cadence: optionalTextSchema,
     preferredTimes: optionalTextSchema,
     schedulingNotes: optionalTextSchema,
+  });
+  const recurrenceBodySchema = z.object({
+    timezone: z.string().trim().min(1).max(100),
+    frequency: z.literal('weekly').optional(),
+    startsOn: z
+      .string()
+      .trim()
+      .regex(/^\d{4}-\d{2}-\d{2}$/),
+    endsOn: z
+      .string()
+      .trim()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .nullable()
+      .optional(),
+    status: z.enum(['active', 'paused']).optional(),
+    generationHorizonDays: z.number().int().min(7).max(366).optional(),
+    slots: z
+      .array(
+        z.object({
+          isoWeekday: z.number().int().min(1).max(7),
+          localStartTime: z
+            .string()
+            .trim()
+            .regex(/^\d{2}:\d{2}$/),
+          durationMinutes: z
+            .number()
+            .int()
+            .positive()
+            .max(24 * 60),
+        }),
+      )
+      .min(1)
+      .max(14),
   });
   const createLessonBodySchema = z.object({
     startsAt: z.string().trim().datetime({ offset: true }),
@@ -479,6 +513,35 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
         const authenticatedUser = getAuthenticatedUser(request);
         return reply.send(
           await updateStudentLessonPlan(params.id, body, authenticatedUser?.id ?? null),
+        );
+      } catch (error: unknown) {
+        return handleScheduleBillingRouteError(reply, routePath, error);
+      }
+    },
+  );
+
+  app.put(
+    '/students/:id/operations/primary-lesson-recurrence',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(
+        request,
+        'PUT /students/:id/operations/primary-lesson-recurrence',
+      );
+      const paramsSchema = z.object({ id: z.string().min(1) });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const body = recurrenceBodySchema.parse(request.body ?? {});
+        const authenticatedUser = getAuthenticatedUser(request);
+        return reply.send(
+          await upsertPrimaryStudentLessonRecurrence(
+            params.id,
+            body,
+            authenticatedUser?.id ?? null,
+          ),
         );
       } catch (error: unknown) {
         return handleScheduleBillingRouteError(reply, routePath, error);

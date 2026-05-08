@@ -188,6 +188,9 @@ Future settings:
 6. Business timezone settings should be selected from a minimal city-based picker that submits
    canonical IANA timezone identifiers. Offset-like legacy values such as `UTC+7` are normalized
    before schedule and stats calculations.
+7. Student recurrence rules materialize generated lessons before business schedule and stats reads,
+   so recurring plans contribute to teacher-wide agenda, workload, and income forecasts without a
+   separate calendar engine.
 
 ## Architecture Direction
 
@@ -236,14 +239,15 @@ The first implementation slice intentionally leaves these areas unfinished:
    learned no-show/cancellation behavior.
 3. Reminder output is manual copy text and dashboard prioritization; Telegram/email delivery is not
    wired to this surface.
-4. Calendar operations are still record/status operations, not recurring lesson generation,
-   drag-and-drop rescheduling, or external calendar sync.
+4. Calendar operations are still record/status operations plus generated weekly recurrence. They do
+   not include drag-and-drop rescheduling or external calendar sync.
 5. Billing is still operational tracking. It does not create invoices, collect payments, reconcile
    bank transfers, calculate tax, or export accounting reports.
 6. The `/business/*` backend uses the default-workspace bridge while preserving workspace-owned data
    boundaries for the future account model.
-7. Schedule and stats use the business timezone for aggregate day/month boundaries, but there is no
-   per-student timezone policy or calendar-conflict handling yet.
+7. Schedule and stats use the business timezone for aggregate day/month boundaries, while generated
+   student lessons use each recurrence rule's IANA timezone. There is no calendar-conflict handling
+   yet.
 8. The dashboard links to student Schedule & Billing for detailed edits; teacher-wide edit flows
    beyond lesson status actions remain future work.
 

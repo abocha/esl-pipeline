@@ -15,6 +15,7 @@ import type {
 } from '@esl-pipeline/contracts';
 
 import { withPgClient } from '../infrastructure/db.js';
+import { materializeWorkspaceLessonRecurrencesWithClient } from './student-schedule-billing.js';
 
 const DEFAULT_WORKSPACE_ID = '00000000-0000-4000-8000-000000000001';
 const DEFAULT_CURRENCY = 'USD';
@@ -55,6 +56,11 @@ interface BusinessLessonRow {
   title: string | null;
   notes: string | null;
   credit_event_id: string | null;
+  recurrence_rule_id: string | null;
+  recurrence_slot_id: string | null;
+  recurrence_occurrence_key: string | null;
+  recurrence_origin: 'manual' | 'generated';
+  recurrence_override_kind: 'manual_edit' | 'manual_reschedule' | 'manual_cancel' | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -172,6 +178,7 @@ export async function getBusinessScheduleSurface(
   params: { from?: string; to?: string } = {},
 ): Promise<BusinessScheduleSurfaceResponse> {
   return withPgClient(async (client) => {
+    await materializeWorkspaceLessonRecurrencesWithClient(client);
     const settings = await getBusinessSettingsForWorkspace(client, DEFAULT_WORKSPACE_ID);
     const from = params.from ?? toDateInputInTimeZone(new Date(), settings.timezone);
     const to = params.to ?? addDaysToDateInput(from, 7);
@@ -211,6 +218,7 @@ export async function getBusinessStatsSurface(
   params: { month?: string } = {},
 ): Promise<BusinessStatsSurfaceResponse> {
   return withPgClient(async (client) => {
+    await materializeWorkspaceLessonRecurrencesWithClient(client);
     const settings = await getBusinessSettingsForWorkspace(client, DEFAULT_WORKSPACE_ID);
     const month = params.month ?? toDateInputInTimeZone(new Date(), settings.timezone).slice(0, 7);
     const monthRange = parseMonth(month);
@@ -329,6 +337,7 @@ async function listBusinessLessons(
     JOIN students ON students.id = student_lessons.student_id
     WHERE COALESCE(student_lessons.workspace_id, $4::uuid) = $4::uuid
       AND students.archived_at IS NULL
+      AND student_lessons.recurrence_obsolete_at IS NULL
       AND (student_lessons.starts_at AT TIME ZONE $3)::date >= $1::date
       AND (student_lessons.starts_at AT TIME ZONE $3)::date <= $2::date
     ORDER BY student_lessons.starts_at ASC, student_lessons.id ASC
@@ -355,6 +364,7 @@ async function listForecastLessons(
     JOIN students ON students.id = student_lessons.student_id
     WHERE COALESCE(student_lessons.workspace_id, $3::uuid) = $3::uuid
       AND students.archived_at IS NULL
+      AND student_lessons.recurrence_obsolete_at IS NULL
       AND student_lessons.status = 'scheduled'
       AND student_lessons.starts_at >= $1
       AND student_lessons.starts_at < $2
@@ -392,6 +402,8 @@ async function listStudentCreditStates(
             AND starts_at < $2
         ) AS upcoming_chargeable_lessons
       FROM student_lessons
+      WHERE COALESCE(workspace_id, $3::uuid) = $3::uuid
+        AND recurrence_obsolete_at IS NULL
       GROUP BY student_id
     )
     SELECT
@@ -539,6 +551,7 @@ async function getLessonStatsForMonth(
     JOIN students ON students.id = student_lessons.student_id
     WHERE COALESCE(student_lessons.workspace_id, $4::uuid) = $4::uuid
       AND students.archived_at IS NULL
+      AND student_lessons.recurrence_obsolete_at IS NULL
       AND (student_lessons.starts_at AT TIME ZONE $3)::date >= $1::date
       AND (student_lessons.starts_at AT TIME ZONE $3)::date < $2::date
     `,
@@ -654,6 +667,11 @@ function mapBusinessLesson(row: BusinessLessonRow): BusinessLessonDto {
     title: row.title ?? null,
     notes: row.notes ?? null,
     creditEventId: row.credit_event_id ?? null,
+    recurrenceRuleId: row.recurrence_rule_id ?? null,
+    recurrenceSlotId: row.recurrence_slot_id ?? null,
+    recurrenceOccurrenceKey: row.recurrence_occurrence_key ?? null,
+    recurrenceOrigin: row.recurrence_origin ?? 'manual',
+    recurrenceOverrideKind: row.recurrence_override_kind ?? null,
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
   };

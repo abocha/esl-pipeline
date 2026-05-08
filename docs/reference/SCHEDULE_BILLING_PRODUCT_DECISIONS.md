@@ -54,6 +54,15 @@ smuggled into the pedagogical learner profile.
 12. Email reminders remain future-compatible and should not become a parallel reminder architecture.
 13. Calendar design must stay sync-ready, but Google Calendar or other bidirectional sync is outside
     the MVP.
+14. Recurring lesson planning is first-class in the MVP. A student can have a primary weekly
+    recurrence rule with one or more local-time slots; the system materializes those slots into
+    normal lesson rows through a bounded horizon.
+15. Generated recurrence lessons are real operational lessons. Completing, canceling, marking
+    no-show, editing, or rescheduling one generated lesson is an occurrence-level exception and must
+    not rewrite the recurrence rule.
+16. When a recurrence rule changes, future unmodified generated placeholders are soft-voided rather
+    than represented as cancellations. Completed, no-show, canceled, or manually edited occurrences
+    remain factual history.
 
 ## Future Account Model
 
@@ -76,10 +85,28 @@ The first implementation must not:
 2. collect payment
 3. store card or bank data
 4. send Telegram or email messages
-5. create recurring lessons automatically
-6. sync with external calendars
-7. enforce the final multi-teacher account permission model
-8. alter prompt-package or learner-profile semantics
+5. sync with external calendars
+6. enforce the final multi-teacher account permission model
+7. alter prompt-package or learner-profile semantics
+
+## Recurrence Architecture
+
+Student lesson planning keeps notes and defaults in `student_lesson_plans`, while executable
+calendar intent lives in structured recurrence records.
+
+The MVP recurrence model is intentionally small:
+
+1. `student_lesson_recurrence_rules` stores the student/workspace-owned rule, IANA timezone,
+   weekly frequency, active/paused status, start/end dates, and generation horizon.
+2. `student_lesson_recurrence_slots` stores one or more ISO weekdays, local start times, and
+   duration values for a rule.
+3. `student_lessons` stores generated occurrences as normal lessons with stable rule ID, slot ID,
+   occurrence key, origin, override kind, and soft-void metadata.
+
+Teacher-wide schedule, stats, reminders, and future sync surfaces should read from materialized
+`student_lessons` rather than reimplementing recurrence math. Future Google Calendar or Telegram
+automation can attach to stable rule IDs, lesson IDs, and occurrence keys without reshaping the
+current tables.
 
 ## Related
 

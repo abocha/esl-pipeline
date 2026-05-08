@@ -570,6 +570,39 @@ CREATE TABLE public.student_lesson_plans (
     CONSTRAINT student_lesson_plans_duration_check CHECK ((default_duration_minutes > 0))
 );
 
+CREATE TABLE public.student_lesson_recurrence_rules (
+    id uuid NOT NULL,
+    student_id uuid NOT NULL,
+    workspace_id uuid,
+    timezone text DEFAULT 'UTC'::text NOT NULL,
+    frequency text DEFAULT 'weekly'::text NOT NULL,
+    starts_on date DEFAULT CURRENT_DATE NOT NULL,
+    ends_on date,
+    status text DEFAULT 'active'::text NOT NULL,
+    generation_horizon_days integer DEFAULT 56 CONSTRAINT student_lesson_recurrence_rule_generation_horizon_days_not_null NOT NULL,
+    materialized_through date,
+    created_by uuid,
+    updated_by uuid,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT student_lesson_recurrence_rules_date_window_check CHECK (((ends_on IS NULL) OR (ends_on >= starts_on))),
+    CONSTRAINT student_lesson_recurrence_rules_frequency_check CHECK ((frequency = 'weekly'::text)),
+    CONSTRAINT student_lesson_recurrence_rules_horizon_check CHECK (((generation_horizon_days >= 7) AND (generation_horizon_days <= 366))),
+    CONSTRAINT student_lesson_recurrence_rules_status_check CHECK ((status = ANY (ARRAY['active'::text, 'paused'::text, 'archived'::text])))
+);
+
+CREATE TABLE public.student_lesson_recurrence_slots (
+    id uuid NOT NULL,
+    rule_id uuid NOT NULL,
+    iso_weekday integer NOT NULL,
+    local_start_time time without time zone NOT NULL,
+    duration_minutes integer NOT NULL,
+    sort_order integer DEFAULT 0 NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT student_lesson_recurrence_slots_duration_check CHECK ((duration_minutes > 0)),
+    CONSTRAINT student_lesson_recurrence_slots_weekday_check CHECK (((iso_weekday >= 1) AND (iso_weekday <= 7)))
+);
+
 CREATE TABLE public.student_lessons (
     id uuid NOT NULL,
     student_id uuid NOT NULL,
@@ -587,7 +620,17 @@ CREATE TABLE public.student_lessons (
     completed_by uuid,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    recurrence_rule_id uuid,
+    recurrence_slot_id uuid,
+    recurrence_occurrence_key text,
+    recurrence_origin text DEFAULT 'manual'::text NOT NULL,
+    recurrence_override_kind text,
+    recurrence_obsolete_at timestamp with time zone,
+    recurrence_obsolete_by uuid,
+    recurrence_obsolete_reason text,
     CONSTRAINT student_lessons_duration_check CHECK ((duration_minutes > 0)),
+    CONSTRAINT student_lessons_recurrence_origin_check CHECK ((recurrence_origin = ANY (ARRAY['manual'::text, 'generated'::text]))),
+    CONSTRAINT student_lessons_recurrence_override_kind_check CHECK (((recurrence_override_kind IS NULL) OR (recurrence_override_kind = ANY (ARRAY['manual_edit'::text, 'manual_reschedule'::text, 'manual_cancel'::text])))),
     CONSTRAINT student_lessons_status_check CHECK ((status = ANY (ARRAY['scheduled'::text, 'completed'::text, 'canceled'::text, 'no_show'::text])))
 );
 
@@ -889,6 +932,12 @@ ALTER TABLE ONLY public.student_credit_events
 ALTER TABLE ONLY public.student_lesson_plans
     ADD CONSTRAINT student_lesson_plans_pkey PRIMARY KEY (student_id);
 
+ALTER TABLE ONLY public.student_lesson_recurrence_rules
+    ADD CONSTRAINT student_lesson_recurrence_rules_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.student_lesson_recurrence_slots
+    ADD CONSTRAINT student_lesson_recurrence_slots_pkey PRIMARY KEY (id);
+
 ALTER TABLE ONLY public.student_lessons
     ADD CONSTRAINT student_lessons_pkey PRIMARY KEY (id);
 
@@ -1061,9 +1110,21 @@ CREATE INDEX idx_student_credit_events_student_created_at ON public.student_cred
 
 CREATE INDEX idx_student_credit_events_workspace_active ON public.student_credit_events USING btree (workspace_id, student_id, created_at DESC, id DESC) WHERE (voided_at IS NULL);
 
+CREATE UNIQUE INDEX idx_student_lesson_recurrence_rules_primary_active ON public.student_lesson_recurrence_rules USING btree (student_id) WHERE (status <> 'archived'::text);
+
+CREATE INDEX idx_student_lesson_recurrence_rules_student ON public.student_lesson_recurrence_rules USING btree (student_id, status, id);
+
+CREATE INDEX idx_student_lesson_recurrence_slots_rule ON public.student_lesson_recurrence_slots USING btree (rule_id, iso_weekday, local_start_time, id);
+
+CREATE UNIQUE INDEX idx_student_lessons_recurrence_occurrence_active ON public.student_lessons USING btree (recurrence_rule_id, recurrence_occurrence_key) WHERE ((recurrence_rule_id IS NOT NULL) AND (recurrence_occurrence_key IS NOT NULL) AND (recurrence_obsolete_at IS NULL));
+
+CREATE INDEX idx_student_lessons_student_active_schedule ON public.student_lessons USING btree (student_id, starts_at DESC, id DESC) WHERE (recurrence_obsolete_at IS NULL);
+
 CREATE INDEX idx_student_lessons_student_next ON public.student_lessons USING btree (student_id, starts_at, id) WHERE (status = 'scheduled'::text);
 
 CREATE INDEX idx_student_lessons_student_starts_at ON public.student_lessons USING btree (student_id, starts_at DESC, id DESC);
+
+CREATE INDEX idx_student_lessons_workspace_active_schedule ON public.student_lessons USING btree (workspace_id, starts_at, id) WHERE (recurrence_obsolete_at IS NULL);
 
 CREATE INDEX idx_student_lessons_workspace_starts_at ON public.student_lessons USING btree (workspace_id, starts_at, id);
 
@@ -1273,6 +1334,21 @@ ALTER TABLE ONLY public.student_lesson_plans
 ALTER TABLE ONLY public.student_lesson_plans
     ADD CONSTRAINT student_lesson_plans_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE SET NULL;
 
+ALTER TABLE ONLY public.student_lesson_recurrence_rules
+    ADD CONSTRAINT student_lesson_recurrence_rules_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.student_lesson_recurrence_rules
+    ADD CONSTRAINT student_lesson_recurrence_rules_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.student_lesson_recurrence_rules
+    ADD CONSTRAINT student_lesson_recurrence_rules_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.student_lesson_recurrence_rules
+    ADD CONSTRAINT student_lesson_recurrence_rules_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.student_lesson_recurrence_slots
+    ADD CONSTRAINT student_lesson_recurrence_slots_rule_id_fkey FOREIGN KEY (rule_id) REFERENCES public.student_lesson_recurrence_rules(id) ON DELETE CASCADE;
+
 ALTER TABLE ONLY public.student_lessons
     ADD CONSTRAINT student_lessons_completed_by_fkey FOREIGN KEY (completed_by) REFERENCES public.users(id) ON DELETE SET NULL;
 
@@ -1281,6 +1357,15 @@ ALTER TABLE ONLY public.student_lessons
 
 ALTER TABLE ONLY public.student_lessons
     ADD CONSTRAINT student_lessons_credit_event_id_fkey FOREIGN KEY (credit_event_id) REFERENCES public.student_credit_events(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.student_lessons
+    ADD CONSTRAINT student_lessons_recurrence_obsolete_by_fkey FOREIGN KEY (recurrence_obsolete_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.student_lessons
+    ADD CONSTRAINT student_lessons_recurrence_rule_id_fkey FOREIGN KEY (recurrence_rule_id) REFERENCES public.student_lesson_recurrence_rules(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.student_lessons
+    ADD CONSTRAINT student_lessons_recurrence_slot_id_fkey FOREIGN KEY (recurrence_slot_id) REFERENCES public.student_lesson_recurrence_slots(id) ON DELETE SET NULL;
 
 ALTER TABLE ONLY public.student_lessons
     ADD CONSTRAINT student_lessons_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id) ON DELETE CASCADE;
@@ -1475,5 +1560,6 @@ VALUES
   ('0024_student_surface_read_path_indexes', '6c35b4e0f01bfb0f9de0c8161618dfbfdd5904b6eba76f4dae1e34d386576ec6', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0025_student_archive_status', 'db8363e4010fc34933a1f83d619931ebf6cf3287169cb92be0d920ed1f57354b', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0026_schedule_billing_foundations', '503e66dae2e95b23028708636942fce28fce3b0c7e734b1cfb689abeb10ccc49', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0027_teacher_business_dashboard_foundations', 'b82df4ed56daa006bdee71a0a56e1c3f584d89eb467aa7aaf5c68cc764c60d01', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0027_teacher_business_dashboard_foundations', 'b82df4ed56daa006bdee71a0a56e1c3f584d89eb467aa7aaf5c68cc764c60d01', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0028_student_lesson_recurrence_core', 'c90dea3bf8cc79162e93d0cbdd167e9142c6d959d2cb743ab164e06c4f658fa0', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;
