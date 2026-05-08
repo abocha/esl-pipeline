@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [6.5.0] - 2026-05-08
+
+### Changed
+
+- Automated release from PR #72: Add schedule and billing MVP (https://github.com/abocha/esl-pipeline/pull/72)
+
 ## [6.4.0] - 2026-05-06
 
 ### Changed
