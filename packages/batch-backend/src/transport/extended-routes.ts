@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { createTranscribeQueue } from '../infrastructure/transcribe-queue.js';
 import { createTranscriptionStorage } from '../infrastructure/transcription-storage.js';
 import { registerAuthUserRoutes } from './extended-routes/auth-user-routes.js';
+import { registerBusinessRoutes } from './extended-routes/business-routes.js';
 import { registerConfigRoutes } from './extended-routes/config-routes.js';
 import { registerOpsRoutes } from './extended-routes/ops-routes.js';
 import { registerProfileTemplateRoutes } from './extended-routes/profiles-templates-routes.js';
@@ -26,6 +27,7 @@ export function registerExtendedRoutes(
 
   registerConfigRoutes(app, context);
   registerStudentRoutes(app, context);
+  registerBusinessRoutes(app, context);
   registerProfileTemplateRoutes(app, context);
   registerRecordingRoutes(app, context);
   registerAuthUserRoutes(app, context);

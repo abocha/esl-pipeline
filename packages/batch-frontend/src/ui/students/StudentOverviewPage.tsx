@@ -8,6 +8,7 @@ import {
   type ProfileRevisionSummaryResponse,
   type StudentMemoryOverviewResponse,
   type StudentProfileCandidate,
+  type StudentScheduleBillingSurface,
   type StudentTimelineItem,
 } from '../../utils/api';
 import { useStudentAreaContext } from './StudentAreaContext';
@@ -19,6 +20,7 @@ interface OverviewData {
   memory: StudentMemoryOverviewResponse | null;
   pendingCandidates: StudentProfileCandidate[];
   timeline: StudentTimelineItem[];
+  scheduleBilling: StudentScheduleBillingSurface | null;
 }
 
 const EMPTY_OVERVIEW_DATA: OverviewData = {
@@ -27,6 +29,7 @@ const EMPTY_OVERVIEW_DATA: OverviewData = {
   memory: null,
   pendingCandidates: [],
   timeline: [],
+  scheduleBilling: null,
 };
 
 function createOverviewKey(studentId: string, profileId?: string | null): string {
@@ -57,6 +60,27 @@ function formatDateTime(value?: string | null): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'Not recorded yet';
   return DATE_TIME_FORMATTER.format(date);
+}
+
+function formatCredits(surface: StudentScheduleBillingSurface | null): string {
+  if (!surface) return 'Not configured yet';
+  const remaining = surface.creditSummary.remaining;
+  return `${remaining} lesson credit${Math.abs(remaining) === 1 ? '' : 's'}`;
+}
+
+function formatReminderSummary(surface: StudentScheduleBillingSurface | null): string {
+  if (!surface || surface.reminders.length === 0) return 'No reminders ready';
+  return `${surface.reminders.length} reminder${surface.reminders.length === 1 ? '' : 's'} ready`;
+}
+
+function formatLatestPayment(surface: StudentScheduleBillingSurface | null): string {
+  const payment = surface?.payments[0];
+  if (!payment) return 'Not tracked yet';
+  const major = payment.amountMinor / 100;
+  return `${payment.currency} ${major.toLocaleString(undefined, {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  })} · ${formatDate(payment.receivedAt)}`;
 }
 
 function compactList(values: readonly string[], limit = 2): string[] {
@@ -377,6 +401,7 @@ export const StudentOverviewPage: React.FC = () => {
           memory: surface.memory,
           pendingCandidates: surface.pendingCandidates.items,
           timeline: surface.recentTimeline.items,
+          scheduleBilling: surface.scheduleBilling ?? null,
         });
         setLoadedOverviewKey(requestOverviewKey);
         setOverviewError(null);
@@ -413,6 +438,7 @@ export const StudentOverviewPage: React.FC = () => {
   }
 
   const renderedOverviewData = overviewData;
+  const scheduleBilling = renderedOverviewData.scheduleBilling;
   const profile = renderedOverviewData.profile?.structuredContent ?? null;
   const profileStatus = getProfileStatus({
     profile: renderedOverviewData.profile,
@@ -483,7 +509,11 @@ export const StudentOverviewPage: React.FC = () => {
               <span className="student-overview-operation-icon">Cal</span>
               <span>
                 <strong>Next lesson</strong>
-                <small>Not scheduled yet</small>
+                <small>
+                  {scheduleBilling?.nextLesson
+                    ? formatDateTime(scheduleBilling.nextLesson.startsAt)
+                    : 'Not scheduled yet'}
+                </small>
               </span>
             </Link>
             <Link
@@ -493,7 +523,7 @@ export const StudentOverviewPage: React.FC = () => {
               <span className="student-overview-operation-icon">Cr</span>
               <span>
                 <strong>Lesson credits</strong>
-                <small>Not configured yet</small>
+                <small>{formatCredits(scheduleBilling)}</small>
               </span>
             </Link>
             <Link
@@ -503,7 +533,7 @@ export const StudentOverviewPage: React.FC = () => {
               <span className="student-overview-operation-icon">Msg</span>
               <span>
                 <strong>Reminders</strong>
-                <small>Telegram and email pending</small>
+                <small>{formatReminderSummary(scheduleBilling)}</small>
               </span>
             </Link>
             <Link
@@ -512,8 +542,8 @@ export const StudentOverviewPage: React.FC = () => {
             >
               <span className="student-overview-operation-icon">Inv</span>
               <span>
-                <strong>Latest invoice</strong>
-                <small>Not tracked yet</small>
+                <strong>Latest payment</strong>
+                <small>{formatLatestPayment(scheduleBilling)}</small>
               </span>
             </Link>
           </aside>

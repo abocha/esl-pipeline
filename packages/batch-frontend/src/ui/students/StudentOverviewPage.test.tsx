@@ -145,6 +145,62 @@ function makeOverviewSurface(overrides: Record<string, unknown> = {}) {
       offset: 0,
       order: 'desc',
     },
+    scheduleBilling: {
+      studentId: 'student-alex',
+      workspaceId: 'workspace-1',
+      lessonPlan: {
+        studentId: 'student-alex',
+        workspaceId: 'workspace-1',
+        timezone: 'Asia/Bangkok',
+        defaultDurationMinutes: 60,
+        cadence: 'Weekly',
+        preferredTimes: null,
+        schedulingNotes: null,
+        updatedAt: NOW,
+      },
+      nextLesson: {
+        id: 'lesson-1',
+        studentId: 'student-alex',
+        workspaceId: 'workspace-1',
+        startsAt: '2026-05-07T10:00:00.000Z',
+        timezone: 'Asia/Bangkok',
+        durationMinutes: 60,
+        status: 'scheduled',
+        consumesCredit: false,
+        title: null,
+        notes: null,
+        creditEventId: null,
+        createdAt: NOW,
+        updatedAt: NOW,
+      },
+      lessons: [],
+      creditSummary: {
+        purchased: 8,
+        consumed: 3,
+        adjustments: 0,
+        remaining: 5,
+        lowBalanceThreshold: 2,
+        isLow: false,
+        isNegative: false,
+      },
+      creditEvents: [],
+      payments: [
+        {
+          id: 'payment-1',
+          studentId: 'student-alex',
+          workspaceId: 'workspace-1',
+          amountMinor: 12000,
+          currency: 'USD',
+          method: 'Bank transfer',
+          receivedAt: '2026-05-06',
+          externalUrl: null,
+          note: null,
+          voidedAt: null,
+          createdAt: NOW,
+        },
+      ],
+      reminders: [],
+    },
     ...overrides,
   };
 }
@@ -174,9 +230,9 @@ describe('StudentOverviewPage', () => {
     expect(screen.getByText('Clear ideas')).toBeTruthy();
     expect(screen.getByText('Phrasal verbs')).toBeTruthy();
     expect(screen.getByText('Fluency with natural expression')).toBeTruthy();
-    expect(screen.queryByText('5 lessons remaining')).toBeNull();
-    expect(screen.getAllByText('Not configured yet')).toHaveLength(1);
-    expect(screen.getByText('Telegram and email pending')).toBeTruthy();
+    expect(screen.getByText('5 lesson credits')).toBeTruthy();
+    expect(screen.getByText('No reminders ready')).toBeTruthy();
+    expect(screen.getByText(/USD 120.00/)).toBeTruthy();
     expect(screen.getByText('Profile revision activated')).toBeTruthy();
     expect(
       screen

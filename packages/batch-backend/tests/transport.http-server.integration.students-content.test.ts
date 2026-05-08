@@ -14,6 +14,7 @@ describeHttpServerIntegrationSuite(
     mockGetStudentTimeline,
     mockListStudentProfileBindingsForStudent,
     mockListStudentProfiles,
+    mockUpsertPrimaryStudentLessonRecurrence,
     mockDeleteProfileContent,
     mockSaveProfileRevisionContent,
     mockDeleteTemplateContent,
@@ -811,6 +812,52 @@ describeHttpServerIntegrationSuite(
         offset: 0,
         order: 'desc',
       });
+    });
+
+    it('PUT /students/:id/operations/primary-lesson-recurrence validates and saves recurrence rules', async () => {
+      const response = await app.inject({
+        method: 'PUT',
+        url: `/students/${deriveStudentId('Anna')}/operations/primary-lesson-recurrence`,
+        payload: {
+          timezone: 'Asia/Bangkok',
+          startsOn: '2026-05-11',
+          generationHorizonDays: 56,
+          slots: [{ isoWeekday: 1, localStartTime: '11:00', durationMinutes: 50 }],
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(mockUpsertPrimaryStudentLessonRecurrence).toHaveBeenCalledWith(
+        deriveStudentId('Anna'),
+        {
+          timezone: 'Asia/Bangkok',
+          startsOn: '2026-05-11',
+          generationHorizonDays: 56,
+          slots: [{ isoWeekday: 1, localStartTime: '11:00', durationMinutes: 50 }],
+        },
+        'test-user-id',
+      );
+      expect(response.json()).toMatchObject({
+        recurrenceRule: {
+          timezone: 'Asia/Bangkok',
+          slots: [{ isoWeekday: 1, localStartTime: '11:00' }],
+        },
+      });
+    });
+
+    it('PUT /students/:id/operations/primary-lesson-recurrence rejects invalid recurrence rules', async () => {
+      const response = await app.inject({
+        method: 'PUT',
+        url: `/students/${deriveStudentId('Anna')}/operations/primary-lesson-recurrence`,
+        payload: {
+          timezone: 'Asia/Bangkok',
+          startsOn: '2026-05-11',
+          slots: [{ isoWeekday: 8, localStartTime: '11:00', durationMinutes: 50 }],
+        },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toMatchObject({ error: 'validation_failed' });
     });
   },
 );

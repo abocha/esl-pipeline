@@ -49,6 +49,27 @@ vi.mock('./students/StudentScheduleBillingPage', () => ({
   StudentScheduleBillingPage: () => <div>Student schedule content</div>,
 }));
 
+vi.mock('./business/BusinessShell', () => ({
+  BusinessShell: () => (
+    <div>
+      Business shell
+      <Outlet />
+    </div>
+  ),
+}));
+
+vi.mock('./business/BusinessSchedulePage', () => ({
+  BusinessSchedulePage: () => <div>Business schedule content</div>,
+}));
+
+vi.mock('./business/BusinessStatsPage', () => ({
+  BusinessStatsPage: () => <div>Business stats content</div>,
+}));
+
+vi.mock('./business/BusinessSettingsPage', () => ({
+  BusinessSettingsPage: () => <div>Business settings content</div>,
+}));
+
 vi.mock('./prompts/PromptTemplatesPage', () => ({
   PromptTemplatesPage: () => <div>Prompt templates content</div>,
 }));
@@ -128,6 +149,7 @@ describe('App', () => {
     expect(screen.getByRole('link', { name: /Assignments/i })).toBeTruthy();
     expect(screen.getByText('teacher@example.com')).toBeTruthy();
     expect(screen.getByText('Minimal assignment content')).toBeTruthy();
+    expect(screen.getByRole('link', { name: /Business/i })).toBeTruthy();
     expect(screen.getByRole('link', { name: /Prompts/i })).toBeTruthy();
     expect(document.querySelector('style')?.textContent ?? '').not.toContain('.app-shell::before');
 
@@ -176,6 +198,42 @@ describe('App', () => {
     await user.click(screen.getByRole('link', { name: /Prompts/i }));
 
     expect(await screen.findByText('Prompt templates content')).toBeTruthy();
+  });
+
+  it('redirects /business to the business schedule route', async () => {
+    useAuthMock.mockReturnValue(
+      createAuthState({
+        user: {
+          id: 'user-1',
+          email: 'teacher@example.com',
+          role: 'user',
+          isActive: true,
+        },
+        isAuthenticated: true,
+      }),
+    );
+
+    renderApp(['/business']);
+
+    expect(await screen.findByText('Business schedule content')).toBeTruthy();
+  });
+
+  it('renders the business stats route', async () => {
+    useAuthMock.mockReturnValue(
+      createAuthState({
+        user: {
+          id: 'user-1',
+          email: 'teacher@example.com',
+          role: 'user',
+          isActive: true,
+        },
+        isAuthenticated: true,
+      }),
+    );
+
+    renderApp(['/business/stats']);
+
+    expect(await screen.findByText('Business stats content')).toBeTruthy();
   });
 
   it('redirects /students/:studentId to the overview page', async () => {
