@@ -215,6 +215,22 @@ async function insertBusinessPayment(params: {
   });
 }
 
+async function countObsoleteGeneratedLessons(ruleId: string): Promise<number> {
+  return withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+    const result = await client.query<{ count: string }>(
+      `
+      SELECT COUNT(*)::text AS count
+      FROM student_lessons
+      WHERE recurrence_rule_id = $1
+        AND recurrence_origin = 'generated'
+        AND recurrence_obsolete_at IS NOT NULL
+      `,
+      [ruleId],
+    );
+    return Number(result.rows[0]?.count ?? 0);
+  });
+}
+
 function addDays(days: number): string {
   const date = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
   return date.toISOString();
@@ -440,6 +456,89 @@ describeIfPg('application/student-schedule-billing', () => {
     ).toEqual(generatedLessonIds);
   });
 
+  it('keeps recurrence IDs and active generated lessons stable across no-op saves', async () => {
+    const { studentId, userId } = await seedStudent();
+    const recurrence = {
+      timezone: 'Asia/Bangkok',
+      startsOn: '2026-05-04',
+      generationHorizonDays: 14,
+      slots: [
+        { isoWeekday: 1, localStartTime: '11:00', durationMinutes: 50 },
+        { isoWeekday: 3, localStartTime: '15:30', durationMinutes: 60 },
+      ],
+    };
+
+    const first = await upsertPrimaryStudentLessonRecurrence(studentId, recurrence, userId);
+    const firstRuleId = first.recurrenceRule?.id ?? '';
+    const firstSlots = first.recurrenceRule?.slots.map((slot) => ({
+      id: slot.id,
+      isoWeekday: slot.isoWeekday,
+      localStartTime: slot.localStartTime,
+      durationMinutes: slot.durationMinutes,
+    }));
+    const firstGenerated = first.lessons
+      .filter((lesson) => lesson.recurrenceOrigin === 'generated')
+      .map((lesson) => ({
+        id: lesson.id,
+        recurrenceOccurrenceKey: lesson.recurrenceOccurrenceKey,
+        recurrenceSlotId: lesson.recurrenceSlotId,
+      }))
+      .sort((left, right) => left.id.localeCompare(right.id));
+
+    const second = await upsertPrimaryStudentLessonRecurrence(studentId, recurrence, userId);
+    const secondGenerated = second.lessons
+      .filter((lesson) => lesson.recurrenceOrigin === 'generated')
+      .map((lesson) => ({
+        id: lesson.id,
+        recurrenceOccurrenceKey: lesson.recurrenceOccurrenceKey,
+        recurrenceSlotId: lesson.recurrenceSlotId,
+      }))
+      .sort((left, right) => left.id.localeCompare(right.id));
+
+    expect(second.recurrenceRule?.id).toBe(firstRuleId);
+    expect(
+      second.recurrenceRule?.slots.map((slot) => ({
+        id: slot.id,
+        isoWeekday: slot.isoWeekday,
+        localStartTime: slot.localStartTime,
+        durationMinutes: slot.durationMinutes,
+      })),
+    ).toEqual(firstSlots);
+    expect(secondGenerated).toEqual(firstGenerated);
+    await expect(countObsoleteGeneratedLessons(firstRuleId)).resolves.toBe(0);
+  });
+
+  it('reports the actual generated horizon when a recurrence rule shrinks', async () => {
+    const { studentId, userId } = await seedStudent();
+    const first = await upsertPrimaryStudentLessonRecurrence(
+      studentId,
+      {
+        timezone: 'Asia/Bangkok',
+        startsOn: '2026-05-04',
+        generationHorizonDays: 56,
+        slots: [{ isoWeekday: 1, localStartTime: '11:00', durationMinutes: 50 }],
+      },
+      userId,
+    );
+    const initialThrough = first.recurrenceRule?.materializedThrough;
+
+    const shrunk = await upsertPrimaryStudentLessonRecurrence(
+      studentId,
+      {
+        timezone: 'Asia/Bangkok',
+        startsOn: '2026-05-04',
+        generationHorizonDays: 14,
+        slots: [{ isoWeekday: 1, localStartTime: '11:00', durationMinutes: 50 }],
+      },
+      userId,
+    );
+
+    expect(initialThrough).toBeDefined();
+    expect(shrunk.recurrenceRule?.materializedThrough).toBeDefined();
+    expect(shrunk.recurrenceRule?.materializedThrough).not.toBe(initialThrough);
+    expect((shrunk.recurrenceRule?.materializedThrough ?? '') < (initialThrough ?? '')).toBe(true);
+  });
+
   it('uses IANA timezone conversion for half-hour recurrence zones', async () => {
     const { studentId, userId } = await seedStudent();
     const surface = await upsertPrimaryStudentLessonRecurrence(
@@ -542,6 +641,50 @@ describeIfPg('application/student-schedule-billing', () => {
         (lesson) => lesson.recurrenceOrigin === 'generated' && lesson.recurrenceSlotId !== null,
       ),
     ).toBe(true);
+  });
+
+  it('preserves chargeable-state edits on generated lesson occurrences', async () => {
+    const { studentId, userId } = await seedStudent();
+    let surface = await upsertPrimaryStudentLessonRecurrence(
+      studentId,
+      {
+        timezone: 'Asia/Bangkok',
+        startsOn: '2026-05-04',
+        generationHorizonDays: 14,
+        slots: [{ isoWeekday: 1, localStartTime: '11:00', durationMinutes: 50 }],
+      },
+      userId,
+    );
+    const generated = surface.lessons.find((lesson) => lesson.recurrenceOrigin === 'generated');
+    expect(generated).toBeDefined();
+
+    surface = await updateStudentLesson(
+      studentId,
+      generated?.id ?? '',
+      { status: 'scheduled', consumesCredit: false },
+      userId,
+    );
+    expect(surface.lessons.find((lesson) => lesson.id === generated?.id)).toMatchObject({
+      consumesCredit: false,
+      recurrenceOverrideKind: 'manual_edit',
+      status: 'scheduled',
+    });
+
+    surface = await upsertPrimaryStudentLessonRecurrence(
+      studentId,
+      {
+        timezone: 'Asia/Bangkok',
+        startsOn: '2026-05-04',
+        generationHorizonDays: 14,
+        slots: [{ isoWeekday: 3, localStartTime: '11:00', durationMinutes: 50 }],
+      },
+      userId,
+    );
+    expect(surface.lessons.find((lesson) => lesson.id === generated?.id)).toMatchObject({
+      consumesCredit: false,
+      recurrenceOverrideKind: 'manual_edit',
+      status: 'scheduled',
+    });
   });
 
   it('self-heals workspace business settings and updates forecast defaults', async () => {

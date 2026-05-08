@@ -212,7 +212,9 @@ describe('StudentScheduleBillingPage', () => {
       target: { value: 'Asia/Kolkata' },
     });
     fireEvent.change(screen.getByLabelText('Starts on'), { target: { value: '2026-05-11' } });
-    fireEvent.change(screen.getByLabelText('Time'), { target: { value: '09:30' } });
+    fireEvent.change(screen.getAllByLabelText('Time')[0] as HTMLElement, {
+      target: { value: '09:30' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Wed' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save plan' }));
 
@@ -226,6 +228,60 @@ describe('StudentScheduleBillingPage', () => {
             { isoWeekday: 1, localStartTime: '09:30', durationMinutes: 60 },
             { isoWeekday: 3, localStartTime: '09:30', durationMinutes: 60 },
           ]),
+        }),
+      );
+    });
+  });
+
+  it('preserves distinct times and durations for existing recurrence slots', async () => {
+    apiMocks.getStudentScheduleBillingSurface.mockResolvedValue(
+      makeSurface({
+        recurrenceRule: {
+          id: 'rule-1',
+          studentId: 'student-alex',
+          workspaceId: 'workspace-1',
+          timezone: 'Asia/Bangkok',
+          frequency: 'weekly',
+          startsOn: '2026-05-04',
+          endsOn: null,
+          status: 'active',
+          generationHorizonDays: 56,
+          materializedThrough: '2026-06-29',
+          updatedAt: '2026-05-06T10:00:00.000Z',
+          slots: [
+            {
+              id: 'slot-1',
+              ruleId: 'rule-1',
+              isoWeekday: 1,
+              localStartTime: '11:00',
+              durationMinutes: 50,
+              sortOrder: 0,
+            },
+            {
+              id: 'slot-2',
+              ruleId: 'rule-1',
+              isoWeekday: 3,
+              localStartTime: '15:30',
+              durationMinutes: 60,
+              sortOrder: 1,
+            },
+          ],
+        },
+      }),
+    );
+    renderPage();
+
+    expect(await screen.findByDisplayValue('15:30')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Save plan' }));
+
+    await waitFor(() => {
+      expect(apiMocks.upsertPrimaryStudentLessonRecurrence).toHaveBeenCalledWith(
+        'student-alex',
+        expect.objectContaining({
+          slots: [
+            { isoWeekday: 1, localStartTime: '11:00', durationMinutes: 50 },
+            { isoWeekday: 3, localStartTime: '15:30', durationMinutes: 60 },
+          ],
         }),
       );
     });
