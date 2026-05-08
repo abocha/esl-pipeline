@@ -233,6 +233,43 @@ describe('StudentScheduleBillingPage', () => {
     });
   });
 
+  it('offers the shared timezone picker shape used by business settings', async () => {
+    renderPage();
+
+    const picker = (await screen.findAllByLabelText('Timezone'))[0] as HTMLSelectElement;
+    const options = Array.from(picker.querySelectorAll('option')).map((option) => ({
+      label: option.textContent,
+      value: option.value,
+    }));
+
+    expect(options.map((option) => option.value)).toEqual([
+      'America/Los_Angeles',
+      'America/Denver',
+      'America/Chicago',
+      'America/New_York',
+      'UTC',
+      'Europe/London',
+      'Europe/Berlin',
+      'Europe/Moscow',
+      'Asia/Dubai',
+      'Asia/Tbilisi',
+      'Asia/Almaty',
+      'Asia/Kolkata',
+      'Asia/Bishkek',
+      'Asia/Bangkok',
+      'Asia/Singapore',
+      'Asia/Tokyo',
+      'Australia/Sydney',
+    ]);
+    expect(options).toEqual(
+      expect.arrayContaining([
+        { value: 'Asia/Kolkata', label: 'India (UTC+5:30)' },
+        { value: 'Asia/Bishkek', label: 'Bishkek (UTC+6)' },
+        { value: 'Asia/Singapore', label: 'Singapore / Shanghai (UTC+8)' },
+      ]),
+    );
+  });
+
   it('preserves distinct times and durations for existing recurrence slots', async () => {
     apiMocks.getStudentScheduleBillingSurface.mockResolvedValue(
       makeSurface({

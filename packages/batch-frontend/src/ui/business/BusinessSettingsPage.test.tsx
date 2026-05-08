@@ -82,6 +82,7 @@ describe('BusinessSettingsPage', () => {
       'Asia/Dubai',
       'Asia/Tbilisi',
       'Asia/Almaty',
+      'Asia/Kolkata',
       'Asia/Bishkek',
       'Asia/Bangkok',
       'Asia/Singapore',
@@ -90,6 +91,7 @@ describe('BusinessSettingsPage', () => {
     ]);
     expect(options).toEqual(
       expect.arrayContaining([
+        { value: 'Asia/Kolkata', label: 'India (UTC+5:30)' },
         { value: 'Asia/Bishkek', label: 'Bishkek (UTC+6)' },
         { value: 'Asia/Singapore', label: 'Singapore / Shanghai (UTC+8)' },
       ]),
