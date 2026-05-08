@@ -360,6 +360,310 @@ export interface StudentSummaryResponse {
   offset: number;
 }
 
+export type StudentLessonStatus = 'scheduled' | 'completed' | 'canceled' | 'no_show';
+export type StudentCreditEventType = 'credit_added' | 'credit_consumed' | 'credit_adjusted';
+export type StudentReminderType = 'no_next_lesson' | 'low_balance' | 'payment_followup';
+export type StudentReminderChannel = 'manual' | 'telegram' | 'email';
+export type StudentLessonRecurrenceStatus = 'active' | 'paused' | 'archived';
+export type StudentLessonRecurrenceFrequency = 'weekly';
+export type StudentLessonRecurrenceOrigin = 'manual' | 'generated';
+export type StudentLessonRecurrenceOverrideKind =
+  | 'manual_edit'
+  | 'manual_reschedule'
+  | 'manual_cancel';
+
+export interface StudentLessonRecurrenceSlotDto {
+  id: string;
+  ruleId: string;
+  isoWeekday: number;
+  localStartTime: string;
+  durationMinutes: number;
+  sortOrder: number;
+}
+
+export interface StudentLessonRecurrenceRuleDto {
+  id: string;
+  studentId: string;
+  workspaceId: string | null;
+  timezone: string;
+  frequency: StudentLessonRecurrenceFrequency;
+  startsOn: string;
+  endsOn: string | null;
+  status: StudentLessonRecurrenceStatus;
+  generationHorizonDays: number;
+  materializedThrough: string | null;
+  slots: StudentLessonRecurrenceSlotDto[];
+  updatedAt: string;
+}
+
+export interface UpsertStudentLessonRecurrenceRequest {
+  timezone: string;
+  frequency?: StudentLessonRecurrenceFrequency;
+  startsOn: string;
+  endsOn?: string | null;
+  status?: Exclude<StudentLessonRecurrenceStatus, 'archived'>;
+  generationHorizonDays?: number;
+  slots: {
+    isoWeekday: number;
+    localStartTime: string;
+    durationMinutes: number;
+  }[];
+}
+
+export interface StudentLessonPlanDto {
+  studentId: string;
+  workspaceId: string | null;
+  timezone: string;
+  defaultDurationMinutes: number;
+  cadence: string | null;
+  preferredTimes: string | null;
+  schedulingNotes: string | null;
+  updatedAt: string | null;
+}
+
+export interface UpdateStudentLessonPlanRequest {
+  timezone?: string;
+  defaultDurationMinutes?: number;
+  cadence?: string | null;
+  preferredTimes?: string | null;
+  schedulingNotes?: string | null;
+}
+
+export interface StudentLessonDto {
+  id: string;
+  studentId: string;
+  workspaceId: string | null;
+  startsAt: string;
+  timezone: string;
+  durationMinutes: number;
+  status: StudentLessonStatus;
+  consumesCredit: boolean;
+  title: string | null;
+  notes: string | null;
+  creditEventId: string | null;
+  recurrenceRuleId: string | null;
+  recurrenceSlotId: string | null;
+  recurrenceOccurrenceKey: string | null;
+  recurrenceOrigin: StudentLessonRecurrenceOrigin;
+  recurrenceOverrideKind: StudentLessonRecurrenceOverrideKind | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateStudentLessonRequest {
+  startsAt: string;
+  timezone?: string;
+  durationMinutes?: number;
+  status?: StudentLessonStatus;
+  consumesCredit?: boolean;
+  title?: string | null;
+  notes?: string | null;
+}
+
+export interface UpdateStudentLessonRequest {
+  startsAt?: string;
+  timezone?: string;
+  durationMinutes?: number;
+  status?: StudentLessonStatus;
+  consumesCredit?: boolean;
+  title?: string | null;
+  notes?: string | null;
+}
+
+export interface StudentCreditEventDto {
+  id: string;
+  studentId: string;
+  workspaceId: string | null;
+  eventType: StudentCreditEventType;
+  quantityDelta: number;
+  sourceLessonId: string | null;
+  sourcePaymentId: string | null;
+  note: string | null;
+  voidedAt: string | null;
+  createdAt: string;
+}
+
+export interface AddStudentPackageRequest {
+  lessons: number;
+  note?: string | null;
+  payment?: {
+    amountMinor: number;
+    currency: string;
+    method?: string | null;
+    receivedAt?: string;
+    externalUrl?: string | null;
+    note?: string | null;
+  } | null;
+}
+
+export interface AdjustStudentCreditsRequest {
+  quantityDelta: number;
+  note?: string | null;
+}
+
+export interface StudentPaymentRecordDto {
+  id: string;
+  studentId: string;
+  workspaceId: string | null;
+  amountMinor: number;
+  currency: string;
+  method: string | null;
+  receivedAt: string;
+  externalUrl: string | null;
+  note: string | null;
+  voidedAt: string | null;
+  createdAt: string;
+}
+
+export interface RecordStudentPaymentRequest {
+  amountMinor: number;
+  currency: string;
+  method?: string | null;
+  receivedAt?: string;
+  externalUrl?: string | null;
+  note?: string | null;
+}
+
+export interface StudentCreditSummaryDto {
+  purchased: number;
+  consumed: number;
+  adjustments: number;
+  remaining: number;
+  lowBalanceThreshold: number;
+  isLow: boolean;
+  isNegative: boolean;
+}
+
+export interface StudentReminderRecommendationDto {
+  type: StudentReminderType;
+  channel: StudentReminderChannel;
+  severity: 'info' | 'attention' | 'urgent';
+  title: string;
+  message: string;
+  copyText: string;
+}
+
+export interface StudentScheduleBillingSurfaceResponse {
+  studentId: string;
+  workspaceId: string | null;
+  lessonPlan: StudentLessonPlanDto;
+  recurrenceRule: StudentLessonRecurrenceRuleDto | null;
+  nextLesson: StudentLessonDto | null;
+  lessons: StudentLessonDto[];
+  creditSummary: StudentCreditSummaryDto;
+  creditEvents: StudentCreditEventDto[];
+  payments: StudentPaymentRecordDto[];
+  reminders: StudentReminderRecommendationDto[];
+}
+
+export interface BusinessSettingsDto {
+  workspaceId: string;
+  defaultCurrency: string;
+  defaultLessonRateMinor: number;
+  defaultLessonDurationMinutes: number;
+  timezone: string;
+  forecastHorizonDays: number;
+  noShowRateBasisPoints: number;
+  cancellationRateBasisPoints: number;
+  topUpThreshold: number;
+  updatedAt: string | null;
+}
+
+export interface UpdateBusinessSettingsRequest {
+  defaultCurrency?: string;
+  defaultLessonRateMinor?: number;
+  defaultLessonDurationMinutes?: number;
+  timezone?: string;
+  forecastHorizonDays?: number;
+  noShowRateBasisPoints?: number;
+  cancellationRateBasisPoints?: number;
+  topUpThreshold?: number;
+}
+
+export interface BusinessLessonDto extends StudentLessonDto {
+  studentName: string;
+  studentScheduleBillingPath: string;
+}
+
+export interface BusinessReminderDto extends StudentReminderRecommendationDto {
+  studentId: string;
+  studentName: string;
+  studentScheduleBillingPath: string;
+  remainingCredits: number;
+}
+
+export interface BusinessCreditAlertDto {
+  studentId: string;
+  studentName: string;
+  studentScheduleBillingPath: string;
+  remainingCredits: number;
+  lowBalanceThreshold: number;
+  severity: 'attention' | 'urgent';
+  upcomingChargeableLessons: number;
+}
+
+export interface BusinessPaymentSummaryDto {
+  studentId: string;
+  studentName: string;
+  studentScheduleBillingPath: string;
+  amountMinor: number;
+  currency: string;
+  receivedAt: string;
+  method: string | null;
+}
+
+export interface BusinessScheduleSurfaceResponse {
+  workspaceId: string;
+  from: string;
+  to: string;
+  generatedAt: string;
+  settings: BusinessSettingsDto;
+  today: BusinessLessonDto[];
+  lessons: BusinessLessonDto[];
+  reminders: BusinessReminderDto[];
+  creditAlerts: BusinessCreditAlertDto[];
+  recentPayments: BusinessPaymentSummaryDto[];
+}
+
+export interface BusinessStatsCurrencyExclusionDto {
+  currency: string;
+  amountMinor: number;
+  paymentCount: number;
+}
+
+export interface BusinessStatsPipelineItemDto {
+  studentId: string;
+  studentName: string;
+  studentScheduleBillingPath: string;
+  remainingCredits: number;
+  upcomingChargeableLessons: number;
+  severity: 'attention' | 'urgent';
+}
+
+export interface BusinessStatsSurfaceResponse {
+  workspaceId: string;
+  month: string;
+  generatedAt: string;
+  settings: BusinessSettingsDto;
+  currency: string;
+  collectedMinor: number;
+  earnedMinor: number;
+  scheduledGrossMinor: number;
+  forecastMinor: number;
+  riskAdjustmentMinor: number;
+  completedLessons: number;
+  taughtMinutes: number;
+  scheduledLessons: number;
+  scheduledMinutes: number;
+  noShowLessons: number;
+  canceledLessons: number;
+  forecastFrom: string;
+  forecastTo: string;
+  excludedCurrencies: BusinessStatsCurrencyExclusionDto[];
+  pipeline: BusinessStatsPipelineItemDto[];
+  risks: BusinessStatsPipelineItemDto[];
+}
+
 export interface StudentProfileDto {
   id: string;
   student: string;

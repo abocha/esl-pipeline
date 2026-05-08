@@ -539,6 +539,101 @@ CREATE TABLE public.schema_migrations (
     tool_version text NOT NULL
 );
 
+CREATE TABLE public.student_credit_events (
+    id uuid NOT NULL,
+    student_id uuid NOT NULL,
+    workspace_id uuid,
+    event_type text NOT NULL,
+    quantity_delta integer NOT NULL,
+    source_lesson_id uuid,
+    source_payment_id uuid,
+    note text,
+    voided_at timestamp with time zone,
+    voided_by uuid,
+    created_by uuid,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT student_credit_events_nonzero_check CHECK ((quantity_delta <> 0)),
+    CONSTRAINT student_credit_events_type_check CHECK ((event_type = ANY (ARRAY['credit_added'::text, 'credit_consumed'::text, 'credit_adjusted'::text])))
+);
+
+CREATE TABLE public.student_lesson_plans (
+    student_id uuid NOT NULL,
+    workspace_id uuid,
+    timezone text DEFAULT 'UTC'::text NOT NULL,
+    default_duration_minutes integer DEFAULT 60 NOT NULL,
+    cadence text,
+    preferred_times text,
+    scheduling_notes text,
+    updated_by uuid,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT student_lesson_plans_duration_check CHECK ((default_duration_minutes > 0))
+);
+
+CREATE TABLE public.student_lesson_recurrence_rules (
+    id uuid NOT NULL,
+    student_id uuid NOT NULL,
+    workspace_id uuid,
+    timezone text DEFAULT 'UTC'::text NOT NULL,
+    frequency text DEFAULT 'weekly'::text NOT NULL,
+    starts_on date DEFAULT CURRENT_DATE NOT NULL,
+    ends_on date,
+    status text DEFAULT 'active'::text NOT NULL,
+    generation_horizon_days integer DEFAULT 56 CONSTRAINT student_lesson_recurrence_rule_generation_horizon_days_not_null NOT NULL,
+    materialized_through date,
+    created_by uuid,
+    updated_by uuid,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT student_lesson_recurrence_rules_date_window_check CHECK (((ends_on IS NULL) OR (ends_on >= starts_on))),
+    CONSTRAINT student_lesson_recurrence_rules_frequency_check CHECK ((frequency = 'weekly'::text)),
+    CONSTRAINT student_lesson_recurrence_rules_horizon_check CHECK (((generation_horizon_days >= 7) AND (generation_horizon_days <= 366))),
+    CONSTRAINT student_lesson_recurrence_rules_status_check CHECK ((status = ANY (ARRAY['active'::text, 'paused'::text, 'archived'::text])))
+);
+
+CREATE TABLE public.student_lesson_recurrence_slots (
+    id uuid NOT NULL,
+    rule_id uuid NOT NULL,
+    iso_weekday integer NOT NULL,
+    local_start_time time without time zone NOT NULL,
+    duration_minutes integer NOT NULL,
+    sort_order integer DEFAULT 0 NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT student_lesson_recurrence_slots_duration_check CHECK ((duration_minutes > 0)),
+    CONSTRAINT student_lesson_recurrence_slots_weekday_check CHECK (((iso_weekday >= 1) AND (iso_weekday <= 7)))
+);
+
+CREATE TABLE public.student_lessons (
+    id uuid NOT NULL,
+    student_id uuid NOT NULL,
+    workspace_id uuid,
+    starts_at timestamp with time zone NOT NULL,
+    timezone text DEFAULT 'UTC'::text NOT NULL,
+    duration_minutes integer DEFAULT 60 NOT NULL,
+    status text DEFAULT 'scheduled'::text NOT NULL,
+    consumes_credit boolean DEFAULT false NOT NULL,
+    title text,
+    notes text,
+    credit_event_id uuid,
+    created_by uuid,
+    updated_by uuid,
+    completed_by uuid,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    recurrence_rule_id uuid,
+    recurrence_slot_id uuid,
+    recurrence_occurrence_key text,
+    recurrence_origin text DEFAULT 'manual'::text NOT NULL,
+    recurrence_override_kind text,
+    recurrence_obsolete_at timestamp with time zone,
+    recurrence_obsolete_by uuid,
+    recurrence_obsolete_reason text,
+    CONSTRAINT student_lessons_duration_check CHECK ((duration_minutes > 0)),
+    CONSTRAINT student_lessons_recurrence_origin_check CHECK ((recurrence_origin = ANY (ARRAY['manual'::text, 'generated'::text]))),
+    CONSTRAINT student_lessons_recurrence_override_kind_check CHECK (((recurrence_override_kind IS NULL) OR (recurrence_override_kind = ANY (ARRAY['manual_edit'::text, 'manual_reschedule'::text, 'manual_cancel'::text])))),
+    CONSTRAINT student_lessons_status_check CHECK ((status = ANY (ARRAY['scheduled'::text, 'completed'::text, 'canceled'::text, 'no_show'::text])))
+);
+
 CREATE TABLE public.student_memory_snapshots (
     id uuid NOT NULL,
     student_id uuid NOT NULL,
@@ -566,6 +661,24 @@ CREATE TABLE public.student_memory_snapshots (
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT student_memory_snapshots_source_kind_check CHECK ((source_kind = 'student_memory_rollup'::text)),
     CONSTRAINT student_memory_snapshots_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'ready'::text, 'failed'::text, 'superseded'::text])))
+);
+
+CREATE TABLE public.student_payment_records (
+    id uuid NOT NULL,
+    student_id uuid NOT NULL,
+    workspace_id uuid,
+    amount_minor integer NOT NULL,
+    currency character(3) NOT NULL,
+    method text,
+    received_at date DEFAULT CURRENT_DATE NOT NULL,
+    external_url text,
+    note text,
+    voided_at timestamp with time zone,
+    voided_by uuid,
+    created_by uuid,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT student_payment_records_amount_check CHECK ((amount_minor > 0)),
+    CONSTRAINT student_payment_records_currency_check CHECK ((currency ~ '^[A-Z]{3}$'::text))
 );
 
 CREATE TABLE public.student_profile_bindings (
@@ -618,6 +731,21 @@ CREATE TABLE public.student_profile_candidates (
     CONSTRAINT student_profile_candidates_target_section_check CHECK ((target_section = ANY (ARRAY['goals_motivation'::text, 'work_communication_context'::text, 'interests_personal_context'::text, 'learning_preferences_study_habits'::text, 'long_running_strengths'::text, 'persistent_challenges_constraints'::text])))
 );
 
+CREATE TABLE public.student_reminder_preferences (
+    student_id uuid NOT NULL,
+    workspace_id uuid,
+    preferred_channel text DEFAULT 'manual'::text NOT NULL,
+    low_balance_threshold integer DEFAULT 2 NOT NULL,
+    enable_upcoming_lesson boolean DEFAULT true NOT NULL,
+    enable_low_balance boolean DEFAULT true NOT NULL,
+    enable_payment_followup boolean DEFAULT true NOT NULL,
+    updated_by uuid,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT student_reminder_preferences_channel_check CHECK ((preferred_channel = ANY (ARRAY['manual'::text, 'telegram'::text, 'email'::text]))),
+    CONSTRAINT student_reminder_preferences_threshold_check CHECK ((low_balance_threshold >= 0))
+);
+
 CREATE TABLE public.students (
     id uuid NOT NULL,
     student text NOT NULL,
@@ -632,7 +760,8 @@ CREATE TABLE public.students (
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     archived_at timestamp with time zone,
     archived_by uuid,
-    archive_reason text
+    archive_reason text,
+    workspace_id uuid
 );
 
 CREATE TABLE public.template_revisions (
@@ -724,6 +853,43 @@ CREATE TABLE public.users (
     CONSTRAINT users_role_check CHECK ((role = ANY (ARRAY['admin'::text, 'user'::text, 'viewer'::text])))
 );
 
+CREATE TABLE public.workspace_business_settings (
+    workspace_id uuid NOT NULL,
+    default_currency character(3) DEFAULT 'USD'::bpchar NOT NULL,
+    default_lesson_rate_minor integer DEFAULT 0 NOT NULL,
+    default_lesson_duration_minutes integer DEFAULT 60 CONSTRAINT workspace_business_settings_default_lesson_duration_mi_not_null NOT NULL,
+    timezone text DEFAULT 'UTC'::text NOT NULL,
+    forecast_horizon_days integer DEFAULT 45 NOT NULL,
+    no_show_rate_basis_points integer DEFAULT 0 NOT NULL,
+    cancellation_rate_basis_points integer DEFAULT 0 CONSTRAINT workspace_business_settings_cancellation_rate_basis_po_not_null NOT NULL,
+    top_up_threshold integer DEFAULT 2 NOT NULL,
+    updated_by uuid,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT workspace_business_settings_cancellation_rate_check CHECK (((cancellation_rate_basis_points >= 0) AND (cancellation_rate_basis_points <= 10000))),
+    CONSTRAINT workspace_business_settings_currency_check CHECK ((default_currency ~ '^[A-Z]{3}$'::text)),
+    CONSTRAINT workspace_business_settings_duration_check CHECK ((default_lesson_duration_minutes > 0)),
+    CONSTRAINT workspace_business_settings_horizon_check CHECK (((forecast_horizon_days >= 7) AND (forecast_horizon_days <= 180))),
+    CONSTRAINT workspace_business_settings_no_show_rate_check CHECK (((no_show_rate_basis_points >= 0) AND (no_show_rate_basis_points <= 10000))),
+    CONSTRAINT workspace_business_settings_rate_check CHECK ((default_lesson_rate_minor >= 0)),
+    CONSTRAINT workspace_business_settings_top_up_threshold_check CHECK ((top_up_threshold >= 0))
+);
+
+CREATE TABLE public.workspace_memberships (
+    workspace_id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    role text DEFAULT 'owner'::text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT workspace_memberships_role_check CHECK ((role = ANY (ARRAY['owner'::text, 'admin'::text, 'member'::text, 'viewer'::text])))
+);
+
+CREATE TABLE public.workspaces (
+    id uuid NOT NULL,
+    name text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
 ALTER TABLE ONLY public.drafts
     ADD CONSTRAINT drafts_pkey PRIMARY KEY (id);
 
@@ -760,8 +926,26 @@ ALTER TABLE ONLY public.recordings
 ALTER TABLE ONLY public.schema_migrations
     ADD CONSTRAINT schema_migrations_pkey PRIMARY KEY (id);
 
+ALTER TABLE ONLY public.student_credit_events
+    ADD CONSTRAINT student_credit_events_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.student_lesson_plans
+    ADD CONSTRAINT student_lesson_plans_pkey PRIMARY KEY (student_id);
+
+ALTER TABLE ONLY public.student_lesson_recurrence_rules
+    ADD CONSTRAINT student_lesson_recurrence_rules_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.student_lesson_recurrence_slots
+    ADD CONSTRAINT student_lesson_recurrence_slots_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.student_lessons
+    ADD CONSTRAINT student_lessons_pkey PRIMARY KEY (id);
+
 ALTER TABLE ONLY public.student_memory_snapshots
     ADD CONSTRAINT student_memory_snapshots_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.student_payment_records
+    ADD CONSTRAINT student_payment_records_pkey PRIMARY KEY (id);
 
 ALTER TABLE ONLY public.student_profile_bindings
     ADD CONSTRAINT student_profile_bindings_pkey PRIMARY KEY (id);
@@ -771,6 +955,9 @@ ALTER TABLE ONLY public.student_profile_candidate_draft_revisions
 
 ALTER TABLE ONLY public.student_profile_candidates
     ADD CONSTRAINT student_profile_candidates_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.student_reminder_preferences
+    ADD CONSTRAINT student_reminder_preferences_pkey PRIMARY KEY (student_id);
 
 ALTER TABLE ONLY public.students
     ADD CONSTRAINT students_pkey PRIMARY KEY (id);
@@ -801,6 +988,15 @@ ALTER TABLE ONLY public.users
 
 ALTER TABLE ONLY public.users
     ADD CONSTRAINT users_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.workspace_business_settings
+    ADD CONSTRAINT workspace_business_settings_pkey PRIMARY KEY (workspace_id);
+
+ALTER TABLE ONLY public.workspace_memberships
+    ADD CONSTRAINT workspace_memberships_pkey PRIMARY KEY (workspace_id, user_id);
+
+ALTER TABLE ONLY public.workspaces
+    ADD CONSTRAINT workspaces_pkey PRIMARY KEY (id);
 
 CREATE INDEX idx_drafts_created_by ON public.drafts USING btree (created_by);
 
@@ -908,11 +1104,39 @@ CREATE INDEX idx_recordings_student_id ON public.recordings USING btree (student
 
 CREATE INDEX idx_schema_migrations_applied_at ON public.schema_migrations USING btree (applied_at DESC);
 
+CREATE INDEX idx_student_credit_events_student_active ON public.student_credit_events USING btree (student_id, created_at DESC, id DESC) WHERE (voided_at IS NULL);
+
+CREATE INDEX idx_student_credit_events_student_created_at ON public.student_credit_events USING btree (student_id, created_at DESC, id DESC);
+
+CREATE INDEX idx_student_credit_events_workspace_active ON public.student_credit_events USING btree (workspace_id, student_id, created_at DESC, id DESC) WHERE (voided_at IS NULL);
+
+CREATE UNIQUE INDEX idx_student_lesson_recurrence_rules_primary_active ON public.student_lesson_recurrence_rules USING btree (student_id) WHERE (status <> 'archived'::text);
+
+CREATE INDEX idx_student_lesson_recurrence_rules_student ON public.student_lesson_recurrence_rules USING btree (student_id, status, id);
+
+CREATE INDEX idx_student_lesson_recurrence_slots_rule ON public.student_lesson_recurrence_slots USING btree (rule_id, iso_weekday, local_start_time, id);
+
+CREATE UNIQUE INDEX idx_student_lessons_recurrence_occurrence_active ON public.student_lessons USING btree (recurrence_rule_id, recurrence_occurrence_key) WHERE ((recurrence_rule_id IS NOT NULL) AND (recurrence_occurrence_key IS NOT NULL) AND (recurrence_obsolete_at IS NULL));
+
+CREATE INDEX idx_student_lessons_student_active_schedule ON public.student_lessons USING btree (student_id, starts_at DESC, id DESC) WHERE (recurrence_obsolete_at IS NULL);
+
+CREATE INDEX idx_student_lessons_student_next ON public.student_lessons USING btree (student_id, starts_at, id) WHERE (status = 'scheduled'::text);
+
+CREATE INDEX idx_student_lessons_student_starts_at ON public.student_lessons USING btree (student_id, starts_at DESC, id DESC);
+
+CREATE INDEX idx_student_lessons_workspace_active_schedule ON public.student_lessons USING btree (workspace_id, starts_at, id) WHERE (recurrence_obsolete_at IS NULL);
+
+CREATE INDEX idx_student_lessons_workspace_starts_at ON public.student_lessons USING btree (workspace_id, starts_at, id);
+
 CREATE INDEX idx_student_memory_snapshots_status_generated_at ON public.student_memory_snapshots USING btree (status, generated_at DESC, id DESC);
 
 CREATE INDEX idx_student_memory_snapshots_student_generated_at ON public.student_memory_snapshots USING btree (student_id, generated_at DESC, id DESC);
 
 CREATE INDEX idx_student_memory_snapshots_student_ready_lookup ON public.student_memory_snapshots USING btree (student_id, generated_at DESC, id DESC) WHERE (status = 'ready'::text);
+
+CREATE INDEX idx_student_payment_records_student_received_at ON public.student_payment_records USING btree (student_id, received_at DESC, created_at DESC, id DESC) WHERE (voided_at IS NULL);
+
+CREATE INDEX idx_student_payment_records_workspace_received_at ON public.student_payment_records USING btree (workspace_id, received_at DESC, created_at DESC, id DESC) WHERE (voided_at IS NULL);
 
 CREATE INDEX idx_student_profile_bindings_effective_from ON public.student_profile_bindings USING btree (effective_from DESC);
 
@@ -944,6 +1168,8 @@ CREATE INDEX idx_students_profile_id ON public.students USING btree (profile_id)
 
 CREATE UNIQUE INDEX idx_students_student_lower_unique ON public.students USING btree (lower(student));
 
+CREATE INDEX idx_students_workspace_id ON public.students USING btree (workspace_id);
+
 CREATE UNIQUE INDEX idx_template_revisions_single_active ON public.template_revisions USING btree (template_id) WHERE (status = 'active'::text);
 
 CREATE INDEX idx_template_revisions_template_id_created_at ON public.template_revisions USING btree (template_id, created_at DESC);
@@ -971,6 +1197,8 @@ CREATE INDEX idx_user_settings_user_id ON public.user_settings USING btree (user
 CREATE INDEX idx_users_email ON public.users USING btree (email);
 
 CREATE INDEX idx_users_role ON public.users USING btree (role);
+
+CREATE INDEX idx_workspace_memberships_user_id ON public.workspace_memberships USING btree (user_id);
 
 CREATE TRIGGER set_drafts_updated_at BEFORE UPDATE ON public.drafts FOR EACH ROW EXECUTE FUNCTION public.set_drafts_updated_at();
 
@@ -1079,11 +1307,92 @@ ALTER TABLE ONLY public.prompt_packages
 ALTER TABLE ONLY public.prompt_packages
     ADD CONSTRAINT prompt_packages_transcript_id_fkey FOREIGN KEY (transcript_id) REFERENCES public.transcripts(id) ON DELETE CASCADE;
 
+ALTER TABLE ONLY public.student_credit_events
+    ADD CONSTRAINT student_credit_events_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.student_credit_events
+    ADD CONSTRAINT student_credit_events_source_lesson_id_fkey FOREIGN KEY (source_lesson_id) REFERENCES public.student_lessons(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.student_credit_events
+    ADD CONSTRAINT student_credit_events_source_payment_id_fkey FOREIGN KEY (source_payment_id) REFERENCES public.student_payment_records(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.student_credit_events
+    ADD CONSTRAINT student_credit_events_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.student_credit_events
+    ADD CONSTRAINT student_credit_events_voided_by_fkey FOREIGN KEY (voided_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.student_credit_events
+    ADD CONSTRAINT student_credit_events_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.student_lesson_plans
+    ADD CONSTRAINT student_lesson_plans_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.student_lesson_plans
+    ADD CONSTRAINT student_lesson_plans_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.student_lesson_plans
+    ADD CONSTRAINT student_lesson_plans_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.student_lesson_recurrence_rules
+    ADD CONSTRAINT student_lesson_recurrence_rules_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.student_lesson_recurrence_rules
+    ADD CONSTRAINT student_lesson_recurrence_rules_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.student_lesson_recurrence_rules
+    ADD CONSTRAINT student_lesson_recurrence_rules_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.student_lesson_recurrence_rules
+    ADD CONSTRAINT student_lesson_recurrence_rules_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.student_lesson_recurrence_slots
+    ADD CONSTRAINT student_lesson_recurrence_slots_rule_id_fkey FOREIGN KEY (rule_id) REFERENCES public.student_lesson_recurrence_rules(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.student_lessons
+    ADD CONSTRAINT student_lessons_completed_by_fkey FOREIGN KEY (completed_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.student_lessons
+    ADD CONSTRAINT student_lessons_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.student_lessons
+    ADD CONSTRAINT student_lessons_credit_event_id_fkey FOREIGN KEY (credit_event_id) REFERENCES public.student_credit_events(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.student_lessons
+    ADD CONSTRAINT student_lessons_recurrence_obsolete_by_fkey FOREIGN KEY (recurrence_obsolete_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.student_lessons
+    ADD CONSTRAINT student_lessons_recurrence_rule_id_fkey FOREIGN KEY (recurrence_rule_id) REFERENCES public.student_lesson_recurrence_rules(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.student_lessons
+    ADD CONSTRAINT student_lessons_recurrence_slot_id_fkey FOREIGN KEY (recurrence_slot_id) REFERENCES public.student_lesson_recurrence_slots(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.student_lessons
+    ADD CONSTRAINT student_lessons_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.student_lessons
+    ADD CONSTRAINT student_lessons_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.student_lessons
+    ADD CONSTRAINT student_lessons_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE SET NULL;
+
 ALTER TABLE ONLY public.student_memory_snapshots
     ADD CONSTRAINT student_memory_snapshots_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id) ON DELETE CASCADE;
 
 ALTER TABLE ONLY public.student_memory_snapshots
     ADD CONSTRAINT student_memory_snapshots_superseded_by_id_fkey FOREIGN KEY (superseded_by_id) REFERENCES public.student_memory_snapshots(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.student_payment_records
+    ADD CONSTRAINT student_payment_records_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.student_payment_records
+    ADD CONSTRAINT student_payment_records_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.student_payment_records
+    ADD CONSTRAINT student_payment_records_voided_by_fkey FOREIGN KEY (voided_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.student_payment_records
+    ADD CONSTRAINT student_payment_records_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE SET NULL;
 
 ALTER TABLE ONLY public.student_profile_bindings
     ADD CONSTRAINT student_profile_bindings_changed_by_fkey FOREIGN KEY (changed_by) REFERENCES public.users(id) ON DELETE SET NULL;
@@ -1115,11 +1424,23 @@ ALTER TABLE ONLY public.student_profile_candidates
 ALTER TABLE ONLY public.student_profile_candidates
     ADD CONSTRAINT student_profile_candidates_superseded_by_id_fkey FOREIGN KEY (superseded_by_id) REFERENCES public.student_profile_candidates(id) ON DELETE SET NULL;
 
+ALTER TABLE ONLY public.student_reminder_preferences
+    ADD CONSTRAINT student_reminder_preferences_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.student_reminder_preferences
+    ADD CONSTRAINT student_reminder_preferences_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.student_reminder_preferences
+    ADD CONSTRAINT student_reminder_preferences_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE SET NULL;
+
 ALTER TABLE ONLY public.students
     ADD CONSTRAINT students_archived_by_fkey FOREIGN KEY (archived_by) REFERENCES public.users(id) ON DELETE SET NULL;
 
 ALTER TABLE ONLY public.students
     ADD CONSTRAINT students_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.profiles(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.students
+    ADD CONSTRAINT students_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE SET NULL;
 
 ALTER TABLE ONLY public.template_revisions
     ADD CONSTRAINT template_revisions_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
@@ -1141,6 +1462,18 @@ ALTER TABLE ONLY public.uploaded_files
 
 ALTER TABLE ONLY public.user_settings
     ADD CONSTRAINT user_settings_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.workspace_business_settings
+    ADD CONSTRAINT workspace_business_settings_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.workspace_business_settings
+    ADD CONSTRAINT workspace_business_settings_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.workspace_memberships
+    ADD CONSTRAINT workspace_memberships_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.workspace_memberships
+    ADD CONSTRAINT workspace_memberships_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
 
 CREATE POLICY jobs_user_scope_policy ON public.jobs USING ((public.app_rls_bypass() OR (user_id = public.app_current_user_id()))) WITH CHECK ((public.app_rls_bypass() OR (user_id = public.app_current_user_id())));
 
@@ -1225,5 +1558,8 @@ VALUES
   ('0022_profile_revision_structured_content', 'a4153ae99387ea7b9d11ef8750f0899ab8ff7f294fc9c6d1a3749defb89bbde6', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0023_profile_revision_lesson_population_source', '8fcba883ef201a06fc88025b41e8a5141c10d824cd5706a1d7fa91a2d462050c', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0024_student_surface_read_path_indexes', '6c35b4e0f01bfb0f9de0c8161618dfbfdd5904b6eba76f4dae1e34d386576ec6', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0025_student_archive_status', 'db8363e4010fc34933a1f83d619931ebf6cf3287169cb92be0d920ed1f57354b', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0025_student_archive_status', 'db8363e4010fc34933a1f83d619931ebf6cf3287169cb92be0d920ed1f57354b', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0026_schedule_billing_foundations', '503e66dae2e95b23028708636942fce28fce3b0c7e734b1cfb689abeb10ccc49', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0027_teacher_business_dashboard_foundations', 'b82df4ed56daa006bdee71a0a56e1c3f584d89eb467aa7aaf5c68cc764c60d01', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0028_student_lesson_recurrence_core', 'c90dea3bf8cc79162e93d0cbdd167e9142c6d959d2cb743ab164e06c4f658fa0', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;

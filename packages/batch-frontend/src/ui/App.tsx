@@ -43,6 +43,26 @@ const StudentScheduleBillingPage = lazy(async () => {
   return { default: module.StudentScheduleBillingPage };
 });
 
+const BusinessShell = lazy(async () => {
+  const module = await import('./business/BusinessShell');
+  return { default: module.BusinessShell };
+});
+
+const BusinessSchedulePage = lazy(async () => {
+  const module = await import('./business/BusinessSchedulePage');
+  return { default: module.BusinessSchedulePage };
+});
+
+const BusinessStatsPage = lazy(async () => {
+  const module = await import('./business/BusinessStatsPage');
+  return { default: module.BusinessStatsPage };
+});
+
+const BusinessSettingsPage = lazy(async () => {
+  const module = await import('./business/BusinessSettingsPage');
+  return { default: module.BusinessSettingsPage };
+});
+
 const PromptTemplatesPage = lazy(async () => {
   const module = await import('./prompts/PromptTemplatesPage');
   return { default: module.PromptTemplatesPage };
@@ -131,6 +151,40 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ user, onLogout }) =
     <Routes>
       <Route element={<MinimalShell user={user} onLogout={onLogout} />}>
         <Route path="/" element={<MinimalAssignment />} />
+        <Route
+          path="/business"
+          element={
+            <Suspense fallback={<RouteLoadingFallback />}>
+              <BusinessShell />
+            </Suspense>
+          }
+        >
+          <Route index element={<Navigate to="schedule" replace />} />
+          <Route
+            path="schedule"
+            element={
+              <Suspense fallback={<RouteLoadingFallback />}>
+                <BusinessSchedulePage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="stats"
+            element={
+              <Suspense fallback={<RouteLoadingFallback />}>
+                <BusinessStatsPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="settings"
+            element={
+              <Suspense fallback={<RouteLoadingFallback />}>
+                <BusinessSettingsPage />
+              </Suspense>
+            }
+          />
+        </Route>
         <Route
           path="/prompts"
           element={
