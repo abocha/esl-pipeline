@@ -69,6 +69,7 @@ import type {
   UpdateBusinessSettingsRequest,
   UpdateStudentLessonPlanRequest,
   UpdateStudentLessonRequest,
+  UpsertStudentLessonRecurrenceRequest,
 } from '@esl-pipeline/contracts';
 import { JobActionType } from '@esl-pipeline/contracts';
 
@@ -852,6 +853,7 @@ export interface StudentHistorySurfaceResponse {
 
 export type StudentScheduleBillingSurface = StudentScheduleBillingSurfaceResponse;
 export type StudentLessonPlanUpdate = UpdateStudentLessonPlanRequest;
+export type StudentLessonRecurrenceUpsert = UpsertStudentLessonRecurrenceRequest;
 export type StudentLessonCreate = CreateStudentLessonRequest;
 export type StudentLessonUpdate = UpdateStudentLessonRequest;
 export type StudentPackageCreate = AddStudentPackageRequest;
@@ -2456,6 +2458,24 @@ export async function updateStudentLessonPlan(
   try {
     const response = await apiClient.put(
       buildApiProxyPath(`/students/${encodeURIComponent(studentId)}/operations/lesson-plan`),
+      body,
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function upsertPrimaryStudentLessonRecurrence(
+  studentId: string,
+  body: StudentLessonRecurrenceUpsert,
+): Promise<StudentScheduleBillingSurface> {
+  try {
+    const response = await apiClient.put(
+      buildApiProxyPath(
+        `/students/${encodeURIComponent(studentId)}/operations/primary-lesson-recurrence`,
+      ),
       body,
     );
     return response.data;

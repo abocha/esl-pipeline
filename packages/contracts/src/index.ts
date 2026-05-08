@@ -364,6 +364,51 @@ export type StudentLessonStatus = 'scheduled' | 'completed' | 'canceled' | 'no_s
 export type StudentCreditEventType = 'credit_added' | 'credit_consumed' | 'credit_adjusted';
 export type StudentReminderType = 'no_next_lesson' | 'low_balance' | 'payment_followup';
 export type StudentReminderChannel = 'manual' | 'telegram' | 'email';
+export type StudentLessonRecurrenceStatus = 'active' | 'paused' | 'archived';
+export type StudentLessonRecurrenceFrequency = 'weekly';
+export type StudentLessonRecurrenceOrigin = 'manual' | 'generated';
+export type StudentLessonRecurrenceOverrideKind =
+  | 'manual_edit'
+  | 'manual_reschedule'
+  | 'manual_cancel';
+
+export interface StudentLessonRecurrenceSlotDto {
+  id: string;
+  ruleId: string;
+  isoWeekday: number;
+  localStartTime: string;
+  durationMinutes: number;
+  sortOrder: number;
+}
+
+export interface StudentLessonRecurrenceRuleDto {
+  id: string;
+  studentId: string;
+  workspaceId: string | null;
+  timezone: string;
+  frequency: StudentLessonRecurrenceFrequency;
+  startsOn: string;
+  endsOn: string | null;
+  status: StudentLessonRecurrenceStatus;
+  generationHorizonDays: number;
+  materializedThrough: string | null;
+  slots: StudentLessonRecurrenceSlotDto[];
+  updatedAt: string;
+}
+
+export interface UpsertStudentLessonRecurrenceRequest {
+  timezone: string;
+  frequency?: StudentLessonRecurrenceFrequency;
+  startsOn: string;
+  endsOn?: string | null;
+  status?: Exclude<StudentLessonRecurrenceStatus, 'archived'>;
+  generationHorizonDays?: number;
+  slots: {
+    isoWeekday: number;
+    localStartTime: string;
+    durationMinutes: number;
+  }[];
+}
 
 export interface StudentLessonPlanDto {
   studentId: string;
@@ -396,6 +441,11 @@ export interface StudentLessonDto {
   title: string | null;
   notes: string | null;
   creditEventId: string | null;
+  recurrenceRuleId: string | null;
+  recurrenceSlotId: string | null;
+  recurrenceOccurrenceKey: string | null;
+  recurrenceOrigin: StudentLessonRecurrenceOrigin;
+  recurrenceOverrideKind: StudentLessonRecurrenceOverrideKind | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -497,6 +547,7 @@ export interface StudentScheduleBillingSurfaceResponse {
   studentId: string;
   workspaceId: string | null;
   lessonPlan: StudentLessonPlanDto;
+  recurrenceRule: StudentLessonRecurrenceRuleDto | null;
   nextLesson: StudentLessonDto | null;
   lessons: StudentLessonDto[];
   creditSummary: StudentCreditSummaryDto;

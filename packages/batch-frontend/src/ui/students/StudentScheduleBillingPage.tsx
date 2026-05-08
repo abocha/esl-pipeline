@@ -4,9 +4,11 @@ import {
   addStudentPackage,
   createStudentLesson,
   getStudentScheduleBillingSurface,
+  recordStudentPayment,
   type StudentScheduleBillingSurface,
   updateStudentLesson,
   updateStudentLessonPlan,
+  upsertPrimaryStudentLessonRecurrence,
 } from '../../utils/api';
 import { useStudentAreaContext } from './StudentAreaContext';
 import {
@@ -20,6 +22,26 @@ import {
 import './StudentScheduleBillingPage.css';
 
 const DEFAULT_LESSON_START = '2026-05-07T10:00';
+const WEEKDAYS = [
+  { value: 1, label: 'Mon' },
+  { value: 2, label: 'Tue' },
+  { value: 3, label: 'Wed' },
+  { value: 4, label: 'Thu' },
+  { value: 5, label: 'Fri' },
+  { value: 6, label: 'Sat' },
+  { value: 7, label: 'Sun' },
+];
+const TIMEZONE_OPTIONS = [
+  { value: 'UTC', label: 'UTC' },
+  { value: 'Asia/Bangkok', label: 'Bangkok (UTC+7)' },
+  { value: 'Asia/Kolkata', label: 'India (UTC+5:30)' },
+  { value: 'Asia/Singapore', label: 'Singapore / Shanghai (UTC+8)' },
+  { value: 'Europe/Moscow', label: 'Moscow / Istanbul (UTC+3)' },
+  { value: 'Europe/Berlin', label: 'Berlin / Paris (UTC+1/+2)' },
+  { value: 'Europe/London', label: 'London (UTC+0/+1)' },
+  { value: 'America/New_York', label: 'New York (UTC-5/-4)' },
+  { value: 'America/Los_Angeles', label: 'Los Angeles (UTC-8/-7)' },
+];
 
 const DATE_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
   month: 'short',
@@ -61,6 +83,24 @@ function toIsoFromDateTimeLocal(value: string): string {
   return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
 }
 
+function todayInput(): string {
+  const date = new Date();
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
+    date.getDate(),
+  ).padStart(2, '0')}`;
+}
+
+function toDateTimeLocal(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return DEFAULT_LESSON_START;
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
 export const StudentScheduleBillingPage: React.FC = () => {
   const { student, studentId } = useStudentAreaContext();
   const studentName = student?.student ?? 'this student';
@@ -75,6 +115,15 @@ export const StudentScheduleBillingPage: React.FC = () => {
     preferredTimes: '',
     schedulingNotes: '',
   });
+  const [recurrenceForm, setRecurrenceForm] = useState({
+    timezone: 'UTC',
+    startsOn: todayInput(),
+    status: 'active' as 'active' | 'paused',
+    generationHorizonDays: '56',
+    selectedWeekdays: [1],
+    localStartTime: '11:00',
+    durationMinutes: '60',
+  });
   const [packageForm, setPackageForm] = useState({
     lessons: '8',
     amountMajor: '',
@@ -88,6 +137,21 @@ export const StudentScheduleBillingPage: React.FC = () => {
     timezone: 'UTC',
     title: '',
     notes: '',
+  });
+  const [paymentForm, setPaymentForm] = useState({
+    amountMajor: '',
+    currency: 'USD',
+    method: '',
+    note: '',
+  });
+  const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
+  const [lessonEditForm, setLessonEditForm] = useState({
+    startsAt: DEFAULT_LESSON_START,
+    durationMinutes: '60',
+    timezone: 'UTC',
+    title: '',
+    notes: '',
+    consumesCredit: true,
   });
 
   useEffect(() => {
@@ -112,6 +176,7 @@ export const StudentScheduleBillingPage: React.FC = () => {
           timezone: nextSurface.lessonPlan.timezone,
           durationMinutes: String(nextSurface.lessonPlan.defaultDurationMinutes),
         }));
+        setRecurrenceFormFromSurface(nextSurface, setRecurrenceForm);
       } catch (loadError: unknown) {
         if (!active) return;
         setError(loadError instanceof Error ? loadError.message : 'Schedule and billing failed.');
@@ -222,49 +287,129 @@ export const StudentScheduleBillingPage: React.FC = () => {
                 updateStudentLessonPlan(studentId, {
                   timezone: planForm.timezone,
                   defaultDurationMinutes: Number(planForm.defaultDurationMinutes),
-                  cadence: planForm.cadence || null,
-                  preferredTimes: planForm.preferredTimes || null,
+                  cadence: null,
+                  preferredTimes: null,
                   schedulingNotes: planForm.schedulingNotes || null,
-                }),
+                }).then(() =>
+                  upsertPrimaryStudentLessonRecurrence(studentId, {
+                    timezone: recurrenceForm.timezone,
+                    startsOn: recurrenceForm.startsOn,
+                    status: recurrenceForm.status,
+                    generationHorizonDays: Number(recurrenceForm.generationHorizonDays),
+                    slots: recurrenceForm.selectedWeekdays.map((weekday) => ({
+                      isoWeekday: weekday,
+                      localStartTime: recurrenceForm.localStartTime,
+                      durationMinutes: Number(recurrenceForm.durationMinutes),
+                    })),
+                  }),
+                ),
               );
             }}
           >
             <label>
               Timezone
-              <input
-                value={planForm.timezone}
-                onChange={(event) => setPlanForm({ ...planForm, timezone: event.target.value })}
-              />
+              <select
+                value={recurrenceForm.timezone}
+                onChange={(event) => {
+                  setRecurrenceForm({ ...recurrenceForm, timezone: event.target.value });
+                  setPlanForm({ ...planForm, timezone: event.target.value });
+                }}
+              >
+                {TIMEZONE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             </label>
             <label>
               Default duration
               <input
                 min="1"
                 type="number"
-                value={planForm.defaultDurationMinutes}
+                value={recurrenceForm.durationMinutes}
+                onChange={(event) => {
+                  setRecurrenceForm({ ...recurrenceForm, durationMinutes: event.target.value });
+                  setPlanForm({ ...planForm, defaultDurationMinutes: event.target.value });
+                }}
+              />
+            </label>
+            <label>
+              Starts on
+              <input
+                type="date"
+                value={recurrenceForm.startsOn}
                 onChange={(event) =>
-                  setPlanForm({ ...planForm, defaultDurationMinutes: event.target.value })
+                  setRecurrenceForm({ ...recurrenceForm, startsOn: event.target.value })
                 }
               />
             </label>
             <label>
-              Cadence
+              Time
               <input
-                placeholder="Weekly"
-                value={planForm.cadence}
-                onChange={(event) => setPlanForm({ ...planForm, cadence: event.target.value })}
-              />
-            </label>
-            <label>
-              Preferred times
-              <input
-                placeholder="Tue or Thu mornings"
-                value={planForm.preferredTimes}
+                type="time"
+                value={recurrenceForm.localStartTime}
                 onChange={(event) =>
-                  setPlanForm({ ...planForm, preferredTimes: event.target.value })
+                  setRecurrenceForm({ ...recurrenceForm, localStartTime: event.target.value })
                 }
               />
             </label>
+            <label>
+              Generate ahead
+              <input
+                min="7"
+                max="366"
+                type="number"
+                value={recurrenceForm.generationHorizonDays}
+                onChange={(event) =>
+                  setRecurrenceForm({
+                    ...recurrenceForm,
+                    generationHorizonDays: event.target.value,
+                  })
+                }
+              />
+            </label>
+            <label>
+              Rule status
+              <select
+                value={recurrenceForm.status}
+                onChange={(event) =>
+                  setRecurrenceForm({
+                    ...recurrenceForm,
+                    status: event.target.value as 'active' | 'paused',
+                  })
+                }
+              >
+                <option value="active">Active</option>
+                <option value="paused">Paused</option>
+              </select>
+            </label>
+            <fieldset className="student-schedule-billing-weekdays">
+              <legend>Repeats weekly</legend>
+              {WEEKDAYS.map((weekday) => {
+                const selected = recurrenceForm.selectedWeekdays.includes(weekday.value);
+                return (
+                  <button
+                    key={weekday.value}
+                    type="button"
+                    className={selected ? 'selected' : ''}
+                    onClick={() => {
+                      const selectedWeekdays = selected
+                        ? recurrenceForm.selectedWeekdays.filter((value) => value !== weekday.value)
+                        : [...recurrenceForm.selectedWeekdays, weekday.value].sort();
+                      setRecurrenceForm({
+                        ...recurrenceForm,
+                        selectedWeekdays: selectedWeekdays.length
+                          ? selectedWeekdays
+                          : [weekday.value],
+                      });
+                    }}
+                  >
+                    {weekday.label}
+                  </button>
+                );
+              })}
+            </fieldset>
             <label className="student-schedule-billing-wide">
               Scheduling notes
               <textarea
@@ -448,26 +593,214 @@ export const StudentScheduleBillingPage: React.FC = () => {
                 >
                   {lesson.status.replace('_', ' ')}
                 </StudentAreaStatusPill>
+                {lesson.recurrenceOrigin === 'generated' ? (
+                  <StudentAreaStatusPill tone="quiet">generated</StudentAreaStatusPill>
+                ) : null}
                 {lesson.status === 'scheduled' ? (
-                  <button
-                    type="button"
-                    disabled={saving === lesson.id}
-                    onClick={() => {
+                  <div className="student-schedule-billing-actions">
+                    <button
+                      type="button"
+                      disabled={saving === lesson.id}
+                      onClick={() => {
+                        void runAction(lesson.id, () =>
+                          updateStudentLesson(studentId, lesson.id, {
+                            status: 'completed',
+                            consumesCredit: true,
+                          }),
+                        );
+                      }}
+                    >
+                      Complete
+                    </button>
+                    <button
+                      type="button"
+                      disabled={saving === lesson.id}
+                      onClick={() => {
+                        void runAction(lesson.id, () =>
+                          updateStudentLesson(studentId, lesson.id, {
+                            status: 'no_show',
+                            consumesCredit: false,
+                          }),
+                        );
+                      }}
+                    >
+                      No-show
+                    </button>
+                    <button
+                      type="button"
+                      disabled={saving === lesson.id}
+                      onClick={() => {
+                        void runAction(lesson.id, () =>
+                          updateStudentLesson(studentId, lesson.id, {
+                            status: 'canceled',
+                            consumesCredit: false,
+                          }),
+                        );
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      disabled={saving === lesson.id}
+                      onClick={() => {
+                        setEditingLessonId(lesson.id);
+                        setLessonEditForm({
+                          startsAt: toDateTimeLocal(lesson.startsAt),
+                          durationMinutes: String(lesson.durationMinutes),
+                          timezone: lesson.timezone,
+                          title: lesson.title ?? '',
+                          notes: lesson.notes ?? '',
+                          consumesCredit: lesson.consumesCredit,
+                        });
+                      }}
+                    >
+                      Edit
+                    </button>
+                  </div>
+                ) : null}
+                {editingLessonId === lesson.id ? (
+                  <form
+                    className="student-schedule-billing-edit-form"
+                    onSubmit={(event) => {
+                      event.preventDefault();
                       void runAction(lesson.id, () =>
                         updateStudentLesson(studentId, lesson.id, {
-                          status: 'completed',
-                          consumesCredit: true,
+                          startsAt: toIsoFromDateTimeLocal(lessonEditForm.startsAt),
+                          timezone: lessonEditForm.timezone,
+                          durationMinutes: Number(lessonEditForm.durationMinutes),
+                          title: lessonEditForm.title || null,
+                          notes: lessonEditForm.notes || null,
+                          consumesCredit: lessonEditForm.consumesCredit,
+                        }).then((nextSurface) => {
+                          setEditingLessonId(null);
+                          return nextSurface;
                         }),
                       );
                     }}
                   >
-                    Complete
-                  </button>
+                    <label>
+                      Starts
+                      <input
+                        type="datetime-local"
+                        value={lessonEditForm.startsAt}
+                        onChange={(event) =>
+                          setLessonEditForm({ ...lessonEditForm, startsAt: event.target.value })
+                        }
+                      />
+                    </label>
+                    <label>
+                      Duration
+                      <input
+                        min="1"
+                        type="number"
+                        value={lessonEditForm.durationMinutes}
+                        onChange={(event) =>
+                          setLessonEditForm({
+                            ...lessonEditForm,
+                            durationMinutes: event.target.value,
+                          })
+                        }
+                      />
+                    </label>
+                    <label>
+                      Chargeable
+                      <input
+                        type="checkbox"
+                        checked={lessonEditForm.consumesCredit}
+                        onChange={(event) =>
+                          setLessonEditForm({
+                            ...lessonEditForm,
+                            consumesCredit: event.target.checked,
+                          })
+                        }
+                      />
+                    </label>
+                    <button type="submit" disabled={saving === lesson.id}>
+                      Save
+                    </button>
+                    <button type="button" onClick={() => setEditingLessonId(null)}>
+                      Close
+                    </button>
+                  </form>
                 ) : null}
               </article>
             ))}
           </div>
         )}
+      </StudentAreaPanel>
+
+      <StudentAreaPanel className="student-schedule-billing-panel">
+        <header>
+          <StudentAreaSectionLabel>Payment History</StudentAreaSectionLabel>
+          <p>Recorded payments are factual ledger entries, separate from lesson-credit packages.</p>
+        </header>
+        <form
+          className="student-schedule-billing-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void runAction('payment', () =>
+              recordStudentPayment(studentId, {
+                amountMinor: Math.round(Number(paymentForm.amountMajor) * 100),
+                currency: paymentForm.currency.toUpperCase(),
+                method: paymentForm.method || null,
+                note: paymentForm.note || null,
+              }),
+            );
+          }}
+        >
+          <label>
+            Amount
+            <input
+              inputMode="decimal"
+              value={paymentForm.amountMajor}
+              onChange={(event) =>
+                setPaymentForm({ ...paymentForm, amountMajor: event.target.value })
+              }
+            />
+          </label>
+          <label>
+            Currency
+            <input
+              maxLength={3}
+              value={paymentForm.currency}
+              onChange={(event) =>
+                setPaymentForm({ ...paymentForm, currency: event.target.value.toUpperCase() })
+              }
+            />
+          </label>
+          <label>
+            Method
+            <input
+              value={paymentForm.method}
+              onChange={(event) => setPaymentForm({ ...paymentForm, method: event.target.value })}
+            />
+          </label>
+          <label className="student-schedule-billing-wide">
+            Note
+            <textarea
+              value={paymentForm.note}
+              onChange={(event) => setPaymentForm({ ...paymentForm, note: event.target.value })}
+            />
+          </label>
+          <button type="submit" disabled={saving === 'payment'}>
+            Record payment
+          </button>
+        </form>
+        <div className="student-schedule-billing-list">
+          {surface.payments.map((payment) => (
+            <article key={payment.id} className="student-schedule-billing-list-row compact">
+              <span>
+                <strong>{formatMoney(payment.amountMinor, payment.currency)}</strong>
+                <small>
+                  {formatDate(payment.receivedAt)}
+                  {payment.method ? ` · ${payment.method}` : ''}
+                </small>
+              </span>
+              {payment.note ? <small>{payment.note}</small> : null}
+            </article>
+          ))}
+        </div>
       </StudentAreaPanel>
 
       <StudentAreaPanel className="student-schedule-billing-panel">
@@ -502,3 +835,33 @@ export const StudentScheduleBillingPage: React.FC = () => {
     </section>
   );
 };
+
+function setRecurrenceFormFromSurface(
+  surface: StudentScheduleBillingSurface,
+  setRecurrenceForm: React.Dispatch<
+    React.SetStateAction<{
+      timezone: string;
+      startsOn: string;
+      status: 'active' | 'paused';
+      generationHorizonDays: string;
+      selectedWeekdays: number[];
+      localStartTime: string;
+      durationMinutes: string;
+    }>
+  >,
+) {
+  const firstSlot = surface.recurrenceRule?.slots[0];
+  setRecurrenceForm({
+    timezone: surface.recurrenceRule?.timezone ?? surface.lessonPlan.timezone,
+    startsOn: surface.recurrenceRule?.startsOn ?? todayInput(),
+    status: surface.recurrenceRule?.status === 'paused' ? 'paused' : 'active',
+    generationHorizonDays: String(surface.recurrenceRule?.generationHorizonDays ?? 56),
+    selectedWeekdays: surface.recurrenceRule?.slots.length
+      ? surface.recurrenceRule.slots.map((slot) => slot.isoWeekday)
+      : [1],
+    localStartTime: firstSlot?.localStartTime ?? '11:00',
+    durationMinutes: String(
+      firstSlot?.durationMinutes ?? surface.lessonPlan.defaultDurationMinutes,
+    ),
+  });
+}

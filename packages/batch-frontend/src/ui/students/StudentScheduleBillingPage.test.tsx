@@ -8,8 +8,10 @@ const apiMocks = vi.hoisted(() => ({
   addStudentPackage: vi.fn(),
   createStudentLesson: vi.fn(),
   getStudentScheduleBillingSurface: vi.fn(),
+  recordStudentPayment: vi.fn(),
   updateStudentLesson: vi.fn(),
   updateStudentLessonPlan: vi.fn(),
+  upsertPrimaryStudentLessonRecurrence: vi.fn(),
 }));
 
 const useStudentAreaContextMock = vi.hoisted(() => vi.fn());
@@ -34,6 +36,7 @@ function makeSurface(overrides: Record<string, unknown> = {}) {
       schedulingNotes: null,
       updatedAt: '2026-05-06T10:00:00.000Z',
     },
+    recurrenceRule: null,
     nextLesson: {
       id: 'lesson-1',
       studentId: 'student-alex',
@@ -46,6 +49,11 @@ function makeSurface(overrides: Record<string, unknown> = {}) {
       title: null,
       notes: null,
       creditEventId: null,
+      recurrenceRuleId: 'rule-1',
+      recurrenceSlotId: 'slot-1',
+      recurrenceOccurrenceKey: 'slot-1:2026-05-07',
+      recurrenceOrigin: 'generated',
+      recurrenceOverrideKind: null,
       createdAt: '2026-05-06T10:00:00.000Z',
       updatedAt: '2026-05-06T10:00:00.000Z',
     },
@@ -62,6 +70,11 @@ function makeSurface(overrides: Record<string, unknown> = {}) {
         title: null,
         notes: null,
         creditEventId: null,
+        recurrenceRuleId: 'rule-1',
+        recurrenceSlotId: 'slot-1',
+        recurrenceOccurrenceKey: 'slot-1:2026-05-07',
+        recurrenceOrigin: 'generated',
+        recurrenceOverrideKind: null,
         createdAt: '2026-05-06T10:00:00.000Z',
         updatedAt: '2026-05-06T10:00:00.000Z',
       },
@@ -121,6 +134,7 @@ describe('StudentScheduleBillingPage', () => {
     apiMocks.getStudentScheduleBillingSurface.mockResolvedValue(makeSurface());
     apiMocks.addStudentPackage.mockResolvedValue(makeSurface());
     apiMocks.createStudentLesson.mockResolvedValue(makeSurface());
+    apiMocks.recordStudentPayment.mockResolvedValue(makeSurface());
     apiMocks.updateStudentLesson.mockResolvedValue(
       makeSurface({
         creditSummary: {
@@ -135,6 +149,7 @@ describe('StudentScheduleBillingPage', () => {
       }),
     );
     apiMocks.updateStudentLessonPlan.mockResolvedValue(makeSurface());
+    apiMocks.upsertPrimaryStudentLessonRecurrence.mockResolvedValue(makeSurface());
   });
 
   it('renders real schedule and billing state from the backend surface', async () => {
@@ -142,8 +157,10 @@ describe('StudentScheduleBillingPage', () => {
 
     expect(await screen.findByText('Lesson credits')).toBeTruthy();
     expect(screen.getByText('5 lesson credits')).toBeTruthy();
-    expect(screen.getByText('USD 120.00')).toBeTruthy();
+    expect(screen.getAllByText('USD 120.00')).toHaveLength(2);
     expect(screen.getByText('Package And Payment')).toBeTruthy();
+    expect(screen.getByText('Payment History')).toBeTruthy();
+    expect(screen.getByText(/Bank transfer/)).toBeTruthy();
     expect(
       screen.getByText('Credits are consumed only when a completed lesson is marked chargeable.'),
     ).toBeTruthy();
@@ -154,7 +171,9 @@ describe('StudentScheduleBillingPage', () => {
 
     await screen.findByText('Package And Payment');
     fireEvent.change(screen.getByLabelText('Lessons'), { target: { value: '10' } });
-    fireEvent.change(screen.getByLabelText('Amount'), { target: { value: '150' } });
+    fireEvent.change(screen.getAllByLabelText('Amount')[0] as HTMLElement, {
+      target: { value: '150' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Add package' }));
 
     await waitFor(() => {
@@ -182,6 +201,79 @@ describe('StudentScheduleBillingPage', () => {
         status: 'completed',
         consumesCredit: true,
       });
+    });
+  });
+
+  it('saves structured weekly recurrence rules', async () => {
+    renderPage();
+
+    expect(await screen.findByText('Lesson Planning')).toBeTruthy();
+    fireEvent.change(screen.getAllByLabelText('Timezone')[0] as HTMLElement, {
+      target: { value: 'Asia/Kolkata' },
+    });
+    fireEvent.change(screen.getByLabelText('Starts on'), { target: { value: '2026-05-11' } });
+    fireEvent.change(screen.getByLabelText('Time'), { target: { value: '09:30' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Wed' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save plan' }));
+
+    await waitFor(() => {
+      expect(apiMocks.upsertPrimaryStudentLessonRecurrence).toHaveBeenCalledWith(
+        'student-alex',
+        expect.objectContaining({
+          timezone: 'Asia/Kolkata',
+          startsOn: '2026-05-11',
+          slots: expect.arrayContaining([
+            { isoWeekday: 1, localStartTime: '09:30', durationMinutes: 60 },
+            { isoWeekday: 3, localStartTime: '09:30', durationMinutes: 60 },
+          ]),
+        }),
+      );
+    });
+  });
+
+  it('supports no-show, cancel, edit, and standalone payment actions', async () => {
+    renderPage();
+
+    await screen.findByRole('button', { name: 'No-show' });
+    fireEvent.click(screen.getByRole('button', { name: 'No-show' }));
+    await waitFor(() => {
+      expect(apiMocks.updateStudentLesson).toHaveBeenCalledWith('student-alex', 'lesson-1', {
+        status: 'no_show',
+        consumesCredit: false,
+      });
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => {
+      expect(apiMocks.updateStudentLesson).toHaveBeenCalledWith('student-alex', 'lesson-1', {
+        status: 'canceled',
+        consumesCredit: false,
+      });
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    const durationInputs = screen.getAllByLabelText('Duration');
+    fireEvent.change(durationInputs[durationInputs.length - 1] as HTMLElement, {
+      target: { value: '75' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => {
+      expect(apiMocks.updateStudentLesson).toHaveBeenCalledWith(
+        'student-alex',
+        'lesson-1',
+        expect.objectContaining({ durationMinutes: 75 }),
+      );
+    });
+
+    const paymentAmountInput = screen.getAllByLabelText('Amount')[1];
+    expect(paymentAmountInput).toBeDefined();
+    fireEvent.change(paymentAmountInput as HTMLElement, { target: { value: '90' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Record payment' }));
+    await waitFor(() => {
+      expect(apiMocks.recordStudentPayment).toHaveBeenCalledWith(
+        'student-alex',
+        expect.objectContaining({ amountMinor: 9000, currency: 'USD' }),
+      );
     });
   });
 });

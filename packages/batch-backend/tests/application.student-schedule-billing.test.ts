@@ -9,6 +9,7 @@ import {
   createStudentLesson,
   getStudentScheduleBillingSurface,
   updateStudentLesson,
+  upsertPrimaryStudentLessonRecurrence,
 } from '../src/application/student-schedule-billing.js';
 import {
   getBusinessScheduleSurface,
@@ -33,6 +34,8 @@ async function resetScheduleBillingTables() {
       `
       TRUNCATE TABLE
         workspace_business_settings,
+        student_lesson_recurrence_slots,
+        student_lesson_recurrence_rules,
         student_reminder_preferences,
         student_payment_records,
         student_credit_events,
@@ -392,6 +395,153 @@ describeIfPg('application/student-schedule-billing', () => {
       type: 'low_balance',
       channel: 'email',
     });
+  });
+
+  it('materializes weekly recurrence rules idempotently into normal lessons', async () => {
+    const { studentId, userId } = await seedStudent();
+
+    const surface = await upsertPrimaryStudentLessonRecurrence(
+      studentId,
+      {
+        timezone: 'Asia/Bangkok',
+        startsOn: '2026-05-04',
+        generationHorizonDays: 14,
+        slots: [
+          { isoWeekday: 1, localStartTime: '11:00', durationMinutes: 50 },
+          { isoWeekday: 3, localStartTime: '11:00', durationMinutes: 50 },
+        ],
+      },
+      userId,
+    );
+    const generatedLessonIds = surface.lessons
+      .filter((lesson) => lesson.recurrenceOrigin === 'generated')
+      .map((lesson) => lesson.id)
+      .sort();
+
+    expect(surface.recurrenceRule).toMatchObject({
+      timezone: 'Asia/Bangkok',
+      status: 'active',
+      generationHorizonDays: 14,
+    });
+    expect(surface.recurrenceRule?.slots).toHaveLength(2);
+    expect(generatedLessonIds.length).toBeGreaterThan(0);
+    expect(
+      surface.lessons.every((lesson) =>
+        lesson.recurrenceOrigin === 'manual' ? true : Boolean(lesson.recurrenceOccurrenceKey),
+      ),
+    ).toBe(true);
+
+    const reloaded = await getStudentScheduleBillingSurface(studentId);
+    expect(
+      reloaded?.lessons
+        .filter((lesson) => lesson.recurrenceOrigin === 'generated')
+        .map((lesson) => lesson.id)
+        .sort(),
+    ).toEqual(generatedLessonIds);
+  });
+
+  it('uses IANA timezone conversion for half-hour recurrence zones', async () => {
+    const { studentId, userId } = await seedStudent();
+    const surface = await upsertPrimaryStudentLessonRecurrence(
+      studentId,
+      {
+        timezone: 'Asia/Kolkata',
+        startsOn: '2026-05-04',
+        generationHorizonDays: 7,
+        slots: [{ isoWeekday: 1, localStartTime: '09:30', durationMinutes: 45 }],
+      },
+      userId,
+    );
+
+    const generated = surface.lessons.find((lesson) => lesson.recurrenceOrigin === 'generated');
+    expect(generated).toBeDefined();
+    expect(generated?.timezone).toBe('Asia/Kolkata');
+    expect(generated?.startsAt).toBe('2026-05-11T04:00:00.000Z');
+  });
+
+  it('feeds generated recurrence lessons into business schedule and stats', async () => {
+    const { studentId, userId } = await seedStudent();
+    await updateBusinessSettings({
+      defaultCurrency: 'USD',
+      defaultLessonRateMinor: 4000,
+      noShowRateBasisPoints: 0,
+      cancellationRateBasisPoints: 0,
+      forecastHorizonDays: 45,
+    });
+
+    await upsertPrimaryStudentLessonRecurrence(
+      studentId,
+      {
+        timezone: 'Asia/Bangkok',
+        startsOn: '2026-05-11',
+        generationHorizonDays: 21,
+        slots: [{ isoWeekday: 1, localStartTime: '11:00', durationMinutes: 50 }],
+      },
+      userId,
+    );
+
+    const schedule = await getBusinessScheduleSurface({
+      from: '2026-05-11',
+      to: '2026-05-11',
+    });
+    expect(schedule.lessons).toHaveLength(1);
+    expect(schedule.lessons[0]).toMatchObject({
+      studentId,
+      recurrenceOrigin: 'generated',
+      durationMinutes: 50,
+    });
+
+    const stats = await getBusinessStatsSurface({ month: '2026-05' });
+    expect(stats.scheduledLessons).toBeGreaterThan(0);
+    expect(stats.forecastMinor).toBe(stats.scheduledLessons * 4000);
+  });
+
+  it('keeps manual generated-lesson changes while obsolete placeholders are replaced', async () => {
+    const { studentId, userId } = await seedStudent();
+    let surface = await upsertPrimaryStudentLessonRecurrence(
+      studentId,
+      {
+        timezone: 'Asia/Bangkok',
+        startsOn: '2026-05-04',
+        generationHorizonDays: 14,
+        slots: [{ isoWeekday: 1, localStartTime: '11:00', durationMinutes: 50 }],
+      },
+      userId,
+    );
+    const generated = surface.lessons.find((lesson) => lesson.recurrenceOrigin === 'generated');
+    expect(generated).toBeDefined();
+
+    surface = await updateStudentLesson(
+      studentId,
+      generated?.id ?? '',
+      { status: 'canceled', consumesCredit: false },
+      userId,
+    );
+    expect(surface.lessons.find((lesson) => lesson.id === generated?.id)).toMatchObject({
+      recurrenceOverrideKind: 'manual_cancel',
+      status: 'canceled',
+    });
+
+    surface = await upsertPrimaryStudentLessonRecurrence(
+      studentId,
+      {
+        timezone: 'Asia/Bangkok',
+        startsOn: '2026-05-04',
+        generationHorizonDays: 14,
+        slots: [{ isoWeekday: 3, localStartTime: '11:00', durationMinutes: 50 }],
+      },
+      userId,
+    );
+
+    expect(surface.lessons.find((lesson) => lesson.id === generated?.id)).toMatchObject({
+      recurrenceOverrideKind: 'manual_cancel',
+      status: 'canceled',
+    });
+    expect(
+      surface.lessons.some(
+        (lesson) => lesson.recurrenceOrigin === 'generated' && lesson.recurrenceSlotId !== null,
+      ),
+    ).toBe(true);
   });
 
   it('self-heals workspace business settings and updates forecast defaults', async () => {

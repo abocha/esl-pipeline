@@ -287,6 +287,7 @@ vi.mock('../src/application/student-schedule-billing', () => {
     updateStudentLessonPlan: vi.fn(),
     createStudentLesson: vi.fn(),
     updateStudentLesson: vi.fn(),
+    upsertPrimaryStudentLessonRecurrence: vi.fn(),
     addStudentPackage: vi.fn(),
     adjustStudentCredits: vi.fn(),
     recordStudentPayment: vi.fn(),
@@ -424,6 +425,9 @@ export function describeHttpServerIntegrationSuite(
     );
     const mockGetStudentScheduleBillingSurface = vi.mocked(
       studentScheduleBillingModule.getStudentScheduleBillingSurface,
+    );
+    const mockUpsertPrimaryStudentLessonRecurrence = vi.mocked(
+      studentScheduleBillingModule.upsertPrimaryStudentLessonRecurrence,
     );
     const mockGetBusinessSettings = vi.mocked(teacherBusinessDashboardModule.getBusinessSettings);
     const mockUpdateBusinessSettings = vi.mocked(
@@ -1015,6 +1019,58 @@ export function describeHttpServerIntegrationSuite(
           schedulingNotes: null,
           updatedAt: null,
         },
+        recurrenceRule: null,
+        nextLesson: null,
+        lessons: [],
+        creditSummary: {
+          purchased: 0,
+          consumed: 0,
+          adjustments: 0,
+          remaining: 0,
+          lowBalanceThreshold: 2,
+          isLow: true,
+          isNegative: false,
+        },
+        creditEvents: [],
+        payments: [],
+        reminders: [],
+      });
+      mockUpsertPrimaryStudentLessonRecurrence.mockResolvedValue({
+        studentId: deriveStudentId('Anna'),
+        workspaceId: '00000000-0000-4000-8000-000000000001',
+        lessonPlan: {
+          studentId: deriveStudentId('Anna'),
+          workspaceId: '00000000-0000-4000-8000-000000000001',
+          timezone: 'UTC',
+          defaultDurationMinutes: 60,
+          cadence: null,
+          preferredTimes: null,
+          schedulingNotes: null,
+          updatedAt: null,
+        },
+        recurrenceRule: {
+          id: 'rule-1',
+          studentId: deriveStudentId('Anna'),
+          workspaceId: '00000000-0000-4000-8000-000000000001',
+          timezone: 'Asia/Bangkok',
+          frequency: 'weekly',
+          startsOn: '2026-05-11',
+          endsOn: null,
+          status: 'active',
+          generationHorizonDays: 56,
+          materializedThrough: '2026-07-06',
+          slots: [
+            {
+              id: 'slot-1',
+              ruleId: 'rule-1',
+              isoWeekday: 1,
+              localStartTime: '11:00',
+              durationMinutes: 50,
+              sortOrder: 0,
+            },
+          ],
+          updatedAt: '2026-05-08T00:00:00.000Z',
+        },
         nextLesson: null,
         lessons: [],
         creditSummary: {
@@ -1187,6 +1243,7 @@ export function describeHttpServerIntegrationSuite(
       mockListStudentProfileBindingsForStudent,
       mockGetActiveStudentProfileBindingForStudent,
       mockGetStudentScheduleBillingSurface,
+      mockUpsertPrimaryStudentLessonRecurrence,
       mockGetBusinessSettings,
       mockUpdateBusinessSettings,
       mockGetBusinessScheduleSurface,

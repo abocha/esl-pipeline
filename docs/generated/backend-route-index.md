@@ -81,6 +81,7 @@
 | GET    | `/students/:id/memory`                                    | `packages/batch-backend/src/transport/extended-routes/students-routes.ts`           |
 | GET    | `/students/:id/memory-snapshots`                          | `packages/batch-backend/src/transport/extended-routes/students-routes.ts`           |
 | PUT    | `/students/:id/operations/lesson-plan`                    | `packages/batch-backend/src/transport/extended-routes/students-routes.ts`           |
+| PUT    | `/students/:id/operations/primary-lesson-recurrence`      | `packages/batch-backend/src/transport/extended-routes/students-routes.ts`           |
 | POST   | `/students/:id/packages`                                  | `packages/batch-backend/src/transport/extended-routes/students-routes.ts`           |
 | POST   | `/students/:id/payments`                                  | `packages/batch-backend/src/transport/extended-routes/students-routes.ts`           |
 | GET    | `/students/:id/profile-candidates`                        | `packages/batch-backend/src/transport/extended-routes/students-routes.ts`           |
