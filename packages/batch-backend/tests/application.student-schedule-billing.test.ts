@@ -333,6 +333,13 @@ describeIfPg('application/student-schedule-billing', () => {
       consumesCredit: false,
       creditEventId: null,
     });
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      const result = await client.query<{ completed_by: string | null }>(
+        'SELECT completed_by FROM student_lessons WHERE id = $1',
+        [lessonId],
+      );
+      expect(result.rows[0]?.completed_by).toBeNull();
+    });
     expect(
       surface.creditEvents.filter((event) => event.eventType === 'credit_consumed'),
     ).toHaveLength(0);

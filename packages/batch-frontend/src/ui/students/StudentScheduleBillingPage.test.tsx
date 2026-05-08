@@ -401,17 +401,17 @@ describe('StudentScheduleBillingPage', () => {
     const restoreButtons = await screen.findAllByRole('button', { name: 'Restore' });
     expect(restoreButtons).toHaveLength(3);
     expect(screen.getAllByRole('button', { name: 'Edit' })).toHaveLength(3);
-    fireEvent.click(restoreButtons[0] as HTMLElement);
+    for (const restoreButton of restoreButtons) {
+      fireEvent.click(restoreButton);
+    }
 
     await waitFor(() => {
-      expect(apiMocks.updateStudentLesson).toHaveBeenCalledWith(
-        'student-alex',
-        'lesson-completed',
-        {
+      for (const lessonId of ['lesson-completed', 'lesson-no-show', 'lesson-canceled']) {
+        expect(apiMocks.updateStudentLesson).toHaveBeenCalledWith('student-alex', lessonId, {
           status: 'scheduled',
           consumesCredit: false,
-        },
-      );
+        });
+      }
     });
   });
 });

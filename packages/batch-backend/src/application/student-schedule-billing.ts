@@ -391,6 +391,7 @@ export async function updateStudentLesson(
         recurrence_override_kind = $11,
         completed_by = CASE
           WHEN $6 = 'completed' AND status <> 'completed' THEN $10
+          WHEN $6 <> 'completed' THEN NULL
           ELSE completed_by
         END,
         updated_at = NOW()
