@@ -60,4 +60,39 @@ describe('BusinessSettingsPage', () => {
     });
     expect(await screen.findByText('Business settings saved.')).toBeTruthy();
   });
+
+  it('offers a timezone picker sorted west-to-east by UTC offset', async () => {
+    render(<BusinessSettingsPage />);
+
+    const picker = await screen.findByLabelText('Timezone');
+    const options = Array.from(picker.querySelectorAll('option')).map((option) => ({
+      label: option.textContent,
+      value: option.value,
+    }));
+
+    expect(options.map((option) => option.value)).toEqual([
+      'America/Los_Angeles',
+      'America/Denver',
+      'America/Chicago',
+      'America/New_York',
+      'UTC',
+      'Europe/London',
+      'Europe/Berlin',
+      'Europe/Moscow',
+      'Asia/Dubai',
+      'Asia/Tbilisi',
+      'Asia/Almaty',
+      'Asia/Bishkek',
+      'Asia/Bangkok',
+      'Asia/Singapore',
+      'Asia/Tokyo',
+      'Australia/Sydney',
+    ]);
+    expect(options).toEqual(
+      expect.arrayContaining([
+        { value: 'Asia/Bishkek', label: 'Bishkek (UTC+6)' },
+        { value: 'Asia/Singapore', label: 'Singapore / Shanghai (UTC+8)' },
+      ]),
+    );
+  });
 });
