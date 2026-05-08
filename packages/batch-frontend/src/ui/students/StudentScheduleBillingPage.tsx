@@ -43,6 +43,22 @@ const TIMEZONE_OPTIONS = [
   { value: 'America/Los_Angeles', label: 'Los Angeles (UTC-8/-7)' },
 ];
 
+interface RecurrenceSlotForm {
+  isoWeekday: number;
+  localStartTime: string;
+  durationMinutes: string;
+}
+
+interface RecurrenceFormState {
+  timezone: string;
+  startsOn: string;
+  status: 'active' | 'paused';
+  generationHorizonDays: string;
+  localStartTime: string;
+  durationMinutes: string;
+  slots: RecurrenceSlotForm[];
+}
+
 const DATE_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
   month: 'short',
   day: 'numeric',
@@ -120,10 +136,10 @@ export const StudentScheduleBillingPage: React.FC = () => {
     startsOn: todayInput(),
     status: 'active' as 'active' | 'paused',
     generationHorizonDays: '56',
-    selectedWeekdays: [1],
     localStartTime: '11:00',
     durationMinutes: '60',
-  });
+    slots: [{ isoWeekday: 1, localStartTime: '11:00', durationMinutes: '60' }],
+  } satisfies RecurrenceFormState);
   const [packageForm, setPackageForm] = useState({
     lessons: '8',
     amountMajor: '',
@@ -296,10 +312,10 @@ export const StudentScheduleBillingPage: React.FC = () => {
                     startsOn: recurrenceForm.startsOn,
                     status: recurrenceForm.status,
                     generationHorizonDays: Number(recurrenceForm.generationHorizonDays),
-                    slots: recurrenceForm.selectedWeekdays.map((weekday) => ({
-                      isoWeekday: weekday,
-                      localStartTime: recurrenceForm.localStartTime,
-                      durationMinutes: Number(recurrenceForm.durationMinutes),
+                    slots: recurrenceForm.slots.map((slot) => ({
+                      isoWeekday: slot.isoWeekday,
+                      localStartTime: slot.localStartTime,
+                      durationMinutes: Number(slot.durationMinutes),
                     })),
                   }),
                 ),
@@ -329,7 +345,14 @@ export const StudentScheduleBillingPage: React.FC = () => {
                 type="number"
                 value={recurrenceForm.durationMinutes}
                 onChange={(event) => {
-                  setRecurrenceForm({ ...recurrenceForm, durationMinutes: event.target.value });
+                  setRecurrenceForm({
+                    ...recurrenceForm,
+                    durationMinutes: event.target.value,
+                    slots: recurrenceForm.slots.map((slot) => ({
+                      ...slot,
+                      durationMinutes: event.target.value,
+                    })),
+                  });
                   setPlanForm({ ...planForm, defaultDurationMinutes: event.target.value });
                 }}
               />
@@ -350,7 +373,14 @@ export const StudentScheduleBillingPage: React.FC = () => {
                 type="time"
                 value={recurrenceForm.localStartTime}
                 onChange={(event) =>
-                  setRecurrenceForm({ ...recurrenceForm, localStartTime: event.target.value })
+                  setRecurrenceForm({
+                    ...recurrenceForm,
+                    localStartTime: event.target.value,
+                    slots: recurrenceForm.slots.map((slot) => ({
+                      ...slot,
+                      localStartTime: event.target.value,
+                    })),
+                  })
                 }
               />
             </label>
@@ -387,21 +417,36 @@ export const StudentScheduleBillingPage: React.FC = () => {
             <fieldset className="student-schedule-billing-weekdays">
               <legend>Repeats weekly</legend>
               {WEEKDAYS.map((weekday) => {
-                const selected = recurrenceForm.selectedWeekdays.includes(weekday.value);
+                const selected = recurrenceForm.slots.some(
+                  (slot) => slot.isoWeekday === weekday.value,
+                );
                 return (
                   <button
                     key={weekday.value}
                     type="button"
                     className={selected ? 'selected' : ''}
                     onClick={() => {
-                      const selectedWeekdays = selected
-                        ? recurrenceForm.selectedWeekdays.filter((value) => value !== weekday.value)
-                        : [...recurrenceForm.selectedWeekdays, weekday.value].sort();
+                      const slots = selected
+                        ? recurrenceForm.slots.filter((slot) => slot.isoWeekday !== weekday.value)
+                        : [
+                            ...recurrenceForm.slots,
+                            {
+                              isoWeekday: weekday.value,
+                              localStartTime: recurrenceForm.localStartTime,
+                              durationMinutes: recurrenceForm.durationMinutes,
+                            },
+                          ].sort((left, right) => left.isoWeekday - right.isoWeekday);
                       setRecurrenceForm({
                         ...recurrenceForm,
-                        selectedWeekdays: selectedWeekdays.length
-                          ? selectedWeekdays
-                          : [weekday.value],
+                        slots: slots.length
+                          ? slots
+                          : [
+                              {
+                                isoWeekday: weekday.value,
+                                localStartTime: recurrenceForm.localStartTime,
+                                durationMinutes: recurrenceForm.durationMinutes,
+                              },
+                            ],
                       });
                     }}
                   >
@@ -410,6 +455,54 @@ export const StudentScheduleBillingPage: React.FC = () => {
                 );
               })}
             </fieldset>
+            <div className="student-schedule-billing-slot-grid student-schedule-billing-wide">
+              {recurrenceForm.slots.map((slot) => {
+                const weekday = WEEKDAYS.find((item) => item.value === slot.isoWeekday);
+                const label = weekday?.label ?? `Day ${slot.isoWeekday}`;
+                return (
+                  <div className="student-schedule-billing-slot-row" key={slot.isoWeekday}>
+                    <strong>{label}</strong>
+                    <label>
+                      Time
+                      <input
+                        aria-label={`${label} time`}
+                        type="time"
+                        value={slot.localStartTime}
+                        onChange={(event) =>
+                          setRecurrenceForm({
+                            ...recurrenceForm,
+                            slots: recurrenceForm.slots.map((current) =>
+                              current.isoWeekday === slot.isoWeekday
+                                ? { ...current, localStartTime: event.target.value }
+                                : current,
+                            ),
+                          })
+                        }
+                      />
+                    </label>
+                    <label>
+                      Duration
+                      <input
+                        aria-label={`${label} duration`}
+                        min="1"
+                        type="number"
+                        value={slot.durationMinutes}
+                        onChange={(event) =>
+                          setRecurrenceForm({
+                            ...recurrenceForm,
+                            slots: recurrenceForm.slots.map((current) =>
+                              current.isoWeekday === slot.isoWeekday
+                                ? { ...current, durationMinutes: event.target.value }
+                                : current,
+                            ),
+                          })
+                        }
+                      />
+                    </label>
+                  </div>
+                );
+              })}
+            </div>
             <label className="student-schedule-billing-wide">
               Scheduling notes
               <textarea
@@ -838,30 +931,31 @@ export const StudentScheduleBillingPage: React.FC = () => {
 
 function setRecurrenceFormFromSurface(
   surface: StudentScheduleBillingSurface,
-  setRecurrenceForm: React.Dispatch<
-    React.SetStateAction<{
-      timezone: string;
-      startsOn: string;
-      status: 'active' | 'paused';
-      generationHorizonDays: string;
-      selectedWeekdays: number[];
-      localStartTime: string;
-      durationMinutes: string;
-    }>
-  >,
+  setRecurrenceForm: React.Dispatch<React.SetStateAction<RecurrenceFormState>>,
 ) {
   const firstSlot = surface.recurrenceRule?.slots[0];
+  const slots = surface.recurrenceRule?.slots.length
+    ? surface.recurrenceRule.slots.map((slot) => ({
+        isoWeekday: slot.isoWeekday,
+        localStartTime: slot.localStartTime,
+        durationMinutes: String(slot.durationMinutes),
+      }))
+    : [
+        {
+          isoWeekday: 1,
+          localStartTime: '11:00',
+          durationMinutes: String(surface.lessonPlan.defaultDurationMinutes),
+        },
+      ];
   setRecurrenceForm({
     timezone: surface.recurrenceRule?.timezone ?? surface.lessonPlan.timezone,
     startsOn: surface.recurrenceRule?.startsOn ?? todayInput(),
     status: surface.recurrenceRule?.status === 'paused' ? 'paused' : 'active',
     generationHorizonDays: String(surface.recurrenceRule?.generationHorizonDays ?? 56),
-    selectedWeekdays: surface.recurrenceRule?.slots.length
-      ? surface.recurrenceRule.slots.map((slot) => slot.isoWeekday)
-      : [1],
     localStartTime: firstSlot?.localStartTime ?? '11:00',
     durationMinutes: String(
       firstSlot?.durationMinutes ?? surface.lessonPlan.defaultDurationMinutes,
     ),
+    slots,
   });
 }

@@ -183,6 +183,31 @@
   color: #fff;
 }
 
+.student-schedule-billing-slot-grid {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.student-schedule-billing-slot-row {
+  display: grid;
+  align-items: end;
+  gap: 0.5rem;
+  grid-template-columns: minmax(3rem, auto) repeat(2, minmax(110px, 1fr));
+  padding: 0.65rem;
+  border: 1px solid var(--student-area-line);
+  border-radius: var(--student-area-radius-sm);
+  background: rgba(255, 253, 248, 0.58);
+}
+
+.student-schedule-billing-slot-row strong {
+  color: var(--student-area-blue);
+}
+
+.student-schedule-billing-slot-row label {
+  display: grid;
+  gap: 0.35rem;
+}
+
 .student-schedule-billing-list-row span,
 .student-schedule-billing-reminder span {
   display: grid;
@@ -223,6 +248,10 @@
 @media (max-width: 760px) {
   .student-schedule-billing-list-row {
     align-items: start;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .student-schedule-billing-slot-row {
     grid-template-columns: minmax(0, 1fr);
   }
 }

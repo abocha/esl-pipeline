@@ -122,6 +122,12 @@ interface RecurrenceSlotRow {
   sort_order: number;
 }
 
+interface NormalizedRecurrenceSlot {
+  isoWeekday: number;
+  localStartTime: string;
+  durationMinutes: number;
+}
+
 interface ReminderPreferences {
   preferredChannel: 'manual' | 'telegram' | 'email';
   lowBalanceThreshold: number;
@@ -224,6 +230,14 @@ export async function upsertPrimaryStudentLessonRecurrence(
       params.generationHorizonDays ??
       existing?.generation_horizon_days ??
       DEFAULT_GENERATION_HORIZON_DAYS;
+    if (!Number.isInteger(horizon) || horizon < 7 || horizon > 366) {
+      throw new StudentScheduleBillingError(
+        'invalid_request',
+        400,
+        'Recurrence generation horizon must be between 7 and 366 days',
+      );
+    }
+    const existingSlots = existing ? await listRecurrenceSlots(client, existing.id) : [];
 
     await client.query(
       `
@@ -266,22 +280,30 @@ export async function upsertPrimaryStudentLessonRecurrence(
       ],
     );
 
-    await markFutureGeneratedLessonsObsolete(client, ruleId, actorUserId ?? null);
-    await client.query('DELETE FROM student_lesson_recurrence_slots WHERE rule_id = $1', [ruleId]);
-    for (const [index, slot] of slots.entries()) {
+    const currentSlots = await replaceRecurrenceSlots(client, ruleId, slots, existingSlots);
+    const desiredOccurrenceKeys = buildDesiredOccurrenceKeys({
+      timezone,
+      startsOn,
+      endsOn,
+      status,
+      generationHorizonDays: horizon,
+      slots: currentSlots,
+    });
+    await markFutureGeneratedLessonsObsolete(
+      client,
+      ruleId,
+      actorUserId ?? null,
+      desiredOccurrenceKeys,
+    );
+    if (desiredOccurrenceKeys.size === 0) {
       await client.query(
         `
-        INSERT INTO student_lesson_recurrence_slots (
-          id,
-          rule_id,
-          iso_weekday,
-          local_start_time,
-          duration_minutes,
-          sort_order
-        )
-        VALUES ($1, $2, $3, $4::time, $5, $6)
+        UPDATE student_lesson_recurrence_rules
+        SET materialized_through = NULL,
+            updated_at = NOW()
+        WHERE id = $1
         `,
-        [randomUUID(), ruleId, slot.isoWeekday, slot.localStartTime, slot.durationMinutes, index],
+        [ruleId],
       );
     }
 
@@ -613,6 +635,55 @@ async function listRecurrenceSlots(
   return result.rows;
 }
 
+async function replaceRecurrenceSlots(
+  client: PoolClient,
+  ruleId: string,
+  slots: NormalizedRecurrenceSlot[],
+  existingSlots: RecurrenceSlotRow[],
+): Promise<RecurrenceSlotRow[]> {
+  const existingByIdentity = new Map(
+    existingSlots.map((slot) => [recurrenceSlotIdentityFromRow(slot), slot]),
+  );
+  const currentSlotIds: string[] = [];
+
+  for (const [index, slot] of slots.entries()) {
+    const existing = existingByIdentity.get(recurrenceSlotIdentity(slot));
+    const slotId = existing?.id ?? randomUUID();
+    currentSlotIds.push(slotId);
+    await client.query(
+      `
+      INSERT INTO student_lesson_recurrence_slots (
+        id,
+        rule_id,
+        iso_weekday,
+        local_start_time,
+        duration_minutes,
+        sort_order
+      )
+      VALUES ($1, $2, $3, $4::time, $5, $6)
+      ON CONFLICT (id) DO UPDATE
+      SET
+        iso_weekday = EXCLUDED.iso_weekday,
+        local_start_time = EXCLUDED.local_start_time,
+        duration_minutes = EXCLUDED.duration_minutes,
+        sort_order = EXCLUDED.sort_order
+      `,
+      [slotId, ruleId, slot.isoWeekday, slot.localStartTime, slot.durationMinutes, index],
+    );
+  }
+
+  await client.query(
+    `
+    DELETE FROM student_lesson_recurrence_slots
+    WHERE rule_id = $1
+      AND NOT (id = ANY($2::uuid[]))
+    `,
+    [ruleId, currentSlotIds],
+  );
+
+  return listRecurrenceSlots(client, ruleId);
+}
+
 async function materializeStudentRecurrenceForContext(
   client: PoolClient,
   context: StudentContext,
@@ -696,7 +767,7 @@ async function materializeStudentRecurrenceForContext(
   await client.query(
     `
     UPDATE student_lesson_recurrence_rules
-    SET materialized_through = GREATEST(COALESCE(materialized_through, $2::date), $2::date),
+    SET materialized_through = $2::date,
         updated_at = NOW()
     WHERE id = $1
     `,
@@ -741,7 +812,11 @@ async function markFutureGeneratedLessonsObsolete(
   client: PoolClient,
   ruleId: string,
   actorUserId: string | null,
+  desiredOccurrenceKeys: Set<string>,
 ): Promise<void> {
+  const desiredKeys = [...desiredOccurrenceKeys];
+  const desiredKeyClause =
+    desiredKeys.length > 0 ? 'AND NOT (recurrence_occurrence_key = ANY($3::text[]))' : '';
   await client.query(
     `
     UPDATE student_lessons
@@ -756,8 +831,9 @@ async function markFutureGeneratedLessonsObsolete(
       AND status = 'scheduled'
       AND starts_at >= NOW()
       AND recurrence_obsolete_at IS NULL
+      ${desiredKeyClause}
     `,
-    [ruleId, actorUserId],
+    desiredKeys.length > 0 ? [ruleId, actorUserId, desiredKeys] : [ruleId, actorUserId],
   );
 }
 
@@ -1127,7 +1203,11 @@ function normalizeRecurrenceSlots(slots: UpsertStudentLessonRecurrenceRequest['s
         'Invalid recurrence start time',
       );
     }
-    if (!Number.isInteger(slot.durationMinutes) || slot.durationMinutes <= 0) {
+    if (
+      !Number.isInteger(slot.durationMinutes) ||
+      slot.durationMinutes <= 0 ||
+      slot.durationMinutes > 24 * 60
+    ) {
       throw new StudentScheduleBillingError('invalid_request', 400, 'Invalid recurrence duration');
     }
     return {
@@ -1136,6 +1216,44 @@ function normalizeRecurrenceSlots(slots: UpsertStudentLessonRecurrenceRequest['s
       durationMinutes: slot.durationMinutes,
     };
   });
+}
+
+function recurrenceSlotIdentity(slot: NormalizedRecurrenceSlot): string {
+  return `${slot.isoWeekday}|${slot.localStartTime}|${slot.durationMinutes}`;
+}
+
+function recurrenceSlotIdentityFromRow(slot: RecurrenceSlotRow): string {
+  return recurrenceSlotIdentity({
+    isoWeekday: slot.iso_weekday,
+    localStartTime: slot.local_start_time.slice(0, 5),
+    durationMinutes: slot.duration_minutes,
+  });
+}
+
+function buildDesiredOccurrenceKeys(params: {
+  timezone: string;
+  startsOn: string;
+  endsOn: string | null;
+  status: RecurrenceRuleRow['status'];
+  generationHorizonDays: number;
+  slots: RecurrenceSlotRow[];
+}): Set<string> {
+  if (params.status !== 'active' || params.slots.length === 0) {
+    return new Set();
+  }
+  const today = toDateInputInTimeZone(new Date(), normalizeTimezone(params.timezone));
+  const fromDate = compareDateInputs(params.startsOn, today) > 0 ? params.startsOn : today;
+  const horizonEnd = addDaysToDateInput(today, params.generationHorizonDays);
+  const throughDate =
+    params.endsOn && compareDateInputs(params.endsOn, horizonEnd) < 0 ? params.endsOn : horizonEnd;
+  if (compareDateInputs(throughDate, fromDate) < 0) {
+    return new Set();
+  }
+  return new Set(
+    buildWeeklyOccurrences(fromDate, throughDate, params.slots).map(
+      (occurrence) => occurrence.occurrenceKey,
+    ),
+  );
 }
 
 function buildWeeklyOccurrences(
@@ -1198,6 +1316,7 @@ function getNextOverrideKind(
     nextStartsAt !== existing.starts_at.toISOString() ||
     params.durationMinutes !== undefined ||
     params.timezone !== undefined ||
+    params.consumesCredit !== undefined ||
     params.title !== undefined ||
     params.notes !== undefined
   ) {
