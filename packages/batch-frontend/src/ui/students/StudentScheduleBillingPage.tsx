@@ -678,69 +678,86 @@ export const StudentScheduleBillingPage: React.FC = () => {
                 {lesson.recurrenceOrigin === 'generated' ? (
                   <StudentAreaStatusPill tone="quiet">generated</StudentAreaStatusPill>
                 ) : null}
-                {lesson.status === 'scheduled' ? (
-                  <div className="student-schedule-billing-actions">
+                <div className="student-schedule-billing-actions">
+                  {lesson.status === 'scheduled' ? (
+                    <>
+                      <button
+                        type="button"
+                        disabled={saving === lesson.id}
+                        onClick={() => {
+                          void runAction(lesson.id, () =>
+                            updateStudentLesson(studentId, lesson.id, {
+                              status: 'completed',
+                              consumesCredit: true,
+                            }),
+                          );
+                        }}
+                      >
+                        Complete
+                      </button>
+                      <button
+                        type="button"
+                        disabled={saving === lesson.id}
+                        onClick={() => {
+                          void runAction(lesson.id, () =>
+                            updateStudentLesson(studentId, lesson.id, {
+                              status: 'no_show',
+                              consumesCredit: false,
+                            }),
+                          );
+                        }}
+                      >
+                        No-show
+                      </button>
+                      <button
+                        type="button"
+                        disabled={saving === lesson.id}
+                        onClick={() => {
+                          void runAction(lesson.id, () =>
+                            updateStudentLesson(studentId, lesson.id, {
+                              status: 'canceled',
+                              consumesCredit: false,
+                            }),
+                          );
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
                     <button
                       type="button"
                       disabled={saving === lesson.id}
                       onClick={() => {
                         void runAction(lesson.id, () =>
                           updateStudentLesson(studentId, lesson.id, {
-                            status: 'completed',
-                            consumesCredit: true,
-                          }),
-                        );
-                      }}
-                    >
-                      Complete
-                    </button>
-                    <button
-                      type="button"
-                      disabled={saving === lesson.id}
-                      onClick={() => {
-                        void runAction(lesson.id, () =>
-                          updateStudentLesson(studentId, lesson.id, {
-                            status: 'no_show',
+                            status: 'scheduled',
                             consumesCredit: false,
                           }),
                         );
                       }}
                     >
-                      No-show
+                      Restore
                     </button>
-                    <button
-                      type="button"
-                      disabled={saving === lesson.id}
-                      onClick={() => {
-                        void runAction(lesson.id, () =>
-                          updateStudentLesson(studentId, lesson.id, {
-                            status: 'canceled',
-                            consumesCredit: false,
-                          }),
-                        );
-                      }}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      disabled={saving === lesson.id}
-                      onClick={() => {
-                        setEditingLessonId(lesson.id);
-                        setLessonEditForm({
-                          startsAt: toDateTimeLocal(lesson.startsAt),
-                          durationMinutes: String(lesson.durationMinutes),
-                          timezone: lesson.timezone,
-                          title: lesson.title ?? '',
-                          notes: lesson.notes ?? '',
-                          consumesCredit: lesson.consumesCredit,
-                        });
-                      }}
-                    >
-                      Edit
-                    </button>
-                  </div>
-                ) : null}
+                  )}
+                  <button
+                    type="button"
+                    disabled={saving === lesson.id}
+                    onClick={() => {
+                      setEditingLessonId(lesson.id);
+                      setLessonEditForm({
+                        startsAt: toDateTimeLocal(lesson.startsAt),
+                        durationMinutes: String(lesson.durationMinutes),
+                        timezone: lesson.timezone,
+                        title: lesson.title ?? '',
+                        notes: lesson.notes ?? '',
+                        consumesCredit: lesson.consumesCredit,
+                      });
+                    }}
+                  >
+                    Edit
+                  </button>
+                </div>
                 {editingLessonId === lesson.id ? (
                   <form
                     className="student-schedule-billing-edit-form"

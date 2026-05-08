@@ -11,7 +11,7 @@ const apiMocks = vi.hoisted(() => ({
 
 vi.mock('../../utils/api', () => apiMocks);
 
-function makeSurface() {
+function makeSurface(overrides: Record<string, unknown> = {}) {
   return {
     workspaceId: 'workspace-1',
     from: '2026-05-07',
@@ -85,6 +85,7 @@ function makeSurface() {
         method: null,
       },
     ],
+    ...overrides,
   };
 }
 
@@ -123,6 +124,37 @@ describe('BusinessSchedulePage', () => {
       expect(apiMocks.updateStudentLesson).toHaveBeenCalledWith('student-alex', 'lesson-1', {
         status: 'completed',
         consumesCredit: true,
+      });
+    });
+  });
+
+  it('restores completed lessons from the agenda', async () => {
+    apiMocks.getBusinessScheduleSurface.mockResolvedValue(
+      makeSurface({
+        lessons: [
+          {
+            ...(makeSurface().lessons[0] as Record<string, unknown>),
+            status: 'completed',
+            consumesCredit: true,
+            creditEventId: 'credit-event-1',
+          },
+        ],
+      }),
+    );
+
+    render(
+      <MemoryRouter>
+        <BusinessSchedulePage />
+      </MemoryRouter>,
+    );
+
+    await screen.findByRole('button', { name: 'Restore' });
+    fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
+
+    await waitFor(() => {
+      expect(apiMocks.updateStudentLesson).toHaveBeenCalledWith('student-alex', 'lesson-1', {
+        status: 'scheduled',
+        consumesCredit: false,
       });
     });
   });

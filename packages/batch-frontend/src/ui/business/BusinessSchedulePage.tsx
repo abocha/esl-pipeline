@@ -43,7 +43,7 @@ export const BusinessSchedulePage: React.FC = () => {
 
   const runLessonStatus = async (
     lesson: NonNullable<BusinessScheduleSurface['lessons'][number]>,
-    status: 'completed' | 'no_show' | 'canceled',
+    status: 'scheduled' | 'completed' | 'no_show' | 'canceled',
   ) => {
     setSavingLessonId(lesson.id);
     setError(null);
@@ -148,7 +148,15 @@ export const BusinessSchedulePage: React.FC = () => {
                           Cancel
                         </button>
                       </>
-                    ) : null}
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={savingLessonId === lesson.id}
+                        onClick={() => void runLessonStatus(lesson, 'scheduled')}
+                      >
+                        Restore
+                      </button>
+                    )}
                   </div>
                 </article>
               ))
