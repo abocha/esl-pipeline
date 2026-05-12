@@ -5,7 +5,7 @@
 - Audience: founder-maintainer and AI execution support.
 - Read Time: 5 minutes.
 - Authority Level: V1 execution source of truth.
-- Last Verified Against: 2026-04-09 repo state.
+- Last Verified Against: 2026-05-12 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: weekly while V1 execution remains active.
 - Status: `roadmap`.
@@ -36,15 +36,15 @@ Historical shipped detail moved to:
 
 ## Current Focus
 
-- Active workstream: `Stabilization and gate review`
+- Active workstream: `MVP readiness evidence`
 - Current objective:
-  - verify WS2B + WS3/WS3.5 stability
-  - confirm readiness drift and quota-window behavior
-  - record the current WS5 go/no-go state explicitly
+  - collect founder-operator evidence against the North Star
+  - verify one real assignment run can publish within the target time
+  - confirm lesson-credit/payment tracking is usable from the student and business surfaces
 - Today `Now` slice:
-  - run stabilization checks
-  - update the go/no-go note
-  - attach one evidence line
+  - run one timed founder-operator assignment flow
+  - record whether draft generation, validation, publish, audio, and lesson-credit tracking complete without manual fallback
+  - attach one evidence line with timing, provider/model, and any support intervention
 
 ## Delivery Rules
 
@@ -62,9 +62,38 @@ Historical shipped detail moved to:
 | WS2A preset plumbing MVP       | complete    | shipped                               |
 | WS2B direct LLM generation     | complete    | shipped                               |
 | WS3 TTS abstraction + fallback | complete    | shipped                               |
-| WS5 cost and quota policy      | parked      | depends on stabilized usage telemetry |
-| WS4 CRM-lite lesson ledger     | parked      | depends on stable assignment flow     |
-| Stabilization and gate review  | in progress | current active lane                   |
+| WS5 cost and quota policy      | complete    | MVP guardrails shipped; monitor usage |
+| WS4 CRM-lite lesson ledger     | complete    | MVP student/business surfaces shipped |
+| Stabilization and gate review  | complete    | current release-tip checks passed     |
+| MVP readiness evidence         | in progress | current active lane                   |
+
+## Latest Evidence
+
+- 2026-05-12 release-tip stabilization:
+  - `pnpm docs:check` passed on `v6.5.1`.
+  - `pnpm check:fast` passed on `v6.5.1`:
+    - orchestrator boundary guard passed
+    - contract-version consistency passed (`db: 0.12.0`, latest migration `0028_student_lesson_recurrence_core`)
+    - workspace build and lint passed
+    - prebuilt fast unit lanes passed:
+      - orchestrator: 19 files / 75 tests
+      - batch-frontend: 35 files / 193 tests
+      - batch-backend: 100 files / 563 tests
+
+## MVP Completion Audit
+
+Prompt-to-artifact checklist for the current MVP definition:
+
+| Requirement                                                                                      | Evidence                                                                                                                                        | State                         |
+| ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| Guided assignment flow from recording/transcript to draft, validation, publish, and job tracking | Backend/frontend alignment marks recording, prompt package, draft, publish approve, and job actions done; `pnpm check:fast` passed on `v6.5.1`. | Implemented; needs timed run  |
+| One trusted `general-english` preset content track and DB-canonical prompt governance            | Product scope and prompt-gallery docs route to `hw_prompt_definitive.md`; prompt catalog runtime is DB-canonical in alignment tracker.          | Implemented                   |
+| Direct LLM draft generation through backend API and guided UX                                    | `POST /generation/drafts`, `GenerateDraft*` DTOs, generation provider/model selection, and quota UI tests are present.                          | Implemented                   |
+| Low-cost/non-premium TTS fallback plus provider abstraction                                      | Alignment tracker marks direct generation, TTS fallback, and safety guardrails shipped; contract/provider tests are in fast lane.               | Implemented                   |
+| Cost/quota guardrails for generation                                                             | `GenerationQuotaView`, budget counters, quota-window helper/tests, and backend budget guard are present; release-tip fast checks passed.        | MVP complete; monitor usage   |
+| CRM-lite lesson ledger and remaining lesson visibility                                           | Schedule & Billing records lesson credits/payments/lessons/reminders; business schedule/stats link to student schedule-billing surfaces.        | Implemented                   |
+| Objective readiness proof against North Star (`<=12 min`, no manual fallback, reliable tracking) | No current real timed founder-operator run is recorded in this tracker.                                                                         | Missing; current active slice |
+| Broader beta readiness evidence from real tutors                                                 | Product readiness doc requires real repeated tutor use and two green weeks before broadening beta.                                              | Not achieved; post-MVP gating |
 
 ## Current Gate Checks
 
@@ -79,6 +108,8 @@ Targeted follow-through depends on the current slice:
 
 - readiness / quota / provider behavior:
   - inspect the relevant backend telemetry and UI signals
+- founder-operator MVP proof:
+  - record one timed assignment flow and lesson-credit tracking pass/fail in this tracker
 - workflow-specific implementation:
   - use the active plan/topic README rather than reopening archived history
 
