@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [6.5.2] - 2026-05-12
+
+### Changed
+
+- Automated release from PR #74: fix(batch-backend): enqueue auto-published drafts (https://github.com/abocha/esl-pipeline/pull/74)
+
 ## [6.5.1] - 2026-05-12
 
 ### Changed
