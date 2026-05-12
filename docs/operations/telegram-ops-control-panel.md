@@ -5,7 +5,7 @@
 - Audience: maintainers and operators running Telegram-based operational controls.
 - Read Time: 5 minutes.
 - Authority Level: operations runbook.
-- Last Verified Against: 2026-03-14 repo state.
+- Last Verified Against: 2026-05-12 repo state.
 - Owner: backend/ops maintainers + automation agents.
 - Review Cadence: monthly or after bot/control-surface changes.
 - Status: `runbook`.

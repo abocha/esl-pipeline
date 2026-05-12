@@ -5,7 +5,7 @@
 - Audience: AI agents and maintainers.
 - Read Time: 1 minute.
 - Authority Level: Design router.
-- Last Verified Against: 2026-03-13 repo state.
+- Last Verified Against: 2026-05-12 repo state.
 - Owner: backend/frontend maintainers + automation agents.
 - Review Cadence: monthly or after transcription-flow changes.
 - Status: `router`.

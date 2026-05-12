@@ -5,7 +5,10 @@
 - Audience: Founder, maintainers, product and engineering collaborators.
 - Read Time: 10 minutes.
 - Authority Level: Product direction and readiness scaffold.
-- Last Verified Against: 2026-02-10 repo strategy.
+- Last Verified Against: 2026-05-12 repo state.
+- Owner: founder-maintainer + product/engineering collaborators.
+- Review Cadence: monthly or after product-surface milestone changes.
+- Status: `reference`.
 
 ## Purpose
 
@@ -44,7 +47,7 @@ The product is successful when it consistently does all three:
   - Prompt Workspace foundations,
   - one trusted shipped preset content track: `general-english`,
   - canonical baseline prompt: `docs/prompt-gallery/templates/hw_prompt_definitive.md`.
-- Direct LLM generation through backend API (deferred until preset plumbing MVP passes acceptance criteria).
+- Direct LLM generation through backend API and guided assignment UX.
 - At least one low-cost TTS fallback in addition to premium providers.
 - Basic CRM-lite ledger:
   - student package purchase tracking,
@@ -75,9 +78,21 @@ Suggested package ownership:
 - Pipeline integration points: `packages/orchestrator`, `packages/tts-core`, `packages/tts-provider-*`
 - Tutor UX and dashboard: `packages/batch-frontend`
 
-## 8-Week Execution Roadmap
+## Current Implementation Baseline
 
-### Weeks 1-2: Preset Foundation + Provider Seams
+The roadmap below is the original readiness sequence, but several target surfaces are now live:
+
+- direct draft generation is exposed through `POST /generation/drafts` and the minimal assignment
+  flow
+- dedicated student-area pages are live for `Overview`, `Learning`, `History`, and Schedule &
+  Billing
+- Schedule & Billing records lesson credits, lessons, payments, recurrence preferences, and
+  reminders
+- teacher business schedule/stats views summarize lesson-credit and payment state
+
+## Readiness Roadmap
+
+### Preset Foundation + Provider Seams
 
 - Implement Preset V2 plumbing:
   - learning preset model,
@@ -92,7 +107,7 @@ Exit criteria:
 - `general-english` preset works end-to-end with schema-aware flow.
 - System can add more presets/tracks without rewrites.
 
-### Weeks 3-4: Preset Plumbing Completion + Preview
+### Preset Plumbing Completion + Preview
 
 - Add Prompt Workspace editing/versioning workflow for learning presets.
 - Add draft preview requirement in assignment workflow using internal HTML preview renderer path.
@@ -105,7 +120,7 @@ Exit criteria:
 - Preset version provenance is captured in assignment flow.
 - Baseline prompt governance (snapshot + alias) is operationally documented.
 
-### Weeks 5-6: Direct LLM Generation (Post-Plumbing)
+### Direct LLM Generation
 
 - Add backend generation endpoint and service path.
 - Connect frontend flow to generated drafts directly.
@@ -116,7 +131,7 @@ Exit criteria:
 - Tutor can generate draft from UI without copy-paste.
 - Generation uses Preset V2 contracts and versioned preset context.
 
-### Weeks 7-8: Low-Cost TTS Path + Spend Controls
+### Low-Cost TTS Path + Spend Controls
 
 - Integrate at least one low-cost/free-viable TTS provider path.
 - Add monthly and per-request limits with visible UX feedback.
@@ -127,7 +142,7 @@ Exit criteria:
 - Audio generation works without premium-only dependency.
 - Budget controls prevent unexpected provider spend spikes.
 
-### Weeks 9-10: CRM-lite Ledger and Tutor Dashboard
+### CRM-lite Ledger and Tutor Dashboard
 
 - Add lesson package purchase records.
 - Add lesson consumption events tied to delivered lessons.

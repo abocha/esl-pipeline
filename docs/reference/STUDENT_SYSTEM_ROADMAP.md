@@ -4,7 +4,7 @@
 
 - Audience: maintainers, backend/frontend agents.
 - Authority Level: implementation roadmap.
-- Last Verified Against: 2026-03-13 repo state.
+- Last Verified Against: 2026-05-12 repo state.
 - Owner: backend/frontend maintainers + automation agents.
 - Review Cadence: monthly or after student-system milestone changes.
 - Status: `roadmap`.
@@ -20,8 +20,11 @@
 - profile revisions and binding history are live
 - prompt lineage and drift metadata are live
 - student timeline and job provenance are live
-- student workspace route is live, but it is still an interim all-in-one surface rather than the
-  long-term student-area architecture
+- dedicated student-area routes are live for `Overview`, `Learning`, `History`, and Schedule &
+  Billing
+- the legacy all-in-one workspace route remains as a compatibility/maintenance surface
+- Schedule & Billing now owns lesson credits, payments, reminders, and operational scheduling
+  state; teacher business dashboard views link back to each student's schedule-billing surface
 
 ## Return-To-Track Checklist
 
@@ -35,7 +38,7 @@
 
 ## Locked Decisions
 
-1. Delivery stays phased (`A` through `E`).
+1. Delivery stays phased (`A` through `H`).
 2. Student/profile data is DB-backed source-of-truth.
 3. Prompt templates/profiles are versioned artifacts, not only filesystem assets.
 4. Legacy filesystem data is migration input, not runtime truth.
@@ -80,15 +83,14 @@
 
 ### Phase E: Student workspace UX
 
-- status: in progress
+- status: complete / maintenance
 - current outcome:
   - workspace route is live
   - profile/binding management is live
   - assignment history, timeline, and provenance panels are live
 - remaining focus:
-  - keep the current workspace operational while the future student area is designed and built
+  - keep the current workspace operational while traffic moves to the dedicated student-area pages
   - destructive-action guardrails
-  - smoother tutor workflow ergonomics until the new page model replaces the current surface
   - operator-facing chronology cleanup in memory overview panels
     - current `Recent homework memory` can look misleading after backfills because the backend
       overview selects by homework-memory generation recency while the UI displays assignment
@@ -125,18 +127,23 @@
 
 ### Phase H: Student area redesign and operational expansion
 
-- status: planned
-- target outcome:
-  - dedicated student-area page model:
+- status: in progress
+- current outcome:
+  - dedicated student-area page model is live:
     - `Overview`
     - `Learning`
     - `Schedule & Billing`
     - `History`
+  - route-level backend surfaces are live for overview, learning, history, and schedule-billing
+  - schedule/billing records lesson credits, lessons, payments, recurrence preferences, and
+    reminders
+  - business schedule/stats views summarize operational state and deep-link into student
+    schedule-billing pages
+- remaining focus:
   - structured canonical learner profile replacing markdown authoring as the long-term product
     model
-  - cleaner separation between pedagogy, operations, and business state
-  - future-ready scheduling, reminder, and accounting surfaces without overloading the learning
-    profile
+  - continued visual convergence across student-area pages
+  - adoption cleanup as the old workspace becomes less central
 - active docs:
   - [`docs/plans/student-area-redesign/README.md`](../plans/student-area-redesign/README.md)
   - [`docs/reference/SCHEDULE_BILLING_PRODUCT_DECISIONS.md`](SCHEDULE_BILLING_PRODUCT_DECISIONS.md)

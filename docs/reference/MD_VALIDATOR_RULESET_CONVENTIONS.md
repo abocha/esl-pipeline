@@ -5,7 +5,7 @@
 - Audience: maintainers and AI agents changing markdown validation behavior.
 - Read Time: 4 minutes.
 - Authority Level: validator design conventions.
-- Last Verified Against: 2026-03-04 repo state.
+- Last Verified Against: 2026-05-12 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: when adding/changing rulesets.
 - Status: `reference`.
@@ -22,7 +22,11 @@
 3. Version is explicit and stable (`v1`, `v2`, ...).
 4. Unknown `learningPresetId` MUST fallback to `general-english@v1` with warning issue code:
    `ruleset.unknown_preset_fallback`.
-5. Legacy `preset` is not part of ruleset resolution; use `learningPresetId` (+ optional `learningPresetVersion`) for deterministic ruleset selection.
+5. Unknown `learningPresetVersion` for a known preset MUST use the matched ruleset with warning
+   issue code `ruleset.unknown_version_fallback`.
+6. Current General English catalog aliases resolve to `general-english@v1`, including
+   `general-english-intensive` and `general-english-*` learning-preset variants.
+7. Legacy `preset` is not part of ruleset resolution; use `learningPresetId` (+ optional `learningPresetVersion`) for deterministic ruleset selection.
 
 ## Issue Model Conventions
 
