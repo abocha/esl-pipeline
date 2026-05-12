@@ -40,14 +40,14 @@
     "@esl-pipeline/pmd": "workspace:*",
     "@esl-pipeline/provider-runtime": "workspace:*",
     "@esl-pipeline/tts-core": "workspace:*",
-    "@google-cloud/text-to-speech": "^6.4.0",
+    "@google-cloud/text-to-speech": "^6.4.1",
     "js-yaml": "^4.1.1"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
-    "@types/node": "^25.6.0",
+    "@types/node": "^25.7.0",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.5"
+    "vitest": "^4.1.6"
   },
   "engines": {
     "node": ">=24.11.1"
