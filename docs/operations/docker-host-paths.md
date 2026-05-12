@@ -4,7 +4,7 @@
 
 - Audience: maintainers and AI agents operating local Docker workflows.
 - Authority Level: operations runbook.
-- Last Verified Against: 2026-05-06 repo state.
+- Last Verified Against: 2026-05-12 repo state.
 - Owner: ops maintainer + automation agents.
 - Review Cadence: monthly or after Docker workflow changes.
 - Status: `runbook`.
@@ -20,7 +20,7 @@ If host paths are missing, Docker may auto-create them with root ownership and c
 ## Dependency Volume Policy (Host vs Docker)
 
 - Host and Docker are intentionally decoupled for dependencies:
-  - Host local pnpm commands use repo-local `.npmrc` (`store-dir=.pnpm-store/v10`).
+  - Host local pnpm commands use repo-local `pnpm-workspace.yaml` (`storeDir: .pnpm-store/v10`).
   - Docker dev services use named volumes:
     - `workspace_node_modules` mounted at `/app/node_modules`
     - `workspace_pnpm_store` mounted at `/pnpm` (with `PNPM_STORE_DIR=/pnpm/store`)
