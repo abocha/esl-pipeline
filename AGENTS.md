@@ -4,7 +4,7 @@
 
 - Audience: AI agents and maintainers.
 - Authority Level: router + operating contract.
-- Last Verified Against: 2026-04-09 repo state.
+- Last Verified Against: 2026-05-12 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly or after major workflow/tooling changes.
 - Status: `router`.
@@ -88,6 +88,10 @@ When implementing from a plan file, re-read that exact plan file after every con
 - Supporting core packages:
   - `@esl-pipeline/md-validator`
   - `@esl-pipeline/pmd`
+  - `@esl-pipeline/stt-core`
+  - `@esl-pipeline/stt-provider-deepgram`
+  - `@esl-pipeline/stt-provider-elevenlabs`
+  - `@esl-pipeline/stt-provider-google`
   - `@esl-pipeline/tts-core`
   - `@esl-pipeline/tts-provider-elevenlabs`
   - `@esl-pipeline/tts-provider-google`
@@ -96,6 +100,7 @@ When implementing from a plan file, re-read that exact plan file after every con
   - `@esl-pipeline/provider-runtime`
   - `@esl-pipeline/contracts`
   - `@esl-pipeline/shared-infrastructure`
+  - `@esl-pipeline/telegram-ops-bot`
 
 ## Non-Negotiable Invariants
 
@@ -138,10 +143,13 @@ Lint/format ownership baseline:
 
 Dependency hygiene when touching deps:
 
-1. `pnpm install`
-2. `pnpm deps:pin`
-3. `pnpm deps:audit:strict`
-4. `pnpm check:fast`
+1. `pnpm -r outdated`
+2. Check registry/advisory metadata for target versions.
+3. `pnpm install`
+4. `pnpm deps:pin`
+5. `pnpm deps:audit:strict`
+6. `pnpm audit`
+7. `pnpm check:fast`
 
 ## Frontend Browser Verification (Playwright)
 

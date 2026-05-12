@@ -5,7 +5,7 @@
 - Audience: AI agents, maintainers.
 - Read Time: 2 minutes.
 - Authority Level: Router.
-- Last Verified Against: 2026-04-09 repo state.
+- Last Verified Against: 2026-05-12 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly.
 - Status: `router`.
@@ -94,6 +94,9 @@
   - [`docs/reference/STUDENT_SYSTEM_ROADMAP.md`](reference/STUDENT_SYSTEM_ROADMAP.md)
   - [`docs/reference/STUDENT_SYSTEM_PHASE_A_RUNBOOK.md`](reference/STUDENT_SYSTEM_PHASE_A_RUNBOOK.md)
   - [`docs/plans/student-area-redesign/README.md`](plans/student-area-redesign/README.md)
+- Student scheduling, billing, credits, and teacher business surfaces:
+  - [`docs/reference/SCHEDULE_BILLING_PRODUCT_DECISIONS.md`](reference/SCHEDULE_BILLING_PRODUCT_DECISIONS.md)
+  - [`docs/reference/TEACHER_BUSINESS_DASHBOARD_PRODUCT_DRAFT.md`](reference/TEACHER_BUSINESS_DASHBOARD_PRODUCT_DRAFT.md)
 - Product readiness and review cadence:
   - [`docs/reference/PRODUCT_NORTH_STAR_AND_READINESS.md`](reference/PRODUCT_NORTH_STAR_AND_READINESS.md)
   - [`docs/playbooks/WEEKLY_PRODUCT_REVIEW_TEMPLATE.md`](playbooks/WEEKLY_PRODUCT_REVIEW_TEMPLATE.md)

@@ -5,7 +5,7 @@
 - Audience: AI agents and maintainers.
 - Read Time: 3 minutes.
 - Authority Level: Active routing map.
-- Last Verified Against: 2026-04-09 repo state.
+- Last Verified Against: 2026-05-12 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly.
 - Status: `router`.
@@ -37,6 +37,7 @@
 | Batch deployment and local service rollout                           | `docs/backend-frontend/DEPLOYMENT.md`                            | `docs/reference/env.md`, `docs/operations/docker-host-paths.md`, `docs/operations/postgres-backup-s3.md`                                                                                                                                                             |
 | Prompt gallery DB runtime                                            | `docs/operations/prompt-gallery-bootstrap.md`                    | `docs/reference/env.md`                                                                                                                                                                                                                                              |
 | Docker dev stack recovery                                            | `docs/operations/docker-host-paths.md`                           | `docs/QUICK_START.md`                                                                                                                                                                                                                                                |
+| Local pnpm store config / npm config warnings                        | `docs/operations/docker-host-paths.md`                           | `docs/operations/rollup-optional-binary-troubleshooting.md`, `docs/QUICK_START.md`                                                                                                                                                                                   |
 | Local Rollup optional-binary failures during install/test            | `docs/operations/rollup-optional-binary-troubleshooting.md`      | `docs/QUICK_START.md`                                                                                                                                                                                                                                                |
 | Postgres backup/restore routine                                      | `docs/operations/postgres-backup-restore.md`                     | `docs/operations/postgres-backup-s3.md`                                                                                                                                                                                                                              |
 | Ops health alerts and key checks                                     | `docs/operations/postgres-ops-health.md`                         | `docs/reference/env.md`                                                                                                                                                                                                                                              |
