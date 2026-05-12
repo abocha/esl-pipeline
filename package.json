@@ -115,23 +115,23 @@
     "typecheck": "pnpm -r --filter './packages/*' --if-present run typecheck"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.4.13",
-    "@eslint-react/eslint-plugin": "^5.6.0",
-    "@types/node": "^25.6.0",
-    "@vitest/coverage-v8": "^4.1.5",
-    "@vitest/eslint-plugin": "^1.6.16",
+    "@biomejs/biome": "2.4.15",
+    "@eslint-react/eslint-plugin": "^5.7.6",
+    "@types/node": "^25.7.0",
+    "@vitest/coverage-v8": "^4.1.6",
+    "@vitest/eslint-plugin": "^1.6.17",
     "concurrently": "^9.2.1",
     "dclint": "3.1.0",
-    "eslint": "^10.2.1",
+    "eslint": "^10.3.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react-refresh": "^0.5.2",
-    "globals": "^17.5.0",
-    "knip": "^6.9.0",
+    "globals": "^17.6.0",
+    "knip": "^6.12.2",
     "prettier": "^3.8.3",
     "prettier-plugin-packagejson": "^3.0.2",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.59.1",
-    "vitest": "^4.1.5"
+    "typescript-eslint": "^8.59.3",
+    "vitest": "^4.1.6"
   },
   "packageManager": "pnpm@10.33.2+sha512.a90faf6feeab71ad6c6e57f94e0fe1a12f5dcc22cd754db40ae9593eb6a3e0b6b12e3540218bb37ae083404b1f2ce6db2a4121e979829b4aff94b99f49da1cf8",
   "engines": {
@@ -139,7 +139,10 @@
   },
   "pnpm": {
     "overrides": {
+      "@tootallnate/once": "^3.0.1",
       "ajv@>=8.0.0 <8.18.0": "^8.18.0",
+      "fast-uri": "^3.1.2",
+      "fast-xml-builder": "^1.2.0",
       "fast-xml-parser": "^5.5.8",
       "ioredis": "^5.10.1",
       "minimatch": "^10.2.4",

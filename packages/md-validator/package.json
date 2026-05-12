@@ -42,16 +42,16 @@
     "@esl-pipeline/contracts": "workspace:*",
     "@esl-pipeline/pmd": "workspace:*",
     "@esl-pipeline/shared-infrastructure": "workspace:*",
-    "commander": "^14.0.3",
+    "commander": "^14.0.2",
     "gray-matter": "^4.0.3",
     "picocolors": "^1.1.1",
-    "zod": "^4.3.6"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/node": "^25.6.0",
+    "@types/node": "^25.7.0",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.5"
+    "vitest": "^4.1.6"
   },
   "engines": {
     "node": ">=24.11.1"

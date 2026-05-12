@@ -5,7 +5,7 @@
 - Audience: founder, maintainers, prompt/runtime implementers, AI agents.
 - Read Time: 8 minutes.
 - Authority Level: canonical pedagogy and assignment-template reference for `general-english` v1.
-- Last Verified Against: 2026-03-20 repo state.
+- Last Verified Against: 2026-05-12 repo state.
 - Owner: founder-maintainer + backend/frontend maintainers.
 - Review Cadence: monthly or after meaningful homework-template changes.
 - Status: `reference`.

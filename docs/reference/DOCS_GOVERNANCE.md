@@ -5,7 +5,7 @@
 - Audience: maintainers and AI agents editing docs.
 - Read Time: 3 minutes.
 - Authority Level: governance policy.
-- Last Verified Against: 2026-05-06 repo state.
+- Last Verified Against: 2026-05-12 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly or after docs-tooling changes.
 - Status: `reference`.
@@ -21,6 +21,8 @@
 - Docs health and stale-candidate outputs are warning/triage artifacts, not policy sources.
 - The rolling issue is the manual review queue for unresolved warnings, heuristic candidates, and repeated drift.
 - Generated artifacts are the source of truth for each run; markdown summaries are renderings of those artifacts.
+- `pnpm docs:garden` emits the full artifact family for that run, including health and stale-active
+  reports, so the GitHub workflow does not advertise files that were produced by separate commands.
 
 ## Lifecycle States
 
@@ -50,6 +52,8 @@
 - Heuristics are advisory only.
 - Stale-active candidates are meant to guide human review, not to auto-archive anything.
 - Manual review decides whether to archive, refresh, re-route, or ignore a candidate.
+- Low-signal content corpora can be included in docs scans without receiving route-coverage
+  pressure; this keeps generated/template galleries from crowding out actionable docs work.
 
 ## Rolling Issue Policy
 

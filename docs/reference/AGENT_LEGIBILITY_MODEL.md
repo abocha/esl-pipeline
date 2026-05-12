@@ -5,7 +5,7 @@
 - Audience: maintainers and AI agents improving repo readability.
 - Read Time: 6 minutes.
 - Authority Level: docs system design reference.
-- Last Verified Against: 2026-03-13 repo state.
+- Last Verified Against: 2026-05-12 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: monthly or after major docs-tooling changes.
 - Status: `reference`.
@@ -60,6 +60,9 @@ Implication:
   - route surfaces
   - package/doc coverage maps
 - If a doc keeps drifting because it is just a list of facts, prefer a generated reference.
+- `pnpm docs:garden` should remain the single entrypoint for weekly docs-gardening artifacts:
+  the gardening snapshot, rolling issue payload, health report, and stale-active queue are produced
+  together so maintainers review one coherent run.
 
 ### 5. Plans are first-class operating documents
 

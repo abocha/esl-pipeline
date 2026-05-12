@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 
-import { composeDocsGardeningSnapshot } from './docs-gardening-lib.mjs';
+import {
+  composeDocsGardeningSnapshot,
+  writeDocsGardeningArtifacts,
+} from './docs-gardening-lib.mjs';
 
 const baseConfig = {
   core_docs: ['AGENTS.md', 'docs/README.md'],
@@ -206,4 +212,110 @@ test('heuristic-only snapshot becomes review-suggested instead of failing', () =
   assert.equal(report.summary.status, 'review-suggested');
   assert.equal(report.issue.action, 'create-or-update');
   assert.match(report.issue.body, /No hard failures/);
+});
+
+test('manual review queue includes stale P1 candidates before golden-set rotation', () => {
+  const checks = {
+    core: { scope: 'core', docsChecked: 2, errors: [], warnings: [] },
+    ops: { scope: 'ops', docsChecked: 1, errors: [], warnings: [] },
+    non_core: { scope: 'non_core', docsChecked: 1, errors: [], warnings: [] },
+    metrics: { checkedDocs: 4, errors: 0, warnings: 0 },
+  };
+  const health = {
+    dimensions: {
+      routing_clarity: 10,
+      authority_ownership_clarity: 10,
+      freshness_drift_resistance: 10,
+      mechanical_enforceability: 10,
+      ops_runbook_reliability: 10,
+      archive_hygiene: 9,
+      agent_onboarding_speed: 10,
+    },
+    composite: 9.86,
+  };
+  const staleActive = {
+    generatedAt: '2026-04-03T00:00:00.000Z',
+    totalCandidates: 2,
+    countsByPriority: { P1: 1, P2: 1, P3: 0 },
+    reasonCounts: { 'stale-by-age': 2 },
+    topCandidates: [
+      {
+        path: 'docs/reference/env.md',
+        priority: 'P1',
+        confidence: 'low',
+        daysOld: 50,
+        inboundRefs: 2,
+        stalePathRefs: 0,
+        overlapWithNewerCount: 0,
+        overlapWithNewerExamples: [],
+        score: 1,
+        reasons: ['stale-by-age'],
+        lastCommitDate: '2026-02-12',
+      },
+      {
+        path: 'docs/reference/custom-flow.md',
+        priority: 'P2',
+        confidence: 'low',
+        daysOld: 60,
+        inboundRefs: 1,
+        stalePathRefs: 0,
+        overlapWithNewerCount: 0,
+        overlapWithNewerExamples: [],
+        score: 1,
+        reasons: ['stale-by-age'],
+        lastCommitDate: '2026-02-02',
+      },
+    ],
+  };
+
+  const report = composeDocsGardeningSnapshot({
+    generatedAt: '2026-04-03T00:00:00.000Z',
+    checks,
+    health,
+    staleActive,
+    config: baseConfig,
+  });
+
+  assert.equal(report.manualReviewQueue.items[0]?.path, 'docs/reference/env.md');
+});
+
+test('docs gardening writer emits issue, health, and stale-active artifacts together', () => {
+  const checks = {
+    core: { scope: 'core', docsChecked: 2, errors: [], warnings: [] },
+    ops: { scope: 'ops', docsChecked: 1, errors: [], warnings: [] },
+    non_core: { scope: 'non_core', docsChecked: 1, errors: [], warnings: [] },
+    metrics: { checkedDocs: 4, errors: 0, warnings: 0 },
+  };
+  const health = {
+    dimensions: {
+      routing_clarity: 10,
+      authority_ownership_clarity: 10,
+      freshness_drift_resistance: 10,
+      mechanical_enforceability: 10,
+      ops_runbook_reliability: 10,
+      archive_hygiene: 9,
+      agent_onboarding_speed: 10,
+    },
+    composite: 9.86,
+  };
+  const staleActive = {
+    generatedAt: '2026-04-03T00:00:00.000Z',
+    totalCandidates: 0,
+    countsByPriority: { P1: 0, P2: 0, P3: 0 },
+    reasonCounts: {},
+    topCandidates: [],
+  };
+  const report = composeDocsGardeningSnapshot({
+    generatedAt: '2026-04-03T00:00:00.000Z',
+    checks,
+    health,
+    staleActive,
+    config: baseConfig,
+  });
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'docs-gardening-test-'));
+  const artifacts = writeDocsGardeningArtifacts(report, { repoRoot });
+
+  for (const artifactPath of Object.values(artifacts)) {
+    assert.equal(fs.existsSync(artifactPath), true, artifactPath);
+  }
 });

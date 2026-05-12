@@ -16,5 +16,9 @@ console.log(
     `- ${artifacts.jsonPath}`,
     `- ${artifacts.issueJsonPath}`,
     `- ${artifacts.issueMdPath}`,
+    `- ${artifacts.healthJsonPath}`,
+    `- ${artifacts.healthMdPath}`,
+    `- ${artifacts.staleActiveJsonPath}`,
+    `- ${artifacts.staleActiveMdPath}`,
   ].join('\n'),
 );

@@ -5,7 +5,7 @@
 - Audience: AI agents touching recording/transcript/prompt/draft flow.
 - Read Time: 8 minutes.
 - Authority Level: Active design spec.
-- Last Verified Against: 2026-03-10 repo state.
+- Last Verified Against: 2026-05-12 repo state.
 - Owner: backend/frontend maintainers + automation agents.
 - Review Cadence: monthly or after artifact-model changes.
 - Status: `spec`.

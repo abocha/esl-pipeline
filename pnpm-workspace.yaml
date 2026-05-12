@@ -2,6 +2,8 @@ packages:
   - packages/*
   - packages/orchestrator/examples/*
 
+storeDir: .pnpm-store/v10
+
 onlyBuiltDependencies:
   - '@swc/core'
   - bcrypt
