@@ -416,9 +416,12 @@ describe('application/draft', () => {
     const drafts = { getById: vi.fn() };
     const promptPackages = { getById: vi.fn() };
     const createApprovalJob = vi.fn();
-    const jobs = { updateDraftLink: vi.fn(), approveJob: vi.fn() };
+    const jobs = { updateDraftLink: vi.fn() };
+    const approvals = { approveForPipeline: vi.fn() };
     const uploadDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-drafts-'));
-    const storage = { getText: vi.fn().mockResolvedValue('markdown content') };
+    const storage = createStorageStub({
+      getText: vi.fn().mockResolvedValue('markdown content'),
+    });
 
     drafts.getById.mockResolvedValue({
       id: 'draft-1',
@@ -432,16 +435,23 @@ describe('application/draft', () => {
     });
 
     jobs.updateDraftLink.mockResolvedValue({ id: 'job-1' });
+    approvals.approveForPipeline.mockResolvedValue({ id: 'job-1' });
 
     await materializeDraft(
       { draftId: 'draft-1', jobId: 'job-1', jobOverrides: { autoPublish: true } },
-      // @ts-expect-error - partial mocks
-      { drafts, promptPackages, createApprovalJob, jobs, uploadDir, storage, localExport: true },
+      {
+        drafts,
+        promptPackages,
+        createApprovalJob,
+        jobs,
+        approvals,
+        uploadDir,
+        storage,
+        localExport: true,
+      },
     );
 
-    expect(jobs.approveJob).toHaveBeenCalledWith({
-      id: 'job-1',
-      expectedState: 'awaiting_approval',
+    expect(approvals.approveForPipeline).toHaveBeenCalledWith('job-1', {
       md: path.resolve(uploadDir, 'drafts', 'draft-1.md'),
       mdStorageUri: 'file:///tmp/draft.json',
     });
