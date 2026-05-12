@@ -3,7 +3,9 @@
 ## Meta
 
 - Audience: founder and core maintainers.
+- Last Verified Against: 2026-05-12 repo state.
 - Cadence: weekly.
+- Status: `playbook`.
 - Inputs:
   - `docs/reference/V1_IMPLEMENTATION_TRACKER.md`
   - `docs/reference/PRODUCT_NORTH_STAR_AND_READINESS.md`

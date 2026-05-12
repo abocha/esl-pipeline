@@ -5,7 +5,7 @@
 - Audience: maintainers and AI agents making cross-package refactor decisions.
 - Read Time: 8 minutes.
 - Authority Level: decision ledger for Keep/Move/Extract/Retire outcomes.
-- Last Verified Against: 2026-03-09 repo state.
+- Last Verified Against: 2026-05-12 repo state.
 - Owner: orchestrator + batch-backend maintainers.
 - Review Cadence: update on every ownership-affecting refactor PR.
 - Status: `active`.
@@ -28,7 +28,7 @@ Decision outcomes:
 - `Extract shared`: create/reuse shared package primitive.
 - `Retire`: remove obsolete or duplicate behavior.
 
-## Ownership Matrix (2026-03-09)
+## Ownership Matrix (2026-05-12)
 
 | Capability                                                                                                                | Current Location                                              | Decision           | Target                                                             | Rationale                                                                                                | Compatibility Impact                                             | Migration Sequence                                                                    |
 | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- | ------------------ | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------- |

@@ -5,7 +5,7 @@
 - Audience: maintainers and AI agents curating docs quality.
 - Read Time: 5 minutes.
 - Authority Level: operational playbook.
-- Last Verified Against: 2026-04-03 repo state.
+- Last Verified Against: 2026-05-12 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: weekly.
 - Status: `reference`.
@@ -45,12 +45,16 @@
 - Stale-active candidates.
 - Repeated warnings that are not yet hard failures.
 - Ambiguous archive versus refresh decisions.
+- P1 stale-by-age candidates in the weekly queue; authoritative docs should be verified first even
+  when they are not yet hard-gate failures.
 
 ### Archive or split
 
 - Docs that are no longer routed by active docs.
 - Mixed-purpose docs that keep generating stale noise.
 - Inventory-style docs that are better generated than hand-maintained.
+- Low-signal content galleries should usually be tuned in the gardening config rather than routed
+  just to satisfy generic no-route heuristics.
 
 ## Habitual Checkpoints
 

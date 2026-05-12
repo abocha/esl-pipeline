@@ -5,21 +5,26 @@
 - Audience: maintainers and migration operators.
 - Read Time: 4 minutes.
 - Authority Level: migration runbook.
-- Last Verified Against: 2026-03-13 repo state.
+- Last Verified Against: 2026-05-12 repo state.
 - Owner: backend/frontend maintainers + automation agents.
 - Review Cadence: quarterly or after student backfill flow changes.
 - Status: `runbook`.
 
 ## Purpose
 
-Operational guide for moving student/profile metadata from filesystem JSON into canonical Postgres tables (`students`, `profiles`, `student_profile_bindings`).
+Operational recovery guide for moving student/profile metadata from filesystem JSON into canonical
+Postgres tables (`students`, `profiles`, `student_profile_bindings`).
+
+This is no longer the normal rollout path for the student system. Runtime student APIs are
+DB-backed; use this runbook only when bootstrapping or repairing canonical student data from a
+legacy filesystem source.
 
 ## Prerequisites
 
 - Postgres reachable by `@esl-pipeline/batch-backend` (`PG_ENABLED=true`).
 - Existing student JSON source directory (default from orchestrator config, or pass `--students-dir`).
 
-## Rollout Steps
+## Backfill Steps
 
 1. Ensure backend schema is current.
    - Run any backend process once (schema auto-ensures), or run a backend check command.
