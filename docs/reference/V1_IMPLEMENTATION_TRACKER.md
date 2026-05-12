@@ -36,15 +36,15 @@ Historical shipped detail moved to:
 
 ## Current Focus
 
-- Active workstream: `MVP readiness evidence`
+- Active workstream: `Post-MVP beta hardening`
 - Current objective:
-  - collect founder-operator evidence against the North Star
-  - verify one real assignment run can publish within the target time
-  - confirm lesson-credit/payment tracking is usable from the student and business surfaces
+  - preserve the MVP readiness evidence gate
+  - keep broader beta readiness gated on repeated real tutor use
+  - prioritize reliability fixes if readiness metrics regress
 - Today `Now` slice:
-  - run one timed founder-operator assignment flow
-  - record whether draft generation, validation, publish, audio, and lesson-credit tracking complete without manual fallback
-  - attach one evidence line with timing, provider/model, and any support intervention
+  - use the 2026-05-12 MVP evidence run as the release-tip baseline
+  - monitor real founder-operator/tutor runs for repeatability before widening beta
+  - if a publish, quota, or billing regression appears, treat it as reliability-only follow-up
 
 ## Delivery Rules
 
@@ -65,7 +65,8 @@ Historical shipped detail moved to:
 | WS5 cost and quota policy      | complete    | MVP guardrails shipped; monitor usage |
 | WS4 CRM-lite lesson ledger     | complete    | MVP student/business surfaces shipped |
 | Stabilization and gate review  | complete    | current release-tip checks passed     |
-| MVP readiness evidence         | in progress | current active lane                   |
+| MVP readiness evidence         | complete    | founder-operator proof passed         |
+| Post-MVP beta hardening        | in progress | requires repeated real tutor evidence |
 
 ## Latest Evidence
 
@@ -79,21 +80,39 @@ Historical shipped detail moved to:
       - orchestrator: 19 files / 75 tests
       - batch-frontend: 35 files / 193 tests
       - batch-backend: 100 files / 563 tests
+- 2026-05-12 MVP founder-operator evidence:
+  - Fixed auto-publish draft materialization so `autoPublish: true` uses
+    `approveJobForPipeline`, which both approves and enqueues the BullMQ worker job.
+  - Timed live probe passed in 56.7 seconds end to end on the local Docker stack:
+    - prompt package: `95029b01-f856-4a37-9ba2-7c61f8828293`
+    - draft: `6a01b870-bff7-481e-afc8-1ef89288260e`
+    - job: `1fcd83a2-a18f-44ed-9ac9-41946ae3409e`
+    - provider/model: `google_ai_studio` / `gemini-3-flash-preview`
+    - publish TTS: Google `chirp3_hd`
+    - validation errors: `0`
+    - final state: `succeeded`
+    - published HTML:
+      `https://esl-notion-tts.s3.ap-southeast-1.amazonaws.com/audio/assignments/materials/html/artifacts/d959f87c5227a9536a7b5c7cdd335cc68bba21536af86b43e1173e1661bbffed.html`
+  - Lesson-credit/payment tracking probe on a disposable archived student:
+    - package/payment recorded: 4 purchased, 0 consumed, 4 remaining
+    - completed lesson recorded: 4 purchased, 1 consumed, 3 remaining
+    - schedule-billing surface returned matching balance and reminders
+    - disposable probe student archived during cleanup
 
 ## MVP Completion Audit
 
 Prompt-to-artifact checklist for the current MVP definition:
 
-| Requirement                                                                                      | Evidence                                                                                                                                        | State                         |
-| ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
-| Guided assignment flow from recording/transcript to draft, validation, publish, and job tracking | Backend/frontend alignment marks recording, prompt package, draft, publish approve, and job actions done; `pnpm check:fast` passed on `v6.5.1`. | Implemented; needs timed run  |
-| One trusted `general-english` preset content track and DB-canonical prompt governance            | Product scope and prompt-gallery docs route to `hw_prompt_definitive.md`; prompt catalog runtime is DB-canonical in alignment tracker.          | Implemented                   |
-| Direct LLM draft generation through backend API and guided UX                                    | `POST /generation/drafts`, `GenerateDraft*` DTOs, generation provider/model selection, and quota UI tests are present.                          | Implemented                   |
-| Low-cost/non-premium TTS fallback plus provider abstraction                                      | Alignment tracker marks direct generation, TTS fallback, and safety guardrails shipped; contract/provider tests are in fast lane.               | Implemented                   |
-| Cost/quota guardrails for generation                                                             | `GenerationQuotaView`, budget counters, quota-window helper/tests, and backend budget guard are present; release-tip fast checks passed.        | MVP complete; monitor usage   |
-| CRM-lite lesson ledger and remaining lesson visibility                                           | Schedule & Billing records lesson credits/payments/lessons/reminders; business schedule/stats link to student schedule-billing surfaces.        | Implemented                   |
-| Objective readiness proof against North Star (`<=12 min`, no manual fallback, reliable tracking) | No current real timed founder-operator run is recorded in this tracker.                                                                         | Missing; current active slice |
-| Broader beta readiness evidence from real tutors                                                 | Product readiness doc requires real repeated tutor use and two green weeks before broadening beta.                                              | Not achieved; post-MVP gating |
+| Requirement                                                                                      | Evidence                                                                                                                                                                                                     | State                         |
+| ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------- |
+| Guided assignment flow from recording/transcript to draft, validation, publish, and job tracking | Live probe created a prompt package, generated a draft, validated it with 0 errors, materialized/auto-published, and observed job `1fcd83a2-a18f-44ed-9ac9-41946ae3409e` reach `succeeded` with an HTML URL. | MVP evidence passed           |
+| One trusted `general-english` preset content track and DB-canonical prompt governance            | Product scope and prompt-gallery docs route to `hw_prompt_definitive.md`; prompt catalog runtime is DB-canonical in alignment tracker.                                                                       | Implemented                   |
+| Direct LLM draft generation through backend API and guided UX                                    | `POST /generation/drafts`, `GenerateDraft*` DTOs, generation provider/model selection, and quota UI tests are present.                                                                                       | Implemented                   |
+| Low-cost/non-premium TTS fallback plus provider abstraction                                      | Alignment tracker marks direct generation, TTS fallback, and safety guardrails shipped; contract/provider tests are in fast lane.                                                                            | Implemented                   |
+| Cost/quota guardrails for generation                                                             | `GenerationQuotaView`, budget counters, quota-window helper/tests, and backend budget guard are present; release-tip fast checks passed.                                                                     | MVP complete; monitor usage   |
+| CRM-lite lesson ledger and remaining lesson visibility                                           | Schedule & Billing records lesson credits/payments/lessons/reminders; business schedule/stats link to student schedule-billing surfaces.                                                                     | Implemented                   |
+| Objective readiness proof against North Star (`<=12 min`, no manual fallback, reliable tracking) | Live Docker-stack probe completed in 56.7 seconds with direct generation, validation, Google TTS publish, job tracking, and lesson-credit/payment tracking evidence.                                         | MVP evidence passed           |
+| Broader beta readiness evidence from real tutors                                                 | Product readiness doc requires real repeated tutor use and two green weeks before broadening beta.                                                                                                           | Not achieved; post-MVP gating |
 
 ## Current Gate Checks
 

@@ -5,11 +5,12 @@ import type { JobConfigOverrides } from '@esl-pipeline/contracts';
 import { readBool } from '@esl-pipeline/shared-infrastructure';
 
 import { getDraftById } from '../domain/draft-repository.js';
-import { approveJob, getJobById, updateJobDraftLink } from '../domain/job-repository.js';
+import { getJobById, updateJobDraftLink } from '../domain/job-repository.js';
 import { getPromptPackageById } from '../domain/prompt-package-repository.js';
 import { createStorageConfigService } from '../infrastructure/storage-config.js';
 import type { TranscriptionStorage } from '../infrastructure/transcription-storage.js';
 import { createTranscriptionStorageForUri } from '../infrastructure/transcription-storage.js';
+import { approveJobForPipeline } from './approve-job.js';
 import { createApprovalJobFromDraft } from './create-approval-job.js';
 
 export interface MaterializeDraftParams {
@@ -37,7 +38,9 @@ export interface MaterializeDraftDependencies {
   jobs: {
     getById?: typeof getJobById;
     updateDraftLink: typeof updateJobDraftLink;
-    approveJob?: typeof approveJob;
+  };
+  approvals: {
+    approveForPipeline: typeof approveJobForPipeline;
   };
   uploadDir: string;
   localExport: boolean;
@@ -59,6 +62,9 @@ export async function materializeDraft(
   const jobs = overrides?.jobs ?? {
     getById: getJobById,
     updateDraftLink: updateJobDraftLink,
+  };
+  const approvals = overrides?.approvals ?? {
+    approveForPipeline: approveJobForPipeline,
   };
   const uploadDir =
     overrides?.uploadDir ?? createStorageConfigService().getFilesystemConfig().uploadDir;
@@ -133,13 +139,11 @@ export async function materializeDraft(
   if (!updated) return null;
 
   if (params.jobOverrides?.autoPublish) {
-    const notifyApprove = overrides?.jobs?.approveJob ?? approveJob;
-    await notifyApprove({
-      id: resolvedJobId,
-      expectedState: 'awaiting_approval',
-      md: mdPath,
+    const approved = await approvals.approveForPipeline(resolvedJobId, {
+      md: mdPath ?? undefined,
       mdStorageUri: draft.storageUri,
     });
+    if (!approved) return null;
   }
 
   return {
