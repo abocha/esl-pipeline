@@ -4,7 +4,7 @@
 
 - Audience: maintainers and implementing agents.
 - Authority Level: package entrypoint and runtime usage guide.
-- Last Verified Against: 2026-03-14 repo state.
+- Last Verified Against: 2026-05-12 repo state.
 - Owner: backend/ops maintainers + automation agents.
 - Review Cadence: monthly or after control-surface changes.
 - Status: `active`.

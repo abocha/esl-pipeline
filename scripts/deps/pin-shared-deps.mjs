@@ -5,25 +5,25 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const SHARED = {
-  '@aws-sdk/client-s3': '^3.1027.0',
-  '@aws-sdk/s3-request-presigner': '^3.1027.0',
-  '@aws-sdk/lib-storage': '^3.1027.0',
-  '@elevenlabs/elevenlabs-js': '^2.42.0',
+  '@aws-sdk/client-s3': '^3.1045.0',
+  '@aws-sdk/s3-request-presigner': '^3.1045.0',
+  '@aws-sdk/lib-storage': '^3.1045.0',
+  '@elevenlabs/elevenlabs-js': '^2.46.0',
   '@notionhq/client': '^5.17.0',
   commander: '^14.0.2',
-  zod: '^4.1.13',
+  zod: '^4.4.3',
   // Frontend
-  react: '^19.2.5',
-  'react-dom': '^19.2.5',
-  axios: '^1.15.0',
+  react: '^19.2.6',
+  'react-dom': '^19.2.6',
+  axios: '^1.16.0',
   '@tanstack/react-query': '^5.90.11',
-  vite: '^8.0.8',
+  vite: '^8.0.12',
   '@vitejs/plugin-react': '^6.0.1',
   // Backend
   fastify: '^5.8.4',
   pg: '^8.20.0',
   ioredis: '^5.10.1',
-  bullmq: '^5.73.3',
+  bullmq: '^5.76.8',
   bcrypt: '^6.0.0',
   jsonwebtoken: '^9.0.2',
 };

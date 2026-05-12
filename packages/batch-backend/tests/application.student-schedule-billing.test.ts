@@ -1,7 +1,7 @@
 import './support/bootstrap-pg-test-env.js';
 
 import { randomUUID } from 'node:crypto';
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   addStudentPackage,
@@ -238,10 +238,13 @@ function addDays(days: number): string {
 
 describeIfPg('application/student-schedule-billing', () => {
   beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-05T00:00:00.000Z'));
     await resetScheduleBillingTables();
   });
 
   afterAll(async () => {
+    vi.useRealTimers();
     await resetScheduleBillingTables();
     await closePgPool();
   });

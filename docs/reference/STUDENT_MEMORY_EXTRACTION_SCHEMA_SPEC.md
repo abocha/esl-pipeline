@@ -5,7 +5,7 @@
 - Audience: founder, maintainers, backend implementers, AI agents.
 - Read Time: 10 minutes.
 - Authority Level: canonical extraction-schema reference for student-memory content generation.
-- Last Verified Against: 2026-03-20 repo state.
+- Last Verified Against: 2026-05-12 repo state.
 - Owner: founder-maintainer + backend maintainers.
 - Review Cadence: monthly or after extraction-contract changes.
 - Status: `reference`.

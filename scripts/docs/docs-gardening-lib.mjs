@@ -128,7 +128,7 @@ export function buildStaleActiveReport({
       score += 1;
       reasons.push('stale-by-age-120');
     }
-    if (inboundRefs === 0) {
+    if (inboundRefs === 0 && !isLowSignalDoc({ relPath, config: resolvedConfig })) {
       score += 2;
       reasons.push('no-route-coverage');
     }
@@ -313,7 +313,29 @@ export function writeDocsGardeningArtifacts(
   fs.writeFileSync(issueJsonPath, `${JSON.stringify(report.issue, null, 2)}\n`, 'utf8');
   fs.writeFileSync(issueMdPath, `${report.issue.body.trimEnd()}\n`, 'utf8');
 
-  return { jsonPath, issueJsonPath, issueMdPath };
+  const healthArtifacts = writeDocsHealthReportArtifacts(
+    {
+      generatedAt: report.generatedAt,
+      metrics: report.metrics,
+      checks: report.checks,
+      scoring: report.heuristics.health,
+    },
+    { repoRoot, outDir },
+  );
+  const staleActiveArtifacts = writeStaleActiveArtifacts(report.heuristics.staleActive, {
+    repoRoot,
+    outDir,
+  });
+
+  return {
+    jsonPath,
+    issueJsonPath,
+    issueMdPath,
+    healthJsonPath: healthArtifacts.jsonPath,
+    healthMdPath: healthArtifacts.mdPath,
+    staleActiveJsonPath: staleActiveArtifacts.jsonPath,
+    staleActiveMdPath: staleActiveArtifacts.mdPath,
+  };
 }
 
 function buildHealthScorecard(checks) {
@@ -402,7 +424,6 @@ function parseBracketedLine(line) {
 function buildManualReviewQueue({ generatedAt, staleActive, config }) {
   const queue = [];
   const heuristicCandidates = [...(staleActive.topCandidates ?? [])]
-    .filter((candidate) => candidate.priority !== 'P1')
     .sort(
       (left, right) =>
         CONFIDENCE_RANK[right.confidence] - CONFIDENCE_RANK[left.confidence] ||
@@ -556,6 +577,12 @@ function classifyPriority({ relPath, config }) {
   }
 
   return 'P2';
+}
+
+function isLowSignalDoc({ relPath, config }) {
+  return (config.docs_gardening?.low_signal_prefixes ?? []).some((prefix) =>
+    relPath.startsWith(prefix),
+  );
 }
 
 function classifyConfidence({

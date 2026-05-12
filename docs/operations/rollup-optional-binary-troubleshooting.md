@@ -4,7 +4,7 @@
 
 - Audience: maintainers and AI agents debugging local build/test runtime issues.
 - Authority Level: operations troubleshooting runbook.
-- Last Verified Against: 2026-04-19 repo state.
+- Last Verified Against: 2026-05-12 repo state.
 - Owner: maintainer + automation agents.
 - Review Cadence: quarterly or after tooling upgrades.
 - Status: `runbook`.
@@ -55,4 +55,6 @@ CI=true pnpm --filter @esl-pipeline/html-publisher test -- tests/rendering.test.
 ## Notes for Agents
 
 - Prefer the explicit `PNPM_STORE_DIR=/home/abocha/.pnpm-store` form for reproducibility in this repo.
+- Normal local pnpm commands use `storeDir: .pnpm-store/v10` from `pnpm-workspace.yaml`; the
+  explicit `PNPM_STORE_DIR` form above is only for recovery runs that need a known-good host store.
 - If Vitest fails before test discovery with Rollup module errors, treat dependency hydration as the first diagnostic step.
