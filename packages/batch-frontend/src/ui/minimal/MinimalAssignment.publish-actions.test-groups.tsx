@@ -112,6 +112,9 @@ export function registerPublishValidationTests() {
         md: '/tmp/assignment.md',
         mdStorageUri: 's3://esl/drafts/draft-1.md',
       });
+      await waitFor(() => {
+        expect(api.archiveAssignmentSession).toHaveBeenCalledWith('session-1');
+      });
 
       await screen.findAllByText(/Job ID: job-1/i);
       expect(screen.getAllByText(/Ready/i).length).toBeGreaterThan(0);

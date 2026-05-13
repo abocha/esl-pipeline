@@ -7,6 +7,7 @@ import { CONTRACT_VERSIONS, DB_MIGRATION_HEAD } from '@esl-pipeline/contracts';
 import { validateMarkdown } from '@esl-pipeline/md-validator';
 
 import * as approveJobModule from '../src/application/approve-job.js';
+import * as assignmentSessionsModule from '../src/application/assignment-sessions.js';
 import * as createDraftModule from '../src/application/create-draft.js';
 import * as createPromptPackageModule from '../src/application/create-prompt-package.js';
 import * as generateDraftModule from '../src/application/generate-draft.js';
@@ -47,6 +48,7 @@ import { deriveStudentId } from '../src/domain/student-utils.js';
 import * as transcriptRepositoryModule from '../src/domain/transcript-repository.js';
 import * as loggerModule from '../src/infrastructure/logger.js';
 import * as transcriptionStorageModule from '../src/infrastructure/transcription-storage.js';
+import * as authMiddlewareModule from '../src/transport/auth-middleware.js';
 import { createHttpServer } from '../src/transport/http-server.js';
 
 vi.mock('../src/transport/auth-middleware.js', async () => {
@@ -1170,6 +1172,8 @@ export function describeHttpServerIntegrationSuite(
       validateMarkdown,
       CONTRACT_VERSIONS,
       DB_MIGRATION_HEAD,
+      assignmentSessionsModule,
+      authMiddlewareModule,
       approveJobModule,
       createDraftModule,
       createPromptPackageModule,

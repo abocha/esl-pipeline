@@ -17,6 +17,7 @@ import {
   previewCurrentDraft,
   renderGenerationReadyAssignment,
   renderMinimalAssignment,
+  renderPromptReadyAssignment,
   renderResumedAssignment,
   testScreen as screen,
   setupMinimalAssignmentTest,
@@ -170,6 +171,39 @@ export function registerGenerationDefaultsTests() {
         });
         expect(await screen.findByDisplayValue('# Generated assignment draft')).toBeTruthy();
         expect(screen.getByText(/Generated with openai\/gpt-5.2/i)).toBeTruthy();
+        await waitFor(() => {
+          expect(api.updateDraft).toHaveBeenCalledWith('draft-1', '# Generated assignment draft');
+        });
+      },
+      INTEGRATION_TEST_TIMEOUT_MS,
+    );
+
+    it(
+      'persists session notes and generation selections after prompt creation',
+      async () => {
+        await renderPromptReadyAssignment();
+        vi.mocked(api.createAssignmentSession).mockClear();
+        vi.mocked(api.updateAssignmentSession).mockClear();
+        vi.useFakeTimers();
+
+        fireEvent.change(screen.getByRole('textbox', { name: /Teacher notes/i }), {
+          target: { value: 'Use more travel vocabulary.' },
+        });
+        selectOpenAiGenerationModel();
+
+        await act(async () => {
+          vi.advanceTimersByTime(1500);
+          await Promise.resolve();
+        });
+
+        expect(api.updateAssignmentSession).toHaveBeenCalledWith(
+          'session-1',
+          expect.objectContaining({
+            teacherNotes: 'Use more travel vocabulary.',
+            selectedGenerationProvider: 'openai',
+            selectedGenerationModel: 'gpt-5.2',
+          }),
+        );
       },
       INTEGRATION_TEST_TIMEOUT_MS,
     );
@@ -185,6 +219,66 @@ export function registerGenerationThrottleTests() {
     afterEach(() => {
       vi.useRealTimers();
     });
+
+    it(
+      'preserves the latest manual edit when autosave overlaps an older save',
+      async () => {
+        const firstSavedDraft = {
+          id: 'draft-1',
+          promptPackageId: 'pkg-1',
+          studentId: null,
+          storageUri: 'memory://drafts/draft-1',
+          createdBy: 'user-1',
+          text: '# First autosave',
+          createdAt: now,
+          updatedAt: now,
+        };
+        const finalSavedDraft = {
+          ...firstSavedDraft,
+          text: '# Final autosave',
+        };
+        let resolveFirstSave: (value: typeof firstSavedDraft) => void = () => {};
+        vi.mocked(api.updateDraft)
+          .mockImplementationOnce(
+            () =>
+              new Promise((resolve) => {
+                resolveFirstSave = resolve;
+              }),
+          )
+          .mockResolvedValueOnce(finalSavedDraft);
+
+        await renderGenerationReadyAssignment();
+        vi.useFakeTimers();
+        const draftTextarea = screen.getByRole('textbox', {
+          name: /Draft markdown/i,
+        }) as HTMLTextAreaElement;
+
+        fireEvent.change(draftTextarea, { target: { value: '# First autosave' } });
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(5000);
+        });
+        expect(api.updateDraft).toHaveBeenCalledWith('draft-1', '# First autosave');
+
+        fireEvent.change(draftTextarea, { target: { value: '# Final autosave' } });
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(5000);
+        });
+        expect(api.updateDraft).toHaveBeenCalledTimes(1);
+
+        await act(async () => {
+          resolveFirstSave(firstSavedDraft);
+          await Promise.resolve();
+        });
+        expect(draftTextarea.value).toBe('# Final autosave');
+
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(5000);
+        });
+        expect(api.updateDraft).toHaveBeenCalledWith('draft-1', '# Final autosave');
+        expect(draftTextarea.value).toBe('# Final autosave');
+      },
+      INTEGRATION_TEST_TIMEOUT_MS,
+    );
 
     it(
       'releases runtime RPM quota lock after minute window rollover',

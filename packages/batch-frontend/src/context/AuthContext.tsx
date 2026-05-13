@@ -15,7 +15,7 @@ import {
   refreshToken as refreshTokenRequest,
   register as registerRequest,
 } from '../utils/api';
-import { setApiAuthToken } from '../utils/api-client';
+import { setApiAuthRefreshHandler, setApiAuthToken } from '../utils/api-client';
 
 export type UserRole = ApiUserRole;
 export type User = Pick<UserProfile, 'id' | 'email' | 'role' | 'isActive'> &
@@ -126,6 +126,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
     if (sessionGenerationRef.current === generation) {
       persistSession(response.user ?? user, response.accessToken ?? accessTokenValue);
     }
+  }, [persistSession, user, accessTokenValue]);
+
+  useEffect(() => {
+    setApiAuthRefreshHandler(async () => {
+      const generation = sessionGenerationRef.current;
+      const response = await refreshSessionOnce();
+      if (sessionGenerationRef.current === generation) {
+        persistSession(response.user ?? user, response.accessToken ?? accessTokenValue);
+      }
+      return { accessToken: response.accessToken ?? null };
+    });
+
+    return () => {
+      setApiAuthRefreshHandler(null);
+    };
   }, [persistSession, user, accessTokenValue]);
 
   const setUserFromProfile = useCallback(

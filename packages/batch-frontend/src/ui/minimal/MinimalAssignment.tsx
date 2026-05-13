@@ -1,17 +1,23 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type {
+  AssignmentSession,
+  GenerationProvider,
   JobEvent,
   JobOptionsResponse,
   JobStatus,
   PromptOptionsResponse,
   SttProvider,
+  UpdateAssignmentSessionRequest,
 } from '../../utils/api';
 import {
+  archiveAssignmentSession,
+  createAssignmentSession,
   fetchJobOptions,
   fetchPromptOptions,
   getJobStatus,
   subscribeToJobEvents,
+  updateAssignmentSession,
 } from '../../utils/api';
 import { AdvancedActionsStage, useAdvancedActionsController } from './MinimalAssignment.advanced';
 import { useMinimalAssignmentAuthoringController } from './MinimalAssignment.authoring';
@@ -27,11 +33,13 @@ import {
 } from './MinimalAssignment.polling';
 import {
   type HydratedAssignmentSnapshot,
+  type HydrationContext,
+  type HydrationMode,
   useMinimalAssignmentResume,
 } from './MinimalAssignment.resume';
 import {
   buildCurrentAssignmentCard,
-  buildResumeJobItems,
+  buildRecentAssignmentItems,
 } from './MinimalAssignment.resume-presentation';
 import { useMinimalAssignmentSourceController } from './MinimalAssignment.source';
 import {
@@ -92,20 +100,34 @@ function isUiPublishTtsStrategy(value: string | null | undefined): value is UiPu
   return value === 'auto' || value === 'dialogue' || value === 'tts';
 }
 
+function isGenerationProvider(value: string | null | undefined): value is GenerationProvider {
+  return value === 'openai' || value === 'google_ai_studio' || value === 'openrouter';
+}
+
+function buildAssignmentSessionSettingsKey(settings: {
+  teacherNotes: string | null;
+  selectedGenerationProvider: GenerationProvider | null;
+  selectedGenerationModel: string | null;
+  publishTarget: string;
+  selectedTtsProvider: string;
+  selectedTtsStrategy: string;
+  selectedTtsModel: string | null;
+  selectedPreset: string | null;
+}): string {
+  return JSON.stringify(settings);
+}
+
 function formatPublishTtsStrategyLabel(strategy: UiPublishTtsStrategy): string {
   if (strategy === 'auto') return 'Auto from draft';
   if (strategy === 'dialogue') return 'Dialogue';
   return 'TTS';
 }
 
-function writeJobIdToQuery(jobId: string | null): void {
+function clearAssignmentResumeQuery(): void {
   if (globalThis.window === undefined) return;
   const nextUrl = new URL(globalThis.location.href);
-  if (jobId) {
-    nextUrl.searchParams.set('jobId', jobId);
-  } else {
-    nextUrl.searchParams.delete('jobId');
-  }
+  nextUrl.searchParams.delete('jobId');
+  nextUrl.searchParams.delete('sessionId');
   const suffix = `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`;
   globalThis.history.replaceState(null, '', suffix);
 }
@@ -183,6 +205,21 @@ export const MinimalAssignment: React.FC = () => {
   const advancedHeadingRef = useRef<HTMLHeadingElement | null>(null);
   const guidedStageIdsRef = useRef<Set<WorkflowStageId>>(new Set());
   const hasInitializedGuidedFlowRef = useRef(false);
+  const assignmentSessionMutationQueueRef = useRef<Promise<AssignmentSession | null>>(
+    Promise.resolve(null),
+  );
+  const assignmentSessionSettingsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const assignmentSessionMilestoneRef = useRef({
+    studentId: '',
+    recordingId: '',
+    transcriptId: '',
+    promptPackageId: '',
+    draftId: '',
+  });
+  const assignmentSessionSettingsRef = useRef('');
+  const hydrationIdRef = useRef(0);
+  const assignmentSessionPersistenceSuppressedRef = useRef(false);
+  const assignmentSessionUserEditedRef = useRef(false);
 
   const generationOptions = jobOptions?.generation ?? null;
   const ttsProviders = useMemo<UiTtsProvider[]>(() => {
@@ -241,7 +278,7 @@ export const MinimalAssignment: React.FC = () => {
   }, [promptOptions]);
 
   const resetJobShell = useCallback(() => {
-    writeJobIdToQuery(null);
+    clearAssignmentResumeQuery();
     setTeacherNotes('');
     setJobStatusState(null);
     setRerunTargetPronunciationMode(null);
@@ -305,12 +342,40 @@ export const MinimalAssignment: React.FC = () => {
     setPublishError: setAuthoringPublishError,
   } = authoring;
 
+  const markAssignmentUserEdit = useCallback(() => {
+    assignmentSessionUserEditedRef.current = true;
+    assignmentSessionPersistenceSuppressedRef.current = false;
+  }, []);
+
+  const beginHydration = useCallback((mode: HydrationMode): HydrationContext => {
+    hydrationIdRef.current += 1;
+    assignmentSessionUserEditedRef.current = false;
+    assignmentSessionPersistenceSuppressedRef.current = mode !== 'new';
+    if (assignmentSessionSettingsTimeoutRef.current) {
+      clearTimeout(assignmentSessionSettingsTimeoutRef.current);
+      assignmentSessionSettingsTimeoutRef.current = null;
+    }
+    return { id: hydrationIdRef.current, mode };
+  }, []);
+
+  const isCurrentHydration = useCallback(
+    (context: HydrationContext) => hydrationIdRef.current === context.id,
+    [],
+  );
+
   const resetFlow = useCallback(() => {
+    beginHydration('new');
     invalidateAuthoringGeneration();
     resetAuthoring();
     resetSourceFlow();
     resetJobShell();
-  }, [invalidateAuthoringGeneration, resetAuthoring, resetJobShell, resetSourceFlow]);
+  }, [
+    beginHydration,
+    invalidateAuthoringGeneration,
+    resetAuthoring,
+    resetJobShell,
+    resetSourceFlow,
+  ]);
 
   const handleStartNewAssignment = useCallback(() => {
     guidedStageIdsRef.current.clear();
@@ -343,6 +408,27 @@ export const MinimalAssignment: React.FC = () => {
 
   const applyHydratedSnapshot = useCallback(
     (snapshot: HydratedAssignmentSnapshot) => {
+      assignmentSessionMilestoneRef.current = {
+        studentId: snapshot.selectedStudentId,
+        recordingId: snapshot.recording?.recordingId ?? '',
+        transcriptId: snapshot.transcript?.transcriptId ?? '',
+        promptPackageId: snapshot.authoring.promptPackage?.id ?? '',
+        draftId: snapshot.authoring.draft?.id ?? '',
+      };
+      assignmentSessionSettingsRef.current = buildAssignmentSessionSettingsKey({
+        teacherNotes: snapshot.teacherNotes.trim() || null,
+        selectedGenerationProvider: isGenerationProvider(
+          snapshot.authoring.selectedGenerationProvider,
+        )
+          ? snapshot.authoring.selectedGenerationProvider
+          : null,
+        selectedGenerationModel: snapshot.authoring.selectedGenerationModel || null,
+        publishTarget: snapshot.authoring.publishTarget,
+        selectedTtsProvider: snapshot.authoring.selectedTtsProvider,
+        selectedTtsStrategy: snapshot.authoring.selectedTtsStrategy,
+        selectedTtsModel: snapshot.authoring.selectedTtsModel || null,
+        selectedPreset: snapshot.authoring.selectedPreset || null,
+      });
       setJobStatusState(snapshot.jobStatus);
       applySourceHydration({
         recording: snapshot.recording,
@@ -376,6 +462,8 @@ export const MinimalAssignment: React.FC = () => {
     applyHydratedSnapshot,
     applyCurrentJobStatus,
     invalidateDraftGenerationRequests: invalidateAuthoringGeneration,
+    beginHydration,
+    isCurrentHydration,
     jobOptions,
     presetOptionIds,
     resolveBoundProfileId: source.resolveBoundProfileId,
@@ -388,6 +476,244 @@ export const MinimalAssignment: React.FC = () => {
     currentSelectedProfileId: context.selectedProfileId,
     currentProfileSelectionMode: context.profileSelectionMode,
   });
+  const activeAssignmentSession = resume.activeAssignmentSession;
+  const setActiveAssignmentSession = resume.setActiveAssignmentSession;
+
+  const assignmentSessionWritesAllowed = useCallback(() => {
+    return (
+      !assignmentSessionPersistenceSuppressedRef.current || assignmentSessionUserEditedRef.current
+    );
+  }, []);
+
+  const saveAssignmentSessionProgress = useCallback(
+    async (patch: UpdateAssignmentSessionRequest): Promise<AssignmentSession | null> => {
+      const cleaned = Object.fromEntries(
+        Object.entries(patch).filter(([, value]) => value !== undefined),
+      ) as UpdateAssignmentSessionRequest;
+      if (Object.keys(cleaned).length === 0) {
+        return activeAssignmentSession;
+      }
+
+      const run = assignmentSessionMutationQueueRef.current
+        .catch(() => null)
+        .then(async (latest) => {
+          const current = latest ?? activeAssignmentSession;
+          if (!current && jobStatus?.jobId) {
+            return null;
+          }
+          const saved = current
+            ? await updateAssignmentSession(current.id, cleaned)
+            : await createAssignmentSession(cleaned);
+          setActiveAssignmentSession(saved);
+          return saved;
+        });
+      assignmentSessionMutationQueueRef.current = run;
+      try {
+        return await run;
+      } catch (error) {
+        console.warn('Unable to save assignment session progress', error);
+        return null;
+      }
+    },
+    [activeAssignmentSession, jobStatus?.jobId, setActiveAssignmentSession],
+  );
+
+  const archiveActiveAssignmentSession = useCallback(async () => {
+    const session = activeAssignmentSession;
+    if (!session) return;
+    try {
+      const archived = await archiveAssignmentSession(session.id);
+      setActiveAssignmentSession(archived);
+    } catch (error) {
+      console.warn('Unable to archive assignment session', error);
+    }
+  }, [activeAssignmentSession, setActiveAssignmentSession]);
+
+  const handleStartNewAssignmentWithSessionReset = useCallback(() => {
+    assignmentSessionMutationQueueRef.current = Promise.resolve(null);
+    if (assignmentSessionSettingsTimeoutRef.current) {
+      clearTimeout(assignmentSessionSettingsTimeoutRef.current);
+      assignmentSessionSettingsTimeoutRef.current = null;
+    }
+    assignmentSessionMilestoneRef.current = {
+      studentId: '',
+      recordingId: '',
+      transcriptId: '',
+      promptPackageId: '',
+      draftId: '',
+    };
+    assignmentSessionSettingsRef.current = '';
+    setActiveAssignmentSession(null);
+    handleStartNewAssignment();
+  }, [handleStartNewAssignment, setActiveAssignmentSession]);
+
+  useEffect(() => {
+    const studentId = source.selectedStudentId.trim();
+    if (!studentId || assignmentSessionMilestoneRef.current.studentId === studentId) return;
+    assignmentSessionMilestoneRef.current.studentId = studentId;
+    if (!assignmentSessionWritesAllowed()) return;
+    void saveAssignmentSessionProgress({
+      studentId,
+      currentStage: 'source',
+    });
+  }, [assignmentSessionWritesAllowed, saveAssignmentSessionProgress, source.selectedStudentId]);
+
+  useEffect(() => {
+    const recordingId = source.recording?.recordingId ?? '';
+    if (!recordingId || assignmentSessionMilestoneRef.current.recordingId === recordingId) return;
+    assignmentSessionMilestoneRef.current.recordingId = recordingId;
+    if (!assignmentSessionWritesAllowed()) return;
+    void saveAssignmentSessionProgress({
+      studentId: (source.recording?.studentId ?? source.selectedStudentId) || null,
+      recordingId,
+      currentStage: 'source',
+    });
+  }, [
+    saveAssignmentSessionProgress,
+    source.recording?.recordingId,
+    source.recording?.studentId,
+    source.selectedStudentId,
+    assignmentSessionWritesAllowed,
+  ]);
+
+  useEffect(() => {
+    const transcriptId = source.transcript?.transcriptId ?? '';
+    if (
+      source.transcriptStatus !== 'ready' ||
+      !transcriptId ||
+      assignmentSessionMilestoneRef.current.transcriptId === transcriptId
+    ) {
+      return;
+    }
+    assignmentSessionMilestoneRef.current.transcriptId = transcriptId;
+    if (!assignmentSessionWritesAllowed()) return;
+    void saveAssignmentSessionProgress({
+      transcriptId,
+      currentStage: 'context',
+    });
+  }, [
+    assignmentSessionWritesAllowed,
+    saveAssignmentSessionProgress,
+    source.transcript?.transcriptId,
+    source.transcriptStatus,
+  ]);
+
+  useEffect(() => {
+    const promptPackageId = authoring.promptPackage?.id ?? '';
+    if (
+      !promptPackageId ||
+      assignmentSessionMilestoneRef.current.promptPackageId === promptPackageId
+    ) {
+      return;
+    }
+    assignmentSessionMilestoneRef.current.promptPackageId = promptPackageId;
+    if (!assignmentSessionWritesAllowed()) return;
+    void saveAssignmentSessionProgress({
+      promptPackageId,
+      teacherNotes: teacherNotes.trim() || null,
+      selectedGenerationProvider: isGenerationProvider(authoring.selectedGenerationProvider)
+        ? authoring.selectedGenerationProvider
+        : null,
+      selectedGenerationModel: authoring.selectedGenerationModel || null,
+      currentStage: 'assignment',
+    });
+  }, [
+    authoring.promptPackage?.id,
+    authoring.selectedGenerationModel,
+    authoring.selectedGenerationProvider,
+    saveAssignmentSessionProgress,
+    teacherNotes,
+    assignmentSessionWritesAllowed,
+  ]);
+
+  useEffect(() => {
+    const draftId = authoring.draft?.id ?? '';
+    if (!draftId || assignmentSessionMilestoneRef.current.draftId === draftId) return;
+    assignmentSessionMilestoneRef.current.draftId = draftId;
+    if (!assignmentSessionWritesAllowed()) return;
+    void saveAssignmentSessionProgress({
+      draftId,
+      publishTarget: authoring.publishTarget,
+      selectedTtsProvider: authoring.selectedTtsProvider,
+      selectedTtsStrategy: authoring.selectedTtsStrategy,
+      selectedTtsModel: authoring.selectedTtsModel || null,
+      selectedPreset: authoring.selectedPreset || null,
+      currentStage: 'review',
+    });
+  }, [
+    authoring.draft?.id,
+    authoring.publishTarget,
+    authoring.selectedPreset,
+    authoring.selectedTtsModel,
+    authoring.selectedTtsProvider,
+    authoring.selectedTtsStrategy,
+    saveAssignmentSessionProgress,
+    assignmentSessionWritesAllowed,
+  ]);
+
+  useEffect(() => {
+    if (!authoring.promptPackage?.id && !authoring.draft?.id) {
+      return;
+    }
+
+    const selectedGenerationProvider = isGenerationProvider(authoring.selectedGenerationProvider)
+      ? authoring.selectedGenerationProvider
+      : null;
+    const settingsKey = buildAssignmentSessionSettingsKey({
+      teacherNotes: teacherNotes.trim() || null,
+      selectedGenerationProvider,
+      selectedGenerationModel: authoring.selectedGenerationModel || null,
+      publishTarget: authoring.publishTarget,
+      selectedTtsProvider: authoring.selectedTtsProvider,
+      selectedTtsStrategy: authoring.selectedTtsStrategy,
+      selectedTtsModel: authoring.selectedTtsModel || null,
+      selectedPreset: authoring.selectedPreset || null,
+    });
+    if (assignmentSessionSettingsRef.current === settingsKey) {
+      return;
+    }
+    assignmentSessionSettingsRef.current = settingsKey;
+    if (!assignmentSessionWritesAllowed()) {
+      return;
+    }
+    if (assignmentSessionSettingsTimeoutRef.current) {
+      clearTimeout(assignmentSessionSettingsTimeoutRef.current);
+    }
+    assignmentSessionSettingsTimeoutRef.current = setTimeout(() => {
+      assignmentSessionSettingsTimeoutRef.current = null;
+      void saveAssignmentSessionProgress({
+        teacherNotes: teacherNotes.trim() || null,
+        selectedGenerationProvider,
+        selectedGenerationModel: authoring.selectedGenerationModel || null,
+        publishTarget: authoring.publishTarget,
+        selectedTtsProvider: authoring.selectedTtsProvider,
+        selectedTtsStrategy: authoring.selectedTtsStrategy,
+        selectedTtsModel: authoring.selectedTtsModel || null,
+        selectedPreset: authoring.selectedPreset || null,
+        currentStage: authoring.draft?.id ? 'review' : 'assignment',
+      });
+    }, 1500);
+
+    return () => {
+      if (assignmentSessionSettingsTimeoutRef.current) {
+        clearTimeout(assignmentSessionSettingsTimeoutRef.current);
+        assignmentSessionSettingsTimeoutRef.current = null;
+      }
+    };
+  }, [
+    authoring.draft?.id,
+    authoring.promptPackage?.id,
+    authoring.publishTarget,
+    authoring.selectedGenerationModel,
+    authoring.selectedGenerationProvider,
+    authoring.selectedPreset,
+    authoring.selectedTtsModel,
+    authoring.selectedTtsProvider,
+    authoring.selectedTtsStrategy,
+    saveAssignmentSessionProgress,
+    teacherNotes,
+    assignmentSessionWritesAllowed,
+  ]);
 
   const advancedActions = useAdvancedActionsController({
     jobStatus,
@@ -406,6 +732,14 @@ export const MinimalAssignment: React.FC = () => {
 
   const handleShowResumeChoice = useCallback(() => {
     setStartStageMode('resume');
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (assignmentSessionSettingsTimeoutRef.current) {
+        clearTimeout(assignmentSessionSettingsTimeoutRef.current);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -582,12 +916,6 @@ export const MinimalAssignment: React.FC = () => {
     setAuthoringPublishError,
   ]);
 
-  useEffect(() => {
-    if (resume.resumeJobs.length <= 4 && showAllResumeJobs) {
-      setShowAllResumeJobs(false);
-    }
-  }, [resume.resumeJobs.length, showAllResumeJobs]);
-
   const transcriptReady = source.transcriptReady;
   const jobReady = Boolean(jobStatus?.jobId);
   const hasAssignmentContent = authoring.draftText.trim().length > 0;
@@ -603,11 +931,28 @@ export const MinimalAssignment: React.FC = () => {
     () => new Map(source.studentOptions.map((student) => [student.id, student.name])),
     [source.studentOptions],
   );
+  const totalResumeItems = resume.assignmentSessions.length + resume.resumeJobs.length;
+  useEffect(() => {
+    if (totalResumeItems <= 4 && showAllResumeJobs) {
+      setShowAllResumeJobs(false);
+    }
+  }, [showAllResumeJobs, totalResumeItems]);
   const resumeJobItems = useMemo<ResumeJobListItem[]>(() => {
-    const jobsToRender = showAllResumeJobs ? resume.resumeJobs : resume.resumeJobs.slice(0, 4);
-    return buildResumeJobItems(jobsToRender, resume.selectedResumeJobId, studentNameById);
-  }, [resume.resumeJobs, resume.selectedResumeJobId, showAllResumeJobs, studentNameById]);
-  const canToggleResumeJobs = resume.resumeJobs.length > 4;
+    const allItems = buildRecentAssignmentItems(
+      resume.assignmentSessions,
+      resume.resumeJobs,
+      resume.selectedResumeJobId,
+      studentNameById,
+    );
+    return showAllResumeJobs ? allItems : allItems.slice(0, 4);
+  }, [
+    resume.assignmentSessions,
+    resume.resumeJobs,
+    resume.selectedResumeJobId,
+    showAllResumeJobs,
+    studentNameById,
+  ]);
+  const canToggleResumeJobs = totalResumeItems > 4;
   const currentAssignmentCard = useMemo<CurrentAssignmentCard | null>(() => {
     return buildCurrentAssignmentCard(jobStatus, studentNameById);
   }, [jobStatus, studentNameById]);
@@ -864,7 +1209,7 @@ export const MinimalAssignment: React.FC = () => {
         sectionRef={startSectionRef}
         headingRef={startHeadingRef}
         mode={startStageMode}
-        onStartNewAssignment={handleStartNewAssignment}
+        onStartNewAssignment={handleStartNewAssignmentWithSessionReset}
         onShowResumeChoice={handleShowResumeChoice}
         onRefreshRecentWork={() => void resume.loadResumeJobs()}
         onResumeSelectedAssignment={() => void resume.handleResumeSelectedJob()}
@@ -872,7 +1217,7 @@ export const MinimalAssignment: React.FC = () => {
         selectedResumeJobId={resume.selectedResumeJobId}
         onSelectedResumeJobIdChange={resume.setSelectedResumeJobId}
         resumeJobItems={resumeJobItems}
-        totalResumeJobs={resume.resumeJobs.length}
+        totalResumeJobs={totalResumeItems}
         canToggleResumeJobs={canToggleResumeJobs}
         showAllResumeJobs={showAllResumeJobs}
         onToggleShowAllResumeJobs={() => setShowAllResumeJobs((current) => !current)}
@@ -903,17 +1248,26 @@ export const MinimalAssignment: React.FC = () => {
         studentOptions={source.studentOptions}
         studentOptionsError={source.studentOptionsError}
         selectedStudentId={source.selectedStudentId}
-        onSelectedStudentIdChange={handleStudentSelectionChange}
+        onSelectedStudentIdChange={(value) => {
+          markAssignmentUserEdit();
+          handleStudentSelectionChange(value);
+        }}
         selectedStudent={source.selectedStudent}
         selectedSttProvider={source.selectedSttProvider}
-        onSelectedSttProviderChange={handleSelectedSttProviderChange}
+        onSelectedSttProviderChange={(provider) => {
+          markAssignmentUserEdit();
+          handleSelectedSttProviderChange(provider);
+        }}
         sttProviders={source.sttProviders}
         formatSttProviderLabel={formatSttProviderLabel}
         audioExtensions={AUDIO_EXTENSIONS}
         uploading={source.uploading}
         selectedFileName={source.selectedFileName}
         uploadProgress={source.uploadProgress}
-        onFiles={handleFiles}
+        onFiles={(files) => {
+          markAssignmentUserEdit();
+          handleFiles(files);
+        }}
         onCancelUpload={handleCancelUpload}
         uploadError={source.uploadError}
         uploadCacheNotice={source.uploadCacheNotice}
@@ -927,10 +1281,16 @@ export const MinimalAssignment: React.FC = () => {
         retryingTranscript={source.retryingTranscript}
         onRetryTranscript={() => void handleRetryTranscription()}
         transcriptText={source.transcriptText}
-        onTranscriptTextChange={setTranscriptText}
+        onTranscriptTextChange={(value) => {
+          markAssignmentUserEdit();
+          setTranscriptText(value);
+        }}
         transcriptDirty={source.transcriptDirty}
         transcriptSaving={source.transcriptSaving}
-        onSaveTranscript={() => void handleSaveTranscript()}
+        onSaveTranscript={() => {
+          markAssignmentUserEdit();
+          void handleSaveTranscript();
+        }}
       />
 
       <ContextStageSection
@@ -942,7 +1302,10 @@ export const MinimalAssignment: React.FC = () => {
         profilePreview={context.profilePreview}
         profileRevisionError={context.profileRevisionError}
         teacherNotes={teacherNotes}
-        onTeacherNotesChange={setTeacherNotes}
+        onTeacherNotesChange={(value) => {
+          markAssignmentUserEdit();
+          setTeacherNotes(value);
+        }}
       />
 
       <AssignmentStageSection
@@ -954,25 +1317,43 @@ export const MinimalAssignment: React.FC = () => {
         promptLoading={authoring.promptLoading}
         promptReady={authoring.promptReady}
         promptOptionsReady={Boolean(promptOptions)}
-        onGeneratePrompt={() => void authoring.generatePrompt()}
+        onGeneratePrompt={() => {
+          markAssignmentUserEdit();
+          void authoring.generatePrompt();
+        }}
         onCopyPrompt={authoring.copyPrompt}
         promptCopyState={authoring.promptCopyState}
         onReloadPromptOptions={() => void loadPromptOptions()}
         promptError={authoring.promptError}
         promptPackage={authoring.promptPackage}
         promptText={authoring.promptText}
-        onPromptTextChange={authoring.setPromptText}
-        onSaveDraft={() => void authoring.saveDraft()}
+        onPromptTextChange={(value) => {
+          markAssignmentUserEdit();
+          authoring.setPromptText(value);
+        }}
+        onSaveDraft={() => {
+          markAssignmentUserEdit();
+          void authoring.saveDraft();
+        }}
         validating={authoring.validating}
         draftDirty={authoring.draftDirty}
         generationOptionsAvailable={Boolean(generationOptions)}
         selectedGenerationProvider={authoring.selectedGenerationProvider}
-        onSelectedGenerationProviderChange={authoring.setSelectedGenerationProvider}
+        onSelectedGenerationProviderChange={(value) => {
+          markAssignmentUserEdit();
+          authoring.setSelectedGenerationProvider(value);
+        }}
         generationProviders={authoring.generationProviders}
         selectedGenerationModel={authoring.selectedGenerationModel}
-        onSelectedGenerationModelChange={authoring.setSelectedGenerationModel}
+        onSelectedGenerationModelChange={(value) => {
+          markAssignmentUserEdit();
+          authoring.setSelectedGenerationModel(value);
+        }}
         generationModelsForProvider={authoring.generationModelsForProvider}
-        onGenerateDraft={() => void authoring.generateDraft()}
+        onGenerateDraft={() => {
+          markAssignmentUserEdit();
+          void authoring.generateDraft();
+        }}
         generatingDraft={authoring.generatingDraft}
         generationBlockedByQuota={authoring.generationBlockedByQuota}
         activeGenerationQuota={authoring.activeGenerationQuota}
@@ -984,7 +1365,10 @@ export const MinimalAssignment: React.FC = () => {
         generationError={authoring.generationError}
         generationSuccess={authoring.generationSuccess}
         draftText={authoring.draftText}
-        onDraftTextChange={authoring.setDraftText}
+        onDraftTextChange={(value) => {
+          markAssignmentUserEdit();
+          authoring.setDraftText(value);
+        }}
         validation={authoring.validation}
         validationError={authoring.validationError}
         draftError={authoring.draftError}
@@ -999,6 +1383,7 @@ export const MinimalAssignment: React.FC = () => {
           void authoring.publishAssignment({
             onPublishedJob: resume.applyJobStatusTransition,
             refreshResumeJobs: resume.loadResumeJobs,
+            completeAssignmentSession: archiveActiveAssignmentSession,
           })
         }
         canPublishWithPreview={authoring.canPublishWithPreview}
@@ -1008,18 +1393,30 @@ export const MinimalAssignment: React.FC = () => {
         draftHasContent={authoring.draftText.trim().length > 0}
         previewReadyForCurrentDraft={authoring.previewReadyForCurrentDraft}
         selectedPreset={authoring.selectedPreset}
-        onSelectedPresetChange={authoring.setSelectedPreset}
+        onSelectedPresetChange={(value) => {
+          markAssignmentUserEdit();
+          authoring.setSelectedPreset(value);
+        }}
         presetOptions={presetOptions}
         jobOptionsLoaded={Boolean(jobOptions)}
         selectedTtsProvider={authoring.selectedTtsProvider}
-        onSelectedTtsProviderChange={authoring.setSelectedTtsProvider}
+        onSelectedTtsProviderChange={(value) => {
+          markAssignmentUserEdit();
+          authoring.setSelectedTtsProvider(value);
+        }}
         ttsProviders={ttsProviders}
         selectedTtsStrategy={authoring.selectedTtsStrategy}
-        onSelectedTtsStrategyChange={authoring.setSelectedTtsStrategy}
+        onSelectedTtsStrategyChange={(value) => {
+          markAssignmentUserEdit();
+          authoring.setSelectedTtsStrategy(value);
+        }}
         availablePublishTtsStrategies={authoring.availablePublishTtsStrategies}
         formatPublishTtsStrategyLabel={formatPublishTtsStrategyLabel}
         selectedTtsModel={authoring.selectedTtsModel}
-        onSelectedTtsModelChange={authoring.setSelectedTtsModel}
+        onSelectedTtsModelChange={(value) => {
+          markAssignmentUserEdit();
+          authoring.setSelectedTtsModel(value);
+        }}
         publishModelSelectionDisabled={authoring.publishModelSelectionDisabled}
         selectedTtsModelOptions={authoring.selectedTtsModelOptions}
         previewError={authoring.previewError}

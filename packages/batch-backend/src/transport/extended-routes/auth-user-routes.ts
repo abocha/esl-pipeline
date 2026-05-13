@@ -3,6 +3,13 @@ import { z } from 'zod';
 
 import type { JobState } from '@esl-pipeline/contracts';
 
+import {
+  archiveAssignmentSessionForUser,
+  createAssignmentSessionForUser,
+  getAssignmentSessionForUser,
+  listAssignmentSessionsForUserDto,
+  updateAssignmentSessionForUser,
+} from '../../application/assignment-sessions.js';
 import { getJobSummaryWithDefaults } from '../../application/job-summary.js';
 import { listJobsWithDefaults } from '../../application/list-jobs.js';
 import {
@@ -770,6 +777,268 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
       });
     }
   });
+
+  const assignmentSessionBodySchema = z.object({
+    studentId: z.string().uuid().nullable().optional(),
+    recordingId: z.string().uuid().nullable().optional(),
+    transcriptId: z.string().uuid().nullable().optional(),
+    promptPackageId: z.string().uuid().nullable().optional(),
+    draftId: z.string().uuid().nullable().optional(),
+    currentStage: z.enum(['source', 'context', 'assignment', 'review']).optional(),
+    publishTarget: z.literal('html').nullable().optional(),
+    selectedTtsProvider: publishTtsProviderSchema.nullable().optional(),
+    selectedTtsStrategy: publishTtsStrategySchema.nullable().optional(),
+    selectedTtsModel: z.string().nullable().optional(),
+    selectedPreset: z.string().nullable().optional(),
+    selectedGenerationProvider: z
+      .enum(['openai', 'google_ai_studio', 'openrouter'])
+      .nullable()
+      .optional(),
+    selectedGenerationModel: z.string().nullable().optional(),
+    teacherNotes: z.string().max(20_000).nullable().optional(),
+  });
+
+  app.get('/user/assignment-sessions', { preHandler: authenticate }, async (request, reply) => {
+    const authenticatedUser = getAuthenticatedUser(request);
+    if (!authenticatedUser) {
+      return reply.code(401).send({
+        error: 'unauthorized',
+        message: 'Authentication required',
+      });
+    }
+
+    const routePath = resolveRoutePath(request, 'GET /user/assignment-sessions');
+    const querySchema = z.object({
+      limit: z.coerce.number().int().min(1).max(50).optional(),
+    });
+
+    try {
+      const query = querySchema.parse(request.query ?? {});
+      const sessions = await listAssignmentSessionsForUserDto(
+        authenticatedUser.id,
+        query.limit ?? 20,
+      );
+
+      logger.info('HTTP request handled', {
+        event: 'http_request',
+        route: routePath,
+        statusCode: 200,
+        userId: authenticatedUser.id,
+      });
+
+      return reply.code(200).send(sessions);
+    } catch (error: unknown) {
+      if (error instanceof z.ZodError) {
+        return reply.code(400).send({
+          error: 'validation_failed',
+          message: 'Invalid query parameters',
+          details: error.issues,
+        });
+      }
+
+      logger.error(error instanceof Error ? error : String(error), {
+        event: 'list_assignment_sessions_failed',
+        userId: authenticatedUser.id,
+      });
+
+      return reply.code(500).send({
+        error: 'internal_error',
+      });
+    }
+  });
+
+  app.post('/assignment-sessions', { preHandler: authenticate }, async (request, reply) => {
+    const authenticatedUser = getAuthenticatedUser(request);
+    if (!authenticatedUser) {
+      return reply.code(401).send({
+        error: 'unauthorized',
+        message: 'Authentication required',
+      });
+    }
+
+    const routePath = resolveRoutePath(request, 'POST /assignment-sessions');
+
+    try {
+      const body = assignmentSessionBodySchema.parse(request.body ?? {});
+      const session = await createAssignmentSessionForUser(authenticatedUser.id, body);
+
+      logger.info('HTTP request handled', {
+        event: 'http_request',
+        route: routePath,
+        statusCode: 200,
+        userId: authenticatedUser.id,
+        assignmentSessionId: session.id,
+      });
+
+      return reply.code(200).send(session);
+    } catch (error: unknown) {
+      if (error instanceof z.ZodError) {
+        return reply.code(400).send({
+          error: 'validation_failed',
+          message: 'Invalid request body',
+          details: error.issues,
+        });
+      }
+
+      logger.error(error instanceof Error ? error : String(error), {
+        event: 'create_assignment_session_failed',
+        userId: authenticatedUser.id,
+      });
+
+      return reply.code(500).send({
+        error: 'internal_error',
+      });
+    }
+  });
+
+  app.get('/assignment-sessions/:id', { preHandler: authenticate }, async (request, reply) => {
+    const authenticatedUser = getAuthenticatedUser(request);
+    if (!authenticatedUser) {
+      return reply.code(401).send({
+        error: 'unauthorized',
+        message: 'Authentication required',
+      });
+    }
+
+    const routePath = resolveRoutePath(request, 'GET /assignment-sessions/:id');
+    const paramsSchema = z.object({ id: z.string().uuid() });
+
+    try {
+      const params = paramsSchema.parse(request.params ?? {});
+      const session = await getAssignmentSessionForUser(authenticatedUser.id, params.id);
+      if (!session) {
+        return reply.code(404).send({ error: 'not_found' });
+      }
+
+      logger.info('HTTP request handled', {
+        event: 'http_request',
+        route: routePath,
+        statusCode: 200,
+        userId: authenticatedUser.id,
+        assignmentSessionId: params.id,
+      });
+
+      return reply.code(200).send(session);
+    } catch (error: unknown) {
+      if (error instanceof z.ZodError) {
+        return reply.code(400).send({
+          error: 'validation_failed',
+          message: 'Invalid request',
+          details: error.issues,
+        });
+      }
+
+      logger.error(error instanceof Error ? error : String(error), {
+        event: 'get_assignment_session_failed',
+        userId: authenticatedUser.id,
+      });
+
+      return reply.code(500).send({
+        error: 'internal_error',
+      });
+    }
+  });
+
+  app.patch('/assignment-sessions/:id', { preHandler: authenticate }, async (request, reply) => {
+    const authenticatedUser = getAuthenticatedUser(request);
+    if (!authenticatedUser) {
+      return reply.code(401).send({
+        error: 'unauthorized',
+        message: 'Authentication required',
+      });
+    }
+
+    const routePath = resolveRoutePath(request, 'PATCH /assignment-sessions/:id');
+    const paramsSchema = z.object({ id: z.string().uuid() });
+
+    try {
+      const params = paramsSchema.parse(request.params ?? {});
+      const body = assignmentSessionBodySchema.parse(request.body ?? {});
+      const session = await updateAssignmentSessionForUser(authenticatedUser.id, params.id, body);
+      if (!session) {
+        return reply.code(404).send({ error: 'not_found' });
+      }
+
+      logger.info('HTTP request handled', {
+        event: 'http_request',
+        route: routePath,
+        statusCode: 200,
+        userId: authenticatedUser.id,
+        assignmentSessionId: params.id,
+      });
+
+      return reply.code(200).send(session);
+    } catch (error: unknown) {
+      if (error instanceof z.ZodError) {
+        return reply.code(400).send({
+          error: 'validation_failed',
+          message: 'Invalid request',
+          details: error.issues,
+        });
+      }
+
+      logger.error(error instanceof Error ? error : String(error), {
+        event: 'update_assignment_session_failed',
+        userId: authenticatedUser.id,
+      });
+
+      return reply.code(500).send({
+        error: 'internal_error',
+      });
+    }
+  });
+
+  app.post(
+    '/assignment-sessions/:id/archive',
+    { preHandler: authenticate },
+    async (request, reply) => {
+      const authenticatedUser = getAuthenticatedUser(request);
+      if (!authenticatedUser) {
+        return reply.code(401).send({
+          error: 'unauthorized',
+          message: 'Authentication required',
+        });
+      }
+
+      const routePath = resolveRoutePath(request, 'POST /assignment-sessions/:id/archive');
+      const paramsSchema = z.object({ id: z.string().uuid() });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const session = await archiveAssignmentSessionForUser(authenticatedUser.id, params.id);
+        if (!session) {
+          return reply.code(404).send({ error: 'not_found' });
+        }
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          userId: authenticatedUser.id,
+          assignmentSessionId: params.id,
+        });
+
+        return reply.code(200).send(session);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid request',
+            details: error.issues,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'archive_assignment_session_failed',
+          userId: authenticatedUser.id,
+        });
+
+        return reply.code(500).send({
+          error: 'internal_error',
+        });
+      }
+    },
+  );
 
   app.get(
     '/metrics/readiness',

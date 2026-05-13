@@ -271,6 +271,33 @@ BEGIN
 END;
 $$;
 
+CREATE TABLE public.assignment_sessions (
+    id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    student_id uuid,
+    recording_id uuid,
+    transcript_id uuid,
+    prompt_package_id uuid,
+    draft_id uuid,
+    current_stage text DEFAULT 'source'::text NOT NULL,
+    publish_target text,
+    selected_tts_provider text,
+    selected_tts_strategy text,
+    selected_tts_model text,
+    selected_preset text,
+    selected_generation_provider text,
+    selected_generation_model text,
+    teacher_notes text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    archived_at timestamp with time zone,
+    CONSTRAINT assignment_sessions_generation_provider_check CHECK (((selected_generation_provider IS NULL) OR (selected_generation_provider = ANY (ARRAY['openai'::text, 'google_ai_studio'::text, 'openrouter'::text])))),
+    CONSTRAINT assignment_sessions_publish_target_check CHECK (((publish_target IS NULL) OR (publish_target = 'html'::text))),
+    CONSTRAINT assignment_sessions_stage_check CHECK ((current_stage = ANY (ARRAY['source'::text, 'context'::text, 'assignment'::text, 'review'::text]))),
+    CONSTRAINT assignment_sessions_tts_provider_check CHECK (((selected_tts_provider IS NULL) OR (selected_tts_provider = ANY (ARRAY['elevenlabs'::text, 'google'::text])))),
+    CONSTRAINT assignment_sessions_tts_strategy_check CHECK (((selected_tts_strategy IS NULL) OR (selected_tts_strategy = ANY (ARRAY['auto'::text, 'dialogue'::text, 'tts'::text]))))
+);
+
 CREATE TABLE public.drafts (
     id uuid NOT NULL,
     prompt_package_id uuid NOT NULL,
@@ -890,6 +917,9 @@ CREATE TABLE public.workspaces (
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
+ALTER TABLE ONLY public.assignment_sessions
+    ADD CONSTRAINT assignment_sessions_pkey PRIMARY KEY (id);
+
 ALTER TABLE ONLY public.drafts
     ADD CONSTRAINT drafts_pkey PRIMARY KEY (id);
 
@@ -997,6 +1027,12 @@ ALTER TABLE ONLY public.workspace_memberships
 
 ALTER TABLE ONLY public.workspaces
     ADD CONSTRAINT workspaces_pkey PRIMARY KEY (id);
+
+CREATE UNIQUE INDEX idx_assignment_sessions_user_active_recording ON public.assignment_sessions USING btree (user_id, recording_id) WHERE ((archived_at IS NULL) AND (recording_id IS NOT NULL));
+
+CREATE INDEX idx_assignment_sessions_user_active_updated ON public.assignment_sessions USING btree (user_id, updated_at DESC, id DESC) WHERE (archived_at IS NULL);
+
+CREATE INDEX idx_assignment_sessions_user_updated ON public.assignment_sessions USING btree (user_id, updated_at DESC, id DESC);
 
 CREATE INDEX idx_drafts_created_by ON public.drafts USING btree (created_by);
 
@@ -1231,6 +1267,24 @@ CREATE TRIGGER set_user_settings_updated_at BEFORE UPDATE ON public.user_setting
 CREATE TRIGGER set_users_updated_at BEFORE UPDATE ON public.users FOR EACH ROW EXECUTE FUNCTION public.set_users_updated_at();
 
 CREATE TRIGGER trg_set_ops_actions_updated_at BEFORE UPDATE ON public.ops_actions FOR EACH ROW EXECUTE FUNCTION public.set_ops_actions_updated_at();
+
+ALTER TABLE ONLY public.assignment_sessions
+    ADD CONSTRAINT assignment_sessions_draft_id_fkey FOREIGN KEY (draft_id) REFERENCES public.drafts(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.assignment_sessions
+    ADD CONSTRAINT assignment_sessions_prompt_package_id_fkey FOREIGN KEY (prompt_package_id) REFERENCES public.prompt_packages(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.assignment_sessions
+    ADD CONSTRAINT assignment_sessions_recording_id_fkey FOREIGN KEY (recording_id) REFERENCES public.recordings(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.assignment_sessions
+    ADD CONSTRAINT assignment_sessions_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.assignment_sessions
+    ADD CONSTRAINT assignment_sessions_transcript_id_fkey FOREIGN KEY (transcript_id) REFERENCES public.transcripts(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.assignment_sessions
+    ADD CONSTRAINT assignment_sessions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
 
 ALTER TABLE ONLY public.drafts
     ADD CONSTRAINT drafts_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
@@ -1561,5 +1615,6 @@ VALUES
   ('0025_student_archive_status', 'db8363e4010fc34933a1f83d619931ebf6cf3287169cb92be0d920ed1f57354b', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0026_schedule_billing_foundations', '503e66dae2e95b23028708636942fce28fce3b0c7e734b1cfb689abeb10ccc49', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0027_teacher_business_dashboard_foundations', 'b82df4ed56daa006bdee71a0a56e1c3f584d89eb467aa7aaf5c68cc764c60d01', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0028_student_lesson_recurrence_core', 'c90dea3bf8cc79162e93d0cbdd167e9142c6d959d2cb743ab164e06c4f658fa0', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0028_student_lesson_recurrence_core', 'c90dea3bf8cc79162e93d0cbdd167e9142c6d959d2cb743ab164e06c4f658fa0', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0029_assignment_sessions', '81d0ae89a6a5e55f1fba02cac60b703e1a22d31024c5d350a43642fcb53433aa', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;
