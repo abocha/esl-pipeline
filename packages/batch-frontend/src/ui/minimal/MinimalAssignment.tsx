@@ -367,7 +367,7 @@ export const MinimalAssignment: React.FC = () => {
     beginHydration('new');
     invalidateAuthoringGeneration();
     resetAuthoring();
-    resetSourceFlow();
+    resetSourceFlow({ resetStudent: true });
     resetJobShell();
   }, [
     beginHydration,
@@ -551,12 +551,7 @@ export const MinimalAssignment: React.FC = () => {
     const studentId = source.selectedStudentId.trim();
     if (!studentId || assignmentSessionMilestoneRef.current.studentId === studentId) return;
     assignmentSessionMilestoneRef.current.studentId = studentId;
-    if (!assignmentSessionWritesAllowed()) return;
-    void saveAssignmentSessionProgress({
-      studentId,
-      currentStage: 'source',
-    });
-  }, [assignmentSessionWritesAllowed, saveAssignmentSessionProgress, source.selectedStudentId]);
+  }, [source.selectedStudentId]);
 
   useEffect(() => {
     const recordingId = source.recording?.recordingId ?? '';
@@ -1249,7 +1244,6 @@ export const MinimalAssignment: React.FC = () => {
         studentOptionsError={source.studentOptionsError}
         selectedStudentId={source.selectedStudentId}
         onSelectedStudentIdChange={(value) => {
-          markAssignmentUserEdit();
           handleStudentSelectionChange(value);
         }}
         selectedStudent={source.selectedStudent}
