@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [6.6.1] - 2026-05-14
+
+### Changed
+
+- Automated release from PR #76: fix(assignments): delay resume sessions until upload (https://github.com/abocha/esl-pipeline/pull/76)
+
 ## [6.6.0] - 2026-05-14
 
 ### Changed
