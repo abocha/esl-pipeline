@@ -25,7 +25,7 @@ function renderDirectory() {
 
 describe('StudentDirectoryPage', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     apiMocks.listProfileContents.mockResolvedValue({ profiles: [] });
     apiMocks.listStudents.mockResolvedValue({
       items: [
@@ -62,6 +62,60 @@ describe('StudentDirectoryPage', () => {
       '/students/student-alex-rivera/overview',
     );
     expect(screen.queryByRole('link', { name: /Open Overview/i })).toBeNull();
+  });
+
+  it('keeps archived tab results when the active tab load resolves later', async () => {
+    const user = userEvent.setup();
+    let resolveActiveLoad: (value: {
+      items: { id: string; student: string; profileId: string | null; archivedAt?: string }[];
+      total: number;
+      limit: number;
+      offset: number;
+      order: string;
+    }) => void = () => {};
+    apiMocks.listStudents
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveActiveLoad = resolve;
+          }),
+      )
+      .mockResolvedValueOnce({
+        items: [
+          {
+            id: 'student-archived-rivera',
+            student: 'Archived Rivera',
+            profileId: 'profiles/students/archived.md',
+            archivedAt: '2026-01-03T00:00:00.000Z',
+          },
+        ],
+        total: 1,
+        limit: 200,
+        offset: 0,
+        order: 'asc',
+      });
+
+    renderDirectory();
+
+    await user.click(screen.getByRole('button', { name: /Archived/i }));
+    expect(await screen.findByRole('heading', { name: 'Archived Rivera' })).toBeTruthy();
+
+    resolveActiveLoad({
+      items: [
+        {
+          id: 'student-active-rivera',
+          student: 'Active Rivera',
+          profileId: 'profiles/students/active.md',
+        },
+      ],
+      total: 1,
+      limit: 200,
+      offset: 0,
+      order: 'asc',
+    });
+
+    expect(await screen.findByRole('heading', { name: 'Archived Rivera' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Active Rivera' })).toBeNull();
   });
 
   it('archives students with confirmation and restores them from the archived view', async () => {

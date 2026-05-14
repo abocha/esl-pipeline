@@ -160,6 +160,59 @@ export interface JobConfigOverrides {
   autoPublish?: boolean;
 }
 
+export type AssignmentSessionStage = 'source' | 'context' | 'assignment' | 'review';
+
+export interface AssignmentSessionDto {
+  id: string;
+  userId: string;
+  studentId: string | null;
+  recordingId: string | null;
+  transcriptId: string | null;
+  promptPackageId: string | null;
+  draftId: string | null;
+  currentStage: AssignmentSessionStage;
+  publishTarget: PublishTarget | null;
+  selectedTtsProvider: TtsProviderId | null;
+  selectedTtsStrategy: TtsStrategy | null;
+  selectedTtsModel: string | null;
+  selectedPreset: string | null;
+  selectedGenerationProvider: GenerationProvider | null;
+  selectedGenerationModel: string | null;
+  teacherNotes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  archivedAt: string | null;
+}
+
+export interface AssignmentSessionListResponse {
+  sessions: AssignmentSessionDto[];
+  total: number;
+  limit: number;
+}
+
+export interface CreateAssignmentSessionRequest {
+  studentId?: string | null;
+  recordingId?: string | null;
+  transcriptId?: string | null;
+  promptPackageId?: string | null;
+  draftId?: string | null;
+  currentStage?: AssignmentSessionStage;
+  publishTarget?: PublishTarget | null;
+  selectedTtsProvider?: TtsProviderId | null;
+  selectedTtsStrategy?: TtsStrategy | null;
+  selectedTtsModel?: string | null;
+  selectedPreset?: string | null;
+  selectedGenerationProvider?: GenerationProvider | null;
+  selectedGenerationModel?: string | null;
+  teacherNotes?: string | null;
+}
+
+export type UpdateAssignmentSessionRequest = Partial<CreateAssignmentSessionRequest>;
+
+export type RecentAssignmentItem =
+  | { kind: 'session'; session: AssignmentSessionDto }
+  | { kind: 'job'; job: JobStatusDto };
+
 export interface JobStatusDto {
   jobId: string;
   studentId?: string | null;

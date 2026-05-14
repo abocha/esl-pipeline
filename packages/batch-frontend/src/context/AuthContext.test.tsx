@@ -12,6 +12,7 @@ const apiMocks = vi.hoisted(() => ({
 }));
 
 const apiClientMocks = vi.hoisted(() => ({
+  setApiAuthRefreshHandler: vi.fn(),
   setApiAuthToken: vi.fn(),
 }));
 
@@ -107,5 +108,38 @@ describe('AuthProvider', () => {
       expect(screen.getByText('Signed out')).toBeTruthy();
     });
     expect(apiClientMocks.setApiAuthToken).not.toHaveBeenCalledWith('access-token-1');
+  });
+
+  it('registers a refresh handler that updates the active access token', async () => {
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+
+    expect(await screen.findByText('teacher@example.com')).toBeTruthy();
+
+    apiMocks.refreshToken.mockResolvedValueOnce({
+      user: {
+        id: 'user-1',
+        email: 'teacher@example.com',
+        role: 'user',
+        isActive: true,
+      },
+      accessToken: 'access-token-2',
+      expiresIn: 1800,
+      message: 'Token refresh successful',
+    });
+
+    const registeredHandler = apiClientMocks.setApiAuthRefreshHandler.mock.calls.find(
+      ([handler]) => typeof handler === 'function',
+    )?.[0];
+
+    expect(registeredHandler).toBeTypeOf('function');
+    await expect(registeredHandler()).resolves.toEqual({ accessToken: 'access-token-2' });
+
+    await waitFor(() => {
+      expect(apiClientMocks.setApiAuthToken).toHaveBeenCalledWith('access-token-2');
+    });
   });
 });

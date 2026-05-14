@@ -36,9 +36,14 @@ import type {
   BusinessScheduleSurfaceResponse,
   BusinessSettingsDto,
   BusinessStatsSurfaceResponse,
+  AssignmentSessionDto as ContractAssignmentSessionDto,
+  AssignmentSessionListResponse as ContractAssignmentSessionListResponse,
+  AssignmentSessionStage as ContractAssignmentSessionStage,
+  CreateAssignmentSessionRequest as ContractCreateAssignmentSessionRequest,
   ElevenLabsTtsModelId as ContractElevenLabsTtsModelId,
   GenerateDraftRequest as ContractGenerateDraftRequest,
   GenerateDraftResponse as ContractGenerateDraftResponse,
+  GenerationProvider as ContractGenerationProvider,
   GoogleTtsModel as ContractGoogleTtsModel,
   JobConfigOverrides as ContractJobConfigOverrides,
   JobEventPayload as ContractJobEventPayload,
@@ -56,10 +61,10 @@ import type {
   SubmitJobRequest as ContractSubmitJobRequest,
   TtsProviderId as ContractTtsProviderId,
   TtsStrategy as ContractTtsStrategy,
+  UpdateAssignmentSessionRequest as ContractUpdateAssignmentSessionRequest,
   VoiceOption as ContractVoiceOption,
   CreateStudentLessonRequest,
   GenerationErrorCategory,
-  GenerationProvider,
   JobActionRequest,
   JobStatusDto,
   PublishTarget,
@@ -96,6 +101,11 @@ export type JobListResponse = ContractJobListResponse;
 export type JobSummaryResponse = ContractJobSummaryResponse;
 export type StudentSummaryResponse = ContractStudentSummaryResponse;
 export type JobConfigOverrides = ContractJobConfigOverrides;
+export type AssignmentSessionStage = ContractAssignmentSessionStage;
+export type AssignmentSession = ContractAssignmentSessionDto;
+export type AssignmentSessionListResponse = ContractAssignmentSessionListResponse;
+export type CreateAssignmentSessionRequest = ContractCreateAssignmentSessionRequest;
+export type UpdateAssignmentSessionRequest = ContractUpdateAssignmentSessionRequest;
 export type TtsProviderId = ContractTtsProviderId;
 export type GoogleTtsModel = ContractGoogleTtsModel;
 export type ElevenLabsTtsModelId = ContractElevenLabsTtsModelId;
@@ -104,6 +114,7 @@ export type MarkdownValidationResponse = ContractMarkdownValidationResponse;
 export type GenerateDraftRequest = ContractGenerateDraftRequest;
 export type GenerateDraftResponse = ContractGenerateDraftResponse;
 export type GenerationDraftErrorCode = GenerationErrorCategory;
+export type GenerationProvider = ContractGenerationProvider;
 export type RerunJobPayload = ContractRerunJobPayload;
 export type BusinessScheduleSurface = BusinessScheduleSurfaceResponse;
 export type BusinessSettings = BusinessSettingsDto;
@@ -3055,6 +3066,85 @@ export async function fetchJobProvenance(jobId: string): Promise<JobProvenanceRe
     const axiosError = toAxiosError(error);
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to view job provenance.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function listAssignmentSessions(limit = 20): Promise<AssignmentSessionListResponse> {
+  try {
+    const response = await apiClient.get(buildApiProxyPath('/user/assignment-sessions'), {
+      params: { limit },
+    });
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to load assignment sessions.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function createAssignmentSession(
+  request: CreateAssignmentSessionRequest,
+): Promise<AssignmentSession> {
+  try {
+    const response = await apiClient.post(buildApiProxyPath('/assignment-sessions'), request);
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to save assignment progress.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function fetchAssignmentSession(sessionId: string): Promise<AssignmentSession> {
+  try {
+    const response = await apiClient.get(
+      buildApiProxyPath(`/assignment-sessions/${encodeURIComponent(sessionId)}`),
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to resume assignment progress.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function updateAssignmentSession(
+  sessionId: string,
+  request: UpdateAssignmentSessionRequest,
+): Promise<AssignmentSession> {
+  try {
+    const response = await apiClient.patch(
+      buildApiProxyPath(`/assignment-sessions/${encodeURIComponent(sessionId)}`),
+      request,
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to update assignment progress.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function archiveAssignmentSession(sessionId: string): Promise<AssignmentSession> {
+  try {
+    const response = await apiClient.post(
+      buildApiProxyPath(`/assignment-sessions/${encodeURIComponent(sessionId)}/archive`),
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to archive assignment progress.');
     }
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }

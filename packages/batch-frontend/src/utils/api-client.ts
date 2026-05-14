@@ -1,6 +1,7 @@
 import axios, { AxiosError, AxiosInstance, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 
 type MaybeString = string | undefined | null;
+type AuthRefreshHandler = () => Promise<{ accessToken?: MaybeString }>;
 
 function normalizeBaseUrl(url: MaybeString): string {
   if (!url) return '';
@@ -39,9 +40,14 @@ function resolveBackendBaseUrl(): string {
 export const backendBaseUrl = resolveBackendBaseUrl();
 
 let currentAccessToken: string | null = null;
+let authRefreshHandler: AuthRefreshHandler | null = null;
 
 export function setApiAuthToken(token: MaybeString): void {
   currentAccessToken = token ?? null;
+}
+
+export function setApiAuthRefreshHandler(handler: AuthRefreshHandler | null): void {
+  authRefreshHandler = handler;
 }
 
 export function getApiAuthToken(): string | null {
@@ -64,6 +70,19 @@ export function buildApiProxyPath(path: string): string {
   }
 
   return buildBackendUrl(path);
+}
+
+function isRefreshableAuthRequest(
+  config: InternalAxiosRequestConfig & { _retry?: boolean },
+): boolean {
+  const url = config.url ?? '';
+  return (
+    !config._retry &&
+    !url.includes('/auth/login') &&
+    !url.includes('/auth/register') &&
+    !url.includes('/auth/refresh') &&
+    !url.includes('/auth/logout')
+  );
 }
 
 // Create axios instance with default config
@@ -99,18 +118,23 @@ apiClient.interceptors.response.use(
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 
-    // If 401 error and we haven't retried yet, try to refresh tokens
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // If a protected request hit an expired access token, refresh the session once and replay it.
+    if (
+      error.response?.status === 401 &&
+      originalRequest &&
+      isRefreshableAuthRequest(originalRequest)
+    ) {
       originalRequest._retry = true;
 
       try {
-        // Try to refresh tokens
-        // Note: This would need access to auth context, but interceptors run outside React
-        // Instead, we'll let the component handle token refresh on 401 errors
-        // The AuthContext will handle automatic redirects
-
-        // For now, just reject and let the component handle it
-        throw error;
+        const refreshed = await authRefreshHandler?.();
+        if (!refreshed?.accessToken) {
+          throw error;
+        }
+        setApiAuthToken(refreshed.accessToken);
+        originalRequest.headers = originalRequest.headers ?? {};
+        originalRequest.headers.Authorization = `Bearer ${refreshed.accessToken}`;
+        return apiClient(originalRequest);
       } catch (refreshError) {
         console.warn('Token refresh attempt failed inside API client', refreshError);
         // Token refresh failed, reject with original error

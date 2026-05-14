@@ -5,7 +5,7 @@
 - Audience: AI agents and maintainers coordinating backend/frontend delivery.
 - Read Time: 5 minutes.
 - Authority Level: canonical status tracker.
-- Last Verified Against: 2026-04-14 repo state.
+- Last Verified Against: 2026-05-13 repo state.
 - Owner: backend/frontend maintainers + automation agents.
 - Review Cadence: weekly while active roadmap work continues.
 - Status: `active`.
@@ -42,6 +42,7 @@ Provider-specific generation details stay in:
 - rerun is now a single regeneration-intent workflow with explicit study-text / pronunciation-main / pronunciation-chunk controls
 - student-area overview/learning/history route-level payloads are live, and job/recording SSE subscriptions can now target specific IDs instead of requiring wildcard streams
 - student retirement is archive-first: `/students/:id/archive` and `/students/:id/restore` preserve audit/history, while default student reads hide archived learners
+- resumable assignment sessions are live for pre-publish work; publish `jobs` remain reserved for materialized/approved pipeline runs
 
 ## Capability Matrix
 
@@ -52,6 +53,7 @@ Provider-specific generation details stay in:
 | Manual transcription retry                 | Done    | Done     | none                                                                                                      |
 | Prompt options / prompt package flow       | Done    | Done     | keep allowlists aligned                                                                                   |
 | Draft save/materialize/publish approve     | Done    | Done     | none                                                                                                      |
+| Pre-publish assignment session resume      | Done    | Done     | sessions store refs only; transcript/prompt/draft bodies remain in canonical storage                      |
 | Job status and core job actions            | Done    | Done     | rerun is a single action; chunk defaults remain mode-aware                                                |
 | Student summary/profile/bindings           | Done    | Partial  | student archive/restore is live; broader workspace hardening continues                                    |
 | Student timeline + provenance              | Done    | Done     | support-facing provenance now includes rerun audio fallback notices; continue ergonomics pass             |
