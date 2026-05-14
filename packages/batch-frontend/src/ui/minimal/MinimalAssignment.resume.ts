@@ -700,14 +700,7 @@ export function useMinimalAssignmentResume({
         return;
       }
 
-      const candidate = jobs.find((job) => isActivelyProcessingJobState(job.state)) ?? null;
-      if (candidate) {
-        await hydrateFromJob(candidate.jobId, jobs);
-      } else if (sessions[0]) {
-        await hydrateFromSession(sessions[0].id, sessions);
-      } else {
-        setResumeLoading(false);
-      }
+      setResumeLoading(false);
     };
 
     void initializeResume();
