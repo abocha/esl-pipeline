@@ -114,6 +114,8 @@ function detectPronunciationModeFromDraft(text: string): PronunciationMode | nul
 const DEFAULT_TTS_PROVIDER: UiTtsProvider = 'elevenlabs';
 const DEFAULT_TTS_STRATEGY: UiPublishTtsStrategy = 'auto';
 const DEFAULT_PUBLISH_TARGET: MinimalPublishTarget = 'html';
+const DRAFT_AUTOSAVE_DEBOUNCE_MS = 1500;
+const DRAFT_AUTOSAVE_MIN_INTERVAL_MS = 5000;
 
 export interface AuthoringHydrationSnapshot {
   publishTarget: MinimalPublishTarget;
@@ -121,6 +123,8 @@ export interface AuthoringHydrationSnapshot {
   selectedTtsStrategy: UiPublishTtsStrategy;
   selectedTtsModel: string;
   selectedPreset: string;
+  selectedGenerationProvider: string;
+  selectedGenerationModel: string;
   promptPackage: PromptPackageResponse | null;
   promptText: string;
   promptError: string | null;
@@ -183,7 +187,10 @@ export type AuthoringAction =
     }
   | { type: 'draft_generate_failed'; payload: { error: string } }
   | { type: 'draft_save_started' }
-  | { type: 'draft_save_succeeded'; payload: { draft: DraftResponse } }
+  | {
+      type: 'draft_save_succeeded';
+      payload: { draft: DraftResponse; preserveCurrentText?: boolean };
+    }
   | { type: 'draft_save_failed'; payload: { error: string } }
   | { type: 'validation_started' }
   | { type: 'validation_succeeded'; payload: { validation: MarkdownValidationResponse } }
@@ -360,7 +367,9 @@ function authoringReducer(state: AuthoringState, action: AuthoringAction): Autho
       return {
         ...state,
         draft: action.payload.draft,
-        draftText: action.payload.draft.text ?? state.draftText,
+        draftText: action.payload.preserveCurrentText
+          ? state.draftText
+          : (action.payload.draft.text ?? state.draftText),
         draftError: null,
       };
     case 'draft_save_failed':
@@ -557,6 +566,7 @@ export interface AuthoringController extends AuthoringState {
   publishAssignment: (params: {
     onPublishedJob: (job: JobStatus) => void;
     refreshResumeJobs: () => Promise<unknown>;
+    completeAssignmentSession?: () => Promise<unknown>;
   }) => Promise<void>;
   applyHydrationSnapshot: (snapshot: AuthoringHydrationSnapshot) => void;
   resetAuthoring: () => void;
@@ -588,7 +598,17 @@ export function useMinimalAssignmentAuthoringController({
     createInitialAuthoringState(),
   );
   const generationRequestVersionRef = useRef(0);
+  const authoringPersistenceVersionRef = useRef(0);
   const promptCopyResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const draftTextRef = useRef('');
+  const draftAutosaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const draftAutosaveLastSavedAtRef = useRef(0);
+  const draftAutosaveInFlightRef = useRef(false);
+  const draftAutosavePendingRef = useRef(false);
+  const [draftAutosaveRescheduleToken, requestDraftAutosaveReschedule] = useReducer(
+    (value: number) => value + 1,
+    0,
+  );
 
   const generationProviders = useMemo(
     () => generationOptions?.providers ?? [],
@@ -709,8 +729,19 @@ export function useMinimalAssignmentAuthoringController({
     dispatch({ type: 'invalidate_generation_requests' });
   }, []);
 
+  const invalidateDraftPersistence = useCallback(() => {
+    authoringPersistenceVersionRef.current += 1;
+    draftAutosaveInFlightRef.current = false;
+    draftAutosavePendingRef.current = false;
+    if (draftAutosaveTimeoutRef.current) {
+      clearTimeout(draftAutosaveTimeoutRef.current);
+      draftAutosaveTimeoutRef.current = null;
+    }
+  }, []);
+
   const resetAuthoring = useCallback(() => {
     invalidatePendingGeneration();
+    invalidateDraftPersistence();
     if (promptCopyResetTimeoutRef.current) {
       clearTimeout(promptCopyResetTimeoutRef.current);
       promptCopyResetTimeoutRef.current = null;
@@ -722,15 +753,24 @@ export function useMinimalAssignmentAuthoringController({
         selectedPreset: state.selectedPreset,
       },
     });
-  }, [invalidatePendingGeneration, state.publishTarget, state.selectedPreset]);
+  }, [
+    invalidateDraftPersistence,
+    invalidatePendingGeneration,
+    state.publishTarget,
+    state.selectedPreset,
+  ]);
 
-  const applyHydrationSnapshot = useCallback((snapshot: AuthoringHydrationSnapshot) => {
-    if (promptCopyResetTimeoutRef.current) {
-      clearTimeout(promptCopyResetTimeoutRef.current);
-      promptCopyResetTimeoutRef.current = null;
-    }
-    dispatch({ type: 'hydrate_authoring_snapshot', payload: snapshot });
-  }, []);
+  const applyHydrationSnapshot = useCallback(
+    (snapshot: AuthoringHydrationSnapshot) => {
+      invalidateDraftPersistence();
+      if (promptCopyResetTimeoutRef.current) {
+        clearTimeout(promptCopyResetTimeoutRef.current);
+        promptCopyResetTimeoutRef.current = null;
+      }
+      dispatch({ type: 'hydrate_authoring_snapshot', payload: snapshot });
+    },
+    [invalidateDraftPersistence],
+  );
 
   const setPromptText = useCallback((value: string) => {
     dispatch({ type: 'prompt_text_changed', payload: { value } });
@@ -801,6 +841,38 @@ export function useMinimalAssignmentAuthoringController({
     }
   }, [learningPresetCatalogEnabled, presetOptionIds, state.draftText, state.selectedPreset]);
 
+  useEffect(() => {
+    draftTextRef.current = state.draftText;
+  }, [state.draftText]);
+
+  const persistDraftText = useCallback(
+    async (
+      text: string,
+      options: { preserveCurrentText?: boolean } = {},
+    ): Promise<DraftResponse | null> => {
+      const normalizedText = text.trim();
+      if (!state.promptPackage?.id || !normalizedText) {
+        return null;
+      }
+      const persistenceVersion = authoringPersistenceVersionRef.current;
+      const response = state.draft?.id
+        ? await updateDraft(state.draft.id, normalizedText)
+        : await createDraft(state.promptPackage.id, normalizedText);
+      if (authoringPersistenceVersionRef.current !== persistenceVersion) {
+        return null;
+      }
+      const preserveCurrentText =
+        options.preserveCurrentText || draftTextRef.current.trim() !== normalizedText;
+      dispatch({
+        type: 'draft_save_succeeded',
+        payload: { draft: response, preserveCurrentText },
+      });
+      onDraftPronunciationModeDetected(detectPronunciationModeFromDraft(response.text ?? text));
+      return response;
+    },
+    [onDraftPronunciationModeDetected, state.draft?.id, state.promptPackage?.id],
+  );
+
   const saveDraft = useCallback(async (): Promise<DraftResponse | null> => {
     if (!state.promptPackage?.id) {
       dispatch({
@@ -828,26 +900,14 @@ export function useMinimalAssignmentAuthoringController({
 
     dispatch({ type: 'draft_save_started' });
     try {
-      const response = state.draft?.id
-        ? await updateDraft(state.draft.id, state.draftText.trim())
-        : await createDraft(state.promptPackage.id, state.draftText.trim());
-      dispatch({ type: 'draft_save_succeeded', payload: { draft: response } });
-      onDraftPronunciationModeDetected(
-        detectPronunciationModeFromDraft(response.text ?? state.draftText),
-      );
+      const response = await persistDraftText(state.draftText);
       return response;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to save draft.';
       dispatch({ type: 'draft_save_failed', payload: { error: message } });
       return null;
     }
-  }, [
-    onDraftPronunciationModeDetected,
-    runValidation,
-    state.draft?.id,
-    state.draftText,
-    state.promptPackage,
-  ]);
+  }, [persistDraftText, runValidation, state.draftText, state.promptPackage]);
 
   const generatePrompt = useCallback(async () => {
     if (!recordingId) {
@@ -964,10 +1024,22 @@ export function useMinimalAssignmentAuthoringController({
             provider: generated.provider,
             model: generated.model,
           },
-          successMessage: `Generated with ${generated.provider}/${generated.model}. Review and save draft.`,
+          successMessage: `Generated with ${generated.provider}/${generated.model}. Draft saved automatically.`,
           quotaWindowTickMs: Date.now(),
         },
       });
+      if (generated.text?.trim()) {
+        try {
+          await persistDraftText(generated.text);
+          draftAutosaveLastSavedAtRef.current = Date.now();
+        } catch (error) {
+          const message =
+            error instanceof Error
+              ? error.message
+              : 'Generated draft is visible, but could not be saved yet.';
+          dispatch({ type: 'draft_save_failed', payload: { error: message } });
+        }
+      }
       return generated;
     } catch (error) {
       if (generationRequestVersionRef.current !== requestVersion) {
@@ -981,6 +1053,7 @@ export function useMinimalAssignmentAuthoringController({
     }
   }, [
     generationOptions,
+    persistDraftText,
     state.promptPackage?.id,
     state.selectedGenerationModel,
     state.selectedGenerationProvider,
@@ -1038,9 +1111,11 @@ export function useMinimalAssignmentAuthoringController({
     async ({
       onPublishedJob,
       refreshResumeJobs,
+      completeAssignmentSession,
     }: {
       onPublishedJob: (job: JobStatus) => void;
       refreshResumeJobs: () => Promise<unknown>;
+      completeAssignmentSession?: () => Promise<unknown>;
     }) => {
       dispatch({ type: 'publish_config_updated', payload: { publishError: null } as never });
       if (!draftPreviewGate.previewReady) {
@@ -1084,6 +1159,7 @@ export function useMinimalAssignmentAuthoringController({
         });
         const refreshed = await getJobStatus(materialized.jobId);
         onPublishedJob(refreshed);
+        await completeAssignmentSession?.();
         await refreshResumeJobs();
         dispatch({ type: 'publish_succeeded' });
       } catch (error) {
@@ -1112,8 +1188,74 @@ export function useMinimalAssignmentAuthoringController({
       if (promptCopyResetTimeoutRef.current) {
         clearTimeout(promptCopyResetTimeoutRef.current);
       }
+      if (draftAutosaveTimeoutRef.current) {
+        clearTimeout(draftAutosaveTimeoutRef.current);
+      }
     };
   }, []);
+
+  useEffect(() => {
+    if (!state.promptPackage?.id || !state.draftText.trim() || !draftDirty) {
+      if (draftAutosaveTimeoutRef.current) {
+        clearTimeout(draftAutosaveTimeoutRef.current);
+        draftAutosaveTimeoutRef.current = null;
+      }
+      return;
+    }
+
+    const elapsedMs = Date.now() - draftAutosaveLastSavedAtRef.current;
+    const delayMs = Math.max(
+      DRAFT_AUTOSAVE_DEBOUNCE_MS,
+      DRAFT_AUTOSAVE_MIN_INTERVAL_MS - elapsedMs,
+    );
+
+    if (draftAutosaveTimeoutRef.current) {
+      clearTimeout(draftAutosaveTimeoutRef.current);
+    }
+    draftAutosaveTimeoutRef.current = setTimeout(() => {
+      draftAutosaveTimeoutRef.current = null;
+      if (draftAutosaveInFlightRef.current) {
+        draftAutosavePendingRef.current = true;
+        return;
+      }
+      const textToSave = state.draftText;
+      draftAutosaveInFlightRef.current = true;
+      void persistDraftText(textToSave, {
+        preserveCurrentText: draftTextRef.current.trim() !== textToSave.trim(),
+      })
+        .then((saved) => {
+          if (saved) {
+            draftAutosaveLastSavedAtRef.current = Date.now();
+          }
+        })
+        .catch((error) => {
+          const message = error instanceof Error ? error.message : 'Unable to autosave draft.';
+          dispatch({ type: 'draft_save_failed', payload: { error: message } });
+        })
+        .finally(() => {
+          draftAutosaveInFlightRef.current = false;
+          const latestText = draftTextRef.current.trim();
+          const savedText = textToSave.trim();
+          if (draftAutosavePendingRef.current || (latestText && latestText !== savedText)) {
+            draftAutosavePendingRef.current = false;
+            requestDraftAutosaveReschedule();
+          }
+        });
+    }, delayMs);
+
+    return () => {
+      if (draftAutosaveTimeoutRef.current) {
+        clearTimeout(draftAutosaveTimeoutRef.current);
+        draftAutosaveTimeoutRef.current = null;
+      }
+    };
+  }, [
+    draftAutosaveRescheduleToken,
+    draftDirty,
+    persistDraftText,
+    state.draftText,
+    state.promptPackage?.id,
+  ]);
 
   useEffect(() => {
     const normalizedPreset = normalizePresetSelection(

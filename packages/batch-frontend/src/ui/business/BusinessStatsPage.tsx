@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { type BusinessStatsSurface, getBusinessStatsSurface } from '../../utils/api';
@@ -9,17 +9,25 @@ export const BusinessStatsPage: React.FC = () => {
   const [surface, setSurface] = useState<BusinessStatsSurface | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const latestLoadRequestRef = useRef(0);
 
   const load = useCallback(
     async (nextMonth = month) => {
+      const requestId = latestLoadRequestRef.current + 1;
+      latestLoadRequestRef.current = requestId;
       setLoading(true);
       setError(null);
       try {
-        setSurface(await getBusinessStatsSurface({ month: nextMonth }));
+        const nextSurface = await getBusinessStatsSurface({ month: nextMonth });
+        if (latestLoadRequestRef.current !== requestId) return;
+        setSurface(nextSurface);
       } catch (loadError: unknown) {
+        if (latestLoadRequestRef.current !== requestId) return;
         setError(loadError instanceof Error ? loadError.message : 'Business stats failed.');
       } finally {
-        setLoading(false);
+        if (latestLoadRequestRef.current === requestId) {
+          setLoading(false);
+        }
       }
     },
     [month],
@@ -27,6 +35,9 @@ export const BusinessStatsPage: React.FC = () => {
 
   useEffect(() => {
     void load();
+    return () => {
+      latestLoadRequestRef.current += 1;
+    };
   }, [load]);
 
   if (loading && !surface) {

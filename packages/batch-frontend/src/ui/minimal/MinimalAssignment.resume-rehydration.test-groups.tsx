@@ -1,11 +1,14 @@
+import { fireEvent } from '@testing-library/react';
 import { beforeEach, describe, it } from 'vitest';
 
 import type * as ApiTypes from '../../utils/api';
 import {
+  testAct as act,
   testApi as api,
   createMinimalUser,
   testExpect as expect,
   INTEGRATION_TEST_TIMEOUT_MS,
+  makeAssignmentSession,
   makeJobStatus,
   makeLearningPreset,
   makeRecording,
@@ -176,6 +179,376 @@ export function registerResumeBasicTests() {
       expect(within(resumeList).getAllByRole('option')).toHaveLength(5);
       expect(screen.getByRole('button', { name: /Show fewer assignments/i })).toBeTruthy();
     });
+
+    it('shows unfinished assignment sessions beside publish jobs', async () => {
+      const user = createMinimalUser();
+      vi.mocked(api.listAssignmentSessions).mockResolvedValueOnce({
+        sessions: [
+          makeAssignmentSession({
+            id: 'session-draft',
+            studentId: 'student-alex',
+            currentStage: 'assignment',
+            updatedAt: '2026-05-13T10:10:00.000Z',
+          }),
+        ],
+        total: 1,
+        limit: 20,
+      });
+      vi.mocked(api.listUserJobs).mockResolvedValueOnce({
+        jobs: [
+          makeJobStatus({
+            jobId: 'job-ready',
+            studentId: 'student-bella',
+            state: 'succeeded',
+            finishedAt: '2026-05-13T10:00:00.000Z',
+          }),
+        ],
+        total: 1,
+        limit: 20,
+        offset: 0,
+      });
+
+      renderMinimalAssignment();
+
+      await user.click(screen.getByRole('button', { name: /Resume recent work/i }));
+      const resumeList = await screen.findByRole('listbox', { name: /Recent assignments/i });
+      expect(within(resumeList).getByRole('option', { name: /Alex/i })).toBeTruthy();
+      expect(screen.getByText(/Draft in progress/i)).toBeTruthy();
+      expect(screen.getByText(/Session session-/i)).toBeTruthy();
+      expect(within(resumeList).getByRole('option', { name: /Bella/i })).toBeTruthy();
+    });
+
+    it('rehydrates an unfinished session from query params', async () => {
+      vi.mocked(api.listAssignmentSessions).mockResolvedValueOnce({
+        sessions: [
+          makeAssignmentSession({
+            id: 'session-resume',
+            studentId: 'student-alex',
+            recordingId: 'rec-session',
+            transcriptId: 'tx-session',
+            promptPackageId: 'pkg-session',
+            draftId: 'draft-session',
+            currentStage: 'review',
+            teacherNotes: 'Remember the travel vocab.',
+            selectedGenerationProvider: 'openai',
+            selectedGenerationModel: 'gpt-5.2',
+            selectedPreset: 'legacy-removed-preset',
+          }),
+        ],
+        total: 1,
+        limit: 20,
+      });
+      vi.mocked(api.getRecording).mockResolvedValue(
+        makeRecording({
+          recordingId: 'rec-session',
+          status: 'transcribed',
+          transcriptId: 'tx-session',
+          studentId: 'student-alex',
+          displayName: 'session.mp3',
+        }),
+      );
+      vi.mocked(api.fetchRecordingTranscript).mockResolvedValue(
+        makeTranscript({
+          recordingId: 'rec-session',
+          transcriptId: 'tx-session',
+          text: 'Session transcript',
+        }),
+      );
+      vi.mocked(api.fetchPromptPackage).mockResolvedValue({
+        id: 'pkg-session',
+        recordingId: 'rec-session',
+        transcriptId: 'tx-session',
+        studentId: 'student-alex',
+        profilePath: null,
+        templateVersion: 'v1',
+        notes: 'Remember the travel vocab.',
+        storageUri: 'memory://prompt/pkg-session',
+        text: 'Session prompt',
+        createdAt: now,
+        updatedAt: now,
+      });
+      vi.mocked(api.fetchDraft).mockResolvedValue({
+        id: 'draft-session',
+        promptPackageId: 'pkg-session',
+        studentId: 'student-alex',
+        storageUri: 'memory://drafts/draft-session',
+        createdBy: 'user-1',
+        text: '# Session draft',
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      globalThis.history.replaceState(null, '', '/?sessionId=session-resume');
+      renderMinimalAssignment();
+
+      expect(await screen.findByDisplayValue('Session transcript')).toBeTruthy();
+      expect(await screen.findByDisplayValue('Session prompt')).toBeTruthy();
+      expect(await screen.findByDisplayValue('# Session draft')).toBeTruthy();
+      expect(((await screen.findByLabelText(/Teacher notes/i)) as HTMLTextAreaElement).value).toBe(
+        'Remember the travel vocab.',
+      );
+      openPublishingSettings();
+      expect(
+        (screen.getByRole('combobox', { name: /Learning preset/i }) as HTMLSelectElement).value,
+      ).toBe('b1-default');
+      vi.useFakeTimers();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1500);
+      });
+      expect(api.createAssignmentSession).not.toHaveBeenCalled();
+      expect(api.updateAssignmentSession).not.toHaveBeenCalled();
+      vi.useRealTimers();
+
+      vi.useFakeTimers();
+      const teacherNotesInput = screen.getByRole('textbox', { name: /Teacher notes/i });
+      fireEvent.change(teacherNotesInput, {
+        target: { value: 'Remember the travel vocab. Add pronunciation contrast.' },
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1500);
+      });
+      expect(api.updateAssignmentSession).toHaveBeenCalledWith(
+        'session-resume',
+        expect.objectContaining({
+          teacherNotes: 'Remember the travel vocab. Add pronunciation contrast.',
+        }),
+      );
+      vi.useRealTimers();
+      expect(api.getJobStatus).not.toHaveBeenCalled();
+    });
+
+    it('does not let a stale initial hydration overwrite a freshly started assignment', async () => {
+      let resolveStaleDraft: (value: ApiTypes.DraftResponse) => void = () => {};
+      vi.mocked(api.listAssignmentSessions).mockResolvedValueOnce({
+        sessions: [
+          makeAssignmentSession({
+            id: 'session-stale',
+            studentId: 'student-alex',
+            recordingId: 'rec-stale',
+            transcriptId: 'tx-stale',
+            promptPackageId: 'pkg-stale',
+            draftId: 'draft-stale',
+            currentStage: 'review',
+          }),
+        ],
+        total: 1,
+        limit: 20,
+      });
+      vi.mocked(api.getRecording).mockResolvedValueOnce(
+        makeRecording({
+          recordingId: 'rec-stale',
+          status: 'transcribed',
+          transcriptId: 'tx-stale',
+          studentId: 'student-alex',
+          displayName: 'stale.mp3',
+        }),
+      );
+      vi.mocked(api.fetchRecordingTranscript).mockResolvedValueOnce(
+        makeTranscript({
+          recordingId: 'rec-stale',
+          transcriptId: 'tx-stale',
+          text: 'Stale transcript',
+        }),
+      );
+      vi.mocked(api.fetchPromptPackage).mockResolvedValueOnce({
+        id: 'pkg-stale',
+        recordingId: 'rec-stale',
+        transcriptId: 'tx-stale',
+        studentId: 'student-alex',
+        profilePath: null,
+        templateVersion: 'v1',
+        notes: null,
+        storageUri: 'memory://prompt/pkg-stale',
+        text: 'Stale prompt',
+        createdAt: now,
+        updatedAt: now,
+      });
+      vi.mocked(api.fetchDraft).mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveStaleDraft = resolve;
+          }),
+      );
+
+      const user = createMinimalUser();
+      globalThis.history.replaceState(null, '', '/?sessionId=session-stale');
+      renderMinimalAssignment();
+
+      await waitFor(() => {
+        expect(api.fetchDraft).toHaveBeenCalledWith('draft-stale');
+      });
+      await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
+
+      await act(async () => {
+        resolveStaleDraft({
+          id: 'draft-stale',
+          promptPackageId: 'pkg-stale',
+          studentId: 'student-alex',
+          storageUri: 'memory://drafts/draft-stale',
+          createdBy: 'user-1',
+          text: '# Stale draft',
+          createdAt: now,
+          updatedAt: now,
+        });
+        await Promise.resolve();
+      });
+
+      expect(screen.queryByDisplayValue('Stale transcript')).toBeNull();
+      expect(screen.queryByDisplayValue('Stale prompt')).toBeNull();
+      expect(screen.queryByDisplayValue('# Stale draft')).toBeNull();
+      expect(screen.getByText(/New assignment ready/i)).toBeTruthy();
+      expect(new URL(globalThis.location.href).searchParams.get('sessionId')).toBeNull();
+    });
+
+    it(
+      'ignores an older draft autosave response after hydrating another assignment session',
+      async () => {
+        let resolveOlderAutosave: (value: ApiTypes.DraftResponse) => void = () => {};
+        vi.mocked(api.listAssignmentSessions).mockResolvedValue({
+          sessions: [
+            makeAssignmentSession({
+              id: 'session-next',
+              studentId: 'student-bella',
+              recordingId: 'rec-next',
+              transcriptId: 'tx-next',
+              promptPackageId: 'pkg-next',
+              draftId: 'draft-next',
+              currentStage: 'review',
+            }),
+          ],
+          total: 1,
+          limit: 20,
+        });
+        vi.mocked(api.fetchDraft).mockImplementation(async (draftId) => {
+          if (draftId === 'draft-next') {
+            return {
+              id: 'draft-next',
+              promptPackageId: 'pkg-next',
+              studentId: 'student-bella',
+              storageUri: 'memory://drafts/draft-next',
+              createdBy: 'user-1',
+              text: '# Next session draft',
+              createdAt: now,
+              updatedAt: now,
+            };
+          }
+          return {
+            id: 'draft-1',
+            promptPackageId: 'pkg-1',
+            studentId: 'student-alex',
+            storageUri: 'memory://drafts/draft-1',
+            createdBy: 'user-1',
+            text: '# Original draft',
+            createdAt: now,
+            updatedAt: now,
+          };
+        });
+        vi.mocked(api.updateDraft).mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              resolveOlderAutosave = resolve;
+            }),
+        );
+        vi.mocked(api.getRecording).mockImplementation(async (recordingId) =>
+          makeRecording({
+            recordingId,
+            status: 'transcribed',
+            transcriptId: recordingId === 'rec-next' ? 'tx-next' : 'tx-1',
+            studentId: recordingId === 'rec-next' ? 'student-bella' : 'student-alex',
+            displayName: `${recordingId}.mp3`,
+          }),
+        );
+        vi.mocked(api.fetchRecordingTranscript).mockImplementation(async (recordingId) =>
+          makeTranscript({
+            recordingId,
+            transcriptId: recordingId === 'rec-next' ? 'tx-next' : 'tx-1',
+            text: recordingId === 'rec-next' ? 'Next session transcript' : 'Original transcript',
+          }),
+        );
+        vi.mocked(api.fetchPromptPackage).mockImplementation(async (promptPackageId) => ({
+          id: promptPackageId,
+          recordingId: promptPackageId === 'pkg-next' ? 'rec-next' : 'rec-1',
+          transcriptId: promptPackageId === 'pkg-next' ? 'tx-next' : 'tx-1',
+          studentId: promptPackageId === 'pkg-next' ? 'student-bella' : 'student-alex',
+          profilePath: null,
+          templateVersion: 'v1',
+          notes: null,
+          storageUri: `memory://prompt/${promptPackageId}`,
+          text: promptPackageId === 'pkg-next' ? 'Next session prompt' : 'Original prompt',
+          createdAt: now,
+          updatedAt: now,
+        }));
+
+        const user = createMinimalUser();
+        globalThis.history.replaceState(null, '', '/?jobId=job-original');
+        vi.mocked(api.listUserJobs).mockResolvedValue({
+          jobs: [
+            makeJobStatus({
+              jobId: 'job-original',
+              studentId: 'student-alex',
+              recordingId: 'rec-1',
+              transcriptId: 'tx-1',
+              promptPackageId: 'pkg-1',
+              draftId: 'draft-1',
+              state: 'succeeded',
+            }),
+          ],
+          total: 1,
+          limit: 20,
+          offset: 0,
+        });
+        vi.mocked(api.getJobStatus).mockResolvedValueOnce(
+          makeJobStatus({
+            jobId: 'job-original',
+            studentId: 'student-alex',
+            recordingId: 'rec-1',
+            transcriptId: 'tx-1',
+            promptPackageId: 'pkg-1',
+            draftId: 'draft-1',
+            state: 'succeeded',
+          }),
+        );
+        renderMinimalAssignment();
+
+        const draftTextarea = (await screen.findByDisplayValue(
+          '# Original draft',
+        )) as HTMLTextAreaElement;
+        vi.useFakeTimers();
+        fireEvent.change(draftTextarea, { target: { value: '# Older autosave' } });
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(5000);
+        });
+        expect(api.updateDraft).toHaveBeenCalledWith('draft-1', '# Older autosave');
+        vi.useRealTimers();
+
+        await user.click(screen.getByRole('button', { name: /Resume recent work/i }));
+        const resumeList = await screen.findByRole('listbox', { name: /Recent assignments/i });
+        await user.click(within(resumeList).getByRole('option', { name: /Bella/i }));
+        await user.click(screen.getByRole('button', { name: /Resume selected assignment/i }));
+
+        const nextDraftTextarea = (await screen.findByDisplayValue(
+          '# Next session draft',
+        )) as HTMLTextAreaElement;
+
+        await act(async () => {
+          resolveOlderAutosave({
+            id: 'draft-1',
+            promptPackageId: 'pkg-1',
+            studentId: 'student-alex',
+            storageUri: 'memory://drafts/draft-1',
+            createdBy: 'user-1',
+            text: '# Older autosave',
+            createdAt: now,
+            updatedAt: now,
+          });
+          await Promise.resolve();
+        });
+
+        expect(nextDraftTextarea.value).toBe('# Next session draft');
+        expect(screen.queryByDisplayValue('# Older autosave')).toBeNull();
+      },
+      INTEGRATION_TEST_TIMEOUT_MS,
+    );
 
     it('prefers an active job when refreshing recent work and the old selection disappears', async () => {
       vi.mocked(api.listUserJobs)
@@ -373,6 +746,12 @@ export function registerResumeBasicTests() {
       expect(await screen.findByDisplayValue('Recovered transcript')).toBeTruthy();
       expect(await screen.findByDisplayValue('Recovered prompt')).toBeTruthy();
       expect(await screen.findByDisplayValue('# Recovered draft')).toBeTruthy();
+      vi.useFakeTimers();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1500);
+      });
+      expect(api.createAssignmentSession).not.toHaveBeenCalled();
+      vi.useRealTimers();
       openPublishingSettings();
       expect(
         ((await screen.findByRole('combobox', { name: /Learning preset/i })) as HTMLSelectElement)
@@ -391,6 +770,17 @@ export function registerResumeBasicTests() {
         );
       });
 
+      globalThis.history.replaceState(null, '', '/');
+    });
+
+    it('clears stale session query params when starting a fresh assignment', async () => {
+      const user = createMinimalUser();
+      globalThis.history.replaceState(null, '', '/?sessionId=session-stale');
+
+      renderMinimalAssignment();
+      await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
+
+      expect(new URL(globalThis.location.href).searchParams.get('sessionId')).toBeNull();
       globalThis.history.replaceState(null, '', '/');
     });
   });

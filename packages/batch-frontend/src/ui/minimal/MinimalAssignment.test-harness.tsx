@@ -17,10 +17,13 @@ import { MinimalAssignment } from './MinimalAssignment';
 
 vi.mock('../../utils/api', () => ({
   approveJob: vi.fn(),
+  archiveAssignmentSession: vi.fn(),
   cancelJob: vi.fn(),
+  createAssignmentSession: vi.fn(),
   createDraft: vi.fn(),
   createPromptPackage: vi.fn(),
   fetchDraft: vi.fn(),
+  fetchAssignmentSession: vi.fn(),
   fetchJobProvenance: vi.fn(),
   fetchJobOptions: vi.fn(),
   fetchPromptPackage: vi.fn(),
@@ -58,6 +61,7 @@ vi.mock('../../utils/api', () => ({
   getJobStatus: vi.fn(),
   getRecording: vi.fn(),
   listUserJobs: vi.fn(),
+  listAssignmentSessions: vi.fn(),
   listProfileContents: vi.fn(),
   listProfileRevisions: vi.fn(),
   materializeDraft: vi.fn(),
@@ -69,6 +73,7 @@ vi.mock('../../utils/api', () => ({
     .mockResolvedValue({ html: '<html><body><h1>Preview</h1></body></html>' }),
   subscribeToJobEvents: vi.fn().mockReturnValue({ close: vi.fn() }),
   upsertProfileContent: vi.fn(),
+  updateAssignmentSession: vi.fn(),
   updateDraft: vi.fn(),
   updateRecordingTranscript: vi.fn(),
   uploadRecording: vi.fn(),
@@ -139,6 +144,33 @@ export function makeJobStatus(overrides: Partial<api.JobStatus> = {}): api.JobSt
     finishedAt: null,
     error: null,
     manifestPath: null,
+    ...overrides,
+  };
+}
+
+export function makeAssignmentSession(
+  overrides: Partial<api.AssignmentSession> = {},
+): api.AssignmentSession {
+  return {
+    id: 'session-1',
+    userId: 'user-1',
+    studentId: null,
+    recordingId: null,
+    transcriptId: null,
+    promptPackageId: null,
+    draftId: null,
+    currentStage: 'source',
+    publishTarget: 'html',
+    selectedTtsProvider: 'elevenlabs',
+    selectedTtsStrategy: 'auto',
+    selectedTtsModel: null,
+    selectedPreset: 'b1-default',
+    selectedGenerationProvider: null,
+    selectedGenerationModel: null,
+    teacherNotes: null,
+    createdAt: now,
+    updatedAt: now,
+    archivedAt: null,
     ...overrides,
   };
 }
@@ -566,6 +598,17 @@ export function setupMinimalAssignmentTest() {
     limit: 20,
     offset: 0,
   });
+  vi.mocked(api.listAssignmentSessions).mockResolvedValue({
+    sessions: [],
+    total: 0,
+    limit: 20,
+  });
+  vi.mocked(api.createAssignmentSession).mockResolvedValue(makeAssignmentSession());
+  vi.mocked(api.updateAssignmentSession).mockResolvedValue(makeAssignmentSession());
+  vi.mocked(api.fetchAssignmentSession).mockResolvedValue(makeAssignmentSession());
+  vi.mocked(api.archiveAssignmentSession).mockResolvedValue(
+    makeAssignmentSession({ archivedAt: now }),
+  );
   vi.mocked(api.listProfileContents).mockResolvedValue({
     profiles: [
       { id: 'profiles/alex.md', label: 'Alex Profile' },
@@ -674,16 +717,16 @@ export function setupMinimalAssignmentTest() {
     warnings: [],
   });
 
-  vi.mocked(api.createDraft).mockResolvedValue({
+  vi.mocked(api.createDraft).mockImplementation(async (promptPackageId, text) => ({
     id: 'draft-1',
-    promptPackageId: 'pkg-1',
+    promptPackageId,
     studentId: null,
     storageUri: 'memory://drafts/draft-1',
     createdBy: 'user-1',
-    text: '# Draft markdown',
+    text,
     createdAt: now,
     updatedAt: now,
-  });
+  }));
   vi.mocked(api.fetchDraft).mockResolvedValue({
     id: 'draft-1',
     promptPackageId: 'pkg-1',
@@ -695,16 +738,16 @@ export function setupMinimalAssignmentTest() {
     updatedAt: now,
   });
 
-  vi.mocked(api.updateDraft).mockResolvedValue({
-    id: 'draft-1',
+  vi.mocked(api.updateDraft).mockImplementation(async (id, text) => ({
+    id,
     promptPackageId: 'pkg-1',
     studentId: null,
     storageUri: 'memory://drafts/draft-1',
     createdBy: 'user-1',
-    text: '# Draft markdown',
+    text,
     createdAt: now,
     updatedAt: now,
-  });
+  }));
 
   vi.mocked(api.materializeDraft).mockResolvedValue({
     draftId: 'draft-1',
