@@ -48,7 +48,7 @@ export function registerResumeBasicTests() {
       expect(screen.getByText(/Assignments publish as HTML pages/i)).toBeTruthy();
     });
 
-    it('auto-resumes queued/running jobs and skips terminal jobs on initial load', async () => {
+    it('does not auto-resume queued or running jobs on a naked initial load', async () => {
       vi.mocked(api.listUserJobs).mockResolvedValueOnce({
         jobs: [
           makeJobStatus({
@@ -68,21 +68,15 @@ export function registerResumeBasicTests() {
         limit: 20,
         offset: 0,
       });
-      vi.mocked(api.getJobStatus).mockResolvedValueOnce(
-        makeJobStatus({
-          jobId: 'job-running',
-          state: 'running',
-          startedAt: now,
-          finishedAt: null,
-        }),
-      );
 
       renderMinimalAssignment();
 
       await waitFor(() => {
-        expect(api.getJobStatus).toHaveBeenCalledWith('job-running');
+        expect(api.listUserJobs).toHaveBeenCalledTimes(1);
       });
-      expect(api.getJobStatus).toHaveBeenCalledTimes(1);
+      expect(api.getJobStatus).not.toHaveBeenCalled();
+      expect(screen.queryByRole('listbox', { name: /Recent assignments/i })).toBeNull();
+      expect(new URL(globalThis.location.href).searchParams.get('jobId')).toBeNull();
     });
 
     it('does not auto-resume terminal jobs when no queued/running job exists', async () => {
@@ -216,6 +210,38 @@ export function registerResumeBasicTests() {
       expect(screen.getByText(/Draft in progress/i)).toBeTruthy();
       expect(screen.getByText(/Session session-/i)).toBeTruthy();
       expect(within(resumeList).getByRole('option', { name: /Bella/i })).toBeTruthy();
+    });
+
+    it('does not auto-rehydrate unfinished sessions on a naked initial load', async () => {
+      vi.mocked(api.listAssignmentSessions).mockResolvedValueOnce({
+        sessions: [
+          makeAssignmentSession({
+            id: 'session-draft',
+            studentId: 'student-alex',
+            recordingId: 'rec-session',
+            transcriptId: 'tx-session',
+            promptPackageId: 'pkg-session',
+            draftId: 'draft-session',
+            currentStage: 'review',
+            updatedAt: '2026-05-13T10:10:00.000Z',
+          }),
+        ],
+        total: 1,
+        limit: 20,
+      });
+
+      renderMinimalAssignment();
+
+      await waitFor(() => {
+        expect(api.listAssignmentSessions).toHaveBeenCalledTimes(1);
+      });
+      expect(api.fetchAssignmentSession).not.toHaveBeenCalled();
+      expect(api.getRecording).not.toHaveBeenCalled();
+      expect(api.fetchDraft).not.toHaveBeenCalled();
+      expect(api.createAssignmentSession).not.toHaveBeenCalled();
+      expect(api.updateAssignmentSession).not.toHaveBeenCalled();
+      expect(screen.queryByRole('listbox', { name: /Recent assignments/i })).toBeNull();
+      expect(new URL(globalThis.location.href).searchParams.get('sessionId')).toBeNull();
     });
 
     it('rehydrates an unfinished session from query params', async () => {
