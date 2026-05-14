@@ -79,7 +79,7 @@ export interface SourceController extends SourceHydrationSnapshot {
   loadTranscript: () => Promise<void>;
   handleSaveTranscript: () => Promise<void>;
   handleRetryTranscription: () => Promise<void>;
-  resetSourceFlow: () => void;
+  resetSourceFlow: (options?: { resetStudent?: boolean }) => void;
   applyHydratedSnapshot: (snapshot: SourceHydrationSnapshot) => void;
   resolveBoundProfileId: (studentId: string) => string;
 }
@@ -152,10 +152,13 @@ export function useMinimalAssignmentSourceController({
     [studentOptions],
   );
 
-  const resetSourceFlow = useCallback(() => {
+  const resetSourceFlow = useCallback((options?: { resetStudent?: boolean }) => {
     uploadAbortRef.current?.abort();
     uploadAbortRef.current = null;
     sttProviderUserChangedRef.current = false;
+    if (options?.resetStudent) {
+      setSelectedStudentId('');
+    }
     setRecording(null);
     setRecordingStatus(null);
     setRecordingError(null);

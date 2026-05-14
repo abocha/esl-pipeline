@@ -783,6 +783,28 @@ export function registerResumeBasicTests() {
       expect(new URL(globalThis.location.href).searchParams.get('sessionId')).toBeNull();
       globalThis.history.replaceState(null, '', '/');
     });
+
+    it('does not create a resumable session for student selection alone and resets selection on start new', async () => {
+      const user = createMinimalUser();
+      renderMinimalAssignment();
+
+      await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
+      const studentSelect = (await screen.findByRole('combobox', {
+        name: /^Student$/i,
+      })) as HTMLSelectElement;
+
+      fireEvent.change(studentSelect, { target: { value: 'student-alex' } });
+      expect(studentSelect.value).toBe('student-alex');
+      await waitFor(() => {
+        expect(api.createAssignmentSession).not.toHaveBeenCalled();
+      });
+      expect(api.updateAssignmentSession).not.toHaveBeenCalled();
+
+      await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
+      expect(studentSelect.value).toBe('');
+      expect(api.createAssignmentSession).not.toHaveBeenCalled();
+      expect(api.updateAssignmentSession).not.toHaveBeenCalled();
+    });
   });
 }
 
