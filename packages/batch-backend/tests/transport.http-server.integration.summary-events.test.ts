@@ -1,3 +1,5 @@
+import type { FastifyReply, FastifyRequest } from 'fastify';
+
 import {
   describeHttpServerIntegrationSuite,
   type JobRecord,
@@ -136,9 +138,11 @@ describeHttpServerIntegrationSuite(
     it('GET /user/assignment-sessions requires authentication before application access', async () => {
       const listSessions = vi.spyOn(assignmentSessionsModule, 'listAssignmentSessionsForUserDto');
       listSessions.mockClear();
-      vi.mocked(authMiddlewareModule.authenticate).mockImplementationOnce((_request, reply) => {
-        void reply.code(401).send({ error: 'unauthorized' });
-      });
+      vi.mocked(authMiddlewareModule.authenticate).mockImplementationOnce(
+        (_request: FastifyRequest, reply: FastifyReply) => {
+          void reply.code(401).send({ error: 'unauthorized' });
+        },
+      );
 
       const response = await app.inject({
         method: 'GET',
