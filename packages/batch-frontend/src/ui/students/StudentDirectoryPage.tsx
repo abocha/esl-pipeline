@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import {
@@ -39,8 +39,11 @@ export const StudentDirectoryPage: React.FC = () => {
   const [createStudentForm, setCreateStudentForm] = useState<CreateStudentFormState>(
     INITIAL_CREATE_STUDENT_FORM,
   );
+  const latestStudentsRequestRef = useRef(0);
 
   const loadStudents = useCallback(async () => {
+    const requestId = latestStudentsRequestRef.current + 1;
+    latestStudentsRequestRef.current = requestId;
     setStudentsLoading(true);
     setStudentsError(null);
     try {
@@ -50,12 +53,16 @@ export const StudentDirectoryPage: React.FC = () => {
         order: 'asc',
         status: studentStatus,
       });
+      if (latestStudentsRequestRef.current !== requestId) return;
       setStudents(response.items ?? []);
     } catch (error) {
+      if (latestStudentsRequestRef.current !== requestId) return;
       const message = error instanceof Error ? error.message : 'Unable to load students.';
       setStudentsError(message);
     } finally {
-      setStudentsLoading(false);
+      if (latestStudentsRequestRef.current === requestId) {
+        setStudentsLoading(false);
+      }
     }
   }, [studentStatus]);
 
@@ -70,6 +77,9 @@ export const StudentDirectoryPage: React.FC = () => {
 
   useEffect(() => {
     void Promise.all([loadStudents(), loadProfileOptions()]);
+    return () => {
+      latestStudentsRequestRef.current += 1;
+    };
   }, [loadProfileOptions, loadStudents]);
 
   const handleCreateStudent = useCallback(async () => {

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import {
@@ -21,17 +21,25 @@ export const BusinessSchedulePage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [savingLessonId, setSavingLessonId] = useState<string | null>(null);
+  const latestLoadRequestRef = useRef(0);
 
   const load = useCallback(
     async (range = { from, to }) => {
+      const requestId = latestLoadRequestRef.current + 1;
+      latestLoadRequestRef.current = requestId;
       setLoading(true);
       setError(null);
       try {
-        setSurface(await getBusinessScheduleSurface(range));
+        const nextSurface = await getBusinessScheduleSurface(range);
+        if (latestLoadRequestRef.current !== requestId) return;
+        setSurface(nextSurface);
       } catch (loadError: unknown) {
+        if (latestLoadRequestRef.current !== requestId) return;
         setError(loadError instanceof Error ? loadError.message : 'Business schedule failed.');
       } finally {
-        setLoading(false);
+        if (latestLoadRequestRef.current === requestId) {
+          setLoading(false);
+        }
       }
     },
     [from, to],
@@ -39,6 +47,9 @@ export const BusinessSchedulePage: React.FC = () => {
 
   useEffect(() => {
     void load();
+    return () => {
+      latestLoadRequestRef.current += 1;
+    };
   }, [load]);
 
   const runLessonStatus = async (

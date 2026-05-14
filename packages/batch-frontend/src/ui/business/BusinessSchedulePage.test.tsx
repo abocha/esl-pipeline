@@ -91,7 +91,7 @@ function makeSurface(overrides: Record<string, unknown> = {}) {
 
 describe('BusinessSchedulePage', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     apiMocks.getBusinessScheduleSurface.mockResolvedValue(makeSurface());
     apiMocks.updateStudentLesson.mockResolvedValue({});
   });
@@ -108,6 +108,65 @@ describe('BusinessSchedulePage', () => {
     expect(screen.getByText('Balance is negative')).toBeTruthy();
     expect(screen.getByText('USD 120.00')).toBeTruthy();
     expect(screen.getByText(/-1 credits/i)).toBeTruthy();
+  });
+
+  it('keeps newer range results when an older schedule load resolves later', async () => {
+    let resolveInitialLoad: (value: ReturnType<typeof makeSurface>) => void = () => {};
+    apiMocks.getBusinessScheduleSurface
+      .mockResolvedValueOnce(makeSurface())
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveInitialLoad = resolve;
+          }),
+      )
+      .mockResolvedValueOnce(
+        makeSurface({
+          from: '2026-05-20',
+          to: '2026-05-27',
+          lessons: [
+            {
+              ...(makeSurface().lessons[0] as Record<string, unknown>),
+              id: 'lesson-newer',
+              studentName: 'Newer Range Student',
+            },
+          ],
+          reminders: [],
+          creditAlerts: [],
+          recentPayments: [],
+        }),
+      );
+
+    render(
+      <MemoryRouter>
+        <BusinessSchedulePage />
+      </MemoryRouter>,
+    );
+
+    await screen.findAllByText('Alex');
+    fireEvent.click(screen.getByRole('button', { name: /Refresh/i }));
+    fireEvent.change(screen.getByLabelText(/From/i), { target: { value: '2026-05-20' } });
+    expect(await screen.findByText('Newer Range Student')).toBeTruthy();
+
+    resolveInitialLoad(
+      makeSurface({
+        lessons: [
+          {
+            ...(makeSurface().lessons[0] as Record<string, unknown>),
+            id: 'lesson-older',
+            studentName: 'Older Range Student',
+          },
+        ],
+        reminders: [],
+        creditAlerts: [],
+        recentPayments: [],
+      }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Newer Range Student')).toBeTruthy();
+    });
+    expect(screen.queryByText('Older Range Student')).toBeNull();
   });
 
   it('marks scheduled lessons completed and chargeable from the agenda', async () => {
