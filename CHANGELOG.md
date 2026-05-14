@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [6.6.2] - 2026-05-14
+
+### Changed
+
+- Automated release from PR #77: fix(assignments): require explicit resume selection (https://github.com/abocha/esl-pipeline/pull/77)
+
 ## [6.6.1] - 2026-05-14
 
 ### Changed
