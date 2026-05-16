@@ -1,6 +1,7 @@
 export function buildTableBehaviorScript(): string {
   return `  try {
     const TABLE_SAMPLE_ROW_LIMIT = 24;
+    const TABLE_TIGHT_WIDTH_RESERVE_PX = 1;
     let tableBalanceTimer = 0;
     let tableBalanceFrame = 0;
 
@@ -494,12 +495,13 @@ export function buildTableBehaviorScript(): string {
       if (parentWidth <= 0) {
         return null;
       }
+      const availableWidth = Math.max(parentWidth - TABLE_TIGHT_WIDTH_RESERVE_PX, 1);
 
-      const plannedWidths = result.widths.map((width) => (parentWidth * width) / 100);
+      const plannedWidths = result.widths.map((width) => (availableWidth * width) / 100);
       if (!intrinsic) {
         return {
           widths: plannedWidths,
-          totalWidth: parentWidth,
+          totalWidth: availableWidth,
           tight: false,
         };
       }
@@ -537,7 +539,7 @@ export function buildTableBehaviorScript(): string {
         };
       }
 
-      const remainingWidth = Math.max(parentWidth - cappedTotal, 0);
+      const remainingWidth = Math.max(availableWidth - cappedTotal, 0);
       const uncappedWeight = uncappedIndices.reduce(
         (sum, index) => sum + (result.widths[index] ?? 0),
         0,
