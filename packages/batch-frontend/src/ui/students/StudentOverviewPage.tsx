@@ -36,12 +36,12 @@ function createOverviewKey(studentId: string, profileId?: string | null): string
   return `${studentId}:${profileId?.trim() ?? ''}`;
 }
 
-const DATE_FORMATTER = new Intl.DateTimeFormat(undefined, {
+const DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
   month: 'short',
   day: 'numeric',
 });
 
-const DATE_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
+const DATE_TIME_FORMATTER = new Intl.DateTimeFormat('en-US', {
   month: 'short',
   day: 'numeric',
   hour: 'numeric',
@@ -77,7 +77,7 @@ function formatLatestPayment(surface: StudentScheduleBillingSurface | null): str
   const payment = surface?.payments[0];
   if (!payment) return 'Not tracked yet';
   const major = payment.amountMinor / 100;
-  return `${payment.currency} ${major.toLocaleString(undefined, {
+  return `${payment.currency} ${major.toLocaleString('en-US', {
     maximumFractionDigits: 2,
     minimumFractionDigits: 2,
   })} · ${formatDate(payment.receivedAt)}`;

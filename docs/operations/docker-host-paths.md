@@ -4,7 +4,7 @@
 
 - Audience: maintainers and AI agents operating local Docker workflows.
 - Authority Level: operations runbook.
-- Last Verified Against: 2026-05-12 repo state.
+- Last Verified Against: 2026-05-17 repo state.
 - Owner: ops maintainer + automation agents.
 - Review Cadence: monthly or after Docker workflow changes.
 - Status: `runbook`.
@@ -23,8 +23,11 @@ If host paths are missing, Docker may auto-create them with root ownership and c
   - Host local pnpm commands use repo-local `pnpm-workspace.yaml` (`storeDir: .pnpm-store/v10`).
   - Docker dev services use named volumes:
     - `workspace_node_modules` mounted at `/app/node_modules`
+    - one `pkg_*_node_modules` volume for each `packages/*/node_modules`
+    - `example_orchestrator_service_node_modules` mounted at
+      `/app/packages/orchestrator/examples/service/node_modules`
     - `workspace_pnpm_store` mounted at `/pnpm` (with `PNPM_STORE_DIR=/pnpm/store`)
-  - `deps` bootstraps dependency volume permissions, then hands ownership back to `${UID}:${GID}` for both `/app/node_modules` and package-local `packages/*/node_modules` entries created during install.
+  - `deps` bootstraps dependency volume permissions, then hands ownership back to `${UID}:${GID}` for the Docker-owned dependency volumes.
 - Source code is still bind-mounted at `/app` for live reload.
 - This avoids host/container dependency churn while preserving fast Docker restarts.
 
@@ -35,7 +38,12 @@ pnpm docker:prepare
 pnpm docker:up
 ```
 
-`docker:prepare` creates required directories and validates write access.
+`docker:prepare` creates required directories and validates write access. It is implemented in
+Node.js so the same command works from PowerShell, Linux, and WSL shells.
+
+Run Docker commands from the checkout you want Compose to bind into `/app`. If both a Windows
+checkout and a WSL checkout exist, starting Compose from the wrong one will make live reload follow
+that other checkout.
 
 Optional tooling container (UV + Python) is now profile-gated and off by default:
 
@@ -58,6 +66,8 @@ sudo chown -R "$(id -un):$(id -gn)" uploads
 pnpm docker:dev:down
 pnpm docker:up
 ```
+
+On Windows, repair folder permissions through Windows security settings instead of `chown`.
 
 ## Backend Host Port Override
 
@@ -91,7 +101,9 @@ under the canonical project name.
 If Docker dependency state gets corrupted:
 
 ```bash
-pnpm docker:dev:down
-docker volume rm esl-pipeline_workspace_node_modules esl-pipeline_workspace_pnpm_store
+pnpm docker:dev:clean-deps
 pnpm docker:up
 ```
+
+The cleanup command removes only the dev dependency volumes for the `esl-pipeline` Compose
+project. It does not remove Postgres, Redis, uploads, env files, or host-side `node_modules`.

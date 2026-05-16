@@ -5,7 +5,7 @@
 - Audience: maintainers and operators managing voice-alignment rollout.
 - Read Time: 5 minutes.
 - Authority Level: operations runbook.
-- Last Verified Against: 2026-03-13 repo state.
+- Last Verified Against: 2026-05-17 repo state.
 - Owner: backend/ops maintainers + automation agents.
 - Review Cadence: monthly or after voice-alignment workflow changes.
 - Status: `runbook`.
@@ -26,7 +26,12 @@ validation, and TTS execution.
 ## 1) Refresh Voice Catalog + Capability Snapshot
 
 1. Sync voices from provider:
-   - `pnpm --filter @esl-pipeline/tts-provider-elevenlabs exec node -e "import('./dist/src/index.js').then(async (m) => { const result = await m.syncVoices(); console.log(result); })"`
+   - One-time refresh: `pnpm voices:sync`
+   - Long-running local refresher: `pnpm voices:sync:watch`
+   - The watcher defaults to every 24 hours. Override with
+     `ESL_ELEVENLABS_VOICES_SYNC_INTERVAL_HOURS=<hours>` or
+     `pnpm voices:sync -- --watch --interval-hours <hours>`.
+   - Both commands load `.env.batch-backend` and `.env` without overriding shell variables.
 2. Confirm catalog was written:
    - Check `generatedAt` and `capabilities` in `packages/orchestrator/configs/elevenlabs.voices.json`
 3. Commit updated catalog when intentional:

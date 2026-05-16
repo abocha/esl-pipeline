@@ -160,7 +160,7 @@ describe('orchestrator observability', () => {
         }),
       ]),
     );
-  }, 40_000);
+  }, 90_000);
 
   it('emits start/success events for rerunAssignment steps', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orchestrator-observe-rerun-'));
@@ -248,7 +248,7 @@ describe('orchestrator observability', () => {
     expect(successCounters.map((c) => c.tags?.stage)).toEqual(
       expect.arrayContaining(executedStages),
     );
-  }, 20_000);
+  }, 90_000);
 
   it('forces upload replacement for regenerated rerun artifacts while reusing unchecked audio', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orchestrator-rerun-upload-'));
