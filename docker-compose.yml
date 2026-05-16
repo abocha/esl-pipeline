@@ -1,3 +1,85 @@
+x-dev-backend-workspace-volumes: &dev_backend_workspace_volumes
+  - type: bind
+    source: ./uploads
+    target: /app/uploads
+    bind:
+      create_host_path: false
+  - /var/run/docker.sock:/var/run/docker.sock
+  - ./:/app
+  - workspace_node_modules:/app/node_modules
+  - pkg_batch_backend_node_modules:/app/packages/batch-backend/node_modules
+  - pkg_batch_frontend_node_modules:/app/packages/batch-frontend/node_modules
+  - pkg_contracts_node_modules:/app/packages/contracts/node_modules
+  - pkg_html_publisher_node_modules:/app/packages/html-publisher/node_modules
+  - pkg_md_validator_node_modules:/app/packages/md-validator/node_modules
+  - pkg_orchestrator_node_modules:/app/packages/orchestrator/node_modules
+  - pkg_pmd_node_modules:/app/packages/pmd/node_modules
+  - pkg_provider_runtime_node_modules:/app/packages/provider-runtime/node_modules
+  - pkg_shared_infrastructure_node_modules:/app/packages/shared-infrastructure/node_modules
+  - pkg_storage_uploader_node_modules:/app/packages/storage-uploader/node_modules
+  - pkg_stt_core_node_modules:/app/packages/stt-core/node_modules
+  - pkg_stt_provider_deepgram_node_modules:/app/packages/stt-provider-deepgram/node_modules
+  - pkg_stt_provider_elevenlabs_node_modules:/app/packages/stt-provider-elevenlabs/node_modules
+  - pkg_stt_provider_google_node_modules:/app/packages/stt-provider-google/node_modules
+  - pkg_telegram_ops_bot_node_modules:/app/packages/telegram-ops-bot/node_modules
+  - pkg_tts_core_node_modules:/app/packages/tts-core/node_modules
+  - pkg_tts_provider_elevenlabs_node_modules:/app/packages/tts-provider-elevenlabs/node_modules
+  - pkg_tts_provider_google_node_modules:/app/packages/tts-provider-google/node_modules
+  - example_orchestrator_service_node_modules:/app/packages/orchestrator/examples/service/node_modules
+  - workspace_pnpm_store:/pnpm
+
+x-dev-upload-workspace-volumes: &dev_upload_workspace_volumes
+  - type: bind
+    source: ./uploads
+    target: /app/uploads
+    bind:
+      create_host_path: false
+  - ./:/app
+  - workspace_node_modules:/app/node_modules
+  - pkg_batch_backend_node_modules:/app/packages/batch-backend/node_modules
+  - pkg_batch_frontend_node_modules:/app/packages/batch-frontend/node_modules
+  - pkg_contracts_node_modules:/app/packages/contracts/node_modules
+  - pkg_html_publisher_node_modules:/app/packages/html-publisher/node_modules
+  - pkg_md_validator_node_modules:/app/packages/md-validator/node_modules
+  - pkg_orchestrator_node_modules:/app/packages/orchestrator/node_modules
+  - pkg_pmd_node_modules:/app/packages/pmd/node_modules
+  - pkg_provider_runtime_node_modules:/app/packages/provider-runtime/node_modules
+  - pkg_shared_infrastructure_node_modules:/app/packages/shared-infrastructure/node_modules
+  - pkg_storage_uploader_node_modules:/app/packages/storage-uploader/node_modules
+  - pkg_stt_core_node_modules:/app/packages/stt-core/node_modules
+  - pkg_stt_provider_deepgram_node_modules:/app/packages/stt-provider-deepgram/node_modules
+  - pkg_stt_provider_elevenlabs_node_modules:/app/packages/stt-provider-elevenlabs/node_modules
+  - pkg_stt_provider_google_node_modules:/app/packages/stt-provider-google/node_modules
+  - pkg_telegram_ops_bot_node_modules:/app/packages/telegram-ops-bot/node_modules
+  - pkg_tts_core_node_modules:/app/packages/tts-core/node_modules
+  - pkg_tts_provider_elevenlabs_node_modules:/app/packages/tts-provider-elevenlabs/node_modules
+  - pkg_tts_provider_google_node_modules:/app/packages/tts-provider-google/node_modules
+  - example_orchestrator_service_node_modules:/app/packages/orchestrator/examples/service/node_modules
+  - workspace_pnpm_store:/pnpm
+
+x-dev-workspace-volumes: &dev_workspace_volumes
+  - ./:/app
+  - workspace_node_modules:/app/node_modules
+  - pkg_batch_backend_node_modules:/app/packages/batch-backend/node_modules
+  - pkg_batch_frontend_node_modules:/app/packages/batch-frontend/node_modules
+  - pkg_contracts_node_modules:/app/packages/contracts/node_modules
+  - pkg_html_publisher_node_modules:/app/packages/html-publisher/node_modules
+  - pkg_md_validator_node_modules:/app/packages/md-validator/node_modules
+  - pkg_orchestrator_node_modules:/app/packages/orchestrator/node_modules
+  - pkg_pmd_node_modules:/app/packages/pmd/node_modules
+  - pkg_provider_runtime_node_modules:/app/packages/provider-runtime/node_modules
+  - pkg_shared_infrastructure_node_modules:/app/packages/shared-infrastructure/node_modules
+  - pkg_storage_uploader_node_modules:/app/packages/storage-uploader/node_modules
+  - pkg_stt_core_node_modules:/app/packages/stt-core/node_modules
+  - pkg_stt_provider_deepgram_node_modules:/app/packages/stt-provider-deepgram/node_modules
+  - pkg_stt_provider_elevenlabs_node_modules:/app/packages/stt-provider-elevenlabs/node_modules
+  - pkg_stt_provider_google_node_modules:/app/packages/stt-provider-google/node_modules
+  - pkg_telegram_ops_bot_node_modules:/app/packages/telegram-ops-bot/node_modules
+  - pkg_tts_core_node_modules:/app/packages/tts-core/node_modules
+  - pkg_tts_provider_elevenlabs_node_modules:/app/packages/tts-provider-elevenlabs/node_modules
+  - pkg_tts_provider_google_node_modules:/app/packages/tts-provider-google/node_modules
+  - example_orchestrator_service_node_modules:/app/packages/orchestrator/examples/service/node_modules
+  - workspace_pnpm_store:/pnpm
 name: ${COMPOSE_PROJECT_NAME:-esl-pipeline}
 
 services:
@@ -14,16 +96,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
-    volumes:
-      - type: bind
-        source: ./uploads
-        target: /app/uploads
-        bind:
-          create_host_path: false
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ./:/app
-      - workspace_node_modules:/app/node_modules
-      - workspace_pnpm_store:/pnpm
+    volumes: *dev_backend_workspace_volumes
     environment:
       NODE_ENV: development
       PIPELINE_CWD: /app
@@ -54,10 +127,7 @@ services:
     depends_on:
       deps:
         condition: service_completed_successfully
-    volumes:
-      - ./:/app
-      - workspace_node_modules:/app/node_modules
-      - workspace_pnpm_store:/pnpm
+    volumes: *dev_workspace_volumes
     environment:
       NODE_ENV: development
       BATCH_BACKEND_URL: http://batch-backend:8080
@@ -81,15 +151,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
-    volumes:
-      - type: bind
-        source: ./uploads
-        target: /app/uploads
-        bind:
-          create_host_path: false
-      - ./:/app
-      - workspace_node_modules:/app/node_modules
-      - workspace_pnpm_store:/pnpm
+    volumes: *dev_upload_workspace_volumes
     environment:
       NODE_ENV: development
       PIPELINE_CWD: /app
@@ -111,23 +173,20 @@ services:
       context: .
       dockerfile: packages/batch-backend/Dockerfile.dev
       target: default
-    volumes:
-      - ./:/app
-      - workspace_node_modules:/app/node_modules
-      - workspace_pnpm_store:/pnpm
+    volumes: *dev_workspace_volumes
     environment:
       CI: 'true'
       PNPM_STORE_DIR: /pnpm/store
       NPM_CONFIG_STORE_DIR: /pnpm/store
     command: >
       sh -lc "
-        mkdir -p /app/node_modules /pnpm/store &&
-        chmod -R 0777 /app/node_modules /pnpm &&
+        dependency_paths='/app/node_modules /app/packages/batch-backend/node_modules /app/packages/batch-frontend/node_modules /app/packages/contracts/node_modules /app/packages/html-publisher/node_modules /app/packages/md-validator/node_modules /app/packages/orchestrator/node_modules /app/packages/pmd/node_modules /app/packages/provider-runtime/node_modules /app/packages/shared-infrastructure/node_modules /app/packages/storage-uploader/node_modules /app/packages/stt-core/node_modules /app/packages/stt-provider-deepgram/node_modules /app/packages/stt-provider-elevenlabs/node_modules /app/packages/stt-provider-google/node_modules /app/packages/telegram-ops-bot/node_modules /app/packages/tts-core/node_modules /app/packages/tts-provider-elevenlabs/node_modules /app/packages/tts-provider-google/node_modules /app/packages/orchestrator/examples/service/node_modules /pnpm' &&
+        mkdir -p $$dependency_paths /pnpm/store &&
+        chmod -R 0777 $$dependency_paths &&
         pnpm install &&
         pnpm -r --filter './packages/*' run build &&
         find /app/packages -mindepth 2 -maxdepth 2 -type d -name dist -exec chown -R ${UID:-1000}:${GID:-1000} {} \\; &&
-        find /app/packages -mindepth 2 -maxdepth 2 -type d -name node_modules -exec chown -R ${UID:-1000}:${GID:-1000} {} \\; &&
-        chown -R ${UID:-1000}:${GID:-1000} /app/node_modules /pnpm
+        chown -R ${UID:-1000}:${GID:-1000} $$dependency_paths
       "
     working_dir: /app
     user: '0:0'
@@ -175,15 +234,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
-    volumes:
-      - type: bind
-        source: ./uploads
-        target: /app/uploads
-        bind:
-          create_host_path: false
-      - ./:/app
-      - workspace_node_modules:/app/node_modules
-      - workspace_pnpm_store:/pnpm
+    volumes: *dev_upload_workspace_volumes
     environment:
       NODE_ENV: development
       PIPELINE_CWD: /app
@@ -206,10 +257,7 @@ services:
         condition: service_started
       deps:
         condition: service_completed_successfully
-    volumes:
-      - ./:/app
-      - workspace_node_modules:/app/node_modules
-      - workspace_pnpm_store:/pnpm
+    volumes: *dev_workspace_volumes
     environment:
       NODE_ENV: development
       PNPM_STORE_DIR: /pnpm/store
@@ -232,10 +280,7 @@ services:
         condition: service_healthy
       telegram-smoke-deps:
         condition: service_completed_successfully
-    volumes:
-      - ./:/app
-      - workspace_node_modules:/app/node_modules
-      - workspace_pnpm_store:/pnpm
+    volumes: *dev_workspace_volumes
     environment:
       NODE_ENV: development
       PNPM_STORE_DIR: /pnpm/store
@@ -335,22 +380,19 @@ services:
       context: .
       dockerfile: packages/batch-backend/Dockerfile.dev
       target: default
-    volumes:
-      - ./:/app
-      - workspace_node_modules:/app/node_modules
-      - workspace_pnpm_store:/pnpm
+    volumes: *dev_workspace_volumes
     environment:
       PNPM_STORE_DIR: /pnpm/store
       NPM_CONFIG_STORE_DIR: /pnpm/store
       CI: 'false'
     command: >
       sh -lc "
-        mkdir -p /app/node_modules /pnpm/store &&
-        chmod -R 0777 /app/node_modules /pnpm &&
+        dependency_paths='/app/node_modules /app/packages/batch-backend/node_modules /app/packages/batch-frontend/node_modules /app/packages/contracts/node_modules /app/packages/html-publisher/node_modules /app/packages/md-validator/node_modules /app/packages/orchestrator/node_modules /app/packages/pmd/node_modules /app/packages/provider-runtime/node_modules /app/packages/shared-infrastructure/node_modules /app/packages/storage-uploader/node_modules /app/packages/stt-core/node_modules /app/packages/stt-provider-deepgram/node_modules /app/packages/stt-provider-elevenlabs/node_modules /app/packages/stt-provider-google/node_modules /app/packages/telegram-ops-bot/node_modules /app/packages/tts-core/node_modules /app/packages/tts-provider-elevenlabs/node_modules /app/packages/tts-provider-google/node_modules /app/packages/orchestrator/examples/service/node_modules /pnpm' &&
+        mkdir -p $$dependency_paths /pnpm/store &&
+        chmod -R 0777 $$dependency_paths &&
         pnpm install --no-frozen-lockfile &&
         pnpm --filter @esl-pipeline/telegram-ops-bot... run build &&
-        find /app/packages -mindepth 2 -maxdepth 2 -type d -name node_modules -exec chown -R ${UID:-1000}:${GID:-1000} {} \\; &&
-        chown -R ${UID:-1000}:${GID:-1000} /app/node_modules /pnpm /app/packages/contracts/dist /app/packages/shared-infrastructure/dist /app/packages/telegram-ops-bot/dist
+        chown -R ${UID:-1000}:${GID:-1000} $$dependency_paths /app/packages/contracts/dist /app/packages/shared-infrastructure/dist /app/packages/telegram-ops-bot/dist
       "
     working_dir: /app
     user: '0:0'
@@ -366,10 +408,7 @@ services:
     depends_on:
       deps:
         condition: service_completed_successfully
-    volumes:
-      - ./:/app
-      - workspace_node_modules:/app/node_modules
-      - workspace_pnpm_store:/pnpm
+    volumes: *dev_workspace_volumes
     environment:
       NODE_ENV: development
       PNPM_STORE_DIR: /pnpm/store
@@ -391,15 +430,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
-    volumes:
-      - type: bind
-        source: ./uploads
-        target: /app/uploads
-        bind:
-          create_host_path: false
-      - ./:/app
-      - workspace_node_modules:/app/node_modules
-      - workspace_pnpm_store:/pnpm
+    volumes: *dev_upload_workspace_volumes
     environment:
       NODE_ENV: development
       PIPELINE_CWD: /app
@@ -416,6 +447,25 @@ services:
     pull_policy: never
 
 volumes:
+  example_orchestrator_service_node_modules:
+  pkg_batch_backend_node_modules:
+  pkg_batch_frontend_node_modules:
+  pkg_contracts_node_modules:
+  pkg_html_publisher_node_modules:
+  pkg_md_validator_node_modules:
+  pkg_orchestrator_node_modules:
+  pkg_pmd_node_modules:
+  pkg_provider_runtime_node_modules:
+  pkg_shared_infrastructure_node_modules:
+  pkg_storage_uploader_node_modules:
+  pkg_stt_core_node_modules:
+  pkg_stt_provider_deepgram_node_modules:
+  pkg_stt_provider_elevenlabs_node_modules:
+  pkg_stt_provider_google_node_modules:
+  pkg_telegram_ops_bot_node_modules:
+  pkg_tts_core_node_modules:
+  pkg_tts_provider_elevenlabs_node_modules:
+  pkg_tts_provider_google_node_modules:
   postgres18_data:
   redis_data:
   workspace_node_modules:

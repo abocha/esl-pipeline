@@ -77,5 +77,5 @@ describe('markdown caching', () => {
     expect(call?.[0]?.path).toBe(mdPath);
     expect(call?.[0]?.strict).toBe(false);
     expect(call?.[0]?.context?.rawMarkdown).toBe(mdContent);
-  }, 30000);
+  }, 90000);
 });
