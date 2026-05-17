@@ -9,6 +9,7 @@
 - Review Cadence: after release automation or contract-versioning PRs.
 - Status: `active`.
 - Exit Trigger: archive after the private release model and contract-version automation are fully implemented and represented in versioning docs.
+- Current Focus: implement the private release-tag and contract-version automation until it is promoted into versioning docs.
 
 ## Summary
 

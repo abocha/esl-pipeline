@@ -2,7 +2,7 @@ import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { buildPlanIndexRows } from './plan-lifecycle-lib.mjs';
+import { generatePlansIndex } from './generate-plans-index.mjs';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const docsCheckConfigPath = path.join(rootDir, 'scripts', 'docs', 'docs-check.config.json');
@@ -254,29 +254,6 @@ async function generateEnvSurfaceIndex() {
   await writeGenerated('docs/generated/env-surface-index.md', lines.join('\n'));
 }
 
-async function generatePlansIndex() {
-  const rows = buildPlanIndexRows({ repoRoot: rootDir, config: docsCheckConfig });
-
-  const lines = [
-    formatGeneratedHeader(
-      'Plans Index',
-      'Provide a lifecycle-aware inventory of plan docs so agents can distinguish editable execution plans from archived historical trace.',
-      'Plan lifecycle, routing, and editability come from `docs/plans/README.md`, plan metadata, and archive location.',
-    ),
-    '## Plan Files',
-    '',
-    '| Kind | Title | Status | Routed | Editable | Exit Trigger | Path |',
-    '| --- | --- | --- | --- | --- | --- | --- |',
-    ...rows.map(
-      (row) =>
-        `| ${row.kind} | ${row.title} | ${row.status || ''} | ${row.routed} | ${row.editable} | ${row.exitTrigger || ''} | \`${row.path}\` |`,
-    ),
-    '',
-  ];
-
-  await writeGenerated('docs/generated/plans-index.md', lines.join('\n'));
-}
-
 function collectRouteMatches(contents) {
   const regex = /app\.(get|post|put|patch|delete)\(\s*['"`]([^'"`]+)['"`]/g;
   const matches = [];
@@ -341,6 +318,10 @@ async function generateBackendRouteIndex() {
 }
 
 await generatePackageReadmeIndex();
-await generatePlansIndex();
+await generatePlansIndex({
+  repoRoot: rootDir,
+  config: docsCheckConfig,
+  sourceCommand: 'pnpm docs:generate:indexes',
+});
 await generateBackendRouteIndex();
 await generateEnvSurfaceIndex();

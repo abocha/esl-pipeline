@@ -8,8 +8,8 @@
 - Last Verified Against: 2026-03-13 repo state and official Telegram docs available on 2026-03-13.
 - Owner: backend/ops maintainers + automation agents.
 - Review Cadence: revisit after major Telegram UX or transport changes.
-- Status: `active`.
-- Exit Trigger: archive after the A-track UX activation and guided-interaction phases either ship or are superseded by the Telegram ops runbook.
+- Status: `archived`.
+- Exit Trigger: archived after the A-track UX activation and guided-interaction phases moved behind the active topic README.
 
 ## Summary
 
@@ -20,7 +20,7 @@ The current UX is intentionally command-first and operator-focused. That is a re
 Primary repo sources:
 
 - [`docs/operations/telegram-ops-control-panel.md`](../../operations/telegram-ops-control-panel.md)
-- [`docs/plans/telegram-ops-control-panel-hardening/README.md`](README.md)
+- [`docs/plans/telegram-ops-control-panel-hardening/README.md`](../../../plans/telegram-ops-control-panel-hardening/README.md)
 - [`packages/telegram-ops-bot/src/runner.ts`](../../../packages/telegram-ops-bot/src/runner.ts)
 - [`packages/telegram-ops-bot/src/commands.ts`](../../../packages/telegram-ops-bot/src/commands.ts)
 - [`packages/telegram-ops-bot/src/formatter.ts`](../../../packages/telegram-ops-bot/src/formatter.ts)

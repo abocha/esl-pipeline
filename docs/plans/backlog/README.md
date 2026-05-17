@@ -9,6 +9,7 @@
 - Review Cadence: after backlog item implementation PRs.
 - Status: `backlog`.
 - Exit Trigger: archive individual wave plans after their implementation PR merges; keep this backlog routed while it contains active or deferred optimization candidates.
+- Current Focus: work from queued backlog items only; completed wave plans are archive trace.
 
 ## Summary
 

@@ -9,6 +9,7 @@
 - Review Cadence: after legacy-retirement workflow changes.
 - Status: `active`.
 - Exit Trigger: archive after the legacy-retirement backlog is complete or the workflow is promoted into durable repo guidance.
+- Current Focus: use this file as the active per-item retirement workflow until it is promoted into durable repo guidance.
 
 ## Summary
 

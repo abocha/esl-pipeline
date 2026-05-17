@@ -19,8 +19,10 @@
 
 1. Run `pnpm docs:garden`.
 2. If you are fixing docs-heavy work before merge, also run `pnpm docs:check`.
-3. Review the rolling issue queue.
-4. Update docs, routing, archive state, or governance policy as needed.
+3. For plan-only lifecycle updates, run `pnpm docs:generate:plans-index` instead of regenerating
+   every generated index.
+4. Review the rolling issue queue.
+5. Update docs, routing, archive state, or governance policy as needed.
 
 ## What Each Artifact Is For
 
@@ -30,7 +32,7 @@
 - `tmp/docs-gardening-issue.json` / `.md`: rolling issue payload generated from the snapshot.
 - `tmp/docs-health-report.json` / `.md`: health snapshot and scorecard rendering.
 - `tmp/docs-stale-active.json` / `.md`: heuristic queue for manual review.
-- `tmp/docs-plan-lifecycle.json` / `.md`: hard-gated plan lifecycle and editability report.
+- `tmp/docs-plan-lifecycle.json` / `.md`: hard-gated plan lifecycle, editability, and current-focus report.
 - Rolling issue: triage surface for unresolved warnings and candidates.
 
 ## Triage Rules
@@ -41,7 +43,8 @@
 - Missing metadata or freshness in enforced scope.
 - Route hints or governance requirements that are mechanically failing.
 - Active plan lifecycle violations: completed/superseded plans under `docs/plans/`, missing exit
-  triggers on routed active plans, or orphan standalone plans.
+  triggers or current focus on routed active plans, non-editable active statuses, non-editable router
+  targets, or orphan standalone plans.
 
 ### Review manually
 
