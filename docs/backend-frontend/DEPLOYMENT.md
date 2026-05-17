@@ -5,7 +5,7 @@
 - Audience: maintainers/operators deploying batch services.
 - Read Time: 6 minutes.
 - Authority Level: Deployment runbook.
-- Last Verified Against: 2026-04-19 repo state.
+- Last Verified Against: 2026-05-17 repo state.
 - Owner: backend/frontend maintainers + automation agents.
 - Review Cadence: monthly or after deployment workflow changes.
 - Status: `runbook`.
@@ -30,7 +30,7 @@
 - Redis 8+
 - ffmpeg available in backend runtime
 
-## Local/Single-Host Deployment (Compose)
+## Local Development Stack (Compose)
 
 Prepare and start:
 
@@ -59,6 +59,31 @@ BATCH_BACKEND_HOST_PORT=8081 pnpm docker:up
 
 Troubleshooting guide:
 [`docs/operations/docker-host-paths.md`](../operations/docker-host-paths.md)
+
+The dev stack bind-mounts the active checkout for live editing and keeps Docker dependencies in
+named volumes separate from host `node_modules`.
+
+## Production-Style Local Stack
+
+Use this before a release candidate when you want image builds instead of the live source bind
+mount:
+
+```bash
+pnpm docker:prod
+pnpm docker:prod:ps
+```
+
+Stop it with:
+
+```bash
+pnpm docker:prod:down
+```
+
+This is still a local/single-host Compose workflow. Keep it portable until the hosting target is
+chosen: images should remain deployable by any container host, secrets should come from the host or
+provider environment, and Postgres/Redis can later move to managed services without changing app
+contracts. The current Docker socket mount is local ops coupling for backup/control workflows; treat
+it as something to isolate behind an ops profile or sidecar before a broader production rollout.
 
 ## Environment Files
 

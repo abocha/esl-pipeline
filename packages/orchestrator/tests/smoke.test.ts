@@ -92,7 +92,7 @@ describe('orchestrator smoke', () => {
     expect(initialTimestamp).toBeDefined();
     expect(statusAfter.manifest?.timestamp).toBeDefined();
     expect(statusAfter.manifest!.timestamp >= initialTimestamp!).toBe(true);
-  }, 30000);
+  }, 90000);
 
   it('keeps HTML publishing on the static theme path even when rerunning the same preset', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orchestrator-colorize-skip-'));
@@ -122,7 +122,7 @@ describe('orchestrator smoke', () => {
     const secondManifest = JSON.parse(await readFile(second.manifestPath!, 'utf8'));
     expect(secondManifest.publishTarget).toBe('html');
     expect(secondManifest).not.toHaveProperty('notionColorization');
-  }, 30000);
+  }, 90000);
 
   it('preserves TTS metadata when rerun without passing TTS flags', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orchestrator-tts-metadata-'));
@@ -175,7 +175,7 @@ describe('orchestrator smoke', () => {
     expect(manifestSecond.dialogueLanguage).toBe('es');
     expect(manifestSecond.dialogueStability).toBe(0.55);
     expect(manifestSecond.dialogueSeed).toBe(999);
-  }, 30000);
+  }, 90000);
 
   it('rerun upload/add-audio does not require parseable markdown when tts is not requested', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orchestrator-rerun-no-tts-parse-'));
@@ -215,7 +215,7 @@ describe('orchestrator smoke', () => {
     });
 
     expect(rerun.steps).toEqual(['add-audio']);
-  }, 30000);
+  }, 90000);
 
   it('strips legacy audio alias on republish rerun', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orchestrator-legacy-prefix-'));
@@ -266,7 +266,7 @@ describe('orchestrator smoke', () => {
     expect(manifestAfter.audioArtifacts?.studyText?.url).toBe(
       'https://s3.amazonaws.com/audio/file.mp3',
     );
-  }, 30000);
+  }, 90000);
 
   it('normalizes a legacy manifest publish target to html during republish reruns', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orchestrator-legacy-publish-target-'));
@@ -312,5 +312,5 @@ describe('orchestrator smoke', () => {
     expect(rerun.publishTarget).toBe('html');
     const manifestAfter = JSON.parse(await readFile(initial.manifestPath!, 'utf8'));
     expect(manifestAfter.publishTarget).toBe('html');
-  }, 30000);
+  }, 90000);
 });

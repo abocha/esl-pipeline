@@ -53,6 +53,7 @@ describe('rendering', () => {
     expect(scriptMatch?.[1]).toContain("normalized.includes('structural formula')");
     expect(scriptMatch?.[1]).toContain('measureIntrinsicColumnWidths');
     expect(scriptMatch?.[1]).toContain("table.setAttribute('data-tight-columns', 'true')");
+    expect(scriptMatch?.[1]).toContain('TABLE_TIGHT_WIDTH_RESERVE_PX');
   });
 
   it('applies grammar matrix styling only to Notice the Grammar column-list blocks', async () => {

@@ -22,6 +22,9 @@ importers:
       '@biomejs/biome':
         specifier: 2.4.15
         version: 2.4.15
+      '@elevenlabs/elevenlabs-js':
+        specifier: ^2.46.0
+        version: 2.46.0
       '@eslint-react/eslint-plugin':
         specifier: ^5.7.6
         version: 5.7.6(eslint@10.3.0(jiti@2.7.0))(typescript@6.0.3)
@@ -61,6 +64,9 @@ importers:
       prettier-plugin-packagejson:
         specifier: ^3.0.2
         version: 3.0.2(prettier@3.8.3)
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
       typescript:
         specifier: ^6.0.3
         version: 6.0.3

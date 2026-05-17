@@ -2,14 +2,14 @@ export function formatDate(value: string): string {
   const date = new Date(value);
   return Number.isNaN(date.getTime())
     ? value
-    : date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    : date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 export function formatDateTime(value: string): string {
   const date = new Date(value);
   return Number.isNaN(date.getTime())
     ? value
-    : date.toLocaleString(undefined, {
+    : date.toLocaleString('en-US', {
         month: 'short',
         day: 'numeric',
         hour: 'numeric',
@@ -18,7 +18,7 @@ export function formatDateTime(value: string): string {
 }
 
 export function formatMoney(amountMinor: number, currency: string): string {
-  return `${currency} ${(amountMinor / 100).toLocaleString(undefined, {
+  return `${currency} ${(amountMinor / 100).toLocaleString('en-US', {
     maximumFractionDigits: 2,
     minimumFractionDigits: 2,
   })}`;
@@ -26,7 +26,7 @@ export function formatMoney(amountMinor: number, currency: string): string {
 
 export function formatHours(minutes: number): string {
   const hours = minutes / 60;
-  return `${hours.toLocaleString(undefined, {
+  return `${hours.toLocaleString('en-US', {
     maximumFractionDigits: 1,
     minimumFractionDigits: Number.isInteger(hours) ? 0 : 1,
   })} h`;

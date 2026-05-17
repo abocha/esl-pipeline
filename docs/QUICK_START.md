@@ -5,7 +5,7 @@
 - Audience: AI agents, maintainers.
 - Read Time: 4 minutes.
 - Authority Level: Operational quickstart.
-- Last Verified Against: 2026-05-12 repo state.
+- Last Verified Against: 2026-05-17 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly.
 - Status: `active`.
@@ -33,6 +33,10 @@ Local pnpm commands use the repo-local `storeDir: .pnpm-store/v10` setting in
 [`pnpm-workspace.yaml`](../pnpm-workspace.yaml); project `.npmrc` is intentionally absent so npm
 commands do not inherit pnpm-only config.
 
+Windows PowerShell, Linux, and WSL use the same core setup commands. See
+[`docs/operations/windows-linux-dev.md`](operations/windows-linux-dev.md) for line-ending, Docker
+bind-mount, and host-vs-Docker dependency notes.
+
 ## Repo Checks
 
 ```bash
@@ -53,6 +57,8 @@ Do not add or depend on CLI entrypoints in orchestrator.
 
 ## Batch System (Local Docker)
 
+Live-edit development stack:
+
 ```bash
 pnpm docker:up
 ```
@@ -66,6 +72,17 @@ BATCH_BACKEND_HOST_PORT=8081 pnpm docker:up
 ```
 
 Common cause: another app (for example qBittorrent Web UI) uses `8080`.
+
+Production-style local validation uses image builds instead of the live source bind mount:
+
+```bash
+pnpm docker:prod
+pnpm docker:prod:ps
+```
+
+Use `pnpm docker:prod:down` to stop that stack. The production-style stack remains local
+single-host Compose; real hosting should provide secrets and persistent services through the
+chosen platform.
 
 ## Prompt Gallery Bootstrap (DB-Canonical)
 
@@ -87,6 +104,7 @@ pnpm ops:alert:check
 
 Full runbooks:
 
+- [`docs/operations/windows-linux-dev.md`](operations/windows-linux-dev.md)
 - [`docs/operations/postgres-backup-s3.md`](operations/postgres-backup-s3.md)
 - [`docs/operations/postgres-ops-health.md`](operations/postgres-ops-health.md)
 - [`docs/operations/rollup-optional-binary-troubleshooting.md`](operations/rollup-optional-binary-troubleshooting.md)
