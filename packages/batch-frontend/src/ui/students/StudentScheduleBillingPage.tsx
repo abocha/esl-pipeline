@@ -48,14 +48,14 @@ interface RecurrenceFormState {
   slots: RecurrenceSlotForm[];
 }
 
-const DATE_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
+const DATE_TIME_FORMATTER = new Intl.DateTimeFormat('en-US', {
   month: 'short',
   day: 'numeric',
   hour: 'numeric',
   minute: '2-digit',
 });
 
-const DATE_FORMATTER = new Intl.DateTimeFormat(undefined, {
+const DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
   month: 'short',
   day: 'numeric',
 });
@@ -73,7 +73,7 @@ function formatDate(value?: string | null): string {
 }
 
 function formatMoney(amountMinor: number, currency: string): string {
-  return `${currency} ${(amountMinor / 100).toLocaleString(undefined, {
+  return `${currency} ${(amountMinor / 100).toLocaleString('en-US', {
     maximumFractionDigits: 2,
     minimumFractionDigits: 2,
   })}`;

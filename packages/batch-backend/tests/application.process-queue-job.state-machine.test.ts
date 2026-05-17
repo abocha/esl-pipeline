@@ -87,7 +87,7 @@ describe('application/process-queue-job', () => {
     if (initial.md == null) {
       throw new Error('expected fixture job md path');
     }
-    expect(payload.md.replaceAll('\\', '/').endsWith(initial.md)).toBe(true);
+    expect(payload.md.replaceAll('\\', '/').endsWith(initial.md.replaceAll('\\', '/'))).toBe(true);
     expect(typeof runId).toBe('string');
     expect(runId.length).toBeGreaterThan(0);
     expect(withTtsCacheActivitySharedLockSpy).toHaveBeenCalledTimes(1);
