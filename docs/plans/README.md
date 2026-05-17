@@ -12,8 +12,9 @@
 
 ## Purpose
 
-- Route readers to active implementation plans, long-lived roadmaps, backlog surfaces, and completed historical plans.
-- Clarify where a new plan should live and when a plan should be superseded, moved, or archived.
+- Route readers only to plans that are still editable execution artifacts.
+- Keep implemented or superseded plans out of active routing so agents do not patch stale intent.
+- Clarify when a plan must be archived after a PR lands.
 
 ## Plan Types
 
@@ -32,7 +33,19 @@
 
 ### Completed plan
 
-- Historical execution truth moved under `docs/plans/completed/` for traceability without cluttering active routing.
+- Historical execution truth moved under `docs/archive/plans/` for traceability without cluttering active routing.
+
+## Lifecycle Contract
+
+- Active plan statuses under `docs/plans/` are limited to `active`, `roadmap`, `backlog`, and
+  `draft`.
+- Completed and superseded plans belong under `docs/archive/plans/`.
+- Active topic routers and standalone plans must declare `Status`, `Last Verified Against`, and
+  `Exit Trigger`.
+- Default exit trigger: archive the plan after the implementation PR merges unless it remains an
+  explicit roadmap.
+- PRs that implement a plan must either archive that plan or update its lifecycle metadata in the
+  same branch.
 
 ## Lifecycle Rules
 
@@ -41,7 +54,7 @@
 3. Supersede a plan when:
    - a newer plan replaces its execution truth, or
    - the work has moved into SSOT/runbooks and the plan is now historical.
-4. Move completed execution plans under `docs/plans/completed/` instead of leaving them mixed with active work.
+4. Move completed execution plans under `docs/archive/plans/` instead of leaving them mixed with active work.
 5. Update this router whenever a new active plan topic or standalone plan becomes part of normal execution flow.
 
 ## Active Plan Routes
@@ -67,7 +80,7 @@
 
 ## Historical and Generated Aids
 
-- Completed plans: [`docs/plans/completed/README.md`](completed/README.md)
+- Archived plans: [`docs/archive/plans/`](../archive/plans/)
 - Generated plan inventory: [`docs/generated/plans-index.md`](../generated/plans-index.md)
 
 ## Related

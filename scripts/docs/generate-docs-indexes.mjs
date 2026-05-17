@@ -2,6 +2,8 @@ import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { buildPlanIndexRows } from './plan-lifecycle-lib.mjs';
+
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const docsCheckConfigPath = path.join(rootDir, 'scripts', 'docs', 'docs-check.config.json');
 
@@ -252,40 +254,23 @@ async function generateEnvSurfaceIndex() {
   await writeGenerated('docs/generated/env-surface-index.md', lines.join('\n'));
 }
 
-function classifyPlanPath(relativePath) {
-  if (relativePath === 'docs/plans/README.md') return 'router';
-  if (relativePath.startsWith('docs/plans/completed/')) return 'completed';
-  if (relativePath.startsWith('docs/plans/backlog/')) return 'backlog';
-  if (path.posix.dirname(relativePath) === 'docs/plans') return 'standalone';
-  if (path.posix.basename(relativePath) === 'README.md') return 'topic';
-  return 'phase/detail';
-}
-
 async function generatePlansIndex() {
-  const planFiles = (await walk('docs/plans', (relativePath) => relativePath.endsWith('.md')))
-    .map(posixRelative)
-    .sort((left, right) => left.localeCompare(right));
-
-  const rows = [];
-  for (const relativePath of planFiles) {
-    rows.push({
-      kind: classifyPlanPath(relativePath),
-      title: await readMarkdownTitle(relativePath),
-      path: relativePath,
-    });
-  }
+  const rows = buildPlanIndexRows({ repoRoot: rootDir, config: docsCheckConfig });
 
   const lines = [
     formatGeneratedHeader(
       'Plans Index',
-      'Provide a flat inventory of plan docs so agents can find the right roadmap, execution phase, or completed work artifact quickly.',
-      'Plan kinds are inferred from the file path under `docs/plans/`.',
+      'Provide a lifecycle-aware inventory of plan docs so agents can distinguish editable execution plans from archived historical trace.',
+      'Plan lifecycle, routing, and editability come from `docs/plans/README.md`, plan metadata, and archive location.',
     ),
     '## Plan Files',
     '',
-    '| Kind | Title | Path |',
-    '| --- | --- | --- |',
-    ...rows.map((row) => `| ${row.kind} | ${row.title} | \`${row.path}\` |`),
+    '| Kind | Title | Status | Routed | Editable | Exit Trigger | Path |',
+    '| --- | --- | --- | --- | --- | --- | --- |',
+    ...rows.map(
+      (row) =>
+        `| ${row.kind} | ${row.title} | ${row.status || ''} | ${row.routed} | ${row.editable} | ${row.exitTrigger || ''} | \`${row.path}\` |`,
+    ),
     '',
   ];
 

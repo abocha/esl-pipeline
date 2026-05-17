@@ -1,5 +1,15 @@
 # Versioning Private Contracts Overhaul
 
+## Meta
+
+- Audience: maintainers and release/tooling agents.
+- Authority Level: active release-system execution plan.
+- Last Verified Against: 2026-05-17 repo state.
+- Owner: founder-maintainer + automation agents.
+- Review Cadence: after release automation or contract-versioning PRs.
+- Status: `active`.
+- Exit Trigger: archive after the private release model and contract-version automation are fully implemented and represented in versioning docs.
+
 ## Summary
 
 Implement a clean private-repo versioning model with deterministic release automation and explicit contract versions.

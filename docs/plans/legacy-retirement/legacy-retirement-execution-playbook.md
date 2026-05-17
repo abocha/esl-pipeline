@@ -1,5 +1,15 @@
 # Legacy Retirement Execution Playbook
 
+## Meta
+
+- Audience: maintainers and implementation agents.
+- Authority Level: active execution playbook.
+- Last Verified Against: 2026-05-17 repo state.
+- Owner: founder-maintainer + automation agents.
+- Review Cadence: after legacy-retirement workflow changes.
+- Status: `active`.
+- Exit Trigger: archive after the legacy-retirement backlog is complete or the workflow is promoted into durable repo guidance.
+
 ## Summary
 
 This playbook defines the standard implementation workflow for each legacy retirement backlog item.

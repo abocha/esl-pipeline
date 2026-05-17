@@ -5,7 +5,7 @@
 - Audience: founder-maintainer + implementation agents.
 - Date Captured: 2026-04-30.
 - Intended Start: 2026-05-01.
-- Status: active planning note.
+- Status: archived.
 
 ## Summary
 

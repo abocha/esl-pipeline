@@ -8,7 +8,8 @@
 - Last Verified Against: 2026-03-13 repo state and official Telegram docs available on 2026-03-13.
 - Owner: backend/ops maintainers + automation agents.
 - Review Cadence: revisit after major Telegram UX or transport changes.
-- Status: `active audit`.
+- Status: `active`.
+- Exit Trigger: archive after the A-track UX activation and guided-interaction phases either ship or are superseded by the Telegram ops runbook.
 
 ## Summary
 

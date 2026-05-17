@@ -16,6 +16,10 @@
 | GET    | `/admin/jobs/summary`                                     | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts`          |
 | GET    | `/admin/stats`                                            | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts`          |
 | GET    | `/admin/users`                                            | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts`          |
+| POST   | `/assignment-sessions`                                    | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts`          |
+| GET    | `/assignment-sessions/:id`                                | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts`          |
+| PATCH  | `/assignment-sessions/:id`                                | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts`          |
+| POST   | `/assignment-sessions/:id/archive`                        | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts`          |
 | POST   | `/auth/login`                                             | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts`          |
 | POST   | `/auth/logout`                                            | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts`          |
 | GET    | `/auth/me`                                                | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts`          |
@@ -107,6 +111,7 @@
 | POST   | `/templates/:id/revisions/:revisionId/activate`           | `packages/batch-backend/src/transport/extended-routes/profiles-templates-routes.ts` |
 | POST   | `/templates/:id/revisions/:revisionId/restore`            | `packages/batch-backend/src/transport/extended-routes/profiles-templates-routes.ts` |
 | POST   | `/uploads`                                                | `packages/batch-backend/src/transport/extended-routes/recordings-routes.ts`         |
+| GET    | `/user/assignment-sessions`                               | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts`          |
 | GET    | `/user/files`                                             | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts`          |
 | GET    | `/user/jobs`                                              | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts`          |
 | POST   | `/user/jobs`                                              | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts`          |

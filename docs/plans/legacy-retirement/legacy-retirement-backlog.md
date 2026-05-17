@@ -1,5 +1,15 @@
 # Legacy Retirement Backlog
 
+## Meta
+
+- Audience: maintainers and implementation agents.
+- Authority Level: active retirement backlog.
+- Last Verified Against: 2026-05-17 repo state.
+- Owner: founder-maintainer + automation agents.
+- Review Cadence: after legacy-retirement PRs.
+- Status: `active`.
+- Exit Trigger: archive after all queued legacy retirement items are done or moved into SSOT/runbooks.
+
 ## Summary
 
 This document is the canonical source of truth for retiring legacy compatibility contracts across the repo.
@@ -14,8 +24,8 @@ Runtime policy for these retirements:
 
 ## Completed Wave Plan Archives
 
-1. `docs/plans/completed/legacy-retirement/legacy-retirement-plan_wave1.md`
-2. `docs/plans/completed/legacy-retirement/legacy-retirement-plan_wave2.md`
+1. `docs/archive/plans/completed/legacy-retirement/legacy-retirement-plan_wave1.md`
+2. `docs/archive/plans/completed/legacy-retirement/legacy-retirement-plan_wave2.md`
 
 ## Backlog Item Schema (Canonical)
 

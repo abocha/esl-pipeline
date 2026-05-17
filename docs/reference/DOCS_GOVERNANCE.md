@@ -23,6 +23,8 @@
 - Generated artifacts are the source of truth for each run; markdown summaries are renderings of those artifacts.
 - `pnpm docs:garden` emits the full artifact family for that run, including health and stale-active
   reports, so the GitHub workflow does not advertise files that were produced by separate commands.
+- Plan lifecycle checks are hard gates: active plans stay under `docs/plans/`; completed or
+  superseded execution plans move to `docs/archive/plans/`.
 
 ## Lifecycle States
 
@@ -54,6 +56,8 @@
 - Manual review decides whether to archive, refresh, re-route, or ignore a candidate.
 - Low-signal content corpora can be included in docs scans without receiving route-coverage
   pressure; this keeps generated/template galleries from crowding out actionable docs work.
+- Plan lifecycle output distinguishes editable plans from archived trace so agents do not patch
+  stale implementation intent.
 
 ## Rolling Issue Policy
 

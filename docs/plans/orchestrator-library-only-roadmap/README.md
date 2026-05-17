@@ -1,5 +1,15 @@
 # Orchestrator Library-Only Roadmap
 
+## Meta
+
+- Audience: maintainers and orchestrator/backend agents.
+- Authority Level: active staged roadmap.
+- Last Verified Against: 2026-05-17 repo state.
+- Owner: founder-maintainer + automation agents.
+- Review Cadence: after orchestrator ownership or API migration PRs.
+- Status: `roadmap`.
+- Exit Trigger: archive after the library-only cutover is complete and current behavior is represented in SSOT, package READMEs, and release docs.
+
 ## Summary
 
 This is a medium-scale staged plan to make `@esl-pipeline/orchestrator` a library-only pipeline engine while keeping `@esl-pipeline/batch-backend` as the operational execution platform.
