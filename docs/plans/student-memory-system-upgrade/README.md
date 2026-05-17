@@ -1,5 +1,15 @@
 # Student Memory System Upgrade
 
+## Meta
+
+- Audience: maintainers and student-memory agents.
+- Authority Level: active staged roadmap.
+- Last Verified Against: 2026-05-17 repo state.
+- Owner: founder-maintainer + backend/frontend maintainers.
+- Review Cadence: after student-memory implementation PRs.
+- Status: `roadmap`.
+- Exit Trigger: archive after the canonical student-memory model is shipped and represented in SSOT, prompt/runtime docs, and relevant package READMEs.
+
 ## Summary
 
 This plan upgrades the current `profile + notes + lightweight lesson history + latest transcript`

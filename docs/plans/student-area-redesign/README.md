@@ -1,5 +1,15 @@
 # Student Area Redesign Blueprint
 
+## Meta
+
+- Audience: maintainers and frontend/backend agents.
+- Authority Level: active product roadmap.
+- Last Verified Against: 2026-05-17 repo state.
+- Owner: founder-maintainer + frontend/backend maintainers.
+- Review Cadence: after student-area implementation PRs.
+- Status: `roadmap`.
+- Exit Trigger: archive after the student-area page model is shipped and the durable behavior is represented in product/reference docs and package READMEs.
+
 ## Summary
 
 This topic defines a brand new student area for the batch frontend.
@@ -97,9 +107,10 @@ page model, ownership boundaries, or profile authority rules.
    - Learning and Schedule & Billing visual convergence
    - shared student-route canvas ownership with page-specific density inside the canvas
    - browser-level visual acceptance
-10. [mvp-tomorrow-2026-05-01.md](mvp-tomorrow-2026-05-01.md)
-    - next MVP backlog captured for scheduling, billing, student continuity, UI repair, account
-      expansion, hosting, email, and signup research
+10. Historical MVP kickoff note:
+    - archived at
+      [`docs/archive/plans/student-area-redesign-mvp-tomorrow-2026-05-01.md`](../../archive/plans/student-area-redesign-mvp-tomorrow-2026-05-01.md)
+    - use the current reference/product docs for active scheduling, billing, and account planning
 
 ## Current Authority Chain
 

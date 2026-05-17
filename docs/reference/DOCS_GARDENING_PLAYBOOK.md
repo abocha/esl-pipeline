@@ -30,6 +30,7 @@
 - `tmp/docs-gardening-issue.json` / `.md`: rolling issue payload generated from the snapshot.
 - `tmp/docs-health-report.json` / `.md`: health snapshot and scorecard rendering.
 - `tmp/docs-stale-active.json` / `.md`: heuristic queue for manual review.
+- `tmp/docs-plan-lifecycle.json` / `.md`: hard-gated plan lifecycle and editability report.
 - Rolling issue: triage surface for unresolved warnings and candidates.
 
 ## Triage Rules
@@ -39,6 +40,8 @@
 - Broken links.
 - Missing metadata or freshness in enforced scope.
 - Route hints or governance requirements that are mechanically failing.
+- Active plan lifecycle violations: completed/superseded plans under `docs/plans/`, missing exit
+  triggers on routed active plans, or orphan standalone plans.
 
 ### Review manually
 
@@ -55,6 +58,8 @@
 - Inventory-style docs that are better generated than hand-maintained.
 - Low-signal content galleries should usually be tuned in the gardening config rather than routed
   just to satisfy generic no-route heuristics.
+- Implementation plans should normally archive after their PR lands unless they remain explicit
+  roadmaps.
 
 ## Habitual Checkpoints
 

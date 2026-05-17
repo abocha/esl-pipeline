@@ -1,5 +1,15 @@
 # STT Multi-Provider Refactor
 
+## Meta
+
+- Audience: maintainers and speech-runtime agents.
+- Authority Level: active staged roadmap.
+- Last Verified Against: 2026-05-17 repo state.
+- Owner: founder-maintainer + speech-runtime maintainers.
+- Review Cadence: after STT provider or transcription pipeline PRs.
+- Status: `roadmap`.
+- Exit Trigger: archive after STT provider runtime behavior is shipped and captured in package READMEs, env policy, and operations docs.
+
 ## Summary
 
 This plan refactors STT into a provider-agnostic architecture parallel to TTS (`core + adapters + registry`), then adds Google Cloud STT V2 as a first-class provider.

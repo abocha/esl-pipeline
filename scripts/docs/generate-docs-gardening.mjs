@@ -20,5 +20,7 @@ console.log(
     `- ${artifacts.healthMdPath}`,
     `- ${artifacts.staleActiveJsonPath}`,
     `- ${artifacts.staleActiveMdPath}`,
+    `- ${artifacts.planLifecycleJsonPath}`,
+    `- ${artifacts.planLifecycleMdPath}`,
   ].join('\n'),
 );

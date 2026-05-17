@@ -8,6 +8,7 @@
 - Owner: founder-maintainer + backend/frontend maintainers.
 - Review Cadence: after each implementation phase.
 - Status: `active`.
+- Exit Trigger: archive after the teacher-reviewed profile enrichment workflow ships or is superseded by the student-area product roadmap.
 
 ## Summary
 

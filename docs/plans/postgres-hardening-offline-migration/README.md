@@ -1,5 +1,15 @@
 # PostgreSQL Hardening + Offline Data-Preserving Migration Plan
 
+## Meta
+
+- Audience: maintainers and batch-backend agents.
+- Authority Level: active infrastructure roadmap.
+- Last Verified Against: 2026-05-17 repo state.
+- Owner: founder-maintainer + backend maintainers.
+- Review Cadence: after database hardening or migration PRs.
+- Status: `roadmap`.
+- Exit Trigger: archive after migration governance and Postgres operations are fully represented in runbooks, schema docs, and package READMEs.
+
 ## Summary
 
 This plan hardens the batch-backend PostgreSQL implementation without wiping existing real data.

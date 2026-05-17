@@ -1,5 +1,15 @@
 # Telegram Ops Control Panel Hardening Plan
 
+## Meta
+
+- Audience: maintainers and Telegram ops agents.
+- Authority Level: active rollout-closeout roadmap.
+- Last Verified Against: 2026-05-17 repo state.
+- Owner: founder-maintainer + ops maintainers.
+- Review Cadence: after Telegram ops bot UX or rollout PRs.
+- Status: `roadmap`.
+- Exit Trigger: archive after remaining rollout-closeout evidence lands and the live operator procedure is fully represented in the Telegram ops runbook.
+
 ## Summary
 
 The core `A`-track hardening work is implemented. This topic now exists mainly to route readers to the shipped audit and phase plans, plus the remaining rollout-closeout evidence path.
