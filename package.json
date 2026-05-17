@@ -120,7 +120,6 @@
   "devDependencies": {
     "@biomejs/biome": "2.4.15",
     "@elevenlabs/elevenlabs-js": "^2.46.0",
-    "@esl-pipeline/contracts": "workspace:*",
     "@eslint-react/eslint-plugin": "^5.7.6",
     "@types/node": "^25.7.0",
     "@vitest/coverage-v8": "^4.1.6",
