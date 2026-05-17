@@ -9,6 +9,7 @@
 - Review Cadence: after database hardening or migration PRs.
 - Status: `roadmap`.
 - Exit Trigger: archive after migration governance and Postgres operations are fully represented in runbooks, schema docs, and package READMEs.
+- Current Focus: use this README with live schema and operations docs for remaining DB governance work.
 
 ## Summary
 
@@ -53,23 +54,27 @@ The strategy is:
 3. Migration-owned indexes aligned with repository filters/sorts.
 4. RLS policy artifacts and readiness checks (without immediate enforcement).
 
-## Phase Files
+## Historical Trace
 
-1. `docs/plans/postgres-hardening-offline-migration/phase-1-rebaseline-and-drift-elimination.md`
-2. `docs/plans/postgres-hardening-offline-migration/phase-2-versioned-migration-system.md`
-3. `docs/plans/postgres-hardening-offline-migration/phase-3-query-index-and-data-path-optimization.md`
-4. `docs/plans/postgres-hardening-offline-migration/phase-4-connection-and-startup-hardening.md`
-5. `docs/plans/postgres-hardening-offline-migration/phase-5-rls-readiness-and-enablement-path.md`
-6. `docs/plans/postgres-hardening-offline-migration/phase-6-testing-and-ci-hardening.md`
+Archived phase details remain available for rationale, but this README is the active edit surface.
 
-## Supporting Files
+### Phase Files
 
-1. `docs/plans/postgres-hardening-offline-migration/offline-data-migration-runbook.md`
-2. `docs/plans/postgres-hardening-offline-migration/verification-acceptance-and-assumptions.md`
-3. `docs/plans/postgres-hardening-offline-migration/current-state-strengths-weaknesses-roadmap.md`
+1. `docs/archive/plans/postgres-hardening-offline-migration/phase-1-rebaseline-and-drift-elimination.md`
+2. `docs/archive/plans/postgres-hardening-offline-migration/phase-2-versioned-migration-system.md`
+3. `docs/archive/plans/postgres-hardening-offline-migration/phase-3-query-index-and-data-path-optimization.md`
+4. `docs/archive/plans/postgres-hardening-offline-migration/phase-4-connection-and-startup-hardening.md`
+5. `docs/archive/plans/postgres-hardening-offline-migration/phase-5-rls-readiness-and-enablement-path.md`
+6. `docs/archive/plans/postgres-hardening-offline-migration/phase-6-testing-and-ci-hardening.md`
 
-## Phase 1 Artifacts
+### Supporting Files
 
-1. `docs/plans/postgres-hardening-offline-migration/phase-1-drift-report.md`
-2. `docs/plans/postgres-hardening-offline-migration/phase-1-canonical-object-map.md`
-3. `docs/plans/postgres-hardening-offline-migration/phase-1-migration-decision-ledger.md`
+1. `docs/archive/plans/postgres-hardening-offline-migration/offline-data-migration-runbook.md`
+2. `docs/archive/plans/postgres-hardening-offline-migration/verification-acceptance-and-assumptions.md`
+3. `docs/archive/plans/postgres-hardening-offline-migration/current-state-strengths-weaknesses-roadmap.md`
+
+### Phase 1 Artifacts
+
+1. `docs/archive/plans/postgres-hardening-offline-migration/phase-1-drift-report.md`
+2. `docs/archive/plans/postgres-hardening-offline-migration/phase-1-canonical-object-map.md`
+3. `docs/archive/plans/postgres-hardening-offline-migration/phase-1-migration-decision-ledger.md`

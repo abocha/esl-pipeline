@@ -9,6 +9,7 @@
 - Review Cadence: after STT provider or transcription pipeline PRs.
 - Status: `roadmap`.
 - Exit Trigger: archive after STT provider runtime behavior is shipped and captured in package READMEs, env policy, and operations docs.
+- Current Focus: use this README as the active STT provider roadmap; archived phase docs are historical trace.
 
 ## Summary
 
@@ -30,15 +31,17 @@ Locked decisions:
 4. Frontend/provider metadata exposure for STT selector.
 5. Operational documentation updates.
 
-## Phase Index
+## Historical Trace
 
-1. [phase-1-core-contracts.md](phase-1-core-contracts.md)
-2. [phase-2-provider-adapters-deepgram-elevenlabs.md](phase-2-provider-adapters-deepgram-elevenlabs.md)
-3. [phase-3-provider-adapter-google-v2.md](phase-3-provider-adapter-google-v2.md)
-4. [phase-4-backend-integration-and-cache.md](phase-4-backend-integration-and-cache.md)
-5. [phase-5-schema-backfill-and-cutover.md](phase-5-schema-backfill-and-cutover.md)
-6. [phase-6-frontend-docs-and-ops.md](phase-6-frontend-docs-and-ops.md)
-7. [verification-acceptance-and-assumptions.md](verification-acceptance-and-assumptions.md)
+Archived phase details remain available for rationale, but this README is the active edit surface.
+
+1. [phase-1-core-contracts.md](../../archive/plans/stt-multi-provider-refactor/phase-1-core-contracts.md)
+2. [phase-2-provider-adapters-deepgram-elevenlabs.md](../../archive/plans/stt-multi-provider-refactor/phase-2-provider-adapters-deepgram-elevenlabs.md)
+3. [phase-3-provider-adapter-google-v2.md](../../archive/plans/stt-multi-provider-refactor/phase-3-provider-adapter-google-v2.md)
+4. [phase-4-backend-integration-and-cache.md](../../archive/plans/stt-multi-provider-refactor/phase-4-backend-integration-and-cache.md)
+5. [phase-5-schema-backfill-and-cutover.md](../../archive/plans/stt-multi-provider-refactor/phase-5-schema-backfill-and-cutover.md)
+6. [phase-6-frontend-docs-and-ops.md](../../archive/plans/stt-multi-provider-refactor/phase-6-frontend-docs-and-ops.md)
+7. [verification-acceptance-and-assumptions.md](../../archive/plans/stt-multi-provider-refactor/verification-acceptance-and-assumptions.md)
 
 ## Acceptance Gates
 

@@ -9,6 +9,7 @@
 - Review Cadence: after Telegram ops bot UX or rollout PRs.
 - Status: `roadmap`.
 - Exit Trigger: archive after remaining rollout-closeout evidence lands and the live operator procedure is fully represented in the Telegram ops runbook.
+- Current Focus: use this README for rollout-closeout evidence; archived A-track docs are historical phase trace.
 
 ## Summary
 
@@ -29,12 +30,18 @@ Current `A`-track map:
 - `A4` guided Telegram interaction
 - `A5` reserved for later context-entry expansion if needed
 
-## Active Docs in This Topic
+## Historical Trace
 
-- [`a-track-ux-audit.md`](a-track-ux-audit.md)
-- [`A3-ux-activation.md`](A3-ux-activation.md)
-- [`A4-guided-telegram-interaction.md`](A4-guided-telegram-interaction.md)
-- [`future-student-facing-roadmap.md`](future-student-facing-roadmap.md)
+Archived A-track details remain available for rollout rationale, but this README is the active edit
+surface.
+
+- [`a-track-ux-audit.md`](../../archive/plans/telegram-ops-control-panel-hardening/a-track-ux-audit.md)
+- [`A2-closeout.md`](../../archive/plans/telegram-ops-control-panel-hardening/A2-closeout.md)
+- [`A3-ux-activation.md`](../../archive/plans/telegram-ops-control-panel-hardening/A3-ux-activation.md)
+- [`A4-guided-telegram-interaction.md`](../../archive/plans/telegram-ops-control-panel-hardening/A4-guided-telegram-interaction.md)
+- [`future-student-facing-roadmap.md`](../../archive/plans/telegram-ops-control-panel-hardening/future-student-facing-roadmap.md)
+- [`new-operations.md`](../../archive/plans/telegram-ops-control-panel-hardening/new-operations.md)
+- [`ux-v2.md`](../../archive/plans/telegram-ops-control-panel-hardening/ux-v2.md)
 
 ## Current State
 

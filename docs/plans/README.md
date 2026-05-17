@@ -40,8 +40,11 @@
 - Active plan statuses under `docs/plans/` are limited to `active`, `roadmap`, `backlog`, and
   `draft`.
 - Completed and superseded plans belong under `docs/archive/plans/`.
-- Active topic routers and standalone plans must declare `Status`, `Last Verified Against`, and
-  `Exit Trigger`.
+- Active topic routers, backlog entries, and standalone plans must declare `Status`,
+  `Last Verified Against`, `Exit Trigger`, and `Current Focus`.
+- Active routers must point to editable topic, backlog, or standalone plans, not phase/detail docs.
+- Phase/detail docs are historical by default after their implementation PR lands; archive them
+  under `docs/archive/plans/`.
 - Default exit trigger: archive the plan after the implementation PR merges unless it remains an
   explicit roadmap.
 - PRs that implement a plan must either archive that plan or update its lifecycle metadata in the
@@ -55,7 +58,9 @@
    - a newer plan replaces its execution truth, or
    - the work has moved into SSOT/runbooks and the plan is now historical.
 4. Move completed execution plans under `docs/archive/plans/` instead of leaving them mixed with active work.
-5. Update this router whenever a new active plan topic or standalone plan becomes part of normal execution flow.
+5. Keep each active topic README as the editable entry point and summarize archived phase detail
+   under a short historical-trace section.
+6. Update this router whenever a new active plan topic or standalone plan becomes part of normal execution flow.
 
 ## Active Plan Routes
 

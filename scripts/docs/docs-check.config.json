@@ -121,7 +121,12 @@
     "plan_lifecycle": {
       "route_source": "docs/plans/README.md",
       "allowed_active_statuses": ["active", "roadmap", "backlog", "draft"],
-      "archive_prefix": "docs/archive/plans/"
+      "archive_prefix": "docs/archive/plans/",
+      "noneditable_route_sources": [
+        "docs/README.md",
+        "docs/reference/DOCS_IA_MAP.md",
+        "docs/plans/README.md"
+      ]
     },
     "route_sources": [
       "AGENTS.md",

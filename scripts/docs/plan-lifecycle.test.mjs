@@ -5,7 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { runDocsChecks } from './docs-check-lib.mjs';
-import { buildPlanIndexRows } from './plan-lifecycle-lib.mjs';
+import { buildPlanIndexRows, buildPlanLifecycleReport } from './plan-lifecycle-lib.mjs';
 
 const baseConfig = {
   core_docs: [],
@@ -17,6 +17,11 @@ const baseConfig = {
       route_source: 'docs/plans/README.md',
       allowed_active_statuses: ['active', 'roadmap', 'backlog', 'draft'],
       archive_prefix: 'docs/archive/plans/',
+      noneditable_route_sources: [
+        'docs/README.md',
+        'docs/reference/DOCS_IA_MAP.md',
+        'docs/plans/README.md',
+      ],
     },
   },
 };
@@ -39,7 +44,11 @@ test('docs check fails completed and superseded plans left under docs/plans', ()
 test('docs check fails active routed plans without an exit trigger', () => {
   const repoRoot = makeRepo({
     'docs/plans/README.md': planRouter(['docs/plans/topic/README.md']),
-    'docs/plans/topic/README.md': planDoc({ status: 'active', exitTrigger: null }),
+    'docs/plans/topic/README.md': planDoc({
+      status: 'active',
+      exitTrigger: null,
+      currentFocus: 'edit this topic README only',
+    }),
   });
 
   const result = runDocsChecks('non_core', { repoRoot, config: baseConfig });
@@ -48,12 +57,29 @@ test('docs check fails active routed plans without an exit trigger', () => {
   assert.match(result.errors.join('\n'), /Exit Trigger/);
 });
 
+test('docs check fails active routed plans without current focus', () => {
+  const repoRoot = makeRepo({
+    'docs/plans/README.md': planRouter(['docs/plans/topic/README.md']),
+    'docs/plans/topic/README.md': planDoc({
+      status: 'roadmap',
+      exitTrigger: 'archive after implementation PR merges',
+      currentFocus: null,
+    }),
+  });
+
+  const result = runDocsChecks('non_core', { repoRoot, config: baseConfig });
+
+  assert.match(result.errors.join('\n'), /topic\/README\.md/);
+  assert.match(result.errors.join('\n'), /Current Focus/);
+});
+
 test('docs check fails orphan standalone plans under docs/plans', () => {
   const repoRoot = makeRepo({
     'docs/plans/README.md': planRouter([]),
     'docs/plans/forgotten.md': planDoc({
       status: 'active',
       exitTrigger: 'archive after implementation PR merges',
+      currentFocus: 'archive this orphan or route it explicitly',
     }),
   });
 
@@ -69,6 +95,7 @@ test('docs check ignores completed plans already under docs/archive/plans', () =
     'docs/archive/plans/completed/done.md': planDoc({
       status: 'completed',
       exitTrigger: 'archived after implementation PR merged',
+      currentFocus: null,
     }),
   });
 
@@ -83,10 +110,12 @@ test('generated plan rows classify routed active and archived plans by editabili
     'docs/plans/topic/README.md': planDoc({
       status: 'active',
       exitTrigger: 'archive after implementation PR merges',
+      currentFocus: 'edit this topic README only',
     }),
     'docs/archive/plans/completed/done.md': planDoc({
       status: 'completed',
       exitTrigger: 'archived after implementation PR merged',
+      currentFocus: null,
     }),
   });
 
@@ -97,9 +126,88 @@ test('generated plan rows classify routed active and archived plans by editabili
   assert.equal(active?.status, 'active');
   assert.equal(active?.routed, 'yes');
   assert.equal(active?.editable, 'yes');
+  assert.equal(active?.currentFocus, 'edit this topic README only');
   assert.equal(archived?.status, 'completed');
   assert.equal(archived?.routed, 'no');
   assert.equal(archived?.editable, 'no');
+});
+
+test('docs check fails top-level routers that point at non-editable phase detail plans', () => {
+  const repoRoot = makeRepo({
+    'docs/README.md': '- Detail: `docs/plans/topic/phase-1.md`',
+    'docs/reference/DOCS_IA_MAP.md': '# IA',
+    'docs/plans/README.md': planRouter(['docs/plans/topic/README.md']),
+    'docs/plans/topic/README.md': planDoc({
+      status: 'roadmap',
+      exitTrigger: 'archive after implementation PR merges',
+      currentFocus: 'edit this topic README only',
+    }),
+    'docs/plans/topic/phase-1.md': planDoc({
+      status: '',
+      exitTrigger: null,
+      currentFocus: null,
+    }),
+  });
+
+  const result = runDocsChecks('non_core', { repoRoot, config: baseConfig });
+
+  assert.match(result.errors.join('\n'), /docs\/README\.md/);
+  assert.match(result.errors.join('\n'), /phase-1\.md/);
+  assert.match(result.errors.join('\n'), /non-editable/);
+});
+
+test('docs check fails active statuses on non-editable phase detail plans', () => {
+  const repoRoot = makeRepo({
+    'docs/plans/README.md': planRouter(['docs/plans/topic/README.md']),
+    'docs/plans/topic/README.md': planDoc({
+      status: 'roadmap',
+      exitTrigger: 'archive after implementation PR merges',
+      currentFocus: 'edit this topic README only',
+    }),
+    'docs/plans/topic/phase-1.md': planDoc({
+      status: 'active',
+      exitTrigger: 'archive after implementation PR merges',
+      currentFocus: 'phase is still current',
+    }),
+  });
+
+  const result = runDocsChecks('non_core', { repoRoot, config: baseConfig });
+
+  assert.match(result.errors.join('\n'), /phase-1\.md/);
+  assert.match(result.errors.join('\n'), /active.*editable/);
+});
+
+test('plan lifecycle report separates editable active, active-tree historical, archived, and contradictions', () => {
+  const repoRoot = makeRepo({
+    'docs/plans/README.md': planRouter(['docs/plans/topic/README.md']),
+    'docs/plans/topic/README.md': planDoc({
+      status: 'roadmap',
+      exitTrigger: 'archive after implementation PR merges',
+      currentFocus: 'edit this topic README only',
+    }),
+    'docs/plans/topic/phase-1.md': planDoc({
+      status: '',
+      exitTrigger: null,
+      currentFocus: null,
+    }),
+    'docs/plans/topic/phase-2.md': planDoc({
+      status: 'active',
+      exitTrigger: 'archive after implementation PR merges',
+      currentFocus: 'phase is still current',
+    }),
+    'docs/archive/plans/topic/phase-0.md': planDoc({
+      status: 'completed',
+      exitTrigger: 'archived after implementation PR merged',
+      currentFocus: null,
+    }),
+  });
+
+  const report = buildPlanLifecycleReport({ repoRoot, config: baseConfig });
+
+  assert.equal(report.counts.editableActive, 1);
+  assert.equal(report.counts.activeTreeHistorical, 1);
+  assert.equal(report.counts.archived, 1);
+  assert.equal(report.counts.statusEditabilityContradictions, 1);
 });
 
 function makeRepo(files) {
@@ -123,7 +231,7 @@ function planRouter(paths) {
   ].join('\n');
 }
 
-function planDoc({ status, exitTrigger }) {
+function planDoc({ status, exitTrigger, currentFocus = 'edit this plan directly' }) {
   return [
     '# Example Plan',
     '',
@@ -134,8 +242,9 @@ function planDoc({ status, exitTrigger }) {
     '- Last Verified Against: 2026-05-17 repo state.',
     '- Owner: founder-maintainer + automation agents.',
     '- Review Cadence: after implementation PR.',
-    `- Status: \`${status}\`.`,
+    ...(status === '' ? [] : [`- Status: \`${status}\`.`]),
     ...(exitTrigger ? [`- Exit Trigger: ${exitTrigger}.`] : []),
+    ...(currentFocus ? [`- Current Focus: ${currentFocus}.`] : []),
     '',
     '## Summary',
     '',

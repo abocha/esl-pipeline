@@ -9,6 +9,7 @@
 - Review Cadence: after legacy-retirement PRs.
 - Status: `active`.
 - Exit Trigger: archive after all queued legacy retirement items are done or moved into SSOT/runbooks.
+- Current Focus: use this file as the active legacy-retirement queue; completed wave plans are archive trace.
 
 ## Summary
 

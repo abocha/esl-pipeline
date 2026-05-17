@@ -2,9 +2,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const DEFAULT_ACTIVE_STATUSES = ['active', 'roadmap', 'backlog', 'draft'];
+const ACTIVE_EDITABLE_STATUSES = new Set(['active', 'roadmap', 'backlog']);
 const COMPLETED_STATUSES = new Set(['completed', 'superseded']);
 const DEFAULT_ARCHIVE_PREFIX = 'docs/archive/plans/';
 const DEFAULT_ROUTE_SOURCE = 'docs/plans/README.md';
+const DEFAULT_NONEDITABLE_ROUTE_SOURCES = [
+  'docs/README.md',
+  'docs/reference/DOCS_IA_MAP.md',
+  'docs/plans/README.md',
+];
 
 export function buildPlanLifecycleReport({
   repoRoot = process.cwd(),
@@ -12,17 +18,51 @@ export function buildPlanLifecycleReport({
   config = {},
 } = {}) {
   const rows = buildPlanIndexRows({ repoRoot, config });
-  const hardGateIssues = validatePlanLifecycleRows(rows, { config });
+  const hardGateIssues = validatePlanLifecycleRows(rows, { repoRoot, config });
   const counts = rows.reduce(
     (acc, row) => {
       acc.total += 1;
       if (row.editable === 'yes') acc.editable += 1;
       if (row.path.startsWith(DEFAULT_ARCHIVE_PREFIX)) acc.archived += 1;
       if (row.routed === 'yes') acc.routed += 1;
+      if (
+        row.editable === 'yes' &&
+        row.path.startsWith('docs/plans/') &&
+        row.path !== 'docs/plans/README.md'
+      ) {
+        acc.editableActive += 1;
+      }
+      if (
+        row.path.startsWith('docs/plans/') &&
+        row.path !== 'docs/plans/README.md' &&
+        row.editable === 'no' &&
+        !row.path.startsWith('docs/plans/completed/') &&
+        !ACTIVE_EDITABLE_STATUSES.has(row.status)
+      ) {
+        acc.activeTreeHistorical += 1;
+      }
+      if (
+        row.path.startsWith('docs/plans/') &&
+        ACTIVE_EDITABLE_STATUSES.has(row.status) &&
+        row.editable === 'no'
+      ) {
+        acc.statusEditabilityContradictions += 1;
+      }
       return acc;
     },
-    { total: 0, editable: 0, archived: 0, routed: 0 },
+    {
+      total: 0,
+      editable: 0,
+      archived: 0,
+      routed: 0,
+      editableActive: 0,
+      activeTreeHistorical: 0,
+      statusEditabilityContradictions: 0,
+    },
   );
+  counts.routerToNoneditableViolations = hardGateIssues.filter(
+    (issue) => issue.code === 'plan-router-noneditable-target',
+  ).length;
 
   return {
     generatedAt,
@@ -59,6 +99,7 @@ export function buildPlanIndexRows({ repoRoot = process.cwd(), config = {} } = {
     const status = normalizeStatus(readMetaField(content, 'Status')) || inferStatus(relativePath);
     const lastVerified = normalizeMetaText(readMetaField(content, 'Last Verified Against'));
     const exitTrigger = normalizeMetaText(readMetaField(content, 'Exit Trigger'));
+    const currentFocus = normalizeMetaText(readMetaField(content, 'Current Focus'));
     const routed = routeSet.has(relativePath) ? 'yes' : 'no';
     const rawKind = classifyPlanPath(relativePath);
     const kind = routed === 'yes' && rawKind === 'phase/detail' ? 'standalone' : rawKind;
@@ -79,12 +120,13 @@ export function buildPlanIndexRows({ repoRoot = process.cwd(), config = {} } = {
       routed,
       editable,
       exitTrigger,
+      currentFocus,
       path: relativePath,
     };
   });
 }
 
-export function validatePlanLifecycleRows(rows, { config = {} } = {}) {
+export function validatePlanLifecycleRows(rows, { repoRoot = process.cwd(), config = {} } = {}) {
   const allowedStatuses = getAllowedStatuses(config);
   const issues = [];
 
@@ -106,6 +148,14 @@ export function validatePlanLifecycleRows(rows, { config = {} } = {}) {
         code: 'plan-invalid-status',
         path: row.path,
         message: `status '${row.status}' is not allowed under docs/plans/`,
+      });
+    }
+
+    if (ACTIVE_EDITABLE_STATUSES.has(row.status) && row.editable === 'no') {
+      issues.push({
+        code: 'plan-active-noneditable',
+        path: row.path,
+        message: `status '${row.status}' requires the plan to be routed and editable`,
       });
     }
 
@@ -139,8 +189,17 @@ export function validatePlanLifecycleRows(rows, { config = {} } = {}) {
           message: 'routed active plan is missing Exit Trigger metadata',
         });
       }
+      if (!row.currentFocus) {
+        issues.push({
+          code: 'plan-missing-current-focus',
+          path: row.path,
+          message: 'routed active plan is missing Current Focus metadata',
+        });
+      }
     }
   }
+
+  issues.push(...validateNoneditableRouteReferences({ repoRoot, config, rows }));
 
   return issues;
 }
@@ -153,7 +212,13 @@ export function toPlanLifecycleMarkdown(report) {
   lines.push(`- Plan docs: ${report.counts.total}`);
   lines.push(`- Routed active entries: ${report.counts.routed}`);
   lines.push(`- Editable entries: ${report.counts.editable}`);
+  lines.push(`- Editable active entries: ${report.counts.editableActive}`);
+  lines.push(`- Active-tree historical entries: ${report.counts.activeTreeHistorical}`);
   lines.push(`- Archived entries: ${report.counts.archived}`);
+  lines.push(`- Router-to-noneditable violations: ${report.counts.routerToNoneditableViolations}`);
+  lines.push(
+    `- Status/editability contradictions: ${report.counts.statusEditabilityContradictions}`,
+  );
   lines.push(`- Hard gate issues: ${report.hardGateIssues.length}`);
   lines.push('');
 
@@ -168,11 +233,11 @@ export function toPlanLifecycleMarkdown(report) {
 
   lines.push('## Plan Files');
   lines.push('');
-  lines.push('| Kind | Status | Routed | Editable | Exit Trigger | Path |');
-  lines.push('| --- | --- | --- | --- | --- | --- |');
+  lines.push('| Kind | Status | Routed | Editable | Current Focus | Exit Trigger | Path |');
+  lines.push('| --- | --- | --- | --- | --- | --- | --- |');
   for (const row of report.rows) {
     lines.push(
-      `| ${row.kind} | ${row.status || ''} | ${row.routed} | ${row.editable} | ${row.exitTrigger || ''} | \`${row.path}\` |`,
+      `| ${row.kind} | ${row.status || ''} | ${row.routed} | ${row.editable} | ${row.currentFocus || ''} | ${row.exitTrigger || ''} | \`${row.path}\` |`,
     );
   }
 
@@ -187,6 +252,37 @@ function collectPlanRouteSet({ repoRoot, config }) {
     routes.add(match[0]);
   }
   return routes;
+}
+
+function validateNoneditableRouteReferences({ repoRoot, config, rows }) {
+  const rowByPath = new Map(rows.map((row) => [row.path, row]));
+  const issues = [];
+
+  for (const source of getNoneditableRouteSources(config)) {
+    const content = readFileIfExists(path.join(repoRoot, source));
+    for (const target of collectPlanReferenceTargets(content)) {
+      const row = rowByPath.get(target);
+      if (!row || row.editable === 'yes' || target.startsWith(DEFAULT_ARCHIVE_PREFIX)) continue;
+      issues.push({
+        code: 'plan-router-noneditable-target',
+        path: source,
+        message: `routes to non-editable plan ${target}; route to an editable topic README or archive reference instead`,
+      });
+    }
+  }
+
+  return issues;
+}
+
+function collectPlanReferenceTargets(content) {
+  const targets = new Set();
+  const regex = /(?<!archive\/)(?:(?:\.\.\/)*docs\/)?plans\/[A-Za-z0-9_./-]+\.md/g;
+  for (const match of content.matchAll(regex)) {
+    let target = match[0].replace(/^(?:\.\.\/)+/, '');
+    if (target.startsWith('plans/')) target = `docs/${target}`;
+    targets.add(target);
+  }
+  return [...targets];
 }
 
 function collectMarkdownFiles(absRoot, relRoot) {
@@ -240,6 +336,13 @@ function hasLastVerified(row) {
 function getAllowedStatuses(config) {
   return new Set(
     config.docs_gardening?.plan_lifecycle?.allowed_active_statuses ?? DEFAULT_ACTIVE_STATUSES,
+  );
+}
+
+function getNoneditableRouteSources(config) {
+  return (
+    config.docs_gardening?.plan_lifecycle?.noneditable_route_sources ??
+    DEFAULT_NONEDITABLE_ROUTE_SOURCES
   );
 }
 

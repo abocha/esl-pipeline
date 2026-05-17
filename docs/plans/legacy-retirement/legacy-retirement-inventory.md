@@ -9,6 +9,7 @@
 - Review Cadence: after legacy-retirement PRs.
 - Status: `active`.
 - Exit Trigger: archive after all live legacy contracts are retired or represented in SSOT/runbooks.
+- Current Focus: update live legacy item status here only when a retirement PR changes an item.
 
 ## Summary
 
