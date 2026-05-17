@@ -255,4 +255,4 @@ The first implementation slice intentionally leaves these areas unfinished:
 
 - [`docs/reference/SCHEDULE_BILLING_PRODUCT_DECISIONS.md`](SCHEDULE_BILLING_PRODUCT_DECISIONS.md)
 - [`docs/reference/STUDENT_SYSTEM_ROADMAP.md`](STUDENT_SYSTEM_ROADMAP.md)
-- [`docs/plans/student-area-redesign/mvp-tomorrow-2026-05-01.md`](../plans/student-area-redesign/mvp-tomorrow-2026-05-01.md)
+- [`docs/plans/student-area-redesign/README.md`](../plans/student-area-redesign/README.md)

@@ -2,6 +2,8 @@ import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { generatePlansIndex } from './generate-plans-index.mjs';
+
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const docsCheckConfigPath = path.join(rootDir, 'scripts', 'docs', 'docs-check.config.json');
 
@@ -252,46 +254,6 @@ async function generateEnvSurfaceIndex() {
   await writeGenerated('docs/generated/env-surface-index.md', lines.join('\n'));
 }
 
-function classifyPlanPath(relativePath) {
-  if (relativePath === 'docs/plans/README.md') return 'router';
-  if (relativePath.startsWith('docs/plans/completed/')) return 'completed';
-  if (relativePath.startsWith('docs/plans/backlog/')) return 'backlog';
-  if (path.posix.dirname(relativePath) === 'docs/plans') return 'standalone';
-  if (path.posix.basename(relativePath) === 'README.md') return 'topic';
-  return 'phase/detail';
-}
-
-async function generatePlansIndex() {
-  const planFiles = (await walk('docs/plans', (relativePath) => relativePath.endsWith('.md')))
-    .map(posixRelative)
-    .sort((left, right) => left.localeCompare(right));
-
-  const rows = [];
-  for (const relativePath of planFiles) {
-    rows.push({
-      kind: classifyPlanPath(relativePath),
-      title: await readMarkdownTitle(relativePath),
-      path: relativePath,
-    });
-  }
-
-  const lines = [
-    formatGeneratedHeader(
-      'Plans Index',
-      'Provide a flat inventory of plan docs so agents can find the right roadmap, execution phase, or completed work artifact quickly.',
-      'Plan kinds are inferred from the file path under `docs/plans/`.',
-    ),
-    '## Plan Files',
-    '',
-    '| Kind | Title | Path |',
-    '| --- | --- | --- |',
-    ...rows.map((row) => `| ${row.kind} | ${row.title} | \`${row.path}\` |`),
-    '',
-  ];
-
-  await writeGenerated('docs/generated/plans-index.md', lines.join('\n'));
-}
-
 function collectRouteMatches(contents) {
   const regex = /app\.(get|post|put|patch|delete)\(\s*['"`]([^'"`]+)['"`]/g;
   const matches = [];
@@ -356,6 +318,10 @@ async function generateBackendRouteIndex() {
 }
 
 await generatePackageReadmeIndex();
-await generatePlansIndex();
+await generatePlansIndex({
+  repoRoot: rootDir,
+  config: docsCheckConfig,
+  sourceCommand: 'pnpm docs:generate:indexes',
+});
 await generateBackendRouteIndex();
 await generateEnvSurfaceIndex();

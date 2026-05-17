@@ -1,5 +1,16 @@
 # Harness-Aligned Agentic Docs Upgrade - Next Phases
 
+## Meta
+
+- Audience: maintainers and docs-tooling agents.
+- Authority Level: active docs-tooling roadmap.
+- Last Verified Against: 2026-05-17 repo state.
+- Owner: founder-maintainer + automation agents.
+- Review Cadence: after docs-tooling implementation PRs.
+- Status: `roadmap`.
+- Exit Trigger: archive after the remaining docs-tooling phases are implemented or superseded by docs governance.
+- Current Focus: use this README to choose the next docs-tooling enforcement slice; archived phase docs are historical trace.
+
 ## Summary
 
 This topic captures the remaining phases after the initial docs-governance baseline landed.
@@ -13,12 +24,14 @@ This topic captures the remaining phases after the initial docs-governance basel
 3. Keep stale-doc tooling non-destructive (report-only).
 4. Convert repeated review issues into checks via quarterly rule-promotion loop.
 
-## Phase Index
+## Historical Trace
 
-1. [phase-3-enforcement-expansion-backend-frontend.md](phase-3-enforcement-expansion-backend-frontend.md)
-2. [phase-4-enforcement-expansion-package-readmes.md](phase-4-enforcement-expansion-package-readmes.md)
-3. [phase-5-gardening-calibration-and-rule-promotion.md](phase-5-gardening-calibration-and-rule-promotion.md)
-4. [verification-acceptance-and-assumptions.md](verification-acceptance-and-assumptions.md)
+Archived phase details remain available for rationale, but this README is the active edit surface.
+
+1. [phase-3-enforcement-expansion-backend-frontend.md](../../archive/plans/harness-agentic-docs-upgrade/phase-3-enforcement-expansion-backend-frontend.md)
+2. [phase-4-enforcement-expansion-package-readmes.md](../../archive/plans/harness-agentic-docs-upgrade/phase-4-enforcement-expansion-package-readmes.md)
+3. [phase-5-gardening-calibration-and-rule-promotion.md](../../archive/plans/harness-agentic-docs-upgrade/phase-5-gardening-calibration-and-rule-promotion.md)
+4. [verification-acceptance-and-assumptions.md](../../archive/plans/harness-agentic-docs-upgrade/verification-acceptance-and-assumptions.md)
 
 ## Operator Commands
 

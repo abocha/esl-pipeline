@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { loadDocsCheckConfig, runDocsChecks } from './docs-check-lib.mjs';
+import { buildPlanLifecycleReport, writePlanLifecycleArtifacts } from './plan-lifecycle-lib.mjs';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const MAX_STALE_CANDIDATES = 40;
@@ -228,12 +229,18 @@ export function buildDocsGardeningReport({
     now,
     config: resolvedConfig,
   });
+  const planLifecycle = buildPlanLifecycleReport({
+    repoRoot,
+    generatedAt,
+    config: resolvedConfig,
+  });
 
   return composeDocsGardeningSnapshot({
     generatedAt,
     checks,
     health,
     staleActive,
+    planLifecycle,
     config: resolvedConfig,
   });
 }
@@ -243,6 +250,7 @@ export function composeDocsGardeningSnapshot({
   checks,
   health,
   staleActive,
+  planLifecycle = emptyPlanLifecycle(generatedAt),
   config = {},
 }) {
   const hardGateItems = collectGateItems(checks);
@@ -266,6 +274,7 @@ export function composeDocsGardeningSnapshot({
     manualReviewQueue,
     health,
     staleActive,
+    planLifecycle,
     config,
   });
 
@@ -290,6 +299,7 @@ export function composeDocsGardeningSnapshot({
     heuristics: {
       health,
       staleActive,
+      planLifecycle,
     },
     manualReviewQueue: {
       count: manualReviewQueue.length,
@@ -326,6 +336,10 @@ export function writeDocsGardeningArtifacts(
     repoRoot,
     outDir,
   });
+  const planLifecycleArtifacts = writePlanLifecycleArtifacts(report.heuristics.planLifecycle, {
+    repoRoot,
+    outDir,
+  });
 
   return {
     jsonPath,
@@ -335,6 +349,17 @@ export function writeDocsGardeningArtifacts(
     healthMdPath: healthArtifacts.mdPath,
     staleActiveJsonPath: staleActiveArtifacts.jsonPath,
     staleActiveMdPath: staleActiveArtifacts.mdPath,
+    planLifecycleJsonPath: planLifecycleArtifacts.jsonPath,
+    planLifecycleMdPath: planLifecycleArtifacts.mdPath,
+  };
+}
+
+function emptyPlanLifecycle(generatedAt) {
+  return {
+    generatedAt,
+    counts: { total: 0, editable: 0, archived: 0, routed: 0 },
+    hardGateIssues: [],
+    rows: [],
   };
 }
 
@@ -490,6 +515,7 @@ function buildRollingIssue({
   manualReviewQueue,
   health,
   staleActive,
+  planLifecycle,
   config,
 }) {
   const action = summary.status === 'clean' ? 'close' : 'create-or-update';
@@ -507,6 +533,7 @@ function buildRollingIssue({
       manualReviewQueue,
       health,
       staleActive,
+      planLifecycle,
     }),
   };
 }
@@ -829,6 +856,7 @@ function toRollingIssueMarkdown({
   manualReviewQueue,
   health,
   staleActive,
+  planLifecycle,
 }) {
   const lines = [];
   lines.push('# Docs Gardening');
@@ -838,6 +866,7 @@ function toRollingIssueMarkdown({
   lines.push(`- Hard gate errors: ${summary.hardGateCount}`);
   lines.push(`- Warnings: ${summary.warningCount}`);
   lines.push(`- Stale candidates: ${summary.staleCandidateCount}`);
+  lines.push(`- Plan lifecycle issues: ${planLifecycle.hardGateIssues.length}`);
   lines.push(`- Review this week: ${summary.manualReviewCount}`);
   lines.push(`- Health composite: ${health.composite}`);
   lines.push('');
@@ -887,6 +916,15 @@ function toRollingIssueMarkdown({
     lines.push('');
   }
 
+  if (planLifecycle.hardGateIssues.length > 0) {
+    lines.push('## Plan Lifecycle Findings');
+    lines.push('');
+    for (const item of planLifecycle.hardGateIssues.slice(0, MAX_ISSUE_FINDINGS)) {
+      lines.push(`- [${item.code}] ${item.path} - ${item.message}`);
+    }
+    lines.push('');
+  }
+
   if (staleActive.topCandidates.length > 0) {
     lines.push('## Top Heuristic Candidates');
     lines.push('');
@@ -904,6 +942,7 @@ function toRollingIssueMarkdown({
   lines.push('- `tmp/docs-gardening-issue.json`');
   lines.push('- `tmp/docs-health-report.md`');
   lines.push('- `tmp/docs-stale-active.md`');
+  lines.push('- `tmp/docs-plan-lifecycle.md`');
   lines.push('');
   return lines.join('\n');
 }

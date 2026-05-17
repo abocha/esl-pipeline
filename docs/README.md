@@ -124,7 +124,7 @@
   - [`docs/plans/README.md`](plans/README.md)
 - Active/completed planning topics:
   - [`docs/plans/backlog/README.md`](plans/backlog/README.md)
-  - [`docs/plans/completed/README.md`](plans/completed/README.md)
+  - [`docs/archive/plans/README.md`](archive/plans/README.md)
 
 ## Rules of Thumb
 

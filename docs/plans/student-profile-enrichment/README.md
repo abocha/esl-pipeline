@@ -8,6 +8,8 @@
 - Owner: founder-maintainer + backend/frontend maintainers.
 - Review Cadence: after each implementation phase.
 - Status: `active`.
+- Exit Trigger: archive after the teacher-reviewed profile enrichment workflow ships or is superseded by the student-area product roadmap.
+- Current Focus: use this README for candidate-fact review and profile-promotion scope; archived phases are historical trace.
 
 ## Summary
 
@@ -317,14 +319,17 @@ To keep enrichment systematic rather than arbitrary, version 1 should follow the
    model
 3. document the operator workflow for safe adoption on real students
 
-## Phase Index
+## Historical Trace
 
-1. [`phase-1-candidate-fact-pipeline.md`](phase-1-candidate-fact-pipeline.md)
-2. [`phase-2-teacher-review-workflow.md`](phase-2-teacher-review-workflow.md)
-3. [`phase-3-profile-revision-promotion.md`](phase-3-profile-revision-promotion.md)
-4. [`phase-4-starter-profile-ux.md`](phase-4-starter-profile-ux.md)
-5. [`phase-5-live-transition-and-operator-adoption.md`](phase-5-live-transition-and-operator-adoption.md)
-6. [`verification-acceptance-and-assumptions.md`](verification-acceptance-and-assumptions.md)
+Archived phase details remain available for rationale, but this README is the active edit surface.
+
+1. [`implementation.md`](../../archive/plans/student-profile-enrichment/implementation.md)
+2. [`phase-1-candidate-fact-pipeline.md`](../../archive/plans/student-profile-enrichment/phase-1-candidate-fact-pipeline.md)
+3. [`phase-2-teacher-review-workflow.md`](../../archive/plans/student-profile-enrichment/phase-2-teacher-review-workflow.md)
+4. [`phase-3-profile-revision-promotion.md`](../../archive/plans/student-profile-enrichment/phase-3-profile-revision-promotion.md)
+5. [`phase-4-starter-profile-ux.md`](../../archive/plans/student-profile-enrichment/phase-4-starter-profile-ux.md)
+6. [`phase-5-live-transition-and-operator-adoption.md`](../../archive/plans/student-profile-enrichment/phase-5-live-transition-and-operator-adoption.md)
+7. [`verification-acceptance-and-assumptions.md`](../../archive/plans/student-profile-enrichment/verification-acceptance-and-assumptions.md)
 
 ## Epilogue Boundary
 

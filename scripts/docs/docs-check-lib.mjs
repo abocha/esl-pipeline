@@ -2,6 +2,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { buildPlanLifecycleReport } from './plan-lifecycle-lib.mjs';
+
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 export function loadDocsCheckConfig(repoRoot = process.cwd()) {
@@ -34,6 +36,9 @@ export function runDocsChecks(scope, options = {}) {
   if (scope === 'core') {
     validateRouteHints({ repoRoot, config, errors });
   }
+  if (scope === 'non_core') {
+    validatePlanLifecycle({ repoRoot, config, errors });
+  }
 
   return {
     scope,
@@ -41,6 +46,13 @@ export function runDocsChecks(scope, options = {}) {
     errors,
     warnings,
   };
+}
+
+function validatePlanLifecycle({ repoRoot, config, errors }) {
+  const report = buildPlanLifecycleReport({ repoRoot, config });
+  for (const issue of report.hardGateIssues) {
+    errors.push(`[plan-lifecycle] ${issue.path} ${issue.message}`);
+  }
 }
 
 export function formatCheckResult(result) {

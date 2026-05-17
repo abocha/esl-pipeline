@@ -1,5 +1,16 @@
 # Orchestrator Library-Only Roadmap
 
+## Meta
+
+- Audience: maintainers and orchestrator/backend agents.
+- Authority Level: active staged roadmap.
+- Last Verified Against: 2026-05-17 repo state.
+- Owner: founder-maintainer + automation agents.
+- Review Cadence: after orchestrator ownership or API migration PRs.
+- Status: `roadmap`.
+- Exit Trigger: archive after the library-only cutover is complete and current behavior is represented in SSOT, package READMEs, and release docs.
+- Current Focus: use this README with the orchestrator SSOT and ownership ledger to select the next library-only slice.
+
 ## Summary
 
 This is a medium-scale staged plan to make `@esl-pipeline/orchestrator` a library-only pipeline engine while keeping `@esl-pipeline/batch-backend` as the operational execution platform.
@@ -27,16 +38,19 @@ The roadmap merges three locked directions:
    - `docs/reference/ORCHESTRATOR_SYSTEM_REVIEW.md`
    - `docs/reference/ORCHESTRATOR_OWNERSHIP_LEDGER.md`
 
-## Stage Index
+## Historical Trace
 
-1. [stage-1-baseline-and-ownership-lock.md](stage-1-baseline-and-ownership-lock.md)
-2. [stage-2-cli-sunset-declaration.md](stage-2-cli-sunset-declaration.md)
-3. [stage-3-shared-duplication-extraction.md](stage-3-shared-duplication-extraction.md)
-4. [stage-4-orchestrator-core-modularization.md](stage-4-orchestrator-core-modularization.md)
-5. [stage-5-api-v2-additive-contract.md](stage-5-api-v2-additive-contract.md)
-6. [stage-6-backend-cutover-and-parity.md](stage-6-backend-cutover-and-parity.md)
-7. [stage-7-cli-wizard-path-picker-removal.md](stage-7-cli-wizard-path-picker-removal.md)
-8. [stage-8-final-cleanup-and-ci-guardrails.md](stage-8-final-cleanup-and-ci-guardrails.md)
+Archived stage details remain available for rationale, but this README is the active edit surface.
+
+1. [stage-1-baseline-and-ownership-lock.md](../../archive/plans/orchestrator-library-only-roadmap/stage-1-baseline-and-ownership-lock.md)
+2. [stage-2-cli-sunset-declaration.md](../../archive/plans/orchestrator-library-only-roadmap/stage-2-cli-sunset-declaration.md)
+3. [stage-3-shared-duplication-extraction.md](../../archive/plans/orchestrator-library-only-roadmap/stage-3-shared-duplication-extraction.md)
+4. [stage-4-orchestrator-core-modularization.md](../../archive/plans/orchestrator-library-only-roadmap/stage-4-orchestrator-core-modularization.md)
+5. [stage-5-api-v2-additive-contract.md](../../archive/plans/orchestrator-library-only-roadmap/stage-5-api-v2-additive-contract.md)
+6. [stage-6-backend-cutover-and-parity.md](../../archive/plans/orchestrator-library-only-roadmap/stage-6-backend-cutover-and-parity.md)
+7. [stage-7-cli-wizard-path-picker-removal.md](../../archive/plans/orchestrator-library-only-roadmap/stage-7-cli-wizard-path-picker-removal.md)
+8. [stage-8-final-cleanup-and-ci-guardrails.md](../../archive/plans/orchestrator-library-only-roadmap/stage-8-final-cleanup-and-ci-guardrails.md)
+9. [cli-removal-release-and-migration-note-template.md](../../archive/plans/orchestrator-library-only-roadmap/cli-removal-release-and-migration-note-template.md)
 
 ## Definition of Done
 
