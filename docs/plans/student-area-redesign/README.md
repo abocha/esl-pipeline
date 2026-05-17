@@ -1,5 +1,16 @@
 # Student Area Redesign Blueprint
 
+## Meta
+
+- Audience: maintainers and frontend/backend agents.
+- Authority Level: active product roadmap.
+- Last Verified Against: 2026-05-17 repo state.
+- Owner: founder-maintainer + frontend/backend maintainers.
+- Review Cadence: after student-area implementation PRs.
+- Status: `roadmap`.
+- Exit Trigger: archive after the student-area page model is shipped and the durable behavior is represented in product/reference docs and package READMEs.
+- Current Focus: use this README as the product blueprint; archived phase and design-lock docs are historical trace.
+
 ## Summary
 
 This topic defines a brand new student area for the batch frontend.
@@ -55,51 +66,29 @@ page model, ownership boundaries, or profile authority rules.
 
 ## Topic Map
 
-1. [phase-1-information-architecture-and-domain-boundaries.md](phase-1-information-architecture-and-domain-boundaries.md)
-   - page map
-   - domain split
-   - navigation model
-2. [phase-2-learning-page-and-structured-profile.md](phase-2-learning-page-and-structured-profile.md)
-   - structured profile
-   - teacher-authoritative editing
-   - learning page UX
-3. [phase-3-profile-generation-migration-and-prompt-packaging.md](phase-3-profile-generation-migration-and-prompt-packaging.md)
-   - structured-output drafting
-   - markdown-to-structured migration
-   - prompt packaging
-4. [phase-4-overview-page-and-cross-domain-summaries.md](phase-4-overview-page-and-cross-domain-summaries.md)
-   - control-tower UX
-   - summary cards
-   - next-action design
-5. [phase-5-scheduling-billing-reminders-and-history.md](phase-5-scheduling-billing-reminders-and-history.md)
-   - lesson planning
-   - lesson-credit accounting
-   - reminders
-   - chronology and provenance
-6. [overview-page-design-lock.md](overview-page-design-lock.md)
-   - Overview visual direction
-   - loading and stability rules
-   - operations rail model
-   - Telegram avatar and 24-hour-time decisions
-7. [history-page-design-lock.md](history-page-design-lock.md)
-   - History visual direction
-   - event-category language
-   - timeline hierarchy
-   - Telegram avatar and 24-hour-time decisions
-8. [phase-6-shared-student-masthead-and-density-system.md](phase-6-shared-student-masthead-and-density-system.md)
-   - shared student masthead
-   - removal of duplicated page-local identity heroes
-   - route-aware body density variants
-   - directory-to-student identity continuity
-9. [phase-7-unified-student-area-design-language.md](phase-7-unified-student-area-design-language.md)
-   - shared global app tokens and student-area visual primitives
-   - unified editorial teaching-studio styling across the authenticated app shell and student area
-   - Learning and Schedule & Billing visual convergence
-   - shared student-route canvas ownership with page-specific density inside the canvas
-   - browser-level visual acceptance
-10. [mvp-tomorrow-2026-05-01.md](mvp-tomorrow-2026-05-01.md)
-    - next MVP backlog captured for scheduling, billing, student continuity, UI repair, account
-      expansion, hosting, email, and signup research
+The active product map lives in this README:
+
+1. `Overview`: control-tower page for glanceability and navigation.
+2. `Learning`: polished deep page for pedagogy and learner profile operations.
+3. `Schedule & Billing`: lesson planning, credits, reminders, and future account operations.
+4. `History`: chronology, provenance, and operational trace.
+5. Shared student-area shell: masthead, density variants, route canvas, and visual primitives.
+
+## Historical Trace
+
+Archived phase and design-lock details remain available for rationale, but this README is the active
+edit surface.
+
+1. [phase-1-information-architecture-and-domain-boundaries.md](../../archive/plans/student-area-redesign/phase-1-information-architecture-and-domain-boundaries.md)
+2. [phase-2-learning-page-and-structured-profile.md](../../archive/plans/student-area-redesign/phase-2-learning-page-and-structured-profile.md)
+3. [phase-3-profile-generation-migration-and-prompt-packaging.md](../../archive/plans/student-area-redesign/phase-3-profile-generation-migration-and-prompt-packaging.md)
+4. [phase-4-overview-page-and-cross-domain-summaries.md](../../archive/plans/student-area-redesign/phase-4-overview-page-and-cross-domain-summaries.md)
+5. [phase-5-scheduling-billing-reminders-and-history.md](../../archive/plans/student-area-redesign/phase-5-scheduling-billing-reminders-and-history.md)
+6. [overview-page-design-lock.md](../../archive/plans/student-area-redesign/overview-page-design-lock.md)
+7. [history-page-design-lock.md](../../archive/plans/student-area-redesign/history-page-design-lock.md)
+8. [phase-6-shared-student-masthead-and-density-system.md](../../archive/plans/student-area-redesign/phase-6-shared-student-masthead-and-density-system.md)
+9. [phase-7-unified-student-area-design-language.md](../../archive/plans/student-area-redesign/phase-7-unified-student-area-design-language.md)
+10. [student-area-redesign-mvp-tomorrow-2026-05-01.md](../../archive/plans/student-area-redesign-mvp-tomorrow-2026-05-01.md)
 
 ## Current Authority Chain
 

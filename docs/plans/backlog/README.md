@@ -1,5 +1,16 @@
 # Optimization Backlog
 
+## Meta
+
+- Audience: maintainers and implementation agents.
+- Authority Level: active optimization backlog.
+- Last Verified Against: 2026-05-17 repo state.
+- Owner: founder-maintainer + automation agents.
+- Review Cadence: after backlog item implementation PRs.
+- Status: `backlog`.
+- Exit Trigger: archive individual wave plans after their implementation PR merges; keep this backlog routed while it contains active or deferred optimization candidates.
+- Current Focus: work from queued backlog items only; completed wave plans are archive trace.
+
 ## Summary
 
 Prioritized backlog of high-impact technical debt and optimization work discovered during repository chores.
@@ -21,9 +32,9 @@ This backlog is intended to be executed incrementally with safe, test-backed pat
 
 ## Wave Plans (Completed)
 
-1. [Wave 1 - Quick ROI](../completed/wave-1-quick-roi.md): `B5`, `B3`, `B4`
-2. [Wave 2 - Maintainability](../completed/wave-2-maintainability.md): `B6`, `B1`
-3. [Wave 3 - Schema Unification](../completed/wave-3-schema-unification.md): `B2`
+1. [Wave 1 - Quick ROI](../../archive/plans/completed/wave-1-quick-roi.md): `B5`, `B3`, `B4`
+2. [Wave 2 - Maintainability](../../archive/plans/completed/wave-2-maintainability.md): `B6`, `B1`
+3. [Wave 3 - Schema Unification](../../archive/plans/completed/wave-3-schema-unification.md): `B2`
 
 ## Wave Status
 

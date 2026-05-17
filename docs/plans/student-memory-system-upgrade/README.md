@@ -1,5 +1,16 @@
 # Student Memory System Upgrade
 
+## Meta
+
+- Audience: maintainers and student-memory agents.
+- Authority Level: active staged roadmap.
+- Last Verified Against: 2026-05-17 repo state.
+- Owner: founder-maintainer + backend/frontend maintainers.
+- Review Cadence: after student-memory implementation PRs.
+- Status: `roadmap`.
+- Exit Trigger: archive after the canonical student-memory model is shipped and represented in SSOT, prompt/runtime docs, and relevant package READMEs.
+- Current Focus: use this README as the active memory architecture roadmap; archived phase docs are historical trace.
+
 ## Summary
 
 This plan upgrades the current `profile + notes + lightweight lesson history + latest transcript`
@@ -251,15 +262,17 @@ This is the required build order and why it exists.
    - add UI, ops, backfill polish, and rollout verification after the core backend model is
      trustworthy
 
-## Phase Index
+## Historical Trace
 
-1. [phase-1-requirements-contracts-and-schema-boundaries.md](phase-1-requirements-contracts-and-schema-boundaries.md)
-2. [phase-2-lesson-memory-pipeline.md](phase-2-lesson-memory-pipeline.md)
-3. [phase-3-homework-memory-pipeline.md](phase-3-homework-memory-pipeline.md)
-4. [phase-4-student-rollup-and-retrieval-packaging.md](phase-4-student-rollup-and-retrieval-packaging.md)
-5. [phase-5-prompt-template-and-provider-runtime.md](phase-5-prompt-template-and-provider-runtime.md)
-6. [phase-6-frontend-ops-backfill-and-rollout.md](phase-6-frontend-ops-backfill-and-rollout.md)
-7. [verification-acceptance-and-assumptions.md](verification-acceptance-and-assumptions.md)
+Archived phase details remain available for rationale, but this README is the active edit surface.
+
+1. [phase-1-requirements-contracts-and-schema-boundaries.md](../../archive/plans/student-memory-system-upgrade/phase-1-requirements-contracts-and-schema-boundaries.md)
+2. [phase-2-lesson-memory-pipeline.md](../../archive/plans/student-memory-system-upgrade/phase-2-lesson-memory-pipeline.md)
+3. [phase-3-homework-memory-pipeline.md](../../archive/plans/student-memory-system-upgrade/phase-3-homework-memory-pipeline.md)
+4. [phase-4-student-rollup-and-retrieval-packaging.md](../../archive/plans/student-memory-system-upgrade/phase-4-student-rollup-and-retrieval-packaging.md)
+5. [phase-5-prompt-template-and-provider-runtime.md](../../archive/plans/student-memory-system-upgrade/phase-5-prompt-template-and-provider-runtime.md)
+6. [phase-6-frontend-ops-backfill-and-rollout.md](../../archive/plans/student-memory-system-upgrade/phase-6-frontend-ops-backfill-and-rollout.md)
+7. [verification-acceptance-and-assumptions.md](../../archive/plans/student-memory-system-upgrade/verification-acceptance-and-assumptions.md)
 
 ## Acceptance Gates
 

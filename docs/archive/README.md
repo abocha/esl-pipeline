@@ -12,6 +12,7 @@ Use active docs in `docs/README.md` for current implementation guidance.
 - Reference archive: `docs/archive/reference/README.md`
 - Playbooks archive: `docs/archive/playbooks/README.md`
 - Release archive: `docs/archive/release/README.md`
+- Plans archive: `docs/archive/plans/README.md`
 
 ## Layout Convention
 
