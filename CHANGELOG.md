@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [6.6.3] - 2026-05-17
+
+### Changed
+
+- Automated release from PR #78: Make the repo cross-platform and isolate Docker dependencies (https://github.com/abocha/esl-pipeline/pull/78)
+
 ## [6.6.2] - 2026-05-14
 
 ### Changed
