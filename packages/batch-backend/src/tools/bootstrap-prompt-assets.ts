@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import { getPromptOptions } from '../application/prompt-options.js';
 import { loadBatchBackendEnv } from '../bootstrap/env.js';
+import { configureHostRunPgRuntimeEnv } from '../bootstrap/pg-host-run-env.js';
 import { loadConfig } from '../config/env.js';
 import {
   getProfileById,
@@ -389,6 +390,7 @@ function printSummary(params: {
 
 async function run(): Promise<void> {
   loadBatchBackendEnv(import.meta.url, 'batch-backend-tool-bootstrap-prompt-assets');
+  configureHostRunPgRuntimeEnv();
   const options = parseArgs(process.argv.slice(2));
   const config = loadConfig();
 

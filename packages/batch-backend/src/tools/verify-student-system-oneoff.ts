@@ -8,6 +8,7 @@ import {
   updateStudentProfile,
 } from '../application/student-profiles-store.js';
 import { loadBatchBackendEnv } from '../bootstrap/env.js';
+import { configureHostRunPgRuntimeEnv } from '../bootstrap/pg-host-run-env.js';
 import { loadConfig } from '../config/env.js';
 import { getProfileById } from '../domain/profile-repository.js';
 import { getActiveStudentProfileBinding } from '../domain/student-profile-binding-repository.js';
@@ -39,6 +40,7 @@ function assertOrThrow(condition: unknown, message: string): asserts condition {
 
 async function run(): Promise<void> {
   loadBatchBackendEnv(import.meta.url, 'batch-backend-tool-verify-student-system-oneoff');
+  configureHostRunPgRuntimeEnv();
   const options = parseArgs(process.argv.slice(2));
   const config = loadConfig();
 

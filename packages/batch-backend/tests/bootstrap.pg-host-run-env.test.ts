@@ -43,4 +43,17 @@ describe('bootstrap/pg-host-run-env', () => {
 
     expect(env.PG_HOST).toBe('127.0.0.1');
   });
+
+  it('preserves container DNS names when running inside a container', () => {
+    const env: NodeJS.ProcessEnv = {
+      PG_CONNECTION_STRING: 'postgresql://esl:esl@postgres:5432/esl_batch',
+      PG_HOST: 'postgres',
+    };
+
+    const resolved = configureHostRunPgRuntimeEnv(env, { isContainer: true });
+
+    expect(resolved.connectionString).toBe('postgresql://esl:esl@postgres:5432/esl_batch');
+    expect(env.PG_CONNECTION_STRING).toBe('postgresql://esl:esl@postgres:5432/esl_batch');
+    expect(env.PG_HOST).toBe('postgres');
+  });
 });

@@ -5,6 +5,7 @@ import type { GenerationProvider } from '@esl-pipeline/contracts';
 import { resolveGenerationCandidates } from '../application/generation-policy.js';
 import { requestLessonMemoryGeneration } from '../application/request-lesson-memory-generation.js';
 import { loadBatchBackendEnv } from '../bootstrap/env.js';
+import { configureHostRunPgRuntimeEnv } from '../bootstrap/pg-host-run-env.js';
 import { type BatchBackendConfig, loadConfig } from '../config/env.js';
 import { withPgClient } from '../infrastructure/db.js';
 
@@ -219,6 +220,7 @@ function resolveModel(config: BatchBackendConfig, provider: GenerationProvider):
 
 async function run(): Promise<void> {
   loadBatchBackendEnv(import.meta.url, 'batch-backend-tool-refresh-lesson-memory');
+  configureHostRunPgRuntimeEnv();
   const options = parseArgs(process.argv.slice(2));
   const config = loadConfig();
 
