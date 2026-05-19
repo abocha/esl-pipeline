@@ -14,11 +14,13 @@ import {
   listAssignmentSessionsForUser,
   updateAssignmentSession,
 } from '../domain/assignment-session-repository.js';
+import { withPgClient } from '../infrastructure/db.js';
 
 export async function createAssignmentSessionForUser(
   userId: string,
   request: CreateAssignmentSessionRequest,
 ): Promise<AssignmentSessionDto> {
+  await validateLessonStudentPair(request);
   const session = await createOrReuseAssignmentSession({
     userId,
     ...request,
@@ -31,6 +33,7 @@ export async function updateAssignmentSessionForUser(
   sessionId: string,
   request: UpdateAssignmentSessionRequest,
 ): Promise<AssignmentSessionDto | null> {
+  await validateLessonStudentPair(request, { userId, sessionId });
   const session = await updateAssignmentSession({
     id: sessionId,
     userId,
@@ -76,6 +79,7 @@ export function toAssignmentSessionDto(session: AssignmentSessionRecord): Assign
     id: session.id,
     userId: session.userId,
     studentId: session.studentId,
+    lessonId: session.lessonId,
     recordingId: session.recordingId,
     transcriptId: session.transcriptId,
     promptPackageId: session.promptPackageId,
@@ -93,4 +97,37 @@ export function toAssignmentSessionDto(session: AssignmentSessionRecord): Assign
     updatedAt: session.updatedAt.toISOString(),
     archivedAt: session.archivedAt?.toISOString() ?? null,
   };
+}
+
+async function validateLessonStudentPair(
+  request: Pick<CreateAssignmentSessionRequest, 'lessonId' | 'studentId'>,
+  existingSession?: { userId: string; sessionId: string },
+): Promise<void> {
+  if (request.lessonId === undefined && request.studentId === undefined) return;
+
+  const session = existingSession
+    ? await getAssignmentSessionByIdForUser(existingSession.sessionId, existingSession.userId)
+    : null;
+  if (existingSession && !session) return;
+
+  const lessonId = request.lessonId !== undefined ? request.lessonId : session?.lessonId;
+  const studentId = request.studentId !== undefined ? request.studentId : session?.studentId;
+
+  if (!lessonId) return;
+
+  if (!studentId) {
+    throw new Error('Assignment session lesson requires a selected student');
+  }
+
+  const belongsToStudent = await withPgClient(async (client) => {
+    const result = await client.query(
+      'SELECT 1 FROM student_lessons WHERE id = $1 AND student_id = $2',
+      [lessonId, studentId],
+    );
+    return (result.rowCount ?? 0) > 0;
+  });
+
+  if (!belongsToStudent) {
+    throw new Error('Assignment session lesson must belong to the selected student');
+  }
 }

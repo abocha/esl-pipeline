@@ -8,8 +8,31 @@ const apiMocks = vi.hoisted(() => ({
   getBusinessScheduleSurface: vi.fn(),
   updateStudentLesson: vi.fn(),
 }));
+const navigateMock = vi.hoisted(() => vi.fn());
 
 vi.mock('../../utils/api', () => apiMocks);
+
+vi.mock('react-router-dom', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react-router-dom')>();
+  return {
+    ...actual,
+    useNavigate: () => navigateMock,
+  };
+});
+
+function makeHomework(overrides: Record<string, unknown> = {}) {
+  return {
+    status: 'not_started',
+    assignmentSessionId: null,
+    promptPackageId: null,
+    draftId: null,
+    jobId: null,
+    homeworkMemoryEntryId: null,
+    htmlUrl: null,
+    updatedAt: null,
+    ...overrides,
+  };
+}
 
 function makeSurface(overrides: Record<string, unknown> = {}) {
   return {
@@ -45,6 +68,12 @@ function makeSurface(overrides: Record<string, unknown> = {}) {
         title: null,
         notes: null,
         creditEventId: null,
+        recurrenceRuleId: null,
+        recurrenceSlotId: null,
+        recurrenceOccurrenceKey: null,
+        recurrenceOrigin: 'manual',
+        recurrenceOverrideKind: null,
+        homework: makeHomework(),
         createdAt: '2026-05-07T00:00:00.000Z',
         updatedAt: '2026-05-07T00:00:00.000Z',
       },
@@ -57,6 +86,7 @@ function makeSurface(overrides: Record<string, unknown> = {}) {
         remainingCredits: -1,
         type: 'payment_followup',
         channel: 'manual',
+        actionIntent: 'copy_text',
         severity: 'urgent',
         title: 'Balance is negative',
         message: '-1 lesson credit remaining.',
@@ -185,6 +215,85 @@ describe('BusinessSchedulePage', () => {
         consumesCredit: true,
       });
     });
+  });
+
+  it('completes lesson follow-up reminders and opens assignment with lesson context', async () => {
+    apiMocks.getBusinessScheduleSurface.mockResolvedValue(
+      makeSurface({
+        reminders: [
+          {
+            studentId: 'student-alex',
+            studentName: 'Alex',
+            studentScheduleBillingPath: '/students/student-alex/schedule-billing',
+            remainingCredits: 0,
+            type: 'lesson_followup',
+            channel: 'manual',
+            actionIntent: 'complete_lesson_and_start_assignment',
+            lessonId: 'lesson-1',
+            lessonStatus: 'scheduled',
+            lessonConsumesCredit: true,
+            severity: 'attention',
+            title: 'Finish lesson follow-up',
+            message: 'The scheduled lesson time has passed and homework is not published yet.',
+            copyText: 'Complete Alex lesson and start homework.',
+          },
+        ],
+      }),
+    );
+
+    render(
+      <MemoryRouter>
+        <BusinessSchedulePage />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Complete + homework' }));
+
+    await waitFor(() => {
+      expect(apiMocks.updateStudentLesson).toHaveBeenCalledWith('student-alex', 'lesson-1', {
+        status: 'completed',
+        consumesCredit: true,
+      });
+      expect(navigateMock).toHaveBeenCalledWith('/?studentId=student-alex&lessonId=lesson-1');
+    });
+  });
+
+  it('opens homework without re-billing completed non-credit business follow-ups', async () => {
+    apiMocks.getBusinessScheduleSurface.mockResolvedValue(
+      makeSurface({
+        reminders: [
+          {
+            studentId: 'student-alex',
+            studentName: 'Alex',
+            studentScheduleBillingPath: '/students/student-alex/schedule-billing',
+            remainingCredits: 0,
+            type: 'lesson_followup',
+            channel: 'manual',
+            actionIntent: 'complete_lesson_and_start_assignment',
+            lessonId: 'lesson-1',
+            lessonStatus: 'completed',
+            lessonConsumesCredit: false,
+            severity: 'attention',
+            title: 'Finish lesson follow-up',
+            message: 'The scheduled lesson time has passed and homework is not published yet.',
+            copyText: 'Start homework for Alex lesson.',
+          },
+        ],
+      }),
+    );
+
+    render(
+      <MemoryRouter>
+        <BusinessSchedulePage />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Complete + homework' }));
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith('/?studentId=student-alex&lessonId=lesson-1');
+    });
+    expect(apiMocks.updateStudentLesson).not.toHaveBeenCalled();
   });
 
   it('restores completed lessons from the agenda', async () => {

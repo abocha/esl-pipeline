@@ -76,6 +76,7 @@ export async function requestHomeworkMemoryGeneration(args: {
     assignmentLineageKey: sourceBundle.assignmentLineageKey,
     promptPackageId: sourceBundle.promptPackageId ?? null,
     draftId: sourceBundle.draftId ?? null,
+    lessonId: sourceBundle.lessonId ?? null,
     recordingId: sourceBundle.recordingId ?? null,
     transcriptId: sourceBundle.transcriptId ?? null,
     schemaVersion: HOMEWORK_MEMORY_SCHEMA_VERSION,

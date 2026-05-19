@@ -5,6 +5,7 @@ export interface PromptPackageRecord {
   recordingId: string;
   transcriptId: string;
   studentId?: string | null;
+  lessonId?: string | null;
   studentMemorySnapshotId?: string | null;
   studentMemorySnapshotHash?: string | null;
   selectedLessonMemoryIds?: string[];

@@ -1,23 +1,20 @@
 import './support/bootstrap-pg-test-env.js';
 
-import { execFile as execFileCallback } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { promisify } from 'node:util';
 import { Pool } from 'pg';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { closePgPool } from '../src/infrastructure/db.js';
 import { verifyMigrations } from '../src/infrastructure/migration-verify.js';
 import { getMigrationStatus, runMigrations } from '../src/infrastructure/migrations.js';
-import { generateSchemaBaselineSql } from '../src/infrastructure/schema-baseline.js';
+import { applySqlFile, generateSchemaBaselineSql } from '../src/infrastructure/schema-baseline.js';
 import { requirePgTestEnv, resolveTestTimeout, writeTestArtifact } from './support/test-env.js';
 
 const { connectionString } = requirePgTestEnv();
 const testTimeout = resolveTestTimeout(120_000);
 const legacyFixturePath = path.resolve(import.meta.dirname, 'fixtures', 'pg-legacy-schema.sql');
 const schemaBaselinePath = path.resolve(import.meta.dirname, '..', 'schema.sql');
-const execFile = promisify(execFileCallback);
 
 async function withAdminClient<T>(fn: (pool: Pool) => Promise<T>): Promise<T> {
   const pool = new Pool({ connectionString });
@@ -46,9 +43,7 @@ async function applyLegacySchemaFixture(): Promise<void> {
 }
 
 async function applySchemaBaselineFixture(): Promise<void> {
-  await execFile('psql', [connectionString, '-v', 'ON_ERROR_STOP=1', '-f', schemaBaselinePath], {
-    maxBuffer: 20 * 1024 * 1024,
-  });
+  await applySqlFile(connectionString, schemaBaselinePath);
 }
 
 async function assertSchemaHealthy(scenario: string): Promise<void> {

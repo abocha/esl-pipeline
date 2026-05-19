@@ -21,6 +21,7 @@ interface HomeworkSourceJobRow {
   md_storage_uri: string | null;
   prompt_package_id: string | null;
   draft_id: string | null;
+  lesson_id: string | null;
   recording_id: string | null;
   transcript_id: string | null;
   source_job_id: string | null;
@@ -37,6 +38,7 @@ export interface HomeworkMemorySourceBundle {
   studentId: string;
   promptPackageId?: string | null;
   draftId?: string | null;
+  lessonId?: string | null;
   recordingId?: string | null;
   transcriptId?: string | null;
   publishedAt: Date;
@@ -85,6 +87,7 @@ export async function resolveHomeworkMemorySourceFromSucceededJob(
     studentId: currentJob.student_id,
     promptPackageId: currentJob.prompt_package_id ?? null,
     draftId: currentJob.draft_id ?? null,
+    lessonId: currentJob.lesson_id ?? null,
     recordingId: currentJob.recording_id ?? null,
     transcriptId: currentJob.transcript_id ?? null,
     publishedAt: currentJob.finished_at ?? currentJob.updated_at,
@@ -136,6 +139,7 @@ async function loadSucceededJob(jobId: string): Promise<HomeworkSourceJobRow | n
         md_storage_uri,
         prompt_package_id,
         draft_id,
+        lesson_id,
         recording_id,
         transcript_id,
         source_job_id,
@@ -194,6 +198,7 @@ async function listSucceededLineageJobs(
           md_storage_uri,
           prompt_package_id,
           draft_id,
+          lesson_id,
           recording_id,
           transcript_id,
           source_job_id,
@@ -214,6 +219,7 @@ async function listSucceededLineageJobs(
           j.md_storage_uri,
           j.prompt_package_id,
           j.draft_id,
+          j.lesson_id,
           j.recording_id,
           j.transcript_id,
           j.source_job_id,

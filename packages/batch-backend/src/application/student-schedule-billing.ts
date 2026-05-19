@@ -8,6 +8,8 @@ import type {
   StudentCreditEventDto,
   StudentCreditSummaryDto,
   StudentLessonDto,
+  StudentLessonHomeworkDto,
+  StudentLessonHomeworkStatus,
   StudentLessonPlanDto,
   StudentLessonRecurrenceRuleDto,
   StudentLessonRecurrenceSlotDto,
@@ -59,6 +61,14 @@ interface LessonRow {
   recurrence_override_kind: 'manual_edit' | 'manual_reschedule' | 'manual_cancel' | null;
   created_at: Date;
   updated_at: Date;
+  homework_status: StudentLessonHomeworkStatus;
+  homework_assignment_session_id: string | null;
+  homework_prompt_package_id: string | null;
+  homework_draft_id: string | null;
+  homework_job_id: string | null;
+  homework_memory_entry_id: string | null;
+  homework_html_url: string | null;
+  homework_updated_at: Date | null;
 }
 
 interface CreditEventRow {
@@ -145,6 +155,87 @@ export class StudentScheduleBillingError extends Error {
     super(message);
   }
 }
+
+const LESSON_HOMEWORK_SELECT = `
+  student_lessons.*,
+  CASE
+    WHEN lesson_homework_memory.id IS NOT NULL THEN 'memory_ready'
+    WHEN lesson_published_job.id IS NOT NULL THEN 'published'
+    WHEN lesson_active_job.id IS NOT NULL THEN 'publishing'
+    WHEN lesson_draft.id IS NOT NULL THEN 'draft_in_progress'
+    WHEN lesson_assignment_session.id IS NOT NULL THEN 'session_in_progress'
+    ELSE 'not_started'
+  END AS homework_status,
+  lesson_assignment_session.id AS homework_assignment_session_id,
+  COALESCE(
+    lesson_homework_memory.prompt_package_id,
+    lesson_published_job.prompt_package_id,
+    lesson_active_job.prompt_package_id,
+    lesson_draft.prompt_package_id,
+    lesson_assignment_session.prompt_package_id
+  ) AS homework_prompt_package_id,
+  COALESCE(
+    lesson_homework_memory.draft_id,
+    lesson_published_job.draft_id,
+    lesson_active_job.draft_id,
+    lesson_draft.id,
+    lesson_assignment_session.draft_id
+  ) AS homework_draft_id,
+  COALESCE(lesson_published_job.id, lesson_active_job.id) AS homework_job_id,
+  lesson_homework_memory.id AS homework_memory_entry_id,
+  lesson_published_job.html_url AS homework_html_url,
+  COALESCE(
+    lesson_homework_memory.generated_at,
+    lesson_published_job.updated_at,
+    lesson_active_job.updated_at,
+    lesson_draft.updated_at,
+    lesson_assignment_session.updated_at
+  ) AS homework_updated_at
+`;
+
+const LESSON_HOMEWORK_JOINS = `
+  LEFT JOIN LATERAL (
+    SELECT id, prompt_package_id, draft_id, updated_at
+    FROM assignment_sessions
+    WHERE lesson_id = student_lessons.id
+      AND archived_at IS NULL
+    ORDER BY updated_at DESC, id DESC
+    LIMIT 1
+  ) lesson_assignment_session ON TRUE
+  LEFT JOIN LATERAL (
+    SELECT id, prompt_package_id, updated_at
+    FROM drafts
+    WHERE lesson_id = student_lessons.id
+    ORDER BY updated_at DESC, id DESC
+    LIMIT 1
+  ) lesson_draft ON TRUE
+  LEFT JOIN LATERAL (
+    SELECT id, prompt_package_id, draft_id, html_url,
+           COALESCE(finished_at, updated_at, created_at) AS updated_at
+    FROM jobs
+    WHERE lesson_id = student_lessons.id
+      AND state = 'succeeded'
+    ORDER BY COALESCE(finished_at, updated_at, created_at) DESC, id DESC
+    LIMIT 1
+  ) lesson_published_job ON TRUE
+  LEFT JOIN LATERAL (
+    SELECT id, prompt_package_id, draft_id,
+           COALESCE(finished_at, updated_at, created_at) AS updated_at
+    FROM jobs
+    WHERE lesson_id = student_lessons.id
+      AND state IN ('queued', 'running', 'awaiting_approval')
+    ORDER BY COALESCE(finished_at, updated_at, created_at) DESC, id DESC
+    LIMIT 1
+  ) lesson_active_job ON TRUE
+  LEFT JOIN LATERAL (
+    SELECT id, prompt_package_id, draft_id, job_id, generated_at
+    FROM homework_memory_entries
+    WHERE lesson_id = student_lessons.id
+      AND status = 'ready'
+    ORDER BY generated_at DESC, created_at DESC, id DESC
+    LIMIT 1
+  ) lesson_homework_memory ON TRUE
+`;
 
 export async function getStudentScheduleBillingSurface(
   studentId: string,
@@ -483,6 +574,7 @@ async function getSurfaceForContext(
   const recurrenceRule = await getPrimaryRecurrenceRule(client, context.id);
   const nextLesson = await getNextLesson(client, context.id);
   const lessons = await listLessons(client, context.id);
+  const elapsedHomeworkFollowups = await listOverdueLessonHomeworkFollowups(client, context.id);
   const creditEvents = await listCreditEvents(client, context.id);
   const payments = await listPayments(client, context.id);
   const reminderPrefs = await getReminderPreferences(client, context);
@@ -505,6 +597,7 @@ async function getSurfaceForContext(
     reminders: buildReminderRecommendations({
       studentName: context.name,
       nextLesson,
+      elapsedHomeworkFollowups,
       creditSummary,
       preferredChannel: reminderPrefs.preferredChannel,
       enableUpcomingLesson: reminderPrefs.enableUpcomingLesson,
@@ -908,8 +1001,9 @@ async function getCreditSummary(
 async function getNextLesson(client: PoolClient, studentId: string): Promise<LessonRow | null> {
   const result = await client.query<LessonRow>(
     `
-    SELECT *
+    SELECT ${LESSON_HOMEWORK_SELECT}
     FROM student_lessons
+    ${LESSON_HOMEWORK_JOINS}
     WHERE student_id = $1
       AND recurrence_obsolete_at IS NULL
       AND status = 'scheduled'
@@ -925,8 +1019,9 @@ async function getNextLesson(client: PoolClient, studentId: string): Promise<Les
 async function listLessons(client: PoolClient, studentId: string): Promise<LessonRow[]> {
   const result = await client.query<LessonRow>(
     `
-    SELECT *
+    SELECT ${LESSON_HOMEWORK_SELECT}
     FROM student_lessons
+    ${LESSON_HOMEWORK_JOINS}
     WHERE student_id = $1
       AND recurrence_obsolete_at IS NULL
     ORDER BY starts_at DESC, id DESC
@@ -935,6 +1030,29 @@ async function listLessons(client: PoolClient, studentId: string): Promise<Lesso
     [studentId],
   );
   return result.rows;
+}
+
+async function listOverdueLessonHomeworkFollowups(
+  client: PoolClient,
+  studentId: string,
+): Promise<LessonRow[]> {
+  const result = await client.query<LessonRow>(
+    `
+    SELECT ${LESSON_HOMEWORK_SELECT}
+    FROM student_lessons
+    ${LESSON_HOMEWORK_JOINS}
+    WHERE student_id = $1
+      AND recurrence_obsolete_at IS NULL
+      AND status IN ('scheduled', 'completed')
+      AND starts_at + (duration_minutes * INTERVAL '1 minute') <= NOW()
+      AND lesson_homework_memory.id IS NULL
+      AND lesson_published_job.id IS NULL
+    ORDER BY starts_at DESC, id DESC
+    LIMIT 30
+    `,
+    [studentId],
+  );
+  return result.rows.filter(isLessonHomeworkFollowUpDue);
 }
 
 async function listCreditEvents(client: PoolClient, studentId: string): Promise<CreditEventRow[]> {
@@ -984,7 +1102,13 @@ async function getLessonRow(
   lessonId: string,
 ): Promise<LessonRow | null> {
   const result = await client.query<LessonRow>(
-    'SELECT * FROM student_lessons WHERE id = $1 AND student_id = $2',
+    `
+    SELECT ${LESSON_HOMEWORK_SELECT}
+    FROM student_lessons
+    ${LESSON_HOMEWORK_JOINS}
+    WHERE student_lessons.id = $1
+      AND student_lessons.student_id = $2
+    `,
     [lessonId, studentId],
   );
   return result.rows[0] ?? null;
@@ -1105,6 +1229,7 @@ async function insertPayment(
 function buildReminderRecommendations(params: {
   studentName: string;
   nextLesson: LessonRow | null;
+  elapsedHomeworkFollowups: LessonRow[];
   creditSummary: StudentCreditSummaryDto;
   preferredChannel: 'manual' | 'telegram' | 'email';
   enableUpcomingLesson: boolean;
@@ -1117,6 +1242,7 @@ function buildReminderRecommendations(params: {
     recommendations.push({
       type: 'no_next_lesson',
       channel,
+      actionIntent: 'copy_text',
       severity: 'attention',
       title: 'Schedule the next lesson',
       message: 'No upcoming lesson is scheduled.',
@@ -1128,6 +1254,7 @@ function buildReminderRecommendations(params: {
     recommendations.push({
       type: 'low_balance',
       channel,
+      actionIntent: 'copy_text',
       severity: remaining < 0 ? 'urgent' : 'attention',
       title: remaining < 0 ? 'Balance is negative' : 'Lesson credits are low',
       message: `${remaining} lesson credit${Math.abs(remaining) === 1 ? '' : 's'} remaining.`,
@@ -1141,10 +1268,25 @@ function buildReminderRecommendations(params: {
     recommendations.push({
       type: 'payment_followup',
       channel,
+      actionIntent: 'copy_text',
       severity: params.creditSummary.remaining < 0 ? 'urgent' : 'attention',
       title: 'Payment follow-up ready',
       message: 'The student needs new paid lesson credits.',
       copyText: `Hi ${params.studentName}, please send payment for the next lesson package when convenient.`,
+    });
+  }
+  for (const lesson of params.elapsedHomeworkFollowups) {
+    recommendations.push({
+      type: 'lesson_followup',
+      channel: 'manual',
+      actionIntent: 'complete_lesson_and_start_assignment',
+      lessonId: lesson.id,
+      lessonStatus: lesson.status,
+      lessonConsumesCredit: lesson.consumes_credit,
+      severity: 'attention',
+      title: 'Finish lesson follow-up',
+      message: 'The scheduled lesson time has passed and homework is not published yet.',
+      copyText: `Complete ${params.studentName}'s lesson record and start the homework assignment.`,
     });
   }
   return recommendations;
@@ -1444,9 +1586,32 @@ function mapLesson(row: LessonRow): StudentLessonDto {
     recurrenceOccurrenceKey: row.recurrence_occurrence_key ?? null,
     recurrenceOrigin: row.recurrence_origin ?? 'manual',
     recurrenceOverrideKind: row.recurrence_override_kind ?? null,
+    homework: mapLessonHomework(row),
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
   };
+}
+
+function mapLessonHomework(row: LessonRow): StudentLessonHomeworkDto {
+  return {
+    status: row.homework_status ?? 'not_started',
+    assignmentSessionId: row.homework_assignment_session_id ?? null,
+    promptPackageId: row.homework_prompt_package_id ?? null,
+    draftId: row.homework_draft_id ?? null,
+    jobId: row.homework_job_id ?? null,
+    homeworkMemoryEntryId: row.homework_memory_entry_id ?? null,
+    htmlUrl: row.homework_html_url ?? null,
+    updatedAt: row.homework_updated_at ? row.homework_updated_at.toISOString() : null,
+  };
+}
+
+function isLessonHomeworkFollowUpDue(lesson: LessonRow): boolean {
+  if (!['scheduled', 'completed'].includes(lesson.status)) return false;
+  if (lesson.homework_status === 'published' || lesson.homework_status === 'memory_ready') {
+    return false;
+  }
+  const endsAt = lesson.starts_at.getTime() + lesson.duration_minutes * 60 * 1000;
+  return endsAt <= Date.now();
 }
 
 function mapCreditEvent(row: CreditEventRow): StudentCreditEventDto {

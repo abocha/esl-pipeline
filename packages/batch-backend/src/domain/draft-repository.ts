@@ -9,6 +9,7 @@ interface DraftRow {
   id: string;
   prompt_package_id: string;
   student_id: string | null;
+  lesson_id: string | null;
   storage_uri: string;
   created_by: string | null;
   created_at: Date;
@@ -19,6 +20,7 @@ export interface InsertDraftParams {
   id?: string;
   promptPackageId: string;
   studentId?: string | null;
+  lessonId?: string | null;
   storageUri: string;
   createdBy?: string | null;
 }
@@ -34,16 +36,18 @@ export async function insertDraft(params: InsertDraftParams): Promise<DraftRecor
         id,
         prompt_package_id,
         student_id,
+        lesson_id,
         storage_uri,
         created_by,
         created_at,
         updated_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING
         id,
         prompt_package_id,
         student_id,
+        lesson_id,
         storage_uri,
         created_by,
         created_at,
@@ -53,6 +57,7 @@ export async function insertDraft(params: InsertDraftParams): Promise<DraftRecor
         id,
         params.promptPackageId,
         params.studentId ?? null,
+        params.lessonId ?? null,
         params.storageUri,
         params.createdBy ?? null,
         now,
@@ -70,7 +75,7 @@ export async function getDraftById(id: string): Promise<DraftRecord | null> {
   const row = await withPgClient(async (client: PoolClient) => {
     const result = await client.query(
       `
-      SELECT id, prompt_package_id, student_id, storage_uri, created_by, created_at, updated_at
+      SELECT id, prompt_package_id, student_id, lesson_id, storage_uri, created_by, created_at, updated_at
       FROM drafts
       WHERE id = $1
       `,
@@ -87,6 +92,7 @@ function mapRowToDraft(row: DraftRow): DraftRecord {
     id: row.id,
     promptPackageId: row.prompt_package_id,
     studentId: row.student_id ?? null,
+    lessonId: row.lesson_id ?? null,
     storageUri: row.storage_uri,
     createdBy: row.created_by ?? null,
     createdAt: row.created_at,
@@ -114,6 +120,7 @@ export async function updateDraft(params: UpdateDraftParams): Promise<DraftRecor
         id,
         prompt_package_id,
         student_id,
+        lesson_id,
         storage_uri,
         created_by,
         created_at,

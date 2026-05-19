@@ -291,6 +291,7 @@ CREATE TABLE public.assignment_sessions (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     archived_at timestamp with time zone,
+    lesson_id uuid,
     CONSTRAINT assignment_sessions_generation_provider_check CHECK (((selected_generation_provider IS NULL) OR (selected_generation_provider = ANY (ARRAY['openai'::text, 'google_ai_studio'::text, 'openrouter'::text])))),
     CONSTRAINT assignment_sessions_publish_target_check CHECK (((publish_target IS NULL) OR (publish_target = 'html'::text))),
     CONSTRAINT assignment_sessions_stage_check CHECK ((current_stage = ANY (ARRAY['source'::text, 'context'::text, 'assignment'::text, 'review'::text]))),
@@ -305,7 +306,8 @@ CREATE TABLE public.drafts (
     storage_uri text NOT NULL,
     created_by uuid,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    lesson_id uuid
 );
 
 CREATE TABLE public.generation_budget_counters (
@@ -352,6 +354,7 @@ CREATE TABLE public.homework_memory_entries (
     draft_id uuid,
     recording_id uuid,
     transcript_id uuid,
+    lesson_id uuid,
     CONSTRAINT homework_memory_entries_input_type_check CHECK (((input_type IS NULL) OR (input_type = ANY (ARRAY['generate'::text, 'authentic'::text])))),
     CONSTRAINT homework_memory_entries_source_kind_check CHECK ((source_kind = 'published_assignment'::text)),
     CONSTRAINT homework_memory_entries_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'ready'::text, 'failed'::text, 'superseded'::text]))),
@@ -417,6 +420,7 @@ CREATE TABLE public.jobs (
     tts_provider text,
     google_tts_model text,
     study_text_elevenlabs_model text,
+    lesson_id uuid,
     CONSTRAINT jobs_google_tts_model_check CHECK (((google_tts_model IS NULL) OR (google_tts_model = ANY (ARRAY['chirp3_hd'::text, 'studio'::text, 'neural2'::text, 'wavenet'::text])))),
     CONSTRAINT jobs_mode_check CHECK (((mode IS NULL) OR (mode = ANY (ARRAY['auto'::text, 'dialogue'::text, 'tts'::text])))),
     CONSTRAINT jobs_state_check CHECK ((state = ANY (ARRAY['queued'::text, 'running'::text, 'awaiting_approval'::text, 'succeeded'::text, 'failed'::text]))),
@@ -537,7 +541,8 @@ CREATE TABLE public.prompt_packages (
     student_memory_snapshot_hash text,
     selected_lesson_memory_ids uuid[] DEFAULT ARRAY[]::uuid[] NOT NULL,
     selected_homework_memory_ids uuid[] DEFAULT ARRAY[]::uuid[] NOT NULL,
-    retrieval_policy_version text
+    retrieval_policy_version text,
+    lesson_id uuid
 );
 
 CREATE TABLE public.recordings (
@@ -1028,6 +1033,8 @@ ALTER TABLE ONLY public.workspace_memberships
 ALTER TABLE ONLY public.workspaces
     ADD CONSTRAINT workspaces_pkey PRIMARY KEY (id);
 
+CREATE INDEX idx_assignment_sessions_lesson_updated ON public.assignment_sessions USING btree (lesson_id, updated_at DESC, id DESC) WHERE ((lesson_id IS NOT NULL) AND (archived_at IS NULL));
+
 CREATE UNIQUE INDEX idx_assignment_sessions_user_active_recording ON public.assignment_sessions USING btree (user_id, recording_id) WHERE ((archived_at IS NULL) AND (recording_id IS NOT NULL));
 
 CREATE INDEX idx_assignment_sessions_user_active_updated ON public.assignment_sessions USING btree (user_id, updated_at DESC, id DESC) WHERE (archived_at IS NULL);
@@ -1035,6 +1042,8 @@ CREATE INDEX idx_assignment_sessions_user_active_updated ON public.assignment_se
 CREATE INDEX idx_assignment_sessions_user_updated ON public.assignment_sessions USING btree (user_id, updated_at DESC, id DESC);
 
 CREATE INDEX idx_drafts_created_by ON public.drafts USING btree (created_by);
+
+CREATE INDEX idx_drafts_lesson_updated ON public.drafts USING btree (lesson_id, updated_at DESC, id DESC) WHERE (lesson_id IS NOT NULL);
 
 CREATE INDEX idx_drafts_prompt_package_id ON public.drafts USING btree (prompt_package_id);
 
@@ -1045,6 +1054,8 @@ CREATE INDEX idx_generation_budget_counters_bucket_start ON public.generation_bu
 CREATE INDEX idx_generation_budget_counters_provider_model ON public.generation_budget_counters USING btree (provider, model);
 
 CREATE INDEX idx_homework_memory_entries_job_generated_at ON public.homework_memory_entries USING btree (job_id, generated_at DESC, id DESC);
+
+CREATE INDEX idx_homework_memory_entries_lesson_ready_generated ON public.homework_memory_entries USING btree (lesson_id, generated_at DESC, created_at DESC, id DESC) WHERE ((lesson_id IS NOT NULL) AND (status = 'ready'::text));
 
 CREATE INDEX idx_homework_memory_entries_lineage_generated_at ON public.homework_memory_entries USING btree (assignment_lineage_key, generated_at DESC, id DESC);
 
@@ -1067,6 +1078,8 @@ CREATE INDEX idx_jobs_created_at ON public.jobs USING btree (created_at);
 CREATE INDEX idx_jobs_created_at_id ON public.jobs USING btree (created_at DESC, id DESC);
 
 CREATE INDEX idx_jobs_draft_id ON public.jobs USING btree (draft_id);
+
+CREATE INDEX idx_jobs_lesson_updated ON public.jobs USING btree (lesson_id, COALESCE(finished_at, updated_at, created_at) DESC, id DESC) WHERE (lesson_id IS NOT NULL);
 
 CREATE INDEX idx_jobs_prompt_package_id ON public.jobs USING btree (prompt_package_id);
 
@@ -1117,6 +1130,8 @@ CREATE UNIQUE INDEX idx_profile_revisions_single_active ON public.profile_revisi
 CREATE INDEX idx_profiles_active_revision_id ON public.profiles USING btree (active_revision_id);
 
 CREATE INDEX idx_profiles_label ON public.profiles USING btree (label);
+
+CREATE INDEX idx_prompt_packages_lesson_updated ON public.prompt_packages USING btree (lesson_id, updated_at DESC, id DESC) WHERE (lesson_id IS NOT NULL);
 
 CREATE INDEX idx_prompt_packages_recording_id ON public.prompt_packages USING btree (recording_id);
 
@@ -1272,6 +1287,9 @@ ALTER TABLE ONLY public.assignment_sessions
     ADD CONSTRAINT assignment_sessions_draft_id_fkey FOREIGN KEY (draft_id) REFERENCES public.drafts(id) ON DELETE SET NULL;
 
 ALTER TABLE ONLY public.assignment_sessions
+    ADD CONSTRAINT assignment_sessions_lesson_id_fkey FOREIGN KEY (lesson_id) REFERENCES public.student_lessons(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.assignment_sessions
     ADD CONSTRAINT assignment_sessions_prompt_package_id_fkey FOREIGN KEY (prompt_package_id) REFERENCES public.prompt_packages(id) ON DELETE SET NULL;
 
 ALTER TABLE ONLY public.assignment_sessions
@@ -1290,6 +1308,9 @@ ALTER TABLE ONLY public.drafts
     ADD CONSTRAINT drafts_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
 
 ALTER TABLE ONLY public.drafts
+    ADD CONSTRAINT drafts_lesson_id_fkey FOREIGN KEY (lesson_id) REFERENCES public.student_lessons(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.drafts
     ADD CONSTRAINT drafts_prompt_package_id_fkey FOREIGN KEY (prompt_package_id) REFERENCES public.prompt_packages(id) ON DELETE CASCADE;
 
 ALTER TABLE ONLY public.homework_memory_entries
@@ -1300,6 +1321,9 @@ ALTER TABLE ONLY public.homework_memory_entries
 
 ALTER TABLE ONLY public.homework_memory_entries
     ADD CONSTRAINT homework_memory_entries_job_id_fkey FOREIGN KEY (job_id) REFERENCES public.jobs(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.homework_memory_entries
+    ADD CONSTRAINT homework_memory_entries_lesson_id_fkey FOREIGN KEY (lesson_id) REFERENCES public.student_lessons(id) ON DELETE SET NULL;
 
 ALTER TABLE ONLY public.homework_memory_entries
     ADD CONSTRAINT homework_memory_entries_prompt_package_id_fkey FOREIGN KEY (prompt_package_id) REFERENCES public.prompt_packages(id) ON DELETE SET NULL;
@@ -1324,6 +1348,9 @@ ALTER TABLE ONLY public.job_action_history
 
 ALTER TABLE ONLY public.job_action_history
     ADD CONSTRAINT job_action_history_requested_by_fkey FOREIGN KEY (requested_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.jobs
+    ADD CONSTRAINT jobs_lesson_id_fkey FOREIGN KEY (lesson_id) REFERENCES public.student_lessons(id) ON DELETE SET NULL;
 
 ALTER TABLE ONLY public.jobs
     ADD CONSTRAINT jobs_source_job_id_fkey FOREIGN KEY (source_job_id) REFERENCES public.jobs(id) ON DELETE SET NULL;
@@ -1354,6 +1381,9 @@ ALTER TABLE ONLY public.profile_revisions
 
 ALTER TABLE ONLY public.profiles
     ADD CONSTRAINT profiles_active_revision_id_fkey FOREIGN KEY (active_revision_id) REFERENCES public.profile_revisions(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.prompt_packages
+    ADD CONSTRAINT prompt_packages_lesson_id_fkey FOREIGN KEY (lesson_id) REFERENCES public.student_lessons(id) ON DELETE SET NULL;
 
 ALTER TABLE ONLY public.prompt_packages
     ADD CONSTRAINT prompt_packages_recording_id_fkey FOREIGN KEY (recording_id) REFERENCES public.recordings(id) ON DELETE CASCADE;
@@ -1616,5 +1646,6 @@ VALUES
   ('0026_schedule_billing_foundations', '503e66dae2e95b23028708636942fce28fce3b0c7e734b1cfb689abeb10ccc49', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0027_teacher_business_dashboard_foundations', 'b82df4ed56daa006bdee71a0a56e1c3f584d89eb467aa7aaf5c68cc764c60d01', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0028_student_lesson_recurrence_core', 'c90dea3bf8cc79162e93d0cbdd167e9142c6d959d2cb743ab164e06c4f658fa0', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0029_assignment_sessions', '81d0ae89a6a5e55f1fba02cac60b703e1a22d31024c5d350a43642fcb53433aa', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0029_assignment_sessions', '81d0ae89a6a5e55f1fba02cac60b703e1a22d31024c5d350a43642fcb53433aa', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0030_lesson_assignment_linkage', '911668bc4cde7c277df35c1be17aaff84067eee9fa0a85da6dbd09545f3f3622', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;

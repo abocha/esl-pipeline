@@ -55,6 +55,7 @@ export interface SourceHydrationSnapshot {
 interface UseMinimalAssignmentSourceControllerParams {
   configuredSttProviders: readonly string[] | null | undefined;
   defaultSttProvider: SttProvider | null;
+  initialSelectedStudentId?: string | null;
   onBeforeUploadReset: () => void;
 }
 
@@ -91,6 +92,7 @@ function isSttProvider(value: string | null | undefined): value is SttProvider {
 export function useMinimalAssignmentSourceController({
   configuredSttProviders,
   defaultSttProvider,
+  initialSelectedStudentId,
   onBeforeUploadReset,
 }: UseMinimalAssignmentSourceControllerParams): SourceController {
   const [recording, setRecording] = useState<RecordingListItem | null>(null);
@@ -111,7 +113,7 @@ export function useMinimalAssignmentSourceController({
   const [retryingTranscript, setRetryingTranscript] = useState(false);
   const [studentOptions, setStudentOptions] = useState<StudentOption[]>([]);
   const [studentOptionsError, setStudentOptionsError] = useState<string | null>(null);
-  const [selectedStudentId, setSelectedStudentId] = useState('');
+  const [selectedStudentId, setSelectedStudentId] = useState(initialSelectedStudentId ?? '');
   const [uploadCacheNotice, setUploadCacheNotice] = useState<string | null>(null);
   const latestRecordingRef = useRef<RecordingListItem | null>(null);
   const latestTranscriptIdRef = useRef<string | null>(null);
@@ -152,28 +154,31 @@ export function useMinimalAssignmentSourceController({
     [studentOptions],
   );
 
-  const resetSourceFlow = useCallback((options?: { resetStudent?: boolean }) => {
-    uploadAbortRef.current?.abort();
-    uploadAbortRef.current = null;
-    sttProviderUserChangedRef.current = false;
-    if (options?.resetStudent) {
-      setSelectedStudentId('');
-    }
-    setRecording(null);
-    setRecordingStatus(null);
-    setRecordingError(null);
-    setTranscript(null);
-    setTranscriptText('');
-    setTranscriptStatus('idle');
-    setTranscriptError(null);
-    setTranscriptSaving(false);
-    setRetryingTranscript(false);
-    setSelectedFileName(null);
-    setUploadError(null);
-    setUploadProgress(0);
-    setUploading(false);
-    setUploadCacheNotice(null);
-  }, []);
+  const resetSourceFlow = useCallback(
+    (options?: { resetStudent?: boolean }) => {
+      uploadAbortRef.current?.abort();
+      uploadAbortRef.current = null;
+      sttProviderUserChangedRef.current = false;
+      if (options?.resetStudent) {
+        setSelectedStudentId(initialSelectedStudentId ?? '');
+      }
+      setRecording(null);
+      setRecordingStatus(null);
+      setRecordingError(null);
+      setTranscript(null);
+      setTranscriptText('');
+      setTranscriptStatus('idle');
+      setTranscriptError(null);
+      setTranscriptSaving(false);
+      setRetryingTranscript(false);
+      setSelectedFileName(null);
+      setUploadError(null);
+      setUploadProgress(0);
+      setUploading(false);
+      setUploadCacheNotice(null);
+    },
+    [initialSelectedStudentId],
+  );
 
   const applyHydratedSnapshot = useCallback((snapshot: SourceHydrationSnapshot) => {
     setRecording(snapshot.recording);

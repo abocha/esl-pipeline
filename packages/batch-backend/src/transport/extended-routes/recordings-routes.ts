@@ -690,6 +690,7 @@ export function registerRecordingRoutes(
         profilePath: z.string().min(1).optional(),
         profileId: z.string().min(1).optional(),
         templateId: z.string().min(1).optional(),
+        lessonId: z.string().uuid().nullable().optional(),
         bindingEffectiveAt: z.string().datetime({ offset: true }).optional(),
       });
 
@@ -701,6 +702,7 @@ export function registerRecordingRoutes(
           profilePath: body.profilePath,
           profileId: body.profileId,
           templateId: body.templateId,
+          lessonId: body.lessonId ?? null,
           bindingEffectiveAt: body.bindingEffectiveAt
             ? new Date(body.bindingEffectiveAt)
             : undefined,
