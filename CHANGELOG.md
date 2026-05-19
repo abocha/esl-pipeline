@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [6.7.0] - 2026-05-19
+
+### Changed
+
+- Automated release from PR #80: Add lesson-linked schedule follow-ups for homework assignment (https://github.com/abocha/esl-pipeline/pull/80)
+
 ## [6.6.4] - 2026-05-17
 
 ### Changed
