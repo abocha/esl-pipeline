@@ -1,4 +1,4 @@
-import { fireEvent } from '@testing-library/react';
+import { fireEvent, within } from '@testing-library/react';
 import { beforeEach, describe, it } from 'vitest';
 
 import {
@@ -6,6 +6,7 @@ import {
   createMinimalUser,
   createTimerAwareMinimalUser,
   testExpect as expect,
+  makeAssignmentSession,
   makeRecording,
   now,
   openRecordingSettings,
@@ -283,6 +284,99 @@ export function registerPromptStudentSelectionTests() {
         expect(api.createPromptPackage).toHaveBeenCalledWith('rec-1', {
           templateId: 'tpl-default',
           profileId: 'profiles/alex.md',
+        });
+      });
+    });
+
+    it('preserves schedule lesson context when generating the prompt package', async () => {
+      globalThis.history.replaceState(
+        null,
+        '',
+        '/?studentId=student-alex&lessonId=lesson-followup-1',
+      );
+      const user = createMinimalUser();
+      renderMinimalAssignment();
+
+      await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
+      const studentSelect = await screen.findByRole('combobox', { name: /^Student$/i });
+      await screen.findByRole('option', { name: 'Alex' });
+      expect((studentSelect as HTMLSelectElement).value).toBe('student-alex');
+      expect((studentSelect as HTMLSelectElement).disabled).toBe(true);
+      expect(screen.getByText('Lesson context: lesson-followup-1')).toBeTruthy();
+
+      await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+      await waitFor(() => {
+        expect(screen.getByDisplayValue('Student transcript text')).toBeTruthy();
+      });
+      await user.click(screen.getByRole('button', { name: /Generate instructions/i }));
+
+      await waitFor(() => {
+        expect(api.createAssignmentSession).toHaveBeenCalledWith(
+          expect.objectContaining({
+            studentId: 'student-alex',
+            recordingId: 'rec-1',
+            lessonId: 'lesson-followup-1',
+          }),
+        );
+        expect(api.createPromptPackage).toHaveBeenCalledWith('rec-1', {
+          templateId: 'tpl-default',
+          profileId: 'profiles/alex.md',
+          lessonId: 'lesson-followup-1',
+        });
+      });
+    });
+
+    it('preserves resumed lesson context when generating the prompt package', async () => {
+      vi.mocked(api.listAssignmentSessions).mockResolvedValueOnce({
+        sessions: [
+          makeAssignmentSession({
+            id: 'session-linked',
+            studentId: 'student-alex',
+            lessonId: 'lesson-resume-1',
+            currentStage: 'source',
+          }),
+        ],
+        total: 1,
+        limit: 20,
+      });
+      vi.mocked(api.fetchAssignmentSession).mockResolvedValueOnce(
+        makeAssignmentSession({
+          id: 'session-linked',
+          studentId: 'student-alex',
+          lessonId: 'lesson-resume-1',
+          currentStage: 'source',
+        }),
+      );
+      const user = createMinimalUser();
+      renderMinimalAssignment();
+
+      await user.click(screen.getByRole('button', { name: /Resume recent work/i }));
+      const resumeList = await screen.findByRole('listbox', { name: /Recent assignments/i });
+      await user.click(within(resumeList).getByRole('option', { name: /Alex/i }));
+      await user.click(screen.getByRole('button', { name: /Resume selected assignment/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText('Lesson context: lesson-resume-1')).toBeTruthy();
+      });
+
+      await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+      await waitFor(() => {
+        expect(screen.getByDisplayValue('Student transcript text')).toBeTruthy();
+      });
+      await user.click(screen.getByRole('button', { name: /Generate instructions/i }));
+
+      await waitFor(() => {
+        expect(api.updateAssignmentSession).toHaveBeenCalledWith(
+          'session-linked',
+          expect.objectContaining({
+            recordingId: 'rec-1',
+            lessonId: 'lesson-resume-1',
+          }),
+        );
+        expect(api.createPromptPackage).toHaveBeenCalledWith('rec-1', {
+          templateId: 'tpl-default',
+          profileId: 'profiles/alex.md',
+          lessonId: 'lesson-resume-1',
         });
       });
     });

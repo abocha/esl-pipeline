@@ -29,6 +29,7 @@ interface HomeworkMemoryRow {
   assignment_lineage_key: string;
   prompt_package_id: string | null;
   draft_id: string | null;
+  lesson_id: string | null;
   recording_id: string | null;
   transcript_id: string | null;
   schema_version: string;
@@ -65,6 +66,7 @@ export interface InsertHomeworkMemoryParams {
   assignmentLineageKey: string;
   promptPackageId?: string | null;
   draftId?: string | null;
+  lessonId?: string | null;
   recordingId?: string | null;
   transcriptId?: string | null;
   schemaVersion: string;
@@ -122,6 +124,7 @@ const HOMEWORK_MEMORY_COLUMNS = `
   assignment_lineage_key,
   prompt_package_id,
   draft_id,
+  lesson_id,
   recording_id,
   transcript_id,
   schema_version,
@@ -167,6 +170,7 @@ export async function insertHomeworkMemoryEntry(
         assignment_lineage_key,
         prompt_package_id,
         draft_id,
+        lesson_id,
         recording_id,
         transcript_id,
         schema_version,
@@ -192,8 +196,8 @@ export async function insertHomeworkMemoryEntry(
         publish_targets
       )
       VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'published_assignment', $14, $15,
-        $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'published_assignment',
+        $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29
       )
       RETURNING
         ${HOMEWORK_MEMORY_COLUMNS}
@@ -205,6 +209,7 @@ export async function insertHomeworkMemoryEntry(
         params.assignmentLineageKey,
         params.promptPackageId ?? null,
         params.draftId ?? null,
+        params.lessonId ?? null,
         params.recordingId ?? null,
         params.transcriptId ?? null,
         params.schemaVersion,
@@ -263,6 +268,7 @@ export async function insertCanonicalReadyHomeworkMemoryEntry(
           assignment_lineage_key,
           prompt_package_id,
           draft_id,
+          lesson_id,
           recording_id,
           transcript_id,
           schema_version,
@@ -288,8 +294,9 @@ export async function insertCanonicalReadyHomeworkMemoryEntry(
           publish_targets
         )
         VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'ready', 'published_assignment', $13,
-          $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'ready',
+          'published_assignment', $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25,
+          $26, $27, $28
         )
         RETURNING
           ${HOMEWORK_MEMORY_COLUMNS}
@@ -301,6 +308,7 @@ export async function insertCanonicalReadyHomeworkMemoryEntry(
           params.assignmentLineageKey,
           params.promptPackageId ?? null,
           params.draftId ?? null,
+          params.lessonId ?? null,
           params.recordingId ?? null,
           params.transcriptId ?? null,
           params.schemaVersion,
@@ -427,6 +435,7 @@ export async function ensurePendingHomeworkMemoryEntry(
           assignment_lineage_key,
           prompt_package_id,
           draft_id,
+          lesson_id,
           recording_id,
           transcript_id,
           schema_version,
@@ -452,8 +461,9 @@ export async function ensurePendingHomeworkMemoryEntry(
           publish_targets
         )
         VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'pending', 'published_assignment',
-          $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'pending',
+          'published_assignment', $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25,
+          $26, $27, $28
         )
         RETURNING
           ${HOMEWORK_MEMORY_COLUMNS}
@@ -465,6 +475,7 @@ export async function ensurePendingHomeworkMemoryEntry(
           params.assignmentLineageKey,
           params.promptPackageId ?? null,
           params.draftId ?? null,
+          params.lessonId ?? null,
           params.recordingId ?? null,
           params.transcriptId ?? null,
           params.schemaVersion,
@@ -812,6 +823,7 @@ function mapRowToHomeworkMemory(row: HomeworkMemoryRow): HomeworkMemoryRecord {
     assignmentLineageKey: row.assignment_lineage_key,
     promptPackageId: row.prompt_package_id ?? null,
     draftId: row.draft_id ?? null,
+    lessonId: row.lesson_id ?? null,
     recordingId: row.recording_id ?? null,
     transcriptId: row.transcript_id ?? null,
     schemaVersion: row.schema_version,

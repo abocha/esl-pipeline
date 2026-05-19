@@ -506,6 +506,7 @@ function mapGenerationError(error: unknown): string {
 
 interface UseMinimalAssignmentAuthoringControllerParams {
   recordingId: string | null;
+  lessonId?: string | null;
   transcriptStatus: TranscriptUiStatus;
   teacherNotes: string;
   selectedProfileId: string;
@@ -575,6 +576,7 @@ export interface AuthoringController extends AuthoringState {
 
 export function useMinimalAssignmentAuthoringController({
   recordingId,
+  lessonId,
   transcriptStatus,
   teacherNotes,
   selectedProfileId,
@@ -939,6 +941,7 @@ export function useMinimalAssignmentAuthoringController({
         ...(normalizedTeacherNotes ? { notes: normalizedTeacherNotes } : {}),
         templateId: selectedTemplateId,
         profileId: selectedProfileId || undefined,
+        ...(lessonId ? { lessonId } : {}),
       });
       onTeacherNotesResolved(response.notes ?? normalizedTeacherNotes);
       dispatch({
@@ -954,6 +957,7 @@ export function useMinimalAssignmentAuthoringController({
     }
   }, [
     invalidatePendingGeneration,
+    lessonId,
     onTeacherNotesResolved,
     recordingId,
     selectedProfileId,

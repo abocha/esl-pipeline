@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import {
   addStudentPackage,
@@ -108,6 +109,7 @@ function toDateTimeLocal(value: string): string {
 
 export const StudentScheduleBillingPage: React.FC = () => {
   const { student, studentId } = useStudentAreaContext();
+  const navigate = useNavigate();
   const studentName = student?.student ?? 'this student';
   const [surface, setSurface] = useState<StudentScheduleBillingSurface | null>(null);
   const [loading, setLoading] = useState(true);
@@ -209,6 +211,32 @@ export const StudentScheduleBillingPage: React.FC = () => {
     } finally {
       setSaving(null);
     }
+  };
+
+  const navigateToLessonAssignment = (lessonId: string) => {
+    navigate(
+      `/?studentId=${encodeURIComponent(studentId)}&lessonId=${encodeURIComponent(lessonId)}`,
+    );
+  };
+
+  const completeLessonAndStartHomework = async (
+    reminder: StudentScheduleBillingSurface['reminders'][number],
+  ): Promise<StudentScheduleBillingSurface> => {
+    if (!reminder.lessonId) {
+      throw new Error('Lesson follow-up is missing lesson context.');
+    }
+    const lessonId = reminder.lessonId;
+    if (reminder.lessonStatus === 'completed') {
+      navigateToLessonAssignment(lessonId);
+      if (!surface) throw new Error('Schedule surface is not loaded.');
+      return surface;
+    }
+    const nextSurface = await updateStudentLesson(studentId, lessonId, {
+      status: 'completed',
+      consumesCredit: true,
+    });
+    navigateToLessonAssignment(lessonId);
+    return nextSurface;
   };
 
   if (loading) {
@@ -678,6 +706,18 @@ export const StudentScheduleBillingPage: React.FC = () => {
                 {lesson.recurrenceOrigin === 'generated' ? (
                   <StudentAreaStatusPill tone="quiet">generated</StudentAreaStatusPill>
                 ) : null}
+                <StudentAreaStatusPill
+                  tone={
+                    lesson.homework.status === 'published' ||
+                    lesson.homework.status === 'memory_ready'
+                      ? 'success'
+                      : lesson.homework.status === 'not_started'
+                        ? 'quiet'
+                        : 'attention'
+                  }
+                >
+                  homework {lesson.homework.status.replaceAll('_', ' ')}
+                </StudentAreaStatusPill>
                 <div className="student-schedule-billing-actions">
                   {lesson.status === 'scheduled' ? (
                     <>
@@ -912,7 +952,10 @@ export const StudentScheduleBillingPage: React.FC = () => {
         ) : (
           <div className="student-schedule-billing-list">
             {surface.reminders.map((reminder) => (
-              <article key={reminder.type} className="student-schedule-billing-reminder">
+              <article
+                key={`${reminder.type}-${reminder.lessonId ?? 'none'}`}
+                className="student-schedule-billing-reminder"
+              >
                 <StudentAreaStatusPill
                   tone={reminder.severity === 'urgent' ? 'warning' : 'attention'}
                 >
@@ -922,7 +965,22 @@ export const StudentScheduleBillingPage: React.FC = () => {
                   <strong>{reminder.title}</strong>
                   <small>{reminder.message}</small>
                 </span>
-                <textarea readOnly value={reminder.copyText} />
+                {reminder.actionIntent === 'complete_lesson_and_start_assignment' &&
+                reminder.lessonId ? (
+                  <button
+                    type="button"
+                    disabled={saving === reminder.lessonId}
+                    onClick={() => {
+                      void runAction(reminder.lessonId ?? reminder.type, () =>
+                        completeLessonAndStartHomework(reminder),
+                      );
+                    }}
+                  >
+                    Complete + homework
+                  </button>
+                ) : (
+                  <textarea readOnly value={reminder.copyText} />
+                )}
               </article>
             ))}
           </div>

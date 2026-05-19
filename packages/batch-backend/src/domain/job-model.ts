@@ -22,6 +22,7 @@ export interface JobRecord {
   transcriptId?: string | null;
   promptPackageId?: string | null;
   draftId?: string | null;
+  lessonId?: string | null;
   preset?: string | null;
   learningPresetId?: string | null;
   learningPresetVersion?: string | null;

@@ -63,6 +63,13 @@ smuggled into the pedagogical learner profile.
 16. When a recurrence rule changes, future unmodified generated placeholders are soft-voided rather
     than represented as cancellations. Completed, no-show, canceled, or manually edited occurrences
     remain factual history.
+17. Elapsed lesson reminders are teacher-confirmed actions. The system may surface a
+    `lesson_followup` when a lesson's scheduled end time has passed, but it must not mark the
+    lesson completed or consume credit until the teacher chooses that action.
+18. Homework created from a schedule follow-up keeps nullable `lesson_id` lineage through
+    assignment sessions, prompt packages, drafts, jobs, and homework-memory entries. Schedule
+    surfaces may summarize that lineage to show whether homework is not started, in progress,
+    publishing, published, or memory-ready.
 
 ## Future Account Model
 
@@ -87,7 +94,8 @@ The first implementation must not:
 4. send Telegram or email messages
 5. sync with external calendars
 6. enforce the final multi-teacher account permission model
-7. alter prompt-package or learner-profile semantics
+7. alter learner-profile semantics
+8. auto-publish homework for elapsed lessons
 
 ## Recurrence Architecture
 
@@ -107,6 +115,18 @@ Teacher-wide schedule, stats, reminders, and future sync surfaces should read fr
 `student_lessons` rather than reimplementing recurrence math. Future Google Calendar or Telegram
 automation can attach to stable rule IDs, lesson IDs, and occurrence keys without reshaping the
 current tables.
+
+## Schedule-To-Homework Follow-Ups
+
+The first schedule-to-homework workflow is an in-app operator reminder:
+
+1. Student and business schedule surfaces expose `lesson_followup` reminders for elapsed lessons
+   that still lack successful linked homework.
+2. The `Complete + homework` action calls the existing lesson update path with
+   `status: completed` and `consumesCredit: true`, then opens the assignment flow with `studentId`
+   and `lessonId` context.
+3. The assignment flow preserves the lesson link while prompt packages, drafts, publish jobs, and
+   homework-memory extraction proceed through the normal review/publish pipeline.
 
 ## Related
 

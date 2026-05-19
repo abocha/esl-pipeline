@@ -32,6 +32,7 @@ Core surfaces:
 - jobs, drafts, prompt packages, recordings, students, auth
 - student archive/restore under `/students/:id/archive` and `/students/:id/restore`; archived students are hidden from default student reads without deleting history
 - student-area route payloads under `/students/:id/surfaces/overview`, `/students/:id/surfaces/learning`, and `/students/:id/surfaces/history`
+- student schedule/billing route payloads under `/students/:id/surfaces/schedule-billing`, including lesson-credit state and elapsed lesson homework follow-ups
 - student-memory inspection under `/students/:id/memory`, `/students/:id/lesson-memory`, `/students/:id/homework-memory`, and `/students/:id/memory-snapshots`
 - targeted job/recording SSE under `/jobs/events?jobId=<id>&recordingId=<id>`; wildcard streams use `jobId=*`
 - optional ops control under `/ops/*`
@@ -49,6 +50,7 @@ Useful indexes:
 - Local/dev startup runs the API server, batch worker, transcribe worker, and dedicated student-memory worker as separate processes.
 - Prompt catalog runtime is DB-canonical.
 - Prompt-package lineage is the canonical assignment-level student-memory provenance surface.
+- Lesson-linked homework lineage is nullable and explicit across assignment sessions, prompt packages, drafts, jobs, and homework-memory entries; schedule surfaces summarize that state for teacher follow-ups.
 - Student-memory replay/backfill is source-truth driven; version 1 repair uses regenerate workflows rather than manual memory-row editing.
 - Schema changes belong in versioned migrations; runtime legacy patching is emergency-only.
 - Fresh database bootstrap uses the generated `schema.sql` baseline; existing databases upgrade through versioned migrations.

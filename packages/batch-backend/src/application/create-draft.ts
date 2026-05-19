@@ -16,6 +16,7 @@ export interface DraftResponse {
   id: string;
   promptPackageId: string;
   studentId: string | null;
+  lessonId: string | null;
   storageUri: string;
   createdBy: string | null;
   text: string;
@@ -60,6 +61,7 @@ export async function createDraft(
     id: draftId,
     promptPackageId: promptPackage.id,
     studentId: promptPackage.studentId ?? null,
+    lessonId: promptPackage.lessonId ?? null,
     storageUri: stored.uri,
     createdBy: params.createdBy ?? null,
   });
@@ -72,6 +74,7 @@ export function toDraftResponse(draft: DraftRecord, text: string): DraftResponse
     id: draft.id,
     promptPackageId: draft.promptPackageId,
     studentId: draft.studentId ?? null,
+    lessonId: draft.lessonId ?? null,
     storageUri: draft.storageUri,
     createdBy: draft.createdBy ?? null,
     text,

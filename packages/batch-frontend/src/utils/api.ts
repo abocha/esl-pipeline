@@ -890,6 +890,7 @@ export interface PromptPackageResponse {
   recordingId: string;
   transcriptId: string;
   studentId: string | null;
+  lessonId?: string | null;
   profilePath: string | null;
   templateVersion: string;
   notes: string | null;
@@ -1092,6 +1093,7 @@ export interface DraftResponse {
   id: string;
   promptPackageId: string;
   studentId: string | null;
+  lessonId?: string | null;
   storageUri: string;
   createdBy: string | null;
   text: string;
@@ -3004,6 +3006,7 @@ export async function createPromptPackage(
     profileId?: string;
     templateId?: string;
     profilePath?: string;
+    lessonId?: string | null;
     bindingEffectiveAt?: string;
   },
 ): Promise<PromptPackageResponse> {

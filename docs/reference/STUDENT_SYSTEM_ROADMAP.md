@@ -25,6 +25,8 @@
 - the legacy all-in-one workspace route remains as a compatibility/maintenance surface
 - Schedule & Billing now owns lesson credits, payments, reminders, and operational scheduling
   state; teacher business dashboard views link back to each student's schedule-billing surface
+- elapsed scheduled lessons can now become teacher-confirmed homework follow-ups; published
+  homework keeps `lessonId` lineage through assignment and memory records
 
 ## Return-To-Track Checklist
 
@@ -139,6 +141,7 @@
     reminders
   - business schedule/stats views summarize operational state and deep-link into student
     schedule-billing pages
+  - elapsed lesson homework follow-ups are live across student and business schedule surfaces
 - remaining focus:
   - structured canonical learner profile replacing markdown authoring as the long-term product
     model

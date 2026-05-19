@@ -1,4 +1,4 @@
-import { execFile as execFileCallback } from 'node:child_process';
+import { execFile as execFileCallback, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
@@ -368,12 +368,40 @@ async function dumpSchemaWithDockerPgDump(
   return stdout;
 }
 
+async function execWithInput(command: string, args: string[], input: string): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(command, args, {
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    const stdout: Buffer[] = [];
+    const stderr: Buffer[] = [];
+    child.stdout.on('data', (chunk: Buffer) => stdout.push(chunk));
+    child.stderr.on('data', (chunk: Buffer) => stderr.push(chunk));
+    child.on('error', reject);
+    child.on('close', (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      reject(
+        new Error(
+          `${command} ${args.join(' ')} exited with code ${code}\n${Buffer.concat(stdout).toString(
+            'utf8',
+          )}${Buffer.concat(stderr).toString('utf8')}`,
+        ),
+      );
+    });
+    child.stdin.end(input);
+  });
+}
+
 async function dumpSchemaSql(connectionString: string): Promise<string> {
   try {
     return await dumpSchemaWithLocalPgDump(connectionString);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (!message.includes('server version mismatch')) {
+    const code = typeof error === 'object' && error !== null && 'code' in error ? error.code : null;
+    if (!message.includes('server version mismatch') && code !== 'ENOENT') {
       throw error;
     }
     const serverMajorVersion = await resolveServerMajorVersion(connectionString);
@@ -410,10 +438,42 @@ export async function writeSchemaBaseline(
   return destinationPath;
 }
 
-async function applySqlFile(connectionString: string, filePath: string): Promise<void> {
-  await execFile('psql', [connectionString, '-v', 'ON_ERROR_STOP=1', '-f', filePath], {
-    maxBuffer: 20 * 1024 * 1024,
-  });
+export async function applySqlFile(connectionString: string, filePath: string): Promise<void> {
+  try {
+    await execFile('psql', [connectionString, '-v', 'ON_ERROR_STOP=1', '-f', filePath], {
+      maxBuffer: 20 * 1024 * 1024,
+    });
+  } catch (error) {
+    const code = typeof error === 'object' && error !== null && 'code' in error ? error.code : null;
+    if (code !== 'ENOENT') {
+      throw error;
+    }
+
+    const serverMajorVersion = await resolveServerMajorVersion(connectionString);
+    const containerId = await resolveDockerPostgresContainer(serverMajorVersion);
+    if (!containerId) {
+      throw new Error(
+        `Local psql is unavailable and no matching postgres:${serverMajorVersion} container was found for fallback.`,
+      );
+    }
+
+    const parsed = new URL(connectionString);
+    const dbName = decodeURIComponent(parsed.pathname.replace(/^\/+/, ''));
+    const args = ['exec', '-i'];
+    if (parsed.password) {
+      args.push('-e', `PGPASSWORD=${decodeURIComponent(parsed.password)}`);
+    }
+    args.push(containerId, 'psql', '-v', 'ON_ERROR_STOP=1');
+    if (parsed.username) {
+      args.push('--username', decodeURIComponent(parsed.username));
+    }
+    args.push('--host', 'localhost');
+    if (parsed.port && parsed.port !== '5432') {
+      args.push('--port', parsed.port);
+    }
+    args.push('--dbname', dbName);
+    await execWithInput('docker', args, await fs.readFile(filePath, 'utf8'));
+  }
 }
 
 export async function verifySchemaBaseline(

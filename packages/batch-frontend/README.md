@@ -18,6 +18,7 @@ This package is the operator-facing frontend for:
 - authenticated assignment flow
 - recording/transcript/prompt/draft/publish workflow
 - student workspace and provenance views
+- student and business schedule follow-up actions that mark elapsed lessons completed and open lesson-linked homework assignment context
 - capability-gated job actions
 
 Canonical behavior and current status live in:
@@ -31,6 +32,7 @@ Canonical behavior and current status live in:
 - Base URL resolution uses runtime override first, then Vite env, then `/api`.
 - The app assumes the extended backend API is enabled.
 - Student-area pages prefer route-level payloads under `/students/:id/surfaces/*`, with granular student APIs retained as compatibility/fallback paths.
+- Lesson follow-up reminders use in-app actions first; Telegram/email delivery remains outside the frontend surface for this slice.
 - Job-event SSE subscriptions should target known `jobId` and `recordingId` values; wildcard all-job streams are explicit.
 
 Use these for deeper detail:

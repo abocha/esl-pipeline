@@ -176,7 +176,15 @@ function buildSelectablePresetOptions(
 }
 
 export const MinimalAssignment: React.FC = () => {
+  const scheduleFollowupContext = useMemo(() => {
+    const params = new URLSearchParams(globalThis.location?.search ?? '');
+    return {
+      studentId: params.get('studentId')?.trim() || '',
+      lessonId: params.get('lessonId')?.trim() || '',
+    };
+  }, []);
   const [promptOptions, setPromptOptions] = useState<PromptOptionsResponse | null>(null);
+  const [linkedLessonId, setLinkedLessonId] = useState(scheduleFollowupContext.lessonId);
   const [teacherNotes, setTeacherNotes] = useState('');
   const [jobStatus, setJobStatusState] = useState<JobStatus | null>(null);
   const [jobOptions, setJobOptions] = useState<JobOptionsResponse | null>(null);
@@ -215,6 +223,7 @@ export const MinimalAssignment: React.FC = () => {
     transcriptId: '',
     promptPackageId: '',
     draftId: '',
+    lessonId: linkedLessonId,
   });
   const assignmentSessionSettingsRef = useRef('');
   const hydrationIdRef = useRef(0);
@@ -289,6 +298,7 @@ export const MinimalAssignment: React.FC = () => {
     defaultSttProvider: isSttProvider(jobOptions?.defaultSttProvider)
       ? jobOptions.defaultSttProvider
       : null,
+    initialSelectedStudentId: scheduleFollowupContext.studentId,
     onBeforeUploadReset: resetJobShell,
   });
 
@@ -313,6 +323,7 @@ export const MinimalAssignment: React.FC = () => {
 
   const authoring = useMinimalAssignmentAuthoringController({
     recordingId: source.recording?.recordingId ?? null,
+    lessonId: linkedLessonId || null,
     transcriptStatus: source.transcriptStatus,
     teacherNotes,
     selectedProfileId: context.selectedProfileId,
@@ -408,12 +419,15 @@ export const MinimalAssignment: React.FC = () => {
 
   const applyHydratedSnapshot = useCallback(
     (snapshot: HydratedAssignmentSnapshot) => {
+      const snapshotLessonId = snapshot.lessonId ?? scheduleFollowupContext.lessonId;
+      setLinkedLessonId(snapshotLessonId);
       assignmentSessionMilestoneRef.current = {
         studentId: snapshot.selectedStudentId,
         recordingId: snapshot.recording?.recordingId ?? '',
         transcriptId: snapshot.transcript?.transcriptId ?? '',
         promptPackageId: snapshot.authoring.promptPackage?.id ?? '',
         draftId: snapshot.authoring.draft?.id ?? '',
+        lessonId: snapshotLessonId,
       };
       assignmentSessionSettingsRef.current = buildAssignmentSessionSettingsKey({
         teacherNotes: snapshot.teacherNotes.trim() || null,
@@ -451,7 +465,12 @@ export const MinimalAssignment: React.FC = () => {
       });
       applyAuthoringHydration(snapshot.authoring);
     },
-    [applyAuthoringHydration, applyContextHydration, applySourceHydration],
+    [
+      applyAuthoringHydration,
+      applyContextHydration,
+      applySourceHydration,
+      scheduleFollowupContext.lessonId,
+    ],
   );
 
   const applyCurrentJobStatus = useCallback((job: JobStatus | null) => {
@@ -541,11 +560,13 @@ export const MinimalAssignment: React.FC = () => {
       transcriptId: '',
       promptPackageId: '',
       draftId: '',
+      lessonId: scheduleFollowupContext.lessonId,
     };
+    setLinkedLessonId(scheduleFollowupContext.lessonId);
     assignmentSessionSettingsRef.current = '';
     setActiveAssignmentSession(null);
     handleStartNewAssignment();
-  }, [handleStartNewAssignment, setActiveAssignmentSession]);
+  }, [handleStartNewAssignment, scheduleFollowupContext.lessonId, setActiveAssignmentSession]);
 
   useEffect(() => {
     const studentId = source.selectedStudentId.trim();
@@ -561,6 +582,7 @@ export const MinimalAssignment: React.FC = () => {
     void saveAssignmentSessionProgress({
       studentId: (source.recording?.studentId ?? source.selectedStudentId) || null,
       recordingId,
+      ...(linkedLessonId ? { lessonId: linkedLessonId } : {}),
       currentStage: 'source',
     });
   }, [
@@ -568,6 +590,7 @@ export const MinimalAssignment: React.FC = () => {
     source.recording?.recordingId,
     source.recording?.studentId,
     source.selectedStudentId,
+    linkedLessonId,
     assignmentSessionWritesAllowed,
   ]);
 
@@ -605,6 +628,7 @@ export const MinimalAssignment: React.FC = () => {
     if (!assignmentSessionWritesAllowed()) return;
     void saveAssignmentSessionProgress({
       promptPackageId,
+      ...(linkedLessonId ? { lessonId: linkedLessonId } : {}),
       teacherNotes: teacherNotes.trim() || null,
       selectedGenerationProvider: isGenerationProvider(authoring.selectedGenerationProvider)
         ? authoring.selectedGenerationProvider
@@ -617,6 +641,7 @@ export const MinimalAssignment: React.FC = () => {
     authoring.selectedGenerationModel,
     authoring.selectedGenerationProvider,
     saveAssignmentSessionProgress,
+    linkedLessonId,
     teacherNotes,
     assignmentSessionWritesAllowed,
   ]);
@@ -628,6 +653,7 @@ export const MinimalAssignment: React.FC = () => {
     if (!assignmentSessionWritesAllowed()) return;
     void saveAssignmentSessionProgress({
       draftId,
+      ...(linkedLessonId ? { lessonId: linkedLessonId } : {}),
       publishTarget: authoring.publishTarget,
       selectedTtsProvider: authoring.selectedTtsProvider,
       selectedTtsStrategy: authoring.selectedTtsStrategy,
@@ -643,6 +669,7 @@ export const MinimalAssignment: React.FC = () => {
     authoring.selectedTtsProvider,
     authoring.selectedTtsStrategy,
     saveAssignmentSessionProgress,
+    linkedLessonId,
     assignmentSessionWritesAllowed,
   ]);
 
@@ -1244,9 +1271,11 @@ export const MinimalAssignment: React.FC = () => {
         studentOptionsError={source.studentOptionsError}
         selectedStudentId={source.selectedStudentId}
         onSelectedStudentIdChange={(value) => {
+          if (linkedLessonId) return;
           handleStudentSelectionChange(value);
         }}
         selectedStudent={source.selectedStudent}
+        linkedLessonId={linkedLessonId || null}
         selectedSttProvider={source.selectedSttProvider}
         onSelectedSttProviderChange={(provider) => {
           markAssignmentUserEdit();
