@@ -369,7 +369,12 @@ function groupEvents(
   const groups = new Map<string, HistoryEvent[]>();
   for (const event of events) {
     const key = getDateKey(event.createdAt);
-    groups.set(key, [...(groups.get(key) ?? []), event]);
+    const bucket = groups.get(key);
+    if (bucket) {
+      bucket.push(event);
+    } else {
+      groups.set(key, [event]);
+    }
   }
 
   return [...groups.entries()].map(([dateKey, items]) => ({
