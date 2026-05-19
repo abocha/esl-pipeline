@@ -15,14 +15,58 @@ const apiMocks = vi.hoisted(() => ({
 }));
 
 const useStudentAreaContextMock = vi.hoisted(() => vi.fn());
+const navigateMock = vi.hoisted(() => vi.fn());
 
 vi.mock('../../utils/api', () => apiMocks);
+
+vi.mock('react-router-dom', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react-router-dom')>();
+  return {
+    ...actual,
+    useNavigate: () => navigateMock,
+  };
+});
 
 vi.mock('./StudentAreaContext', () => ({
   useStudentAreaContext: useStudentAreaContextMock,
 }));
 
+function makeHomework(overrides: Record<string, unknown> = {}) {
+  return {
+    status: 'not_started',
+    assignmentSessionId: null,
+    promptPackageId: null,
+    draftId: null,
+    jobId: null,
+    homeworkMemoryEntryId: null,
+    htmlUrl: null,
+    updatedAt: null,
+    ...overrides,
+  };
+}
+
 function makeSurface(overrides: Record<string, unknown> = {}) {
+  const lesson = {
+    id: 'lesson-1',
+    studentId: 'student-alex',
+    workspaceId: 'workspace-1',
+    startsAt: '2026-05-07T10:00:00.000Z',
+    timezone: 'Asia/Bangkok',
+    durationMinutes: 60,
+    status: 'scheduled',
+    consumesCredit: false,
+    title: null,
+    notes: null,
+    creditEventId: null,
+    recurrenceRuleId: 'rule-1',
+    recurrenceSlotId: 'slot-1',
+    recurrenceOccurrenceKey: 'slot-1:2026-05-07',
+    recurrenceOrigin: 'generated',
+    recurrenceOverrideKind: null,
+    homework: makeHomework(),
+    createdAt: '2026-05-06T10:00:00.000Z',
+    updatedAt: '2026-05-06T10:00:00.000Z',
+  };
   return {
     studentId: 'student-alex',
     workspaceId: 'workspace-1',
@@ -37,48 +81,8 @@ function makeSurface(overrides: Record<string, unknown> = {}) {
       updatedAt: '2026-05-06T10:00:00.000Z',
     },
     recurrenceRule: null,
-    nextLesson: {
-      id: 'lesson-1',
-      studentId: 'student-alex',
-      workspaceId: 'workspace-1',
-      startsAt: '2026-05-07T10:00:00.000Z',
-      timezone: 'Asia/Bangkok',
-      durationMinutes: 60,
-      status: 'scheduled',
-      consumesCredit: false,
-      title: null,
-      notes: null,
-      creditEventId: null,
-      recurrenceRuleId: 'rule-1',
-      recurrenceSlotId: 'slot-1',
-      recurrenceOccurrenceKey: 'slot-1:2026-05-07',
-      recurrenceOrigin: 'generated',
-      recurrenceOverrideKind: null,
-      createdAt: '2026-05-06T10:00:00.000Z',
-      updatedAt: '2026-05-06T10:00:00.000Z',
-    },
-    lessons: [
-      {
-        id: 'lesson-1',
-        studentId: 'student-alex',
-        workspaceId: 'workspace-1',
-        startsAt: '2026-05-07T10:00:00.000Z',
-        timezone: 'Asia/Bangkok',
-        durationMinutes: 60,
-        status: 'scheduled',
-        consumesCredit: false,
-        title: null,
-        notes: null,
-        creditEventId: null,
-        recurrenceRuleId: 'rule-1',
-        recurrenceSlotId: 'slot-1',
-        recurrenceOccurrenceKey: 'slot-1:2026-05-07',
-        recurrenceOrigin: 'generated',
-        recurrenceOverrideKind: null,
-        createdAt: '2026-05-06T10:00:00.000Z',
-        updatedAt: '2026-05-06T10:00:00.000Z',
-      },
-    ],
+    nextLesson: lesson,
+    lessons: [lesson],
     creditSummary: {
       purchased: 8,
       consumed: 3,
@@ -202,6 +206,69 @@ describe('StudentScheduleBillingPage', () => {
         consumesCredit: true,
       });
     });
+  });
+
+  it('completes an elapsed lesson follow-up and opens assignment with lesson context', async () => {
+    apiMocks.getStudentScheduleBillingSurface.mockResolvedValue(
+      makeSurface({
+        nextLesson: null,
+        reminders: [
+          {
+            type: 'lesson_followup',
+            channel: 'manual',
+            actionIntent: 'complete_lesson_and_start_assignment',
+            lessonId: 'lesson-1',
+            lessonStatus: 'scheduled',
+            lessonConsumesCredit: true,
+            severity: 'attention',
+            title: 'Finish lesson follow-up',
+            message: 'The scheduled lesson time has passed and homework is not published yet.',
+            copyText: 'Complete Alex lesson and start homework.',
+          },
+        ],
+      }),
+    );
+    renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Complete + homework' }));
+
+    await waitFor(() => {
+      expect(apiMocks.updateStudentLesson).toHaveBeenCalledWith('student-alex', 'lesson-1', {
+        status: 'completed',
+        consumesCredit: true,
+      });
+      expect(navigateMock).toHaveBeenCalledWith('/?studentId=student-alex&lessonId=lesson-1');
+    });
+  });
+
+  it('opens homework without re-billing a completed non-credit lesson follow-up', async () => {
+    apiMocks.getStudentScheduleBillingSurface.mockResolvedValue(
+      makeSurface({
+        nextLesson: null,
+        reminders: [
+          {
+            type: 'lesson_followup',
+            channel: 'manual',
+            actionIntent: 'complete_lesson_and_start_assignment',
+            lessonId: 'lesson-1',
+            lessonStatus: 'completed',
+            lessonConsumesCredit: false,
+            severity: 'attention',
+            title: 'Finish lesson follow-up',
+            message: 'The scheduled lesson time has passed and homework is not published yet.',
+            copyText: 'Start homework for Alex lesson.',
+          },
+        ],
+      }),
+    );
+    renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Complete + homework' }));
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith('/?studentId=student-alex&lessonId=lesson-1');
+    });
+    expect(apiMocks.updateStudentLesson).not.toHaveBeenCalled();
   });
 
   it('saves structured weekly recurrence rules', async () => {

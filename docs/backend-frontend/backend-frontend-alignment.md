@@ -43,6 +43,7 @@ Provider-specific generation details stay in:
 - student-area overview/learning/history route-level payloads are live, and job/recording SSE subscriptions can now target specific IDs instead of requiring wildcard streams
 - student retirement is archive-first: `/students/:id/archive` and `/students/:id/restore` preserve audit/history, while default student reads hide archived learners
 - resumable assignment sessions are live for pre-publish work; publish `jobs` remain reserved for materialized/approved pipeline runs
+- elapsed schedule-to-homework follow-ups are live as teacher-confirmed in-app actions with durable lesson lineage through assignment sessions, prompt packages, drafts, jobs, and homework memory
 
 ## Capability Matrix
 
@@ -63,6 +64,7 @@ Provider-specific generation details stay in:
 | STT provider metadata + persistence        | Done    | Done     | keep defaults aligned with env policy                                                                     |
 | Voice-alignment provenance and readiness   | Done    | Partial  | dashboard UX remains thin                                                                                 |
 | Telegram ops control panel                 | Done    | Partial  | Telegram is the operator UI for this slice                                                                |
+| Schedule-to-homework follow-ups            | Done    | Done     | in-app only; Telegram/email delivery remains deferred                                                     |
 
 ## Current Blockers
 

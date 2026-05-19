@@ -784,6 +784,7 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
     transcriptId: z.string().uuid().nullable().optional(),
     promptPackageId: z.string().uuid().nullable().optional(),
     draftId: z.string().uuid().nullable().optional(),
+    lessonId: z.string().uuid().nullable().optional(),
     currentStage: z.enum(['source', 'context', 'assignment', 'review']).optional(),
     publishTarget: z.literal('html').nullable().optional(),
     selectedTtsProvider: publishTtsProviderSchema.nullable().optional(),

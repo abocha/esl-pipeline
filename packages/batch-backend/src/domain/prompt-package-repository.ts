@@ -12,6 +12,7 @@ interface PromptPackageRow {
   recording_id: string;
   transcript_id: string;
   student_id: string | null;
+  lesson_id: string | null;
   student_memory_snapshot_id: string | null;
   student_memory_snapshot_hash: string | null;
   selected_lesson_memory_ids: string[] | null;
@@ -45,6 +46,7 @@ export interface InsertPromptPackageParams {
   recordingId: string;
   transcriptId: string;
   studentId?: string | null;
+  lessonId?: string | null;
   studentMemorySnapshotId?: string | null;
   studentMemorySnapshotHash?: string | null;
   selectedLessonMemoryIds?: string[];
@@ -85,6 +87,7 @@ export async function insertPromptPackage(
         recording_id,
         transcript_id,
         student_id,
+        lesson_id,
         student_memory_snapshot_id,
         student_memory_snapshot_hash,
         selected_lesson_memory_ids,
@@ -115,13 +118,14 @@ export async function insertPromptPackage(
       VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
         $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-        $21, $22, $23, $24, $25, $26, $27, $28, $29, $30
+        $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31
       )
       RETURNING
         id,
         recording_id,
         transcript_id,
         student_id,
+        lesson_id,
         student_memory_snapshot_id,
         student_memory_snapshot_hash,
         selected_lesson_memory_ids,
@@ -154,6 +158,7 @@ export async function insertPromptPackage(
         params.recordingId,
         params.transcriptId,
         params.studentId ?? null,
+        params.lessonId ?? null,
         params.studentMemorySnapshotId ?? null,
         params.studentMemorySnapshotHash ?? null,
         params.selectedLessonMemoryIds ?? [],
@@ -194,7 +199,7 @@ export async function getPromptPackageById(id: string): Promise<PromptPackageRec
     const result = await client.query(
       `
       SELECT id, recording_id, transcript_id, profile_path, template_version,
-             student_id, resolved_profile_id, resolved_profile_hash,
+             student_id, lesson_id, resolved_profile_id, resolved_profile_hash,
              student_memory_snapshot_id, student_memory_snapshot_hash,
              selected_lesson_memory_ids, selected_homework_memory_ids,
              retrieval_policy_version,
@@ -223,6 +228,7 @@ function mapRowToPromptPackage(row: PromptPackageRow): PromptPackageRecord {
     recordingId: row.recording_id,
     transcriptId: row.transcript_id,
     studentId: row.student_id ?? null,
+    lessonId: row.lesson_id ?? null,
     studentMemorySnapshotId: row.student_memory_snapshot_id ?? null,
     studentMemorySnapshotHash: row.student_memory_snapshot_hash ?? null,
     selectedLessonMemoryIds: row.selected_lesson_memory_ids ?? [],

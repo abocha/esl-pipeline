@@ -19,6 +19,7 @@ interface AssignmentSessionRow {
   id: string;
   user_id: string;
   student_id: string | null;
+  lesson_id: string | null;
   recording_id: string | null;
   transcript_id: string | null;
   prompt_package_id: string | null;
@@ -39,6 +40,7 @@ interface AssignmentSessionRow {
 
 export interface AssignmentSessionPatch {
   studentId?: string | null;
+  lessonId?: string | null;
   recordingId?: string | null;
   transcriptId?: string | null;
   promptPackageId?: string | null;
@@ -67,6 +69,7 @@ const RETURNING_COLUMNS = `
   id,
   user_id,
   student_id,
+  lesson_id,
   recording_id,
   transcript_id,
   prompt_package_id,
@@ -87,6 +90,7 @@ const RETURNING_COLUMNS = `
 
 const FIELD_COLUMNS = {
   studentId: 'student_id',
+  lessonId: 'lesson_id',
   recordingId: 'recording_id',
   transcriptId: 'transcript_id',
   promptPackageId: 'prompt_package_id',
@@ -160,6 +164,7 @@ export async function createOrReuseAssignmentSession(
           id,
           user_id,
           student_id,
+          lesson_id,
           recording_id,
           transcript_id,
           prompt_package_id,
@@ -178,7 +183,7 @@ export async function createOrReuseAssignmentSession(
         )
         VALUES (
           $1, $2, $3, $4, $5, $6, $7, $8,
-          $9, $10, $11, $12, $13, $14, $15, $16, $17, $17
+          $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $18
         )
         RETURNING ${RETURNING_COLUMNS}
         `,
@@ -186,6 +191,7 @@ export async function createOrReuseAssignmentSession(
           id,
           params.userId,
           params.studentId ?? null,
+          params.lessonId ?? null,
           params.recordingId ?? null,
           params.transcriptId ?? null,
           params.promptPackageId ?? null,
@@ -358,6 +364,7 @@ function mapRow(row: AssignmentSessionRow): AssignmentSessionRecord {
     id: row.id,
     userId: row.user_id,
     studentId: row.student_id,
+    lessonId: row.lesson_id ?? null,
     recordingId: row.recording_id,
     transcriptId: row.transcript_id,
     promptPackageId: row.prompt_package_id,

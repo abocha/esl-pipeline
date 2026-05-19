@@ -111,6 +111,7 @@ interface SourceStageSectionProps {
   selectedStudentId: string;
   onSelectedStudentIdChange: (value: string) => void;
   selectedStudent: StudentOption | null;
+  linkedLessonId?: string | null;
   selectedSttProvider: SttProvider;
   onSelectedSttProviderChange: (provider: SttProvider) => void;
   sttProviders: readonly SttProvider[];
@@ -598,6 +599,7 @@ export function SourceStageSection({
   selectedStudentId,
   onSelectedStudentIdChange,
   selectedStudent,
+  linkedLessonId,
   selectedSttProvider,
   onSelectedSttProviderChange,
   sttProviders,
@@ -670,6 +672,7 @@ export function SourceStageSection({
               }
               value={selectedStudentId}
               onChange={(event) => onSelectedStudentIdChange(event.target.value)}
+              disabled={Boolean(linkedLessonId)}
             >
               <option value="">Select a student</option>
               {studentOptions.map((student) => (
@@ -687,6 +690,9 @@ export function SourceStageSection({
           ) : (
             <p className="minimal-help">Select a student before uploading a recording.</p>
           )}
+          {linkedLessonId ? (
+            <p className="minimal-muted">Lesson context: {linkedLessonId}</p>
+          ) : null}
           {studentOptionsError ? <p className="minimal-error">{studentOptionsError}</p> : null}
           <details className="minimal-details">
             <summary>Recording settings</summary>

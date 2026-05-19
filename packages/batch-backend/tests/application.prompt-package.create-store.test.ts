@@ -442,6 +442,7 @@ describe('application/prompt-package', () => {
 
     expect(result).toEqual({
       id: 'prompt-1',
+      lessonId: null,
       recordingId: 'recording-1',
       transcriptId: 'transcript-1',
       studentId: 'student-1',

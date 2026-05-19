@@ -166,6 +166,7 @@ export interface AssignmentSessionDto {
   id: string;
   userId: string;
   studentId: string | null;
+  lessonId: string | null;
   recordingId: string | null;
   transcriptId: string | null;
   promptPackageId: string | null;
@@ -192,6 +193,7 @@ export interface AssignmentSessionListResponse {
 
 export interface CreateAssignmentSessionRequest {
   studentId?: string | null;
+  lessonId?: string | null;
   recordingId?: string | null;
   transcriptId?: string | null;
   promptPackageId?: string | null;
@@ -217,6 +219,7 @@ export interface JobStatusDto {
   jobId: string;
   studentId?: string | null;
   studentName?: string | null;
+  lessonId?: string | null;
   md: string | null;
   mdStorageUri?: string | null;
   pronunciationMode?:
@@ -415,8 +418,31 @@ export interface StudentSummaryResponse {
 
 export type StudentLessonStatus = 'scheduled' | 'completed' | 'canceled' | 'no_show';
 export type StudentCreditEventType = 'credit_added' | 'credit_consumed' | 'credit_adjusted';
-export type StudentReminderType = 'no_next_lesson' | 'low_balance' | 'payment_followup';
+export type StudentReminderType =
+  | 'no_next_lesson'
+  | 'low_balance'
+  | 'payment_followup'
+  | 'lesson_followup';
 export type StudentReminderChannel = 'manual' | 'telegram' | 'email';
+export type StudentReminderActionIntent = 'copy_text' | 'complete_lesson_and_start_assignment';
+export type StudentLessonHomeworkStatus =
+  | 'not_started'
+  | 'session_in_progress'
+  | 'draft_in_progress'
+  | 'publishing'
+  | 'published'
+  | 'memory_ready';
+
+export interface StudentLessonHomeworkDto {
+  status: StudentLessonHomeworkStatus;
+  assignmentSessionId: string | null;
+  promptPackageId: string | null;
+  draftId: string | null;
+  jobId: string | null;
+  homeworkMemoryEntryId: string | null;
+  htmlUrl: string | null;
+  updatedAt: string | null;
+}
 export type StudentLessonRecurrenceStatus = 'active' | 'paused' | 'archived';
 export type StudentLessonRecurrenceFrequency = 'weekly';
 export type StudentLessonRecurrenceOrigin = 'manual' | 'generated';
@@ -499,6 +525,7 @@ export interface StudentLessonDto {
   recurrenceOccurrenceKey: string | null;
   recurrenceOrigin: StudentLessonRecurrenceOrigin;
   recurrenceOverrideKind: StudentLessonRecurrenceOverrideKind | null;
+  homework: StudentLessonHomeworkDto;
   createdAt: string;
   updatedAt: string;
 }
@@ -591,6 +618,10 @@ export interface StudentReminderRecommendationDto {
   type: StudentReminderType;
   channel: StudentReminderChannel;
   severity: 'info' | 'attention' | 'urgent';
+  actionIntent: StudentReminderActionIntent;
+  lessonId?: string | null;
+  lessonStatus?: StudentLessonStatus | null;
+  lessonConsumesCredit?: boolean | null;
   title: string;
   message: string;
   copyText: string;

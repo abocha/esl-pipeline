@@ -130,6 +130,7 @@ export interface HydratedAssignmentSnapshot {
   teacherNotes: string;
   rerunTargetPronunciationMode: PronunciationMode | null;
   selectedStudentId: string;
+  lessonId: string | null;
   selectedProfileId: string;
   profileSelectionMode: 'auto' | 'manual';
   uploadError: string | null;
@@ -273,6 +274,7 @@ export function useMinimalAssignmentResume({
         teacherNotes: session.teacherNotes ?? '',
         rerunTargetPronunciationMode: null,
         selectedStudentId: session.studentId ?? currentSelectedStudentId,
+        lessonId: session.lessonId ?? null,
         selectedProfileId: session.studentId
           ? resolveBoundProfileId(session.studentId)
           : currentSelectedProfileId,
@@ -375,6 +377,7 @@ export function useMinimalAssignmentResume({
           teacherNotes: '',
           rerunTargetPronunciationMode: status.pronunciationMode ?? null,
           selectedStudentId: currentSelectedStudentId,
+          lessonId: status.lessonId ?? null,
           selectedProfileId: currentSelectedProfileId,
           profileSelectionMode: currentProfileSelectionMode,
           uploadError: null,

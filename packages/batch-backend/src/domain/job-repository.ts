@@ -37,6 +37,7 @@ interface JobRow {
   transcript_id: string | null;
   prompt_package_id: string | null;
   draft_id: string | null;
+  lesson_id: string | null;
   preset: string | null;
   learning_preset_id: string | null;
   learning_preset_version: string | null;
@@ -77,6 +78,7 @@ export interface InsertJobParams {
   transcriptId?: string | null;
   promptPackageId?: string | null;
   draftId?: string | null;
+  lessonId?: string | null;
   preset?: string;
   learningPresetId?: string | null;
   learningPresetVersion?: string | null;
@@ -200,6 +202,7 @@ async function insertJobWithState(params: InsertJobParams, state: JobState): Pro
         transcript_id,
         prompt_package_id,
         draft_id,
+        lesson_id,
         preset,
         learning_preset_id,
         learning_preset_version,
@@ -223,7 +226,7 @@ async function insertJobWithState(params: InsertJobParams, state: JobState): Pro
       )
       VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
-        $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28
+        $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29
       )
       RETURNING
         id,
@@ -236,6 +239,7 @@ async function insertJobWithState(params: InsertJobParams, state: JobState): Pro
         transcript_id,
         prompt_package_id,
         draft_id,
+        lesson_id,
         preset,
         learning_preset_id,
         learning_preset_version,
@@ -271,6 +275,7 @@ async function insertJobWithState(params: InsertJobParams, state: JobState): Pro
         params.transcriptId ?? null,
         params.promptPackageId ?? null,
         params.draftId ?? null,
+        params.lessonId ?? null,
         params.preset ?? null,
         params.learningPresetId ?? null,
         params.learningPresetVersion ?? null,
@@ -317,6 +322,7 @@ export async function getJobById(id: string): Promise<JobRecord | null> {
         j.transcript_id,
         j.prompt_package_id,
         j.draft_id,
+        j.lesson_id,
         j.preset,
         j.learning_preset_id,
         j.learning_preset_version,
@@ -378,6 +384,7 @@ export async function listJobs(options: JobListOptions): Promise<JobRecord[]> {
         j.transcript_id,
         j.prompt_package_id,
         j.draft_id,
+        j.lesson_id,
         j.preset,
         j.learning_preset_id,
         j.learning_preset_version,
@@ -704,6 +711,7 @@ export async function updateJobStateAndResult(args: {
         transcript_id,
         prompt_package_id,
         draft_id,
+        lesson_id,
         preset,
         learning_preset_id,
         learning_preset_version,
@@ -775,6 +783,7 @@ export async function updateJobDraftLink(args: {
         transcript_id,
         prompt_package_id,
         draft_id,
+        lesson_id,
         preset,
         learning_preset_id,
         learning_preset_version,
@@ -924,6 +933,7 @@ export async function updateJobMetadata(
         transcript_id,
         prompt_package_id,
         draft_id,
+        lesson_id,
         preset,
         learning_preset_id,
         learning_preset_version,
@@ -1006,6 +1016,7 @@ export async function approveJob(args: {
         transcript_id,
         prompt_package_id,
         draft_id,
+        lesson_id,
         preset,
         learning_preset_id,
         learning_preset_version,
@@ -1086,6 +1097,7 @@ function mapRowToJob(row: JobRow): JobRecord {
     transcriptId: row.transcript_id ?? null,
     promptPackageId: row.prompt_package_id ?? null,
     draftId: row.draft_id ?? null,
+    lessonId: row.lesson_id ?? null,
     preset: row.preset ?? null,
     learningPresetId: row.learning_preset_id ?? null,
     learningPresetVersion: row.learning_preset_version ?? null,
