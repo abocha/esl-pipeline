@@ -356,6 +356,7 @@ function createConfig(): BatchBackendConfig {
       user: '',
       password: '',
       database: '',
+      applicationName: 'esl-pipeline-test',
       poolMax: 10,
       idleTimeoutMs: 30_000,
       connectionTimeoutMs: 5_000,

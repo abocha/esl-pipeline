@@ -1,4 +1,4 @@
-import { type Dispatch, type SetStateAction, useState } from 'react';
+import { type Dispatch, type SetStateAction, useCallback, useMemo, useState } from 'react';
 
 import type { StudentProfileCandidate } from '../../utils/api';
 import {
@@ -75,25 +75,32 @@ export function WorkspaceCandidatesPanel({
   onReviewProfileCandidate,
 }: WorkspaceCandidatesPanelProps) {
   const [openCandidateIds, setOpenCandidateIds] = useState<string[]>([]);
-  const approvedCandidatesReadyForPromotion =
-    getApprovedCandidatesReadyForPromotion(profileCandidates);
-  const approvedCandidateIdsReadyForPromotion = new Set(
-    approvedCandidatesReadyForPromotion.map((candidate) => candidate.id),
+  const approvedCandidatesReadyForPromotion = useMemo(
+    () => getApprovedCandidatesReadyForPromotion(profileCandidates),
+    [profileCandidates],
   );
-  const selectedApprovedCandidateCount = selectedCandidateIds.filter((candidateId) =>
-    approvedCandidateIdsReadyForPromotion.has(candidateId),
-  ).length;
-  const groupedProfileCandidates = groupVisibleCandidatesBySection(
-    profileCandidates,
-    profileCandidateFilter,
+  const approvedCandidateIdsReadyForPromotion = useMemo(
+    () => new Set(approvedCandidatesReadyForPromotion.map((candidate) => candidate.id)),
+    [approvedCandidatesReadyForPromotion],
   );
-  const toggleCandidateDetails = (candidateId: string) => {
+  const selectedApprovedCandidateCount = useMemo(
+    () =>
+      selectedCandidateIds.filter((candidateId) =>
+        approvedCandidateIdsReadyForPromotion.has(candidateId),
+      ).length,
+    [approvedCandidateIdsReadyForPromotion, selectedCandidateIds],
+  );
+  const groupedProfileCandidates = useMemo(
+    () => groupVisibleCandidatesBySection(profileCandidates, profileCandidateFilter),
+    [profileCandidateFilter, profileCandidates],
+  );
+  const toggleCandidateDetails = useCallback((candidateId: string) => {
     setOpenCandidateIds((current) =>
       current.includes(candidateId)
         ? current.filter((item) => item !== candidateId)
         : [...current, candidateId],
     );
-  };
+  }, []);
 
   return (
     <article className={['workspace-card card', className].filter(Boolean).join(' ')}>

@@ -5,6 +5,7 @@ import path from 'node:path';
 import { resolveConfigPaths } from '@esl-pipeline/orchestrator';
 
 import { loadBatchBackendEnv } from '../bootstrap/env.js';
+import { configureHostRunPgRuntimeEnv } from '../bootstrap/pg-host-run-env.js';
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
 import { upsertProfile } from '../domain/profile-repository.js';
@@ -177,6 +178,7 @@ async function loadLegacyProfiles(studentsDir: string): Promise<LegacyStudentPro
 
 async function run(): Promise<void> {
   loadBatchBackendEnv(import.meta.url, 'batch-backend-tool-backfill-student-system');
+  configureHostRunPgRuntimeEnv();
   const options = parseArgs(process.argv.slice(2));
   const config = loadConfig();
 

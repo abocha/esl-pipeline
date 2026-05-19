@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url';
 
 import { loadBatchBackendEnv } from '../bootstrap/env.js';
+import { configureHostRunPgRuntimeEnv } from '../bootstrap/pg-host-run-env.js';
 import { closePgPool } from '../infrastructure/db.js';
 import { verifyMigrations } from '../infrastructure/migration-verify.js';
 import { getMigrationStatus, runMigrations } from '../infrastructure/migrations.js';
@@ -109,6 +110,7 @@ async function handleRlsAudit(): Promise<void> {
 
 async function main(): Promise<void> {
   loadBatchBackendEnv(import.meta.url, 'batch-backend-migrate-db-tool');
+  configureHostRunPgRuntimeEnv();
 
   const command = process.argv[2]?.trim().toLowerCase();
   if (!command) {
