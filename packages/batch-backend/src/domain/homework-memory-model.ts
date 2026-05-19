@@ -79,6 +79,7 @@ export interface HomeworkMemoryRecord {
   assignmentLineageKey: string;
   promptPackageId?: string | null;
   draftId?: string | null;
+  lessonId?: string | null;
   recordingId?: string | null;
   transcriptId?: string | null;
   schemaVersion: string;

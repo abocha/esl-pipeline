@@ -47,6 +47,37 @@ async function insertRecording(recordingId: string) {
   });
 }
 
+async function insertStudent(studentId: string) {
+  await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+    await client.query(
+      `
+      INSERT INTO students (id, student, created_at, updated_at)
+      VALUES ($1, $2, NOW(), NOW())
+      `,
+      [studentId, `Alex ${studentId.slice(0, 8)}`],
+    );
+  });
+}
+
+async function insertLesson(studentId: string, lessonId: string) {
+  await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+    await client.query(
+      `
+      INSERT INTO student_lessons (
+        id,
+        student_id,
+        starts_at,
+        duration_minutes,
+        status,
+        consumes_credit
+      )
+      VALUES ($1, $2, '2026-05-18T10:00:00.000Z', 60, 'scheduled', FALSE)
+      `,
+      [lessonId, studentId],
+    );
+  });
+}
+
 describe('domain/assignment-session-repository', () => {
   beforeEach(async () => {
     await resetTables();
@@ -86,6 +117,33 @@ describe('domain/assignment-session-repository', () => {
 
     const listed = await listAssignmentSessionsForUser(userId, 10);
     expect(listed.map((session) => session.id)).toEqual([created.id]);
+  });
+
+  it('persists lesson lineage on assignment sessions', async () => {
+    const userId = randomUUID();
+    const studentId = randomUUID();
+    const lessonId = randomUUID();
+    await insertUser(userId);
+    await insertStudent(studentId);
+    await insertLesson(studentId, lessonId);
+
+    const created = await createOrReuseAssignmentSession({
+      userId,
+      studentId,
+      lessonId,
+      currentStage: 'source',
+    });
+
+    expect(created.lessonId).toBe(lessonId);
+
+    const updated = await updateAssignmentSession({
+      id: created.id,
+      userId,
+      currentStage: 'assignment',
+      lessonId: null,
+    });
+
+    expect(updated?.lessonId).toBeNull();
   });
 
   it('reuses an active session for the same user and recording', async () => {

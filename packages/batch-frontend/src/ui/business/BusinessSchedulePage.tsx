@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 import {
   type BusinessScheduleSurface,
@@ -15,6 +15,7 @@ import {
 } from './business-format';
 
 export const BusinessSchedulePage: React.FC = () => {
+  const navigate = useNavigate();
   const [from, setFrom] = useState(todayInput);
   const [to, setTo] = useState(() => addDaysInput(7));
   const [surface, setSurface] = useState<BusinessScheduleSurface | null>(null);
@@ -64,6 +65,31 @@ export const BusinessSchedulePage: React.FC = () => {
         consumesCredit: status === 'completed',
       });
       await load({ from, to });
+    } catch (actionError: unknown) {
+      setError(actionError instanceof Error ? actionError.message : 'Unable to update lesson.');
+    } finally {
+      setSavingLessonId(null);
+    }
+  };
+
+  const runCompleteLessonAndStartHomework = async (
+    reminder: NonNullable<BusinessScheduleSurface['reminders'][number]>,
+  ) => {
+    if (!reminder.lessonId) return;
+    setSavingLessonId(reminder.lessonId);
+    setError(null);
+    try {
+      if (reminder.lessonStatus !== 'completed') {
+        await updateStudentLesson(reminder.studentId, reminder.lessonId, {
+          status: 'completed',
+          consumesCredit: true,
+        });
+      }
+      navigate(
+        `/?studentId=${encodeURIComponent(reminder.studentId)}&lessonId=${encodeURIComponent(
+          reminder.lessonId,
+        )}`,
+      );
     } catch (actionError: unknown) {
       setError(actionError instanceof Error ? actionError.message : 'Unable to update lesson.');
     } finally {
@@ -185,10 +211,24 @@ export const BusinessSchedulePage: React.FC = () => {
           <div className="business-list">
             {surface?.reminders.length ? (
               surface.reminders.map((reminder) => (
-                <article key={`${reminder.studentId}-${reminder.type}`} className="business-note">
+                <article
+                  key={`${reminder.studentId}-${reminder.type}-${reminder.lessonId ?? 'none'}`}
+                  className="business-note"
+                >
                   <strong>{reminder.studentName}</strong>
                   <span>{reminder.title}</span>
-                  <textarea readOnly value={reminder.copyText} />
+                  {reminder.actionIntent === 'complete_lesson_and_start_assignment' &&
+                  reminder.lessonId ? (
+                    <button
+                      type="button"
+                      disabled={savingLessonId === reminder.lessonId}
+                      onClick={() => void runCompleteLessonAndStartHomework(reminder)}
+                    >
+                      Complete + homework
+                    </button>
+                  ) : (
+                    <textarea readOnly value={reminder.copyText} />
+                  )}
                 </article>
               ))
             ) : (

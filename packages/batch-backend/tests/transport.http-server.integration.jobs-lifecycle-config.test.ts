@@ -273,6 +273,7 @@ describeHttpServerIntegrationSuite(
         studyTextElevenlabsModel: null,
         googleTtsModel: null,
         htmlUrl: 'https://example.com/job-approve-1',
+        lessonId: null,
         autoPublish: null,
         state: 'queued',
         createdAt: '2024-01-01T00:00:00.000Z',

@@ -4,6 +4,10 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  createAssignmentSessionForUser,
+  updateAssignmentSessionForUser,
+} from '../src/application/assignment-sessions.js';
+import {
   addStudentPackage,
   adjustStudentCredits,
   createStudentLesson,
@@ -33,6 +37,13 @@ async function resetScheduleBillingTables() {
     await client.query(
       `
       TRUNCATE TABLE
+        homework_memory_entries,
+        jobs,
+        drafts,
+        prompt_packages,
+        transcripts,
+        recordings,
+        assignment_sessions,
         workspace_business_settings,
         student_lesson_recurrence_slots,
         student_lesson_recurrence_rules,
@@ -182,6 +193,68 @@ async function insertBusinessCreditEvent(studentId: string, quantityDelta: numbe
       ],
     );
   });
+}
+
+async function insertSucceededHomeworkJob(params: {
+  studentId: string;
+  lessonId: string;
+  htmlUrl?: string;
+}) {
+  const jobId = randomUUID();
+  await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+    await client.query(
+      `
+      INSERT INTO jobs (
+        id,
+        state,
+        student_id,
+        lesson_id,
+        publish_target,
+        html_url,
+        finished_at,
+        created_at,
+        updated_at
+      )
+      VALUES ($1, 'succeeded', $2, $3, 'html', $4, NOW(), NOW(), NOW())
+      `,
+      [jobId, params.studentId, params.lessonId, params.htmlUrl ?? 'https://example.test/hw'],
+    );
+  });
+  return jobId;
+}
+
+async function insertFailedHomeworkJob(params: { studentId: string; lessonId: string }) {
+  const jobId = randomUUID();
+  await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+    await client.query(
+      `
+      INSERT INTO jobs (
+        id,
+        state,
+        student_id,
+        lesson_id,
+        publish_target,
+        error,
+        finished_at,
+        created_at,
+        updated_at
+      )
+      VALUES (
+        $1,
+        'failed',
+        $2,
+        $3,
+        'html',
+        'later rerun failed',
+        NOW() + INTERVAL '1 minute',
+        NOW() + INTERVAL '1 minute',
+        NOW() + INTERVAL '1 minute'
+      )
+      `,
+      [jobId, params.studentId, params.lessonId],
+    );
+  });
+  return jobId;
 }
 
 async function insertBusinessPayment(params: {
@@ -374,6 +447,126 @@ describeIfPg('application/student-schedule-billing', () => {
       'low_balance',
       'payment_followup',
     ]);
+  });
+
+  it('surfaces elapsed scheduled lessons as homework follow-ups until homework is published', async () => {
+    const { studentId } = await seedStudent();
+    const elapsedLessonId = await insertBusinessLesson({
+      studentId,
+      startsAt: '2000-01-01T10:00:00.000Z',
+      consumesCredit: true,
+    });
+    await insertBusinessLesson({
+      studentId,
+      startsAt: '2999-01-01T10:00:00.000Z',
+      consumesCredit: true,
+    });
+
+    let surface = await getStudentScheduleBillingSurface(studentId);
+
+    expect(
+      surface?.reminders.find(
+        (reminder) => reminder.type === 'lesson_followup' && reminder.lessonId === elapsedLessonId,
+      ),
+    ).toMatchObject({
+      type: 'lesson_followup',
+      actionIntent: 'complete_lesson_and_start_assignment',
+      lessonStatus: 'scheduled',
+      lessonConsumesCredit: true,
+      title: 'Finish lesson follow-up',
+    });
+    expect(
+      surface?.lessons.find((lesson) => lesson.id === elapsedLessonId)?.homework,
+    ).toMatchObject({
+      status: 'not_started',
+    });
+
+    const jobId = await insertSucceededHomeworkJob({ studentId, lessonId: elapsedLessonId });
+    await insertFailedHomeworkJob({ studentId, lessonId: elapsedLessonId });
+    surface = await getStudentScheduleBillingSurface(studentId);
+
+    expect(
+      surface?.reminders.some(
+        (reminder) => reminder.type === 'lesson_followup' && reminder.lessonId === elapsedLessonId,
+      ),
+    ).toBe(false);
+    expect(
+      surface?.lessons.find((lesson) => lesson.id === elapsedLessonId)?.homework,
+    ).toMatchObject({
+      status: 'published',
+      jobId,
+      htmlUrl: 'https://example.test/hw',
+    });
+  });
+
+  it('caps student follow-up reminders after suppressing already published overdue lessons', async () => {
+    const { studentId } = await seedStudent();
+    const overdueUnpublishedLessonId = await insertBusinessLesson({
+      studentId,
+      startsAt: '2000-01-01T10:00:00.000Z',
+      consumesCredit: true,
+    });
+
+    for (let index = 0; index < 31; index += 1) {
+      const publishedLessonId = await insertBusinessLesson({
+        studentId,
+        startsAt: `2001-01-${String((index % 28) + 1).padStart(2, '0')}T10:00:00.000Z`,
+        consumesCredit: true,
+      });
+      await insertSucceededHomeworkJob({ studentId, lessonId: publishedLessonId });
+    }
+
+    const surface = await getStudentScheduleBillingSurface(studentId);
+
+    expect(
+      surface?.reminders.some(
+        (reminder) =>
+          reminder.type === 'lesson_followup' && reminder.lessonId === overdueUnpublishedLessonId,
+      ),
+    ).toBe(true);
+  });
+
+  it('validates assignment session lesson lineage against the resulting selected student', async () => {
+    const { studentId, userId } = await seedStudent();
+    const otherStudentId = await seedAdditionalStudent('Bella');
+    const matchingLessonId = await insertBusinessLesson({
+      studentId,
+      startsAt: '2026-05-18T10:00:00.000Z',
+    });
+    const mismatchedLessonId = await insertBusinessLesson({
+      studentId: otherStudentId,
+      startsAt: '2026-05-19T10:00:00.000Z',
+    });
+
+    await expect(
+      createAssignmentSessionForUser(userId, {
+        studentId,
+        lessonId: mismatchedLessonId,
+        currentStage: 'source',
+      }),
+    ).rejects.toThrow('Assignment session lesson must belong to the selected student');
+
+    const session = await createAssignmentSessionForUser(userId, {
+      studentId,
+      lessonId: matchingLessonId,
+      currentStage: 'source',
+    });
+
+    await expect(
+      updateAssignmentSessionForUser(userId, session.id, {
+        studentId: otherStudentId,
+      }),
+    ).rejects.toThrow('Assignment session lesson must belong to the selected student');
+
+    await expect(
+      updateAssignmentSessionForUser(userId, session.id, {
+        lessonId: matchingLessonId,
+      }),
+    ).resolves.toMatchObject({
+      id: session.id,
+      studentId,
+      lessonId: matchingLessonId,
+    });
   });
 
   it('self-heals the default workspace for baseline-created students without workspace data', async () => {
@@ -794,6 +987,69 @@ describeIfPg('application/student-schedule-billing', () => {
     );
     expect(surface.reminders.map((reminder) => reminder.studentName)).toContain('Bea');
     expect(surface.reminders.map((reminder) => reminder.studentName)).toContain('Alex');
+  });
+
+  it('includes overdue lesson homework follow-ups in the business reminder queue outside the selected date range', async () => {
+    const { studentId } = await seedStudent();
+    const lessonId = await insertBusinessLesson({
+      studentId,
+      startsAt: '2000-01-01T10:00:00.000Z',
+      consumesCredit: true,
+    });
+
+    const surface = await getBusinessScheduleSurface();
+
+    expect(surface.lessons.some((lesson) => lesson.id === lessonId)).toBe(false);
+
+    expect(
+      surface.reminders.find(
+        (reminder) => reminder.type === 'lesson_followup' && reminder.lessonId === lessonId,
+      ),
+    ).toMatchObject({
+      studentId,
+      studentName: 'Alex',
+      actionIntent: 'complete_lesson_and_start_assignment',
+      lessonStatus: 'scheduled',
+      lessonConsumesCredit: true,
+    });
+
+    const jobId = await insertSucceededHomeworkJob({ studentId, lessonId });
+    await insertFailedHomeworkJob({ studentId, lessonId });
+    const surfaceAfterPublish = await getBusinessScheduleSurface();
+
+    expect(
+      surfaceAfterPublish.reminders.some(
+        (reminder) => reminder.type === 'lesson_followup' && reminder.lessonId === lessonId,
+      ),
+    ).toBe(false);
+    expect(jobId).toBeTruthy();
+  });
+
+  it('caps business follow-up reminders after suppressing already published overdue lessons', async () => {
+    const { studentId } = await seedStudent();
+    const overdueUnpublishedLessonId = await insertBusinessLesson({
+      studentId,
+      startsAt: '2000-01-01T10:00:00.000Z',
+      consumesCredit: true,
+    });
+
+    for (let index = 0; index < 101; index += 1) {
+      const publishedLessonId = await insertBusinessLesson({
+        studentId,
+        startsAt: `2001-01-${String((index % 28) + 1).padStart(2, '0')}T10:00:00.000Z`,
+        consumesCredit: true,
+      });
+      await insertSucceededHomeworkJob({ studentId, lessonId: publishedLessonId });
+    }
+
+    const surface = await getBusinessScheduleSurface();
+
+    expect(
+      surface.reminders.some(
+        (reminder) =>
+          reminder.type === 'lesson_followup' && reminder.lessonId === overdueUnpublishedLessonId,
+      ),
+    ).toBe(true);
   });
 
   it('uses the configured business timezone for schedule day ranges', async () => {

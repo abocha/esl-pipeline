@@ -12,6 +12,7 @@ export interface AssignmentSessionRecord {
   id: string;
   userId: string;
   studentId: string | null;
+  lessonId: string | null;
   recordingId: string | null;
   transcriptId: string | null;
   promptPackageId: string | null;

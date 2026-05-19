@@ -18,6 +18,7 @@ import {
   getActiveTemplateRevision,
 } from '../domain/template-revision-repository.js';
 import { getTranscriptByRecordingId } from '../domain/transcript-repository.js';
+import { withPgClient } from '../infrastructure/db.js';
 import { logger } from '../infrastructure/logger.js';
 import type { TranscriptionStorage } from '../infrastructure/transcription-storage.js';
 import {
@@ -45,6 +46,7 @@ export interface CreatePromptPackageParams {
   profilePath?: string | null;
   profileId?: string | null;
   templateId?: string | null;
+  lessonId?: string | null;
   bindingEffectiveAt?: Date;
 }
 
@@ -53,6 +55,7 @@ export interface PromptPackageResponse {
   recordingId: string;
   transcriptId: string;
   studentId: string | null;
+  lessonId: string | null;
   profilePath: string | null;
   templateVersion: string;
   notes: string | null;
@@ -200,6 +203,9 @@ export async function createPromptPackage(
   const transcript = await transcripts.getByRecordingId(params.recordingId);
   if (!transcript) return null;
   const recording = await recordings.getById(transcript.recordingId);
+  if (params.lessonId && recording?.studentId) {
+    await validateLessonStudentPair(params.lessonId, recording.studentId);
+  }
   const bindingLookupAt =
     params.bindingEffectiveAt && !Number.isNaN(params.bindingEffectiveAt.getTime())
       ? params.bindingEffectiveAt
@@ -270,6 +276,7 @@ export async function createPromptPackage(
     recordingId: transcript.recordingId,
     transcriptId: transcript.id,
     studentId: recording?.studentId ?? null,
+    lessonId: params.lessonId ?? null,
     studentMemorySnapshotId: memoryContext.studentMemorySnapshotId,
     studentMemorySnapshotHash: memoryContext.studentMemorySnapshotHash,
     selectedLessonMemoryIds: memoryContext.selectedLessonMemoryIds,
@@ -323,6 +330,19 @@ export async function createPromptPackage(
   return response;
 }
 
+async function validateLessonStudentPair(lessonId: string, studentId: string): Promise<void> {
+  const belongsToStudent = await withPgClient(async (client) => {
+    const result = await client.query(
+      'SELECT 1 FROM student_lessons WHERE id = $1 AND student_id = $2',
+      [lessonId, studentId],
+    );
+    return (result.rowCount ?? 0) > 0;
+  });
+  if (!belongsToStudent) {
+    throw new Error('Prompt-package lesson must belong to the recording student');
+  }
+}
+
 export function toPromptPackageResponse(
   promptPackage: PromptPackageRecord,
   text: string,
@@ -348,6 +368,7 @@ export function toPromptPackageResponse(
     recordingId: promptPackage.recordingId,
     transcriptId: promptPackage.transcriptId,
     studentId: promptPackage.studentId ?? null,
+    lessonId: promptPackage.lessonId ?? null,
     profilePath: promptPackage.profilePath ?? null,
     templateVersion: promptPackage.templateVersion,
     notes: promptPackage.notes ?? null,
