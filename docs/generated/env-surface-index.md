@@ -247,6 +247,7 @@
 | `OPENROUTER_HTTP_REFERER`                            | `.env.example`               | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md`  |
 | `OPENROUTER_X_TITLE`                                 | `.env.batch-backend.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md`  |
 | `OPENROUTER_X_TITLE`                                 | `.env.example`               | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md`  |
+| `PG_APPLICATION_NAME`                                | `.env.batch-backend.example` | batch_backend      | `packages/batch-backend/README.md`              |
 | `PG_AUTO_MIGRATE_ON_BOOT`                            | `.env.batch-backend.example` | batch_backend      | `packages/batch-backend/README.md`              |
 | `PG_BACKUP_ALERT_COOLDOWN_MINUTES`                   | `.env.batch-backend.example` | postgres_ops       | `docs/operations/postgres-backup-restore.md`    |
 | `PG_BACKUP_ALERT_TELEGRAM_BOT_TOKEN`                 | `.env.batch-backend.example` | postgres_ops       | `docs/operations/postgres-backup-restore.md`    |

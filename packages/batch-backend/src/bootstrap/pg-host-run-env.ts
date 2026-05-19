@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+
 const DEFAULT_TMP_ROOT = '/tmp/codex-tmp';
 
 function normalizeEnvValue(value: string | undefined): string | null {
@@ -22,16 +24,27 @@ export interface HostRunPgRuntimeEnv {
   tmpDir: string;
 }
 
+export interface HostRunPgRuntimeEnvOptions {
+  isContainer?: boolean;
+}
+
+function isRunningInContainer(): boolean {
+  return existsSync('/.dockerenv');
+}
+
 export function configureHostRunPgRuntimeEnv(
   env: NodeJS.ProcessEnv = process.env,
+  options: HostRunPgRuntimeEnvOptions = {},
 ): HostRunPgRuntimeEnv {
-  const connectionString = normalizeEnvValue(env.PG_CONNECTION_STRING);
-  if (connectionString) {
-    env.PG_CONNECTION_STRING = normalizePgConnectionString(connectionString);
-  } else {
-    const host = normalizeEnvValue(env.PG_HOST);
-    if (host) {
-      env.PG_HOST = normalizeHostForHostRun(host);
+  if (!(options.isContainer ?? isRunningInContainer())) {
+    const connectionString = normalizeEnvValue(env.PG_CONNECTION_STRING);
+    if (connectionString) {
+      env.PG_CONNECTION_STRING = normalizePgConnectionString(connectionString);
+    } else {
+      const host = normalizeEnvValue(env.PG_HOST);
+      if (host) {
+        env.PG_HOST = normalizeHostForHostRun(host);
+      }
     }
   }
 

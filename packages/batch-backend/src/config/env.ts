@@ -27,6 +27,7 @@ export interface BatchBackendConfig {
     password: string;
     database: string;
     connectionString?: string;
+    applicationName: string;
     poolMax: number;
     idleTimeoutMs: number;
     connectionTimeoutMs: number;
@@ -332,6 +333,7 @@ export function loadConfig(): BatchBackendConfig {
   const pgPassword = readString('PG_PASSWORD', 'esl')!;
   const pgDatabase = readString('PG_DATABASE', 'esl_batch')!;
   const pgConnectionString = readString('PG_CONNECTION_STRING');
+  const pgApplicationName = readString('PG_APPLICATION_NAME', 'esl-pipeline-batch-backend')!;
   const pgPoolMax = readInt('PG_POOL_MAX', 10);
   const pgIdleTimeoutMs = readInt('PG_IDLE_TIMEOUT_MS', 30_000);
   const pgConnectionTimeoutMs = readInt('PG_CONNECTION_TIMEOUT_MS', 5_000);
@@ -745,6 +747,7 @@ export function loadConfig(): BatchBackendConfig {
       password: pgPassword,
       database: pgDatabase,
       connectionString: pgConnectionString,
+      applicationName: pgApplicationName,
       poolMax: pgPoolMax,
       idleTimeoutMs: pgIdleTimeoutMs,
       connectionTimeoutMs: pgConnectionTimeoutMs,

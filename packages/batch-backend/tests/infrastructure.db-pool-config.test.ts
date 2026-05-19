@@ -39,6 +39,7 @@ describe('infrastructure/db pool configuration', () => {
         PG_USER: 'esl',
         PG_PASSWORD: 'esl',
         PG_DATABASE: 'esl_batch',
+        PG_APPLICATION_NAME: 'esl-pipeline-test-pool',
         PG_POOL_MAX: '25',
         PG_IDLE_TIMEOUT_MS: '45000',
         PG_CONNECTION_TIMEOUT_MS: '8000',
@@ -52,6 +53,7 @@ describe('infrastructure/db pool configuration', () => {
         expect(pool.options.max).toBe(25);
         expect(pool.options.idleTimeoutMillis).toBe(45_000);
         expect(pool.options.connectionTimeoutMillis).toBe(8_000);
+        expect(pool.options.application_name).toBe('esl-pipeline-test-pool');
 
         await db.closePgPool();
       },
