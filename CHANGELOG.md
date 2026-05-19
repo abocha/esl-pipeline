@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [6.7.1] - 2026-05-19
+
+### Changed
+
+- Automated release from PR #81: Harden Postgres and Redis runtime behavior (https://github.com/abocha/esl-pipeline/pull/81)
+
 ## [6.7.0] - 2026-05-19
 
 ### Changed
