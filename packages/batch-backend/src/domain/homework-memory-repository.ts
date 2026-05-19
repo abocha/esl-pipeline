@@ -294,7 +294,7 @@ export async function insertCanonicalReadyHomeworkMemoryEntry(
           publish_targets
         )
         VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'ready', $13,
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'ready',
           'published_assignment', $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25,
           $26, $27, $28
         )
@@ -461,7 +461,7 @@ export async function ensurePendingHomeworkMemoryEntry(
           publish_targets
         )
         VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'pending', $13,
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'pending',
           'published_assignment', $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25,
           $26, $27, $28
         )
