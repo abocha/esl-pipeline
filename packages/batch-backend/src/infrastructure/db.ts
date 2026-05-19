@@ -1437,6 +1437,7 @@ export function createPgPool(): Pool {
     max: config.pg.poolMax,
     idleTimeoutMillis: config.pg.idleTimeoutMs,
     connectionTimeoutMillis: config.pg.connectionTimeoutMs,
+    application_name: config.pg.applicationName,
   });
 
   logger.info('Postgres pool initialized', {
@@ -1448,6 +1449,7 @@ export function createPgPool(): Pool {
     pgHost: config.pg.host,
     pgPort: config.pg.port,
     pgDatabase: config.pg.database,
+    applicationName: config.pg.applicationName,
     usingConnectionString: Boolean(config.pg.connectionString),
   });
 

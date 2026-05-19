@@ -285,4 +285,66 @@ describe('runtime/pronunciation-audio', () => {
     expect(result?.itemClips?.every((clip) => clip.voiceId === 'en-GB-SoniaNeural')).toBe(true);
     expect(result?.itemClips?.every((clip) => clip.tts?.provider === 'edge')).toBe(true);
   });
+
+  it('synthesizes independent item clips with bounded concurrency while preserving order', async () => {
+    vi.mocked(extractPronunciationFocus).mockReturnValue({
+      mode: 'sentence_stress',
+      naturalSentence: 'One two three four five.',
+      drills: [
+        { line: 1, text: 'one' },
+        { line: 2, text: 'two' },
+        { line: 3, text: 'three' },
+        { line: 4, text: 'four' },
+        { line: 5, text: 'five' },
+      ],
+      sectionStartLine: 1,
+      issues: [],
+    });
+
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const delayByText = new Map([
+      ['one', 30],
+      ['two', 20],
+      ['three', 10],
+      ['four', 5],
+      ['five', 1],
+    ]);
+    vi.mocked(buildPronunciationTextMp3).mockImplementation(async ({ text, voiceId }) => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, delayByText.get(String(text)) ?? 1));
+      inFlight -= 1;
+      return {
+        path: `/tmp/${String(text)}.mp3`,
+        hash: `hash-${String(text)}`,
+        voiceId,
+        provider: 'google',
+        modelId: 'chirp3_hd',
+        generatedCharacters: String(text).length,
+        cachedCharacters: 0,
+      };
+    });
+
+    const result = await synthesizePronunciationAudio({
+      context: {} as never,
+      mdPath: '/tmp/example.md',
+      outPath: '/tmp',
+      title: 'Pronunciation',
+      regeneratePrimary: false,
+      primaryTtsProvider: 'google',
+      primaryVoiceId: 'voice-primary',
+    });
+
+    expect(vi.mocked(buildPronunciationTextMp3)).toHaveBeenCalledTimes(5);
+    expect(maxInFlight).toBeGreaterThan(1);
+    expect(maxInFlight).toBeLessThanOrEqual(3);
+    expect(result?.itemClips?.map((clip) => clip.text)).toEqual([
+      'one',
+      'two',
+      'three',
+      'four',
+      'five',
+    ]);
+  });
 });

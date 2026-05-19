@@ -75,6 +75,19 @@ BEGIN
   END IF;
 END $$;
 `.trim();
+const OPTIONAL_PG_STAT_STATEMENTS_SQL = `
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_stat_statements') THEN
+    BEGIN
+      CREATE EXTENSION pg_stat_statements;
+    EXCEPTION
+      WHEN insufficient_privilege OR feature_not_supported THEN
+        RAISE NOTICE 'Skipping pg_stat_statements extension creation because privileges or server support are insufficient.';
+    END;
+  END IF;
+END $$;
+`.trim();
 
 export function selectDockerPostgresContainerId(
   dockerPsOutput: string,
@@ -175,6 +188,9 @@ function normalizeDumpSql(rawSql: string): string {
         trimmed === 'CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public;' ||
         trimmed ===
           "COMMENT ON EXTENSION pg_trgm IS 'text similarity measurement and index searching based on trigrams';" ||
+        trimmed === 'CREATE EXTENSION IF NOT EXISTS pg_stat_statements WITH SCHEMA public;' ||
+        trimmed ===
+          "COMMENT ON EXTENSION pg_stat_statements IS 'track planning and execution statistics of all SQL statements executed';" ||
         trimmed.includes('gin_trgm_ops')
       ) {
         return false;
@@ -188,7 +204,7 @@ function normalizeDumpSql(rawSql: string): string {
     .replaceAll(/^\s+/g, '')
     .replaceAll(/\s+$/g, '');
 
-  return `${buildGeneratedHeader()}${collapsed}\n\n-- Optional pg_trgm support retained from migrations.\n${OPTIONAL_PG_TRGM_SQL}\n`;
+  return `${buildGeneratedHeader()}${collapsed}\n\n-- Optional pg_stat_statements support retained from migrations.\n${OPTIONAL_PG_STAT_STATEMENTS_SQL}\n\n-- Optional pg_trgm support retained from migrations.\n${OPTIONAL_PG_TRGM_SQL}\n`;
 }
 
 function buildSchemaMigrationsSeed(

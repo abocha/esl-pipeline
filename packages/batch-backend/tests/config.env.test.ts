@@ -610,6 +610,7 @@ describe('config/env - postgres pool tuning', () => {
       },
       async () => {
         const cfg = await loadConfigFresh();
+        expect(cfg.pg.applicationName).toBe('esl-pipeline-batch-backend');
         expect(cfg.pg.poolMax).toBe(10);
         expect(cfg.pg.idleTimeoutMs).toBe(30_000);
         expect(cfg.pg.connectionTimeoutMs).toBe(5_000);
@@ -622,11 +623,13 @@ describe('config/env - postgres pool tuning', () => {
       {
         NODE_ENV: 'test',
         PG_POOL_MAX: '25',
+        PG_APPLICATION_NAME: 'esl-pipeline-test-worker',
         PG_IDLE_TIMEOUT_MS: '45000',
         PG_CONNECTION_TIMEOUT_MS: '8000',
       },
       async () => {
         const cfg = await loadConfigFresh();
+        expect(cfg.pg.applicationName).toBe('esl-pipeline-test-worker');
         expect(cfg.pg.poolMax).toBe(25);
         expect(cfg.pg.idleTimeoutMs).toBe(45_000);
         expect(cfg.pg.connectionTimeoutMs).toBe(8_000);

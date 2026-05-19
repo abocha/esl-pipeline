@@ -1567,6 +1567,19 @@ CREATE POLICY user_settings_user_scope_policy ON public.user_settings USING ((pu
 
 CREATE POLICY users_self_access_policy ON public.users USING ((public.app_rls_bypass() OR (id = public.app_current_user_id()))) WITH CHECK ((public.app_rls_bypass() OR (id = public.app_current_user_id())));
 
+-- Optional pg_stat_statements support retained from migrations.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_stat_statements') THEN
+    BEGIN
+      CREATE EXTENSION pg_stat_statements;
+    EXCEPTION
+      WHEN insufficient_privilege OR feature_not_supported THEN
+        RAISE NOTICE 'Skipping pg_stat_statements extension creation because privileges or server support are insufficient.';
+    END;
+  END IF;
+END $$;
+
 -- Optional pg_trgm support retained from migrations.
 DO $$
 BEGIN
@@ -1647,5 +1660,6 @@ VALUES
   ('0027_teacher_business_dashboard_foundations', 'b82df4ed56daa006bdee71a0a56e1c3f584d89eb467aa7aaf5c68cc764c60d01', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0028_student_lesson_recurrence_core', 'c90dea3bf8cc79162e93d0cbdd167e9142c6d959d2cb743ab164e06c4f658fa0', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0029_assignment_sessions', '81d0ae89a6a5e55f1fba02cac60b703e1a22d31024c5d350a43642fcb53433aa', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0030_lesson_assignment_linkage', '911668bc4cde7c277df35c1be17aaff84067eee9fa0a85da6dbd09545f3f3622', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0030_lesson_assignment_linkage', '911668bc4cde7c277df35c1be17aaff84067eee9fa0a85da6dbd09545f3f3622', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0031_pg_stat_statements_observability', 'ad512b286919b89eda1c4eb6c2762884ca4e4bac6e7eb56d4655c726f3cce558', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;

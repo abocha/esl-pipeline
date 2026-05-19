@@ -104,6 +104,8 @@ services:
       PG_BACKUP_ENV_FILE: /dev/null
       PG_CONTAINER_NAME: ${COMPOSE_PROJECT_NAME:-esl-pipeline}-postgres-1
       PG_BACKUP_RESTORE_DRILL_REPORT_LATEST: /app/tmp/logs/backup/restore-drill-report-latest.json
+      PG_APPLICATION_NAME: esl-pipeline-api
+      PG_POOL_MAX: '8'
       PNPM_STORE_DIR: /pnpm/store
       NPM_CONFIG_STORE_DIR: /pnpm/store
     env_file:
@@ -156,6 +158,8 @@ services:
       NODE_ENV: development
       PIPELINE_CWD: /app
       FILESYSTEM_UPLOAD_DIR: /app/uploads
+      PG_APPLICATION_NAME: esl-pipeline-batch-worker
+      PG_POOL_MAX: '6'
       PNPM_STORE_DIR: /pnpm/store
       NPM_CONFIG_STORE_DIR: /pnpm/store
     env_file:
@@ -192,7 +196,7 @@ services:
     user: '0:0'
     pull_policy: never
   postgres:
-    image: postgres:18-alpine
+    image: postgres:18.4-alpine
     # Persistent DB (named volume).
     volumes:
       - postgres18_data:/var/lib/postgresql
@@ -204,7 +208,26 @@ services:
       POSTGRES_DB: esl_batch
     ports:
       - '127.0.0.1:5432:5432'
-    command: ['postgres', '-c', 'fsync=on', '-c', 'listen_addresses=*']
+    command:
+      [
+        'postgres',
+        '-c',
+        'fsync=on',
+        '-c',
+        'shared_preload_libraries=pg_stat_statements',
+        '-c',
+        'compute_query_id=on',
+        '-c',
+        'pg_stat_statements.max=10000',
+        '-c',
+        'track_io_timing=on',
+        '-c',
+        'log_lock_waits=on',
+        '-c',
+        'idle_in_transaction_session_timeout=60s',
+        '-c',
+        'listen_addresses=*',
+      ]
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U esl -d esl_batch']
       interval: 5s
@@ -212,13 +235,24 @@ services:
       retries: 10
 
   redis:
-    image: redis:8-alpine
+    image: redis:8.6.3-alpine
     # Persistent data (named volume).
     volumes:
       - redis_data:/data
     ports:
       - '127.0.0.1:6380:6379'
-    command: ['redis-server', '--save', '', '--appendonly', 'no']
+    command:
+      [
+        'redis-server',
+        '--save',
+        '',
+        '--appendonly',
+        'no',
+        '--maxmemory-policy',
+        'noeviction',
+        '--latency-monitor-threshold',
+        '100',
+      ]
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
@@ -239,6 +273,8 @@ services:
       NODE_ENV: development
       PIPELINE_CWD: /app
       FILESYSTEM_UPLOAD_DIR: /app/uploads
+      PG_APPLICATION_NAME: esl-pipeline-student-memory-worker
+      PG_POOL_MAX: '4'
       PNPM_STORE_DIR: /pnpm/store
       NPM_CONFIG_STORE_DIR: /pnpm/store
     env_file:
@@ -260,6 +296,8 @@ services:
     volumes: *dev_workspace_volumes
     environment:
       NODE_ENV: development
+      PG_APPLICATION_NAME: esl-pipeline-telegram-ops-bot
+      PG_POOL_MAX: '2'
       PNPM_STORE_DIR: /pnpm/store
       NPM_CONFIG_STORE_DIR: /pnpm/store
     env_file:
@@ -435,6 +473,8 @@ services:
       NODE_ENV: development
       PIPELINE_CWD: /app
       FILESYSTEM_UPLOAD_DIR: /app/uploads
+      PG_APPLICATION_NAME: esl-pipeline-transcribe-worker
+      PG_POOL_MAX: '4'
       PNPM_STORE_DIR: /pnpm/store
       NPM_CONFIG_STORE_DIR: /pnpm/store
     env_file:

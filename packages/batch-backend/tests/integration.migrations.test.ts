@@ -186,6 +186,13 @@ describe('integration/migrations', () => {
       expect(actual).toBe(expected);
       expect(actual).not.toContain('CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public;');
       expect(actual).not.toContain('COMMENT ON EXTENSION pg_trgm');
+      expect(actual).not.toContain(
+        'CREATE EXTENSION IF NOT EXISTS pg_stat_statements WITH SCHEMA public;',
+      );
+      expect(actual).not.toContain('COMMENT ON EXTENSION pg_stat_statements');
+      expect(actual).toContain(
+        'Skipping pg_stat_statements extension creation because privileges or server support are insufficient.',
+      );
       expect(actual).toContain(
         'Skipping pg_trgm extension creation because privileges are insufficient.',
       );
