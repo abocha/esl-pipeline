@@ -145,6 +145,15 @@ Runbooks:
 - [`docs/operations/postgres-ops-health.md`](../operations/postgres-ops-health.md)
 - [`docs/operations/telegram-ops-control-panel.md`](../operations/telegram-ops-control-panel.md)
 
+## Redis Queue Runtime
+
+Compose-managed Redis is used as durable queue/event infrastructure for BullMQ, not as a disposable
+cache. Keep `maxmemory-policy noeviction` so Redis returns backpressure errors under memory pressure
+instead of evicting queue state. Production Compose enables AOF with `appendfsync everysec`; local dev
+keeps persistence disabled for fast reset semantics unless you take a manual snapshot before a Redis
+container refresh. Latency monitoring is enabled at 100 ms so `LATENCY DOCTOR` and `LATENCY LATEST`
+can explain server-side stalls without waiting for a failure window to reproduce.
+
 ## CI Expectations
 
 Deployment changes should preserve green CI for:

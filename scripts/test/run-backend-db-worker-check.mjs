@@ -139,6 +139,21 @@ function runCommand(command, args, env) {
   });
 }
 
+function resolvePackageManagerCommand(args) {
+  const npmExecPath = normalizeEnvValue(process.env.npm_execpath);
+  if (npmExecPath) {
+    return {
+      command: process.execPath,
+      args: [npmExecPath, ...args],
+    };
+  }
+
+  return {
+    command: process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm',
+    args,
+  };
+}
+
 loadEnvFile(envFilePath);
 
 const pgUrl = normalizeServiceUrl(process.env.BATCH_BACKEND_TEST_PG, {
@@ -193,5 +208,10 @@ const commandEnv = {
 };
 
 for (const scriptName of ['test:db:migrations', 'test:db:postgres', 'test:integration:worker']) {
-  await runCommand('pnpm', ['--filter', '@esl-pipeline/batch-backend', scriptName], commandEnv);
+  const command = resolvePackageManagerCommand([
+    '--filter',
+    '@esl-pipeline/batch-backend',
+    scriptName,
+  ]);
+  await runCommand(command.command, command.args, commandEnv);
 }

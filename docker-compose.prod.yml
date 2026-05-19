@@ -114,12 +114,25 @@ services:
       retries: 10
 
   redis:
-    image: redis:8-alpine
+    image: redis:8.6.3-alpine
     volumes:
       - redis_data:/data
     ports:
       - '127.0.0.1:6379:6379'
-    command: ['redis-server', '--save', '', '--appendonly', 'yes', '--appendfsync', 'everysec']
+    command:
+      [
+        'redis-server',
+        '--save',
+        '',
+        '--appendonly',
+        'yes',
+        '--appendfsync',
+        'everysec',
+        '--maxmemory-policy',
+        'noeviction',
+        '--latency-monitor-threshold',
+        '100',
+      ]
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
@@ -134,11 +147,11 @@ services:
         - esl-pipeline/telegram-ops-bot:local
     depends_on:
       - batch-backend
-    env_file:
-      - .env.batch-backend
     environment:
       PG_APPLICATION_NAME: esl-pipeline-telegram-ops-bot
       PG_POOL_MAX: '2'
+    env_file:
+      - .env.batch-backend
     restart: unless-stopped
 
 volumes:

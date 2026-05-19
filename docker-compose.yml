@@ -235,13 +235,24 @@ services:
       retries: 10
 
   redis:
-    image: redis:8-alpine
+    image: redis:8.6.3-alpine
     # Persistent data (named volume).
     volumes:
       - redis_data:/data
     ports:
       - '127.0.0.1:6380:6379'
-    command: ['redis-server', '--save', '', '--appendonly', 'no']
+    command:
+      [
+        'redis-server',
+        '--save',
+        '',
+        '--appendonly',
+        'no',
+        '--maxmemory-policy',
+        'noeviction',
+        '--latency-monitor-threshold',
+        '100',
+      ]
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
