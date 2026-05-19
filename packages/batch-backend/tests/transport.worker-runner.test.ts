@@ -20,6 +20,7 @@ vi.mock('../src/config/env.js', () => ({
     pg: {
       enabled: true,
       autoMigrateOnBoot: false,
+      applicationName: 'esl-pipeline-test-worker',
       poolMax: 8,
       idleTimeoutMs: 30000,
       connectionTimeoutMs: 5000,
