@@ -4,7 +4,7 @@
 
 - Audience: maintainers and implementation agents.
 - Authority Level: active optimization backlog.
-- Last Verified Against: 2026-05-19 repo state.
+- Last Verified Against: 2026-05-20 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: after backlog item implementation PRs.
 - Status: `backlog`.
@@ -31,6 +31,8 @@ This backlog is intended to be executed incrementally with safe, test-backed pat
 | B9  | Do one last targeted UI timing polish pass           | `batch-frontend` still dominates unit timings, led by `MinimalAssignment` flows.                                               | S      | L    | Prefer narrower harness or logic-level tests for `MinimalAssignment.job-actions`, `generation-throttle`, and only then optional follow-up on orchestrator smoke or TTS retry classification. |
 | B10 | Move homework memory lineage comparison to hashes    | Homework memory source resolution still serially reads historical lineage markdown before deciding whether content changed.    | M      | M    | Persist or backfill published markdown hashes for lineage jobs, then filter same-content lineage rows by hash before reading markdown from storage.                                          |
 | B11 | Batch recurrence materialization writes              | Student lesson recurrence saves can issue one database write per slot and generated occurrence, which grows with horizon size. | M      | M-H  | Replace per-row slot and lesson writes with bulk SQL while preserving recurrence ID stability, generated occurrence keys, and manual override behavior.                                      |
+| B12 | Fix `BusinessSchedulePage` range-race test failure   | `test:unit:prebuilt:fast:agent` surfaced a reproducible frontend test failure around stale versus newer schedule range loads.  | S      | M    | Reproduce `BusinessSchedulePage.test.tsx` in isolation, then fix the race expectation or implementation without broad UI changes.                                                            |
+| B13 | Fix Windows batch-backend integration glob handling  | `test:integration:prebuilt:agent` surfaced that the batch-backend integration script reports 0 tests on the Windows checkout.  | S      | L-M  | Normalize the package integration test target so `pnpm --filter @esl-pipeline/batch-backend run test:integration` resolves test files cross-platform.                                        |
 
 ## Wave Plans (Completed)
 

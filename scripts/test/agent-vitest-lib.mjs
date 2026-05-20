@@ -1,5 +1,7 @@
 import path from 'node:path';
 
+const ansiEscapePattern = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'gu');
+
 export function parsePackageTestScript({ scripts, scriptName }) {
   return parsePackageTestScriptInner({
     scripts,
@@ -357,7 +359,7 @@ function normalizePath(value) {
 function compactFailureMessage(messages) {
   const raw = Array.isArray(messages) ? messages.filter(Boolean).join('\n') : '';
   return raw
-    .replace(/\u001b\[[0-9;]*m/gu, '')
+    .replace(ansiEscapePattern, '')
     .split(/\r?\n/u)
     .map((line) => line.trimEnd())
     .filter((line, index) => line.trim() || index < 4)

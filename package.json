@@ -26,6 +26,7 @@
     "build": "pnpm -r --filter \"./packages/*\" run build",
     "check": "pnpm build && pnpm typecheck && pnpm lint && pnpm test:unit:prebuilt && pnpm test:integration:prebuilt && pnpm test:backend:db:worker",
     "check:fast": "pnpm guard:orchestrator:boundary && pnpm release:verify:contracts && pnpm build && pnpm lint && pnpm test:unit:prebuilt:fast",
+    "check:fast:agent": "node scripts/check/run-agent-check-fast.mjs",
     "clean": "pnpm -r --filter \"./packages/*\" --if-present run clean",
     "clean:artifacts": "node -e \"const fs=require('node:fs'); for (const dir of ['out','tmp','uploads']) fs.rmSync(dir,{recursive:true,force:true});\"",
     "deps:audit": "pnpm exec knip --dependencies --reporter compact --no-progress --no-exit-code",
