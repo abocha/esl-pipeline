@@ -14,6 +14,8 @@ import {
   withAgentVitestArgs,
 } from './agent-vitest-lib.mjs';
 
+const ansiEscapePattern = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'gu');
+
 const repoRoot = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const options = parseArgs(process.argv.slice(2));
 const timestamp = new Date().toISOString().replace(/[:.]/gu, '-');
@@ -482,7 +484,7 @@ function normalizeEnvValue(value) {
 
 function firstSignal(output) {
   return output
-    .replace(/\u001b\[[0-9;]*m/gu, '')
+    .replace(ansiEscapePattern, '')
     .split(/\r?\n/u)
     .map((line) => line.trimEnd())
     .filter(Boolean)

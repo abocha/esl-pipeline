@@ -4,7 +4,7 @@
 
 - Audience: AI agents and maintainers.
 - Authority Level: router + compact operating contract.
-- Last Verified Against: 2026-05-17 repo state.
+- Last Verified Against: 2026-05-21 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly or after major workflow/tooling changes.
 - Status: `router`.
@@ -66,12 +66,21 @@ If resuming after context loss, start with
 ## Command Baseline
 
 - Install: `pnpm install`
-- Fast check: `pnpm check:fast`
+- Fast check (agent default): `pnpm --silent run check:fast:agent`
+- Fast check (raw human output): `pnpm check:fast`
 - Full check: `pnpm check`
 - Docs check: `pnpm docs:check`
 - Docs indexes: `pnpm docs:generate:indexes`
 - Docs gardening: `pnpm docs:garden`
 - Batch dev stack: `pnpm dev:batch`
+
+Agents should prefer `:agent` validation commands when they exist. These commands are intentionally
+silent on success and terse on failure; do not treat quiet output as a hang. On failure, read the
+reported `tmp/check-logs/...` or `tmp/test-logs/...` artifact before rerunning raw commands. Use raw
+lanes only when the agent lane is missing or when the artifact shows that full stream output is
+needed for diagnosis. For Vitest-heavy work, prefer the matching agent lane first:
+`pnpm --silent run test:unit:prebuilt:fast:agent`, `pnpm --silent run test:agent:html-publisher`,
+or another existing `:agent` test script.
 
 When touching migrations, schema baselines, or contract-version files, also run the contract and DB
 baseline verification commands listed in [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md)
