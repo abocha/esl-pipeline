@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [6.7.2] - 2026-05-21
+
+### Changed
+
+- Automated release from PR #82: Add cross-workstream change intake docs and agent test lane helpers (https://github.com/abocha/esl-pipeline/pull/82)
+
 ## [6.7.1] - 2026-05-19
 
 ### Changed
