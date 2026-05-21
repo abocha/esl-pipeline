@@ -25,6 +25,7 @@ const CANONICAL_AGE: VoiceCapabilitiesSnapshot['age'] = [
   'senior',
   'universal',
 ];
+const GOOGLE_TTS_MODEL_STYLE_DENY_LIST = new Set(['chirp3_hd', 'studio', 'wavenet', 'neural2']);
 
 interface VoiceCatalogLike {
   generatedAt?: unknown;
@@ -281,6 +282,7 @@ function normalizeAccent(value: string): string {
 function normalizeStyle(value: string): string {
   const normalized = normalizeToken(value);
   if (!normalized) return '';
+  if (GOOGLE_TTS_MODEL_STYLE_DENY_LIST.has(normalized)) return '';
   if (normalized.includes('conversation')) return 'conversational';
   if (normalized.includes('narrative') || normalized.includes('story')) return 'narrative_story';
   if (normalized.includes('informative')) return 'informative_educational';
