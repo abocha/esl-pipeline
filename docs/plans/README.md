@@ -83,6 +83,7 @@
 2. `docs/plans/legacy-retirement/legacy-retirement-backlog.md`
 3. `docs/plans/legacy-retirement/legacy-retirement-inventory.md`
 4. `docs/plans/legacy-retirement/legacy-retirement-execution-playbook.md`
+5. `docs/plans/2026-05-20-cross-workstream-change-intake.md`
 
 ## Historical and Generated Aids
 
