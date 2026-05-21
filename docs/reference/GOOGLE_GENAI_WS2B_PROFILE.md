@@ -28,6 +28,7 @@
 
 1. Context7 library: `/googleapis/js-genai`
 2. Supporting pages:
+   - https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash
    - https://ai.google.dev/gemini-api/docs/text-generation
    - https://github.com/googleapis/js-genai/blob/main/README.md
    - https://github.com/googleapis/js-genai/blob/main/docs/classes/models.Models.html
@@ -67,6 +68,8 @@ Model policy alignment:
 1. Provider/model selection and fallback order are controlled by:
    - `docs/reference/GENERATION_PROVIDER_POLICY.md`
 2. This profile controls payload semantics, not provider priority decisions.
+3. `gemini-3.5-flash` is an allowlisted selectable model for normal Google generation; the
+   configured primary/default remains `gemini-3-flash-preview`.
 
 ## Response Profile (Consumed Fields)
 

@@ -181,6 +181,58 @@ describe('application/generation-policy', () => {
     expect(extraModel?.defaultSelected).toBe(false);
   });
 
+  it('keeps Gemini 3.5 Flash selectable without making it the Google default', () => {
+    const config = buildConfig({
+      models: {
+        openai: {
+          primary: 'gpt-5.4-mini',
+          fallback: 'gpt-5.4-nano',
+          allowed: ['gpt-5.4-mini', 'gpt-5.4-nano'],
+          studentMemoryPrimary: 'gpt-5.4-nano',
+          studentMemoryFallback: 'gpt-5.4-mini',
+          profileDraftPrimary: 'gpt-5.4',
+          profileDraftFallback: 'gpt-5.4-mini',
+          profileDraftTertiary: 'gpt-5.4-nano',
+        },
+        googleAiStudio: {
+          primary: 'gemini-3-flash-preview',
+          fallback: 'gemini-2.5-flash-lite',
+          tertiary: 'gemini-2.5-pro',
+          allowed: [
+            'gemini-3-flash-preview',
+            'gemini-3.5-flash',
+            'gemini-2.5-flash-lite',
+            'gemini-2.5-pro',
+          ],
+        },
+        openrouter: {
+          primary: 'anthropic/claude-sonnet-4',
+          fallback: 'openai/gpt-5-mini',
+          allowed: [],
+        },
+      },
+    });
+
+    const googleModels = resolveGenerationCandidates({ config })
+      .filter((candidate) => candidate.provider === 'google_ai_studio')
+      .map((candidate) => candidate.model);
+
+    expect(googleModels).toEqual([
+      'gemini-3-flash-preview',
+      'gemini-2.5-flash-lite',
+      'gemini-2.5-pro',
+      'gemini-3.5-flash',
+    ]);
+
+    const options = buildGenerationOptionsPayload({ config });
+    expect(options.defaultModelByProvider.google_ai_studio).toBe('gemini-3-flash-preview');
+    const selectableModel = options.modelOptions.find(
+      (option) => option.provider === 'google_ai_studio' && option.id === 'gemini-3.5-flash',
+    );
+    expect(selectableModel?.tier).toBe('custom');
+    expect(selectableModel?.defaultSelected).toBe(false);
+  });
+
   it('uses workload-specific openai ladders for memory extraction and profile drafting', () => {
     const config = buildConfig();
 
