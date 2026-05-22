@@ -19,11 +19,12 @@ const {
 } = h;
 
 describe('application/process-queue-job', () => {
-  it('uses manifestMd from rerun payload when markdown is materialized from storage', async () => {
+  it('rejects rerun jobs that only have stored draft markdown', async () => {
     const initial = makeJob({
       state: 'queued',
       md: null,
       mdStorageUri: 's3://esl-notion-tts/drafts/draft-1.md',
+      sourceJobId: 'job-source',
     });
     getJobByIdSpy.mockResolvedValue(initial);
 
@@ -31,18 +32,18 @@ describe('application/process-queue-job', () => {
       state: 'running',
       md: null,
       mdStorageUri: 's3://esl-notion-tts/drafts/draft-1.md',
+      sourceJobId: 'job-source',
       startedAt: new Date('2024-01-01T10:01:00Z'),
     });
-    const succeeded = {
+    const failed = {
       ...running,
-      state: 'succeeded',
-      manifestPath: '/manifests/job-rerun-publish-storage.json',
+      state: 'failed',
+      error: 'Rerun job is missing an approved markdown source',
       finishedAt: new Date('2024-01-01T10:02:00Z'),
-      htmlUrl: 'https://example.com/job-rerun-publish-storage',
     };
     updateJobStateAndResultSpy
       .mockResolvedValueOnce(running as any)
-      .mockResolvedValueOnce(succeeded as any);
+      .mockResolvedValueOnce(failed as any);
 
     createTranscriptionStorageForUriSpy.mockReturnValue({
       getText: vi.fn().mockResolvedValue('# Draft from S3'),
@@ -53,21 +54,87 @@ describe('application/process-queue-job', () => {
       htmlUrl: 'https://example.com/job-rerun-publish-storage',
     });
 
-    await processQueueJob({
-      jobId: 'job-1',
-      executionMode: 'rerun',
+    await expect(
+      processQueueJob({
+        jobId: 'job-1',
+        executionMode: 'rerun',
+        sourceJobId: 'job-source',
+        rerun: {
+          manifestMd: '/tmp/source-assignment.md',
+          republishOnly: true,
+          upload: 's3',
+        },
+      }),
+    ).rejects.toThrow('Rerun job is missing an approved markdown source');
+
+    expect(createTranscriptionStorageForUriSpy).not.toHaveBeenCalled();
+    expect(runRerunAssignmentJobSpy).not.toHaveBeenCalled();
+  });
+
+  it('prefers the approved markdown path over stored draft text for reruns', async () => {
+    const uploadDir = await fs.mkdtemp(path.join(tmpdir(), 'esl-process-queue-rerun-md-'));
+    const approvedPath = path.join(uploadDir, 'approved.md');
+    await fs.writeFile(
+      approvedPath,
+      '---\nstudent: "Alice Nguyen"\n---\n\n# Approved assignment',
+      'utf8',
+    );
+
+    const initial = makeJob({
+      state: 'queued',
+      md: approvedPath,
+      mdStorageUri: 's3://esl-notion-tts/drafts/raw-placeholder-student.md',
       sourceJobId: 'job-source',
-      rerun: {
-        manifestMd: '/tmp/source-assignment.md',
-        republishOnly: true,
-        upload: 's3',
-      },
+    });
+    getJobByIdSpy.mockResolvedValue(initial);
+
+    const running = makeJob({
+      state: 'running',
+      md: approvedPath,
+      mdStorageUri: 's3://esl-notion-tts/drafts/raw-placeholder-student.md',
+      sourceJobId: 'job-source',
+      startedAt: new Date('2024-01-01T10:01:00Z'),
+    });
+    const succeeded = {
+      ...running,
+      state: 'succeeded',
+      manifestPath: '/manifests/job-rerun-approved-md.json',
+      finishedAt: new Date('2024-01-01T10:02:00Z'),
+      htmlUrl: 'https://example.com/job-rerun-approved-md',
+    };
+    updateJobStateAndResultSpy
+      .mockResolvedValueOnce(running as any)
+      .mockResolvedValueOnce(succeeded as any);
+
+    createTranscriptionStorageForUriSpy.mockReturnValue({
+      getText: vi.fn().mockResolvedValue('---\nstudent: student\n---\n\n# Raw draft'),
+    } as unknown as ReturnType<typeof transcriptionStorage.createTranscriptionStorageForUri>);
+
+    runRerunAssignmentJobSpy.mockResolvedValue({
+      manifestPath: '/manifests/job-rerun-approved-md.json',
+      htmlUrl: 'https://example.com/job-rerun-approved-md',
     });
 
-    expect(runRerunAssignmentJobSpy).toHaveBeenCalledTimes(1);
-    const [payload] = runRerunAssignmentJobSpy.mock.calls[0]!;
-    expect(path.isAbsolute(payload.md)).toBe(true);
-    expect(payload.manifestMd).toBe('/tmp/source-assignment.md');
+    try {
+      await processQueueJob({
+        jobId: 'job-1',
+        executionMode: 'rerun',
+        sourceJobId: 'job-source',
+        rerun: {
+          regeneratePronunciationChunkAudio: true,
+          manifestMd: approvedPath,
+          upload: 's3',
+        },
+      });
+
+      expect(createTranscriptionStorageForUriSpy).not.toHaveBeenCalled();
+      expect(runRerunAssignmentJobSpy).toHaveBeenCalledTimes(1);
+      const [payload] = runRerunAssignmentJobSpy.mock.calls[0]!;
+      expect(payload.md).toBe(approvedPath);
+      expect(payload.manifestMd).toBe(approvedPath);
+    } finally {
+      await fs.rm(uploadDir, { recursive: true, force: true });
+    }
   });
 
   it('normalizes relative manifestMd to the canonical resolved markdown path', async () => {
