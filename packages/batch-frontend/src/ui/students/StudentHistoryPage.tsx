@@ -4,8 +4,10 @@ import { Link } from 'react-router-dom';
 import {
   getStudentHistorySurface,
   getStudentTimeline,
+  listStudentProfileCandidates,
   type HomeworkMemoryRecord,
   type LessonMemoryRecord,
+  type StudentProfileCandidate,
   listStudentHomeworkMemoryEntries,
   listStudentLessonMemoryEntries,
   type StudentTimelineItem,
@@ -44,12 +46,14 @@ interface HistoryData {
   timeline: StudentTimelineItem[];
   lessons: LessonMemoryRecord[];
   homework: HomeworkMemoryRecord[];
+  candidates: StudentProfileCandidate[];
 }
 
 const EMPTY_HISTORY_DATA: HistoryData = {
   timeline: [],
   lessons: [],
   homework: [],
+  candidates: [],
 };
 
 const FILTERS: { key: HistoryFilter; label: string }[] = [
@@ -205,6 +209,44 @@ function homeworkToEvent(record: HomeworkMemoryRecord): HistoryEvent {
       ...(record.teacherFollowUpCues[0]
         ? [{ label: 'Teacher follow-up', value: record.teacherFollowUpCues[0].note }]
         : []),
+    ],
+  };
+}
+
+function candidateToEvent(record: StudentProfileCandidate): HistoryEvent | null {
+  const decision =
+    typeof record.dedupDecision?.decision === 'string' ? record.dedupDecision.decision : null;
+  const isDropped = decision === 'duplicate' || decision === 'stale';
+  if (!isDropped && !record.sourceLessonTitle && !record.sourceLessonId) {
+    return null;
+  }
+  const reason =
+    typeof record.dedupDecision?.reason === 'string' ? record.dedupDecision.reason : null;
+  return {
+    id: makeEventId('profile-candidate', record.id, record.createdAt),
+    category: 'profile',
+    createdAt: record.createdAt,
+    title: isDropped ? `Profile candidate dropped as ${decision}` : 'Profile candidate proposed',
+    subtitle: record.sourceLessonTitle ?? record.proposedFact,
+    summary: reason ?? truncateText(record.proposedFact, 210),
+    density: 'compact',
+    tone: isDropped ? 'amber' : 'green',
+    tags: compactList([decision, record.reviewState, record.targetSection], 3),
+    meta: [],
+    detailRows: [
+      { label: 'Candidate ID', value: record.id },
+      { label: 'Candidate fact', value: record.proposedFact },
+      ...(record.sourceLessonId
+        ? [{ label: 'Source lesson ID', value: record.sourceLessonId }]
+        : []),
+      ...(record.sourceLessonStartedAt
+        ? [{ label: 'Source lesson date', value: record.sourceLessonStartedAt }]
+        : []),
+      ...(record.sourceMemoryIds && record.sourceMemoryIds.length > 0
+        ? [{ label: 'Source memory IDs', value: record.sourceMemoryIds.join(', ') }]
+        : []),
+      ...(decision ? [{ label: 'Dedup decision', value: decision }] : []),
+      ...(reason ? [{ label: 'Dedup reason', value: reason }] : []),
     ],
   };
 }
@@ -435,6 +477,9 @@ function buildHistoryEvents(data: HistoryData): HistoryEvent[] {
   return [
     ...data.lessons.map(lessonToEvent),
     ...data.homework.map(homeworkToEvent),
+    ...data.candidates
+      .map(candidateToEvent)
+      .filter((event): event is HistoryEvent => Boolean(event)),
     ...timelineEvents,
   ].sort((left, right) => {
     const leftTime = new Date(left.createdAt).getTime();
@@ -589,7 +634,10 @@ export const StudentHistoryPage: React.FC = () => {
 
     const loadHistory = async () => {
       try {
-        const surface = await getStudentHistorySurface(studentId);
+        const [surface, candidates] = await Promise.all([
+          getStudentHistorySurface(studentId),
+          listStudentProfileCandidates(studentId, { limit: 100, offset: 0, order: 'desc' }),
+        ]);
 
         if (latestHistoryRequestRef.current !== requestId) {
           return;
@@ -599,6 +647,7 @@ export const StudentHistoryPage: React.FC = () => {
           timeline: surface.timeline.items,
           lessons: surface.lessonMemory.items,
           homework: surface.homeworkMemory.items,
+          candidates: candidates.items,
         });
         setLoadedStudentId(studentId);
         setHistoryError(null);
@@ -606,21 +655,23 @@ export const StudentHistoryPage: React.FC = () => {
         if (latestHistoryRequestRef.current !== requestId) {
           return;
         }
-        const [timelineResult, lessonResult, homeworkResult] = await Promise.allSettled([
-          getStudentTimeline(studentId, { limit: 100, offset: 0, order: 'desc' }),
-          listStudentLessonMemoryEntries(studentId, {
-            status: 'ready',
-            limit: 60,
-            offset: 0,
-            order: 'desc',
-          }),
-          listStudentHomeworkMemoryEntries(studentId, {
-            status: 'ready',
-            limit: 60,
-            offset: 0,
-            order: 'desc',
-          }),
-        ]);
+        const [timelineResult, lessonResult, homeworkResult, candidatesResult] =
+          await Promise.allSettled([
+            getStudentTimeline(studentId, { limit: 100, offset: 0, order: 'desc' }),
+            listStudentLessonMemoryEntries(studentId, {
+              status: 'ready',
+              limit: 60,
+              offset: 0,
+              order: 'desc',
+            }),
+            listStudentHomeworkMemoryEntries(studentId, {
+              status: 'ready',
+              limit: 60,
+              offset: 0,
+              order: 'desc',
+            }),
+            listStudentProfileCandidates(studentId, { limit: 100, offset: 0, order: 'desc' }),
+          ]);
         if (latestHistoryRequestRef.current !== requestId) {
           return;
         }
@@ -628,10 +679,11 @@ export const StudentHistoryPage: React.FC = () => {
           timeline: timelineResult.status === 'fulfilled' ? timelineResult.value.items : [],
           lessons: lessonResult.status === 'fulfilled' ? lessonResult.value.items : [],
           homework: homeworkResult.status === 'fulfilled' ? homeworkResult.value.items : [],
+          candidates: candidatesResult.status === 'fulfilled' ? candidatesResult.value.items : [],
         });
         setLoadedStudentId(studentId);
         setHistoryError(
-          [timelineResult, lessonResult, homeworkResult].some(
+          [timelineResult, lessonResult, homeworkResult, candidatesResult].some(
             (result) => result.status === 'rejected',
           )
             ? 'Some history context could not be loaded.'

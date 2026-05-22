@@ -745,6 +745,12 @@ CREATE TABLE public.student_profile_candidates (
     review_needed boolean DEFAULT true NOT NULL,
     source_snapshot_id uuid,
     source_lesson_memory_ids uuid[] DEFAULT '{}'::uuid[] NOT NULL,
+    source_lesson_id uuid,
+    source_lesson_started_at timestamp with time zone,
+    source_lesson_title text,
+    source_memory_ids uuid[] DEFAULT ARRAY[]::uuid[] NOT NULL,
+    provenance jsonb DEFAULT '{}'::jsonb NOT NULL,
+    dedup_decision jsonb DEFAULT '{}'::jsonb NOT NULL,
     evidence jsonb DEFAULT '[]'::jsonb NOT NULL,
     status text DEFAULT 'pending_review'::text NOT NULL,
     review_state text DEFAULT 'unreviewed'::text NOT NULL,
@@ -1208,6 +1214,10 @@ CREATE INDEX idx_student_profile_candidates_student_candidate_key ON public.stud
 
 CREATE INDEX idx_student_profile_candidates_student_created_at ON public.student_profile_candidates USING btree (student_id, created_at DESC, id DESC);
 
+CREATE INDEX idx_student_profile_candidates_dedup_decision ON public.student_profile_candidates USING btree (student_id, status, created_at DESC, id DESC) WHERE (dedup_decision <> '{}'::jsonb);
+
+CREATE INDEX idx_student_profile_candidates_source_lesson ON public.student_profile_candidates USING btree (student_id, source_lesson_id, created_at DESC, id DESC) WHERE (source_lesson_id IS NOT NULL);
+
 CREATE INDEX idx_student_profile_candidates_student_review_state_created_at ON public.student_profile_candidates USING btree (student_id, review_state, created_at DESC, id DESC);
 
 CREATE INDEX idx_student_profile_candidates_student_status_created_at ON public.student_profile_candidates USING btree (student_id, status, created_at DESC, id DESC);
@@ -1504,6 +1514,9 @@ ALTER TABLE ONLY public.student_profile_candidates
     ADD CONSTRAINT student_profile_candidates_promoted_revision_id_fkey FOREIGN KEY (promoted_revision_id) REFERENCES public.profile_revisions(id) ON DELETE SET NULL;
 
 ALTER TABLE ONLY public.student_profile_candidates
+    ADD CONSTRAINT student_profile_candidates_source_lesson_id_fkey FOREIGN KEY (source_lesson_id) REFERENCES public.student_lessons(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.student_profile_candidates
     ADD CONSTRAINT student_profile_candidates_reviewer_id_fkey FOREIGN KEY (reviewer_id) REFERENCES public.users(id) ON DELETE SET NULL;
 
 ALTER TABLE ONLY public.student_profile_candidates
@@ -1670,5 +1683,6 @@ VALUES
   ('0030_lesson_assignment_linkage', '911668bc4cde7c277df35c1be17aaff84067eee9fa0a85da6dbd09545f3f3622', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0031_pg_stat_statements_observability', 'ad512b286919b89eda1c4eb6c2762884ca4e4bac6e7eb56d4655c726f3cce558', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0032_student_reminder_suppression', '881d242f174bea55a6313f064f436ac623937152327d7f6941d508790e995a86', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0033_prompt_template_default', 'dc002e1ad504ac9d4c50426cc097517250c58f6e910151c5a77359a500062d26', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0033_prompt_template_default', 'dc002e1ad504ac9d4c50426cc097517250c58f6e910151c5a77359a500062d26', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0034_profile_candidate_provenance_audit', 'd49bd4047afe5bac9b0b9a521fc5f74b46a6cc5d550c719e8ba5435b4e48de60', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;

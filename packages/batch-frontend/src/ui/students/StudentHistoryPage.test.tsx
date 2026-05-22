@@ -8,6 +8,7 @@ import { StudentHistoryPage } from './StudentHistoryPage';
 const apiMocks = vi.hoisted(() => ({
   getStudentHistorySurface: vi.fn(),
   getStudentTimeline: vi.fn(),
+  listStudentProfileCandidates: vi.fn(),
   listStudentHomeworkMemoryEntries: vi.fn(),
   listStudentLessonMemoryEntries: vi.fn(),
 }));
@@ -322,6 +323,45 @@ function seedHistoryMocks() {
     offset: 0,
     order: 'desc',
   });
+
+  apiMocks.listStudentProfileCandidates.mockResolvedValue({
+    studentId: 'student-daria',
+    items: [
+      {
+        id: 'candidate-dropped-1',
+        studentId: 'student-daria',
+        proposedFact: 'Already uses English in client meetings.',
+        approvedFactText: null,
+        category: 'work',
+        targetSection: 'work_communication_context',
+        sourceSummary: 'Client practice',
+        authority: 'teacher_confirmed',
+        confidence: 'high',
+        evidence: [],
+        sourceSnapshotId: 'snapshot-1',
+        sourceLessonMemoryIds: ['lesson-memory-2'],
+        sourceLessonId: 'lesson-2',
+        sourceLessonStartedAt: '2026-04-18T08:00:00.000Z',
+        sourceLessonTitle: 'Client practice',
+        sourceMemoryIds: ['lesson-memory-2'],
+        provenance: {
+          sourceKind: 'latest_lesson_memory',
+        },
+        dedupDecision: {
+          decision: 'duplicate',
+          reason: 'Existing profile candidate already covers this fact.',
+        },
+        status: 'rejected',
+        reviewState: 'rejected',
+        createdAt: '2026-04-18T08:30:00.000Z',
+        updatedAt: '2026-04-18T08:30:00.000Z',
+      },
+    ],
+    total: 1,
+    limit: 100,
+    offset: 0,
+    order: 'desc',
+  });
 }
 
 function renderHistory() {
@@ -374,6 +414,7 @@ describe('StudentHistoryPage', () => {
     expect(screen.getByText('Payment received')).toBeTruthy();
     expect(screen.getByText('Business settings updated')).toBeTruthy();
     expect(screen.getByText('Reminder hidden')).toBeTruthy();
+    expect(screen.getByText('Profile candidate dropped as duplicate')).toBeTruthy();
     expect(screen.getAllByText(/^\d{2}:\d{2}$/).length).toBeGreaterThan(0);
     expect(screen.queryByText(/\b(?:AM|PM)\b/)).toBeNull();
     expect(screen.queryByText('recording_ingested')).toBeNull();
@@ -401,6 +442,11 @@ describe('StudentHistoryPage', () => {
     expect(apiMocks.listStudentHomeworkMemoryEntries).toHaveBeenCalledWith('student-daria', {
       status: 'ready',
       limit: 60,
+      offset: 0,
+      order: 'desc',
+    });
+    expect(apiMocks.listStudentProfileCandidates).toHaveBeenCalledWith('student-daria', {
+      limit: 100,
       offset: 0,
       order: 'desc',
     });
@@ -498,6 +544,14 @@ describe('StudentHistoryPage', () => {
       offset: 0,
       order: 'desc',
       statuses: ['ready'],
+    });
+    apiMocks.listStudentProfileCandidates.mockResolvedValue({
+      studentId: 'student-daria',
+      items: [],
+      total: 0,
+      limit: 100,
+      offset: 0,
+      order: 'desc',
     });
 
     renderHistory();

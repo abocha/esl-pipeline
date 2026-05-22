@@ -30,6 +30,12 @@ interface StudentProfileCandidateRow {
   review_needed: boolean;
   source_snapshot_id: string | null;
   source_lesson_memory_ids: string[] | null;
+  source_lesson_id: string | null;
+  source_lesson_started_at: Date | null;
+  source_lesson_title: string | null;
+  source_memory_ids: string[] | null;
+  provenance: Record<string, unknown> | null;
+  dedup_decision: Record<string, unknown> | null;
   evidence: FactEvidence[] | null;
   status: string;
   review_state: string;
@@ -56,6 +62,12 @@ export interface InsertStudentProfileCandidateParams {
   reviewNeeded: boolean;
   sourceSnapshotId?: string | null;
   sourceLessonMemoryIds?: string[];
+  sourceLessonId?: string | null;
+  sourceLessonStartedAt?: Date | null;
+  sourceLessonTitle?: string | null;
+  sourceMemoryIds?: string[];
+  provenance?: Record<string, unknown>;
+  dedupDecision?: Record<string, unknown>;
   evidence?: FactEvidence[];
   status?: StudentProfileCandidateStatus;
   reviewState?: StudentProfileCandidateReviewState;
@@ -115,6 +127,12 @@ const SELECT_COLUMNS = `
   review_needed,
   source_snapshot_id,
   source_lesson_memory_ids,
+  source_lesson_id,
+  source_lesson_started_at,
+  source_lesson_title,
+  source_memory_ids,
+  provenance,
+  dedup_decision,
   evidence,
   status,
   review_state,
@@ -148,12 +166,18 @@ export async function insertStudentProfileCandidate(
         review_needed,
         source_snapshot_id,
         source_lesson_memory_ids,
+        source_lesson_id,
+        source_lesson_started_at,
+        source_lesson_title,
+        source_memory_ids,
+        provenance,
+        dedup_decision,
         evidence,
         status,
         review_state
       )
       VALUES (
-        $1, $2, $3, $4, $5, NULL, $6, $7, $8, $9, $10, $11, $12, $13, $14
+        $1, $2, $3, $4, $5, NULL, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20
       )
       RETURNING ${SELECT_COLUMNS}
       `,
@@ -169,6 +193,12 @@ export async function insertStudentProfileCandidate(
         params.reviewNeeded,
         params.sourceSnapshotId ?? null,
         params.sourceLessonMemoryIds ?? [],
+        params.sourceLessonId ?? null,
+        params.sourceLessonStartedAt ?? null,
+        params.sourceLessonTitle ?? null,
+        params.sourceMemoryIds ?? params.sourceLessonMemoryIds ?? [],
+        JSON.stringify(params.provenance ?? {}),
+        JSON.stringify(params.dedupDecision ?? {}),
         JSON.stringify(params.evidence ?? []),
         params.status ?? 'pending_review',
         params.reviewState ?? 'unreviewed',
@@ -467,6 +497,12 @@ function mapRow(row: StudentProfileCandidateRow): StudentProfileCandidateRecord 
     reviewNeeded: row.review_needed,
     sourceSnapshotId: row.source_snapshot_id,
     sourceLessonMemoryIds: row.source_lesson_memory_ids ?? [],
+    sourceLessonId: row.source_lesson_id,
+    sourceLessonStartedAt: row.source_lesson_started_at,
+    sourceLessonTitle: row.source_lesson_title,
+    sourceMemoryIds: row.source_memory_ids ?? [],
+    provenance: row.provenance ?? {},
+    dedupDecision: row.dedup_decision ?? {},
     evidence: row.evidence ?? [],
     status: StudentProfileCandidateStatusSchema.parse(row.status),
     reviewState: StudentProfileCandidateReviewStateSchema.parse(row.review_state),
