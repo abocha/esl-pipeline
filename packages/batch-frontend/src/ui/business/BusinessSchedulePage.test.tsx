@@ -6,6 +6,8 @@ import { BusinessSchedulePage } from './BusinessSchedulePage';
 
 const apiMocks = vi.hoisted(() => ({
   getBusinessScheduleSurface: vi.fn(),
+  hideStudentLessonFollowupReminder: vi.fn(),
+  undoLatestHiddenStudentReminder: vi.fn(),
   updateStudentLesson: vi.fn(),
 }));
 const navigateMock = vi.hoisted(() => vi.fn());
@@ -115,6 +117,7 @@ function makeSurface(overrides: Record<string, unknown> = {}) {
         method: null,
       },
     ],
+    latestHiddenReminder: null,
     ...overrides,
   };
 }
@@ -235,6 +238,11 @@ describe('BusinessSchedulePage', () => {
             severity: 'attention',
             title: 'Finish lesson follow-up',
             message: 'The scheduled lesson time has passed and homework is not published yet.',
+            lessonSummary: {
+              lessonId: 'lesson-1',
+              startsAt: '2026-05-08T10:00:00.000Z',
+              title: 'Present perfect review',
+            },
             copyText: 'Complete Alex lesson and start homework.',
           },
         ],
@@ -255,6 +263,77 @@ describe('BusinessSchedulePage', () => {
         consumesCredit: true,
       });
       expect(navigateMock).toHaveBeenCalledWith('/?studentId=student-alex&lessonId=lesson-1');
+    });
+  });
+
+  it('shows lesson context, hides business reminders, and undoes the latest hidden reminder', async () => {
+    apiMocks.getBusinessScheduleSurface
+      .mockResolvedValueOnce(
+        makeSurface({
+          reminders: [
+            {
+              studentId: 'student-alex',
+              studentName: 'Alex',
+              studentScheduleBillingPath: '/students/student-alex/schedule-billing',
+              remainingCredits: 0,
+              type: 'lesson_followup',
+              channel: 'manual',
+              actionIntent: 'complete_lesson_and_start_assignment',
+              lessonId: 'lesson-1',
+              lessonStatus: 'scheduled',
+              lessonConsumesCredit: true,
+              severity: 'attention',
+              title: 'Finish lesson follow-up',
+              message: 'The scheduled lesson time has passed and homework is not published yet.',
+              lessonSummary: {
+                lessonId: 'lesson-1',
+                startsAt: '2026-05-08T10:00:00.000Z',
+                title: 'Present perfect review',
+              },
+              copyText: 'Complete Alex lesson and start homework.',
+            },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(
+        makeSurface({
+          reminders: [],
+          latestHiddenReminder: {
+            studentId: 'student-alex',
+            studentName: 'Alex',
+            type: 'lesson_followup',
+            lessonId: 'lesson-1',
+            lessonSummary: {
+              lessonId: 'lesson-1',
+              startsAt: '2026-05-08T10:00:00.000Z',
+              title: 'Present perfect review',
+            },
+          },
+        }),
+      )
+      .mockResolvedValueOnce(makeSurface());
+    apiMocks.hideStudentLessonFollowupReminder.mockResolvedValue({});
+    apiMocks.undoLatestHiddenStudentReminder.mockResolvedValue({});
+
+    render(
+      <MemoryRouter>
+        <BusinessSchedulePage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText(/Present perfect review/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Hide' }));
+
+    await waitFor(() => {
+      expect(apiMocks.hideStudentLessonFollowupReminder).toHaveBeenCalledWith(
+        'student-alex',
+        'lesson-1',
+      );
+    });
+    fireEvent.click(await screen.findByRole('button', { name: 'Undo hide' }));
+
+    await waitFor(() => {
+      expect(apiMocks.undoLatestHiddenStudentReminder).toHaveBeenCalledWith('student-alex');
     });
   });
 

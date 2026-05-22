@@ -2533,6 +2533,41 @@ export async function updateStudentLesson(
   }
 }
 
+export async function hideStudentLessonFollowupReminder(
+  studentId: string,
+  lessonId: string,
+): Promise<StudentScheduleBillingSurface> {
+  try {
+    const response = await apiClient.put(
+      buildApiProxyPath(
+        `/students/${encodeURIComponent(
+          studentId,
+        )}/operations/reminders/lesson-followup/${encodeURIComponent(lessonId)}/hide`,
+      ),
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function undoLatestHiddenStudentReminder(
+  studentId: string,
+): Promise<StudentScheduleBillingSurface> {
+  try {
+    const response = await apiClient.put(
+      buildApiProxyPath(
+        `/students/${encodeURIComponent(studentId)}/operations/reminders/latest-hidden/undo`,
+      ),
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
 export async function addStudentPackage(
   studentId: string,
   body: StudentPackageCreate,

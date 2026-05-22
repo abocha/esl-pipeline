@@ -7,6 +7,7 @@ import type {
   RecordStudentPaymentRequest,
   StudentCreditEventDto,
   StudentCreditSummaryDto,
+  StudentLatestHiddenReminderDto,
   StudentLessonDto,
   StudentLessonHomeworkDto,
   StudentLessonHomeworkStatus,
@@ -15,6 +16,7 @@ import type {
   StudentLessonRecurrenceSlotDto,
   StudentLessonStatus,
   StudentPaymentRecordDto,
+  StudentReminderLessonSummaryDto,
   StudentReminderRecommendationDto,
   StudentScheduleBillingSurfaceResponse,
   UpdateStudentLessonPlanRequest,
@@ -144,6 +146,10 @@ interface ReminderPreferences {
   enableUpcomingLesson: boolean;
   enableLowBalance: boolean;
   enablePaymentFollowup: boolean;
+  hiddenLessonFollowupKeys: Set<string>;
+  latestHiddenLessonFollowupKey: string | null;
+  latestHiddenLessonFollowupLessonId: string | null;
+  latestHiddenLessonFollowupAt: Date | null;
 }
 
 export class StudentScheduleBillingError extends Error {
@@ -243,6 +249,53 @@ export async function getStudentScheduleBillingSurface(
   return withPgClient(async (client) => {
     const context = await getStudentContext(client, studentId);
     if (!context) return null;
+    return getSurfaceForContext(client, context);
+  });
+}
+
+export async function hideStudentLessonFollowupReminder(
+  studentId: string,
+  lessonId: string,
+  actorUserId?: string | null,
+): Promise<StudentScheduleBillingSurfaceResponse> {
+  return withPgTransaction(async (client) => {
+    const context = await requireStudentContext(client, studentId);
+    const lesson = await getLessonRow(client, studentId, lessonId);
+    if (!lesson) {
+      throw new StudentScheduleBillingError('not_found', 404, 'Lesson not found');
+    }
+    await upsertReminderSuppression(client, context, {
+      suppressionKey: getLessonFollowupSuppressionKey(context, lesson.id),
+      lessonId: lesson.id,
+      actorUserId: actorUserId ?? null,
+    });
+    return getSurfaceForContext(client, context);
+  });
+}
+
+export async function undoLatestHiddenStudentReminder(
+  studentId: string,
+  actorUserId?: string | null,
+): Promise<StudentScheduleBillingSurfaceResponse> {
+  return withPgTransaction(async (client) => {
+    const context = await requireStudentContext(client, studentId);
+    const prefs = await getReminderPreferences(client, context);
+    if (!prefs.latestHiddenLessonFollowupKey) {
+      return getSurfaceForContext(client, context);
+    }
+    await client.query(
+      `
+      UPDATE student_reminder_preferences
+      SET hidden_lesson_followup_keys = array_remove(hidden_lesson_followup_keys, $2),
+          latest_hidden_lesson_followup_key = NULL,
+          latest_hidden_lesson_followup_lesson_id = NULL,
+          latest_hidden_lesson_followup_at = NULL,
+          updated_by = $3,
+          updated_at = NOW()
+      WHERE student_id = $1
+      `,
+      [context.id, prefs.latestHiddenLessonFollowupKey, actorUserId ?? null],
+    );
     return getSurfaceForContext(client, context);
   });
 }
@@ -574,10 +627,17 @@ async function getSurfaceForContext(
   const recurrenceRule = await getPrimaryRecurrenceRule(client, context.id);
   const nextLesson = await getNextLesson(client, context.id);
   const lessons = await listLessons(client, context.id);
-  const elapsedHomeworkFollowups = await listOverdueLessonHomeworkFollowups(client, context.id);
   const creditEvents = await listCreditEvents(client, context.id);
   const payments = await listPayments(client, context.id);
   const reminderPrefs = await getReminderPreferences(client, context);
+  const elapsedHomeworkFollowups = (
+    await listOverdueLessonHomeworkFollowups(client, context.id)
+  ).filter(
+    (lesson) =>
+      !reminderPrefs.hiddenLessonFollowupKeys.has(
+        getLessonFollowupSuppressionKey(context, lesson.id),
+      ),
+  );
   const creditSummary = await getCreditSummary(
     client,
     context.id,
@@ -594,6 +654,7 @@ async function getSurfaceForContext(
     creditSummary,
     creditEvents: creditEvents.map((event) => mapCreditEvent(event)),
     payments: payments.map((payment) => mapPayment(payment)),
+    latestHiddenReminder: await getLatestHiddenReminder(client, context, reminderPrefs),
     reminders: buildReminderRecommendations({
       studentName: context.name,
       nextLesson,
@@ -941,10 +1002,16 @@ async function getReminderPreferences(
     enable_upcoming_lesson: boolean;
     enable_low_balance: boolean;
     enable_payment_followup: boolean;
+    hidden_lesson_followup_keys: string[];
+    latest_hidden_lesson_followup_key: string | null;
+    latest_hidden_lesson_followup_lesson_id: string | null;
+    latest_hidden_lesson_followup_at: Date | null;
   }>(
     `
     SELECT preferred_channel, low_balance_threshold, enable_upcoming_lesson,
-           enable_low_balance, enable_payment_followup
+           enable_low_balance, enable_payment_followup, hidden_lesson_followup_keys,
+           latest_hidden_lesson_followup_key, latest_hidden_lesson_followup_lesson_id,
+           latest_hidden_lesson_followup_at
     FROM student_reminder_preferences
     WHERE student_id = $1
     `,
@@ -956,6 +1023,11 @@ async function getReminderPreferences(
     enableUpcomingLesson: result.rows[0]?.enable_upcoming_lesson ?? true,
     enableLowBalance: result.rows[0]?.enable_low_balance ?? true,
     enablePaymentFollowup: result.rows[0]?.enable_payment_followup ?? true,
+    hiddenLessonFollowupKeys: new Set(result.rows[0]?.hidden_lesson_followup_keys ?? []),
+    latestHiddenLessonFollowupKey: result.rows[0]?.latest_hidden_lesson_followup_key ?? null,
+    latestHiddenLessonFollowupLessonId:
+      result.rows[0]?.latest_hidden_lesson_followup_lesson_id ?? null,
+    latestHiddenLessonFollowupAt: result.rows[0]?.latest_hidden_lesson_followup_at ?? null,
   };
 }
 
@@ -1283,6 +1355,7 @@ function buildReminderRecommendations(params: {
       lessonId: lesson.id,
       lessonStatus: lesson.status,
       lessonConsumesCredit: lesson.consumes_credit,
+      lessonSummary: mapLessonSummary(lesson),
       severity: 'attention',
       title: 'Finish lesson follow-up',
       message: 'The scheduled lesson time has passed and homework is not published yet.',
@@ -1290,6 +1363,79 @@ function buildReminderRecommendations(params: {
     });
   }
   return recommendations;
+}
+
+async function upsertReminderSuppression(
+  client: PoolClient,
+  context: StudentContext,
+  params: {
+    suppressionKey: string;
+    lessonId: string;
+    actorUserId: string | null;
+  },
+): Promise<void> {
+  await client.query(
+    `
+    INSERT INTO student_reminder_preferences (
+      student_id,
+      workspace_id,
+      hidden_lesson_followup_keys,
+      latest_hidden_lesson_followup_key,
+      latest_hidden_lesson_followup_lesson_id,
+      latest_hidden_lesson_followup_at,
+      updated_by
+    )
+    VALUES ($1, $2, ARRAY[$3]::text[], $3, $4, NOW(), $5)
+    ON CONFLICT (student_id) DO UPDATE
+    SET workspace_id = EXCLUDED.workspace_id,
+        hidden_lesson_followup_keys = CASE
+          WHEN student_reminder_preferences.hidden_lesson_followup_keys @> ARRAY[$3]::text[]
+            THEN student_reminder_preferences.hidden_lesson_followup_keys
+          ELSE array_append(student_reminder_preferences.hidden_lesson_followup_keys, $3)
+        END,
+        latest_hidden_lesson_followup_key = $3,
+        latest_hidden_lesson_followup_lesson_id = $4,
+        latest_hidden_lesson_followup_at = NOW(),
+        updated_by = $5,
+        updated_at = NOW()
+    `,
+    [context.id, context.workspaceId, params.suppressionKey, params.lessonId, params.actorUserId],
+  );
+}
+
+async function getLatestHiddenReminder(
+  client: PoolClient,
+  context: StudentContext,
+  prefs: ReminderPreferences,
+): Promise<StudentLatestHiddenReminderDto | null> {
+  if (!prefs.latestHiddenLessonFollowupLessonId) return null;
+  const lesson = await getLessonRow(client, context.id, prefs.latestHiddenLessonFollowupLessonId);
+  return {
+    type: 'lesson_followup',
+    lessonId: prefs.latestHiddenLessonFollowupLessonId,
+    hiddenAt: prefs.latestHiddenLessonFollowupAt
+      ? prefs.latestHiddenLessonFollowupAt.toISOString()
+      : null,
+    lessonSummary: lesson ? mapLessonSummary(lesson) : null,
+  };
+}
+
+function getLessonFollowupSuppressionKey(context: StudentContext, lessonId: string): string {
+  return [
+    context.workspaceId ?? DEFAULT_WORKSPACE_ID,
+    context.id,
+    lessonId,
+    'lesson_followup',
+  ].join(':');
+}
+
+function mapLessonSummary(row: LessonRow): StudentReminderLessonSummaryDto {
+  return {
+    lessonId: row.id,
+    startsAt: row.starts_at ? row.starts_at.toISOString() : null,
+    durationMinutes: row.duration_minutes ?? null,
+    title: row.title ?? null,
+  };
 }
 
 async function ensureDefaultWorkspace(client: PoolClient): Promise<void> {
