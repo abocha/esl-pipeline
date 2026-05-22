@@ -12,6 +12,8 @@ import {
   adjustStudentCredits,
   createStudentLesson,
   getStudentScheduleBillingSurface,
+  hideStudentLessonFollowupReminder,
+  undoLatestHiddenStudentReminder,
   updateStudentLesson,
   upsertPrimaryStudentLessonRecurrence,
 } from '../src/application/student-schedule-billing.js';
@@ -141,6 +143,7 @@ async function insertBusinessLesson(params: {
   status?: 'scheduled' | 'completed' | 'canceled' | 'no_show';
   consumesCredit?: boolean;
   durationMinutes?: number;
+  title?: string | null;
 }) {
   const id = randomUUID();
   await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
@@ -153,9 +156,10 @@ async function insertBusinessLesson(params: {
         starts_at,
         duration_minutes,
         status,
-        consumes_credit
+        consumes_credit,
+        title
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       `,
       [
         id,
@@ -165,6 +169,7 @@ async function insertBusinessLesson(params: {
         params.durationMinutes ?? 60,
         params.status ?? 'scheduled',
         params.consumesCredit ?? false,
+        params.title ?? null,
       ],
     );
   });
@@ -455,6 +460,7 @@ describeIfPg('application/student-schedule-billing', () => {
       studentId,
       startsAt: '2000-01-01T10:00:00.000Z',
       consumesCredit: true,
+      title: 'Present perfect review',
     });
     await insertBusinessLesson({
       studentId,
@@ -474,6 +480,11 @@ describeIfPg('application/student-schedule-billing', () => {
       lessonStatus: 'scheduled',
       lessonConsumesCredit: true,
       title: 'Finish lesson follow-up',
+      lessonSummary: {
+        lessonId: elapsedLessonId,
+        startsAt: '2000-01-01T10:00:00.000Z',
+        title: 'Present perfect review',
+      },
     });
     expect(
       surface?.lessons.find((lesson) => lesson.id === elapsedLessonId)?.homework,
@@ -633,6 +644,64 @@ describeIfPg('application/student-schedule-billing', () => {
       type: 'low_balance',
       channel: 'email',
     });
+  });
+
+  it('hides lesson follow-up reminders by lesson key and only exposes the latest hidden reminder for undo', async () => {
+    const { studentId, userId } = await seedStudent();
+    const firstLessonId = await insertBusinessLesson({
+      studentId,
+      startsAt: '2000-01-01T10:00:00.000Z',
+      title: 'First follow-up',
+    });
+    const secondLessonId = await insertBusinessLesson({
+      studentId,
+      startsAt: '2000-01-02T10:00:00.000Z',
+      title: 'Second follow-up',
+    });
+
+    const hiddenOnce = await hideStudentLessonFollowupReminder(studentId, firstLessonId, userId);
+    expect(
+      hiddenOnce.reminders.some(
+        (reminder) => reminder.type === 'lesson_followup' && reminder.lessonId === firstLessonId,
+      ),
+    ).toBe(false);
+    expect(hiddenOnce.latestHiddenReminder).toMatchObject({
+      type: 'lesson_followup',
+      lessonId: firstLessonId,
+      lessonSummary: {
+        lessonId: firstLessonId,
+        title: 'First follow-up',
+      },
+    });
+
+    const hiddenTwice = await hideStudentLessonFollowupReminder(studentId, secondLessonId, userId);
+    expect(hiddenTwice.latestHiddenReminder).toMatchObject({
+      type: 'lesson_followup',
+      lessonId: secondLessonId,
+    });
+
+    const reloaded = await getStudentScheduleBillingSurface(studentId);
+    expect(
+      reloaded?.reminders.some(
+        (reminder) =>
+          reminder.type === 'lesson_followup' &&
+          (reminder.lessonId === firstLessonId || reminder.lessonId === secondLessonId),
+      ),
+    ).toBe(false);
+    expect(reloaded?.latestHiddenReminder?.lessonId).toBe(secondLessonId);
+
+    const undone = await undoLatestHiddenStudentReminder(studentId, userId);
+    expect(undone.latestHiddenReminder).toBeNull();
+    expect(
+      undone.reminders.some(
+        (reminder) => reminder.type === 'lesson_followup' && reminder.lessonId === secondLessonId,
+      ),
+    ).toBe(true);
+    expect(
+      undone.reminders.some(
+        (reminder) => reminder.type === 'lesson_followup' && reminder.lessonId === firstLessonId,
+      ),
+    ).toBe(false);
   });
 
   it('materializes weekly recurrence rules idempotently into normal lessons', async () => {
@@ -1023,6 +1092,33 @@ describeIfPg('application/student-schedule-billing', () => {
       ),
     ).toBe(false);
     expect(jobId).toBeTruthy();
+  });
+
+  it('shares hidden lesson follow-up reminders with the business reminder queue', async () => {
+    const { studentId, userId } = await seedStudent();
+    const lessonId = await insertBusinessLesson({
+      studentId,
+      startsAt: '2000-01-01T10:00:00.000Z',
+      title: 'Shared hidden follow-up',
+    });
+
+    await hideStudentLessonFollowupReminder(studentId, lessonId, userId);
+    const surface = await getBusinessScheduleSurface();
+
+    expect(
+      surface.reminders.some(
+        (reminder) => reminder.type === 'lesson_followup' && reminder.lessonId === lessonId,
+      ),
+    ).toBe(false);
+    expect(surface.latestHiddenReminder).toMatchObject({
+      type: 'lesson_followup',
+      lessonId,
+      studentId,
+      lessonSummary: {
+        lessonId,
+        title: 'Shared hidden follow-up',
+      },
+    });
   });
 
   it('caps business follow-up reminders after suppressing already published overdue lessons', async () => {

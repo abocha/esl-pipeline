@@ -1019,10 +1019,12 @@ export function useMinimalAssignmentAuthoringController({
       if (generationRequestVersionRef.current !== requestVersion) {
         return null;
       }
+      const generatedText = generated.text ?? '';
+      draftTextRef.current = generatedText;
       dispatch({
         type: 'draft_generate_succeeded',
         payload: {
-          draftText: generated.text ?? '',
+          draftText: generatedText,
           quota: generated.quota ?? null,
           runtimeSelection: {
             provider: generated.provider,

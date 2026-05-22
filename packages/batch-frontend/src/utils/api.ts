@@ -288,6 +288,7 @@ export interface TemplateContentOption {
 
 export interface TemplateContentListResponse {
   templates: TemplateContentOption[];
+  defaultTemplateId?: string | null;
 }
 
 export interface TemplateContentResponse {
@@ -341,7 +342,18 @@ export type StudentTimelineType =
   | 'template_revision_activated'
   | 'job_action_rerun'
   | 'job_action_cancel'
-  | 'job_action_edit_metadata';
+  | 'job_action_edit_metadata'
+  | 'lesson_created'
+  | 'lesson_updated'
+  | 'lesson_completed'
+  | 'lesson_canceled'
+  | 'lesson_no_show'
+  | 'lesson_plan_updated'
+  | 'lesson_recurrence_updated'
+  | 'credit_event_recorded'
+  | 'payment_recorded'
+  | 'reminder_hidden'
+  | 'business_settings_updated';
 
 export interface StudentTimelineItem {
   type: StudentTimelineType;
@@ -683,6 +695,12 @@ export interface StudentProfileCandidate {
   evidence: StudentProfileCandidateEvidence[];
   sourceSnapshotId?: string | null;
   sourceLessonMemoryIds: string[];
+  sourceLessonId?: string | null;
+  sourceLessonStartedAt?: string | null;
+  sourceLessonTitle?: string | null;
+  sourceMemoryIds?: string[];
+  provenance?: Record<string, unknown>;
+  dedupDecision?: Record<string, unknown>;
   status: StudentProfileCandidateStatus;
   reviewState: StudentProfileCandidateReviewState;
   reviewerId?: string | null;
@@ -710,6 +728,12 @@ interface StudentProfileCandidateApiRecord {
   evidence: StudentProfileCandidateEvidence[];
   sourceSnapshotId?: string | null;
   sourceLessonMemoryIds: string[];
+  sourceLessonId?: string | null;
+  sourceLessonStartedAt?: string | null;
+  sourceLessonTitle?: string | null;
+  sourceMemoryIds?: string[];
+  provenance?: Record<string, unknown>;
+  dedupDecision?: Record<string, unknown>;
   status: StudentProfileCandidateStatus;
   reviewState: StudentProfileCandidateReviewState;
   reviewerId?: string | null;
@@ -787,6 +811,9 @@ function buildCandidateSourceSummary(record: StudentProfileCandidateApiRecord): 
     const lessonCount = record.sourceLessonMemoryIds.length;
     parts.push(`${lessonCount} lesson memory entr${lessonCount === 1 ? 'y' : 'ies'}`);
   }
+  if (record.sourceLessonTitle) {
+    parts.push(record.sourceLessonTitle);
+  }
 
   return parts.length > 0 ? parts.join(' + ') : null;
 }
@@ -807,6 +834,12 @@ function mapStudentProfileCandidate(
     evidence: record.evidence ?? [],
     sourceSnapshotId: record.sourceSnapshotId ?? null,
     sourceLessonMemoryIds: record.sourceLessonMemoryIds ?? [],
+    sourceLessonId: record.sourceLessonId ?? null,
+    sourceLessonStartedAt: record.sourceLessonStartedAt ?? null,
+    sourceLessonTitle: record.sourceLessonTitle ?? null,
+    sourceMemoryIds: record.sourceMemoryIds ?? [],
+    provenance: record.provenance ?? {},
+    dedupDecision: record.dedupDecision ?? {},
     status: record.status,
     reviewState: record.reviewState,
     reviewerId: record.reviewerId ?? null,
@@ -2167,6 +2200,23 @@ export async function deleteTemplateContent(templateId: string): Promise<void> {
   }
 }
 
+export async function setDefaultTemplateContent(
+  templateId: string,
+): Promise<TemplateContentResponse> {
+  try {
+    const response = await apiClient.post(
+      buildApiProxyPath(`/templates/${encodeURIComponent(templateId)}/default`),
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to update template defaults.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
 export async function listTemplateRevisions(
   templateId: string,
   params: {
@@ -2525,6 +2575,41 @@ export async function updateStudentLesson(
         `/students/${encodeURIComponent(studentId)}/lessons/${encodeURIComponent(lessonId)}`,
       ),
       body,
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function hideStudentLessonFollowupReminder(
+  studentId: string,
+  lessonId: string,
+): Promise<StudentScheduleBillingSurface> {
+  try {
+    const response = await apiClient.put(
+      buildApiProxyPath(
+        `/students/${encodeURIComponent(
+          studentId,
+        )}/operations/reminders/lesson-followup/${encodeURIComponent(lessonId)}/hide`,
+      ),
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function undoLatestHiddenStudentReminder(
+  studentId: string,
+): Promise<StudentScheduleBillingSurface> {
+  try {
+    const response = await apiClient.put(
+      buildApiProxyPath(
+        `/students/${encodeURIComponent(studentId)}/operations/reminders/latest-hidden/undo`,
+      ),
     );
     return response.data;
   } catch (error: unknown) {

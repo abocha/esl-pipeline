@@ -116,7 +116,10 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
       });
     }
 
-    const markdownInput = await resolveMarkdownInput(running);
+    const isRerunExecution = payload.executionMode === 'rerun';
+    const markdownInput = await resolveMarkdownInput(running, {
+      preferFilesystemMd: isRerunExecution,
+    });
 
     const uploadFlag = resolveUploadTarget(running.upload, config.storage.provider);
 
@@ -156,7 +159,6 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
         ? running.ttsProvider
         : userSettingsTtsProvider;
 
-    const isRerunExecution = payload.executionMode === 'rerun';
     const rerunRequestsGeneration =
       !payload.rerun?.republishOnly &&
       Boolean(
@@ -468,11 +470,26 @@ interface ResolvedMarkdownInput {
   cleanup: () => Promise<void>;
 }
 
-async function resolveMarkdownInput(job: {
-  id: string;
-  md: string | null;
-  mdStorageUri?: string | null;
-}): Promise<ResolvedMarkdownInput> {
+async function resolveMarkdownInput(
+  job: {
+    id: string;
+    md: string | null;
+    mdStorageUri?: string | null;
+  },
+  options: { preferFilesystemMd?: boolean } = {},
+): Promise<ResolvedMarkdownInput> {
+  if (options.preferFilesystemMd) {
+    if (!job.md) {
+      throw new Error('Rerun job is missing an approved markdown source');
+    }
+
+    const resolvedMdPath = await resolveMarkdownPath(job.md);
+    return {
+      mdPath: resolvedMdPath,
+      cleanup: async () => {},
+    };
+  }
+
   if (job.mdStorageUri) {
     return materializeMarkdownFromStorage(job.id, job.mdStorageUri);
   }

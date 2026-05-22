@@ -46,10 +46,16 @@
 - current allowlisted roster for text generation:
   - `gemini-3.1-pro-preview`
   - `gemini-3-flash-preview`
+  - `gemini-3.5-flash`
   - `gemini-3.1-flash-lite-preview`
   - `gemini-2.5-pro`
   - `gemini-2.5-flash`
   - `gemini-2.5-flash-lite`
+- `gemini-3.5-flash` is selectable as the stable 3.5 Flash model, but
+  `gemini-3-flash-preview` remains the configured primary/default until a separate default-change
+  decision lands.
+- No model-specific quota baseline is set for `gemini-3.5-flash`; generic Google provider budgets
+  still apply, and provider dashboard limits remain the external truth.
 
 ### OpenRouter
 

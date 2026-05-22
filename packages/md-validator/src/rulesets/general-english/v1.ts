@@ -882,16 +882,20 @@ function normalizeMeta(
 }
 
 function classifyStudyTextType(rawLines: string[]): StudyTextType {
-  let dialogueLines = 0;
+  const speakerLabels = new Set<string>();
   for (const raw of rawLines) {
     const line = raw.trim();
     if (!line) continue;
     const match = line.match(
       /^\s*(?:\[([^\]]+)\]|(?:\*\*)?([A-Za-zА-Яа-яЁё0-9 _.-]{1,32})(?:\*\*)?)\s*:(?:\*\*)?\s+.+$/,
     );
-    if (match) dialogueLines += 1;
+    if (!match) continue;
+    const who = (match[1] ?? match[2] ?? '').replaceAll('**', '').trim();
+    if (!who) continue;
+    speakerLabels.add(normalizeSpeakerToken(who));
+    if (speakerLabels.size >= 2) return 'dialogue';
   }
-  return dialogueLines >= 2 ? 'dialogue' : 'monologue';
+  return 'monologue';
 }
 
 function validateSpeakerMetadataAlignment(

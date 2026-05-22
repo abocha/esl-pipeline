@@ -35,7 +35,7 @@ Use this document to:
 
 | ID  | Type   | Title                                                                 | Primary Areas                                           |
 | --- | ------ | --------------------------------------------------------------------- | ------------------------------------------------------- |
-| T1  | change | Treat repeated single-speaker study text as monologue                 | validator, voice alignment tests                       |
+| T1  | change | Treat repeated single-speaker study text as monologue                 | validator, voice alignment tests                        |
 | T2  | feat   | Make prompt template defaults and per-job selection explicit          | prompt template admin, minimal assignment, backend opts |
 | T3  | bug    | Preserve real student name in HTML output for audio reruns            | job rerun lineage, publish metadata, HTML publisher     |
 | T4  | feat   | Add lesson details and hide/undo controls for homework reminders      | schedule reminders, preferences/suppression, UI         |

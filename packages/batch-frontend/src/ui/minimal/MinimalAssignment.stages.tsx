@@ -112,6 +112,10 @@ interface SourceStageSectionProps {
   onSelectedStudentIdChange: (value: string) => void;
   selectedStudent: StudentOption | null;
   linkedLessonId?: string | null;
+  linkedLessonContextLabel?: string | null;
+  lessonSuggestions: { id: string; label: string; detail: string }[];
+  lessonSuggestionsError: string | null;
+  onSelectLessonSuggestion: (lessonId: string) => void;
   selectedSttProvider: SttProvider;
   onSelectedSttProviderChange: (provider: SttProvider) => void;
   sttProviders: readonly SttProvider[];
@@ -168,6 +172,11 @@ interface AssignmentStageSectionProps {
   promptLoading: boolean;
   promptReady: boolean;
   promptOptionsReady: boolean;
+  promptTemplates: { id: string; label: string }[];
+  selectedTemplateId: string;
+  selectedTemplateLabel: string;
+  selectedProfileLabel: string;
+  onSelectedTemplateIdChange: (templateId: string) => void;
   onGeneratePrompt: () => void;
   onCopyPrompt: () => void;
   promptCopyState: 'idle' | 'copied' | 'error';
@@ -600,6 +609,10 @@ export function SourceStageSection({
   onSelectedStudentIdChange,
   selectedStudent,
   linkedLessonId,
+  linkedLessonContextLabel,
+  lessonSuggestions,
+  lessonSuggestionsError,
+  onSelectLessonSuggestion,
   selectedSttProvider,
   onSelectedSttProviderChange,
   sttProviders,
@@ -690,8 +703,29 @@ export function SourceStageSection({
           ) : (
             <p className="minimal-help">Select a student before uploading a recording.</p>
           )}
-          {linkedLessonId ? (
-            <p className="minimal-muted">Lesson context: {linkedLessonId}</p>
+          {linkedLessonContextLabel ? (
+            <p className="minimal-muted">{linkedLessonContextLabel}</p>
+          ) : null}
+          {!linkedLessonId && lessonSuggestions.length > 0 ? (
+            <div className="minimal-block" aria-label="Recent lesson suggestions">
+              <p className="minimal-help">Recent lessons without homework</p>
+              <div className="minimal-inline">
+                {lessonSuggestions.map((lesson) => (
+                  <button
+                    key={lesson.id}
+                    type="button"
+                    className="minimal-secondary"
+                    onClick={() => onSelectLessonSuggestion(lesson.id)}
+                  >
+                    {lesson.label}
+                    <span className="minimal-muted"> {lesson.detail}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {lessonSuggestionsError ? (
+            <p className="minimal-muted">Recent lesson suggestions unavailable.</p>
           ) : null}
           {studentOptionsError ? <p className="minimal-error">{studentOptionsError}</p> : null}
           <details className="minimal-details">
@@ -966,6 +1000,11 @@ export function AssignmentStageSection({
   promptLoading,
   promptReady,
   promptOptionsReady,
+  promptTemplates,
+  selectedTemplateId,
+  selectedTemplateLabel,
+  selectedProfileLabel,
+  onSelectedTemplateIdChange,
   onGeneratePrompt,
   onCopyPrompt,
   promptCopyState,
@@ -1027,6 +1066,23 @@ export function AssignmentStageSection({
               </p>
             </div>
             <div className="minimal-inline">
+              <label className="minimal-select minimal-template-select">
+                Prompt template
+                <select
+                  value={selectedTemplateId}
+                  onChange={(event) => onSelectedTemplateIdChange(event.target.value)}
+                  disabled={!promptOptionsReady || promptTemplates.length === 0 || promptLoading}
+                >
+                  {promptTemplates.length === 0 ? (
+                    <option value="">No templates available</option>
+                  ) : null}
+                  {promptTemplates.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <button
                 type="button"
                 className={`minimal-primary${
@@ -1057,7 +1113,7 @@ export function AssignmentStageSection({
             </div>
           </div>
           <p className="minimal-help">
-            Uses the default template and the current learner profile when one is selected.
+            Uses {selectedTemplateLabel} with {selectedProfileLabel}.
           </p>
           {promptError ? <p className="minimal-error">{promptError}</p> : null}
           {promptPackage?.profileDrift?.detected ? (

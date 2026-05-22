@@ -2,6 +2,7 @@ import type { PoolClient } from 'pg';
 
 import type {
   BusinessCreditAlertDto,
+  BusinessLatestHiddenReminderDto,
   BusinessLessonDto,
   BusinessPaymentSummaryDto,
   BusinessReminderDto,
@@ -13,6 +14,7 @@ import type {
   StudentLessonHomeworkDto,
   StudentLessonHomeworkStatus,
   StudentLessonStatus,
+  StudentReminderLessonSummaryDto,
   UpdateBusinessSettingsRequest,
 } from '@esl-pipeline/contracts';
 
@@ -100,6 +102,15 @@ interface PaymentSummaryRow {
   currency: string;
   received_at: string;
   method: string | null;
+}
+
+interface BusinessReminderSuppressionRow {
+  student_id: string;
+  student_name: string;
+  workspace_id: string | null;
+  hidden_lesson_followup_keys: string[];
+  latest_hidden_lesson_followup_lesson_id: string | null;
+  latest_hidden_lesson_followup_at: Date | null;
 }
 
 export class TeacherBusinessDashboardError extends Error {
@@ -281,7 +292,13 @@ export async function getBusinessScheduleSurface(
       settings.timezone,
     );
     const lessons = lessonItems.map((item) => item.lesson);
-    const lessonFollowups = await listOverdueBusinessLessonFollowups(client);
+    const reminderSuppressions = await listBusinessReminderSuppressions(client);
+    const hiddenFollowupKeys = new Set(
+      reminderSuppressions.flatMap((row) => row.hidden_lesson_followup_keys ?? []),
+    );
+    const lessonFollowups = (await listOverdueBusinessLessonFollowups(client)).filter(
+      (lesson) => !hiddenFollowupKeys.has(getBusinessLessonFollowupSuppressionKey(lesson)),
+    );
     const creditStates = await listStudentCreditStates(
       client,
       range.fromInstant,
@@ -300,6 +317,7 @@ export async function getBusinessScheduleSurface(
       today: lessonItems.filter((item) => item.localDate === today).map((item) => item.lesson),
       lessons,
       reminders: buildBusinessReminders(creditStates, lessonFollowups),
+      latestHiddenReminder: await getLatestBusinessHiddenReminder(client, reminderSuppressions),
       creditAlerts: buildCreditAlerts(creditStates),
       recentPayments,
     };
@@ -580,6 +598,74 @@ async function listRecentPayments(
   }));
 }
 
+async function listBusinessReminderSuppressions(
+  client: PoolClient,
+): Promise<BusinessReminderSuppressionRow[]> {
+  const result = await client.query<BusinessReminderSuppressionRow>(
+    `
+    SELECT
+      student_reminder_preferences.student_id,
+      students.student AS student_name,
+      COALESCE(student_reminder_preferences.workspace_id, students.workspace_id, $1::uuid) AS workspace_id,
+      student_reminder_preferences.hidden_lesson_followup_keys,
+      student_reminder_preferences.latest_hidden_lesson_followup_lesson_id,
+      student_reminder_preferences.latest_hidden_lesson_followup_at
+    FROM student_reminder_preferences
+    JOIN students ON students.id = student_reminder_preferences.student_id
+    WHERE COALESCE(student_reminder_preferences.workspace_id, students.workspace_id, $1::uuid) = $1::uuid
+      AND students.archived_at IS NULL
+      AND (
+        cardinality(student_reminder_preferences.hidden_lesson_followup_keys) > 0
+        OR student_reminder_preferences.latest_hidden_lesson_followup_lesson_id IS NOT NULL
+      )
+    ORDER BY student_reminder_preferences.latest_hidden_lesson_followup_at DESC NULLS LAST
+    `,
+    [DEFAULT_WORKSPACE_ID],
+  );
+  return result.rows;
+}
+
+async function getLatestBusinessHiddenReminder(
+  client: PoolClient,
+  rows: BusinessReminderSuppressionRow[],
+): Promise<BusinessLatestHiddenReminderDto | null> {
+  const latest = rows.find((row) => row.latest_hidden_lesson_followup_lesson_id);
+  if (!latest?.latest_hidden_lesson_followup_lesson_id) return null;
+  const lesson = await getBusinessLessonRow(client, latest.latest_hidden_lesson_followup_lesson_id);
+  return {
+    type: 'lesson_followup',
+    lessonId: latest.latest_hidden_lesson_followup_lesson_id,
+    hiddenAt: latest.latest_hidden_lesson_followup_at
+      ? latest.latest_hidden_lesson_followup_at.toISOString()
+      : null,
+    studentId: latest.student_id,
+    studentName: latest.student_name,
+    studentScheduleBillingPath: getStudentScheduleBillingPath(latest.student_id),
+    lessonSummary: lesson ? mapBusinessLessonSummary(mapBusinessLesson(lesson)) : null,
+  };
+}
+
+async function getBusinessLessonRow(
+  client: PoolClient,
+  lessonId: string,
+): Promise<BusinessLessonRow | null> {
+  const result = await client.query<BusinessLessonRow>(
+    `
+    SELECT
+      ${BUSINESS_LESSON_HOMEWORK_SELECT},
+      students.student AS student_name
+    FROM student_lessons
+    ${BUSINESS_LESSON_HOMEWORK_JOINS}
+    JOIN students ON students.id = student_lessons.student_id
+    WHERE student_lessons.id = $1
+      AND COALESCE(student_lessons.workspace_id, $2::uuid) = $2::uuid
+      AND students.archived_at IS NULL
+    `,
+    [lessonId, DEFAULT_WORKSPACE_ID],
+  );
+  return result.rows[0] ?? null;
+}
+
 async function getCollectedForMonth(
   client: PoolClient,
   fromDate: string,
@@ -705,6 +791,7 @@ function buildBusinessReminders(
       severity: 'attention',
       lessonStatus: lesson.status,
       lessonConsumesCredit: lesson.consumesCredit,
+      lessonSummary: mapBusinessLessonSummary(lesson),
       title: 'Finish lesson follow-up',
       message: 'The scheduled lesson time has passed and homework is not published yet.',
       copyText: `Complete ${lesson.studentName}'s lesson record and start the homework assignment.`,
@@ -832,6 +919,24 @@ function mapBusinessLessonHomework(row: BusinessLessonRow): StudentLessonHomewor
     htmlUrl: row.homework_html_url ?? null,
     updatedAt: row.homework_updated_at ? row.homework_updated_at.toISOString() : null,
   };
+}
+
+function mapBusinessLessonSummary(lesson: BusinessLessonDto): StudentReminderLessonSummaryDto {
+  return {
+    lessonId: lesson.id,
+    startsAt: lesson.startsAt,
+    durationMinutes: lesson.durationMinutes,
+    title: lesson.title ?? null,
+  };
+}
+
+function getBusinessLessonFollowupSuppressionKey(lesson: BusinessLessonDto): string {
+  return [
+    lesson.workspaceId ?? DEFAULT_WORKSPACE_ID,
+    lesson.studentId,
+    lesson.id,
+    'lesson_followup',
+  ].join(':');
 }
 
 function isBusinessLessonFollowUpDue(lesson: BusinessLessonDto): boolean {

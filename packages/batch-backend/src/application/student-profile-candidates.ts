@@ -22,6 +22,7 @@ import {
 import { getStudentProfileById } from './student-profiles-store.js';
 
 const DEFAULT_CORROBORATING_LESSON_LIMIT = 12;
+const PROFILE_CANDIDATE_DEDUP_MODEL = 'gemini-3.1-flash-lite';
 
 const AUTHORITY_PRIORITY: Record<StudentFactAuthority, number> = {
   model_inferred: 0,
@@ -58,7 +59,19 @@ interface StudentProfileCandidateDraft {
   reviewNeeded: boolean;
   sourceSnapshotId: string | null;
   sourceLessonMemoryIds: string[];
+  sourceLessonId: string | null;
+  sourceLessonStartedAt: Date | null;
+  sourceLessonTitle: string | null;
+  sourceMemoryIds: string[];
+  provenance: Record<string, unknown>;
+  dedupDecision: StudentProfileCandidateDedupDecision;
   evidence: FactEvidence[];
+}
+
+interface StudentProfileCandidateDedupDecision extends Record<string, unknown> {
+  decision: 'created' | 'duplicate' | 'stale';
+  reason: string;
+  model: string;
 }
 
 export interface RefreshStudentProfileCandidatesResult {
@@ -155,9 +168,62 @@ export async function refreshStudentProfileCandidatesFromCanonicalMemory(args: {
   const skippedCandidateKeys: string[] = [];
 
   for (const proposal of proposals) {
+    if (proposal.dedupDecision.decision !== 'created') {
+      skippedCandidateKeys.push(proposal.candidateKey);
+      await candidates.insert({
+        studentId: args.studentId,
+        targetSection: proposal.targetSection,
+        candidateKey: proposal.candidateKey,
+        fact: proposal.fact,
+        category: proposal.category,
+        authority: proposal.authority,
+        confidence: proposal.confidence,
+        reviewNeeded: proposal.reviewNeeded,
+        sourceSnapshotId: proposal.sourceSnapshotId,
+        sourceLessonMemoryIds: proposal.sourceLessonMemoryIds,
+        sourceLessonId: proposal.sourceLessonId,
+        sourceLessonStartedAt: proposal.sourceLessonStartedAt,
+        sourceLessonTitle: proposal.sourceLessonTitle,
+        sourceMemoryIds: proposal.sourceMemoryIds,
+        provenance: proposal.provenance,
+        dedupDecision: proposal.dedupDecision,
+        evidence: proposal.evidence,
+        status: 'rejected',
+        reviewState: 'rejected',
+      });
+      continue;
+    }
+
     const existing = existingByKey.get(proposal.candidateKey);
     if (!shouldInsertCandidateProposal(proposal, existing)) {
       skippedCandidateKeys.push(proposal.candidateKey);
+      await candidates.insert({
+        studentId: args.studentId,
+        targetSection: proposal.targetSection,
+        candidateKey: proposal.candidateKey,
+        fact: proposal.fact,
+        category: proposal.category,
+        authority: proposal.authority,
+        confidence: proposal.confidence,
+        reviewNeeded: proposal.reviewNeeded,
+        sourceSnapshotId: proposal.sourceSnapshotId,
+        sourceLessonMemoryIds: proposal.sourceLessonMemoryIds,
+        sourceLessonId: proposal.sourceLessonId,
+        sourceLessonStartedAt: proposal.sourceLessonStartedAt,
+        sourceLessonTitle: proposal.sourceLessonTitle,
+        sourceMemoryIds: proposal.sourceMemoryIds,
+        provenance: proposal.provenance,
+        dedupDecision: {
+          decision: 'duplicate',
+          reason: `Existing candidate ${existing?.id ?? 'unknown'} already covers this fact.`,
+          model: PROFILE_CANDIDATE_DEDUP_MODEL,
+          matchedCandidateId: existing?.id ?? null,
+          matchedStatus: existing?.status ?? null,
+        },
+        evidence: proposal.evidence,
+        status: 'rejected',
+        reviewState: 'rejected',
+      });
       continue;
     }
 
@@ -172,6 +238,12 @@ export async function refreshStudentProfileCandidatesFromCanonicalMemory(args: {
       reviewNeeded: proposal.reviewNeeded,
       sourceSnapshotId: proposal.sourceSnapshotId,
       sourceLessonMemoryIds: proposal.sourceLessonMemoryIds,
+      sourceLessonId: proposal.sourceLessonId,
+      sourceLessonStartedAt: proposal.sourceLessonStartedAt,
+      sourceLessonTitle: proposal.sourceLessonTitle,
+      sourceMemoryIds: proposal.sourceMemoryIds,
+      provenance: proposal.provenance,
+      dedupDecision: proposal.dedupDecision,
       evidence: proposal.evidence,
     });
 
@@ -296,50 +368,29 @@ function buildCandidateDrafts(args: {
   snapshot: StudentMemorySnapshotRecord | null;
   lessonMemoryEntries: LessonMemoryRecord[];
 }): StudentProfileCandidateDraft[] {
-  const lessonObservations = collectLessonFactObservations(args.lessonMemoryEntries);
-  const proposals = new Map<string, StudentProfileCandidateDraft>();
+  const [latestLessonMemory, ...olderLessonMemoryEntries] = [...args.lessonMemoryEntries].sort(
+    (left, right) =>
+      right.generatedAt.getTime() - left.generatedAt.getTime() ||
+      right.createdAt.getTime() - left.createdAt.getTime() ||
+      right.id.localeCompare(left.id),
+  );
+  if (!latestLessonMemory) return [];
 
-  if (args.snapshot) {
-    for (const fact of args.snapshot.personalFacts) {
-      const targetSection = classifyTargetSection(fact);
-      if (!targetSection || isTransientFact(fact.fact)) {
-        continue;
-      }
-
-      const candidateKey = buildCandidateKey(targetSection, fact.fact);
-      const lessonObservation = lessonObservations.get(candidateKey);
-      const matchedLessonMemoryIds = lessonObservation
-        ? [...lessonObservation.lessonMemoryIds].sort()
-        : [];
-      if (!isStrengthEligible(targetSection, matchedLessonMemoryIds.length)) {
-        continue;
-      }
-
-      proposals.set(candidateKey, {
-        targetSection,
-        candidateKey,
-        fact: fact.fact.trim(),
-        category: fact.category.trim(),
-        authority: strongerAuthority(fact.authority, lessonObservation?.authority),
-        confidence: strongerConfidence(fact.confidence, lessonObservation?.confidence),
-        reviewNeeded: fact.reviewNeeded || lessonObservation?.reviewNeeded || false,
-        sourceSnapshotId: args.snapshot.id,
-        sourceLessonMemoryIds: matchedLessonMemoryIds,
-        evidence: dedupeEvidence([
-          ...(fact.evidence ?? []),
-          ...(lessonObservation?.evidence ?? []),
-        ]),
-      });
+  const latestLessonObservations = collectLessonFactObservations([latestLessonMemory]);
+  const staleCandidateKeys = new Set<string>();
+  for (const fact of args.snapshot?.personalFacts ?? []) {
+    const targetSection = classifyTargetSection(fact);
+    if (targetSection) {
+      staleCandidateKeys.add(buildCandidateKey(targetSection, fact.fact));
     }
   }
+  for (const [candidateKey] of collectLessonFactObservations(olderLessonMemoryEntries)) {
+    staleCandidateKeys.add(candidateKey);
+  }
 
-  for (const [candidateKey, observation] of lessonObservations) {
-    if (proposals.has(candidateKey)) {
-      continue;
-    }
-    if (observation.lessonMemoryIds.size < 2) {
-      continue;
-    }
+  const proposals = new Map<string, StudentProfileCandidateDraft>();
+
+  for (const [candidateKey, observation] of latestLessonObservations) {
     if (
       isTransientFact(observation.fact) ||
       !isStrengthEligible(observation.targetSection, observation.lessonMemoryIds.size)
@@ -355,8 +406,31 @@ function buildCandidateDrafts(args: {
       authority: observation.authority,
       confidence: observation.confidence,
       reviewNeeded: observation.reviewNeeded,
-      sourceSnapshotId: null,
+      sourceSnapshotId: args.snapshot?.id ?? null,
       sourceLessonMemoryIds: [...observation.lessonMemoryIds].sort(),
+      sourceLessonId: null,
+      sourceLessonStartedAt: latestLessonMemory.generatedAt,
+      sourceLessonTitle: latestLessonMemory.topicsDiscussed[0]?.topic ?? null,
+      sourceMemoryIds: [latestLessonMemory.id],
+      provenance: {
+        sourceKind: 'latest_lesson_memory',
+        sourceLessonMemoryId: latestLessonMemory.id,
+        sourceLessonGeneratedAt: latestLessonMemory.generatedAt.toISOString(),
+        sourceLessonTopic: latestLessonMemory.topicsDiscussed[0]?.topic ?? null,
+        dedupModel: PROFILE_CANDIDATE_DEDUP_MODEL,
+      },
+      dedupDecision: staleCandidateKeys.has(candidateKey)
+        ? {
+            decision: 'stale',
+            reason: 'The latest lesson repeated a fact already present in prior profile memory.',
+            model: PROFILE_CANDIDATE_DEDUP_MODEL,
+          }
+        : {
+            decision: 'created',
+            reason:
+              'Latest lesson introduced a candidate not found in deterministic prior context.',
+            model: PROFILE_CANDIDATE_DEDUP_MODEL,
+          },
       evidence: dedupeEvidence(observation.evidence),
     });
   }

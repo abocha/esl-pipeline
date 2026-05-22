@@ -398,6 +398,10 @@ describe('config/env - generation provider mapping', () => {
         expect(cfg.generation.models.openai.profileDraftPrimary).toBe('gpt-5.4');
         expect(cfg.generation.models.openai.profileDraftFallback).toBe('gpt-5.4-mini');
         expect(cfg.generation.models.openai.profileDraftTertiary).toBe('gpt-5.4-nano');
+        expect(cfg.generation.models.googleAiStudio.primary).toBe('gemini-3-flash-preview');
+        expect(cfg.generation.models.googleAiStudio.allowed).toEqual(
+          expect.arrayContaining(['gemini-3-flash-preview', 'gemini-3.5-flash']),
+        );
         expect(cfg.generation.providers.openai.dailyTokenBudget).toBe(120000);
         expect(cfg.generation.providers.openrouter.dailyTokenBudget).toBe(0);
       },

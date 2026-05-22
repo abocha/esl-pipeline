@@ -156,6 +156,68 @@ describe('application/prompt-options', () => {
     });
   });
 
+  it('prefers an active DB-selected default template over the configured path', async () => {
+    const config = createConfig(
+      'docs/prompt-gallery/templates/default-template.md',
+      'docs/prompt-gallery/profiles/default-profile.md',
+    );
+
+    const options = await getPromptOptions({
+      config,
+      ...createActiveRevisionDependencies(
+        ['default-template.md', 'alternate-template.md'],
+        ['default-profile.md'],
+      ),
+      templates: {
+        list: async () => ({
+          items: [
+            {
+              id: 'default-template.md',
+              label: 'Default Template',
+              activeRevisionId: 'template-revision-1',
+              isDefault: false,
+              createdAt: new Date('2026-01-01T00:00:00.000Z'),
+              updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+            },
+            {
+              id: 'alternate-template.md',
+              label: 'Alternate Template',
+              activeRevisionId: 'template-revision-2',
+              isDefault: true,
+              createdAt: new Date('2026-01-01T00:00:00.000Z'),
+              updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+            },
+          ],
+          total: 2,
+          limit: 500,
+          offset: 0,
+          order: 'asc',
+        }),
+        getById: async () => null,
+      },
+      profiles: {
+        list: async () => ({
+          items: [
+            {
+              id: 'default-profile.md',
+              label: 'Default Profile',
+              activeRevisionId: 'profile-revision-1',
+              createdAt: new Date('2026-01-01T00:00:00.000Z'),
+              updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+            },
+          ],
+          total: 1,
+          limit: 500,
+          offset: 0,
+          order: 'asc',
+        }),
+        getById: async () => null,
+      },
+    });
+
+    expect(options.defaults.templateId).toBe('alternate-template.md');
+  });
+
   it('maps legacy profilePath to canonical profile ID in selection', async () => {
     const config = createConfig(
       'docs/prompt-gallery/templates/default-template.md',

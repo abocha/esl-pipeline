@@ -138,6 +138,28 @@ describe('domain/job-repository', () => {
       expect(job.draftId).toBe(draftId);
     });
 
+    it('persists the canonical student id and resolves the display name', async () => {
+      const studentId = randomUUID();
+      await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+        await client.query(
+          `INSERT INTO students (id, student, created_at, updated_at) VALUES ($1, 'Alice Nguyen', NOW(), NOW())`,
+          [studentId],
+        );
+      });
+
+      const job = await insertJob({
+        md: 'fixtures/ok.md',
+        studentId,
+      });
+
+      expect(job.studentId).toBe(studentId);
+      expect(job.studentName).toBe('Alice Nguyen');
+
+      const loaded = await getJobById(job.id);
+      expect(loaded?.studentId).toBe(studentId);
+      expect(loaded?.studentName).toBe('Alice Nguyen');
+    });
+
     it('returns null for unknown id', async () => {
       const loaded = await getJobById(randomUUID());
       expect(loaded).toBeNull();
@@ -228,7 +250,7 @@ describe('domain/job-repository', () => {
             id,
             'fixtures/ok.md',
             'queued',
-            'monologue',
+            'unsupported-mode',
           ]);
         }),
       ).rejects.toThrow(/jobs_mode_check/);

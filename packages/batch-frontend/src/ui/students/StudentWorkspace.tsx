@@ -120,6 +120,17 @@ const TIMELINE_TYPES: StudentTimelineType[] = [
   'job_action_rerun',
   'job_action_cancel',
   'job_action_edit_metadata',
+  'lesson_created',
+  'lesson_updated',
+  'lesson_completed',
+  'lesson_canceled',
+  'lesson_no_show',
+  'lesson_plan_updated',
+  'lesson_recurrence_updated',
+  'credit_event_recorded',
+  'payment_recorded',
+  'reminder_hidden',
+  'business_settings_updated',
 ];
 
 function toIsoOrUndefined(value: string): string | undefined {

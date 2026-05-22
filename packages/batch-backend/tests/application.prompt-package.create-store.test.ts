@@ -236,7 +236,7 @@ describe('application/prompt-package', () => {
         gender: ['male', 'female', 'neutral', 'child'],
         age: ['child', 'teen', 'young', 'adult', 'middle_aged', 'senior', 'universal'],
         accent: ['australian'],
-        style: ['chirp3_hd'],
+        style: ['chirp3_hd', 'calm', 'studio', 'casual', 'wavenet', 'neural2'],
       },
       voices: [],
     });
@@ -247,7 +247,11 @@ describe('application/prompt-package', () => {
         putPromptPackage: async ({ promptPackageId, text }) => {
           expect(text).toContain('[VOICE_CAPABILITIES]\ngenerated_at: 2026-01-06T00:00:00.000Z');
           expect(text).toContain('accent: [american, australian, british]');
-          expect(text).toContain('style: [chirp3_hd, conversational, professional]');
+          expect(text).toContain('style: [calm, casual, conversational, professional]');
+          expect(text).not.toContain('chirp3_hd');
+          expect(text).not.toContain('studio');
+          expect(text).not.toContain('wavenet');
+          expect(text).not.toContain('neural2');
           expect(text).not.toContain('# CAPABILITY SNAPSHOT');
           expect(text).not.toContain('<provider-backed values>');
           expect(text.indexOf('Header')).toBeLessThan(text.indexOf('[VOICE_CAPABILITIES]'));
@@ -295,7 +299,8 @@ describe('application/prompt-package', () => {
         'british',
       ]);
       expect(result?.voiceCapabilitiesSnapshot?.capabilities.style).toEqual([
-        'chirp3_hd',
+        'calm',
+        'casual',
         'conversational',
         'professional',
       ]);
