@@ -225,7 +225,9 @@ describe('application/generation-policy', () => {
     ]);
 
     const options = buildGenerationOptionsPayload({ config });
-    expect(options.defaultModelByProvider.google_ai_studio).toBe('gemini-3-flash-preview');
+    const defaultModelByProvider = options.defaultModelByProvider;
+    expect(defaultModelByProvider).toBeDefined();
+    expect(defaultModelByProvider?.google_ai_studio).toBe('gemini-3-flash-preview');
     const selectableModel = options.modelOptions.find(
       (option) => option.provider === 'google_ai_studio' && option.id === 'gemini-3.5-flash',
     );
