@@ -1385,7 +1385,7 @@ async function upsertReminderSuppression(
       latest_hidden_lesson_followup_at,
       updated_by
     )
-    VALUES ($1, $2, ARRAY[$3]::text[], $3, $4, NOW(), $5)
+    VALUES ($1, $2, ARRAY[$3]::text[], $3, $4::uuid, NOW(), $5)
     ON CONFLICT (student_id) DO UPDATE
     SET workspace_id = EXCLUDED.workspace_id,
         hidden_lesson_followup_keys = CASE
@@ -1394,7 +1394,7 @@ async function upsertReminderSuppression(
           ELSE array_append(student_reminder_preferences.hidden_lesson_followup_keys, $3)
         END,
         latest_hidden_lesson_followup_key = $3,
-        latest_hidden_lesson_followup_lesson_id = $4,
+        latest_hidden_lesson_followup_lesson_id = $4::uuid,
         latest_hidden_lesson_followup_at = NOW(),
         updated_by = $5,
         updated_at = NOW()

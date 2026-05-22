@@ -250,7 +250,7 @@ describe('domain/job-repository', () => {
             id,
             'fixtures/ok.md',
             'queued',
-            'monologue',
+            'unsupported-mode',
           ]);
         }),
       ).rejects.toThrow(/jobs_mode_check/);

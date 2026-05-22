@@ -560,7 +560,7 @@ describe('student-timeline', () => {
           created_at,
           updated_at
         )
-        VALUES ($1, $2, 'lesson_followup:' || $3::text, $3, $4, $4, $4)
+        VALUES ($1, $2, 'lesson_followup:' || $3::text, $3::uuid, $4, $4, $4)
         `,
         [studentId, workspaceId, lessonId, times.reminder],
       );
