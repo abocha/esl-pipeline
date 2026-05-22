@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [6.8.0] - 2026-05-22
+
+### Changed
+
+- Automated release from PR #83: Implement cross-workstream intake plan (https://github.com/abocha/esl-pipeline/pull/83)
+
 ## [6.7.2] - 2026-05-21
 
 ### Changed
