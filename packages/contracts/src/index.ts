@@ -622,9 +622,24 @@ export interface StudentReminderRecommendationDto {
   lessonId?: string | null;
   lessonStatus?: StudentLessonStatus | null;
   lessonConsumesCredit?: boolean | null;
+  lessonSummary?: StudentReminderLessonSummaryDto | null;
   title: string;
   message: string;
   copyText: string;
+}
+
+export interface StudentReminderLessonSummaryDto {
+  lessonId: string;
+  startsAt: string | null;
+  durationMinutes: number | null;
+  title: string | null;
+}
+
+export interface StudentLatestHiddenReminderDto {
+  type: Extract<StudentReminderType, 'lesson_followup'>;
+  lessonId: string;
+  hiddenAt: string | null;
+  lessonSummary: StudentReminderLessonSummaryDto | null;
 }
 
 export interface StudentScheduleBillingSurfaceResponse {
@@ -638,6 +653,7 @@ export interface StudentScheduleBillingSurfaceResponse {
   creditEvents: StudentCreditEventDto[];
   payments: StudentPaymentRecordDto[];
   reminders: StudentReminderRecommendationDto[];
+  latestHiddenReminder: StudentLatestHiddenReminderDto | null;
 }
 
 export interface BusinessSettingsDto {
@@ -676,6 +692,12 @@ export interface BusinessReminderDto extends StudentReminderRecommendationDto {
   remainingCredits: number;
 }
 
+export interface BusinessLatestHiddenReminderDto extends StudentLatestHiddenReminderDto {
+  studentId: string;
+  studentName: string;
+  studentScheduleBillingPath: string;
+}
+
 export interface BusinessCreditAlertDto {
   studentId: string;
   studentName: string;
@@ -705,6 +727,7 @@ export interface BusinessScheduleSurfaceResponse {
   today: BusinessLessonDto[];
   lessons: BusinessLessonDto[];
   reminders: BusinessReminderDto[];
+  latestHiddenReminder: BusinessLatestHiddenReminderDto | null;
   creditAlerts: BusinessCreditAlertDto[];
   recentPayments: BusinessPaymentSummaryDto[];
 }
