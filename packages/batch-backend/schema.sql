@@ -507,6 +507,7 @@ CREATE TABLE public.profiles (
     id text NOT NULL,
     label text NOT NULL,
     active_revision_id uuid,
+    is_default boolean DEFAULT false NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -1237,6 +1238,8 @@ CREATE INDEX idx_templates_active_revision_id ON public.templates USING btree (a
 
 CREATE INDEX idx_templates_label ON public.templates USING btree (label);
 
+CREATE UNIQUE INDEX idx_templates_single_default ON public.templates USING btree (is_default) WHERE is_default;
+
 CREATE INDEX idx_transcripts_recording_id ON public.transcripts USING btree (recording_id);
 
 CREATE INDEX idx_uploaded_files_created_at ON public.uploaded_files USING btree (created_at);
@@ -1665,5 +1668,7 @@ VALUES
   ('0028_student_lesson_recurrence_core', 'c90dea3bf8cc79162e93d0cbdd167e9142c6d959d2cb743ab164e06c4f658fa0', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0029_assignment_sessions', '81d0ae89a6a5e55f1fba02cac60b703e1a22d31024c5d350a43642fcb53433aa', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0030_lesson_assignment_linkage', '911668bc4cde7c277df35c1be17aaff84067eee9fa0a85da6dbd09545f3f3622', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0031_pg_stat_statements_observability', 'ad512b286919b89eda1c4eb6c2762884ca4e4bac6e7eb56d4655c726f3cce558', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0031_pg_stat_statements_observability', 'ad512b286919b89eda1c4eb6c2762884ca4e4bac6e7eb56d4655c726f3cce558', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0032_student_reminder_suppression', '881d242f174bea55a6313f064f436ac623937152327d7f6941d508790e995a86', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0033_prompt_template_default', 'dc002e1ad504ac9d4c50426cc097517250c58f6e910151c5a77359a500062d26', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;

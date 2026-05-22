@@ -12,6 +12,7 @@ const apiMocks = vi.hoisted(() => ({
   listTemplateContents: vi.fn(),
   listTemplateRevisions: vi.fn(),
   restoreTemplateRevision: vi.fn(),
+  setDefaultTemplateContent: vi.fn(),
   upsertTemplateContent: vi.fn(),
 }));
 
@@ -22,6 +23,7 @@ const now = '2026-05-01T09:00:00.000Z';
 
 function seedPromptTemplateMocks() {
   apiMocks.listTemplateContents.mockResolvedValue({
+    defaultTemplateId: 'hw/default.md',
     templates: [
       { id: 'hw/default.md', label: 'Default Homework' },
       { id: 'hw/alternate.md', label: 'Alternate Homework' },
@@ -88,6 +90,13 @@ function seedPromptTemplateMocks() {
     content: 'DEFAULT TEMPLATE',
   });
   apiMocks.deleteTemplateContent.mockResolvedValue(undefined);
+  apiMocks.setDefaultTemplateContent.mockImplementation(async (templateId: string) => ({
+    id: templateId,
+    label: templateId === 'hw/alternate.md' ? 'Alternate Homework' : 'Default Homework',
+    content: templateId === 'hw/alternate.md' ? 'ALTERNATE TEMPLATE' : 'DEFAULT TEMPLATE',
+    currentRevisionId: templateId === 'hw/alternate.md' ? 'revision-2' : 'revision-1',
+    updatedAt: now,
+  }));
 }
 
 function renderPromptTemplatesPage() {
@@ -113,12 +122,47 @@ describe('PromptTemplatesPage', () => {
       'hw/default.md',
     );
     expect(screen.getByText('v1')).toBeTruthy();
+    expect(screen.getByText('Default')).toBeTruthy();
     expect(apiMocks.getTemplateContent).toHaveBeenCalledWith('hw/default.md');
     expect(apiMocks.listTemplateRevisions).toHaveBeenCalledWith('hw/default.md', {
       limit: 25,
       offset: 0,
       order: 'desc',
     });
+  });
+
+  it('marks the selected active template as default', async () => {
+    const user = userEvent.setup();
+    apiMocks.listTemplateContents
+      .mockResolvedValueOnce({
+        defaultTemplateId: 'hw/default.md',
+        templates: [
+          { id: 'hw/default.md', label: 'Default Homework' },
+          { id: 'hw/alternate.md', label: 'Alternate Homework' },
+        ],
+      })
+      .mockResolvedValueOnce({
+        defaultTemplateId: 'hw/alternate.md',
+        templates: [
+          { id: 'hw/default.md', label: 'Default Homework' },
+          { id: 'hw/alternate.md', label: 'Alternate Homework' },
+        ],
+      });
+    renderPromptTemplatesPage();
+    await screen.findByDisplayValue('DEFAULT TEMPLATE');
+
+    fireEvent.change(screen.getByRole('combobox', { name: /Template/i }), {
+      target: { value: 'hw/alternate.md' },
+    });
+    await screen.findByDisplayValue('ALTERNATE TEMPLATE');
+    await user.click(screen.getByRole('button', { name: /Make Default/i }));
+
+    await waitFor(() => {
+      expect(apiMocks.setDefaultTemplateContent).toHaveBeenCalledWith('hw/alternate.md');
+    });
+    expect(screen.getByText(/Alternate Homework is now the default template/i)).toBeTruthy();
+    expect((screen.getByRole('button', { name: /Make Default/i }) as HTMLButtonElement).disabled)
+      .toBe(true);
   });
 
   it('saves edited template content and refreshes revision history', async () => {
@@ -179,12 +223,13 @@ describe('PromptTemplatesPage', () => {
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     apiMocks.listTemplateContents
       .mockResolvedValueOnce({
+        defaultTemplateId: 'hw/default.md',
         templates: [
           { id: 'hw/default.md', label: 'Default Homework' },
           { id: 'hw/alternate.md', label: 'Alternate Homework' },
         ],
       })
-      .mockResolvedValueOnce({ templates: [] });
+      .mockResolvedValueOnce({ defaultTemplateId: null, templates: [] });
 
     renderPromptTemplatesPage();
     await screen.findByDisplayValue('DEFAULT TEMPLATE');

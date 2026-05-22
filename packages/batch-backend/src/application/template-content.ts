@@ -6,6 +6,7 @@ import { loadConfig } from '../config/env.js';
 import {
   getTemplateById,
   listTemplates,
+  setDefaultTemplate,
   setTemplateActiveRevision,
   upsertTemplate,
 } from '../domain/template-repository.js';
@@ -30,6 +31,7 @@ const LEGACY_PROFILE_MARKER = 'INSERT PROFILE HERE';
 
 export interface TemplateContentListResponse {
   templates: PromptOption[];
+  defaultTemplateId?: string | null;
 }
 
 export interface TemplateContentResponse {
@@ -82,6 +84,7 @@ interface TemplateContentDependencies {
   templates: {
     list: typeof listTemplates;
     getById: typeof getTemplateById;
+    setDefault?: typeof setDefaultTemplate;
     upsert: typeof upsertTemplate;
     setActive: typeof setTemplateActiveRevision;
   };
@@ -151,6 +154,7 @@ function getDependencies(
     templates: overrides?.templates ?? {
       list: listTemplates,
       getById: getTemplateById,
+      setDefault: setDefaultTemplate,
       upsert: upsertTemplate,
       setActive: setTemplateActiveRevision,
     },
@@ -278,7 +282,8 @@ export async function listTemplateContents(
 ): Promise<TemplateContentListResponse> {
   const dependencies = getDependencies(overrides);
   const templates = await listActiveTemplateOptions(dependencies);
-  return { templates };
+  const defaultTemplateId = await resolveDefaultTemplateId(dependencies, templates);
+  return { templates, defaultTemplateId };
 }
 
 export async function getTemplateContent(
@@ -427,4 +432,40 @@ export async function activateTemplateRevisionForTemplate(
     ...toTemplateRevisionSummary(activated),
     content: activated.content,
   };
+}
+
+export async function setDefaultTemplateContent(
+  templateId: string,
+  overrides?: Partial<TemplateContentDependencies>,
+): Promise<TemplateContentResponse | null> {
+  const dependencies = getDependencies(overrides);
+  const normalizedTemplateId = normalizeTemplateId(templateId);
+  if (!dependencies.templates.setDefault) {
+    throw new TemplateContentError(
+      'Default template updates are not available',
+      'template_default_not_available',
+      500,
+    );
+  }
+  const updated = await dependencies.templates.setDefault(normalizedTemplateId);
+  if (!updated?.activeRevisionId) return null;
+
+  return getTemplateContent(updated.id, overrides);
+}
+
+async function resolveDefaultTemplateId(
+  dependencies: TemplateContentDependencies,
+  templates: PromptOption[],
+): Promise<string | null> {
+  const activeIds = new Set(templates.map((template) => template.id));
+  const listed = await dependencies.templates.list({
+    limit: MAX_OPTION_PAGE_LIMIT,
+    offset: 0,
+    order: 'asc',
+  });
+  const dbDefault = listed.items.find((template) => template.isDefault && activeIds.has(template.id));
+  if (dbDefault) return dbDefault.id;
+
+  const configuredDefault = normalizeTemplateId(path.basename(dependencies.config.prompt.templatePath));
+  return activeIds.has(configuredDefault) ? configuredDefault : null;
 }

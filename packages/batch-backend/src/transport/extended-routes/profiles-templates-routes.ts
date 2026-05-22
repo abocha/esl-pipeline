@@ -25,6 +25,7 @@ import {
   listTemplateContents,
   listTemplateRevisionsForTemplate,
   restoreTemplateRevision,
+  setDefaultTemplateContent,
   TemplateContentError,
   upsertTemplateContent,
 } from '../../application/template-content.js';
@@ -863,6 +864,60 @@ export function registerProfileTemplateRoutes(
           return reply.code(400).send({
             error: 'validation_failed',
             message: 'Invalid request parameters',
+            details: error.issues,
+          });
+        }
+        if (error instanceof TemplateContentError) {
+          return reply.code(error.status).send({
+            error: error.code,
+            message: error.message,
+            code: error.code,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.post(
+    '/templates/:id/default',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'POST /templates/:id/default');
+      const paramsSchema = z.object({
+        id: z.string().min(1),
+      });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const updated = await setDefaultTemplateContent(params.id);
+        if (!updated) {
+          return errorResponse(reply, 'not_found');
+        }
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          templateId: params.id,
+        });
+
+        return reply.send(updated);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid template id',
             details: error.issues,
           });
         }

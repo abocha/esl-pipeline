@@ -288,6 +288,7 @@ export interface TemplateContentOption {
 
 export interface TemplateContentListResponse {
   templates: TemplateContentOption[];
+  defaultTemplateId?: string | null;
 }
 
 export interface TemplateContentResponse {
@@ -2162,6 +2163,23 @@ export async function deleteTemplateContent(templateId: string): Promise<void> {
     const axiosError = toAxiosError(error);
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to archive templates.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function setDefaultTemplateContent(
+  templateId: string,
+): Promise<TemplateContentResponse> {
+  try {
+    const response = await apiClient.post(
+      buildApiProxyPath(`/templates/${encodeURIComponent(templateId)}/default`),
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to update template defaults.');
     }
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }

@@ -430,6 +430,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   id TEXT PRIMARY KEY,
   label TEXT NOT NULL,
   active_revision_id UUID NULL,
+  is_default BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -457,6 +458,7 @@ const TEMPLATES_SCHEMA_PATCHES: string[] = [
   'ALTER TABLE templates ADD COLUMN IF NOT EXISTS id TEXT NULL',
   'ALTER TABLE templates ADD COLUMN IF NOT EXISTS label TEXT NULL',
   'ALTER TABLE templates ADD COLUMN IF NOT EXISTS active_revision_id UUID NULL',
+  'ALTER TABLE templates ADD COLUMN IF NOT EXISTS is_default BOOLEAN NOT NULL DEFAULT FALSE',
   'ALTER TABLE templates ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NULL',
   'ALTER TABLE templates ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NULL',
 ];
@@ -469,6 +471,7 @@ const PROFILES_INDEX_PATCHES: string[] = [
 const TEMPLATES_INDEX_PATCHES: string[] = [
   'CREATE INDEX IF NOT EXISTS idx_templates_label ON templates (label)',
   'CREATE INDEX IF NOT EXISTS idx_templates_active_revision_id ON templates (active_revision_id)',
+  'CREATE UNIQUE INDEX IF NOT EXISTS idx_templates_single_default ON templates (is_default) WHERE is_default',
 ];
 
 const STUDENT_PROFILE_BINDINGS_TABLE_SQL = `

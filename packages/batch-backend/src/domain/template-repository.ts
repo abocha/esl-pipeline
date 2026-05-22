@@ -7,6 +7,7 @@ interface TemplateRow {
   id: string;
   label: string;
   active_revision_id: string | null;
+  is_default: boolean;
   created_at: Date;
   updated_at: Date;
 }
@@ -40,6 +41,7 @@ export async function upsertTemplate(params: UpsertTemplateParams): Promise<Temp
         id,
         label,
         active_revision_id,
+        is_default,
         created_at,
         updated_at
       `,
@@ -59,12 +61,15 @@ export async function setTemplateActiveRevision(
     const result = await client.query(
       `
       UPDATE templates
-      SET active_revision_id = $2
+      SET
+        active_revision_id = $2,
+        is_default = CASE WHEN $2 IS NULL THEN FALSE ELSE is_default END
       WHERE id = $1
       RETURNING
         id,
         label,
         active_revision_id,
+        is_default,
         created_at,
         updated_at
       `,
@@ -84,6 +89,7 @@ export async function getTemplateById(id: string): Promise<TemplateRecord | null
         id,
         label,
         active_revision_id,
+        is_default,
         created_at,
         updated_at
       FROM templates
@@ -126,6 +132,7 @@ export async function listTemplates(params: ListTemplatesParams = {}): Promise<T
         id,
         label,
         active_revision_id,
+        is_default,
         created_at,
         updated_at
       FROM templates
@@ -159,11 +166,64 @@ export async function deleteTemplateById(id: string): Promise<boolean> {
   return deleted;
 }
 
+export async function setDefaultTemplate(templateId: string): Promise<TemplateRecord | null> {
+  const row = await withPgClient(async (client: PoolClient) => {
+    await client.query('BEGIN');
+    try {
+      const currentResult = await client.query(
+        `
+        SELECT
+          id,
+          label,
+          active_revision_id,
+          is_default,
+          created_at,
+          updated_at
+        FROM templates
+        WHERE id = $1 AND active_revision_id IS NOT NULL
+        FOR UPDATE
+        `,
+        [templateId],
+      );
+      const current = currentResult.rows[0] as TemplateRow | undefined;
+      if (!current) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+
+      await client.query('UPDATE templates SET is_default = FALSE WHERE is_default = TRUE');
+      const updatedResult = await client.query(
+        `
+        UPDATE templates
+        SET is_default = TRUE
+        WHERE id = $1
+        RETURNING
+          id,
+          label,
+          active_revision_id,
+          is_default,
+          created_at,
+          updated_at
+        `,
+        [templateId],
+      );
+      await client.query('COMMIT');
+      return updatedResult.rows[0] as TemplateRow;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
+  });
+
+  return row ? mapRow(row) : null;
+}
+
 function mapRow(row: TemplateRow): TemplateRecord {
   return {
     id: row.id,
     label: row.label,
     activeRevisionId: row.active_revision_id ?? null,
+    isDefault: row.is_default ?? false,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
