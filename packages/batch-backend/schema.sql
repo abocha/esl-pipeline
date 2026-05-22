@@ -507,7 +507,6 @@ CREATE TABLE public.profiles (
     id text NOT NULL,
     label text NOT NULL,
     active_revision_id uuid,
-    is_default boolean DEFAULT false NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -745,12 +744,6 @@ CREATE TABLE public.student_profile_candidates (
     review_needed boolean DEFAULT true NOT NULL,
     source_snapshot_id uuid,
     source_lesson_memory_ids uuid[] DEFAULT '{}'::uuid[] NOT NULL,
-    source_lesson_id uuid,
-    source_lesson_started_at timestamp with time zone,
-    source_lesson_title text,
-    source_memory_ids uuid[] DEFAULT ARRAY[]::uuid[] NOT NULL,
-    provenance jsonb DEFAULT '{}'::jsonb NOT NULL,
-    dedup_decision jsonb DEFAULT '{}'::jsonb NOT NULL,
     evidence jsonb DEFAULT '[]'::jsonb NOT NULL,
     status text DEFAULT 'pending_review'::text NOT NULL,
     review_state text DEFAULT 'unreviewed'::text NOT NULL,
@@ -763,6 +756,12 @@ CREATE TABLE public.student_profile_candidates (
     superseded_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    source_lesson_id uuid,
+    source_lesson_started_at timestamp with time zone,
+    source_lesson_title text,
+    source_memory_ids uuid[] DEFAULT ARRAY[]::uuid[] NOT NULL,
+    provenance jsonb DEFAULT '{}'::jsonb NOT NULL,
+    dedup_decision jsonb DEFAULT '{}'::jsonb NOT NULL,
     CONSTRAINT student_profile_candidates_authority_check CHECK ((authority = ANY (ARRAY['teacher_confirmed'::text, 'student_stated'::text, 'model_inferred'::text]))),
     CONSTRAINT student_profile_candidates_confidence_check CHECK ((confidence = ANY (ARRAY['low'::text, 'medium'::text, 'high'::text]))),
     CONSTRAINT student_profile_candidates_review_state_check CHECK ((review_state = ANY (ARRAY['unreviewed'::text, 'deferred'::text, 'approved'::text, 'rejected'::text]))),
@@ -778,13 +777,13 @@ CREATE TABLE public.student_reminder_preferences (
     enable_upcoming_lesson boolean DEFAULT true NOT NULL,
     enable_low_balance boolean DEFAULT true NOT NULL,
     enable_payment_followup boolean DEFAULT true NOT NULL,
-    hidden_lesson_followup_keys text[] DEFAULT ARRAY[]::text[] NOT NULL,
-    latest_hidden_lesson_followup_key text,
-    latest_hidden_lesson_followup_lesson_id uuid,
-    latest_hidden_lesson_followup_at timestamp with time zone,
     updated_by uuid,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    hidden_lesson_followup_keys text[] DEFAULT ARRAY[]::text[] CONSTRAINT student_reminder_preference_hidden_lesson_followup_key_not_null NOT NULL,
+    latest_hidden_lesson_followup_key text,
+    latest_hidden_lesson_followup_lesson_id uuid,
+    latest_hidden_lesson_followup_at timestamp with time zone,
     CONSTRAINT student_reminder_preferences_channel_check CHECK ((preferred_channel = ANY (ARRAY['manual'::text, 'telegram'::text, 'email'::text]))),
     CONSTRAINT student_reminder_preferences_threshold_check CHECK ((low_balance_threshold >= 0))
 );
@@ -831,7 +830,8 @@ CREATE TABLE public.templates (
     label text NOT NULL,
     active_revision_id uuid,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    is_default boolean DEFAULT false NOT NULL
 );
 
 CREATE TABLE public.transcripts (
@@ -1210,13 +1210,13 @@ CREATE INDEX idx_student_profile_bindings_student_id ON public.student_profile_b
 
 CREATE INDEX idx_student_profile_candidate_draft_revisions_revision ON public.student_profile_candidate_draft_revisions USING btree (revision_id, candidate_id);
 
-CREATE INDEX idx_student_profile_candidates_student_candidate_key ON public.student_profile_candidates USING btree (student_id, candidate_key, created_at DESC, id DESC);
-
-CREATE INDEX idx_student_profile_candidates_student_created_at ON public.student_profile_candidates USING btree (student_id, created_at DESC, id DESC);
-
 CREATE INDEX idx_student_profile_candidates_dedup_decision ON public.student_profile_candidates USING btree (student_id, status, created_at DESC, id DESC) WHERE (dedup_decision <> '{}'::jsonb);
 
 CREATE INDEX idx_student_profile_candidates_source_lesson ON public.student_profile_candidates USING btree (student_id, source_lesson_id, created_at DESC, id DESC) WHERE (source_lesson_id IS NOT NULL);
+
+CREATE INDEX idx_student_profile_candidates_student_candidate_key ON public.student_profile_candidates USING btree (student_id, candidate_key, created_at DESC, id DESC);
+
+CREATE INDEX idx_student_profile_candidates_student_created_at ON public.student_profile_candidates USING btree (student_id, created_at DESC, id DESC);
 
 CREATE INDEX idx_student_profile_candidates_student_review_state_created_at ON public.student_profile_candidates USING btree (student_id, review_state, created_at DESC, id DESC);
 
@@ -1514,10 +1514,10 @@ ALTER TABLE ONLY public.student_profile_candidates
     ADD CONSTRAINT student_profile_candidates_promoted_revision_id_fkey FOREIGN KEY (promoted_revision_id) REFERENCES public.profile_revisions(id) ON DELETE SET NULL;
 
 ALTER TABLE ONLY public.student_profile_candidates
-    ADD CONSTRAINT student_profile_candidates_source_lesson_id_fkey FOREIGN KEY (source_lesson_id) REFERENCES public.student_lessons(id) ON DELETE SET NULL;
+    ADD CONSTRAINT student_profile_candidates_reviewer_id_fkey FOREIGN KEY (reviewer_id) REFERENCES public.users(id) ON DELETE SET NULL;
 
 ALTER TABLE ONLY public.student_profile_candidates
-    ADD CONSTRAINT student_profile_candidates_reviewer_id_fkey FOREIGN KEY (reviewer_id) REFERENCES public.users(id) ON DELETE SET NULL;
+    ADD CONSTRAINT student_profile_candidates_source_lesson_id_fkey FOREIGN KEY (source_lesson_id) REFERENCES public.student_lessons(id) ON DELETE SET NULL;
 
 ALTER TABLE ONLY public.student_profile_candidates
     ADD CONSTRAINT student_profile_candidates_source_snapshot_id_fkey FOREIGN KEY (source_snapshot_id) REFERENCES public.student_memory_snapshots(id) ON DELETE SET NULL;

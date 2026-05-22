@@ -463,9 +463,13 @@ async function resolveDefaultTemplateId(
     offset: 0,
     order: 'asc',
   });
-  const dbDefault = listed.items.find((template) => template.isDefault && activeIds.has(template.id));
+  const dbDefault = listed.items.find(
+    (template) => template.isDefault && activeIds.has(template.id),
+  );
   if (dbDefault) return dbDefault.id;
 
-  const configuredDefault = normalizeTemplateId(path.basename(dependencies.config.prompt.templatePath));
+  const configuredDefault = normalizeTemplateId(
+    path.basename(dependencies.config.prompt.templatePath),
+  );
   return activeIds.has(configuredDefault) ? configuredDefault : null;
 }

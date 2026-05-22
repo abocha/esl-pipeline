@@ -4,12 +4,12 @@ import { Link } from 'react-router-dom';
 import {
   getStudentHistorySurface,
   getStudentTimeline,
-  listStudentProfileCandidates,
   type HomeworkMemoryRecord,
   type LessonMemoryRecord,
-  type StudentProfileCandidate,
   listStudentHomeworkMemoryEntries,
   listStudentLessonMemoryEntries,
+  listStudentProfileCandidates,
+  type StudentProfileCandidate,
   type StudentTimelineItem,
 } from '../../utils/api';
 import { useStudentAreaContext } from './StudentAreaContext';
