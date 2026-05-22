@@ -93,6 +93,7 @@ export async function createApprovalJobFromDraft(
     transcriptId: params.promptPackage.transcriptId,
     promptPackageId: params.promptPackage.id,
     draftId: params.draft.id,
+    studentId: params.draft.studentId ?? params.promptPackage.studentId ?? null,
     lessonId: params.draft.lessonId ?? params.promptPackage.lessonId ?? null,
     userId: params.draft.createdBy ?? undefined,
     preset: selectedPreset,
