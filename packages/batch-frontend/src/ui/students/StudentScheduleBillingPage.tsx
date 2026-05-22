@@ -238,24 +238,17 @@ export const StudentScheduleBillingPage: React.FC = () => {
     return Number.isFinite(endsAt) && endsAt <= Date.now();
   };
 
-  const completeLessonAndStartHomework = async (
+  const startHomeworkFromReminder = async (
     reminder: StudentScheduleBillingSurface['reminders'][number],
   ): Promise<StudentScheduleBillingSurface> => {
     if (!reminder.lessonId) {
       throw new Error('Lesson follow-up is missing lesson context.');
     }
-    const lessonId = reminder.lessonId;
-    if (reminder.lessonStatus === 'completed') {
-      navigateToLessonAssignment(lessonId);
-      if (!surface) throw new Error('Schedule surface is not loaded.');
-      return surface;
+    if (!surface) {
+      throw new Error('Schedule surface is not loaded.');
     }
-    const nextSurface = await updateStudentLesson(studentId, lessonId, {
-      status: 'completed',
-      consumesCredit: true,
-    });
-    navigateToLessonAssignment(lessonId);
-    return nextSurface;
+    navigateToLessonAssignment(reminder.lessonId);
+    return surface;
   };
 
   const hideReminder = async (
@@ -1013,14 +1006,15 @@ export const StudentScheduleBillingPage: React.FC = () => {
                   <>
                     <button
                       type="button"
+                      aria-label="Add homework from reminder"
                       disabled={saving === reminder.lessonId}
                       onClick={() => {
                         void runAction(reminder.lessonId ?? reminder.type, () =>
-                          completeLessonAndStartHomework(reminder),
+                          startHomeworkFromReminder(reminder),
                         );
                       }}
                     >
-                      Complete + homework
+                      Add homework
                     </button>
                     <button
                       type="button"

@@ -238,15 +238,12 @@ describe('StudentScheduleBillingPage', () => {
     );
     renderPage();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Complete + homework' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Add homework from reminder' }));
 
     await waitFor(() => {
-      expect(apiMocks.updateStudentLesson).toHaveBeenCalledWith('student-alex', 'lesson-1', {
-        status: 'completed',
-        consumesCredit: true,
-      });
       expect(navigateMock).toHaveBeenCalledWith('/?studentId=student-alex&lessonId=lesson-1');
     });
+    expect(apiMocks.updateStudentLesson).not.toHaveBeenCalled();
   });
 
   it('shows lesson context, hides follow-up reminders, and offers latest undo', async () => {
@@ -329,7 +326,7 @@ describe('StudentScheduleBillingPage', () => {
     );
     renderPage();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Complete + homework' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Add homework from reminder' }));
 
     await waitFor(() => {
       expect(navigateMock).toHaveBeenCalledWith('/?studentId=student-alex&lessonId=lesson-1');
