@@ -21,7 +21,7 @@ describe('application/student-profile-candidates', () => {
     expect(result).toBeNull();
   });
 
-  it('builds snapshot-led candidates with corroborating lesson memory and inserts them once', async () => {
+  it('builds latest-lesson candidates with provenance and inserts them once', async () => {
     const insert = vi.fn().mockImplementation(async (params) => ({
       id: 'candidate-1',
       approvedFact: null,
@@ -51,7 +51,7 @@ describe('application/student-profile-candidates', () => {
             id: 'snapshot-1',
             personalFacts: [
               {
-                fact: 'Wants to speak English more confidently at work.',
+                fact: 'Prefers structured homework checklists.',
                 category: 'goal',
                 authority: 'student_stated',
                 confidence: 'high',
@@ -65,10 +65,13 @@ describe('application/student-profile-candidates', () => {
           listRecentReadyByStudentId: vi.fn().mockResolvedValue([
             {
               id: 'lesson-1',
+              generatedAt: new Date('2026-03-21T10:00:00.000Z'),
+              createdAt: new Date('2026-03-21T10:00:00.000Z'),
+              topicsDiscussed: [{ topic: 'Client updates', note: 'Practiced concise updates.' }],
               studentFacts: [
                 {
-                  fact: 'Wants to speak English more confidently at work.',
-                  category: 'goal',
+                  fact: 'Uses English with clients at work.',
+                  category: 'work',
                   authority: 'teacher_confirmed',
                   confidence: 'medium',
                   reviewNeeded: false,
@@ -91,17 +94,27 @@ describe('application/student-profile-candidates', () => {
     expect(insert).toHaveBeenCalledWith(
       expect.objectContaining({
         studentId: 'student-1',
-        targetSection: 'goals_motivation',
+        targetSection: 'work_communication_context',
         authority: 'teacher_confirmed',
-        confidence: 'high',
+        confidence: 'medium',
         sourceSnapshotId: 'snapshot-1',
         sourceLessonMemoryIds: ['lesson-1'],
+        sourceMemoryIds: ['lesson-1'],
+        sourceLessonTitle: 'Client updates',
+        provenance: expect.objectContaining({
+          sourceKind: 'latest_lesson_memory',
+          sourceLessonMemoryId: 'lesson-1',
+          dedupModel: 'gemini-3.1-flash-lite',
+        }),
+        dedupDecision: expect.objectContaining({
+          decision: 'created',
+        }),
       }),
     );
     expect(supersedePending).toHaveBeenCalledWith(
       expect.objectContaining({
         studentId: 'student-1',
-        candidateKey: 'goals_motivation:wants to speak english more confidently at work',
+        candidateKey: 'work_communication_context:uses english with clients at work',
         supersededById: 'candidate-1',
       }),
     );
@@ -122,22 +135,27 @@ describe('application/student-profile-candidates', () => {
           getById: vi.fn().mockResolvedValue({ id: 'student-1' }),
         },
         snapshots: {
-          getLatestReadyByStudentId: vi.fn().mockResolvedValue({
-            id: 'snapshot-1',
-            personalFacts: [
-              {
-                fact: 'Wants to speak English more confidently at work.',
-                category: 'goal',
-                authority: 'student_stated',
-                confidence: 'high',
-                reviewNeeded: false,
-                evidence: [],
-              },
-            ],
-          }),
+          getLatestReadyByStudentId: vi.fn().mockResolvedValue(null),
         },
         lessonMemory: {
-          listRecentReadyByStudentId: vi.fn().mockResolvedValue([]),
+          listRecentReadyByStudentId: vi.fn().mockResolvedValue([
+            {
+              id: 'lesson-1',
+              generatedAt: new Date('2026-03-21T10:00:00.000Z'),
+              createdAt: new Date('2026-03-21T10:00:00.000Z'),
+              topicsDiscussed: [],
+              studentFacts: [
+                {
+                  fact: 'Wants to speak English more confidently at work.',
+                  category: 'goal',
+                  authority: 'student_stated',
+                  confidence: 'high',
+                  reviewNeeded: false,
+                  evidence: [],
+                },
+              ],
+            },
+          ]),
         },
         candidates: {
           getById: vi.fn(),
@@ -159,7 +177,16 @@ describe('application/student-profile-candidates', () => {
       },
     });
 
-    expect(insert).not.toHaveBeenCalled();
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'rejected',
+        reviewState: 'rejected',
+        dedupDecision: expect.objectContaining({
+          decision: 'duplicate',
+          model: 'gemini-3.1-flash-lite',
+        }),
+      }),
+    );
     expect(result?.skippedCandidateKeys).toEqual([
       'goals_motivation:wants to speak english more confidently at work',
     ]);

@@ -9,12 +9,12 @@ export interface ContractVersionRegistry {
   db: string;
 }
 
-export const API_CONTRACT_VERSION = '2.8.0';
+export const API_CONTRACT_VERSION = '2.9.0';
 export const MANIFEST_CONTRACT_VERSION = '2.0.0';
 export const PROMPT_SCHEMA_VERSION = '1.0.0';
 export const VALIDATOR_CONTRACT_VERSION = '1.0.0';
-export const DB_CONTRACT_VERSION = '0.16.0';
-export const DB_MIGRATION_HEAD = '0033_prompt_template_default';
+export const DB_CONTRACT_VERSION = '0.17.0';
+export const DB_MIGRATION_HEAD = '0034_profile_candidate_provenance_audit';
 
 export const CONTRACT_VERSIONS: Readonly<ContractVersionRegistry> = Object.freeze({
   api: API_CONTRACT_VERSION,

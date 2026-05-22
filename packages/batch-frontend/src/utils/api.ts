@@ -695,6 +695,12 @@ export interface StudentProfileCandidate {
   evidence: StudentProfileCandidateEvidence[];
   sourceSnapshotId?: string | null;
   sourceLessonMemoryIds: string[];
+  sourceLessonId?: string | null;
+  sourceLessonStartedAt?: string | null;
+  sourceLessonTitle?: string | null;
+  sourceMemoryIds?: string[];
+  provenance?: Record<string, unknown>;
+  dedupDecision?: Record<string, unknown>;
   status: StudentProfileCandidateStatus;
   reviewState: StudentProfileCandidateReviewState;
   reviewerId?: string | null;
@@ -722,6 +728,12 @@ interface StudentProfileCandidateApiRecord {
   evidence: StudentProfileCandidateEvidence[];
   sourceSnapshotId?: string | null;
   sourceLessonMemoryIds: string[];
+  sourceLessonId?: string | null;
+  sourceLessonStartedAt?: string | null;
+  sourceLessonTitle?: string | null;
+  sourceMemoryIds?: string[];
+  provenance?: Record<string, unknown>;
+  dedupDecision?: Record<string, unknown>;
   status: StudentProfileCandidateStatus;
   reviewState: StudentProfileCandidateReviewState;
   reviewerId?: string | null;
@@ -799,6 +811,9 @@ function buildCandidateSourceSummary(record: StudentProfileCandidateApiRecord): 
     const lessonCount = record.sourceLessonMemoryIds.length;
     parts.push(`${lessonCount} lesson memory entr${lessonCount === 1 ? 'y' : 'ies'}`);
   }
+  if (record.sourceLessonTitle) {
+    parts.push(record.sourceLessonTitle);
+  }
 
   return parts.length > 0 ? parts.join(' + ') : null;
 }
@@ -819,6 +834,12 @@ function mapStudentProfileCandidate(
     evidence: record.evidence ?? [],
     sourceSnapshotId: record.sourceSnapshotId ?? null,
     sourceLessonMemoryIds: record.sourceLessonMemoryIds ?? [],
+    sourceLessonId: record.sourceLessonId ?? null,
+    sourceLessonStartedAt: record.sourceLessonStartedAt ?? null,
+    sourceLessonTitle: record.sourceLessonTitle ?? null,
+    sourceMemoryIds: record.sourceMemoryIds ?? [],
+    provenance: record.provenance ?? {},
+    dedupDecision: record.dedupDecision ?? {},
     status: record.status,
     reviewState: record.reviewState,
     reviewerId: record.reviewerId ?? null,

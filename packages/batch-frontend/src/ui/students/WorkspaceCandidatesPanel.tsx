@@ -52,6 +52,17 @@ function formatAuthorityLabel(authority: StudentProfileCandidate['authority']): 
   return authority ? authority.replaceAll('_', ' ') : 'authority n/a';
 }
 
+function formatCandidateDate(value?: string | null): string {
+  if (!value) return 'n/a';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+}
+
+function candidateDecisionLabel(candidate: StudentProfileCandidate): string | null {
+  const decision = candidate.dedupDecision?.decision;
+  return typeof decision === 'string' && decision !== 'created' ? decision : null;
+}
+
 export function WorkspaceCandidatesPanel({
   className,
   selectedStudentId,
@@ -226,6 +237,7 @@ export function WorkspaceCandidatesPanel({
                     candidate.status === 'promoted' || candidate.status === 'superseded';
                   const isSelected = selectedCandidateIds.includes(candidate.id);
                   const isDetailsOpen = openCandidateIds.includes(candidate.id);
+                  const decisionLabel = candidateDecisionLabel(candidate);
 
                   return (
                     <article
@@ -241,6 +253,11 @@ export function WorkspaceCandidatesPanel({
                           </div>
                           {candidate.sourceSummary ? (
                             <p className="workspace-candidate-source">{candidate.sourceSummary}</p>
+                          ) : null}
+                          {decisionLabel ? (
+                            <p className="workspace-candidate-source">
+                              Dedup decision: {decisionLabel}
+                            </p>
                           ) : null}
                         </div>
 
@@ -348,6 +365,31 @@ export function WorkspaceCandidatesPanel({
                                 ? candidate.sourceLessonMemoryIds.join(', ')
                                 : 'none'}
                             </span>
+                            <span>
+                              <strong>Source lesson:</strong>{' '}
+                              {candidate.sourceLessonTitle ?? candidate.sourceLessonId ?? 'none'}
+                            </span>
+                            <span>
+                              <strong>Source lesson date:</strong>{' '}
+                              {formatCandidateDate(candidate.sourceLessonStartedAt)}
+                            </span>
+                            <span>
+                              <strong>Source memory IDs:</strong>{' '}
+                              {candidate.sourceMemoryIds && candidate.sourceMemoryIds.length > 0
+                                ? candidate.sourceMemoryIds.join(', ')
+                                : 'none'}
+                            </span>
+                            <span>
+                              <strong>Dedup decision:</strong>{' '}
+                              {candidate.dedupDecision?.decision
+                                ? `${candidate.dedupDecision.decision}`
+                                : 'none'}
+                            </span>
+                            {typeof candidate.dedupDecision?.reason === 'string' ? (
+                              <span>
+                                <strong>Dedup reason:</strong> {candidate.dedupDecision.reason}
+                              </span>
+                            ) : null}
                             <span>
                               <strong>Promoted revision:</strong>{' '}
                               {candidate.promotedRevisionId ?? 'not yet promoted'}
