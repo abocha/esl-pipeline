@@ -83,19 +83,13 @@ export const BusinessSchedulePage: React.FC = () => {
     }
   };
 
-  const runCompleteLessonAndStartHomework = async (
+  const runStartHomeworkFromReminder = async (
     reminder: NonNullable<BusinessScheduleSurface['reminders'][number]>,
   ) => {
     if (!reminder.lessonId) return;
     setSavingLessonId(reminder.lessonId);
     setError(null);
     try {
-      if (reminder.lessonStatus !== 'completed') {
-        await updateStudentLesson(reminder.studentId, reminder.lessonId, {
-          status: 'completed',
-          consumesCredit: true,
-        });
-      }
       navigateToLessonAssignment(reminder.studentId, reminder.lessonId);
     } catch (actionError: unknown) {
       setError(actionError instanceof Error ? actionError.message : 'Unable to update lesson.');
@@ -290,10 +284,11 @@ export const BusinessSchedulePage: React.FC = () => {
                     <div className="business-actions">
                       <button
                         type="button"
+                        aria-label="Add homework from reminder"
                         disabled={savingLessonId === reminder.lessonId}
-                        onClick={() => void runCompleteLessonAndStartHomework(reminder)}
+                        onClick={() => void runStartHomeworkFromReminder(reminder)}
                       >
-                        Complete + homework
+                        Add homework
                       </button>
                       <button
                         type="button"
