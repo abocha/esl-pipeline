@@ -7,8 +7,8 @@ import type {
   JobOptionsResponse,
   JobStatus,
   PromptOptionsResponse,
-  StudentScheduleBillingSurface,
   SttProvider,
+  StudentScheduleBillingSurface,
   UpdateAssignmentSessionRequest,
 } from '../../utils/api';
 import {
@@ -16,8 +16,8 @@ import {
   createAssignmentSession,
   fetchJobOptions,
   fetchPromptOptions,
-  getStudentScheduleBillingSurface,
   getJobStatus,
+  getStudentScheduleBillingSurface,
   subscribeToJobEvents,
   updateAssignmentSession,
 } from '../../utils/api';

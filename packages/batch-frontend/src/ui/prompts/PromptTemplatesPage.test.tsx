@@ -161,8 +161,9 @@ describe('PromptTemplatesPage', () => {
       expect(apiMocks.setDefaultTemplateContent).toHaveBeenCalledWith('hw/alternate.md');
     });
     expect(screen.getByText(/Alternate Homework is now the default template/i)).toBeTruthy();
-    expect((screen.getByRole('button', { name: /Make Default/i }) as HTMLButtonElement).disabled)
-      .toBe(true);
+    expect(
+      (screen.getByRole('button', { name: /Make Default/i }) as HTMLButtonElement).disabled,
+    ).toBe(true);
   });
 
   it('saves edited template content and refreshes revision history', async () => {
