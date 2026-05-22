@@ -13,7 +13,15 @@ import {
 import { useStudentAreaContext } from './StudentAreaContext';
 import './StudentHistoryPage.css';
 
-type HistoryFilter = 'all' | 'lessons' | 'homework' | 'profile' | 'materials' | 'operations';
+type HistoryFilter =
+  | 'all'
+  | 'lessons'
+  | 'homework'
+  | 'profile'
+  | 'materials'
+  | 'billing'
+  | 'business'
+  | 'operations';
 type HistoryEventDensity = 'rich' | 'compact';
 type HistoryEventTone = 'blue' | 'green' | 'amber' | 'rose' | 'quiet';
 
@@ -50,6 +58,8 @@ const FILTERS: { key: HistoryFilter; label: string }[] = [
   { key: 'homework', label: 'Homework' },
   { key: 'profile', label: 'Profile' },
   { key: 'materials', label: 'Materials' },
+  { key: 'billing', label: 'Billing' },
+  { key: 'business', label: 'Business' },
   { key: 'operations', label: 'Operations' },
 ];
 
@@ -104,6 +114,12 @@ function compactList(values: readonly (string | null | undefined)[], limit: numb
 
 function detailValue(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+}
+
+function detailScalarValue(value: unknown): string | null {
+  if (typeof value === 'string') return value.trim().length > 0 ? value.trim() : null;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return null;
 }
 
 function detailsRecord(item: StudentTimelineItem): Record<string, unknown> {
@@ -212,6 +228,26 @@ function getTimelineCategory(item: StudentTimelineItem): Exclude<HistoryFilter, 
   if (item.type === 'recording_ingested' || item.type === 'transcript_ready') {
     return 'lessons';
   }
+  if (
+    item.type === 'lesson_created' ||
+    item.type === 'lesson_updated' ||
+    item.type === 'lesson_completed' ||
+    item.type === 'lesson_canceled' ||
+    item.type === 'lesson_no_show' ||
+    item.type === 'lesson_plan_updated' ||
+    item.type === 'lesson_recurrence_updated'
+  ) {
+    return 'lessons';
+  }
+  if (item.type === 'credit_event_recorded' || item.type === 'payment_recorded') {
+    return 'billing';
+  }
+  if (item.type === 'business_settings_updated') {
+    return 'business';
+  }
+  if (item.type === 'reminder_hidden') {
+    return 'operations';
+  }
   return null;
 }
 
@@ -249,6 +285,28 @@ function getTimelineLabel(item: StudentTimelineItem): string {
       return 'Recording added';
     case 'transcript_ready':
       return 'Transcript ready';
+    case 'lesson_created':
+      return 'Lesson scheduled';
+    case 'lesson_updated':
+      return 'Lesson updated';
+    case 'lesson_completed':
+      return 'Lesson completed';
+    case 'lesson_canceled':
+      return 'Lesson canceled';
+    case 'lesson_no_show':
+      return 'Lesson marked no-show';
+    case 'lesson_plan_updated':
+      return 'Lesson plan updated';
+    case 'lesson_recurrence_updated':
+      return 'Lesson recurrence updated';
+    case 'credit_event_recorded':
+      return item.status === 'credit_added' ? 'Lesson credits added' : 'Credit ledger updated';
+    case 'payment_recorded':
+      return item.status === 'voided' ? 'Payment voided' : 'Payment received';
+    case 'reminder_hidden':
+      return 'Reminder hidden';
+    case 'business_settings_updated':
+      return 'Business settings updated';
     default:
       return 'History event';
   }
@@ -263,6 +321,9 @@ function getTimelineTone(item: StudentTimelineItem): HistoryEventTone {
   if (item.type.startsWith('template_revision') || item.type === 'prompt_package_created') {
     return 'quiet';
   }
+  if (item.type === 'credit_event_recorded' || item.type === 'payment_recorded') return 'green';
+  if (item.type === 'business_settings_updated' || item.type === 'reminder_hidden') return 'amber';
+  if (item.type.startsWith('lesson_')) return 'blue';
   return 'quiet';
 }
 
@@ -274,6 +335,17 @@ function timelineToEvent(item: StudentTimelineItem): HistoryEvent | null {
   const message = detailValue(details.message);
   const htmlUrl = detailValue(details.htmlUrl);
   const source = detailValue(details.source);
+  const lessonId = detailValue(details.lessonId);
+  const startsAt = detailValue(details.startsAt);
+  const durationMinutes = detailScalarValue(details.durationMinutes);
+  const title = detailValue(details.title);
+  const creditEventId = detailValue(details.creditEventId);
+  const paymentId = detailValue(details.paymentId);
+  const amountMinor = detailScalarValue(details.amountMinor);
+  const currency = detailValue(details.currency);
+  const quantityDelta = detailScalarValue(details.quantityDelta);
+  const receivedAt = detailValue(details.receivedAt);
+  const workspaceId = detailValue(details.workspaceId);
 
   return {
     id: makeEventId(
@@ -284,7 +356,7 @@ function timelineToEvent(item: StudentTimelineItem): HistoryEvent | null {
     category,
     createdAt: item.createdAt,
     title: getTimelineLabel(item),
-    subtitle: versionLabel ?? message ?? item.displayName,
+    subtitle: title ?? versionLabel ?? message ?? item.displayName,
     summary: message ?? undefined,
     density: 'compact',
     tone: getTimelineTone(item),
@@ -302,6 +374,17 @@ function timelineToEvent(item: StudentTimelineItem): HistoryEvent | null {
         : []),
       ...(item.draftId ? [{ label: 'Draft ID', value: item.draftId }] : []),
       ...(item.jobId ? [{ label: 'Job ID', value: item.jobId }] : []),
+      ...(lessonId ? [{ label: 'Lesson ID', value: lessonId }] : []),
+      ...(startsAt ? [{ label: 'Lesson time', value: startsAt }] : []),
+      ...(durationMinutes ? [{ label: 'Duration minutes', value: durationMinutes }] : []),
+      ...(creditEventId ? [{ label: 'Credit event ID', value: creditEventId }] : []),
+      ...(quantityDelta ? [{ label: 'Credit delta', value: quantityDelta }] : []),
+      ...(paymentId ? [{ label: 'Payment ID', value: paymentId }] : []),
+      ...(amountMinor && currency
+        ? [{ label: 'Amount', value: `${currency} ${(Number(amountMinor) / 100).toFixed(2)}` }]
+        : []),
+      ...(receivedAt ? [{ label: 'Received at', value: receivedAt }] : []),
+      ...(workspaceId ? [{ label: 'Workspace ID', value: workspaceId }] : []),
       ...(detailValue(details.profileRevisionId)
         ? [{ label: 'Profile revision ID', value: detailValue(details.profileRevisionId) ?? '' }]
         : []),
@@ -589,8 +672,8 @@ export const StudentHistoryPage: React.FC = () => {
         <article className="student-area-panel student-history-about">
           <p className="student-history-section-label">About this history</p>
           <p>
-            This timeline includes lessons, homework, materials, profile updates, and important
-            operations.
+            This timeline includes lessons, homework, materials, profile updates, billing, business,
+            and important operations.
           </p>
           <Link to={`/students/${encodeURIComponent(studentId)}/overview`}>How history works</Link>
         </article>
@@ -633,8 +716,8 @@ export const StudentHistoryPage: React.FC = () => {
           <article className="student-area-empty-state student-history-empty">
             <h3>History will collect here</h3>
             <p>
-              Lesson, homework, profile, material, and operations events will appear as this student
-              works through the new flow.
+              Lesson, homework, profile, material, billing, business, and operations events will
+              appear as this student works through the new flow.
             </p>
           </article>
         )}

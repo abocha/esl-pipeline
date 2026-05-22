@@ -24,6 +24,15 @@ async function truncateTimelineTables() {
         prompt_packages,
         transcripts,
         recordings,
+        student_payment_records,
+        student_credit_events,
+        student_reminder_preferences,
+        student_lesson_recurrence_slots,
+        student_lesson_recurrence_rules,
+        student_lesson_plans,
+        student_lessons,
+        workspace_business_settings,
+        workspaces,
         template_revisions,
         templates,
         profile_revisions,
@@ -394,6 +403,214 @@ describe('student-timeline', () => {
     expect(actionEvent?.details).toMatchObject({
       actionType: 'rerun',
       message: 'Publish rerun queued',
+    });
+  });
+
+  it('includes schedule, billing, business, and reminder events', async () => {
+    const studentId = deriveStudentId('Rina');
+    const workspaceId = randomUUID();
+    const lessonId = randomUUID();
+    const recurrenceRuleId = randomUUID();
+    const creditEventId = randomUUID();
+    const paymentId = randomUUID();
+    const times = {
+      workspace: new Date('2024-03-01T08:00:00.000Z'),
+      lessonCreated: new Date('2024-03-02T08:00:00.000Z'),
+      lessonUpdated: new Date('2024-03-03T08:00:00.000Z'),
+      billing: new Date('2024-03-04T08:00:00.000Z'),
+      reminder: new Date('2024-03-05T08:00:00.000Z'),
+    };
+
+    await withPgClient(async (client) => {
+      await client.query(
+        `
+        INSERT INTO workspaces (id, name, created_at, updated_at)
+        VALUES ($1, 'Rina workspace', $2, $2)
+        `,
+        [workspaceId, times.workspace],
+      );
+      await client.query(
+        `
+        INSERT INTO workspace_business_settings (
+          workspace_id,
+          default_currency,
+          default_lesson_rate_minor,
+          default_lesson_duration_minutes,
+          timezone,
+          forecast_horizon_days,
+          top_up_threshold,
+          created_at,
+          updated_at
+        )
+        VALUES ($1, 'USD', 12000, 60, 'UTC', 45, 2, $2, $2)
+        `,
+        [workspaceId, times.workspace],
+      );
+      await client.query(
+        `
+        INSERT INTO students (id, student, workspace_id)
+        VALUES ($1, 'Rina', $2)
+        `,
+        [studentId, workspaceId],
+      );
+      await client.query(
+        `
+        INSERT INTO student_lesson_plans (
+          student_id,
+          workspace_id,
+          timezone,
+          default_duration_minutes,
+          cadence,
+          preferred_times,
+          scheduling_notes,
+          created_at,
+          updated_at
+        )
+        VALUES ($1, $2, 'UTC', 60, 'weekly', 'Mondays', 'Keep mornings', $3, $3)
+        `,
+        [studentId, workspaceId, times.lessonCreated],
+      );
+      await client.query(
+        `
+        INSERT INTO student_lesson_recurrence_rules (
+          id,
+          student_id,
+          workspace_id,
+          timezone,
+          frequency,
+          starts_on,
+          status,
+          generation_horizon_days,
+          created_at,
+          updated_at
+        )
+        VALUES ($1, $2, $3, 'UTC', 'weekly', '2024-03-01', 'active', 56, $4, $4)
+        `,
+        [recurrenceRuleId, studentId, workspaceId, times.lessonCreated],
+      );
+      await client.query(
+        `
+        INSERT INTO student_lessons (
+          id,
+          student_id,
+          workspace_id,
+          starts_at,
+          timezone,
+          duration_minutes,
+          status,
+          consumes_credit,
+          title,
+          recurrence_rule_id,
+          created_at,
+          updated_at
+        )
+        VALUES ($1, $2, $3, '2024-03-02T09:00:00.000Z', 'UTC', 60, 'completed', true, 'Pitch practice', $4, $5, $6)
+        `,
+        [
+          lessonId,
+          studentId,
+          workspaceId,
+          recurrenceRuleId,
+          times.lessonCreated,
+          times.lessonUpdated,
+        ],
+      );
+      await client.query(
+        `
+        INSERT INTO student_payment_records (
+          id,
+          student_id,
+          workspace_id,
+          amount_minor,
+          currency,
+          method,
+          received_at,
+          note,
+          created_at
+        )
+        VALUES ($1, $2, $3, 120000, 'USD', 'bank', '2024-03-04', 'March package', $4)
+        `,
+        [paymentId, studentId, workspaceId, times.billing],
+      );
+      await client.query(
+        `
+        INSERT INTO student_credit_events (
+          id,
+          student_id,
+          workspace_id,
+          event_type,
+          quantity_delta,
+          source_lesson_id,
+          source_payment_id,
+          note,
+          created_at
+        )
+        VALUES ($1, $2, $3, 'credit_added', 8, $4, $5, 'Package purchase', $6)
+        `,
+        [creditEventId, studentId, workspaceId, lessonId, paymentId, times.billing],
+      );
+      await client.query(
+        `
+        INSERT INTO student_reminder_preferences (
+          student_id,
+          workspace_id,
+          latest_hidden_lesson_followup_key,
+          latest_hidden_lesson_followup_lesson_id,
+          latest_hidden_lesson_followup_at,
+          created_at,
+          updated_at
+        )
+        VALUES ($1, $2, 'lesson_followup:' || $3::text, $3, $4, $4, $4)
+        `,
+        [studentId, workspaceId, lessonId, times.reminder],
+      );
+    });
+
+    const timeline = await getStudentTimeline(studentId, {
+      types: [
+        'lesson_created',
+        'lesson_completed',
+        'lesson_plan_updated',
+        'lesson_recurrence_updated',
+        'credit_event_recorded',
+        'payment_recorded',
+        'reminder_hidden',
+        'business_settings_updated',
+      ],
+      order: 'asc',
+    });
+
+    expect(timeline.items.map((item) => item.type)).toEqual([
+      'business_settings_updated',
+      'lesson_created',
+      'lesson_plan_updated',
+      'lesson_recurrence_updated',
+      'lesson_completed',
+      'credit_event_recorded',
+      'payment_recorded',
+      'reminder_hidden',
+    ]);
+    expect(timeline.items.find((item) => item.type === 'lesson_completed')?.details).toMatchObject({
+      lessonId,
+      title: 'Pitch practice',
+      status: 'completed',
+      durationMinutes: 60,
+    });
+    expect(
+      timeline.items.find((item) => item.type === 'credit_event_recorded')?.details,
+    ).toMatchObject({
+      creditEventId,
+      quantityDelta: 8,
+      sourceLessonId: lessonId,
+      sourcePaymentId: paymentId,
+    });
+    expect(timeline.items.find((item) => item.type === 'payment_recorded')?.details).toMatchObject({
+      paymentId,
+      amountMinor: 120000,
+      currency: 'USD',
+    });
+    expect(timeline.items.find((item) => item.type === 'reminder_hidden')?.details).toMatchObject({
+      lessonId,
     });
   });
 });
