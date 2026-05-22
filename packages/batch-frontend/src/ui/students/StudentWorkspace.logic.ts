@@ -106,7 +106,18 @@ export type TimelineFilterState =
   | 'template_revision_activated'
   | 'job_action_rerun'
   | 'job_action_cancel'
-  | 'job_action_edit_metadata';
+  | 'job_action_edit_metadata'
+  | 'lesson_created'
+  | 'lesson_updated'
+  | 'lesson_completed'
+  | 'lesson_canceled'
+  | 'lesson_no_show'
+  | 'lesson_plan_updated'
+  | 'lesson_recurrence_updated'
+  | 'credit_event_recorded'
+  | 'payment_recorded'
+  | 'reminder_hidden'
+  | 'business_settings_updated';
 
 export interface TimelineFilters {
   type: TimelineFilterState;

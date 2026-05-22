@@ -8,12 +8,22 @@ import {
   type LessonMemoryRecord,
   listStudentHomeworkMemoryEntries,
   listStudentLessonMemoryEntries,
+  listStudentProfileCandidates,
+  type StudentProfileCandidate,
   type StudentTimelineItem,
 } from '../../utils/api';
 import { useStudentAreaContext } from './StudentAreaContext';
 import './StudentHistoryPage.css';
 
-type HistoryFilter = 'all' | 'lessons' | 'homework' | 'profile' | 'materials' | 'operations';
+type HistoryFilter =
+  | 'all'
+  | 'lessons'
+  | 'homework'
+  | 'profile'
+  | 'materials'
+  | 'billing'
+  | 'business'
+  | 'operations';
 type HistoryEventDensity = 'rich' | 'compact';
 type HistoryEventTone = 'blue' | 'green' | 'amber' | 'rose' | 'quiet';
 
@@ -36,12 +46,14 @@ interface HistoryData {
   timeline: StudentTimelineItem[];
   lessons: LessonMemoryRecord[];
   homework: HomeworkMemoryRecord[];
+  candidates: StudentProfileCandidate[];
 }
 
 const EMPTY_HISTORY_DATA: HistoryData = {
   timeline: [],
   lessons: [],
   homework: [],
+  candidates: [],
 };
 
 const FILTERS: { key: HistoryFilter; label: string }[] = [
@@ -50,6 +62,8 @@ const FILTERS: { key: HistoryFilter; label: string }[] = [
   { key: 'homework', label: 'Homework' },
   { key: 'profile', label: 'Profile' },
   { key: 'materials', label: 'Materials' },
+  { key: 'billing', label: 'Billing' },
+  { key: 'business', label: 'Business' },
   { key: 'operations', label: 'Operations' },
 ];
 
@@ -104,6 +118,12 @@ function compactList(values: readonly (string | null | undefined)[], limit: numb
 
 function detailValue(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+}
+
+function detailScalarValue(value: unknown): string | null {
+  if (typeof value === 'string') return value.trim().length > 0 ? value.trim() : null;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return null;
 }
 
 function detailsRecord(item: StudentTimelineItem): Record<string, unknown> {
@@ -193,6 +213,44 @@ function homeworkToEvent(record: HomeworkMemoryRecord): HistoryEvent {
   };
 }
 
+function candidateToEvent(record: StudentProfileCandidate): HistoryEvent | null {
+  const decision =
+    typeof record.dedupDecision?.decision === 'string' ? record.dedupDecision.decision : null;
+  const isDropped = decision === 'duplicate' || decision === 'stale';
+  if (!isDropped && !record.sourceLessonTitle && !record.sourceLessonId) {
+    return null;
+  }
+  const reason =
+    typeof record.dedupDecision?.reason === 'string' ? record.dedupDecision.reason : null;
+  return {
+    id: makeEventId('profile-candidate', record.id, record.createdAt),
+    category: 'profile',
+    createdAt: record.createdAt,
+    title: isDropped ? `Profile candidate dropped as ${decision}` : 'Profile candidate proposed',
+    subtitle: record.sourceLessonTitle ?? record.proposedFact,
+    summary: reason ?? truncateText(record.proposedFact, 210),
+    density: 'compact',
+    tone: isDropped ? 'amber' : 'green',
+    tags: compactList([decision, record.reviewState, record.targetSection], 3),
+    meta: [],
+    detailRows: [
+      { label: 'Candidate ID', value: record.id },
+      { label: 'Candidate fact', value: record.proposedFact },
+      ...(record.sourceLessonId
+        ? [{ label: 'Source lesson ID', value: record.sourceLessonId }]
+        : []),
+      ...(record.sourceLessonStartedAt
+        ? [{ label: 'Source lesson date', value: record.sourceLessonStartedAt }]
+        : []),
+      ...(record.sourceMemoryIds && record.sourceMemoryIds.length > 0
+        ? [{ label: 'Source memory IDs', value: record.sourceMemoryIds.join(', ') }]
+        : []),
+      ...(decision ? [{ label: 'Dedup decision', value: decision }] : []),
+      ...(reason ? [{ label: 'Dedup reason', value: reason }] : []),
+    ],
+  };
+}
+
 function getTimelineCategory(item: StudentTimelineItem): Exclude<HistoryFilter, 'all'> | null {
   if (item.type.startsWith('profile_revision') || item.type === 'student_profile_binding_changed') {
     return 'profile';
@@ -211,6 +269,26 @@ function getTimelineCategory(item: StudentTimelineItem): Exclude<HistoryFilter, 
   }
   if (item.type === 'recording_ingested' || item.type === 'transcript_ready') {
     return 'lessons';
+  }
+  if (
+    item.type === 'lesson_created' ||
+    item.type === 'lesson_updated' ||
+    item.type === 'lesson_completed' ||
+    item.type === 'lesson_canceled' ||
+    item.type === 'lesson_no_show' ||
+    item.type === 'lesson_plan_updated' ||
+    item.type === 'lesson_recurrence_updated'
+  ) {
+    return 'lessons';
+  }
+  if (item.type === 'credit_event_recorded' || item.type === 'payment_recorded') {
+    return 'billing';
+  }
+  if (item.type === 'business_settings_updated') {
+    return 'business';
+  }
+  if (item.type === 'reminder_hidden') {
+    return 'operations';
   }
   return null;
 }
@@ -249,6 +327,28 @@ function getTimelineLabel(item: StudentTimelineItem): string {
       return 'Recording added';
     case 'transcript_ready':
       return 'Transcript ready';
+    case 'lesson_created':
+      return 'Lesson scheduled';
+    case 'lesson_updated':
+      return 'Lesson updated';
+    case 'lesson_completed':
+      return 'Lesson completed';
+    case 'lesson_canceled':
+      return 'Lesson canceled';
+    case 'lesson_no_show':
+      return 'Lesson marked no-show';
+    case 'lesson_plan_updated':
+      return 'Lesson plan updated';
+    case 'lesson_recurrence_updated':
+      return 'Lesson recurrence updated';
+    case 'credit_event_recorded':
+      return item.status === 'credit_added' ? 'Lesson credits added' : 'Credit ledger updated';
+    case 'payment_recorded':
+      return item.status === 'voided' ? 'Payment voided' : 'Payment received';
+    case 'reminder_hidden':
+      return 'Reminder hidden';
+    case 'business_settings_updated':
+      return 'Business settings updated';
     default:
       return 'History event';
   }
@@ -263,6 +363,9 @@ function getTimelineTone(item: StudentTimelineItem): HistoryEventTone {
   if (item.type.startsWith('template_revision') || item.type === 'prompt_package_created') {
     return 'quiet';
   }
+  if (item.type === 'credit_event_recorded' || item.type === 'payment_recorded') return 'green';
+  if (item.type === 'business_settings_updated' || item.type === 'reminder_hidden') return 'amber';
+  if (item.type.startsWith('lesson_')) return 'blue';
   return 'quiet';
 }
 
@@ -274,6 +377,17 @@ function timelineToEvent(item: StudentTimelineItem): HistoryEvent | null {
   const message = detailValue(details.message);
   const htmlUrl = detailValue(details.htmlUrl);
   const source = detailValue(details.source);
+  const lessonId = detailValue(details.lessonId);
+  const startsAt = detailValue(details.startsAt);
+  const durationMinutes = detailScalarValue(details.durationMinutes);
+  const title = detailValue(details.title);
+  const creditEventId = detailValue(details.creditEventId);
+  const paymentId = detailValue(details.paymentId);
+  const amountMinor = detailScalarValue(details.amountMinor);
+  const currency = detailValue(details.currency);
+  const quantityDelta = detailScalarValue(details.quantityDelta);
+  const receivedAt = detailValue(details.receivedAt);
+  const workspaceId = detailValue(details.workspaceId);
 
   return {
     id: makeEventId(
@@ -284,7 +398,7 @@ function timelineToEvent(item: StudentTimelineItem): HistoryEvent | null {
     category,
     createdAt: item.createdAt,
     title: getTimelineLabel(item),
-    subtitle: versionLabel ?? message ?? item.displayName,
+    subtitle: title ?? versionLabel ?? message ?? item.displayName,
     summary: message ?? undefined,
     density: 'compact',
     tone: getTimelineTone(item),
@@ -302,6 +416,17 @@ function timelineToEvent(item: StudentTimelineItem): HistoryEvent | null {
         : []),
       ...(item.draftId ? [{ label: 'Draft ID', value: item.draftId }] : []),
       ...(item.jobId ? [{ label: 'Job ID', value: item.jobId }] : []),
+      ...(lessonId ? [{ label: 'Lesson ID', value: lessonId }] : []),
+      ...(startsAt ? [{ label: 'Lesson time', value: startsAt }] : []),
+      ...(durationMinutes ? [{ label: 'Duration minutes', value: durationMinutes }] : []),
+      ...(creditEventId ? [{ label: 'Credit event ID', value: creditEventId }] : []),
+      ...(quantityDelta ? [{ label: 'Credit delta', value: quantityDelta }] : []),
+      ...(paymentId ? [{ label: 'Payment ID', value: paymentId }] : []),
+      ...(amountMinor && currency
+        ? [{ label: 'Amount', value: `${currency} ${(Number(amountMinor) / 100).toFixed(2)}` }]
+        : []),
+      ...(receivedAt ? [{ label: 'Received at', value: receivedAt }] : []),
+      ...(workspaceId ? [{ label: 'Workspace ID', value: workspaceId }] : []),
       ...(detailValue(details.profileRevisionId)
         ? [{ label: 'Profile revision ID', value: detailValue(details.profileRevisionId) ?? '' }]
         : []),
@@ -352,6 +477,9 @@ function buildHistoryEvents(data: HistoryData): HistoryEvent[] {
   return [
     ...data.lessons.map(lessonToEvent),
     ...data.homework.map(homeworkToEvent),
+    ...data.candidates
+      .map(candidateToEvent)
+      .filter((event): event is HistoryEvent => Boolean(event)),
     ...timelineEvents,
   ].sort((left, right) => {
     const leftTime = new Date(left.createdAt).getTime();
@@ -506,7 +634,10 @@ export const StudentHistoryPage: React.FC = () => {
 
     const loadHistory = async () => {
       try {
-        const surface = await getStudentHistorySurface(studentId);
+        const [surface, candidates] = await Promise.all([
+          getStudentHistorySurface(studentId),
+          listStudentProfileCandidates(studentId, { limit: 100, offset: 0, order: 'desc' }),
+        ]);
 
         if (latestHistoryRequestRef.current !== requestId) {
           return;
@@ -516,6 +647,7 @@ export const StudentHistoryPage: React.FC = () => {
           timeline: surface.timeline.items,
           lessons: surface.lessonMemory.items,
           homework: surface.homeworkMemory.items,
+          candidates: candidates.items,
         });
         setLoadedStudentId(studentId);
         setHistoryError(null);
@@ -523,21 +655,23 @@ export const StudentHistoryPage: React.FC = () => {
         if (latestHistoryRequestRef.current !== requestId) {
           return;
         }
-        const [timelineResult, lessonResult, homeworkResult] = await Promise.allSettled([
-          getStudentTimeline(studentId, { limit: 100, offset: 0, order: 'desc' }),
-          listStudentLessonMemoryEntries(studentId, {
-            status: 'ready',
-            limit: 60,
-            offset: 0,
-            order: 'desc',
-          }),
-          listStudentHomeworkMemoryEntries(studentId, {
-            status: 'ready',
-            limit: 60,
-            offset: 0,
-            order: 'desc',
-          }),
-        ]);
+        const [timelineResult, lessonResult, homeworkResult, candidatesResult] =
+          await Promise.allSettled([
+            getStudentTimeline(studentId, { limit: 100, offset: 0, order: 'desc' }),
+            listStudentLessonMemoryEntries(studentId, {
+              status: 'ready',
+              limit: 60,
+              offset: 0,
+              order: 'desc',
+            }),
+            listStudentHomeworkMemoryEntries(studentId, {
+              status: 'ready',
+              limit: 60,
+              offset: 0,
+              order: 'desc',
+            }),
+            listStudentProfileCandidates(studentId, { limit: 100, offset: 0, order: 'desc' }),
+          ]);
         if (latestHistoryRequestRef.current !== requestId) {
           return;
         }
@@ -545,10 +679,11 @@ export const StudentHistoryPage: React.FC = () => {
           timeline: timelineResult.status === 'fulfilled' ? timelineResult.value.items : [],
           lessons: lessonResult.status === 'fulfilled' ? lessonResult.value.items : [],
           homework: homeworkResult.status === 'fulfilled' ? homeworkResult.value.items : [],
+          candidates: candidatesResult.status === 'fulfilled' ? candidatesResult.value.items : [],
         });
         setLoadedStudentId(studentId);
         setHistoryError(
-          [timelineResult, lessonResult, homeworkResult].some(
+          [timelineResult, lessonResult, homeworkResult, candidatesResult].some(
             (result) => result.status === 'rejected',
           )
             ? 'Some history context could not be loaded.'
@@ -589,8 +724,8 @@ export const StudentHistoryPage: React.FC = () => {
         <article className="student-area-panel student-history-about">
           <p className="student-history-section-label">About this history</p>
           <p>
-            This timeline includes lessons, homework, materials, profile updates, and important
-            operations.
+            This timeline includes lessons, homework, materials, profile updates, billing, business,
+            and important operations.
           </p>
           <Link to={`/students/${encodeURIComponent(studentId)}/overview`}>How history works</Link>
         </article>
@@ -633,8 +768,8 @@ export const StudentHistoryPage: React.FC = () => {
           <article className="student-area-empty-state student-history-empty">
             <h3>History will collect here</h3>
             <p>
-              Lesson, homework, profile, material, and operations events will appear as this student
-              works through the new flow.
+              Lesson, homework, profile, material, billing, business, and operations events will
+              appear as this student works through the new flow.
             </p>
           </article>
         )}

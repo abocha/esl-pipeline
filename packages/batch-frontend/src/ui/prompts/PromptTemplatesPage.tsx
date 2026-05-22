@@ -12,6 +12,7 @@ import {
   listTemplateContents,
   listTemplateRevisions,
   restoreTemplateRevision,
+  setDefaultTemplateContent,
   upsertTemplateContent,
 } from '../../utils/api';
 
@@ -50,6 +51,7 @@ type TemplateBusyState =
   | 'creating'
   | 'restoring'
   | 'activating'
+  | 'defaulting'
   | 'archiving';
 
 function formatDateTime(value?: string | null): string {
@@ -69,6 +71,7 @@ function getErrorMessage(error: unknown, fallback: string): string {
 
 export const PromptTemplatesPage: React.FC = () => {
   const [templates, setTemplates] = useState<TemplateContentOption[]>([]);
+  const [defaultTemplateId, setDefaultTemplateId] = useState<string | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [newTemplateId, setNewTemplateId] = useState('');
   const [currentTemplate, setCurrentTemplate] = useState<TemplateContentResponse | null>(null);
@@ -86,6 +89,8 @@ export const PromptTemplatesPage: React.FC = () => {
     templates.find((template) => template.id === selectedTemplateId)?.label ??
     currentTemplate?.label ??
     selectedTemplateId;
+  const selectedTemplateIsDefault =
+    Boolean(selectedTemplateId) && selectedTemplateId === defaultTemplateId;
 
   const confirmDiscardDirty = useCallback((): boolean => {
     if (!templateDirty) return true;
@@ -144,6 +149,7 @@ export const PromptTemplatesPage: React.FC = () => {
       try {
         const response = await listTemplateContents();
         const nextTemplates = response.templates ?? [];
+        setDefaultTemplateId(response.defaultTemplateId ?? null);
         setTemplates(nextTemplates);
 
         const nextSelected =
@@ -308,6 +314,24 @@ export const PromptTemplatesPage: React.FC = () => {
     }
   };
 
+  const handleMakeDefaultTemplate = async () => {
+    if (!selectedTemplateId) return;
+
+    setBusy('defaulting');
+    setError(null);
+    setSuccess(null);
+    try {
+      const updated = await setDefaultTemplateContent(selectedTemplateId);
+      setDefaultTemplateId(updated.id);
+      setSuccess(`${updated.label} is now the default template.`);
+      await loadTemplates(updated.id, { loadSelectedTemplate: false });
+    } catch (defaultError) {
+      setError(getErrorMessage(defaultError, 'Unable to update the default template.'));
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const isBusy = busy !== null || listLoading;
   const hasTemplates = templates.length > 0;
 
@@ -352,6 +376,7 @@ export const PromptTemplatesPage: React.FC = () => {
                   {templates.map((template) => (
                     <option key={template.id} value={template.id}>
                       {template.label} ({template.id})
+                      {template.id === defaultTemplateId ? ' - default' : ''}
                     </option>
                   ))}
                 </select>
@@ -401,6 +426,9 @@ export const PromptTemplatesPage: React.FC = () => {
                 {currentTemplate?.currentRevisionId ? (
                   <span className="prompt-templates-pill">Active revision</span>
                 ) : null}
+                {selectedTemplateIsDefault ? (
+                  <span className="prompt-templates-pill success">Default</span>
+                ) : null}
                 {templateDirty ? (
                   <span className="prompt-templates-pill warning">Unsaved</span>
                 ) : null}
@@ -437,6 +465,14 @@ export const PromptTemplatesPage: React.FC = () => {
                 disabled={!selectedTemplateId || isBusy}
               >
                 {busy === 'archiving' ? 'Archiving...' : 'Archive Template'}
+              </button>
+              <button
+                type="button"
+                className="prompt-templates-secondary"
+                onClick={() => void handleMakeDefaultTemplate()}
+                disabled={!selectedTemplateId || isBusy || selectedTemplateIsDefault}
+              >
+                {busy === 'defaulting' ? 'Updating default...' : 'Make Default'}
               </button>
               {currentTemplate?.updatedAt ? (
                 <span className="prompt-templates-muted">

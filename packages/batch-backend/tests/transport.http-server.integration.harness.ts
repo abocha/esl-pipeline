@@ -1036,6 +1036,7 @@ export function describeHttpServerIntegrationSuite(
         creditEvents: [],
         payments: [],
         reminders: [],
+        latestHiddenReminder: null,
       });
       mockUpsertPrimaryStudentLessonRecurrence.mockResolvedValue({
         studentId: deriveStudentId('Anna'),
@@ -1087,6 +1088,7 @@ export function describeHttpServerIntegrationSuite(
         creditEvents: [],
         payments: [],
         reminders: [],
+        latestHiddenReminder: null,
       });
       mockGetBusinessSettings.mockResolvedValue({
         workspaceId: '00000000-0000-4000-8000-000000000001',
@@ -1121,6 +1123,7 @@ export function describeHttpServerIntegrationSuite(
         today: [],
         lessons: [],
         reminders: [],
+        latestHiddenReminder: null,
         creditAlerts: [],
         recentPayments: [],
       });

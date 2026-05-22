@@ -49,8 +49,10 @@ import {
   adjustStudentCredits,
   createStudentLesson,
   getStudentScheduleBillingSurface,
+  hideStudentLessonFollowupReminder,
   recordStudentPayment,
   StudentScheduleBillingError,
+  undoLatestHiddenStudentReminder,
   updateStudentLesson,
   updateStudentLessonPlan,
   upsertPrimaryStudentLessonRecurrence,
@@ -594,6 +596,61 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
             body,
             authenticatedUser?.id ?? null,
           ),
+        );
+      } catch (error: unknown) {
+        return handleScheduleBillingRouteError(reply, routePath, error);
+      }
+    },
+  );
+
+  app.put(
+    '/students/:id/operations/reminders/lesson-followup/:lessonId/hide',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(
+        request,
+        'PUT /students/:id/operations/reminders/lesson-followup/:lessonId/hide',
+      );
+      const paramsSchema = z.object({
+        id: z.string().min(1),
+        lessonId: z.string().min(1),
+      });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const authenticatedUser = getAuthenticatedUser(request);
+        return reply.send(
+          await hideStudentLessonFollowupReminder(
+            params.id,
+            params.lessonId,
+            authenticatedUser?.id ?? null,
+          ),
+        );
+      } catch (error: unknown) {
+        return handleScheduleBillingRouteError(reply, routePath, error);
+      }
+    },
+  );
+
+  app.put(
+    '/students/:id/operations/reminders/latest-hidden/undo',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(
+        request,
+        'PUT /students/:id/operations/reminders/latest-hidden/undo',
+      );
+      const paramsSchema = z.object({ id: z.string().min(1) });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const authenticatedUser = getAuthenticatedUser(request);
+        return reply.send(
+          await undoLatestHiddenStudentReminder(params.id, authenticatedUser?.id ?? null),
         );
       } catch (error: unknown) {
         return handleScheduleBillingRouteError(reply, routePath, error);

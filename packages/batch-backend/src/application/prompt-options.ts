@@ -253,6 +253,9 @@ async function loadPromptOptionLists(
     templates,
     'template',
   );
+  const dbDefaultTemplateId = templateRecords.find(
+    (template) => template.isDefault && templates.some((option) => option.id === template.id),
+  )?.id;
   const defaultProfileId = resolveDefaultId(
     dependencies.config.prompt.defaultProfilePath,
     profiles,
@@ -263,7 +266,7 @@ async function loadPromptOptionLists(
     templates,
     profiles,
     defaults: {
-      templateId: defaultTemplateId,
+      templateId: dbDefaultTemplateId ?? defaultTemplateId,
       profileId: defaultProfileId,
     },
     templateRoot,

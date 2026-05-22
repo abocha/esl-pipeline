@@ -4,6 +4,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
   type BusinessScheduleSurface,
   getBusinessScheduleSurface,
+  hideStudentLessonFollowupReminder,
+  undoLatestHiddenStudentReminder,
   updateStudentLesson,
 } from '../../utils/api';
 import {
@@ -13,6 +15,15 @@ import {
   formatMoney,
   todayInput,
 } from './business-format';
+
+function formatReminderLessonDetail(
+  summary?: BusinessScheduleSurface['reminders'][number]['lessonSummary'] | null,
+): string {
+  if (!summary) return 'Lesson no longer available';
+  const topic = summary.title?.trim() ? summary.title.trim() : 'Untitled lesson';
+  const date = summary.startsAt ? formatDateTime(summary.startsAt) : 'Not scheduled yet';
+  return `${date} · ${topic} · Lesson ${summary.lessonId}`;
+}
 
 export const BusinessSchedulePage: React.FC = () => {
   const navigate = useNavigate();
@@ -72,26 +83,61 @@ export const BusinessSchedulePage: React.FC = () => {
     }
   };
 
-  const runCompleteLessonAndStartHomework = async (
+  const runStartHomeworkFromReminder = async (
     reminder: NonNullable<BusinessScheduleSurface['reminders'][number]>,
   ) => {
     if (!reminder.lessonId) return;
     setSavingLessonId(reminder.lessonId);
     setError(null);
     try {
-      if (reminder.lessonStatus !== 'completed') {
-        await updateStudentLesson(reminder.studentId, reminder.lessonId, {
-          status: 'completed',
-          consumesCredit: true,
-        });
-      }
-      navigate(
-        `/?studentId=${encodeURIComponent(reminder.studentId)}&lessonId=${encodeURIComponent(
-          reminder.lessonId,
-        )}`,
-      );
+      navigateToLessonAssignment(reminder.studentId, reminder.lessonId);
     } catch (actionError: unknown) {
       setError(actionError instanceof Error ? actionError.message : 'Unable to update lesson.');
+    } finally {
+      setSavingLessonId(null);
+    }
+  };
+
+  const navigateToLessonAssignment = (studentId: string, lessonId: string) => {
+    navigate(
+      `/?studentId=${encodeURIComponent(studentId)}&lessonId=${encodeURIComponent(lessonId)}`,
+    );
+  };
+
+  const canAddHomeworkForLesson = (lesson: BusinessScheduleSurface['lessons'][number]) => {
+    if (lesson.homework.status !== 'not_started') return false;
+    if (lesson.status === 'completed') return true;
+    if (lesson.status !== 'scheduled') return false;
+    const endsAt = new Date(lesson.startsAt).getTime() + lesson.durationMinutes * 60 * 1000;
+    return Number.isFinite(endsAt) && endsAt <= Date.now();
+  };
+
+  const runHideReminder = async (
+    reminder: NonNullable<BusinessScheduleSurface['reminders'][number]>,
+  ) => {
+    if (!reminder.lessonId) return;
+    setSavingLessonId(reminder.lessonId);
+    setError(null);
+    try {
+      await hideStudentLessonFollowupReminder(reminder.studentId, reminder.lessonId);
+      await load({ from, to });
+    } catch (actionError: unknown) {
+      setError(actionError instanceof Error ? actionError.message : 'Unable to hide reminder.');
+    } finally {
+      setSavingLessonId(null);
+    }
+  };
+
+  const runUndoHiddenReminder = async () => {
+    const latest = surface?.latestHiddenReminder;
+    if (!latest) return;
+    setSavingLessonId(latest.lessonId);
+    setError(null);
+    try {
+      await undoLatestHiddenStudentReminder(latest.studentId);
+      await load({ from, to });
+    } catch (actionError: unknown) {
+      setError(actionError instanceof Error ? actionError.message : 'Unable to undo reminder.');
     } finally {
       setSavingLessonId(null);
     }
@@ -161,6 +207,19 @@ export const BusinessSchedulePage: React.FC = () => {
                   </div>
                   <div className="business-actions">
                     <Link to={lesson.studentScheduleBillingPath}>Open</Link>
+                    {lesson.homework.htmlUrl ? (
+                      <a href={lesson.homework.htmlUrl} target="_blank" rel="noreferrer">
+                        Open homework
+                      </a>
+                    ) : null}
+                    {canAddHomeworkForLesson(lesson) ? (
+                      <button
+                        type="button"
+                        onClick={() => navigateToLessonAssignment(lesson.studentId, lesson.id)}
+                      >
+                        Add homework
+                      </button>
+                    ) : null}
                     {lesson.status === 'scheduled' ? (
                       <>
                         <button
@@ -217,15 +276,28 @@ export const BusinessSchedulePage: React.FC = () => {
                 >
                   <strong>{reminder.studentName}</strong>
                   <span>{reminder.title}</span>
+                  {reminder.lessonSummary ? (
+                    <small>{formatReminderLessonDetail(reminder.lessonSummary)}</small>
+                  ) : null}
                   {reminder.actionIntent === 'complete_lesson_and_start_assignment' &&
                   reminder.lessonId ? (
-                    <button
-                      type="button"
-                      disabled={savingLessonId === reminder.lessonId}
-                      onClick={() => void runCompleteLessonAndStartHomework(reminder)}
-                    >
-                      Complete + homework
-                    </button>
+                    <div className="business-actions">
+                      <button
+                        type="button"
+                        aria-label="Add homework from reminder"
+                        disabled={savingLessonId === reminder.lessonId}
+                        onClick={() => void runStartHomeworkFromReminder(reminder)}
+                      >
+                        Add homework
+                      </button>
+                      <button
+                        type="button"
+                        disabled={savingLessonId === reminder.lessonId}
+                        onClick={() => void runHideReminder(reminder)}
+                      >
+                        Hide
+                      </button>
+                    </div>
                   ) : (
                     <textarea readOnly value={reminder.copyText} />
                   )}
@@ -234,6 +306,20 @@ export const BusinessSchedulePage: React.FC = () => {
             ) : (
               <p className="business-muted">No reminders ready.</p>
             )}
+            {surface?.latestHiddenReminder ? (
+              <div className="business-hidden-reminder">
+                <span>
+                  Hidden: {formatReminderLessonDetail(surface.latestHiddenReminder.lessonSummary)}
+                </span>
+                <button
+                  type="button"
+                  disabled={savingLessonId === surface.latestHiddenReminder.lessonId}
+                  onClick={() => void runUndoHiddenReminder()}
+                >
+                  Undo hide
+                </button>
+              </div>
+            ) : null}
           </div>
         </article>
 

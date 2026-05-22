@@ -5,8 +5,10 @@ import {
   addStudentPackage,
   createStudentLesson,
   getStudentScheduleBillingSurface,
+  hideStudentLessonFollowupReminder,
   recordStudentPayment,
   type StudentScheduleBillingSurface,
+  undoLatestHiddenStudentReminder,
   updateStudentLesson,
   updateStudentLessonPlan,
   upsertPrimaryStudentLessonRecurrence,
@@ -82,6 +84,15 @@ function formatMoney(amountMinor: number, currency: string): string {
 
 function formatCredits(value: number): string {
   return `${value} lesson credit${Math.abs(value) === 1 ? '' : 's'}`;
+}
+
+function formatReminderLessonDetail(
+  summary?: StudentScheduleBillingSurface['reminders'][number]['lessonSummary'] | null,
+): string {
+  if (!summary) return 'Lesson no longer available';
+  const topic = summary.title?.trim() ? summary.title.trim() : 'Untitled lesson';
+  const date = formatDateTime(summary.startsAt);
+  return `${date} · ${topic} · Lesson ${summary.lessonId}`;
 }
 
 function toIsoFromDateTimeLocal(value: string): string {
@@ -219,24 +230,34 @@ export const StudentScheduleBillingPage: React.FC = () => {
     );
   };
 
-  const completeLessonAndStartHomework = async (
+  const canAddHomeworkForLesson = (lesson: StudentScheduleBillingSurface['lessons'][number]) => {
+    if (lesson.homework.status !== 'not_started') return false;
+    if (lesson.status === 'completed') return true;
+    if (lesson.status !== 'scheduled') return false;
+    const endsAt = new Date(lesson.startsAt).getTime() + lesson.durationMinutes * 60 * 1000;
+    return Number.isFinite(endsAt) && endsAt <= Date.now();
+  };
+
+  const startHomeworkFromReminder = async (
     reminder: StudentScheduleBillingSurface['reminders'][number],
   ): Promise<StudentScheduleBillingSurface> => {
     if (!reminder.lessonId) {
       throw new Error('Lesson follow-up is missing lesson context.');
     }
-    const lessonId = reminder.lessonId;
-    if (reminder.lessonStatus === 'completed') {
-      navigateToLessonAssignment(lessonId);
-      if (!surface) throw new Error('Schedule surface is not loaded.');
-      return surface;
+    if (!surface) {
+      throw new Error('Schedule surface is not loaded.');
     }
-    const nextSurface = await updateStudentLesson(studentId, lessonId, {
-      status: 'completed',
-      consumesCredit: true,
-    });
-    navigateToLessonAssignment(lessonId);
-    return nextSurface;
+    navigateToLessonAssignment(reminder.lessonId);
+    return surface;
+  };
+
+  const hideReminder = async (
+    reminder: StudentScheduleBillingSurface['reminders'][number],
+  ): Promise<StudentScheduleBillingSurface> => {
+    if (!reminder.lessonId) {
+      throw new Error('Lesson follow-up is missing lesson context.');
+    }
+    return hideStudentLessonFollowupReminder(studentId, reminder.lessonId);
   };
 
   if (loading) {
@@ -719,6 +740,16 @@ export const StudentScheduleBillingPage: React.FC = () => {
                   homework {lesson.homework.status.replaceAll('_', ' ')}
                 </StudentAreaStatusPill>
                 <div className="student-schedule-billing-actions">
+                  {lesson.homework.htmlUrl ? (
+                    <a href={lesson.homework.htmlUrl} target="_blank" rel="noreferrer">
+                      Open homework
+                    </a>
+                  ) : null}
+                  {canAddHomeworkForLesson(lesson) ? (
+                    <button type="button" onClick={() => navigateToLessonAssignment(lesson.id)}>
+                      Add homework
+                    </button>
+                  ) : null}
                   {lesson.status === 'scheduled' ? (
                     <>
                       <button
@@ -964,20 +995,37 @@ export const StudentScheduleBillingPage: React.FC = () => {
                 <span>
                   <strong>{reminder.title}</strong>
                   <small>{reminder.message}</small>
+                  {reminder.lessonSummary ? (
+                    <small className="student-schedule-billing-reminder-detail">
+                      {formatReminderLessonDetail(reminder.lessonSummary)}
+                    </small>
+                  ) : null}
                 </span>
                 {reminder.actionIntent === 'complete_lesson_and_start_assignment' &&
                 reminder.lessonId ? (
-                  <button
-                    type="button"
-                    disabled={saving === reminder.lessonId}
-                    onClick={() => {
-                      void runAction(reminder.lessonId ?? reminder.type, () =>
-                        completeLessonAndStartHomework(reminder),
-                      );
-                    }}
-                  >
-                    Complete + homework
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      aria-label="Add homework from reminder"
+                      disabled={saving === reminder.lessonId}
+                      onClick={() => {
+                        void runAction(reminder.lessonId ?? reminder.type, () =>
+                          startHomeworkFromReminder(reminder),
+                        );
+                      }}
+                    >
+                      Add homework
+                    </button>
+                    <button
+                      type="button"
+                      disabled={saving === `hide-${reminder.lessonId}`}
+                      onClick={() => {
+                        void runAction(`hide-${reminder.lessonId}`, () => hideReminder(reminder));
+                      }}
+                    >
+                      Hide
+                    </button>
+                  </>
                 ) : (
                   <textarea readOnly value={reminder.copyText} />
                 )}
@@ -985,6 +1033,24 @@ export const StudentScheduleBillingPage: React.FC = () => {
             ))}
           </div>
         )}
+        {surface.latestHiddenReminder ? (
+          <div className="student-schedule-billing-hidden-reminder">
+            <span>
+              Hidden: {formatReminderLessonDetail(surface.latestHiddenReminder.lessonSummary)}
+            </span>
+            <button
+              type="button"
+              disabled={saving === 'undo-hidden-reminder'}
+              onClick={() => {
+                void runAction('undo-hidden-reminder', () =>
+                  undoLatestHiddenStudentReminder(studentId),
+                );
+              }}
+            >
+              Undo hide
+            </button>
+          </div>
+        ) : null}
         <StudentAreaActionLink to={`/students/${encodeURIComponent(studentId)}/overview`}>
           Back to overview
         </StudentAreaActionLink>

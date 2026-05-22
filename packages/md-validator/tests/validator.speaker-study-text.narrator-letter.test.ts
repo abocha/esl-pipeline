@@ -153,5 +153,153 @@ content
       expect(res.ok).toBe(true);
       expect(res.errors).toHaveLength(0);
     });
+
+    it('classifies repeated single-speaker markers as monologue', async () => {
+      const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
+      const file = path.join(tempDir, 'repeated-narrator-monologue.md');
+      await writeFile(
+        file,
+        `
+---
+title: Narrator Blocks
+student: Vera
+level: A2
+topic: narrative
+input_type: generate
+study_text_type: monologue
+speaker_labels: [Narrator]
+---
+
+## 1. This Week's Mission Briefing
+text
+
+## 2. Your Homework Roadmap
+text
+
+## 3. Input Material: The Source
+:::study-text
+Narrator: Leo walked into the station and checked the big clock.
+
+Narrator: The train was delayed, so he bought tea and reviewed his notes.
+
+Narrator: When the train arrived, Leo felt calm and ready for the meeting.
+:::
+
+## 4. Language Toolkit: Useful Language
+text
+
+## 5. Practice & Pronunciation
+### A. Controlled Practice
+1) item
+2) item
+3) item
+4) item
+5) item
+6) item
+7) item
+8) item
+### B. Comprehension Check
+1) question
+2) question
+
+### C. Pronunciation Micro-Focus
+text
+
+## 6. Your Turn: Complete the Mission!
+text
+
+## 7. Why This Mission Helps You
+text
+
+## 8. Answer Key & Sample Mission
+:::toggle-heading Answer Key
+content
+:::
+
+## 9. Teacher's Follow-up Plan
+:::toggle-heading Teacher's Follow-up Plan
+content
+:::
+    `.trim(),
+      );
+
+      const res = await validateMarkdownFile(file);
+      expect(res.ok).toBe(true);
+      expect(res.errors).toHaveLength(0);
+      expect(res.warnings.join('\n')).not.toMatch(
+        /study_text_type "monologue".*detected "dialogue"/i,
+      );
+    });
+
+    it('still detects multiple speaker markers as dialogue', async () => {
+      const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
+      const file = path.join(tempDir, 'multi-speaker-dialogue.md');
+      await writeFile(
+        file,
+        `
+---
+title: Dialogue Contrast
+student: Vera
+level: A2
+topic: narrative
+input_type: generate
+study_text_type: monologue
+speaker_labels: [Alex, Mara]
+---
+
+## 1. This Week's Mission Briefing
+text
+
+## 2. Your Homework Roadmap
+text
+
+## 3. Input Material: The Source
+:::study-text
+Alex: Did you see the new timetable?
+Mara: Yes, the meeting moved to Friday afternoon.
+:::
+
+## 4. Language Toolkit: Useful Language
+text
+
+## 5. Practice & Pronunciation
+### A. Controlled Practice
+1) item
+2) item
+3) item
+4) item
+5) item
+6) item
+7) item
+8) item
+### B. Comprehension Check
+1) question
+2) question
+
+### C. Pronunciation Micro-Focus
+text
+
+## 6. Your Turn: Complete the Mission!
+text
+
+## 7. Why This Mission Helps You
+text
+
+## 8. Answer Key & Sample Mission
+:::toggle-heading Answer Key
+content
+:::
+
+## 9. Teacher's Follow-up Plan
+:::toggle-heading Teacher's Follow-up Plan
+content
+:::
+    `.trim(),
+      );
+
+      const res = await validateMarkdownFile(file);
+      expect(res.ok).toBe(true);
+      expect(res.warnings.join('\n')).toMatch(/study_text_type "monologue".*detected "dialogue"/i);
+    });
   },
 );

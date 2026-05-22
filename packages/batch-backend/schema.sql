@@ -422,7 +422,7 @@ CREATE TABLE public.jobs (
     study_text_elevenlabs_model text,
     lesson_id uuid,
     CONSTRAINT jobs_google_tts_model_check CHECK (((google_tts_model IS NULL) OR (google_tts_model = ANY (ARRAY['chirp3_hd'::text, 'studio'::text, 'neural2'::text, 'wavenet'::text])))),
-    CONSTRAINT jobs_mode_check CHECK (((mode IS NULL) OR (mode = ANY (ARRAY['auto'::text, 'dialogue'::text, 'tts'::text])))),
+    CONSTRAINT jobs_mode_check CHECK (((mode IS NULL) OR (mode = ANY (ARRAY['auto'::text, 'dialogue'::text, 'monologue'::text, 'tts'::text])))),
     CONSTRAINT jobs_state_check CHECK ((state = ANY (ARRAY['queued'::text, 'running'::text, 'awaiting_approval'::text, 'succeeded'::text, 'failed'::text]))),
     CONSTRAINT jobs_study_text_elevenlabs_model_check CHECK (((study_text_elevenlabs_model IS NULL) OR (study_text_elevenlabs_model = ANY (ARRAY['eleven_v3'::text, 'eleven_multilingual_v2'::text, 'eleven_flash_v2_5'::text, 'eleven_flash_v2'::text])))),
     CONSTRAINT jobs_tts_provider_check CHECK (((tts_provider IS NULL) OR (tts_provider = ANY (ARRAY['elevenlabs'::text, 'google'::text]))))
@@ -756,6 +756,12 @@ CREATE TABLE public.student_profile_candidates (
     superseded_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    source_lesson_id uuid,
+    source_lesson_started_at timestamp with time zone,
+    source_lesson_title text,
+    source_memory_ids uuid[] DEFAULT ARRAY[]::uuid[] NOT NULL,
+    provenance jsonb DEFAULT '{}'::jsonb NOT NULL,
+    dedup_decision jsonb DEFAULT '{}'::jsonb NOT NULL,
     CONSTRAINT student_profile_candidates_authority_check CHECK ((authority = ANY (ARRAY['teacher_confirmed'::text, 'student_stated'::text, 'model_inferred'::text]))),
     CONSTRAINT student_profile_candidates_confidence_check CHECK ((confidence = ANY (ARRAY['low'::text, 'medium'::text, 'high'::text]))),
     CONSTRAINT student_profile_candidates_review_state_check CHECK ((review_state = ANY (ARRAY['unreviewed'::text, 'deferred'::text, 'approved'::text, 'rejected'::text]))),
@@ -774,6 +780,10 @@ CREATE TABLE public.student_reminder_preferences (
     updated_by uuid,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    hidden_lesson_followup_keys text[] DEFAULT ARRAY[]::text[] CONSTRAINT student_reminder_preference_hidden_lesson_followup_key_not_null NOT NULL,
+    latest_hidden_lesson_followup_key text,
+    latest_hidden_lesson_followup_lesson_id uuid,
+    latest_hidden_lesson_followup_at timestamp with time zone,
     CONSTRAINT student_reminder_preferences_channel_check CHECK ((preferred_channel = ANY (ARRAY['manual'::text, 'telegram'::text, 'email'::text]))),
     CONSTRAINT student_reminder_preferences_threshold_check CHECK ((low_balance_threshold >= 0))
 );
@@ -820,7 +830,8 @@ CREATE TABLE public.templates (
     label text NOT NULL,
     active_revision_id uuid,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    is_default boolean DEFAULT false NOT NULL
 );
 
 CREATE TABLE public.transcripts (
@@ -1199,6 +1210,10 @@ CREATE INDEX idx_student_profile_bindings_student_id ON public.student_profile_b
 
 CREATE INDEX idx_student_profile_candidate_draft_revisions_revision ON public.student_profile_candidate_draft_revisions USING btree (revision_id, candidate_id);
 
+CREATE INDEX idx_student_profile_candidates_dedup_decision ON public.student_profile_candidates USING btree (student_id, status, created_at DESC, id DESC) WHERE (dedup_decision <> '{}'::jsonb);
+
+CREATE INDEX idx_student_profile_candidates_source_lesson ON public.student_profile_candidates USING btree (student_id, source_lesson_id, created_at DESC, id DESC) WHERE (source_lesson_id IS NOT NULL);
+
 CREATE INDEX idx_student_profile_candidates_student_candidate_key ON public.student_profile_candidates USING btree (student_id, candidate_key, created_at DESC, id DESC);
 
 CREATE INDEX idx_student_profile_candidates_student_created_at ON public.student_profile_candidates USING btree (student_id, created_at DESC, id DESC);
@@ -1232,6 +1247,8 @@ CREATE UNIQUE INDEX idx_template_revisions_template_version ON public.template_r
 CREATE INDEX idx_templates_active_revision_id ON public.templates USING btree (active_revision_id);
 
 CREATE INDEX idx_templates_label ON public.templates USING btree (label);
+
+CREATE UNIQUE INDEX idx_templates_single_default ON public.templates USING btree (is_default) WHERE is_default;
 
 CREATE INDEX idx_transcripts_recording_id ON public.transcripts USING btree (recording_id);
 
@@ -1500,6 +1517,9 @@ ALTER TABLE ONLY public.student_profile_candidates
     ADD CONSTRAINT student_profile_candidates_reviewer_id_fkey FOREIGN KEY (reviewer_id) REFERENCES public.users(id) ON DELETE SET NULL;
 
 ALTER TABLE ONLY public.student_profile_candidates
+    ADD CONSTRAINT student_profile_candidates_source_lesson_id_fkey FOREIGN KEY (source_lesson_id) REFERENCES public.student_lessons(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.student_profile_candidates
     ADD CONSTRAINT student_profile_candidates_source_snapshot_id_fkey FOREIGN KEY (source_snapshot_id) REFERENCES public.student_memory_snapshots(id) ON DELETE SET NULL;
 
 ALTER TABLE ONLY public.student_profile_candidates
@@ -1661,5 +1681,9 @@ VALUES
   ('0028_student_lesson_recurrence_core', 'c90dea3bf8cc79162e93d0cbdd167e9142c6d959d2cb743ab164e06c4f658fa0', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0029_assignment_sessions', '81d0ae89a6a5e55f1fba02cac60b703e1a22d31024c5d350a43642fcb53433aa', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0030_lesson_assignment_linkage', '911668bc4cde7c277df35c1be17aaff84067eee9fa0a85da6dbd09545f3f3622', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0031_pg_stat_statements_observability', 'ad512b286919b89eda1c4eb6c2762884ca4e4bac6e7eb56d4655c726f3cce558', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0031_pg_stat_statements_observability', 'ad512b286919b89eda1c4eb6c2762884ca4e4bac6e7eb56d4655c726f3cce558', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0032_student_reminder_suppression', '881d242f174bea55a6313f064f436ac623937152327d7f6941d508790e995a86', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0033_prompt_template_default', 'dc002e1ad504ac9d4c50426cc097517250c58f6e910151c5a77359a500062d26', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0034_profile_candidate_provenance_audit', 'd49bd4047afe5bac9b0b9a521fc5f74b46a6cc5d550c719e8ba5435b4e48de60', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0035_jobs_mode_monologue', 'b9e84d2b640f6531c6e2aa0963a48909522e3400d5b6fc15286347f613242ba8', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;

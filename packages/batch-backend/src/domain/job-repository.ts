@@ -74,6 +74,7 @@ interface JobRow {
 export interface InsertJobParams {
   md?: string | null;
   mdStorageUri?: string | null;
+  studentId?: string | null;
   recordingId?: string | null;
   transcriptId?: string | null;
   promptPackageId?: string | null;
@@ -222,11 +223,12 @@ async function insertJobWithState(params: InsertJobParams, state: JobState): Pro
         source_job_id,
         created_at,
         updated_at,
-        user_id
+        user_id,
+        student_id
       )
       VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
-        $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29
+        $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30
       )
       RETURNING
         id,
@@ -296,6 +298,7 @@ async function insertJobWithState(params: InsertJobParams, state: JobState): Pro
         now,
         now,
         params.userId ?? null,
+        params.studentId ?? null,
       ],
     );
     return result.rows[0];

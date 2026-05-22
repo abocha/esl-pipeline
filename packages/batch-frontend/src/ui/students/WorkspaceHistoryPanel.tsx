@@ -193,6 +193,17 @@ export function WorkspaceHistoryPanel({
               <option value="job_action_rerun">job_action_rerun</option>
               <option value="job_action_cancel">job_action_cancel</option>
               <option value="job_action_edit_metadata">job_action_edit_metadata</option>
+              <option value="lesson_created">lesson_created</option>
+              <option value="lesson_updated">lesson_updated</option>
+              <option value="lesson_completed">lesson_completed</option>
+              <option value="lesson_canceled">lesson_canceled</option>
+              <option value="lesson_no_show">lesson_no_show</option>
+              <option value="lesson_plan_updated">lesson_plan_updated</option>
+              <option value="lesson_recurrence_updated">lesson_recurrence_updated</option>
+              <option value="credit_event_recorded">credit_event_recorded</option>
+              <option value="payment_recorded">payment_recorded</option>
+              <option value="reminder_hidden">reminder_hidden</option>
+              <option value="business_settings_updated">business_settings_updated</option>
             </select>
           </label>
 

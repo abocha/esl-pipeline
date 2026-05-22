@@ -172,6 +172,8 @@ Return the assignment as **clean Markdown** inside **one single code block**.
 - **One profile per label is required.** `speaker_profiles[].id` must match one `speaker_labels` entry exactly.
 - Keep accent/style realistic for authentic sounding output.
 - Use only exact provider-backed values listed in `[VOICE_CAPABILITIES]`.
+- Treat `style` as a speaking quality, not a provider/model choice; do not introduce provider or
+  model identifiers.
 - Voice capabilities constrain only `speaker_profiles`; they do not override lesson facts or student facts.
 - If age/accent/style is unknown, omit the field. If gender is unknown, set `gender: neutral`.
 - For ordinary dialogue participants, omit `role` unless a special speaking function truly matters.

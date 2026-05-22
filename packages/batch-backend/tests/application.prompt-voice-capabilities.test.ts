@@ -60,7 +60,7 @@ describe('application/prompt-voice-capabilities', () => {
         gender: ['male', 'female', 'neutral'],
         age: ['child', 'teen', 'young', 'adult', 'middle_aged', 'senior', 'universal'],
         accent: ['australian'],
-        style: ['chirp3_hd'],
+        style: ['chirp3_hd', 'calm', 'studio', 'casual', 'wavenet', 'neural2'],
       },
       voices: [],
     });
@@ -72,14 +72,19 @@ describe('application/prompt-voice-capabilities', () => {
 
       expect(result.capabilitiesSnapshot?.accent).toEqual(['american', 'australian', 'british']);
       expect(result.capabilitiesSnapshot?.style).toEqual([
-        'chirp3_hd',
+        'calm',
+        'casual',
         'conversational',
         'professional',
       ]);
       expect(result.blockText).toContain('[VOICE_CAPABILITIES]');
       expect(result.blockText).toContain('generated_at: 2026-01-06T00:00:00.000Z');
       expect(result.blockText).toContain('accent: [american, australian, british]');
-      expect(result.blockText).toContain('style: [chirp3_hd, conversational, professional]');
+      expect(result.blockText).toContain('style: [calm, casual, conversational, professional]');
+      expect(result.blockText).not.toContain('chirp3_hd');
+      expect(result.blockText).not.toContain('studio');
+      expect(result.blockText).not.toContain('wavenet');
+      expect(result.blockText).not.toContain('neural2');
       expect(result.blockText).not.toContain('# CAPABILITY SNAPSHOT');
       expect(result.blockText).not.toContain('```');
       expect(result.blockText).not.toContain('<provider-backed values>');

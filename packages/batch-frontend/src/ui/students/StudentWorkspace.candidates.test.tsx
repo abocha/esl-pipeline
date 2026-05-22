@@ -46,6 +46,10 @@ describe('StudentWorkspace candidates', () => {
       screen.getByRole('button', { name: /Hide details for candidate-pending/i }),
     ).toBeTruthy();
     expect(screen.getByText(/Lesson memory IDs/i)).toBeTruthy();
+    expect(screen.getByText(/Source lesson:/i)).toBeTruthy();
+    expect(screen.getByText('Sprint planning')).toBeTruthy();
+    expect(screen.getByText(/Source memory IDs:/i)).toBeTruthy();
+    expect(screen.getByText(/Dedup decision:/i)).toBeTruthy();
     expect(screen.getByLabelText(/Approved Fact Text candidate-pending/i)).toBeTruthy();
   });
 

@@ -8,7 +8,9 @@ const apiMocks = vi.hoisted(() => ({
   addStudentPackage: vi.fn(),
   createStudentLesson: vi.fn(),
   getStudentScheduleBillingSurface: vi.fn(),
+  hideStudentLessonFollowupReminder: vi.fn(),
   recordStudentPayment: vi.fn(),
+  undoLatestHiddenStudentReminder: vi.fn(),
   updateStudentLesson: vi.fn(),
   updateStudentLessonPlan: vi.fn(),
   upsertPrimaryStudentLessonRecurrence: vi.fn(),
@@ -109,6 +111,7 @@ function makeSurface(overrides: Record<string, unknown> = {}) {
       },
     ],
     reminders: [],
+    latestHiddenReminder: null,
     ...overrides,
   };
 }
@@ -223,6 +226,11 @@ describe('StudentScheduleBillingPage', () => {
             severity: 'attention',
             title: 'Finish lesson follow-up',
             message: 'The scheduled lesson time has passed and homework is not published yet.',
+            lessonSummary: {
+              lessonId: 'lesson-1',
+              startsAt: '2026-05-07T10:00:00.000Z',
+              title: 'Present perfect review',
+            },
             copyText: 'Complete Alex lesson and start homework.',
           },
         ],
@@ -230,14 +238,69 @@ describe('StudentScheduleBillingPage', () => {
     );
     renderPage();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Complete + homework' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Add homework from reminder' }));
 
     await waitFor(() => {
-      expect(apiMocks.updateStudentLesson).toHaveBeenCalledWith('student-alex', 'lesson-1', {
-        status: 'completed',
-        consumesCredit: true,
-      });
       expect(navigateMock).toHaveBeenCalledWith('/?studentId=student-alex&lessonId=lesson-1');
+    });
+    expect(apiMocks.updateStudentLesson).not.toHaveBeenCalled();
+  });
+
+  it('shows lesson context, hides follow-up reminders, and offers latest undo', async () => {
+    const hiddenSurface = makeSurface({
+      reminders: [],
+      latestHiddenReminder: {
+        type: 'lesson_followup',
+        lessonId: 'lesson-1',
+        lessonSummary: {
+          lessonId: 'lesson-1',
+          startsAt: '2026-05-07T10:00:00.000Z',
+          title: 'Present perfect review',
+        },
+      },
+    });
+    apiMocks.getStudentScheduleBillingSurface.mockResolvedValue(
+      makeSurface({
+        nextLesson: null,
+        reminders: [
+          {
+            type: 'lesson_followup',
+            channel: 'manual',
+            actionIntent: 'complete_lesson_and_start_assignment',
+            lessonId: 'lesson-1',
+            lessonStatus: 'scheduled',
+            lessonConsumesCredit: true,
+            severity: 'attention',
+            title: 'Finish lesson follow-up',
+            message: 'The scheduled lesson time has passed and homework is not published yet.',
+            lessonSummary: {
+              lessonId: 'lesson-1',
+              startsAt: '2026-05-07T10:00:00.000Z',
+              title: 'Present perfect review',
+            },
+            copyText: 'Complete Alex lesson and start homework.',
+          },
+        ],
+      }),
+    );
+    apiMocks.hideStudentLessonFollowupReminder.mockResolvedValue(hiddenSurface);
+    apiMocks.undoLatestHiddenStudentReminder.mockResolvedValue(makeSurface());
+    renderPage();
+
+    expect(await screen.findByText(/Present perfect review/)).toBeTruthy();
+    expect(screen.getByText(/Lesson lesson-1/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Hide' }));
+
+    await waitFor(() => {
+      expect(apiMocks.hideStudentLessonFollowupReminder).toHaveBeenCalledWith(
+        'student-alex',
+        'lesson-1',
+      );
+    });
+    fireEvent.click(await screen.findByRole('button', { name: 'Undo hide' }));
+
+    await waitFor(() => {
+      expect(apiMocks.undoLatestHiddenStudentReminder).toHaveBeenCalledWith('student-alex');
     });
   });
 
@@ -263,12 +326,77 @@ describe('StudentScheduleBillingPage', () => {
     );
     renderPage();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Complete + homework' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Add homework from reminder' }));
 
     await waitFor(() => {
       expect(navigateMock).toHaveBeenCalledWith('/?studentId=student-alex&lessonId=lesson-1');
     });
     expect(apiMocks.updateStudentLesson).not.toHaveBeenCalled();
+  });
+
+  it('offers homework row actions for published, completed, and elapsed scheduled lessons only', async () => {
+    apiMocks.getStudentScheduleBillingSurface.mockResolvedValue(
+      makeSurface({
+        lessons: [
+          {
+            ...makeSurface().lessons[0],
+            id: 'published-lesson',
+            status: 'completed',
+            homework: makeHomework({
+              status: 'published',
+              htmlUrl: 'https://example.test/published-homework',
+            }),
+          },
+          {
+            ...makeSurface().lessons[0],
+            id: 'completed-no-homework',
+            status: 'completed',
+            startsAt: '2026-05-06T10:00:00.000Z',
+            homework: makeHomework({ status: 'not_started' }),
+          },
+          {
+            ...makeSurface().lessons[0],
+            id: 'elapsed-scheduled',
+            status: 'scheduled',
+            startsAt: '2000-01-01T10:00:00.000Z',
+            durationMinutes: 60,
+            homework: makeHomework({ status: 'not_started' }),
+          },
+          {
+            ...makeSurface().lessons[0],
+            id: 'future-scheduled',
+            status: 'scheduled',
+            startsAt: '2999-01-01T10:00:00.000Z',
+            durationMinutes: 60,
+            title: 'future-scheduled',
+            homework: makeHomework({ status: 'not_started' }),
+          },
+          {
+            ...makeSurface().lessons[0],
+            id: 'memory-ready',
+            status: 'completed',
+            homework: makeHomework({
+              status: 'memory_ready',
+              htmlUrl: 'https://example.test/memory-ready-homework',
+            }),
+          },
+        ],
+      }),
+    );
+    renderPage();
+
+    expect(await screen.findAllByRole('link', { name: 'Open homework' })).toHaveLength(2);
+    const addButtons = await screen.findAllByRole('button', { name: 'Add homework' });
+    expect(addButtons).toHaveLength(2);
+
+    fireEvent.click(addButtons[0]!);
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith(
+        '/?studentId=student-alex&lessonId=completed-no-homework',
+      );
+    });
+    expect(screen.getByText('future-scheduled')).toBeTruthy();
   });
 
   it('saves structured weekly recurrence rules', async () => {

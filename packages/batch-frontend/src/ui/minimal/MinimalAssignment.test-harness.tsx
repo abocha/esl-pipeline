@@ -60,6 +60,7 @@ vi.mock('../../utils/api', () => ({
   getProfileContent: vi.fn(),
   getJobStatus: vi.fn(),
   getRecording: vi.fn(),
+  getStudentScheduleBillingSurface: vi.fn(),
   listUserJobs: vi.fn(),
   listAssignmentSessions: vi.fn(),
   listProfileContents: vi.fn(),
@@ -226,6 +227,78 @@ export function makeLearningPreset(
     track: 'general-english',
     status: 'active',
     promptSnapshotVersion: 'hw_prompt_v4-2_clean',
+    ...overrides,
+  };
+}
+
+export function makeScheduleBillingSurface(
+  overrides: Partial<api.StudentScheduleBillingSurface> = {},
+): api.StudentScheduleBillingSurface {
+  return {
+    studentId: 'student-alex',
+    workspaceId: null,
+    lessonPlan: {
+      studentId: 'student-alex',
+      workspaceId: null,
+      timezone: 'UTC',
+      defaultDurationMinutes: 60,
+      cadence: null,
+      preferredTimes: null,
+      schedulingNotes: null,
+      updatedAt: now,
+    },
+    recurrenceRule: null,
+    nextLesson: null,
+    lessons: [],
+    creditSummary: {
+      purchased: 0,
+      consumed: 0,
+      adjustments: 0,
+      remaining: 0,
+      lowBalanceThreshold: 2,
+      isLow: false,
+      isNegative: false,
+    },
+    creditEvents: [],
+    payments: [],
+    reminders: [],
+    latestHiddenReminder: null,
+    ...overrides,
+  };
+}
+
+export function makeStudentLesson(
+  overrides: Partial<api.StudentScheduleBillingSurface['lessons'][number]> = {},
+): api.StudentScheduleBillingSurface['lessons'][number] {
+  return {
+    id: 'lesson-1',
+    studentId: 'student-alex',
+    workspaceId: null,
+    startsAt: '2026-02-04T10:00:00.000Z',
+    timezone: 'UTC',
+    durationMinutes: 60,
+    status: 'completed',
+    consumesCredit: true,
+    title: 'Negotiation practice',
+    notes: null,
+    creditEventId: null,
+    recurrenceRuleId: null,
+    recurrenceSlotId: null,
+    recurrenceOccurrenceKey: null,
+    recurrenceOrigin: 'manual',
+    recurrenceOverrideKind: null,
+    homework: {
+      status: 'not_started',
+      assignmentSessionId: null,
+      promptPackageId: null,
+      draftId: null,
+      jobId: null,
+      homeworkMemoryEntryId: null,
+      htmlUrl: null,
+      updatedAt: null,
+    },
+    createdAt: now,
+    updatedAt: now,
     ...overrides,
   };
 }
@@ -596,6 +669,7 @@ export function setupMinimalAssignmentTest() {
       { id: 'student-bella', name: 'Bella', profileId: 'profiles/bella.md' },
     ],
   });
+  vi.mocked(api.getStudentScheduleBillingSurface).mockResolvedValue(makeScheduleBillingSurface());
   vi.mocked(api.listUserJobs).mockResolvedValue({
     jobs: [],
     total: 0,

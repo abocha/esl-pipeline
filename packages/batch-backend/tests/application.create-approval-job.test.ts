@@ -113,6 +113,7 @@ describe('application/create-approval-job', () => {
       transcriptId: 'transcript-1',
       promptPackageId: 'prompt-1',
       draftId: 'draft-1',
+      studentId: 'student-1',
       lessonId: null,
       userId: 'user-1',
       preset: 'b2-intermediate',

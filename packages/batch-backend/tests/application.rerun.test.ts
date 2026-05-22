@@ -217,6 +217,44 @@ describe('application/job-actions/rerun', () => {
     );
   });
 
+  it('queues audio reruns from the approved markdown path with the source student id', async () => {
+    vi.mocked(getJobById).mockResolvedValue({
+      id: 'job-1',
+      state: 'succeeded',
+      md: jobMdPath,
+      mdStorageUri: 's3://drafts/raw-placeholder-student.md',
+      studentId: 'student-1',
+      studentName: 'Alice Nguyen',
+      withTts: true,
+      ttsProvider: 'elevenlabs',
+      ttsStrategy: 'auto',
+      voiceId: 'voice-1',
+      voiceAccent: 'american',
+      publishTarget: 'html',
+      htmlUrl: 'https://example.com/published.html',
+      userId: 'user-1',
+    } as never);
+
+    const result = await rerun('job-1', {
+      type: JobActionType.RERUN,
+      requestedAt,
+      payload: {
+        regeneratePronunciationChunkAudio: true,
+      },
+    });
+
+    expect(result.success).toBe(true);
+    const insertParams = vi.mocked(insertJob).mock.calls[0]?.[0] as
+      | Record<string, unknown>
+      | undefined;
+    expect(insertParams).toMatchObject({
+      md: jobMdPath,
+      studentId: 'student-1',
+      sourceJobId: 'job-1',
+    });
+    expect(insertParams).not.toHaveProperty('mdStorageUri');
+  });
+
   it('forwards inherited study-text model defaults into the rerun queue payload', async () => {
     vi.mocked(getJobById).mockResolvedValue({
       id: 'job-1',

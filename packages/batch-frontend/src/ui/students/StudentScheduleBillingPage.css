@@ -124,8 +124,19 @@
   gap: 0.45rem;
 }
 
-.student-schedule-billing-actions button {
+.student-schedule-billing-actions button,
+.student-schedule-billing-actions a {
   padding: 0.5rem 0.65rem;
+}
+
+.student-schedule-billing-actions a {
+  border: 1px solid var(--student-area-line);
+  border-radius: var(--student-area-radius-sm);
+  background: rgba(255, 253, 248, 0.88);
+  color: var(--student-area-blue);
+  font-size: 0.85rem;
+  font-weight: 800;
+  text-decoration: none;
 }
 
 .student-schedule-billing-edit-form {
@@ -243,6 +254,23 @@
   font: inherit;
   padding: 0.7rem;
   resize: vertical;
+}
+
+.student-schedule-billing-reminder-detail {
+  word-break: break-word;
+}
+
+.student-schedule-billing-hidden-reminder {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  border: 1px dashed var(--student-area-line);
+  border-radius: var(--student-area-radius-sm);
+  color: var(--student-area-muted);
+  font-size: 0.9rem;
 }
 
 @media (max-width: 760px) {

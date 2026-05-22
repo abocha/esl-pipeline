@@ -8,6 +8,8 @@ import {
   testExpect as expect,
   makeAssignmentSession,
   makeRecording,
+  makeScheduleBillingSurface,
+  makeStudentLesson,
   now,
   openRecordingSettings,
   renderMinimalAssignment,
@@ -71,7 +73,9 @@ export function registerPromptEditorTests() {
 
       await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
       openRecordingSettings();
-      const sttProviderSelect = await screen.findByRole('combobox', { name: /Transcript engine/i });
+      const sttProviderSelect = await screen.findByRole('combobox', {
+        name: /Transcript engine/i,
+      });
       await waitFor(() => {
         expect((sttProviderSelect as HTMLSelectElement).value).toBe('google');
       });
@@ -167,6 +171,43 @@ export function registerPromptEditorTests() {
         });
       });
       expect(screen.getByDisplayValue('Prompt package output')).toBeTruthy();
+    });
+
+    it('lets the operator choose a prompt template for the current assignment session', async () => {
+      vi.mocked(api.fetchPromptOptions).mockResolvedValueOnce({
+        templates: [
+          { id: 'tpl-default', label: 'Default Template' },
+          { id: 'tpl-focused', label: 'Focused Follow-up' },
+        ],
+        profiles: [{ id: 'profiles/alex.md', label: 'Alex active profile' }],
+        defaults: {
+          templateId: 'tpl-default',
+          profileId: null,
+        },
+      });
+      const user = createMinimalUser();
+      renderMinimalAssignment();
+
+      await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
+      await screen.findByRole('option', { name: 'Alex' });
+      await user.selectOptions(
+        screen.getByRole('combobox', { name: /^Student$/i }),
+        'student-alex',
+      );
+      await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+      await screen.findByDisplayValue('Student transcript text');
+
+      const templateSelect = await screen.findByRole('combobox', { name: /Prompt template/i });
+      await user.selectOptions(templateSelect, 'tpl-focused');
+      expect(screen.getByText(/Uses Focused Follow-up with Alex active profile\./i)).toBeTruthy();
+      await user.click(screen.getByRole('button', { name: /Generate instructions/i }));
+
+      await waitFor(() => {
+        expect(api.createPromptPackage).toHaveBeenCalledWith('rec-1', {
+          templateId: 'tpl-focused',
+          profileId: 'profiles/alex.md',
+        });
+      });
     });
 
     it('sends teacher notes into prompt package generation', async () => {
@@ -294,6 +335,17 @@ export function registerPromptStudentSelectionTests() {
         '',
         '/?studentId=student-alex&lessonId=lesson-followup-1',
       );
+      vi.mocked(api.getStudentScheduleBillingSurface).mockResolvedValueOnce(
+        makeScheduleBillingSurface({
+          lessons: [
+            makeStudentLesson({
+              id: 'lesson-followup-1',
+              startsAt: '2026-02-04T10:00:00.000Z',
+              title: 'Pitch follow-up',
+            }),
+          ],
+        }),
+      );
       const user = createMinimalUser();
       renderMinimalAssignment();
 
@@ -302,7 +354,7 @@ export function registerPromptStudentSelectionTests() {
       await screen.findByRole('option', { name: 'Alex' });
       expect((studentSelect as HTMLSelectElement).value).toBe('student-alex');
       expect((studentSelect as HTMLSelectElement).disabled).toBe(true);
-      expect(screen.getByText('Lesson context: lesson-followup-1')).toBeTruthy();
+      await screen.findByText(/Lesson context: .*Pitch follow-up.*lesson-followup-1/i);
 
       await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
       await waitFor(() => {
@@ -327,6 +379,17 @@ export function registerPromptStudentSelectionTests() {
     });
 
     it('preserves resumed lesson context when generating the prompt package', async () => {
+      vi.mocked(api.getStudentScheduleBillingSurface).mockResolvedValueOnce(
+        makeScheduleBillingSurface({
+          lessons: [
+            makeStudentLesson({
+              id: 'lesson-resume-1',
+              startsAt: '2026-02-03T09:30:00.000Z',
+              title: 'Resume review',
+            }),
+          ],
+        }),
+      );
       vi.mocked(api.listAssignmentSessions).mockResolvedValueOnce({
         sessions: [
           makeAssignmentSession({
@@ -356,7 +419,7 @@ export function registerPromptStudentSelectionTests() {
       await user.click(screen.getByRole('button', { name: /Resume selected assignment/i }));
 
       await waitFor(() => {
-        expect(screen.getByText('Lesson context: lesson-resume-1')).toBeTruthy();
+        expect(screen.getByText(/Lesson context: .*Resume review.*lesson-resume-1/i)).toBeTruthy();
       });
 
       await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
@@ -379,6 +442,65 @@ export function registerPromptStudentSelectionTests() {
           lessonId: 'lesson-resume-1',
         });
       });
+    });
+
+    it('suggests recent passed lessons without homework and links the selected lesson', async () => {
+      const recentStart = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+      vi.mocked(api.getStudentScheduleBillingSurface).mockResolvedValueOnce(
+        makeScheduleBillingSurface({
+          lessons: [
+            makeStudentLesson({
+              id: 'lesson-recent-no-homework',
+              startsAt: recentStart,
+              title: 'Client update practice',
+            }),
+            makeStudentLesson({
+              id: 'lesson-has-homework',
+              startsAt: recentStart,
+              title: 'Already assigned',
+              homework: {
+                ...makeStudentLesson().homework,
+                status: 'published',
+                htmlUrl: 'https://example.test/homework',
+              },
+            }),
+          ],
+        }),
+      );
+      const user = createMinimalUser();
+      renderMinimalAssignment();
+
+      await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
+      await screen.findByRole('option', { name: 'Alex' });
+      await user.selectOptions(
+        screen.getByRole('combobox', { name: /^Student$/i }),
+        'student-alex',
+      );
+
+      await screen.findByText(/Recent lessons without homework/i);
+      await user.click(screen.getByRole('button', { name: /Client update practice/i }));
+      await screen.findByText(
+        /Lesson context: .*Client update practice.*lesson-recent-no-homework/i,
+      );
+
+      await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+      await screen.findByDisplayValue('Student transcript text');
+      await user.click(screen.getByRole('button', { name: /Generate instructions/i }));
+
+      await waitFor(() => {
+        expect(api.createAssignmentSession).toHaveBeenCalledWith(
+          expect.objectContaining({
+            studentId: 'student-alex',
+            lessonId: 'lesson-recent-no-homework',
+          }),
+        );
+        expect(api.createPromptPackage).toHaveBeenCalledWith('rec-1', {
+          templateId: 'tpl-default',
+          profileId: 'profiles/alex.md',
+          lessonId: 'lesson-recent-no-homework',
+        });
+      });
+      expect(screen.queryByText(/Already assigned/i)).toBeNull();
     });
   });
 }

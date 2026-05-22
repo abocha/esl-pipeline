@@ -40,6 +40,12 @@ export interface StudentProfileCandidateRecord {
   reviewNeeded: boolean;
   sourceSnapshotId: string | null;
   sourceLessonMemoryIds: string[];
+  sourceLessonId?: string | null;
+  sourceLessonStartedAt?: Date | null;
+  sourceLessonTitle?: string | null;
+  sourceMemoryIds?: string[];
+  provenance?: Record<string, unknown>;
+  dedupDecision?: Record<string, unknown>;
   evidence: FactEvidence[];
   status: StudentProfileCandidateStatus;
   reviewState: StudentProfileCandidateReviewState;

@@ -817,6 +817,17 @@ function seedStudentWorkspaceMocks() {
       category: 'work_context',
       targetSection: 'work_communication_context',
       sourceSummary: 'Repeatedly mentioned sprint planning and client calls.',
+      sourceLessonId: 'student-lesson-1',
+      sourceLessonStartedAt: '2026-04-20T09:00:00.000Z',
+      sourceLessonTitle: 'Sprint planning',
+      sourceMemoryIds: ['lesson-1'],
+      provenance: {
+        sourceKind: 'latest_lesson_memory',
+      },
+      dedupDecision: {
+        decision: 'created',
+        reason: 'Latest lesson introduced a candidate not found in prior context.',
+      },
       authority: 'student_stated',
       confidence: 'high',
       evidence: [
@@ -1055,6 +1066,17 @@ const DEFAULT_CANDIDATES_PANEL_PROPS: Omit<
       ],
       sourceSnapshotId: 'snapshot-1',
       sourceLessonMemoryIds: ['lesson-1'],
+      sourceLessonId: 'student-lesson-1',
+      sourceLessonStartedAt: '2026-04-20T09:00:00.000Z',
+      sourceLessonTitle: 'Sprint planning',
+      sourceMemoryIds: ['lesson-1'],
+      provenance: {
+        sourceKind: 'latest_lesson_memory',
+      },
+      dedupDecision: {
+        decision: 'created',
+        reason: 'Latest lesson introduced a candidate not found in prior context.',
+      },
       status: 'pending_review',
       reviewState: 'unreviewed',
       reviewerId: null,

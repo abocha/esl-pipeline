@@ -8,6 +8,7 @@ import type {
   JobStatus,
   PromptOptionsResponse,
   SttProvider,
+  StudentScheduleBillingSurface,
   UpdateAssignmentSessionRequest,
 } from '../../utils/api';
 import {
@@ -16,6 +17,7 @@ import {
   fetchJobOptions,
   fetchPromptOptions,
   getJobStatus,
+  getStudentScheduleBillingSurface,
   subscribeToJobEvents,
   updateAssignmentSession,
 } from '../../utils/api';
@@ -70,6 +72,7 @@ const FALLBACK_ELEVENLABS_MODELS = [
   'eleven_flash_v2_5',
   'eleven_flash_v2',
 ] as const;
+const RECENT_LESSON_LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000;
 
 type UiTtsProvider = (typeof FALLBACK_TTS_PROVIDERS)[number];
 type UiPronunciationChunkTtsProvider = (typeof FALLBACK_PRONUNCIATION_CHUNK_TTS_PROVIDERS)[number];
@@ -156,6 +159,14 @@ interface SelectablePresetOption {
   source: 'learning' | 'legacy';
 }
 
+type ScheduleLesson = StudentScheduleBillingSurface['lessons'][number];
+
+interface AssignmentLessonSuggestion {
+  id: string;
+  label: string;
+  detail: string;
+}
+
 function buildSelectablePresetOptions(
   options: Pick<JobOptionsResponse, 'learningPresets' | 'presets'> | null | undefined,
 ): SelectablePresetOption[] {
@@ -175,6 +186,35 @@ function buildSelectablePresetOptions(
   }));
 }
 
+const LESSON_DATE_TIME_FORMATTER = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+});
+
+function formatLessonDateTime(value: string | null | undefined): string {
+  if (!value) return 'date unknown';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? 'date unknown' : LESSON_DATE_TIME_FORMATTER.format(date);
+}
+
+function formatLessonContext(lesson: ScheduleLesson | null, lessonId: string): string {
+  if (!lesson) return `Lesson context: ${lessonId}`;
+  const topic = lesson.title?.trim() ? lesson.title.trim() : 'Untitled lesson';
+  return `Lesson context: ${formatLessonDateTime(lesson.startsAt)} - ${topic} - ${lesson.id}`;
+}
+
+function isRecentPassedNoHomeworkLesson(lesson: ScheduleLesson, nowMs: number): boolean {
+  if (lesson.homework.status !== 'not_started') return false;
+  if (lesson.status === 'canceled') return false;
+  const startsAtMs = new Date(lesson.startsAt).getTime();
+  if (Number.isNaN(startsAtMs)) return false;
+  const endsAtMs = startsAtMs + lesson.durationMinutes * 60 * 1000;
+  if (endsAtMs > nowMs) return false;
+  return endsAtMs >= nowMs - RECENT_LESSON_LOOKBACK_MS;
+}
+
 export const MinimalAssignment: React.FC = () => {
   const scheduleFollowupContext = useMemo(() => {
     const params = new URLSearchParams(globalThis.location?.search ?? '');
@@ -184,7 +224,12 @@ export const MinimalAssignment: React.FC = () => {
     };
   }, []);
   const [promptOptions, setPromptOptions] = useState<PromptOptionsResponse | null>(null);
+  const [operatorSelectedTemplateId, setOperatorSelectedTemplateId] = useState('');
   const [linkedLessonId, setLinkedLessonId] = useState(scheduleFollowupContext.lessonId);
+  const [scheduleSurface, setScheduleSurface] = useState<StudentScheduleBillingSurface | null>(
+    null,
+  );
+  const [scheduleSurfaceError, setScheduleSurfaceError] = useState<string | null>(null);
   const [teacherNotes, setTeacherNotes] = useState('');
   const [jobStatus, setJobStatusState] = useState<JobStatus | null>(null);
   const [jobOptions, setJobOptions] = useState<JobOptionsResponse | null>(null);
@@ -281,10 +326,26 @@ export const MinimalAssignment: React.FC = () => {
   const presetOptions = useMemo(() => buildSelectablePresetOptions(jobOptions), [jobOptions]);
   const presetOptionIds = useMemo(() => presetOptions.map((preset) => preset.id), [presetOptions]);
   const learningPresetCatalogEnabled = (jobOptions?.learningPresets?.length ?? 0) > 0;
-  const selectedTemplateId = useMemo(() => {
+  const fallbackTemplateId = useMemo(() => {
     if (!promptOptions) return '';
     return promptOptions.defaults.templateId ?? promptOptions.templates?.[0]?.id ?? '';
   }, [promptOptions]);
+  const selectedTemplateId = useMemo(() => {
+    if (!promptOptions) return '';
+    const templateIds = new Set(promptOptions.templates.map((template) => template.id));
+    if (operatorSelectedTemplateId && templateIds.has(operatorSelectedTemplateId)) {
+      return operatorSelectedTemplateId;
+    }
+    return fallbackTemplateId;
+  }, [fallbackTemplateId, operatorSelectedTemplateId, promptOptions]);
+
+  useEffect(() => {
+    if (!promptOptions) return;
+    const templateIds = new Set(promptOptions.templates.map((template) => template.id));
+    if (!operatorSelectedTemplateId || !templateIds.has(operatorSelectedTemplateId)) {
+      setOperatorSelectedTemplateId(fallbackTemplateId);
+    }
+  }, [fallbackTemplateId, operatorSelectedTemplateId, promptOptions]);
 
   const resetJobShell = useCallback(() => {
     clearAssignmentResumeQuery();
@@ -548,6 +609,34 @@ export const MinimalAssignment: React.FC = () => {
     }
   }, [activeAssignmentSession, setActiveAssignmentSession]);
 
+  const handleLinkedLessonSelection = useCallback(
+    (lessonId: string) => {
+      setLinkedLessonId(lessonId);
+      assignmentSessionMilestoneRef.current.lessonId = lessonId;
+      markAssignmentUserEdit();
+      if (!assignmentSessionWritesAllowed()) return;
+      void saveAssignmentSessionProgress({
+        studentId: source.selectedStudentId || null,
+        lessonId,
+        currentStage: 'source',
+      });
+    },
+    [
+      assignmentSessionWritesAllowed,
+      markAssignmentUserEdit,
+      saveAssignmentSessionProgress,
+      source.selectedStudentId,
+    ],
+  );
+
+  const handleSelectedTemplateChange = useCallback(
+    (templateId: string) => {
+      markAssignmentUserEdit();
+      setOperatorSelectedTemplateId(templateId);
+    },
+    [markAssignmentUserEdit],
+  );
+
   const handleStartNewAssignmentWithSessionReset = useCallback(() => {
     assignmentSessionMutationQueueRef.current = Promise.resolve(null);
     if (assignmentSessionSettingsTimeoutRef.current) {
@@ -563,10 +652,16 @@ export const MinimalAssignment: React.FC = () => {
       lessonId: scheduleFollowupContext.lessonId,
     };
     setLinkedLessonId(scheduleFollowupContext.lessonId);
+    setOperatorSelectedTemplateId(fallbackTemplateId);
     assignmentSessionSettingsRef.current = '';
     setActiveAssignmentSession(null);
     handleStartNewAssignment();
-  }, [handleStartNewAssignment, scheduleFollowupContext.lessonId, setActiveAssignmentSession]);
+  }, [
+    fallbackTemplateId,
+    handleStartNewAssignment,
+    scheduleFollowupContext.lessonId,
+    setActiveAssignmentSession,
+  ]);
 
   useEffect(() => {
     const studentId = source.selectedStudentId.trim();
@@ -769,6 +864,34 @@ export const MinimalAssignment: React.FC = () => {
     void loadJobOptions();
     void loadStudentOptions();
   }, [loadJobOptions, loadPromptOptions, loadStudentOptions]);
+
+  useEffect(() => {
+    const studentId = source.selectedStudentId.trim();
+    if (!studentId) {
+      setScheduleSurface(null);
+      setScheduleSurfaceError(null);
+      return;
+    }
+
+    let active = true;
+    void getStudentScheduleBillingSurface(studentId)
+      .then((surface) => {
+        if (!active) return;
+        setScheduleSurface(surface);
+        setScheduleSurfaceError(null);
+      })
+      .catch((error) => {
+        if (!active) return;
+        const message =
+          error instanceof Error ? error.message : 'Unable to load recent lesson suggestions.';
+        setScheduleSurface(null);
+        setScheduleSurfaceError(message);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [source.selectedStudentId]);
 
   useEffect(() => {
     if (!jobStatus?.jobId || !isActivelyProcessingJobState(jobStatus.state)) return;
@@ -987,6 +1110,48 @@ export const MinimalAssignment: React.FC = () => {
   const reviewReady =
     hasAssignmentContent &&
     (!authoring.draftPreviewGate.previewRequired || authoring.previewReadyForCurrentDraft);
+  const linkedLesson = useMemo(() => {
+    if (!linkedLessonId || !scheduleSurface) return null;
+    return scheduleSurface.lessons.find((lesson) => lesson.id === linkedLessonId) ?? null;
+  }, [linkedLessonId, scheduleSurface]);
+  const linkedLessonContextLabel = linkedLessonId
+    ? formatLessonContext(linkedLesson, linkedLessonId)
+    : null;
+  const lessonSuggestions = useMemo<AssignmentLessonSuggestion[]>(() => {
+    if (!scheduleSurface) return [];
+    const nowMs = Date.now();
+    return scheduleSurface.lessons
+      .filter((lesson) => lesson.id !== linkedLessonId)
+      .filter((lesson) => isRecentPassedNoHomeworkLesson(lesson, nowMs))
+      .sort((left, right) => new Date(right.startsAt).getTime() - new Date(left.startsAt).getTime())
+      .slice(0, 3)
+      .map((lesson) => {
+        const topic = lesson.title?.trim() ? lesson.title.trim() : 'Untitled lesson';
+        return {
+          id: lesson.id,
+          label: `${formatLessonDateTime(lesson.startsAt)} - ${topic}`,
+          detail: `Lesson ${lesson.id}`,
+        };
+      });
+  }, [linkedLessonId, scheduleSurface]);
+  const selectedTemplateLabel = useMemo(() => {
+    if (!selectedTemplateId) return 'no template selected';
+    const template = promptOptions?.templates.find((option) => option.id === selectedTemplateId);
+    const label = template?.label ?? selectedTemplateId;
+    return selectedTemplateId === promptOptions?.defaults.templateId
+      ? `${label} (default template)`
+      : label;
+  }, [promptOptions?.defaults.templateId, promptOptions?.templates, selectedTemplateId]);
+  const selectedProfileLabel = useMemo(() => {
+    if (!context.selectedProfileId) return 'no learner profile selected';
+    const profile = promptOptions?.profiles.find(
+      (option) => option.id === context.selectedProfileId,
+    );
+    const label = profile?.label ?? context.selectedProfileId;
+    return context.selectedProfileId === promptOptions?.defaults.profileId
+      ? `${label} (default profile)`
+      : label;
+  }, [context.selectedProfileId, promptOptions?.defaults.profileId, promptOptions?.profiles]);
 
   useEffect(() => {
     if (!hasStartedFlow || startStageMode !== 'idle') return;
@@ -1276,6 +1441,10 @@ export const MinimalAssignment: React.FC = () => {
         }}
         selectedStudent={source.selectedStudent}
         linkedLessonId={linkedLessonId || null}
+        linkedLessonContextLabel={linkedLessonContextLabel}
+        lessonSuggestions={lessonSuggestions}
+        lessonSuggestionsError={scheduleSurfaceError}
+        onSelectLessonSuggestion={handleLinkedLessonSelection}
         selectedSttProvider={source.selectedSttProvider}
         onSelectedSttProviderChange={(provider) => {
           markAssignmentUserEdit();
@@ -1340,6 +1509,11 @@ export const MinimalAssignment: React.FC = () => {
         promptLoading={authoring.promptLoading}
         promptReady={authoring.promptReady}
         promptOptionsReady={Boolean(promptOptions)}
+        promptTemplates={promptOptions?.templates ?? []}
+        selectedTemplateId={selectedTemplateId}
+        selectedTemplateLabel={selectedTemplateLabel}
+        selectedProfileLabel={selectedProfileLabel}
+        onSelectedTemplateIdChange={handleSelectedTemplateChange}
         onGeneratePrompt={() => {
           markAssignmentUserEdit();
           void authoring.generatePrompt();
