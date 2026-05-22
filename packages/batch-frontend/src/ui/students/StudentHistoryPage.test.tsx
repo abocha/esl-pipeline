@@ -256,8 +256,68 @@ function seedHistoryMocks() {
           message: 'Regenerated homework after teacher edit.',
         },
       },
+      {
+        type: 'lesson_completed',
+        studentId: 'student-daria',
+        status: 'completed',
+        createdAt: '2026-04-20T07:30:00.000Z',
+        displayName: 'Pitch practice',
+        details: {
+          lessonId: 'lesson-1',
+          title: 'Pitch practice',
+          startsAt: '2026-04-20T07:00:00.000Z',
+          durationMinutes: 60,
+        },
+      },
+      {
+        type: 'credit_event_recorded',
+        studentId: 'student-daria',
+        status: 'credit_added',
+        createdAt: '2026-04-19T10:00:00.000Z',
+        displayName: 'Credit event credit-1',
+        details: {
+          creditEventId: 'credit-1',
+          quantityDelta: 8,
+          note: 'Package purchase',
+        },
+      },
+      {
+        type: 'payment_recorded',
+        studentId: 'student-daria',
+        status: 'received',
+        createdAt: '2026-04-19T09:55:00.000Z',
+        displayName: 'Payment payment-1',
+        details: {
+          paymentId: 'payment-1',
+          amountMinor: 120000,
+          currency: 'USD',
+          receivedAt: '2026-04-19',
+        },
+      },
+      {
+        type: 'business_settings_updated',
+        studentId: 'student-daria',
+        status: 'updated',
+        createdAt: '2026-04-18T09:55:00.000Z',
+        displayName: 'Business settings',
+        details: {
+          workspaceId: 'workspace-1',
+          defaultCurrency: 'USD',
+        },
+      },
+      {
+        type: 'reminder_hidden',
+        studentId: 'student-daria',
+        status: 'lesson_followup',
+        createdAt: '2026-04-17T09:55:00.000Z',
+        displayName: 'Hidden lesson follow-up reminder',
+        details: {
+          lessonId: 'lesson-1',
+          reminderKey: 'lesson_followup:lesson-1',
+        },
+      },
     ],
-    total: 6,
+    total: 11,
     limit: 100,
     offset: 0,
     order: 'desc',
@@ -291,6 +351,8 @@ describe('StudentHistoryPage', () => {
     expect(screen.getByRole('button', { name: 'Homework' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Profile' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Materials' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Billing' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Business' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Operations' })).toBeTruthy();
 
     expect(screen.getByText('Lesson memory created')).toBeTruthy();
@@ -307,6 +369,11 @@ describe('StudentHistoryPage', () => {
     expect(screen.getByText('Profile revision activated')).toBeTruthy();
     expect(screen.getByText('Material generated')).toBeTruthy();
     expect(screen.getByText('Rerun requested')).toBeTruthy();
+    expect(screen.getByText('Lesson completed')).toBeTruthy();
+    expect(screen.getByText('Lesson credits added')).toBeTruthy();
+    expect(screen.getByText('Payment received')).toBeTruthy();
+    expect(screen.getByText('Business settings updated')).toBeTruthy();
+    expect(screen.getByText('Reminder hidden')).toBeTruthy();
     expect(screen.getAllByText(/^\d{2}:\d{2}$/).length).toBeGreaterThan(0);
     expect(screen.queryByText(/\b(?:AM|PM)\b/)).toBeNull();
     expect(screen.queryByText('recording_ingested')).toBeNull();
@@ -359,6 +426,17 @@ describe('StudentHistoryPage', () => {
 
     expect(screen.getByText('Profile revision activated')).toBeTruthy();
     expect(screen.queryByText('Homework assigned')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Billing' }));
+
+    expect(screen.getByText('Lesson credits added')).toBeTruthy();
+    expect(screen.getByText('Payment received')).toBeTruthy();
+    expect(screen.queryByText('Profile revision activated')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Business' }));
+
+    expect(screen.getByText('Business settings updated')).toBeTruthy();
+    expect(screen.queryByText('Payment received')).toBeNull();
   });
 
   it('shows a non-readable pending canvas while history sources resolve', async () => {
@@ -427,7 +505,7 @@ describe('StudentHistoryPage', () => {
     expect(await screen.findByText('History will collect here')).toBeTruthy();
     expect(
       screen.getByText(
-        'Lesson, homework, profile, material, and operations events will appear as this student works through the new flow.',
+        'Lesson, homework, profile, material, billing, business, and operations events will appear as this student works through the new flow.',
       ),
     ).toBeTruthy();
   });

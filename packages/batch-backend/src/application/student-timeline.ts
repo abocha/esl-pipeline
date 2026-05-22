@@ -18,7 +18,18 @@ export type StudentTimelineType =
   | 'template_revision_activated'
   | 'job_action_rerun'
   | 'job_action_cancel'
-  | 'job_action_edit_metadata';
+  | 'job_action_edit_metadata'
+  | 'lesson_created'
+  | 'lesson_updated'
+  | 'lesson_completed'
+  | 'lesson_canceled'
+  | 'lesson_no_show'
+  | 'lesson_plan_updated'
+  | 'lesson_recurrence_updated'
+  | 'credit_event_recorded'
+  | 'payment_recorded'
+  | 'reminder_hidden'
+  | 'business_settings_updated';
 
 export interface StudentTimelineItem {
   type: StudentTimelineType;
@@ -85,6 +96,7 @@ interface TimelineRow {
   action_requested_by: string | null;
   action_created_job_id: string | null;
   html_url: string | null;
+  details_json: Record<string, unknown> | null;
 }
 
 function deriveDisplayName(params: {
@@ -150,7 +162,8 @@ const timelineQuery = `
            NULL::text AS action_error_code,
            NULL::uuid AS action_requested_by,
            NULL::uuid AS action_created_job_id,
-           NULL::text AS html_url
+           NULL::text AS html_url,
+           NULL::jsonb AS details_json
     FROM recordings r
     WHERE r.student_id = $1
 
@@ -185,7 +198,8 @@ const timelineQuery = `
            NULL::text AS action_error_code,
            NULL::uuid AS action_requested_by,
            NULL::uuid AS action_created_job_id,
-           NULL::text AS html_url
+           NULL::text AS html_url,
+           NULL::jsonb AS details_json
     FROM transcripts t
     JOIN recordings r ON r.id = t.recording_id
     WHERE r.student_id = $1
@@ -221,7 +235,8 @@ const timelineQuery = `
            NULL::text AS action_error_code,
            NULL::uuid AS action_requested_by,
            NULL::uuid AS action_created_job_id,
-           NULL::text AS html_url
+           NULL::text AS html_url,
+           NULL::jsonb AS details_json
     FROM prompt_packages p
     LEFT JOIN recordings r ON r.id = p.recording_id
     WHERE p.student_id = $1
@@ -257,7 +272,8 @@ const timelineQuery = `
            NULL::text AS action_error_code,
            NULL::uuid AS action_requested_by,
            NULL::uuid AS action_created_job_id,
-           NULL::text AS html_url
+           NULL::text AS html_url,
+           NULL::jsonb AS details_json
     FROM drafts d
     LEFT JOIN prompt_packages p ON p.id = d.prompt_package_id
     LEFT JOIN recordings r ON r.id = p.recording_id
@@ -298,7 +314,8 @@ const timelineQuery = `
       NULL::text AS action_error_code,
       NULL::uuid AS action_requested_by,
       NULL::uuid AS action_created_job_id,
-      j.html_url
+      j.html_url,
+      NULL::jsonb AS details_json
     FROM jobs j
     LEFT JOIN recordings r ON r.id = j.recording_id
     LEFT JOIN prompt_packages p ON p.id = j.prompt_package_id
@@ -346,7 +363,8 @@ const timelineQuery = `
            NULL::text AS action_error_code,
            NULL::uuid AS action_requested_by,
            NULL::uuid AS action_created_job_id,
-           NULL::text AS html_url
+           NULL::text AS html_url,
+           NULL::jsonb AS details_json
     FROM student_profile_bindings spb
     WHERE spb.student_id = $1
 
@@ -385,7 +403,8 @@ const timelineQuery = `
       NULL::text AS action_error_code,
       NULL::uuid AS action_requested_by,
       NULL::uuid AS action_created_job_id,
-      NULL::text AS html_url
+      NULL::text AS html_url,
+      NULL::jsonb AS details_json
     FROM profile_revisions pr
     WHERE EXISTS (
       SELECT 1
@@ -430,7 +449,8 @@ const timelineQuery = `
       NULL::text AS action_error_code,
       NULL::uuid AS action_requested_by,
       NULL::uuid AS action_created_job_id,
-      NULL::text AS html_url
+      NULL::text AS html_url,
+      NULL::jsonb AS details_json
     FROM profile_revisions pr
     WHERE pr.status = 'active'
       AND pr.activated_at IS NOT NULL
@@ -482,7 +502,8 @@ const timelineQuery = `
       NULL::text AS action_error_code,
       NULL::uuid AS action_requested_by,
       NULL::uuid AS action_created_job_id,
-      NULL::text AS html_url
+      NULL::text AS html_url,
+      NULL::jsonb AS details_json
     FROM template_revisions tr
     WHERE EXISTS (
       SELECT 1
@@ -522,7 +543,8 @@ const timelineQuery = `
       NULL::text AS action_error_code,
       NULL::uuid AS action_requested_by,
       NULL::uuid AS action_created_job_id,
-      NULL::text AS html_url
+      NULL::text AS html_url,
+      NULL::jsonb AS details_json
     FROM template_revisions tr
     WHERE tr.status = 'active'
       AND tr.activated_at IS NOT NULL
@@ -568,7 +590,8 @@ const timelineQuery = `
       jah.error_code AS action_error_code,
       jah.requested_by AS action_requested_by,
       jah.created_job_id AS action_created_job_id,
-      j.html_url
+      j.html_url,
+      NULL::jsonb AS details_json
     FROM job_action_history jah
     JOIN jobs j ON j.id = jah.job_id
     LEFT JOIN recordings r ON r.id = j.recording_id
@@ -584,6 +607,379 @@ const timelineQuery = `
         AND COALESCE(r.student_id, p.student_id, d.student_id, pd.student_id, rp.student_id, rd.student_id) = $1
       )
     )
+
+    UNION ALL
+
+    SELECT
+      'lesson_created'::text AS type,
+      sl.status::text AS status,
+      sl.created_at,
+      NULL::uuid AS recording_id,
+      NULL::uuid AS transcript_id,
+      NULL::uuid AS prompt_package_id,
+      NULL::uuid AS draft_id,
+      NULL::uuid AS job_id,
+      COALESCE(sl.title, 'Lesson ' || sl.id::text) AS source_path,
+      NULL::text AS storage_uri,
+      NULL::text AS error,
+      NULL::uuid AS binding_id,
+      NULL::text AS binding_profile_id,
+      NULL::text AS binding_reason,
+      NULL::uuid AS binding_changed_by,
+      NULL::uuid AS profile_revision_id,
+      NULL::text AS profile_id,
+      NULL::text AS profile_source,
+      NULL::text AS profile_version_label,
+      NULL::uuid AS template_revision_id,
+      NULL::text AS template_id,
+      NULL::text AS template_source,
+      NULL::text AS template_version_label,
+      NULL::uuid AS action_id,
+      NULL::text AS action_type,
+      NULL::text AS action_message,
+      NULL::text AS action_error_code,
+      NULL::uuid AS action_requested_by,
+      NULL::uuid AS action_created_job_id,
+      NULL::text AS html_url,
+      jsonb_build_object(
+        'lessonId', sl.id,
+        'workspaceId', sl.workspace_id,
+        'startsAt', sl.starts_at,
+        'timezone', sl.timezone,
+        'durationMinutes', sl.duration_minutes,
+        'title', sl.title,
+        'status', sl.status,
+        'consumesCredit', sl.consumes_credit,
+        'recurrenceOrigin', sl.recurrence_origin,
+        'recurrenceOverrideKind', sl.recurrence_override_kind
+      ) AS details_json
+    FROM student_lessons sl
+    WHERE sl.student_id = $1
+
+    UNION ALL
+
+    SELECT
+      CASE
+        WHEN sl.status = 'completed' THEN 'lesson_completed'
+        WHEN sl.status = 'canceled' THEN 'lesson_canceled'
+        WHEN sl.status = 'no_show' THEN 'lesson_no_show'
+        ELSE 'lesson_updated'
+      END::text AS type,
+      sl.status::text AS status,
+      sl.updated_at AS created_at,
+      NULL::uuid AS recording_id,
+      NULL::uuid AS transcript_id,
+      NULL::uuid AS prompt_package_id,
+      NULL::uuid AS draft_id,
+      NULL::uuid AS job_id,
+      COALESCE(sl.title, 'Lesson ' || sl.id::text) AS source_path,
+      NULL::text AS storage_uri,
+      NULL::text AS error,
+      NULL::uuid AS binding_id,
+      NULL::text AS binding_profile_id,
+      NULL::text AS binding_reason,
+      NULL::uuid AS binding_changed_by,
+      NULL::uuid AS profile_revision_id,
+      NULL::text AS profile_id,
+      NULL::text AS profile_source,
+      NULL::text AS profile_version_label,
+      NULL::uuid AS template_revision_id,
+      NULL::text AS template_id,
+      NULL::text AS template_source,
+      NULL::text AS template_version_label,
+      NULL::uuid AS action_id,
+      NULL::text AS action_type,
+      NULL::text AS action_message,
+      NULL::text AS action_error_code,
+      NULL::uuid AS action_requested_by,
+      NULL::uuid AS action_created_job_id,
+      NULL::text AS html_url,
+      jsonb_build_object(
+        'lessonId', sl.id,
+        'workspaceId', sl.workspace_id,
+        'startsAt', sl.starts_at,
+        'timezone', sl.timezone,
+        'durationMinutes', sl.duration_minutes,
+        'title', sl.title,
+        'status', sl.status,
+        'consumesCredit', sl.consumes_credit,
+        'recurrenceOrigin', sl.recurrence_origin,
+        'recurrenceOverrideKind', sl.recurrence_override_kind
+      ) AS details_json
+    FROM student_lessons sl
+    WHERE sl.student_id = $1
+      AND sl.updated_at > sl.created_at
+
+    UNION ALL
+
+    SELECT
+      'lesson_plan_updated'::text AS type,
+      'updated'::text AS status,
+      slp.updated_at AS created_at,
+      NULL::uuid AS recording_id,
+      NULL::uuid AS transcript_id,
+      NULL::uuid AS prompt_package_id,
+      NULL::uuid AS draft_id,
+      NULL::uuid AS job_id,
+      'Lesson plan'::text AS source_path,
+      NULL::text AS storage_uri,
+      NULL::text AS error,
+      NULL::uuid AS binding_id,
+      NULL::text AS binding_profile_id,
+      NULL::text AS binding_reason,
+      NULL::uuid AS binding_changed_by,
+      NULL::uuid AS profile_revision_id,
+      NULL::text AS profile_id,
+      NULL::text AS profile_source,
+      NULL::text AS profile_version_label,
+      NULL::uuid AS template_revision_id,
+      NULL::text AS template_id,
+      NULL::text AS template_source,
+      NULL::text AS template_version_label,
+      NULL::uuid AS action_id,
+      NULL::text AS action_type,
+      NULL::text AS action_message,
+      NULL::text AS action_error_code,
+      NULL::uuid AS action_requested_by,
+      NULL::uuid AS action_created_job_id,
+      NULL::text AS html_url,
+      jsonb_build_object(
+        'workspaceId', slp.workspace_id,
+        'timezone', slp.timezone,
+        'defaultDurationMinutes', slp.default_duration_minutes,
+        'cadence', slp.cadence,
+        'preferredTimes', slp.preferred_times,
+        'schedulingNotes', slp.scheduling_notes
+      ) AS details_json
+    FROM student_lesson_plans slp
+    WHERE slp.student_id = $1
+
+    UNION ALL
+
+    SELECT
+      'lesson_recurrence_updated'::text AS type,
+      slrr.status::text AS status,
+      slrr.updated_at AS created_at,
+      NULL::uuid AS recording_id,
+      NULL::uuid AS transcript_id,
+      NULL::uuid AS prompt_package_id,
+      NULL::uuid AS draft_id,
+      NULL::uuid AS job_id,
+      'Lesson recurrence'::text AS source_path,
+      NULL::text AS storage_uri,
+      NULL::text AS error,
+      NULL::uuid AS binding_id,
+      NULL::text AS binding_profile_id,
+      NULL::text AS binding_reason,
+      NULL::uuid AS binding_changed_by,
+      NULL::uuid AS profile_revision_id,
+      NULL::text AS profile_id,
+      NULL::text AS profile_source,
+      NULL::text AS profile_version_label,
+      NULL::uuid AS template_revision_id,
+      NULL::text AS template_id,
+      NULL::text AS template_source,
+      NULL::text AS template_version_label,
+      NULL::uuid AS action_id,
+      NULL::text AS action_type,
+      NULL::text AS action_message,
+      NULL::text AS action_error_code,
+      NULL::uuid AS action_requested_by,
+      NULL::uuid AS action_created_job_id,
+      NULL::text AS html_url,
+      jsonb_build_object(
+        'recurrenceRuleId', slrr.id,
+        'workspaceId', slrr.workspace_id,
+        'timezone', slrr.timezone,
+        'frequency', slrr.frequency,
+        'startsOn', slrr.starts_on,
+        'endsOn', slrr.ends_on,
+        'status', slrr.status,
+        'generationHorizonDays', slrr.generation_horizon_days,
+        'materializedThrough', slrr.materialized_through
+      ) AS details_json
+    FROM student_lesson_recurrence_rules slrr
+    WHERE slrr.student_id = $1
+
+    UNION ALL
+
+    SELECT
+      'credit_event_recorded'::text AS type,
+      sce.event_type::text AS status,
+      sce.created_at,
+      NULL::uuid AS recording_id,
+      NULL::uuid AS transcript_id,
+      NULL::uuid AS prompt_package_id,
+      NULL::uuid AS draft_id,
+      NULL::uuid AS job_id,
+      'Credit event ' || sce.id::text AS source_path,
+      NULL::text AS storage_uri,
+      NULL::text AS error,
+      NULL::uuid AS binding_id,
+      NULL::text AS binding_profile_id,
+      NULL::text AS binding_reason,
+      NULL::uuid AS binding_changed_by,
+      NULL::uuid AS profile_revision_id,
+      NULL::text AS profile_id,
+      NULL::text AS profile_source,
+      NULL::text AS profile_version_label,
+      NULL::uuid AS template_revision_id,
+      NULL::text AS template_id,
+      NULL::text AS template_source,
+      NULL::text AS template_version_label,
+      NULL::uuid AS action_id,
+      NULL::text AS action_type,
+      NULL::text AS action_message,
+      NULL::text AS action_error_code,
+      NULL::uuid AS action_requested_by,
+      NULL::uuid AS action_created_job_id,
+      NULL::text AS html_url,
+      jsonb_build_object(
+        'creditEventId', sce.id,
+        'workspaceId', sce.workspace_id,
+        'eventType', sce.event_type,
+        'quantityDelta', sce.quantity_delta,
+        'sourceLessonId', sce.source_lesson_id,
+        'sourcePaymentId', sce.source_payment_id,
+        'note', sce.note,
+        'voidedAt', sce.voided_at
+      ) AS details_json
+    FROM student_credit_events sce
+    WHERE sce.student_id = $1
+
+    UNION ALL
+
+    SELECT
+      'payment_recorded'::text AS type,
+      CASE WHEN spr.voided_at IS NULL THEN 'received' ELSE 'voided' END::text AS status,
+      spr.created_at,
+      NULL::uuid AS recording_id,
+      NULL::uuid AS transcript_id,
+      NULL::uuid AS prompt_package_id,
+      NULL::uuid AS draft_id,
+      NULL::uuid AS job_id,
+      'Payment ' || spr.id::text AS source_path,
+      NULL::text AS storage_uri,
+      NULL::text AS error,
+      NULL::uuid AS binding_id,
+      NULL::text AS binding_profile_id,
+      NULL::text AS binding_reason,
+      NULL::uuid AS binding_changed_by,
+      NULL::uuid AS profile_revision_id,
+      NULL::text AS profile_id,
+      NULL::text AS profile_source,
+      NULL::text AS profile_version_label,
+      NULL::uuid AS template_revision_id,
+      NULL::text AS template_id,
+      NULL::text AS template_source,
+      NULL::text AS template_version_label,
+      NULL::uuid AS action_id,
+      NULL::text AS action_type,
+      NULL::text AS action_message,
+      NULL::text AS action_error_code,
+      NULL::uuid AS action_requested_by,
+      NULL::uuid AS action_created_job_id,
+      spr.external_url AS html_url,
+      jsonb_build_object(
+        'paymentId', spr.id,
+        'workspaceId', spr.workspace_id,
+        'amountMinor', spr.amount_minor,
+        'currency', spr.currency,
+        'method', spr.method,
+        'receivedAt', spr.received_at,
+        'note', spr.note,
+        'voidedAt', spr.voided_at
+      ) AS details_json
+    FROM student_payment_records spr
+    WHERE spr.student_id = $1
+
+    UNION ALL
+
+    SELECT
+      'reminder_hidden'::text AS type,
+      'lesson_followup'::text AS status,
+      srp.latest_hidden_lesson_followup_at AS created_at,
+      NULL::uuid AS recording_id,
+      NULL::uuid AS transcript_id,
+      NULL::uuid AS prompt_package_id,
+      NULL::uuid AS draft_id,
+      NULL::uuid AS job_id,
+      'Hidden lesson follow-up reminder'::text AS source_path,
+      NULL::text AS storage_uri,
+      NULL::text AS error,
+      NULL::uuid AS binding_id,
+      NULL::text AS binding_profile_id,
+      NULL::text AS binding_reason,
+      NULL::uuid AS binding_changed_by,
+      NULL::uuid AS profile_revision_id,
+      NULL::text AS profile_id,
+      NULL::text AS profile_source,
+      NULL::text AS profile_version_label,
+      NULL::uuid AS template_revision_id,
+      NULL::text AS template_id,
+      NULL::text AS template_source,
+      NULL::text AS template_version_label,
+      NULL::uuid AS action_id,
+      NULL::text AS action_type,
+      NULL::text AS action_message,
+      NULL::text AS action_error_code,
+      NULL::uuid AS action_requested_by,
+      NULL::uuid AS action_created_job_id,
+      NULL::text AS html_url,
+      jsonb_build_object(
+        'workspaceId', srp.workspace_id,
+        'lessonId', srp.latest_hidden_lesson_followup_lesson_id,
+        'reminderKey', srp.latest_hidden_lesson_followup_key
+      ) AS details_json
+    FROM student_reminder_preferences srp
+    WHERE srp.student_id = $1
+      AND srp.latest_hidden_lesson_followup_at IS NOT NULL
+
+    UNION ALL
+
+    SELECT
+      'business_settings_updated'::text AS type,
+      'updated'::text AS status,
+      wbs.updated_at AS created_at,
+      NULL::uuid AS recording_id,
+      NULL::uuid AS transcript_id,
+      NULL::uuid AS prompt_package_id,
+      NULL::uuid AS draft_id,
+      NULL::uuid AS job_id,
+      'Business settings'::text AS source_path,
+      NULL::text AS storage_uri,
+      NULL::text AS error,
+      NULL::uuid AS binding_id,
+      NULL::text AS binding_profile_id,
+      NULL::text AS binding_reason,
+      NULL::uuid AS binding_changed_by,
+      NULL::uuid AS profile_revision_id,
+      NULL::text AS profile_id,
+      NULL::text AS profile_source,
+      NULL::text AS profile_version_label,
+      NULL::uuid AS template_revision_id,
+      NULL::text AS template_id,
+      NULL::text AS template_source,
+      NULL::text AS template_version_label,
+      NULL::uuid AS action_id,
+      NULL::text AS action_type,
+      NULL::text AS action_message,
+      NULL::text AS action_error_code,
+      NULL::uuid AS action_requested_by,
+      NULL::uuid AS action_created_job_id,
+      NULL::text AS html_url,
+      jsonb_build_object(
+        'workspaceId', wbs.workspace_id,
+        'defaultCurrency', wbs.default_currency,
+        'defaultLessonRateMinor', wbs.default_lesson_rate_minor,
+        'defaultLessonDurationMinutes', wbs.default_lesson_duration_minutes,
+        'timezone', wbs.timezone,
+        'forecastHorizonDays', wbs.forecast_horizon_days,
+        'topUpThreshold', wbs.top_up_threshold
+      ) AS details_json
+    FROM workspace_business_settings wbs
+    JOIN students s ON s.workspace_id = wbs.workspace_id
+    WHERE s.id = $1
   )
 `;
 
@@ -661,7 +1057,8 @@ export async function getStudentTimeline(
              action_error_code,
              action_requested_by,
              action_created_job_id,
-             html_url
+             html_url,
+             details_json
       FROM timeline
       ${whereClause}
       ORDER BY
@@ -677,6 +1074,7 @@ export async function getStudentTimeline(
           profile_revision_id::text,
           template_revision_id::text,
           action_id::text,
+          source_path,
           ''
         ) ${orderClause}
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
@@ -691,7 +1089,7 @@ export async function getStudentTimeline(
   });
 
   const items = rows.map((row) => {
-    const details: Record<string, unknown> = {};
+    const details: Record<string, unknown> = { ...(row.details_json ?? {}) };
     if (row.error) {
       details.error = row.error;
     }
