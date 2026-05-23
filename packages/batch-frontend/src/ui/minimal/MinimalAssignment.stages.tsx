@@ -894,39 +894,49 @@ export function ContextStageSection({
           </div>
           {profileRevisionError ? <p className="minimal-error">{profileRevisionError}</p> : null}
           {selectedProfileId && profilePreview ? (
-            <div className="minimal-block">
-              <div className="minimal-list">
-                <div className="minimal-list-item">
-                  <strong>Profile</strong>
-                  <span>{profilePreview.profileId}</span>
+            <div className="minimal-profile-card">
+              <div className="minimal-profile-meta-grid">
+                <div>
+                  <span>Profile</span>
+                  <strong>{profilePreview.profileId}</strong>
                 </div>
-                <div className="minimal-list-item">
-                  <strong>Level</strong>
-                  <span>{profilePreview.overallLevel ?? 'Not set yet'}</span>
+                <div>
+                  <span>Level</span>
+                  <strong>{profilePreview.overallLevel ?? 'Not set yet'}</strong>
                 </div>
-                {profilePreview.goalsAndContexts.map((item) => (
-                  <div key={`goal-${item}`} className="minimal-list-item">
-                    <strong>Goal / context</strong>
-                    <span>{item}</span>
-                  </div>
-                ))}
-                {profilePreview.strengthsAndChallenges.map((item) => (
-                  <div key={`signal-${item}`} className="minimal-list-item">
-                    <strong>Strength / challenge</strong>
-                    <span>{item}</span>
-                  </div>
-                ))}
-                {profilePreview.teacherNoteSnippet ? (
-                  <div className="minimal-list-item">
-                    <strong>Teacher note</strong>
-                    <span>{profilePreview.teacherNoteSnippet}</span>
+                {profilePreview.updatedAt ? (
+                  <div>
+                    <span>Updated</span>
+                    <strong>{new Date(profilePreview.updatedAt).toLocaleString()}</strong>
                   </div>
                 ) : null}
-                {profilePreview.updatedAt ? (
-                  <div className="minimal-list-item">
-                    <strong>Last updated</strong>
-                    <span>{new Date(profilePreview.updatedAt).toLocaleString()}</span>
-                  </div>
+              </div>
+              <div className="minimal-profile-scan-grid">
+                {profilePreview.goalsAndContexts.length > 0 ? (
+                  <section className="minimal-profile-scan-group">
+                    <h4>Goals / context</h4>
+                    <ul>
+                      {profilePreview.goalsAndContexts.map((item) => (
+                        <li key={`goal-${item}`}>{item}</li>
+                      ))}
+                    </ul>
+                  </section>
+                ) : null}
+                {profilePreview.strengthsAndChallenges.length > 0 ? (
+                  <section className="minimal-profile-scan-group">
+                    <h4>Strengths / challenges</h4>
+                    <ul>
+                      {profilePreview.strengthsAndChallenges.map((item) => (
+                        <li key={`signal-${item}`}>{item}</li>
+                      ))}
+                    </ul>
+                  </section>
+                ) : null}
+                {profilePreview.teacherNoteSnippet ? (
+                  <section className="minimal-profile-scan-group minimal-profile-scan-group-wide">
+                    <h4>Teacher note</h4>
+                    <p>{profilePreview.teacherNoteSnippet}</p>
+                  </section>
                 ) : null}
               </div>
             </div>
@@ -946,21 +956,21 @@ export function ContextStageSection({
             {studentId ? (
               isInRouterContext ? (
                 <Link
-                  className="minimal-primary"
+                  className="minimal-primary minimal-link-button"
                   to={`/students/${encodeURIComponent(studentId)}/learning`}
                 >
                   Open Learning page
                 </Link>
               ) : (
                 <a
-                  className="minimal-primary"
+                  className="minimal-primary minimal-link-button"
                   href={`/students/${encodeURIComponent(studentId)}/learning`}
                 >
                   Open Learning page
                 </a>
               )
             ) : (
-              <span className="minimal-primary" aria-disabled="true">
+              <span className="minimal-primary minimal-link-button" aria-disabled="true">
                 Open Learning page
               </span>
             )}
