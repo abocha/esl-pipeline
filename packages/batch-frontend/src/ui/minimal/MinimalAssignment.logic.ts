@@ -175,7 +175,35 @@ export function getPresetRerunActions(): readonly PresetRerunAction[] {
   return PRESET_RERUN_ACTIONS;
 }
 
-export function buildPresetRerunPayload(kind: PresetRerunKind): RerunPayload {
+function withPresetSelections(input: CustomRerunInput, kind: PresetRerunKind): CustomRerunInput {
+  return {
+    ...input,
+    rerunStudyTextAudio: kind === 'studyText' || kind === 'allAudio',
+    rerunPronunciationMainAudio: kind === 'pronunciation' || kind === 'allAudio',
+    rerunPronunciationChunkAudio: kind === 'pronunciation' || kind === 'allAudio',
+  };
+}
+
+export function buildContextualPresetRerunPayload(
+  kind: PresetRerunKind,
+  input: CustomRerunInput,
+): RerunPayload {
+  if (kind === 'republish') {
+    return buildPresetRerunPayload(kind);
+  }
+
+  const contextualPayload = buildCustomRerunPayload(withPresetSelections(input, kind));
+  return contextualPayload.ok ? contextualPayload.payload : buildPresetRerunPayload(kind);
+}
+
+export function buildPresetRerunPayload(
+  kind: PresetRerunKind,
+  input?: CustomRerunInput,
+): RerunPayload {
+  if (input) {
+    return buildContextualPresetRerunPayload(kind, input);
+  }
+
   return PRESET_RERUN_ACTIONS.find((action) => action.kind === kind)!.payload;
 }
 

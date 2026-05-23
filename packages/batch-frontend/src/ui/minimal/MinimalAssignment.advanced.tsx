@@ -404,9 +404,9 @@ export function useAdvancedActionsController({
 
   const handlePresetRerun = useCallback(
     async (kind: PresetRerunKind) => {
-      await queueRerun(buildPresetRerunPayload(kind), 'Rerun queued.');
+      await queueRerun(buildPresetRerunPayload(kind, form), 'Rerun queued.');
     },
-    [queueRerun],
+    [form, queueRerun],
   );
 
   const handleRepublishCurrentDraft = useCallback(async () => {
