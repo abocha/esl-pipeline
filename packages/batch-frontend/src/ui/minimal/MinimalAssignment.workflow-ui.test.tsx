@@ -1,6 +1,7 @@
 import { fireEvent } from '@testing-library/react';
 import { afterEach, beforeEach, describe, it } from 'vitest';
 
+import { getTranscriptUnexpectedCharacterWarnings } from './MinimalAssignment.stages';
 import {
   testAct as act,
   testApi as api,
@@ -28,6 +29,11 @@ describe('MinimalAssignment - staged workflow UI', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it('flags Spanish-looking accent characters in transcript text', () => {
+    expect(getTranscriptUnexpectedCharacterWarnings('Student: Ajá, I understand.')).toEqual(['á']);
+    expect(getTranscriptUnexpectedCharacterWarnings('Teacher: Ага, good.')).toEqual([]);
   });
 
   it(

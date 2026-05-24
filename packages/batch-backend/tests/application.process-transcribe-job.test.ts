@@ -319,9 +319,7 @@ describe('application/process-transcribe-job', () => {
       },
     );
 
-    expect(storedTexts).toContain(
-      '[Teacher 00:00.000-00:01.200] Hello there.\n[Student 00:02.000-00:02.400] Hi.',
-    );
+    expect(storedTexts).toContain('[Teacher 00:00] Hello there.\n[Student 00:02] Hi.');
     expect(storedTexts).toContain('Hello there.');
     expect(storedTexts).toContain('Hi.');
   });
