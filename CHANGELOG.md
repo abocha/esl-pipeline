@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [6.8.1] - 2026-05-24
+
+### Changed
+
+- Automated release from PR #84: Shorten transcript timestamps and fix repo-hygiene shell linting on Windows (https://github.com/abocha/esl-pipeline/pull/84)
+
 ## [6.8.0] - 2026-05-22
 
 ### Changed
