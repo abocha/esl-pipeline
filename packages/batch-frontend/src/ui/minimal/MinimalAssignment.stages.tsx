@@ -52,6 +52,14 @@ export interface CurrentAssignmentCard {
   supportLabel: string;
 }
 
+const UNEXPECTED_TRANSCRIPT_CHARACTER_PATTERN = /[áéíóúüñÁÉÍÓÚÜÑ¿¡]/gu;
+
+export function getTranscriptUnexpectedCharacterWarnings(transcriptText: string): string[] {
+  return [...new Set(transcriptText.match(UNEXPECTED_TRANSCRIPT_CHARACTER_PATTERN) ?? [])].sort(
+    (left, right) => left.localeCompare(right),
+  );
+}
+
 interface WorkflowOverviewProps {
   currentStageTitle: string;
   stages: WorkflowStage[];
@@ -652,6 +660,10 @@ export function SourceStageSection({
               ? 'Next step: wait for the transcript, then review it here.'
               : null
       : null;
+  const unexpectedTranscriptCharacters =
+    transcriptReady && transcriptText
+      ? getTranscriptUnexpectedCharacterWarnings(transcriptText)
+      : [];
 
   return (
     <StageSection
@@ -831,6 +843,13 @@ export function SourceStageSection({
           ) : null}
           {transcriptReady ? (
             <div className="minimal-block">
+              {unexpectedTranscriptCharacters.length > 0 ? (
+                <div className="minimal-alert warning" role="note">
+                  Transcript contains characters outside expected English/Russian text:{' '}
+                  <strong>{unexpectedTranscriptCharacters.join(' ')}</strong>. Check these spots
+                  before generating instructions.
+                </div>
+              ) : null}
               <textarea
                 aria-label="Transcript text"
                 value={transcriptText}

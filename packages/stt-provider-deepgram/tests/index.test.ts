@@ -122,4 +122,40 @@ describe('stt-provider-deepgram', () => {
       }),
     ).rejects.toThrow(/async accepted response/i);
   });
+
+  it('normalizes Deepgram Spanish-looking aha in returned segments', async () => {
+    const provider = createDeepgramSttProvider({
+      clientFactory: () => ({
+        listen: {
+          v1: {
+            media: {
+              async transcribeFile() {
+                return {
+                  metadata: { channels: 2 },
+                  results: {
+                    utterances: [{ transcript: 'Ajá, got it.', speaker: 1, start: 1, end: 1.4 }],
+                    channels: [{ alternatives: [{ transcript: 'Ajá, got it.' }] }],
+                  },
+                };
+              },
+            },
+          },
+        },
+      }),
+    });
+
+    const result = await provider.transcribe({
+      context: {
+        recordingId: 'rec-1',
+        storageUri: 'local://audio.wav',
+        async getStream() {
+          return Readable.from(Buffer.from('audio'));
+        },
+      },
+      config: baseConfig(),
+    });
+
+    expect(result.text).toBe('Ага, got it.');
+    expect(result.segments[0]?.text).toBe('Ага, got it.');
+  });
 });

@@ -47,6 +47,7 @@ export {
   formatTranscriptFromSegments,
   mergeSegments,
   normalizeSegmentEnds,
+  normalizeTranscriptText,
 } from './format.js';
 export type {
   SttEngine,

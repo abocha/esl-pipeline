@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatSpeakerLabel, formatTranscriptFromSegments, mergeSegments } from '../src/index.js';
+import {
+  formatSpeakerLabel,
+  formatTranscriptFromSegments,
+  mergeSegments,
+  normalizeTranscriptText,
+} from '../src/index.js';
 
 describe('stt-core format helpers', () => {
   it('maps speaker labels deterministically', () => {
@@ -19,8 +24,9 @@ describe('stt-core format helpers', () => {
       'timeline',
     );
 
-    expect(text).toContain('[Teacher 00:00.000-00:00.500] Hello');
-    expect(text).toContain('[Student 00:01.000-00:01.400] Hi');
+    expect(text).toContain('[Teacher 00:00] Hello');
+    expect(text).toContain('[Student 00:01] Hi');
+    expect(text).not.toContain('00:00.000-00:00.500');
   });
 
   it('merges adjacent same-speaker segments under gap threshold', () => {
@@ -33,5 +39,9 @@ describe('stt-core format helpers', () => {
     expect(merged).toHaveLength(2);
     expect(merged[0]?.text).toBe('Hello there');
     expect(merged[1]?.speaker).toBe(1);
+  });
+
+  it('normalizes common Deepgram multilingual transcript quirks', () => {
+    expect(normalizeTranscriptText('Ajá, I see. ajá.')).toBe('Ага, I see. Ага.');
   });
 });
