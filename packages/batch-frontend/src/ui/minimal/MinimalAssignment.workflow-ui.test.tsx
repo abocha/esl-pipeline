@@ -1,7 +1,6 @@
 import { fireEvent } from '@testing-library/react';
 import { afterEach, beforeEach, describe, it } from 'vitest';
 
-import { getTranscriptUnexpectedCharacterWarnings } from './MinimalAssignment.stages';
 import {
   testAct as act,
   testApi as api,
@@ -21,6 +20,7 @@ import {
   testWaitFor as waitFor,
   testWithin as within,
 } from './MinimalAssignment.test-harness';
+import { getTranscriptUnexpectedCharacterWarnings } from './MinimalAssignment.transcript-warnings';
 
 describe('MinimalAssignment - staged workflow UI', () => {
   beforeEach(() => {

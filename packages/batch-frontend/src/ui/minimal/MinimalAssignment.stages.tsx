@@ -13,6 +13,7 @@ import type {
 } from '../../utils/api';
 import { DropZone } from '../shared/DropZone';
 import { UploadProgress } from '../shared/UploadProgress';
+import { getTranscriptUnexpectedCharacterWarnings } from './MinimalAssignment.transcript-warnings';
 
 export type WorkflowStageId = 'start' | 'source' | 'context' | 'assignment' | 'review' | 'advanced';
 export type WorkflowStageStatus = 'current' | 'complete' | 'available' | 'locked';
@@ -50,14 +51,6 @@ export interface CurrentAssignmentCard {
   statusTone: ResumeJobListItem['statusTone'];
   meta: string[];
   supportLabel: string;
-}
-
-const UNEXPECTED_TRANSCRIPT_CHARACTER_PATTERN = /[áéíóúüñÁÉÍÓÚÜÑ¿¡]/gu;
-
-export function getTranscriptUnexpectedCharacterWarnings(transcriptText: string): string[] {
-  return [...new Set(transcriptText.match(UNEXPECTED_TRANSCRIPT_CHARACTER_PATTERN) ?? [])].sort(
-    (left, right) => left.localeCompare(right),
-  );
 }
 
 interface WorkflowOverviewProps {
