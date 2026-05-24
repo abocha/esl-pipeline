@@ -86,6 +86,40 @@ describe('MinimalAssignment logic helpers', () => {
     });
   });
 
+  it('builds contextual pronunciation preset payloads with the custom rerun provider defaults', () => {
+    const customDefaults = {
+      rerunStudyTextAudio: false,
+      rerunPronunciationMainAudio: false,
+      rerunPronunciationChunkAudio: false,
+      rerunStudyTextProvider: 'elevenlabs' as const,
+      rerunStudyTextModel: '',
+      rerunStudyTextVoiceId: '',
+      rerunStudyTextVoiceAccent: '',
+      rerunStudyTextStrategy: 'auto' as const,
+      rerunStudyTextDialogueLanguage: '',
+      rerunStudyTextDialogueStability: '',
+      rerunStudyTextDialogueSeed: '',
+      rerunPronunciationMainProvider: 'elevenlabs' as const,
+      rerunPronunciationMainModel: 'eleven_multilingual_v2',
+      rerunPronunciationMainVoiceId: '',
+      rerunPronunciationMainVoiceAccent: '',
+      rerunPronunciationChunkProvider: 'google' as const,
+      rerunPronunciationChunkModel: 'chirp3_hd',
+      rerunPronunciationChunkVoiceId: '',
+      rerunPronunciationChunkVoiceAccent: '',
+      rerunPronunciationChunkEdgeVoice: '',
+    };
+
+    expect(buildPresetRerunPayload('pronunciation', customDefaults)).toEqual({
+      regeneratePronunciationMainAudio: true,
+      pronunciationMainTtsProvider: 'elevenlabs',
+      pronunciationMainElevenlabsModel: 'eleven_multilingual_v2',
+      regeneratePronunciationChunkAudio: true,
+      pronunciationChunkTtsProvider: 'google',
+      pronunciationChunkGoogleTtsModel: 'chirp3_hd',
+    });
+  });
+
   it('describes preset rerun actions with labels that match their payloads', () => {
     expect(getPresetRerunActions()).toEqual([
       {

@@ -20,6 +20,7 @@ import {
   testWaitFor as waitFor,
   testWithin as within,
 } from './MinimalAssignment.test-harness';
+import { getTranscriptUnexpectedCharacterWarnings } from './MinimalAssignment.transcript-warnings';
 
 describe('MinimalAssignment - staged workflow UI', () => {
   beforeEach(() => {
@@ -28,6 +29,11 @@ describe('MinimalAssignment - staged workflow UI', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it('flags Spanish-looking accent characters in transcript text', () => {
+    expect(getTranscriptUnexpectedCharacterWarnings('Student: Ajá, I understand.')).toEqual(['á']);
+    expect(getTranscriptUnexpectedCharacterWarnings('Teacher: Ага, good.')).toEqual([]);
   });
 
   it(
