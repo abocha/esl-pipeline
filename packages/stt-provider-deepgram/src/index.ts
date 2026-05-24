@@ -5,6 +5,7 @@ import { classifyProviderRuntimeFailure } from '@esl-pipeline/provider-runtime';
 import {
   mergeSegments,
   normalizeSegmentEnds,
+  normalizeTranscriptText,
   type SttProviderAdapter,
   type TranscriptSegment,
 } from '@esl-pipeline/stt-core';
@@ -373,7 +374,7 @@ function getRawTranscript(result: DeepgramResult): string {
   const channel = result.results?.channels?.[0];
   const alternative = channel?.alternatives?.[0];
   const transcript = alternative?.transcript ?? '';
-  return transcript.trim();
+  return normalizeTranscriptText(transcript).trim();
 }
 
 function buildSummary(result: DeepgramResult): Record<string, unknown> | null {

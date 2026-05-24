@@ -171,10 +171,16 @@ export function registerJobActionTests() {
         await user.click(screen.getByRole('button', { name: /Regenerate pronunciation audio/i }));
 
         await waitFor(() => {
-          expect(api.rerunJob).toHaveBeenCalledWith('job-1', {
-            regeneratePronunciationMainAudio: true,
-            regeneratePronunciationChunkAudio: true,
-          });
+          expect(api.rerunJob).toHaveBeenCalledWith(
+            'job-1',
+            expect.objectContaining({
+              regeneratePronunciationMainAudio: true,
+              pronunciationMainTtsProvider: 'elevenlabs',
+              regeneratePronunciationChunkAudio: true,
+              pronunciationChunkTtsProvider: 'google',
+              pronunciationChunkGoogleTtsModel: 'chirp3_hd',
+            }),
+          );
         });
         expect(screen.getByText(/Rerun queued/i)).toBeTruthy();
       },
@@ -190,14 +196,17 @@ export function registerJobActionTests() {
       {
         label: 'Regenerate study-text audio',
         description: 'Replace only the study-text narration.',
-        payload: { regenerateStudyTextAudio: true },
+        payload: { regenerateStudyTextAudio: true, studyTextTtsProvider: 'elevenlabs' },
       },
       {
         label: 'Regenerate pronunciation audio',
         description: 'Replace main pronunciation and pronunciation chunk clips.',
         payload: {
           regeneratePronunciationMainAudio: true,
+          pronunciationMainTtsProvider: 'elevenlabs',
           regeneratePronunciationChunkAudio: true,
+          pronunciationChunkTtsProvider: 'google',
+          pronunciationChunkGoogleTtsModel: 'chirp3_hd',
         },
       },
       {
@@ -205,8 +214,12 @@ export function registerJobActionTests() {
         description: 'Replace study-text, main pronunciation, and pronunciation chunk audio.',
         payload: {
           regenerateStudyTextAudio: true,
+          studyTextTtsProvider: 'elevenlabs',
           regeneratePronunciationMainAudio: true,
+          pronunciationMainTtsProvider: 'elevenlabs',
           regeneratePronunciationChunkAudio: true,
+          pronunciationChunkTtsProvider: 'google',
+          pronunciationChunkGoogleTtsModel: 'chirp3_hd',
         },
       },
     ])('queues the $label quick rerun payload', async ({ label, description, payload }) => {
@@ -221,7 +234,7 @@ export function registerJobActionTests() {
       await user.click(within(quickReruns).getByRole('button', { name: label }));
 
       await waitFor(() => {
-        expect(api.rerunJob).toHaveBeenCalledWith('job-1', payload);
+        expect(api.rerunJob).toHaveBeenCalledWith('job-1', expect.objectContaining(payload));
       });
     });
 

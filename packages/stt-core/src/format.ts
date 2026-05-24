@@ -7,14 +7,15 @@ export function formatSpeakerLabel(index: number): string {
 }
 
 export function formatTimestamp(seconds: number): string {
-  if (!Number.isFinite(seconds)) return '00:00.000';
-  const totalMillis = Math.round(seconds * 1000);
-  const mins = Math.floor(totalMillis / 60_000);
-  const secs = Math.floor((totalMillis % 60_000) / 1000);
-  const millis = totalMillis % 1000;
-  return `${mins.toString().padStart(2, '0')}:${secs
-    .toString()
-    .padStart(2, '0')}.${millis.toString().padStart(3, '0')}`;
+  if (!Number.isFinite(seconds)) return '00:00';
+  const totalSeconds = Math.round(seconds);
+  const mins = Math.floor(totalSeconds / 60);
+  const secs = totalSeconds % 60;
+  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+}
+
+export function normalizeTranscriptText(text: string): string {
+  return text.replaceAll(/(?<![\p{L}\p{N}_])ajá(?![\p{L}\p{N}_])/giu, 'Ага');
 }
 
 export function normalizeSegmentEnds<T extends { start?: number; end?: number }>(
@@ -55,7 +56,7 @@ export function mergeSegments(
   const merged: TranscriptSegment[] = [];
 
   for (const segment of segments) {
-    const text = segment.text.trim();
+    const text = normalizeTranscriptText(segment.text).trim();
     if (!text) continue;
 
     const current: TranscriptSegment = {
@@ -103,7 +104,7 @@ export function formatTranscriptFromSegments(
     for (const segment of segments) {
       const speaker = segment.speaker ?? 0;
       const list = grouped.get(speaker) ?? [];
-      list.push(segment.text);
+      list.push(normalizeTranscriptText(segment.text));
       grouped.set(speaker, list);
     }
 
@@ -115,9 +116,8 @@ export function formatTranscriptFromSegments(
   return segments
     .map((segment) => {
       const start = formatTimestamp(segment.start ?? 0);
-      const end = formatTimestamp(segment.end ?? segment.start ?? 0);
       const speaker = formatSpeakerLabel(segment.speaker ?? 0);
-      return `[${speaker} ${start}-${end}] ${segment.text}`;
+      return `[${speaker} ${start}] ${normalizeTranscriptText(segment.text)}`;
     })
     .join('\n');
 }

@@ -2013,7 +2013,12 @@ async function resolveSharePayloadForJob(
 function looksLikeMarkdownFilePath(value: string): boolean {
   const trimmed = value.trim();
   if (!trimmed.toLowerCase().endsWith('.md')) return false;
-  return trimmed.startsWith('/') || trimmed.startsWith('./') || trimmed.startsWith('../');
+  return (
+    trimmed.startsWith('/') ||
+    trimmed.startsWith('./') ||
+    trimmed.startsWith('../') ||
+    /^[A-Za-z]:[\\/]/.test(trimmed)
+  );
 }
 
 function extractLabeledMarkdownAudioUrl(
