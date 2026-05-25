@@ -1,9 +1,14 @@
 .student-directory-layout {
+  --student-directory-inverse: var(--text-inverse);
+  --student-directory-card-wash: color-mix(in srgb, var(--student-area-blue-soft) 90%, transparent);
+  --student-directory-avatar-line: color-mix(in srgb, var(--student-area-blue) 14%, transparent);
+  --student-directory-avatar-glint: color-mix(in srgb, var(--bg-raised) 82%, transparent);
+
   display: grid;
   gap: 1rem;
 }
 
-.student-directory-layout > .card {
+.student-directory-layout > .student-area-panel {
   border: 1px solid var(--student-area-line);
   border-radius: var(--student-area-radius-md);
   background: var(--student-area-panel);
@@ -38,6 +43,14 @@
   flex-wrap: wrap;
 }
 
+.student-directory-layout .workspace-primary-btn,
+.student-directory-layout .workspace-secondary-btn {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .student-directory-status-tabs {
   display: inline-flex;
   gap: 0.25rem;
@@ -50,6 +63,7 @@
 .student-directory-status-tabs button {
   border: 0;
   border-radius: 999px;
+  min-height: 44px;
   padding: 0.5rem 0.8rem;
   background: transparent;
   color: var(--student-area-muted);
@@ -59,7 +73,7 @@
 
 .student-directory-status-tabs button.is-active {
   background: var(--student-area-blue);
-  color: #fffaf1;
+  color: var(--student-directory-inverse);
 }
 
 .student-directory-grid {
@@ -75,7 +89,7 @@
   display: grid;
   gap: 0.75rem;
   background:
-    radial-gradient(circle at top right, rgba(232, 238, 247, 0.9), transparent 36%),
+    radial-gradient(circle at top right, var(--student-directory-card-wash), transparent 36%),
     var(--student-area-panel);
   box-shadow: var(--student-area-shadow-soft);
 }
@@ -94,9 +108,9 @@
   border-radius: 30% 70% 62% 38% / 42% 46% 54% 58%;
   display: grid;
   place-items: center;
-  border: 1px solid rgba(20, 63, 115, 0.14);
+  border: 1px solid var(--student-directory-avatar-line);
   background:
-    radial-gradient(circle at 34% 28%, rgba(255, 255, 255, 0.82), transparent 32%),
+    radial-gradient(circle at 34% 28%, var(--student-directory-avatar-glint), transparent 32%),
     linear-gradient(145deg, var(--student-area-paper-deep), var(--student-area-blue-soft));
   color: var(--student-area-blue);
   font-weight: 800;
@@ -113,17 +127,21 @@
 .student-directory-actions button {
   font: inherit;
   width: fit-content;
+  min-height: 44px;
   padding: 0.65rem 0.95rem;
   border-radius: 999px;
   text-decoration: none;
   font-weight: 600;
   border: 0;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .student-directory-primary-action {
   background: var(--student-area-blue);
-  color: #fffaf1;
+  color: var(--student-directory-inverse);
 }
 
 .student-directory-secondary-action {
@@ -142,8 +160,8 @@
 }
 
 .student-directory-menu-trigger {
-  width: 2.1rem;
-  aspect-ratio: 1;
+  width: 44px;
+  height: 44px;
   border: 1px solid var(--student-area-line);
   border-radius: 999px;
   background: var(--student-area-paper);
@@ -174,6 +192,7 @@
 
 .student-directory-menu button {
   width: 100%;
+  min-height: 44px;
   border: 0;
   border-radius: 0.45rem;
   padding: 0.6rem 0.7rem;

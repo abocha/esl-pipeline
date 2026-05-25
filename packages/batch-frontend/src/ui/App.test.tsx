@@ -127,6 +127,48 @@ describe('App', () => {
     expect(await screen.findByRole('heading', { name: /Welcome back/i })).toBeTruthy();
   });
 
+  it('opens auth as a labelled modal, traps focus, and restores focus on close', async () => {
+    const user = userEvent.setup();
+    useAuthMock.mockReturnValue(createAuthState());
+
+    renderApp();
+
+    const loginButton = screen.getByRole('button', { name: /Login to your account/i });
+    loginButton.focus();
+
+    await user.click(loginButton);
+
+    const dialog = await screen.findByRole('dialog', { name: /Welcome back/i });
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+    expect(dialog.getAttribute('aria-describedby')).toBe('auth-dialog-description');
+    expect(await screen.findByLabelText(/Email/i)).toBe(document.activeElement);
+
+    for (let index = 0; index < 8; index += 1) {
+      await user.tab();
+      expect(dialog.contains(document.activeElement)).toBe(true);
+    }
+
+    await user.keyboard('{Escape}');
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+    expect(loginButton).toBe(document.activeElement);
+    expect(document.body.classList.contains('dialog-open')).toBe(false);
+  });
+
+  it('announces auth form validation errors', async () => {
+    const user = userEvent.setup();
+    useAuthMock.mockReturnValue(createAuthState());
+
+    renderApp();
+
+    await user.click(screen.getByRole('button', { name: /Login to your account/i }));
+    await user.click(await screen.findByRole('button', { name: /^Sign in$/i }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('Please fill in all fields');
+  });
+
   it('renders the authenticated shell and assignment route', async () => {
     const user = userEvent.setup();
     useAuthMock.mockReturnValue(
@@ -148,7 +190,7 @@ describe('App', () => {
     );
     expect(screen.getByRole('link', { name: /Assignments/i })).toBeTruthy();
     expect(screen.getByText('teacher@example.com')).toBeTruthy();
-    expect(screen.getByText('Minimal assignment content')).toBeTruthy();
+    expect(await screen.findByText('Minimal assignment content')).toBeTruthy();
     expect(screen.getByRole('link', { name: /Business/i })).toBeTruthy();
     expect(screen.getByRole('link', { name: /Prompts/i })).toBeTruthy();
     expect(document.querySelector('style')?.textContent ?? '').not.toContain('.app-shell::before');

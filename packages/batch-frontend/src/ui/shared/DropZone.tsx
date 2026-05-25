@@ -64,7 +64,7 @@ export const DropZone: React.FC<DropZoneProps> = ({
     >
       <input {...getInputProps()} />
       <div className="dropzone-content">
-        <div className={`dropzone-icon ${isDragActive ? 'bounce' : ''}`}>
+        <div className="dropzone-icon">
           <UploadIcon />
         </div>
         <div>

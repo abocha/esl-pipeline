@@ -1,7 +1,7 @@
 .dialog-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.6);
+  background: color-mix(in srgb, var(--color-gray-900) 60%, transparent);
   backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
@@ -9,6 +9,10 @@
   z-index: var(--z-modal-backdrop);
   padding: var(--space-4);
   animation: fadeIn 0.2s ease-out;
+}
+
+body.dialog-open {
+  overflow: hidden;
 }
 
 .dialog-container {
@@ -26,8 +30,8 @@
   position: absolute;
   top: var(--space-4);
   right: var(--space-4);
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border-radius: var(--radius-lg);
   background: var(--bg-secondary);
   border: 1px solid var(--border-light);
@@ -39,6 +43,14 @@
   transition:
     background-color var(--transition-fast),
     color var(--transition-fast);
+}
+
+.dialog-close:focus-visible,
+.input-toggle:focus-visible,
+.btn-submit:focus-visible,
+.btn-switch:focus-visible {
+  outline: 3px solid var(--color-primary-200);
+  outline-offset: 2px;
 }
 
 .dialog-close:hover {
@@ -60,7 +72,7 @@
   align-items: center;
   justify-content: center;
   margin: 0 auto var(--space-4);
-  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.3);
+  box-shadow: var(--shadow-glow);
 }
 
 .dialog-logo svg {
@@ -89,8 +101,8 @@
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
-  background: rgba(244, 63, 94, 0.1);
-  border: 1px solid rgba(244, 63, 94, 0.3);
+  background: color-mix(in srgb, var(--color-error-400) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-error-400) 30%, transparent);
   border-radius: var(--radius-lg);
   color: var(--color-error-600);
   font-size: var(--text-sm);
@@ -130,6 +142,8 @@
   position: absolute;
   right: var(--space-2);
   padding: var(--space-2);
+  min-width: 44px;
+  min-height: 44px;
   background: none;
   border: none;
   color: var(--text-tertiary);
@@ -151,7 +165,7 @@
   background: var(--gradient-primary);
   border: none;
   border-radius: var(--radius-lg);
-  color: white;
+  color: var(--text-inverse);
   font-size: var(--text-base);
   font-weight: 600;
   cursor: pointer;
@@ -163,12 +177,12 @@
     box-shadow var(--transition-fast),
     opacity var(--transition-fast),
     transform var(--transition-fast);
-  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+  box-shadow: var(--shadow-glow);
 }
 
 .btn-submit:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.45);
+  box-shadow: var(--shadow-glow-lg);
 }
 
 .btn-submit:disabled {
@@ -194,7 +208,8 @@
   color: var(--color-primary-500);
   font-weight: 600;
   cursor: pointer;
-  padding: 0;
+  min-height: 44px;
+  padding: 0 var(--space-1);
 }
 
 .btn-switch:hover {

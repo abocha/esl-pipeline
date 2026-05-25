@@ -1,7 +1,7 @@
 import type { Dispatch, SetStateAction } from 'react';
-import { Link } from 'react-router-dom';
 
 import type { JobListResponse, StudentTimelineResponse } from '../../utils/api';
+import { WorkspaceAssignmentHistoryTable } from './WorkspaceAssignmentHistoryTable';
 import type { HistoryFilters, TimelineFilters } from './StudentWorkspace.logic';
 
 export interface WorkspaceHistoryPanelProps {
@@ -41,7 +41,7 @@ export function WorkspaceHistoryPanel({
 }: WorkspaceHistoryPanelProps) {
   return (
     <>
-      <article className="workspace-card card">
+      <article className="workspace-card workspace-panel">
         <header>
           <h2>Assignment History</h2>
           <p>Recent assignments for this student with outcome visibility.</p>
@@ -105,58 +105,17 @@ export function WorkspaceHistoryPanel({
         {jobsLoading ? (
           <p className="workspace-muted">Loading assignment history...</p>
         ) : jobHistory.length > 0 ? (
-          <div className="workspace-table-wrap">
-            <table className="workspace-table">
-              <thead>
-                <tr>
-                  <th>Job</th>
-                  <th>State</th>
-                  <th>Created</th>
-                  <th>Publish</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {jobHistory.map((job) => (
-                  <tr
-                    key={job.jobId}
-                    className={selectedJobId === job.jobId ? 'workspace-selected-row' : ''}
-                  >
-                    <td>
-                      <code>{job.jobId.slice(0, 8)}</code>
-                      <div className="workspace-muted">prompt {job.promptPackageId ?? 'n/a'}</div>
-                    </td>
-                    <td>{job.state}</td>
-                    <td>{new Date(job.createdAt).toLocaleString()}</td>
-                    <td>{job.htmlUrl ? 'HTML' : 'Pending'}</td>
-                    <td>
-                      <div className="workspace-inline">
-                        <Link
-                          className="workspace-secondary-btn"
-                          to={`/?jobId=${encodeURIComponent(job.jobId)}`}
-                        >
-                          Resume
-                        </Link>
-                        <button
-                          type="button"
-                          className="workspace-secondary-btn"
-                          onClick={() => onInspectJob(job.jobId, job.promptPackageId)}
-                        >
-                          Inspect
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <WorkspaceAssignmentHistoryTable
+            jobs={jobHistory}
+            selectedJobId={selectedJobId}
+            onInspectJob={onInspectJob}
+          />
         ) : (
           <p className="workspace-muted">No assignments found for this student yet.</p>
         )}
       </article>
 
-      <article className="workspace-card card">
+      <article className="workspace-card workspace-panel">
         <header>
           <h2>Student Timeline</h2>
           <p>Chronological student events for governance and diagnostics.</p>

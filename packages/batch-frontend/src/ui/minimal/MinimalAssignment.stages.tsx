@@ -1338,6 +1338,7 @@ export function AssignmentStageSection({
                       )}
                       {activeGenerationQuota.dashboardUrl ? (
                         <a
+                          className="minimal-secondary minimal-link-button"
                           href={activeGenerationQuota.dashboardUrl}
                           target="_blank"
                           rel="noreferrer"
