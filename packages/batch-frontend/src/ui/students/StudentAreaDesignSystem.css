@@ -19,6 +19,23 @@
   --student-area-shadow: var(--app-shadow);
   --student-area-shadow-soft: var(--app-shadow-soft);
   --student-area-serif: var(--app-serif);
+  --student-area-paper-panel: color-mix(in srgb, var(--student-area-paper) 74%, transparent);
+  --student-area-paper-panel-strong: color-mix(in srgb, var(--student-area-paper) 96%, transparent);
+  --student-area-paper-panel-soft: color-mix(
+    in srgb,
+    var(--student-area-paper-deep) 92%,
+    transparent
+  );
+  --student-area-paper-empty: color-mix(in srgb, var(--student-area-paper) 48%, transparent);
+  --student-area-ink-grid-strong: color-mix(in srgb, var(--student-area-ink) 4%, transparent);
+  --student-area-ink-grid-soft: color-mix(in srgb, var(--student-area-ink) 3%, transparent);
+  --student-area-skeleton-base: color-mix(in srgb, var(--student-area-ink) 6%, transparent);
+  --student-area-blue-tint: color-mix(in srgb, var(--student-area-blue) 5%, transparent);
+  --student-area-blue-line: color-mix(in srgb, var(--student-area-blue) 14%, transparent);
+  --student-area-sage-tint: color-mix(in srgb, var(--student-area-sage) 8%, transparent);
+  --student-area-sage-line: color-mix(in srgb, var(--student-area-sage) 16%, transparent);
+  --student-area-amber-line: color-mix(in srgb, var(--student-area-amber) 20%, transparent);
+  --student-area-rose-line: color-mix(in srgb, var(--student-area-rose) 20%, transparent);
 }
 
 .student-area-frame {
@@ -28,19 +45,23 @@
   overflow: hidden;
   border: 1px solid var(--student-area-line);
   border-radius: var(--student-area-radius-lg);
-  background: linear-gradient(135deg, rgba(255, 252, 245, 0.98), rgba(247, 239, 226, 0.92));
+  background: linear-gradient(
+    135deg,
+    var(--student-area-paper-panel-strong),
+    var(--student-area-paper-panel-soft)
+  );
   box-shadow: var(--student-area-shadow);
 }
 
 .student-area-frame::before {
-  content: "";
+  content: '';
   position: absolute;
   inset: 0;
   pointer-events: none;
   opacity: 0.32;
   background-image:
-    linear-gradient(rgba(42, 36, 26, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(42, 36, 26, 0.025) 1px, transparent 1px);
+    linear-gradient(var(--student-area-ink-grid-strong) 1px, transparent 1px),
+    linear-gradient(90deg, var(--student-area-ink-grid-soft) 1px, transparent 1px);
   background-size: 44px 44px;
 }
 
@@ -62,18 +83,30 @@
 }
 
 .student-area-panel-success {
-  border-color: rgba(49, 92, 58, 0.16);
-  background: linear-gradient(135deg, rgba(240, 247, 236, 0.94), rgba(255, 253, 248, 0.72));
+  border-color: var(--student-area-sage-line);
+  background: linear-gradient(
+    135deg,
+    var(--student-area-sage-soft),
+    var(--student-area-paper-panel)
+  );
 }
 
 .student-area-panel-attention {
-  border-color: rgba(145, 98, 12, 0.2);
-  background: linear-gradient(135deg, rgba(255, 248, 229, 0.96), rgba(255, 253, 248, 0.74));
+  border-color: var(--student-area-amber-line);
+  background: linear-gradient(
+    135deg,
+    var(--student-area-amber-soft),
+    var(--student-area-paper-panel)
+  );
 }
 
 .student-area-panel-warning {
-  border-color: rgba(143, 63, 50, 0.2);
-  background: linear-gradient(135deg, rgba(250, 232, 226, 0.94), rgba(255, 253, 248, 0.74));
+  border-color: var(--student-area-rose-line);
+  background: linear-gradient(
+    135deg,
+    var(--student-area-rose-soft),
+    var(--student-area-paper-panel)
+  );
 }
 
 .student-area-section-label {
@@ -92,28 +125,28 @@
   padding: 1rem;
   border: 1px solid var(--student-area-line);
   border-radius: 18px;
-  background: rgba(255, 253, 248, 0.74);
+  background: var(--student-area-paper-panel);
 }
 
 .student-area-metric-card-success {
-  border-color: rgba(49, 92, 58, 0.16);
+  border-color: var(--student-area-sage-line);
   background: var(--student-area-sage-soft);
 }
 
 .student-area-metric-card-attention {
-  border-color: rgba(145, 98, 12, 0.18);
+  border-color: var(--student-area-amber-line);
   background: var(--student-area-amber-soft);
 }
 
 .student-area-metric-card-warning {
-  border-color: rgba(143, 63, 50, 0.18);
+  border-color: var(--student-area-rose-line);
   background: var(--student-area-rose-soft);
 }
 
 .student-area-metric-card strong {
   color: var(--student-area-ink);
   font-family: var(--student-area-serif);
-  font-size: clamp(1.25rem, 2vw, 1.65rem);
+  font-size: 1.35rem;
   font-weight: 500;
   line-height: 1.12;
 }
@@ -125,8 +158,12 @@
 
 .student-area-action-link {
   width: fit-content;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 0.58rem 0.85rem;
-  border: 1px solid rgba(20, 63, 115, 0.14);
+  border: 1px solid var(--student-area-blue-line);
   border-radius: var(--student-area-radius-sm);
   background: var(--student-area-blue-soft);
   color: var(--student-area-blue);
@@ -146,6 +183,7 @@
   align-items: center;
   gap: 0.4rem;
   width: fit-content;
+  min-height: 32px;
   padding: 0.42rem 0.68rem;
   border-radius: 999px;
   background: var(--student-area-blue-soft);
@@ -175,7 +213,7 @@
   padding: clamp(2rem, 6vw, 4rem);
   border: 1px dashed var(--student-area-line);
   border-radius: var(--student-area-radius-md);
-  background: rgba(255, 252, 245, 0.48);
+  background: var(--student-area-paper-empty);
   text-align: center;
 }
 
@@ -197,11 +235,11 @@
   background:
     linear-gradient(
       90deg,
-      rgba(20, 63, 115, 0.045),
-      rgba(49, 92, 58, 0.075),
-      rgba(20, 63, 115, 0.045)
+      var(--student-area-blue-tint),
+      var(--student-area-sage-tint),
+      var(--student-area-blue-tint)
     ),
-    rgba(42, 36, 26, 0.055);
+    var(--student-area-skeleton-base);
   background-size: 180% 100%;
   animation: student-area-skeleton-breathe 1900ms ease-in-out infinite;
 }

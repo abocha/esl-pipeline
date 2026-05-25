@@ -158,7 +158,7 @@ export const StudentDirectoryPage: React.FC = () => {
   return (
     <section className="student-directory-layout student-area-theme">
       <StudentAreaDesignSystemStyles />
-      <article className="student-area-panel card student-directory-hero">
+      <article className="student-area-panel student-directory-hero">
         <div>
           <span className="student-area-eyebrow">Students</span>
           <h1>Student area</h1>
@@ -166,7 +166,7 @@ export const StudentDirectoryPage: React.FC = () => {
         </div>
       </article>
 
-      <article className="student-area-panel card">
+      <article className="student-area-panel">
         <CreateStudentDialog
           isOpen={createOpen}
           isBusy={createBusy}
@@ -188,7 +188,7 @@ export const StudentDirectoryPage: React.FC = () => {
         />
       </article>
 
-      <article className="student-area-panel card student-directory-list">
+      <article className="student-area-panel student-directory-list">
         <header className="student-directory-list-header">
           <div>
             <h2>Students</h2>

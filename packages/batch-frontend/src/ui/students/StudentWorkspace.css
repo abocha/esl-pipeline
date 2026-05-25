@@ -11,6 +11,14 @@
   flex-wrap: wrap;
 }
 
+.workspace-panel {
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  background: var(--bg-primary);
+  box-shadow: var(--shadow-card);
+}
+
 .workspace-hero h1 {
   margin-bottom: var(--space-1);
 }
@@ -60,6 +68,7 @@
 .workspace-field select,
 .workspace-field input,
 .workspace-card textarea {
+  min-height: 44px;
   border: 1px solid var(--border-light);
   background: var(--bg-primary);
   border-radius: var(--radius-md);
@@ -79,6 +88,7 @@
 .workspace-primary-btn,
 .workspace-secondary-btn {
   border-radius: var(--radius-full);
+  min-height: 44px;
   padding: var(--space-2) var(--space-4);
   border: 1px solid var(--border-medium);
   cursor: pointer;
@@ -92,7 +102,7 @@
 
 .workspace-primary-btn {
   background: var(--color-primary-600);
-  color: white;
+  color: var(--text-inverse);
   border-color: transparent;
 }
 
@@ -174,10 +184,13 @@
 .workspace-pill {
   border-radius: var(--radius-full);
   border: 1px solid var(--border-medium);
+  min-height: 32px;
   padding: 0.125rem 0.5rem;
   font-size: var(--text-xs);
   background: var(--bg-primary);
   color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
 }
 
 .workspace-candidate-group {

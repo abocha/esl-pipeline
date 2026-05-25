@@ -37,7 +37,7 @@ export function WorkspaceInspectionPanel({
   formatDateTime,
 }: WorkspaceInspectionPanelProps) {
   return (
-    <article className="workspace-card card">
+    <article className="workspace-card workspace-panel">
       <header>
         <h2>Lineage & Provenance</h2>
         <p>Inspect selected assignment provenance and pinned prompt lineage.</p>

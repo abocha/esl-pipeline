@@ -1,4 +1,10 @@
 .prompt-templates-page {
+  --prompt-templates-surface: color-mix(in srgb, var(--app-panel) 86%, transparent);
+  --prompt-templates-control: color-mix(in srgb, var(--bg-raised) 78%, transparent);
+  --prompt-templates-secondary-bg: color-mix(in srgb, var(--app-panel) 72%, transparent);
+  --prompt-templates-soft-bg: color-mix(in srgb, var(--app-paper) 58%, transparent);
+  --prompt-templates-danger-border: color-mix(in srgb, var(--app-rose) 24%, transparent);
+
   display: grid;
   gap: 1.2rem;
   color: var(--app-ink);
@@ -6,11 +12,11 @@
 
 .prompt-templates-hero,
 .prompt-templates-panel,
-.prompt-templates-editor-card,
-.prompt-templates-revisions-card {
+.prompt-templates-editor-surface,
+.prompt-templates-revisions-surface {
   border: 1px solid var(--app-line);
   border-radius: var(--app-radius-md);
-  background: rgba(255, 253, 248, 0.86);
+  background: var(--prompt-templates-surface);
   box-shadow: var(--app-shadow-soft);
 }
 
@@ -24,8 +30,8 @@
 
 .prompt-templates-hero h1,
 .prompt-templates-panel h2,
-.prompt-templates-editor-card h2,
-.prompt-templates-revisions-card h2 {
+.prompt-templates-editor-surface h2,
+.prompt-templates-revisions-surface h2 {
   margin: 0;
   color: var(--app-ink);
   font-family: var(--app-serif);
@@ -34,7 +40,7 @@
 }
 
 .prompt-templates-hero h1 {
-  font-size: clamp(2rem, 4vw, 3.1rem);
+  font-size: 2rem;
   line-height: 1;
 }
 
@@ -66,8 +72,8 @@
 .prompt-templates-sidebar,
 .prompt-templates-editor-panel,
 .prompt-templates-panel,
-.prompt-templates-editor-card,
-.prompt-templates-revisions-card,
+.prompt-templates-editor-surface,
+.prompt-templates-revisions-surface,
 .prompt-templates-field,
 .prompt-templates-editor-field {
   display: grid;
@@ -75,8 +81,8 @@
 }
 
 .prompt-templates-panel,
-.prompt-templates-editor-card,
-.prompt-templates-revisions-card {
+.prompt-templates-editor-surface,
+.prompt-templates-revisions-surface {
   padding: 1rem;
 }
 
@@ -93,7 +99,7 @@
   min-width: 0;
   border: 1px solid var(--app-line);
   border-radius: var(--app-radius-sm);
-  background: rgba(255, 255, 255, 0.78);
+  background: var(--prompt-templates-control);
   color: var(--app-ink);
   font: inherit;
 }
@@ -135,27 +141,30 @@
 
 .prompt-templates-primary,
 .prompt-templates-secondary {
-  min-height: 2.55rem;
+  min-height: 44px;
   border: 1px solid transparent;
   border-radius: var(--app-radius-sm);
   padding: 0.62rem 0.88rem;
   font-weight: 850;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .prompt-templates-primary {
   background: var(--app-blue);
-  color: #fffaf1;
+  color: var(--text-inverse);
 }
 
 .prompt-templates-secondary {
   border-color: var(--app-line);
-  background: rgba(255, 253, 248, 0.72);
+  background: var(--prompt-templates-secondary-bg);
   color: var(--app-ink);
 }
 
 .prompt-templates-secondary.danger {
-  border-color: rgba(143, 63, 50, 0.24);
+  border-color: var(--prompt-templates-danger-border);
   color: var(--app-rose);
 }
 
@@ -208,7 +217,7 @@
   border: 1px dashed var(--app-line);
   border-radius: var(--app-radius-sm);
   padding: 1rem;
-  background: rgba(255, 252, 245, 0.58);
+  background: var(--prompt-templates-soft-bg);
 }
 
 .prompt-templates-revision-list {
@@ -220,7 +229,7 @@
   border: 1px solid var(--app-line);
   border-radius: var(--app-radius-sm);
   padding: 0.85rem;
-  background: rgba(255, 252, 245, 0.58);
+  background: var(--prompt-templates-soft-bg);
 }
 
 .prompt-templates-revision-row div:first-child {
