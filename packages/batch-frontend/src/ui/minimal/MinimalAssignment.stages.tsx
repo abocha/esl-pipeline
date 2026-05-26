@@ -230,9 +230,9 @@ interface ReviewStageSectionProps {
   onSelectedPresetChange: (value: string) => void;
   presetOptions: { id: string; label: string }[];
   jobOptionsLoaded: boolean;
-  selectedTtsProvider: 'elevenlabs' | 'google';
-  onSelectedTtsProviderChange: (value: 'elevenlabs' | 'google') => void;
-  ttsProviders: readonly ('elevenlabs' | 'google')[];
+  selectedTtsProvider: 'elevenlabs' | 'google' | 'inworld';
+  onSelectedTtsProviderChange: (value: 'elevenlabs' | 'google' | 'inworld') => void;
+  ttsProviders: readonly ('elevenlabs' | 'google' | 'inworld')[];
   selectedTtsStrategy: 'auto' | 'dialogue' | 'tts';
   onSelectedTtsStrategyChange: (value: 'auto' | 'dialogue' | 'tts') => void;
   availablePublishTtsStrategies: readonly ('auto' | 'dialogue' | 'tts')[];
@@ -1515,7 +1515,9 @@ export function ReviewStageSection({
                 <select
                   value={selectedTtsProvider}
                   onChange={(event) =>
-                    onSelectedTtsProviderChange(event.target.value as 'elevenlabs' | 'google')
+                    onSelectedTtsProviderChange(
+                      event.target.value as 'elevenlabs' | 'google' | 'inworld',
+                    )
                   }
                   disabled={ttsProviders.length === 0}
                 >

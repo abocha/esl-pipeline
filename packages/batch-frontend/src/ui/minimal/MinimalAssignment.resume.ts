@@ -110,7 +110,7 @@ function detectPronunciationModeFromDraft(text: string): PronunciationMode | nul
 }
 
 function isUiTtsProvider(value: string | null | undefined): value is UiTtsProvider {
-  return value === 'elevenlabs' || value === 'google';
+  return value === 'elevenlabs' || value === 'google' || value === 'inworld';
 }
 
 function isUiPublishTtsStrategy(value: string | null | undefined): value is UiPublishTtsStrategy {
@@ -342,18 +342,10 @@ export function useMinimalAssignmentResume({
         const selectedTtsStrategy = isUiPublishTtsStrategy(status.ttsStrategy)
           ? status.ttsStrategy
           : currentSelectedTtsStrategy;
-        let selectedTtsModel = currentSelectedTtsModel;
-        if (
-          typeof status.studyTextElevenlabsModel === 'string' &&
-          status.studyTextElevenlabsModel.trim().length > 0
-        ) {
-          selectedTtsModel = status.studyTextElevenlabsModel;
-        } else if (
-          typeof status.googleTtsModel === 'string' &&
-          status.googleTtsModel.trim().length > 0
-        ) {
-          selectedTtsModel = status.googleTtsModel;
-        }
+        const selectedTtsModel =
+          typeof status.ttsModel === 'string' && status.ttsModel.trim().length > 0
+            ? status.ttsModel
+            : currentSelectedTtsModel;
 
         const resumedPresetId = status.learningPresetId ?? status.preset;
         const selectedPreset = resumedPresetId

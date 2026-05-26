@@ -1,11 +1,11 @@
 // packages/batch-backend/src/domain/settings-model.ts
 // Domain model for user settings (API keys and preferences).
-import type { TtsStrategy } from '@esl-pipeline/contracts';
+import type { TtsProviderId, TtsStrategy } from '@esl-pipeline/contracts';
 
 /**
  * TTS provider type - aligned with currently supported runtime adapters.
  */
-export type TtsProvider = 'elevenlabs' | 'google';
+export type TtsProvider = TtsProviderId;
 
 /**
  * TTS strategy for audio generation
@@ -68,7 +68,7 @@ export interface UserSettingsOutput {
 /**
  * Valid TTS providers
  */
-export const VALID_TTS_PROVIDERS: TtsProvider[] = ['elevenlabs', 'google'];
+export const VALID_TTS_PROVIDERS: TtsProvider[] = ['elevenlabs', 'google', 'inworld'];
 
 /**
  * Valid TTS strategies

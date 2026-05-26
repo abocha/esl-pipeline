@@ -25,6 +25,7 @@ x-dev-backend-workspace-volumes: &dev_backend_workspace_volumes
   - pkg_tts_core_node_modules:/app/packages/tts-core/node_modules
   - pkg_tts_provider_elevenlabs_node_modules:/app/packages/tts-provider-elevenlabs/node_modules
   - pkg_tts_provider_google_node_modules:/app/packages/tts-provider-google/node_modules
+  - pkg_tts_provider_inworld_node_modules:/app/packages/tts-provider-inworld/node_modules
   - example_orchestrator_service_node_modules:/app/packages/orchestrator/examples/service/node_modules
   - workspace_pnpm_store:/pnpm
 
@@ -54,6 +55,7 @@ x-dev-upload-workspace-volumes: &dev_upload_workspace_volumes
   - pkg_tts_core_node_modules:/app/packages/tts-core/node_modules
   - pkg_tts_provider_elevenlabs_node_modules:/app/packages/tts-provider-elevenlabs/node_modules
   - pkg_tts_provider_google_node_modules:/app/packages/tts-provider-google/node_modules
+  - pkg_tts_provider_inworld_node_modules:/app/packages/tts-provider-inworld/node_modules
   - example_orchestrator_service_node_modules:/app/packages/orchestrator/examples/service/node_modules
   - workspace_pnpm_store:/pnpm
 
@@ -78,6 +80,7 @@ x-dev-workspace-volumes: &dev_workspace_volumes
   - pkg_tts_core_node_modules:/app/packages/tts-core/node_modules
   - pkg_tts_provider_elevenlabs_node_modules:/app/packages/tts-provider-elevenlabs/node_modules
   - pkg_tts_provider_google_node_modules:/app/packages/tts-provider-google/node_modules
+  - pkg_tts_provider_inworld_node_modules:/app/packages/tts-provider-inworld/node_modules
   - example_orchestrator_service_node_modules:/app/packages/orchestrator/examples/service/node_modules
   - workspace_pnpm_store:/pnpm
 name: ${COMPOSE_PROJECT_NAME:-esl-pipeline}
@@ -184,7 +187,7 @@ services:
       NPM_CONFIG_STORE_DIR: /pnpm/store
     command: >
       sh -lc "
-        dependency_paths='/app/node_modules /app/packages/batch-backend/node_modules /app/packages/batch-frontend/node_modules /app/packages/contracts/node_modules /app/packages/html-publisher/node_modules /app/packages/md-validator/node_modules /app/packages/orchestrator/node_modules /app/packages/pmd/node_modules /app/packages/provider-runtime/node_modules /app/packages/shared-infrastructure/node_modules /app/packages/storage-uploader/node_modules /app/packages/stt-core/node_modules /app/packages/stt-provider-deepgram/node_modules /app/packages/stt-provider-elevenlabs/node_modules /app/packages/stt-provider-google/node_modules /app/packages/telegram-ops-bot/node_modules /app/packages/tts-core/node_modules /app/packages/tts-provider-elevenlabs/node_modules /app/packages/tts-provider-google/node_modules /app/packages/orchestrator/examples/service/node_modules /pnpm' &&
+        dependency_paths='/app/node_modules /app/packages/batch-backend/node_modules /app/packages/batch-frontend/node_modules /app/packages/contracts/node_modules /app/packages/html-publisher/node_modules /app/packages/md-validator/node_modules /app/packages/orchestrator/node_modules /app/packages/pmd/node_modules /app/packages/provider-runtime/node_modules /app/packages/shared-infrastructure/node_modules /app/packages/storage-uploader/node_modules /app/packages/stt-core/node_modules /app/packages/stt-provider-deepgram/node_modules /app/packages/stt-provider-elevenlabs/node_modules /app/packages/stt-provider-google/node_modules /app/packages/telegram-ops-bot/node_modules /app/packages/tts-core/node_modules /app/packages/tts-provider-elevenlabs/node_modules /app/packages/tts-provider-google/node_modules /app/packages/tts-provider-inworld/node_modules /app/packages/orchestrator/examples/service/node_modules /pnpm' &&
         mkdir -p $$dependency_paths /pnpm/store &&
         chmod -R 0777 $$dependency_paths &&
         pnpm install &&
@@ -425,7 +428,7 @@ services:
       CI: 'false'
     command: >
       sh -lc "
-        dependency_paths='/app/node_modules /app/packages/batch-backend/node_modules /app/packages/batch-frontend/node_modules /app/packages/contracts/node_modules /app/packages/html-publisher/node_modules /app/packages/md-validator/node_modules /app/packages/orchestrator/node_modules /app/packages/pmd/node_modules /app/packages/provider-runtime/node_modules /app/packages/shared-infrastructure/node_modules /app/packages/storage-uploader/node_modules /app/packages/stt-core/node_modules /app/packages/stt-provider-deepgram/node_modules /app/packages/stt-provider-elevenlabs/node_modules /app/packages/stt-provider-google/node_modules /app/packages/telegram-ops-bot/node_modules /app/packages/tts-core/node_modules /app/packages/tts-provider-elevenlabs/node_modules /app/packages/tts-provider-google/node_modules /app/packages/orchestrator/examples/service/node_modules /pnpm' &&
+        dependency_paths='/app/node_modules /app/packages/batch-backend/node_modules /app/packages/batch-frontend/node_modules /app/packages/contracts/node_modules /app/packages/html-publisher/node_modules /app/packages/md-validator/node_modules /app/packages/orchestrator/node_modules /app/packages/pmd/node_modules /app/packages/provider-runtime/node_modules /app/packages/shared-infrastructure/node_modules /app/packages/storage-uploader/node_modules /app/packages/stt-core/node_modules /app/packages/stt-provider-deepgram/node_modules /app/packages/stt-provider-elevenlabs/node_modules /app/packages/stt-provider-google/node_modules /app/packages/telegram-ops-bot/node_modules /app/packages/tts-core/node_modules /app/packages/tts-provider-elevenlabs/node_modules /app/packages/tts-provider-google/node_modules /app/packages/tts-provider-inworld/node_modules /app/packages/orchestrator/examples/service/node_modules /pnpm' &&
         mkdir -p $$dependency_paths /pnpm/store &&
         chmod -R 0777 $$dependency_paths &&
         pnpm install --no-frozen-lockfile &&
@@ -506,6 +509,7 @@ volumes:
   pkg_tts_core_node_modules:
   pkg_tts_provider_elevenlabs_node_modules:
   pkg_tts_provider_google_node_modules:
+  pkg_tts_provider_inworld_node_modules:
   postgres18_data:
   redis_data:
   workspace_node_modules:

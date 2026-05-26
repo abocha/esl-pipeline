@@ -82,4 +82,21 @@ describe('DefaultTtsEngine provider selection', () => {
 
     expect(result.provider).toBe('google');
   });
+
+  it('selects inworld from defaults and provider order', async () => {
+    process.env.ESL_TTS_DEFAULT_PROVIDER = 'inworld';
+    process.env.ESL_TTS_PROVIDER_ORDER = 'google,inworld,elevenlabs';
+
+    const engine = createTtsEngine([
+      createProvider('elevenlabs'),
+      createProvider('google'),
+      createProvider('inworld'),
+    ]);
+    const result = await engine.buildStudyTextMp3(
+      { context: {} as never },
+      { voiceMapPath: 'voices.yml', outPath: '/tmp' },
+    );
+
+    expect(result.provider).toBe('inworld');
+  });
 });

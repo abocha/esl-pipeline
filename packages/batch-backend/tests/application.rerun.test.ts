@@ -60,7 +60,7 @@ describe('application/job-actions/rerun', () => {
       ttsStrategy: 'auto',
       voiceId: 'voice-1',
       voiceAccent: 'american',
-      googleTtsModel: 'chirp3_hd',
+      ttsModel: 'eleven_multilingual_v2',
       publishTarget: 'html',
       htmlUrl: 'https://example.com/published.html',
       userId: 'user-1',
@@ -79,7 +79,7 @@ describe('application/job-actions/rerun', () => {
       payload: {
         regeneratePronunciationMainAudio: true,
         pronunciationMainTtsProvider: 'elevenlabs',
-        pronunciationMainElevenlabsModel: 'eleven_v3',
+        pronunciationMainTtsModel: 'eleven_v3',
       },
     });
 
@@ -96,7 +96,7 @@ describe('application/job-actions/rerun', () => {
         regenerateStudyTextAudio: true,
         studyTextTtsProvider: 'elevenlabs',
         studyTextTtsStrategy: 'auto',
-        studyTextElevenlabsModel: 'eleven_multilingual_v2',
+        studyTextTtsModel: 'eleven_multilingual_v2',
       },
     });
 
@@ -113,7 +113,7 @@ describe('application/job-actions/rerun', () => {
         regenerateStudyTextAudio: true,
         studyTextTtsProvider: 'elevenlabs',
         studyTextTtsStrategy: 'dialogue',
-        studyTextElevenlabsModel: 'eleven_v3',
+        studyTextTtsModel: 'eleven_v3',
       },
     });
 
@@ -125,8 +125,7 @@ describe('application/job-actions/rerun', () => {
         voiceAccent: 'american',
         ttsProvider: 'elevenlabs',
         ttsStrategy: 'dialogue',
-        studyTextElevenlabsModel: 'eleven_v3',
-        googleTtsModel: undefined,
+        ttsModel: 'eleven_v3',
       }),
     );
   });
@@ -142,7 +141,7 @@ describe('application/job-actions/rerun', () => {
       ttsStrategy: 'dialogue',
       voiceId: 'voice-1',
       voiceAccent: 'american',
-      googleTtsModel: 'chirp3_hd',
+      ttsModel: 'eleven_multilingual_v2',
       publishTarget: 'html',
       userId: 'user-1',
     } as never);
@@ -152,7 +151,7 @@ describe('application/job-actions/rerun', () => {
       requestedAt,
       payload: {
         regenerateStudyTextAudio: true,
-        studyTextElevenlabsModel: 'eleven_multilingual_v2',
+        studyTextTtsModel: 'eleven_multilingual_v2',
       },
     });
 
@@ -172,7 +171,7 @@ describe('application/job-actions/rerun', () => {
       ttsStrategy: 'auto',
       voiceId: 'voice-1',
       voiceAccent: 'american',
-      googleTtsModel: 'chirp3_hd',
+      ttsModel: 'eleven_multilingual_v2',
       publishTarget: 'html',
       userId: 'user-1',
     } as never);
@@ -182,7 +181,7 @@ describe('application/job-actions/rerun', () => {
       requestedAt,
       payload: {
         regenerateStudyTextAudio: true,
-        studyTextElevenlabsModel: 'eleven_flash_v2_5',
+        studyTextTtsModel: 'eleven_flash_v2_5',
       },
     });
 
@@ -198,7 +197,7 @@ describe('application/job-actions/rerun', () => {
       payload: {
         regeneratePronunciationChunkAudio: true,
         pronunciationChunkTtsProvider: 'google',
-        pronunciationChunkGoogleTtsModel: 'studio',
+        pronunciationChunkTtsModel: 'studio',
         pronunciationChunkVoiceId: 'chunk-voice',
         pronunciationChunkVoiceAccent: 'british',
       },
@@ -211,8 +210,7 @@ describe('application/job-actions/rerun', () => {
         voiceAccent: 'american',
         ttsProvider: 'elevenlabs',
         ttsStrategy: 'auto',
-        studyTextElevenlabsModel: undefined,
-        googleTtsModel: 'chirp3_hd',
+        ttsModel: 'eleven_multilingual_v2',
       }),
     );
   });
@@ -264,7 +262,7 @@ describe('application/job-actions/rerun', () => {
       withTts: true,
       ttsProvider: 'elevenlabs',
       ttsStrategy: 'dialogue',
-      studyTextElevenlabsModel: 'eleven_v3',
+      ttsModel: 'eleven_v3',
       voiceId: 'voice-1',
       voiceAccent: 'american',
       publishTarget: 'html',
@@ -288,7 +286,7 @@ describe('application/job-actions/rerun', () => {
           regenerateStudyTextAudio: true,
           studyTextTtsProvider: 'elevenlabs',
           studyTextTtsStrategy: 'dialogue',
-          studyTextElevenlabsModel: 'eleven_v3',
+          studyTextTtsModel: 'eleven_v3',
         }),
       }),
     );
@@ -310,7 +308,7 @@ describe('application/job-actions/rerun', () => {
         voiceId: undefined,
         voiceAccent: 'american',
         ttsProvider: 'google',
-        googleTtsModel: 'chirp3_hd',
+        ttsModel: undefined,
       }),
     );
 

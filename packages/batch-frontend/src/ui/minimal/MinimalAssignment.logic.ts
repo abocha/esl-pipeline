@@ -1,16 +1,15 @@
 import type {
-  ElevenLabsTtsModelId,
   GenerateDraftResponse,
-  GoogleTtsModel,
   JobConfigOverrides,
   RerunJobPayload,
+  TtsModelId,
 } from '../../utils/api';
 
 export type MinimalPublishTarget = 'html';
 
 export interface PublishJobOverridesInput {
   publishTarget: MinimalPublishTarget;
-  selectedTtsProvider: 'elevenlabs' | 'google';
+  selectedTtsProvider: 'elevenlabs' | 'google' | 'inworld';
   selectedTtsStrategy: 'auto' | 'dialogue' | 'tts';
   selectedTtsModel: string;
   selectedPreset: string;
@@ -20,13 +19,7 @@ export interface PublishJobOverridesInput {
 
 export type PublishJobOverrides = Pick<
   JobConfigOverrides,
-  | 'publishTarget'
-  | 'withTts'
-  | 'ttsProvider'
-  | 'ttsStrategy'
-  | 'studyTextElevenlabsModel'
-  | 'googleTtsModel'
-  | 'learningPresetId'
+  'publishTarget' | 'withTts' | 'ttsProvider' | 'ttsStrategy' | 'ttsModel' | 'learningPresetId'
 >;
 
 export interface DraftPreviewGate {
@@ -51,7 +44,7 @@ export interface CustomRerunInput {
   rerunStudyTextAudio: boolean;
   rerunPronunciationMainAudio: boolean;
   rerunPronunciationChunkAudio: boolean;
-  rerunStudyTextProvider: 'elevenlabs' | 'google';
+  rerunStudyTextProvider: 'elevenlabs' | 'google' | 'inworld';
   rerunStudyTextModel: string;
   rerunStudyTextVoiceId: string;
   rerunStudyTextVoiceAccent: string;
@@ -59,11 +52,11 @@ export interface CustomRerunInput {
   rerunStudyTextDialogueLanguage: string;
   rerunStudyTextDialogueStability: string;
   rerunStudyTextDialogueSeed: string;
-  rerunPronunciationMainProvider: 'elevenlabs' | 'google';
+  rerunPronunciationMainProvider: 'elevenlabs' | 'google' | 'inworld';
   rerunPronunciationMainModel: string;
   rerunPronunciationMainVoiceId: string;
   rerunPronunciationMainVoiceAccent: string;
-  rerunPronunciationChunkProvider: 'edge-tts' | 'elevenlabs' | 'google';
+  rerunPronunciationChunkProvider: 'edge-tts' | 'elevenlabs' | 'google' | 'inworld';
   rerunPronunciationChunkModel: string;
   rerunPronunciationChunkVoiceId: string;
   rerunPronunciationChunkVoiceAccent: string;
@@ -120,10 +113,11 @@ export function buildPublishJobOverrides(input: PublishJobOverridesInput): Publi
     ttsStrategy: input.selectedTtsStrategy,
   };
 
-  if (input.selectedTtsProvider === 'google' && input.selectedTtsModel.trim()) {
-    overrides.googleTtsModel = input.selectedTtsModel.trim() as GoogleTtsModel;
-  } else if (input.selectedTtsStrategy !== 'auto' && input.selectedTtsModel.trim()) {
-    overrides.studyTextElevenlabsModel = input.selectedTtsModel.trim() as ElevenLabsTtsModelId;
+  if (
+    input.selectedTtsModel.trim() &&
+    (input.selectedTtsProvider !== 'elevenlabs' || input.selectedTtsStrategy !== 'auto')
+  ) {
+    overrides.ttsModel = input.selectedTtsModel.trim() as TtsModelId;
   }
 
   if (
@@ -236,16 +230,8 @@ export function buildCustomRerunPayload(input: CustomRerunInput): CustomRerunPay
       payload.studyTextDialogueSeed = parsed;
     }
 
-    if (input.rerunStudyTextProvider === 'google') {
-      if (input.rerunStudyTextModel.trim()) {
-        payload.studyTextGoogleTtsModel = input.rerunStudyTextModel.trim() as GoogleTtsModel;
-      }
-    } else if (input.rerunStudyTextModel.trim()) {
-      payload.studyTextElevenlabsModel = input.rerunStudyTextModel.trim() as
-        | 'eleven_v3'
-        | 'eleven_multilingual_v2'
-        | 'eleven_flash_v2_5'
-        | 'eleven_flash_v2';
+    if (input.rerunStudyTextModel.trim()) {
+      payload.studyTextTtsModel = input.rerunStudyTextModel.trim() as TtsModelId;
     }
   }
 
@@ -255,17 +241,8 @@ export function buildCustomRerunPayload(input: CustomRerunInput): CustomRerunPay
     payload.pronunciationMainVoiceId = input.rerunPronunciationMainVoiceId.trim() || undefined;
     payload.pronunciationMainVoiceAccent =
       input.rerunPronunciationMainVoiceAccent.trim() || undefined;
-    if (input.rerunPronunciationMainProvider === 'google') {
-      if (input.rerunPronunciationMainModel.trim()) {
-        payload.pronunciationMainGoogleTtsModel =
-          input.rerunPronunciationMainModel.trim() as GoogleTtsModel;
-      }
-    } else if (input.rerunPronunciationMainModel.trim()) {
-      payload.pronunciationMainElevenlabsModel = input.rerunPronunciationMainModel.trim() as
-        | 'eleven_v3'
-        | 'eleven_multilingual_v2'
-        | 'eleven_flash_v2_5'
-        | 'eleven_flash_v2';
+    if (input.rerunPronunciationMainModel.trim()) {
+      payload.pronunciationMainTtsModel = input.rerunPronunciationMainModel.trim() as TtsModelId;
     }
   }
 
@@ -275,22 +252,14 @@ export function buildCustomRerunPayload(input: CustomRerunInput): CustomRerunPay
     payload.pronunciationChunkVoiceId = input.rerunPronunciationChunkVoiceId.trim() || undefined;
     payload.pronunciationChunkVoiceAccent =
       input.rerunPronunciationChunkVoiceAccent.trim() || undefined;
-    if (input.rerunPronunciationChunkProvider === 'google') {
-      if (input.rerunPronunciationChunkModel.trim()) {
-        payload.pronunciationChunkGoogleTtsModel =
-          input.rerunPronunciationChunkModel.trim() as GoogleTtsModel;
-      }
-    } else if (input.rerunPronunciationChunkProvider === 'elevenlabs') {
-      if (input.rerunPronunciationChunkModel.trim()) {
-        payload.pronunciationChunkElevenlabsModel = input.rerunPronunciationChunkModel.trim() as
-          | 'eleven_v3'
-          | 'eleven_multilingual_v2'
-          | 'eleven_flash_v2_5'
-          | 'eleven_flash_v2';
-      }
-    } else {
+    if (input.rerunPronunciationChunkProvider === 'edge-tts') {
       payload.pronunciationChunkEdgeVoice =
         input.rerunPronunciationChunkEdgeVoice.trim() || undefined;
+    } else {
+      if (input.rerunPronunciationChunkModel.trim()) {
+        payload.pronunciationChunkTtsModel =
+          input.rerunPronunciationChunkModel.trim() as TtsModelId;
+      }
     }
   }
 

@@ -81,7 +81,7 @@ describe('domain/job-repository', () => {
       expect(job.forceTts).toBeNull();
       expect(job.publishTarget).toBeNull();
       expect(job.ttsStrategy).toBeNull();
-      expect(job.studyTextElevenlabsModel).toBeNull();
+      expect(job.ttsModel).toBeNull();
       expect(job.htmlUrl).toBeNull();
       expect(job.recordingId).toBeNull();
       expect(job.transcriptId).toBeNull();
@@ -121,7 +121,7 @@ describe('domain/job-repository', () => {
         publishTarget: 'html',
         ttsStrategy: 'dialogue',
         ttsProvider: 'elevenlabs',
-        studyTextElevenlabsModel: 'eleven_v3',
+        ttsModel: 'eleven_v3',
       });
 
       expect(job.voiceId).toBe('voice_amanda');
@@ -130,7 +130,7 @@ describe('domain/job-repository', () => {
       expect(job.publishTarget).toBe('html');
       expect(job.ttsStrategy).toBe('dialogue');
       expect(job.ttsProvider).toBe('elevenlabs');
-      expect(job.studyTextElevenlabsModel).toBe('eleven_v3');
+      expect(job.ttsModel).toBe('eleven_v3');
       expect(job.htmlUrl).toBeNull();
       expect(job.recordingId).toBe(recordingId);
       expect(job.transcriptId).toBe(transcriptId);

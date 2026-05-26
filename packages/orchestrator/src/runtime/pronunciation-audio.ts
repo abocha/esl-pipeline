@@ -9,6 +9,10 @@ import {
   type BuildPronunciationTextOptions,
   buildPronunciationShadowSentenceMp3,
   buildPronunciationTextMp3,
+  type GoogleTtsModel,
+  isTtsModelForProvider,
+  resolveDefaultTtsModel,
+  type TtsModelId,
   type TtsProviderId,
 } from '@esl-pipeline/tts-core';
 
@@ -28,11 +32,9 @@ interface PronunciationAudioSynthesisOptions {
   regeneratePrimary?: boolean;
   regenerateItems?: boolean;
   primaryTtsProvider?: TtsProviderId;
-  primaryGoogleTtsModel?: BuildPronunciationTextOptions['googleTtsModel'];
-  primaryModelId?: string;
+  primaryTtsModel?: TtsModelId;
   chunkTtsProvider?: TtsProviderId | 'edge-tts';
-  chunkGoogleTtsModel?: BuildPronunciationTextOptions['googleTtsModel'];
-  chunkModelId?: string;
+  chunkTtsModel?: TtsModelId;
   logger?: PipelineLogger;
   primaryVoiceId?: string | null;
   chunkVoiceId?: string | null;
@@ -41,8 +43,7 @@ interface PronunciationAudioSynthesisOptions {
 
 interface ProviderClipSynthesisConfig {
   ttsProvider?: TtsProviderId;
-  googleTtsModel?: BuildPronunciationTextOptions['googleTtsModel'];
-  modelId?: string;
+  ttsModel?: BuildPronunciationTextOptions['ttsModel'];
   voiceId?: string | null;
 }
 
@@ -53,11 +54,9 @@ const EDGE_TTS_PROVIDER_FALLBACK_WARNING: PronunciationAudioWarning = {
 };
 const PRONUNCIATION_ITEM_SYNTHESIS_CONCURRENCY = 3;
 const IPA_TRANSCRIPTION_ONLY_REGEX = /^\/[^/\n]+\/$/;
-const DEFAULT_GOOGLE_CHUNK_MODEL: BuildPronunciationTextOptions['googleTtsModel'] = 'chirp3_hd';
-const DEFAULT_GOOGLE_CHUNK_VOICE_BY_MODEL: Record<
-  NonNullable<BuildPronunciationTextOptions['googleTtsModel']>,
-  string
-> = {
+const DEFAULT_ELEVENLABS_PRONUNCIATION_MODEL = 'eleven_flash_v2_5' satisfies TtsModelId;
+const DEFAULT_GOOGLE_CHUNK_MODEL = 'chirp3_hd' satisfies GoogleTtsModel;
+const DEFAULT_GOOGLE_CHUNK_VOICE_BY_MODEL: Record<GoogleTtsModel, string> = {
   chirp3_hd: 'en-US-Chirp3-HD-Charon',
   studio: 'en-US-Studio-O',
   neural2: 'en-US-Neural2-F',
@@ -167,9 +166,8 @@ async function synthesizeProviderClip(
       outPath: options.outPath,
       preview: options.preview,
       force: options.force,
-      modelId: config.modelId,
       ttsProvider: config.ttsProvider,
-      googleTtsModel: config.googleTtsModel,
+      ttsModel: config.ttsModel,
       logger: options.logger,
       fileStem: clip.id,
       titleSuffix: clip.label ?? 'Pronunciation',
@@ -277,9 +275,8 @@ async function synthesizeShadowPrimary(
       outPath: options.outPath,
       preview: options.preview,
       force: options.force,
-      modelId: options.primaryModelId,
       ttsProvider: options.primaryTtsProvider,
-      googleTtsModel: options.primaryGoogleTtsModel,
+      ttsModel: options.primaryTtsModel,
       logger: options.logger,
     },
   );
@@ -338,6 +335,13 @@ function resolveChunkProvider(
   }
 }
 
+function resolveDefaultPronunciationModel(provider: TtsProviderId): TtsModelId {
+  if (provider === 'elevenlabs') {
+    return DEFAULT_ELEVENLABS_PRONUNCIATION_MODEL;
+  }
+  return resolveDefaultTtsModel(provider);
+}
+
 export async function synthesizePronunciationAudio(
   options: PronunciationAudioSynthesisOptions,
 ): Promise<PronunciationAudioArtifact | undefined> {
@@ -352,24 +356,35 @@ export async function synthesizePronunciationAudio(
   const fallbackState = { fallbackWarningLogged: false };
   const shouldGeneratePrimary = options.regeneratePrimary !== false;
   const shouldGenerateItems = options.regenerateItems !== false;
+  const resolvedPrimaryModel =
+    options.primaryTtsModel ??
+    (options.primaryTtsProvider
+      ? resolveDefaultPronunciationModel(options.primaryTtsProvider)
+      : undefined);
   const chunkProvider = resolveChunkProvider(focus, options.chunkTtsProvider);
+  const chunkProviderForModel =
+    chunkProvider === 'edge-tts' ? options.primaryTtsProvider : chunkProvider;
+  const fallbackChunkProvider = chunkProviderForModel ?? options.primaryTtsProvider;
+  const resolvedChunkModel =
+    options.chunkTtsModel ??
+    (fallbackChunkProvider === 'google'
+      ? DEFAULT_GOOGLE_CHUNK_MODEL
+      : fallbackChunkProvider
+        ? resolveDefaultPronunciationModel(fallbackChunkProvider)
+        : resolvedPrimaryModel);
   const googleChunkModel =
-    chunkProvider === 'google'
-      ? (options.chunkGoogleTtsModel ?? DEFAULT_GOOGLE_CHUNK_MODEL)
+    fallbackChunkProvider === 'google' &&
+    resolvedChunkModel &&
+    isTtsModelForProvider('google', resolvedChunkModel)
+      ? (resolvedChunkModel as GoogleTtsModel)
       : undefined;
-  const resolvedChunkGoogleModel =
-    googleChunkModel ?? options.chunkGoogleTtsModel ?? options.primaryGoogleTtsModel;
   const resolvedChunkGoogleVoice =
     googleChunkModel !== undefined
       ? DEFAULT_GOOGLE_CHUNK_VOICE_BY_MODEL[googleChunkModel]
       : undefined;
   const chunkProviderConfig: ProviderClipSynthesisConfig = {
-    ttsProvider:
-      chunkProvider === 'edge-tts'
-        ? options.primaryTtsProvider
-        : (chunkProvider ?? options.primaryTtsProvider),
-    googleTtsModel: resolvedChunkGoogleModel,
-    modelId: options.chunkModelId ?? options.primaryModelId,
+    ttsProvider: fallbackChunkProvider,
+    ttsModel: resolvedChunkModel,
     voiceId:
       options.chunkVoiceId ??
       (chunkProvider === 'google' ? resolvedChunkGoogleVoice : undefined) ??
@@ -379,8 +394,7 @@ export async function synthesizePronunciationAudio(
   };
   const primaryProviderConfig: ProviderClipSynthesisConfig = {
     ttsProvider: options.primaryTtsProvider,
-    googleTtsModel: options.primaryGoogleTtsModel,
-    modelId: options.primaryModelId,
+    ttsModel: resolvedPrimaryModel,
     voiceId: options.primaryVoiceId,
   };
   const synthesizeItemClip = async (
@@ -400,7 +414,10 @@ export async function synthesizePronunciationAudio(
   switch (focus.mode) {
     case 'shadow_sentence': {
       if (shouldGeneratePrimary) {
-        primaryClip = await synthesizeShadowPrimary(focus, options);
+        primaryClip = await synthesizeShadowPrimary(focus, {
+          ...options,
+          primaryTtsModel: resolvedPrimaryModel,
+        });
       }
 
       if (!shouldGenerateItems) break;

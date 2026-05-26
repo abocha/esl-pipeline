@@ -30,8 +30,8 @@ import { requestHomeworkMemoryGeneration } from './request-homework-memory-gener
 
 function resolveInheritedVoiceIdForProviderChange(args: {
   explicitVoiceId?: string;
-  explicitProvider?: 'elevenlabs' | 'google' | 'edge-tts';
-  persistedProvider?: 'elevenlabs' | 'google';
+  explicitProvider?: 'elevenlabs' | 'google' | 'inworld' | 'edge-tts';
+  persistedProvider?: 'elevenlabs' | 'google' | 'inworld';
   persistedVoiceId?: string | null;
 }): string | undefined {
   if (args.explicitVoiceId !== undefined) {
@@ -127,7 +127,7 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
     let userSettings:
       | {
           elevenLabsApiKey?: string | null;
-          ttsProvider?: 'elevenlabs' | 'google' | null;
+          ttsProvider?: 'elevenlabs' | 'google' | 'inworld' | null;
         }
       | undefined;
     if (running.userId) {
@@ -151,11 +151,15 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
       }
     }
     const userSettingsTtsProvider =
-      userSettings?.ttsProvider === 'elevenlabs' || userSettings?.ttsProvider === 'google'
+      userSettings?.ttsProvider === 'elevenlabs' ||
+      userSettings?.ttsProvider === 'google' ||
+      userSettings?.ttsProvider === 'inworld'
         ? userSettings.ttsProvider
         : undefined;
     const persistedStudyTextProvider =
-      running.ttsProvider === 'elevenlabs' || running.ttsProvider === 'google'
+      running.ttsProvider === 'elevenlabs' ||
+      running.ttsProvider === 'google' ||
+      running.ttsProvider === 'inworld'
         ? running.ttsProvider
         : userSettingsTtsProvider;
 
@@ -207,12 +211,8 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
                   running.ttsProvider ??
                   userSettingsTtsProvider ??
                   undefined,
-                studyTextElevenlabsModel:
-                  payload.rerun?.studyTextElevenlabsModel ??
-                  running.studyTextElevenlabsModel ??
-                  undefined,
-                studyTextGoogleTtsModel:
-                  payload.rerun?.studyTextGoogleTtsModel ?? running.googleTtsModel ?? undefined,
+                studyTextTtsModel:
+                  payload.rerun?.studyTextTtsModel ?? running.ttsModel ?? undefined,
                 studyTextDialogueLanguage: payload.rerun?.studyTextDialogueLanguage,
                 studyTextDialogueStability: payload.rerun?.studyTextDialogueStability,
                 studyTextDialogueSeed: payload.rerun?.studyTextDialogueSeed,
@@ -225,8 +225,7 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
                   persistedVoiceId: running.voiceId,
                 }),
                 pronunciationMainTtsProvider: payload.rerun?.pronunciationMainTtsProvider,
-                pronunciationMainElevenlabsModel: payload.rerun?.pronunciationMainElevenlabsModel,
-                pronunciationMainGoogleTtsModel: payload.rerun?.pronunciationMainGoogleTtsModel,
+                pronunciationMainTtsModel: payload.rerun?.pronunciationMainTtsModel,
                 pronunciationChunkVoiceAccent:
                   payload.rerun?.pronunciationChunkVoiceAccent ?? running.voiceAccent ?? undefined,
                 pronunciationChunkVoiceId: resolveInheritedVoiceIdForProviderChange({
@@ -236,8 +235,7 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
                   persistedVoiceId: running.voiceId,
                 }),
                 pronunciationChunkTtsProvider: payload.rerun?.pronunciationChunkTtsProvider,
-                pronunciationChunkElevenlabsModel: payload.rerun?.pronunciationChunkElevenlabsModel,
-                pronunciationChunkGoogleTtsModel: payload.rerun?.pronunciationChunkGoogleTtsModel,
+                pronunciationChunkTtsModel: payload.rerun?.pronunciationChunkTtsModel,
                 pronunciationChunkEdgeVoice: payload.rerun?.pronunciationChunkEdgeVoice,
                 settings: userSettings,
               },
@@ -258,8 +256,7 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
                 publishTarget: running.publishTarget ?? undefined,
                 ttsStrategy: running.ttsStrategy ?? undefined,
                 ttsProvider: running.ttsProvider ?? userSettingsTtsProvider ?? undefined,
-                studyTextElevenlabsModel: running.studyTextElevenlabsModel ?? undefined,
-                googleTtsModel: running.googleTtsModel ?? undefined,
+                ttsModel: running.ttsModel ?? undefined,
                 settings: userSettings,
               },
               runId,

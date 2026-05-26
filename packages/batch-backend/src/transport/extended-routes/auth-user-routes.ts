@@ -13,8 +13,7 @@ import {
 import { getJobSummaryWithDefaults } from '../../application/job-summary.js';
 import { listJobsWithDefaults } from '../../application/list-jobs.js';
 import {
-  publishElevenLabsModelSchema,
-  publishGoogleTtsModelSchema,
+  publishTtsModelSchema,
   publishTtsProviderSchema,
   publishTtsStrategySchema,
 } from '../../application/publish-study-text-overrides.js';
@@ -615,7 +614,7 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
       if (body.ttsProvider !== undefined && !isValidTtsProvider(body.ttsProvider)) {
         return reply.code(400).send({
           error: 'validation_failed',
-          message: 'Invalid TTS provider. Must be one of: elevenlabs, google',
+          message: 'Invalid TTS provider. Must be one of: elevenlabs, google, inworld',
           code: 'invalid_tts_provider',
         });
       }
@@ -1109,8 +1108,7 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
       forceTts: z.boolean().optional(),
       ttsStrategy: publishTtsStrategySchema.optional(),
       ttsProvider: publishTtsProviderSchema.optional(),
-      studyTextElevenlabsModel: publishElevenLabsModelSchema.optional(),
-      googleTtsModel: publishGoogleTtsModelSchema.optional(),
+      ttsModel: publishTtsModelSchema.optional(),
     });
 
     try {
@@ -1125,8 +1123,7 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
         forceTts: validatedData.forceTts,
         ttsStrategy: validatedData.ttsStrategy,
         ttsProvider: validatedData.ttsProvider,
-        studyTextElevenlabsModel: validatedData.studyTextElevenlabsModel,
-        googleTtsModel: validatedData.googleTtsModel,
+        ttsModel: validatedData.ttsModel,
         userId: authenticatedUser.id,
       });
 

@@ -7,18 +7,18 @@ import { randomUUID } from 'node:crypto';
 import { PoolClient } from 'pg';
 
 import type { VoiceProviderErrorCategory } from '@esl-pipeline/contracts';
+import { parseTtsModelId } from '@esl-pipeline/tts-core';
 
 import { buildLearningPresetProvenance } from '../application/learning-preset.js';
 import { withPgClient } from '../infrastructure/db.js';
 import { logger } from '../infrastructure/logger.js';
 import {
   assertTransition,
-  ElevenLabsTtsModelId,
-  GoogleTtsModel,
   JobRecord,
   JobState,
   JobUploadOption,
   PublishTarget,
+  TtsModelId,
   TtsProviderId,
   TtsStrategy,
 } from './job-model.js';
@@ -59,8 +59,7 @@ interface JobRow {
   publish_target: string | null;
   mode: string | null;
   tts_provider: string | null;
-  study_text_elevenlabs_model: string | null;
-  google_tts_model: string | null;
+  tts_model: string | null;
   html_url: string | null;
   auto_publish: boolean | null;
   started_at: Date | null;
@@ -93,8 +92,7 @@ export interface InsertJobParams {
   publishTarget?: PublishTarget;
   ttsStrategy?: TtsStrategy;
   ttsProvider?: TtsProviderId;
-  studyTextElevenlabsModel?: ElevenLabsTtsModelId;
-  googleTtsModel?: GoogleTtsModel;
+  ttsModel?: TtsModelId | null;
   userId?: string;
   autoPublish?: boolean;
   sourceJobId?: string | null;
@@ -172,8 +170,7 @@ export interface UpdateJobMetadataParams {
   forceTts?: boolean;
   ttsStrategy?: TtsStrategy;
   ttsProvider?: TtsProviderId;
-  studyTextElevenlabsModel?: ElevenLabsTtsModelId | null;
-  googleTtsModel?: GoogleTtsModel | null;
+  ttsModel?: TtsModelId | null;
   upload?: JobUploadOption | null;
   voiceId?: string;
   voiceAccent?: string;
@@ -217,8 +214,7 @@ async function insertJobWithState(params: InsertJobParams, state: JobState): Pro
         publish_target,
         mode,
         tts_provider,
-        study_text_elevenlabs_model,
-        google_tts_model,
+        tts_model,
         auto_publish,
         source_job_id,
         created_at,
@@ -228,7 +224,7 @@ async function insertJobWithState(params: InsertJobParams, state: JobState): Pro
       )
       VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
-        $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30
+        $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29
       )
       RETURNING
         id,
@@ -255,8 +251,7 @@ async function insertJobWithState(params: InsertJobParams, state: JobState): Pro
         publish_target,
         mode,
         tts_provider,
-        study_text_elevenlabs_model,
-        google_tts_model,
+        tts_model,
         html_url,
         auto_publish,
         created_at,
@@ -291,8 +286,7 @@ async function insertJobWithState(params: InsertJobParams, state: JobState): Pro
         params.publishTarget ?? null,
         params.ttsStrategy ?? null,
         params.ttsProvider ?? null,
-        params.studyTextElevenlabsModel ?? null,
-        params.googleTtsModel ?? null,
+        params.ttsModel ?? null,
         params.autoPublish ?? false,
         params.sourceJobId ?? null,
         now,
@@ -339,8 +333,7 @@ export async function getJobById(id: string): Promise<JobRecord | null> {
         j.publish_target,
         j.mode,
         j.tts_provider,
-        j.study_text_elevenlabs_model,
-        j.google_tts_model,
+        j.tts_model,
         j.html_url,
         j.auto_publish,
         j.created_at,
@@ -401,8 +394,7 @@ export async function listJobs(options: JobListOptions): Promise<JobRecord[]> {
         j.publish_target,
         j.mode,
         j.tts_provider,
-        j.study_text_elevenlabs_model,
-        j.google_tts_model,
+        j.tts_model,
         j.html_url,
         j.auto_publish,
         j.created_at,
@@ -728,8 +720,7 @@ export async function updateJobStateAndResult(args: {
         publish_target,
         mode,
         tts_provider,
-        study_text_elevenlabs_model,
-        google_tts_model,
+        tts_model,
         html_url,
         auto_publish,
         created_at,
@@ -800,8 +791,7 @@ export async function updateJobDraftLink(args: {
         publish_target,
         mode,
         tts_provider,
-        study_text_elevenlabs_model,
-        google_tts_model,
+        tts_model,
         html_url,
         auto_publish,
         created_at,
@@ -879,14 +869,9 @@ export async function updateJobMetadata(
     updates.push(`tts_provider = $${values.length}`);
   }
 
-  if (params.studyTextElevenlabsModel !== undefined) {
-    values.push(params.studyTextElevenlabsModel);
-    updates.push(`study_text_elevenlabs_model = $${values.length}`);
-  }
-
-  if (params.googleTtsModel !== undefined) {
-    values.push(params.googleTtsModel);
-    updates.push(`google_tts_model = $${values.length}`);
+  if (params.ttsModel !== undefined) {
+    values.push(params.ttsModel);
+    updates.push(`tts_model = $${values.length}`);
   }
 
   if (params.upload !== undefined) {
@@ -950,8 +935,7 @@ export async function updateJobMetadata(
         publish_target,
         mode,
         tts_provider,
-        study_text_elevenlabs_model,
-        google_tts_model,
+        tts_model,
         html_url,
         auto_publish,
         created_at,
@@ -1033,8 +1017,7 @@ export async function approveJob(args: {
         publish_target,
         mode,
         tts_provider,
-        study_text_elevenlabs_model,
-        google_tts_model,
+        tts_model,
         html_url,
         auto_publish,
         created_at,
@@ -1114,10 +1097,7 @@ function mapRowToJob(row: JobRow): JobRecord {
     publishTarget: normalizePublishTarget(row.publish_target),
     ttsStrategy: normalizeTtsStrategy(row.mode, { jobId: row.id }),
     ttsProvider: normalizeTtsProvider(row.tts_provider, { jobId: row.id }),
-    studyTextElevenlabsModel: normalizeElevenLabsTtsModel(row.study_text_elevenlabs_model, {
-      jobId: row.id,
-    }),
-    googleTtsModel: normalizeGoogleTtsModel(row.google_tts_model, { jobId: row.id }),
+    ttsModel: normalizeTtsModel(row.tts_model, { jobId: row.id }),
     htmlUrl: row.html_url ?? null,
     autoPublish: row.auto_publish ?? false,
     createdAt: row.created_at,
@@ -1187,7 +1167,7 @@ function normalizeTtsStrategy(value: unknown, ctx: { jobId: string }): TtsStrate
 
 function normalizeTtsProvider(value: unknown, ctx: { jobId: string }): TtsProviderId | null {
   if (value == null) return null;
-  if (value === 'elevenlabs' || value === 'google') return value;
+  if (value === 'elevenlabs' || value === 'google' || value === 'inworld') return value;
   if (typeof value === 'string') {
     throw new TypeError(
       `Unsupported jobs.tts_provider value "${value}" for job ${ctx.jobId}; migrate legacy rows before running this version`,
@@ -1198,41 +1178,17 @@ function normalizeTtsProvider(value: unknown, ctx: { jobId: string }): TtsProvid
   );
 }
 
-function normalizeElevenLabsTtsModel(
-  value: unknown,
-  ctx: { jobId: string },
-): ElevenLabsTtsModelId | null {
+function normalizeTtsModel(value: unknown, ctx: { jobId: string }): TtsModelId | null {
   if (value == null) return null;
-  if (
-    value === 'eleven_v3' ||
-    value === 'eleven_multilingual_v2' ||
-    value === 'eleven_flash_v2_5' ||
-    value === 'eleven_flash_v2'
-  ) {
-    return value;
-  }
   if (typeof value === 'string') {
+    const parsed = parseTtsModelId(value);
+    if (parsed) return parsed;
     throw new TypeError(
-      `Unsupported jobs.study_text_elevenlabs_model value "${value}" for job ${ctx.jobId}; migrate legacy rows before running this version`,
+      `Unsupported jobs.tts_model value "${value}" for job ${ctx.jobId}; migrate legacy rows before running this version`,
     );
   }
   throw new Error(
-    `Unsupported jobs.study_text_elevenlabs_model value type "${typeof value}" for job ${ctx.jobId}; expected null or an ElevenLabsTtsModelId string`,
-  );
-}
-
-function normalizeGoogleTtsModel(value: unknown, ctx: { jobId: string }): GoogleTtsModel | null {
-  if (value == null) return null;
-  if (value === 'chirp3_hd' || value === 'studio' || value === 'neural2' || value === 'wavenet') {
-    return value;
-  }
-  if (typeof value === 'string') {
-    throw new TypeError(
-      `Unsupported jobs.google_tts_model value "${value}" for job ${ctx.jobId}; migrate legacy rows before running this version`,
-    );
-  }
-  throw new Error(
-    `Unsupported jobs.google_tts_model value type "${typeof value}" for job ${ctx.jobId}; expected null or a GoogleTtsModel string`,
+    `Unsupported jobs.tts_model value type "${typeof value}" for job ${ctx.jobId}; expected null or a TtsModelId string`,
   );
 }
 

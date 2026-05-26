@@ -80,7 +80,7 @@ export function makeJob(overrides: Partial<JobRecord> = {}): JobRecord {
     publishTarget: 'html',
     ttsStrategy: 'auto',
     ttsProvider: 'elevenlabs',
-    studyTextElevenlabsModel: null,
+    ttsModel: null,
     createdAt: now,
     updatedAt: now,
     startedAt: null,

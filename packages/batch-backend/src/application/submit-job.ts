@@ -4,8 +4,16 @@
 // - Validates input.
 // - Persists a queued job via JobRepository.
 // - Enqueues a BullMQ job via createJobQueue.
+
+import {
+  parseTtsModelId,
+  parseTtsProviderId,
+  resolveDefaultTtsProvider,
+  validateTtsSelection,
+} from '@esl-pipeline/tts-core';
+
 import { publishJobEvent } from '../domain/job-events.js';
-import type { TtsStrategy as DomainTtsStrategy } from '../domain/job-model.js';
+import type { TtsStrategy as DomainTtsStrategy, TtsModelId } from '../domain/job-model.js';
 import { insertJob } from '../domain/job-repository.js';
 import { logger } from '../infrastructure/logger.js';
 import { createJobQueue } from '../infrastructure/queue-bullmq.js';
@@ -14,13 +22,7 @@ import { collectPublishStudyTextOverrideIssues } from './publish-study-text-over
 
 export type UploadTarget = 'auto' | 's3' | 'none';
 export type TtsStrategy = DomainTtsStrategy;
-export type TtsProvider = 'elevenlabs' | 'google';
-export type GoogleTtsModel = 'chirp3_hd' | 'studio' | 'neural2' | 'wavenet';
-export type ElevenLabsTtsModelId =
-  | 'eleven_v3'
-  | 'eleven_multilingual_v2'
-  | 'eleven_flash_v2_5'
-  | 'eleven_flash_v2';
+export type TtsProvider = 'elevenlabs' | 'google' | 'inworld';
 
 export interface SubmitJobRequest {
   md: string;
@@ -33,8 +35,7 @@ export interface SubmitJobRequest {
   publishTarget?: 'html';
   ttsStrategy?: TtsStrategy;
   ttsProvider?: TtsProvider;
-  studyTextElevenlabsModel?: ElevenLabsTtsModelId;
-  googleTtsModel?: GoogleTtsModel;
+  ttsModel?: TtsModelId;
   userId?: string;
   autoPublish?: boolean;
 }
@@ -127,40 +128,38 @@ function validateSubmitJobRequest(req: SubmitJobRequest): void {
     );
   }
 
-  if (req.ttsProvider && !['elevenlabs', 'google'].includes(req.ttsProvider)) {
+  if (req.ttsProvider && !parseTtsProviderId(req.ttsProvider)) {
     throw new ValidationError(
-      'ttsProvider must be elevenlabs or google when provided',
+      'ttsProvider must be elevenlabs, google, or inworld when provided',
       'invalid_tts_provider',
     );
   }
 
-  if (
-    req.googleTtsModel &&
-    !['chirp3_hd', 'studio', 'neural2', 'wavenet'].includes(req.googleTtsModel)
-  ) {
+  if (req.ttsModel && !parseTtsModelId(req.ttsModel)) {
     throw new ValidationError(
-      'googleTtsModel must be chirp3_hd, studio, neural2, or wavenet when provided',
-      'invalid_google_tts_model',
+      'ttsModel must be a supported TTS model when provided',
+      'invalid_tts_model',
     );
   }
 
-  if (
-    req.studyTextElevenlabsModel &&
-    !['eleven_v3', 'eleven_multilingual_v2', 'eleven_flash_v2_5', 'eleven_flash_v2'].includes(
-      req.studyTextElevenlabsModel,
-    )
-  ) {
-    throw new ValidationError(
-      'studyTextElevenlabsModel must be eleven_v3, eleven_multilingual_v2, eleven_flash_v2_5, or eleven_flash_v2 when provided',
-      'invalid_study_text_elevenlabs_model',
-    );
+  if (req.ttsProvider || req.ttsModel) {
+    try {
+      validateTtsSelection({
+        provider: req.ttsProvider ?? resolveDefaultTtsProvider(),
+        model: req.ttsModel,
+      });
+    } catch (error) {
+      throw new ValidationError(
+        error instanceof Error ? error.message : String(error),
+        'invalid_tts_model',
+      );
+    }
   }
 
   const publishStudyTextIssues = collectPublishStudyTextOverrideIssues({
     ttsStrategy: req.ttsStrategy,
     ttsProvider: req.ttsProvider,
-    studyTextElevenlabsModel: req.studyTextElevenlabsModel,
-    googleTtsModel: req.googleTtsModel,
+    ttsModel: req.ttsModel,
   });
   if (publishStudyTextIssues.length > 0) {
     const issue = publishStudyTextIssues[0];
@@ -194,8 +193,7 @@ export async function submitJob(req: SubmitJobRequest): Promise<SubmitJobRespons
     publishTarget: req.publishTarget ?? 'html',
     ttsStrategy: req.ttsStrategy,
     ttsProvider: req.ttsProvider,
-    studyTextElevenlabsModel: req.studyTextElevenlabsModel,
-    googleTtsModel: req.googleTtsModel,
+    ttsModel: req.ttsModel,
     userId: req.userId,
     autoPublish: req.autoPublish,
   });

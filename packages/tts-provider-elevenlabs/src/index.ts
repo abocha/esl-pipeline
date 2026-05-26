@@ -21,6 +21,7 @@ import {
   type Frontmatter,
 } from '@esl-pipeline/pmd';
 import { runProviderFallbackLadder } from '@esl-pipeline/provider-runtime';
+import { type ElevenLabsTtsModelId, resolveTtsSelection } from '@esl-pipeline/tts-core';
 
 import { loadVoicesCatalog } from './assign.js';
 import { estimateDurationFromFileSize } from './audioDuration.js';
@@ -52,10 +53,6 @@ import type {
   TtsStrategy,
 } from './types.js';
 
-const DEFAULT_MODEL_ID =
-  process.env.ESL_TTS_PROVIDER_ELEVENLABS_MODEL_ID ?? 'eleven_multilingual_v2';
-const DEFAULT_PRONUNCIATION_MODEL_ID =
-  process.env.ESL_TTS_PROVIDER_ELEVENLABS_PRONUNCIATION_MODEL_ID ?? 'eleven_flash_v2_5';
 type TextToSpeechConvertBody = Parameters<
   ReturnType<typeof getElevenClient>['textToSpeech']['convert']
 >[1];
@@ -66,6 +63,11 @@ const DEFAULT_OUTPUT_FORMAT = (process.env.ESL_TTS_PROVIDER_ELEVENLABS_OUTPUT_FO
   'mp3_22050_32') as unknown as TtsOutputFormat;
 const DEFAULT_TTS_MAX_CHARS = 4500;
 const DEFAULT_TTS_PROVIDER = 'elevenlabs' as const;
+
+function resolveElevenLabsTtsModel(model?: string): ElevenLabsTtsModelId {
+  return resolveTtsSelection({ provider: DEFAULT_TTS_PROVIDER, model })
+    .model as ElevenLabsTtsModelId;
+}
 
 function isTtsDebugEnabled(): boolean {
   const raw = process.env.ESL_TTS_DEBUG;
@@ -322,7 +324,7 @@ async function buildDialogueMp3(
   frontmatter: Frontmatter,
 ): Promise<BuildStudyTextResult> {
   const { dialogueLanguage, dialogueStability, dialogueSeed } = options;
-  const modelId = options.modelId ?? 'eleven_v3';
+  const modelId = resolveElevenLabsTtsModel(options.ttsModel ?? 'eleven_v3');
   // Synthesize dialogue
   const result = await synthesizeDialogue(
     {
@@ -463,7 +465,7 @@ export async function buildStudyTextMp3(
     );
     const inputs = toDialogueInputs(segments, speakerVoiceMap);
     const hash = buildDialogueHash(inputs, {
-      modelId: opts.modelId ?? 'eleven_v3',
+      modelId: resolveElevenLabsTtsModel(opts.ttsModel ?? 'eleven_v3'),
       outputFormat: resolveOutputFormat(opts.outputFormat),
       languageCode: opts.dialogueLanguage,
       stability: opts.dialogueStability,
@@ -650,7 +652,7 @@ export async function buildStudyTextMp3(
       const chunkHashInput = JSON.stringify({
         voiceId: run.voiceId,
         text: chunkText,
-        modelId: opts.modelId ?? DEFAULT_MODEL_ID,
+        modelId: resolveElevenLabsTtsModel(opts.ttsModel),
         outputFormat: resolveOutputFormat(opts.outputFormat),
       });
       const chunkHash = createHash('sha256').update(chunkHashInput).digest('hex');
@@ -664,7 +666,7 @@ export async function buildStudyTextMp3(
       }
 
       await synthesizeLineWithRetry(eleven, run.voiceId, chunkText, chunkFilePath, {
-        modelId: opts.modelId ?? DEFAULT_MODEL_ID,
+        modelId: resolveElevenLabsTtsModel(opts.ttsModel),
         outputFormat: resolveOutputFormat(opts.outputFormat),
       });
       generatedCharacters += chunkText.length;
@@ -758,7 +760,7 @@ export async function buildPronunciationShadowSentenceMp3(
   const outputDir = resolve(opts.outPath || (input.mdPath ? dirname(input.mdPath) : process.cwd()));
   await mkdir(outputDir, { recursive: true });
   resolveTtsProvider(opts.ttsProvider);
-  const modelId = opts.modelId ?? DEFAULT_PRONUNCIATION_MODEL_ID;
+  const modelId = resolveElevenLabsTtsModel(opts.ttsModel ?? 'eleven_flash_v2_5');
   const outputFormat = resolveOutputFormat(opts.outputFormat);
   const hash = createHash('sha256')
     .update(
@@ -858,7 +860,7 @@ export async function buildPronunciationTextMp3(
   const outputDir = resolve(opts.outPath || (input.mdPath ? dirname(input.mdPath) : process.cwd()));
   await mkdir(outputDir, { recursive: true });
   resolveTtsProvider(opts.ttsProvider);
-  const modelId = opts.modelId ?? DEFAULT_PRONUNCIATION_MODEL_ID;
+  const modelId = resolveElevenLabsTtsModel(opts.ttsModel ?? 'eleven_flash_v2_5');
   const outputFormat = resolveOutputFormat(opts.outputFormat);
   const fileStem = opts.fileStem?.trim() || 'pronunciation';
   const hash = createHash('sha256')

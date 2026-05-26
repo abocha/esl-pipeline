@@ -94,8 +94,7 @@ describe('application/submit-job', () => {
       publishTarget: 'html',
       ttsStrategy: request.ttsStrategy,
       ttsProvider: request.ttsProvider,
-      studyTextElevenlabsModel: request.studyTextElevenlabsModel,
-      googleTtsModel: request.googleTtsModel,
+      ttsModel: request.ttsModel,
       autoPublish: undefined,
       userId: request.userId,
     });
@@ -163,8 +162,7 @@ describe('application/submit-job', () => {
       voiceAccent: fakeJob.voiceAccent,
       forceTts: fakeJob.forceTts,
       ttsProvider: undefined,
-      studyTextElevenlabsModel: undefined,
-      googleTtsModel: undefined,
+      ttsModel: undefined,
       publishTarget: 'html',
       ttsStrategy: fakeJob.ttsStrategy,
       autoPublish: undefined,
@@ -217,8 +215,7 @@ describe('application/submit-job', () => {
       voiceAccent: undefined,
       forceTts: undefined,
       ttsProvider: undefined,
-      studyTextElevenlabsModel: undefined,
-      googleTtsModel: undefined,
+      ttsModel: undefined,
       publishTarget: 'html',
       ttsStrategy: undefined,
       autoPublish: undefined,
@@ -260,7 +257,7 @@ describe('application/submit-job', () => {
         md: 'fixtures/ok.md',
         ttsProvider: 'elevenlabs',
         ttsStrategy: 'auto',
-        studyTextElevenlabsModel: 'eleven_v3',
+        ttsModel: 'eleven_v3',
       }),
     ).rejects.toThrow(
       'Automatic ElevenLabs publish jobs must use strategy-default model selection.',
@@ -270,11 +267,52 @@ describe('application/submit-job', () => {
       submitJob({
         md: 'fixtures/ok.md',
         ttsProvider: 'google',
-        studyTextElevenlabsModel: 'eleven_v3',
+        ttsModel: 'eleven_v3',
       }),
-    ).rejects.toThrow('studyTextElevenlabsModel must be omitted');
+    ).rejects.toThrow('TTS model "eleven_v3" is not supported by provider "google".');
 
     expect(insertJobSpy).not.toHaveBeenCalled();
+  });
+
+  it('accepts inworld provider and model selections', async () => {
+    const fakeJob = {
+      id: 'job-inworld',
+      state: 'queued',
+      md: 'fixtures/ok.md',
+      preset: null,
+      withTts: true,
+      upload: null,
+      voiceId: null,
+      voiceAccent: null,
+      forceTts: null,
+      ttsStrategy: 'tts',
+      htmlUrl: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    insertJobSpy.mockResolvedValue(fakeJob as any);
+    createJobQueueSpy.mockReturnValue({
+      queue: {} as any,
+      queueEvents: {} as any,
+      enqueue: vi.fn().mockResolvedValue(void 0),
+      cancelQueuedJob: vi.fn(),
+    });
+
+    await submitJob({
+      md: fakeJob.md,
+      withTts: true,
+      ttsProvider: 'inworld',
+      ttsStrategy: 'tts',
+      ttsModel: 'inworld-tts-1.5-max',
+    });
+
+    expect(insertJobSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ttsProvider: 'inworld',
+        ttsModel: 'inworld-tts-1.5-max',
+      }),
+    );
   });
 
   it('rejects retired non-html publish targets', async () => {

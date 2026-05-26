@@ -42,6 +42,7 @@ Primary groups:
   - `AWS_*`, `S3_*`, `STORAGE_*`, `ESL_PIPELINE_MANIFEST_*`
 - Speech runtime:
   - `ESL_TTS_*`, `ESL_STT_*`, `ESL_EDGE_TTS_*`, `VOICE_ALIGNMENT_V2_*`
+  - Inworld TTS uses `INWORLD_API_KEY` or `ESL_TTS_PROVIDER_INWORLD_API_KEY`, plus optional `ESL_TTS_PROVIDER_INWORLD_*` model/voice/runtime overrides.
 - Remote config:
   - `ESL_PIPELINE_CONFIG_*`
 - Optional logging/debug:

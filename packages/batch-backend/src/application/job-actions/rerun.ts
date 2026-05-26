@@ -3,19 +3,18 @@ import path from 'node:path';
 import { z } from 'zod';
 
 import { type AssignmentManifest, manifestPathFor } from '@esl-pipeline/orchestrator';
+import { isTtsModelForProvider } from '@esl-pipeline/tts-core';
 
 import type { JobActionResult, RerunAction } from '../../domain/job-actions.js';
 import { JobActionType } from '../../domain/job-actions.js';
 import { publishJobEvent } from '../../domain/job-events.js';
+import type { TtsModelId, TtsProviderId } from '../../domain/job-model.js';
 import { getJobById, insertJob } from '../../domain/job-repository.js';
 import { createJobQueue } from '../../infrastructure/queue-bullmq.js';
-
-const elevenLabsModelSchema = z.enum([
-  'eleven_v3',
-  'eleven_multilingual_v2',
-  'eleven_flash_v2_5',
-  'eleven_flash_v2',
-]);
+import {
+  collectPublishStudyTextOverrideIssues,
+  publishTtsModelSchema,
+} from '../publish-study-text-overrides.js';
 
 type PronunciationManifestArtifacts = NonNullable<
   NonNullable<AssignmentManifest['audioArtifacts']>['pronunciation']
@@ -27,27 +26,22 @@ const rerunSchema = z
     regenerateStudyTextAudio: z.boolean().optional(),
     regeneratePronunciationMainAudio: z.boolean().optional(),
     regeneratePronunciationChunkAudio: z.boolean().optional(),
-    studyTextTtsProvider: z.enum(['elevenlabs', 'google']).optional(),
-    studyTextElevenlabsModel: elevenLabsModelSchema.optional(),
-    studyTextGoogleTtsModel: z.enum(['chirp3_hd', 'studio', 'neural2', 'wavenet']).optional(),
+    studyTextTtsProvider: z.enum(['elevenlabs', 'google', 'inworld']).optional(),
+    studyTextTtsModel: publishTtsModelSchema.optional(),
     studyTextVoiceId: z.string().min(1).optional(),
     studyTextVoiceAccent: z.string().min(1).optional(),
     studyTextTtsStrategy: z.enum(['auto', 'dialogue', 'tts']).optional(),
     studyTextDialogueLanguage: z.string().min(1).optional(),
     studyTextDialogueStability: z.number().min(0).max(1).optional(),
     studyTextDialogueSeed: z.number().int().optional(),
-    pronunciationMainTtsProvider: z.enum(['elevenlabs', 'google']).optional(),
-    pronunciationMainElevenlabsModel: elevenLabsModelSchema.optional(),
-    pronunciationMainGoogleTtsModel: z
-      .enum(['chirp3_hd', 'studio', 'neural2', 'wavenet'])
-      .optional(),
+    pronunciationMainTtsProvider: z.enum(['elevenlabs', 'google', 'inworld']).optional(),
+    pronunciationMainTtsModel: publishTtsModelSchema.optional(),
     pronunciationMainVoiceId: z.string().min(1).optional(),
     pronunciationMainVoiceAccent: z.string().min(1).optional(),
-    pronunciationChunkTtsProvider: z.enum(['edge-tts', 'elevenlabs', 'google']).optional(),
-    pronunciationChunkElevenlabsModel: elevenLabsModelSchema.optional(),
-    pronunciationChunkGoogleTtsModel: z
-      .enum(['chirp3_hd', 'studio', 'neural2', 'wavenet'])
+    pronunciationChunkTtsProvider: z
+      .enum(['edge-tts', 'elevenlabs', 'google', 'inworld'])
       .optional(),
+    pronunciationChunkTtsModel: publishTtsModelSchema.optional(),
     pronunciationChunkVoiceId: z.string().min(1).optional(),
     pronunciationChunkVoiceAccent: z.string().min(1).optional(),
     pronunciationChunkEdgeVoice: z.string().min(1).optional(),
@@ -75,57 +69,62 @@ const rerunSchema = z
       });
     }
 
-    if (
-      payload.studyTextTtsProvider === 'elevenlabs' &&
-      payload.studyTextTtsStrategy === 'auto' &&
-      payload.studyTextElevenlabsModel !== undefined
-    ) {
+    for (const issue of collectPublishStudyTextOverrideIssues({
+      ttsProvider: payload.studyTextTtsProvider,
+      ttsStrategy: payload.studyTextTtsStrategy,
+      ttsModel: payload.studyTextTtsModel,
+    })) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ['studyTextElevenlabsModel'],
-        message:
-          'Automatic ElevenLabs study-text reruns must use strategy-default model selection.',
+        path: issue.path,
+        message: issue.message.replace('publish jobs', 'study-text reruns'),
       });
     }
 
-    if (
-      payload.studyTextTtsProvider === 'elevenlabs' &&
-      payload.studyTextElevenlabsModel === 'eleven_v3' &&
-      payload.studyTextTtsStrategy !== 'dialogue'
-    ) {
+    if (payload.pronunciationMainTtsModel === 'eleven_v3') {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ['studyTextElevenlabsModel'],
-        message: 'eleven_v3 is only valid for ElevenLabs dialogue study-text reruns.',
-      });
-    }
-
-    if (
-      payload.studyTextTtsProvider === 'elevenlabs' &&
-      payload.studyTextTtsStrategy === 'dialogue' &&
-      payload.studyTextElevenlabsModel !== undefined &&
-      payload.studyTextElevenlabsModel !== 'eleven_v3'
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['studyTextElevenlabsModel'],
-        message: 'Dialogue study-text reruns only support eleven_v3.',
-      });
-    }
-
-    if (payload.pronunciationMainElevenlabsModel === 'eleven_v3') {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['pronunciationMainElevenlabsModel'],
+        path: ['pronunciationMainTtsModel'],
         message: 'eleven_v3 cannot be used for pronunciation main synthesis.',
       });
     }
 
-    if (payload.pronunciationChunkElevenlabsModel === 'eleven_v3') {
+    if (payload.pronunciationChunkTtsModel === 'eleven_v3') {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ['pronunciationChunkElevenlabsModel'],
+        path: ['pronunciationChunkTtsModel'],
         message: 'eleven_v3 cannot be used for pronunciation chunk synthesis.',
+      });
+    }
+
+    if (
+      payload.pronunciationMainTtsProvider &&
+      payload.pronunciationMainTtsModel &&
+      !isTtsModelForProvider(
+        payload.pronunciationMainTtsProvider,
+        payload.pronunciationMainTtsModel,
+      )
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['pronunciationMainTtsModel'],
+        message: `TTS model ${payload.pronunciationMainTtsModel} is not supported by pronunciationMainTtsProvider=${payload.pronunciationMainTtsProvider}.`,
+      });
+    }
+
+    if (
+      payload.pronunciationChunkTtsProvider &&
+      payload.pronunciationChunkTtsProvider !== 'edge-tts' &&
+      payload.pronunciationChunkTtsModel &&
+      !isTtsModelForProvider(
+        payload.pronunciationChunkTtsProvider,
+        payload.pronunciationChunkTtsModel,
+      )
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['pronunciationChunkTtsModel'],
+        message: `TTS model ${payload.pronunciationChunkTtsModel} is not supported by pronunciationChunkTtsProvider=${payload.pronunciationChunkTtsProvider}.`,
       });
     }
   });
@@ -147,50 +146,54 @@ function collectEffectiveValidationErrors(
   job: Awaited<ReturnType<typeof getJobById>>,
 ): { path: (string | number)[]; message: string }[] {
   const issues: { path: (string | number)[]; message: string }[] = [];
+  if (payload.regenerateStudyTextAudio !== true) {
+    return issues;
+  }
+
   const effectiveStudyTextProvider = payload.studyTextTtsProvider ?? job?.ttsProvider ?? undefined;
   const effectiveStudyTextStrategy = payload.studyTextTtsStrategy ?? job?.ttsStrategy ?? undefined;
-  const explicitStudyTextModel = payload.studyTextElevenlabsModel;
+  const effectiveStudyTextModel =
+    payload.studyTextTtsModel ??
+    (effectiveStudyTextStrategy === 'auto'
+      ? undefined
+      : resolveInheritedTtsModelForProviderChange({
+          explicitProvider: effectiveStudyTextProvider,
+          persistedProvider: job?.ttsProvider,
+          persistedModel: job?.ttsModel,
+        }));
 
-  if (
-    effectiveStudyTextProvider === 'elevenlabs' &&
-    effectiveStudyTextStrategy === 'auto' &&
-    explicitStudyTextModel !== undefined
-  ) {
-    issues.push({
-      path: ['studyTextElevenlabsModel'],
-      message: 'Automatic ElevenLabs study-text reruns must use strategy-default model selection.',
-    });
-  }
-
-  if (
-    effectiveStudyTextProvider === 'elevenlabs' &&
-    explicitStudyTextModel === 'eleven_v3' &&
-    effectiveStudyTextStrategy !== 'dialogue'
-  ) {
-    issues.push({
-      path: ['studyTextElevenlabsModel'],
-      message: 'eleven_v3 is only valid for ElevenLabs dialogue study-text reruns.',
-    });
-  }
-
-  if (
-    effectiveStudyTextProvider === 'elevenlabs' &&
-    effectiveStudyTextStrategy === 'dialogue' &&
-    explicitStudyTextModel !== undefined &&
-    explicitStudyTextModel !== 'eleven_v3'
-  ) {
-    issues.push({
-      path: ['studyTextElevenlabsModel'],
-      message: 'Dialogue study-text reruns only support eleven_v3.',
-    });
-  }
+  issues.push(
+    ...collectPublishStudyTextOverrideIssues({
+      ttsProvider: effectiveStudyTextProvider,
+      ttsStrategy: effectiveStudyTextStrategy,
+      ttsModel: effectiveStudyTextModel,
+    }),
+  );
 
   return issues;
 }
 
+function resolveInheritedTtsModelForProviderChange(args: {
+  explicitModel?: TtsModelId;
+  explicitProvider?: TtsProviderId;
+  persistedProvider?: TtsProviderId | null;
+  persistedModel?: TtsModelId | null;
+}): TtsModelId | undefined {
+  if (args.explicitModel !== undefined) {
+    return args.explicitModel;
+  }
+
+  const provider = args.explicitProvider ?? args.persistedProvider ?? undefined;
+  if (!provider || !args.persistedModel) {
+    return undefined;
+  }
+
+  return isTtsModelForProvider(provider, args.persistedModel) ? args.persistedModel : undefined;
+}
+
 function resolveInheritedVoiceIdForProviderChange(args: {
   explicitVoiceId?: string;
-  explicitProvider?: 'elevenlabs' | 'google';
+  explicitProvider?: 'elevenlabs' | 'google' | 'inworld';
   persistedProvider?: string | null;
   persistedVoiceId?: string | null;
 }): string | undefined {
@@ -393,18 +396,14 @@ export async function rerun(jobId: string, action: RerunAction): Promise<JobActi
   const persistedTtsProvider = persistStudyTextSettings
     ? (payload.studyTextTtsProvider ?? job.ttsProvider ?? undefined)
     : (job.ttsProvider ?? undefined);
-  const persistedStudyTextElevenlabsModel =
-    persistStudyTextSettings && persistedTtsProvider === 'elevenlabs'
-      ? (payload.studyTextElevenlabsModel ?? job.studyTextElevenlabsModel ?? undefined)
-      : persistStudyTextSettings && persistedTtsProvider === 'google'
-        ? undefined
-        : (job.studyTextElevenlabsModel ?? undefined);
-  const persistedGoogleTtsModel =
-    persistStudyTextSettings && persistedTtsProvider === 'google'
-      ? (payload.studyTextGoogleTtsModel ?? job.googleTtsModel ?? undefined)
-      : persistStudyTextSettings && persistedTtsProvider === 'elevenlabs'
-        ? undefined
-        : (job.googleTtsModel ?? undefined);
+  const persistedTtsModel = persistStudyTextSettings
+    ? resolveInheritedTtsModelForProviderChange({
+        explicitModel: payload.studyTextTtsModel,
+        explicitProvider: persistedTtsProvider,
+        persistedProvider: job.ttsProvider,
+        persistedModel: job.ttsModel,
+      })
+    : (job.ttsModel ?? undefined);
 
   const rerunJob = await insertJob({
     md: job.md,
@@ -419,8 +418,7 @@ export async function rerun(jobId: string, action: RerunAction): Promise<JobActi
     publishTarget: job.publishTarget ?? undefined,
     ttsStrategy: persistedTtsStrategy,
     ttsProvider: persistedTtsProvider,
-    studyTextElevenlabsModel: persistedStudyTextElevenlabsModel,
-    googleTtsModel: persistedGoogleTtsModel,
+    ttsModel: persistedTtsModel,
     userId: job.userId ?? undefined,
     autoPublish: job.autoPublish ?? undefined,
     sourceJobId: jobId,
@@ -442,9 +440,12 @@ export async function rerun(jobId: string, action: RerunAction): Promise<JobActi
       studyTextVoiceAccent: payload.studyTextVoiceAccent ?? job.voiceAccent ?? undefined,
       studyTextVoiceId,
       studyTextTtsProvider: payload.studyTextTtsProvider ?? job.ttsProvider ?? undefined,
-      studyTextElevenlabsModel:
-        payload.studyTextElevenlabsModel ?? job.studyTextElevenlabsModel ?? undefined,
-      studyTextGoogleTtsModel: payload.studyTextGoogleTtsModel ?? job.googleTtsModel ?? undefined,
+      studyTextTtsModel: resolveInheritedTtsModelForProviderChange({
+        explicitModel: payload.studyTextTtsModel,
+        explicitProvider: payload.studyTextTtsProvider ?? job.ttsProvider ?? undefined,
+        persistedProvider: job.ttsProvider,
+        persistedModel: job.ttsModel,
+      }),
       studyTextTtsStrategy: payload.studyTextTtsStrategy ?? job.ttsStrategy ?? undefined,
       studyTextDialogueLanguage: payload.studyTextDialogueLanguage,
       studyTextDialogueStability: payload.studyTextDialogueStability,
@@ -452,13 +453,11 @@ export async function rerun(jobId: string, action: RerunAction): Promise<JobActi
       pronunciationMainVoiceAccent: payload.pronunciationMainVoiceAccent ?? undefined,
       pronunciationMainVoiceId: payload.pronunciationMainVoiceId ?? undefined,
       pronunciationMainTtsProvider: payload.pronunciationMainTtsProvider ?? undefined,
-      pronunciationMainElevenlabsModel: payload.pronunciationMainElevenlabsModel,
-      pronunciationMainGoogleTtsModel: payload.pronunciationMainGoogleTtsModel,
+      pronunciationMainTtsModel: payload.pronunciationMainTtsModel,
       pronunciationChunkVoiceAccent: payload.pronunciationChunkVoiceAccent ?? undefined,
       pronunciationChunkVoiceId: payload.pronunciationChunkVoiceId ?? undefined,
       pronunciationChunkTtsProvider: payload.pronunciationChunkTtsProvider ?? undefined,
-      pronunciationChunkElevenlabsModel: payload.pronunciationChunkElevenlabsModel,
-      pronunciationChunkGoogleTtsModel: payload.pronunciationChunkGoogleTtsModel,
+      pronunciationChunkTtsModel: payload.pronunciationChunkTtsModel,
       pronunciationChunkEdgeVoice: payload.pronunciationChunkEdgeVoice,
     },
   });
