@@ -50,7 +50,7 @@ function buildApprovalJob(withTts: boolean): JobRecord {
     voiceAccent: 'british',
     forceTts: null,
     ttsStrategy: 'dialogue',
-    studyTextElevenlabsModel: null,
+    ttsModel: null,
     publishTarget: 'html',
     htmlUrl: null,
     createdAt: new Date('2024-01-01T00:00:00Z'),
@@ -126,8 +126,7 @@ describe('application/create-approval-job', () => {
       publishTarget: 'html',
       ttsStrategy: 'dialogue',
       ttsProvider: undefined,
-      studyTextElevenlabsModel: undefined,
-      googleTtsModel: undefined,
+      ttsModel: undefined,
       voiceAccent: 'british',
       voiceId: undefined,
       forceTts: undefined,
@@ -150,7 +149,7 @@ describe('application/create-approval-job', () => {
         promptPackage,
         jobOverrides: {
           ttsProvider: 'google',
-          googleTtsModel: 'chirp3_hd',
+          ttsModel: 'chirp3_hd',
         },
       },
       {
@@ -177,8 +176,7 @@ describe('application/create-approval-job', () => {
       expect.objectContaining({
         withTts: true,
         ttsProvider: 'google',
-        studyTextElevenlabsModel: undefined,
-        googleTtsModel: 'chirp3_hd',
+        ttsModel: 'chirp3_hd',
       }),
     );
   });
@@ -198,7 +196,7 @@ describe('application/create-approval-job', () => {
         jobOverrides: {
           withTts: false,
           ttsProvider: 'google',
-          googleTtsModel: 'studio',
+          ttsModel: 'studio',
         },
       },
       {
@@ -225,8 +223,7 @@ describe('application/create-approval-job', () => {
       expect.objectContaining({
         withTts: false,
         ttsProvider: 'google',
-        studyTextElevenlabsModel: undefined,
-        googleTtsModel: 'studio',
+        ttsModel: 'studio',
       }),
     );
   });
@@ -246,7 +243,7 @@ describe('application/create-approval-job', () => {
         jobOverrides: {
           ttsProvider: 'elevenlabs',
           ttsStrategy: 'dialogue',
-          studyTextElevenlabsModel: 'eleven_v3',
+          ttsModel: 'eleven_v3',
         },
       },
       {
@@ -264,7 +261,7 @@ describe('application/create-approval-job', () => {
       expect.objectContaining({
         ttsProvider: 'elevenlabs',
         ttsStrategy: 'dialogue',
-        studyTextElevenlabsModel: 'eleven_v3',
+        ttsModel: 'eleven_v3',
       }),
     );
   });

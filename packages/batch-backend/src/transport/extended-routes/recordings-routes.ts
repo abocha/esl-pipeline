@@ -18,8 +18,7 @@ import { ProfilePathError } from '../../application/profile-path.js';
 import { PromptOptionError } from '../../application/prompt-options.js';
 import {
   collectPublishStudyTextOverrideIssues,
-  publishElevenLabsModelSchema,
-  publishGoogleTtsModelSchema,
+  publishTtsModelSchema,
   publishTtsProviderSchema,
   publishTtsStrategySchema,
 } from '../../application/publish-study-text-overrides.js';
@@ -965,8 +964,7 @@ export function registerRecordingRoutes(
           forceTts: z.boolean().optional(),
           ttsStrategy: publishTtsStrategySchema.optional(),
           ttsProvider: publishTtsProviderSchema.optional(),
-          studyTextElevenlabsModel: publishElevenLabsModelSchema.optional(),
-          googleTtsModel: publishGoogleTtsModelSchema.optional(),
+          ttsModel: publishTtsModelSchema.optional(),
           upload: z.enum(['auto', 's3', 'none']).optional(),
           voiceId: z.string().min(1).optional(),
           voiceAccent: z.string().min(1).optional(),
@@ -976,8 +974,7 @@ export function registerRecordingRoutes(
           const issues = collectPublishStudyTextOverrideIssues({
             ttsStrategy: value.ttsStrategy,
             ttsProvider: value.ttsProvider,
-            studyTextElevenlabsModel: value.studyTextElevenlabsModel,
-            googleTtsModel: value.googleTtsModel,
+            ttsModel: value.ttsModel,
           });
           for (const issue of issues) {
             ctx.addIssue({

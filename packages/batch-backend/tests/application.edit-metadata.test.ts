@@ -124,7 +124,7 @@ describe('application/job-actions/edit-metadata', () => {
     const result = await editMetadata('job-1', {
       type: JobActionType.EDIT_METADATA,
       requestedAt: new Date(),
-      payload: { studyTextElevenlabsModel: 'eleven_v3' },
+      payload: { ttsModel: 'eleven_v3' },
     });
 
     expect(result.success).toBe(false);
@@ -137,14 +137,14 @@ describe('application/job-actions/edit-metadata', () => {
       ...baseJob,
       ttsProvider: 'elevenlabs',
       ttsStrategy: 'dialogue',
-      studyTextElevenlabsModel: 'eleven_v3',
+      ttsModel: 'eleven_v3',
     });
     vi.spyOn(jobEvents, 'publishJobEvent').mockImplementation(() => {});
     vi.spyOn(jobRepository, 'updateJobMetadata').mockResolvedValue({
       ...baseJob,
       ttsProvider: 'google',
       ttsStrategy: 'dialogue',
-      studyTextElevenlabsModel: null,
+      ttsModel: null,
     });
 
     const result = await editMetadata('job-1', {
@@ -158,7 +158,7 @@ describe('application/job-actions/edit-metadata', () => {
       expect.objectContaining({
         id: 'job-1',
         ttsProvider: 'google',
-        studyTextElevenlabsModel: null,
+        ttsModel: null,
       }),
     );
   });
@@ -168,27 +168,27 @@ describe('application/job-actions/edit-metadata', () => {
       ...baseJob,
       ttsProvider: 'elevenlabs',
       ttsStrategy: 'dialogue',
-      studyTextElevenlabsModel: 'eleven_v3',
+      ttsModel: 'eleven_v3',
     });
     vi.spyOn(jobEvents, 'publishJobEvent').mockImplementation(() => {});
     vi.spyOn(jobRepository, 'updateJobMetadata').mockResolvedValue({
       ...baseJob,
       ttsProvider: 'elevenlabs',
       ttsStrategy: 'dialogue',
-      studyTextElevenlabsModel: null,
+      ttsModel: null,
     });
 
     const result = await editMetadata('job-1', {
       type: JobActionType.EDIT_METADATA,
       requestedAt: new Date(),
-      payload: { studyTextElevenlabsModel: null },
+      payload: { ttsModel: null },
     });
 
     expect(result.success).toBe(true);
     expect(jobRepository.updateJobMetadata).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'job-1',
-        studyTextElevenlabsModel: null,
+        ttsModel: null,
       }),
     );
   });

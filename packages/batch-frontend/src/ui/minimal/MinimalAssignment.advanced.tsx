@@ -18,15 +18,13 @@ type UiTtsProvider = CustomRerunInput['rerunStudyTextProvider'];
 type UiPronunciationChunkTtsProvider = CustomRerunInput['rerunPronunciationChunkProvider'];
 type UiStudyTextStrategy = CustomRerunInput['rerunStudyTextStrategy'];
 type ActionBusyState = 'rerun' | 'cancel' | null;
+type TtsModelOptionsByProvider = Partial<Record<UiTtsProvider, readonly string[]>>;
 
 function createDefaultCustomRerunInput(
   selectedTtsProvider: UiTtsProvider,
   jobStatus: JobStatus | null,
 ): CustomRerunInput {
-  const persistedStudyTextModel =
-    selectedTtsProvider === 'google'
-      ? (jobStatus?.googleTtsModel ?? '')
-      : (jobStatus?.studyTextElevenlabsModel ?? '');
+  const persistedStudyTextModel = jobStatus?.ttsModel ?? '';
 
   return {
     rerunStudyTextAudio: false,
@@ -41,7 +39,10 @@ function createDefaultCustomRerunInput(
     rerunStudyTextDialogueStability: '',
     rerunStudyTextDialogueSeed: '',
     rerunPronunciationMainProvider: selectedTtsProvider,
-    rerunPronunciationMainModel: selectedTtsProvider === 'google' ? persistedStudyTextModel : '',
+    rerunPronunciationMainModel:
+      selectedTtsProvider === 'google' || selectedTtsProvider === 'inworld'
+        ? persistedStudyTextModel
+        : '',
     rerunPronunciationMainVoiceId: '',
     rerunPronunciationMainVoiceAccent: '',
     rerunPronunciationChunkProvider: 'google',
@@ -90,7 +91,7 @@ interface UseAdvancedActionsControllerParams {
   jobOptions: Pick<JobOptionsResponse, 'supportedActions' | 'ttsStrategies'> | null;
   selectedTtsProvider: UiTtsProvider;
   ttsProviders: readonly UiTtsProvider[];
-  googleTtsModelOptions: readonly string[];
+  ttsModelOptionsByProvider: TtsModelOptionsByProvider;
   elevenlabsStandardModelOptions: readonly string[];
   defaultPronunciationChunkProvider: UiPronunciationChunkTtsProvider;
   applyJobStatusTransition: (job: JobStatus) => void;
@@ -102,7 +103,7 @@ export function useAdvancedActionsController({
   jobOptions,
   selectedTtsProvider,
   ttsProviders,
-  googleTtsModelOptions,
+  ttsModelOptionsByProvider,
   elevenlabsStandardModelOptions,
   defaultPronunciationChunkProvider,
   applyJobStatusTransition,
@@ -139,6 +140,11 @@ export function useAdvancedActionsController({
       rerunPronunciationChunkProvider: provider,
     }));
   }, []);
+
+  const getTtsModelOptions = useCallback(
+    (provider: UiTtsProvider): readonly string[] => ttsModelOptionsByProvider[provider] ?? [],
+    [ttsModelOptionsByProvider],
+  );
 
   const loadJobProvenance = useCallback(async (jobId: string) => {
     setJobProvenanceLoading(true);
@@ -237,7 +243,8 @@ export function useAdvancedActionsController({
     if (
       form.rerunPronunciationChunkProvider !== 'edge-tts' &&
       form.rerunPronunciationChunkProvider !== 'elevenlabs' &&
-      form.rerunPronunciationChunkProvider !== 'google'
+      form.rerunPronunciationChunkProvider !== 'google' &&
+      form.rerunPronunciationChunkProvider !== 'inworld'
     ) {
       setForm((current) => ({
         ...current,
@@ -256,11 +263,12 @@ export function useAdvancedActionsController({
   }, [defaultPronunciationChunkProvider, rerunPronunciationChunkProviderDirty, jobStatus?.jobId]);
 
   useEffect(() => {
-    if (form.rerunStudyTextProvider === 'google') {
-      if (!form.rerunStudyTextModel || !googleTtsModelOptions.includes(form.rerunStudyTextModel)) {
+    if (form.rerunStudyTextProvider !== 'elevenlabs') {
+      const providerModelOptions = getTtsModelOptions(form.rerunStudyTextProvider);
+      if (!form.rerunStudyTextModel || !providerModelOptions.includes(form.rerunStudyTextModel)) {
         setForm((current) => ({
           ...current,
-          rerunStudyTextModel: googleTtsModelOptions[0] ?? '',
+          rerunStudyTextModel: providerModelOptions[0] ?? '',
         }));
       }
       return;
@@ -288,18 +296,19 @@ export function useAdvancedActionsController({
     form.rerunStudyTextModel,
     form.rerunStudyTextProvider,
     form.rerunStudyTextStrategy,
-    googleTtsModelOptions,
+    getTtsModelOptions,
   ]);
 
   useEffect(() => {
-    if (form.rerunPronunciationMainProvider === 'google') {
+    if (form.rerunPronunciationMainProvider !== 'elevenlabs') {
+      const providerModelOptions = getTtsModelOptions(form.rerunPronunciationMainProvider);
       if (
         !form.rerunPronunciationMainModel ||
-        !googleTtsModelOptions.includes(form.rerunPronunciationMainModel)
+        !providerModelOptions.includes(form.rerunPronunciationMainModel)
       ) {
         setForm((current) => ({
           ...current,
-          rerunPronunciationMainModel: googleTtsModelOptions[0] ?? '',
+          rerunPronunciationMainModel: providerModelOptions[0] ?? '',
         }));
       }
       return;
@@ -320,18 +329,22 @@ export function useAdvancedActionsController({
     elevenlabsStandardModelOptions,
     form.rerunPronunciationMainModel,
     form.rerunPronunciationMainProvider,
-    googleTtsModelOptions,
+    getTtsModelOptions,
   ]);
 
   useEffect(() => {
-    if (form.rerunPronunciationChunkProvider === 'google') {
+    if (
+      form.rerunPronunciationChunkProvider !== 'edge-tts' &&
+      form.rerunPronunciationChunkProvider !== 'elevenlabs'
+    ) {
+      const providerModelOptions = getTtsModelOptions(form.rerunPronunciationChunkProvider);
       if (
         !form.rerunPronunciationChunkModel ||
-        !googleTtsModelOptions.includes(form.rerunPronunciationChunkModel)
+        !providerModelOptions.includes(form.rerunPronunciationChunkModel)
       ) {
         setForm((current) => ({
           ...current,
-          rerunPronunciationChunkModel: googleTtsModelOptions[0] ?? '',
+          rerunPronunciationChunkModel: providerModelOptions[0] ?? '',
         }));
       }
       return;
@@ -361,7 +374,7 @@ export function useAdvancedActionsController({
     elevenlabsStandardModelOptions,
     form.rerunPronunciationChunkModel,
     form.rerunPronunciationChunkProvider,
-    googleTtsModelOptions,
+    getTtsModelOptions,
   ]);
 
   useEffect(() => {
@@ -517,7 +530,7 @@ interface AdvancedActionsStageProps {
   onRefreshActions: () => void;
   jobOptionsError: string | null;
   ttsProviders: readonly UiTtsProvider[];
-  googleTtsModelOptions: readonly string[];
+  ttsModelOptionsByProvider: TtsModelOptionsByProvider;
   elevenlabsStandardModelOptions: readonly string[];
   pronunciationChunkProviders: readonly UiPronunciationChunkTtsProvider[];
   studyTextStrategies: readonly UiStudyTextStrategy[];
@@ -533,12 +546,14 @@ export function AdvancedActionsStage({
   onRefreshActions,
   jobOptionsError,
   ttsProviders,
-  googleTtsModelOptions,
+  ttsModelOptionsByProvider,
   elevenlabsStandardModelOptions,
   pronunciationChunkProviders,
   studyTextStrategies,
 }: AdvancedActionsStageProps) {
   const presetRerunActions = getPresetRerunActions();
+  const modelOptionsForProvider = (provider: UiTtsProvider): readonly string[] =>
+    ttsModelOptionsByProvider[provider] ?? [];
 
   return (
     <StageSection
@@ -710,12 +725,14 @@ export function AdvancedActionsStage({
                             controller.setFormField('rerunStudyTextModel', event.target.value)
                           }
                         >
-                          {controller.form.rerunStudyTextProvider === 'google' ? (
-                            googleTtsModelOptions.map((model) => (
-                              <option key={model} value={model}>
-                                {model}
-                              </option>
-                            ))
+                          {controller.form.rerunStudyTextProvider !== 'elevenlabs' ? (
+                            modelOptionsForProvider(controller.form.rerunStudyTextProvider).map(
+                              (model) => (
+                                <option key={model} value={model}>
+                                  {model}
+                                </option>
+                              ),
+                            )
                           ) : controller.form.rerunStudyTextStrategy === 'auto' ? (
                             <option value="">
                               Strategy default (`dialogue` {`->`} `eleven_v3`, `tts` {`->`}{' '}
@@ -855,8 +872,14 @@ export function AdvancedActionsStage({
                           }
                         >
                           {(controller.form.rerunPronunciationMainProvider === 'google'
-                            ? googleTtsModelOptions
-                            : elevenlabsStandardModelOptions
+                            ? modelOptionsForProvider(
+                                controller.form.rerunPronunciationMainProvider,
+                              )
+                            : controller.form.rerunPronunciationMainProvider === 'inworld'
+                              ? modelOptionsForProvider(
+                                  controller.form.rerunPronunciationMainProvider,
+                                )
+                              : elevenlabsStandardModelOptions
                           ).map((model) => (
                             <option key={model} value={model}>
                               {model}
@@ -945,8 +968,14 @@ export function AdvancedActionsStage({
                               }
                             >
                               {(controller.form.rerunPronunciationChunkProvider === 'google'
-                                ? googleTtsModelOptions
-                                : elevenlabsStandardModelOptions
+                                ? modelOptionsForProvider(
+                                    controller.form.rerunPronunciationChunkProvider,
+                                  )
+                                : controller.form.rerunPronunciationChunkProvider === 'inworld'
+                                  ? modelOptionsForProvider(
+                                      controller.form.rerunPronunciationChunkProvider,
+                                    )
+                                  : elevenlabsStandardModelOptions
                               ).map((model) => (
                                 <option key={model} value={model}>
                                   {model}

@@ -31,7 +31,7 @@ import {
 } from './MinimalAssignment.logic';
 import { getGenerationQuotaWindowDecision } from './MinimalAssignment.quota-window';
 
-type UiTtsProvider = 'elevenlabs' | 'google';
+type UiTtsProvider = 'elevenlabs' | 'google' | 'inworld';
 type UiPublishTtsStrategy = 'auto' | 'dialogue' | 'tts';
 type TranscriptUiStatus = 'idle' | 'loading' | 'processing' | 'ready' | 'failed';
 type PronunciationMode =
@@ -516,10 +516,13 @@ interface UseMinimalAssignmentAuthoringControllerParams {
   presetOptionIds: readonly string[];
   generationOptions: GenerationOptions | null;
   ttsProviders: readonly UiTtsProvider[];
-  ttsModelOptionsByProvider: { elevenlabs: readonly string[]; google: readonly string[] };
+  ttsModelOptionsByProvider: {
+    elevenlabs: readonly string[];
+    google: readonly string[];
+    inworld: readonly string[];
+  };
   elevenlabsModelOptions: readonly string[];
   elevenlabsStandardModelOptions: readonly string[];
-  googleTtsModelOptions: readonly string[];
   defaultTtsProvider: UiTtsProvider | null;
   defaultTtsModelByProvider: JobOptionsResponse['defaultTtsModelByProvider'] | null | undefined;
   configuredTtsStrategies: readonly UiPublishTtsStrategy[];
@@ -589,7 +592,6 @@ export function useMinimalAssignmentAuthoringController({
   ttsModelOptionsByProvider,
   elevenlabsModelOptions,
   elevenlabsStandardModelOptions,
-  googleTtsModelOptions,
   defaultTtsProvider,
   defaultTtsModelByProvider,
   configuredTtsStrategies,
@@ -648,10 +650,10 @@ export function useMinimalAssignmentAuthoringController({
   }, [elevenlabsModelOptions, elevenlabsStandardModelOptions, state.selectedTtsStrategy]);
   const selectedTtsModelOptions = useMemo(
     () =>
-      state.selectedTtsProvider === 'google'
-        ? googleTtsModelOptions
-        : [...publishElevenlabsModelOptions].filter(Boolean),
-    [googleTtsModelOptions, publishElevenlabsModelOptions, state.selectedTtsProvider],
+      state.selectedTtsProvider === 'elevenlabs'
+        ? [...publishElevenlabsModelOptions].filter(Boolean)
+        : (ttsModelOptionsByProvider[state.selectedTtsProvider] ?? []),
+    [publishElevenlabsModelOptions, state.selectedTtsProvider, ttsModelOptionsByProvider],
   );
   const publishModelSelectionDisabled =
     state.selectedTtsProvider === 'elevenlabs' && state.selectedTtsStrategy === 'auto';
@@ -1301,6 +1303,28 @@ export function useMinimalAssignmentAuthoringController({
 
   useEffect(() => {
     const modelOptions = ttsModelOptionsByProvider[state.selectedTtsProvider] ?? [];
+    if (state.selectedTtsProvider === 'inworld') {
+      if (modelOptions.length === 0) {
+        if (state.selectedTtsModel) {
+          dispatch({ type: 'publish_config_updated', payload: { selectedTtsModel: '' } });
+        }
+        return;
+      }
+      const configuredDefault = defaultTtsModelByProvider?.inworld;
+      const preferredModel =
+        configuredDefault && modelOptions.includes(configuredDefault)
+          ? configuredDefault
+          : modelOptions[0];
+      if (!preferredModel) return;
+      if (!state.selectedTtsModel || !modelOptions.includes(state.selectedTtsModel)) {
+        dispatch({
+          type: 'publish_config_updated',
+          payload: { selectedTtsModel: preferredModel },
+        });
+      }
+      return;
+    }
+
     if (state.selectedTtsProvider === 'google') {
       if (modelOptions.length === 0) {
         if (state.selectedTtsModel) {

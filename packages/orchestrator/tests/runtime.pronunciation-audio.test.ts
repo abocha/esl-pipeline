@@ -7,6 +7,20 @@ vi.mock('@esl-pipeline/pmd', () => ({
 vi.mock('@esl-pipeline/tts-core', () => ({
   buildPronunciationShadowSentenceMp3: vi.fn(),
   buildPronunciationTextMp3: vi.fn(),
+  isTtsModelForProvider: (provider: string, model: string) =>
+    provider === 'google'
+      ? ['chirp3_hd', 'studio', 'neural2', 'wavenet'].includes(model)
+      : provider === 'elevenlabs'
+        ? ['eleven_v3', 'eleven_multilingual_v2', 'eleven_flash_v2_5', 'eleven_flash_v2'].includes(
+            model,
+          )
+        : ['inworld-tts-2', 'inworld-tts-1.5-max', 'inworld-tts-1.5-mini'].includes(model),
+  resolveDefaultTtsModel: (provider: string) =>
+    provider === 'google'
+      ? 'chirp3_hd'
+      : provider === 'inworld'
+        ? 'inworld-tts-2'
+        : 'eleven_multilingual_v2',
 }));
 
 vi.mock('../src/runtime/edge-tts.js', () => ({
@@ -216,7 +230,7 @@ describe('runtime/pronunciation-audio', () => {
         hash: `hash-${String(text).replaceAll(/\s+/g, '-')}`,
         voiceId,
         provider: 'google',
-        modelId: providerConfig.googleTtsModel,
+        modelId: providerConfig.ttsModel,
         generatedCharacters: String(text).length,
         cachedCharacters: 0,
       }),
@@ -228,7 +242,7 @@ describe('runtime/pronunciation-audio', () => {
       outPath: '/tmp',
       title: 'Pronunciation',
       primaryTtsProvider: 'google',
-      primaryGoogleTtsModel: 'studio',
+      primaryTtsModel: 'studio',
       primaryVoiceId: 'voice-primary',
     });
 
@@ -246,7 +260,7 @@ describe('runtime/pronunciation-audio', () => {
       }),
       expect.objectContaining({
         ttsProvider: 'google',
-        googleTtsModel: 'chirp3_hd',
+        ttsModel: 'chirp3_hd',
       }),
     );
   });

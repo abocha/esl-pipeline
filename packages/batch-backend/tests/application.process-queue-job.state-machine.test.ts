@@ -81,7 +81,7 @@ describe('application/process-queue-job', () => {
       publishTarget: initial.publishTarget,
       ttsStrategy: initial.ttsStrategy,
       ttsProvider: initial.ttsProvider,
-      studyTextElevenlabsModel: undefined,
+      ttsModel: undefined,
     });
     expect(path.isAbsolute(payload.md)).toBe(true);
     if (initial.md == null) {
@@ -121,7 +121,7 @@ describe('application/process-queue-job', () => {
       state: 'queued',
       ttsProvider: 'elevenlabs',
       ttsStrategy: 'dialogue',
-      studyTextElevenlabsModel: 'eleven_v3',
+      ttsModel: 'eleven_v3',
     });
     getJobByIdSpy.mockResolvedValue(initial);
 
@@ -142,7 +142,7 @@ describe('application/process-queue-job', () => {
       expect.objectContaining({
         ttsProvider: 'elevenlabs',
         ttsStrategy: 'dialogue',
-        studyTextElevenlabsModel: 'eleven_v3',
+        ttsModel: 'eleven_v3',
       }),
       expect.any(String),
       expect.anything(),

@@ -45,6 +45,7 @@ import type {
   GenerateDraftResponse as ContractGenerateDraftResponse,
   GenerationProvider as ContractGenerationProvider,
   GoogleTtsModel as ContractGoogleTtsModel,
+  InworldTtsModel as ContractInworldTtsModel,
   JobConfigOverrides as ContractJobConfigOverrides,
   JobEventPayload as ContractJobEventPayload,
   JobEventType as ContractJobEventType,
@@ -59,6 +60,7 @@ import type {
   SttProviderId as ContractSttProviderId,
   StudentSummaryResponse as ContractStudentSummaryResponse,
   SubmitJobRequest as ContractSubmitJobRequest,
+  TtsModelId as ContractTtsModelId,
   TtsProviderId as ContractTtsProviderId,
   TtsStrategy as ContractTtsStrategy,
   UpdateAssignmentSessionRequest as ContractUpdateAssignmentSessionRequest,
@@ -107,7 +109,9 @@ export type AssignmentSessionListResponse = ContractAssignmentSessionListRespons
 export type CreateAssignmentSessionRequest = ContractCreateAssignmentSessionRequest;
 export type UpdateAssignmentSessionRequest = ContractUpdateAssignmentSessionRequest;
 export type TtsProviderId = ContractTtsProviderId;
+export type TtsModelId = ContractTtsModelId;
 export type GoogleTtsModel = ContractGoogleTtsModel;
+export type InworldTtsModel = ContractInworldTtsModel;
 export type ElevenLabsTtsModelId = ContractElevenLabsTtsModelId;
 export type PronunciationChunkTtsProviderId = ContractPronunciationChunkTtsProviderId;
 export type MarkdownValidationResponse = ContractMarkdownValidationResponse;

@@ -6,6 +6,8 @@
 import { randomUUID } from 'node:crypto';
 import type { Redis } from 'ioredis';
 
+import { parseTtsModelId } from '@esl-pipeline/tts-core';
+
 import {
   getJobSubscriptionSnapshot,
   type JobEvent,
@@ -38,8 +40,7 @@ interface SerializedJobRecord {
   publishTarget: string | null;
   ttsStrategy: string | null;
   ttsProvider: string | null;
-  studyTextElevenlabsModel: string | null;
-  googleTtsModel: string | null;
+  ttsModel: string | null;
   htmlUrl: string | null;
   autoPublish: boolean | null;
   createdAt: string;
@@ -299,8 +300,7 @@ function serializeJobRecord(job: JobRecord): SerializedJobRecord {
     publishTarget: job.publishTarget ?? null,
     ttsStrategy: job.ttsStrategy ?? null,
     ttsProvider: job.ttsProvider ?? null,
-    studyTextElevenlabsModel: job.studyTextElevenlabsModel ?? null,
-    googleTtsModel: job.googleTtsModel ?? null,
+    ttsModel: job.ttsModel ?? null,
     htmlUrl: job.htmlUrl ?? null,
     autoPublish: job.autoPublish ?? null,
     createdAt: job.createdAt.toISOString(),
@@ -329,8 +329,7 @@ function deserializeJobRecord(serialized: SerializedJobRecord): JobRecord {
     publishTarget: normalizePublishTarget(serialized.publishTarget),
     ttsStrategy: normalizeTtsStrategy(serialized.ttsStrategy),
     ttsProvider: normalizeTtsProvider(serialized.ttsProvider),
-    studyTextElevenlabsModel: normalizeElevenLabsTtsModel(serialized.studyTextElevenlabsModel),
-    googleTtsModel: normalizeGoogleTtsModel(serialized.googleTtsModel),
+    ttsModel: normalizeTtsModel(serialized.ttsModel),
     htmlUrl: serialized.htmlUrl ?? null,
     autoPublish: serialized.autoPublish ?? null,
     createdAt: new Date(serialized.createdAt),
@@ -354,27 +353,10 @@ function normalizeTtsStrategy(value: string | null | undefined): JobRecord['ttsS
 }
 
 function normalizeTtsProvider(value: string | null | undefined): JobRecord['ttsProvider'] {
-  if (value === 'elevenlabs' || value === 'google') return value;
+  if (value === 'elevenlabs' || value === 'google' || value === 'inworld') return value;
   return null;
 }
 
-function normalizeGoogleTtsModel(value: string | null | undefined): JobRecord['googleTtsModel'] {
-  if (value === 'chirp3_hd' || value === 'studio' || value === 'neural2' || value === 'wavenet') {
-    return value;
-  }
-  return null;
-}
-
-function normalizeElevenLabsTtsModel(
-  value: string | null | undefined,
-): JobRecord['studyTextElevenlabsModel'] {
-  if (
-    value === 'eleven_v3' ||
-    value === 'eleven_multilingual_v2' ||
-    value === 'eleven_flash_v2_5' ||
-    value === 'eleven_flash_v2'
-  ) {
-    return value;
-  }
-  return null;
+function normalizeTtsModel(value: string | null | undefined): JobRecord['ttsModel'] {
+  return parseTtsModelId(value) ?? null;
 }

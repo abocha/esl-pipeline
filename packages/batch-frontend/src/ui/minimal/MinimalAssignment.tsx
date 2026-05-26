@@ -62,9 +62,19 @@ import {
 import './MinimalAssignment.css';
 
 const AUDIO_EXTENSIONS = ['.wav', '.mp3', '.m4a', '.aac', '.ogg', '.opus'];
-const FALLBACK_TTS_PROVIDERS = ['elevenlabs', 'google'] as const;
-const FALLBACK_PRONUNCIATION_CHUNK_TTS_PROVIDERS = ['google', 'elevenlabs', 'edge-tts'] as const;
+const FALLBACK_TTS_PROVIDERS = ['elevenlabs', 'google', 'inworld'] as const;
+const FALLBACK_PRONUNCIATION_CHUNK_TTS_PROVIDERS = [
+  'google',
+  'elevenlabs',
+  'inworld',
+  'edge-tts',
+] as const;
 const FALLBACK_GOOGLE_TTS_MODELS = ['chirp3_hd', 'studio', 'neural2', 'wavenet'] as const;
+const FALLBACK_INWORLD_TTS_MODELS = [
+  'inworld-tts-2',
+  'inworld-tts-1.5-max',
+  'inworld-tts-1.5-mini',
+] as const;
 const FALLBACK_ELEVENLABS_MODEL = 'eleven_multilingual_v2';
 const FALLBACK_ELEVENLABS_MODELS = [
   'eleven_v3',
@@ -86,7 +96,7 @@ type PronunciationMode =
   | 'minimal_pair';
 
 function isUiTtsProvider(value: string | null | undefined): value is UiTtsProvider {
-  return value === 'elevenlabs' || value === 'google';
+  return value === 'elevenlabs' || value === 'google' || value === 'inworld';
 }
 
 function isSttProvider(value: string | null | undefined): value is SttProvider {
@@ -288,6 +298,7 @@ export const MinimalAssignment: React.FC = () => {
   const ttsModelOptionsByProvider = useMemo(() => {
     const elevenlabsConfigured = jobOptions?.ttsModelOptionsByProvider?.elevenlabs ?? [];
     const googleConfigured = jobOptions?.ttsModelOptionsByProvider?.google ?? [];
+    const inworldConfigured = jobOptions?.ttsModelOptionsByProvider?.inworld ?? [];
     const elevenlabsDefault =
       (jobOptions?.defaultTtsModelByProvider?.elevenlabs ?? '').trim() || FALLBACK_ELEVENLABS_MODEL;
     const elevenlabsOptions = [
@@ -296,10 +307,16 @@ export const MinimalAssignment: React.FC = () => {
     const googleOptions = [
       ...new Set(googleConfigured.length > 0 ? googleConfigured : [...FALLBACK_GOOGLE_TTS_MODELS]),
     ];
+    const inworldOptions = [
+      ...new Set(
+        inworldConfigured.length > 0 ? inworldConfigured : [...FALLBACK_INWORLD_TTS_MODELS],
+      ),
+    ];
 
     return {
       elevenlabs: elevenlabsOptions.length > 0 ? elevenlabsOptions : [FALLBACK_ELEVENLABS_MODEL],
       google: googleOptions.length > 0 ? googleOptions : [...FALLBACK_GOOGLE_TTS_MODELS],
+      inworld: inworldOptions.length > 0 ? inworldOptions : [...FALLBACK_INWORLD_TTS_MODELS],
     };
   }, [jobOptions?.defaultTtsModelByProvider, jobOptions?.ttsModelOptionsByProvider]);
   const elevenlabsModelOptions = useMemo(
@@ -313,10 +330,6 @@ export const MinimalAssignment: React.FC = () => {
           model !== 'eleven_v3',
       ),
     [elevenlabsModelOptions],
-  );
-  const googleTtsModelOptions = useMemo(
-    () => ttsModelOptionsByProvider.google ?? [...FALLBACK_GOOGLE_TTS_MODELS],
-    [ttsModelOptionsByProvider],
   );
   const defaultPronunciationChunkProvider = useMemo<UiPronunciationChunkTtsProvider>(
     () => getDefaultPronunciationChunkProviderForMode(rerunTargetPronunciationMode),
@@ -397,7 +410,6 @@ export const MinimalAssignment: React.FC = () => {
     ttsModelOptionsByProvider,
     elevenlabsModelOptions,
     elevenlabsStandardModelOptions,
-    googleTtsModelOptions,
     defaultTtsProvider: isUiTtsProvider(jobOptions?.defaultTtsProvider)
       ? jobOptions.defaultTtsProvider
       : null,
@@ -837,7 +849,7 @@ export const MinimalAssignment: React.FC = () => {
     jobOptions,
     selectedTtsProvider: authoring.selectedTtsProvider,
     ttsProviders,
-    googleTtsModelOptions,
+    ttsModelOptionsByProvider,
     elevenlabsStandardModelOptions,
     defaultPronunciationChunkProvider,
     applyJobStatusTransition: resume.applyJobStatusTransition,
@@ -1641,7 +1653,7 @@ export const MinimalAssignment: React.FC = () => {
         onRefreshActions={() => void loadJobOptions()}
         jobOptionsError={jobOptionsError}
         ttsProviders={ttsProviders}
-        googleTtsModelOptions={googleTtsModelOptions}
+        ttsModelOptionsByProvider={ttsModelOptionsByProvider}
         elevenlabsStandardModelOptions={elevenlabsStandardModelOptions}
         pronunciationChunkProviders={FALLBACK_PRONUNCIATION_CHUNK_TTS_PROVIDERS}
         studyTextStrategies={

@@ -3,6 +3,8 @@
 // Handler for job metadata editing action
 import { z } from 'zod';
 
+import { isTtsModelForProvider } from '@esl-pipeline/tts-core';
+
 import type { EditMetadataAction, JobActionResult } from '../../domain/job-actions.js';
 import { JobActionType } from '../../domain/job-actions.js';
 import { publishJobEvent } from '../../domain/job-events.js';
@@ -10,8 +12,7 @@ import type { JobRecord } from '../../domain/job-model.js';
 import { getJobById, updateJobMetadata } from '../../domain/job-repository.js';
 import {
   collectPublishStudyTextOverrideIssues,
-  publishElevenLabsModelSchema,
-  publishGoogleTtsModelSchema,
+  publishTtsModelSchema,
   publishTtsProviderSchema,
   publishTtsStrategySchema,
 } from '../publish-study-text-overrides.js';
@@ -23,8 +24,7 @@ const editMetadataSchema = z.object({
   forceTts: z.boolean().optional(),
   ttsStrategy: publishTtsStrategySchema.optional(),
   ttsProvider: publishTtsProviderSchema.optional(),
-  studyTextElevenlabsModel: publishElevenLabsModelSchema.nullable().optional(),
-  googleTtsModel: publishGoogleTtsModelSchema.nullable().optional(),
+  ttsModel: publishTtsModelSchema.nullable().optional(),
   upload: z.enum(['auto', 's3', 'none']).optional(),
   voiceId: z.string().min(1).optional(),
   voiceAccent: z.string().min(1).optional(),
@@ -52,8 +52,7 @@ function getEffectiveMetadataOverrides(
   assignIfChanged('forceTts', job.forceTts ?? null);
   assignIfChanged('ttsStrategy', job.ttsStrategy ?? null);
   assignIfChanged('ttsProvider', job.ttsProvider ?? null);
-  assignIfChanged('studyTextElevenlabsModel', job.studyTextElevenlabsModel ?? null);
-  assignIfChanged('googleTtsModel', job.googleTtsModel ?? null);
+  assignIfChanged('ttsModel', job.ttsModel ?? null);
   assignIfChanged('upload', job.upload ?? null);
   assignIfChanged('voiceId', job.voiceId ?? null);
   assignIfChanged('voiceAccent', job.voiceAccent ?? null);
@@ -67,29 +66,21 @@ function getEffectivePublishStudyTextOverrides(
 ): {
   ttsStrategy?: JobRecord['ttsStrategy'];
   ttsProvider?: JobRecord['ttsProvider'];
-  studyTextElevenlabsModel?: JobRecord['studyTextElevenlabsModel'];
-  googleTtsModel?: JobRecord['googleTtsModel'];
+  ttsModel?: JobRecord['ttsModel'];
 } {
   const ttsStrategy = overrides.ttsStrategy ?? job.ttsStrategy ?? undefined;
   const ttsProvider = overrides.ttsProvider ?? job.ttsProvider ?? undefined;
-  const studyTextElevenlabsModel =
-    overrides.studyTextElevenlabsModel !== undefined
-      ? overrides.studyTextElevenlabsModel
-      : ttsProvider === 'google' || ttsStrategy === 'auto'
+  const ttsModel =
+    overrides.ttsModel !== undefined
+      ? overrides.ttsModel
+      : ttsProvider && job.ttsModel && !isTtsModelForProvider(ttsProvider, job.ttsModel)
         ? null
-        : (job.studyTextElevenlabsModel ?? null);
-  const googleTtsModel =
-    overrides.googleTtsModel !== undefined
-      ? overrides.googleTtsModel
-      : ttsProvider === 'elevenlabs'
-        ? null
-        : (job.googleTtsModel ?? null);
+        : (job.ttsModel ?? null);
 
   return {
     ttsStrategy,
     ttsProvider,
-    studyTextElevenlabsModel,
-    googleTtsModel,
+    ttsModel,
   };
 }
 
@@ -101,21 +92,12 @@ function withImpliedPublishModelClears(
   const nextOverrides: EditMetadataOverrides = { ...overrides };
 
   if (
-    overrides.studyTextElevenlabsModel === undefined &&
-    effective.studyTextElevenlabsModel === null &&
-    job.studyTextElevenlabsModel !== null &&
-    job.studyTextElevenlabsModel !== undefined
+    overrides.ttsModel === undefined &&
+    effective.ttsModel === null &&
+    job.ttsModel !== null &&
+    job.ttsModel !== undefined
   ) {
-    nextOverrides.studyTextElevenlabsModel = null;
-  }
-
-  if (
-    overrides.googleTtsModel === undefined &&
-    effective.googleTtsModel === null &&
-    job.googleTtsModel !== null &&
-    job.googleTtsModel !== undefined
-  ) {
-    nextOverrides.googleTtsModel = null;
+    nextOverrides.ttsModel = null;
   }
 
   return nextOverrides;
@@ -220,8 +202,7 @@ export async function editMetadata(
     forceTts: normalizedOverrides.forceTts,
     ttsStrategy: normalizedOverrides.ttsStrategy,
     ttsProvider: normalizedOverrides.ttsProvider,
-    studyTextElevenlabsModel: normalizedOverrides.studyTextElevenlabsModel,
-    googleTtsModel: normalizedOverrides.googleTtsModel,
+    ttsModel: normalizedOverrides.ttsModel,
     upload: normalizedOverrides.upload,
     voiceId: normalizedOverrides.voiceId,
     voiceAccent: normalizedOverrides.voiceAccent,

@@ -8,8 +8,7 @@ import { getJobProvenance } from '../application/get-job-provenance.js';
 import { getJobStatus } from '../application/get-job-status.js';
 import { jobRecordToDto } from '../application/job-dto.js';
 import {
-  publishElevenLabsModelSchema,
-  publishGoogleTtsModelSchema,
+  publishTtsModelSchema,
   publishTtsProviderSchema,
   publishTtsStrategySchema,
 } from '../application/publish-study-text-overrides.js';
@@ -61,8 +60,7 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
       publishTarget: z.literal('html').optional(),
       ttsStrategy: publishTtsStrategySchema.optional(),
       ttsProvider: publishTtsProviderSchema.optional(),
-      studyTextElevenlabsModel: publishElevenLabsModelSchema.optional(),
-      googleTtsModel: publishGoogleTtsModelSchema.optional(),
+      ttsModel: publishTtsModelSchema.optional(),
     });
 
     const validatedData = jobSchema.parse(body);
@@ -78,8 +76,7 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
       publishTarget: validatedData.publishTarget,
       ttsStrategy: validatedData.ttsStrategy,
       ttsProvider: validatedData.ttsProvider,
-      studyTextElevenlabsModel: validatedData.studyTextElevenlabsModel,
-      googleTtsModel: validatedData.googleTtsModel,
+      ttsModel: validatedData.ttsModel,
     });
 
     logger.info('HTTP request handled', {

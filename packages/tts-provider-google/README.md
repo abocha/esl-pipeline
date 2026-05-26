@@ -42,7 +42,7 @@ Google assignment now follows the same precedence model as ElevenLabs:
 3. `voices.yml.default`
 4. automatic profile-aware picker (gender + accent/locale heuristics)
 
-When `googleTtsModel` (or `ESL_TTS_PROVIDER_GOOGLE_MODEL`) is selected, explicit voices must belong
+When `ttsModel` (or `ESL_TTS_PROVIDER_GOOGLE_MODEL`) is selected, explicit voices must belong
 to that model family. For example, `en-US-Studio-O` is rejected when model family is `chirp3_hd`.
 
 ## `voices.yml` Examples

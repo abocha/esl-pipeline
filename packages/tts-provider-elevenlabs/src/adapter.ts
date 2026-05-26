@@ -5,9 +5,11 @@ import type {
   BuildPronunciationTextOptions,
   BuildStudyTextInput,
   BuildStudyTextOptions,
+  ElevenLabsTtsModelId,
   SpeakerVoiceAssignment,
   TtsProviderAdapter,
 } from '@esl-pipeline/tts-core';
+import { resolveTtsSelection } from '@esl-pipeline/tts-core';
 
 import {
   buildPronunciationShadowSentenceMp3,
@@ -17,13 +19,28 @@ import {
 } from './index.js';
 import { classifyElevenLabsVoiceProviderError } from './provider-runtime.js';
 
+function resolveAdapterOptions<T extends { ttsModel?: string }>(
+  options: T,
+): Omit<T, 'ttsModel'> & { ttsModel?: ElevenLabsTtsModelId } {
+  const selection = options.ttsModel
+    ? resolveTtsSelection({ provider: 'elevenlabs', model: options.ttsModel })
+    : undefined;
+  return {
+    ...options,
+    ttsModel: selection?.model as ElevenLabsTtsModelId | undefined,
+  };
+}
+
 export function createElevenLabsTtsProvider(): TtsProviderAdapter {
   return {
     id: 'elevenlabs',
-    providerMetadata() {
+    providerMetadata(args) {
       return {
         provider: 'elevenlabs',
-        modelFamily: process.env.ESL_TTS_PROVIDER_ELEVENLABS_MODEL_ID ?? 'eleven_multilingual_v2',
+        modelFamily: resolveTtsSelection({
+          provider: 'elevenlabs',
+          model: args.studyTextOptions?.ttsModel ?? args.shadowOptions?.ttsModel,
+        }).model,
         pricingToken: 'ELEVENLABS',
       };
     },
@@ -39,7 +56,7 @@ export function createElevenLabsTtsProvider(): TtsProviderAdapter {
         options: BuildStudyTextOptions;
       }): Promise<SpeakerVoiceAssignment[]> {
         const result = await buildStudyTextMp3(args.input, {
-          ...args.options,
+          ...resolveAdapterOptions(args.options),
           preview: true,
           ttsProvider: 'elevenlabs',
         });
@@ -55,19 +72,28 @@ export function createElevenLabsTtsProvider(): TtsProviderAdapter {
       },
     },
     async synthesizeStudyText(input: BuildStudyTextInput, options: BuildStudyTextOptions) {
-      return buildStudyTextMp3(input, { ...options, ttsProvider: 'elevenlabs' });
+      return buildStudyTextMp3(input, {
+        ...resolveAdapterOptions(options),
+        ttsProvider: 'elevenlabs',
+      });
     },
     async synthesizeShadowSentence(
       input: BuildPronunciationShadowSentenceInput,
       options: BuildPronunciationShadowSentenceOptions,
     ) {
-      return buildPronunciationShadowSentenceMp3(input, { ...options, ttsProvider: 'elevenlabs' });
+      return buildPronunciationShadowSentenceMp3(input, {
+        ...resolveAdapterOptions(options),
+        ttsProvider: 'elevenlabs',
+      });
     },
     async synthesizePronunciationText(
       input: BuildPronunciationTextInput,
       options: BuildPronunciationTextOptions,
     ) {
-      return buildPronunciationTextMp3(input, { ...options, ttsProvider: 'elevenlabs' });
+      return buildPronunciationTextMp3(input, {
+        ...resolveAdapterOptions(options),
+        ttsProvider: 'elevenlabs',
+      });
     },
   };
 }

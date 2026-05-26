@@ -1,7 +1,11 @@
 /**
  * TTS strategy selection
  */
-import type { PipelineLogger, VoiceSelectionDiagnostics } from '@esl-pipeline/contracts';
+import type {
+  ElevenLabsTtsModelId,
+  PipelineLogger,
+  VoiceSelectionDiagnostics,
+} from '@esl-pipeline/contracts';
 import type { ParsedMarkdownContext } from '@esl-pipeline/pmd';
 
 export type TtsStrategy = 'auto' | 'tts' | 'dialogue';
@@ -61,7 +65,7 @@ export interface BuildStudyTextOptions {
   defaultVoiceId?: string;
   ffmpegPath?: string;
   outputFormat?: string;
-  modelId?: string;
+  ttsModel?: ElevenLabsTtsModelId;
   logger?: PipelineLogger;
 
   // Strategy selection (auto chooses based on content heuristics)
@@ -123,7 +127,7 @@ export interface BuildPronunciationShadowSentenceOptions {
   force?: boolean;
   ffmpegPath?: string;
   outputFormat?: string;
-  modelId?: string;
+  ttsModel?: ElevenLabsTtsModelId;
   logger?: PipelineLogger;
 
   // Provider selection
@@ -136,7 +140,7 @@ export interface BuildPronunciationTextOptions {
   force?: boolean;
   ffmpegPath?: string;
   outputFormat?: string;
-  modelId?: string;
+  ttsModel?: ElevenLabsTtsModelId;
   logger?: PipelineLogger;
   ttsProvider?: TtsProvider;
   fileStem?: string;

@@ -130,6 +130,18 @@
 | `ESL_TTS_PROVIDER_GOOGLE_VOICE_STUDIO`               | `.env.example`               | speech_runtime     | `docs/reference/env.md`                         |
 | `ESL_TTS_PROVIDER_GOOGLE_VOICE_WAVENET`              | `.env.batch-backend.example` | speech_runtime     | `docs/reference/env.md`                         |
 | `ESL_TTS_PROVIDER_GOOGLE_VOICE_WAVENET`              | `.env.example`               | speech_runtime     | `docs/reference/env.md`                         |
+| `ESL_TTS_PROVIDER_INWORLD_API_KEY`                   | `.env.batch-backend.example` | speech_runtime     | `docs/reference/env.md`                         |
+| `ESL_TTS_PROVIDER_INWORLD_API_KEY`                   | `.env.example`               | speech_runtime     | `docs/reference/env.md`                         |
+| `ESL_TTS_PROVIDER_INWORLD_MODEL`                     | `.env.batch-backend.example` | speech_runtime     | `docs/reference/env.md`                         |
+| `ESL_TTS_PROVIDER_INWORLD_MODEL`                     | `.env.example`               | speech_runtime     | `docs/reference/env.md`                         |
+| `ESL_TTS_PROVIDER_INWORLD_RETRY_MAX`                 | `.env.batch-backend.example` | speech_runtime     | `docs/reference/env.md`                         |
+| `ESL_TTS_PROVIDER_INWORLD_RETRY_MAX`                 | `.env.example`               | speech_runtime     | `docs/reference/env.md`                         |
+| `ESL_TTS_PROVIDER_INWORLD_SAMPLE_RATE_HERTZ`         | `.env.batch-backend.example` | speech_runtime     | `docs/reference/env.md`                         |
+| `ESL_TTS_PROVIDER_INWORLD_SAMPLE_RATE_HERTZ`         | `.env.example`               | speech_runtime     | `docs/reference/env.md`                         |
+| `ESL_TTS_PROVIDER_INWORLD_TIMEOUT_MS`                | `.env.batch-backend.example` | speech_runtime     | `docs/reference/env.md`                         |
+| `ESL_TTS_PROVIDER_INWORLD_TIMEOUT_MS`                | `.env.example`               | speech_runtime     | `docs/reference/env.md`                         |
+| `ESL_TTS_PROVIDER_INWORLD_VOICE`                     | `.env.batch-backend.example` | speech_runtime     | `docs/reference/env.md`                         |
+| `ESL_TTS_PROVIDER_INWORLD_VOICE`                     | `.env.example`               | speech_runtime     | `docs/reference/env.md`                         |
 | `ESL_TTS_PROVIDER_ORDER`                             | `.env.batch-backend.example` | speech_runtime     | `docs/reference/env.md`                         |
 | `ESL_TTS_PROVIDER_ORDER`                             | `.env.example`               | speech_runtime     | `docs/reference/env.md`                         |
 | `FILESYSTEM_UPLOAD_DIR`                              | `.env.batch-backend.example` | batch_backend      | `packages/batch-backend/README.md`              |
@@ -223,6 +235,8 @@
 | `GOOGLE_STT_PROJECT_ID`                              | `.env.batch-backend.example` | misc               | `docs/reference/env.md`                         |
 | `GOOGLE_STT_RECOGNIZER`                              | `.env.batch-backend.example` | misc               | `docs/reference/env.md`                         |
 | `HSTS_MAX_AGE`                                       | `.env.batch-backend.example` | batch_backend      | `packages/batch-backend/README.md`              |
+| `INWORLD_API_KEY`                                    | `.env.batch-backend.example` | misc               | `docs/reference/env.md`                         |
+| `INWORLD_API_KEY`                                    | `.env.example`               | misc               | `docs/reference/env.md`                         |
 | `JOB_SUBMISSION_RATE_LIMIT`                          | `.env.batch-backend.example` | misc               | `docs/reference/env.md`                         |
 | `JWT_EXPIRES_IN`                                     | `.env.batch-backend.example` | batch_backend      | `packages/batch-backend/README.md`              |
 | `JWT_SECRET`                                         | `.env.batch-backend.example` | batch_backend      | `packages/batch-backend/README.md`              |

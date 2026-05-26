@@ -1,13 +1,40 @@
 import type {
+  ElevenLabsTtsModelId,
+  GoogleTtsModel,
+  InworldTtsModel,
   PipelineLogger,
+  TtsModelId,
+  TtsProviderId,
   VoiceProviderErrorCategory,
   VoiceSelectionDiagnostics,
 } from '@esl-pipeline/contracts';
 import type { ParsedMarkdownContext } from '@esl-pipeline/pmd';
 
-export type TtsProviderId = 'elevenlabs' | 'google';
 export type TtsStrategy = 'auto' | 'tts' | 'dialogue';
-export type GoogleTtsModel = 'chirp3_hd' | 'studio' | 'neural2' | 'wavenet';
+export type { ElevenLabsTtsModelId, GoogleTtsModel, InworldTtsModel, TtsModelId, TtsProviderId };
+
+export type TtsCapabilitySnapshotMode = 'static' | 'credentialed' | 'none';
+
+export interface TtsProviderDescriptor<
+  ProviderId extends TtsProviderId = TtsProviderId,
+  ModelId extends TtsModelId = TtsModelId,
+> {
+  id: ProviderId;
+  label: string;
+  models: readonly ModelId[];
+  defaultModel: ModelId;
+  envModelKey?: string;
+  defaultVoiceId?: string;
+  capabilitySnapshotMode: TtsCapabilitySnapshotMode;
+}
+
+export interface TtsSelection<
+  ProviderId extends TtsProviderId = TtsProviderId,
+  ModelId extends TtsModelId = TtsModelId,
+> {
+  provider: ProviderId;
+  model: ModelId;
+}
 
 export interface BuildStudyTextInput {
   context: ParsedMarkdownContext;
@@ -37,14 +64,13 @@ export interface BuildStudyTextOptions {
   defaultVoiceId?: string;
   ffmpegPath?: string;
   outputFormat?: string;
-  modelId?: string;
   logger?: PipelineLogger;
   ttsStrategy?: TtsStrategy;
   dialogueLanguage?: string;
   dialogueStability?: number;
   dialogueSeed?: number;
   ttsProvider?: TtsProviderId;
-  googleTtsModel?: GoogleTtsModel;
+  ttsModel?: TtsModelId;
   googleLanguageCode?: string;
   googleApiEndpoint?: string;
   googleModelName?: string;
@@ -56,10 +82,9 @@ export interface BuildPronunciationShadowSentenceOptions {
   force?: boolean;
   ffmpegPath?: string;
   outputFormat?: string;
-  modelId?: string;
   logger?: PipelineLogger;
   ttsProvider?: TtsProviderId;
-  googleTtsModel?: GoogleTtsModel;
+  ttsModel?: TtsModelId;
   googleLanguageCode?: string;
   googleApiEndpoint?: string;
   googleModelName?: string;
@@ -71,10 +96,9 @@ export interface BuildPronunciationTextOptions {
   force?: boolean;
   ffmpegPath?: string;
   outputFormat?: string;
-  modelId?: string;
   logger?: PipelineLogger;
   ttsProvider?: TtsProviderId;
-  googleTtsModel?: GoogleTtsModel;
+  ttsModel?: TtsModelId;
   googleLanguageCode?: string;
   googleApiEndpoint?: string;
   googleModelName?: string;
