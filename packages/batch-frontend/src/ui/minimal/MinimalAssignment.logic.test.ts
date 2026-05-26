@@ -28,8 +28,28 @@ describe('MinimalAssignment logic helpers', () => {
       withTts: true,
       ttsProvider: 'google',
       ttsStrategy: 'tts',
-      googleTtsModel: 'studio',
+      ttsModel: 'studio',
       learningPresetId: 'general-english-intensive',
+    });
+  });
+
+  it('builds publish overrides for inworld tts', () => {
+    expect(
+      buildPublishJobOverrides({
+        publishTarget: 'html',
+        selectedTtsProvider: 'inworld',
+        selectedTtsStrategy: 'tts',
+        selectedTtsModel: 'inworld-tts-2',
+        selectedPreset: '',
+        validPresetIds: [],
+        learningPresetCatalogEnabled: false,
+      }),
+    ).toEqual({
+      publishTarget: 'html',
+      withTts: true,
+      ttsProvider: 'inworld',
+      ttsStrategy: 'tts',
+      ttsModel: 'inworld-tts-2',
     });
   });
 
@@ -68,7 +88,7 @@ describe('MinimalAssignment logic helpers', () => {
       withTts: true,
       ttsProvider: 'elevenlabs',
       ttsStrategy: 'dialogue',
-      studyTextElevenlabsModel: 'eleven_v3',
+      ttsModel: 'eleven_v3',
     });
   });
 
@@ -113,10 +133,10 @@ describe('MinimalAssignment logic helpers', () => {
     expect(buildPresetRerunPayload('pronunciation', customDefaults)).toEqual({
       regeneratePronunciationMainAudio: true,
       pronunciationMainTtsProvider: 'elevenlabs',
-      pronunciationMainElevenlabsModel: 'eleven_multilingual_v2',
+      pronunciationMainTtsModel: 'eleven_multilingual_v2',
       regeneratePronunciationChunkAudio: true,
       pronunciationChunkTtsProvider: 'google',
-      pronunciationChunkGoogleTtsModel: 'chirp3_hd',
+      pronunciationChunkTtsModel: 'chirp3_hd',
     });
   });
 
@@ -191,12 +211,12 @@ describe('MinimalAssignment logic helpers', () => {
         studyTextDialogueLanguage: 'es',
         studyTextDialogueStability: 0.42,
         studyTextDialogueSeed: 7,
-        studyTextGoogleTtsModel: 'studio',
+        studyTextTtsModel: 'studio',
         regeneratePronunciationMainAudio: true,
         pronunciationMainTtsProvider: 'elevenlabs',
         pronunciationMainVoiceId: 'main-voice',
         pronunciationMainVoiceAccent: 'american',
-        pronunciationMainElevenlabsModel: 'eleven_flash_v2_5',
+        pronunciationMainTtsModel: 'eleven_flash_v2_5',
         regeneratePronunciationChunkAudio: true,
         pronunciationChunkTtsProvider: 'google',
         pronunciationChunkVoiceId: 'chunk-voice',

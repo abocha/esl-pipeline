@@ -4,7 +4,7 @@ export type JobState = 'queued' | 'running' | 'awaiting_approval' | 'succeeded' 
 
 export type TtsStrategy = 'auto' | 'dialogue' | 'tts';
 export type TtsStrategyOption = TtsStrategy;
-export type TtsProviderId = 'elevenlabs' | 'google';
+export type TtsProviderId = 'elevenlabs' | 'google' | 'inworld';
 export type ElevenLabsTtsModelId =
   | 'eleven_v3'
   | 'eleven_multilingual_v2'
@@ -13,6 +13,8 @@ export type ElevenLabsTtsModelId =
 export type PronunciationChunkTtsProviderId = TtsProviderId | 'edge-tts';
 export type SttProviderId = 'deepgram' | 'elevenlabs' | 'google';
 export type GoogleTtsModel = 'chirp3_hd' | 'studio' | 'neural2' | 'wavenet';
+export type InworldTtsModel = 'inworld-tts-2' | 'inworld-tts-1.5-max' | 'inworld-tts-1.5-mini';
+export type TtsModelId = ElevenLabsTtsModelId | GoogleTtsModel | InworldTtsModel;
 export type CefrLevel = 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2';
 
 export type JobUploadOption = 'auto' | 's3' | 'none';
@@ -138,8 +140,7 @@ export interface SubmitJobRequest {
   upload?: JobUploadOption;
   ttsStrategy?: TtsStrategy;
   ttsProvider?: TtsProviderId;
-  studyTextElevenlabsModel?: ElevenLabsTtsModelId;
-  googleTtsModel?: GoogleTtsModel;
+  ttsModel?: TtsModelId;
   voiceId?: string;
   voiceAccent?: string;
   autoPublish?: boolean;
@@ -152,8 +153,7 @@ export interface JobConfigOverrides {
   forceTts?: boolean;
   ttsStrategy?: TtsStrategy;
   ttsProvider?: TtsProviderId;
-  studyTextElevenlabsModel?: ElevenLabsTtsModelId;
-  googleTtsModel?: GoogleTtsModel;
+  ttsModel?: TtsModelId | null;
   upload?: JobUploadOption;
   voiceId?: string;
   voiceAccent?: string;
@@ -247,8 +247,7 @@ export interface JobStatusDto {
   publishTarget: PublishTarget | null;
   ttsStrategy: TtsStrategy | null;
   ttsProvider?: TtsProviderId | null;
-  studyTextElevenlabsModel?: ElevenLabsTtsModelId | null;
-  googleTtsModel?: GoogleTtsModel | null;
+  ttsModel?: TtsModelId | null;
   autoPublish: boolean | null;
   htmlUrl: string | null;
   state: JobState;

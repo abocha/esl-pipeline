@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import type { VoiceCapabilitiesSnapshot } from '@esl-pipeline/contracts';
 import { loadVoicesCatalog as loadElevenLabsVoicesCatalog } from '@esl-pipeline/tts-provider-elevenlabs';
 import { loadGoogleVoicesCatalog } from '@esl-pipeline/tts-provider-google';
+import { loadInworldVoicesCatalog } from '@esl-pipeline/tts-provider-inworld';
 
 const CANONICAL_ROLE: VoiceCapabilitiesSnapshot['role'] = [
   'narrator',
@@ -26,6 +27,7 @@ const CANONICAL_AGE: VoiceCapabilitiesSnapshot['age'] = [
   'universal',
 ];
 const GOOGLE_TTS_MODEL_STYLE_DENY_LIST = new Set(['chirp3_hd', 'studio', 'wavenet', 'neural2']);
+const INWORLD_API_KEY_ENV_KEYS = ['ESL_TTS_PROVIDER_INWORLD_API_KEY', 'INWORLD_API_KEY'] as const;
 
 interface VoiceCatalogLike {
   generatedAt?: unknown;
@@ -90,13 +92,26 @@ async function loadGoogleVoiceCapabilitiesSnapshot(): Promise<VoiceCapabilitiesS
   }
 }
 
+async function loadInworldVoiceCapabilitiesSnapshot(): Promise<VoiceCapabilitiesSnapshot | null> {
+  const hasApiKey = INWORLD_API_KEY_ENV_KEYS.some((key) => Boolean(process.env[key]?.trim()));
+  if (!hasApiKey) return null;
+
+  try {
+    const catalog = await loadInworldVoicesCatalog();
+    return parseCapabilitiesSnapshot(catalog as VoiceCatalogLike);
+  } catch {
+    return null;
+  }
+}
+
 async function loadMergedVoiceCapabilitiesSnapshot(): Promise<VoiceCapabilitiesSnapshot | null> {
-  const [elevenLabs, google] = await Promise.all([
+  const [elevenLabs, google, inworld] = await Promise.all([
     loadElevenLabsVoiceCapabilitiesSnapshot(),
     loadGoogleVoiceCapabilitiesSnapshot(),
+    loadInworldVoiceCapabilitiesSnapshot(),
   ]);
   return mergeVoiceCapabilitySnapshots(
-    [elevenLabs, google].filter(Boolean) as VoiceCapabilitiesSnapshot[],
+    [elevenLabs, google, inworld].filter(Boolean) as VoiceCapabilitiesSnapshot[],
   );
 }
 
@@ -280,6 +295,9 @@ function normalizeAccent(value: string): string {
 }
 
 function normalizeStyle(value: string): string {
+  const raw = value.trim().toLowerCase().replaceAll('_', '-');
+  if (raw.startsWith('inworld-tts-')) return raw;
+
   const normalized = normalizeToken(value);
   if (!normalized) return '';
   if (GOOGLE_TTS_MODEL_STYLE_DENY_LIST.has(normalized)) return '';

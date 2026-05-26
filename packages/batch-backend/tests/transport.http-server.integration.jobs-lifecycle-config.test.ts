@@ -46,8 +46,7 @@ describeHttpServerIntegrationSuite(
         publishTarget: undefined,
         ttsStrategy: undefined,
         ttsProvider: undefined,
-        studyTextElevenlabsModel: undefined,
-        googleTtsModel: undefined,
+        ttsModel: undefined,
       });
     });
 
@@ -83,8 +82,7 @@ describeHttpServerIntegrationSuite(
         publishTarget: 'html',
         ttsStrategy: 'dialogue',
         ttsProvider: undefined,
-        studyTextElevenlabsModel: undefined,
-        googleTtsModel: undefined,
+        ttsModel: undefined,
       });
     });
 
@@ -99,7 +97,7 @@ describeHttpServerIntegrationSuite(
           md: 'fixtures/ok.md',
           withTts: true,
           ttsProvider: 'google',
-          googleTtsModel: 'chirp3_hd',
+          ttsModel: 'chirp3_hd',
         },
       });
 
@@ -109,7 +107,7 @@ describeHttpServerIntegrationSuite(
           md: 'fixtures/ok.md',
           withTts: true,
           ttsProvider: 'google',
-          googleTtsModel: 'chirp3_hd',
+          ttsModel: 'chirp3_hd',
         }),
       );
     });
@@ -126,7 +124,7 @@ describeHttpServerIntegrationSuite(
           withTts: true,
           ttsProvider: 'elevenlabs',
           ttsStrategy: 'dialogue',
-          studyTextElevenlabsModel: 'eleven_v3',
+          ttsModel: 'eleven_v3',
         },
       });
 
@@ -137,7 +135,7 @@ describeHttpServerIntegrationSuite(
           withTts: true,
           ttsProvider: 'elevenlabs',
           ttsStrategy: 'dialogue',
-          studyTextElevenlabsModel: 'eleven_v3',
+          ttsModel: 'eleven_v3',
         }),
       );
     });
@@ -167,8 +165,7 @@ describeHttpServerIntegrationSuite(
         publishTarget: undefined,
         ttsStrategy: undefined,
         ttsProvider: undefined,
-        studyTextElevenlabsModel: undefined,
-        googleTtsModel: undefined,
+        ttsModel: undefined,
       });
     });
 
@@ -270,8 +267,7 @@ describeHttpServerIntegrationSuite(
         publishTarget: 'html',
         ttsStrategy: 'dialogue',
         ttsProvider: null,
-        studyTextElevenlabsModel: null,
-        googleTtsModel: null,
+        ttsModel: null,
         htmlUrl: 'https://example.com/job-approve-1',
         lessonId: null,
         autoPublish: null,
@@ -340,8 +336,7 @@ describeHttpServerIntegrationSuite(
         publishTarget: 'html',
         ttsStrategy: 'dialogue',
         ttsProvider: null,
-        studyTextElevenlabsModel: null,
-        googleTtsModel: null,
+        ttsModel: null,
         autoPublish: null,
         htmlUrl: 'https://example.com/job-1',
         state: 'queued',
@@ -375,8 +370,7 @@ describeHttpServerIntegrationSuite(
         publishTarget: 'html',
         ttsStrategy: 'dialogue',
         ttsProvider: null,
-        studyTextElevenlabsModel: null,
-        googleTtsModel: null,
+        ttsModel: null,
         autoPublish: null,
         htmlUrl: 'https://example.com/job-1',
         state: 'queued',

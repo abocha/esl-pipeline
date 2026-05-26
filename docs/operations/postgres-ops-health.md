@@ -55,6 +55,35 @@ LIMIT 20;
 If `pg_stat_user_tables.n_live_tup` looks wrong after a restore, import, or long local session, run
 `ANALYZE;` before using table statistics for sizing or query-plan decisions.
 
+## Local Migration Checksum Recovery
+
+Historical migrations are append-only after merge, but an unlanded local branch may still rewrite
+its latest migration while the Docker dev database has already applied the earlier draft. Startup
+then fails with:
+
+```text
+Migration status is invalid (checksum mismatch or missing migration files); resolve before startup.
+```
+
+Confirm the mismatch first:
+
+```bash
+pnpm --filter @esl-pipeline/batch-backend db:status
+```
+
+For a rewritten latest local migration only, make that migration pending again and re-apply it
+against the dev database:
+
+```bash
+docker compose -p esl-pipeline -f docker-compose.yml exec -T postgres \
+  psql -U esl -d esl_batch \
+  -c "DELETE FROM schema_migrations WHERE id = '<latest_local_migration_id>';"
+pnpm --filter @esl-pipeline/batch-backend db:migrate
+```
+
+Use this only for unmerged local migration rewrites. For merged or shared migration history,
+preserve append-only history and add a new migration instead.
+
 ## Required Env (Telegram + IAM)
 
 Set in `.env.batch-backend`:

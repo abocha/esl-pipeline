@@ -1,8 +1,4 @@
-import type {
-  ElevenLabsTtsModelId,
-  GoogleTtsModel,
-  PronunciationChunkTtsProviderId,
-} from '@esl-pipeline/contracts';
+import type { PronunciationChunkTtsProviderId, TtsModelId } from '@esl-pipeline/contracts';
 import type { PronunciationAudioMode } from '@esl-pipeline/shared-infrastructure';
 import type { TtsProviderId as TtsProvider } from '@esl-pipeline/tts-core';
 
@@ -107,8 +103,7 @@ export interface NewAssignmentFlags {
   voiceId?: string;
   withTts?: boolean;
   ttsProvider?: TtsProvider;
-  studyTextElevenlabsModel?: ElevenLabsTtsModelId;
-  googleTtsModel?: GoogleTtsModel;
+  ttsModel?: TtsModelId;
   publishTarget?: PublishTarget;
 
   // TTS strategy fields
@@ -178,8 +173,7 @@ export interface RerunFlags {
   studyTextVoiceAccent?: string;
   studyTextVoiceId?: string;
   studyTextTtsProvider?: TtsProvider;
-  studyTextElevenlabsModel?: ElevenLabsTtsModelId;
-  studyTextGoogleTtsModel?: GoogleTtsModel;
+  studyTextTtsModel?: TtsModelId;
   studyTextTtsStrategy?: 'auto' | 'dialogue' | 'tts';
   studyTextDialogueLanguage?: string;
   studyTextDialogueStability?: number;
@@ -187,13 +181,11 @@ export interface RerunFlags {
   pronunciationMainVoiceAccent?: string;
   pronunciationMainVoiceId?: string;
   pronunciationMainTtsProvider?: TtsProvider;
-  pronunciationMainElevenlabsModel?: ElevenLabsTtsModelId;
-  pronunciationMainGoogleTtsModel?: GoogleTtsModel;
+  pronunciationMainTtsModel?: TtsModelId;
   pronunciationChunkVoiceAccent?: string;
   pronunciationChunkVoiceId?: string;
   pronunciationChunkTtsProvider?: PronunciationChunkTtsProviderId;
-  pronunciationChunkElevenlabsModel?: ElevenLabsTtsModelId;
-  pronunciationChunkGoogleTtsModel?: GoogleTtsModel;
+  pronunciationChunkTtsModel?: TtsModelId;
   pronunciationChunkEdgeVoice?: string;
 }
 

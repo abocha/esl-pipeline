@@ -321,7 +321,7 @@ describeHttpServerIntegrationSuite(
           publishTarget: 'html',
           withTts: true,
           ttsProvider: 'elevenlabs',
-          studyTextElevenlabsModel: 'eleven_v3',
+          ttsModel: 'eleven_v3',
           forceTts: true,
           ttsStrategy: 'dialogue',
           upload: 's3',
@@ -353,7 +353,7 @@ describeHttpServerIntegrationSuite(
             withTts: true,
             ttsProvider: 'elevenlabs',
             ttsStrategy: 'auto',
-            studyTextElevenlabsModel: 'eleven_v3',
+            ttsModel: 'eleven_v3',
           },
         },
       });
@@ -365,7 +365,7 @@ describeHttpServerIntegrationSuite(
         details: expect.arrayContaining([
           expect.objectContaining({
             message: 'Automatic ElevenLabs publish jobs must use strategy-default model selection.',
-            path: ['jobOverrides', 'studyTextElevenlabsModel'],
+            path: ['jobOverrides', 'ttsModel'],
           }),
         ]),
       });
@@ -388,7 +388,7 @@ describeHttpServerIntegrationSuite(
         payload: {
           jobOverrides: {
             ttsProvider: 'elevenlabs',
-            studyTextElevenlabsModel: 'eleven_multilingual_v2',
+            ttsModel: 'eleven_multilingual_v2',
           },
         },
       });

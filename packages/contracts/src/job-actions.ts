@@ -2,10 +2,9 @@
 //
 // Shared types for job actions between backend and frontend
 import type {
-  ElevenLabsTtsModelId,
-  GoogleTtsModel,
   JobConfigOverrides,
   PronunciationChunkTtsProviderId,
+  TtsModelId,
   TtsProviderId,
   TtsStrategy,
 } from './index.js';
@@ -25,8 +24,7 @@ export interface RerunJobPayload {
   regeneratePronunciationMainAudio?: boolean;
   regeneratePronunciationChunkAudio?: boolean;
   studyTextTtsProvider?: TtsProviderId;
-  studyTextElevenlabsModel?: ElevenLabsTtsModelId;
-  studyTextGoogleTtsModel?: GoogleTtsModel;
+  studyTextTtsModel?: TtsModelId;
   studyTextVoiceId?: string;
   studyTextVoiceAccent?: string;
   studyTextTtsStrategy?: TtsStrategy;
@@ -34,25 +32,17 @@ export interface RerunJobPayload {
   studyTextDialogueStability?: number;
   studyTextDialogueSeed?: number;
   pronunciationMainTtsProvider?: TtsProviderId;
-  pronunciationMainElevenlabsModel?: ElevenLabsTtsModelId;
-  pronunciationMainGoogleTtsModel?: GoogleTtsModel;
+  pronunciationMainTtsModel?: TtsModelId;
   pronunciationMainVoiceId?: string;
   pronunciationMainVoiceAccent?: string;
   pronunciationChunkTtsProvider?: PronunciationChunkTtsProviderId;
-  pronunciationChunkElevenlabsModel?: ElevenLabsTtsModelId;
-  pronunciationChunkGoogleTtsModel?: GoogleTtsModel;
+  pronunciationChunkTtsModel?: TtsModelId;
   pronunciationChunkVoiceId?: string;
   pronunciationChunkVoiceAccent?: string;
   pronunciationChunkEdgeVoice?: string;
 }
 
-export type EditMetadataJobPayload = Omit<
-  JobConfigOverrides,
-  'studyTextElevenlabsModel' | 'googleTtsModel'
-> & {
-  studyTextElevenlabsModel?: ElevenLabsTtsModelId | null;
-  googleTtsModel?: GoogleTtsModel | null;
-};
+export type EditMetadataJobPayload = JobConfigOverrides;
 
 /**
  * Request to execute a job action

@@ -5,12 +5,15 @@ import { describe, expect, it, vi } from 'vitest';
 
 import * as elevenLabsProvider from '@esl-pipeline/tts-provider-elevenlabs';
 import * as googleProvider from '@esl-pipeline/tts-provider-google';
+import * as inworldProvider from '@esl-pipeline/tts-provider-inworld';
 
 import { resolvePromptVoiceCapabilities } from '../src/application/prompt-voice-capabilities.js';
 
 const CANONICAL_ELEVENLABS_VOICES_ENV = 'ESL_TTS_PROVIDER_ELEVENLABS_VOICES_PATH';
 const RETIRED_ELEVENLABS_VOICES_ENV = ['ELEVENLABS', 'VOICES', 'PATH'].join('_');
 const GOOGLE_CREDENTIALS_ENV = 'GOOGLE_APPLICATION_CREDENTIALS';
+const CANONICAL_INWORLD_API_KEY_ENV = 'ESL_TTS_PROVIDER_INWORLD_API_KEY';
+const INWORLD_API_KEY_ENV = 'INWORLD_API_KEY';
 
 async function writeElevenCatalog(
   filePath: string,
@@ -52,6 +55,7 @@ describe('application/prompt-voice-capabilities', () => {
     const previousGoogleCredentials = process.env[GOOGLE_CREDENTIALS_ENV];
     process.env[CANONICAL_ELEVENLABS_VOICES_ENV] = voicesPath;
     process.env[GOOGLE_CREDENTIALS_ENV] = path.join(dir, 'mock-google-credentials.json');
+    vi.spyOn(inworldProvider, 'loadInworldVoicesCatalog').mockRejectedValue(new Error('no key'));
     vi.spyOn(googleProvider, 'loadGoogleVoicesCatalog').mockResolvedValue({
       generatedAt: '2026-01-06T00:00:00.000Z',
       capabilities: {
@@ -123,6 +127,7 @@ describe('application/prompt-voice-capabilities', () => {
     process.env[CANONICAL_ELEVENLABS_VOICES_ENV] = canonicalVoicesPath;
     process.env[RETIRED_ELEVENLABS_VOICES_ENV] = legacyVoicesPath;
     vi.spyOn(googleProvider, 'loadGoogleVoicesCatalog').mockRejectedValue(new Error('adc missing'));
+    vi.spyOn(inworldProvider, 'loadInworldVoicesCatalog').mockRejectedValue(new Error('no key'));
 
     try {
       const result = await resolvePromptVoiceCapabilities({
@@ -158,6 +163,7 @@ describe('application/prompt-voice-capabilities', () => {
     const previousVoicesPath = process.env[CANONICAL_ELEVENLABS_VOICES_ENV];
     process.env[CANONICAL_ELEVENLABS_VOICES_ENV] = voicesPath;
     vi.spyOn(googleProvider, 'loadGoogleVoicesCatalog').mockRejectedValue(new Error('adc missing'));
+    vi.spyOn(inworldProvider, 'loadInworldVoicesCatalog').mockRejectedValue(new Error('no key'));
 
     try {
       const result = await resolvePromptVoiceCapabilities({
@@ -179,12 +185,28 @@ describe('application/prompt-voice-capabilities', () => {
   it('fails when no provider capability snapshot is available', async () => {
     const previousVoicesPath = process.env[CANONICAL_ELEVENLABS_VOICES_ENV];
     const previousGoogleCredentials = process.env[GOOGLE_CREDENTIALS_ENV];
+    const previousCanonicalInworldApiKey = process.env[CANONICAL_INWORLD_API_KEY_ENV];
+    const previousInworldApiKey = process.env[INWORLD_API_KEY_ENV];
     delete process.env[CANONICAL_ELEVENLABS_VOICES_ENV];
     delete process.env[GOOGLE_CREDENTIALS_ENV];
+    delete process.env[CANONICAL_INWORLD_API_KEY_ENV];
+    delete process.env[INWORLD_API_KEY_ENV];
     vi.spyOn(elevenLabsProvider, 'loadVoicesCatalog').mockRejectedValue(
       new Error('catalog missing'),
     );
     vi.spyOn(googleProvider, 'loadGoogleVoicesCatalog').mockRejectedValue(new Error('adc missing'));
+    vi.spyOn(inworldProvider, 'loadInworldVoicesCatalog').mockResolvedValue({
+      generatedAt: '2026-01-09T00:00:00.000Z',
+      capabilities: {
+        generatedAt: '2026-01-09T00:00:00.000Z',
+        role: ['narrator', 'teacher', 'student', 'system'],
+        gender: ['male', 'female', 'neutral'],
+        age: ['child', 'teen', 'young', 'adult', 'middle_aged', 'senior', 'universal'],
+        accent: ['american'],
+        style: ['inworld-tts-2'],
+      },
+      voices: [],
+    });
 
     try {
       await expect(
@@ -202,6 +224,63 @@ describe('application/prompt-voice-capabilities', () => {
         delete process.env[GOOGLE_CREDENTIALS_ENV];
       } else {
         process.env[GOOGLE_CREDENTIALS_ENV] = previousGoogleCredentials;
+      }
+      if (previousCanonicalInworldApiKey === undefined) {
+        delete process.env[CANONICAL_INWORLD_API_KEY_ENV];
+      } else {
+        process.env[CANONICAL_INWORLD_API_KEY_ENV] = previousCanonicalInworldApiKey;
+      }
+      if (previousInworldApiKey === undefined) {
+        delete process.env[INWORLD_API_KEY_ENV];
+      } else {
+        process.env[INWORLD_API_KEY_ENV] = previousInworldApiKey;
+      }
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('merges Inworld capability snapshot when an Inworld API key is configured', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-voice-cap-inworld-'));
+    const voicesPath = path.join(dir, 'voices.json');
+    await writeElevenCatalog(voicesPath);
+
+    const previousVoicesPath = process.env[CANONICAL_ELEVENLABS_VOICES_ENV];
+    const previousCanonicalInworldApiKey = process.env[CANONICAL_INWORLD_API_KEY_ENV];
+    process.env[CANONICAL_ELEVENLABS_VOICES_ENV] = voicesPath;
+    process.env[CANONICAL_INWORLD_API_KEY_ENV] = 'test-basic-key';
+    vi.spyOn(googleProvider, 'loadGoogleVoicesCatalog').mockRejectedValue(new Error('adc missing'));
+    vi.spyOn(inworldProvider, 'loadInworldVoicesCatalog').mockResolvedValue({
+      generatedAt: '2026-01-09T00:00:00.000Z',
+      capabilities: {
+        generatedAt: '2026-01-09T00:00:00.000Z',
+        role: ['narrator', 'teacher', 'student', 'system'],
+        gender: ['male', 'female', 'neutral'],
+        age: ['child', 'teen', 'young', 'adult', 'middle_aged', 'senior', 'universal'],
+        accent: ['american'],
+        style: ['inworld-tts-2', 'inworld-tts-1.5-max', 'inworld-tts-1.5-mini'],
+      },
+      voices: [],
+    });
+
+    try {
+      const result = await resolvePromptVoiceCapabilities({
+        templateId: 'hw_prompt_definitive.md',
+      });
+
+      expect(result.capabilitiesSnapshot?.style).toContain('inworld-tts-2');
+      expect(result.capabilitiesSnapshot?.style).toContain('inworld-tts-1.5-max');
+      expect(result.capabilitiesSnapshot?.style).toContain('inworld-tts-1.5-mini');
+      expect(result.blockText).toContain('inworld-tts-2');
+    } finally {
+      if (previousVoicesPath === undefined) {
+        delete process.env[CANONICAL_ELEVENLABS_VOICES_ENV];
+      } else {
+        process.env[CANONICAL_ELEVENLABS_VOICES_ENV] = previousVoicesPath;
+      }
+      if (previousCanonicalInworldApiKey === undefined) {
+        delete process.env[CANONICAL_INWORLD_API_KEY_ENV];
+      } else {
+        process.env[CANONICAL_INWORLD_API_KEY_ENV] = previousCanonicalInworldApiKey;
       }
       vi.restoreAllMocks();
     }

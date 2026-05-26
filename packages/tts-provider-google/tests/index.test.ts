@@ -160,7 +160,7 @@ describe('google provider adapter basics', () => {
 
     const result = await buildStudyTextMp3Google(
       { context: parseMarkdownContext(md), mdPath: join(workdir, 'lesson.md') },
-      { voiceMapPath, outPath: workdir, googleTtsModel: 'chirp3_hd', preview: true },
+      { voiceMapPath, outPath: workdir, ttsModel: 'chirp3_hd', preview: true },
     );
 
     const narrator = result.voices.find((voice) => voice.speaker === 'Narrator');
@@ -199,7 +199,7 @@ describe('google provider adapter basics', () => {
 
     const result = await buildStudyTextMp3Google(
       { context: parseMarkdownContext(md), mdPath: join(workdir, 'lesson.md') },
-      { voiceMapPath, outPath: workdir, googleTtsModel: 'chirp3_hd', preview: true },
+      { voiceMapPath, outPath: workdir, ttsModel: 'chirp3_hd', preview: true },
     );
 
     expect(result.voices[0]?.voiceId).toBe('en-GB-Chirp3-HD-Gacrux');
@@ -232,7 +232,7 @@ describe('google provider adapter basics', () => {
 
     const result = await buildStudyTextMp3Google(
       { context: parseMarkdownContext(md), mdPath: join(workdir, 'lesson.md') },
-      { voiceMapPath, outPath: workdir, googleTtsModel: 'chirp3_hd', preview: true },
+      { voiceMapPath, outPath: workdir, ttsModel: 'chirp3_hd', preview: true },
     );
 
     expect(result.voices[0]?.voiceId).toBe('en-IE-Chirp3-HD-Orpheus');
@@ -265,7 +265,7 @@ describe('google provider adapter basics', () => {
 
     const result = await buildStudyTextMp3Google(
       { context: parseMarkdownContext(md), mdPath: join(workdir, 'lesson.md') },
-      { voiceMapPath, outPath: workdir, googleTtsModel: 'chirp3_hd', preview: true },
+      { voiceMapPath, outPath: workdir, ttsModel: 'chirp3_hd', preview: true },
     );
 
     expect(result.voices[0]?.voiceId).toBe('en-US-Chirp3-HD-Aoede');
@@ -298,11 +298,11 @@ describe('google provider adapter basics', () => {
 
     const first = await buildStudyTextMp3Google(
       { context: parseMarkdownContext(md), mdPath: join(workdir, 'lesson.md') },
-      { voiceMapPath, outPath: workdir, googleTtsModel: 'chirp3_hd', preview: true },
+      { voiceMapPath, outPath: workdir, ttsModel: 'chirp3_hd', preview: true },
     );
     const second = await buildStudyTextMp3Google(
       { context: parseMarkdownContext(md), mdPath: join(workdir, 'lesson.md') },
-      { voiceMapPath, outPath: workdir, googleTtsModel: 'chirp3_hd', preview: true },
+      { voiceMapPath, outPath: workdir, ttsModel: 'chirp3_hd', preview: true },
     );
 
     expect(first.voices[0]?.voiceId.startsWith('en-US-')).toBe(true);
@@ -335,7 +335,7 @@ describe('google provider adapter basics', () => {
 
     const assignments = await resolveGoogleSpeakerAssignments(
       { context: parseMarkdownContext(md) },
-      { voiceMapPath, outPath: workdir, googleTtsModel: 'chirp3_hd' },
+      { voiceMapPath, outPath: workdir, ttsModel: 'chirp3_hd' },
     );
 
     expect(assignments).toEqual([
@@ -374,7 +374,7 @@ describe('google provider adapter basics', () => {
     await expect(
       resolveGoogleSpeakerAssignments(
         { context: parseMarkdownContext(md) },
-        { voiceMapPath, outPath: workdir, googleTtsModel: 'chirp3_hd' },
+        { voiceMapPath, outPath: workdir, ttsModel: 'chirp3_hd' },
       ),
     ).rejects.toThrow(/selected model family is chirp3_hd/i);
   });
@@ -413,7 +413,7 @@ describe('google provider adapter basics', () => {
 
     const result = await buildStudyTextMp3Google(
       { context: parseMarkdownContext(md), mdPath: join(workdir, 'lesson.md') },
-      { voiceMapPath, outPath: workdir, googleTtsModel: model, preview: true },
+      { voiceMapPath, outPath: workdir, ttsModel: model, preview: true },
     );
 
     for (const voice of result.voices) {
@@ -456,11 +456,11 @@ describe('google provider adapter basics', () => {
 
     const first = await resolveGoogleSpeakerAssignments(
       { context: parseMarkdownContext(md) },
-      { voiceMapPath, outPath: workdir, googleTtsModel: 'chirp3_hd' },
+      { voiceMapPath, outPath: workdir, ttsModel: 'chirp3_hd' },
     );
     const second = await resolveGoogleSpeakerAssignments(
       { context: parseMarkdownContext(md) },
-      { voiceMapPath, outPath: workdir, googleTtsModel: 'chirp3_hd' },
+      { voiceMapPath, outPath: workdir, ttsModel: 'chirp3_hd' },
     );
 
     expect(first).toEqual(second);

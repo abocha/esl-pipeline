@@ -69,8 +69,7 @@ export async function createApprovalJobFromDraft(
   const publishStudyTextIssues = collectPublishStudyTextOverrideIssues({
     ttsStrategy: jobOverrides.ttsStrategy ?? ttsStrategy,
     ttsProvider: jobOverrides.ttsProvider,
-    studyTextElevenlabsModel: jobOverrides.studyTextElevenlabsModel,
-    googleTtsModel: jobOverrides.googleTtsModel,
+    ttsModel: jobOverrides.ttsModel,
   });
   if (publishStudyTextIssues.length > 0) {
     const issue = publishStudyTextIssues[0];
@@ -80,7 +79,10 @@ export async function createApprovalJobFromDraft(
     );
   }
   const withTts =
-    jobOverrides.withTts ?? (jobOverrides.ttsProvider === 'google' ? true : hasTtsKey);
+    jobOverrides.withTts ??
+    (jobOverrides.ttsProvider === 'google' || jobOverrides.ttsProvider === 'inworld'
+      ? true
+      : hasTtsKey);
   const selectedPreset = preset;
   const learningPresetId =
     normalizeLearningPresetId({
@@ -104,8 +106,7 @@ export async function createApprovalJobFromDraft(
     withTts,
     ttsStrategy: jobOverrides.ttsStrategy ?? ttsStrategy,
     ttsProvider: jobOverrides.ttsProvider,
-    studyTextElevenlabsModel: jobOverrides.studyTextElevenlabsModel,
-    googleTtsModel: jobOverrides.googleTtsModel,
+    ttsModel: jobOverrides.ttsModel,
     voiceAccent: jobOverrides.voiceAccent ?? voiceAccent,
     voiceId: jobOverrides.voiceId,
     forceTts: jobOverrides.forceTts,
