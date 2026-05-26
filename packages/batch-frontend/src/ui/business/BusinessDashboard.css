@@ -1,4 +1,12 @@
 .business-dashboard-page {
+  --business-panel: color-mix(in srgb, var(--app-paper) 78%, transparent);
+  --business-panel-soft: color-mix(in srgb, var(--app-paper) 68%, transparent);
+  --business-panel-muted: color-mix(in srgb, var(--app-paper) 70%, transparent);
+  --business-control: var(--bg-primary);
+  --business-blue-line: color-mix(in srgb, var(--app-blue) 16%, transparent);
+  --business-amber-line: color-mix(in srgb, var(--app-amber) 22%, transparent);
+  --business-rose-line: color-mix(in srgb, var(--app-rose) 22%, transparent);
+  --business-sage-line: color-mix(in srgb, var(--app-sage) 18%, transparent);
   display: grid;
   gap: 1rem;
   color: var(--app-ink);
@@ -12,7 +20,7 @@
   padding: 1.1rem;
   border: 1px solid var(--app-line);
   border-radius: var(--app-radius-lg);
-  background: rgba(255, 253, 248, 0.78);
+  background: var(--business-panel);
   box-shadow: var(--app-shadow-soft);
 }
 
@@ -26,7 +34,7 @@
 }
 
 .business-dashboard-header h1 {
-  font-size: clamp(1.5rem, 2.6vw, 2.25rem);
+  font-size: 1.75rem;
   line-height: 1.05;
 }
 
@@ -45,11 +53,11 @@
 }
 
 .business-dashboard-tab {
-  min-height: 2.4rem;
+  min-height: 44px;
   padding: 0.55rem 0.8rem;
   border: 1px solid var(--app-line);
   border-radius: 999px;
-  background: rgba(255, 253, 248, 0.72);
+  background: var(--business-panel);
   color: var(--app-ink);
   font-weight: 800;
   text-decoration: none;
@@ -58,7 +66,7 @@
 .business-dashboard-tab.active {
   border-color: transparent;
   background: var(--app-blue);
-  color: #fffaf1;
+  color: var(--text-inverse);
 }
 
 .business-dashboard-surface {
@@ -75,7 +83,7 @@
   padding: 1rem;
   border: 1px solid var(--app-line);
   border-radius: var(--app-radius-md);
-  background: rgba(255, 253, 248, 0.68);
+  background: var(--business-panel-soft);
 }
 
 .business-settings-form {
@@ -96,10 +104,10 @@
 .business-toolbar input,
 .business-settings-form input,
 .business-settings-form select {
-  min-height: 2.55rem;
+  min-height: 44px;
   border: 1px solid var(--app-line);
   border-radius: var(--app-radius-sm);
-  background: #fffdf8;
+  background: var(--business-control);
   color: var(--app-ink);
   font: inherit;
   padding: 0.55rem 0.7rem;
@@ -109,8 +117,8 @@
 .business-settings-form button,
 .business-actions button,
 .business-actions a {
-  min-height: 2.55rem;
-  border: 1px solid rgba(20, 63, 115, 0.16);
+  min-height: 44px;
+  border: 1px solid var(--business-blue-line);
   border-radius: var(--app-radius-sm);
   background: var(--app-blue-soft);
   color: var(--app-blue);
@@ -137,7 +145,7 @@
 .business-panel {
   border: 1px solid var(--app-line);
   border-radius: var(--app-radius-md);
-  background: rgba(255, 253, 248, 0.78);
+  background: var(--business-panel);
   box-shadow: var(--app-shadow-soft);
 }
 
@@ -209,7 +217,7 @@
   padding: 0.8rem;
   border: 1px solid var(--app-line);
   border-radius: var(--app-radius-sm);
-  background: rgba(255, 253, 248, 0.7);
+  background: var(--business-panel-muted);
   color: var(--app-ink);
   text-decoration: none;
 }
@@ -237,7 +245,7 @@
   resize: vertical;
   border: 1px solid var(--app-line);
   border-radius: var(--app-radius-sm);
-  background: #fffdf8;
+  background: var(--business-control);
   color: var(--app-ink);
   padding: 0.7rem;
 }
@@ -255,12 +263,12 @@
 }
 
 .business-alert {
-  border-color: rgba(145, 98, 12, 0.18);
+  border-color: var(--business-amber-line);
   background: var(--app-amber-soft);
 }
 
 .business-alert-urgent {
-  border-color: rgba(143, 63, 50, 0.2);
+  border-color: var(--business-rose-line);
   background: var(--app-rose-soft);
 }
 
@@ -285,25 +293,25 @@
 }
 
 .business-warning-box {
-  border: 1px solid rgba(145, 98, 12, 0.22);
+  border: 1px solid var(--business-amber-line);
   background: var(--app-amber-soft);
 }
 
 .business-dashboard-error {
-  border: 1px solid rgba(143, 63, 50, 0.22);
+  border: 1px solid var(--business-rose-line);
   background: var(--app-rose-soft);
   color: var(--app-rose);
 }
 
 .business-dashboard-success {
-  border: 1px solid rgba(49, 92, 58, 0.18);
+  border: 1px solid var(--business-sage-line);
   background: var(--app-sage-soft);
   color: var(--app-sage);
 }
 
 .business-empty {
   border: 1px dashed var(--app-line);
-  background: rgba(255, 253, 248, 0.68);
+  background: var(--business-panel-soft);
   color: var(--app-muted);
 }
 

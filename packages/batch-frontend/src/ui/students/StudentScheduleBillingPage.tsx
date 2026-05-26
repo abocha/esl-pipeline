@@ -1027,7 +1027,11 @@ export const StudentScheduleBillingPage: React.FC = () => {
                     </button>
                   </>
                 ) : (
-                  <textarea readOnly value={reminder.copyText} />
+                  <textarea
+                    aria-label={`Reminder copy for ${studentName}`}
+                    readOnly
+                    value={reminder.copyText}
+                  />
                 )}
               </article>
             ))}

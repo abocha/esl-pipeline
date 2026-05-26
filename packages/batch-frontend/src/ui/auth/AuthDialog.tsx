@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 
 import { useAuth } from '../../context/AuthContext';
@@ -104,6 +104,8 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({
   onRegistered,
 }) => {
   const { login, register } = useAuth();
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
   const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -116,11 +118,31 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({
   }, [initialEmail]);
 
   useEffect(() => {
+    let focusTimer: number | undefined;
+
     if (mode) {
       setError(null);
       setPassword('');
       setConfirmPassword('');
+      previousFocusRef.current =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      document.body.classList.add('dialog-open');
+      focusTimer = window.setTimeout(() => {
+        const firstInput = dialogRef.current?.querySelector<HTMLInputElement>(
+          'input:not([type="hidden"]):not(:disabled)',
+        );
+        firstInput?.focus();
+      }, 0);
     }
+
+    return () => {
+      if (focusTimer !== undefined) {
+        window.clearTimeout(focusTimer);
+      }
+      document.body.classList.remove('dialog-open');
+      previousFocusRef.current?.focus();
+      previousFocusRef.current = null;
+    };
   }, [mode]);
 
   const handleSubmit = useCallback(
@@ -163,22 +185,59 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({
     [mode, email, password, confirmPassword, login, register, onClose, onRegistered],
   );
 
-  // Handle escape key
   useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
+    const handleDialogKeys = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && mode) {
         onClose();
+        return;
+      }
+
+      if (e.key !== 'Tab' || !mode || !dialogRef.current) {
+        return;
+      }
+
+      const focusable = Array.from(
+        dialogRef.current.querySelectorAll<HTMLElement>(
+          'button:not(:disabled), input:not(:disabled), [href], select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((element) => !element.hasAttribute('hidden') && element.getAttribute('aria-hidden') !== 'true');
+
+      if (focusable.length === 0) {
+        e.preventDefault();
+        dialogRef.current.focus();
+        return;
+      }
+
+      const first = focusable[0]!;
+      const last = focusable[focusable.length - 1]!;
+
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
       }
     };
-    document.addEventListener('keydown', handleEscape);
-    return () => document.removeEventListener('keydown', handleEscape);
+
+    document.addEventListener('keydown', handleDialogKeys, true);
+    return () => document.removeEventListener('keydown', handleDialogKeys, true);
   }, [mode, onClose]);
 
   if (!mode) return null;
 
   return (
     <div className="dialog-overlay" onClick={onClose}>
-      <div className="dialog-container animate-scale-in" onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={dialogRef}
+        className="dialog-container animate-scale-in"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="auth-dialog-title"
+        aria-describedby="auth-dialog-description"
+        tabIndex={-1}
+      >
         <button type="button" onClick={onClose} className="dialog-close" aria-label="Close dialog">
           <XIcon />
         </button>
@@ -216,8 +275,8 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({
               </defs>
             </svg>
           </div>
-          <h2>{mode === 'login' ? 'Welcome back' : 'Create account'}</h2>
-          <p>
+          <h2 id="auth-dialog-title">{mode === 'login' ? 'Welcome back' : 'Create account'}</h2>
+          <p id="auth-dialog-description">
             {mode === 'login'
               ? 'Sign in to access your batch jobs'
               : 'Start processing lessons in minutes'}
@@ -226,8 +285,8 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({
 
         <form onSubmit={(e) => void handleSubmit(e)} className="dialog-form">
           {error && (
-            <div className="form-error animate-fade-in">
-              <span>⚠️</span>
+            <div className="form-error animate-fade-in" role="alert" aria-live="assertive">
+              <span aria-hidden="true">⚠️</span>
               {error}
             </div>
           )}
@@ -245,7 +304,6 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
                 autoComplete="email"
-                autoFocus
               />
             </div>
           </div>

@@ -1,6 +1,6 @@
 import { createContext, type ReactNode, useEffect, useState } from 'react';
 
-type Theme = 'light' | 'dark';
+type Theme = 'light';
 
 interface ThemeContextType {
   theme: Theme;
@@ -20,8 +20,6 @@ function getInitialTheme(): Theme {
     return stored;
   }
 
-  // Dark mode is not product-ready for the editorial Phase 7 surfaces yet.
-  // Prefer a safe light default over inheriting an unusable browser/OS dark preference.
   return 'light';
 }
 
@@ -42,8 +40,8 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
     setThemeState('light');
   };
 
-  const setTheme = (newTheme: Theme) => {
-    setThemeState(newTheme === 'dark' ? 'light' : newTheme);
+  const setTheme = (_newTheme: Theme) => {
+    setThemeState('light');
   };
 
   return (

@@ -114,7 +114,7 @@ export function WorkspaceCandidatesPanel({
   }, []);
 
   return (
-    <article className={['workspace-card card', className].filter(Boolean).join(' ')}>
+    <article className={['workspace-card workspace-panel', className].filter(Boolean).join(' ')}>
       <header>
         <h2>Profile Candidates</h2>
         <p>

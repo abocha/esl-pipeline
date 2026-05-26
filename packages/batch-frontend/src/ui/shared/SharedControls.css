@@ -50,10 +50,6 @@
   color: var(--color-primary-500);
 }
 
-.dropzone-icon.bounce {
-  animation: pulse 1s ease-in-out infinite;
-}
-
 .dropzone-hint {
   font-size: var(--text-xs);
   color: var(--text-tertiary);
