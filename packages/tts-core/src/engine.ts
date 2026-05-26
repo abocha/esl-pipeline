@@ -1,5 +1,10 @@
 import { ConfigurationError } from '@esl-pipeline/contracts';
 
+import {
+  resolveDefaultTtsProvider,
+  resolveTtsProviderOrder,
+  validateTtsSelection,
+} from './descriptors.js';
 import type {
   BuildPronunciationShadowSentenceInput,
   BuildPronunciationShadowSentenceOptions,
@@ -15,33 +20,6 @@ import type {
   TtsProviderId,
   VoiceCatalog,
 } from './types.js';
-
-function resolveDefaultProvider(): TtsProviderId {
-  const raw = process.env.ESL_TTS_DEFAULT_PROVIDER?.trim().toLowerCase();
-  if (raw === 'google') return 'google';
-  return 'elevenlabs';
-}
-
-function parseProviderId(raw: string): TtsProviderId | null {
-  const normalized = raw.trim().toLowerCase();
-  if (normalized === 'elevenlabs') return 'elevenlabs';
-  if (normalized === 'google') return 'google';
-  return null;
-}
-
-function resolveProviderOrder(): TtsProviderId[] {
-  const raw = process.env.ESL_TTS_PROVIDER_ORDER?.trim();
-  if (!raw) return [];
-  const order: TtsProviderId[] = [];
-  const seen = new Set<TtsProviderId>();
-  for (const token of raw.split(',')) {
-    const parsed = parseProviderId(token);
-    if (!parsed || seen.has(parsed)) continue;
-    seen.add(parsed);
-    order.push(parsed);
-  }
-  return order;
-}
 
 export class DefaultTtsEngine implements TtsEngine {
   private readonly providers = new Map<TtsProviderId, TtsProviderAdapter>();
@@ -64,7 +42,7 @@ export class DefaultTtsEngine implements TtsEngine {
     if (explicit) return explicit;
     const preferred: TtsProviderId[] = [];
     const seen = new Set<TtsProviderId>();
-    for (const providerId of [resolveDefaultProvider(), ...resolveProviderOrder()]) {
+    for (const providerId of [resolveDefaultTtsProvider(), ...resolveTtsProviderOrder()]) {
       if (seen.has(providerId)) continue;
       seen.add(providerId);
       preferred.push(providerId);
@@ -76,7 +54,7 @@ export class DefaultTtsEngine implements TtsEngine {
 
     const firstRegistered = this.providers.keys().next().value as TtsProviderId | undefined;
     if (firstRegistered) return firstRegistered;
-    return resolveDefaultProvider();
+    return resolveDefaultTtsProvider();
   }
 
   private resolveProviderOrThrow(id: TtsProviderId): TtsProviderAdapter {
@@ -94,8 +72,13 @@ export class DefaultTtsEngine implements TtsEngine {
     options: BuildStudyTextOptions,
   ): Promise<BuildStudyTextResult> {
     const providerId = this.resolveProviderId(options.ttsProvider);
+    const selection = validateTtsSelection({ provider: providerId, model: options.ttsModel });
     const provider = this.resolveProviderOrThrow(providerId);
-    return provider.synthesizeStudyText(input, { ...options, ttsProvider: providerId });
+    return provider.synthesizeStudyText(input, {
+      ...options,
+      ttsProvider: selection.provider,
+      ttsModel: selection.model,
+    });
   }
 
   async buildPronunciationShadowSentenceMp3(
@@ -103,8 +86,13 @@ export class DefaultTtsEngine implements TtsEngine {
     options: BuildPronunciationShadowSentenceOptions,
   ): Promise<BuildPronunciationShadowSentenceResult> {
     const providerId = this.resolveProviderId(options.ttsProvider);
+    const selection = validateTtsSelection({ provider: providerId, model: options.ttsModel });
     const provider = this.resolveProviderOrThrow(providerId);
-    return provider.synthesizeShadowSentence(input, { ...options, ttsProvider: providerId });
+    return provider.synthesizeShadowSentence(input, {
+      ...options,
+      ttsProvider: selection.provider,
+      ttsModel: selection.model,
+    });
   }
 
   async buildPronunciationTextMp3(
@@ -112,8 +100,13 @@ export class DefaultTtsEngine implements TtsEngine {
     options: BuildPronunciationTextOptions,
   ): Promise<BuildPronunciationTextResult> {
     const providerId = this.resolveProviderId(options.ttsProvider);
+    const selection = validateTtsSelection({ provider: providerId, model: options.ttsModel });
     const provider = this.resolveProviderOrThrow(providerId);
-    return provider.synthesizePronunciationText(input, { ...options, ttsProvider: providerId });
+    return provider.synthesizePronunciationText(input, {
+      ...options,
+      ttsProvider: selection.provider,
+      ttsModel: selection.model,
+    });
   }
 
   async loadVoicesCatalog(provider?: TtsProviderId): Promise<VoiceCatalog> {

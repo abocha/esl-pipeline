@@ -13,7 +13,13 @@ import { renderAndPublishMarkdownToS3 } from '@esl-pipeline/html-publisher';
 import { validateMarkdown } from '@esl-pipeline/md-validator';
 import { extractPronunciationFocus, parseMarkdownContext } from '@esl-pipeline/pmd';
 import { deriveS3UploadAddress, uploadFile } from '@esl-pipeline/storage-uploader';
-import { buildStudyTextMp3, hashStudyText } from '@esl-pipeline/tts-core';
+import {
+  buildStudyTextMp3,
+  hashStudyText,
+  isTtsModelForProvider,
+  parseTtsModelId,
+  type TtsModelId,
+} from '@esl-pipeline/tts-core';
 
 import {
   createProgressCallbacksFromV2Context,
@@ -138,39 +144,37 @@ function normalizeCancellationReason(reason: unknown): string | undefined {
 
 function normalizePronunciationProviderFromManifest(
   provider?: string | null,
-): 'elevenlabs' | 'google' | 'edge-tts' | undefined {
+): 'elevenlabs' | 'google' | 'inworld' | 'edge-tts' | undefined {
   if (!provider) return undefined;
-  if (provider === 'elevenlabs' || provider === 'google') return provider;
+  if (provider === 'elevenlabs' || provider === 'google' || provider === 'inworld') return provider;
   if (provider === 'edge') return 'edge-tts';
   return undefined;
 }
 
 function normalizePrimaryPronunciationProviderFromManifest(
   provider?: string | null,
-): 'elevenlabs' | 'google' | undefined {
-  if (provider === 'elevenlabs' || provider === 'google') {
+): 'elevenlabs' | 'google' | 'inworld' | undefined {
+  if (provider === 'elevenlabs' || provider === 'google' || provider === 'inworld') {
     return provider;
   }
   return undefined;
 }
 
-function resolvePronunciationGoogleModelFromManifest(modelId?: string | null) {
-  if (
-    modelId === 'chirp3_hd' ||
-    modelId === 'studio' ||
-    modelId === 'neural2' ||
-    modelId === 'wavenet'
-  ) {
-    return modelId;
+function resolvePronunciationTtsModelFromManifest(args: {
+  provider?: 'elevenlabs' | 'google' | 'inworld';
+  modelId?: string | null;
+}): TtsModelId | undefined {
+  if (!args.provider || !args.modelId || !isTtsModelForProvider(args.provider, args.modelId)) {
+    return undefined;
   }
-  return undefined;
+  return parseTtsModelId(args.modelId) ?? undefined;
 }
 
 function resolveProviderCompatibleVoiceId(args: {
   explicitVoiceId?: string;
-  effectiveProvider?: 'elevenlabs' | 'google';
+  effectiveProvider?: 'elevenlabs' | 'google' | 'inworld';
   previousVoiceId?: string;
-  previousProvider?: 'elevenlabs' | 'google';
+  previousProvider?: 'elevenlabs' | 'google' | 'inworld';
   fallbackCandidates?: Array<{
     voiceId?: string;
     provider?: string | null;
@@ -199,9 +203,9 @@ function resolveProviderCompatibleVoiceId(args: {
 
 function resolveProviderCompatibleEdgeVoice(args: {
   explicitEdgeVoice?: string;
-  effectiveProvider?: 'edge-tts' | 'elevenlabs' | 'google';
+  effectiveProvider?: 'edge-tts' | 'elevenlabs' | 'google' | 'inworld';
   previousVoiceId?: string;
-  previousProvider?: 'edge-tts' | 'elevenlabs' | 'google';
+  previousProvider?: 'edge-tts' | 'elevenlabs' | 'google' | 'inworld';
 }): string | undefined {
   if (args.explicitEdgeVoice !== undefined) {
     return args.explicitEdgeVoice;
@@ -318,7 +322,8 @@ async function applyRerunVoicePreferences(flags: RerunFlags): Promise<void> {
     accentPreference: flags.pronunciationChunkVoiceAccent,
     provider:
       flags.pronunciationChunkTtsProvider === 'elevenlabs' ||
-      flags.pronunciationChunkTtsProvider === 'google'
+      flags.pronunciationChunkTtsProvider === 'google' ||
+      flags.pronunciationChunkTtsProvider === 'inworld'
         ? flags.pronunciationChunkTtsProvider
         : undefined,
   };
@@ -580,9 +585,8 @@ export async function newAssignment(
               force: flags.force || flags.redoTts,
               defaultAccent: flags.accentPreference,
               defaultVoiceId: flags.voiceId,
-              modelId: flags.studyTextElevenlabsModel,
               ttsProvider: flags.ttsProvider,
-              googleTtsModel: flags.googleTtsModel,
+              ttsModel: flags.ttsModel,
 
               // Pass TTS strategy options to TTS package
               ttsStrategy: flags.ttsStrategy,
@@ -674,11 +678,11 @@ export async function newAssignment(
           preview: flags.dryRun,
           force: flags.force || flags.redoTts,
           primaryTtsProvider: flags.ttsProvider,
-          primaryGoogleTtsModel: flags.googleTtsModel,
+          primaryTtsModel: flags.ttsModel,
           logger,
           primaryVoiceId: fallbackVoiceId,
           chunkTtsProvider: defaultChunkProvider,
-          chunkGoogleTtsModel: defaultChunkProvider === 'google' ? flags.googleTtsModel : undefined,
+          chunkTtsModel: defaultChunkProvider === flags.ttsProvider ? flags.ttsModel : undefined,
         });
         emitPronunciationProviderCharacterMetrics(metrics, audioArtifacts.pronunciation);
       }
@@ -1127,9 +1131,8 @@ export async function rerunAssignment(
               force: true,
               defaultAccent: flags.studyTextVoiceAccent,
               defaultVoiceId: flags.studyTextVoiceId,
-              modelId: flags.studyTextElevenlabsModel,
               ttsProvider: flags.studyTextTtsProvider,
-              googleTtsModel: flags.studyTextGoogleTtsModel,
+              ttsModel: flags.studyTextTtsModel,
               ttsStrategy: effectiveStudyTextTtsStrategy,
               dialogueLanguage: effectiveStudyTextDialogueLanguage,
               dialogueStability: effectiveStudyTextDialogueStability,
@@ -1326,24 +1329,25 @@ export async function rerunAssignment(
           regeneratePrimary: flags.regeneratePronunciationMainAudio,
           regenerateItems: flags.regeneratePronunciationChunkAudio,
           primaryTtsProvider: effectivePrimaryProvider,
-          primaryGoogleTtsModel:
-            flags.pronunciationMainGoogleTtsModel ??
-            (previousPrimaryProvider === 'google'
-              ? resolvePronunciationGoogleModelFromManifest(previousPrimaryModelId)
-              : undefined),
-          primaryModelId:
-            flags.pronunciationMainElevenlabsModel ??
-            (previousPrimaryProvider === 'elevenlabs' ? previousPrimaryModelId : undefined),
+          primaryTtsModel:
+            flags.pronunciationMainTtsModel ??
+            resolvePronunciationTtsModelFromManifest({
+              provider: previousPrimaryProvider,
+              modelId: previousPrimaryModelId,
+            }),
           primaryVoiceId: resolvedPrimaryVoiceId,
           chunkTtsProvider: effectiveChunkProvider,
-          chunkGoogleTtsModel:
-            flags.pronunciationChunkGoogleTtsModel ??
-            (previousChunkProvider === 'google'
-              ? resolvePronunciationGoogleModelFromManifest(previousChunkModelId)
-              : undefined),
-          chunkModelId:
-            flags.pronunciationChunkElevenlabsModel ??
-            (previousChunkProvider === 'elevenlabs' ? previousChunkModelId : undefined),
+          chunkTtsModel:
+            flags.pronunciationChunkTtsModel ??
+            resolvePronunciationTtsModelFromManifest({
+              provider:
+                previousChunkProvider === 'elevenlabs' ||
+                previousChunkProvider === 'google' ||
+                previousChunkProvider === 'inworld'
+                  ? previousChunkProvider
+                  : undefined,
+              modelId: previousChunkModelId,
+            }),
           chunkVoiceId: resolvedChunkVoiceId,
           chunkEdgeVoice: resolvedChunkEdgeVoice,
           logger,

@@ -217,7 +217,7 @@ describe('application/process-queue-job', () => {
         manifestMd: '/tmp/source-assignment.md',
         upload: 's3',
         pronunciationChunkTtsProvider: 'elevenlabs',
-        pronunciationChunkElevenlabsModel: 'eleven_multilingual_v2',
+        pronunciationChunkTtsModel: 'eleven_multilingual_v2',
       },
     });
 
@@ -230,7 +230,7 @@ describe('application/process-queue-job', () => {
         pronunciationChunkVoiceId: 'voice_job_default',
         pronunciationChunkVoiceAccent: 'british',
         pronunciationChunkTtsProvider: 'elevenlabs',
-        pronunciationChunkElevenlabsModel: 'eleven_multilingual_v2',
+        pronunciationChunkTtsModel: 'eleven_multilingual_v2',
       }),
       expect.any(String),
       expect.objectContaining({
@@ -280,7 +280,7 @@ describe('application/process-queue-job', () => {
         manifestMd: '/tmp/source-assignment.md',
         upload: 's3',
         pronunciationChunkTtsProvider: 'google',
-        pronunciationChunkGoogleTtsModel: 'chirp3_hd',
+        pronunciationChunkTtsModel: 'chirp3_hd',
       },
     });
 
@@ -289,7 +289,7 @@ describe('application/process-queue-job', () => {
         jobId: 'job-1',
         regeneratePronunciationChunkAudio: true,
         pronunciationChunkTtsProvider: 'google',
-        pronunciationChunkGoogleTtsModel: 'chirp3_hd',
+        pronunciationChunkTtsModel: 'chirp3_hd',
         pronunciationChunkVoiceAccent: 'american',
         pronunciationChunkVoiceId: undefined,
       }),
@@ -305,7 +305,7 @@ describe('application/process-queue-job', () => {
       state: 'queued',
       ttsProvider: 'elevenlabs',
       ttsStrategy: 'dialogue',
-      studyTextElevenlabsModel: 'eleven_v3',
+      ttsModel: 'eleven_v3',
     });
     getJobByIdSpy.mockResolvedValue(initial);
 
@@ -313,7 +313,7 @@ describe('application/process-queue-job', () => {
       state: 'running',
       ttsProvider: 'elevenlabs',
       ttsStrategy: 'dialogue',
-      studyTextElevenlabsModel: 'eleven_v3',
+      ttsModel: 'eleven_v3',
       startedAt: new Date('2024-01-01T10:01:00Z'),
     });
     const succeeded = {
@@ -348,7 +348,7 @@ describe('application/process-queue-job', () => {
         regenerateStudyTextAudio: true,
         studyTextTtsProvider: 'elevenlabs',
         studyTextTtsStrategy: 'dialogue',
-        studyTextElevenlabsModel: 'eleven_v3',
+        studyTextTtsModel: 'eleven_v3',
       }),
       expect.any(String),
       expect.objectContaining({

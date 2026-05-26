@@ -1269,7 +1269,7 @@ export function registerResumePresetRaceTests() {
           state: 'succeeded',
           ttsProvider: 'elevenlabs',
           ttsStrategy: 'dialogue',
-          studyTextElevenlabsModel: 'eleven_v3',
+          ttsModel: 'eleven_v3',
         }),
       );
 
@@ -1324,7 +1324,7 @@ export function registerResumePresetRaceTests() {
             state: 'succeeded',
             ttsProvider: 'elevenlabs',
             ttsStrategy: 'dialogue',
-            studyTextElevenlabsModel: 'eleven_v3',
+            ttsModel: 'eleven_v3',
           }),
         );
 

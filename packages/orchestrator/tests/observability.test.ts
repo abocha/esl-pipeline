@@ -471,7 +471,7 @@ describe('orchestrator observability', () => {
         upload: 's3',
         dryRun: true,
         pronunciationChunkTtsProvider: 'google',
-        pronunciationChunkGoogleTtsModel: 'chirp3_hd',
+        pronunciationChunkTtsModel: 'chirp3_hd',
       },
       { runId: 'run-rerun' },
     );
@@ -480,7 +480,7 @@ describe('orchestrator observability', () => {
     expect(rerunInvocation).toEqual(
       expect.objectContaining({
         chunkTtsProvider: 'google',
-        chunkGoogleTtsModel: 'chirp3_hd',
+        chunkTtsModel: 'chirp3_hd',
         chunkVoiceId: undefined,
       }),
     );
@@ -580,7 +580,7 @@ describe('orchestrator observability', () => {
         upload: 's3',
         dryRun: true,
         pronunciationChunkTtsProvider: 'google',
-        pronunciationChunkGoogleTtsModel: 'chirp3_hd',
+        pronunciationChunkTtsModel: 'chirp3_hd',
       },
       { runId: 'run-rerun', logger },
     );

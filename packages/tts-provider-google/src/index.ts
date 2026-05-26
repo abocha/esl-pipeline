@@ -29,8 +29,10 @@ import {
   type BuildStudyTextInput,
   type BuildStudyTextOptions,
   type BuildStudyTextResult,
+  GOOGLE_TTS_MODELS,
   type GoogleTtsModel,
   hashStudyText,
+  resolveTtsSelection,
   type SpeakerVoiceAssignment,
   type TtsProviderAdapter,
   type VoiceCatalog,
@@ -45,8 +47,6 @@ import {
 import { type GoogleVoiceListEntry, listGoogleVoices, synthesizeGoogleSpeech } from './google.js';
 
 const GOOGLE_TTS_BYTE_LIMIT = 5000;
-const GOOGLE_TTS_MODEL_FAMILIES = ['chirp3_hd', 'studio', 'neural2', 'wavenet'] as const;
-const DEFAULT_GOOGLE_TTS_MODEL: GoogleTtsModel = 'chirp3_hd';
 const GOOGLE_VOICE_CATALOG_TTL_MS = 15 * 60 * 1000;
 const CANONICAL_ROLE = ['narrator', 'teacher', 'student', 'system'] as const;
 const CANONICAL_AGE = [
@@ -131,13 +131,16 @@ const MARKDOWN_STRIPPERS: [RegExp, string][] = [
 ] as const;
 
 export function resolveGoogleTtsModel(model?: string): GoogleTtsModel {
-  const normalized = (model ?? process.env.ESL_TTS_PROVIDER_GOOGLE_MODEL ?? '')
+  const raw = model?.trim();
+  const normalized = (raw ?? '')
     .trim()
     .toLowerCase()
     .replaceAll(/[^a-z0-9]+/g, '_')
     .replaceAll(/^_+|_+$/g, '');
 
-  if (!normalized) return DEFAULT_GOOGLE_TTS_MODEL;
+  if (!normalized) {
+    return resolveTtsSelection({ provider: 'google' }).model as GoogleTtsModel;
+  }
   if (normalized === 'chirp3hd' || normalized === 'chirp_3_hd' || normalized === 'chirp3_hd') {
     return 'chirp3_hd';
   }
@@ -146,7 +149,7 @@ export function resolveGoogleTtsModel(model?: string): GoogleTtsModel {
   if (normalized === 'wavenet' || normalized === 'wave_net') return 'wavenet';
 
   throw new ConfigurationError(
-    `Unsupported ESL_TTS_PROVIDER_GOOGLE_MODEL "${model}". Use one of: ${GOOGLE_TTS_MODEL_FAMILIES.join(', ')}`,
+    `Unsupported Google TTS model "${model}". Use one of: ${GOOGLE_TTS_MODELS.join(', ')}`,
   );
 }
 
@@ -315,7 +318,7 @@ function deriveAccentFromLocale(locale: string): string {
 
 function buildFallbackGoogleCatalogSnapshot(): GoogleCatalogSnapshot {
   const generatedAt = new Date().toISOString();
-  const fallbackVoices: GoogleCatalogVoice[] = GOOGLE_TTS_MODEL_FAMILIES.map((modelFamily) => {
+  const fallbackVoices: GoogleCatalogVoice[] = GOOGLE_TTS_MODELS.map((modelFamily) => {
     const name = resolveGoogleDefaultVoice(modelFamily);
     const locale = inferLocaleFromVoiceName(name) ?? 'en-US';
     return {
@@ -616,7 +619,7 @@ function assertVoiceInSelectedModelFamily(args: {
   const supported = describeSupportedVoicesForModelFamily(args.modelFamily, args.availableVoices);
   throw new ConfigurationError(
     `Google voice "${args.voice.name}"${speakerSuffix} is ${args.voice.modelFamily}, but selected model family is ${args.modelFamily}. ` +
-      `Update ${args.source === 'profile' ? 'speaker_profiles.voice' : 'voices.yml/default voice'} to a ${args.modelFamily} voice, or change googleTtsModel. ` +
+      `Update ${args.source === 'profile' ? 'speaker_profiles.voice' : 'voices.yml/default voice'} to a ${args.modelFamily} voice, or change ttsModel. ` +
       `Sample ${args.modelFamily} voices: ${supported}`,
   );
 }
@@ -1001,7 +1004,7 @@ async function resolveStudyTextPlan(
     .filter((segment) => segment.length > 0);
   const normalizedText = sanitizedSegments.join('\n');
 
-  const modelFamily = resolveGoogleTtsModel(opts.googleTtsModel);
+  const modelFamily = resolveGoogleTtsModel(opts.ttsModel);
   const catalogSnapshot = await loadGoogleCatalogSnapshot();
   const voiceLookupByName = buildVoiceLookupByName(catalogSnapshot);
   const modelVoices = catalogSnapshot.voices.filter((voice) => voice.modelFamily === modelFamily);
@@ -1559,7 +1562,7 @@ export async function buildPronunciationShadowSentenceMp3Google(
   const outputDir = resolve(opts.outPath || (input.mdPath ? dirname(input.mdPath) : process.cwd()));
   await mkdir(outputDir, { recursive: true });
 
-  const modelFamily = resolveGoogleTtsModel(opts.googleTtsModel);
+  const modelFamily = resolveGoogleTtsModel(opts.ttsModel);
   const voiceName = input.voiceId.trim();
   const languageCode = resolveGoogleLanguageCode(opts.googleLanguageCode, voiceName);
   const apiEndpoint = resolveGoogleApiEndpoint(opts.googleApiEndpoint);
@@ -1671,7 +1674,7 @@ export async function buildPronunciationTextMp3Google(
   const outputDir = resolve(opts.outPath || (input.mdPath ? dirname(input.mdPath) : process.cwd()));
   await mkdir(outputDir, { recursive: true });
 
-  const modelFamily = resolveGoogleTtsModel(opts.googleTtsModel);
+  const modelFamily = resolveGoogleTtsModel(opts.ttsModel);
   const voiceName = input.voiceId.trim();
   const languageCode = resolveGoogleLanguageCode(opts.googleLanguageCode, voiceName);
   const apiEndpoint = resolveGoogleApiEndpoint(opts.googleApiEndpoint);
@@ -1833,7 +1836,7 @@ export function createGoogleTtsProvider(): TtsProviderAdapter {
       return {
         provider: 'google',
         modelFamily: resolveGoogleTtsModel(
-          args.studyTextOptions?.googleTtsModel ?? args.shadowOptions?.googleTtsModel,
+          args.studyTextOptions?.ttsModel ?? args.shadowOptions?.ttsModel,
         ),
         pricingToken: 'GOOGLE_TTS',
       };

@@ -6,6 +6,8 @@
 // - Purposefully small so it is easy to replace or extend.
 import { JobsOptions, Processor, Queue, QueueEvents, Worker } from 'bullmq';
 
+import type { TtsModelId } from '@esl-pipeline/contracts';
+
 import { loadConfig } from '../config/env.js';
 import { createJobLogger, logger } from './logger.js';
 import { createRedisClient } from './redis.js';
@@ -27,34 +29,19 @@ export interface QueueJobPayload {
     studyTextVoiceAccent?: string;
     studyTextVoiceId?: string;
     studyTextTtsStrategy?: 'auto' | 'dialogue' | 'tts';
-    studyTextTtsProvider?: 'elevenlabs' | 'google';
-    studyTextElevenlabsModel?:
-      | 'eleven_v3'
-      | 'eleven_multilingual_v2'
-      | 'eleven_flash_v2_5'
-      | 'eleven_flash_v2';
-    studyTextGoogleTtsModel?: 'chirp3_hd' | 'studio' | 'neural2' | 'wavenet';
+    studyTextTtsProvider?: 'elevenlabs' | 'google' | 'inworld';
+    studyTextTtsModel?: TtsModelId;
     studyTextDialogueLanguage?: string;
     studyTextDialogueStability?: number;
     studyTextDialogueSeed?: number;
     pronunciationMainVoiceAccent?: string;
     pronunciationMainVoiceId?: string;
-    pronunciationMainTtsProvider?: 'elevenlabs' | 'google';
-    pronunciationMainElevenlabsModel?:
-      | 'eleven_v3'
-      | 'eleven_multilingual_v2'
-      | 'eleven_flash_v2_5'
-      | 'eleven_flash_v2';
-    pronunciationMainGoogleTtsModel?: 'chirp3_hd' | 'studio' | 'neural2' | 'wavenet';
+    pronunciationMainTtsProvider?: 'elevenlabs' | 'google' | 'inworld';
+    pronunciationMainTtsModel?: TtsModelId;
     pronunciationChunkVoiceAccent?: string;
     pronunciationChunkVoiceId?: string;
-    pronunciationChunkTtsProvider?: 'edge-tts' | 'elevenlabs' | 'google';
-    pronunciationChunkElevenlabsModel?:
-      | 'eleven_v3'
-      | 'eleven_multilingual_v2'
-      | 'eleven_flash_v2_5'
-      | 'eleven_flash_v2';
-    pronunciationChunkGoogleTtsModel?: 'chirp3_hd' | 'studio' | 'neural2' | 'wavenet';
+    pronunciationChunkTtsProvider?: 'edge-tts' | 'elevenlabs' | 'google' | 'inworld';
+    pronunciationChunkTtsModel?: TtsModelId;
     pronunciationChunkEdgeVoice?: string;
   };
 }

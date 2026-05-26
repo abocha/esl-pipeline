@@ -11,6 +11,34 @@ vi.mock('@esl-pipeline/tts-core', () => ({
   loadVoicesCatalog: vi.fn(),
   getRegisteredTtsProvider: vi.fn(),
   registerTtsProvider: vi.fn(),
+  parseTtsProviderId: (value: unknown) =>
+    value === 'elevenlabs' || value === 'google' || value === 'inworld' ? value : undefined,
+  resolveTtsSelection: ({ provider, model }: { provider?: TtsProviderId; model?: string }) => ({
+    provider: provider ?? 'elevenlabs',
+    model:
+      model ??
+      (provider === 'google'
+        ? 'chirp3_hd'
+        : provider === 'inworld'
+          ? 'inworld-tts-2'
+          : 'eleven_multilingual_v2'),
+  }),
+  buildTtsModelOptionsByProvider: (providers: TtsProviderId[]) => {
+    const all = {
+      elevenlabs: ['eleven_v3', 'eleven_multilingual_v2', 'eleven_flash_v2_5', 'eleven_flash_v2'],
+      google: ['chirp3_hd', 'studio', 'neural2', 'wavenet'],
+      inworld: ['inworld-tts-2', 'inworld-tts-1.5-max', 'inworld-tts-1.5-mini'],
+    };
+    return Object.fromEntries(providers.map((provider) => [provider, all[provider]]));
+  },
+  buildDefaultTtsModelByProvider: (providers: TtsProviderId[]) => {
+    const all = {
+      elevenlabs: 'eleven_multilingual_v2',
+      google: process.env.ESL_TTS_PROVIDER_GOOGLE_MODEL || 'chirp3_hd',
+      inworld: 'inworld-tts-2',
+    };
+    return Object.fromEntries(providers.map((provider) => [provider, all[provider]]));
+  },
 }));
 
 const configPaths: ResolvedConfigPaths = {
@@ -160,7 +188,7 @@ describe('metadata/job-options', () => {
 
     expect(result.ttsProviders).toEqual(['google']);
     expect(result.defaultTtsProvider).toBe('google');
-    expect(result.defaultTtsModelByProvider).toEqual({ google: 'studio' });
+    expect(result.defaultTtsModelByProvider).toEqual({ google: 'chirp3_hd' });
     expect(result.ttsModelOptionsByProvider).toEqual({
       google: ['chirp3_hd', 'studio', 'neural2', 'wavenet'],
     });

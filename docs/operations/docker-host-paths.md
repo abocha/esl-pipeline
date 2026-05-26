@@ -31,6 +31,21 @@ If host paths are missing, Docker may auto-create them with root ownership and c
 - Source code is still bind-mounted at `/app` for live reload.
 - This avoids host/container dependency churn while preserving fast Docker restarts.
 
+## Adding Workspace Packages
+
+When adding a new `packages/*` workspace package, keep Docker dependency isolation in sync:
+
+1. Add a `pkg_<package_name>_node_modules` named volume in `docker-compose.yml`.
+2. Mount it in each dev workspace volume anchor at `/app/packages/<package-name>/node_modules`.
+3. Add `/app/packages/<package-name>/node_modules` to each Compose `dependency_paths` bootstrap list.
+4. Add the volume key to `scripts/docker/clean-dev-dependency-volumes.mjs` so
+   `pnpm docker:dev:clean-deps` can reset it.
+5. Run `docker compose -p esl-pipeline -f docker-compose.yml config --quiet` after editing Compose.
+
+The Inworld TTS provider follows this pattern with
+`pkg_tts_provider_inworld_node_modules` mounted at
+`/app/packages/tts-provider-inworld/node_modules`.
+
 ## Safe Startup Flow
 
 ```bash

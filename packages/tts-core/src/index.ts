@@ -58,6 +58,27 @@ export async function loadVoicesCatalog(provider?: TtsProviderId): Promise<Voice
   return defaultEngine.loadVoicesCatalog(provider);
 }
 
+export {
+  buildDefaultTtsModelByProvider,
+  buildTtsModelOptionsByProvider,
+  ELEVENLABS_TTS_DESCRIPTOR,
+  ELEVENLABS_TTS_MODELS,
+  GOOGLE_TTS_DESCRIPTOR,
+  GOOGLE_TTS_MODELS,
+  getTtsProviderDescriptor,
+  getTtsProviderDescriptors,
+  INWORLD_TTS_DESCRIPTOR,
+  INWORLD_TTS_MODELS,
+  isTtsModelForProvider,
+  parseTtsModelId,
+  parseTtsProviderId,
+  resolveDefaultTtsModel,
+  resolveDefaultTtsProvider,
+  resolveTtsProviderOrder,
+  resolveTtsSelection,
+  TTS_PROVIDER_DESCRIPTORS,
+  validateTtsSelection,
+} from './descriptors.js';
 export { createTtsEngine } from './engine.js';
 export { hashStudyText } from './hash.js';
 export type {
@@ -70,11 +91,16 @@ export type {
   BuildStudyTextInput,
   BuildStudyTextOptions,
   BuildStudyTextResult,
+  ElevenLabsTtsModelId,
   GoogleTtsModel,
+  InworldTtsModel,
   SpeakerVoiceAssignment,
   TtsEngine,
+  TtsModelId,
   TtsProviderAdapter,
+  TtsProviderDescriptor,
   TtsProviderId,
+  TtsSelection,
   TtsStrategy,
   Voice,
   VoiceCatalog,

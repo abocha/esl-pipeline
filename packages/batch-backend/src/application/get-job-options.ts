@@ -7,13 +7,17 @@ import type {
   ActionCapability,
   CefrLevel,
   GenerationOptionsPayload,
-  GoogleTtsModel,
   JobOptionsPayload,
   SttProviderId,
   TtsProviderId,
   VoiceOption,
 } from '@esl-pipeline/contracts';
 import { normalizeVoiceCatalogToOptions } from '@esl-pipeline/shared-infrastructure';
+import {
+  buildDefaultTtsModelByProvider,
+  buildTtsModelOptionsByProvider,
+  parseTtsProviderId,
+} from '@esl-pipeline/tts-core';
 import { loadVoicesCatalog as loadElevenLabsVoicesCatalog } from '@esl-pipeline/tts-provider-elevenlabs';
 
 import { loadConfig } from '../config/env.js';
@@ -37,15 +41,8 @@ interface JobOptionsCacheEntry {
 const DEFAULT_CEFR_LEVELS: CefrLevel[] = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 const DEFAULT_CEFR_DEFAULT: CefrLevel = 'B1';
 const JOB_OPTIONS_CACHE_TTL_MS = 60_000;
-const DEFAULT_TTS_PROVIDERS: TtsProviderId[] = ['elevenlabs', 'google'];
+const DEFAULT_TTS_PROVIDERS: TtsProviderId[] = ['elevenlabs', 'google', 'inworld'];
 const DEFAULT_STT_PROVIDERS: SttProviderId[] = ['deepgram', 'elevenlabs', 'google'];
-const DEFAULT_GOOGLE_TTS_MODELS: GoogleTtsModel[] = ['chirp3_hd', 'studio', 'neural2', 'wavenet'];
-const DEFAULT_ELEVENLABS_TTS_MODELS = [
-  'eleven_v3',
-  'eleven_multilingual_v2',
-  'eleven_flash_v2_5',
-  'eleven_flash_v2',
-] as const;
 
 // TODO: Remove static metadata fallback once orchestrator metadata reliability SLO is met.
 // Kept behind an explicit env gate for emergency recovery only.
@@ -276,43 +273,29 @@ function resolveTtsMetadata(
 } {
   const ttsProviders = (
     input.ttsProviders?.length ? input.ttsProviders : DEFAULT_TTS_PROVIDERS
-  ).filter(
-    (provider): provider is TtsProviderId => provider === 'elevenlabs' || provider === 'google',
-  );
+  ).filter((provider): provider is TtsProviderId => Boolean(parseTtsProviderId(provider)));
   const uniqueProviders = [...new Set(ttsProviders)];
-  const modelOptionsByProvider: Partial<Record<TtsProviderId, string[]>> = {
-    ...input.ttsModelOptionsByProvider,
-  };
+  const descriptorModelOptions = buildTtsModelOptionsByProvider(uniqueProviders);
+  const modelOptionsByProvider: Partial<Record<TtsProviderId, string[]>> = {};
+  for (const provider of uniqueProviders) {
+    const configured = input.ttsModelOptionsByProvider?.[provider];
+    modelOptionsByProvider[provider] =
+      configured && configured.length > 0
+        ? [...configured]
+        : (descriptorModelOptions[provider] ?? []);
+  }
   const defaultModelByProvider: Partial<Record<TtsProviderId, string>> = {
-    ...input.defaultTtsModelByProvider,
+    ...buildDefaultTtsModelByProvider(uniqueProviders),
   };
-
-  if (!modelOptionsByProvider.elevenlabs || modelOptionsByProvider.elevenlabs.length === 0) {
-    modelOptionsByProvider.elevenlabs = [...DEFAULT_ELEVENLABS_TTS_MODELS];
-  }
-  if (!defaultModelByProvider.elevenlabs) {
-    defaultModelByProvider.elevenlabs =
-      process.env.ESL_TTS_PROVIDER_ELEVENLABS_MODEL_ID?.trim() || 'eleven_multilingual_v2';
+  for (const provider of uniqueProviders) {
+    const configured = input.defaultTtsModelByProvider?.[provider];
+    if (configured && modelOptionsByProvider[provider]?.includes(configured)) {
+      defaultModelByProvider[provider] = configured;
+    }
   }
 
-  if (!modelOptionsByProvider.google || modelOptionsByProvider.google.length === 0) {
-    modelOptionsByProvider.google = [...DEFAULT_GOOGLE_TTS_MODELS];
-  }
-  if (
-    !defaultModelByProvider.google ||
-    !modelOptionsByProvider.google.includes(defaultModelByProvider.google)
-  ) {
-    defaultModelByProvider.google =
-      process.env.ESL_TTS_PROVIDER_GOOGLE_MODEL?.trim() ||
-      modelOptionsByProvider.google[0] ||
-      'chirp3_hd';
-  }
-
-  const defaultProviderRaw = input.defaultTtsProvider ?? process.env.ESL_TTS_DEFAULT_PROVIDER;
   const normalizedDefaultProvider =
-    defaultProviderRaw === 'elevenlabs' || defaultProviderRaw === 'google'
-      ? defaultProviderRaw
-      : undefined;
+    input.defaultTtsProvider ?? parseTtsProviderId(process.env.ESL_TTS_DEFAULT_PROVIDER);
   const defaultProvider =
     normalizedDefaultProvider && uniqueProviders.includes(normalizedDefaultProvider)
       ? normalizedDefaultProvider

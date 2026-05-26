@@ -25,6 +25,7 @@ const dependencyVolumeKeys = [
   'pkg_tts_core_node_modules',
   'pkg_tts_provider_elevenlabs_node_modules',
   'pkg_tts_provider_google_node_modules',
+  'pkg_tts_provider_inworld_node_modules',
   'example_orchestrator_service_node_modules',
 ];
 

@@ -29,3 +29,4 @@
 | `@esl-pipeline/tts-core`                | @esl-pipeline/tts-core                | no       | `packages/tts-core/README.md`                |
 | `@esl-pipeline/tts-provider-elevenlabs` | @esl-pipeline/tts-provider-elevenlabs | no       | `packages/tts-provider-elevenlabs/README.md` |
 | `@esl-pipeline/tts-provider-google`     | @esl-pipeline/tts-provider-google     | no       | `packages/tts-provider-google/README.md`     |
+| `@esl-pipeline/tts-provider-inworld`    | @esl-pipeline/tts-provider-inworld    | no       | `packages/tts-provider-inworld/README.md`    |

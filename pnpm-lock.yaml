@@ -124,12 +124,18 @@ importers:
       '@esl-pipeline/stt-provider-google':
         specifier: workspace:*
         version: link:../stt-provider-google
+      '@esl-pipeline/tts-core':
+        specifier: workspace:*
+        version: link:../tts-core
       '@esl-pipeline/tts-provider-elevenlabs':
         specifier: workspace:*
         version: link:../tts-provider-elevenlabs
       '@esl-pipeline/tts-provider-google':
         specifier: workspace:*
         version: link:../tts-provider-google
+      '@esl-pipeline/tts-provider-inworld':
+        specifier: workspace:*
+        version: link:../tts-provider-inworld
       '@fastify/cookie':
         specifier: ^11.0.2
         version: 11.0.2
@@ -384,6 +390,9 @@ importers:
       '@esl-pipeline/tts-provider-google':
         specifier: workspace:*
         version: link:../tts-provider-google
+      '@esl-pipeline/tts-provider-inworld':
+        specifier: workspace:*
+        version: link:../tts-provider-inworld
       '@types/node':
         specifier: ^25.7.0
         version: 25.7.0
@@ -682,6 +691,40 @@ importers:
       '@google-cloud/text-to-speech':
         specifier: ^6.4.1
         version: 6.4.1
+      js-yaml:
+        specifier: ^4.1.1
+        version: 4.1.1
+    devDependencies:
+      '@types/js-yaml':
+        specifier: ^4.0.9
+        version: 4.0.9
+      '@types/node':
+        specifier: ^25.7.0
+        version: 25.7.0
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.6
+        version: 4.1.6(@types/node@25.7.0)(@vitest/coverage-v8@4.1.6)(jsdom@29.1.1)(vite@8.0.12(@types/node@25.7.0)(esbuild@0.27.7)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))
+
+  packages/tts-provider-inworld:
+    dependencies:
+      '@esl-pipeline/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@esl-pipeline/pmd':
+        specifier: workspace:*
+        version: link:../pmd
+      '@esl-pipeline/provider-runtime':
+        specifier: workspace:*
+        version: link:../provider-runtime
+      '@esl-pipeline/tts-core':
+        specifier: workspace:*
+        version: link:../tts-core
+      '@inworld/tts':
+        specifier: ^1.1.1
+        version: 1.1.1
       js-yaml:
         specifier: ^4.1.1
         version: 4.1.1
@@ -1372,6 +1415,10 @@ packages:
   '@humanwhocodes/retry@0.4.3':
     resolution: {integrity: sha512-bV0Tgo9K4hfPCek+aMAn81RppFKv2ySDQeMoSZuvTASywNTnVJCArCZE2FWqpvIatKu7VMRLWlR1EazvVhDyhQ==}
     engines: {node: '>=18.18'}
+
+  '@inworld/tts@1.1.1':
+    resolution: {integrity: sha512-a7yrgkhKJN4UL2IqTqVdjuk+7kkHx6E6VvHHLnrhhhibDzk0hWyKFa9Pp35rPi4aFBXPus4x2A41MzuTJn7GSQ==}
+    engines: {node: '>=18'}
 
   '@ioredis/commands@1.5.1':
     resolution: {integrity: sha512-JH8ZL/ywcJyR9MmJ5BNqZllXNZQqQbnVZOqpPQqE1vHiFgAw4NHbvE0FOduNU8IX9babitBT46571OnPTT0Zcw==}
@@ -5724,6 +5771,8 @@ snapshots:
   '@humanwhocodes/module-importer@1.0.1': {}
 
   '@humanwhocodes/retry@0.4.3': {}
+
+  '@inworld/tts@1.1.1': {}
 
   '@ioredis/commands@1.5.1': {}
 

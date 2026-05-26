@@ -178,7 +178,7 @@ export function registerJobActionTests() {
               pronunciationMainTtsProvider: 'elevenlabs',
               regeneratePronunciationChunkAudio: true,
               pronunciationChunkTtsProvider: 'google',
-              pronunciationChunkGoogleTtsModel: 'chirp3_hd',
+              pronunciationChunkTtsModel: 'chirp3_hd',
             }),
           );
         });
@@ -206,7 +206,7 @@ export function registerJobActionTests() {
           pronunciationMainTtsProvider: 'elevenlabs',
           regeneratePronunciationChunkAudio: true,
           pronunciationChunkTtsProvider: 'google',
-          pronunciationChunkGoogleTtsModel: 'chirp3_hd',
+          pronunciationChunkTtsModel: 'chirp3_hd',
         },
       },
       {
@@ -219,7 +219,7 @@ export function registerJobActionTests() {
           pronunciationMainTtsProvider: 'elevenlabs',
           regeneratePronunciationChunkAudio: true,
           pronunciationChunkTtsProvider: 'google',
-          pronunciationChunkGoogleTtsModel: 'chirp3_hd',
+          pronunciationChunkTtsModel: 'chirp3_hd',
         },
       },
     ])('queues the $label quick rerun payload', async ({ label, description, payload }) => {
@@ -275,7 +275,7 @@ export function registerJobActionTests() {
               studyTextVoiceAccent: 'british',
               studyTextTtsStrategy: 'dialogue',
               studyTextTtsProvider: 'elevenlabs',
-              studyTextElevenlabsModel: 'eleven_v3',
+              studyTextTtsModel: 'eleven_v3',
               studyTextDialogueLanguage: 'es',
               studyTextDialogueStability: 0.42,
               studyTextDialogueSeed: 7,
@@ -392,13 +392,13 @@ export function registerJobActionTests() {
           jobId: 'job-a',
           state: 'succeeded',
           ttsProvider: 'elevenlabs',
-          studyTextElevenlabsModel: 'eleven_flash_v2_5',
+          ttsModel: 'eleven_flash_v2_5',
         });
         const jobB = makeJobStatus({
           jobId: 'job-b',
           state: 'succeeded',
           ttsProvider: 'google',
-          googleTtsModel: 'studio',
+          ttsModel: 'studio',
         });
 
         await renderPublishedAssignment({
@@ -459,7 +459,7 @@ export function registerJobActionTests() {
             expect.objectContaining({
               regenerateStudyTextAudio: true,
               studyTextTtsProvider: 'google',
-              studyTextGoogleTtsModel: 'studio',
+              studyTextTtsModel: 'studio',
             }),
           );
         });
@@ -711,7 +711,7 @@ export function registerJobActionTests() {
             withTts: true,
             ttsProvider: 'elevenlabs',
             ttsStrategy: 'dialogue',
-            studyTextElevenlabsModel: 'eleven_v3',
+            ttsModel: 'eleven_v3',
           }),
         );
 
@@ -733,7 +733,7 @@ export function registerJobActionTests() {
             withTts: true,
             ttsProvider: 'google',
             ttsStrategy: 'dialogue',
-            googleTtsModel: 'studio',
+            ttsModel: 'studio',
           }),
         );
       },

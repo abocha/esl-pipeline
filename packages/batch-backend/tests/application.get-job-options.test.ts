@@ -90,15 +90,17 @@ describe('application/get-job-options', () => {
       voices: [{ id: 'voice-1', name: 'Voice One', accent: 'accent_one', gender: 'female' }],
       uploadOptions: ['auto', 's3', 'none'],
       ttsStrategies: ['auto', 'dialogue', 'tts'],
-      ttsProviders: ['elevenlabs', 'google'],
+      ttsProviders: ['elevenlabs', 'google', 'inworld'],
       ttsModelOptionsByProvider: {
         elevenlabs: ['eleven_v3', 'eleven_multilingual_v2', 'eleven_flash_v2_5', 'eleven_flash_v2'],
         google: ['chirp3_hd', 'studio', 'neural2', 'wavenet'],
+        inworld: ['inworld-tts-2', 'inworld-tts-1.5-max', 'inworld-tts-1.5-mini'],
       },
       defaultTtsProvider: 'google',
       defaultTtsModelByProvider: {
         elevenlabs: 'eleven_flash_v2_5',
         google: 'studio',
+        inworld: 'inworld-tts-2',
       },
       learningPresets: [
         {
@@ -123,15 +125,17 @@ describe('application/get-job-options', () => {
       voices: [{ id: 'voice-1', name: 'Voice One', accent: 'accent_one', gender: 'female' }],
       uploadOptions: ['auto', 's3', 'none'],
       ttsStrategies: ['auto', 'dialogue', 'tts'],
-      ttsProviders: ['elevenlabs', 'google'],
+      ttsProviders: ['elevenlabs', 'google', 'inworld'],
       ttsModelOptionsByProvider: {
         elevenlabs: ['eleven_v3', 'eleven_multilingual_v2', 'eleven_flash_v2_5', 'eleven_flash_v2'],
         google: ['chirp3_hd', 'studio', 'neural2', 'wavenet'],
+        inworld: ['inworld-tts-2', 'inworld-tts-1.5-max', 'inworld-tts-1.5-mini'],
       },
       defaultTtsProvider: 'google',
       defaultTtsModelByProvider: {
         elevenlabs: 'eleven_flash_v2_5',
         google: 'studio',
+        inworld: 'inworld-tts-2',
       },
       learningPresets: [
         {
@@ -184,15 +188,17 @@ describe('application/get-job-options', () => {
     ]);
     expect(result.generation?.quota.usedRequestsToday).toBe(0);
     expect(result.generation?.quota.usedTokensToday).toBe(0);
-    expect(result.ttsProviders).toEqual(['elevenlabs', 'google']);
+    expect(result.ttsProviders).toEqual(['elevenlabs', 'google', 'inworld']);
     expect(result.ttsModelOptionsByProvider).toEqual({
       elevenlabs: ['eleven_v3', 'eleven_multilingual_v2', 'eleven_flash_v2_5', 'eleven_flash_v2'],
       google: ['chirp3_hd', 'studio', 'neural2', 'wavenet'],
+      inworld: ['inworld-tts-2', 'inworld-tts-1.5-max', 'inworld-tts-1.5-mini'],
     });
     expect(result.defaultTtsProvider).toBe('google');
     expect(result.defaultTtsModelByProvider).toEqual({
       elevenlabs: 'eleven_flash_v2_5',
       google: 'studio',
+      inworld: 'inworld-tts-2',
     });
   });
 
@@ -258,15 +264,17 @@ describe('application/get-job-options', () => {
     ]);
     expect(result.uploadOptions).toEqual(['auto', 's3', 'none']);
     expect(result.ttsStrategies).toEqual(['auto']);
-    expect(result.ttsProviders).toEqual(['elevenlabs', 'google']);
+    expect(result.ttsProviders).toEqual(['elevenlabs', 'google', 'inworld']);
     expect(result.ttsModelOptionsByProvider).toEqual({
       elevenlabs: ['eleven_v3', 'eleven_multilingual_v2', 'eleven_flash_v2_5', 'eleven_flash_v2'],
       google: ['chirp3_hd', 'studio', 'neural2', 'wavenet'],
+      inworld: ['inworld-tts-2', 'inworld-tts-1.5-max', 'inworld-tts-1.5-mini'],
     });
     expect(result.defaultTtsProvider).toEqual('elevenlabs');
     expect(result.defaultTtsModelByProvider).toEqual({
       elevenlabs: 'eleven_multilingual_v2',
       google: 'chirp3_hd',
+      inworld: 'inworld-tts-2',
     });
     expect(result.learningPresets).toEqual([
       {

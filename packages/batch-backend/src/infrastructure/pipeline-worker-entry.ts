@@ -136,12 +136,8 @@ async function runAssignmentPipeline(
     flags.ttsProvider = payload.ttsProvider;
   }
 
-  if (payload.studyTextElevenlabsModel) {
-    flags.studyTextElevenlabsModel = payload.studyTextElevenlabsModel;
-  }
-
-  if (payload.googleTtsModel) {
-    flags.googleTtsModel = payload.googleTtsModel;
+  if (payload.ttsModel) {
+    flags.ttsModel = payload.ttsModel;
   }
 
   const result = await (
@@ -187,21 +183,18 @@ async function runRerunPipeline(
     studyTextVoiceId: payload.studyTextVoiceId ?? undefined,
     studyTextTtsStrategy: payload.studyTextTtsStrategy ?? undefined,
     studyTextTtsProvider: payload.studyTextTtsProvider ?? undefined,
-    studyTextElevenlabsModel: payload.studyTextElevenlabsModel ?? undefined,
-    studyTextGoogleTtsModel: payload.studyTextGoogleTtsModel ?? undefined,
+    studyTextTtsModel: payload.studyTextTtsModel ?? undefined,
     studyTextDialogueLanguage: payload.studyTextDialogueLanguage ?? undefined,
     studyTextDialogueStability: payload.studyTextDialogueStability ?? undefined,
     studyTextDialogueSeed: payload.studyTextDialogueSeed ?? undefined,
     pronunciationMainVoiceAccent: payload.pronunciationMainVoiceAccent ?? undefined,
     pronunciationMainVoiceId: payload.pronunciationMainVoiceId ?? undefined,
     pronunciationMainTtsProvider: payload.pronunciationMainTtsProvider ?? undefined,
-    pronunciationMainElevenlabsModel: payload.pronunciationMainElevenlabsModel ?? undefined,
-    pronunciationMainGoogleTtsModel: payload.pronunciationMainGoogleTtsModel ?? undefined,
+    pronunciationMainTtsModel: payload.pronunciationMainTtsModel ?? undefined,
     pronunciationChunkVoiceAccent: payload.pronunciationChunkVoiceAccent ?? undefined,
     pronunciationChunkVoiceId: payload.pronunciationChunkVoiceId ?? undefined,
     pronunciationChunkTtsProvider: payload.pronunciationChunkTtsProvider ?? undefined,
-    pronunciationChunkElevenlabsModel: payload.pronunciationChunkElevenlabsModel ?? undefined,
-    pronunciationChunkGoogleTtsModel: payload.pronunciationChunkGoogleTtsModel ?? undefined,
+    pronunciationChunkTtsModel: payload.pronunciationChunkTtsModel ?? undefined,
     pronunciationChunkEdgeVoice: payload.pronunciationChunkEdgeVoice ?? undefined,
   };
   if (payload.manifestMd) {

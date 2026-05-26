@@ -1,36 +1,34 @@
 import { z } from 'zod';
 
-import type {
-  ElevenLabsTtsModelId,
-  GoogleTtsModel,
-  TtsProviderId,
-  TtsStrategy,
-} from '@esl-pipeline/contracts';
+import type { TtsModelId, TtsProviderId, TtsStrategy } from '@esl-pipeline/contracts';
+import { isTtsModelForProvider } from '@esl-pipeline/tts-core';
 
 export const publishTtsStrategySchema = z.enum(['auto', 'dialogue', 'tts']);
-export const publishTtsProviderSchema = z.enum(['elevenlabs', 'google']);
-export const publishGoogleTtsModelSchema = z.enum(['chirp3_hd', 'studio', 'neural2', 'wavenet']);
-export const publishElevenLabsModelSchema = z.enum([
+export const publishTtsProviderSchema = z.enum(['elevenlabs', 'google', 'inworld']);
+export const publishTtsModelSchema = z.enum([
   'eleven_v3',
   'eleven_multilingual_v2',
   'eleven_flash_v2_5',
   'eleven_flash_v2',
+  'chirp3_hd',
+  'studio',
+  'neural2',
+  'wavenet',
+  'inworld-tts-2',
+  'inworld-tts-1.5-max',
+  'inworld-tts-1.5-mini',
 ]);
 
 export interface PublishStudyTextOverrides {
   ttsStrategy?: TtsStrategy | null;
   ttsProvider?: TtsProviderId | null;
-  studyTextElevenlabsModel?: ElevenLabsTtsModelId | null;
-  googleTtsModel?: GoogleTtsModel | null;
+  ttsModel?: TtsModelId | null;
 }
 
 export interface PublishStudyTextOverrideIssue {
-  code:
-    | 'invalid_study_text_elevenlabs_model'
-    | 'invalid_study_text_elevenlabs_model_for_strategy'
-    | 'invalid_study_text_elevenlabs_model_for_provider';
+  code: 'invalid_tts_model' | 'invalid_tts_model_for_strategy' | 'invalid_tts_model_for_provider';
   message: string;
-  path: ['studyTextElevenlabsModel'];
+  path: ['ttsModel'];
 }
 
 export function collectPublishStudyTextOverrideIssues(
@@ -39,33 +37,28 @@ export function collectPublishStudyTextOverrideIssues(
   const issues: PublishStudyTextOverrideIssue[] = [];
   const provider = input.ttsProvider ?? undefined;
   const strategy = input.ttsStrategy ?? undefined;
-  const studyTextElevenlabsModel = input.studyTextElevenlabsModel ?? undefined;
+  const ttsModel = input.ttsModel ?? undefined;
 
-  if (provider === 'google' && studyTextElevenlabsModel !== undefined) {
+  if (provider && ttsModel !== undefined && !isTtsModelForProvider(provider, ttsModel)) {
     issues.push({
-      code: 'invalid_study_text_elevenlabs_model_for_provider',
-      path: ['studyTextElevenlabsModel'],
-      message:
-        'Google study-text publishing uses googleTtsModel; studyTextElevenlabsModel must be omitted.',
+      code: 'invalid_tts_model_for_provider',
+      path: ['ttsModel'],
+      message: `TTS model ${ttsModel} is not supported by ttsProvider=${provider}.`,
     });
   }
 
-  if (provider === 'elevenlabs' && strategy === 'auto' && studyTextElevenlabsModel !== undefined) {
+  if (provider === 'elevenlabs' && strategy === 'auto' && ttsModel !== undefined) {
     issues.push({
-      code: 'invalid_study_text_elevenlabs_model_for_strategy',
-      path: ['studyTextElevenlabsModel'],
+      code: 'invalid_tts_model_for_strategy',
+      path: ['ttsModel'],
       message: 'Automatic ElevenLabs publish jobs must use strategy-default model selection.',
     });
   }
 
-  if (
-    provider === 'elevenlabs' &&
-    studyTextElevenlabsModel === 'eleven_v3' &&
-    strategy !== 'dialogue'
-  ) {
+  if (provider === 'elevenlabs' && ttsModel === 'eleven_v3' && strategy !== 'dialogue') {
     issues.push({
-      code: 'invalid_study_text_elevenlabs_model_for_strategy',
-      path: ['studyTextElevenlabsModel'],
+      code: 'invalid_tts_model_for_strategy',
+      path: ['ttsModel'],
       message: 'eleven_v3 is only valid for ElevenLabs dialogue study-text publishing.',
     });
   }
@@ -73,12 +66,12 @@ export function collectPublishStudyTextOverrideIssues(
   if (
     provider === 'elevenlabs' &&
     strategy === 'dialogue' &&
-    studyTextElevenlabsModel !== undefined &&
-    studyTextElevenlabsModel !== 'eleven_v3'
+    ttsModel !== undefined &&
+    ttsModel !== 'eleven_v3'
   ) {
     issues.push({
-      code: 'invalid_study_text_elevenlabs_model',
-      path: ['studyTextElevenlabsModel'],
+      code: 'invalid_tts_model',
+      path: ['ttsModel'],
       message: 'Dialogue study-text publishing only supports eleven_v3.',
     });
   }

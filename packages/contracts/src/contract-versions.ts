@@ -14,7 +14,7 @@ export const MANIFEST_CONTRACT_VERSION = '2.0.0';
 export const PROMPT_SCHEMA_VERSION = '1.0.0';
 export const VALIDATOR_CONTRACT_VERSION = '1.0.0';
 export const DB_CONTRACT_VERSION = '0.18.0';
-export const DB_MIGRATION_HEAD = '0035_jobs_mode_monologue';
+export const DB_MIGRATION_HEAD = '0036_inworld_tts_provider';
 
 export const CONTRACT_VERSIONS: Readonly<ContractVersionRegistry> = Object.freeze({
   api: API_CONTRACT_VERSION,

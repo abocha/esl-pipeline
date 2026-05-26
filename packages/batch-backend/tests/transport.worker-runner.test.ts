@@ -78,7 +78,7 @@ describe('transport/worker-runner', () => {
         rerun: {
           regeneratePronunciationChunkAudio: true,
           pronunciationChunkTtsProvider: 'elevenlabs' as const,
-          pronunciationChunkElevenlabsModel: 'eleven_multilingual_v2' as const,
+          pronunciationChunkTtsModel: 'eleven_multilingual_v2' as const,
         },
       };
 
