@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [7.0.0] - 2026-05-26
+
+### Changed
+
+- Automated release from PR #85: Refactor TTS selection to generic models and add Inworld support (https://github.com/abocha/esl-pipeline/pull/85)
+
 ## [6.8.1] - 2026-05-24
 
 ### Changed
