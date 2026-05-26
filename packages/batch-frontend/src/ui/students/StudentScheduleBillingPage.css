@@ -1,4 +1,10 @@
 .student-schedule-billing-page {
+  --student-schedule-panel: color-mix(in srgb, var(--student-area-paper) 88%, transparent);
+  --student-schedule-panel-soft: color-mix(in srgb, var(--student-area-paper) 64%, transparent);
+  --student-schedule-panel-muted: color-mix(in srgb, var(--student-area-paper) 58%, transparent);
+  --student-schedule-panel-strong: color-mix(in srgb, var(--student-area-paper) 82%, transparent);
+  --student-schedule-rose-line: color-mix(in srgb, var(--student-area-rose) 24%, transparent);
+  --student-schedule-blue-line: color-mix(in srgb, var(--student-area-blue) 16%, transparent);
   display: grid;
   gap: 1rem;
 }
@@ -6,7 +12,7 @@
 .student-schedule-billing-error {
   margin: 0;
   padding: 0.85rem 1rem;
-  border: 1px solid rgba(143, 63, 50, 0.24);
+  border: 1px solid var(--student-schedule-rose-line);
   border-radius: var(--student-area-radius-sm);
   background: var(--student-area-rose-soft);
   color: var(--student-area-rose);
@@ -58,10 +64,11 @@
 .student-schedule-billing-form select,
 .student-schedule-billing-form textarea {
   width: 100%;
+  min-height: 44px;
   min-width: 0;
   border: 1px solid var(--student-area-line);
   border-radius: var(--student-area-radius-sm);
-  background: rgba(255, 253, 248, 0.88);
+  background: var(--student-schedule-panel);
   color: var(--student-area-ink);
   font: inherit;
   padding: 0.62rem 0.7rem;
@@ -78,20 +85,28 @@
 
 .student-schedule-billing-form button,
 .student-schedule-billing-list-row button,
-.student-schedule-billing-weekdays button {
+.student-schedule-billing-weekdays button,
+.student-schedule-billing-reminder button,
+.student-schedule-billing-hidden-reminder button {
   width: fit-content;
-  border: 1px solid rgba(20, 63, 115, 0.16);
+  min-height: 44px;
+  border: 1px solid var(--student-schedule-blue-line);
   border-radius: var(--student-area-radius-sm);
   background: var(--student-area-blue);
-  color: #fff;
+  color: var(--text-inverse);
   cursor: pointer;
   font-weight: 800;
   padding: 0.62rem 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .student-schedule-billing-form button:disabled,
 .student-schedule-billing-list-row button:disabled,
-.student-schedule-billing-weekdays button:disabled {
+.student-schedule-billing-weekdays button:disabled,
+.student-schedule-billing-reminder button:disabled,
+.student-schedule-billing-hidden-reminder button:disabled {
   cursor: wait;
   opacity: 0.62;
 }
@@ -110,7 +125,7 @@
   padding: 0.85rem;
   border: 1px solid var(--student-area-line);
   border-radius: var(--student-area-radius-sm);
-  background: rgba(255, 253, 248, 0.64);
+  background: var(--student-schedule-panel-soft);
 }
 
 .student-schedule-billing-list-row.compact {
@@ -126,13 +141,17 @@
 
 .student-schedule-billing-actions button,
 .student-schedule-billing-actions a {
-  padding: 0.5rem 0.65rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0.58rem 0.75rem;
 }
 
 .student-schedule-billing-actions a {
   border: 1px solid var(--student-area-line);
   border-radius: var(--student-area-radius-sm);
-  background: rgba(255, 253, 248, 0.88);
+  background: var(--student-schedule-panel);
   color: var(--student-area-blue);
   font-size: 0.85rem;
   font-weight: 800;
@@ -158,10 +177,11 @@
 }
 
 .student-schedule-billing-edit-form input {
+  min-height: 44px;
   min-width: 0;
   border: 1px solid var(--student-area-line);
   border-radius: var(--student-area-radius-sm);
-  background: rgba(255, 253, 248, 0.88);
+  background: var(--student-schedule-panel);
   color: var(--student-area-ink);
   font: inherit;
   padding: 0.55rem 0.65rem;
@@ -191,7 +211,7 @@
 
 .student-schedule-billing-weekdays button.selected {
   background: var(--student-area-blue);
-  color: #fff;
+  color: var(--text-inverse);
 }
 
 .student-schedule-billing-slot-grid {
@@ -207,7 +227,7 @@
   padding: 0.65rem;
   border: 1px solid var(--student-area-line);
   border-radius: var(--student-area-radius-sm);
-  background: rgba(255, 253, 248, 0.58);
+  background: var(--student-schedule-panel-muted);
 }
 
 .student-schedule-billing-slot-row strong {
@@ -249,7 +269,7 @@
   min-height: 4.5rem;
   border: 1px solid var(--student-area-line);
   border-radius: var(--student-area-radius-sm);
-  background: rgba(255, 253, 248, 0.82);
+  background: var(--student-schedule-panel-strong);
   color: var(--student-area-ink);
   font: inherit;
   padding: 0.7rem;

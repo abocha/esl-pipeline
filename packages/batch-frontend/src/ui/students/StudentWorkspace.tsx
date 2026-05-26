@@ -70,6 +70,7 @@ import {
   type ProfileCandidateFilter,
   type TimelineFilters,
 } from './StudentWorkspace.logic';
+import { WorkspaceAssignmentHistoryTable } from './WorkspaceAssignmentHistoryTable';
 import { WorkspaceInspectionPanel } from './WorkspaceInspectionPanel';
 import './StudentWorkspace.css';
 
@@ -1187,7 +1188,7 @@ export const StudentWorkspace: React.FC = () => {
 
   return (
     <div className="workspace-root">
-      <section className="workspace-hero card">
+      <section className="workspace-hero workspace-panel">
         <div>
           <h1>Student Workspace</h1>
           <p>
@@ -1211,7 +1212,7 @@ export const StudentWorkspace: React.FC = () => {
       </section>
 
       <section className="workspace-grid">
-        <article className="workspace-card card">
+        <article className="workspace-card workspace-panel">
           <CreateStudentDialog
             isOpen={isCreateStudentOpen}
             isBusy={createStudentBusy}
@@ -1268,7 +1269,7 @@ export const StudentWorkspace: React.FC = () => {
           )}
         </article>
 
-        <article className="workspace-card card">
+        <article className="workspace-card workspace-panel">
           <header>
             <h2>Profile Selection</h2>
             <p>Select the learner profile used by the legacy workspace.</p>
@@ -1323,7 +1324,7 @@ export const StudentWorkspace: React.FC = () => {
       </section>
 
       <section className="workspace-grid workspace-grid-wide">
-        <article className="workspace-card card">
+        <article className="workspace-card workspace-panel">
           <header>
             <h2>Foundational Profile & Revisions</h2>
             <p>
@@ -1506,7 +1507,7 @@ export const StudentWorkspace: React.FC = () => {
           )}
         </article>
 
-        <article className="workspace-card card">
+        <article className="workspace-card workspace-panel">
           <header>
             <h2>Profile Candidates</h2>
             <p>
@@ -1817,7 +1818,7 @@ export const StudentWorkspace: React.FC = () => {
           )}
         </article>
 
-        <article className="workspace-card card">
+        <article className="workspace-card workspace-panel">
           <header>
             <h2>Template Gallery & Revisions</h2>
             <p>Edit templates, restore prior revisions, and archive deprecated entries.</p>
@@ -1933,7 +1934,7 @@ export const StudentWorkspace: React.FC = () => {
           )}
         </article>
 
-        <article className="workspace-card card">
+        <article className="workspace-card workspace-panel">
           <header>
             <h2>Assignment History</h2>
             <p>Recent assignments for this student with outcome visibility.</p>
@@ -2002,52 +2003,11 @@ export const StudentWorkspace: React.FC = () => {
           {jobsLoading ? (
             <p className="workspace-muted">Loading assignment history...</p>
           ) : jobHistory.length > 0 ? (
-            <div className="workspace-table-wrap">
-              <table className="workspace-table">
-                <thead>
-                  <tr>
-                    <th>Job</th>
-                    <th>State</th>
-                    <th>Created</th>
-                    <th>Publish</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {jobHistory.map((job) => (
-                    <tr
-                      key={job.jobId}
-                      className={selectedJobId === job.jobId ? 'workspace-selected-row' : ''}
-                    >
-                      <td>
-                        <code>{job.jobId.slice(0, 8)}</code>
-                        <div className="workspace-muted">prompt {job.promptPackageId ?? 'n/a'}</div>
-                      </td>
-                      <td>{job.state}</td>
-                      <td>{new Date(job.createdAt).toLocaleString()}</td>
-                      <td>{job.htmlUrl ? 'HTML' : 'Pending'}</td>
-                      <td>
-                        <div className="workspace-inline">
-                          <Link
-                            className="workspace-secondary-btn"
-                            to={`/?jobId=${encodeURIComponent(job.jobId)}`}
-                          >
-                            Resume
-                          </Link>
-                          <button
-                            type="button"
-                            className="workspace-secondary-btn"
-                            onClick={() => handleInspectJob(job.jobId, job.promptPackageId)}
-                          >
-                            Inspect
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <WorkspaceAssignmentHistoryTable
+              jobs={jobHistory}
+              selectedJobId={selectedJobId}
+              onInspectJob={handleInspectJob}
+            />
           ) : (
             <p className="workspace-muted">No assignments found for this student yet.</p>
           )}
@@ -2069,7 +2029,7 @@ export const StudentWorkspace: React.FC = () => {
           formatDateTime={formatDateTime}
         />
 
-        <article className="workspace-card card">
+        <article className="workspace-card workspace-panel">
           <header>
             <h2>Student Timeline</h2>
             <p>Chronological student events for governance and diagnostics.</p>

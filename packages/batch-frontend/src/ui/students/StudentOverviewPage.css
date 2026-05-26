@@ -11,6 +11,21 @@
   --overview-amber-soft: var(--student-area-amber-soft);
   --overview-rose: var(--student-area-rose);
   --overview-line: var(--student-area-line);
+  --overview-paper-translucent: color-mix(in srgb, var(--overview-paper) 72%, transparent);
+  --overview-paper-translucent-strong: color-mix(in srgb, var(--overview-paper) 82%, transparent);
+  --overview-paper-soft: color-mix(in srgb, var(--overview-paper-deep) 66%, transparent);
+  --overview-paper-control: color-mix(in srgb, var(--bg-primary) 38%, transparent);
+  --overview-blue-tint: color-mix(in srgb, var(--overview-blue) 5%, transparent);
+  --overview-blue-tint-strong: color-mix(in srgb, var(--overview-blue) 8%, transparent);
+  --overview-blue-border: color-mix(in srgb, var(--overview-blue) 16%, transparent);
+  --overview-sage-tint: color-mix(in srgb, var(--overview-sage) 8%, transparent);
+  --overview-sage-border: color-mix(in srgb, var(--overview-sage) 16%, transparent);
+  --overview-amber-panel: color-mix(in srgb, var(--overview-amber-soft) 84%, transparent);
+  --overview-amber-border: color-mix(in srgb, var(--overview-amber) 28%, transparent);
+  --overview-rose-panel: color-mix(in srgb, var(--overview-rose-soft) 80%, transparent);
+  --overview-rose-border: color-mix(in srgb, var(--overview-rose) 22%, transparent);
+  --overview-ink-soft: color-mix(in srgb, var(--overview-ink) 6%, transparent);
+  --overview-shadow-soft: color-mix(in srgb, var(--overview-ink) 5%, transparent);
   color: var(--overview-ink);
 }
 
@@ -53,11 +68,11 @@
   background:
     linear-gradient(
       90deg,
-      rgba(20, 63, 115, 0.045),
-      rgba(49, 92, 58, 0.075),
-      rgba(20, 63, 115, 0.045)
+      var(--overview-blue-tint),
+      var(--overview-sage-tint),
+      var(--overview-blue-tint)
     ),
-    rgba(42, 36, 26, 0.055);
+    var(--overview-ink-soft);
   background-size: 180% 100%;
   animation: overview-skeleton-breathe 1900ms ease-in-out infinite;
 }
@@ -111,9 +126,9 @@
   align-items: center;
   width: min(100%, 32rem);
   padding: 1rem 1.15rem;
-  border: 1px solid rgba(49, 92, 58, 0.1);
+  border: 1px solid var(--overview-sage-border);
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.38);
+  background: var(--overview-paper-control);
 }
 
 .student-overview-pending-operations {
@@ -140,7 +155,7 @@
 .student-overview-pending-attention {
   min-height: 6.5rem;
   grid-template-columns: auto minmax(0, 1fr);
-  background: rgba(255, 253, 248, 0.66);
+  background: var(--overview-paper-translucent);
 }
 
 .student-overview-panel a,
@@ -168,7 +183,11 @@
   padding: clamp(1.2rem, 3vw, 1.75rem);
   border: 1px solid var(--overview-line);
   border-radius: 20px;
-  background: linear-gradient(135deg, rgba(255, 253, 248, 0.82), rgba(248, 244, 235, 0.54));
+  background: linear-gradient(
+    135deg,
+    var(--overview-paper-translucent-strong),
+    var(--overview-paper-soft)
+  );
 }
 
 .student-overview-status-panel {
@@ -182,9 +201,9 @@
 .student-overview-status-panel > p:not(.student-overview-section-label) {
   max-width: 36rem;
   margin: 0;
-  color: #2c2923;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(1.18rem, 2.3vw, 1.62rem);
+  color: var(--overview-ink);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1.3rem;
   line-height: 1.42;
 }
 
@@ -195,7 +214,7 @@
   gap: 0.85rem;
   width: min(100%, 34rem);
   padding: 1.05rem 1.2rem;
-  border: 1px solid rgba(49, 92, 58, 0.14);
+  border: 1px solid var(--overview-sage-border);
   border-radius: 18px;
   background: var(--overview-sage-soft);
   transition:
@@ -222,14 +241,14 @@
 }
 
 .student-overview-status small {
-  color: #344332;
+  color: var(--overview-sage);
   line-height: 1.4;
 }
 
 .student-overview-status-action {
   flex: 0 0 auto;
   padding: 0.45rem 0.62rem;
-  border: 1px solid rgba(49, 92, 58, 0.16);
+  border: 1px solid var(--overview-sage-border);
   border-radius: 999px;
   color: var(--overview-blue);
   font-size: 0.78rem;
@@ -239,20 +258,20 @@
 
 .student-overview-status.status-attention {
   background: var(--overview-amber-soft);
-  border-color: rgba(145, 98, 12, 0.18);
+  border-color: var(--overview-amber-border);
 }
 
 .student-overview-status.status-attention .student-overview-status-action {
-  border-color: rgba(145, 98, 12, 0.2);
+  border-color: var(--overview-amber-border);
 }
 
 .student-overview-status.status-quiet {
   background: var(--overview-blue-soft);
-  border-color: rgba(20, 63, 115, 0.14);
+  border-color: var(--overview-blue-border);
 }
 
 .student-overview-status.status-quiet .student-overview-status-action {
-  border-color: rgba(20, 63, 115, 0.16);
+  border-color: var(--overview-blue-border);
 }
 
 .student-overview-operations {
@@ -303,7 +322,7 @@
 }
 
 .student-overview-operation-row:nth-of-type(5) .student-overview-operation-icon {
-  background: #f8e6df;
+  background: var(--overview-rose-soft);
   color: var(--overview-rose);
 }
 
@@ -313,7 +332,7 @@
 }
 
 .student-overview-operation-row strong {
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: Georgia, 'Times New Roman', serif;
   font-size: 1rem;
   font-weight: 500;
 }
@@ -327,9 +346,9 @@
 .student-overview-error {
   margin: 0;
   padding: 1rem 1.1rem;
-  border: 1px solid rgba(143, 63, 50, 0.22);
+  border: 1px solid var(--overview-rose-border);
   border-radius: 18px;
-  background: rgba(255, 241, 238, 0.8);
+  background: var(--overview-rose-panel);
   color: var(--overview-rose);
 }
 
@@ -338,8 +357,8 @@
   gap: clamp(1rem, 2vw, 1.35rem);
   grid-template-columns: minmax(0, 1.08fr) minmax(280px, 0.72fr);
   grid-template-areas:
-    "snapshot side"
-    "focus side";
+    'snapshot side'
+    'focus side';
   align-items: start;
 }
 
@@ -347,8 +366,8 @@
 .student-overview-attention {
   border: 1px solid var(--overview-line);
   border-radius: 22px;
-  background: rgba(255, 253, 248, 0.72);
-  box-shadow: 0 14px 30px rgba(42, 36, 26, 0.05);
+  background: var(--overview-paper-translucent);
+  box-shadow: 0 14px 30px var(--overview-shadow-soft);
 }
 
 .student-overview-panel {
@@ -376,7 +395,7 @@
 .current-focus > a {
   width: fit-content;
   padding: 0.58rem 0.8rem;
-  border: 1px solid rgba(20, 63, 115, 0.14);
+  border: 1px solid var(--overview-blue-border);
   border-radius: 12px;
   background: var(--overview-blue-soft);
   color: var(--overview-blue);
@@ -409,7 +428,7 @@
 
 .student-overview-profile-grid strong {
   display: block;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: Georgia, 'Times New Roman', serif;
   font-size: 2.2rem;
   font-weight: 500;
   line-height: 1;
@@ -417,7 +436,7 @@
 
 .student-overview-profile-grid p {
   margin: 0;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: Georgia, 'Times New Roman', serif;
   font-size: 1.05rem;
   line-height: 1.4;
 }
@@ -446,15 +465,15 @@
 
 .current-focus h3 {
   margin: 0;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(1.55rem, 2.4vw, 2.2rem);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1.7rem;
   font-weight: 500;
   line-height: 1.12;
 }
 
 .current-focus p {
   margin: 0;
-  color: #3e382f;
+  color: var(--overview-ink);
   font-size: 1.02rem;
   line-height: 1.55;
 }
@@ -477,7 +496,7 @@
   gap: 1rem;
   padding: 1.1rem 1.25rem;
   color: var(--overview-amber);
-  background: linear-gradient(135deg, rgba(255, 248, 229, 0.96), rgba(255, 242, 207, 0.76));
+  background: linear-gradient(135deg, var(--overview-amber-soft), var(--overview-amber-panel));
   transition:
     transform 160ms ease,
     box-shadow 160ms ease;
@@ -488,9 +507,9 @@
   place-items: center;
   width: 2.6rem;
   height: 2.6rem;
-  border: 1px solid rgba(145, 98, 12, 0.32);
+  border: 1px solid var(--overview-amber-border);
   border-radius: 999px;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: Georgia, 'Times New Roman', serif;
   font-size: 1.6rem;
 }
 
@@ -500,25 +519,29 @@
 }
 
 .student-overview-attention strong {
-  color: #4d3410;
-  font-family: Georgia, "Times New Roman", serif;
+  color: var(--overview-ink);
+  font-family: Georgia, 'Times New Roman', serif;
   font-size: 1.18rem;
   font-weight: 500;
 }
 
 .student-overview-attention small {
   margin-top: 0.2rem;
-  color: #77551b;
+  color: var(--overview-amber);
   line-height: 1.45;
 }
 
 .student-overview-attention.attention-calm {
   color: var(--overview-sage);
-  background: linear-gradient(135deg, rgba(240, 247, 236, 0.96), rgba(235, 244, 229, 0.78));
+  background: linear-gradient(
+    135deg,
+    var(--overview-sage-soft),
+    color-mix(in srgb, var(--overview-sage-soft) 78%, transparent)
+  );
 }
 
 .student-overview-attention.attention-calm > span:first-child {
-  border-color: rgba(49, 92, 58, 0.28);
+  border-color: var(--overview-sage-border);
 }
 
 .recent-activity ol {
@@ -549,9 +572,9 @@
   justify-self: center;
   margin: 0.2rem 0 0;
   color: var(--overview-blue);
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: Georgia, 'Times New Roman', serif;
   font-style: italic;
-  font-size: clamp(1rem, 2vw, 1.25rem);
+  font-size: 1.1rem;
   letter-spacing: 0.03em;
 }
 
@@ -575,9 +598,9 @@
 
   .student-overview-body {
     grid-template-areas:
-      "snapshot"
-      "focus"
-      "side";
+      'snapshot'
+      'focus'
+      'side';
   }
 
   .student-overview-operations {

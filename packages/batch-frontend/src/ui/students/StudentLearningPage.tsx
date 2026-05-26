@@ -1160,7 +1160,7 @@ export const StudentLearningPage: React.FC = () => {
 
   return (
     <section className="student-learning-layout student-area-theme">
-      <article className="student-area-panel card student-learning-hero">
+      <article className="student-area-panel student-learning-hero">
         <div className="student-learning-hero-copy">
           <span className="student-learning-eyebrow">Learning</span>
           <p>
@@ -1275,7 +1275,7 @@ export const StudentLearningPage: React.FC = () => {
 
       <div className="student-learning-main">
         <div className="student-learning-primary-column">
-          <article className="student-area-panel workspace-card card student-learning-profile-card">
+          <article className="student-area-panel workspace-card student-learning-profile-card">
             <header className="student-learning-block-header">
               <div>
                 <span className="student-learning-card-eyebrow">Foundational Profile</span>
@@ -1335,7 +1335,7 @@ export const StudentLearningPage: React.FC = () => {
             </footer>
           </article>
 
-          <article className="student-area-panel workspace-card card student-learning-memory-card">
+          <article className="student-area-panel workspace-card student-learning-memory-card">
             <header className="student-learning-block-header">
               <div>
                 <span className="student-learning-card-eyebrow">Memory & Signals</span>
@@ -1465,7 +1465,7 @@ export const StudentLearningPage: React.FC = () => {
           />
         </div>
 
-        <aside className="student-area-panel workspace-card card student-learning-sidebar">
+        <aside className="student-area-panel workspace-card student-learning-sidebar">
           <header className="student-learning-block-header">
             <div>
               <span className="student-learning-card-eyebrow">Revision Rail</span>

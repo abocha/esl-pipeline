@@ -4,13 +4,17 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 
 import { useAuth } from '../context/AuthContext';
 import type { AuthMode } from './auth/AuthDialog';
-import { MinimalAssignment } from './minimal/MinimalAssignment';
 import { MinimalShell } from './minimal/MinimalShell';
 
 import './AppShell.css';
 const AuthDialog = lazy(async () => {
   const module = await import('./auth/AuthDialog');
   return { default: module.AuthDialog };
+});
+
+const MinimalAssignment = lazy(async () => {
+  const module = await import('./minimal/MinimalAssignment');
+  return { default: module.MinimalAssignment };
 });
 
 const StudentDirectoryPage = lazy(async () => {
@@ -150,7 +154,14 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ user, onLogout }) =
   return (
     <Routes>
       <Route element={<MinimalShell user={user} onLogout={onLogout} />}>
-        <Route path="/" element={<MinimalAssignment />} />
+        <Route
+          path="/"
+          element={
+            <Suspense fallback={<RouteLoadingFallback />}>
+              <MinimalAssignment />
+            </Suspense>
+          }
+        />
         <Route
           path="/business"
           element={
@@ -258,7 +269,7 @@ const RouteLoadingFallback: React.FC = () => (
 );
 
 const LoadingPanel: React.FC = () => (
-  <section className="loading-panel card animate-fade-in">
+  <section className="loading-panel app-state-panel animate-fade-in">
     <div className="loading-content">
       <div className="loading-spinner">
         <div className="spinner-ring" />
@@ -276,7 +287,7 @@ const UnauthenticatedNotice: React.FC<{ onLogin: () => void; onRegister: () => v
   onLogin,
   onRegister,
 }) => (
-  <section className="unauth-panel card animate-scale-in">
+  <section className="unauth-panel app-state-panel animate-scale-in">
     <div className="unauth-graphic">
       <div className="graphic-circles">
         <div className="circle circle-1" />

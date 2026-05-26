@@ -415,7 +415,7 @@ export const PromptTemplatesPage: React.FC = () => {
         </aside>
 
         <main className="prompt-templates-editor-panel">
-          <section className="prompt-templates-editor-card">
+          <section className="prompt-templates-editor-surface">
             <header className="prompt-templates-editor-header">
               <div>
                 <span className="prompt-templates-section-label">Editor</span>
@@ -482,7 +482,7 @@ export const PromptTemplatesPage: React.FC = () => {
             </div>
           </section>
 
-          <section className="prompt-templates-revisions-card" aria-label="Template revisions">
+          <section className="prompt-templates-revisions-surface" aria-label="Template revisions">
             <header>
               <span className="prompt-templates-section-label">Version History</span>
               <h2>Revisions</h2>

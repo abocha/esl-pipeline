@@ -12,6 +12,17 @@
   --history-rose: var(--student-area-rose);
   --history-rose-soft: var(--student-area-rose-soft);
   --history-line: var(--student-area-line);
+  --history-paper-panel: color-mix(in srgb, var(--history-paper) 64%, transparent);
+  --history-paper-panel-soft: color-mix(in srgb, var(--history-paper) 58%, transparent);
+  --history-paper-empty: color-mix(in srgb, var(--history-paper) 48%, transparent);
+  --history-highlight: color-mix(in srgb, var(--bg-primary) 72%, transparent);
+  --history-ink-line: color-mix(in srgb, var(--history-ink) 12%, transparent);
+  --history-ink-skeleton: color-mix(in srgb, var(--history-ink) 10%, transparent);
+  --history-blue-tint: color-mix(in srgb, var(--history-blue) 13%, transparent);
+  --history-blue-line: color-mix(in srgb, var(--history-blue) 20%, transparent);
+  --history-sage-tint: color-mix(in srgb, var(--history-sage) 16%, transparent);
+  --history-sage-line: color-mix(in srgb, var(--history-sage) 14%, transparent);
+  --history-amber-line: color-mix(in srgb, var(--history-amber) 24%, transparent);
   color: var(--history-ink);
 }
 
@@ -74,14 +85,14 @@
   place-items: center;
   width: clamp(8rem, 18vw, 12rem);
   aspect-ratio: 1;
-  border: 1px solid rgba(42, 36, 26, 0.12);
+  border: 1px solid var(--history-ink-line);
   border-radius: 999px;
   background:
-    radial-gradient(circle at 32% 25%, rgba(255, 255, 255, 0.72), transparent 30%),
-    linear-gradient(135deg, rgba(20, 63, 115, 0.13), rgba(49, 92, 58, 0.16));
+    radial-gradient(circle at 32% 25%, var(--history-highlight), transparent 30%),
+    linear-gradient(135deg, var(--history-blue-tint), var(--history-sage-tint));
   color: var(--history-blue);
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(3rem, 8vw, 5rem);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 3.5rem;
 }
 
 .student-history-identity p,
@@ -96,10 +107,10 @@
 
 .student-history-identity h2 {
   margin: 0.15rem 0 0.7rem;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(3rem, 7vw, 5.8rem);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 3.5rem;
   font-weight: 500;
-  letter-spacing: -0.055em;
+  letter-spacing: 0;
   line-height: 0.95;
 }
 
@@ -107,8 +118,8 @@
   display: block;
   max-width: 32rem;
   color: var(--history-ink);
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(1.1rem, 2vw, 1.4rem);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1.2rem;
   line-height: 1.6;
 }
 
@@ -118,7 +129,7 @@
   padding: 1.25rem;
   border: 1px solid var(--history-line);
   border-radius: 20px;
-  background: rgba(255, 252, 245, 0.58);
+  background: var(--history-paper-panel-soft);
 }
 
 .student-history-about p {
@@ -130,7 +141,7 @@
 .student-history-error {
   margin: 0;
   padding: 0.9rem 1rem;
-  border: 1px solid rgba(145, 98, 12, 0.24);
+  border: 1px solid var(--history-amber-line);
   border-radius: 16px;
   background: var(--history-amber-soft);
   color: var(--history-amber);
@@ -157,7 +168,7 @@
   padding: 0.65rem 1rem;
   border: 1px solid var(--history-line);
   border-radius: 12px;
-  background: rgba(255, 252, 245, 0.62);
+  background: var(--history-paper-panel);
   color: var(--history-ink);
   cursor: pointer;
   font: inherit;
@@ -166,7 +177,7 @@
 
 .student-history-filters button.active {
   background: var(--history-blue-soft);
-  border-color: rgba(20, 63, 115, 0.2);
+  border-color: var(--history-blue-line);
   color: var(--history-blue);
 }
 
@@ -183,7 +194,7 @@
 
 .student-history-date-group > h3 {
   margin: 0.3rem 0 0;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: Georgia, 'Times New Roman', serif;
   font-size: 1.25rem;
   font-weight: 500;
 }
@@ -195,7 +206,7 @@
 }
 
 .student-history-date-events::before {
-  content: "";
+  content: '';
   position: absolute;
   top: 0;
   bottom: 0;
@@ -249,7 +260,7 @@
   padding: 1.05rem 1.25rem;
   border: 1px solid var(--history-line);
   border-radius: 18px;
-  background: rgba(255, 252, 245, 0.64);
+  background: var(--history-paper-panel);
   content-visibility: auto;
   contain-intrinsic-size: 180px;
 }
@@ -277,8 +288,8 @@
 
 .student-history-event-card h3 {
   margin: 0;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(1.15rem, 2vw, 1.55rem);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1.25rem;
   font-weight: 500;
   line-height: 1.2;
 }
@@ -311,9 +322,9 @@
 
 .student-history-tags span {
   padding: 0.35rem 0.65rem;
-  border: 1px solid rgba(49, 92, 58, 0.14);
+  border: 1px solid var(--history-sage-line);
   border-radius: 8px;
-  background: rgba(237, 244, 231, 0.76);
+  background: color-mix(in srgb, var(--history-sage-soft) 76%, transparent);
   color: var(--history-sage);
   font-size: 0.82rem;
 }
@@ -350,14 +361,14 @@
   padding: clamp(2rem, 6vw, 4rem);
   border: 1px dashed var(--history-line);
   border-radius: 22px;
-  background: rgba(255, 252, 245, 0.48);
+  background: var(--history-paper-empty);
   text-align: center;
 }
 
 .student-history-empty h3 {
   margin: 0 0 0.5rem;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(1.5rem, 3vw, 2.1rem);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1.6rem;
   font-weight: 500;
 }
 
@@ -372,7 +383,7 @@
   justify-self: center;
   margin: 0;
   color: var(--history-blue);
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: Georgia, 'Times New Roman', serif;
   font-style: italic;
   letter-spacing: 0.08em;
 }
@@ -382,15 +393,20 @@
   position: relative;
   overflow: hidden;
   border-radius: 999px;
-  background: rgba(42, 36, 26, 0.1);
+  background: var(--history-ink-skeleton);
 }
 
 .student-history-skeleton::after {
-  content: "";
+  content: '';
   position: absolute;
   inset: 0;
   transform: translateX(-100%);
-  background: linear-gradient(90deg, transparent, rgba(255, 252, 245, 0.55), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--history-paper) 55%, transparent),
+    transparent
+  );
   animation: history-skeleton-breathe 1.8s ease-in-out infinite;
 }
 

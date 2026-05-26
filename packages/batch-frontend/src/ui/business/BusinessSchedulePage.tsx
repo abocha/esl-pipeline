@@ -299,7 +299,11 @@ export const BusinessSchedulePage: React.FC = () => {
                       </button>
                     </div>
                   ) : (
-                    <textarea readOnly value={reminder.copyText} />
+                    <textarea
+                      aria-label={`Reminder copy for ${reminder.studentName}`}
+                      readOnly
+                      value={reminder.copyText}
+                    />
                   )}
                 </article>
               ))

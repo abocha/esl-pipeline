@@ -24,6 +24,18 @@
   text-align: center;
 }
 
+.app-state-panel {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-card);
+  transition: box-shadow var(--transition-base);
+}
+
+.app-state-panel:hover {
+  box-shadow: var(--shadow-card-hover);
+}
+
 .loading-content {
   display: flex;
   flex-direction: column;
@@ -98,7 +110,7 @@
 .circle {
   position: absolute;
   border-radius: 999px;
-  background: rgba(20, 63, 115, 0.08);
+  background: color-mix(in srgb, var(--color-primary-500) 8%, transparent);
 }
 
 .circle-1 {
