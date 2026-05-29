@@ -263,8 +263,8 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ user, onLogout }) =
 const RouteLoadingFallback: React.FC = () => (
   <section className="route-loading-panel" aria-live="polite">
     <span className="loading-eyebrow">Opening page…</span>
-    <h2>Preparing the studio surface</h2>
-    <p>Loading the next teaching room without changing your session.</p>
+    <h2>Preparing the teaching workspace</h2>
+    <p>Loading the next view without changing your session.</p>
   </section>
 );
 

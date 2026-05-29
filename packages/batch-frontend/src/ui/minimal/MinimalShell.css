@@ -16,7 +16,7 @@
 }
 
 .app-shell::before {
-  content: '';
+  content: "";
   position: fixed;
   inset: 0;
   z-index: 0;
@@ -92,7 +92,6 @@
 
 .app-brand-copy strong {
   color: var(--app-ink);
-  font-family: var(--app-serif);
   font-size: 1.35rem;
   font-weight: 600;
   line-height: 1;

@@ -1263,7 +1263,7 @@ export const MinimalAssignment: React.FC = () => {
         id: 'advanced',
         title: 'Advanced actions',
         description: jobReady
-          ? 'Republish, rerun audio, or inspect assignment lineage.'
+          ? 'Update shared output, refresh audio, or open support details.'
           : 'Available after the assignment has been shared once.',
         status: advancedStatus,
       },

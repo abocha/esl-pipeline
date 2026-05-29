@@ -38,9 +38,8 @@
 .student-learning-layout .workspace-card {
   border: 1px solid var(--student-area-line);
   border-radius: var(--student-area-radius-md);
-  background:
-    radial-gradient(circle at top right, var(--student-learning-blue-tint-soft), transparent 34%),
-    var(--student-area-panel);
+  padding: clamp(1.15rem, 2.6vw, 1.55rem);
+  background: var(--student-area-panel);
   box-shadow: var(--student-area-shadow-soft);
 }
 
@@ -66,14 +65,16 @@
   padding: clamp(1.25rem, 3vw, 1.8rem);
   border: 1px solid var(--student-area-line);
   border-radius: var(--student-area-radius-md);
-  background:
-    radial-gradient(circle at top right, var(--student-learning-blue-tint), transparent 32%),
-    linear-gradient(
-      180deg,
-      var(--student-learning-panel-strong),
-      var(--student-learning-panel-soft)
-    );
+  background: var(--student-learning-panel-strong);
   box-shadow: var(--student-area-shadow-soft);
+}
+
+.student-learning-hero.student-area-panel {
+  padding: 0 0 0.35rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .student-learning-hero-copy h2,
@@ -121,13 +122,20 @@
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
 
-.student-learning-metric {
+.student-learning-status-grid {
+  padding-top: 0.35rem;
+}
+
+.student-learning-metric.student-area-metric-card {
   min-width: 0;
   display: grid;
   gap: 0.3rem;
-  padding: 1rem;
-  border-radius: 18px;
-  box-shadow: inset 0 1px 0 var(--student-learning-panel);
+  padding: 0.8rem 0.15rem 0;
+  border: 0;
+  border-top: 1px solid var(--student-area-line);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .student-learning-metric strong {
@@ -144,13 +152,12 @@
   line-height: 1.45;
 }
 
-.student-learning-metric-success {
-  background: var(--student-area-sage-soft);
+.student-learning-metric-success.student-area-metric-card {
+  border-color: color-mix(in srgb, var(--color-success-500) 18%, var(--student-area-line));
 }
 
-.student-learning-metric-accent {
-  border-color: color-mix(in srgb, var(--student-area-amber) 18%, transparent);
-  background: var(--student-area-amber-soft);
+.student-learning-metric-accent.student-area-metric-card {
+  border-color: color-mix(in srgb, var(--student-area-amber) 22%, var(--student-area-line));
 }
 
 .student-learning-action-grid {
@@ -162,10 +169,8 @@
 .student-learning-action-cluster {
   display: grid;
   gap: 0.65rem;
-  padding: 1rem;
-  border: 1px solid var(--student-area-line);
-  border-radius: 18px;
-  background: var(--student-learning-panel);
+  padding: 0.85rem 0 0;
+  border-top: 1px solid var(--student-area-line);
 }
 
 .student-learning-action-row,
@@ -177,16 +182,29 @@
   align-items: center;
 }
 
-.student-learning-system-note {
+.student-learning-support-details {
   display: grid;
   gap: 0.35rem;
-  padding: 0.95rem 1rem;
-  border-radius: 18px;
-  background: var(--student-learning-ink-tint);
+  padding: 0.85rem 0 0;
+  border-top: 1px solid var(--student-area-line);
   color: var(--student-area-muted);
 }
 
-.student-learning-system-note code,
+.student-learning-support-details summary,
+.student-learning-binding summary {
+  width: fit-content;
+  color: var(--student-area-blue);
+  cursor: pointer;
+  font-weight: 700;
+  list-style: none;
+}
+
+.student-learning-support-details summary::-webkit-details-marker,
+.student-learning-binding summary::-webkit-details-marker {
+  display: none;
+}
+
+.student-learning-support-details code,
 .student-learning-binding code {
   font-size: 0.92rem;
   background: var(--student-learning-panel);
@@ -213,13 +231,14 @@
 .student-learning-section-card {
   display: grid;
   gap: 0.9rem;
-  padding: 1.1rem;
-  border-radius: 22px;
-  border: 1px solid var(--student-area-line);
-  background:
-    radial-gradient(circle at top right, var(--student-learning-blue-tint-soft), transparent 28%),
-    var(--student-learning-panel);
+  padding: 1.1rem 0 0;
+  border-top: 1px solid var(--student-area-line);
   min-width: 0;
+}
+
+.student-learning-section-card:first-child {
+  padding-top: 0;
+  border-top: 0;
 }
 
 .student-learning-section-header {
@@ -410,9 +429,7 @@
 .workspace-candidate-details {
   padding: 1rem;
   border: 1px solid var(--student-learning-blue-border);
-  background:
-    radial-gradient(circle at top right, var(--student-learning-blue-tint-soft), transparent 30%),
-    var(--student-learning-panel);
+  background: var(--student-learning-panel);
 }
 
 .workspace-header-row {
@@ -451,9 +468,8 @@ details > .workspace-candidate-summary::-webkit-details-marker {
 }
 
 .workspace-candidate-copy strong {
-  font-family: var(--student-area-serif);
   font-size: 1.1rem;
-  font-weight: 500;
+  font-weight: 700;
   line-height: 1.25;
 }
 
@@ -521,9 +537,8 @@ details > .workspace-candidate-summary::-webkit-details-marker {
 .student-learning-memory-highlight {
   display: grid;
   gap: 0.45rem;
-  padding: 1rem;
-  border-radius: 18px;
-  background: var(--student-learning-ink-tint);
+  padding: 0.9rem 0 0;
+  border-top: 1px solid var(--student-area-line);
 }
 
 .student-learning-memory-highlight strong,
@@ -541,10 +556,8 @@ details > .workspace-candidate-summary::-webkit-details-marker {
   display: grid;
   gap: 0.6rem;
   min-width: 0;
-  padding: 1rem;
-  border: 1px solid var(--student-area-line);
-  border-radius: 18px;
-  background: var(--student-learning-panel);
+  padding: 0.9rem 0 0;
+  border-top: 1px solid var(--student-area-line);
 }
 
 .student-learning-memory-column ul {
@@ -558,6 +571,19 @@ details > .workspace-candidate-summary::-webkit-details-marker {
   max-height: 720px;
   overflow: auto;
   padding-right: 0.25rem;
+  gap: 0;
+}
+
+.student-learning-revision-list .workspace-list-item {
+  padding: 0.9rem 0;
+  border-top: 1px solid var(--student-area-line);
+  border-radius: 0;
+  background: transparent;
+}
+
+.student-learning-revision-list .workspace-list-item:first-child {
+  border-top: 0;
+  padding-top: 0;
 }
 
 .student-learning-sidebar {
@@ -619,6 +645,10 @@ details > .workspace-candidate-summary::-webkit-details-marker {
   .student-learning-status-panel,
   .student-learning-standalone-state {
     padding: 1.1rem;
+  }
+
+  .student-learning-hero.student-area-panel {
+    padding: 0 0 0.35rem;
   }
 
   .workspace-candidate-summary {
