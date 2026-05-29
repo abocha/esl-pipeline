@@ -24,7 +24,7 @@ const STUDENT_AREA_PAGE_META: Record<StudentAreaPageKey, StudentAreaPageMeta> = 
   },
   learning: {
     label: 'Learning',
-    summary: 'The canonical pedagogical home for profile truth and memory signals.',
+    summary: 'Learner profile, student memory, and memory evidence for future assignments.',
     density: 'learning',
   },
   history: {

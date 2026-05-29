@@ -57,7 +57,7 @@ describe('StudentDirectoryPage', () => {
 
     expect(await screen.findByText('AR')).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Alex Rivera' })).toBeTruthy();
-    expect(screen.getByText('Student ID: alex-riv')).toBeTruthy();
+    expect(screen.getByText('Support ID: alex-riv')).toBeTruthy();
     expect(screen.getByRole('link', { name: /Open student/i }).getAttribute('href')).toBe(
       '/students/student-alex-rivera/overview',
     );

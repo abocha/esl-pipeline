@@ -437,7 +437,7 @@ describe('StudentLearningPage', () => {
     });
   });
 
-  it('lets an unbound student start an empty canonical profile without falling back to legacy UI', async () => {
+  it('lets an unbound student start an empty learner profile without falling back to legacy UI', async () => {
     const user = userEvent.setup();
     const refreshStudent = vi.fn(async () => {});
 
@@ -455,7 +455,7 @@ describe('StudentLearningPage', () => {
 
     renderLearningPage();
 
-    expect(await screen.findByText(/does not have a canonical learner profile yet/i)).toBeTruthy();
+    expect(await screen.findByText(/does not have an active learner profile yet/i)).toBeTruthy();
     expect(screen.queryByRole('link', { name: /Open legacy workspace/i })).toBeNull();
 
     await user.click(screen.getByRole('button', { name: /Start Empty Profile/i }));
@@ -743,7 +743,7 @@ describe('StudentLearningPage', () => {
 
     expect(await screen.findByDisplayValue('B2')).toBeTruthy();
     expect(screen.getByText('Student B memory summary.')).toBeTruthy();
-    expect(screen.getAllByText(/Student ID: bora/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Support ID: bora/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/candidate-b/).length).toBeGreaterThan(0);
 
     await act(async () => {
@@ -852,8 +852,8 @@ describe('StudentLearningPage', () => {
       expect(screen.queryByDisplayValue('A2')).toBeNull();
       expect(screen.getByText('Student B memory summary.')).toBeTruthy();
       expect(screen.queryByText('Student A memory summary.')).toBeNull();
-      expect(screen.getAllByText(/Student ID: bora/).length).toBeGreaterThan(0);
-      expect(screen.queryByText(/Student ID: alex/)).toBeNull();
+      expect(screen.getAllByText(/Support ID: bora/).length).toBeGreaterThan(0);
+      expect(screen.queryByText(/Support ID: alex/)).toBeNull();
       expect(screen.getAllByText(/candidate-b/).length).toBeGreaterThan(0);
       expect(screen.queryByText(/candidate-a/)).toBeNull();
     });

@@ -25,7 +25,7 @@ export const UploadProgress: React.FC<UploadProgressProps> = ({ fileName, progre
         ) : null}
       </div>
       <div className="upload-progress-bar">
-        <span style={{ width: `${normalized}%` }} />
+        <span style={{ transform: `scaleX(${normalized / 100})` }} />
       </div>
       <span className="upload-progress-value">{normalized}%</span>
     </div>

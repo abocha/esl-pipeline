@@ -202,7 +202,7 @@
   max-width: 36rem;
   margin: 0;
   color: var(--overview-ink);
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: Georgia, "Times New Roman", serif;
   font-size: 1.3rem;
   line-height: 1.42;
 }
@@ -332,7 +332,7 @@
 }
 
 .student-overview-operation-row strong {
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: Georgia, "Times New Roman", serif;
   font-size: 1rem;
   font-weight: 500;
 }
@@ -357,8 +357,8 @@
   gap: clamp(1rem, 2vw, 1.35rem);
   grid-template-columns: minmax(0, 1.08fr) minmax(280px, 0.72fr);
   grid-template-areas:
-    'snapshot side'
-    'focus side';
+    "snapshot side"
+    "focus side";
   align-items: start;
 }
 
@@ -428,7 +428,7 @@
 
 .student-overview-profile-grid strong {
   display: block;
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: Georgia, "Times New Roman", serif;
   font-size: 2.2rem;
   font-weight: 500;
   line-height: 1;
@@ -436,7 +436,7 @@
 
 .student-overview-profile-grid p {
   margin: 0;
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: Georgia, "Times New Roman", serif;
   font-size: 1.05rem;
   line-height: 1.4;
 }
@@ -465,7 +465,7 @@
 
 .current-focus h3 {
   margin: 0;
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: Georgia, "Times New Roman", serif;
   font-size: 1.7rem;
   font-weight: 500;
   line-height: 1.12;
@@ -509,7 +509,7 @@
   height: 2.6rem;
   border: 1px solid var(--overview-amber-border);
   border-radius: 999px;
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: Georgia, "Times New Roman", serif;
   font-size: 1.6rem;
 }
 
@@ -520,7 +520,7 @@
 
 .student-overview-attention strong {
   color: var(--overview-ink);
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: Georgia, "Times New Roman", serif;
   font-size: 1.18rem;
   font-weight: 500;
 }
@@ -572,7 +572,7 @@
   justify-self: center;
   margin: 0.2rem 0 0;
   color: var(--overview-blue);
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: Georgia, "Times New Roman", serif;
   font-style: italic;
   font-size: 1.1rem;
   letter-spacing: 0.03em;
@@ -598,9 +598,9 @@
 
   .student-overview-body {
     grid-template-areas:
-      'snapshot'
-      'focus'
-      'side';
+      "snapshot"
+      "focus"
+      "side";
   }
 
   .student-overview-operations {
