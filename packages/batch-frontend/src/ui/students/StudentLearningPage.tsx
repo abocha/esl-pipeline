@@ -212,7 +212,7 @@ function getLegacyProfileNotice(profile: {
 }): string | null {
   if (profile.structuredContent) return null;
   return profile.content?.trim()
-    ? 'This revision is still markdown-only. Saving a draft here will create the canonical structured revision.'
+    ? 'This revision is still markdown-only. Saving a draft here will create the structured learner profile.'
     : null;
 }
 
@@ -295,9 +295,9 @@ function getSnapshotLabel(
 function getDraftSourceLabel(revision: ProfileRevisionDetailResponse | null): string {
   if (!revision) return 'Start the first profile draft to make this page actionable.';
   if (revision.status === 'draft') {
-    return 'This draft is editable but not yet shaping prompt packages until activation.';
+    return 'This draft is editable but will not shape future assignments until activation.';
   }
-  return 'This active revision is the canonical pedagogical truth for downstream generation.';
+  return 'This active learner profile shapes future assignment generation.';
 }
 
 function LearningMetricCard({
@@ -1058,7 +1058,7 @@ export const StudentLearningPage: React.FC = () => {
       >
         <span className="student-learning-eyebrow">Learning</span>
         <h2>Loading learning workspace…</h2>
-        <p>Restoring the canonical learner profile, revision history, and teaching signals.</p>
+        <p>Restoring the learner profile, revision history, and student memory.</p>
       </section>
     );
   }
@@ -1096,8 +1096,8 @@ export const StudentLearningPage: React.FC = () => {
           <span className="student-learning-eyebrow">Learning</span>
           <h2>Build the first foundational profile</h2>
           <p>
-            {student.student} does not have a canonical learner profile yet. Start an empty
-            structured profile or bootstrap one from lesson evidence here.
+            {student.student} does not have an active learner profile yet. Start an empty structured
+            profile or bootstrap one from lesson evidence here.
           </p>
         </div>
 
@@ -1164,7 +1164,8 @@ export const StudentLearningPage: React.FC = () => {
         <div className="student-learning-hero-copy">
           <span className="student-learning-eyebrow">Learning</span>
           <p>
-            Review durable truth, memory signals, and candidate facts in one calm editing surface.
+            Review the learner profile, student memory, and candidate facts in one calm editing
+            surface.
           </p>
         </div>
 
@@ -1202,7 +1203,7 @@ export const StudentLearningPage: React.FC = () => {
 
         <div className="student-learning-action-grid">
           <div className="student-learning-action-cluster">
-            <span className="student-learning-card-eyebrow">Generated Helpers</span>
+            <span className="student-learning-card-eyebrow">Profile helpers</span>
             <div className="student-learning-action-row">
               <button
                 type="button"
@@ -1232,7 +1233,7 @@ export const StudentLearningPage: React.FC = () => {
           </div>
 
           <div className="student-learning-action-cluster">
-            <span className="student-learning-card-eyebrow">Revision Controls</span>
+            <span className="student-learning-card-eyebrow">Profile actions</span>
             <div className="student-learning-action-row">
               <button
                 type="button"
@@ -1254,12 +1255,13 @@ export const StudentLearningPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="student-learning-system-note">
+        <details className="student-learning-support-details">
+          <summary>Support details</summary>
           <p>
             <strong>{formatStudentShortId(studentId)}</strong>
           </p>
           <p>{getDraftSourceLabel(currentRevision)}</p>
-        </div>
+        </details>
 
         {profileError ? (
           <p className="workspace-error" aria-live="polite">
@@ -1278,12 +1280,12 @@ export const StudentLearningPage: React.FC = () => {
           <article className="student-area-panel workspace-card student-learning-profile-card">
             <header className="student-learning-block-header">
               <div>
-                <span className="student-learning-card-eyebrow">Foundational Profile</span>
+                <span className="student-learning-card-eyebrow">Learner profile</span>
                 <h2>Foundational Profile</h2>
               </div>
               <p>
-                Structured edits here drive the rendered prompt-package profile block and should
-                stay focused on durable pedagogical truth.
+                Structured edits here shape future assignments and should stay focused on stable
+                learner context.
               </p>
             </header>
 
@@ -1326,7 +1328,7 @@ export const StudentLearningPage: React.FC = () => {
                 <strong>{profileDirty ? 'Unsaved structured edits' : 'No unsaved changes'}</strong>
                 <p>
                   Save the whole profile as one draft revision, then activate explicitly when the
-                  canonical truth looks right.
+                  learner profile looks right.
                 </p>
               </div>
               {profileLegacyNotice ? (
@@ -1338,12 +1340,12 @@ export const StudentLearningPage: React.FC = () => {
           <article className="student-area-panel workspace-card student-learning-memory-card">
             <header className="student-learning-block-header">
               <div>
-                <span className="student-learning-card-eyebrow">Memory & Signals</span>
-                <h2>Memory & Signals</h2>
+                <span className="student-learning-card-eyebrow">Student memory</span>
+                <h2>Student Memory</h2>
               </div>
               <p>
-                Use recent memory to update the profile and plan lessons without turning this page
-                into a chronology dump.
+                Use automated memory evidence to update the profile and plan lessons without turning
+                this page into a chronology dump.
               </p>
             </header>
 
@@ -1468,13 +1470,10 @@ export const StudentLearningPage: React.FC = () => {
         <aside className="student-area-panel workspace-card student-learning-sidebar">
           <header className="student-learning-block-header">
             <div>
-              <span className="student-learning-card-eyebrow">Revision Rail</span>
-              <h2>Revision History</h2>
+              <span className="student-learning-card-eyebrow">Version history</span>
+              <h2>Profile Versions</h2>
             </div>
-            <p>
-              Keep revision mechanics close at hand without letting chronology dominate the editing
-              experience.
-            </p>
+            <p>Open earlier versions when you need to compare or restore the learner profile.</p>
           </header>
 
           <div className="student-learning-rail-summary">
@@ -1485,7 +1484,7 @@ export const StudentLearningPage: React.FC = () => {
               tone={currentRevision?.status === 'draft' ? 'accent' : 'success'}
             />
             <LearningMetricCard
-              eyebrow="Student Identifier"
+              eyebrow="Support ID"
               value={formatStudentShortId(studentId)}
               detail={
                 activeBinding
@@ -1535,8 +1534,8 @@ export const StudentLearningPage: React.FC = () => {
             ))}
           </div>
 
-          <div className="student-learning-binding">
-            <strong>Student Identifier</strong>
+          <details className="student-learning-binding">
+            <summary>Support details</summary>
             {activeBinding ? (
               <p className="workspace-muted">
                 {formatStudentShortId(studentId)} • profile active since{' '}
@@ -1546,9 +1545,9 @@ export const StudentLearningPage: React.FC = () => {
               <p className="workspace-muted">Profile activation history is not available yet.</p>
             )}
             <p className="workspace-muted">
-              Learning now owns the canonical learner profile workflow.
+              Learning now owns the active learner profile workflow.
             </p>
-          </div>
+          </details>
         </aside>
       </div>
     </section>

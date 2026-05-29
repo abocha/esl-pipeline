@@ -146,7 +146,7 @@ function getProfileStatus(args: {
   if (!args.profile) {
     return {
       label: 'Needs first profile',
-      detail: 'Create the canonical learner profile in Learning.',
+      detail: 'Create the active learner profile in Learning.',
       tone: 'attention',
     };
   }

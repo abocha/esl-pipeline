@@ -10,8 +10,6 @@
   color: var(--app-ink);
 }
 
-.prompt-templates-hero,
-.prompt-templates-panel,
 .prompt-templates-editor-surface,
 .prompt-templates-revisions-surface {
   border: 1px solid var(--app-line);
@@ -25,7 +23,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: clamp(1.2rem, 3vw, 1.8rem);
+  padding: 0.2rem 0 0.35rem;
 }
 
 .prompt-templates-hero h1,
@@ -34,7 +32,6 @@
 .prompt-templates-revisions-surface h2 {
   margin: 0;
   color: var(--app-ink);
-  font-family: var(--app-serif);
   font-weight: 600;
   letter-spacing: 0;
 }
@@ -80,10 +77,24 @@
   gap: 1rem;
 }
 
-.prompt-templates-panel,
 .prompt-templates-editor-surface,
 .prompt-templates-revisions-surface {
   padding: 1rem;
+}
+
+.prompt-templates-sidebar {
+  gap: 1.25rem;
+  padding-top: 0.2rem;
+}
+
+.prompt-templates-panel {
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--app-line);
+}
+
+.prompt-templates-panel:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
 }
 
 .prompt-templates-field,
@@ -137,6 +148,34 @@
 .prompt-templates-actions,
 .prompt-templates-revision-actions {
   flex-wrap: wrap;
+}
+
+.prompt-templates-support-actions {
+  display: inline-grid;
+  gap: 0.5rem;
+}
+
+.prompt-templates-support-actions summary {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  border: 1px solid var(--app-line);
+  border-radius: var(--app-radius-sm);
+  padding: 0.62rem 0.88rem;
+  background: var(--prompt-templates-secondary-bg);
+  color: var(--app-muted);
+  cursor: pointer;
+  font-weight: 800;
+  list-style: none;
+}
+
+.prompt-templates-support-actions summary::-webkit-details-marker {
+  display: none;
+}
+
+.prompt-templates-support-actions:not([open]) > :not(summary) {
+  display: none;
 }
 
 .prompt-templates-primary,
@@ -222,14 +261,17 @@
 
 .prompt-templates-revision-list {
   display: grid;
-  gap: 0.7rem;
+  gap: 0;
 }
 
 .prompt-templates-revision-row {
-  border: 1px solid var(--app-line);
-  border-radius: var(--app-radius-sm);
-  padding: 0.85rem;
-  background: var(--prompt-templates-soft-bg);
+  border-top: 1px solid var(--app-line);
+  padding: 0.85rem 0;
+}
+
+.prompt-templates-revision-row:first-child {
+  border-top: 0;
+  padding-top: 0;
 }
 
 .prompt-templates-revision-row div:first-child {

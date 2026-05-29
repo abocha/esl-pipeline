@@ -16,7 +16,7 @@ export function getShortStudentId(studentId: string | null | undefined): string 
 }
 
 export function formatStudentShortId(studentId: string | null | undefined): string {
-  return `Student ID: ${getShortStudentId(studentId)}`;
+  return `Support ID: ${getShortStudentId(studentId)}`;
 }
 
 export function getStudentInitials(name: string | null | undefined): string {

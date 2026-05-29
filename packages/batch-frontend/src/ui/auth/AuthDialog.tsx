@@ -200,7 +200,10 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({
         dialogRef.current.querySelectorAll<HTMLElement>(
           'button:not(:disabled), input:not(:disabled), [href], select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
         ),
-      ).filter((element) => !element.hasAttribute('hidden') && element.getAttribute('aria-hidden') !== 'true');
+      ).filter(
+        (element) =>
+          !element.hasAttribute('hidden') && element.getAttribute('aria-hidden') !== 'true',
+      );
 
       if (focusable.length === 0) {
         e.preventDefault();

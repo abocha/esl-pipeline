@@ -128,7 +128,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
 
     expect(
       screen.getByText(
-        /Share the assignment once to unlock republish, reruns, cancellation, and lineage details\./i,
+        /Share the assignment once to unlock updates, audio refreshes, cancellation, and support details\./i,
       ),
     ).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Show advanced actions/i })).toBeNull();
@@ -189,7 +189,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
     expect(screen.getByRole('button', { name: /Republish current draft/i })).toBeTruthy();
   });
 
-  it('shows support-facing audio notices in advanced lineage details', async () => {
+  it('shows support-facing audio notices in advanced support details', async () => {
     vi.mocked(api.fetchJobProvenance).mockResolvedValueOnce({
       job: {
         id: 'job-1',

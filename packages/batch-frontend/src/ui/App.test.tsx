@@ -192,7 +192,7 @@ describe('App', () => {
     expect(screen.getByText('teacher@example.com')).toBeTruthy();
     expect(await screen.findByText('Minimal assignment content')).toBeTruthy();
     expect(screen.getByRole('link', { name: /Business/i })).toBeTruthy();
-    expect(screen.getByRole('link', { name: /Prompts/i })).toBeTruthy();
+    expect(screen.getByRole('link', { name: /Assignment Templates/i })).toBeTruthy();
     expect(document.querySelector('style')?.textContent ?? '').not.toContain('.app-shell::before');
 
     await user.click(screen.getByRole('link', { name: /Skip to main content/i }));
@@ -237,7 +237,7 @@ describe('App', () => {
 
     renderApp();
 
-    await user.click(screen.getByRole('link', { name: /Prompts/i }));
+    await user.click(screen.getByRole('link', { name: /Assignment Templates/i }));
 
     expect(await screen.findByText('Prompt templates content')).toBeTruthy();
   });

@@ -224,7 +224,7 @@ describe('StudentOverviewPage', () => {
 
     expect(await screen.findByText('On track')).toBeTruthy();
     expect(screen.queryByRole('heading', { name: 'Alex Rivera' })).toBeNull();
-    expect(screen.queryByText('Student ID: alex')).toBeNull();
+    expect(screen.queryByText('Support ID: alex')).toBeNull();
     expect(screen.getByText('B1')).toBeTruthy();
     expect(screen.getAllByText('Speak confidently in workplace meetings.')).toHaveLength(2);
     expect(screen.getByText('Clear ideas')).toBeTruthy();
@@ -366,7 +366,7 @@ describe('StudentOverviewPage', () => {
     expect(screen.getByText('1 candidate profile update waiting.')).toBeTruthy();
   });
 
-  it('handles students without a canonical learner profile', async () => {
+  it('handles students without an active learner profile', async () => {
     apiMocks.getStudentOverviewSurface.mockResolvedValue(
       makeOverviewSurface({
         profile: null,

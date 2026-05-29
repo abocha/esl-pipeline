@@ -574,7 +574,8 @@ export function AdvancedActionsStage({
     >
       {!jobReady ? (
         <p className="minimal-help">
-          Share the assignment once to unlock republish, reruns, cancellation, and lineage details.
+          Share the assignment once to unlock updates, audio refreshes, cancellation, and support
+          details.
         </p>
       ) : controller.showAdvancedActions ? (
         <div className="minimal-stage-layout">
@@ -587,10 +588,6 @@ export function AdvancedActionsStage({
               <button type="button" className="minimal-secondary" onClick={onRefreshActions}>
                 Refresh actions
               </button>
-            </div>
-            <div className="minimal-meta">
-              <span>Job ID: {jobStatus?.jobId}</span>
-              <span>State: {jobStatus?.state}</span>
             </div>
             <section className="minimal-rerun-quick" aria-label="Quick reruns">
               <div className="minimal-list-heading">
@@ -1034,10 +1031,10 @@ export function AdvancedActionsStage({
 
           <div className="minimal-stage-panel">
             <div className="minimal-stage-panel-title">
-              <h3>Cancel and inspect</h3>
+              <h3>Cancel and support details</h3>
               <p>
-                Use these tools when you need to stop a job or trace exactly how the current output
-                was made.
+                Use these tools when you need to stop a job or review the support details behind the
+                current output.
               </p>
             </div>
             <div className="minimal-block">
@@ -1078,12 +1075,11 @@ export function AdvancedActionsStage({
             {controller.actionSuccess ? (
               <p className="minimal-success">{controller.actionSuccess}</p>
             ) : null}
-            <details className="minimal-details" open>
-              <summary>Assignment lineage</summary>
+            <details className="minimal-details">
+              <summary>Support details</summary>
               <div className="minimal-section-header">
                 <p className="minimal-help">
-                  See which prompt, draft, profile snapshot, and audio chain produced this
-                  assignment.
+                  See the job, template, profile, memory, and audio chain behind this assignment.
                 </p>
                 <button
                   type="button"
@@ -1099,6 +1095,10 @@ export function AdvancedActionsStage({
               ) : null}
               {controller.jobProvenance ? (
                 <>
+                  <div className="minimal-meta">
+                    <span>Job ID: {jobStatus?.jobId}</span>
+                    <span>State: {jobStatus?.state}</span>
+                  </div>
                   <div className="minimal-meta">
                     <span>Source job: {controller.jobProvenance.job.sourceJobId ?? 'none'}</span>
                     <span>
@@ -1182,7 +1182,7 @@ export function AdvancedActionsStage({
                   )}
                 </>
               ) : (
-                <p className="minimal-muted">Lineage details will appear once loaded.</p>
+                <p className="minimal-muted">Support details will appear once loaded.</p>
               )}
             </details>
           </div>

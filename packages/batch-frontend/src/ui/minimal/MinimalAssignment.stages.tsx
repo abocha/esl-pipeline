@@ -961,7 +961,7 @@ export function ContextStageSection({
           {!selectedProfileId ? (
             <p className="minimal-muted">
               No learner profile is selected for this student yet. Open the Learning page to create
-              or choose the canonical profile before generating instructions.
+              or choose the active learner profile before generating instructions.
             </p>
           ) : null}
           <div className="minimal-inline">
