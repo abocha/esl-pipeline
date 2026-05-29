@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [7.0.2] - 2026-05-29
+
+### Changed
+
+- Automated release from PR #87: Distill teacher-facing frontend language and card density (https://github.com/abocha/esl-pipeline/pull/87)
+
 ## [7.0.1] - 2026-05-26
 
 ### Changed
