@@ -6,6 +6,7 @@ p1_count: 2
 timestamp: 2026-05-26T19-37-03Z
 slug: packages-batch-frontend-src-ui
 ---
+
 **Overall Impression**
 
 The frontend repair is a real improvement: auth is more semantic, the most generic glass/card language was reduced, the assignment flow lazy-loads cleanly, and live route checks on `http://localhost:5173/`, `/students`, and `/prompts` show authenticated content rendering with no sampled horizontal overflow or unlabeled buttons at the default Browser viewport.
@@ -14,19 +15,19 @@ The remaining issue is not polish by itself. The product still carries two menta
 
 **Design Health Score**
 
-| # | Heuristic | Score | Notes |
-|---|---:|---:|---|
-| 1 | Visibility of system status | 3 | Loading, dirty, empty, and route status affordances are visible; old dense panels still bury state changes. |
-| 2 | Match with real world | 3 | Teacher language improved; internal terms like prompt package, lineage, binding, and revision controls still leak. |
-| 3 | User control and freedom | 3 | Confirm/cancel/restore patterns exist; destructive and revision actions still crowd together. |
-| 4 | Consistency and standards | 2 | Save/create/archive/restore/action vocabulary varies across prompt and student surfaces. |
-| 5 | Error prevention | 3 | Disabled states and scoped labels help; advanced template/revision actions need stronger hierarchy. |
-| 6 | Recognition over recall | 3 | Navigation and table labels improved; long workflows still ask users to remember too much context. |
-| 7 | Flexibility and efficiency | 2 | Dense workflows exist, but power-user paths lack clear command structure and predictable bulk/keyboard patterns. |
-| 8 | Aesthetic and minimalist design | 2 | Generic card/glass cleanup helped; framed panels, serif data treatments, and decorative shell gradients remain. |
-| 9 | Error recovery | 3 | Errors and recovery states exist; recovery priority and copy are uneven across high-stakes actions. |
-| 10 | Help and documentation | 2 | Inline help exists in spots, but high-stakes actions do not have a consistent contextual help layer. |
-| **Total** |  | **26/40** | **Improved but still heavier than the product task model wants.** |
+| #         |                       Heuristic |     Score | Notes                                                                                                              |
+| --------- | ------------------------------: | --------: | ------------------------------------------------------------------------------------------------------------------ |
+| 1         |     Visibility of system status |         3 | Loading, dirty, empty, and route status affordances are visible; old dense panels still bury state changes.        |
+| 2         |           Match with real world |         3 | Teacher language improved; internal terms like prompt package, lineage, binding, and revision controls still leak. |
+| 3         |        User control and freedom |         3 | Confirm/cancel/restore patterns exist; destructive and revision actions still crowd together.                      |
+| 4         |       Consistency and standards |         2 | Save/create/archive/restore/action vocabulary varies across prompt and student surfaces.                           |
+| 5         |                Error prevention |         3 | Disabled states and scoped labels help; advanced template/revision actions need stronger hierarchy.                |
+| 6         |         Recognition over recall |         3 | Navigation and table labels improved; long workflows still ask users to remember too much context.                 |
+| 7         |      Flexibility and efficiency |         2 | Dense workflows exist, but power-user paths lack clear command structure and predictable bulk/keyboard patterns.   |
+| 8         | Aesthetic and minimalist design |         2 | Generic card/glass cleanup helped; framed panels, serif data treatments, and decorative shell gradients remain.    |
+| 9         |                  Error recovery |         3 | Errors and recovery states exist; recovery priority and copy are uneven across high-stakes actions.                |
+| 10        |          Help and documentation |         2 | Inline help exists in spots, but high-stakes actions do not have a consistent contextual help layer.               |
+| **Total** |                                 | **26/40** | **Improved but still heavier than the product task model wants.**                                                  |
 
 **Anti-Pattern Verdict**
 

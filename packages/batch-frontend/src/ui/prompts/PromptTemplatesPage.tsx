@@ -344,9 +344,9 @@ export const PromptTemplatesPage: React.FC = () => {
     <section className="prompt-templates-page">
       <header className="prompt-templates-hero">
         <div>
-          <span className="prompt-templates-kicker">Prompt Gallery</span>
-          <h1>Prompt Templates</h1>
-          <p>Manage the active homework-generation templates and their revision history.</p>
+          <span className="prompt-templates-kicker">Template library</span>
+          <h1>Assignment Templates</h1>
+          <p>Manage reusable assignment templates and their version history.</p>
         </div>
         <button
           type="button"
@@ -359,10 +359,10 @@ export const PromptTemplatesPage: React.FC = () => {
       </header>
 
       <div className="prompt-templates-layout">
-        <aside className="prompt-templates-sidebar" aria-label="Prompt template controls">
+        <aside className="prompt-templates-sidebar" aria-label="Assignment template controls">
           <section className="prompt-templates-panel">
             <header>
-              <span className="prompt-templates-section-label">Active Template</span>
+              <span className="prompt-templates-section-label">Active template</span>
               <h2>Selection</h2>
             </header>
             {hasTemplates ? (
@@ -383,7 +383,7 @@ export const PromptTemplatesPage: React.FC = () => {
               </label>
             ) : (
               <div className="prompt-templates-empty-small">
-                <strong>No active prompt templates</strong>
+                <strong>No active assignment templates</strong>
                 <span>Create one from the starter scaffold to unblock generation.</span>
               </div>
             )}
@@ -391,7 +391,7 @@ export const PromptTemplatesPage: React.FC = () => {
 
           <section className="prompt-templates-panel">
             <header>
-              <span className="prompt-templates-section-label">New Template</span>
+              <span className="prompt-templates-section-label">New template</span>
               <h2>Create</h2>
             </header>
             <label className="prompt-templates-field">
@@ -420,7 +420,7 @@ export const PromptTemplatesPage: React.FC = () => {
               <div>
                 <span className="prompt-templates-section-label">Editor</span>
                 <h2>{selectedTemplateLabel || 'No template selected'}</h2>
-                <p>{currentTemplate?.id ?? 'Create or select a prompt template.'}</p>
+                <p>{currentTemplate?.id ?? 'Create or select an assignment template.'}</p>
               </div>
               <div className="prompt-templates-status-stack">
                 {currentTemplate?.currentRevisionId ? (
@@ -439,7 +439,7 @@ export const PromptTemplatesPage: React.FC = () => {
             {success ? <p className="prompt-templates-alert success">{success}</p> : null}
 
             <label className="prompt-templates-editor-field">
-              Template Content
+              Template content
               <textarea
                 value={editorText}
                 onChange={(event) => setEditorText(event.target.value)}
@@ -484,8 +484,8 @@ export const PromptTemplatesPage: React.FC = () => {
 
           <section className="prompt-templates-revisions-surface" aria-label="Template revisions">
             <header>
-              <span className="prompt-templates-section-label">Version History</span>
-              <h2>Revisions</h2>
+              <span className="prompt-templates-section-label">Version history</span>
+              <h2>Versions</h2>
             </header>
             {revisions.length > 0 ? (
               <div className="prompt-templates-revision-list">
@@ -507,16 +507,19 @@ export const PromptTemplatesPage: React.FC = () => {
                           onClick={() => void handleRestoreRevision(revision.id)}
                           disabled={isBusy}
                         >
-                          Restore {label}
+                          Restore
                         </button>
-                        <button
-                          type="button"
-                          className="prompt-templates-secondary"
-                          onClick={() => void handleActivateRevision(revision.id)}
-                          disabled={isBusy}
-                        >
-                          Activate {label}
-                        </button>
+                        <details className="prompt-templates-support-actions">
+                          <summary>More actions</summary>
+                          <button
+                            type="button"
+                            className="prompt-templates-secondary"
+                            onClick={() => void handleActivateRevision(revision.id)}
+                            disabled={isBusy}
+                          >
+                            Activate {label}
+                          </button>
+                        </details>
                       </div>
                     </article>
                   );

@@ -116,7 +116,7 @@ describe('PromptTemplatesPage', () => {
   it('loads active templates, selected content, and revision history', async () => {
     renderPromptTemplatesPage();
 
-    expect(await screen.findByRole('heading', { name: /Prompt Templates/i })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: /Assignment Templates/i })).toBeTruthy();
     expect(await screen.findByDisplayValue('DEFAULT TEMPLATE')).toBeTruthy();
     expect((screen.getByRole('combobox', { name: /Template/i }) as HTMLSelectElement).value).toBe(
       'hw/default.md',
@@ -170,7 +170,7 @@ describe('PromptTemplatesPage', () => {
     const user = userEvent.setup();
     renderPromptTemplatesPage();
 
-    const editor = (await screen.findByLabelText(/Template Content/i)) as HTMLTextAreaElement;
+    const editor = (await screen.findByLabelText(/Template content/i)) as HTMLTextAreaElement;
     await user.clear(editor);
     await user.type(editor, 'UPDATED TEMPLATE');
     await user.click(screen.getByRole('button', { name: /Save Template/i }));
@@ -205,13 +205,14 @@ describe('PromptTemplatesPage', () => {
     renderPromptTemplatesPage();
 
     const revisionList = await screen.findByLabelText(/Template revisions/i);
-    await user.click(within(revisionList).getByRole('button', { name: /Restore v1/i }));
+    await user.click(within(revisionList).getByRole('button', { name: /^Restore$/i }));
 
     await waitFor(() => {
       expect(apiMocks.restoreTemplateRevision).toHaveBeenCalledWith('hw/default.md', 'revision-1');
     });
     expect(screen.getByDisplayValue('RESTORED TEMPLATE')).toBeTruthy();
 
+    await user.click(within(revisionList).getByText(/More actions/i));
     await user.click(within(revisionList).getByRole('button', { name: /Activate v1/i }));
 
     await waitFor(() => {
@@ -240,7 +241,7 @@ describe('PromptTemplatesPage', () => {
       expect(apiMocks.deleteTemplateContent).toHaveBeenCalledWith('hw/default.md');
     });
     expect(confirmSpy).toHaveBeenCalled();
-    expect(screen.getByText(/No active prompt templates/i)).toBeTruthy();
+    expect(screen.getByText(/No active assignment templates/i)).toBeTruthy();
 
     confirmSpy.mockRestore();
   });
@@ -250,7 +251,7 @@ describe('PromptTemplatesPage', () => {
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
     renderPromptTemplatesPage();
 
-    const editor = (await screen.findByLabelText(/Template Content/i)) as HTMLTextAreaElement;
+    const editor = (await screen.findByLabelText(/Template content/i)) as HTMLTextAreaElement;
     await user.clear(editor);
     await user.type(editor, 'UNSAVED TEMPLATE');
     fireEvent.change(screen.getByRole('combobox', { name: /Template/i }), {
@@ -301,7 +302,7 @@ describe('PromptTemplatesPage', () => {
       'hw/default.md',
     );
 
-    const editor = screen.getByLabelText(/Template Content/i) as HTMLTextAreaElement;
+    const editor = screen.getByLabelText(/Template content/i) as HTMLTextAreaElement;
     await user.clear(editor);
     await user.type(editor, 'STALE EDIT');
     await user.click(screen.getByRole('button', { name: /Save Template/i }));
@@ -322,7 +323,7 @@ describe('PromptTemplatesPage', () => {
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
     renderPromptTemplatesPage();
 
-    const editor = (await screen.findByLabelText(/Template Content/i)) as HTMLTextAreaElement;
+    const editor = (await screen.findByLabelText(/Template content/i)) as HTMLTextAreaElement;
     await user.clear(editor);
     await user.type(editor, 'UNSAVED BEFORE REFRESH');
     await user.click(screen.getByRole('button', { name: /Refresh/i }));
@@ -339,7 +340,7 @@ describe('PromptTemplatesPage', () => {
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
     renderPromptTemplatesPage();
 
-    const editor = (await screen.findByLabelText(/Template Content/i)) as HTMLTextAreaElement;
+    const editor = (await screen.findByLabelText(/Template content/i)) as HTMLTextAreaElement;
     await user.clear(editor);
     await user.type(editor, 'UNSAVED BEFORE CREATE');
     await user.type(screen.getByLabelText(/New template ID/i), 'hw/custom.md');

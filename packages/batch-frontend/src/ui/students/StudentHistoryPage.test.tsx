@@ -384,7 +384,7 @@ describe('StudentHistoryPage', () => {
 
     expect(await screen.findByText('About this history')).toBeTruthy();
     expect(screen.queryByRole('heading', { name: 'Daria' })).toBeNull();
-    expect(screen.queryByText('Student ID: daria')).toBeNull();
+    expect(screen.queryByText('Support ID: daria')).toBeNull();
     expect(screen.getByText('About this history')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'All' }).getAttribute('aria-pressed')).toBe('true');
     expect(screen.getByRole('button', { name: 'Lessons' })).toBeTruthy();

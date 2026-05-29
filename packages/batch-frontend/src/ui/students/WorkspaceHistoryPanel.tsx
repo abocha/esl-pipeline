@@ -1,8 +1,8 @@
 import type { Dispatch, SetStateAction } from 'react';
 
 import type { JobListResponse, StudentTimelineResponse } from '../../utils/api';
-import { WorkspaceAssignmentHistoryTable } from './WorkspaceAssignmentHistoryTable';
 import type { HistoryFilters, TimelineFilters } from './StudentWorkspace.logic';
+import { WorkspaceAssignmentHistoryTable } from './WorkspaceAssignmentHistoryTable';
 
 export interface WorkspaceHistoryPanelProps {
   selectedStudentId: string;

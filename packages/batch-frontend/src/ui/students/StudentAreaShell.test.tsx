@@ -84,7 +84,7 @@ describe('StudentAreaShell', () => {
     ).toBe('/students');
     expect(screen.getByText('AR')).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Alex Rivera' })).toBeTruthy();
-    expect(screen.getByText('Student ID: alex-riv')).toBeTruthy();
+    expect(screen.getByText('Support ID: alex-riv')).toBeTruthy();
     expect(
       screen.getByText(
         'A chronological teaching ledger for lessons, materials, and profile changes.',
