@@ -113,6 +113,10 @@ function sanitizeAudioArtifactManifest(
   };
 }
 
+function sanitizeVoicePlan(plan: VoicePlan): VoicePlan {
+  return (plan as { mode: string }).mode === 'resolved' ? { ...plan, mode: 'deterministic' } : plan;
+}
+
 export function sanitizeAssignmentManifest(manifest: AssignmentManifest): AssignmentManifest {
   const audioArtifacts = manifest.audioArtifacts
     ? {
@@ -167,7 +171,15 @@ export function sanitizeAssignmentManifest(manifest: AssignmentManifest): Assign
     ...(manifest.htmlReused !== undefined ? { htmlReused: manifest.htmlReused } : {}),
     ...(audioArtifacts !== undefined ? { audioArtifacts } : {}),
     ...(manifest.speechPlans !== undefined ? { speechPlans: manifest.speechPlans } : {}),
-    ...(manifest.voicePlans !== undefined ? { voicePlans: manifest.voicePlans } : {}),
+    ...(manifest.voicePlans !== undefined
+      ? {
+          voicePlans: {
+            ...(manifest.voicePlans.studyText
+              ? { studyText: sanitizeVoicePlan(manifest.voicePlans.studyText) }
+              : {}),
+          },
+        }
+      : {}),
     ...(manifest.preset !== undefined ? { preset: manifest.preset } : {}),
     ...(manifest.ttsStrategy !== undefined ? { ttsStrategy: manifest.ttsStrategy } : {}),
     ...(manifest.dialogueLanguage !== undefined

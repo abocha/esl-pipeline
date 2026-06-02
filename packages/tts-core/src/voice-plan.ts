@@ -5,11 +5,12 @@ import type { PreparedStudyTextSynthesis, VoicePlan, VoicePlanAssignment } from 
 export function createResolvedVoicePlan(
   prepared: PreparedStudyTextSynthesis,
   assignments: VoicePlanAssignment[],
-  options: Pick<VoicePlan, 'ranker'> = {},
+  options: Pick<VoicePlan, 'mode' | 'ranker' | 'fallbackReason'> = {
+    mode: 'deterministic',
+  },
 ): VoicePlan {
   return {
     schemaVersion: 1,
-    mode: 'resolved',
     provider: prepared.selection.provider,
     model: prepared.selection.model,
     sourceHash: prepared.sourceHash,
@@ -36,11 +37,14 @@ export function validateVoicePlan(
   }
 
   const sourceSpeakers = new Set(
-    prepared.segments.flatMap((segment) => (segment.speaker ? [segment.speaker] : [])),
+    [
+      ...prepared.segments.flatMap((segment) => (segment.speaker ? [segment.speaker] : [])),
+      ...(prepared.speakerLabels ?? []),
+    ].map((speaker) => speaker.toLocaleLowerCase()),
   );
   const assignedSpeakers = new Set<string>();
   for (const assignment of plan.assignments) {
-    if (!sourceSpeakers.has(assignment.speaker)) {
+    if (!sourceSpeakers.has(assignment.speaker.toLocaleLowerCase())) {
       throw new ConfigurationError(
         `Voice plan assignment speaker "${assignment.speaker}" is not present in prepared text.`,
       );

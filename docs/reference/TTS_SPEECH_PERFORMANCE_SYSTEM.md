@@ -76,6 +76,7 @@ direction.
 The voice plan is structured JSON resolved before speech planning. It contains:
 
 - schema version, source hash, provider/model selection, and plan hash
+- a resolution mode: `ranked`, `deterministic`, or `fallback`
 - selected speaker assignments with compact capability snapshots
 - optional semantic-ranker provenance and fallback reason
 - compact shortlist diagnostics suitable for manifest persistence
@@ -219,8 +220,15 @@ audioArtifacts.studyText.speechPlanHash
 ```
 
 The top-level plans store validated neutral provenance. The audio artifact links to the consumed
-voice-plan and speech-plan hashes. Audio caching includes both plan hashes, rendered controls, and
-study-text assembly margins.
+voice-plan and speech-plan hashes. New voice plans use the explicit `ranked`, `deterministic`, and
+`fallback` modes. Schema-5 manifests written before this clarification may contain `resolved`;
+manifest loading normalizes that legacy token to `deterministic`.
+
+Inworld audio caching is derived from already-rendered segment payloads: voice ID, rendered text,
+SDK controls, effective inter-segment gaps, encoding, sample rate, and the assembly-margin policy.
+Planner and ranker timestamps do not affect audio identity. Any change that affects rendered audio,
+including emphasis, pauses, delivery mode, voice selection, or speaker-switch margins, invalidates
+the cache.
 
 Study-text assembly inserts deterministic minimum margins before applying optional planner pauses:
 

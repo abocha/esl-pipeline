@@ -198,4 +198,80 @@ describe('DefaultTtsEngine provider selection', () => {
     ]);
     expect(prepared.voiceAssignments).toEqual({ Maya: 'Ashley' });
   });
+
+  it('preserves rich ranked assignment resolution provenance', async () => {
+    const ranker = {
+      metadata: {
+        provider: 'google_ai_studio',
+        model: 'gemma-4-26b-a4b-it',
+        generatedAt: '2026-06-02T00:00:00.000Z',
+      },
+      async rank() {
+        return { selections: [] };
+      },
+    };
+    const engine = createTtsEngine([
+      createProvider('inworld', {
+        async resolveSpeakerAssignments() {
+          return {
+            mode: 'ranked',
+            assignments: [{ speaker: 'Maya', voiceId: 'Ashley', source: 'auto' }],
+          };
+        },
+      }),
+    ]);
+    const context = parseMarkdownContext(
+      '---\ntitle: Test\nstudent: Alex\nlevel: B1\ntopic: work\ninput_type: generate\n---\n\n:::study-text\nMaya: Hello.\n:::',
+    );
+
+    const prepared = await engine.prepareStudyTextSynthesis(
+      { context },
+      {
+        voiceMapPath: 'voices.yml',
+        outPath: '/tmp',
+        ttsProvider: 'inworld',
+        ttsModel: 'inworld-tts-2',
+        voiceRanker: ranker,
+      },
+    );
+
+    expect(prepared.voicePlan).toMatchObject({
+      mode: 'ranked',
+      ranker: ranker.metadata,
+      assignments: [{ speaker: 'Maya', voiceId: 'Ashley' }],
+    });
+  });
+
+  it('omits ranker provenance when rich resolution reports deterministic fallback', async () => {
+    const engine = createTtsEngine([
+      createProvider('inworld', {
+        async resolveSpeakerAssignments() {
+          return {
+            mode: 'deterministic',
+            fallbackReason: 'model_not_supported',
+            assignments: [{ speaker: 'Maya', voiceId: 'Ashley', source: 'fallback' }],
+          };
+        },
+      }),
+    ]);
+    const context = parseMarkdownContext(
+      '---\ntitle: Test\nstudent: Alex\nlevel: B1\ntopic: work\ninput_type: generate\n---\n\n:::study-text\nMaya: Hello.\n:::',
+    );
+
+    const prepared = await engine.prepareStudyTextSynthesis(
+      { context },
+      {
+        voiceMapPath: 'voices.yml',
+        outPath: '/tmp',
+        ttsProvider: 'inworld',
+        ttsModel: 'inworld-tts-2',
+      },
+    );
+
+    expect(prepared.voicePlan).toMatchObject({
+      mode: 'deterministic',
+      fallbackReason: 'model_not_supported',
+    });
+    expect(prepared.voicePlan).not.toHaveProperty('ranker');
+  });
 });
