@@ -272,12 +272,42 @@ async function resolveAssignmentsForStudyText(
   };
 }
 
+export function buildInworldChunkHash(args: {
+  model: string;
+  voiceId: string;
+  text: string;
+  index: number;
+  speakingRate?: number;
+  temperature?: number;
+  deliveryMode?: string;
+  sampleRateHertz: number;
+  encoding?: string;
+}): string {
+  return createHash('sha256')
+    .update(
+      JSON.stringify({
+        provider: 'inworld',
+        model: args.model,
+        voiceId: args.voiceId,
+        text: args.text,
+        index: args.index,
+        speakingRate: args.speakingRate,
+        temperature: args.temperature,
+        deliveryMode: args.deliveryMode,
+        sampleRateHertz: args.sampleRateHertz,
+        encoding: args.encoding ?? 'MP3',
+      }),
+    )
+    .digest('hex');
+}
+
 export async function buildStudyTextMp3Inworld(
   input: BuildStudyTextInput,
   opts: BuildStudyTextOptions,
 ): Promise<BuildStudyTextResult> {
   const plan = await resolveAssignmentsForStudyText(input, opts);
   const { frontmatter, segments, normalizedText, model, assignments, voiceSummaries } = plan;
+  const sampleRateHertz = resolveInworldSampleRateHertz();
   const voiceAssignments = Object.fromEntries(
     assignments.map((assignment) => [cleanSpeakerName(assignment.speaker), assignment.voiceId]),
   );
@@ -326,7 +356,7 @@ export async function buildStudyTextMp3Inworld(
           ...(gapAfterMs !== undefined ? { gapAfterMs } : {}),
         }),
       ),
-      sampleRateHertz: resolveInworldSampleRateHertz(),
+      sampleRateHertz,
       encoding: 'MP3',
       assemblyMargins: INWORLD_ASSEMBLY_MARGIN_POLICY,
     }),
@@ -371,20 +401,16 @@ export async function buildStudyTextMp3Inworld(
   for (const [index, segment] of renderedSegments.entries()) {
     const speechText = segment.text;
     const voiceId = segment.voiceId;
-    const chunkHash = createHash('sha256')
-      .update(
-        JSON.stringify({
-          provider: 'inworld',
-          model,
-          voiceId,
-          text: speechText,
-          index,
-          speakingRate: segment.speakingRate,
-          temperature: segment.temperature,
-          deliveryMode: segment.deliveryMode,
-        }),
-      )
-      .digest('hex');
+    const chunkHash = buildInworldChunkHash({
+      model,
+      voiceId,
+      text: speechText,
+      index,
+      speakingRate: segment.speakingRate,
+      temperature: segment.temperature,
+      deliveryMode: segment.deliveryMode,
+      sampleRateHertz,
+    });
     const chunkFilePath = resolve(outputDir, `${chunkHash}.mp3`);
     if (!opts.force && (await fileExistsNonEmpty(chunkFilePath))) {
       runFiles.push(chunkFilePath);
@@ -397,6 +423,7 @@ export async function buildStudyTextMp3Inworld(
       speakingRate: segment.speakingRate,
       temperature: segment.temperature,
       deliveryMode: segment.deliveryMode,
+      sampleRateHertz,
     });
     runFiles.push(chunkFilePath);
     runSegments.push({ speaker: segment.speaker });

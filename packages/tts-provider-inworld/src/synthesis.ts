@@ -99,6 +99,7 @@ export async function synthesizeInworldSpeech(
     speakingRate?: number;
     temperature?: number;
     deliveryMode?: SpeechDeliveryMode;
+    sampleRateHertz?: number;
   },
 ): Promise<Buffer> {
   const apiKey = resolveInworldApiKey();
@@ -118,7 +119,7 @@ export async function synthesizeInworldSpeech(
     voice: voiceId,
     model: options.model,
     encoding: 'MP3',
-    sampleRate: resolveInworldSampleRateHertz(),
+    sampleRate: options.sampleRateHertz ?? resolveInworldSampleRateHertz(),
     ...(options.speakingRate !== undefined ? { speakingRate: options.speakingRate } : {}),
     ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
     ...(options.deliveryMode !== undefined ? { deliveryMode: options.deliveryMode } : {}),
@@ -135,6 +136,7 @@ export async function synthesizeInworldChunkWithRetry(
     speakingRate?: number;
     temperature?: number;
     deliveryMode?: SpeechDeliveryMode;
+    sampleRateHertz?: number;
   },
 ): Promise<void> {
   const candidate = { text, voiceId, outFile };
