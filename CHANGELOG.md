@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [8.0.1] - 2026-06-02
+
+### Changed
+
+- Automated release from PR #90: fix(tts): harden Inworld voice planning (https://github.com/abocha/esl-pipeline/pull/90)
+
 ## [8.0.0] - 2026-06-02
 
 ### Changed
