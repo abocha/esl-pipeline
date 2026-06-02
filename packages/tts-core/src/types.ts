@@ -95,6 +95,7 @@ export interface PreparedStudyTextSynthesis {
   selection: TtsSelection;
   sourceHash: string;
   segments: SpeechPerformancePlanSegment[];
+  speakerLabels?: string[];
   voices: VoiceSelectionSummary[];
   voiceAssignments: Record<string, string>;
   voicePlan?: VoicePlan;
@@ -119,7 +120,7 @@ export interface VoicePlanRankerMetadata {
 
 export interface VoicePlan {
   schemaVersion: 1;
-  mode: 'resolved' | 'fallback';
+  mode: 'ranked' | 'deterministic' | 'fallback';
   provider: TtsProviderId;
   model: TtsModelId;
   sourceHash: string;
@@ -341,12 +342,22 @@ export interface SpeakerVoiceAssignment {
   capabilities?: VoiceAssignmentCapabilities;
 }
 
+export interface VoiceAssignmentResolution {
+  assignments: SpeakerVoiceAssignment[];
+  mode: 'ranked' | 'deterministic' | 'fallback';
+  fallbackReason?:
+    | 'ranker_disabled'
+    | 'model_not_supported'
+    | 'no_rankable_credentialed_english_candidates'
+    | 'ranker_failed';
+}
+
 export interface VoiceProviderAdapter {
   loadCatalog(): Promise<VoiceCatalog>;
   resolveSpeakerAssignments(args: {
     input: BuildStudyTextInput;
     options: BuildStudyTextOptions;
-  }): Promise<SpeakerVoiceAssignment[]>;
+  }): Promise<VoiceAssignmentResolution | SpeakerVoiceAssignment[]>;
   buildVoiceDiagnostics?(args: {
     assignments: SpeakerVoiceAssignment[];
     catalog: VoiceCatalog;
