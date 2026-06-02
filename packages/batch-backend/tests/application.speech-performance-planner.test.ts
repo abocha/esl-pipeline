@@ -14,7 +14,7 @@ function createPrepared() {
     voiceAssignments: {},
     voicePlan: {
       schemaVersion: 1 as const,
-      mode: 'resolved' as const,
+      mode: 'deterministic' as const,
       provider: 'inworld' as const,
       model: 'inworld-tts-2' as const,
       sourceHash: 'source-hash',

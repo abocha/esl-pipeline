@@ -22,6 +22,7 @@ import type {
   TtsModelId,
   TtsProviderAdapter,
   TtsProviderId,
+  VoiceAssignmentResolution,
   VoiceCatalog,
 } from './types.js';
 import { createResolvedVoicePlan, withVoicePlan } from './voice-plan.js';
@@ -107,17 +108,21 @@ export class DefaultTtsEngine implements TtsEngine {
     const provider = this.resolveProviderOrThrow(providerId);
     const resolvedOptions = { ...options, ttsProvider: providerId, ttsModel };
     const prepared = createPreparedStudyTextSynthesis(input, resolvedOptions);
-    const assignments = await provider.voice.resolveSpeakerAssignments({
-      input,
-      options: resolvedOptions,
-    });
+    const resolution = normalizeResolution(
+      await provider.voice.resolveSpeakerAssignments({
+        input,
+        options: resolvedOptions,
+      }),
+    );
     return withVoicePlan(
       prepared,
-      createResolvedVoicePlan(
-        prepared,
-        normalizeVoiceAssignments(assignments),
-        options.voiceRanker ? { ranker: options.voiceRanker.metadata } : {},
-      ),
+      createResolvedVoicePlan(prepared, normalizeVoiceAssignments(resolution.assignments), {
+        mode: resolution.mode,
+        ...(resolution.fallbackReason ? { fallbackReason: resolution.fallbackReason } : {}),
+        ...(resolution.mode === 'ranked' && options.voiceRanker
+          ? { ranker: options.voiceRanker.metadata }
+          : {}),
+      }),
     );
   }
 
@@ -171,6 +176,12 @@ function normalizeVoiceAssignments(assignments: SpeakerVoiceAssignment[]) {
     ...assignment,
     capabilities: assignment.capabilities ?? IDENTITY_VOICE_CAPABILITIES,
   }));
+}
+
+function normalizeResolution(
+  result: SpeakerVoiceAssignment[] | VoiceAssignmentResolution,
+): VoiceAssignmentResolution {
+  return Array.isArray(result) ? { assignments: result, mode: 'deterministic' } : result;
 }
 
 export function createTtsEngine(providers: TtsProviderAdapter[] = []): TtsEngine {

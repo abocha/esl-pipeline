@@ -54,6 +54,8 @@ For deep system maps, prefer the linked docs rather than growing this file again
 - Do not bypass orchestrator contracts for pipeline behavior changes.
 - Do not silently change stage order or meaning for validate/import/colorize/voice-plan/speech-plan/tts/upload/add-audio/manifest.
 - Manifest behavior is contract-level; changes must be coordinated with tests and docs.
+- New schema-5 study-text voice plans emit `ranked`, `deterministic`, or `fallback` resolution modes.
+  Manifests containing the older `resolved` token normalize it to `deterministic` when read.
 - Authored lesson Markdown stays provider-neutral. Provider capability resolution and expressive
   speech rendering happen after TTS provider/model selection.
 - Rerun family selection is contract-level:

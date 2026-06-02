@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { parseMarkdownContext } from '@esl-pipeline/pmd';
+
 import {
+  buildInworldChunkHash,
+  buildStudyTextMp3Inworld,
   createInworldTtsProvider,
   loadInworldVoicesCatalog,
   renderInworldSpeechSegment,
@@ -9,6 +13,54 @@ import {
   resolveInworldSpeakerAssignmentsWithRankerFromCatalog,
   resolveInworldTtsModel,
 } from '../src/index.js';
+
+function createPreviewContext() {
+  return parseMarkdownContext(
+    '---\ntitle: Test\nstudent: Alex\nlevel: B1\ntopic: work\ninput_type: generate\n---\n\n:::study-text\n[Maya]: We need a clearer deadline.\n:::',
+  );
+}
+
+function createPreviewVoicePlan(generatedAt: string, speaker = 'Maya', voiceId = 'Ashley') {
+  return {
+    schemaVersion: 1 as const,
+    mode: 'ranked' as const,
+    provider: 'inworld' as const,
+    model: 'inworld-tts-2' as const,
+    sourceHash: 'source-hash',
+    ranker: { provider: 'google_ai_studio', model: 'gemma-4-26b-a4b-it', generatedAt },
+    assignments: [
+      {
+        speaker,
+        voiceId,
+        source: 'auto' as const,
+        capabilities: {
+          supportsMetadataInstructions: true,
+          supportsNonVerbals: true,
+          supportsUppercaseEmphasis: true,
+          supportsFreeFormDirection: false,
+        },
+      },
+    ],
+  };
+}
+
+function createPreviewSpeechPlan(segment: Record<string, unknown> = {}) {
+  return {
+    schemaVersion: 1 as const,
+    mode: 'prompted' as const,
+    provider: 'inworld' as const,
+    model: 'inworld-tts-2' as const,
+    sourceHash: 'source-hash',
+    segments: [
+      {
+        id: 'segment-1',
+        speaker: 'Maya',
+        text: 'We need a clearer deadline.',
+        ...segment,
+      },
+    ],
+  };
+}
 
 describe('inworld provider adapter basics', () => {
   it('defaults model family to inworld-tts-2', () => {
@@ -319,15 +371,18 @@ describe('inworld provider adapter basics', () => {
           model: 'inworld-tts-2',
         },
       ),
-    ).resolves.toMatchObject([
-      {
-        speaker: 'Nina',
-        voiceId: 'Warm Plain',
-        source: 'auto',
-        selectionReason: 'Selected by Inworld voice ranker: warmer conversational fit',
-        capabilities: { supportsFreeFormDirection: false },
-      },
-    ]);
+    ).resolves.toMatchObject({
+      mode: 'ranked',
+      assignments: [
+        {
+          speaker: 'Nina',
+          voiceId: 'Warm Plain',
+          source: 'auto',
+          selectionReason: 'Selected by Inworld voice ranker: warmer conversational fit',
+          capabilities: { supportsFreeFormDirection: false },
+        },
+      ],
+    });
   });
 
   it('logs the shortlist and selected voices when the injected ranker runs', async () => {
@@ -344,7 +399,7 @@ describe('inworld provider adapter basics', () => {
       }),
     };
 
-    await resolveInworldSpeakerAssignmentsWithRankerFromCatalog(
+    const resolution = await resolveInworldSpeakerAssignmentsWithRankerFromCatalog(
       ['Nina'],
       {},
       {
@@ -388,7 +443,7 @@ describe('inworld provider adapter basics', () => {
       rank: vi.fn(),
     };
 
-    await resolveInworldSpeakerAssignmentsWithRankerFromCatalog(
+    const resolution = await resolveInworldSpeakerAssignmentsWithRankerFromCatalog(
       ['Nina'],
       {},
       {
@@ -401,6 +456,10 @@ describe('inworld provider adapter basics', () => {
     );
 
     expect(ranker.rank).not.toHaveBeenCalled();
+    expect(resolution).toMatchObject({
+      mode: 'deterministic',
+      fallbackReason: 'no_rankable_credentialed_english_candidates',
+    });
     expect(logger.log).toHaveBeenCalledWith({
       level: 'info',
       stage: 'voice-plan',
@@ -423,7 +482,7 @@ describe('inworld provider adapter basics', () => {
       rank: vi.fn(),
     };
 
-    await resolveInworldSpeakerAssignmentsWithRankerFromCatalog(
+    const resolution = await resolveInworldSpeakerAssignmentsWithRankerFromCatalog(
       ['Nina'],
       {},
       {
@@ -439,6 +498,10 @@ describe('inworld provider adapter basics', () => {
     );
 
     expect(ranker.rank).not.toHaveBeenCalled();
+    expect(resolution).toMatchObject({
+      mode: 'deterministic',
+      fallbackReason: 'model_not_supported',
+    });
     expect(logger.log).toHaveBeenCalledWith({
       level: 'info',
       stage: 'voice-plan',
@@ -605,5 +668,106 @@ describe('inworld provider adapter basics', () => {
         },
       }),
     ).toEqual({ text: 'We need a clearer deadline.' });
+  });
+
+  it('keeps preview cache hashes stable when only ranker timestamps change', async () => {
+    const context = createPreviewContext();
+    const first = await buildStudyTextMp3Inworld(
+      { context },
+      {
+        voiceMapPath: 'voices.yml',
+        outPath: '/tmp',
+        preview: true,
+        voicePlan: createPreviewVoicePlan('2026-06-02T00:00:00.000Z'),
+      },
+    );
+    const second = await buildStudyTextMp3Inworld(
+      { context },
+      {
+        voiceMapPath: 'voices.yml',
+        outPath: '/tmp',
+        preview: true,
+        voicePlan: createPreviewVoicePlan('2026-06-02T00:01:00.000Z'),
+      },
+    );
+
+    expect(second.hash).toBe(first.hash);
+  });
+
+  it('normalizes bracketed segment speakers before resolving rendered voice assignments', async () => {
+    const context = createPreviewContext();
+    const bracketed = await buildStudyTextMp3Inworld(
+      { context },
+      {
+        voiceMapPath: 'voices.yml',
+        outPath: '/tmp',
+        preview: true,
+        voicePlan: createPreviewVoicePlan('2026-06-02T00:00:00.000Z', '[Maya]'),
+      },
+    );
+    const unbracketed = await buildStudyTextMp3Inworld(
+      { context },
+      {
+        voiceMapPath: 'voices.yml',
+        outPath: '/tmp',
+        preview: true,
+        voicePlan: createPreviewVoicePlan('2026-06-02T00:00:00.000Z', 'Maya'),
+      },
+    );
+
+    expect(bracketed.hash).toBe(unbracketed.hash);
+  });
+
+  it('changes preview cache hashes when rendered controls or voice assignments change', async () => {
+    const context = createPreviewContext();
+    const buildHash = async (
+      speechPlan = createPreviewSpeechPlan(),
+      voicePlan = createPreviewVoicePlan('2026-06-02T00:00:00.000Z'),
+    ) =>
+      (
+        await buildStudyTextMp3Inworld(
+          { context },
+          { voiceMapPath: 'voices.yml', outPath: '/tmp', preview: true, speechPlan, voicePlan },
+        )
+      ).hash;
+    const baseline = await buildHash();
+
+    await expect(buildHash(createPreviewSpeechPlan({ pauseAfterMs: 250 }))).resolves.not.toBe(
+      baseline,
+    );
+    await expect(
+      buildHash(createPreviewSpeechPlan({ deliveryMode: 'CREATIVE' })),
+    ).resolves.not.toBe(baseline);
+    await expect(
+      buildHash(createPreviewSpeechPlan({ emphasis: ['clearer deadline'] })),
+    ).resolves.not.toBe(baseline);
+    await expect(
+      buildHash(
+        createPreviewSpeechPlan(),
+        createPreviewVoicePlan('2026-06-02T00:00:00.000Z', 'Maya', 'Dennis'),
+      ),
+    ).resolves.not.toBe(baseline);
+  });
+
+  it('includes sample rate and encoding in chunk-cache identity hash', () => {
+    const chunkArgs = {
+      model: 'inworld-tts-2',
+      voiceId: 'Ashley',
+      text: 'We need a clearer deadline.',
+      index: 0,
+      speakingRate: 1.0,
+      temperature: 1.0,
+      deliveryMode: 'BALANCED',
+      sampleRateHertz: 48_000,
+    };
+
+    const first = buildInworldChunkHash(chunkArgs);
+    const same = buildInworldChunkHash({ ...chunkArgs });
+    const differentSampleRate = buildInworldChunkHash({ ...chunkArgs, sampleRateHertz: 24_000 });
+    const differentEncoding = buildInworldChunkHash({ ...chunkArgs, encoding: 'LINEAR16' });
+
+    expect(same).toBe(first);
+    expect(differentSampleRate).not.toBe(first);
+    expect(differentEncoding).not.toBe(first);
   });
 });

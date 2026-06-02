@@ -134,6 +134,7 @@ export type {
   TtsStrategy,
   Voice,
   VoiceAssignmentCapabilities,
+  VoiceAssignmentResolution,
   VoiceCatalog,
   VoicePlan,
   VoicePlanAssignment,

@@ -1,5 +1,5 @@
 import { ConfigurationError } from '@esl-pipeline/contracts';
-import { extractStudyText } from '@esl-pipeline/pmd';
+import { extractFrontmatter, extractStudyText } from '@esl-pipeline/pmd';
 
 import { resolveTtsSelection } from './descriptors.js';
 import { hashStudyText } from './hash.js';
@@ -38,6 +38,7 @@ export function createPreparedStudyTextSynthesis(
   options: BuildStudyTextOptions,
 ): PreparedStudyTextSynthesis {
   const selection = resolveTtsSelection({ provider: options.ttsProvider, model: options.ttsModel });
+  const frontmatter = extractFrontmatter(input.context);
   const segments = extractStudyText(input.context)
     .lines.map((line, index) => {
       const separator = line.indexOf(':');
@@ -49,10 +50,16 @@ export function createPreparedStudyTextSynthesis(
       return { id: `segment-${index + 1}`, ...(speaker ? { speaker } : {}), text };
     })
     .filter((segment) => segment.text.length > 0);
+  const speakerLabels = collectSpeakerLabels(
+    frontmatter.speaker_labels,
+    frontmatter.speaker_profiles,
+    segments,
+  );
   return {
     selection,
     sourceHash: hashStudyText(JSON.stringify(segments)),
     segments,
+    speakerLabels,
     voices: [],
     voiceAssignments: {},
   };
@@ -66,6 +73,40 @@ export function normalizeStudyTextSpeakerToken(value: string): string | undefine
     .replaceAll(/\s+/g, ' ')
     .trim();
   return normalized || undefined;
+}
+
+function collectSpeakerLabels(
+  labels: unknown,
+  profiles: unknown,
+  segments: SpeechPerformancePlanSegment[],
+): string[] {
+  const collected: string[] = [];
+  const seen = new Set<string>();
+  const add = (value: unknown) => {
+    if (typeof value !== 'string') return;
+    const normalized = normalizeStudyTextSpeakerToken(value);
+    const key = normalized?.toLocaleLowerCase();
+    if (!normalized || !key || seen.has(key)) return;
+    seen.add(key);
+    collected.push(normalized);
+  };
+
+  if (Array.isArray(labels)) {
+    for (const label of labels) add(label);
+  }
+  if (collected.length === 0 && !segments.some((segment) => segment.speaker)) {
+    if (Array.isArray(profiles)) {
+      const first = profiles.find(
+        (profile): profile is { id: string } =>
+          typeof profile === 'object' &&
+          profile !== null &&
+          typeof (profile as { id?: unknown }).id === 'string',
+      );
+      add(first?.id);
+    }
+  }
+  if (collected.length === 0) add('Narrator');
+  return collected;
 }
 
 export function createIdentitySpeechPerformancePlan(

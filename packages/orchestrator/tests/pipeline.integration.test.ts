@@ -50,7 +50,7 @@ vi.mock('@esl-pipeline/tts-core', async () => {
         ...prepared,
         voicePlan: {
           schemaVersion: 1,
-          mode: 'resolved',
+          mode: 'deterministic',
           provider: prepared.selection.provider,
           model: prepared.selection.model,
           sourceHash: prepared.sourceHash,
