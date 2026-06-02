@@ -70,7 +70,6 @@
     "@esl-pipeline/tts-core": "workspace:*",
     "@esl-pipeline/tts-provider-elevenlabs": "workspace:*",
     "@esl-pipeline/tts-provider-google": "workspace:*",
-    "@esl-pipeline/tts-provider-inworld": "workspace:*",
     "@fastify/cookie": "^11.0.2",
     "@fastify/multipart": "^10.0.0",
     "bcrypt": "^6.0.0",
