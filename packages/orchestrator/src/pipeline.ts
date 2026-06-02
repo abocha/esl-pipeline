@@ -4,6 +4,11 @@ import { fileURLToPath } from 'node:url';
 
 import { ConfigurationError } from '@esl-pipeline/contracts';
 import { resolveManifestStoreConfig } from '@esl-pipeline/shared-infrastructure';
+import type {
+  SpeechPerformancePlanner,
+  SpeechPerformancePlannerFallbackReason,
+  VoicePlanRanker,
+} from '@esl-pipeline/tts-core';
 
 import {
   RemoteConfigProvider,
@@ -206,6 +211,10 @@ export type CreatePipelineOptions = ResolveConfigPathsOptions & {
   manifestStoreConfig?: { type: 's3'; options: S3ManifestStoreOptions };
   logger?: PipelineLogger;
   metrics?: PipelineMetrics;
+  speechPlanner?: SpeechPerformancePlanner;
+  speechPlannerUnavailableReason?: SpeechPerformancePlannerFallbackReason;
+  speechPlannerDebugLogPlan?: boolean;
+  voiceRanker?: VoicePlanRanker;
 };
 
 export type PipelineNewAssignmentOptions = NewAssignmentFlags;
@@ -308,6 +317,10 @@ export function createPipeline(options: CreatePipelineOptions = {}): Orchestrato
         metrics,
         runId: dependencies?.runId,
         signal: dependencies?.signal,
+        speechPlanner: options.speechPlanner,
+        speechPlannerUnavailableReason: options.speechPlannerUnavailableReason,
+        speechPlannerDebugLogPlan: options.speechPlannerDebugLogPlan,
+        voiceRanker: options.voiceRanker,
       });
     },
     async rerunAssignment(flags, dependencies) {
@@ -326,6 +339,10 @@ export function createPipeline(options: CreatePipelineOptions = {}): Orchestrato
         metrics,
         runId: dependencies?.runId,
         signal: dependencies?.signal,
+        speechPlanner: options.speechPlanner,
+        speechPlannerUnavailableReason: options.speechPlannerUnavailableReason,
+        speechPlannerDebugLogPlan: options.speechPlannerDebugLogPlan,
+        voiceRanker: options.voiceRanker,
       });
     },
     async planRerunAssignment(request, dependencies) {
@@ -369,6 +386,10 @@ export function createPipeline(options: CreatePipelineOptions = {}): Orchestrato
           metrics,
           runId: context.dependencies?.runId,
           signal: context.dependencies?.signal,
+          speechPlanner: options.speechPlanner,
+          speechPlannerUnavailableReason: options.speechPlannerUnavailableReason,
+          speechPlannerDebugLogPlan: options.speechPlannerDebugLogPlan,
+          voiceRanker: options.voiceRanker,
         },
       });
     },
@@ -391,6 +412,10 @@ export function createPipeline(options: CreatePipelineOptions = {}): Orchestrato
           metrics,
           runId: context.dependencies?.runId,
           signal: context.dependencies?.signal,
+          speechPlanner: options.speechPlanner,
+          speechPlannerUnavailableReason: options.speechPlannerUnavailableReason,
+          speechPlannerDebugLogPlan: options.speechPlannerDebugLogPlan,
+          voiceRanker: options.voiceRanker,
         },
       });
     },

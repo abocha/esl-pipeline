@@ -264,6 +264,42 @@ describe('formatter', () => {
     );
   });
 
+  it('does not promote pronunciation item clips into the student-facing pronunciation link', () => {
+    const html = formatJobLinks({
+      jobId: 'job-chunks-only',
+      studentId: null,
+      md: [
+        '# Lesson',
+        '[Audio recording: Study Text](https://bucket.s3.amazonaws.com/audio/final/study.mp3)',
+        '[Chunk](https://bucket.s3.amazonaws.com/audio/pronunciation-item/chunk.mp3)',
+      ].join('\n'),
+      recordingId: null,
+      transcriptId: null,
+      promptPackageId: null,
+      draftId: null,
+      preset: null,
+      withTts: null,
+      voiceId: null,
+      upload: null,
+      voiceAccent: null,
+      forceTts: null,
+      publishTarget: null,
+      ttsStrategy: null,
+      autoPublish: null,
+      htmlUrl: null,
+      state: 'succeeded',
+      createdAt: '2026-06-02T00:00:00Z',
+      updatedAt: '2026-06-02T00:00:00Z',
+      startedAt: null,
+      finishedAt: null,
+      error: null,
+      manifestPath: null,
+    });
+
+    expect(html).toContain('Listen 1: Study Text');
+    expect(html).not.toContain('Listen 2: Pronunciation');
+  });
+
   it('renders student summary with explicit UTC timestamps and latest homework', () => {
     const html = formatStudentSummary({
       student: {

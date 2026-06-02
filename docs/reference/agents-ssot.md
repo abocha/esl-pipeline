@@ -52,8 +52,10 @@ For deep system maps, prefer the linked docs rather than growing this file again
 ### Pipeline and runtime
 
 - Do not bypass orchestrator contracts for pipeline behavior changes.
-- Do not silently change stage order or meaning for validate/import/colorize/tts/upload/add-audio/manifest.
+- Do not silently change stage order or meaning for validate/import/colorize/voice-plan/speech-plan/tts/upload/add-audio/manifest.
 - Manifest behavior is contract-level; changes must be coordinated with tests and docs.
+- Authored lesson Markdown stays provider-neutral. Provider capability resolution and expressive
+  speech rendering happen after TTS provider/model selection.
 - Rerun family selection is contract-level:
   - unchecked study-text / pronunciation families must preserve prior published artifacts and persisted family defaults
   - checked families must replace the published artifact for that family even when deterministic upload keys or hashes are unchanged
@@ -147,6 +149,7 @@ Docs-heavy changes also require:
 - environment and providers:
   - `docs/reference/env.md`
   - `docs/reference/GENERATION_PROVIDER_POLICY.md`
+  - `docs/reference/TTS_SPEECH_PERFORMANCE_SYSTEM.md`
 - docs governance:
   - `docs/reference/DOCS_GOVERNANCE.md`
 

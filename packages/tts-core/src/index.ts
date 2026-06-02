@@ -9,6 +9,7 @@ import type {
   BuildStudyTextInput,
   BuildStudyTextOptions,
   BuildStudyTextResult,
+  PreparedStudyTextSynthesis,
   TtsEngine,
   TtsProviderAdapter,
   TtsProviderId,
@@ -40,6 +41,13 @@ export async function buildStudyTextMp3(
   return defaultEngine.buildStudyTextMp3(input, options);
 }
 
+export async function prepareStudyTextSynthesis(
+  input: BuildStudyTextInput,
+  options: BuildStudyTextOptions,
+): Promise<PreparedStudyTextSynthesis> {
+  return defaultEngine.prepareStudyTextSynthesis(input, options);
+}
+
 export async function buildPronunciationShadowSentenceMp3(
   input: BuildPronunciationShadowSentenceInput,
   options: BuildPronunciationShadowSentenceOptions,
@@ -65,6 +73,7 @@ export {
   ELEVENLABS_TTS_MODELS,
   GOOGLE_TTS_DESCRIPTOR,
   GOOGLE_TTS_MODELS,
+  getTtsModelCapabilities,
   getTtsProviderDescriptor,
   getTtsProviderDescriptors,
   INWORLD_TTS_DESCRIPTOR,
@@ -81,6 +90,14 @@ export {
 } from './descriptors.js';
 export { createTtsEngine } from './engine.js';
 export { hashStudyText } from './hash.js';
+export { resolveSpeakerRoutingHint } from './speaker-routing.js';
+export {
+  createIdentitySpeechPerformancePlan,
+  createPreparedStudyTextSynthesis,
+  normalizeStudyTextSpeakerToken,
+  SpeechPerformancePlannerInvalidOutputError,
+  validateSpeechPerformancePlan,
+} from './speech-plan.js';
 export type {
   BuildPronunciationShadowSentenceInput,
   BuildPronunciationShadowSentenceOptions,
@@ -94,16 +111,40 @@ export type {
   ElevenLabsTtsModelId,
   GoogleTtsModel,
   InworldTtsModel,
+  PreparedStudyTextSynthesis,
+  SpeakerRoutingHint,
   SpeakerVoiceAssignment,
+  SpeechDeliveryMode,
+  SpeechNonVerbal,
+  SpeechPace,
+  SpeechPerformancePlan,
+  SpeechPerformancePlanner,
+  SpeechPerformancePlannerBinding,
+  SpeechPerformancePlannerFallbackReason,
+  SpeechPerformancePlannerMetadata,
+  SpeechPerformancePlanSegment,
   TtsEngine,
+  TtsModelCapabilities,
   TtsModelId,
   TtsProviderAdapter,
   TtsProviderDescriptor,
   TtsProviderId,
   TtsSelection,
+  TtsSpeechPlanningMode,
   TtsStrategy,
   Voice,
+  VoiceAssignmentCapabilities,
   VoiceCatalog,
+  VoicePlan,
+  VoicePlanAssignment,
+  VoicePlanRankCandidate,
+  VoicePlanRanker,
+  VoicePlanRankerMetadata,
+  VoicePlanRankRequest,
+  VoicePlanRankResult,
+  VoicePlanRankSelection,
+  VoicePlanRankSpeaker,
   VoiceProviderAdapter,
   VoiceSelectionSummary,
 } from './types.js';
+export { createResolvedVoicePlan, validateVoicePlan, withVoicePlan } from './voice-plan.js';

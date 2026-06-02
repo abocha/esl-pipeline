@@ -1,7 +1,9 @@
 # @esl-pipeline/storage-uploader
 
-Stub uploader that fabricates an S3 URL for a file without performing any network operations.  
-Future work will stream files to S3 (or alternative backends) and return metadata such as ETag, signed URLs, and expiry.
+S3 artifact uploader for pipeline-generated files.
+
+Callers may request a temporary MP3 metadata remux before upload. This is used by the orchestrator
+for student-facing primary audio exports while preserving the original generated cache artifact.
 
 ## CLI
 

@@ -220,6 +220,22 @@ export interface BatchBackendConfig {
       };
     };
   };
+  speechPlanner: {
+    enabled: boolean;
+    model: string;
+    maxOutputTokens: number;
+    rpmBudget: number;
+    dailyRequestBudget: number;
+    debugLogPlan: boolean;
+  };
+  voiceRanker: {
+    enabled: boolean;
+    model: string;
+    maxOutputTokens: number;
+    rpmBudget: number;
+    dailyRequestBudget: number;
+    debugLogPlan: boolean;
+  };
   prompt: {
     templatePath: string;
     defaultProfilePath: string;
@@ -736,6 +752,21 @@ export function loadConfig(): BatchBackendConfig {
   const generationOpenRouterDailyTokenBudget = readInt('GEN_OPENROUTER_DAILY_TOKEN_BUDGET', 0);
 
   const extendedApiEnabled = readBool('BATCH_BACKEND_ENABLE_EXTENDED_API', true);
+  const speechPlannerEnabled = readBool('ESL_TTS_SPEECH_PLANNER_ENABLED', false);
+  const speechPlannerModel = readString('ESL_TTS_SPEECH_PLANNER_MODEL', 'gemini-3.1-flash-lite')!;
+  const speechPlannerMaxOutputTokens = readInt('ESL_TTS_SPEECH_PLANNER_MAX_OUTPUT_TOKENS', 2400);
+  const speechPlannerRpmBudget = readInt('ESL_TTS_SPEECH_PLANNER_RPM_BUDGET', 4);
+  const speechPlannerDailyRequestBudget = readInt(
+    'ESL_TTS_SPEECH_PLANNER_DAILY_REQUEST_BUDGET',
+    120,
+  );
+  const speechPlannerDebugLogPlan = readBool('ESL_TTS_SPEECH_PLANNER_DEBUG_LOG_PLAN', false);
+  const voiceRankerEnabled = readBool('ESL_TTS_VOICE_RANKER_ENABLED', true);
+  const voiceRankerModel = readString('ESL_TTS_VOICE_RANKER_MODEL', 'gemma-4-31b-it')!;
+  const voiceRankerMaxOutputTokens = readInt('ESL_TTS_VOICE_RANKER_MAX_OUTPUT_TOKENS', 1200);
+  const voiceRankerRpmBudget = readInt('ESL_TTS_VOICE_RANKER_RPM_BUDGET', 12);
+  const voiceRankerDailyRequestBudget = readInt('ESL_TTS_VOICE_RANKER_DAILY_REQUEST_BUDGET', 1000);
+  const voiceRankerDebugLogPlan = readBool('ESL_TTS_VOICE_RANKER_DEBUG_LOG_PLAN', false);
 
   return {
     nodeEnv,
@@ -944,6 +975,22 @@ export function loadConfig(): BatchBackendConfig {
           rpmBudget: generationOpenRouterRpmBudget,
         },
       },
+    },
+    speechPlanner: {
+      enabled: speechPlannerEnabled,
+      model: speechPlannerModel,
+      maxOutputTokens: speechPlannerMaxOutputTokens,
+      rpmBudget: speechPlannerRpmBudget,
+      dailyRequestBudget: speechPlannerDailyRequestBudget,
+      debugLogPlan: speechPlannerDebugLogPlan,
+    },
+    voiceRanker: {
+      enabled: voiceRankerEnabled,
+      model: voiceRankerModel,
+      maxOutputTokens: voiceRankerMaxOutputTokens,
+      rpmBudget: voiceRankerRpmBudget,
+      dailyRequestBudget: voiceRankerDailyRequestBudget,
+      debugLogPlan: voiceRankerDebugLogPlan,
     },
     prompt: {
       templatePath: promptTemplatePath,

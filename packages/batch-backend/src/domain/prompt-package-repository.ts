@@ -1,8 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { PoolClient } from 'pg';
 
-import type { VoiceCapabilitiesSnapshot } from '@esl-pipeline/contracts';
-
 import { withPgClient } from '../infrastructure/db.js';
 import { logger } from '../infrastructure/logger.js';
 import type { PromptPackageRecord } from './prompt-package-model.js';
@@ -31,9 +29,6 @@ interface PromptPackageRow {
   resolved_template_updated_at: Date | null;
   resolved_template_version_label: string | null;
   resolved_template_status: 'draft' | 'active' | 'deprecated' | null;
-  resolved_voice_capabilities_hash: string | null;
-  resolved_voice_capabilities_generated_at: Date | null;
-  resolved_voice_capabilities_snapshot: VoiceCapabilitiesSnapshot | null;
   template_version: string;
   notes: string | null;
   storage_uri: string;
@@ -65,9 +60,6 @@ export interface InsertPromptPackageParams {
   resolvedTemplateUpdatedAt?: Date | null;
   resolvedTemplateVersionLabel?: string | null;
   resolvedTemplateStatus?: 'draft' | 'active' | 'deprecated' | null;
-  resolvedVoiceCapabilitiesHash?: string | null;
-  resolvedVoiceCapabilitiesGeneratedAt?: Date | null;
-  resolvedVoiceCapabilitiesSnapshot?: VoiceCapabilitiesSnapshot | null;
   templateVersion: string;
   notes?: string | null;
   storageUri: string;
@@ -106,9 +98,6 @@ export async function insertPromptPackage(
         resolved_template_updated_at,
         resolved_template_version_label,
         resolved_template_status,
-        resolved_voice_capabilities_hash,
-        resolved_voice_capabilities_generated_at,
-        resolved_voice_capabilities_snapshot,
         template_version,
         notes,
         storage_uri,
@@ -118,7 +107,7 @@ export async function insertPromptPackage(
       VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
         $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-        $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31
+        $21, $22, $23, $24, $25, $26, $27, $28
       )
       RETURNING
         id,
@@ -144,9 +133,6 @@ export async function insertPromptPackage(
         resolved_template_updated_at,
         resolved_template_version_label,
         resolved_template_status,
-        resolved_voice_capabilities_hash,
-        resolved_voice_capabilities_generated_at,
-        resolved_voice_capabilities_snapshot,
         template_version,
         notes,
         storage_uri,
@@ -177,9 +163,6 @@ export async function insertPromptPackage(
         params.resolvedTemplateUpdatedAt ?? null,
         params.resolvedTemplateVersionLabel ?? null,
         params.resolvedTemplateStatus ?? null,
-        params.resolvedVoiceCapabilitiesHash ?? null,
-        params.resolvedVoiceCapabilitiesGeneratedAt ?? null,
-        params.resolvedVoiceCapabilitiesSnapshot ?? null,
         params.templateVersion,
         params.notes ?? null,
         params.storageUri,
@@ -208,8 +191,6 @@ export async function getPromptPackageById(id: string): Promise<PromptPackageRec
              resolved_template_id, resolved_template_hash,
              resolved_template_revision_id, resolved_template_updated_at,
              resolved_template_version_label, resolved_template_status,
-             resolved_voice_capabilities_hash, resolved_voice_capabilities_generated_at,
-             resolved_voice_capabilities_snapshot,
              notes, storage_uri, created_at, updated_at
       FROM prompt_packages
       WHERE id = $1
@@ -247,9 +228,6 @@ function mapRowToPromptPackage(row: PromptPackageRow): PromptPackageRecord {
     resolvedTemplateUpdatedAt: row.resolved_template_updated_at ?? null,
     resolvedTemplateVersionLabel: row.resolved_template_version_label ?? null,
     resolvedTemplateStatus: row.resolved_template_status ?? null,
-    resolvedVoiceCapabilitiesHash: row.resolved_voice_capabilities_hash ?? null,
-    resolvedVoiceCapabilitiesGeneratedAt: row.resolved_voice_capabilities_generated_at ?? null,
-    resolvedVoiceCapabilitiesSnapshot: row.resolved_voice_capabilities_snapshot ?? null,
     templateVersion: row.template_version,
     notes: row.notes ?? null,
     storageUri: row.storage_uri,

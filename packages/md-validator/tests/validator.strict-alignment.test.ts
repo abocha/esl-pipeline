@@ -277,7 +277,7 @@ describeMdValidatorSuite(
       expect(res.voiceDiagnostics?.compatibilityMode?.enabled).toBe(false);
     });
 
-    it('hard-fails invalid speaker_profiles.voice when strict alignment and catalog are available', async () => {
+    it('ignores legacy speaker_profiles.voice even when strict alignment is enabled', async () => {
       process.env.VOICE_ALIGNMENT_V2_ENABLED = 'true';
       process.env.VOICE_ALIGNMENT_V2_STRICT_VALIDATION = 'true';
 
@@ -324,8 +324,8 @@ describeMdValidatorSuite(
       await writeFile(file, md);
 
       const res = await validateMarkdownFile(file);
-      expect(res.ok).toBe(false);
-      expect(res.errors.join('\n')).toMatch(/does not exist in the current voice catalog/i);
+      expect(res.ok).toBe(true);
+      expect(res.warnings.join('\n')).toMatch(/speaker_profiles voice.*is ignored/i);
     });
   },
 );

@@ -29,6 +29,34 @@ export interface AudioArtifacts {
   pronunciation?: PronunciationAudioArtifact;
 }
 
+const STUDENT_AUDIO_ARTIST = 'English with Andrei';
+
+function sanitizeStudentFacingTitle(title?: string): string {
+  const unwrapped = title?.replace(/^homework\s+assignment\s*:\s*/i, '').trim() ?? '';
+  const sanitized = unwrapped
+    .replaceAll(/[/\\:*?"<>|]+/g, '-')
+    .replaceAll(/\s+/g, ' ')
+    .replaceAll(/[-.\s]+$/g, '')
+    .trim();
+  return sanitized || 'Homework Assignment';
+}
+
+function resolveStudentFacingFileStem(title: string | undefined, kind: AudioArtifactKind): string {
+  const lessonTitle = sanitizeStudentFacingTitle(title);
+  return kind === 'study_text' ? `${lessonTitle} - Study Text` : `${lessonTitle} - Pronunciation`;
+}
+
+export function resolveStudentFacingAudioMetadata(
+  title: string | undefined,
+  kind: AudioArtifactKind,
+): { title: string; artist: string } | undefined {
+  if (kind === 'pronunciation_item') return undefined;
+  return {
+    title: resolveStudentFacingFileStem(title, kind),
+    artist: STUDENT_AUDIO_ARTIST,
+  };
+}
+
 function cloneAudioArtifact(artifact?: AudioArtifact): AudioArtifact | undefined {
   return artifact ? { ...artifact } : undefined;
 }
@@ -70,19 +98,21 @@ export function resolveAudioArtifactKey(
   audioHash: string,
   prefix: string | undefined,
   kind: AudioArtifactKind = 'study_text',
+  title?: string,
 ): string {
   const normalizedPrefix = prefix?.replace(/^[/\\]+/, '').replace(/[/\\]+$/, '') ?? '';
   const key =
     kind === 'study_text'
-      ? `audio/final/${audioHash}.mp3`
+      ? `audio/final/${audioHash}/${resolveStudentFacingFileStem(title, kind)}.mp3`
       : kind === 'pronunciation_primary'
-        ? `audio/pronunciation/${audioHash}.mp3`
+        ? `audio/pronunciation/${audioHash}/${resolveStudentFacingFileStem(title, kind)}.mp3`
         : `audio/pronunciation-item/${audioHash}.mp3`;
   return normalizedPrefix ? `${normalizedPrefix}/${key}` : key;
 }
 
 export function deriveS3GlobalUrl(bucket: string, key: string): string {
-  return `https://${bucket}.s3.amazonaws.com/${key}`;
+  const encodedKey = key.split('/').map(encodeURIComponent).join('/');
+  return `https://${bucket}.s3.amazonaws.com/${encodedKey}`;
 }
 
 export function emitArtifactReuseMetric(

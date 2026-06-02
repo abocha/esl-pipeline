@@ -54,13 +54,15 @@ Every generated draft should retain:
 - prompt snapshot version
 - prompt alias when applicable
 
-## Voice-Alignment Rules
+## Speaker And Speech-Performance Rules
 
 The default `general-english` preset uses `hw_prompt_definitive`.
 
-- append `[VOICE_CAPABILITIES]` from the current merged provider voice catalog snapshot
-- persist capability provenance
-- fail fast if the capability snapshot cannot be resolved
+- authored `speaker_profiles` stay provider-neutral
+- descriptive cast intent belongs in `role`, optional `persona`, and optional `voice_direction`
+- `accent` is regional only; omit placeholders such as `neutral`, `standard`, and `default`
+- live provider catalogs are resolved after TTS provider/model selection
+- expressive delivery planning is a separate runtime stage with identity fallback
 
 ## MVP Scope Boundaries
 

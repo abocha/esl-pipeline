@@ -96,10 +96,6 @@ export interface PromptPackageLineageResponse {
     };
     drift: PromptPackageTemplateDrift | null;
   };
-  voiceCapabilitiesSnapshot?: {
-    generatedAt: string | null;
-    hash: string | null;
-  } | null;
   memory: {
     studentMemorySnapshotId: string | null;
     studentMemorySnapshotHash: string | null;
@@ -249,16 +245,6 @@ export async function getPromptPackageLineage(
       },
       drift: templateDrift,
     },
-    voiceCapabilitiesSnapshot:
-      promptPackage.resolvedVoiceCapabilitiesHash ||
-      promptPackage.resolvedVoiceCapabilitiesGeneratedAt
-        ? {
-            generatedAt: promptPackage.resolvedVoiceCapabilitiesGeneratedAt
-              ? promptPackage.resolvedVoiceCapabilitiesGeneratedAt.toISOString()
-              : null,
-            hash: promptPackage.resolvedVoiceCapabilitiesHash ?? null,
-          }
-        : null,
     memory: {
       studentMemorySnapshotId: promptPackage.studentMemorySnapshotId ?? null,
       studentMemorySnapshotHash: promptPackage.studentMemorySnapshotHash ?? null,

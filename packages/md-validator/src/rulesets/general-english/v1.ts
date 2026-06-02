@@ -7,9 +7,7 @@ import type {
   MarkdownValidationResponse,
   SpeakerProfile,
   StudyTextType,
-  VoiceCapabilitiesSnapshot,
 } from '@esl-pipeline/contracts';
-import { normalizeSpeakerRole } from '@esl-pipeline/contracts';
 import type {
   ParsedMarkdownContext,
   PmdBlock,
@@ -45,6 +43,15 @@ interface ResolvedValidateInput {
   path?: string;
 }
 
+interface VoiceCatalogCapabilities {
+  generatedAt: string;
+  role: string[];
+  gender: string[];
+  age: string[];
+  accent: string[];
+  style: string[];
+}
+
 export interface GeneralEnglishValidateOptions {
   strict?: boolean;
   /**
@@ -60,6 +67,8 @@ const SpeakerProfileSchema = z
     id: z.string().trim().min(1),
     display_name: z.string().trim().min(1).optional(),
     role: z.string().trim().min(1).optional(),
+    persona: z.string().trim().min(1).optional(),
+    voice_direction: z.string().trim().min(1).optional(),
     gender: z.enum(['male', 'female', 'neutral', 'child']).optional(),
     age: z
       .enum(['child', 'teen', 'young', 'adult', 'middle_aged', 'senior', 'universal'])
@@ -96,7 +105,7 @@ type RawMeta = z.infer<typeof FrontSchema>;
 
 interface VoiceCatalogLike {
   voices: { id?: string; name?: string; labels?: Record<string, unknown> }[];
-  capabilities?: VoiceCapabilitiesSnapshot;
+  capabilities?: VoiceCatalogCapabilities;
 }
 
 const DEFAULT_VOICES_PATH = 'packages/orchestrator/configs/elevenlabs.voices.json';
@@ -622,19 +631,19 @@ function normalizeStyle(value: string): string {
 }
 
 function normalizeVoiceCapabilities(
-  capabilities: VoiceCapabilitiesSnapshot,
-): VoiceCapabilitiesSnapshot {
+  capabilities: VoiceCatalogCapabilities,
+): VoiceCatalogCapabilities {
   return {
     generatedAt: capabilities.generatedAt,
     role: [
       ...new Set(capabilities.role.map((value) => normalizeCapabilityToken(value))),
-    ].sort() as VoiceCapabilitiesSnapshot['role'],
+    ].sort() as VoiceCatalogCapabilities['role'],
     gender: [
       ...new Set(capabilities.gender.map((value) => normalizeCapabilityToken(value))),
-    ].sort() as VoiceCapabilitiesSnapshot['gender'],
+    ].sort() as VoiceCatalogCapabilities['gender'],
     age: [
       ...new Set(capabilities.age.map((value) => normalizeCapabilityToken(value))),
-    ].sort() as VoiceCapabilitiesSnapshot['age'],
+    ].sort() as VoiceCatalogCapabilities['age'],
     accent: [
       ...new Set(
         capabilities.accent
@@ -652,7 +661,7 @@ function normalizeVoiceCapabilities(
   };
 }
 
-function deriveVoiceCapabilities(catalog: VoiceCatalogLike): VoiceCapabilitiesSnapshot {
+function deriveVoiceCapabilities(catalog: VoiceCatalogLike): VoiceCatalogCapabilities {
   if (catalog.capabilities) {
     return normalizeVoiceCapabilities(catalog.capabilities);
   }
@@ -696,8 +705,8 @@ function deriveVoiceCapabilities(catalog: VoiceCatalogLike): VoiceCapabilitiesSn
     role: [...CANONICAL_ROLES],
     gender: [
       ...(genders.size > 0 ? genders : CANONICAL_GENDERS),
-    ].sort() as VoiceCapabilitiesSnapshot['gender'],
-    age: [...(ages.size > 0 ? ages : CANONICAL_AGES)].sort() as VoiceCapabilitiesSnapshot['age'],
+    ].sort() as VoiceCatalogCapabilities['gender'],
+    age: [...(ages.size > 0 ? ages : CANONICAL_AGES)].sort() as VoiceCatalogCapabilities['age'],
     accent: [...accents].sort(),
     style: [...styles].sort(),
   };
@@ -853,18 +862,32 @@ function normalizeMeta(
 
   const speakerProfiles = Array.isArray(rawMeta.speaker_profiles)
     ? rawMeta.speaker_profiles.map((profile) => {
-        const rawRole = typeof profile.role === 'string' ? profile.role.trim() : '';
-        const normalizedRole = normalizeSpeakerRole(rawRole);
-        if (rawRole && !normalizedRole) {
-          const message =
-            `Front matter: speaker_profiles role "${rawRole}" for "${profile.id}" is unknown. ` +
-            `Allowed canonical roles: [${CANONICAL_ROLES.join(', ')}]. Role score will be 0.`;
+        if (profile.style) {
+          const message = `Front matter: speaker_profiles style for "${profile.id}" is ignored; use stable persona text instead.`;
           warnings.push(message);
           diagnosticsWarnings.push(message);
         }
+        if (profile.voice) {
+          const message = `Front matter: speaker_profiles voice for "${profile.id}" is ignored; configure operator voice routing instead.`;
+          warnings.push(message);
+          diagnosticsWarnings.push(message);
+        }
+        const normalizedAccent = profile.accent?.trim().toLowerCase();
+        const ignoredAccent =
+          normalizedAccent === 'neutral' ||
+          normalizedAccent === 'standard' ||
+          normalizedAccent === 'default' ||
+          normalizedAccent === 'generic';
+        if (ignoredAccent) {
+          const message = `Front matter: speaker_profiles accent "${profile.accent}" for "${profile.id}" is ignored; use a regional accent or omit it.`;
+          warnings.push(message);
+          diagnosticsWarnings.push(message);
+        }
+        const { style: _style, voice: _voice, accent: _accent, ...stableProfile } = profile;
         return {
-          ...profile,
-          role: normalizedRole,
+          ...stableProfile,
+          role: typeof profile.role === 'string' ? profile.role.trim() : undefined,
+          ...(ignoredAccent ? {} : { accent: profile.accent }),
         };
       })
     : undefined;
@@ -901,7 +924,7 @@ function classifyStudyTextType(rawLines: string[]): StudyTextType {
 function validateSpeakerMetadataAlignment(
   meta: ValidationMeta,
   strictValidation: boolean,
-  capabilities: VoiceCapabilitiesSnapshot | undefined,
+  capabilities: VoiceCatalogCapabilities | undefined,
   knownVoices: Set<string> | undefined,
   errors: string[],
   warnings: string[],
@@ -1497,7 +1520,6 @@ export async function validateGeneralEnglishRuleset(
       ? buildShadowModeDiagnostics([...voiceDiagnosticsErrors, ...voiceDiagnosticsWarnings])
       : undefined;
   const voiceDiagnostics: GeneralEnglishValidateResult['voiceDiagnostics'] = {
-    capabilities,
     errors: voiceDiagnosticsErrors.length > 0 ? voiceDiagnosticsErrors : undefined,
     warnings: voiceDiagnosticsWarnings.length > 0 ? voiceDiagnosticsWarnings : undefined,
     compatibilityMode: strictVoiceAlignment

@@ -7,6 +7,7 @@ Provider-agnostic TTS core contracts and orchestration utilities.
 - Defines shared TTS input/output contracts.
 - Defines provider adapter interfaces (`TtsProviderAdapter`, `VoiceProviderAdapter`).
 - Provides registry + engine helpers (`registerTtsProvider`, `buildStudyTextMp3`, etc.).
+- Defines neutral speech-performance plans and preparation helpers for expressive adapters.
 - Resolves provider selection using:
   - `ESL_TTS_DEFAULT_PROVIDER`
   - `ESL_TTS_PROVIDER_ORDER`
@@ -23,3 +24,6 @@ registerTtsProvider(createGoogleTtsProvider());
 
 await buildStudyTextMp3({ context, mdPath }, { voiceMapPath, outPath, ttsProvider: 'google' });
 ```
+
+Adapters own provider syntax. Authored Markdown and orchestrator manifests carry neutral speaker
+profiles and optional speech-performance plans.

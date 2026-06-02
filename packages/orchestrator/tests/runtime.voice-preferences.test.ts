@@ -71,6 +71,15 @@ describe('runtime/voice-preferences', () => {
     expect(flags).toEqual({ accentPreference: 'american', voiceId: 'voice-3' });
   });
 
+  it('keeps accent-only preferences as provider guidance when concrete resolution is disabled', async () => {
+    const flags = { accentPreference: 'american' };
+
+    await applyVoicePreferences(flags, { resolveAccentToVoiceId: false });
+
+    expect(flags).toEqual({ accentPreference: 'american' });
+    expect(ttsMocks.loadVoicesCatalog).not.toHaveBeenCalled();
+  });
+
   it('falls back to empty catalog when voice catalog load fails', async () => {
     ttsMocks.loadVoicesCatalog.mockRejectedValue(new Error('network down'));
     const flags = { voiceId: 'Narrator' };

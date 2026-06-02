@@ -257,6 +257,8 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
                 ttsStrategy: running.ttsStrategy ?? undefined,
                 ttsProvider: running.ttsProvider ?? userSettingsTtsProvider ?? undefined,
                 ttsModel: running.ttsModel ?? undefined,
+                voiceAccent: running.voiceAccent ?? undefined,
+                voiceId: running.voiceId ?? undefined,
                 settings: userSettings,
               },
               runId,

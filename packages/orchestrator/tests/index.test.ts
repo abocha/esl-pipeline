@@ -53,7 +53,7 @@ default: voice_id_default
     expect(result.steps).toContain('import');
     expect(result.manifestPath).toBeDefined();
     expect(result.audio?.url).toMatch(
-      /^https:\/\/test-bucket\.s3\.amazonaws\.com\/audio\/final\/[a-f0-9]+\.mp3$/,
+      /^https:\/\/test-bucket\.s3\.amazonaws\.com\/audio\/final\/[a-f0-9]+\/Conditionals%20Type%202%20-%20Study%20Text\.mp3$/,
     );
   }, 30_000);
 

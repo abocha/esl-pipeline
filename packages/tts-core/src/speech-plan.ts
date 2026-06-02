@@ -1,0 +1,162 @@
+import { ConfigurationError } from '@esl-pipeline/contracts';
+import { extractStudyText } from '@esl-pipeline/pmd';
+
+import { resolveTtsSelection } from './descriptors.js';
+import { hashStudyText } from './hash.js';
+import type {
+  BuildStudyTextInput,
+  BuildStudyTextOptions,
+  PreparedStudyTextSynthesis,
+  SpeechPerformancePlan,
+  SpeechPerformancePlannerFallbackReason,
+  SpeechPerformancePlanSegment,
+} from './types.js';
+
+export class SpeechPerformancePlannerInvalidOutputError extends Error {
+  readonly validationMessage?: string;
+  readonly rejectedOutput?: unknown;
+  readonly rawText?: string;
+
+  constructor(
+    message: string,
+    options: ErrorOptions & {
+      validationMessage?: string;
+      rejectedOutput?: unknown;
+      rawText?: string;
+    } = {},
+  ) {
+    super(message, options);
+    this.name = 'SpeechPerformancePlannerInvalidOutputError';
+    this.validationMessage = options.validationMessage;
+    this.rejectedOutput = options.rejectedOutput;
+    this.rawText = options.rawText;
+  }
+}
+
+export function createPreparedStudyTextSynthesis(
+  input: BuildStudyTextInput,
+  options: BuildStudyTextOptions,
+): PreparedStudyTextSynthesis {
+  const selection = resolveTtsSelection({ provider: options.ttsProvider, model: options.ttsModel });
+  const segments = extractStudyText(input.context)
+    .lines.map((line, index) => {
+      const separator = line.indexOf(':');
+      const speaker =
+        separator > 0 && separator < 40
+          ? normalizeStudyTextSpeakerToken(line.slice(0, separator))
+          : undefined;
+      const text = (speaker ? line.slice(separator + 1) : line).trim();
+      return { id: `segment-${index + 1}`, ...(speaker ? { speaker } : {}), text };
+    })
+    .filter((segment) => segment.text.length > 0);
+  return {
+    selection,
+    sourceHash: hashStudyText(JSON.stringify(segments)),
+    segments,
+    voices: [],
+    voiceAssignments: {},
+  };
+}
+
+export function normalizeStudyTextSpeakerToken(value: string): string | undefined {
+  const normalized = value
+    .trim()
+    .replaceAll(/[*_`~>#\]]/g, '')
+    .replaceAll('[', '')
+    .replaceAll(/\s+/g, ' ')
+    .trim();
+  return normalized || undefined;
+}
+
+export function createIdentitySpeechPerformancePlan(
+  prepared: PreparedStudyTextSynthesis,
+  options: { fallbackReason?: SpeechPerformancePlannerFallbackReason } = {},
+): SpeechPerformancePlan {
+  return {
+    schemaVersion: 1,
+    mode: 'identity',
+    provider: prepared.selection.provider,
+    model: prepared.selection.model,
+    sourceHash: prepared.sourceHash,
+    ...(options.fallbackReason ? { fallbackReason: options.fallbackReason } : {}),
+    segments: prepared.segments.map((segment) => ({ ...segment })),
+  };
+}
+
+export function validateSpeechPerformancePlan(
+  prepared: PreparedStudyTextSynthesis,
+  plan: SpeechPerformancePlan,
+): SpeechPerformancePlan {
+  if (plan.schemaVersion !== 1) {
+    throw new ConfigurationError(`Unsupported speech plan schema version "${plan.schemaVersion}".`);
+  }
+  if (
+    plan.provider !== prepared.selection.provider ||
+    plan.model !== prepared.selection.model ||
+    plan.sourceHash !== prepared.sourceHash
+  ) {
+    throw new ConfigurationError(
+      'Speech plan selection or source hash does not match prepared text.',
+    );
+  }
+  if (plan.segments.length !== prepared.segments.length) {
+    throw new ConfigurationError('Speech plan segment count does not match prepared text.');
+  }
+
+  const segments = plan.segments.map((segment, index) =>
+    validateSegment(prepared, prepared.segments[index]!, segment),
+  );
+  return { ...plan, segments };
+}
+
+function validateSegment(
+  prepared: PreparedStudyTextSynthesis,
+  source: SpeechPerformancePlanSegment,
+  segment: SpeechPerformancePlanSegment,
+): SpeechPerformancePlanSegment {
+  if (segment.id !== source.id) {
+    throw new ConfigurationError(
+      `Speech plan segment "${segment.id}" does not match source segment "${source.id}".`,
+    );
+  }
+  if (segment.text !== source.text) {
+    throw new ConfigurationError(`Speech plan segment "${segment.id}" changed the authored text.`);
+  }
+  if (segment.speaker !== source.speaker) {
+    throw new ConfigurationError(
+      `Speech plan segment "${segment.id}" changed the authored speaker.`,
+    );
+  }
+  const emphasis = (segment.emphasis ?? []).map((phrase) => {
+    if (!phrase) {
+      throw new ConfigurationError(
+        `Speech plan segment "${segment.id}" emphasis phrase must not be empty.`,
+      );
+    }
+    const index = segment.text.toLocaleLowerCase().indexOf(phrase.toLocaleLowerCase());
+    if (index === -1) {
+      throw new ConfigurationError(
+        `Speech plan segment "${segment.id}" emphasis "${phrase}" is not present in authored text.`,
+      );
+    }
+    return segment.text.slice(index, index + phrase.length);
+  });
+  for (const pause of [segment.pauseBeforeMs, segment.pauseAfterMs]) {
+    if (pause !== undefined && (!Number.isInteger(pause) || pause < 0 || pause > 3000)) {
+      throw new ConfigurationError(
+        `Speech plan segment "${segment.id}" pause must be an integer from 0 to 3000ms.`,
+      );
+    }
+  }
+  if (segment.freeFormDirection) {
+    const assignment = prepared.voicePlan?.assignments.find(
+      (candidate) => candidate.speaker === segment.speaker,
+    );
+    if (!assignment?.capabilities.supportsFreeFormDirection) {
+      throw new ConfigurationError(
+        `Speech plan segment "${segment.id}" selected voice does not support free-form direction.`,
+      );
+    }
+  }
+  return emphasis.length > 0 ? { ...segment, emphasis } : segment;
+}

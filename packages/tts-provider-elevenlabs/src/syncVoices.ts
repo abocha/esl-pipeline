@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { ConfigurationError } from '@esl-pipeline/contracts';
 
 import { getElevenClient } from './eleven.js';
-import { buildVoiceCapabilitiesSnapshot } from './voiceCapabilities.js';
+import { buildVoiceCatalogCapabilities } from './voiceCapabilities.js';
 
 interface VoiceRow {
   id: string;
@@ -132,7 +132,7 @@ export async function syncVoices(outPath = DEFAULT_VOICES_OUT) {
       a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) || a.id.localeCompare(b.id),
   );
   const generatedAt = new Date().toISOString();
-  const capabilities = buildVoiceCapabilitiesSnapshot(
+  const capabilities = buildVoiceCatalogCapabilities(
     rows.map((row) => ({
       labels: row.labels,
       useCase: typeof row.labels?.use_case === 'string' ? row.labels.use_case : undefined,

@@ -62,8 +62,8 @@ export async function setTemplateActiveRevision(
       `
       UPDATE templates
       SET
-        active_revision_id = $2,
-        is_default = CASE WHEN $2 IS NULL THEN FALSE ELSE is_default END
+        active_revision_id = $2::uuid,
+        is_default = CASE WHEN $2::uuid IS NULL THEN FALSE ELSE is_default END
       WHERE id = $1
       RETURNING
         id,

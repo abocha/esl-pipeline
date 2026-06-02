@@ -82,6 +82,8 @@ describe('application/process-queue-job', () => {
       ttsStrategy: initial.ttsStrategy,
       ttsProvider: initial.ttsProvider,
       ttsModel: undefined,
+      voiceAccent: initial.voiceAccent,
+      voiceId: initial.voiceId,
     });
     expect(path.isAbsolute(payload.md)).toBe(true);
     if (initial.md == null) {

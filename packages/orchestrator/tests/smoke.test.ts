@@ -9,6 +9,20 @@ vi.mock('@esl-pipeline/tts-core', async () => {
   return {
     ...actual,
     buildStudyTextMp3: vi.fn(),
+    prepareStudyTextSynthesis: vi.fn(async (input, options) => {
+      const prepared = actual.createPreparedStudyTextSynthesis(input, options);
+      return {
+        ...prepared,
+        voicePlan: {
+          schemaVersion: 1,
+          mode: 'resolved',
+          provider: prepared.selection.provider,
+          model: prepared.selection.model,
+          sourceHash: prepared.sourceHash,
+          assignments: [],
+        },
+      };
+    }),
   };
 });
 
@@ -65,11 +79,22 @@ describe('orchestrator smoke', () => {
       dryRun: false,
     });
 
-    expect(result.steps).toEqual(['validate', 'import', 'tts', 'upload', 'add-audio', 'manifest']);
+    expect(result.steps).toEqual([
+      'validate',
+      'import',
+      'voice-plan',
+      'speech-plan',
+      'tts',
+      'upload',
+      'add-audio',
+      'manifest',
+    ]);
     expect(result.audio?.url).toBe('https://s3.amazonaws.com/audio/file.mp3');
     expect(result.manifestPath).toBeTruthy();
     const manifestContents = await readFile(result.manifestPath!, 'utf8');
     expect(manifestContents).toContain('"publishTarget": "html"');
+    expect(manifestContents).toContain('"voicePlans"');
+    expect(manifestContents).toContain('"speechPlans"');
 
     const statusBefore = await getAssignmentStatus(mdPath);
     expect(statusBefore.manifest?.publishTarget).toBe('html');

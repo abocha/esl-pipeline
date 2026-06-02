@@ -55,7 +55,7 @@ is now primarily a **bootstrap seed/reference asset**, not the live runtime sour
 At the time of writing:
 
 - template id is `hw_prompt_definitive.md`
-- the first template revision supporting the first-class voice-capabilities block is `v10`
+- the current template revision is being replaced by the speech-performance rollout
 
 This means prompt changes must be reasoned about in two layers:
 
@@ -70,10 +70,9 @@ Current flow:
 
 1. Resolve active template revision from DB.
 2. Resolve active profile revision from DB.
-3. Resolve the merged provider voice-capabilities snapshot.
-4. Stitch runtime context blocks after the static template, including `[VOICE_CAPABILITIES]`.
-5. Store the finished prompt package.
-6. Send the stored prompt-package text to the provider for draft generation.
+3. Stitch provider-neutral runtime context blocks after the static template.
+4. Store the finished prompt package.
+5. Send the stored prompt-package text to the provider for draft generation.
 
 Implication:
 
@@ -85,7 +84,6 @@ Implication:
 The prompt package is now assembled with one uniform rule:
 
 - the template is a pure static system-instructions document
-- `[VOICE_CAPABILITIES]` is appended by code as provider-backed runtime context
 - `[FOUNDATIONAL_PROFILE]` is appended by code like every other runtime block
 - templates no longer contain or require `INSERT PROFILE HERE`
 - templates no longer contain or require a capability snapshot marker
@@ -93,14 +91,13 @@ The prompt package is now assembled with one uniform rule:
 The effective runtime order is:
 
 1. static template content
-2. `[VOICE_CAPABILITIES]`
-3. `[FOUNDATIONAL_PROFILE]`
-4. `[STUDENT_MEMORY_SNAPSHOT]`
-5. `[RECENT_LESSON_MEMORY]`
-6. `[RECENT_HOMEWORK_MEMORY]`
-7. `[UNRESOLVED_ISSUES]`
-8. `[TEACHER_NOTES]`
-9. `[LATEST_TRANSCRIPT]`
+2. `[FOUNDATIONAL_PROFILE]`
+3. `[STUDENT_MEMORY_SNAPSHOT]`
+4. `[RECENT_LESSON_MEMORY]`
+5. `[RECENT_HOMEWORK_MEMORY]`
+6. `[UNRESOLVED_ISSUES]`
+7. `[TEACHER_NOTES]`
+8. `[LATEST_TRANSCRIPT]`
 
 This matters because every dynamic block now follows one explicit assembly contract instead of mixing template-local insertion with appended context.
 
@@ -124,18 +121,18 @@ The template revision should become a pure system-instructions document, contain
 
 After the static instructions, the backend appends the dynamic blocks in one fixed canonical order:
 
-1. `[VOICE_CAPABILITIES]`
-2. `[FOUNDATIONAL_PROFILE]`
-3. `[STUDENT_MEMORY_SNAPSHOT]`
-4. `[RECENT_LESSON_MEMORY]`
-5. `[RECENT_HOMEWORK_MEMORY]`
-6. `[UNRESOLVED_ISSUES]`
-7. `[TEACHER_NOTES]`
-8. `[LATEST_TRANSCRIPT]`
+1. `[FOUNDATIONAL_PROFILE]`
+2. `[STUDENT_MEMORY_SNAPSHOT]`
+3. `[RECENT_LESSON_MEMORY]`
+4. `[RECENT_HOMEWORK_MEMORY]`
+5. `[UNRESOLVED_ISSUES]`
+6. `[TEACHER_NOTES]`
+7. `[LATEST_TRANSCRIPT]`
 
-`[VOICE_CAPABILITIES]` constrains only `speaker_profiles` frontmatter values such as
-`role`, `gender`, `age`, `accent`, and `style`; it does not override lesson facts or
-student facts.
+Generated `speaker_profiles` describe stable cast intent using free-text `role`, optional `persona`,
+optional `voice_direction`, and basic provider-neutral `gender`, `age`, and regional `accent`.
+Placeholder accents such as `neutral`, `standard`, and `default` must be omitted. Provider voice
+catalogs are resolved later by the speech-performance runtime.
 
 ### Design principle
 
@@ -422,6 +419,10 @@ What changed:
 3. all runtime blocks are appended in one canonical order
 4. template validation no longer requires the marker
 5. bootstrap no longer relies on the marker for classification
+
+The speech-performance rollout further retires `[VOICE_CAPABILITIES]` from draft generation and
+moves provider/model capability handling into the post-draft `speech-plan` stage. See
+[`docs/reference/TTS_SPEECH_PERFORMANCE_SYSTEM.md`](TTS_SPEECH_PERFORMANCE_SYSTEM.md).
 
 ## Non-Goals
 

@@ -1,6 +1,11 @@
 import type { PronunciationChunkTtsProviderId, TtsModelId } from '@esl-pipeline/contracts';
 import type { PronunciationAudioMode } from '@esl-pipeline/shared-infrastructure';
-import type { TtsProviderId as TtsProvider } from '@esl-pipeline/tts-core';
+import type {
+  SpeechPerformancePlanner,
+  SpeechPerformancePlannerFallbackReason,
+  TtsProviderId as TtsProvider,
+  VoicePlanRanker,
+} from '@esl-pipeline/tts-core';
 
 import type { ConfigProvider } from './config.js';
 import type { AssignmentManifest, AudioArtifactManifest, ManifestStore } from './manifest.js';
@@ -10,6 +15,8 @@ export type AssignmentStage =
   | 'validate'
   | 'import'
   | 'colorize'
+  | 'voice-plan'
+  | 'speech-plan'
   | 'tts'
   | 'upload'
   | 'add-audio'
@@ -84,6 +91,10 @@ export interface OrchestratorDependencies {
   metrics?: PipelineMetrics;
   runId?: string;
   signal?: AbortSignal;
+  speechPlanner?: SpeechPerformancePlanner;
+  speechPlannerUnavailableReason?: SpeechPerformancePlannerFallbackReason;
+  speechPlannerDebugLogPlan?: boolean;
+  voiceRanker?: VoicePlanRanker;
 }
 
 export interface OrchestratorV2ExecutionContext {

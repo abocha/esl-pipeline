@@ -44,6 +44,20 @@ vi.mock('@esl-pipeline/tts-core', async () => {
   return {
     ...actual,
     buildStudyTextMp3: vi.fn(),
+    prepareStudyTextSynthesis: vi.fn(async (input, options) => {
+      const prepared = actual.createPreparedStudyTextSynthesis(input, options);
+      return {
+        ...prepared,
+        voicePlan: {
+          schemaVersion: 1,
+          mode: 'resolved',
+          provider: prepared.selection.provider,
+          model: prepared.selection.model,
+          sourceHash: prepared.sourceHash,
+          assignments: [],
+        },
+      };
+    }),
   };
 });
 
@@ -115,6 +129,8 @@ describe('pipeline integration', () => {
     expect(result.steps).toEqual([
       'validate',
       'skip:import',
+      'voice-plan',
+      'speech-plan',
       'tts',
       'upload',
       'add-audio',
@@ -138,6 +154,8 @@ describe('pipeline integration', () => {
       'validate:success',
       'import:skipped',
       'colorize:skipped',
+      'voice-plan:success',
+      'speech-plan:success',
       'tts:success',
       'upload:success',
       'add-audio:success',
@@ -197,6 +215,8 @@ describe('pipeline integration', () => {
     expect(result.steps).toEqual([
       'validate',
       'skip:import',
+      'voice-plan',
+      'speech-plan',
       'tts',
       'upload',
       'add-audio',
@@ -216,6 +236,8 @@ describe('pipeline integration', () => {
       'validate:success',
       'import:skipped',
       'colorize:skipped',
+      'voice-plan:success',
+      'speech-plan:success',
       'tts:success',
       'upload:success',
       'add-audio:success',

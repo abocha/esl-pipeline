@@ -3,6 +3,7 @@ import type { PipelineLogger } from '@esl-pipeline/contracts';
 import { ConfigurationError } from '@esl-pipeline/contracts';
 
 import { normalizeS3ObjectKey, sanitizeS3KeyPrefix } from './address.js';
+import { type Mp3Metadata, withMp3MetadataExport } from './mp3-metadata.js';
 import { uploadToS3 } from './s3.js';
 
 export interface UploadOpts {
@@ -17,6 +18,7 @@ export interface UploadOpts {
   region?: string; // optional; defaults to env AWS_REGION
   presignExpiresIn?: number;
   logger?: PipelineLogger;
+  mp3Metadata?: Mp3Metadata;
 }
 
 export async function uploadFile(
@@ -51,16 +53,18 @@ export async function uploadFile(
       )
     : undefined;
 
-  return uploadToS3(localPath, {
-    bucket,
-    region: opts.region ?? process.env.AWS_REGION ?? 'ap-southeast-1',
-    keyPrefix,
-    key: explicitKey,
-    sha256: opts.sha256,
-    skipIfExists: opts.skipIfExists,
-    publicRead: !!opts.public,
-    logger: opts.logger,
-    // If your s3.ts supports presign, uncomment/forward it:
-    // presignSeconds: opts.presign ?? 0,
-  });
+  return withMp3MetadataExport(localPath, opts.mp3Metadata, (exportPath) =>
+    uploadToS3(exportPath, {
+      bucket,
+      region: opts.region ?? process.env.AWS_REGION ?? 'ap-southeast-1',
+      keyPrefix,
+      key: explicitKey,
+      sha256: opts.sha256,
+      skipIfExists: opts.skipIfExists,
+      publicRead: !!opts.public,
+      logger: opts.logger,
+      // If your s3 helper supports presign, uncomment/forward it:
+      // presignSeconds: opts.presign ?? 0,
+    }),
+  );
 }

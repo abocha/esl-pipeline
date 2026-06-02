@@ -122,6 +122,8 @@ async function runAssignmentPipeline(
     upload: payload.upload,
     publishTarget: payload.publishTarget,
     out: ttsOutDir,
+    accentPreference: payload.voiceAccent ?? undefined,
+    voiceId: payload.voiceId ?? undefined,
   };
 
   if (payload.forceTts) {

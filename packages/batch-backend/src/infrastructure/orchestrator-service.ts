@@ -21,6 +21,8 @@ import {
   S3ManifestStore,
 } from '@esl-pipeline/orchestrator';
 
+import { createBackendSpeechPerformancePlanner } from '../application/speech-performance-planner.js';
+import { createBackendVoicePlanRanker } from '../application/voice-plan-ranker.js';
 import { loadConfig } from '../config/env.js';
 import type { TtsModelId, TtsStrategy } from '../domain/job-model.js';
 import type { TtsProvider } from '../domain/settings-model.js';
@@ -116,6 +118,11 @@ export function getPipeline(configOverride?: ReturnType<typeof loadConfig>) {
     cwd: process.env.PIPELINE_CWD || process.cwd(),
   });
 
+  const speechPlannerBinding = createBackendSpeechPerformancePlanner(config);
+  const voiceRanker =
+    config.voiceRanker?.enabled && config.generation.providers.googleAiStudio.apiKey
+      ? createBackendVoicePlanRanker(config)
+      : undefined;
   cachedPipeline = createPipeline({
     cwd: process.env.PIPELINE_CWD || process.cwd(),
     logger: orchestratorLogger,
@@ -125,6 +132,10 @@ export function getPipeline(configOverride?: ReturnType<typeof loadConfig>) {
     presetsPath: configPaths.presetsPath,
     voicesPath: configPaths.voicesPath,
     studentsDir: configPaths.studentsDir,
+    speechPlanner: speechPlannerBinding.planner,
+    speechPlannerUnavailableReason: speechPlannerBinding.unavailableReason,
+    speechPlannerDebugLogPlan: config.speechPlanner?.debugLogPlan ?? false,
+    voiceRanker,
   });
 
   return cachedPipeline;
@@ -144,6 +155,8 @@ export interface RunAssignmentPayload {
   ttsStrategy?: TtsStrategy | null;
   ttsProvider?: TtsProvider | null;
   ttsModel?: TtsModelId | null;
+  voiceAccent?: string | null;
+  voiceId?: string | null;
   settings?: RunJobSettings;
 }
 
