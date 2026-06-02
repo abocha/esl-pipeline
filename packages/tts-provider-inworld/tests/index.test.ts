@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { parseMarkdownContext } from '@esl-pipeline/pmd';
 
 import {
+  buildInworldChunkHash,
   buildStudyTextMp3Inworld,
   createInworldTtsProvider,
   loadInworldVoicesCatalog,
@@ -746,5 +747,27 @@ describe('inworld provider adapter basics', () => {
         createPreviewVoicePlan('2026-06-02T00:00:00.000Z', 'Maya', 'Dennis'),
       ),
     ).resolves.not.toBe(baseline);
+  });
+
+  it('includes sample rate and encoding in chunk-cache identity hash', () => {
+    const chunkArgs = {
+      model: 'inworld-tts-2',
+      voiceId: 'Ashley',
+      text: 'We need a clearer deadline.',
+      index: 0,
+      speakingRate: 1.0,
+      temperature: 1.0,
+      deliveryMode: 'BALANCED',
+      sampleRateHertz: 48_000,
+    };
+
+    const first = buildInworldChunkHash(chunkArgs);
+    const same = buildInworldChunkHash({ ...chunkArgs });
+    const differentSampleRate = buildInworldChunkHash({ ...chunkArgs, sampleRateHertz: 24_000 });
+    const differentEncoding = buildInworldChunkHash({ ...chunkArgs, encoding: 'LINEAR16' });
+
+    expect(same).toBe(first);
+    expect(differentSampleRate).not.toBe(first);
+    expect(differentEncoding).not.toBe(first);
   });
 });

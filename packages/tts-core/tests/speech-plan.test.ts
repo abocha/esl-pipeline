@@ -301,6 +301,38 @@ describe('speech performance plans', () => {
     expect(validateVoicePlan(prepared, plan)).toEqual(plan);
   });
 
+  it('rejects voice plans with duplicate casing assignments for the same speaker', () => {
+    const prepared = createPrepared();
+    const plan = createResolvedVoicePlan(prepared, [
+      {
+        speaker: 'Maya',
+        voiceId: 'Ashley',
+        source: 'auto',
+        capabilities: {
+          supportsMetadataInstructions: true,
+          supportsNonVerbals: true,
+          supportsUppercaseEmphasis: true,
+          supportsFreeFormDirection: false,
+        },
+      },
+      {
+        speaker: 'maya',
+        voiceId: 'Ashley',
+        source: 'auto',
+        capabilities: {
+          supportsMetadataInstructions: true,
+          supportsNonVerbals: true,
+          supportsUppercaseEmphasis: true,
+          supportsFreeFormDirection: false,
+        },
+      },
+    ]);
+
+    expect(() => validateVoicePlan(prepared, plan)).toThrow(
+      'Voice plan contains duplicate assignment for speaker "maya".',
+    );
+  });
+
   it('rejects plans that rewrite the authored words', () => {
     const prepared = createPrepared();
     const plan: SpeechPerformancePlan = {
