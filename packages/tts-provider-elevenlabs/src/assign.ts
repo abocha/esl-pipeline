@@ -2,18 +2,14 @@ import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import type { VoiceCapabilitiesSnapshot } from '@esl-pipeline/contracts';
-import {
-  ConfigurationError,
-  InfrastructureError,
-  normalizeSpeakerRole,
-} from '@esl-pipeline/contracts';
+import { ConfigurationError, InfrastructureError } from '@esl-pipeline/contracts';
+import { resolveSpeakerRoutingHint } from '@esl-pipeline/tts-core';
 
-import { getVoiceCapabilities } from './voiceCapabilities.js';
+import { getVoiceCapabilities, type VoiceCatalogCapabilities } from './voiceCapabilities.js';
 
 export interface VoiceCatalog {
   generatedAt?: string;
-  capabilities?: VoiceCapabilitiesSnapshot;
+  capabilities?: VoiceCatalogCapabilities;
   voices: Voice[];
 }
 
@@ -96,7 +92,7 @@ export async function loadVoicesCatalog(
 
 export async function loadVoiceCapabilities(
   file = 'packages/orchestrator/configs/elevenlabs.voices.json',
-): Promise<VoiceCapabilitiesSnapshot> {
+): Promise<VoiceCatalogCapabilities> {
   const catalog = await loadVoicesCatalog(file);
   return getVoiceCapabilities(catalog);
 }
@@ -203,7 +199,7 @@ function score(voice: Voice, need: SpeakerMeta): number {
   let s = 0;
 
   const gender = (need.gender || '').toLowerCase();
-  const role = normalizeScoringRole(normalizeSpeakerRole(need.role) ?? need.role);
+  const role = normalizeScoringRole(resolveSpeakerRoutingHint(need.role) ?? need.role);
   const desiredAge = (need.age || '').toLowerCase();
   const accent = (need.accent || '').toLowerCase();
   const style = (need.style || '').toLowerCase();
@@ -301,7 +297,7 @@ export async function pickVoiceForSpeaker(
   const explicitGender = normalizeGender(meta.gender);
   const guessedGender = explicitGender || guessGenderFromName(speakerName);
   const normalizedRole = normalizeScoringRole(
-    normalizeSpeakerRole(meta.role) ??
+    resolveSpeakerRoutingHint(meta.role) ??
       (speakerName.toLowerCase() === 'narrator' ? 'narrator' : meta.role),
   );
   const guessed: SpeakerMeta = {

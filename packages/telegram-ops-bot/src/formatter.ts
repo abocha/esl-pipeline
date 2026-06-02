@@ -13,11 +13,7 @@ import type { BotConfig, BotDomain, BotRuntimeSnapshot, CommandDefinition } from
 
 const STUDY_TEXT_AUDIO_LINK_LABEL = 'Audio recording: Study Text';
 const PRONUNCIATION_AUDIO_LINK_LABEL = 'Audio recording: Pronunciation Practice';
-const PRONUNCIATION_AUDIO_PATH_HINTS = [
-  '/audio/pronunciation/',
-  '/audio/pronunciation-item/',
-  '/audio/pronunciation-shadow/',
-] as const;
+const PRONUNCIATION_AUDIO_PATH_HINTS = ['/audio/pronunciation/'] as const;
 
 export function escapeHtml(value: string): string {
   return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');

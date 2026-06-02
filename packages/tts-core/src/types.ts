@@ -3,6 +3,7 @@ import type {
   GoogleTtsModel,
   InworldTtsModel,
   PipelineLogger,
+  SpeakerProfile,
   TtsModelId,
   TtsProviderId,
   VoiceProviderErrorCategory,
@@ -14,6 +15,22 @@ export type TtsStrategy = 'auto' | 'tts' | 'dialogue';
 export type { ElevenLabsTtsModelId, GoogleTtsModel, InworldTtsModel, TtsModelId, TtsProviderId };
 
 export type TtsCapabilitySnapshotMode = 'static' | 'credentialed' | 'none';
+export type TtsSpeechPlanningMode = 'identity' | 'prompted';
+export type SpeechDeliveryMode = 'STABLE' | 'BALANCED' | 'CREATIVE';
+export type SpeechPace = 'slow' | 'measured' | 'natural' | 'brisk';
+export type SpeechNonVerbal = 'sigh' | 'laugh' | 'chuckle' | 'breath';
+
+export interface TtsModelCapabilities {
+  planningMode: TtsSpeechPlanningMode;
+  speakingRate?: { min: number; max: number };
+  temperature?: { min: number; max: number };
+  deliveryModes?: readonly SpeechDeliveryMode[];
+  naturalLanguageSteering?: boolean;
+  metadataInstructions?: boolean;
+  ssmlBreaks?: boolean;
+  nonVerbals?: boolean;
+  uppercaseEmphasis?: boolean;
+}
 
 export interface TtsProviderDescriptor<
   ProviderId extends TtsProviderId = TtsProviderId,
@@ -39,6 +56,133 @@ export interface TtsSelection<
 export interface BuildStudyTextInput {
   context: ParsedMarkdownContext;
   mdPath?: string;
+}
+
+export interface SpeechPerformancePlanSegment {
+  id: string;
+  speaker?: string;
+  text: string;
+  emotion?: string;
+  intonation?: string;
+  pace?: SpeechPace;
+  emphasis?: string[];
+  pauseBeforeMs?: number;
+  pauseAfterMs?: number;
+  nonVerbalsBefore?: SpeechNonVerbal[];
+  nonVerbalsAfter?: SpeechNonVerbal[];
+  deliveryMode?: SpeechDeliveryMode;
+  freeFormDirection?: string;
+}
+
+export interface SpeechPerformancePlannerMetadata {
+  provider: string;
+  model: string;
+  generatedAt: string;
+}
+
+export interface SpeechPerformancePlan {
+  schemaVersion: 1;
+  mode: TtsSpeechPlanningMode;
+  provider: TtsProviderId;
+  model: TtsModelId;
+  sourceHash: string;
+  planner?: SpeechPerformancePlannerMetadata;
+  fallbackReason?: string;
+  segments: SpeechPerformancePlanSegment[];
+}
+
+export interface PreparedStudyTextSynthesis {
+  selection: TtsSelection;
+  sourceHash: string;
+  segments: SpeechPerformancePlanSegment[];
+  voices: VoiceSelectionSummary[];
+  voiceAssignments: Record<string, string>;
+  voicePlan?: VoicePlan;
+}
+
+export interface VoiceAssignmentCapabilities {
+  supportsMetadataInstructions: boolean;
+  supportsNonVerbals: boolean;
+  supportsUppercaseEmphasis: boolean;
+  supportsFreeFormDirection: boolean;
+}
+
+export interface VoicePlanAssignment extends SpeakerVoiceAssignment {
+  capabilities: VoiceAssignmentCapabilities;
+}
+
+export interface VoicePlanRankerMetadata {
+  provider: string;
+  model: string;
+  generatedAt: string;
+}
+
+export interface VoicePlan {
+  schemaVersion: 1;
+  mode: 'resolved' | 'fallback';
+  provider: TtsProviderId;
+  model: TtsModelId;
+  sourceHash: string;
+  ranker?: VoicePlanRankerMetadata;
+  fallbackReason?: string;
+  assignments: VoicePlanAssignment[];
+}
+
+export interface VoicePlanRankCandidate {
+  voiceId: string;
+  name: string;
+  score: number;
+  description?: string;
+  tags?: string[];
+  capabilities: VoiceAssignmentCapabilities;
+}
+
+export interface VoicePlanRankSpeaker {
+  speaker: string;
+  profile?: SpeakerProfile;
+  candidates: VoicePlanRankCandidate[];
+}
+
+export interface VoicePlanRankRequest {
+  provider: TtsProviderId;
+  model: TtsModelId;
+  speakers: VoicePlanRankSpeaker[];
+}
+
+export interface VoicePlanRankSelection {
+  speaker: string;
+  voiceId: string;
+  reason?: string;
+}
+
+export interface VoicePlanRankResult {
+  selections: VoicePlanRankSelection[];
+}
+
+export interface VoicePlanRanker {
+  metadata: VoicePlanRankerMetadata;
+  debugLogPlan?: boolean;
+  rank(request: VoicePlanRankRequest): Promise<VoicePlanRankResult>;
+}
+
+export interface SpeechPerformancePlanner {
+  plan(prepared: PreparedStudyTextSynthesis): Promise<SpeechPerformancePlan>;
+}
+
+export type SpeechPerformancePlannerFallbackReason =
+  | 'planner_disabled'
+  | 'planner_missing_credentials'
+  | 'planner_unavailable'
+  | 'planner_budget_exceeded'
+  | 'planner_execution_failed'
+  | 'planner_invalid';
+
+export interface SpeechPerformancePlannerBinding {
+  planner?: SpeechPerformancePlanner;
+  unavailableReason?: Extract<
+    SpeechPerformancePlannerFallbackReason,
+    'planner_disabled' | 'planner_missing_credentials' | 'planner_unavailable'
+  >;
 }
 
 export interface BuildPronunciationShadowSentenceInput {
@@ -74,6 +218,9 @@ export interface BuildStudyTextOptions {
   googleLanguageCode?: string;
   googleApiEndpoint?: string;
   googleModelName?: string;
+  voicePlan?: VoicePlan;
+  voiceRanker?: VoicePlanRanker;
+  speechPlan?: SpeechPerformancePlan;
 }
 
 export interface BuildPronunciationShadowSentenceOptions {
@@ -156,9 +303,11 @@ export interface BuildPronunciationTextResult {
 
 export interface VoiceCatalog {
   generatedAt?: string;
-  capabilities?: VoiceCapabilitiesSnapshot;
+  capabilities?: VoiceCatalogCapabilities;
   voices: Voice[];
 }
+
+export type { SpeakerRoutingHint } from './speaker-routing.js';
 
 export interface Voice {
   id: string;
@@ -171,7 +320,7 @@ export interface Voice {
   preview_url?: string | null;
 }
 
-export interface VoiceCapabilitiesSnapshot {
+export interface VoiceCatalogCapabilities {
   generatedAt?: string;
   provider?: string;
   role?: string[];
@@ -189,6 +338,7 @@ export interface SpeakerVoiceAssignment {
   selectionReason?: string;
   capabilityMatches?: string[];
   capabilityMismatches?: string[];
+  capabilities?: VoiceAssignmentCapabilities;
 }
 
 export interface VoiceProviderAdapter {
@@ -236,6 +386,10 @@ export interface TtsEngine {
   registerProvider(provider: TtsProviderAdapter): void;
   registerProviders(providers: TtsProviderAdapter[]): void;
   getProvider(id: TtsProviderId): TtsProviderAdapter | undefined;
+  prepareStudyTextSynthesis(
+    input: BuildStudyTextInput,
+    options: BuildStudyTextOptions,
+  ): Promise<PreparedStudyTextSynthesis>;
   buildStudyTextMp3(
     input: BuildStudyTextInput,
     options: BuildStudyTextOptions,

@@ -1,8 +1,21 @@
 import { describe, expect, it } from 'vitest';
 
-import { createTtsEngine, type TtsProviderAdapter, type TtsProviderId } from '../src/index.js';
+import { parseMarkdownContext } from '@esl-pipeline/pmd';
 
-function createProvider(id: TtsProviderId): TtsProviderAdapter {
+import {
+  type BuildStudyTextOptions,
+  createTtsEngine,
+  type TtsProviderAdapter,
+  type TtsProviderId,
+} from '../src/index.js';
+
+function createProvider(
+  id: TtsProviderId,
+  hooks: {
+    onStudyTextOptions?: (options: BuildStudyTextOptions) => void;
+    resolveSpeakerAssignments?: TtsProviderAdapter['voice']['resolveSpeakerAssignments'];
+  } = {},
+): TtsProviderAdapter {
   return {
     id,
     providerMetadata() {
@@ -12,11 +25,12 @@ function createProvider(id: TtsProviderId): TtsProviderAdapter {
       async loadCatalog() {
         return { voices: [] };
       },
-      async resolveSpeakerAssignments() {
-        return [];
+      async resolveSpeakerAssignments(args) {
+        return hooks.resolveSpeakerAssignments?.(args) ?? [];
       },
     },
-    async synthesizeStudyText() {
+    async synthesizeStudyText(_input, options) {
+      hooks.onStudyTextOptions?.(options);
       return {
         path: `/tmp/${id}.mp3`,
         hash: id,
@@ -98,5 +112,90 @@ describe('DefaultTtsEngine provider selection', () => {
     );
 
     expect(result.provider).toBe('inworld');
+  });
+
+  it('preserves omitted model options so providers can apply mode-specific defaults', async () => {
+    delete process.env.ESL_TTS_DEFAULT_PROVIDER;
+    delete process.env.ESL_TTS_PROVIDER_ORDER;
+    const seenModels: BuildStudyTextOptions['ttsModel'][] = [];
+    const engine = createTtsEngine([
+      createProvider('elevenlabs', {
+        onStudyTextOptions(options) {
+          seenModels.push(options.ttsModel);
+        },
+      }),
+    ]);
+
+    await engine.buildStudyTextMp3(
+      { context: {} as never },
+      { voiceMapPath: 'voices.yml', outPath: '/tmp' },
+    );
+
+    expect(seenModels).toEqual([undefined]);
+  });
+
+  it('still rejects explicit models that do not belong to the selected provider', async () => {
+    const engine = createTtsEngine([createProvider('google')]);
+
+    await expect(
+      engine.buildStudyTextMp3(
+        { context: {} as never },
+        {
+          voiceMapPath: 'voices.yml',
+          outPath: '/tmp',
+          ttsProvider: 'google',
+          ttsModel: 'eleven_v3',
+        },
+      ),
+    ).rejects.toThrow('TTS model "eleven_v3" is not supported by provider "google".');
+  });
+
+  it('prepares study text with provider-resolved voice-plan assignments', async () => {
+    const engine = createTtsEngine([
+      createProvider('inworld', {
+        async resolveSpeakerAssignments() {
+          return [
+            {
+              speaker: '[Maya]',
+              voiceId: 'Ashley',
+              source: 'auto',
+              capabilities: {
+                supportsMetadataInstructions: true,
+                supportsNonVerbals: true,
+                supportsUppercaseEmphasis: true,
+                supportsFreeFormDirection: false,
+              },
+            },
+            {
+              speaker: 'Maya',
+              voiceId: 'Duplicate Ashley',
+              source: 'default',
+            },
+          ];
+        },
+      }),
+    ]);
+    const context = parseMarkdownContext(
+      '---\ntitle: Test\nstudent: Alex\nlevel: B1\ntopic: work\ninput_type: generate\n---\n\n:::study-text\n[Maya]: We need a clearer deadline.\n:::',
+    );
+
+    const prepared = await engine.prepareStudyTextSynthesis(
+      { context },
+      {
+        voiceMapPath: 'voices.yml',
+        outPath: '/tmp',
+        ttsProvider: 'inworld',
+        ttsModel: 'inworld-tts-2',
+      },
+    );
+
+    expect(prepared.voicePlan?.assignments).toMatchObject([
+      {
+        speaker: 'Maya',
+        voiceId: 'Ashley',
+        capabilities: { supportsFreeFormDirection: false },
+      },
+    ]);
+    expect(prepared.voiceAssignments).toEqual({ Maya: 'Ashley' });
   });
 });

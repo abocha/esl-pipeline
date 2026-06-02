@@ -1,5 +1,3 @@
-import type { VoiceCapabilitiesSnapshot } from '@esl-pipeline/contracts';
-
 export interface PromptPackageRecord {
   id: string;
   recordingId: string;
@@ -24,9 +22,6 @@ export interface PromptPackageRecord {
   resolvedTemplateUpdatedAt?: Date | null;
   resolvedTemplateVersionLabel?: string | null;
   resolvedTemplateStatus?: 'draft' | 'active' | 'deprecated' | null;
-  resolvedVoiceCapabilitiesHash?: string | null;
-  resolvedVoiceCapabilitiesGeneratedAt?: Date | null;
-  resolvedVoiceCapabilitiesSnapshot?: VoiceCapabilitiesSnapshot | null;
   templateVersion: string;
   notes?: string | null;
   storageUri: string;

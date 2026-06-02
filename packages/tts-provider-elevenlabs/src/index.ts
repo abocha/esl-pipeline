@@ -1194,7 +1194,7 @@ export type {
   TtsStrategy,
 } from './types.js';
 export {
-  buildVoiceCapabilitiesSnapshot,
+  buildVoiceCatalogCapabilities,
   getVoiceCapabilities,
   validateCapabilityValue,
 } from './voiceCapabilities.js';

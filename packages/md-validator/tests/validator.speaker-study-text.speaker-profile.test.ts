@@ -4,6 +4,71 @@ import { describeMdValidatorSuite } from './validator.test-harness.js';
 
 interface SpeakerProfileLike {
   role?: string;
+  persona?: string;
+}
+
+function buildSpeakerProfileDoc(extraProfiles: string): string {
+  return `
+---
+title: "Dialogue Test"
+student: Alex
+level: B1
+topic: "travel"
+input_type: generate
+speaker_labels: ["Alex", "Mara"]
+${extraProfiles}
+---
+
+## 1. This Week's Mission Briefing
+text
+
+## 2. Your Homework Roadmap
+text
+
+## 3. Input Material: The Source
+### B. Generated Material
+- **Text:**
+:::study-text
+Alex: Hello!
+Mara: Hi there.
+:::
+
+## 4. Language Toolkit: Useful Language
+text
+
+## 5. Practice & Pronunciation
+### A. Controlled Practice
+1) item
+2) item
+3) item
+4) item
+5) item
+6) item
+7) item
+8) item
+### B. Comprehension Check
+1) question
+2) question
+
+### C. Pronunciation Micro-Focus
+text
+
+## 6. Your Turn: Complete the Mission!
+text
+
+## 7. Why This Mission Helps You
+text
+
+## 8. Answer Key & Sample Mission
+:::toggle-heading Answer Key
+content
+:::
+
+## 9. Teacher's Follow-up Plan
+:::toggle-heading Teacher's Follow-up Plan
+content
+:::
+  `.trim();
 }
 
 describeMdValidatorSuite(
@@ -235,7 +300,7 @@ content
       );
     });
 
-    it('accepts expanded ESL dialogue role aliases from pasted LLM drafts', async () => {
+    it('preserves descriptive ESL dialogue roles from pasted LLM drafts', async () => {
       const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
       const file = path.join(tempDir, 'speaker-profile-role-case.md');
       await writeFile(
@@ -321,10 +386,10 @@ content
       expect(res.errors.join('\n')).not.toMatch(/speaker_profiles\.\d+\.role/i);
       expect(
         res.meta?.speaker_profiles?.map((profile: SpeakerProfileLike) => profile.role),
-      ).toEqual(['teacher', 'student', 'teacher', 'student']);
+      ).toEqual(['receptionist', 'customer', 'flight attendant', 'passenger']);
     });
 
-    it('warns on unknown speaker role and keeps validation non-blocking', async () => {
+    it('preserves descriptive speaker roles without catalog-shaped warnings', async () => {
       const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
       const file = path.join(tempDir, 'speaker-profile-role-unknown.md');
       await writeFile(
@@ -401,11 +466,65 @@ content
       const res = await validateMarkdownFile(file, { strict: true });
       expect(res.errors.join('\n')).not.toMatch(/speaker_profiles\.\d+\.role/i);
       expect(res.errors.join('\n')).not.toMatch(/speaker_profiles role/i);
-      expect(res.warnings.join('\n')).toMatch(/speaker_profiles role "alien ambassador"/i);
-      expect(res.warnings.join('\n')).toMatch(/Role score will be 0/i);
+      expect(res.warnings.join('\n')).not.toMatch(/speaker_profiles role "alien ambassador"/i);
       expect(
         res.meta?.speaker_profiles?.map((profile: SpeakerProfileLike) => profile.role),
-      ).toEqual([undefined, 'student']);
+      ).toEqual(['alien ambassador', 'customer']);
+    });
+
+    it('warns that legacy style and voice fields are ignored while preserving persona', async () => {
+      const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
+      const file = path.join(tempDir, 'speaker-profile-legacy-voice-style.md');
+      await writeFile(
+        file,
+        buildSpeakerProfileDoc(
+          [
+            'speaker_profiles:',
+            '  - id: Alex',
+            '    role: project manager clarifying an unrealistic deadline',
+            '    persona: warm, practical, and direct',
+            '    style: conversational',
+            '    voice: legacy-voice-id',
+            '  - id: Mara',
+            '    role: colleague offering a workable compromise',
+          ].join('\n'),
+        ),
+      );
+
+      const res = await validateMarkdownFile(file);
+      expect(res.warnings.join('\n')).toMatch(/speaker_profiles style .* ignored/i);
+      expect(res.warnings.join('\n')).toMatch(/speaker_profiles voice .* ignored/i);
+      expect(res.meta?.speaker_profiles?.[0]).toMatchObject({
+        role: 'project manager clarifying an unrealistic deadline',
+        persona: 'warm, practical, and direct',
+      });
+    });
+
+    it('preserves voice direction and ignores placeholder accents', async () => {
+      const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
+      const file = path.join(tempDir, 'speaker-profile-voice-direction.md');
+      await writeFile(
+        file,
+        buildSpeakerProfileDoc(
+          [
+            'speaker_profiles:',
+            '  - id: Alex',
+            '    role: project manager clarifying an unrealistic deadline',
+            '    persona: warm, practical, and direct',
+            '    voice_direction: calm, neutral, clear, conversational adult voice',
+            '    accent: neutral',
+            '  - id: Mara',
+            '    role: colleague offering a workable compromise',
+          ].join('\n'),
+        ),
+      );
+
+      const res = await validateMarkdownFile(file);
+      expect(res.warnings.join('\n')).toMatch(/speaker_profiles accent "neutral".*ignored/i);
+      expect(res.meta?.speaker_profiles?.[0]).toMatchObject({
+        voice_direction: 'calm, neutral, clear, conversational adult voice',
+      });
+      expect(res.meta?.speaker_profiles?.[0]?.accent).toBeUndefined();
     });
 
     it('warns when speaker labels are missing speaker profiles', async () => {

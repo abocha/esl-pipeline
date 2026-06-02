@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { unlink, writeFile } from 'node:fs/promises';
 import { homedir, platform, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -97,10 +98,42 @@ export async function concatMp3Segments(
   outFile: string,
   reencode = false,
   ffmpegPath?: string,
+  gapDurationsMs: number[] = [],
 ): Promise<void> {
   if (segmentPaths.length === 0) throw new Error('No segments to concatenate');
+  if (gapDurationsMs.length > 0 && gapDurationsMs.length !== segmentPaths.length - 1) {
+    throw new Error('Gap durations must describe every boundary between segments');
+  }
   const listFile = join(tmpdir(), `ffconcat-inworld-${Date.now()}.txt`);
-  const lines = segmentPaths
+  const silenceFiles: string[] = [];
+  const pathsWithMargins: string[] = [];
+  for (const [index, segmentPath] of segmentPaths.entries()) {
+    pathsWithMargins.push(segmentPath);
+    const durationMs = gapDurationsMs[index];
+    if (!durationMs) continue;
+    const silencePath = join(tmpdir(), `ffconcat-inworld-silence-${randomUUID()}.mp3`);
+    await runFfmpeg(
+      [
+        '-y',
+        '-f',
+        'lavfi',
+        '-i',
+        'anullsrc=r=48000:cl=mono',
+        '-t',
+        String(durationMs / 1000),
+        '-c:a',
+        'libmp3lame',
+        '-b:a',
+        '128k',
+        silencePath,
+      ],
+      'ffmpeg-generate-silence',
+      ffmpegPath,
+    );
+    silenceFiles.push(silencePath);
+    pathsWithMargins.push(silencePath);
+  }
+  const lines = pathsWithMargins
     .map((p) => `file '${resolve(p).replaceAll("'", String.raw`'\''`)}'`)
     .join('\n');
   await writeFile(listFile, lines, 'utf8');
@@ -124,6 +157,7 @@ export async function concatMp3Segments(
     await runFfmpeg(args, reencode ? 'ffmpeg-concat-reencode' : 'ffmpeg-concat-fast', ffmpegPath);
   } finally {
     await unlink(listFile).catch(() => {});
+    await Promise.all(silenceFiles.map((path) => unlink(path).catch(() => {})));
   }
 }
 

@@ -4,6 +4,7 @@ import {
   executeGoogleStructuredGeneration,
   executeOpenAiStructuredGeneration,
   executeOpenRouterStructuredGeneration,
+  ProviderExecutionError,
 } from '../src/application/generation-providers.js';
 import type { BatchBackendConfig } from '../src/config/env.js';
 import { loadConfig } from '../src/config/env.js';
@@ -176,6 +177,46 @@ describe('application/generation-providers structured output', () => {
         additionalProperties: false,
       },
     });
+  });
+
+  it('retains malformed Google structured-output text for debug logging', async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValue(
+      createJsonResponse({
+        responseId: 'google-response-malformed',
+        candidates: [
+          {
+            content: {
+              parts: [{ text: '{"selections":[{"speaker":"Maya"' }],
+            },
+          },
+        ],
+      }),
+    );
+
+    await expect(
+      executeGoogleStructuredGeneration({
+        config: createGenerationConfig(),
+        request: {
+          model: 'gemma-4-31b-it',
+          prompt: 'Rank voices',
+          responseSchema: {
+            name: 'voice_rank',
+            schema: {
+              type: 'object',
+              properties: {
+                selections: { type: 'array' },
+              },
+              required: ['selections'],
+              additionalProperties: false,
+            },
+          },
+        },
+      }),
+    ).rejects.toMatchObject({
+      name: 'ProviderExecutionError',
+      rawText: '{"selections":[{"speaker":"Maya"',
+    } satisfies Partial<ProviderExecutionError>);
   });
 
   it('sends OpenRouter structured-output requests and parses JSON text', async () => {

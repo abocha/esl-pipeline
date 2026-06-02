@@ -3,12 +3,22 @@ import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { BusinessStatsPage } from './BusinessStatsPage';
+import { currentMonthInput } from './business-format';
 
 const apiMocks = vi.hoisted(() => ({
   getBusinessStatsSurface: vi.fn(),
 }));
 
 vi.mock('../../utils/api', () => apiMocks);
+
+function nextMonthInput(month: string): string {
+  const match = /^(\d{4})-(\d{2})$/.exec(month);
+  if (!match) throw new Error(`Expected YYYY-MM month input, received "${month}".`);
+  const year = Number(match[1]);
+  const monthNumber = Number(match[2]);
+  const nextMonth = new Date(year, monthNumber, 1);
+  return `${nextMonth.getFullYear()}-${`${nextMonth.getMonth() + 1}`.padStart(2, '0')}`;
+}
 
 function makeStatsSurface(overrides: Record<string, unknown> = {}) {
   return {
@@ -80,9 +90,11 @@ describe('BusinessStatsPage', () => {
   });
 
   it('keeps newer month results when an older stats load resolves later', async () => {
+    const initialMonth = currentMonthInput();
+    const nextMonth = nextMonthInput(initialMonth);
     let resolveInitialLoad: (value: ReturnType<typeof makeStatsSurface>) => void = () => {};
     apiMocks.getBusinessStatsSurface
-      .mockResolvedValueOnce(makeStatsSurface())
+      .mockResolvedValueOnce(makeStatsSurface({ month: initialMonth }))
       .mockImplementationOnce(
         () =>
           new Promise((resolve) => {
@@ -91,7 +103,7 @@ describe('BusinessStatsPage', () => {
       )
       .mockResolvedValueOnce(
         makeStatsSurface({
-          month: '2026-06',
+          month: nextMonth,
           collectedMinor: 99000,
           forecastMinor: 88000,
           pipeline: [
@@ -116,12 +128,15 @@ describe('BusinessStatsPage', () => {
 
     await screen.findByText('Bea');
     fireEvent.click(screen.getByRole('button', { name: /Refresh/i }));
-    fireEvent.change(screen.getByLabelText(/Month/i), { target: { value: '2026-06' } });
+    fireEvent.change(screen.getByLabelText(/Month/i), { target: { value: nextMonth } });
+    await waitFor(() => {
+      expect(apiMocks.getBusinessStatsSurface).toHaveBeenCalledTimes(3);
+    });
     expect(await screen.findByText('Newer Month Student')).toBeTruthy();
 
     resolveInitialLoad(
       makeStatsSurface({
-        month: '2026-05',
+        month: initialMonth,
         pipeline: [
           {
             studentId: 'student-older',

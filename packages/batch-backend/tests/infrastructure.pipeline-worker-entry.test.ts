@@ -98,4 +98,15 @@ describe('infrastructure/pipeline-worker-entry', () => {
     expect(source).not.toContain('falling back to filesystem manifest store');
     expect(source).not.toContain("manifestStore: 'filesystem'");
   });
+
+  it('maps fresh-job voice preferences into new-assignment orchestrator flags', async () => {
+    const sourcePath = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      '../src/infrastructure/pipeline-worker-entry.ts',
+    );
+    const source = await fs.readFile(sourcePath, 'utf8');
+
+    expect(source).toContain('accentPreference: payload.voiceAccent ?? undefined');
+    expect(source).toContain('voiceId: payload.voiceId ?? undefined');
+  });
 });

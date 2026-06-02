@@ -1,6 +1,7 @@
 import type { VoiceSelectionDiagnostics } from '@esl-pipeline/contracts';
-import { ConfigurationError, normalizeSpeakerRole } from '@esl-pipeline/contracts';
+import { ConfigurationError } from '@esl-pipeline/contracts';
 import type { SpeakerProfile } from '@esl-pipeline/pmd';
+import { resolveSpeakerRoutingHint } from '@esl-pipeline/tts-core';
 
 import {
   type PickedVoice,
@@ -157,7 +158,7 @@ function buildDiagnostics(
   const matches: string[] = [];
   const mismatches: string[] = [];
   if (profile && catalogEntry) {
-    const normalizedRole = normalizeSpeakerRole(profile.role) ?? profile.role;
+    const normalizedRole = resolveSpeakerRoutingHint(profile.role) ?? profile.role;
     const capabilityRole =
       normalizedRole === 'narrator' || normalizedRole === 'system' ? normalizedRole : undefined;
     const checks: [label: string, expected: unknown, actual: string][] = [
@@ -253,7 +254,7 @@ export async function resolveSpeakerVoices(opts: {
     if (!assigned) {
       const hasExplicitRoleToken =
         typeof profile?.role === 'string' && profile.role.trim().length > 0;
-      const normalizedProfileRole = normalizeSpeakerRole(profile?.role);
+      const normalizedProfileRole = resolveSpeakerRoutingHint(profile?.role);
       const inferredRole =
         normalizedProfileRole ??
         (hasExplicitRoleToken

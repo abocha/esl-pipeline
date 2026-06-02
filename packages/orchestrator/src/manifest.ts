@@ -5,9 +5,13 @@ import type {
   PronunciationAudioClip,
   PronunciationAudioPayload,
 } from '@esl-pipeline/shared-infrastructure';
-import type { BuildStudyTextResult } from '@esl-pipeline/tts-core';
+import type {
+  BuildStudyTextResult,
+  SpeechPerformancePlan,
+  VoicePlan,
+} from '@esl-pipeline/tts-core';
 
-export const CURRENT_MANIFEST_SCHEMA_VERSION = 3;
+export const CURRENT_MANIFEST_SCHEMA_VERSION = 5;
 const LEGACY_MANIFEST_SCHEMA_VERSION = 1;
 
 export interface AudioArtifactManifest {
@@ -18,6 +22,8 @@ export interface AudioArtifactManifest {
   etag?: string;
   sizeBytes?: number;
   reused?: boolean;
+  voicePlanHash?: string;
+  speechPlanHash?: string;
   voices?: BuildStudyTextResult['voices'];
   voiceId?: string;
   tts?: {
@@ -54,6 +60,12 @@ export interface AssignmentManifest {
       itemClips?: PronunciationAudioArtifactManifest[];
       warnings?: PronunciationAudioWarning[];
     };
+  };
+  speechPlans?: {
+    studyText?: SpeechPerformancePlan;
+  };
+  voicePlans?: {
+    studyText?: VoicePlan;
   };
   preset?: string;
 
@@ -93,6 +105,8 @@ function sanitizeAudioArtifactManifest(
     ...(artifact.etag !== undefined ? { etag: artifact.etag } : {}),
     ...(artifact.sizeBytes !== undefined ? { sizeBytes: artifact.sizeBytes } : {}),
     ...(artifact.reused !== undefined ? { reused: artifact.reused } : {}),
+    ...(artifact.voicePlanHash !== undefined ? { voicePlanHash: artifact.voicePlanHash } : {}),
+    ...(artifact.speechPlanHash !== undefined ? { speechPlanHash: artifact.speechPlanHash } : {}),
     ...(artifact.voices !== undefined ? { voices: artifact.voices } : {}),
     ...(artifact.voiceId !== undefined ? { voiceId: artifact.voiceId } : {}),
     ...(artifact.tts !== undefined ? { tts: artifact.tts } : {}),
@@ -152,6 +166,8 @@ export function sanitizeAssignmentManifest(manifest: AssignmentManifest): Assign
     ...(manifest.htmlEtag !== undefined ? { htmlEtag: manifest.htmlEtag } : {}),
     ...(manifest.htmlReused !== undefined ? { htmlReused: manifest.htmlReused } : {}),
     ...(audioArtifacts !== undefined ? { audioArtifacts } : {}),
+    ...(manifest.speechPlans !== undefined ? { speechPlans: manifest.speechPlans } : {}),
+    ...(manifest.voicePlans !== undefined ? { voicePlans: manifest.voicePlans } : {}),
     ...(manifest.preset !== undefined ? { preset: manifest.preset } : {}),
     ...(manifest.ttsStrategy !== undefined ? { ttsStrategy: manifest.ttsStrategy } : {}),
     ...(manifest.dialogueLanguage !== undefined
