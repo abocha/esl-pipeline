@@ -1,15 +1,17 @@
 import { ConfigurationError } from '@esl-pipeline/contracts';
 
+import { normalizeStudyTextSpeakerToken } from './speech-plan.js';
 import type { PreparedStudyTextSynthesis, VoicePlan, VoicePlanAssignment } from './types.js';
 
 export function createResolvedVoicePlan(
   prepared: PreparedStudyTextSynthesis,
   assignments: VoicePlanAssignment[],
-  options: Pick<VoicePlan, 'ranker'> = {},
+  options: Pick<VoicePlan, 'mode' | 'ranker' | 'fallbackReason'> = {
+    mode: 'deterministic',
+  },
 ): VoicePlan {
   return {
     schemaVersion: 1,
-    mode: 'resolved',
     provider: prepared.selection.provider,
     model: prepared.selection.model,
     sourceHash: prepared.sourceHash,
@@ -36,21 +38,27 @@ export function validateVoicePlan(
   }
 
   const sourceSpeakers = new Set(
-    prepared.segments.flatMap((segment) => (segment.speaker ? [segment.speaker] : [])),
+    [
+      ...prepared.segments.flatMap((segment) => (segment.speaker ? [segment.speaker] : [])),
+      ...(prepared.speakerLabels ?? []),
+    ]
+      .map((speaker) => normalizeStudyTextSpeakerToken(speaker)?.toLocaleLowerCase())
+      .filter((key): key is string => key !== undefined),
   );
   const assignedSpeakers = new Set<string>();
   for (const assignment of plan.assignments) {
-    if (!sourceSpeakers.has(assignment.speaker)) {
+    const speakerKey = normalizeStudyTextSpeakerToken(assignment.speaker)?.toLocaleLowerCase();
+    if (!speakerKey || !sourceSpeakers.has(speakerKey)) {
       throw new ConfigurationError(
         `Voice plan assignment speaker "${assignment.speaker}" is not present in prepared text.`,
       );
     }
-    if (assignedSpeakers.has(assignment.speaker)) {
+    if (assignedSpeakers.has(speakerKey)) {
       throw new ConfigurationError(
         `Voice plan contains duplicate assignment for speaker "${assignment.speaker}".`,
       );
     }
-    assignedSpeakers.add(assignment.speaker);
+    assignedSpeakers.add(speakerKey);
   }
   return plan;
 }

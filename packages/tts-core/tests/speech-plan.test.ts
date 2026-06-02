@@ -83,6 +83,54 @@ describe('speech performance plans', () => {
     });
   });
 
+  it('preserves normalized speaker labels for frontmatter-only speaker universes', () => {
+    const context = parseMarkdownContext(
+      `---\ntitle: Test\nstudent: Alex\nlevel: B1\ntopic: work\ninput_type: generate\nspeaker_labels: ["[Alex]", "Alex"]\nspeaker_profiles:\n  - id: alex\n---\n\n:::study-text\nWe need a clearer deadline.\n:::`,
+    );
+
+    const prepared = createPreparedStudyTextSynthesis(
+      { context },
+      { voiceMapPath: 'voices.yml', outPath: '/tmp', ttsProvider: 'inworld' },
+    );
+
+    expect(prepared.speakerLabels).toEqual(['Alex']);
+    expect(() =>
+      validateVoicePlan(prepared, {
+        schemaVersion: 1,
+        mode: 'deterministic',
+        provider: 'inworld',
+        model: 'inworld-tts-2',
+        sourceHash: prepared.sourceHash,
+        assignments: [
+          {
+            speaker: 'Alex',
+            voiceId: 'Ashley',
+            source: 'auto',
+            capabilities: {
+              supportsMetadataInstructions: true,
+              supportsNonVerbals: true,
+              supportsUppercaseEmphasis: true,
+              supportsFreeFormDirection: false,
+            },
+          },
+        ],
+      }),
+    ).not.toThrow();
+  });
+
+  it('falls back to the first speaker profile when unlabeled study text has no speaker prefixes', () => {
+    const context = parseMarkdownContext(
+      `---\ntitle: Test\nstudent: Alex\nlevel: B1\ntopic: work\ninput_type: generate\nspeaker_profiles:\n  - id: "[Narrator]"\n---\n\n:::study-text\nWe need a clearer deadline.\n:::`,
+    );
+
+    expect(
+      createPreparedStudyTextSynthesis(
+        { context },
+        { voiceMapPath: 'voices.yml', outPath: '/tmp', ttsProvider: 'inworld' },
+      ).speakerLabels,
+    ).toEqual(['Narrator']);
+  });
+
   it('accepts expressive cues while preserving authored words', () => {
     const prepared = withVoicePlan(
       createPrepared(),
@@ -251,6 +299,38 @@ describe('speech performance plans', () => {
     ]);
 
     expect(validateVoicePlan(prepared, plan)).toEqual(plan);
+  });
+
+  it('rejects voice plans with duplicate casing assignments for the same speaker', () => {
+    const prepared = createPrepared();
+    const plan = createResolvedVoicePlan(prepared, [
+      {
+        speaker: 'Maya',
+        voiceId: 'Ashley',
+        source: 'auto',
+        capabilities: {
+          supportsMetadataInstructions: true,
+          supportsNonVerbals: true,
+          supportsUppercaseEmphasis: true,
+          supportsFreeFormDirection: false,
+        },
+      },
+      {
+        speaker: 'maya',
+        voiceId: 'Ashley',
+        source: 'auto',
+        capabilities: {
+          supportsMetadataInstructions: true,
+          supportsNonVerbals: true,
+          supportsUppercaseEmphasis: true,
+          supportsFreeFormDirection: false,
+        },
+      },
+    ]);
+
+    expect(() => validateVoicePlan(prepared, plan)).toThrow(
+      'Voice plan contains duplicate assignment for speaker "maya".',
+    );
   });
 
   it('rejects plans that rewrite the authored words', () => {
