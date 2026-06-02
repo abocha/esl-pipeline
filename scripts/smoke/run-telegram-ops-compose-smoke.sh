@@ -469,7 +469,7 @@ if (pronunciationAudioMessage) {
     'Pronunciation audio message should route to jobs thread',
   );
   assert(
-    String(pronunciationAudioMessage.payload.text).includes('/audio/pronunciation-shadow/'),
+    String(pronunciationAudioMessage.payload.text).includes('/audio/pronunciation/'),
     'Pronunciation audio should resolve from HTML fallback',
   );
 }
