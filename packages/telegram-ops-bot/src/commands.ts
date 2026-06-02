@@ -1927,8 +1927,6 @@ async function resolveSharePayloadForJob(
   } else {
     const pronunciationFallbackUrl = extractAudioUrlByPathHints(markdown, [
       '/audio/pronunciation/',
-      '/audio/pronunciation-item/',
-      '/audio/pronunciation-shadow/',
     ]);
     if (pronunciationFallbackUrl) {
       pronunciationAudioUrl = pronunciationFallbackUrl;
@@ -1956,8 +1954,6 @@ async function resolveSharePayloadForJob(
       if (!pronunciationAudioUrl) {
         const htmlPronunciationAudioUrl = extractAudioUrlByPathHints(html, [
           '/audio/pronunciation/',
-          '/audio/pronunciation-item/',
-          '/audio/pronunciation-shadow/',
         ]);
         if (htmlPronunciationAudioUrl) {
           pronunciationAudioUrl = htmlPronunciationAudioUrl;

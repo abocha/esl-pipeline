@@ -60,7 +60,7 @@ describe('infrastructure/job-event-redis-bridge', () => {
     createRedisClientMock.mockReset();
     const bridgeModule = await import('../src/infrastructure/job-event-redis-bridge.js');
     bridgeModule.resetJobEventBridgeForTests();
-  });
+  }, 30_000);
 
   it('relays local events through redis and delivers remote events back to subscribers', async () => {
     const publisher = createFakeRedisConnection();

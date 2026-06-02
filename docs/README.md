@@ -37,6 +37,8 @@
   - [`docs/reference/ORCHESTRATOR_OWNERSHIP_LEDGER.md`](reference/ORCHESTRATOR_OWNERSHIP_LEDGER.md)
 - Env contracts: [`docs/reference/env.md`](reference/env.md)
 - Manifest schema and compatibility: [`docs/reference/pipeline-manifest.md`](reference/pipeline-manifest.md)
+- TTS speech-performance planning and provider rendering:
+  [`docs/reference/TTS_SPEECH_PERFORMANCE_SYSTEM.md`](reference/TTS_SPEECH_PERFORMANCE_SYSTEM.md)
 - Test methodology + lane model: [`docs/reference/TESTING_GUIDELINES.md`](reference/TESTING_GUIDELINES.md)
 - Validator ruleset conventions: [`docs/reference/MD_VALIDATOR_RULESET_CONVENTIONS.md`](reference/MD_VALIDATOR_RULESET_CONVENTIONS.md)
 
@@ -56,6 +58,7 @@
   - [`docs/operations/telegram-ops-control-panel.md`](operations/telegram-ops-control-panel.md)
 - Voice-alignment rollout and diagnostics:
   - [`docs/operations/voice-alignment-v2-runbook.md`](operations/voice-alignment-v2-runbook.md)
+  - [`docs/reference/TTS_SPEECH_PERFORMANCE_SYSTEM.md`](reference/TTS_SPEECH_PERFORMANCE_SYSTEM.md)
 - Student-memory replay and backfill:
   - [`docs/operations/student-memory-replay-backfill.md`](operations/student-memory-replay-backfill.md)
 - Legacy profile normalization during live transition:

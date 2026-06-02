@@ -46,6 +46,8 @@ Display notes:
 
 - operator-facing timestamps are rendered in explicit UTC as `YYYY-MM-DD HH:mm UTC`
 - job and student surfaces lead with human-readable identity and use short ids as supporting context
+- `/share` includes the optional pronunciation playback link only for the published primary
+  pronunciation recording; chunk-only pronunciation clips stay inside the HTML assignment
 
 Runtime modes:
 

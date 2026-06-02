@@ -1029,10 +1029,6 @@ export interface PromptPackageLineageResponse {
     };
     drift: PromptPackageResponse['templateDrift'] | null;
   };
-  voiceCapabilitiesSnapshot?: {
-    generatedAt: string | null;
-    hash: string | null;
-  } | null;
   memory: {
     studentMemorySnapshotId: string | null;
     studentMemorySnapshotHash: string | null;

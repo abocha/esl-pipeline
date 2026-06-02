@@ -5,19 +5,58 @@ import {
   emitArtifactReuseMetric,
   resolveAudioArtifactKey,
   resolveAudioArtifactsFromManifest,
+  resolveStudentFacingAudioMetadata,
 } from '../src/runtime/audio-artifacts.js';
 
 describe('runtime/audio-artifacts', () => {
   it('resolves deterministic artifact keys with optional prefix', () => {
-    expect(resolveAudioArtifactKey('abc123', undefined, 'study_text')).toBe(
-      'audio/final/abc123.mp3',
+    expect(
+      resolveAudioArtifactKey('abc123', undefined, 'study_text', 'Homework Assignment: Old Goals'),
+    ).toBe('audio/final/abc123/Old Goals - Study Text.mp3');
+    expect(
+      resolveAudioArtifactKey(
+        'abc123',
+        '/root/prefix/',
+        'study_text',
+        'Homework Assignment: Old Goals',
+      ),
+    ).toBe('root/prefix/audio/final/abc123/Old Goals - Study Text.mp3');
+    expect(
+      resolveAudioArtifactKey(
+        'abc123',
+        'root',
+        'pronunciation_primary',
+        'Homework Assignment: Old Goals',
+      ),
+    ).toBe('root/audio/pronunciation/abc123/Old Goals - Pronunciation.mp3');
+    expect(resolveAudioArtifactKey('abc123', 'root', 'pronunciation_item', 'Old Goals')).toBe(
+      'root/audio/pronunciation-item/abc123.mp3',
     );
-    expect(resolveAudioArtifactKey('abc123', '/root/prefix/', 'study_text')).toBe(
-      'root/prefix/audio/final/abc123.mp3',
+  });
+
+  it('sanitizes student-facing artifact filenames and falls back for blank titles', () => {
+    expect(
+      resolveAudioArtifactKey('abc123', undefined, 'study_text', 'Homework Assignment: A/B: C?'),
+    ).toBe('audio/final/abc123/A-B- C - Study Text.mp3');
+    expect(resolveAudioArtifactKey('abc123', undefined, 'pronunciation_primary', '   ')).toBe(
+      'audio/pronunciation/abc123/Homework Assignment - Pronunciation.mp3',
     );
-    expect(resolveAudioArtifactKey('abc123', 'root', 'pronunciation_primary')).toBe(
-      'root/audio/pronunciation/abc123.mp3',
-    );
+  });
+
+  it('returns branded metadata only for student-facing audio artifacts', () => {
+    expect(
+      resolveStudentFacingAudioMetadata('Homework Assignment: Old Goals', 'study_text'),
+    ).toEqual({
+      title: 'Old Goals - Study Text',
+      artist: 'English with Andrei',
+    });
+    expect(
+      resolveStudentFacingAudioMetadata('Homework Assignment: Old Goals', 'pronunciation_primary'),
+    ).toEqual({
+      title: 'Old Goals - Pronunciation',
+      artist: 'English with Andrei',
+    });
+    expect(resolveStudentFacingAudioMetadata('Old Goals', 'pronunciation_item')).toBeUndefined();
   });
 
   it('resolves artifact views from manifests with canonical audioArtifacts payload', () => {
@@ -96,6 +135,9 @@ describe('runtime/audio-artifacts', () => {
     ]);
     expect(deriveS3GlobalUrl('bucket-x', 'path/to/object.mp3')).toBe(
       'https://bucket-x.s3.amazonaws.com/path/to/object.mp3',
+    );
+    expect(deriveS3GlobalUrl('bucket-x', 'path/to/Old Goals - Study Text.mp3')).toBe(
+      'https://bucket-x.s3.amazonaws.com/path/to/Old%20Goals%20-%20Study%20Text.mp3',
     );
   });
 });

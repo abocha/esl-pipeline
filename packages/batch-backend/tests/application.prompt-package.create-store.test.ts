@@ -73,8 +73,7 @@ describe('application/prompt-package', () => {
     const storage = createStorageStub({
       getText: async () => 'TRANSCRIPT BODY',
       putPromptPackage: async ({ promptPackageId, text }) => {
-        expect(text).toContain('[VOICE_CAPABILITIES]\ngenerated_at: 2026-01-05T00:00:00.000Z');
-        expect(text).toContain('accent: [american, british]');
+        expect(text).not.toContain('[VOICE_CAPABILITIES]');
         expect(text).toContain('[FOUNDATIONAL_PROFILE]\nPROFILE CONTENT');
         expect(text).toContain(
           '[STUDENT_MEMORY_SNAPSHOT]\nNot available for this prompt package because canonical student-memory retrieval is disabled.',
@@ -91,10 +90,7 @@ describe('application/prompt-package', () => {
         expect(text).toContain('[TEACHER_NOTES]\nSome notes');
         expect(text).toContain('[LATEST_TRANSCRIPT]\nTRANSCRIPT BODY');
         expect(text).not.toContain('[LESSON_HISTORY]');
-        expect(text.indexOf('Hello\nFooter')).toBeLessThan(text.indexOf('[VOICE_CAPABILITIES]'));
-        expect(text.indexOf('[VOICE_CAPABILITIES]')).toBeLessThan(
-          text.indexOf('[FOUNDATIONAL_PROFILE]'),
-        );
+        expect(text.indexOf('Hello\nFooter')).toBeLessThan(text.indexOf('[FOUNDATIONAL_PROFILE]'));
         expect(text.indexOf('[FOUNDATIONAL_PROFILE]')).toBeLessThan(
           text.indexOf('[STUDENT_MEMORY_SNAPSHOT]'),
         );
@@ -203,7 +199,7 @@ describe('application/prompt-package', () => {
     }
   });
 
-  it('stitches capabilities as a runtime block and persists provenance', async () => {
+  it('does not stitch provider voice catalogs into authored prompt context', async () => {
     const allowedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-prompt-v10-'));
     const templatePath = path.join(allowedDir, 'hw_prompt_definitive.md');
     const profilePath = path.join(allowedDir, 'profile.md');
@@ -211,9 +207,7 @@ describe('application/prompt-package', () => {
 
     await fs.writeFile(
       templatePath,
-      ['Header', 'Use exact values from [VOICE_CAPABILITIES] when writing speaker_profiles.'].join(
-        '\n',
-      ),
+      ['Header', 'Use descriptive role and persona text when writing speaker_profiles.'].join('\n'),
       'utf8',
     );
     await fs.writeFile(profilePath, 'PROFILE CONTENT', 'utf8');
@@ -245,24 +239,21 @@ describe('application/prompt-package', () => {
       const storage = createStorageStub({
         getText: async () => 'TRANSCRIPT BODY',
         putPromptPackage: async ({ promptPackageId, text }) => {
-          expect(text).toContain('[VOICE_CAPABILITIES]\ngenerated_at: 2026-01-06T00:00:00.000Z');
-          expect(text).toContain('accent: [american, australian, british]');
-          expect(text).toContain('style: [calm, casual, conversational, professional]');
+          expect(text).not.toContain('[VOICE_CAPABILITIES]');
+          expect(text).not.toContain('accent: [american, australian, british]');
+          expect(text).not.toContain('style: [calm, casual, conversational, professional]');
           expect(text).not.toContain('chirp3_hd');
           expect(text).not.toContain('studio');
           expect(text).not.toContain('wavenet');
           expect(text).not.toContain('neural2');
           expect(text).not.toContain('# CAPABILITY SNAPSHOT');
           expect(text).not.toContain('<provider-backed values>');
-          expect(text.indexOf('Header')).toBeLessThan(text.indexOf('[VOICE_CAPABILITIES]'));
-          expect(text.indexOf('[VOICE_CAPABILITIES]')).toBeLessThan(
-            text.indexOf('[FOUNDATIONAL_PROFILE]'),
-          );
+          expect(text.indexOf('Header')).toBeLessThan(text.indexOf('[FOUNDATIONAL_PROFILE]'));
           return { uri: `local://prompt-packages/${promptPackageId}.txt`, bytes: text.length };
         },
       });
 
-      const result = await createPromptPackage(
+      await createPromptPackage(
         {
           recordingId: transcript.recordingId,
           templateId: 'hw_prompt_definitive.md',
@@ -290,20 +281,6 @@ describe('application/prompt-package', () => {
           },
         },
       );
-
-      expect(result?.voiceCapabilitiesSnapshot?.generatedAt).toBe('2026-01-06T00:00:00.000Z');
-      expect(result?.voiceCapabilitiesSnapshot?.hash).toMatch(/^[a-f0-9]{64}$/);
-      expect(result?.voiceCapabilitiesSnapshot?.capabilities.accent).toEqual([
-        'american',
-        'australian',
-        'british',
-      ]);
-      expect(result?.voiceCapabilitiesSnapshot?.capabilities.style).toEqual([
-        'calm',
-        'casual',
-        'conversational',
-        'professional',
-      ]);
     } finally {
       if (previousCanonicalVoicesPath === undefined) {
         delete process.env[CANONICAL_ELEVENLABS_VOICES_ENV];
@@ -328,94 +305,9 @@ describe('application/prompt-package', () => {
     const revision =
       await createTemplateRevisionRepositoryStub().getActive('hw_prompt_definitive.md');
 
-    expect(revision?.content).toContain('[VOICE_CAPABILITIES]');
+    expect(revision?.content).not.toContain('[VOICE_CAPABILITIES]');
     expect(revision?.content).not.toContain('# CAPABILITY SNAPSHOT');
     expect(revision?.content).not.toContain('<provider-backed values>');
-  });
-
-  it('rejects active template revisions that still contain the retired capability snapshot marker', async () => {
-    const allowedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-prompt-retired-marker-'));
-    const templatePath = path.join(allowedDir, 'hw_prompt_definitive.md');
-    const profilePath = path.join(allowedDir, 'profile.md');
-    const voicesPath = path.join(allowedDir, 'voices.json');
-    const markerTemplate = [
-      'Header',
-      '```yaml',
-      '# CAPABILITY SNAPSHOT (injected dynamically per voice catalog refresh)',
-      'accent: [<provider-backed values>]',
-      'style: [<provider-backed values>]',
-      '```',
-    ].join('\n');
-
-    await fs.writeFile(templatePath, markerTemplate, 'utf8');
-    await fs.writeFile(profilePath, 'PROFILE CONTENT', 'utf8');
-    await writeVoiceCatalog(voicesPath);
-
-    const previousCanonicalVoicesPath = process.env[CANONICAL_ELEVENLABS_VOICES_ENV];
-    process.env[CANONICAL_ELEVENLABS_VOICES_ENV] = voicesPath;
-    vi.spyOn(googleProvider, 'loadGoogleVoicesCatalog').mockRejectedValue(new Error('adc missing'));
-
-    try {
-      const transcript = createTranscriptRecord();
-
-      await expect(
-        createPromptPackage(
-          {
-            recordingId: transcript.recordingId,
-            templateId: 'hw_prompt_definitive.md',
-            profileId: 'profile.md',
-          },
-          {
-            config: createConfig(templatePath, profilePath),
-            storage: createStorageStub({
-              getText: async () => 'TRANSCRIPT BODY',
-            }),
-            transcripts: {
-              getByRecordingId: async () => transcript,
-            },
-            recordings: {
-              getById: async () => null,
-            },
-            students: {
-              getById: async () => null,
-            },
-            promptPackages: createPromptPackageRepositoryStub(),
-            profileRevisions: createProfileRevisionRepositoryStub(),
-            templateRevisions: createTemplateRevisionRepositoryStub({
-              getActive: async () => ({
-                id: 'template-revision-retired-marker',
-                templateId: 'hw_prompt_definitive.md',
-                content: markerTemplate,
-                contentHash: 'marker-hash',
-                source: 'update',
-                status: 'active',
-                versionNumber: 9,
-                versionLabel: 'v9',
-                activatedAt: new Date('2026-04-30T00:00:00.000Z'),
-                deprecatedAt: null,
-                createdAt: new Date('2026-04-30T00:00:00.000Z'),
-                createdBy: null,
-                restoredFromRevisionId: null,
-              }),
-            }),
-            bindings: createBindingResolverStub(),
-            promptOptions: createPromptOptionsStub(),
-            lessonMemory: {
-              requestGeneration: async () => null,
-            },
-          },
-        ),
-      ).rejects.toMatchObject({
-        code: 'template_revision_legacy_voice_capability_marker',
-      });
-    } finally {
-      if (previousCanonicalVoicesPath === undefined) {
-        delete process.env[CANONICAL_ELEVENLABS_VOICES_ENV];
-      } else {
-        process.env[CANONICAL_ELEVENLABS_VOICES_ENV] = previousCanonicalVoicesPath;
-      }
-      vi.restoreAllMocks();
-    }
   });
 
   it('loads prompt package text from storage', async () => {

@@ -517,6 +517,22 @@ function createConfig(): BatchBackendConfig {
         },
       },
     },
+    speechPlanner: {
+      enabled: false,
+      model: 'gemini-3.1-flash-lite',
+      maxOutputTokens: 2400,
+      rpmBudget: 4,
+      dailyRequestBudget: 120,
+      debugLogPlan: false,
+    },
+    voiceRanker: {
+      enabled: true,
+      model: 'gemma-4-31b-it',
+      maxOutputTokens: 1200,
+      rpmBudget: 12,
+      dailyRequestBudget: 1000,
+      debugLogPlan: false,
+    },
     prompt: {
       templatePath: '',
       defaultProfilePath: '',

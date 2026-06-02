@@ -9,6 +9,7 @@ interface VoicePreferenceFlags {
 
 interface ApplyVoicePreferenceOptions {
   fallbackToFirstCatalogVoice?: boolean;
+  resolveAccentToVoiceId?: boolean;
 }
 
 const cachedVoiceCatalogs = new Map<string, VoiceCatalog>();
@@ -71,7 +72,9 @@ export async function applyVoicePreferences(
   options: ApplyVoicePreferenceOptions = {},
 ): Promise<void> {
   const needsResolution = Boolean(
-    flags.voiceId || flags.accentPreference || options.fallbackToFirstCatalogVoice,
+    flags.voiceId ||
+      (flags.accentPreference && options.resolveAccentToVoiceId !== false) ||
+      options.fallbackToFirstCatalogVoice,
   );
   if (!needsResolution) return;
 
@@ -83,7 +86,7 @@ export async function applyVoicePreferences(
     }
   }
 
-  if (flags.accentPreference) {
+  if (flags.accentPreference && options.resolveAccentToVoiceId !== false) {
     const match =
       findVoiceByToken(flags.accentPreference, catalog) ??
       findVoiceByAccent(flags.accentPreference, catalog);

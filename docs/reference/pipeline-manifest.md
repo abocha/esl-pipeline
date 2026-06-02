@@ -15,17 +15,17 @@ This document captures the canonical schema so remote stores and services can va
 
 ## Schema Versioning
 
-- **Current version:** `2`
-- Every manifest written by the pipeline now includes `schemaVersion: 3`.
+- **Current version:** `5`
+- Every manifest written by the pipeline now includes `schemaVersion: 5`.
 - Older manifests without `schemaVersion` are treated as legacy version `1` when read.
 - Future breaking changes to the manifest structure must bump `CURRENT_MANIFEST_SCHEMA_VERSION` in
   `packages/orchestrator/src/manifest.ts` and extend this document with migration guidance.
 
-## JSON Structure (v2)
+## JSON Structure (v5)
 
 ```jsonc
 {
-  "schemaVersion": 3,
+  "schemaVersion": 5,
   "mdHash": "<sha256 hash of the Markdown study text>",
   "timestamp": "2024-07-19T12:34:56.789Z",
   "preset": "b1-default", // optional, last applied heading preset
@@ -40,6 +40,8 @@ This document captures the canonical schema so remote stores and services can va
       "etag": "\"abc123...\"",
       "sizeBytes": 123456,
       "reused": true,
+      "voicePlanHash": "<sha256 neutral voice-plan hash>",
+      "speechPlanHash": "<sha256 neutral speech-plan hash>",
       "voices": [
         {
           "speaker": "Narrator",
@@ -88,6 +90,25 @@ This document captures the canonical schema so remote stores and services can va
       ],
     },
   },
+  "voicePlans": {
+    "studyText": {
+      "schemaVersion": 1,
+      "provider": "inworld",
+      "model": "inworld-tts-2",
+      "sourceHash": "<sha256 prepared source hash>",
+      "assignments": [],
+    },
+  },
+  "speechPlans": {
+    "studyText": {
+      "schemaVersion": 1,
+      "provider": "inworld",
+      "model": "inworld-tts-2",
+      "sourceHash": "<sha256 prepared source hash>",
+      "mode": "prompted",
+      "segments": [],
+    },
+  },
   // TTS metadata (additive, optional)
   "ttsStrategy": "dialogue",
   "dialogueLanguage": "en",
@@ -110,6 +131,11 @@ This document captures the canonical schema so remote stores and services can va
 - `audioArtifacts.studyText.tts` is optional usage telemetry: generated vs cached provider characters plus optional
   cost estimate fields when pricing env vars are configured.
 - `audioArtifacts.studyText.key`/`audioArtifacts.studyText.hash` provide deterministic artifact identity for reruns and upload dedupe.
+- `voicePlans.studyText` stores provider-neutral cast selection and per-assignment capability
+  provenance. The matching `audioArtifacts.studyText.voicePlanHash` links generated study-text
+  audio to the consumed cast.
+- `speechPlans.studyText` stores validated provider-neutral delivery provenance. The matching
+  `audioArtifacts.studyText.speechPlanHash` links generated study-text audio to the consumed plan.
 - `audioArtifacts.studyText.reused` and `htmlReused` are operational hints showing whether remote upload/publish reused
   an existing content-addressed object.
 - `audioArtifacts` stores per-target audio artifacts:
@@ -135,6 +161,21 @@ This document captures the canonical schema so remote stores and services can va
 - Introducing new optional fields does **not** require a schema bump.
 - Removing/renaming fields or altering semantics **does** require a bump and migration steps.
 - When bumping the schema, capture upgrade instructions here and consider providing a migration script.
+
+## Schema Version 4
+
+The speech-performance rollout adds optional `speechPlans.studyText` provenance and
+`audioArtifacts.studyText.speechPlanHash`. Study-text audio caching includes the plan hash and
+provider-rendered controls. Older manifests without plans remain readable and reusable.
+
+See [`docs/reference/TTS_SPEECH_PERFORMANCE_SYSTEM.md`](TTS_SPEECH_PERFORMANCE_SYSTEM.md).
+
+## Schema Version 5
+
+The capability-tiered Inworld rollout adds optional `voicePlans.studyText` provenance and
+`audioArtifacts.studyText.voicePlanHash`. The voice plan records the selected cast and compact
+capability snapshots before speech planning. Older manifests without voice plans remain readable
+and reusable.
 
 ## Migrating from Filesystem to S3
 

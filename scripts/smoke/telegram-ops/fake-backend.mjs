@@ -216,7 +216,7 @@ function buildShareHtml(jobId) {
     '    <div class="hero-emoji">📘</div>',
     '    <h1>Quiet Reading Pack</h1>',
     '    <p>Fallback pronunciation audio link:</p>',
-    '    <a href="https://cdn.smoke.example/audio/pronunciation-shadow/smoke-pronunciation.mp3">Pronunciation</a>',
+    '    <a href="https://cdn.smoke.example/audio/pronunciation/smoke-pronunciation.mp3">Pronunciation</a>',
     '  </body>',
     '</html>',
   ].join('\n');

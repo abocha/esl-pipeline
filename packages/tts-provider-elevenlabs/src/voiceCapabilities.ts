@@ -1,9 +1,14 @@
-import type {
-  SpeakerAge,
-  SpeakerGender,
-  SpeakerRole,
-  VoiceCapabilitiesSnapshot,
-} from '@esl-pipeline/contracts';
+import type { SpeakerAge, SpeakerGender } from '@esl-pipeline/contracts';
+import type { SpeakerRoutingHint } from '@esl-pipeline/tts-core';
+
+export interface VoiceCatalogCapabilities {
+  generatedAt: string;
+  role: SpeakerRoutingHint[];
+  gender: SpeakerGender[];
+  age: SpeakerAge[];
+  accent: string[];
+  style: string[];
+}
 
 export type VoiceCapabilityKind = 'accent' | 'style' | 'age' | 'gender' | 'role';
 
@@ -12,7 +17,7 @@ interface VoiceLike {
   useCase?: string;
 }
 
-const CANONICAL_ROLE: SpeakerRole[] = ['narrator', 'teacher', 'student', 'system'];
+const CANONICAL_ROLE: SpeakerRoutingHint[] = ['narrator', 'dialogue', 'system'];
 const CANONICAL_GENDER: SpeakerGender[] = ['male', 'female', 'neutral', 'child'];
 const CANONICAL_AGE: SpeakerAge[] = [
   'child',
@@ -131,10 +136,10 @@ function addCapabilitiesFromVoice(
   }
 }
 
-export function buildVoiceCapabilitiesSnapshot(
+export function buildVoiceCatalogCapabilities(
   voices: VoiceLike[],
   generatedAt = new Date().toISOString(),
-): VoiceCapabilitiesSnapshot {
+): VoiceCatalogCapabilities {
   const accents = new Set<string>();
   const styles = new Set<string>();
   const ages = new Set<string>();
@@ -154,11 +159,11 @@ export function buildVoiceCapabilitiesSnapshot(
   };
 }
 
-function normalizeSnapshot(snapshot: VoiceCapabilitiesSnapshot): VoiceCapabilitiesSnapshot {
+function normalizeSnapshot(snapshot: VoiceCatalogCapabilities): VoiceCatalogCapabilities {
   return {
     generatedAt: snapshot.generatedAt,
     role: [
-      ...new Set(snapshot.role.map((value) => toComparableToken(value) as SpeakerRole)),
+      ...new Set(snapshot.role.map((value) => toComparableToken(value) as SpeakerRoutingHint)),
     ].sort(),
     gender: [
       ...new Set(snapshot.gender.map((value) => toComparableToken(value) as SpeakerGender)),
@@ -174,17 +179,17 @@ function normalizeSnapshot(snapshot: VoiceCapabilitiesSnapshot): VoiceCapabiliti
 }
 
 export function getVoiceCapabilities(catalog: {
-  capabilities?: VoiceCapabilitiesSnapshot;
+  capabilities?: VoiceCatalogCapabilities;
   voices?: VoiceLike[];
-}): VoiceCapabilitiesSnapshot {
+}): VoiceCatalogCapabilities {
   if (catalog.capabilities) {
     return normalizeSnapshot(catalog.capabilities);
   }
-  return buildVoiceCapabilitiesSnapshot(catalog.voices ?? []);
+  return buildVoiceCatalogCapabilities(catalog.voices ?? []);
 }
 
 export function validateCapabilityValue(
-  capabilities: VoiceCapabilitiesSnapshot,
+  capabilities: VoiceCatalogCapabilities,
   kind: VoiceCapabilityKind,
   value: string,
 ): boolean {
@@ -194,5 +199,5 @@ export function validateCapabilityValue(
   if (kind === 'age') return capabilities.age.includes(toComparableToken(value) as SpeakerAge);
   if (kind === 'gender')
     return capabilities.gender.includes(toComparableToken(value) as SpeakerGender);
-  return capabilities.role.includes(toComparableToken(value) as SpeakerRole);
+  return capabilities.role.includes(toComparableToken(value) as SpeakerRoutingHint);
 }

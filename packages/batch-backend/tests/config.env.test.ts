@@ -64,6 +64,36 @@ describe('config/env - core defaults', () => {
         expect(['filesystem', 's3']).toContain(cfg.orchestrator.manifestStore);
         expect(['local', 'http']).toContain(cfg.orchestrator.configProvider);
         expect(cfg.jobOptions.allowStaticFallback).toBe(false);
+        expect(cfg.voiceRanker).toEqual({
+          enabled: true,
+          model: 'gemma-4-31b-it',
+          maxOutputTokens: 1200,
+          rpmBudget: 12,
+          dailyRequestBudget: 1000,
+          debugLogPlan: false,
+        });
+        expect(cfg.speechPlanner.rpmBudget).toBe(4);
+        expect(cfg.speechPlanner.dailyRequestBudget).toBe(120);
+        expect(cfg.speechPlanner.debugLogPlan).toBe(false);
+      },
+    );
+  });
+});
+
+describe('config/env - speech planner debug logging', () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it('maps ESL_TTS_SPEECH_PLANNER_DEBUG_LOG_PLAN override', async () => {
+    await withEnv(
+      {
+        NODE_ENV: 'test',
+        ESL_TTS_SPEECH_PLANNER_DEBUG_LOG_PLAN: 'true',
+      },
+      async () => {
+        const cfg = await loadConfigFresh();
+        expect(cfg.speechPlanner.debugLogPlan).toBe(true);
       },
     );
   });

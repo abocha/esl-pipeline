@@ -795,7 +795,6 @@ export interface StudentProfileListResponse {
 
 export type ContentSource = 'generate' | 'authentic';
 export type StudyTextType = 'monologue' | 'dialogue';
-export type SpeakerRole = 'narrator' | 'teacher' | 'student' | 'system';
 export type SpeakerGender = 'male' | 'female' | 'neutral' | 'child';
 export type SpeakerAge =
   | 'child'
@@ -806,172 +805,20 @@ export type SpeakerAge =
   | 'senior'
   | 'universal';
 
-const SPEAKER_ROLE_ALIAS_SETS: Record<SpeakerRole, readonly string[]> = {
-  narrator: [
-    'narrator',
-    'narration',
-    'storyteller',
-    'presenter',
-    'announcer',
-    'voiceover',
-    'voice over',
-    'guide',
-    'host',
-  ],
-  teacher: [
-    'teacher',
-    'tutor',
-    'instructor',
-    'professor',
-    'lecturer',
-    'coach',
-    'trainer',
-    'mentor',
-    'teacher assistant',
-    'teaching assistant',
-    'interviewer',
-    'recruiter',
-    'examiner',
-    'manager',
-    'boss',
-    'supervisor',
-    'doctor',
-    'physician',
-    'dentist',
-    'nurse',
-    'pharmacist',
-    'therapist',
-    'counselor',
-    'consultant',
-    'advisor',
-    'adviser',
-    'receptionist',
-    'front desk',
-    'concierge',
-    'agent',
-    'travel agent',
-    'officer',
-    'police officer',
-    'security officer',
-    'customs officer',
-    'immigration officer',
-    'flight attendant',
-    'landlord',
-    'bank teller',
-    'mechanic',
-    'technician',
-    'it support',
-    'customer support',
-    'help desk',
-    'dispatcher',
-  ],
-  student: [
-    'student',
-    'learner',
-    'classmate',
-    'peer',
-    'colleague',
-    'coworker',
-    'co worker',
-    'teammate',
-    'friend',
-    'partner',
-    'spouse',
-    'wife',
-    'husband',
-    'parent',
-    'mother',
-    'father',
-    'child',
-    'kid',
-    'teen',
-    'teenager',
-    'son',
-    'daughter',
-    'sibling',
-    'brother',
-    'sister',
-    'neighbor',
-    'roommate',
-    'customer',
-    'client',
-    'patient',
-    'guest',
-    'tourist',
-    'traveler',
-    'commuter',
-    'passenger',
-    'shopper',
-    'buyer',
-    'caller',
-    'visitor',
-    'resident',
-    'applicant',
-    'candidate',
-    'interviewee',
-    'tenant',
-    'employee',
-    'staff',
-    'cashier',
-    'clerk',
-    'barista',
-    'waiter',
-    'waitress',
-    'server',
-    'salesperson',
-    'sales clerk',
-    'shop assistant',
-    'shopkeeper',
-    'vendor',
-    'diner',
-    'citizen',
-  ],
-  system: ['system', 'assistant', 'ai', 'bot', 'chatbot'],
-};
-
-const SPEAKER_ROLE_ALIAS_LOOKUP: ReadonlyMap<string, SpeakerRole> = (() => {
-  const pairs: [string, SpeakerRole][] = [];
-  for (const [role, aliases] of Object.entries(SPEAKER_ROLE_ALIAS_SETS) as [
-    SpeakerRole,
-    readonly string[],
-  ][]) {
-    for (const alias of aliases) {
-      pairs.push([normalizeSpeakerRoleToken(alias), role]);
-    }
-  }
-  return new Map(pairs);
-})();
-
-function normalizeSpeakerRoleToken(value: string): string {
-  return value.trim().toLowerCase().replaceAll(/[_-]+/g, ' ').replaceAll(/\s+/g, ' ');
-}
-
-export function normalizeSpeakerRole(value: unknown): SpeakerRole | undefined {
-  if (typeof value !== 'string') return undefined;
-  const token = normalizeSpeakerRoleToken(value);
-  if (!token) return undefined;
-  return SPEAKER_ROLE_ALIAS_LOOKUP.get(token);
-}
-
 export interface SpeakerProfile {
   id: string;
   display_name?: string;
-  role?: SpeakerRole;
+  role?: string;
+  persona?: string;
+  voice_direction?: string;
   gender?: SpeakerGender;
   age?: SpeakerAge;
   accent?: string;
+  /** @deprecated Authored profiles should use stable persona text instead. */
   style?: string;
+  /** @deprecated Use operator voice routing configuration instead. */
   voice?: string;
   [k: string]: unknown;
-}
-
-export interface VoiceCapabilitiesSnapshot {
-  generatedAt: string;
-  role: SpeakerRole[];
-  gender: SpeakerGender[];
-  age: SpeakerAge[];
-  accent: string[];
-  style: string[];
 }
 
 export interface VoiceSelectionDiagnostics {
@@ -995,7 +842,6 @@ export interface VoiceProviderErrorDetails {
 }
 
 export interface MarkdownValidationVoiceDiagnostics {
-  capabilities?: VoiceCapabilitiesSnapshot;
   errors?: string[];
   warnings?: string[];
   compatibilityMode?: {

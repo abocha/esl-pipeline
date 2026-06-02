@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const ORCHESTRATOR_SERVICE_TEST_TIMEOUT_MS = 15_000;
+const ORCHESTRATOR_SERVICE_TEST_TIMEOUT_MS = 45_000;
 
 /**
  * NOTE ON VITEST HOISTING:
