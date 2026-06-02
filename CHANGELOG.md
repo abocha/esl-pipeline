@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [8.0.0] - 2026-06-02
+
+### Changed
+
+- Automated release from PR #88: feat(tts): add expressive Inworld speech planning and generic provider contracts (https://github.com/abocha/esl-pipeline/pull/88)
+
 ## [7.0.2] - 2026-05-29
 
 ### Changed
