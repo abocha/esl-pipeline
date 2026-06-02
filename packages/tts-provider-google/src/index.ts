@@ -7,7 +7,6 @@ import {
   ConfigurationError,
   InfrastructureError,
   noopLogger,
-  normalizeSpeakerRole,
   ValidationError,
   type VoiceProviderErrorCategory,
 } from '@esl-pipeline/contracts';
@@ -32,6 +31,7 @@ import {
   GOOGLE_TTS_MODELS,
   type GoogleTtsModel,
   hashStudyText,
+  resolveSpeakerRoutingHint,
   resolveTtsSelection,
   type SpeakerVoiceAssignment,
   type TtsProviderAdapter,
@@ -574,7 +574,7 @@ function buildGoogleCapabilityDiagnostics(
   const expectedAccent = normalizeAccentToken(
     typeof profile.accent === 'string' ? profile.accent : undefined,
   );
-  const normalizedRole = normalizeSpeakerRole(profile.role);
+  const normalizedRole = resolveSpeakerRoutingHint(profile.role);
   const expectedStyle =
     typeof profile.style === 'string' ? profile.style.trim().toLowerCase() : undefined;
 
@@ -680,10 +680,10 @@ function scoreGoogleVoiceCandidate(args: {
     }
   }
 
-  const role = normalizeSpeakerRole(args.profile?.role);
+  const role = resolveSpeakerRoutingHint(args.profile?.role);
   if (role === 'narrator') {
     score += args.voice.gender === 'female' ? 6 : 3;
-  } else if (role === 'teacher') {
+  } else if (role === 'dialogue') {
     score += 2;
   }
 

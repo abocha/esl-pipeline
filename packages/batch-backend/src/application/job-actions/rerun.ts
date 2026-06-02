@@ -301,7 +301,7 @@ async function recoverDurableHtmlManifest(
   const studyTextUrl = extractStudyTextAudioUrl(html);
   const pronunciation = extractPronunciationAudioPayload(html);
   const recoveredManifest: AssignmentManifest = {
-    schemaVersion: 3,
+    schemaVersion: 5,
     mdHash: `recovered:${job.id}`,
     publishTarget: 'html',
     htmlUrl: job.htmlUrl,

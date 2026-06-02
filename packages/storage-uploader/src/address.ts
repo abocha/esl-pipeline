@@ -29,9 +29,10 @@ export function normalizeS3ObjectKey(key: string): string {
 export function deriveS3ObjectUrl(options: S3ObjectUrlOptions): string {
   const region = options.region ?? 'ap-southeast-1';
   const normalizedKey = normalizeS3ObjectKey(options.key);
+  const encodedKey = normalizedKey.split('/').map(encodeURIComponent).join('/');
   return options.urlStyle === 'global'
-    ? `https://${options.bucket}.s3.amazonaws.com/${normalizedKey}`
-    : `https://${options.bucket}.s3.${region}.amazonaws.com/${normalizedKey}`;
+    ? `https://${options.bucket}.s3.amazonaws.com/${encodedKey}`
+    : `https://${options.bucket}.s3.${region}.amazonaws.com/${encodedKey}`;
 }
 
 export function deriveS3UploadAddress(options: S3UploadAddressOptions): {

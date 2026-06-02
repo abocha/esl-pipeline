@@ -63,6 +63,57 @@ describe('telegram commands - share and approval', () => {
     expect(sendMock.mock.calls[3]?.[0].html).toContain('audio/final/study.mp3');
   });
 
+  it('does not send a pronunciation attachment when only item clips are present', async () => {
+    const registry = createCommandRegistry();
+    const linksCommand = registry.resolve('links');
+    expect(linksCommand).toBeDefined();
+
+    const context = createBaseContext({
+      command: 'links',
+      args: ['job-chunks-only'],
+    });
+
+    const getJobMock = context.backend.getJob as ReturnType<typeof vi.fn>;
+    getJobMock.mockResolvedValue({
+      jobId: 'job-chunks-only',
+      studentId: null,
+      md: [
+        '# Homework Assignment: Chunk Practice',
+        '[Study](https://bucket.s3.amazonaws.com/audio/final/study.mp3)',
+        '[Chunk](https://bucket.s3.amazonaws.com/audio/pronunciation-item/chunk.mp3)',
+      ].join('\n'),
+      recordingId: null,
+      transcriptId: null,
+      promptPackageId: null,
+      draftId: null,
+      preset: null,
+      withTts: null,
+      voiceId: null,
+      upload: null,
+      voiceAccent: null,
+      forceTts: null,
+      publishTarget: null,
+      ttsStrategy: null,
+      autoPublish: null,
+      htmlUrl: null,
+      state: 'succeeded',
+      createdAt: '2026-06-02T00:00:00Z',
+      updatedAt: '2026-06-02T00:00:00Z',
+      startedAt: null,
+      finishedAt: null,
+      error: null,
+      manifestPath: null,
+    });
+
+    await linksCommand?.execute(context);
+
+    const sendMock = context.messenger.sendHtmlMessage as ReturnType<typeof vi.fn>;
+    const sentHtml = sendMock.mock.calls.map((call) => call[0].html).join('\n');
+    expect(sentHtml).toContain('audio/final/study.mp3');
+    expect(sentHtml).not.toContain('audio/pronunciation-item/chunk.mp3');
+    expect(sentHtml).not.toContain('Listen 2: Pronunciation');
+  });
+
   it('runs /links and falls back to htmlUrl when md is a file path', async () => {
     const registry = createCommandRegistry();
     const linksCommand = registry.resolve('links');

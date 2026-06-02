@@ -35,7 +35,7 @@
 ```text
 Batch Frontend (React + Vite)
   -> Batch Backend (Fastify + queue workers + Postgres/Redis)
-  -> Orchestrator (validation/import/TTS/upload/manifest)
+  -> Orchestrator (validation/import/speech planning/TTS/upload/manifest)
 ```
 
 ## Active User Flow
@@ -68,6 +68,12 @@ Event fanout behavior (Redis bridge):
 
 - Job events publish on targeted channels only: `batch_job_events:<jobId>`.
 - All-jobs listeners consume targeted channels through pattern subscription: `batch_job_events:*`.
+
+Study-text TTS uses provider-neutral `voice-plan` and `speech-plan` stages before synthesis.
+`voice-plan` resolves the cast and its per-voice capabilities before the injected structured-output
+speech planner runs. Identity fallback keeps publish flow available when planning is disabled or
+unavailable. See
+[`docs/reference/TTS_SPEECH_PERFORMANCE_SYSTEM.md`](../reference/TTS_SPEECH_PERFORMANCE_SYSTEM.md).
 
 ## Related
 

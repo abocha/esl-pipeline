@@ -11,6 +11,20 @@ vi.mock('@esl-pipeline/tts-core', async () => {
   return {
     ...actual,
     buildStudyTextMp3: vi.fn(),
+    prepareStudyTextSynthesis: vi.fn(async (input, options) => {
+      const prepared = actual.createPreparedStudyTextSynthesis(input, options);
+      return {
+        ...prepared,
+        voicePlan: {
+          schemaVersion: 1,
+          mode: 'resolved',
+          provider: prepared.selection.provider,
+          model: prepared.selection.model,
+          sourceHash: prepared.sourceHash,
+          assignments: [],
+        },
+      };
+    }),
   };
 });
 
@@ -122,7 +136,16 @@ describe('orchestrator observability', () => {
       { logger, metrics, runId: 'run-new' },
     );
 
-    const expectedStages = ['validate', 'import', 'tts', 'upload', 'add-audio', 'manifest'];
+    const expectedStages = [
+      'validate',
+      'import',
+      'voice-plan',
+      'speech-plan',
+      'tts',
+      'upload',
+      'add-audio',
+      'manifest',
+    ];
     for (const stage of expectedStages) {
       const start = logs.find((e) => e.message === `stage.${stage}.start`);
       const success = logs.find((e) => e.message === `stage.${stage}.success`);
@@ -348,7 +371,9 @@ describe('orchestrator observability', () => {
 
     const studyUploadCall = vi
       .mocked(uploadFile)
-      .mock.calls.find((call) => call[1]?.key === 'audio/final/study-hash.mp3');
+      .mock.calls.find(
+        (call) => call[1]?.key === 'audio/final/study-hash/Conditionals Type 2 - Study Text.mp3',
+      );
     const itemUploadCall = vi
       .mocked(uploadFile)
       .mock.calls.find((call) => call[1]?.key === 'audio/pronunciation-item/pron-item-hash.mp3');

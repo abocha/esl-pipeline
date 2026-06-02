@@ -7,7 +7,7 @@ import type {
 } from '@esl-pipeline/contracts';
 import { ConfigurationError } from '@esl-pipeline/contracts';
 
-import type { TtsProviderDescriptor, TtsSelection } from './types.js';
+import type { TtsModelCapabilities, TtsProviderDescriptor, TtsSelection } from './types.js';
 
 export const ELEVENLABS_TTS_MODELS = [
   'eleven_v3',
@@ -67,6 +67,39 @@ const DESCRIPTORS_BY_PROVIDER = new Map<TtsProviderId, TtsProviderDescriptor>(
   TTS_PROVIDER_DESCRIPTORS.map((descriptor) => [descriptor.id, descriptor]),
 );
 
+const IDENTITY_CAPABILITIES = { planningMode: 'identity' } as const satisfies TtsModelCapabilities;
+
+const MODEL_CAPABILITIES: Record<TtsModelId, TtsModelCapabilities> = {
+  eleven_v3: IDENTITY_CAPABILITIES,
+  eleven_multilingual_v2: IDENTITY_CAPABILITIES,
+  eleven_flash_v2_5: IDENTITY_CAPABILITIES,
+  eleven_flash_v2: IDENTITY_CAPABILITIES,
+  chirp3_hd: IDENTITY_CAPABILITIES,
+  studio: IDENTITY_CAPABILITIES,
+  neural2: IDENTITY_CAPABILITIES,
+  wavenet: IDENTITY_CAPABILITIES,
+  'inworld-tts-2': {
+    planningMode: 'prompted',
+    speakingRate: { min: 0.5, max: 1.5 },
+    deliveryModes: ['STABLE', 'BALANCED', 'CREATIVE'],
+    naturalLanguageSteering: true,
+    metadataInstructions: true,
+    ssmlBreaks: true,
+    nonVerbals: true,
+    uppercaseEmphasis: true,
+  },
+  'inworld-tts-1.5-max': {
+    planningMode: 'identity',
+    speakingRate: { min: 0.5, max: 1.5 },
+    temperature: { min: 0, max: 2 },
+  },
+  'inworld-tts-1.5-mini': {
+    planningMode: 'identity',
+    speakingRate: { min: 0.5, max: 1.5 },
+    temperature: { min: 0, max: 2 },
+  },
+};
+
 export function getTtsProviderDescriptor(
   provider: TtsProviderId,
 ): TtsProviderDescriptor | undefined {
@@ -75,6 +108,14 @@ export function getTtsProviderDescriptor(
 
 export function getTtsProviderDescriptors(): readonly TtsProviderDescriptor[] {
   return TTS_PROVIDER_DESCRIPTORS;
+}
+
+export function getTtsModelCapabilities(
+  provider: TtsProviderId,
+  model: TtsModelId,
+): TtsModelCapabilities {
+  validateTtsSelection({ provider, model });
+  return MODEL_CAPABILITIES[model];
 }
 
 export function parseTtsProviderId(value: unknown): TtsProviderId | null {

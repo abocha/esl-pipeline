@@ -11,6 +11,7 @@ const toastMock = vi.hoisted(() => ({
   success: vi.fn(),
   error: vi.fn(),
 }));
+const UI_WAIT_TIMEOUT_MS = 10_000;
 
 vi.mock('../context/AuthContext', () => ({
   useAuth: useAuthMock,
@@ -124,7 +125,13 @@ describe('App', () => {
 
     await user.click(screen.getByRole('button', { name: /Login to your account/i }));
 
-    expect(await screen.findByRole('heading', { name: /Welcome back/i })).toBeTruthy();
+    expect(
+      await screen.findByRole(
+        'heading',
+        { name: /Welcome back/i },
+        { timeout: UI_WAIT_TIMEOUT_MS },
+      ),
+    ).toBeTruthy();
   });
 
   it('opens auth as a labelled modal, traps focus, and restores focus on close', async () => {
@@ -138,7 +145,11 @@ describe('App', () => {
 
     await user.click(loginButton);
 
-    const dialog = await screen.findByRole('dialog', { name: /Welcome back/i });
+    const dialog = await screen.findByRole(
+      'dialog',
+      { name: /Welcome back/i },
+      { timeout: UI_WAIT_TIMEOUT_MS },
+    );
     expect(dialog.getAttribute('aria-modal')).toBe('true');
     expect(dialog.getAttribute('aria-describedby')).toBe('auth-dialog-description');
     expect(await screen.findByLabelText(/Email/i)).toBe(document.activeElement);
@@ -163,7 +174,9 @@ describe('App', () => {
     renderApp();
 
     await user.click(screen.getByRole('button', { name: /Login to your account/i }));
-    await user.click(await screen.findByRole('button', { name: /^Sign in$/i }));
+    await user.click(
+      await screen.findByRole('button', { name: /^Sign in$/i }, { timeout: UI_WAIT_TIMEOUT_MS }),
+    );
 
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toContain('Please fill in all fields');

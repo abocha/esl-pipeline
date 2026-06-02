@@ -59,9 +59,6 @@ export function createPromptPackageRepositoryStub() {
       resolvedTemplateHash: params.resolvedTemplateHash ?? null,
       resolvedTemplateRevisionId: params.resolvedTemplateRevisionId ?? null,
       resolvedTemplateUpdatedAt: params.resolvedTemplateUpdatedAt ?? null,
-      resolvedVoiceCapabilitiesHash: params.resolvedVoiceCapabilitiesHash ?? null,
-      resolvedVoiceCapabilitiesGeneratedAt: params.resolvedVoiceCapabilitiesGeneratedAt ?? null,
-      resolvedVoiceCapabilitiesSnapshot: params.resolvedVoiceCapabilitiesSnapshot ?? null,
       templateVersion: params.templateVersion,
       notes: params.notes ?? null,
       storageUri: params.storageUri,
@@ -165,7 +162,7 @@ export function createTemplateRevisionRepositoryStub(
           'template.md': 'Hello\nFooter\n',
           'hw_prompt_definitive.md': [
             'Header',
-            'Use exact values from [VOICE_CAPABILITIES] when writing speaker_profiles.',
+            'Use descriptive speaker profiles with stable role and persona text.',
           ].join('\n'),
         };
         const content = contentByTemplateId[templateId] ?? 'Hello\nFooter\n';

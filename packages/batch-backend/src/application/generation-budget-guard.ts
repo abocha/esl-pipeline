@@ -2,6 +2,7 @@ import type { GenerationProvider } from '@esl-pipeline/contracts';
 
 import type { BatchBackendConfig } from '../config/env.js';
 import {
+  type GenerationBudgetLimits,
   type GenerationBudgetLimitType,
   type GenerationBudgetReservationResult,
   type GenerationBudgetUsage,
@@ -339,6 +340,7 @@ export async function enforceGenerationBudgetBeforeAttempt(args: {
   maxOutputTokens?: number;
   now: Date;
   repository: GenerationBudgetRepository;
+  limits?: GenerationBudgetLimits;
 }): Promise<GenerationBudgetUsage> {
   const generationConfig = args.config.generation;
 
@@ -389,7 +391,7 @@ export async function enforceGenerationBudgetBeforeAttempt(args: {
     });
   }
 
-  const limits = resolveProviderLimits(generationConfig, args.provider);
+  const limits = args.limits ?? resolveProviderLimits(generationConfig, args.provider);
   const reservation = await args.repository.reserve({
     provider: args.provider,
     model: args.model,

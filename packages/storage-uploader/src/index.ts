@@ -7,6 +7,8 @@ export {
 } from './address.js';
 export type { ArtifactKind } from './artifact-identity.js';
 export { buildArtifactKey, hashArtifactContent } from './artifact-identity.js';
+export type { Mp3Metadata } from './mp3-metadata.js';
+export { buildMp3MetadataArgs, withMp3MetadataExport } from './mp3-metadata.js';
 export { uploadToS3 } from './s3.js';
 export type { UploadOpts } from './upload.js';
 export { uploadFile } from './upload.js';

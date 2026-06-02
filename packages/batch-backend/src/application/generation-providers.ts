@@ -42,18 +42,21 @@ export class ProviderExecutionError extends Error {
   readonly provider: GenerationProvider;
   readonly status?: number;
   readonly code?: string;
+  readonly rawText?: string;
 
   constructor(args: {
     provider: GenerationProvider;
     message: string;
     status?: number;
     code?: string;
+    rawText?: string;
   }) {
     super(args.message);
     this.name = 'ProviderExecutionError';
     this.provider = args.provider;
     this.status = args.status;
     this.code = args.code;
+    this.rawText = args.rawText;
   }
 }
 
@@ -575,6 +578,7 @@ export async function executeOpenAiStructuredGeneration(args: {
         error instanceof Error ? error.message : 'OpenAI structured response JSON parsing failed',
       status: 502,
       code: 'malformed_structured_output',
+      rawText,
     });
   }
 
@@ -783,6 +787,7 @@ export async function executeGoogleStructuredGeneration(args: {
           : 'Google AI Studio structured response JSON parsing failed',
       status: 502,
       code: 'malformed_structured_output',
+      rawText,
     });
   }
 
@@ -1010,6 +1015,7 @@ export async function executeOpenRouterStructuredGeneration(args: {
           : 'OpenRouter structured response JSON parsing failed',
       status: 502,
       code: 'malformed_structured_output',
+      rawText,
     });
   }
 

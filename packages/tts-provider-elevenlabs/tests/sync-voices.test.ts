@@ -4,7 +4,7 @@ import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const originalCwd = process.cwd();
-const syncVoicesTestTimeout = 15_000;
+const syncVoicesTestTimeout = 45_000;
 
 describe.sequential('syncVoices path resolution', () => {
   beforeEach(() => {

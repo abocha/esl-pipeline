@@ -5,6 +5,7 @@ import {
   resolveTtsProviderOrder,
   validateTtsSelection,
 } from './descriptors.js';
+import { createPreparedStudyTextSynthesis, normalizeStudyTextSpeakerToken } from './speech-plan.js';
 import type {
   BuildPronunciationShadowSentenceInput,
   BuildPronunciationShadowSentenceOptions,
@@ -15,11 +16,22 @@ import type {
   BuildStudyTextInput,
   BuildStudyTextOptions,
   BuildStudyTextResult,
+  PreparedStudyTextSynthesis,
+  SpeakerVoiceAssignment,
   TtsEngine,
+  TtsModelId,
   TtsProviderAdapter,
   TtsProviderId,
   VoiceCatalog,
 } from './types.js';
+import { createResolvedVoicePlan, withVoicePlan } from './voice-plan.js';
+
+const IDENTITY_VOICE_CAPABILITIES = {
+  supportsMetadataInstructions: false,
+  supportsNonVerbals: false,
+  supportsUppercaseEmphasis: false,
+  supportsFreeFormDirection: false,
+} as const;
 
 export class DefaultTtsEngine implements TtsEngine {
   private readonly providers = new Map<TtsProviderId, TtsProviderAdapter>();
@@ -67,18 +79,46 @@ export class DefaultTtsEngine implements TtsEngine {
     return provider;
   }
 
+  private validateExplicitModel(providerId: TtsProviderId, model?: string): TtsModelId | undefined {
+    if (!model) return undefined;
+    return validateTtsSelection({ provider: providerId, model }).model;
+  }
+
   async buildStudyTextMp3(
     input: BuildStudyTextInput,
     options: BuildStudyTextOptions,
   ): Promise<BuildStudyTextResult> {
     const providerId = this.resolveProviderId(options.ttsProvider);
-    const selection = validateTtsSelection({ provider: providerId, model: options.ttsModel });
+    const ttsModel = this.validateExplicitModel(providerId, options.ttsModel);
     const provider = this.resolveProviderOrThrow(providerId);
     return provider.synthesizeStudyText(input, {
       ...options,
-      ttsProvider: selection.provider,
-      ttsModel: selection.model,
+      ttsProvider: providerId,
+      ttsModel,
     });
+  }
+
+  async prepareStudyTextSynthesis(
+    input: BuildStudyTextInput,
+    options: BuildStudyTextOptions,
+  ): Promise<PreparedStudyTextSynthesis> {
+    const providerId = this.resolveProviderId(options.ttsProvider);
+    const ttsModel = this.validateExplicitModel(providerId, options.ttsModel);
+    const provider = this.resolveProviderOrThrow(providerId);
+    const resolvedOptions = { ...options, ttsProvider: providerId, ttsModel };
+    const prepared = createPreparedStudyTextSynthesis(input, resolvedOptions);
+    const assignments = await provider.voice.resolveSpeakerAssignments({
+      input,
+      options: resolvedOptions,
+    });
+    return withVoicePlan(
+      prepared,
+      createResolvedVoicePlan(
+        prepared,
+        normalizeVoiceAssignments(assignments),
+        options.voiceRanker ? { ranker: options.voiceRanker.metadata } : {},
+      ),
+    );
   }
 
   async buildPronunciationShadowSentenceMp3(
@@ -86,12 +126,12 @@ export class DefaultTtsEngine implements TtsEngine {
     options: BuildPronunciationShadowSentenceOptions,
   ): Promise<BuildPronunciationShadowSentenceResult> {
     const providerId = this.resolveProviderId(options.ttsProvider);
-    const selection = validateTtsSelection({ provider: providerId, model: options.ttsModel });
+    const ttsModel = this.validateExplicitModel(providerId, options.ttsModel);
     const provider = this.resolveProviderOrThrow(providerId);
     return provider.synthesizeShadowSentence(input, {
       ...options,
-      ttsProvider: selection.provider,
-      ttsModel: selection.model,
+      ttsProvider: providerId,
+      ttsModel,
     });
   }
 
@@ -100,12 +140,12 @@ export class DefaultTtsEngine implements TtsEngine {
     options: BuildPronunciationTextOptions,
   ): Promise<BuildPronunciationTextResult> {
     const providerId = this.resolveProviderId(options.ttsProvider);
-    const selection = validateTtsSelection({ provider: providerId, model: options.ttsModel });
+    const ttsModel = this.validateExplicitModel(providerId, options.ttsModel);
     const provider = this.resolveProviderOrThrow(providerId);
     return provider.synthesizePronunciationText(input, {
       ...options,
-      ttsProvider: selection.provider,
-      ttsModel: selection.model,
+      ttsProvider: providerId,
+      ttsModel,
     });
   }
 
@@ -114,6 +154,23 @@ export class DefaultTtsEngine implements TtsEngine {
     const adapter = this.resolveProviderOrThrow(providerId);
     return adapter.voice.loadCatalog();
   }
+}
+
+function normalizeVoiceAssignments(assignments: SpeakerVoiceAssignment[]) {
+  const normalized = new Map<string, SpeakerVoiceAssignment>();
+  for (const assignment of assignments) {
+    const speaker = normalizeStudyTextSpeakerToken(assignment.speaker) ?? assignment.speaker;
+    if (normalized.has(speaker)) continue;
+    normalized.set(speaker, {
+      ...assignment,
+      speaker,
+      capabilities: assignment.capabilities ?? IDENTITY_VOICE_CAPABILITIES,
+    });
+  }
+  return [...normalized.values()].map((assignment) => ({
+    ...assignment,
+    capabilities: assignment.capabilities ?? IDENTITY_VOICE_CAPABILITIES,
+  }));
 }
 
 export function createTtsEngine(providers: TtsProviderAdapter[] = []): TtsEngine {

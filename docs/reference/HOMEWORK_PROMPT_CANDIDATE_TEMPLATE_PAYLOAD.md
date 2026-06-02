@@ -31,7 +31,6 @@ Use the runtime blocks in this priority order:
 3. **`[UNRESOLVED_ISSUES]`**, **`[RECENT_LESSON_MEMORY]`**, and **`[RECENT_HOMEWORK_MEMORY]`** guide tactical continuity.
 4. **`[STUDENT_MEMORY_SNAPSHOT]`** supports broader long-term continuity.
 5. **`[FOUNDATIONAL_PROFILE]`** governs stable student truth, goals, preferences, and durable constraints.
-6. **`[VOICE_CAPABILITIES]`** constrains only `speaker_profiles`; it does not override lesson facts, student facts, or output content.
 
 **Conflict Resolution Rules**
 
@@ -45,20 +44,17 @@ Use the runtime blocks in this priority order:
 **Runtime Context Blocks**
 The backend appends the following labeled blocks after this static prompt. These blocks are the only runtime context for the request.
 
-1. **`[VOICE_CAPABILITIES]`**
-   - Provider-backed voice metadata values available for this run.
-   - Use these exact values only when writing `speaker_profiles`.
-2. **`[FOUNDATIONAL_PROFILE]`**
+1. **`[FOUNDATIONAL_PROFILE]`**
    - Stable identity, long-term goals, durable preferences, and persistent constraints.
-3. **`[STUDENT_MEMORY_SNAPSHOT]`**
+2. **`[STUDENT_MEMORY_SNAPSHOT]`**
    - Broad long-term continuity across the student's learning history.
-4. **`[RECENT_LESSON_MEMORY]`**
+3. **`[RECENT_LESSON_MEMORY]`**
    - Recent lesson-level continuity that may still matter now.
-5. **`[RECENT_HOMEWORK_MEMORY]`**
+4. **`[RECENT_HOMEWORK_MEMORY]`**
    - Recent homework history, especially important for avoiding repetition and preserving progression.
-6. **`[UNRESOLVED_ISSUES]`**
+5. **`[UNRESOLVED_ISSUES]`**
    - Active carry-forward issues, gaps, or teaching priorities.
-7. **`[TEACHER_NOTES]`**
+6. **`[TEACHER_NOTES]`**
    - Optional current-lesson notes from the teacher.
    - May include:
      - `Input Type: generate`
@@ -66,7 +62,7 @@ The backend appends the following labeled blocks after this static prompt. These
      - `Link: <url>` when an authentic source is requested
      - lesson-specific priorities, corrections, or teaching notes
    - If no input type is specified, default to `generate`.
-8. **`[LATEST_TRANSCRIPT]`**
+7. **`[LATEST_TRANSCRIPT]`**
    - Raw transcript or detailed lesson evidence from the current session.
    - This is the main factual basis for the current lesson.
 
@@ -151,14 +147,12 @@ Return the assignment as **clean Markdown** inside **one single code block**.
 - **Do not add extra names.** Every label must appear in `:::study-text`, and every speaking name in `:::study-text` must appear in `speaker_labels`.
 - **Do not use the real student as a character in the study text.**
 - **One profile per label is required.** `speaker_profiles[].id` must match one `speaker_labels` entry exactly.
-- Keep accent/style realistic for authentic sounding output.
-- Use only exact provider-backed values listed in `[VOICE_CAPABILITIES]`.
-- Treat `style` as a speaking quality, not a provider/model choice; do not introduce provider or
-  model identifiers.
-- Voice capabilities constrain only `speaker_profiles`; they do not override lesson facts or student facts.
-- If age/accent/style is unknown, omit the field. If gender is unknown, set `gender: neutral`.
-- For ordinary dialogue participants, omit `role` unless a special speaking function truly matters.
-- Reserve explicit roles mainly for narrator/system-like voices.
+- Give each speaker a short descriptive `role` grounded in the parallel scenario, such as
+  `project manager clarifying an unrealistic deadline`.
+- Add an optional `persona` when a compact behavioral description will improve the performance.
+- Keep provider-neutral `gender`, `age`, and `accent` realistic when supported by the scenario.
+- If age or accent is unknown, omit the field. If gender is unknown, set `gender: neutral`.
+- Do not author `style`, `voice`, provider identifiers, or model identifiers.
 
 2. **Use Rich Directives:** Use the following custom directives when they improve clarity or layout. **All directive markers must start at column 1 (flush-left, no indentation).**
    - `:::callout <emoji>` for tips, warnings, or key goals
@@ -199,13 +193,15 @@ speaker_profiles:
   gender: female
   age: young
   accent: american
-  style: casual
+  role: project manager clarifying an unrealistic deadline
+  persona: warm but direct, trying to keep the meeting practical
 - id: Name2
   display_name: Name2
   gender: male
   age: young
   accent: british
-  style: calm
+  role: designer explaining why the requested timeline is risky
+  persona: thoughtful and slightly hesitant, then firmer when giving details
 
 ---
 

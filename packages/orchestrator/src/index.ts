@@ -18,7 +18,10 @@ import {
   hashStudyText,
   isTtsModelForProvider,
   parseTtsModelId,
+  prepareStudyTextSynthesis,
+  type SpeechPerformancePlan,
   type TtsModelId,
+  type VoicePlan,
 } from '@esl-pipeline/tts-core';
 
 import {
@@ -47,6 +50,7 @@ import {
   type PronunciationAudioArtifact,
   resolveAudioArtifactKey,
   resolveAudioArtifactsFromManifest,
+  resolveStudentFacingAudioMetadata,
 } from './runtime/audio-artifacts.js';
 import { readMarkdownCached } from './runtime/markdown-cache.js';
 import { synthesizePronunciationAudio } from './runtime/pronunciation-audio.js';
@@ -55,6 +59,7 @@ import {
   resolveHeadingTheme,
   resolveMarkdownTitle,
 } from './runtime/publish-utils.js';
+import { resolveSpeechPerformancePlan } from './runtime/speech-performance.js';
 import { createStageReporter } from './runtime/stage-reporter.js';
 import {
   buildTtsSpendSummary,
@@ -304,7 +309,7 @@ async function applyRerunVoicePreferences(flags: RerunFlags): Promise<void> {
     accentPreference: flags.studyTextVoiceAccent,
     provider: flags.studyTextTtsProvider,
   };
-  await applyVoicePreferences(studyTextPreferences);
+  await applyVoicePreferences(studyTextPreferences, { resolveAccentToVoiceId: false });
   flags.studyTextVoiceId = studyTextPreferences.voiceId;
   flags.studyTextVoiceAccent = studyTextPreferences.accentPreference;
 
@@ -466,7 +471,7 @@ export async function newAssignment(
   const signal = dependencies.signal;
   const pipelineStartedAt = Date.now();
   throwIfCancelled(signal, 'validate');
-  await applyVoicePreferences(flags);
+  await applyVoicePreferences(flags, { resolveAccentToVoiceId: false });
   throwIfCancelled(signal, 'validate');
   const { emitStage, recordSkip } = createStageReporter({
     callbacks,
@@ -543,8 +548,15 @@ export async function newAssignment(
     }
 
     let audioArtifacts = resolveAudioArtifactsFromManifest(previousManifest);
+    let studyTextVoicePlan: VoicePlan | undefined = previousManifest?.voicePlans?.studyText;
+    let studyTextVoicePlanHash = audioArtifacts.studyText?.voicePlanHash;
+    let studyTextSpeechPlan: SpeechPerformancePlan | undefined =
+      previousManifest?.speechPlans?.studyText;
+    let studyTextSpeechPlanHash = audioArtifacts.studyText?.speechPlanHash;
     if (flags.withTts) {
       if (flags.skipTts) {
+        recordSkip('voice-plan', 'skip-tts flag set');
+        recordSkip('speech-plan', 'skip-tts flag set');
         recordSkip('tts', 'skip-tts flag set');
         steps.push('skip:tts');
         if (!audioArtifacts.studyText?.path && !flags.dryRun) {
@@ -553,6 +565,53 @@ export async function newAssignment(
           );
         }
       } else {
+        emitStage('voice-plan', 'start');
+        steps.push('voice-plan');
+        throwIfCancelled(signal, 'voice-plan');
+        const prepared = await prepareStudyTextSynthesis(
+          { context: markdownContext, mdPath: flags.md },
+          {
+            voiceMapPath: flags.voices ?? DEFAULT_VOICES_PATH,
+            outPath: flags.out ?? dirname(flags.md),
+            defaultAccent: flags.accentPreference,
+            defaultVoiceId: flags.voiceId,
+            ttsProvider: flags.ttsProvider,
+            ttsModel: flags.ttsModel,
+            logger,
+            voiceRanker: dependencies.voiceRanker,
+          },
+        );
+        studyTextVoicePlan = prepared.voicePlan;
+        studyTextVoicePlanHash = studyTextVoicePlan
+          ? hashStudyText(JSON.stringify(studyTextVoicePlan))
+          : undefined;
+        emitStage('voice-plan', 'success', {
+          provider: prepared.selection.provider,
+          model: prepared.selection.model,
+          assignmentCount: studyTextVoicePlan?.assignments.length ?? 0,
+        });
+
+        emitStage('speech-plan', 'start');
+        steps.push('speech-plan');
+        throwIfCancelled(signal, 'speech-plan');
+        const resolvedSpeechPlan = await resolveSpeechPerformancePlan({
+          prepared,
+          planner: dependencies.speechPlanner,
+          plannerUnavailableReason: dependencies.speechPlannerUnavailableReason,
+          logger,
+          debugLogPlan: dependencies.speechPlannerDebugLogPlan,
+        });
+        studyTextSpeechPlan = resolvedSpeechPlan.plan;
+        studyTextSpeechPlanHash = resolvedSpeechPlan.hash;
+        throwIfCancelled(signal, 'speech-plan');
+        emitStage('speech-plan', 'success', {
+          mode: studyTextSpeechPlan.mode,
+          provider: studyTextSpeechPlan.provider,
+          model: studyTextSpeechPlan.model,
+          fallbackReason: studyTextSpeechPlan.fallbackReason,
+          segmentCount: studyTextSpeechPlan.segments.length,
+        });
+
         emitStage('tts', 'start');
         steps.push('tts');
         throwIfCancelled(signal, 'tts');
@@ -594,6 +653,8 @@ export async function newAssignment(
               dialogueStability: flags.dialogueStability,
               dialogueSeed: flags.dialogueSeed,
               logger,
+              voicePlan: studyTextVoicePlan,
+              speechPlan: studyTextSpeechPlan,
             },
           );
           throwIfCancelled(signal, 'tts');
@@ -629,6 +690,8 @@ export async function newAssignment(
           hash: ttsResult.hash,
           voices: ttsResult.voices,
           tts: ttsSummary,
+          voicePlanHash: studyTextVoicePlanHash,
+          speechPlanHash: studyTextSpeechPlanHash,
         };
         emitVoiceSelectionMetrics(metrics, ttsResult.voices);
         const voiceSummary = summarizeVoiceSelections(ttsResult.voices);
@@ -687,6 +750,8 @@ export async function newAssignment(
         emitPronunciationProviderCharacterMetrics(metrics, audioArtifacts.pronunciation);
       }
     } else {
+      recordSkip('voice-plan', 'tts disabled');
+      recordSkip('speech-plan', 'tts disabled');
       recordSkip('tts', 'tts disabled');
       audioArtifacts = {};
     }
@@ -702,6 +767,12 @@ export async function newAssignment(
         artifact,
       })),
     ];
+    const studentFacingAudioTitle = resolveMarkdownTitle(
+      mdContents,
+      basename(flags.md).replace(/\.[^.]+$/, ''),
+      validation.meta?.title ?? null,
+      true,
+    );
     const uploadableArtifacts = artifactEntries.filter((entry) => entry.artifact?.path);
     if (flags.upload === 's3' && uploadableArtifacts.length > 0) {
       if (flags.skipUpload) {
@@ -722,7 +793,7 @@ export async function newAssignment(
           const artifact = entry.artifact;
           if (!artifact?.path) continue;
           const audioKey = artifact.hash
-            ? resolveAudioArtifactKey(artifact.hash, keyPrefix, entry.kind)
+            ? resolveAudioArtifactKey(artifact.hash, keyPrefix, entry.kind, studentFacingAudioTitle)
             : undefined;
           if (flags.dryRun) {
             if (audioKey) {
@@ -749,6 +820,7 @@ export async function newAssignment(
               public: flags.publicRead,
               presignExpiresIn: flags.presign,
               logger,
+              mp3Metadata: resolveStudentFacingAudioMetadata(studentFacingAudioTitle, entry.kind),
             });
             artifact.url = upload.url;
             artifact.key = upload.key;
@@ -833,6 +905,8 @@ export async function newAssignment(
         studyText: audioArtifacts.studyText,
         pronunciation: audioArtifacts.pronunciation,
       },
+      speechPlans: studyTextSpeechPlan ? { studyText: studyTextSpeechPlan } : undefined,
+      voicePlans: studyTextVoicePlan ? { studyText: studyTextVoicePlan } : undefined,
       preset: flags.preset,
 
       // Preserve TTS metadata from previous runs when flags are omitted
@@ -1071,6 +1145,12 @@ export async function rerunAssignment(
       flags.studyTextDialogueStability ?? manifest.dialogueStability;
     const effectiveStudyTextDialogueSeed = flags.studyTextDialogueSeed ?? manifest.dialogueSeed;
     const effectiveStudyTextTitleFallback = basename(manifestMd).replace(/\.[^.]+$/, '');
+    const studentFacingAudioTitle = resolveMarkdownTitle(
+      mdContents,
+      effectiveStudyTextTitleFallback,
+      null,
+      true,
+    );
     const previousPrimaryProvider = normalizePrimaryPronunciationProviderFromManifest(
       previousPrimaryClip?.tts?.provider,
     );
@@ -1088,6 +1168,10 @@ export async function rerunAssignment(
     let audioReused = audioArtifacts.studyText?.reused;
     let audioVoices = audioArtifacts.studyText?.voices;
     let audioTts = audioArtifacts.studyText?.tts;
+    let studyTextVoicePlan = manifest.voicePlans?.studyText;
+    let studyTextVoicePlanHash = audioArtifacts.studyText?.voicePlanHash;
+    let studyTextSpeechPlan = manifest.speechPlans?.studyText;
+    let studyTextSpeechPlanHash = audioArtifacts.studyText?.speechPlanHash;
     const publishTarget = normalizeManifestPublishTarget(manifest.publishTarget);
     let htmlUrl = manifest.htmlUrl;
     let htmlHash = manifest.htmlHash;
@@ -1096,11 +1180,61 @@ export async function rerunAssignment(
     let htmlReused = manifest.htmlReused;
 
     if (stepsToRun.has('tts')) {
-      emitStage('tts', 'start');
-      throwIfCancelled(signal, 'tts');
       if (!markdownContext) {
         throw new ValidationError('Cannot regenerate audio without parseable markdown context.');
       }
+      if (flags.regenerateStudyTextAudio) {
+        emitStage('voice-plan', 'start');
+        throwIfCancelled(signal, 'voice-plan');
+        const prepared = await prepareStudyTextSynthesis(
+          { context: markdownContext, mdPath: flags.md },
+          {
+            voiceMapPath: flags.voices ?? DEFAULT_VOICES_PATH,
+            outPath: flags.out ?? dirname(flags.md),
+            defaultAccent: flags.studyTextVoiceAccent,
+            defaultVoiceId: flags.studyTextVoiceId,
+            ttsProvider: flags.studyTextTtsProvider,
+            ttsModel: flags.studyTextTtsModel,
+            logger,
+            voiceRanker: dependencies.voiceRanker,
+          },
+        );
+        studyTextVoicePlan = prepared.voicePlan;
+        studyTextVoicePlanHash = studyTextVoicePlan
+          ? hashStudyText(JSON.stringify(studyTextVoicePlan))
+          : undefined;
+        emitStage('voice-plan', 'success', {
+          provider: prepared.selection.provider,
+          model: prepared.selection.model,
+          assignmentCount: studyTextVoicePlan?.assignments.length ?? 0,
+        });
+
+        emitStage('speech-plan', 'start');
+        throwIfCancelled(signal, 'speech-plan');
+        const resolvedSpeechPlan = await resolveSpeechPerformancePlan({
+          prepared,
+          planner: dependencies.speechPlanner,
+          plannerUnavailableReason: dependencies.speechPlannerUnavailableReason,
+          logger,
+          debugLogPlan: dependencies.speechPlannerDebugLogPlan,
+        });
+        studyTextSpeechPlan = resolvedSpeechPlan.plan;
+        studyTextSpeechPlanHash = resolvedSpeechPlan.hash;
+        throwIfCancelled(signal, 'speech-plan');
+        emitStage('speech-plan', 'success', {
+          mode: studyTextSpeechPlan.mode,
+          provider: studyTextSpeechPlan.provider,
+          model: studyTextSpeechPlan.model,
+          fallbackReason: studyTextSpeechPlan.fallbackReason,
+          segmentCount: studyTextSpeechPlan.segments.length,
+        });
+      } else {
+        emitStage('voice-plan', 'skipped', { reason: 'study-text audio not requested' });
+        emitStage('speech-plan', 'skipped', { reason: 'study-text audio not requested' });
+      }
+
+      emitStage('tts', 'start');
+      throwIfCancelled(signal, 'tts');
 
       // TTS mode debug logging for rerun
       if (flags.studyTextTtsStrategy) {
@@ -1138,6 +1272,8 @@ export async function rerunAssignment(
               dialogueStability: effectiveStudyTextDialogueStability,
               dialogueSeed: effectiveStudyTextDialogueSeed,
               logger,
+              voicePlan: studyTextVoicePlan,
+              speechPlan: studyTextSpeechPlan,
             },
           );
           throwIfCancelled(signal, 'tts');
@@ -1192,6 +1328,8 @@ export async function rerunAssignment(
           reused: audioReused,
           voices: audioVoices,
           tts: audioTts,
+          voicePlanHash: studyTextVoicePlanHash,
+          speechPlanHash: studyTextSpeechPlanHash,
         };
         emitVoiceSelectionMetrics(metrics, ttsResult.voices);
 
@@ -1392,6 +1530,12 @@ export async function rerunAssignment(
       });
       executed.push('tts');
     } else {
+      emitStage('voice-plan', 'skipped', {
+        reason: 'study-text audio not requested',
+      });
+      emitStage('speech-plan', 'skipped', {
+        reason: flags.republishOnly ? 'republish-only rerun' : 'not requested',
+      });
       emitStage('tts', 'skipped', { reason: skipReasonByStage.get('tts') ?? 'not requested' });
     }
 
@@ -1443,7 +1587,7 @@ export async function rerunAssignment(
         const artifact = entry.artifact;
         if (!artifact?.path) continue;
         const deterministicKey = artifact.hash
-          ? resolveAudioArtifactKey(artifact.hash, keyPrefix, entry.kind)
+          ? resolveAudioArtifactKey(artifact.hash, keyPrefix, entry.kind, studentFacingAudioTitle)
           : undefined;
         if (flags.dryRun) {
           if (deterministicKey) {
@@ -1472,6 +1616,7 @@ export async function rerunAssignment(
             public: flags.publicRead,
             presignExpiresIn: flags.presign,
             logger,
+            mp3Metadata: resolveStudentFacingAudioMetadata(studentFacingAudioTitle, entry.kind),
           });
           artifact.url = upload.url;
           artifact.key = upload.key;
@@ -1575,6 +1720,8 @@ export async function rerunAssignment(
         studyText: audioArtifacts.studyText,
         pronunciation: audioArtifacts.pronunciation,
       },
+      speechPlans: studyTextSpeechPlan ? { studyText: studyTextSpeechPlan } : undefined,
+      voicePlans: studyTextVoicePlan ? { studyText: studyTextVoicePlan } : undefined,
 
       // Preserve prior TTS metadata unless explicitly overridden
       ttsStrategy: effectiveStudyTextTtsStrategy,

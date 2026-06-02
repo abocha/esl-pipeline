@@ -1,7 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
 
-import type { VoiceCapabilitiesSnapshot } from '@esl-pipeline/contracts';
-
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
 import type { ProfileRevisionRecord } from '../domain/profile-revision-model.js';
@@ -31,14 +29,12 @@ import {
 } from './foundational-profile.js';
 import { stitchPromptPayload } from './prompt-assembly.js';
 import { PromptOptionError, resolvePromptSelection } from './prompt-options.js';
-import { resolvePromptVoiceCapabilities } from './prompt-voice-capabilities.js';
 import { requestLessonMemoryGeneration } from './request-lesson-memory-generation.js';
 import { buildStudentMemoryPackageContext } from './student-memory-package.js';
 import { resolveStudentProfileBindingAt } from './student-profile-bindings.js';
 import { getStudentProfileById } from './student-profiles-store.js';
 
 const LEGACY_PROFILE_MARKER = 'INSERT PROFILE HERE';
-const LEGACY_VOICE_CAPABILITY_MARKER = '# CAPABILITY SNAPSHOT';
 
 export interface CreatePromptPackageParams {
   recordingId: string;
@@ -90,11 +86,6 @@ export interface PromptPackageResponse {
     currentTemplateHash: string | null;
     currentTemplateRevisionId: string | null;
     currentTemplateUpdatedAt: string | null;
-  };
-  voiceCapabilitiesSnapshot?: {
-    generatedAt: string;
-    hash: string;
-    capabilities: VoiceCapabilitiesSnapshot;
   };
   memory: {
     studentMemorySnapshotId: string | null;
@@ -249,13 +240,8 @@ export async function createPromptPackage(
     currentTranscriptId: transcript.id,
     config,
   });
-  const voiceCapabilities = await resolvePromptVoiceCapabilities({
-    templateId: selection.templateId,
-  });
-
   const payload = stitchPromptPayload({
     template: artifacts.template.content,
-    voiceCapabilities: voiceCapabilities.blockText,
     profile: artifacts.profile.content,
     studentMemorySnapshot: memoryContext.studentMemorySnapshotBlock,
     recentLessonMemory: memoryContext.recentLessonMemoryBlock,
@@ -295,9 +281,6 @@ export async function createPromptPackage(
     resolvedTemplateUpdatedAt: artifacts.template.revision.createdAt,
     resolvedTemplateVersionLabel: artifacts.template.revision.versionLabel,
     resolvedTemplateStatus: artifacts.template.revision.status,
-    resolvedVoiceCapabilitiesHash: voiceCapabilities.capabilitiesHash,
-    resolvedVoiceCapabilitiesGeneratedAt: voiceCapabilities.capabilitiesGeneratedAt,
-    resolvedVoiceCapabilitiesSnapshot: voiceCapabilities.capabilitiesSnapshot,
     templateVersion: selection.templateId,
     notes: params.notes ?? null,
     storageUri: stored.uri,
@@ -357,12 +340,6 @@ export function toPromptPackageResponse(
     promptPackage.resolvedTemplateId.length > 0 &&
     typeof promptPackage.resolvedTemplateHash === 'string' &&
     promptPackage.resolvedTemplateHash.length > 0;
-  const hasVoiceCapabilitiesSnapshot =
-    typeof promptPackage.resolvedVoiceCapabilitiesHash === 'string' &&
-    promptPackage.resolvedVoiceCapabilitiesHash.length > 0 &&
-    promptPackage.resolvedVoiceCapabilitiesGeneratedAt instanceof Date &&
-    !Number.isNaN(promptPackage.resolvedVoiceCapabilitiesGeneratedAt.getTime());
-
   return {
     id: promptPackage.id,
     recordingId: promptPackage.recordingId,
@@ -399,26 +376,6 @@ export function toPromptPackageResponse(
               : null,
             resolvedTemplateVersionLabel: promptPackage.resolvedTemplateVersionLabel ?? null,
             resolvedTemplateStatus: promptPackage.resolvedTemplateStatus ?? null,
-          },
-        }
-      : {}),
-    ...(hasVoiceCapabilitiesSnapshot
-      ? {
-          voiceCapabilitiesSnapshot: {
-            generatedAt: (promptPackage.resolvedVoiceCapabilitiesGeneratedAt as Date).toISOString(),
-            hash: promptPackage.resolvedVoiceCapabilitiesHash as string,
-            capabilities:
-              promptPackage.resolvedVoiceCapabilitiesSnapshot ??
-              ({
-                generatedAt: (
-                  promptPackage.resolvedVoiceCapabilitiesGeneratedAt as Date
-                ).toISOString(),
-                role: ['narrator', 'teacher', 'student', 'system'],
-                gender: ['male', 'female', 'neutral', 'child'],
-                age: ['child', 'teen', 'young', 'adult', 'middle_aged', 'senior', 'universal'],
-                accent: [],
-                style: [],
-              } as VoiceCapabilitiesSnapshot),
           },
         }
       : {}),
@@ -537,12 +494,6 @@ async function resolveTemplateArtifact(params: {
       throw new PromptOptionError(
         `Active template "${selection.templateId}" still uses retired legacy marker ${LEGACY_PROFILE_MARKER}. Migrate or replace the template revision before generation.`,
         'template_revision_legacy_marker',
-      );
-    }
-    if (activeTemplateRevision.content.includes(LEGACY_VOICE_CAPABILITY_MARKER)) {
-      throw new PromptOptionError(
-        `Active template "${selection.templateId}" still uses retired voice capability marker ${LEGACY_VOICE_CAPABILITY_MARKER}. Activate the v10 template revision before generation.`,
-        'template_revision_legacy_voice_capability_marker',
       );
     }
     return {

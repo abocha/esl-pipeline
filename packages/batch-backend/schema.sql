@@ -527,9 +527,6 @@ CREATE TABLE public.prompt_packages (
     resolved_template_updated_at timestamp with time zone,
     resolved_template_version_label text,
     resolved_template_status text,
-    resolved_voice_capabilities_hash text,
-    resolved_voice_capabilities_generated_at timestamp with time zone,
-    resolved_voice_capabilities_snapshot jsonb,
     template_version text NOT NULL,
     notes text,
     storage_uri text NOT NULL,
@@ -1684,5 +1681,6 @@ VALUES
   ('0033_prompt_template_default', 'dc002e1ad504ac9d4c50426cc097517250c58f6e910151c5a77359a500062d26', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0034_profile_candidate_provenance_audit', 'd49bd4047afe5bac9b0b9a521fc5f74b46a6cc5d550c719e8ba5435b4e48de60', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0035_jobs_mode_monologue', 'b9e84d2b640f6531c6e2aa0963a48909522e3400d5b6fc15286347f613242ba8', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0036_inworld_tts_provider', 'd796cd5efc8c71844fdc1db633d90c50aa6c98980dc5f6b523f11fb797c46b5f', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0036_inworld_tts_provider', 'd796cd5efc8c71844fdc1db633d90c50aa6c98980dc5f6b523f11fb797c46b5f', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0037_retire_prompt_voice_capabilities', '8bcbad9b5f2d5d866a42fc99b95c4cf49f2f9e825e87a9ec20bd66f42c3440d6', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;
