@@ -17,7 +17,11 @@ import {
   restoreStudent,
   upsertStudent,
 } from '../domain/student-repository.js';
-import { deriveStudentId, normalizeStudentName } from '../domain/student-utils.js';
+import {
+  deriveStudentId,
+  deriveWorkspaceStudentId,
+  normalizeStudentName,
+} from '../domain/student-utils.js';
 import { saveProfileRevisionContent } from './profile-content.js';
 import {
   buildStarterProfileStructuredContent,
@@ -28,6 +32,7 @@ import {
 export interface StudentProfileData {
   id: string;
   student: string;
+  workspaceId?: string | null;
   dbId?: string | null;
   pageParentId?: string | null;
   colorPreset?: string | null;
@@ -60,6 +65,7 @@ export interface StudentProfileListParams {
   offset?: number;
   order?: 'asc' | 'desc';
   status?: 'active' | 'archived' | 'all';
+  workspaceId?: string | null;
 }
 
 export interface StudentArchiveInput {
@@ -94,6 +100,7 @@ interface StudentStoreDependencies {
 
 export interface StudentStoreOverrides {
   config?: BatchBackendConfig;
+  workspaceId?: string | null;
   bindingAudit?: {
     reason?: string | null;
     changedBy?: string | null;
@@ -191,6 +198,7 @@ function sanitizeProfileInput(input: Partial<StudentProfileInput>): Partial<Stud
     sanitized.student = normalizeStudentName(input.student);
   }
   if ('dbId' in input) sanitized.dbId = normalizeOptionalString(input.dbId);
+  if ('workspaceId' in input) sanitized.workspaceId = normalizeOptionalString(input.workspaceId);
   if ('pageParentId' in input) sanitized.pageParentId = normalizeOptionalString(input.pageParentId);
   if ('colorPreset' in input) sanitized.colorPreset = normalizeOptionalString(input.colorPreset);
   if ('accentPreference' in input) {
@@ -218,6 +226,7 @@ function toStudentProfileData(entry: StudentProfileEntry): StudentProfileData {
     id: entry.id,
     student: entry.student,
     dbId: entry.dbId ?? null,
+    workspaceId: entry.workspaceId ?? null,
     pageParentId: entry.pageParentId ?? null,
     colorPreset: entry.colorPreset ?? null,
     accentPreference: entry.accentPreference ?? null,
@@ -234,6 +243,7 @@ function mapStudentRecordToEntry(record: StudentRecord): StudentProfileEntry {
   return {
     id: record.id,
     student: normalizeStudentName(record.student),
+    workspaceId: record.workspaceId ?? null,
     dbId: normalizeOptionalString(record.dbId),
     pageParentId: normalizeOptionalString(record.pageParentId),
     colorPreset: normalizeOptionalString(record.colorPreset),
@@ -335,8 +345,11 @@ async function createStudentProfileDb(
     throw new StudentProfileStoreError('Student name is required', 'student_name_missing', 400);
   }
 
-  const id = deriveStudentId(student);
-  const existing = await dependencies.students.getById(id);
+  const workspaceId = sanitized.workspaceId ?? null;
+  const id = workspaceId
+    ? deriveWorkspaceStudentId(student, workspaceId)
+    : deriveStudentId(student);
+  const existing = await dependencies.students.getById(id, { workspaceId });
   if (existing) {
     throw new StudentProfileStoreError('Student profile already exists', 'student_exists', 409);
   }
@@ -368,6 +381,7 @@ async function createStudentProfileDb(
     inserted = await dependencies.students.insert({
       id,
       student,
+      workspaceId,
       dbId: sanitized.dbId ?? null,
       pageParentId: sanitized.pageParentId ?? null,
       colorPreset: sanitized.colorPreset ?? null,
@@ -432,7 +446,8 @@ async function updateStudentProfileDb(
     throw new StudentProfileStoreError('Student name is required', 'student_name_missing', 400);
   }
 
-  const existing = await options.dependencies.students.getById(id);
+  const workspaceId = sanitized.workspaceId ?? null;
+  const existing = await options.dependencies.students.getById(id, { workspaceId });
   if (!existing) return null;
 
   if (sanitized.student && deriveStudentId(sanitized.student) !== id) {
@@ -448,6 +463,7 @@ async function updateStudentProfileDb(
   const merged = {
     id: existing.id,
     student: has('student') ? (sanitized.student as string) : existing.student,
+    workspaceId: existing.workspaceId ?? workspaceId,
     dbId: has('dbId') ? (sanitized.dbId ?? null) : existing.dbId,
     pageParentId: has('pageParentId') ? (sanitized.pageParentId ?? null) : existing.pageParentId,
     colorPreset: has('colorPreset') ? (sanitized.colorPreset ?? null) : existing.colorPreset,
@@ -472,6 +488,7 @@ async function updateStudentProfileDb(
   const persisted = await options.dependencies.students.upsert({
     id: merged.id,
     student: merged.student,
+    workspaceId: merged.workspaceId ?? null,
     dbId: merged.dbId,
     pageParentId: merged.pageParentId,
     colorPreset: merged.colorPreset,
@@ -505,6 +522,7 @@ export async function listStudentProfiles(
     offset: 0,
     order: 'asc',
     status: params.status ?? 'active',
+    workspaceId: params.workspaceId ?? null,
   });
 
   const entries = dbResult.items.map((item) => mapStudentRecordToEntry(item));
@@ -521,7 +539,10 @@ export async function getStudentProfileById(
   assertDbEnabled(config);
 
   const dependencies = getDependencies(overrides);
-  const record = await dependencies.students.getById(id, { includeArchived: false });
+  const record = await dependencies.students.getById(id, {
+    includeArchived: false,
+    workspaceId: overrides?.workspaceId ?? null,
+  });
   if (record) {
     return toStudentProfileData(mapStudentRecordToEntry(record));
   }
@@ -536,9 +557,13 @@ export async function createStudentProfile(
   const config = overrides?.config ?? loadConfig();
   assertDbEnabled(config);
 
-  return createStudentProfileDb(input, getDependencies(overrides), {
-    bindingAudit: overrides?.bindingAudit,
-  });
+  return createStudentProfileDb(
+    { ...input, workspaceId: overrides?.workspaceId ?? input.workspaceId ?? null },
+    getDependencies(overrides),
+    {
+      bindingAudit: overrides?.bindingAudit,
+    },
+  );
 }
 
 export async function updateStudentProfile(
@@ -551,10 +576,14 @@ export async function updateStudentProfile(
   const config = overrides?.config ?? loadConfig();
   assertDbEnabled(config);
 
-  return updateStudentProfileDb(id, input, {
-    dependencies: getDependencies(overrides),
-    bindingAudit: overrides?.bindingAudit,
-  });
+  return updateStudentProfileDb(
+    id,
+    { ...input, workspaceId: overrides?.workspaceId ?? input.workspaceId ?? null },
+    {
+      dependencies: getDependencies(overrides),
+      bindingAudit: overrides?.bindingAudit,
+    },
+  );
 }
 
 export async function ensureStudentCanonicalProfileBinding(
@@ -593,6 +622,7 @@ export async function deleteStudentProfile(
   const dependencies = getDependencies(overrides);
   const archived = await dependencies.students.archive({
     id,
+    workspaceId: overrides?.workspaceId ?? null,
     archivedBy: null,
     archiveReason: 'Archived through legacy delete operation.',
   });
@@ -619,6 +649,7 @@ export async function archiveStudentProfile(
   const dependencies = getDependencies(overrides);
   const archived = await dependencies.students.archive({
     id,
+    workspaceId: overrides?.workspaceId ?? null,
     archivedBy: normalizeOptionalString(input.archivedBy),
     archiveReason: normalizeOptionalString(input.archiveReason),
   });
@@ -643,7 +674,9 @@ export async function restoreStudentProfile(
   assertDbEnabled(config);
 
   const dependencies = getDependencies(overrides);
-  const restored = await dependencies.students.restore(id);
+  const restored = await dependencies.students.restore(id, {
+    workspaceId: overrides?.workspaceId ?? null,
+  });
   if (!restored) return null;
 
   await syncBindingForStudent(

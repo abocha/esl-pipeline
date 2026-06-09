@@ -399,7 +399,7 @@ describe('inworld provider adapter basics', () => {
       }),
     };
 
-    const resolution = await resolveInworldSpeakerAssignmentsWithRankerFromCatalog(
+    const _resolution = await resolveInworldSpeakerAssignmentsWithRankerFromCatalog(
       ['Nina'],
       {},
       {

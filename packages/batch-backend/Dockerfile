@@ -59,6 +59,7 @@ RUN apk add --no-cache \
 WORKDIR /app
 
 COPY --from=build /app/deployed/ ./
+COPY docs/prompt-gallery ./docs/prompt-gallery
 COPY scripts/docker ./scripts/docker
 RUN chmod +x ./scripts/docker/*.sh
 

@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useCallback, useState } from 'react';
+import React, { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { Navigate, Route, Routes } from 'react-router-dom';
 
@@ -72,10 +72,45 @@ const PromptTemplatesPage = lazy(async () => {
   return { default: module.PromptTemplatesPage };
 });
 
+function extractInviteTokenFromLocation(location: Location): string | null {
+  const hash = location.hash.replace(/^#/, '');
+  const hashQuery = hash.includes('?') ? hash.slice(hash.indexOf('?') + 1) : hash;
+  const candidates = [hashQuery, location.search.replace(/^\?/, '')];
+
+  for (const candidate of candidates) {
+    const params = new URLSearchParams(candidate);
+    const token = params.get('invite') ?? params.get('inviteToken');
+    if (token?.trim()) return token.trim();
+  }
+
+  return null;
+}
+
 export const App: React.FC = () => {
   const { user, isAuthenticated, isLoading, logout } = useAuth();
   const [authMode, setAuthMode] = useState<AuthMode | null>(null);
   const [prefillEmail, setPrefillEmail] = useState('');
+  const [inviteToken, setInviteToken] = useState<string | null>(() =>
+    extractInviteTokenFromLocation(window.location),
+  );
+
+  useEffect(() => {
+    const syncInviteToken = () => {
+      const token = extractInviteTokenFromLocation(window.location);
+      setInviteToken(token);
+      if (token) {
+        setAuthMode('register');
+      }
+    };
+
+    syncInviteToken();
+    window.addEventListener('hashchange', syncInviteToken);
+    window.addEventListener('popstate', syncInviteToken);
+    return () => {
+      window.removeEventListener('hashchange', syncInviteToken);
+      window.removeEventListener('popstate', syncInviteToken);
+    };
+  }, []);
 
   const openLogin = () => setAuthMode('login');
   const openRegister = () => {
@@ -130,6 +165,7 @@ export const App: React.FC = () => {
         <AuthDialog
           mode={authMode}
           initialEmail={prefillEmail}
+          inviteToken={inviteToken}
           onRegistered={handleRegistered}
           onClose={closeDialog}
           onSwitchMode={(mode) => {

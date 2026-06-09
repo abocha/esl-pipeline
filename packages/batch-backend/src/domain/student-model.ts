@@ -1,6 +1,7 @@
 export interface StudentRecord {
   id: string;
   student: string;
+  workspaceId?: string | null;
   dbId: string | null;
   pageParentId: string | null;
   colorPreset: string | null;

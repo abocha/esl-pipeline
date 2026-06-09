@@ -10,6 +10,7 @@ export type AuthMode = 'login' | 'register';
 interface AuthDialogProps {
   mode: AuthMode | null;
   initialEmail?: string;
+  inviteToken?: string | null;
   onClose: () => void;
   onSwitchMode: (mode: AuthMode) => void;
   onRegistered?: (email: string) => void;
@@ -99,6 +100,7 @@ const EyeOffIcon = () => (
 export const AuthDialog: React.FC<AuthDialogProps> = ({
   mode,
   initialEmail = '',
+  inviteToken = null,
   onClose,
   onSwitchMode,
   onRegistered,
@@ -160,6 +162,11 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({
         return;
       }
 
+      if (mode === 'register' && !inviteToken) {
+        setError('Invite link is required for closed alpha registration');
+        return;
+      }
+
       if (password.length < 6) {
         setError('Password must be at least 6 characters');
         return;
@@ -172,7 +179,7 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({
           toast.success('Welcome back!');
           onClose();
         } else {
-          await register(email, password, 'user');
+          await register(email, password, 'user', inviteToken ?? undefined);
           onRegistered?.(email);
         }
       } catch (error_: unknown) {
@@ -182,7 +189,7 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({
         setIsLoading(false);
       }
     },
-    [mode, email, password, confirmPassword, login, register, onClose, onRegistered],
+    [mode, email, password, confirmPassword, inviteToken, login, register, onClose, onRegistered],
   );
 
   useEffect(() => {

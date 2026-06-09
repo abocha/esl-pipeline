@@ -161,6 +161,7 @@ describeHttpServerIntegrationSuite(
         offset: undefined,
         order: undefined,
         status: 'archived',
+        workspaceId: '00000000-0000-4000-8000-000000000001',
       });
     });
 
@@ -179,6 +180,7 @@ describeHttpServerIntegrationSuite(
         expect.objectContaining({
           archiveReason: 'Student paused lessons.',
         }),
+        { workspaceId: '00000000-0000-4000-8000-000000000001' },
       );
       expect(response.json()).toMatchObject({
         id: deriveStudentId('Anna'),
@@ -200,6 +202,7 @@ describeHttpServerIntegrationSuite(
         expect.objectContaining({
           restoredBy: expect.any(String),
         }),
+        { workspaceId: '00000000-0000-4000-8000-000000000001' },
       );
       expect(response.json()).toMatchObject({
         id: deriveStudentId('Anna'),
@@ -232,6 +235,7 @@ describeHttpServerIntegrationSuite(
         expect.objectContaining({
           archiveReason: 'Archived through legacy DELETE /students/:id route.',
         }),
+        { workspaceId: '00000000-0000-4000-8000-000000000001' },
       );
     });
 

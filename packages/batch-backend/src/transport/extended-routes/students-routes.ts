@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyReply } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
 import {
@@ -62,6 +62,10 @@ import {
   getStudentTimeline,
   type StudentTimelineType,
 } from '../../application/student-timeline.js';
+import {
+  resolvePrimaryWorkspaceIdForUser,
+  WorkspaceContextError,
+} from '../../application/workspace-context.js';
 import { HomeworkMemoryEntryStatusSchema } from '../../domain/homework-memory-model.js';
 import { LessonMemoryEntryStatusSchema } from '../../domain/lesson-memory-model.js';
 import { StudentMemorySnapshotStatusSchema } from '../../domain/student-memory-snapshot-model.js';
@@ -73,6 +77,23 @@ import { logger } from '../../infrastructure/logger.js';
 import { getAuthenticatedUser } from '../auth-middleware.js';
 import { errorResponse, resolveRoutePath } from '../route-helpers.js';
 import type { ExtendedRoutesContext } from './context.js';
+
+async function resolveWorkspaceIdForRequest(request: FastifyRequest): Promise<string> {
+  const authenticatedUser = getAuthenticatedUser(request);
+  if (!authenticatedUser) {
+    throw new WorkspaceContextError('Authentication required');
+  }
+  return resolvePrimaryWorkspaceIdForUser(authenticatedUser.id);
+}
+
+function workspaceContextErrorResponse(reply: FastifyReply, error: unknown) {
+  if (!(error instanceof WorkspaceContextError)) return null;
+  return reply.code(error.status).send({
+    error: error.code,
+    message: error.message,
+    code: error.code,
+  });
+}
 
 export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRoutesContext): void {
   const { authenticate } = context;
@@ -1239,12 +1260,14 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
 
       try {
         const query = querySchema.parse(request.query ?? {});
+        const workspaceId = await resolveWorkspaceIdForRequest(request);
         const result = await listStudentProfiles({
           search: query.q,
           limit: query.limit,
           offset: query.offset,
           order: query.order,
           status: query.status,
+          workspaceId,
         });
 
         logger.info('HTTP request handled', {
@@ -1269,6 +1292,8 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
             code: error.code,
           });
         }
+        const workspaceError = workspaceContextErrorResponse(reply, error);
+        if (workspaceError) return workspaceError;
 
         logger.error(error instanceof Error ? error : String(error), {
           event: 'http_request',
@@ -1297,10 +1322,12 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
 
       try {
         const query = querySchema.parse(request.query ?? {});
+        const workspaceId = await resolveWorkspaceIdForRequest(request);
         const result = await getStudentSummaryWithDefaults({
           limit: query.limit,
           offset: query.offset,
           order: query.order,
+          workspaceId,
         });
 
         logger.info('HTTP request handled', {
@@ -1318,6 +1345,8 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
             details: error.issues,
           });
         }
+        const workspaceError = workspaceContextErrorResponse(reply, error);
+        if (workspaceError) return workspaceError;
 
         logger.error(error instanceof Error ? error : String(error), {
           event: 'http_request',
@@ -1344,7 +1373,8 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
 
       try {
         const params = paramsSchema.parse(request.params ?? {});
-        const profile = await getStudentProfileById(params.id);
+        const workspaceId = await resolveWorkspaceIdForRequest(request);
+        const profile = await getStudentProfileById(params.id, { workspaceId });
         if (!profile) {
           return errorResponse(reply, 'not_found');
         }
@@ -1372,6 +1402,8 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
             code: error.code,
           });
         }
+        const workspaceError = workspaceContextErrorResponse(reply, error);
+        if (workspaceError) return workspaceError;
 
         logger.error(error instanceof Error ? error : String(error), {
           event: 'http_request',
@@ -1675,7 +1707,9 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
       try {
         const body = schema.parse(request.body ?? {});
         const authenticatedUser = getAuthenticatedUser(request);
+        const workspaceId = await resolveWorkspaceIdForRequest(request);
         const created = await createStudentProfile(body, {
+          workspaceId,
           bindingAudit: {
             reason: 'student_create',
             changedBy: authenticatedUser?.id ?? null,
@@ -1705,6 +1739,8 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
             code: error.code,
           });
         }
+        const workspaceError = workspaceContextErrorResponse(reply, error);
+        if (workspaceError) return workspaceError;
 
         logger.error(error instanceof Error ? error : String(error), {
           event: 'http_request',
@@ -1745,7 +1781,9 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
         const params = paramsSchema.parse(request.params ?? {});
         const body = schema.parse(request.body ?? {});
         const authenticatedUser = getAuthenticatedUser(request);
+        const workspaceId = await resolveWorkspaceIdForRequest(request);
         const updated = await updateStudentProfile(params.id, body, {
+          workspaceId,
           bindingAudit: {
             reason: 'student_update',
             changedBy: authenticatedUser?.id ?? null,
@@ -1779,6 +1817,8 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
             code: error.code,
           });
         }
+        const workspaceError = workspaceContextErrorResponse(reply, error);
+        if (workspaceError) return workspaceError;
 
         logger.error(error instanceof Error ? error : String(error), {
           event: 'http_request',
@@ -1810,10 +1850,15 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
         const params = paramsSchema.parse(request.params ?? {});
         const body = bodySchema.parse(request.body ?? {});
         const authenticatedUser = getAuthenticatedUser(request);
-        const archived = await archiveStudentProfile(params.id, {
-          archivedBy: authenticatedUser?.id ?? null,
-          archiveReason: body.reason ?? null,
-        });
+        const workspaceId = await resolveWorkspaceIdForRequest(request);
+        const archived = await archiveStudentProfile(
+          params.id,
+          {
+            archivedBy: authenticatedUser?.id ?? null,
+            archiveReason: body.reason ?? null,
+          },
+          { workspaceId },
+        );
 
         if (!archived) {
           return errorResponse(reply, 'not_found');
@@ -1842,6 +1887,8 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
             code: error.code,
           });
         }
+        const workspaceError = workspaceContextErrorResponse(reply, error);
+        if (workspaceError) return workspaceError;
 
         logger.error(error instanceof Error ? error : String(error), {
           event: 'http_request',
@@ -1869,9 +1916,14 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
       try {
         const params = paramsSchema.parse(request.params ?? {});
         const authenticatedUser = getAuthenticatedUser(request);
-        const restored = await restoreStudentProfile(params.id, {
-          restoredBy: authenticatedUser?.id ?? null,
-        });
+        const workspaceId = await resolveWorkspaceIdForRequest(request);
+        const restored = await restoreStudentProfile(
+          params.id,
+          {
+            restoredBy: authenticatedUser?.id ?? null,
+          },
+          { workspaceId },
+        );
 
         if (!restored) {
           return errorResponse(reply, 'not_found');
@@ -1900,6 +1952,8 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
             code: error.code,
           });
         }
+        const workspaceError = workspaceContextErrorResponse(reply, error);
+        if (workspaceError) return workspaceError;
 
         logger.error(error instanceof Error ? error : String(error), {
           event: 'http_request',
@@ -1927,10 +1981,15 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
       try {
         const params = paramsSchema.parse(request.params ?? {});
         const authenticatedUser = getAuthenticatedUser(request);
-        const removed = await archiveStudentProfile(params.id, {
-          archivedBy: authenticatedUser?.id ?? null,
-          archiveReason: 'Archived through legacy DELETE /students/:id route.',
-        });
+        const workspaceId = await resolveWorkspaceIdForRequest(request);
+        const removed = await archiveStudentProfile(
+          params.id,
+          {
+            archivedBy: authenticatedUser?.id ?? null,
+            archiveReason: 'Archived through legacy DELETE /students/:id route.',
+          },
+          { workspaceId },
+        );
 
         if (!removed) {
           return errorResponse(reply, 'not_found');
@@ -1959,6 +2018,8 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
             code: error.code,
           });
         }
+        const workspaceError = workspaceContextErrorResponse(reply, error);
+        if (workspaceError) return workspaceError;
 
         logger.error(error instanceof Error ? error : String(error), {
           event: 'http_request',
