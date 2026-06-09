@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [8.1.0] - 2026-06-09
+
+### Changed
+
+- Automated release from PR #91: feat(alpha): prepare private hosted closed alpha (https://github.com/abocha/esl-pipeline/pull/91)
+
 ## [8.0.1] - 2026-06-02
 
 ### Changed
