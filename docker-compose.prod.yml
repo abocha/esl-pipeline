@@ -28,6 +28,7 @@ services:
       PG_BACKUP_RESTORE_DRILL_REPORT_LATEST: /app/tmp/logs/backup/restore-drill-report-latest.json
       PG_APPLICATION_NAME: esl-pipeline-api
       PG_POOL_MAX: '8'
+      BATCH_BACKEND_ENABLE_OPS_CONTROL: ${BATCH_BACKEND_ENABLE_OPS_CONTROL:-false}
     env_file:
       - .env.batch-backend
     ports:
@@ -140,6 +141,8 @@ services:
       retries: 10
 
   telegram-ops-bot:
+    profiles:
+      - ops-bot
     build:
       context: .
       dockerfile: packages/telegram-ops-bot/Dockerfile

@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import type { JobState } from '@esl-pipeline/contracts';
 
+import { AlphaInviteError, registerInvitedUser } from '../../application/alpha-invites.js';
 import {
   archiveAssignmentSessionForUser,
   createAssignmentSessionForUser,
@@ -31,16 +32,9 @@ import {
   getSettingsByUserId,
   upsertSettings,
 } from '../../domain/settings-repository.js';
-import {
-  isValidRole,
-  sanitizeUser,
-  UserLogin,
-  UserRegistration,
-  UserRole,
-} from '../../domain/user-model.js';
+import { sanitizeUser, UserLogin, UserRegistration } from '../../domain/user-model.js';
 import {
   countUsers,
-  createUser,
   getAllUsers,
   getUserByEmail,
   getUserById,
@@ -61,10 +55,10 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
       const body = request.body as UserRegistration | undefined;
 
       try {
-        if (!body || !body.email || !body.password) {
+        if (!body || !body.email || !body.password || !body.inviteToken) {
           return reply.code(400).send({
             error: 'validation_failed',
-            message: 'Email and password are required',
+            message: 'Email, password, and invite token are required',
             code: 'missing_fields',
           });
         }
@@ -87,33 +81,11 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
           });
         }
 
-        let role: UserRole = 'user';
-        if (body.role) {
-          if (!isValidRole(body.role)) {
-            return reply.code(400).send({
-              error: 'validation_failed',
-              message: 'Invalid role specified',
-              code: 'invalid_role',
-            });
-          }
-          role = body.role;
-        }
-
-        const existingUser = await getUserByEmail(body.email);
-        if (existingUser) {
-          return reply.code(409).send({
-            error: 'conflict',
-            message: 'User with this email already exists',
-            code: 'email_exists',
-          });
-        }
-
         const passwordHash = await authService.hashPassword(body.password);
-        const user = await createUser({
-          email: body.email.toLowerCase(),
+        const user = await registerInvitedUser({
+          email: body.email,
           passwordHash,
-          role,
-          isActive: true,
+          inviteToken: body.inviteToken,
         });
 
         logger.info('User registered successfully', {
@@ -129,6 +101,14 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
           user: sanitizedUser,
         });
       } catch (error: unknown) {
+        if (error instanceof AlphaInviteError) {
+          return reply.code(error.status).send({
+            error: error.status === 409 ? 'conflict' : 'validation_failed',
+            message: error.message,
+            code: error.code,
+          });
+        }
+
         logger.error(error instanceof Error ? error : String(error), {
           event: 'http_request',
           route: 'POST /auth/register',

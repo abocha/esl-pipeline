@@ -20,6 +20,10 @@ import { getPromptOptions } from '../../application/get-prompt-options.js';
 import { getStudentProfiles } from '../../application/get-student-profiles.js';
 import { PromptOptionError } from '../../application/prompt-options.js';
 import { StudentProfileStoreError } from '../../application/student-profiles-store.js';
+import {
+  resolvePrimaryWorkspaceIdForUser,
+  WorkspaceContextError,
+} from '../../application/workspace-context.js';
 import { getDefaultSettings } from '../../domain/settings-model.js';
 import { createDefaultSettings, getSettingsByUserId } from '../../domain/settings-repository.js';
 import { logger } from '../../infrastructure/logger.js';
@@ -568,7 +572,12 @@ export function registerConfigRoutes(app: FastifyInstance, context: ExtendedRout
     async (request, reply) => {
       const routePath = resolveRoutePath(request, 'GET /config/students');
       try {
-        const students = await getStudentProfiles();
+        const authenticatedUser = getAuthenticatedUser(request);
+        if (!authenticatedUser) {
+          throw new WorkspaceContextError('Authentication required');
+        }
+        const workspaceId = await resolvePrimaryWorkspaceIdForUser(authenticatedUser.id);
+        const students = await getStudentProfiles({ workspaceId });
         reply.header('Cache-Control', 'private, max-age=60');
 
         logger.info('HTTP request handled', {
@@ -580,6 +589,13 @@ export function registerConfigRoutes(app: FastifyInstance, context: ExtendedRout
         return reply.send(students);
       } catch (error: unknown) {
         if (error instanceof StudentProfileStoreError) {
+          return reply.code(error.status).send({
+            error: error.code,
+            message: error.message,
+            code: error.code,
+          });
+        }
+        if (error instanceof WorkspaceContextError) {
           return reply.code(error.status).send({
             error: error.code,
             message: error.message,

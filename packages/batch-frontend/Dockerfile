@@ -7,7 +7,7 @@ ENV PATH="${PNPM_HOME}:${PATH}" \
     CI=true
 
 RUN corepack enable && corepack prepare pnpm@10 --activate \
-    && apk add --no-cache ca-certificates=20251003-r0
+    && apk add --no-cache ca-certificates
 
 WORKDIR /app
 

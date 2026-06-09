@@ -20,6 +20,7 @@ export interface UserRecord {
 export interface UserRegistration {
   email: string;
   password: string;
+  inviteToken?: string;
   role?: UserRole;
 }
 

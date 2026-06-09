@@ -13,8 +13,8 @@ export const API_CONTRACT_VERSION = '3.0.0';
 export const MANIFEST_CONTRACT_VERSION = '3.0.0';
 export const PROMPT_SCHEMA_VERSION = '2.0.0';
 export const VALIDATOR_CONTRACT_VERSION = '2.0.0';
-export const DB_CONTRACT_VERSION = '0.19.0';
-export const DB_MIGRATION_HEAD = '0037_retire_prompt_voice_capabilities';
+export const DB_CONTRACT_VERSION = '0.20.0';
+export const DB_MIGRATION_HEAD = '0038_alpha_invites_and_signup_workspace';
 
 export const CONTRACT_VERSIONS: Readonly<ContractVersionRegistry> = Object.freeze({
   api: API_CONTRACT_VERSION,

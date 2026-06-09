@@ -12,7 +12,24 @@ export function deriveStudentId(name: string): string {
     throw new Error('Student name is required');
   }
 
-  const hash = createHash('sha256').update(`${STUDENT_NAMESPACE}:${normalized}`).digest();
+  return deriveNamespacedStudentId(normalized);
+}
+
+export function deriveWorkspaceStudentId(name: string, workspaceId: string): string {
+  const normalized = normalizeStudentName(name).toLowerCase();
+  const normalizedWorkspaceId = workspaceId.trim().toLowerCase();
+  if (!normalized) {
+    throw new Error('Student name is required');
+  }
+  if (!normalizedWorkspaceId) {
+    throw new Error('Workspace id is required');
+  }
+
+  return deriveNamespacedStudentId(`${normalizedWorkspaceId}:${normalized}`);
+}
+
+function deriveNamespacedStudentId(value: string): string {
+  const hash = createHash('sha256').update(`${STUDENT_NAMESPACE}:${value}`).digest();
   const bytes = Buffer.from(hash.subarray(0, 16));
   bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x50;
   bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;

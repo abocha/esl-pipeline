@@ -7,6 +7,7 @@ import type { StudentListResult, StudentRecord } from './student-model.js';
 interface StudentRow {
   id: string;
   student: string;
+  workspace_id: string | null;
   db_id: string | null;
   page_parent_id: string | null;
   color_preset: string | null;
@@ -24,6 +25,7 @@ interface StudentRow {
 export interface InsertStudentParams {
   id?: string;
   student: string;
+  workspaceId?: string | null;
   dbId?: string | null;
   pageParentId?: string | null;
   colorPreset?: string | null;
@@ -35,6 +37,7 @@ export interface InsertStudentParams {
 
 export interface UpdateStudentParams {
   id: string;
+  workspaceId?: string | null;
   student?: string;
   dbId?: string | null;
   pageParentId?: string | null;
@@ -51,19 +54,39 @@ export interface ListStudentsParams {
   offset?: number;
   order?: 'asc' | 'desc';
   status?: 'active' | 'archived' | 'all';
+  workspaceId?: string | null;
 }
 
 export interface ArchiveStudentParams {
   id: string;
+  workspaceId?: string | null;
   archivedBy?: string | null;
   archiveReason?: string | null;
 }
 
 export interface GetStudentParams {
   includeArchived?: boolean;
+  workspaceId?: string | null;
 }
 
 const MAX_PAGE_LIMIT = 500;
+const STUDENT_COLUMNS = `
+  id,
+  student,
+  workspace_id,
+  db_id,
+  page_parent_id,
+  color_preset,
+  voices,
+  manifest_preset,
+  accent_preference,
+  profile_id,
+  archived_at,
+  archived_by,
+  archive_reason,
+  created_at,
+  updated_at
+`;
 
 export async function insertStudent(params: InsertStudentParams): Promise<StudentRecord> {
   const id = params.id ?? randomUUID();
@@ -73,6 +96,7 @@ export async function insertStudent(params: InsertStudentParams): Promise<Studen
       INSERT INTO students (
         id,
         student,
+        workspace_id,
         db_id,
         page_parent_id,
         color_preset,
@@ -81,26 +105,13 @@ export async function insertStudent(params: InsertStudentParams): Promise<Studen
         accent_preference,
         profile_id
       )
-      VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9)
-      RETURNING
-        id,
-        student,
-        db_id,
-        page_parent_id,
-        color_preset,
-        voices,
-        manifest_preset,
-        accent_preference,
-        profile_id,
-        archived_at,
-        archived_by,
-        archive_reason,
-        created_at,
-        updated_at
+      VALUES ($1, $2, $3::uuid, $4, $5, $6, $7::jsonb, $8, $9, $10)
+      RETURNING ${STUDENT_COLUMNS}
       `,
       [
         id,
         params.student,
+        params.workspaceId ?? null,
         params.dbId ?? null,
         params.pageParentId ?? null,
         params.colorPreset ?? null,
@@ -124,6 +135,7 @@ export async function upsertStudent(params: InsertStudentParams): Promise<Studen
       INSERT INTO students (
         id,
         student,
+        workspace_id,
         db_id,
         page_parent_id,
         color_preset,
@@ -132,10 +144,11 @@ export async function upsertStudent(params: InsertStudentParams): Promise<Studen
         accent_preference,
         profile_id
       )
-      VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9)
+      VALUES ($1, $2, $3::uuid, $4, $5, $6, $7::jsonb, $8, $9, $10)
       ON CONFLICT (id) DO UPDATE
       SET
         student = EXCLUDED.student,
+        workspace_id = EXCLUDED.workspace_id,
         db_id = EXCLUDED.db_id,
         page_parent_id = EXCLUDED.page_parent_id,
         color_preset = EXCLUDED.color_preset,
@@ -143,25 +156,12 @@ export async function upsertStudent(params: InsertStudentParams): Promise<Studen
         manifest_preset = EXCLUDED.manifest_preset,
         accent_preference = EXCLUDED.accent_preference,
         profile_id = EXCLUDED.profile_id
-      RETURNING
-        id,
-        student,
-        db_id,
-        page_parent_id,
-        color_preset,
-        voices,
-        manifest_preset,
-        accent_preference,
-        profile_id,
-        archived_at,
-        archived_by,
-        archive_reason,
-        created_at,
-        updated_at
+      RETURNING ${STUDENT_COLUMNS}
       `,
       [
         id,
         params.student,
+        params.workspaceId ?? null,
         params.dbId ?? null,
         params.pageParentId ?? null,
         params.colorPreset ?? null,
@@ -184,26 +184,13 @@ export async function getStudentById(
   const row = await withPgClient(async (client: PoolClient) => {
     const result = await client.query(
       `
-      SELECT
-        id,
-        student,
-        db_id,
-        page_parent_id,
-        color_preset,
-        voices,
-        manifest_preset,
-        accent_preference,
-        profile_id,
-        archived_at,
-        archived_by,
-        archive_reason,
-        created_at,
-        updated_at
+      SELECT ${STUDENT_COLUMNS}
       FROM students
       WHERE id = $1
         AND ($2::boolean OR archived_at IS NULL)
+        AND ($3::uuid IS NULL OR workspace_id = $3::uuid)
       `,
-      [id, params.includeArchived ?? false],
+      [id, params.includeArchived ?? false, params.workspaceId ?? null],
     );
     return result.rows[0] as StudentRow | undefined;
   });
@@ -226,6 +213,12 @@ export async function listStudents(params: ListStudentsParams = {}): Promise<Stu
     filters.push('archived_at IS NOT NULL');
   }
 
+  if (params.workspaceId) {
+    values.push(params.workspaceId);
+    filters.push(`workspace_id = $${index}::uuid`);
+    index += 1;
+  }
+
   if (params.search?.trim()) {
     const search = `%${params.search.trim()}%`;
     values.push(search);
@@ -243,21 +236,7 @@ export async function listStudents(params: ListStudentsParams = {}): Promise<Stu
     );
     const dataResult = await client.query(
       `
-      SELECT
-        id,
-        student,
-        db_id,
-        page_parent_id,
-        color_preset,
-        voices,
-        manifest_preset,
-        accent_preference,
-        profile_id,
-        archived_at,
-        archived_by,
-        archive_reason,
-        created_at,
-        updated_at
+      SELECT ${STUDENT_COLUMNS}
       FROM students
       ${whereClause}
       ORDER BY student ${orderDirection}, id ${orderDirection}
@@ -295,21 +274,8 @@ export async function updateStudent(params: UpdateStudentParams): Promise<Studen
         accent_preference = COALESCE($8, accent_preference),
         profile_id = $9
       WHERE id = $1
-      RETURNING
-        id,
-        student,
-        db_id,
-        page_parent_id,
-        color_preset,
-        voices,
-        manifest_preset,
-        accent_preference,
-        profile_id,
-        archived_at,
-        archived_by,
-        archive_reason,
-        created_at,
-        updated_at
+        AND ($10::uuid IS NULL OR workspace_id = $10::uuid)
+      RETURNING ${STUDENT_COLUMNS}
       `,
       [
         params.id,
@@ -321,6 +287,7 @@ export async function updateStudent(params: UpdateStudentParams): Promise<Studen
         params.manifestPreset ?? null,
         params.accentPreference ?? null,
         params.profileId ?? null,
+        params.workspaceId ?? null,
       ],
     );
     return result.rows[0] as StudentRow | undefined;
@@ -348,23 +315,15 @@ export async function archiveStudent(params: ArchiveStudentParams): Promise<Stud
         archived_by = $2,
         archive_reason = $3
       WHERE id = $1
-      RETURNING
-        id,
-        student,
-        db_id,
-        page_parent_id,
-        color_preset,
-        voices,
-        manifest_preset,
-        accent_preference,
-        profile_id,
-        archived_at,
-        archived_by,
-        archive_reason,
-        created_at,
-        updated_at
+        AND ($4::uuid IS NULL OR workspace_id = $4::uuid)
+      RETURNING ${STUDENT_COLUMNS}
       `,
-      [params.id, params.archivedBy ?? null, params.archiveReason ?? null],
+      [
+        params.id,
+        params.archivedBy ?? null,
+        params.archiveReason ?? null,
+        params.workspaceId ?? null,
+      ],
     );
     return result.rows[0] as StudentRow | undefined;
   });
@@ -372,7 +331,10 @@ export async function archiveStudent(params: ArchiveStudentParams): Promise<Stud
   return row ? mapRow(row) : null;
 }
 
-export async function restoreStudent(id: string): Promise<StudentRecord | null> {
+export async function restoreStudent(
+  id: string,
+  params: { workspaceId?: string | null } = {},
+): Promise<StudentRecord | null> {
   const row = await withPgClient(async (client: PoolClient) => {
     const result = await client.query(
       `
@@ -382,23 +344,10 @@ export async function restoreStudent(id: string): Promise<StudentRecord | null> 
         archived_by = NULL,
         archive_reason = NULL
       WHERE id = $1
-      RETURNING
-        id,
-        student,
-        db_id,
-        page_parent_id,
-        color_preset,
-        voices,
-        manifest_preset,
-        accent_preference,
-        profile_id,
-        archived_at,
-        archived_by,
-        archive_reason,
-        created_at,
-        updated_at
+        AND ($2::uuid IS NULL OR workspace_id = $2::uuid)
+      RETURNING ${STUDENT_COLUMNS}
       `,
-      [id],
+      [id, params.workspaceId ?? null],
     );
     return result.rows[0] as StudentRow | undefined;
   });
@@ -410,6 +359,7 @@ function mapRow(row: StudentRow): StudentRecord {
   return {
     id: row.id,
     student: row.student,
+    workspaceId: row.workspace_id ?? null,
     dbId: row.db_id ?? null,
     pageParentId: row.page_parent_id ?? null,
     colorPreset: row.color_preset ?? null,
