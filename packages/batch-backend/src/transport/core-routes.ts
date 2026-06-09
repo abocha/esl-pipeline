@@ -18,6 +18,7 @@ import { getVersionMeta } from '../application/version-meta.js';
 import type { BatchBackendConfig } from '../config/env.js';
 import { subscribeJobEvents } from '../domain/job-events.js';
 import { subscribeRecordingEvents } from '../domain/recording-events.js';
+import { checkBackendHealth } from '../infrastructure/health-checks.js';
 import { logger } from '../infrastructure/logger.js';
 import { errorResponse, resolveRoutePath } from './route-helpers.js';
 
@@ -44,6 +45,21 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
     });
 
     return reply.send(payload);
+  });
+
+  app.get('/health', async (request, reply) => {
+    const routePath = resolveRoutePath(request, 'GET /health');
+    const health = await checkBackendHealth(config);
+    const statusCode = health.ok ? 200 : 503;
+
+    logger.info('HTTP request handled', {
+      event: 'http_request',
+      route: routePath,
+      statusCode,
+      ok: health.ok,
+    });
+
+    return reply.code(statusCode).send(health);
   });
 
   const handleSubmitJob: RouteHandlerMethod = async (request, reply) => {

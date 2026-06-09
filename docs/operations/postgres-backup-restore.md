@@ -4,7 +4,7 @@
 
 - Audience: maintainers and AI agents operating backup/restore locally.
 - Authority Level: operations runbook.
-- Last Verified Against: 2026-04-19 repo state.
+- Last Verified Against: 2026-06-10 repo state.
 - Owner: ops maintainer + automation agents.
 - Review Cadence: monthly or after backup script changes.
 - Status: `runbook`.

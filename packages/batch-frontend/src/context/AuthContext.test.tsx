@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import { render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -31,6 +33,18 @@ function AuthControls(): React.JSX.Element {
   return (
     <button type="button" onClick={() => void logout()}>
       {isLoading ? 'Loading' : 'Logout'}
+    </button>
+  );
+}
+
+function RegisterControls(): React.JSX.Element {
+  const { register } = useAuth();
+  return (
+    <button
+      type="button"
+      onClick={() => void register(' Teacher@Example.com ', 'password123', 'user', 'invite-token')}
+    >
+      Register
     </button>
   );
 }
@@ -140,6 +154,27 @@ describe('AuthProvider', () => {
 
     await waitFor(() => {
       expect(apiClientMocks.setApiAuthToken).toHaveBeenCalledWith('access-token-2');
+    });
+  });
+
+  it('passes invite tokens through registration without changing the client role default', async () => {
+    apiMocks.register.mockResolvedValue(undefined);
+
+    render(
+      <AuthProvider>
+        <RegisterControls />
+      </AuthProvider>,
+    );
+
+    screen.getByRole('button', { name: 'Register' }).click();
+
+    await waitFor(() => {
+      expect(apiMocks.register).toHaveBeenCalledWith({
+        email: 'teacher@example.com',
+        password: 'password123',
+        role: 'user',
+        inviteToken: 'invite-token',
+      });
     });
   });
 });

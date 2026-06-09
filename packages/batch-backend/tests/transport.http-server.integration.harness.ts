@@ -166,6 +166,18 @@ vi.mock('../src/application/student-profiles-store', async () => {
   };
 });
 
+vi.mock('../src/application/workspace-context', async () => {
+  const actual = await vi.importActual<typeof import('../src/application/workspace-context.js')>(
+    '../src/application/workspace-context',
+  );
+  return {
+    ...actual,
+    resolvePrimaryWorkspaceIdForUser: vi
+      .fn()
+      .mockResolvedValue('00000000-0000-4000-8000-000000000001'),
+  };
+});
+
 vi.mock('../src/application/profile-content', () => {
   return {
     listProfileContents: vi.fn(),

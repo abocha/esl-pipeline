@@ -162,6 +162,7 @@ describe('application/student-summary', () => {
       limit: 500,
       offset: 0,
       order: 'asc',
+      workspaceId: null,
     });
   });
 });
