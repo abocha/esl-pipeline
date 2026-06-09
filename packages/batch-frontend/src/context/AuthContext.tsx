@@ -36,7 +36,12 @@ export interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, role?: RegisterRole) => Promise<void>;
+  register: (
+    email: string,
+    password: string,
+    role?: RegisterRole,
+    inviteToken?: string,
+  ) => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
   setUserFromProfile: (nextUser: User | null) => void;
@@ -102,9 +107,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
   );
 
   const register = useCallback(
-    async (email: string, password: string, role: RegisterRole = 'user') => {
+    async (email: string, password: string, role: RegisterRole = 'user', inviteToken?: string) => {
       const normalizedEmail = email.trim().toLowerCase();
-      await registerRequest({ email: normalizedEmail, password, role });
+      await registerRequest({ email: normalizedEmail, password, role, inviteToken });
     },
     [],
   );

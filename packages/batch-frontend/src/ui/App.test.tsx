@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Outlet } from 'react-router-dom';
@@ -105,6 +107,7 @@ function renderApp(initialEntries: string[] = ['/']) {
 describe('App', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.history.replaceState(null, '', '/');
   });
 
   it('shows the loading panel while session restore is in progress', () => {
@@ -132,6 +135,15 @@ describe('App', () => {
         { timeout: UI_WAIT_TIMEOUT_MS },
       ),
     ).toBeTruthy();
+  });
+
+  it('opens registration when an invite token is present in the URL fragment', async () => {
+    window.history.replaceState(null, '', '/#invite=invite-token');
+    useAuthMock.mockReturnValue(createAuthState());
+
+    renderApp();
+
+    expect(await screen.findByRole('heading', { name: /Create account/i })).toBeTruthy();
   });
 
   it('opens auth as a labelled modal, traps focus, and restores focus on close', async () => {

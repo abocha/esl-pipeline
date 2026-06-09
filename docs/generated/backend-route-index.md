@@ -36,6 +36,7 @@
 | POST   | `/drafts/:draftId/materialize`                                      | `packages/batch-backend/src/transport/extended-routes/recordings-routes.ts`         |
 | PUT    | `/drafts/:id`                                                       | `packages/batch-backend/src/transport/extended-routes/recordings-routes.ts`         |
 | POST   | `/generation/drafts`                                                | `packages/batch-backend/src/transport/extended-routes/config-routes.ts`             |
+| GET    | `/health`                                                           | `packages/batch-backend/src/transport/core-routes.ts`                               |
 | POST   | `/jobs`                                                             | `packages/batch-backend/src/transport/core-routes.ts`                               |
 | GET    | `/jobs/:jobId`                                                      | `packages/batch-backend/src/transport/core-routes.ts`                               |
 | POST   | `/jobs/:jobId/actions`                                              | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts`          |

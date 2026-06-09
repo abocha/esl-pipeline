@@ -7,6 +7,7 @@ export interface StudentSummaryParams {
   limit?: number;
   offset?: number;
   order?: StudentProfileListParams['order'];
+  workspaceId?: string | null;
 }
 
 export interface StudentSummaryDependencies {
@@ -37,6 +38,7 @@ export async function getStudentSummaryWithDefaults(
     limit: PROFILE_SCAN_LIMIT,
     offset: 0,
     order: 'asc',
+    workspaceId: params.workspaceId ?? null,
   });
 
   const ids = result.items.map((profile) => profile.id);

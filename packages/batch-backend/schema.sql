@@ -271,6 +271,23 @@ BEGIN
 END;
 $$;
 
+CREATE TABLE public.alpha_invites (
+    id uuid NOT NULL,
+    email text NOT NULL,
+    email_normalized text NOT NULL,
+    token_hash text NOT NULL,
+    status text DEFAULT 'pending'::text NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    invited_by_user_id uuid,
+    accepted_user_id uuid,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    accepted_at timestamp with time zone,
+    revoked_at timestamp with time zone,
+    CONSTRAINT alpha_invites_email_normalized_check CHECK ((email_normalized = lower(btrim(email_normalized)))),
+    CONSTRAINT alpha_invites_expiration_check CHECK ((expires_at > created_at)),
+    CONSTRAINT alpha_invites_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'accepted'::text, 'revoked'::text, 'expired'::text])))
+);
+
 CREATE TABLE public.assignment_sessions (
     id uuid NOT NULL,
     user_id uuid NOT NULL,
@@ -928,6 +945,12 @@ CREATE TABLE public.workspaces (
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
+ALTER TABLE ONLY public.alpha_invites
+    ADD CONSTRAINT alpha_invites_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.alpha_invites
+    ADD CONSTRAINT alpha_invites_token_hash_key UNIQUE (token_hash);
+
 ALTER TABLE ONLY public.assignment_sessions
     ADD CONSTRAINT assignment_sessions_pkey PRIMARY KEY (id);
 
@@ -1038,6 +1061,10 @@ ALTER TABLE ONLY public.workspace_memberships
 
 ALTER TABLE ONLY public.workspaces
     ADD CONSTRAINT workspaces_pkey PRIMARY KEY (id);
+
+CREATE UNIQUE INDEX idx_alpha_invites_pending_email_normalized ON public.alpha_invites USING btree (email_normalized) WHERE (status = 'pending'::text);
+
+CREATE INDEX idx_alpha_invites_status_expires_at ON public.alpha_invites USING btree (status, expires_at);
 
 CREATE INDEX idx_assignment_sessions_lesson_updated ON public.assignment_sessions USING btree (lesson_id, updated_at DESC, id DESC) WHERE ((lesson_id IS NOT NULL) AND (archived_at IS NULL));
 
@@ -1227,9 +1254,9 @@ CREATE INDEX idx_students_created_at ON public.students USING btree (created_at)
 
 CREATE INDEX idx_students_profile_id ON public.students USING btree (profile_id);
 
-CREATE UNIQUE INDEX idx_students_student_lower_unique ON public.students USING btree (lower(student));
-
 CREATE INDEX idx_students_workspace_id ON public.students USING btree (workspace_id);
+
+CREATE UNIQUE INDEX idx_students_workspace_student_lower_unique ON public.students USING btree (workspace_id, lower(student));
 
 CREATE UNIQUE INDEX idx_template_revisions_single_active ON public.template_revisions USING btree (template_id) WHERE (status = 'active'::text);
 
@@ -1294,6 +1321,12 @@ CREATE TRIGGER set_user_settings_updated_at BEFORE UPDATE ON public.user_setting
 CREATE TRIGGER set_users_updated_at BEFORE UPDATE ON public.users FOR EACH ROW EXECUTE FUNCTION public.set_users_updated_at();
 
 CREATE TRIGGER trg_set_ops_actions_updated_at BEFORE UPDATE ON public.ops_actions FOR EACH ROW EXECUTE FUNCTION public.set_ops_actions_updated_at();
+
+ALTER TABLE ONLY public.alpha_invites
+    ADD CONSTRAINT alpha_invites_accepted_user_id_fkey FOREIGN KEY (accepted_user_id) REFERENCES public.users(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.alpha_invites
+    ADD CONSTRAINT alpha_invites_invited_by_user_id_fkey FOREIGN KEY (invited_by_user_id) REFERENCES public.users(id) ON DELETE SET NULL;
 
 ALTER TABLE ONLY public.assignment_sessions
     ADD CONSTRAINT assignment_sessions_draft_id_fkey FOREIGN KEY (draft_id) REFERENCES public.drafts(id) ON DELETE SET NULL;
@@ -1682,5 +1715,6 @@ VALUES
   ('0034_profile_candidate_provenance_audit', 'd49bd4047afe5bac9b0b9a521fc5f74b46a6cc5d550c719e8ba5435b4e48de60', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0035_jobs_mode_monologue', 'b9e84d2b640f6531c6e2aa0963a48909522e3400d5b6fc15286347f613242ba8', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0036_inworld_tts_provider', 'd796cd5efc8c71844fdc1db633d90c50aa6c98980dc5f6b523f11fb797c46b5f', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0037_retire_prompt_voice_capabilities', '8bcbad9b5f2d5d866a42fc99b95c4cf49f2f9e825e87a9ec20bd66f42c3440d6', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0037_retire_prompt_voice_capabilities', '8bcbad9b5f2d5d866a42fc99b95c4cf49f2f9e825e87a9ec20bd66f42c3440d6', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0038_alpha_invites_and_signup_workspace', '727507071d99af1e7fcf22d6d17993fa9e9941fd9d2b912244f678cb3daad12b', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;

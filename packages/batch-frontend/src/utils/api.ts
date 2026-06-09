@@ -1264,6 +1264,7 @@ export interface LoginRequest {
 export interface RegisterRequest {
   email: string;
   password: string;
+  inviteToken?: string;
   role?: RegisterRole;
 }
 
