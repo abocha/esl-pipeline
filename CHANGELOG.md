@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [8.1.1] - 2026-06-10
+
+### Changed
+
+- Automated release from PR #92: feat(docker): add optional Caddy HTTPS edge profile (https://github.com/abocha/esl-pipeline/pull/92)
+
 ## [8.1.0] - 2026-06-09
 
 ### Changed
