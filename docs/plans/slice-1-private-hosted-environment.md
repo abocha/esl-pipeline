@@ -323,9 +323,9 @@ Use the existing backup scripts.
 Known commands from root package scripts:
 
 ```bash
-pnpm docker:db:backup:s3
-pnpm docker:db:list:s3
-pnpm docker:db:restore:s3 -- <s3-key-or-s3-uri> --download-only
+pnpm docker:prod:db:backup:s3
+pnpm docker:prod:db:list:s3
+pnpm docker:prod:db:restore:s3 -- <s3-key-or-s3-uri> --download-only
 ```
 
 Codex must document hosted variants and verify they work with the prod compose project/container names.
@@ -417,6 +417,10 @@ pnpm docker:prod:ps
 docker compose -p esl-pipeline-prod -f docker-compose.prod.yml logs --tail=100 batch-backend
 docker compose -p esl-pipeline-prod -f docker-compose.prod.yml logs --tail=100 batch-worker
 curl -fsS http://127.0.0.1:${BATCH_FRONTEND_HOST_PORT:-5173}/api/meta/version
+docker compose -p esl-pipeline-prod -f docker-compose.prod.yml exec batch-backend node dist/tools/smoke-s3-storage.js
+pnpm docker:prod:db:backup:s3 -- alpha_manual_check
+pnpm docker:prod:db:list:s3
+pnpm docker:prod:db:restore:s3 -- <latest-backup-key.dump> --download-only
 ```
 
 ### Step D: operator deploys to Ubuntu 24.04 VPS
@@ -513,10 +517,10 @@ Candidate commands:
 
 ```bash
 git rev-parse HEAD
-pnpm docker:db:backup:s3 -- pre_deploy_$(date -u +%Y%m%d_%H%M%S)
+pnpm docker:prod:db:backup:s3 -- pre_deploy_$(date -u +%Y%m%d_%H%M%S)
 git checkout <previous-good-commit>
 pnpm docker:prod
-pnpm docker:db:restore:s3 -- <backup-key.dump> --clean
+pnpm docker:prod:db:restore:s3 -- <backup-key.dump> --clean
 ```
 
 Codex must adjust these to the real repo/server command shape.

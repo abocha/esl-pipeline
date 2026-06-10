@@ -125,7 +125,11 @@ function classifyEnvSurface(key) {
     };
   }
 
-  if (key.startsWith('PG_BACKUP_') || key === 'PG_CONTAINER_NAME') {
+  if (
+    key.startsWith('PG_BACKUP_') ||
+    key.startsWith('PG_COMPOSE_') ||
+    key === 'PG_CONTAINER_NAME'
+  ) {
     return {
       surface: 'postgres_ops',
       details: 'docs/operations/postgres-backup-restore.md',

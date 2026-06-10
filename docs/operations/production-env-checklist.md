@@ -175,8 +175,13 @@ PG_BACKUP_ALLOW_EMPTY_SOURCE=false
 Container targeting for prod compose may need:
 
 ```bash
+PG_COMPOSE_PROJECT=esl-pipeline-prod
+PG_COMPOSE_FILE=docker-compose.prod.yml
 PG_CONTAINER_NAME=esl-pipeline-prod-postgres-1
 ```
+
+The root `pnpm docker:prod:db:*` scripts set those production Compose targeting values for normal
+host-side backup/list/restore commands.
 
 Codex must verify actual container name from:
 
@@ -273,9 +278,10 @@ docker compose -p esl-pipeline-prod -f docker-compose.prod.yml exec batch-backen
 docker compose -p esl-pipeline-prod -f docker-compose.prod.yml exec batch-backend node dist/tools/migrate-db.js verify
 docker compose -p esl-pipeline-prod -f docker-compose.prod.yml exec batch-backend node dist/tools/bootstrap-prompt-assets.js --dry-run
 docker compose -p esl-pipeline-prod -f docker-compose.prod.yml exec batch-backend node dist/tools/bootstrap-prompt-assets.js
-pnpm docker:db:backup:s3 -- alpha_manual_check
-pnpm docker:db:list:s3
-pnpm docker:db:restore:s3 -- <latest-backup-key.dump> --download-only
+docker compose -p esl-pipeline-prod -f docker-compose.prod.yml exec batch-backend node dist/tools/smoke-s3-storage.js
+pnpm docker:prod:db:backup:s3 -- alpha_manual_check
+pnpm docker:prod:db:list:s3
+pnpm docker:prod:db:restore:s3 -- <latest-backup-key.dump> --download-only
 ```
 
 Deferred HTTPS checks after DNS points to the real VPS:
