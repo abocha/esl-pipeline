@@ -81,16 +81,16 @@ importers:
   packages/batch-backend:
     dependencies:
       '@aws-sdk/client-s3':
-        specifier: ^3.1065.0
+        specifier: ^3.1045.0
         version: 3.1065.0
       '@aws-sdk/lib-storage':
-        specifier: ^3.1065.0
+        specifier: ^3.1045.0
         version: 3.1065.0(@aws-sdk/client-s3@3.1065.0)
       '@aws-sdk/s3-request-presigner':
-        specifier: ^3.1065.0
+        specifier: ^3.1045.0
         version: 3.1065.0
       '@elevenlabs/elevenlabs-js':
-        specifier: ^2.52.0
+        specifier: ^2.46.0
         version: 2.52.0
       '@esl-pipeline/contracts':
         specifier: workspace:*
@@ -144,10 +144,10 @@ importers:
         specifier: ^6.0.0
         version: 6.0.0
       bullmq:
-        specifier: ^5.78.0
+        specifier: ^5.76.8
         version: 5.78.0
       fastify:
-        specifier: ^5.8.5
+        specifier: ^5.8.4
         version: 5.8.5
       file-type:
         specifier: ^22.0.1
@@ -156,13 +156,13 @@ importers:
         specifier: ^5.10.1
         version: 5.11.1
       jsonwebtoken:
-        specifier: ^9.0.3
+        specifier: ^9.0.2
         version: 9.0.3
       mime-types:
         specifier: ^3.0.2
         version: 3.0.2
       pg:
-        specifier: ^8.21.0
+        specifier: ^8.20.0
         version: 8.21.0
       pino:
         specifier: ^10.3.1
@@ -202,13 +202,13 @@ importers:
         specifier: workspace:*
         version: link:../contracts
       axios:
-        specifier: ^1.17.0
+        specifier: ^1.16.0
         version: 1.17.0
       react:
-        specifier: ^19.2.7
+        specifier: ^19.2.6
         version: 19.2.7
       react-dom:
-        specifier: ^19.2.7
+        specifier: ^19.2.6
         version: 19.2.7(react@19.2.7)
       react-dropzone:
         specifier: ^15.0.0
@@ -236,7 +236,7 @@ importers:
         specifier: ^19.2.3
         version: 19.2.3(@types/react@19.2.17)
       '@vitejs/plugin-react':
-        specifier: ^6.0.2
+        specifier: ^6.0.1
         version: 6.0.2(vite@8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
       eslint:
         specifier: ^10.4.1
@@ -248,7 +248,7 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
       vite:
-        specifier: ^8.0.16
+        specifier: ^8.0.12
         version: 8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0)
 
   packages/contracts:
@@ -312,8 +312,8 @@ importers:
         specifier: workspace:*
         version: link:../shared-infrastructure
       commander:
-        specifier: ^15.0.0
-        version: 15.0.0
+        specifier: ^14.0.2
+        version: 14.0.3
       gray-matter:
         specifier: ^4.0.3
         version: 4.0.3
@@ -340,10 +340,10 @@ importers:
   packages/orchestrator:
     dependencies:
       '@aws-sdk/client-s3':
-        specifier: ^3.1065.0
+        specifier: ^3.1045.0
         version: 3.1065.0
       '@elevenlabs/elevenlabs-js':
-        specifier: ^2.52.0
+        specifier: ^2.46.0
         version: 2.52.0
       gray-matter:
         specifier: ^4.0.3
@@ -478,7 +478,7 @@ importers:
   packages/storage-uploader:
     dependencies:
       '@aws-sdk/client-s3':
-        specifier: ^3.1065.0
+        specifier: ^3.1045.0
         version: 3.1065.0
       '@esl-pipeline/contracts':
         specifier: workspace:*
@@ -487,8 +487,8 @@ importers:
         specifier: workspace:*
         version: link:../shared-infrastructure
       commander:
-        specifier: ^15.0.0
-        version: 15.0.0
+        specifier: ^14.0.2
+        version: 14.0.3
     devDependencies:
       '@types/node':
         specifier: ^25.9.2
@@ -547,7 +547,7 @@ importers:
   packages/stt-provider-elevenlabs:
     dependencies:
       '@elevenlabs/elevenlabs-js':
-        specifier: ^2.52.0
+        specifier: ^2.46.0
         version: 2.52.0
       '@esl-pipeline/provider-runtime':
         specifier: workspace:*
@@ -603,7 +603,7 @@ importers:
         specifier: ^3.27.3
         version: 3.27.3
       pg:
-        specifier: ^8.21.0
+        specifier: ^8.20.0
         version: 8.21.0
     devDependencies:
       '@types/node':
@@ -641,7 +641,7 @@ importers:
   packages/tts-provider-elevenlabs:
     dependencies:
       '@elevenlabs/elevenlabs-js':
-        specifier: ^2.52.0
+        specifier: ^2.46.0
         version: 2.52.0
       '@esl-pipeline/contracts':
         specifier: workspace:*
@@ -2675,9 +2675,9 @@ packages:
   command-exists@1.2.9:
     resolution: {integrity: sha512-LTQ/SGc+s0Xc0Fu5WaKnR0YiygZkm9eKFvyS+fRsU7/ZWFF8ykFM6Pc9aCVf1+xasOOZpO3BAVgVrKvsqKHV7w==}
 
-  commander@15.0.0:
-    resolution: {integrity: sha512-z67u4ZhzCL/Tydu1lJARtEZYWbWaN7oYLHbsuzocr6y4N6WZAagG3RQ4FW61V1/0+jImpj293XfrcYnd1qxtPg==}
-    engines: {node: '>=22.12.0'}
+  commander@14.0.3:
+    resolution: {integrity: sha512-H+y0Jo/T1RZ9qPP4Eh1pkcQcLRglraJaSLoyOtHxu6AapkjWVCy2Sit1QQ4x3Dng8qDlSsZEet7g5Pq06MvTgw==}
+    engines: {node: '>=20'}
 
   commander@4.1.1:
     resolution: {integrity: sha512-NOKm8xhkzAjzFx8B2v5OAHT+u5pRQc2UCa2Vq9jYL/31o2wi9mxBA7LIFs3sV5VSC49z6pEhfbMULvShKj26WA==}
@@ -6519,7 +6519,7 @@ snapshots:
 
   command-exists@1.2.9: {}
 
-  commander@15.0.0: {}
+  commander@14.0.3: {}
 
   commander@4.1.1: {}
 
