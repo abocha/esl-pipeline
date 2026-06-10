@@ -90,10 +90,14 @@ Known current facts:
 - Root `package.json` contains Postgres backup/S3/restore commands.
 - `docker-compose.prod.yml` already defines `batch-backend`, `batch-frontend`, `batch-worker`, `postgres`, and `redis`.
 - `batch-backend` exposes port 8080 to localhost by default.
-- `batch-frontend` exposes port 80 inside the container and maps to host port `${BATCH_FRONTEND_HOST_PORT:-5173}`.
+- `batch-frontend` exposes port 80 inside the container and maps to host port
+  `${BATCH_FRONTEND_BIND_ADDR:-127.0.0.1}:${BATCH_FRONTEND_HOST_PORT:-5173}`.
+- `BATCH_FRONTEND_BIND_ADDR=0.0.0.0` is only an explicit private founder-rehearsal override, not a
+  real tutor-access shape.
 - The frontend API client calls `/api/...` when `VITE_BATCH_BACKEND_URL` is unset.
 - `packages/batch-frontend/nginx.conf` proxies `/api/*` to the backend and does not expose raw
   `/jobs` by default.
+- Optional Caddy edge mode exposes public `80/443` and reverse proxies to `batch-frontend:80`.
 - Backend has `GET /meta/version` and config-aware `GET /health`.
 - Worker runner already logs `Worker started`.
 - `telegram-ops-bot` appears in `docker-compose.prod.yml` but is profile-gated behind `ops-bot`.
@@ -197,14 +201,15 @@ Minimum requirements:
 - `telegram-ops-bot` is not started by default, or it is intentionally enabled with complete
   credentials and documented purpose.
 
-Current issue to fix or route around:
+Current route shape to preserve:
 
-`packages/batch-frontend/nginx.conf` currently proxies `/jobs` to the backend, but the frontend
-client emits `/api/auth/*`, `/api/students/*`, `/api/recordings/*`, `/api/assignment-sessions/*`,
-`/api/user/*`, `/api/business/*`, `/api/config/*`, `/api/meta/version`, and `/api/jobs/*` when no
-backend base URL is configured.
+`packages/batch-frontend/nginx.conf` proxies `/api/*` to the backend, and the frontend client emits
+same-origin `/api/auth/*`, `/api/students/*`, `/api/recordings/*`,
+`/api/assignment-sessions/*`, `/api/user/*`, `/api/business/*`, `/api/config/*`,
+`/api/meta/version`, and `/api/jobs/*` when no backend base URL is configured.
 
-Codex should not assume this is fine. Verify by exercising the hosted UI/API path.
+Codex should verify this route shape through the frontend entrypoint during hosted or edge smoke
+checks.
 
 ### 4. Health check
 
@@ -401,6 +406,12 @@ Suggested commands to verify, adjusted as needed:
 ```bash
 pnpm install --frozen-lockfile
 pnpm check:fast
+docker compose -p esl-pipeline-prod -f docker-compose.prod.yml config --quiet
+export CADDY_PUBLIC_HOSTNAME=alpha.example.com
+export CADDY_ACME_EMAIL=ops@example.com
+pnpm docker:prod:edge:env
+pnpm docker:prod:edge:config
+pnpm docker:caddy:validate
 pnpm docker:prod
 pnpm docker:prod:ps
 docker compose -p esl-pipeline-prod -f docker-compose.prod.yml logs --tail=100 batch-backend
@@ -408,7 +419,7 @@ docker compose -p esl-pipeline-prod -f docker-compose.prod.yml logs --tail=100 b
 curl -fsS http://127.0.0.1:${BATCH_FRONTEND_HOST_PORT:-5173}/api/meta/version
 ```
 
-### Step D: operator deploys to Droplet
+### Step D: operator deploys to Ubuntu 24.04 VPS
 
 Codex may document commands, but the operator performs real provider setup and secret entry.
 
@@ -423,8 +434,12 @@ git clone <repo-url> esl-pipeline
 cd esl-pipeline
 cp .env.batch-backend.example .env.batch-backend
 # edit .env.batch-backend with production values, never commit it
+export CADDY_PUBLIC_HOSTNAME=<public-hostname>
+export CADDY_ACME_EMAIL=<operator-email>
 pnpm docker:prepare
-pnpm docker:prod
+pnpm docker:prod:edge:config
+pnpm docker:caddy:validate
+pnpm docker:prod:edge
 pnpm docker:prod:ps
 ```
 

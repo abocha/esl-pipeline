@@ -106,6 +106,35 @@ VITE_BATCH_BACKEND_URL=<only-if-frontend-calls-backend-directly>
 
 Codex must verify the actual frontend/backend routing shape before deciding these values.
 
+## Public HTTPS Edge
+
+Default production Compose binds the frontend to loopback:
+
+```bash
+BATCH_FRONTEND_BIND_ADDR=127.0.0.1
+BATCH_FRONTEND_HOST_PORT=5173
+```
+
+`BATCH_FRONTEND_BIND_ADDR=0.0.0.0` is only an explicit private founder-rehearsal
+override for temporary HTTP access. It is not acceptable for real tutor signup, login, or lesson
+data entry. Real tutor access must use the Caddy edge profile, HTTPS, and
+`REFRESH_COOKIE_SECURE=true`.
+
+Configure the edge profile only after DNS can point at the Ubuntu 24.04 VPS:
+
+```bash
+CADDY_PUBLIC_HOSTNAME=<alpha-public-hostname>
+CADDY_ACME_EMAIL=<operator-email-for-acme-notices>
+```
+
+Edge-mode public traffic flow:
+
+```text
+browser -> Caddy :80/:443 -> batch-frontend nginx :80 -> /api/* -> batch-backend :8080
+```
+
+Do not configure Caddy to proxy the backend directly.
+
 ## AWS S3 Object Storage
 
 Keep existing AWS S3.
@@ -199,7 +228,7 @@ Do not run that profile unless the bot is intentionally enabled with complete cr
 
 ## Host-Level Checklist
 
-On the Droplet:
+On the Ubuntu 24.04 VPS:
 
 ```text
 - SSH key access works.
@@ -211,17 +240,28 @@ On the Droplet:
 - Docker volumes exist for Postgres and Redis.
 - Backups can be uploaded to S3.
 - Logs can be viewed through Docker Compose.
-- Public HTTP goes through one entrypoint. Backend, Postgres, and Redis host ports stay bound to
-  `127.0.0.1` unless deliberately exposed.
+- In edge mode, public HTTP/HTTPS goes through Caddy only.
+- Backend, frontend, Postgres, and Redis host ports stay bound to `127.0.0.1` unless deliberately
+  exposed for private founder rehearsal.
 ```
 
 ## Verification Commands
 
-Adjust after Codex confirms exact command shape:
+Local/CI verification that does not require a real VPS or DNS:
 
 ```bash
 pnpm docker:prepare
 docker compose -p esl-pipeline-prod -f docker-compose.prod.yml config --quiet
+export CADDY_PUBLIC_HOSTNAME=alpha.example.com
+export CADDY_ACME_EMAIL=ops@example.com
+pnpm docker:prod:edge:env
+pnpm docker:prod:edge:config
+pnpm docker:caddy:validate
+```
+
+Private founder-rehearsal smoke checks:
+
+```bash
 pnpm docker:prod
 pnpm docker:prod:ps
 curl -fsS http://127.0.0.1:8080/health
@@ -237,6 +277,20 @@ pnpm docker:db:backup:s3 -- alpha_manual_check
 pnpm docker:db:list:s3
 pnpm docker:db:restore:s3 -- <latest-backup-key.dump> --download-only
 ```
+
+Deferred HTTPS checks after DNS points to the real VPS:
+
+```bash
+curl -I http://<public-hostname>
+curl -fsS https://<public-hostname>/
+curl -fsS https://<public-hostname>/api/health
+curl -fsS https://<public-hostname>/api/meta/version
+```
+
+The HTTP check should show Caddy redirecting to HTTPS.
+Also verify from outside the VPS that raw frontend, backend, Postgres, Redis, and worker ports are
+not publicly reachable, and that the `caddy_data` and `caddy_config` Docker volumes persist across
+container recreation.
 
 The production image copies `docs/prompt-gallery` into `/app/docs/prompt-gallery` so prompt asset
 bootstrap can use the documented prompt-gallery paths inside the runtime container.
