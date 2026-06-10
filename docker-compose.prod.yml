@@ -44,7 +44,9 @@ services:
     depends_on:
       - batch-backend
     ports:
-      - '0.0.0.0:${BATCH_FRONTEND_HOST_PORT:-5173}:80'
+      - target: 80
+        published: ${BATCH_FRONTEND_HOST_PORT:-5173}
+        host_ip: ${BATCH_FRONTEND_BIND_ADDR:-127.0.0.1}
     restart: unless-stopped
 
   batch-worker:
@@ -68,8 +70,26 @@ services:
       PG_POOL_MAX: '6'
     env_file:
       - .env.batch-backend
-    command: [ 'node', 'dist/transport/worker-runner.js' ]
+    command: ['node', 'dist/transport/worker-runner.js']
     restart: unless-stopped
+
+  caddy-edge:
+    image: caddy:2-alpine
+    depends_on:
+      - batch-frontend
+    volumes:
+      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      CADDY_PUBLIC_HOSTNAME: ${CADDY_PUBLIC_HOSTNAME:-}
+      CADDY_ACME_EMAIL: ${CADDY_ACME_EMAIL:-}
+    ports:
+      - '0.0.0.0:80:80'
+      - '0.0.0.0:443:443'
+    restart: unless-stopped
+    profiles:
+      - edge
 
   postgres:
     image: postgres:18.4-alpine
@@ -84,9 +104,32 @@ services:
       POSTGRES_DB: esl_batch
     ports:
       - '127.0.0.1:5432:5432'
-    command: [ 'postgres', '-c', 'fsync=on', '-c', 'synchronous_commit=on', '-c', 'wal_compression=on', '-c', 'shared_preload_libraries=pg_stat_statements', '-c', 'compute_query_id=on', '-c', 'pg_stat_statements.max=10000', '-c', 'track_io_timing=on', '-c', 'log_lock_waits=on', '-c', 'idle_in_transaction_session_timeout=60s', '-c', 'listen_addresses=*' ]
+    command:
+      [
+        'postgres',
+        '-c',
+        'fsync=on',
+        '-c',
+        'synchronous_commit=on',
+        '-c',
+        'wal_compression=on',
+        '-c',
+        'shared_preload_libraries=pg_stat_statements',
+        '-c',
+        'compute_query_id=on',
+        '-c',
+        'pg_stat_statements.max=10000',
+        '-c',
+        'track_io_timing=on',
+        '-c',
+        'log_lock_waits=on',
+        '-c',
+        'idle_in_transaction_session_timeout=60s',
+        '-c',
+        'listen_addresses=*',
+      ]
     healthcheck:
-      test: [ 'CMD-SHELL', 'pg_isready -U esl -d esl_batch' ]
+      test: ['CMD-SHELL', 'pg_isready -U esl -d esl_batch']
       interval: 5s
       timeout: 3s
       retries: 10
@@ -97,9 +140,22 @@ services:
       - redis_data:/data
     ports:
       - '127.0.0.1:6379:6379'
-    command: [ 'redis-server', '--save', '', '--appendonly', 'yes', '--appendfsync', 'everysec', '--maxmemory-policy', 'noeviction', '--latency-monitor-threshold', '100' ]
+    command:
+      [
+        'redis-server',
+        '--save',
+        '',
+        '--appendonly',
+        'yes',
+        '--appendfsync',
+        'everysec',
+        '--maxmemory-policy',
+        'noeviction',
+        '--latency-monitor-threshold',
+        '100',
+      ]
     healthcheck:
-      test: [ 'CMD', 'redis-cli', 'ping' ]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
       timeout: 3s
       retries: 10
@@ -122,5 +178,7 @@ services:
       - ops-bot
 
 volumes:
+  caddy_config:
+  caddy_data:
   postgres18_data:
   redis_data:

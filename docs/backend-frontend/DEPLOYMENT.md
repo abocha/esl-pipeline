@@ -79,11 +79,47 @@ Stop it with:
 pnpm docker:prod:down
 ```
 
+The production frontend host binding is private by default:
+`${BATCH_FRONTEND_BIND_ADDR:-127.0.0.1}:${BATCH_FRONTEND_HOST_PORT:-5173}:80`.
+Set `BATCH_FRONTEND_BIND_ADDR=0.0.0.0` only for explicit private founder rehearsal over plain HTTP.
+Do not use that override for real tutor signup/login or lesson data.
+
 This is still a local/single-host Compose workflow. Keep it portable until the hosting target is
 chosen: images should remain deployable by any container host, secrets should come from the host or
 provider environment, and Postgres/Redis can later move to managed services without changing app
 contracts. The current Docker socket mount is local ops coupling for backup/control workflows; treat
 it as something to isolate behind an ops profile or sidecar before a broader production rollout.
+
+## Production HTTPS Edge Profile
+
+For the Ubuntu 24.04 VPS closed-alpha path, use the optional Caddy edge profile after DNS can point
+to the host:
+
+```bash
+export CADDY_PUBLIC_HOSTNAME=alpha.example.com
+export CADDY_ACME_EMAIL=ops@example.com
+pnpm docker:prod:edge:config
+pnpm docker:caddy:validate
+pnpm docker:prod:edge
+pnpm docker:prod:ps
+```
+
+In edge mode, Caddy is the only intended public entrypoint on ports `80` and `443`. It reverse
+proxies to `batch-frontend:80`; the frontend nginx config keeps same-origin `/api/*` traffic routed
+to `batch-backend:8080`. Do not expose or proxy the backend directly for the normal alpha path.
+
+After DNS points to the VPS, verify:
+
+```bash
+curl -I http://<public-hostname>
+curl -fsS https://<public-hostname>/
+curl -fsS https://<public-hostname>/api/health
+curl -fsS https://<public-hostname>/api/meta/version
+```
+
+The HTTP check should show Caddy redirecting to HTTPS.
+Before real tutor access, set `REFRESH_COOKIE_SECURE=true` and confirm backend, frontend raw host
+port, Postgres, Redis, and worker ports are not publicly reachable.
 
 ## Environment Files
 

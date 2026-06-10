@@ -1,0 +1,7 @@
+{
+	email {$CADDY_ACME_EMAIL}
+}
+
+{$CADDY_PUBLIC_HOSTNAME} {
+	reverse_proxy batch-frontend:80
+}

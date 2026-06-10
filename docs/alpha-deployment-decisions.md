@@ -91,6 +91,7 @@ Target services:
 
 ```text
 DigitalOcean Droplet
+  - Caddy edge proxy for HTTPS
   - frontend container
   - backend/API container
   - worker container
@@ -110,6 +111,7 @@ Repo facts to verify and use:
 - It defines `batch-backend`, `batch-frontend`, `batch-worker`, `postgres`, and `redis`.
 - It also currently defines `telegram-ops-bot`; Telegram bot work is deferred for alpha.
 - Root `package.json` already has `pnpm docker:prod`, `pnpm docker:prod:ps`, and backup/restore commands.
+  The HTTPS edge path also has `pnpm docker:prod:edge:*` validation/start commands.
 
 Codex should preserve and improve the existing deployment path instead of creating a parallel one unless there is a documented blocker.
 
@@ -120,6 +122,12 @@ Current verification notes from the 2026-06-09 doc/repo pass:
 - The frontend API client uses `/api/...` when `VITE_BATCH_BACKEND_URL` is unset, and production
   frontend nginx now proxies `/api/*` to `batch-backend:8080` with `/api` stripped. Raw `/jobs` is
   not exposed by default through frontend nginx.
+- Default production Compose should keep the raw frontend host binding private on `127.0.0.1`.
+  `BATCH_FRONTEND_BIND_ADDR=0.0.0.0` is a founder-rehearsal-only HTTP override, not a tutor-access
+  shape.
+- Caddy edge mode is the intended public HTTPS topology: public `80/443` terminate at Caddy, then
+  Caddy proxies to `batch-frontend:80`, and frontend nginx keeps `/api/*` routed to
+  `batch-backend:8080`.
 - The production backend image is a built runtime image. Do not assume
   `pnpm --filter @esl-pipeline/batch-backend db:migrate` works inside the container until the
   runtime image is verified; prefer or add a built command such as
@@ -278,6 +286,17 @@ reason: Provides controlled signup without introducing a broader account-state s
 alternatives considered: open registration with admin approval, new user status enum, full organization management.
 impact: Operator creates invites through a compiled backend CLI; signup creates user, settings, workspace, membership, business settings, and accepted invite transactionally.
 follow-up: Do not expand past one real tutor until workspace isolation covers the active assignment flow.
+```
+
+### 2026-06-10: Optional Caddy HTTPS edge prepared before VPS access
+
+```text
+date: 2026-06-10
+decision: Prepare an optional Caddy edge profile for the Ubuntu 24.04 VPS while DigitalOcean access is blocked.
+reason: The app needs a single public HTTPS entrypoint before real tutor signup/login, but the current account review prevents live VPS validation.
+alternatives considered: Leave the raw frontend port public, proxy backend directly from Caddy, wait for VPS access before adding any edge config.
+impact: Default prod Compose remains private-safe and locally verifiable; edge mode exposes only Caddy on 80/443 and preserves same-origin frontend nginx API routing.
+follow-up: After DigitalOcean access and DNS are available, verify HTTP redirects to HTTPS, public `/api/health`, public `/api/meta/version`, closed raw service ports, and persistent Caddy state volumes on the real VPS.
 ```
 
 ## Codex Working Rules
