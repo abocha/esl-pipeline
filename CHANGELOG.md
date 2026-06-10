@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [8.1.2] - 2026-06-10
+
+### Changed
+
+- Automated release from PR #93: fix(deploy): unblock closed-alpha rehearsal checks (https://github.com/abocha/esl-pipeline/pull/93)
+
 ## [8.1.1] - 2026-06-10
 
 ### Changed
