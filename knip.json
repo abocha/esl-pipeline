@@ -30,7 +30,7 @@
     "scripts/smoke/telegram-ops/fake-backend.mjs",
     "scripts/smoke/telegram-ops/fake-telegram-api.mjs"
   ],
-  "ignoreBinaries": ["actionlint", "rg"],
+  "ignoreBinaries": ["actionlint", "rg", "shellcheck"],
   "workspaces": {
     "packages/*": {
       "entry": ["src/index.ts", "bin/cli.ts", "bin/**/*.ts"],
