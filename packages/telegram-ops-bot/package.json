@@ -32,14 +32,14 @@
   "dependencies": {
     "@esl-pipeline/contracts": "workspace:*",
     "@esl-pipeline/shared-infrastructure": "workspace:*",
-    "@grammyjs/types": "^3.26.0",
+    "@grammyjs/types": "^3.27.3",
     "pg": "^8.20.0"
   },
   "devDependencies": {
-    "@types/node": "^25.7.0",
-    "tsx": "^4.21.0",
+    "@types/node": "^25.9.2",
+    "tsx": "^4.22.4",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.6"
+    "vitest": "^4.1.8"
   },
   "engines": {
     "node": ">=24.11.1"

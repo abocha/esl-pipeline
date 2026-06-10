@@ -41,13 +41,13 @@
     "@esl-pipeline/provider-runtime": "workspace:*",
     "@esl-pipeline/tts-core": "workspace:*",
     "@google-cloud/text-to-speech": "^6.4.1",
-    "js-yaml": "^4.1.1"
+    "js-yaml": "^4.2.0"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
-    "@types/node": "^25.7.0",
+    "@types/node": "^25.9.2",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.6"
+    "vitest": "^4.1.8"
   },
   "engines": {
     "node": ">=24.11.1"
