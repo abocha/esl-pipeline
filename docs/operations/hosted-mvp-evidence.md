@@ -35,6 +35,9 @@ docker compose -p esl-pipeline-prod -f docker-compose.prod.yml exec batch-backen
 docker compose -p esl-pipeline-prod -f docker-compose.prod.yml exec batch-backend node dist/tools/bootstrap-prompt-assets.js --dry-run
 docker compose -p esl-pipeline-prod -f docker-compose.prod.yml exec batch-backend node dist/tools/bootstrap-prompt-assets.js
 
+# S3 storage smoke command:
+docker compose -p esl-pipeline-prod -f docker-compose.prod.yml exec batch-backend node dist/tools/smoke-s3-storage.js
+
 # Health check command:
 curl -fsS http://127.0.0.1:${BATCH_FRONTEND_HOST_PORT:-5173}/api/health
 
@@ -90,6 +93,7 @@ Prompt assets bootstrap result:
 Artifact bucket/prefix:
 Backup bucket/prefix:
 Test upload/read performed:
+S3 smoke command result:
 Published artifact S3 key:
 Published artifact URL or access mechanism:
 Private transcript/backup visibility checked:
