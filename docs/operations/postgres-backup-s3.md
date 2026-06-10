@@ -56,6 +56,7 @@ Monthly reminder/drill task:
 
 - Local backup source of truth: `scripts/docker/postgres-backup-restore.sh`
 - S3 wrapper: `scripts/docker/postgres-backup-s3.sh`
+- Production Compose targeting wrapper: `scripts/docker/postgres-prod-backup-s3.sh`
 - Scheduler wrapper: `scripts/docker/run-postgres-backup-s3.sh`
 - Monthly drill reminder wrapper: `scripts/docker/run-postgres-restore-drill-reminder.sh`
 - Ops status helper: `scripts/docker/postgres-ops-status.sh`
@@ -69,6 +70,10 @@ Wrapper commands:
 - `pnpm docker:db:upload:s3` (upload latest local backup set)
 - `pnpm docker:db:list:s3` (list remote backup objects)
 - `pnpm docker:db:restore:s3 -- <s3://bucket/key.dump|key.dump> [--clean]`
+- `pnpm docker:prod:db:backup:s3` (same operation, targeting `docker-compose.prod.yml`)
+- `pnpm docker:prod:db:upload:s3` (upload latest local prod-targeted set)
+- `pnpm docker:prod:db:list:s3` (list remote backup objects for prod/alpha env)
+- `pnpm docker:prod:db:restore:s3 -- <s3://bucket/key.dump|key.dump> [--download-only|--clean]`
 - `pnpm docker:db:restore-drill:reminder` (monthly reminder with latest remote key)
 - `pnpm docker:db:restore-drill:auto` (monthly reminder + auto `--download-only` drill)
 - `pnpm ops:status` (table) / `pnpm ops:status:json` (machine-readable)
@@ -136,6 +141,12 @@ Create and upload a fresh set:
 pnpm docker:db:backup:s3 -- nightly
 ```
 
+For the production Compose project used by the closed-alpha Droplet rehearsal:
+
+```bash
+pnpm docker:prod:db:backup:s3 -- alpha_manual_check
+```
+
 `backup-upload` inherits empty-source protection from `postgres-backup-restore.sh` during local backup creation:
 
 - default behavior blocks backup/upload when `users`, `jobs`, and `transcripts` are all empty.
@@ -145,6 +156,7 @@ Upload latest existing set only:
 
 ```bash
 pnpm docker:db:upload:s3
+pnpm docker:prod:db:upload:s3
 ```
 
 `upload-latest` does not perform source-db guard checks because it reuses an already-created local dump set.
@@ -153,6 +165,7 @@ List remote objects:
 
 ```bash
 pnpm docker:db:list:s3
+pnpm docker:prod:db:list:s3
 ```
 
 Object layout:
@@ -195,6 +208,7 @@ To validate download + digest only (no restore side effects):
 
 ```bash
 pnpm docker:db:restore:s3 -- backups/postgres/dev/esl_batch/2026/03/03/<set>/<set>.dump --download-only
+pnpm docker:prod:db:restore:s3 -- backups/postgres/alpha/esl_batch/2026/06/10/<set>/<set>.dump --download-only
 ```
 
 ## Completion Telegram Notifications

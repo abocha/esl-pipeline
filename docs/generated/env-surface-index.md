@@ -320,6 +320,8 @@
 | `PG_BACKUP_S3_REGION`                                | `.env.example`               | postgres_ops       | `docs/operations/postgres-backup-restore.md`    |
 | `PG_BACKUP_S3_SSE`                                   | `.env.batch-backend.example` | postgres_ops       | `docs/operations/postgres-backup-restore.md`    |
 | `PG_BACKUP_S3_SSE`                                   | `.env.example`               | postgres_ops       | `docs/operations/postgres-backup-restore.md`    |
+| `PG_COMPOSE_FILE`                                    | `.env.batch-backend.example` | postgres_ops       | `docs/operations/postgres-backup-restore.md`    |
+| `PG_COMPOSE_PROJECT`                                 | `.env.batch-backend.example` | postgres_ops       | `docs/operations/postgres-backup-restore.md`    |
 | `PG_CONNECTION_STRING`                               | `.env.batch-backend.example` | batch_backend      | `packages/batch-backend/README.md`              |
 | `PG_CONNECTION_TIMEOUT_MS`                           | `.env.batch-backend.example` | batch_backend      | `packages/batch-backend/README.md`              |
 | `PG_CONTAINER_NAME`                                  | `.env.batch-backend.example` | postgres_ops       | `docs/operations/postgres-backup-restore.md`    |

@@ -102,7 +102,10 @@ Primary groups:
 - Ops health / alerting:
   - `PG_BACKUP_HEALTH_*`, `PG_BACKUP_KEY_ROTATION_*`, `PG_BACKUP_ALERT_*`
 - Container targeting:
-  - `PG_CONTAINER_NAME`
+  - `PG_COMPOSE_PROJECT`, `PG_COMPOSE_FILE`, `PG_CONTAINER_NAME`
+
+Use the `pnpm docker:prod:db:*` wrappers for the closed-alpha production Compose stack; they set
+the prod Compose project/file/container defaults before delegating to the shared backup scripts.
 
 Read next:
 
