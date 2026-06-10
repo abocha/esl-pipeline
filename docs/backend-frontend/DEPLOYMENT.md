@@ -142,6 +142,15 @@ pnpm --filter @esl-pipeline/batch-backend db:migrate
 pnpm --filter @esl-pipeline/batch-backend db:verify
 ```
 
+For the production Compose runtime image, run the built tools inside `batch-backend` instead of
+assuming source `pnpm`/`tsx` are present:
+
+```bash
+docker compose -p esl-pipeline-prod -f docker-compose.prod.yml exec batch-backend node dist/tools/migrate-db.js status
+docker compose -p esl-pipeline-prod -f docker-compose.prod.yml exec batch-backend node dist/tools/migrate-db.js migrate
+docker compose -p esl-pipeline-prod -f docker-compose.prod.yml exec batch-backend node dist/tools/migrate-db.js verify
+```
+
 For fresh environments bootstrapped from the generated schema baseline, verify the baseline stays current when schema work changes:
 
 ```bash
@@ -157,12 +166,35 @@ pnpm --filter @esl-pipeline/batch-backend run prompt-assets:bootstrap:dry
 pnpm --filter @esl-pipeline/batch-backend run prompt-assets:bootstrap
 ```
 
+Production Compose runtime equivalent:
+
+```bash
+docker compose -p esl-pipeline-prod -f docker-compose.prod.yml exec batch-backend node dist/tools/bootstrap-prompt-assets.js --dry-run
+docker compose -p esl-pipeline-prod -f docker-compose.prod.yml exec batch-backend node dist/tools/bootstrap-prompt-assets.js
+```
+
 Details: [`docs/operations/prompt-gallery-bootstrap.md`](../operations/prompt-gallery-bootstrap.md)
+
+## Object Storage Smoke
+
+Before the first hosted assignment publish, prove the backend runtime can use the configured S3
+artifact bucket/prefix:
+
+```bash
+docker compose -p esl-pipeline-prod -f docker-compose.prod.yml exec batch-backend node dist/tools/smoke-s3-storage.js
+```
+
+The command uploads a small text object, reads metadata, generates a short-lived presigned URL, then
+deletes the object by default. Add `--keep` only when you want a retained evidence object and have
+chosen a non-sensitive key.
 
 ## Backup and Ops Safety (Recommended)
 
 - Daily backup archival to S3:
-  - `pnpm docker:db:backup:s3:scheduled`
+  - local/dev stack: `pnpm docker:db:backup:s3:scheduled`
+  - production Compose one-shot: `pnpm docker:prod:db:backup:s3 -- <label>`
+  - production Compose list/drill: `pnpm docker:prod:db:list:s3` and
+    `pnpm docker:prod:db:restore:s3 -- <key.dump> --download-only`
 - Ops health status:
   - `pnpm ops:status`
 - Alert check (Telegram + cooldown/recovery):
