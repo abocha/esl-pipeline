@@ -2,6 +2,7 @@ name: ${COMPOSE_PROJECT_NAME:-esl-pipeline-prod}
 
 services:
   batch-backend:
+    image: esl-pipeline/batch-backend:local
     build:
       context: .
       dockerfile: packages/batch-backend/Dockerfile
@@ -40,8 +41,10 @@ services:
       timeout: 5s
       retries: 6
       start_period: 20s
+    pull_policy: never
 
   batch-frontend:
+    image: esl-pipeline/batch-frontend:local
     build:
       context: .
       dockerfile: packages/batch-frontend/Dockerfile
@@ -54,6 +57,7 @@ services:
         published: ${BATCH_FRONTEND_HOST_PORT:-5173}
         host_ip: ${BATCH_FRONTEND_BIND_ADDR:-127.0.0.1}
     restart: unless-stopped
+    pull_policy: never
 
   batch-worker:
     image: esl-pipeline/batch-backend:local
@@ -78,6 +82,7 @@ services:
       - .env.batch-backend
     command: ['node', 'dist/transport/worker-runner.js']
     restart: unless-stopped
+    pull_policy: never
 
   caddy-edge:
     image: caddy:2-alpine
@@ -182,6 +187,31 @@ services:
     restart: unless-stopped
     profiles:
       - ops-bot
+
+  transcribe-worker:
+    image: esl-pipeline/batch-backend:local
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - type: bind
+        source: ./uploads
+        target: /app/uploads
+        bind:
+          create_host_path: false
+    environment:
+      NODE_ENV: production
+      PIPELINE_CWD: /app
+      FILESYSTEM_UPLOAD_DIR: /app/uploads
+      PG_APPLICATION_NAME: esl-pipeline-transcribe-worker
+      PG_POOL_MAX: '4'
+    env_file:
+      - .env.batch-backend
+    command: ['node', 'dist/transport/transcribe-worker.js']
+    restart: unless-stopped
+    pull_policy: never
 
 volumes:
   caddy_config:

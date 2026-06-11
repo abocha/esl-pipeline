@@ -29,6 +29,7 @@
     "prompt-assets:bootstrap:dry": "tsx --tsconfig tsconfig.json src/tools/bootstrap-prompt-assets.ts --dry-run",
     "start:api": "node dist/transport/http-server.js",
     "start:student-memory-worker": "node dist/transport/student-memory-worker.js",
+    "start:transcribe-worker": "node dist/transport/transcribe-worker.js",
     "start:worker": "node dist/transport/worker-runner.js",
     "storage:s3:smoke": "tsx --tsconfig tsconfig.json src/tools/smoke-s3-storage.ts",
     "storage:s3:smoke:dist": "node dist/tools/smoke-s3-storage.js",
