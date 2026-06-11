@@ -345,6 +345,9 @@ importers:
       '@elevenlabs/elevenlabs-js':
         specifier: ^2.46.0
         version: 2.52.0
+      '@google-cloud/text-to-speech':
+        specifier: ^6.4.1
+        version: 6.4.1
       gray-matter:
         specifier: ^4.0.3
         version: 4.0.3

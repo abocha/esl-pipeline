@@ -17,6 +17,7 @@ export default defineConfig(() => ({
   shims: false,
   outDir: 'dist',
   dts: false,
+  external: ['@google-cloud/text-to-speech'],
   noExternal: INTERNAL_BUNDLE,
   tsconfig: 'tsconfig.json',
 }));
