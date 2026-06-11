@@ -5,7 +5,7 @@
 - Audience: maintainers/operators deploying batch services.
 - Read Time: 6 minutes.
 - Authority Level: Deployment runbook.
-- Last Verified Against: 2026-05-17 repo state.
+- Last Verified Against: 2026-06-11 repo state.
 - Owner: backend/frontend maintainers + automation agents.
 - Review Cadence: monthly or after deployment workflow changes.
 - Status: `runbook`.
@@ -96,6 +96,8 @@ For the Ubuntu 24.04 VPS closed-alpha path, use the optional Caddy edge profile 
 to the host:
 
 ```bash
+# Export these in the same shell where you run the edge commands; Compose may read `.env`, but the
+# Node validator invoked by the pnpm scripts reads the current process environment.
 export CADDY_PUBLIC_HOSTNAME=alpha.example.com
 export CADDY_ACME_EMAIL=ops@example.com
 pnpm docker:prod:edge:config
@@ -107,6 +109,9 @@ pnpm docker:prod:ps
 In edge mode, Caddy is the only intended public entrypoint on ports `80` and `443`. It reverse
 proxies to `batch-frontend:80`; the frontend nginx config keeps same-origin `/api/*` traffic routed
 to `batch-backend:8080`. Do not expose or proxy the backend directly for the normal alpha path.
+Default production Compose also starts the generic `batch-worker` and the dedicated
+`transcribe-worker`; the latter is required for recording uploads to leave the
+`transcribe_queue_waiting` state.
 
 After DNS points to the VPS, verify:
 
@@ -172,6 +177,10 @@ Production Compose runtime equivalent:
 docker compose -p esl-pipeline-prod -f docker-compose.prod.yml exec batch-backend node dist/tools/bootstrap-prompt-assets.js --dry-run
 docker compose -p esl-pipeline-prod -f docker-compose.prod.yml exec batch-backend node dist/tools/bootstrap-prompt-assets.js
 ```
+
+The production backend image copies `docs/prompt-gallery` into `/app/docs/prompt-gallery`.
+Keep `PROMPT_TEMPLATE_PATH` and `PROMPT_PROFILE_PATH` relative to `/app` or explicitly under
+`/app/docs/...`; paths such as `/docs/...` point outside the runtime image and fail bootstrap.
 
 Details: [`docs/operations/prompt-gallery-bootstrap.md`](../operations/prompt-gallery-bootstrap.md)
 

@@ -4,7 +4,7 @@
 
 - Audience: maintainers and AI agents operating backup archival.
 - Authority Level: operations runbook.
-- Last Verified Against: 2026-06-10 repo state.
+- Last Verified Against: 2026-06-11 repo state.
 - Owner: ops maintainer + automation agents.
 - Review Cadence: monthly or after scheduler/env changes.
 - Status: `runbook`.
@@ -95,6 +95,9 @@ PG_BACKUP_S3_ENV=dev
 # PG_BACKUP_S3_PROFILE=default
 ```
 
+Use `PG_BACKUP_S3_ENV=alpha` on the private hosted Lightsail deployment so hosted rehearsal backups
+do not blend into the local/dev prefix.
+
 By default, `postgres-backup-s3.sh` auto-loads `.env.batch-backend` when present.
 Override with `PG_BACKUP_ENV_FILE=/path/to/env`.
 
@@ -120,7 +123,7 @@ PG_BACKUP_S3_PREFIX=backups/postgres
 PG_BACKUP_S3_REGION=ap-southeast-1
 PG_BACKUP_S3_SSE=aws:kms
 PG_BACKUP_S3_KMS_KEY_ID=arn:aws:kms:...
-PG_BACKUP_S3_ENV=dev
+PG_BACKUP_S3_ENV=dev # use alpha on the hosted Lightsail deployment
 ```
 
 Optional maintenance knobs:
@@ -141,7 +144,7 @@ Create and upload a fresh set:
 pnpm docker:db:backup:s3 -- nightly
 ```
 
-For the production Compose project used by the closed-alpha Droplet rehearsal:
+For the production Compose project used by the closed-alpha Lightsail rehearsal:
 
 ```bash
 pnpm docker:prod:db:backup:s3 -- alpha_manual_check
@@ -224,6 +227,12 @@ Notification delivery uses the same env vars as ops alerts:
 - `PG_BACKUP_ALERT_TELEGRAM_CHAT_ID`
 - optional `PG_BACKUP_ALERT_TELEGRAM_THREAD_ID`
 - `PG_BACKUP_ALERT_TELEGRAM_DISABLE`
+
+These notification variables are separate from the optional `TELEGRAM_OPS_BOT_*` runtime. During
+manual deployment or restore work, set `PG_BACKUP_ALERT_TELEGRAM_DISABLE=true` unless the bot token,
+chat id, and optional forum thread id are known-good. A stale
+`PG_BACKUP_ALERT_TELEGRAM_THREAD_ID` can make Telegram reject an otherwise successful backup/restore
+completion message.
 
 When `postgres-backup-s3.sh` calls `postgres-backup-restore.sh`, nested completion notifications are internally suppressed to avoid duplicate Telegram messages.
 

@@ -39,7 +39,7 @@ Slice 1 is not a public launch. It is a private hosted rehearsal for the founder
 
 ### 1. Compute Provider
 
-Decision: use a DigitalOcean Droplet for first hosted alpha compute.
+Decision: use an AWS Lightsail instance for first hosted alpha compute.
 
 Reason:
 
@@ -48,15 +48,17 @@ Reason:
 - It avoids a platform rewrite for Firebase, Supabase, Vercel, or serverless functions.
 - It keeps closed-alpha cost low.
 - It supports the current shape of the app: frontend, API, worker, Postgres, Redis.
+- AWS billing is available for the operator, while DigitalOcean account activation was blocked.
 
-Expected starting size:
+Current starting size:
 
-- Preferred: Basic Droplet with 2 vCPU / 2 GB RAM if the price difference is acceptable.
-- Cheaper fallback: Basic Droplet with 1 vCPU / 2 GB RAM.
+- AWS Lightsail, Singapore region.
+- Ubuntu 24.04 LTS.
+- General purpose instance with 2 GB RAM, 2 vCPUs, 60 GB SSD, and 3 TB transfer.
 
-Verify the exact size slug, available regions, and current price at provisioning time through the
-DigitalOcean control panel or `doctl compute size list`; do not copy old size/pricing assumptions
-into deployment scripts without checking them live.
+Verify the exact Lightsail bundle, region, and current price at provisioning time through the AWS
+console or AWS CLI; do not copy old size/pricing assumptions into deployment scripts without
+checking them live.
 
 Codex must not hard-code a provider-specific assumption into app code. Provider choice belongs in docs and deployment commands.
 
@@ -80,21 +82,22 @@ Reason:
 
 Non-decision:
 
-- Do not migrate to DigitalOcean Spaces for Slice 1.
+- Do not migrate away from AWS S3 for Slice 1.
 - Reconsider only if S3 cost, latency, IAM complexity, or operational friction becomes a real alpha problem.
 
 ### 3. Deployment Shape
 
-Decision: use a single Docker Compose deployment on the Droplet.
+Decision: use a single Docker Compose deployment on the Lightsail VPS.
 
 Target services:
 
 ```text
-DigitalOcean Droplet
+AWS Lightsail VPS
   - Caddy edge proxy for HTTPS
   - frontend container
   - backend/API container
   - worker container
+  - transcribe worker container
   - Postgres container with persistent Docker volume
   - Redis container with persistent Docker volume
 
@@ -108,7 +111,8 @@ AWS S3
 Repo facts to verify and use:
 
 - `docker-compose.prod.yml` already exists.
-- It defines `batch-backend`, `batch-frontend`, `batch-worker`, `postgres`, and `redis`.
+- It defines `batch-backend`, `batch-frontend`, `batch-worker`, `transcribe-worker`, `postgres`,
+  and `redis`.
 - It also currently defines `telegram-ops-bot`; Telegram bot work is deferred for alpha.
 - Root `package.json` already has `pnpm docker:prod`, `pnpm docker:prod:ps`, and backup/restore commands.
   The HTTPS edge path also has `pnpm docker:prod:edge:*` validation/start commands.
@@ -134,6 +138,9 @@ Current verification notes from the 2026-06-09 doc/repo pass:
   `node dist/tools/migrate-db.js migrate`.
 - `telegram-ops-bot` is profile-gated behind the `ops-bot` Compose profile. Default production
   Compose does not start it.
+- The hosted rehearsal proved that the generic `batch-worker` is not enough for recording uploads.
+  Transcription jobs require a dedicated `transcribe-worker` service running
+  `node dist/transport/transcribe-worker.js`.
 
 ### 4. Docker
 
@@ -259,10 +266,10 @@ follow-up:
 
 ```text
 date: 2026-06-06
-decision: Use DigitalOcean Droplet for compute and existing AWS S3 for object storage/backups.
+decision: Use a single VPS for compute and existing AWS S3 for object storage/backups.
 reason: Lowest migration burden for the current Docker-based repo while preserving existing working S3 storage and keeping alpha cost low.
 alternatives considered: Render, Railway, Fly.io, Firebase rewrite, Supabase rewrite, Vercel/serverless rewrite, DigitalOcean Spaces migration.
-impact: One-server alpha deployment; app/storage split across DigitalOcean and AWS; low initial cost; simple mental model; VM operations remain the operator's responsibility.
+impact: One-server alpha deployment; low initial cost; simple mental model; VM operations remain the operator's responsibility.
 follow-up: Reconsider managed Postgres/Redis or PaaS deployment after alpha usage shows real operational pain.
 ```
 
@@ -292,11 +299,33 @@ follow-up: Do not expand past one real tutor until workspace isolation covers th
 
 ```text
 date: 2026-06-10
-decision: Prepare an optional Caddy edge profile for the Ubuntu 24.04 VPS while DigitalOcean access is blocked.
+decision: Prepare an optional Caddy edge profile for the Ubuntu 24.04 VPS while VPS access is blocked.
 reason: The app needs a single public HTTPS entrypoint before real tutor signup/login, but the current account review prevents live VPS validation.
 alternatives considered: Leave the raw frontend port public, proxy backend directly from Caddy, wait for VPS access before adding any edge config.
 impact: Default prod Compose remains private-safe and locally verifiable; edge mode exposes only Caddy on 80/443 and preserves same-origin frontend nginx API routing.
-follow-up: After DigitalOcean access and DNS are available, verify HTTP redirects to HTTPS, public `/api/health`, public `/api/meta/version`, closed raw service ports, and persistent Caddy state volumes on the real VPS.
+follow-up: After VPS access and DNS are available, verify HTTP redirects to HTTPS, public `/api/health`, public `/api/meta/version`, closed raw service ports, and persistent Caddy state volumes on the real VPS.
+```
+
+### 2026-06-11: Compute provider switched to AWS Lightsail
+
+```text
+date: 2026-06-11
+decision: Use AWS Lightsail in Singapore for the first private hosted rehearsal.
+reason: DigitalOcean blocked account activation, while AWS billing and Lightsail provisioning worked for the operator.
+alternatives considered: Continue waiting on DigitalOcean account activation, migrate storage/provider shape, or switch to a broader PaaS.
+impact: The existing single-VPS + Docker Compose + AWS S3 topology remains intact; only the compute provider/runbook language changes.
+follow-up: Keep app code provider-neutral, update docs from Droplet to Lightsail, and record the hosted rehearsal evidence.
+```
+
+### 2026-06-11: First private hosted rehearsal completed
+
+```text
+date: 2026-06-11
+decision: Treat the Lightsail deployment as the Slice 1 rehearsal environment.
+reason: The app loaded over HTTPS at esl-pipeline.run.place, public health passed, DB restore and migration verification passed, S3 smoke passed, and backup upload to S3 passed.
+alternatives considered: Tear down and retry on a different provider before recording evidence.
+impact: Next work should stabilize reproducibility from git and server-local env rather than hand-editing the VPS.
+follow-up: Add production transcribe-worker, commit the orchestrator runtime hotfix, and verify a fresh prod Compose rebuild.
 ```
 
 ## Codex Working Rules

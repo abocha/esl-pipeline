@@ -12,6 +12,7 @@
   "project": ["scripts/**/*.mjs"],
   "ignoreDependencies": [
     "@elevenlabs/elevenlabs-js",
+    "@google-cloud/text-to-speech",
     "@notionhq/client",
     "gray-matter",
     "js-yaml",
