@@ -36,6 +36,7 @@ skills-lock.json
 .env
 .env.batch-backend
 .secrets
+*.pem
 
 # Runtime artifacts
 /uploads

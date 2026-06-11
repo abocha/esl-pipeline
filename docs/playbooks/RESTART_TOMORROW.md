@@ -1,28 +1,128 @@
 # Restart Tomorrow (ADHD-Friendly, ELI5)
 
-## Current Handoff (2026-04-21)
+## Current Handoff (2026-06-11)
 
 - What I finished:
-  - Structured foundational profile storage is now live in the backend.
-  - `profile_revisions` now supports `structured_content` with migration `0022`.
-  - Starter profiles now create both rendered profile text and canonical structured profile data.
-  - Profile DTOs expose additive `structuredContent` for current reads/restores.
-  - PG-backed backend tests now self-bootstrap from `.env.batch-backend`, so `test:db:migrations` and other DB lanes work without manually exporting `BATCH_BACKEND_TEST_PG`.
-  - Live verification passed for:
-    - `pnpm --filter @esl-pipeline/batch-backend test -- tests/application.profile-content.test.ts tests/application.student-profiles-store.test.ts tests/transport.http-server.integration.students-content.test.ts`
-    - `pnpm --filter @esl-pipeline/batch-backend exec vitest run --config ../../vitest.config.ts --reporter=dot --maxWorkers=1 ../../packages/batch-backend/tests/transport.http-server.integration.students-content.test.ts`
-    - `pnpm --filter @esl-pipeline/batch-backend run typecheck`
-    - `pnpm --filter @esl-pipeline/batch-backend run test:db:migrations`
-    - `pnpm --filter @esl-pipeline/batch-backend run test:db:postgres`
+  - First private hosted rehearsal is live at `https://esl-pipeline.run.place/` on AWS Lightsail.
+  - DNSExit `A` record points `esl-pipeline.run.place` at the static Lightsail IPv4 address.
+  - Caddy edge mode is running with HTTPS.
+  - Production Compose stack is up after the deployment stabilization changes:
+    - `batch-frontend`
+    - `batch-backend`
+    - `batch-worker`
+    - `transcribe-worker`
+    - `postgres`
+    - `redis`
+    - `caddy-edge`
+  - Public health checks passed:
+    - `https://esl-pipeline.run.place/api/health`
+    - `https://esl-pipeline.run.place/api/meta/version`
+  - Backend health reported `api`, `postgres`, and `redis` all `ok: true`.
+  - Worker logs show `Worker started`.
+  - Restored production-ish DB state from the configured S3 backup prefix.
+  - Migration verification passed at:
+    - `db=0.20.0`
+    - `dbMigrationHead=0038_alpha_invites_and_signup_workspace`
+  - S3 smoke passed against bucket `esl-notion-tts`, with upload, presigned URL generation, and delete all successful.
+  - Post-restore backup uploaded successfully under the configured S3 backup prefix.
+  - First live recording job initially waited forever at `transcribe_queue_waiting`; it completed only after starting a transcribe worker manually.
 
 - First step for next session:
-  - Start the new student-area implementation from the `Learning` page path, using the new structured profile as the canonical backend surface.
+  - Review, commit, and push the deployment stabilization PR:
+    - `packages/orchestrator/tsup.config.ts`
+    - `packages/orchestrator/package.json`
+    - `pnpm-lock.yaml`
+    - `docker-compose.prod.yml`
+    - Lightsail deployment docs and evidence
 
 - Current blocker:
-  - No technical blocker right now. The next decision is just rollout order:
-    - backend write/update APIs for structured profiles
-    - workspace `Learning` UI
-    - minimal-flow profile preview
+  - No hosted runtime blocker after the manual transcribe worker was started, but the VPS must not rely on manual one-off worker starts.
+  - Do not forget to preserve the server-local `.env.batch-backend`; it contains real secrets and host-specific fixes.
+
+## Tomorrow Todo (Lightsail Hosted Alpha)
+
+1. Commit the production boot hotfix.
+   - Root cause: backend crashed because the orchestrator bundle embedded Google Cloud TTS CommonJS code, which triggered `Dynamic require of "stream" is not supported`.
+   - Fix already applied locally:
+     - externalize `@google-cloud/text-to-speech` in `packages/orchestrator/tsup.config.ts`
+     - add `@google-cloud/text-to-speech` as an orchestrator runtime dependency
+   - Validation already run:
+     - `pnpm --filter @esl-pipeline/orchestrator build`
+     - direct `node import('./packages/orchestrator/dist/index.js')`
+     - `pnpm --filter @esl-pipeline/orchestrator test:unit:prebuilt`
+     - `pnpm --filter @esl-pipeline/batch-backend build`
+   - Backend unit prebuilt failed only because local Postgres was not running at `127.0.0.1:5432`; do not treat that as related without reproducing with DB up.
+
+2. Commit the production `transcribe-worker` service.
+   - Root cause: generic `batch-worker` does not consume transcription jobs.
+   - Required production service:
+     - same backend runtime image and `.env.batch-backend`
+     - `PG_APPLICATION_NAME=esl-pipeline-transcribe-worker`
+     - command `node dist/transport/transcribe-worker.js`
+     - `restart: unless-stopped`
+   - Fresh `pnpm docker:prod:edge` must start it automatically.
+
+3. Clean up deployment docs.
+   - Replace active DigitalOcean/Droplet assumptions with AWS Lightsail.
+   - Keep the actual decision as:
+     - single VPS
+     - Docker Compose
+     - Caddy HTTPS edge
+     - local Docker Postgres and Redis for now
+     - AWS S3 for artifacts and Postgres backups
+   - Likely files:
+     - `docs/alpha-deployment-decisions.md`
+     - `docs/plans/slice-1-private-hosted-environment.md`
+     - `docs/operations/postgres-backup-s3.md`
+     - `docs/operations/hosted-mvp-evidence.md`
+     - generated plans index after docs generation
+
+4. Record hosted evidence.
+   - Fill `docs/operations/hosted-mvp-evidence.md` with:
+     - hosted URL
+     - Lightsail region/shape
+     - commit deployed
+     - compose command
+     - health output summary
+     - migration output summary
+     - S3 smoke result
+     - backup result without exact private object keys
+     - worker/backend/transcribe-worker log evidence
+
+5. Fix server env rough edges.
+   - Change `PG_BACKUP_S3_ENV=dev` to `PG_BACKUP_S3_ENV=alpha` for future hosted backups.
+   - Confirm prompt paths stay relative or `/app/...`, not `/docs/...`:
+     - `PROMPT_TEMPLATE_PATH=docs/prompt-gallery/templates/hw_prompt_definitive.md`
+     - `PROMPT_PROFILE_PATH=docs/prompt-gallery/profiles/PROFILE_2025-11-16.md`
+   - Keep prod restore targeting explicit:
+     - `PG_CONTAINER_NAME=esl-pipeline-prod-postgres-1`
+     - `PG_COMPOSE_PROJECT=esl-pipeline-prod`
+     - `PG_COMPOSE_FILE=docker-compose.prod.yml`
+   - Set the real Caddy ACME email if it was left as a placeholder.
+
+6. Fix Telegram backup notification confusion.
+   - Backup/restore completion Telegram uses `PG_BACKUP_ALERT_TELEGRAM_*`, not `TELEGRAM_OPS_BOT_*`.
+   - Current safe setting:
+     - `PG_BACKUP_ALERT_TELEGRAM_DISABLE=true`
+   - If enabling later, only set `PG_BACKUP_ALERT_TELEGRAM_THREAD_ID` if the exact forum topic exists.
+   - The previous error was:
+     - `Bad Request: message thread not found`
+
+7. Commit the Compose image/tag polish patch.
+   - `batch-worker` references `image: esl-pipeline/batch-backend:local`.
+   - `batch-backend` currently builds with a Compose-generated image name unless explicitly tagged.
+   - This caused the initial pull error for `esl-pipeline/batch-backend:local`.
+   - Make the image naming/build dependency unambiguous before the next fresh host deploy.
+
+8. Run final morning verification.
+   - On VPS:
+     - `curl -fsS https://esl-pipeline.run.place/api/health | jq .`
+     - `curl -fsS https://esl-pipeline.run.place/api/meta/version | jq .`
+     - `docker compose -p esl-pipeline-prod -f docker-compose.prod.yml ps`
+     - `docker compose -p esl-pipeline-prod -f docker-compose.prod.yml logs --tail=80 batch-worker`
+     - `docker compose -p esl-pipeline-prod -f docker-compose.prod.yml logs --tail=80 transcribe-worker`
+   - Optional:
+     - submit one small hosted assignment job and confirm worker completion.
 
 ## Purpose
 

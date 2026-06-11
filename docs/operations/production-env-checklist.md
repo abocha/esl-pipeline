@@ -127,6 +127,9 @@ CADDY_PUBLIC_HOSTNAME=<alpha-public-hostname>
 CADDY_ACME_EMAIL=<operator-email-for-acme-notices>
 ```
 
+Export these values in the same shell that runs `pnpm docker:prod:edge:*`. Docker Compose reads
+`.env`, but the Node validator behind the pnpm edge scripts reads the current process environment.
+
 Edge-mode public traffic flow:
 
 ```text
@@ -189,6 +192,12 @@ Codex must verify actual container name from:
 pnpm docker:prod:ps
 ```
 
+Backup/restore completion Telegram notifications use `PG_BACKUP_ALERT_TELEGRAM_*`, not
+`TELEGRAM_OPS_BOT_*`. During manual restore or deploy work, set
+`PG_BACKUP_ALERT_TELEGRAM_DISABLE=true` unless the bot token, chat id, and optional forum thread id
+have all been verified. Only set `PG_BACKUP_ALERT_TELEGRAM_THREAD_ID` when that exact Telegram
+topic exists.
+
 ## Provider Keys and Cost Guardrails
 
 Set only providers required by the current core hosted assignment flow.
@@ -231,6 +240,19 @@ Backup alert Telegram variables may be used separately if already configured by 
 Important compose note: `telegram-ops-bot` is profile-gated behind the `ops-bot` Compose profile.
 Do not run that profile unless the bot is intentionally enabled with complete credentials.
 
+## Prompt Assets
+
+Fresh or restored hosted databases need DB prompt assets bootstrapped before real assignment
+generation. The production backend image runs from `/app` and copies prompt-gallery files to
+`/app/docs/prompt-gallery`, so keep prompt paths relative to `/app` or explicitly under `/app`.
+
+```bash
+PROMPT_TEMPLATE_PATH=docs/prompt-gallery/templates/hw_prompt_definitive.md
+PROMPT_PROFILE_PATH=docs/prompt-gallery/profiles/PROFILE_2025-11-16.md
+```
+
+Do not use `/docs/...` paths in production containers.
+
 ## Host-Level Checklist
 
 On the Ubuntu 24.04 VPS:
@@ -245,6 +267,8 @@ On the Ubuntu 24.04 VPS:
 - Docker volumes exist for Postgres and Redis.
 - Backups can be uploaded to S3.
 - Logs can be viewed through Docker Compose.
+- `batch-worker` and `transcribe-worker` are both running; recording uploads require the dedicated
+  transcribe worker.
 - In edge mode, public HTTP/HTTPS goes through Caddy only.
 - Backend, frontend, Postgres, and Redis host ports stay bound to `127.0.0.1` unless deliberately
   exposed for private founder rehearsal.
@@ -295,8 +319,8 @@ curl -fsS https://<public-hostname>/api/meta/version
 
 The HTTP check should show Caddy redirecting to HTTPS.
 Also verify from outside the VPS that raw frontend, backend, Postgres, Redis, and worker ports are
-not publicly reachable, and that the `caddy_data` and `caddy_config` Docker volumes persist across
-container recreation.
+not publicly reachable, that `transcribe-worker` has no public port, and that the `caddy_data` and
+`caddy_config` Docker volumes persist across container recreation.
 
 The production image copies `docs/prompt-gallery` into `/app/docs/prompt-gallery` so prompt asset
 bootstrap can use the documented prompt-gallery paths inside the runtime container.

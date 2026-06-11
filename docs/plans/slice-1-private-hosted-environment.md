@@ -4,9 +4,9 @@
 
 - Audience: founder/operator, Codex, implementation agents.
 - Status: active.
-- Last Verified Against: 2026-06-09 repo state.
+- Last Verified Against: 2026-06-11 repo state.
 - Exit Trigger: archive or update after the Slice 1 implementation PR/deploy evidence lands.
-- Current Focus: private DigitalOcean Droplet deployment rehearsal with Docker Compose, AWS S3, health, migrations, backups, and one hosted assignment publish.
+- Current Focus: private AWS Lightsail rehearsal with Docker Compose, Caddy HTTPS, AWS S3, health, migrations, backups, transcription workers, and one hosted assignment publish.
 
 ## Goal
 
@@ -44,11 +44,13 @@ Allowed exception: a non-goal may be touched only if it blocks the private hoste
 Use this topology:
 
 ```text
-DigitalOcean Droplet
+AWS Lightsail VPS
   - Docker Compose
+  - Caddy HTTPS edge
   - batch-frontend
   - batch-backend/API
   - batch-worker
+  - transcribe-worker
   - Postgres
   - Redis
 
@@ -59,7 +61,7 @@ AWS S3
   - Postgres backups
 ```
 
-Do not migrate S3 to DigitalOcean Spaces during Slice 1.
+Do not migrate away from AWS S3 during Slice 1.
 
 ## Existing Repo Assets to Use
 
@@ -80,6 +82,7 @@ packages/batch-frontend/Dockerfile
 packages/batch-frontend/nginx.conf
 packages/batch-backend/src/transport/http-server.ts
 packages/batch-backend/src/transport/worker-runner.ts
+packages/batch-backend/src/transport/transcribe-worker.ts
 packages/batch-backend/src/infrastructure/migrations.ts
 ```
 
@@ -88,7 +91,8 @@ Known current facts:
 - Root `package.json` contains `pnpm docker:prod`.
 - Root `package.json` contains `pnpm docker:prod:ps`.
 - Root `package.json` contains Postgres backup/S3/restore commands.
-- `docker-compose.prod.yml` already defines `batch-backend`, `batch-frontend`, `batch-worker`, `postgres`, and `redis`.
+- `docker-compose.prod.yml` already defines `batch-backend`, `batch-frontend`, `batch-worker`,
+  `transcribe-worker`, `postgres`, and `redis`.
 - `batch-backend` exposes port 8080 to localhost by default.
 - `batch-frontend` exposes port 80 inside the container and maps to host port
   `${BATCH_FRONTEND_BIND_ADDR:-127.0.0.1}:${BATCH_FRONTEND_HOST_PORT:-5173}`.
@@ -100,6 +104,8 @@ Known current facts:
 - Optional Caddy edge mode exposes public `80/443` and reverse proxies to `batch-frontend:80`.
 - Backend has `GET /meta/version` and config-aware `GET /health`.
 - Worker runner already logs `Worker started`.
+- Transcription jobs require the separate `transcribe-worker` entrypoint. A healthy
+  `batch-worker` alone does not consume recording transcription jobs.
 - `telegram-ops-bot` appears in `docker-compose.prod.yml` but is profile-gated behind `ops-bot`.
 - `docker compose -p esl-pipeline-prod -f docker-compose.prod.yml config --quiet` passed during the
   2026-06-09 doc/repo check.
@@ -112,7 +118,7 @@ Known current facts:
 
 Update or create docs that record:
 
-- DigitalOcean Droplet selected for compute.
+- AWS Lightsail selected for compute.
 - Existing AWS S3 retained for storage/backups.
 - Docker Compose retained.
 - Single-server alpha topology.
@@ -189,6 +195,7 @@ Minimum requirements:
 
 - `batch-backend` starts reliably.
 - `batch-worker` starts reliably.
+- `transcribe-worker` starts reliably and consumes recording transcription jobs.
 - `batch-frontend` starts reliably.
 - `postgres` persists data in a Docker volume.
 - `redis` persists if needed and does not expose itself publicly.
@@ -259,6 +266,7 @@ Verify existing worker logs and add only the minimum missing visibility.
 Required evidence:
 
 - worker startup log is visible through `docker compose logs batch-worker`
+- transcribe worker startup log is visible through `docker compose logs transcribe-worker`
 - queue connection or worker readiness is visible
 - job start/success/failure logs are visible
 - failed job can be diagnosed without guessing whether the worker is running
@@ -416,6 +424,7 @@ pnpm docker:prod
 pnpm docker:prod:ps
 docker compose -p esl-pipeline-prod -f docker-compose.prod.yml logs --tail=100 batch-backend
 docker compose -p esl-pipeline-prod -f docker-compose.prod.yml logs --tail=100 batch-worker
+docker compose -p esl-pipeline-prod -f docker-compose.prod.yml logs --tail=100 transcribe-worker
 curl -fsS http://127.0.0.1:${BATCH_FRONTEND_HOST_PORT:-5173}/api/meta/version
 docker compose -p esl-pipeline-prod -f docker-compose.prod.yml exec batch-backend node dist/tools/smoke-s3-storage.js
 pnpm docker:prod:db:backup:s3 -- alpha_manual_check
@@ -432,7 +441,7 @@ Suggested host sequence:
 ```bash
 sudo apt update
 sudo apt install -y git ca-certificates curl
-# install Docker using official Docker docs or DigitalOcean image
+# install Docker using official Docker docs
 
 git clone <repo-url> esl-pipeline
 cd esl-pipeline
@@ -496,6 +505,7 @@ Manual verification must include:
 - user/operator can reach the current app surface
 - API logs are visible
 - worker logs are visible
+- transcribe-worker logs are visible
 - DB survives container restart
 - S3 publish path works
 - backup uploads to S3
@@ -536,6 +546,7 @@ Slice 1 is done only when this is true:
 - backend health check passes
 - API container is running
 - worker container is running
+- transcribe-worker container is running
 - Postgres persists after restart/redeploy
 - Redis is reachable
 - AWS S3 object upload/read/publish path works
@@ -555,5 +566,6 @@ Stop and report instead of expanding scope if:
 - backup works but restore path cannot be documented
 - health check would leak secrets or require auth in a way that defeats ops use
 - worker cannot start or cannot consume jobs
+- transcribe-worker cannot start or transcription jobs remain stuck at `transcribe_queue_waiting`
 - hosted publish requires building a deferred feature
 - migration risk is unclear and no verified backup exists
