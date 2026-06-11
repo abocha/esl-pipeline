@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [8.1.4] - 2026-06-11
+
+### Changed
+
+- Automated release from PR #95: fix(deploy): stabilize Lightsail rehearsal stack (https://github.com/abocha/esl-pipeline/pull/95)
+
 ## [8.1.3] - 2026-06-10
 
 ### Changed
