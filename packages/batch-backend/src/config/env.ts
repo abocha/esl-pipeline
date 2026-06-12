@@ -551,17 +551,11 @@ export function loadConfig(): BatchBackendConfig {
 
   const opsControlEnabled = readBool('BATCH_BACKEND_ENABLE_OPS_CONTROL', false);
   const opsControlBotSharedSecret = readString('BATCH_BACKEND_OPS_CONTROL_BOT_SECRET');
-  const opsControlStatusCommand = readString(
-    'BATCH_BACKEND_OPS_CONTROL_STATUS_COMMAND',
-    'bash scripts/docker/postgres-ops-status.sh --json',
-  )!;
-  const opsControlBackupCommand = readString(
-    'BATCH_BACKEND_OPS_CONTROL_BACKUP_COMMAND',
-    'bash scripts/docker/postgres-backup-s3.sh backup-upload',
-  )!;
+  const opsControlStatusCommand = readString('BATCH_BACKEND_OPS_CONTROL_STATUS_COMMAND', '')!;
+  const opsControlBackupCommand = readString('BATCH_BACKEND_OPS_CONTROL_BACKUP_COMMAND', '')!;
   const opsControlRestoreDrillCommand = readString(
     'BATCH_BACKEND_OPS_CONTROL_RESTORE_DRILL_COMMAND',
-    'PG_BACKUP_RESTORE_DRILL_AUTO=true bash scripts/docker/run-postgres-restore-drill-reminder.sh',
+    '',
   )!;
   const opsControlActionTimeoutMs = readInt(
     'BATCH_BACKEND_OPS_CONTROL_ACTION_TIMEOUT_MS',

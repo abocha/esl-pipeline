@@ -20,5 +20,13 @@ RUN find packages -name '*.tsbuildinfo' -delete \
 
 FROM nginx:alpine-slim AS runtime
 
+RUN mkdir -p /tmp/nginx \
+    && chown -R nginx:nginx /tmp/nginx /var/cache/nginx /usr/share/nginx/html
+
+COPY packages/batch-frontend/nginx-rootless.conf /etc/nginx/nginx.conf
 COPY packages/batch-frontend/nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=build /app/packages/batch-frontend/dist /usr/share/nginx/html
+COPY --from=build --chown=nginx:nginx /app/packages/batch-frontend/dist /usr/share/nginx/html
+
+EXPOSE 8080
+
+USER nginx

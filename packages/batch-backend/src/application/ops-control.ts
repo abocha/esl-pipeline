@@ -181,7 +181,13 @@ export async function getOpsStatus(): Promise<OpsStatusResponse> {
   assertOpsControlEnabled();
   const config = loadConfig();
 
-  const statusCommand = config.opsControl.statusCommand;
+  const statusCommand = config.opsControl.statusCommand.trim();
+  if (!statusCommand) {
+    return buildStatusFailureResponse(
+      'Status command is not configured. Set BATCH_BACKEND_OPS_CONTROL_STATUS_COMMAND to enable ops status checks.',
+      dependencies.now(),
+    );
+  }
   const result = await dependencies.runCommand(statusCommand, config.opsControl.actionTimeoutMs);
   if (result.exitCode !== 0) {
     return buildStatusFailureResponse(
@@ -210,18 +216,18 @@ export async function enqueueOpsAction(
 
   const operationId = dependencies.randomId();
   const requestedAt = dependencies.now().toISOString();
-  const command = resolveActionCommand(request);
+  const { command, unconfiguredMessage } = resolveActionCommand(request);
 
   const initial: InternalActionStatus = {
     operationId,
     action: request.action,
-    state: 'queued',
+    state: unconfiguredMessage ? 'failed' : 'queued',
     requestedAt,
     startedAt: null,
-    finishedAt: null,
+    finishedAt: unconfiguredMessage ? dependencies.now().toISOString() : null,
     requestedBy: options.requestedBy,
     requestedByUserId: options.requestedByUserId,
-    message: 'Action queued',
+    message: unconfiguredMessage ?? 'Action queued',
     command,
     exitCode: null,
     stdoutTail: null,
@@ -234,6 +240,10 @@ export async function enqueueOpsAction(
   }
   storeAction(queued, config.opsControl.actionHistoryLimit);
   void maybePrunePersistedActions(config.opsControl.actionRetentionDays);
+
+  if (unconfiguredMessage) {
+    return { ...queued };
+  }
 
   dependencies.scheduleTask(() =>
     runQueuedAction(
@@ -365,16 +375,37 @@ export async function listOpsActions(args?: {
   };
 }
 
-function resolveActionCommand(request: OpsActionRequest): string {
+function resolveActionCommand(request: OpsActionRequest): {
+  command: string;
+  unconfiguredMessage: string | null;
+} {
   const config = loadConfig();
   switch (request.action) {
     case 'backup_upload': {
+      const baseCommand = config.opsControl.backupCommand.trim();
+      if (!baseCommand) {
+        return {
+          command: '',
+          unconfiguredMessage:
+            'Backup command is not configured. Set BATCH_BACKEND_OPS_CONTROL_BACKUP_COMMAND to enable backup actions.',
+        };
+      }
       const label = request.label?.trim();
-      if (!label) return config.opsControl.backupCommand;
-      return `${config.opsControl.backupCommand} ${shellEscape(label)}`;
+      return {
+        command: label ? `${baseCommand} ${shellEscape(label)}` : baseCommand,
+        unconfiguredMessage: null,
+      };
     }
     case 'restore_drill_download_only': {
-      return config.opsControl.restoreDrillCommand;
+      const command = config.opsControl.restoreDrillCommand.trim();
+      if (!command) {
+        return {
+          command: '',
+          unconfiguredMessage:
+            'Restore drill command is not configured. Set BATCH_BACKEND_OPS_CONTROL_RESTORE_DRILL_COMMAND to enable restore drill actions.',
+        };
+      }
+      return { command, unconfiguredMessage: null };
     }
     default: {
       throw new Error(

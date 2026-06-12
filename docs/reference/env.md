@@ -143,7 +143,10 @@ Read next:
   - `GEN_MAX_OUTPUT_TOKENS_HARD=3200`
 - Direct generation provider requests default to 240000 ms unless overridden per provider.
 - Telegram mutating ops stay disabled unless `TELEGRAM_OPS_BOT_ENABLE_ACTION_COMMANDS=true`.
-- Backend ops control is additive and should remain off unless explicitly enabled with `BATCH_BACKEND_ENABLE_OPS_CONTROL=true`.
+- Backend ops control is additive and should remain off unless explicitly enabled with
+  `BATCH_BACKEND_ENABLE_OPS_CONTROL=true`; command execution also requires explicit
+  `BATCH_BACKEND_OPS_CONTROL_*_COMMAND` values and must not depend on Docker/AWS tooling inside the
+  long-running backend container.
 
 ## Exhaustive Lookup
 

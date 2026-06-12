@@ -2,12 +2,7 @@ name: ${COMPOSE_PROJECT_NAME:-esl-pipeline-prod}
 
 services:
   batch-backend:
-    image: esl-pipeline/batch-backend:local
-    build:
-      context: .
-      dockerfile: packages/batch-backend/Dockerfile
-      tags:
-        - esl-pipeline/batch-backend:local
+    image: ${BATCH_BACKEND_IMAGE:?Set BATCH_BACKEND_IMAGE to a GHCR image reference tagged with the deployed Git SHA}
     depends_on:
       postgres:
         condition: service_healthy
@@ -19,7 +14,6 @@ services:
         target: /app/uploads
         bind:
           create_host_path: false
-      - /var/run/docker.sock:/var/run/docker.sock
     environment:
       NODE_ENV: production
       PIPELINE_CWD: /app
@@ -41,26 +35,19 @@ services:
       timeout: 5s
       retries: 6
       start_period: 20s
-    pull_policy: never
 
   batch-frontend:
-    image: esl-pipeline/batch-frontend:local
-    build:
-      context: .
-      dockerfile: packages/batch-frontend/Dockerfile
-      tags:
-        - esl-pipeline/batch-frontend:local
+    image: ${BATCH_FRONTEND_IMAGE:?Set BATCH_FRONTEND_IMAGE to a GHCR image reference tagged with the deployed Git SHA}
     depends_on:
       - batch-backend
     ports:
-      - target: 80
+      - target: 8080
         published: ${BATCH_FRONTEND_HOST_PORT:-5173}
         host_ip: ${BATCH_FRONTEND_BIND_ADDR:-127.0.0.1}
     restart: unless-stopped
-    pull_policy: never
 
   batch-worker:
-    image: esl-pipeline/batch-backend:local
+    image: ${BATCH_BACKEND_IMAGE:?Set BATCH_BACKEND_IMAGE to a GHCR image reference tagged with the deployed Git SHA}
     depends_on:
       postgres:
         condition: service_healthy
@@ -82,7 +69,6 @@ services:
       - .env.batch-backend
     command: ['node', 'dist/transport/worker-runner.js']
     restart: unless-stopped
-    pull_policy: never
 
   caddy-edge:
     image: caddy:2-alpine
@@ -172,11 +158,7 @@ services:
       retries: 10
 
   telegram-ops-bot:
-    build:
-      context: .
-      dockerfile: packages/telegram-ops-bot/Dockerfile
-      tags:
-        - esl-pipeline/telegram-ops-bot:local
+    image: ${TELEGRAM_OPS_BOT_IMAGE:-ghcr.io/abocha/esl-pipeline/telegram-ops-bot:disabled}
     depends_on:
       - batch-backend
     environment:
@@ -189,7 +171,7 @@ services:
       - ops-bot
 
   transcribe-worker:
-    image: esl-pipeline/batch-backend:local
+    image: ${BATCH_BACKEND_IMAGE:?Set BATCH_BACKEND_IMAGE to a GHCR image reference tagged with the deployed Git SHA}
     depends_on:
       postgres:
         condition: service_healthy
@@ -211,7 +193,6 @@ services:
       - .env.batch-backend
     command: ['node', 'dist/transport/transcribe-worker.js']
     restart: unless-stopped
-    pull_policy: never
 
 volumes:
   caddy_config:

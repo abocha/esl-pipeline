@@ -27,8 +27,8 @@ local development -> Git push -> CI validation and image build -> reviewed deplo
 - Use the Lightsail VPS for production runtime only: pulling or running selected images, reviewed
   migrations, service updates, health checks, logs, backups, and emergency recovery.
 - Do not install a self-hosted GitHub Actions runner on the production VPS.
-- Prefer CI-built Docker images tagged with the Git commit SHA. Until that workflow exists, record
-  the exact deployed Git SHA for the current Compose-based deployment path.
+- Deploy CI-built Docker images tagged with the Git commit SHA. Record the exact deployed image refs
+  and resolved digests in `/var/lib/esl-pipeline/deploy/deployments.log`.
 - If an emergency server edit is unavoidable, reproduce it locally, commit it, and redeploy through
   the normal path as soon as possible.
 
@@ -153,7 +153,7 @@ Export these values in the same shell that runs `pnpm docker:prod:edge:*`. Docke
 Edge-mode public traffic flow:
 
 ```text
-browser -> Caddy :80/:443 -> batch-frontend nginx :80 -> /api/* -> batch-backend :8080
+browser -> Caddy :80/:443 -> batch-frontend nginx :8080 -> /api/* -> batch-backend :8080
 ```
 
 Do not configure Caddy to proxy the backend directly.
@@ -195,11 +195,11 @@ PG_BACKUP_LOG_RETENTION_DAYS=30
 PG_BACKUP_ALLOW_EMPTY_SOURCE=false
 ```
 
-Container targeting for prod compose may need:
+Container targeting for prod compose uses an explicit project name and absolute compose path:
 
 ```bash
 PG_COMPOSE_PROJECT=esl-pipeline-prod
-PG_COMPOSE_FILE=docker-compose.prod.yml
+PG_COMPOSE_FILE=/opt/esl-pipeline/docker-compose.prod.yml
 PG_CONTAINER_NAME=esl-pipeline-prod-postgres-1
 ```
 
@@ -217,6 +217,40 @@ Backup/restore completion Telegram notifications use `PG_BACKUP_ALERT_TELEGRAM_*
 `PG_BACKUP_ALERT_TELEGRAM_DISABLE=true` unless the bot token, chat id, and optional forum thread id
 have all been verified. Only set `PG_BACKUP_ALERT_TELEGRAM_THREAD_ID` when that exact Telegram
 topic exists.
+
+## Deployment Images and State
+
+Production app images are supplied through image environment values, not production `build:` blocks:
+
+```bash
+BATCH_BACKEND_IMAGE=ghcr.io/abocha/esl-pipeline/batch-backend:<40-char-git-sha>
+BATCH_FRONTEND_IMAGE=ghcr.io/abocha/esl-pipeline/batch-frontend:<40-char-git-sha>
+TELEGRAM_OPS_BOT_IMAGE=ghcr.io/abocha/esl-pipeline/telegram-ops-bot:<40-char-git-sha>
+```
+
+The manual deploy script writes image refs and digests only under:
+
+```text
+/var/lib/esl-pipeline/deploy/current-images.env
+/var/lib/esl-pipeline/deploy/previous-images.env
+/var/lib/esl-pipeline/deploy/known-good-images.env
+/var/lib/esl-pipeline/deploy/deployments.log
+```
+
+Do not put application secrets in those state files. Keep `.env.batch-backend` in the application
+checkout with restrictive permissions. Authenticate to GHCR on the VPS with a read-only production
+credential where possible:
+
+```bash
+echo '<read-only-token>' | docker login ghcr.io -u '<github-user-or-bot>' --password-stdin
+```
+
+Deploy after CI publishes images:
+
+```bash
+cd /opt/esl-pipeline
+bash scripts/deploy/deploy-prod-images.sh <40-char-git-sha>
+```
 
 ## Provider Keys and Cost Guardrails
 
@@ -323,29 +357,39 @@ Local/CI verification that does not require a real VPS or DNS:
 
 ```bash
 pnpm docker:prepare
-docker compose -p esl-pipeline-prod -f docker-compose.prod.yml config --quiet
+pnpm docker:prod:config
 export CADDY_PUBLIC_HOSTNAME=alpha.example.com
 export CADDY_ACME_EMAIL=ops@example.com
 pnpm docker:prod:edge:env
 pnpm docker:prod:edge:config
+pnpm docker:prod:ops-bot:config
 pnpm docker:caddy:validate
 ```
 
 Private founder-rehearsal smoke checks:
 
 ```bash
-pnpm docker:prod
+bash scripts/deploy/deploy-prod-images.sh <40-char-git-sha>
 pnpm docker:prod:ps
 curl -fsS http://127.0.0.1:8080/health
 curl -fsS http://127.0.0.1:8080/meta/version
 curl -fsS http://127.0.0.1:${BATCH_FRONTEND_HOST_PORT:-5173}/api/meta/version
 curl -fsS http://127.0.0.1:${BATCH_FRONTEND_HOST_PORT:-5173}/api/health
-docker compose -p esl-pipeline-prod -f docker-compose.prod.yml exec batch-backend node dist/tools/migrate-db.js status
-docker compose -p esl-pipeline-prod -f docker-compose.prod.yml exec batch-backend node dist/tools/migrate-db.js migrate
-docker compose -p esl-pipeline-prod -f docker-compose.prod.yml exec batch-backend node dist/tools/migrate-db.js verify
-docker compose -p esl-pipeline-prod -f docker-compose.prod.yml exec batch-backend node dist/tools/bootstrap-prompt-assets.js --dry-run
-docker compose -p esl-pipeline-prod -f docker-compose.prod.yml exec batch-backend node dist/tools/bootstrap-prompt-assets.js
-docker compose -p esl-pipeline-prod -f docker-compose.prod.yml exec batch-backend node dist/tools/smoke-s3-storage.js
+docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml \
+  --env-file /var/lib/esl-pipeline/deploy/current-images.env \
+  exec batch-backend node dist/tools/migrate-db.js status
+docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml \
+  --env-file /var/lib/esl-pipeline/deploy/current-images.env \
+  exec batch-backend node dist/tools/migrate-db.js verify
+docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml \
+  --env-file /var/lib/esl-pipeline/deploy/current-images.env \
+  exec batch-backend node dist/tools/bootstrap-prompt-assets.js --dry-run
+docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml \
+  --env-file /var/lib/esl-pipeline/deploy/current-images.env \
+  exec batch-backend node dist/tools/bootstrap-prompt-assets.js
+docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml \
+  --env-file /var/lib/esl-pipeline/deploy/current-images.env \
+  exec batch-backend node dist/tools/smoke-s3-storage.js
 pnpm docker:prod:db:backup:s3 -- alpha_manual_check
 pnpm docker:prod:db:list:s3
 pnpm docker:prod:db:restore:s3 -- <latest-backup-key.dump> --download-only
@@ -384,6 +428,12 @@ pnpm docker:prod:db:backup:s3 -- pre_migration_<short-sha>
 pnpm docker:prod:db:list:s3
 pnpm docker:prod:db:restore:s3 -- <latest-backup-key.dump> --download-only
 ```
+
+Application rollback and database rollback are separate. The deployment script may tell you how to
+restart the previous application image set, but it never restores PostgreSQL automatically. Only
+restore the database after choosing that recovery path explicitly and verifying the target backup.
+Older application images may fail against a migrated schema unless the migration was
+backward-compatible.
 
 Do not copy real production student, invoice, transcript, or credential data into local development
 unless it has been anonymized.
