@@ -17,6 +17,9 @@ describeHttpServerIntegrationSuite(
         PG_ENABLED: 'false',
         BATCH_BACKEND_ENABLE_EXTENDED_API: 'true',
         BATCH_BACKEND_ENABLE_OPS_CONTROL: 'true',
+        BATCH_BACKEND_OPS_CONTROL_STATUS_COMMAND: 'test-status',
+        BATCH_BACKEND_OPS_CONTROL_BACKUP_COMMAND: 'test-backup',
+        BATCH_BACKEND_OPS_CONTROL_RESTORE_DRILL_COMMAND: 'test-restore-drill',
         ...env,
       };
 
