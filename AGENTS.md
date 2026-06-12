@@ -4,7 +4,7 @@
 
 - Audience: AI agents and maintainers.
 - Authority Level: router + compact operating contract.
-- Last Verified Against: 2026-05-21 repo state.
+- Last Verified Against: 2026-06-12 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly or after major workflow/tooling changes.
 - Status: `router`.
@@ -34,6 +34,8 @@ If resuming after context loss, start with
 - Do not treat archive docs as current truth.
 - Keep code, docs, and package READMEs aligned when behavior changes.
 - When implementing from a plan file, re-read that exact plan after context compaction.
+- Treat the developer laptop as the primary development environment, Git/CI as the source of truth,
+  and the Lightsail VPS as production runtime only.
 
 ## Common Routes
 
@@ -50,6 +52,9 @@ If resuming after context loss, start with
 - Prompt gallery runtime:
   [`docs/operations/prompt-gallery-bootstrap.md`](docs/operations/prompt-gallery-bootstrap.md)
 - Docker/dev stack: [`docs/operations/docker-host-paths.md`](docs/operations/docker-host-paths.md)
+- Deployment/runtime workflow: [`docs/backend-frontend/DEPLOYMENT.md`](docs/backend-frontend/DEPLOYMENT.md),
+  [`docs/operations/production-env-checklist.md`](docs/operations/production-env-checklist.md),
+  [`docs/alpha-deployment-decisions.md`](docs/alpha-deployment-decisions.md)
 - Postgres ops:
   [`docs/operations/postgres-backup-restore.md`](docs/operations/postgres-backup-restore.md),
   [`docs/operations/postgres-backup-s3.md`](docs/operations/postgres-backup-s3.md),

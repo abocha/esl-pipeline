@@ -12,6 +12,26 @@ This file lists the production environment values that must be decided and set o
 
 Do not commit real `.env.batch-backend` values.
 
+## Deployment Policy
+
+The development and deployment boundary is:
+
+```text
+local development -> Git push -> CI validation and image build -> reviewed deployment -> VPS runtime and smoke checks
+```
+
+- Do normal development locally: code edits, dependency installs, dev servers, hot reload, debugging,
+  lint/type/test lanes, integration tests, migration tests, and synthetic-data experiments.
+- Use Git and CI as the authoritative source for deployable code. Avoid production states that
+  depend on uncommitted server checkout changes.
+- Use the Lightsail VPS for production runtime only: pulling or running selected images, reviewed
+  migrations, service updates, health checks, logs, backups, and emergency recovery.
+- Do not install a self-hosted GitHub Actions runner on the production VPS.
+- Prefer CI-built Docker images tagged with the Git commit SHA. Until that workflow exists, record
+  the exact deployed Git SHA for the current Compose-based deployment path.
+- If an emergency server edit is unavoidable, reproduce it locally, commit it, and redeploy through
+  the normal path as soon as possible.
+
 ## Runtime Mode
 
 ```bash
@@ -262,17 +282,40 @@ On the Ubuntu 24.04 VPS:
 - Firewall allows SSH, HTTP, HTTPS only.
 - Docker and Docker Compose are installed.
 - Repo is cloned.
+- Server checkout is on the reviewed deployment commit; no uncommitted server edits remain.
 - `.env.batch-backend` exists on server and is not committed.
 - `uploads/` host path exists if compose bind mount requires it.
 - Docker volumes exist for Postgres and Redis.
 - Backups can be uploaded to S3.
 - Logs can be viewed through Docker Compose.
+- Container log rotation is configured at the Docker daemon or service level.
 - `batch-worker` and `transcribe-worker` are both running; recording uploads require the dedicated
   transcribe worker.
 - In edge mode, public HTTP/HTTPS goes through Caddy only.
 - Backend, frontend, Postgres, and Redis host ports stay bound to `127.0.0.1` unless deliberately
   exposed for private founder rehearsal.
+- PostgreSQL, Redis, MinIO/internal storage, internal APIs, and development ports are not publicly
+  exposed.
+- Persistent production data lives in Docker volumes or dedicated host paths, not inside mutable
+  container filesystems or ad hoc source-tree edits.
 ```
+
+## Lightsail Resource Checks
+
+The Lightsail instance is burstable. During and after deployment, check:
+
+```text
+- CPU utilization.
+- Remaining burst capacity.
+- RAM and swap usage.
+- Disk space.
+- Container health.
+- Application health endpoints.
+```
+
+Short deployment spikes are acceptable. Sustained burst-capacity depletion means development work,
+image builds, test suites, or other CPU-heavy tasks should move back to the laptop/CI, or the
+instance should be resized.
 
 ## Verification Commands
 
@@ -324,6 +367,26 @@ not publicly reachable, that `transcribe-worker` has no public port, and that th
 
 The production image copies `docs/prompt-gallery` into `/app/docs/prompt-gallery` so prompt asset
 bootstrap can use the documented prompt-gallery paths inside the runtime container.
+
+## Backup Recovery Model
+
+Use both:
+
+- Lightsail snapshots for whole-server recovery.
+- Logical Postgres backups for application-data recovery.
+
+Keep logical backups separate from the main application data where possible and periodically test
+restore into a non-production environment. Before risky migrations, create and verify a logical
+backup with the production Compose wrapper:
+
+```bash
+pnpm docker:prod:db:backup:s3 -- pre_migration_<short-sha>
+pnpm docker:prod:db:list:s3
+pnpm docker:prod:db:restore:s3 -- <latest-backup-key.dump> --download-only
+```
+
+Do not copy real production student, invoice, transcript, or credential data into local development
+unless it has been anonymized.
 
 ## Do Not Store Here
 
