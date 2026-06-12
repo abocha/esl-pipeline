@@ -41,14 +41,8 @@ ENV PATH="${EDGE_TTS_VENV}/bin:${PATH}" \
     FILESYSTEM_UPLOAD_DIR=/app/uploads
 
 RUN apk add --no-cache \
-        bash \
-        aws-cli \
         ca-certificates \
-        coreutils \
         curl \
-        docker-cli \
-        docker-cli-compose \
-        findutils \
         ffmpeg \
         py3-pip \
         python3 \
@@ -58,11 +52,11 @@ RUN apk add --no-cache \
 
 WORKDIR /app
 
-COPY --from=build /app/deployed/ ./
-COPY docs/prompt-gallery ./docs/prompt-gallery
-COPY scripts/docker ./scripts/docker
-RUN chmod +x ./scripts/docker/*.sh
+COPY --from=build --chown=node:node /app/deployed/ ./
+COPY --chown=node:node docs/prompt-gallery ./docs/prompt-gallery
 
 EXPOSE 8080
+
+USER node
 
 CMD ["node", "dist/transport/http-server.js"]

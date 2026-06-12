@@ -10,7 +10,7 @@ const targets = [
   { key: 'batch-frontend', packageName: '@esl-pipeline/batch-frontend' },
   { key: 'batch-backend', packageName: '@esl-pipeline/batch-backend' },
   { key: 'orchestrator', packageName: '@esl-pipeline/orchestrator' },
-  { key: 'tts-elevenlabs', packageName: '@esl-pipeline/tts-elevenlabs' },
+  { key: 'tts-elevenlabs', packageName: '@esl-pipeline/tts-provider-elevenlabs' },
 ];
 
 mkdirSync(coverageRoot, { recursive: true });

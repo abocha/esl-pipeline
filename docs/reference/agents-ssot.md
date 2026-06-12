@@ -4,7 +4,7 @@
 
 - Audience: maintainers and AI agents implementing or reviewing repo behavior.
 - Authority Level: authoritative contracts and invariants.
-- Last Verified Against: 2026-05-16 repo state.
+- Last Verified Against: 2026-06-12 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: monthly and after contract-level changes.
 - Status: `reference`.
@@ -46,6 +46,7 @@ For deep system maps, prefer the linked docs rather than growing this file again
 - live capability status -> `docs/backend-frontend/backend-frontend-alignment.md`
 - environment policy -> `docs/reference/env.md`
 - operational procedures -> `docs/operations/*`
+- development/deployment workflow -> `docs/backend-frontend/DEPLOYMENT.md`
 
 ## Non-Negotiable Invariants
 
@@ -81,6 +82,30 @@ For deep system maps, prefer the linked docs rather than growing this file again
 - Never hardcode secrets.
 - Prefer canonical namespaced env vars over legacy aliases.
 - Fail-safe defaults matter more than convenience defaults for auth, quotas, and mutating operations.
+
+### Development, CI, and production runtime
+
+- Treat the developer laptop as the primary development environment for editing code, installing
+  dependencies, running dev servers, debugging, tests, integration checks, and migration tests.
+- Treat Git commits plus CI validation as the source of truth for deployable code. Production
+  deployments must be reproducible from committed code, not server-local edits.
+- Treat the AWS Lightsail VPS as production runtime: pull selected images, apply reviewed
+  migrations once, serve traffic, run health checks, keep production data, emit logs, and run
+  backup/restore operations.
+- Do not use the production VPS as the normal coding, hot-reload, full-test-suite, or repeated image
+  build environment. Do not install a self-hosted CI runner there.
+- Prefer CI-built Docker images tagged by Git commit SHA for production deployments. Avoid relying
+  only on mutable tags such as `latest`; record the deployed Git SHA or image version in deployment
+  evidence.
+- Production Compose app services must be pull-based. Do not reintroduce production `build:`,
+  `:local` app tags, `pull_policy: never`, or `up --build` for backend, frontend, bot, or worker
+  services. Keep Docker orchestration and backups host-side rather than mounting `/var/run/docker.sock`
+  into the long-running backend.
+- Use SSH for deployment, status/log inspection, resource checks, reviewed migrations, backups,
+  production-only diagnosis, and emergency recovery. If an emergency server edit is unavoidable,
+  reproduce it locally, commit it, and redeploy normally as soon as possible.
+- Keep persistent production data outside the application source checkout. Do not manually mutate
+  files inside running containers.
 
 ## Safe Change Rules
 

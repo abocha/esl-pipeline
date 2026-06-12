@@ -3,5 +3,5 @@
 }
 
 {$CADDY_PUBLIC_HOSTNAME} {
-	reverse_proxy batch-frontend:80
+	reverse_proxy batch-frontend:8080
 }

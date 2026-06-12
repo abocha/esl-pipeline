@@ -5,7 +5,7 @@
 - Audience: AI agents, maintainers.
 - Read Time: 2 minutes.
 - Authority Level: Router.
-- Last Verified Against: 2026-05-12 repo state.
+- Last Verified Against: 2026-06-12 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly.
 - Status: `router`.
@@ -48,6 +48,9 @@
   - [`docs/operations/docker-host-paths.md`](operations/docker-host-paths.md)
 - Batch deployment runbook:
   - [`docs/backend-frontend/DEPLOYMENT.md`](backend-frontend/DEPLOYMENT.md)
+- Production environment and Lightsail checklist:
+  - [`docs/operations/production-env-checklist.md`](operations/production-env-checklist.md)
+  - [`docs/alpha-deployment-decisions.md`](alpha-deployment-decisions.md)
 - Postgres backup/restore:
   - [`docs/operations/postgres-backup-restore.md`](operations/postgres-backup-restore.md)
 - S3 archival + scheduling:

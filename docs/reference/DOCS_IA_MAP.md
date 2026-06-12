@@ -5,7 +5,7 @@
 - Audience: AI agents and maintainers.
 - Read Time: 3 minutes.
 - Authority Level: Active routing map.
-- Last Verified Against: 2026-05-12 repo state.
+- Last Verified Against: 2026-06-12 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly.
 - Status: `router`.
@@ -34,7 +34,7 @@
 | Backend/frontend capability status                                   | `docs/backend-frontend/backend-frontend-alignment.md`            | `docs/backend-frontend/BATCH_SYSTEM.md`                                                                                                                                                                                                                              |
 | Batch-backend service boundary and invariants                        | `docs/backend-frontend/batch-backend-ssot.md`                    | `docs/backend-frontend/backend-frontend-alignment.md`, `docs/reference/agents-ssot.md`                                                                                                                                                                               |
 | Batch-backend migration parity inventory                             | `docs/backend-frontend/batch-backend-legacy-schema-inventory.md` | `docs/backend-frontend/batch-backend-ssot.md`, `docs/reference/agents-ssot.md`                                                                                                                                                                                       |
-| Batch deployment and local service rollout                           | `docs/backend-frontend/DEPLOYMENT.md`                            | `docs/reference/env.md`, `docs/operations/docker-host-paths.md`, `docs/operations/postgres-backup-s3.md`                                                                                                                                                             |
+| Batch deployment and local service rollout                           | `docs/backend-frontend/DEPLOYMENT.md`                            | `docs/operations/production-env-checklist.md`, `docs/alpha-deployment-decisions.md`, `docs/reference/env.md`, `docs/operations/docker-host-paths.md`, `docs/operations/postgres-backup-s3.md`                                                                        |
 | Prompt gallery DB runtime                                            | `docs/operations/prompt-gallery-bootstrap.md`                    | `docs/reference/env.md`                                                                                                                                                                                                                                              |
 | Docker dev stack recovery                                            | `docs/operations/docker-host-paths.md`                           | `docs/QUICK_START.md`                                                                                                                                                                                                                                                |
 | Local pnpm store config / npm config warnings                        | `docs/operations/docker-host-paths.md`                           | `docs/operations/rollup-optional-binary-troubleshooting.md`, `docs/QUICK_START.md`                                                                                                                                                                                   |

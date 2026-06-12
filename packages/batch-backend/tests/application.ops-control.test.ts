@@ -139,6 +139,7 @@ describe('application/ops-control', () => {
       {
         NODE_ENV: 'test',
         BATCH_BACKEND_ENABLE_OPS_CONTROL: 'true',
+        BATCH_BACKEND_OPS_CONTROL_STATUS_COMMAND: 'echo "{}"',
       },
       async () => {
         const ops = await loadOpsControlFresh();
@@ -232,6 +233,47 @@ describe('application/ops-control', () => {
         expect(status.overall.state).toBe('critical');
         expect(status.overall.reasons[0]).toContain('Failed to launch command runner');
         expect(status.overall.reasons[0]).toContain('Ensure bash is installed');
+      },
+    );
+  });
+
+  it('fails closed when ops command execution is enabled without command configuration', async () => {
+    await withEnv(
+      {
+        NODE_ENV: 'test',
+        BATCH_BACKEND_ENABLE_OPS_CONTROL: 'true',
+      },
+      async () => {
+        const ops = await loadOpsControlFresh();
+        const scheduler = createOpsControlTestScheduler();
+        const commands: string[] = [];
+        setDeterministicOpsControlDependencies(ops, scheduler, {
+          randomId: () => 'missing-command-op',
+          runCommand: async (command: string) => {
+            commands.push(command);
+            return {
+              exitCode: 0,
+              stdout: '{}',
+              stderr: '',
+              timedOut: false,
+            };
+          },
+        });
+
+        const status = await ops.getOpsStatus();
+        expect(status.overall.state).toBe('critical');
+        expect(status.overall.reasons[0]).toContain('Status command is not configured');
+
+        const queued = await ops.enqueueOpsAction(
+          { action: 'backup_upload' },
+          { requestedBy: 'telegram:42', requestedByUserId: 'user-1' },
+        );
+        await scheduler.settle();
+
+        const completed = await ops.getOpsActionStatus(queued.operationId);
+        expect(completed?.state).toBe('failed');
+        expect(completed?.message).toContain('Backup command is not configured');
+        expect(commands).toEqual([]);
       },
     );
   });
