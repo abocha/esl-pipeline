@@ -15,6 +15,8 @@ const defaultElevenLabsVoicesPath = path.join(
   'elevenlabs.voices.json',
 );
 const envFiles = ['.env.batch-backend', '.env'];
+const productionRuntimeUid = 1000;
+const productionRuntimeGid = 1000;
 
 const emptyVoiceCapabilities = {
   generatedAt: new Date().toISOString(),
@@ -86,6 +88,12 @@ async function assertWritableDirectory(abs, rel) {
     const actualOwner = `${stat.uid}:${stat.gid}`;
     if (actualOwner !== expectedOwner) {
       console.warn(`WARN: ${rel} is owned by ${actualOwner} (expected ${expectedOwner})`);
+    }
+    const expectedRuntimeOwner = `${productionRuntimeUid}:${productionRuntimeGid}`;
+    if (actualOwner !== expectedRuntimeOwner) {
+      console.warn(
+        `WARN: production containers run as ${expectedRuntimeOwner}; ensure ${rel} stays writable by that UID:GID on the VPS.`,
+      );
     }
   }
 }

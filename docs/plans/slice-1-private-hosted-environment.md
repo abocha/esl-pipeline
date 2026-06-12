@@ -94,14 +94,14 @@ Known current facts:
 - `docker-compose.prod.yml` already defines `batch-backend`, `batch-frontend`, `batch-worker`,
   `transcribe-worker`, `postgres`, and `redis`.
 - `batch-backend` exposes port 8080 to localhost by default.
-- `batch-frontend` exposes port 80 inside the container and maps to host port
+- `batch-frontend` exposes port 8080 inside the container and maps to host port
   `${BATCH_FRONTEND_BIND_ADDR:-127.0.0.1}:${BATCH_FRONTEND_HOST_PORT:-5173}`.
 - `BATCH_FRONTEND_BIND_ADDR=0.0.0.0` is only an explicit private founder-rehearsal override, not a
   real tutor-access shape.
 - The frontend API client calls `/api/...` when `VITE_BATCH_BACKEND_URL` is unset.
 - `packages/batch-frontend/nginx.conf` proxies `/api/*` to the backend and does not expose raw
   `/jobs` by default.
-- Optional Caddy edge mode exposes public `80/443` and reverse proxies to `batch-frontend:80`.
+- Optional Caddy edge mode exposes public `80/443` and reverse proxies to `batch-frontend:8080`.
 - Backend has `GET /meta/version` and config-aware `GET /health`.
 - Worker runner already logs `Worker started`.
 - Transcription jobs require the separate `transcribe-worker` entrypoint. A healthy
@@ -414,19 +414,21 @@ Suggested commands to verify, adjusted as needed:
 ```bash
 pnpm install --frozen-lockfile
 pnpm check:fast
-docker compose -p esl-pipeline-prod -f docker-compose.prod.yml config --quiet
+pnpm docker:prod:config
 export CADDY_PUBLIC_HOSTNAME=alpha.example.com
 export CADDY_ACME_EMAIL=ops@example.com
 pnpm docker:prod:edge:env
 pnpm docker:prod:edge:config
 pnpm docker:caddy:validate
-pnpm docker:prod
+bash scripts/deploy/deploy-prod-images.sh <40-char-git-sha>
 pnpm docker:prod:ps
-docker compose -p esl-pipeline-prod -f docker-compose.prod.yml logs --tail=100 batch-backend
-docker compose -p esl-pipeline-prod -f docker-compose.prod.yml logs --tail=100 batch-worker
-docker compose -p esl-pipeline-prod -f docker-compose.prod.yml logs --tail=100 transcribe-worker
+node scripts/docker/prod-compose.mjs --placeholder-images logs --tail=100 batch-backend
+node scripts/docker/prod-compose.mjs --placeholder-images logs --tail=100 batch-worker
+node scripts/docker/prod-compose.mjs --placeholder-images logs --tail=100 transcribe-worker
 curl -fsS http://127.0.0.1:${BATCH_FRONTEND_HOST_PORT:-5173}/api/meta/version
-docker compose -p esl-pipeline-prod -f docker-compose.prod.yml exec batch-backend node dist/tools/smoke-s3-storage.js
+docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml \
+  --env-file /var/lib/esl-pipeline/deploy/current-images.env \
+  exec batch-backend node dist/tools/smoke-s3-storage.js
 pnpm docker:prod:db:backup:s3 -- alpha_manual_check
 pnpm docker:prod:db:list:s3
 pnpm docker:prod:db:restore:s3 -- <latest-backup-key.dump> --download-only

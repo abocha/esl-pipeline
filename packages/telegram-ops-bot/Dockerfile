@@ -33,6 +33,8 @@ RUN apk add --no-cache \
 
 WORKDIR /app
 
-COPY --from=build /app/deployed/ ./
+COPY --from=build --chown=node:node /app/deployed/ ./
+
+USER node
 
 CMD ["node", "dist/src/index.js"]

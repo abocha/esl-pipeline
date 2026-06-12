@@ -4,6 +4,8 @@ on:
   pull_request:
     branches: [main]
     types: [opened, reopened, synchronize, ready_for_review]
+  push:
+    branches: [main]
 
 permissions:
   contents: read
@@ -378,3 +380,67 @@ jobs:
           path: ${{ github.workspace }}/.artifacts/telegram-compose-smoke
           include-hidden-files: true
           if-no-files-found: warn
+
+  container-images:
+    name: production container images
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    needs:
+      - static-checks
+      - integration-tests
+      - backend-db-integration
+      - telegram-compose-smoke
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE_PREFIX: ghcr.io/${{ github.repository }}
+      PUSH_IMAGES: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Docker buildx version
+        run: docker buildx version
+
+      - name: Create Docker buildx builder
+        run: docker buildx create --use --name esl-pipeline-builder
+
+      - name: Login to GHCR
+        if: env.PUSH_IMAGES == 'true'
+        run: echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build or publish production images
+        run: |
+          set -euo pipefail
+
+          common_args=(
+            --platform linux/amd64
+            --provenance=false
+            --sbom=false
+          )
+
+          if [[ "$PUSH_IMAGES" == "true" ]]; then
+            output_args=(--push)
+          else
+            output_args=(--load)
+          fi
+
+          build_image() {
+            local name="$1"
+            local dockerfile="$2"
+            local image="${IMAGE_PREFIX}/${name}:${GITHUB_SHA}"
+
+            docker buildx build \
+              "${common_args[@]}" \
+              --cache-from "type=gha,scope=${name}" \
+              --cache-to "type=gha,mode=max,scope=${name}" \
+              --file "$dockerfile" \
+              --tag "$image" \
+              "${output_args[@]}" \
+              .
+          }
+
+          build_image batch-backend packages/batch-backend/Dockerfile
+          build_image batch-frontend packages/batch-frontend/Dockerfile
+          build_image telegram-ops-bot packages/telegram-ops-bot/Dockerfile

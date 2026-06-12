@@ -89,7 +89,7 @@ For deep system maps, prefer the linked docs rather than growing this file again
   dependencies, running dev servers, debugging, tests, integration checks, and migration tests.
 - Treat Git commits plus CI validation as the source of truth for deployable code. Production
   deployments must be reproducible from committed code, not server-local edits.
-- Treat the AWS Lightsail VPS as production runtime: pull or run selected images, apply reviewed
+- Treat the AWS Lightsail VPS as production runtime: pull selected images, apply reviewed
   migrations once, serve traffic, run health checks, keep production data, emit logs, and run
   backup/restore operations.
 - Do not use the production VPS as the normal coding, hot-reload, full-test-suite, or repeated image
@@ -97,6 +97,10 @@ For deep system maps, prefer the linked docs rather than growing this file again
 - Prefer CI-built Docker images tagged by Git commit SHA for production deployments. Avoid relying
   only on mutable tags such as `latest`; record the deployed Git SHA or image version in deployment
   evidence.
+- Production Compose app services must be pull-based. Do not reintroduce production `build:`,
+  `:local` app tags, `pull_policy: never`, or `up --build` for backend, frontend, bot, or worker
+  services. Keep Docker orchestration and backups host-side rather than mounting `/var/run/docker.sock`
+  into the long-running backend.
 - Use SSH for deployment, status/log inspection, resource checks, reviewed migrations, backups,
   production-only diagnosis, and emergency recovery. If an emergency server edit is unavoidable,
   reproduce it locally, commit it, and redeploy normally as soon as possible.

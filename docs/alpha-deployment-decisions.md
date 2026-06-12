@@ -114,7 +114,8 @@ Repo facts to verify and use:
 - It defines `batch-backend`, `batch-frontend`, `batch-worker`, `transcribe-worker`, `postgres`,
   and `redis`.
 - It also currently defines `telegram-ops-bot`; Telegram bot work is deferred for alpha.
-- Root `package.json` already has `pnpm docker:prod`, `pnpm docker:prod:ps`, and backup/restore commands.
+- Root `package.json` has pull-based `pnpm docker:prod`, `pnpm docker:prod:ps`, image-env
+  validation, and host-side backup/restore commands.
   The HTTPS edge path also has `pnpm docker:prod:edge:*` validation/start commands.
 
 Codex should preserve and improve the existing deployment path instead of creating a parallel one unless there is a documented blocker.
@@ -127,8 +128,8 @@ Development and deployment policy:
   environment.
 - SSH is for deployment, status/log/resource checks, reviewed migrations, backup/restore operations,
   production-only diagnosis, and emergency recovery.
-- Prefer CI-built images tagged by Git commit SHA for production deployment. Until that publish path
-  exists, record the exact deployed Git SHA for the current Compose-based rehearsal path.
+- Use CI-built images tagged by Git commit SHA for production deployment, and record the exact image
+  refs/digests selected by the manual VPS deployment script.
 - Do not install a self-hosted CI runner on the production VPS.
 
 Current verification notes from the 2026-06-09 doc/repo pass:
@@ -142,7 +143,7 @@ Current verification notes from the 2026-06-09 doc/repo pass:
   `BATCH_FRONTEND_BIND_ADDR=0.0.0.0` is a founder-rehearsal-only HTTP override, not a tutor-access
   shape.
 - Caddy edge mode is the intended public HTTPS topology: public `80/443` terminate at Caddy, then
-  Caddy proxies to `batch-frontend:80`, and frontend nginx keeps `/api/*` routed to
+  Caddy proxies to `batch-frontend:8080`, and frontend nginx keeps `/api/*` routed to
   `batch-backend:8080`.
 - The production backend image is a built runtime image. Do not assume
   `pnpm --filter @esl-pipeline/batch-backend db:migrate` works inside the container until the

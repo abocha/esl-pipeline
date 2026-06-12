@@ -78,6 +78,8 @@ If resuming after context loss, start with
 - Docs indexes: `pnpm docs:generate:indexes`
 - Docs gardening: `pnpm docs:garden`
 - Batch dev stack: `pnpm dev:batch`
+- Production deploy (VPS, after CI publishes images):
+  `bash scripts/deploy/deploy-prod-images.sh <40-char-git-sha>`
 
 Agents should prefer `:agent` validation commands when they exist. These commands are intentionally
 silent on success and terse on failure; do not treat quiet output as a hang. On failure, read the
@@ -90,6 +92,11 @@ or another existing `:agent` test script.
 When touching migrations, schema baselines, or contract-version files, also run the contract and DB
 baseline verification commands listed in [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md)
 and the repo admin workflow.
+
+Production Compose must stay pull-based: app services use SHA-tagged GHCR image refs supplied through
+environment/state files, while the VPS stores deployment state outside the checkout under
+`/var/lib/esl-pipeline/deploy`. Do not reintroduce production `build:`, `:local`, `pull_policy:
+never`, `up --build`, backend Docker socket mounts, or long-running backend Docker/AWS CLIs.
 
 ## Repo Admin
 
