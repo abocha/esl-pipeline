@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [8.2.0] - 2026-06-12
+
+### Changed
+
+- Automated release from PR #96: Clarify deployment and runtime boundaries (https://github.com/abocha/esl-pipeline/pull/96)
+
 ## [8.1.4] - 2026-06-11
 
 ### Changed
