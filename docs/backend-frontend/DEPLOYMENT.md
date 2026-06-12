@@ -5,7 +5,7 @@
 - Audience: maintainers/operators deploying batch services.
 - Read Time: 6 minutes.
 - Authority Level: Deployment runbook.
-- Last Verified Against: 2026-06-11 repo state.
+- Last Verified Against: 2026-06-12 repo state.
 - Owner: backend/frontend maintainers + automation agents.
 - Review Cadence: monthly or after deployment workflow changes.
 - Status: `runbook`.
@@ -29,6 +29,39 @@
 - Postgres 18+
 - Redis 8+
 - ffmpeg available in backend runtime
+
+## Operating Model
+
+The intended workflow is:
+
+```text
+local development -> Git push -> CI validation and image build -> reviewed deployment -> VPS runtime and smoke checks
+```
+
+Use the developer laptop for normal development: code edits, dependency installs, dev servers, hot
+reload, debugging, lint/type/test lanes, integration tests, migration tests, and local or synthetic
+data. The local Compose stack should reproduce production services where practical while keeping
+development affordances such as source mounts, exposed loopback ports, debug logging, and fast
+resets.
+
+Use GitHub Actions as the clean validation authority: install dependencies from scratch, lint,
+format-check, type-check, run automated tests, test database migrations, and build deployable
+production Docker images. The current blocking CI lanes are listed below in
+[CI Expectations](#ci-expectations). When a registry-publish workflow is added, published images
+should be tagged with the Git commit SHA and deployed by explicit SHA/version, not only by mutable
+tags such as `latest`.
+
+Use the AWS Lightsail VPS as production runtime, not as the normal coding machine. SSH is for
+deployment, container/service status, logs, CPU/RAM/disk checks, reviewed migrations, backup/restore
+operations, production-only diagnosis, and emergency recovery. Avoid routine server-side code
+editing, full test suites, hot-reload servers, repeated Docker builds, experiments against the
+production database, uncommitted server checkout changes, and manual edits inside running
+containers.
+
+Current repo production Compose commands (`pnpm docker:prod`, `pnpm docker:prod:edge`) build local
+`:local` images because the repository has not yet added a commit-SHA image publishing workflow.
+That path is acceptable for private rehearsal and controlled manual deploys, but the preferred
+production direction is CI-built images that the VPS pulls and records by Git SHA/image version.
 
 ## Local Development Stack (Compose)
 
@@ -126,6 +159,28 @@ The HTTP check should show Caddy redirecting to HTTPS.
 Before real tutor access, set `REFRESH_COOKIE_SECURE=true` and confirm backend, frontend raw host
 port, Postgres, Redis, and worker ports are not publicly reachable.
 
+## Production Deployment Flow
+
+A reviewed production deployment should broadly follow:
+
+1. CI passes for the selected commit.
+2. Production images are built and published, preferably tagged with the Git commit SHA.
+3. The Lightsail VPS pulls the selected image version or otherwise checks out the selected committed
+   code for the current Compose-based rehearsal path.
+4. A backup is created before risky migrations:
+   `pnpm docker:prod:db:backup:s3 -- pre_deploy_<short-sha>`.
+5. Database migrations run once from the production backend runtime image.
+6. Services are updated with `pnpm docker:prod:edge` or the future image-pull equivalent.
+7. Health and smoke checks run for HTTPS, API health, contract metadata, prompt assets, S3 storage,
+   workers, and backup download-only restore drills when relevant.
+8. If checks fail, roll back to the previous image version or previous committed deployment and use
+   the verified backup only when data rollback is required.
+
+Record the deployed Git SHA or image version in
+[`docs/operations/hosted-mvp-evidence.md`](../operations/hosted-mvp-evidence.md) or the active
+deployment evidence note. Do not leave the VPS in a state where the only working fix is an
+uncommitted server edit.
+
 ## Environment Files
 
 Create/update:
@@ -222,6 +277,15 @@ Runbooks:
 - [`docs/operations/postgres-ops-health.md`](../operations/postgres-ops-health.md)
 - [`docs/operations/telegram-ops-control-panel.md`](../operations/telegram-ops-control-panel.md)
 
+Use both Lightsail snapshots for whole-server recovery and logical Postgres backups for
+application-data recovery. Store logical backups separately from the main application data where
+possible, and periodically test restores in a non-production environment.
+
+Lightsail instances use burstable CPU performance. Short deployment spikes are acceptable, but do
+not spend burst capacity on development work, repeated image builds, or full test suites that can
+run locally or in CI. Monitor CPU utilization, remaining burst capacity, RAM/swap, disk, container
+health, and application health endpoints during and after deploys.
+
 ## Redis Queue Runtime
 
 Compose-managed Redis is used as durable queue/event infrastructure for BullMQ, not as a disposable
@@ -238,6 +302,9 @@ Deployment changes should preserve green CI for:
 - `static checks (node 24.x)`
 - `integration lane (blocking)`
 - `backend db + worker integration (blocking)`
+
+CI must remain separate from the production VPS. Do not install a self-hosted GitHub Actions runner
+on the Lightsail server.
 
 Workflow source:
 [`/.github/workflows/ci.yml`](../../.github/workflows/ci.yml)
