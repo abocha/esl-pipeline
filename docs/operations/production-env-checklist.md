@@ -12,6 +12,26 @@ This file lists the production environment values that must be decided and set o
 
 Do not commit real `.env.batch-backend` values.
 
+## Deployment Policy
+
+The development and deployment boundary is:
+
+```text
+local development -> Git push -> CI validation and image build -> reviewed deployment -> VPS runtime and smoke checks
+```
+
+- Do normal development locally: code edits, dependency installs, dev servers, hot reload, debugging,
+  lint/type/test lanes, integration tests, migration tests, and synthetic-data experiments.
+- Use Git and CI as the authoritative source for deployable code. Avoid production states that
+  depend on uncommitted server checkout changes.
+- Use the Lightsail VPS for production runtime only: pulling or running selected images, reviewed
+  migrations, service updates, health checks, logs, backups, and emergency recovery.
+- Do not install a self-hosted GitHub Actions runner on the production VPS.
+- Deploy CI-built Docker images tagged with the Git commit SHA. Record the exact deployed image refs
+  and resolved digests in `/var/lib/esl-pipeline/deploy/deployments.log`.
+- If an emergency server edit is unavoidable, reproduce it locally, commit it, and redeploy through
+  the normal path as soon as possible.
+
 ## Runtime Mode
 
 ```bash
@@ -133,7 +153,7 @@ Export these values in the same shell that runs `pnpm docker:prod:edge:*`. Docke
 Edge-mode public traffic flow:
 
 ```text
-browser -> Caddy :80/:443 -> batch-frontend nginx :80 -> /api/* -> batch-backend :8080
+browser -> Caddy :80/:443 -> batch-frontend nginx :8080 -> /api/* -> batch-backend :8080
 ```
 
 Do not configure Caddy to proxy the backend directly.
@@ -175,11 +195,11 @@ PG_BACKUP_LOG_RETENTION_DAYS=30
 PG_BACKUP_ALLOW_EMPTY_SOURCE=false
 ```
 
-Container targeting for prod compose may need:
+Container targeting for prod compose uses an explicit project name and absolute compose path:
 
 ```bash
 PG_COMPOSE_PROJECT=esl-pipeline-prod
-PG_COMPOSE_FILE=docker-compose.prod.yml
+PG_COMPOSE_FILE=/opt/esl-pipeline/docker-compose.prod.yml
 PG_CONTAINER_NAME=esl-pipeline-prod-postgres-1
 ```
 
@@ -197,6 +217,40 @@ Backup/restore completion Telegram notifications use `PG_BACKUP_ALERT_TELEGRAM_*
 `PG_BACKUP_ALERT_TELEGRAM_DISABLE=true` unless the bot token, chat id, and optional forum thread id
 have all been verified. Only set `PG_BACKUP_ALERT_TELEGRAM_THREAD_ID` when that exact Telegram
 topic exists.
+
+## Deployment Images and State
+
+Production app images are supplied through image environment values, not production `build:` blocks:
+
+```bash
+BATCH_BACKEND_IMAGE=ghcr.io/abocha/esl-pipeline/batch-backend:<40-char-git-sha>
+BATCH_FRONTEND_IMAGE=ghcr.io/abocha/esl-pipeline/batch-frontend:<40-char-git-sha>
+TELEGRAM_OPS_BOT_IMAGE=ghcr.io/abocha/esl-pipeline/telegram-ops-bot:<40-char-git-sha>
+```
+
+The manual deploy script writes image refs and digests only under:
+
+```text
+/var/lib/esl-pipeline/deploy/current-images.env
+/var/lib/esl-pipeline/deploy/previous-images.env
+/var/lib/esl-pipeline/deploy/known-good-images.env
+/var/lib/esl-pipeline/deploy/deployments.log
+```
+
+Do not put application secrets in those state files. Keep `.env.batch-backend` in the application
+checkout with restrictive permissions. Authenticate to GHCR on the VPS with a read-only production
+credential where possible:
+
+```bash
+echo '<read-only-token>' | docker login ghcr.io -u '<github-user-or-bot>' --password-stdin
+```
+
+Deploy after CI publishes images:
+
+```bash
+cd /opt/esl-pipeline
+bash scripts/deploy/deploy-prod-images.sh <40-char-git-sha>
+```
 
 ## Provider Keys and Cost Guardrails
 
@@ -262,17 +316,40 @@ On the Ubuntu 24.04 VPS:
 - Firewall allows SSH, HTTP, HTTPS only.
 - Docker and Docker Compose are installed.
 - Repo is cloned.
+- Server checkout is on the reviewed deployment commit; no uncommitted server edits remain.
 - `.env.batch-backend` exists on server and is not committed.
 - `uploads/` host path exists if compose bind mount requires it.
 - Docker volumes exist for Postgres and Redis.
 - Backups can be uploaded to S3.
 - Logs can be viewed through Docker Compose.
+- Container log rotation is configured at the Docker daemon or service level.
 - `batch-worker` and `transcribe-worker` are both running; recording uploads require the dedicated
   transcribe worker.
 - In edge mode, public HTTP/HTTPS goes through Caddy only.
 - Backend, frontend, Postgres, and Redis host ports stay bound to `127.0.0.1` unless deliberately
   exposed for private founder rehearsal.
+- PostgreSQL, Redis, MinIO/internal storage, internal APIs, and development ports are not publicly
+  exposed.
+- Persistent production data lives in Docker volumes or dedicated host paths, not inside mutable
+  container filesystems or ad hoc source-tree edits.
 ```
+
+## Lightsail Resource Checks
+
+The Lightsail instance is burstable. During and after deployment, check:
+
+```text
+- CPU utilization.
+- Remaining burst capacity.
+- RAM and swap usage.
+- Disk space.
+- Container health.
+- Application health endpoints.
+```
+
+Short deployment spikes are acceptable. Sustained burst-capacity depletion means development work,
+image builds, test suites, or other CPU-heavy tasks should move back to the laptop/CI, or the
+instance should be resized.
 
 ## Verification Commands
 
@@ -280,29 +357,39 @@ Local/CI verification that does not require a real VPS or DNS:
 
 ```bash
 pnpm docker:prepare
-docker compose -p esl-pipeline-prod -f docker-compose.prod.yml config --quiet
+pnpm docker:prod:config
 export CADDY_PUBLIC_HOSTNAME=alpha.example.com
 export CADDY_ACME_EMAIL=ops@example.com
 pnpm docker:prod:edge:env
 pnpm docker:prod:edge:config
+pnpm docker:prod:ops-bot:config
 pnpm docker:caddy:validate
 ```
 
 Private founder-rehearsal smoke checks:
 
 ```bash
-pnpm docker:prod
+bash scripts/deploy/deploy-prod-images.sh <40-char-git-sha>
 pnpm docker:prod:ps
 curl -fsS http://127.0.0.1:8080/health
 curl -fsS http://127.0.0.1:8080/meta/version
 curl -fsS http://127.0.0.1:${BATCH_FRONTEND_HOST_PORT:-5173}/api/meta/version
 curl -fsS http://127.0.0.1:${BATCH_FRONTEND_HOST_PORT:-5173}/api/health
-docker compose -p esl-pipeline-prod -f docker-compose.prod.yml exec batch-backend node dist/tools/migrate-db.js status
-docker compose -p esl-pipeline-prod -f docker-compose.prod.yml exec batch-backend node dist/tools/migrate-db.js migrate
-docker compose -p esl-pipeline-prod -f docker-compose.prod.yml exec batch-backend node dist/tools/migrate-db.js verify
-docker compose -p esl-pipeline-prod -f docker-compose.prod.yml exec batch-backend node dist/tools/bootstrap-prompt-assets.js --dry-run
-docker compose -p esl-pipeline-prod -f docker-compose.prod.yml exec batch-backend node dist/tools/bootstrap-prompt-assets.js
-docker compose -p esl-pipeline-prod -f docker-compose.prod.yml exec batch-backend node dist/tools/smoke-s3-storage.js
+docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml \
+  --env-file /var/lib/esl-pipeline/deploy/current-images.env \
+  exec batch-backend node dist/tools/migrate-db.js status
+docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml \
+  --env-file /var/lib/esl-pipeline/deploy/current-images.env \
+  exec batch-backend node dist/tools/migrate-db.js verify
+docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml \
+  --env-file /var/lib/esl-pipeline/deploy/current-images.env \
+  exec batch-backend node dist/tools/bootstrap-prompt-assets.js --dry-run
+docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml \
+  --env-file /var/lib/esl-pipeline/deploy/current-images.env \
+  exec batch-backend node dist/tools/bootstrap-prompt-assets.js
+docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml \
+  --env-file /var/lib/esl-pipeline/deploy/current-images.env \
+  exec batch-backend node dist/tools/smoke-s3-storage.js
 pnpm docker:prod:db:backup:s3 -- alpha_manual_check
 pnpm docker:prod:db:list:s3
 pnpm docker:prod:db:restore:s3 -- <latest-backup-key.dump> --download-only
@@ -324,6 +411,32 @@ not publicly reachable, that `transcribe-worker` has no public port, and that th
 
 The production image copies `docs/prompt-gallery` into `/app/docs/prompt-gallery` so prompt asset
 bootstrap can use the documented prompt-gallery paths inside the runtime container.
+
+## Backup Recovery Model
+
+Use both:
+
+- Lightsail snapshots for whole-server recovery.
+- Logical Postgres backups for application-data recovery.
+
+Keep logical backups separate from the main application data where possible and periodically test
+restore into a non-production environment. Before risky migrations, create and verify a logical
+backup with the production Compose wrapper:
+
+```bash
+pnpm docker:prod:db:backup:s3 -- pre_migration_<short-sha>
+pnpm docker:prod:db:list:s3
+pnpm docker:prod:db:restore:s3 -- <latest-backup-key.dump> --download-only
+```
+
+Application rollback and database rollback are separate. The deployment script may tell you how to
+restart the previous application image set, but it never restores PostgreSQL automatically. Only
+restore the database after choosing that recovery path explicitly and verifying the target backup.
+Older application images may fail against a migrated schema unless the migration was
+backward-compatible.
+
+Do not copy real production student, invoice, transcript, or credential data into local development
+unless it has been anonymized.
 
 ## Do Not Store Here
 

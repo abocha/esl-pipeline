@@ -114,10 +114,23 @@ Repo facts to verify and use:
 - It defines `batch-backend`, `batch-frontend`, `batch-worker`, `transcribe-worker`, `postgres`,
   and `redis`.
 - It also currently defines `telegram-ops-bot`; Telegram bot work is deferred for alpha.
-- Root `package.json` already has `pnpm docker:prod`, `pnpm docker:prod:ps`, and backup/restore commands.
+- Root `package.json` has pull-based `pnpm docker:prod`, `pnpm docker:prod:ps`, image-env
+  validation, and host-side backup/restore commands.
   The HTTPS edge path also has `pnpm docker:prod:edge:*` validation/start commands.
 
 Codex should preserve and improve the existing deployment path instead of creating a parallel one unless there is a documented blocker.
+
+Development and deployment policy:
+
+- The developer laptop is the primary development environment.
+- Git commits and CI validation are the source of truth for deployable code.
+- The Lightsail VPS is production runtime, not the normal coding, test-suite, or repeated image-build
+  environment.
+- SSH is for deployment, status/log/resource checks, reviewed migrations, backup/restore operations,
+  production-only diagnosis, and emergency recovery.
+- Use CI-built images tagged by Git commit SHA for production deployment, and record the exact image
+  refs/digests selected by the manual VPS deployment script.
+- Do not install a self-hosted CI runner on the production VPS.
 
 Current verification notes from the 2026-06-09 doc/repo pass:
 
@@ -130,7 +143,7 @@ Current verification notes from the 2026-06-09 doc/repo pass:
   `BATCH_FRONTEND_BIND_ADDR=0.0.0.0` is a founder-rehearsal-only HTTP override, not a tutor-access
   shape.
 - Caddy edge mode is the intended public HTTPS topology: public `80/443` terminate at Caddy, then
-  Caddy proxies to `batch-frontend:80`, and frontend nginx keeps `/api/*` routed to
+  Caddy proxies to `batch-frontend:8080`, and frontend nginx keeps `/api/*` routed to
   `batch-backend:8080`.
 - The production backend image is a built runtime image. Do not assume
   `pnpm --filter @esl-pipeline/batch-backend db:migrate` works inside the container until the
@@ -326,6 +339,17 @@ reason: The app loaded over HTTPS at esl-pipeline.run.place, public health passe
 alternatives considered: Tear down and retry on a different provider before recording evidence.
 impact: Next work should stabilize reproducibility from git and server-local env rather than hand-editing the VPS.
 follow-up: Add production transcribe-worker, commit the orchestrator runtime hotfix, and verify a fresh prod Compose rebuild.
+```
+
+### 2026-06-12: Development and VPS runtime boundary
+
+```text
+date: 2026-06-12
+decision: Treat local development as the coding/testing environment, Git plus CI as the deployable source of truth, and Lightsail as production runtime only.
+reason: The Lightsail instance is burstable and holds production data; using it for routine coding, full tests, hot reload, repeated builds, or CI would waste capacity and increase drift/data risk.
+alternatives considered: Use the VPS as a remote development box, install a self-hosted CI runner there, or keep deploying mutable local/server builds without recording the selected commit.
+impact: Normal work happens locally, CI remains clean and off-server, deployments must record the Git SHA or image version, and SSH use is limited to production operations.
+follow-up: Add a CI image-publish path with commit-SHA tags when the deployment flow graduates from private rehearsal to repeatable production releases.
 ```
 
 ## Codex Working Rules

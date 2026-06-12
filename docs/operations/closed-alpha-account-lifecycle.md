@@ -32,9 +32,15 @@ Client-supplied roles are ignored during public registration.
 Run inside the production backend container:
 
 ```bash
-docker compose -p esl-pipeline-prod -f docker-compose.prod.yml exec batch-backend node dist/tools/alpha-invites.js create --email tutor@example.com --expires-days 14 --app-url https://app.example.com
-docker compose -p esl-pipeline-prod -f docker-compose.prod.yml exec batch-backend node dist/tools/alpha-invites.js list
-docker compose -p esl-pipeline-prod -f docker-compose.prod.yml exec batch-backend node dist/tools/alpha-invites.js revoke --email tutor@example.com
+docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml \
+  --env-file /var/lib/esl-pipeline/deploy/current-images.env \
+  exec batch-backend node dist/tools/alpha-invites.js create --email tutor@example.com --expires-days 14 --app-url https://app.example.com
+docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml \
+  --env-file /var/lib/esl-pipeline/deploy/current-images.env \
+  exec batch-backend node dist/tools/alpha-invites.js list
+docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml \
+  --env-file /var/lib/esl-pipeline/deploy/current-images.env \
+  exec batch-backend node dist/tools/alpha-invites.js revoke --email tutor@example.com
 ```
 
 The `create` command prints the raw token exactly once. Store only the invite URL sent to the tutor.
