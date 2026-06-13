@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [8.2.2] - 2026-06-13
+
+### Changed
+
+- Automated release from PR #98: fix(batch): route profile revision ids via query aliases (https://github.com/abocha/esl-pipeline/pull/98)
+
 ## [8.2.1] - 2026-06-13
 
 ### Changed
