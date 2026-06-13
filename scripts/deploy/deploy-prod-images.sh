@@ -330,6 +330,28 @@ assert_recent_logs_clean() {
   fi
 }
 
+recreate_edge_service() {
+  if ! edge_enabled; then
+    return 0
+  fi
+
+  info "Force-recreating caddy-edge to refresh mounted edge configuration"
+  compose_with_env "$PENDING_ENV" up -d --no-build --force-recreate caddy-edge
+}
+
+assert_caddy_upstream_config() {
+  if ! edge_enabled; then
+    return 0
+  fi
+
+  local config
+  config="$(compose_with_env "$PENDING_ENV" exec -T caddy-edge cat /etc/caddy/Caddyfile 2>/dev/null || true)"
+  if ! printf '%s\n' "$config" | grep -Fq 'reverse_proxy batch-frontend:8080'; then
+    printf '%s\n' "$config" >&2
+    die "caddy-edge Caddyfile does not contain reverse_proxy batch-frontend:8080"
+  fi
+}
+
 run_smoke_checks() {
   local backend_port="${BATCH_BACKEND_HOST_PORT:-8080}"
   local frontend_port="${BATCH_FRONTEND_HOST_PORT:-5173}"
@@ -340,6 +362,7 @@ run_smoke_checks() {
 
   if edge_enabled && [[ -n "${CADDY_PUBLIC_HOSTNAME:-}" ]]; then
     retry_curl "https://${CADDY_PUBLIC_HOSTNAME}/api/health" 20 3
+    assert_caddy_upstream_config
   fi
 
   run_in_backend node dist/tools/migrate-db.js verify
@@ -459,6 +482,7 @@ main() {
 
   UPDATED_SERVICES=true
   compose_with_env "$PENDING_ENV" up -d --no-build
+  recreate_edge_service
   run_smoke_checks
 
   copy_state_file "$PENDING_ENV" "$CURRENT_ENV"
