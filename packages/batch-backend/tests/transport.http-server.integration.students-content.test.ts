@@ -16,6 +16,9 @@ describeHttpServerIntegrationSuite(
     mockListStudentProfiles,
     mockUpsertPrimaryStudentLessonRecurrence,
     mockDeleteProfileContent,
+    mockGetProfileRevisionForProfile,
+    mockListProfileRevisionsForProfile,
+    mockRestoreProfileRevision,
     mockSaveProfileRevisionContent,
     mockDeleteTemplateContent,
     mockRestoreStudentProfile,
@@ -604,6 +607,28 @@ describeHttpServerIntegrationSuite(
       expect(mockSaveProfileRevisionContent).toHaveBeenCalled();
     });
 
+    it('POST /profiles/revisions saves a draft revision with profileId in the body', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/profiles/revisions',
+        payload: {
+          profileId: 'profiles/students/alex.md',
+          content: '# Profile',
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(mockSaveProfileRevisionContent).toHaveBeenCalledWith(
+        'profiles/students/alex.md',
+        '# Profile',
+        expect.objectContaining({
+          source: 'update',
+          status: 'draft',
+          createdBy: 'test-user-id',
+        }),
+      );
+    });
+
     it('GET /profiles/:id/revisions returns profile revision list', async () => {
       const response = await app.inject({
         method: 'GET',
@@ -633,6 +658,23 @@ describeHttpServerIntegrationSuite(
         offset: 0,
         order: 'desc',
       });
+    });
+
+    it('GET /profiles/revisions returns profile revision list with profileId in the query', async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/profiles/revisions?profileId=profiles%2Fstudents%2Falex.md&limit=10&offset=0&order=desc',
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(mockListProfileRevisionsForProfile).toHaveBeenCalledWith(
+        'profiles/students/alex.md',
+        {
+          limit: 10,
+          offset: 0,
+          order: 'desc',
+        },
+      );
     });
 
     it('GET /profiles/:id/revisions/:revisionId returns revision detail', async () => {
@@ -671,6 +713,19 @@ describeHttpServerIntegrationSuite(
       });
     });
 
+    it('GET /profiles/revisions/:revisionId returns revision detail with profileId in the query', async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/profiles/revisions/11111111-1111-4111-8111-111111111111?profileId=profiles%2Fstudents%2Falex.md',
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(mockGetProfileRevisionForProfile).toHaveBeenCalledWith(
+        'profiles/students/alex.md',
+        '11111111-1111-4111-8111-111111111111',
+      );
+    });
+
     it('POST /profiles/:id/revisions/:revisionId/restore restores profile content', async () => {
       const response = await app.inject({
         method: 'POST',
@@ -697,6 +752,25 @@ describeHttpServerIntegrationSuite(
         currentRevisionId: 'revision-2',
         updatedAt: '2024-01-02T00:00:00.000Z',
       });
+    });
+
+    it('POST /profiles/revisions/:revisionId/restore restores profile content with profileId in the body', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/profiles/revisions/11111111-1111-4111-8111-111111111111/restore',
+        payload: {
+          profileId: 'profiles/students/alex.md',
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(mockRestoreProfileRevision).toHaveBeenCalledWith(
+        'profiles/students/alex.md',
+        '11111111-1111-4111-8111-111111111111',
+        expect.objectContaining({
+          createdBy: 'test-user-id',
+        }),
+      );
     });
 
     it('POST /profiles/:id/revisions/:revisionId/activate returns activated revision', async () => {
@@ -728,6 +802,38 @@ describeHttpServerIntegrationSuite(
         status: 'active',
         versionLabel: 'v1',
       });
+    });
+
+    it('POST /profiles/revisions/:revisionId/activate activates a revision with profileId in the body', async () => {
+      mockActivateProfileRevisionForProfile.mockResolvedValueOnce({
+        id: 'revision-1',
+        profileId: 'profiles/students/alex.md',
+        contentHash: 'hash-1',
+        source: 'create',
+        status: 'active',
+        versionNumber: 1,
+        versionLabel: 'v1',
+        activatedAt: '2024-01-01T00:00:00.000Z',
+        deprecatedAt: null,
+        createdAt: '2024-01-01T00:00:00.000Z',
+        createdBy: null,
+        restoredFromRevisionId: null,
+        content: 'Profile content',
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/profiles/revisions/11111111-1111-4111-8111-111111111111/activate',
+        payload: {
+          profileId: 'profiles/students/alex.md',
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(mockActivateProfileRevisionForProfile).toHaveBeenCalledWith(
+        'profiles/students/alex.md',
+        '11111111-1111-4111-8111-111111111111',
+      );
     });
 
     it('GET /templates returns template list', async () => {
