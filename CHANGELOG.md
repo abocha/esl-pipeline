@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [8.2.1] - 2026-06-13
+
+### Changed
+
+- Automated release from PR #97: fix(deploy): preserve encoded profile routes through edge deploy (https://github.com/abocha/esl-pipeline/pull/97)
+
 ## [8.2.0] - 2026-06-12
 
 ### Changed
