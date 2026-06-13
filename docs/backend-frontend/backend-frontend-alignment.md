@@ -5,7 +5,7 @@
 - Audience: AI agents and maintainers coordinating backend/frontend delivery.
 - Read Time: 5 minutes.
 - Authority Level: canonical status tracker.
-- Last Verified Against: 2026-05-13 repo state.
+- Last Verified Against: 2026-06-13 repo state.
 - Owner: backend/frontend maintainers + automation agents.
 - Review Cadence: weekly while active roadmap work continues.
 - Status: `active`.
@@ -44,6 +44,7 @@ Provider-specific generation details stay in:
 - student retirement is archive-first: `/students/:id/archive` and `/students/:id/restore` preserve audit/history, while default student reads hide archived learners
 - resumable assignment sessions are live for pre-publish work; publish `jobs` remain reserved for materialized/approved pipeline runs
 - elapsed schedule-to-homework follow-ups are live as teacher-confirmed in-app actions with durable lesson lineage through assignment sessions, prompt packages, drafts, jobs, and homework memory
+- same-origin `/api/*` frontend proxying preserves encoded `%2F` segments for path-like profile IDs such as `profiles/students/<id>.md`
 
 ## Capability Matrix
 
@@ -56,7 +57,7 @@ Provider-specific generation details stay in:
 | Draft save/materialize/publish approve     | Done    | Done     | none                                                                                                      |
 | Pre-publish assignment session resume      | Done    | Done     | sessions store refs only; transcript/prompt/draft bodies remain in canonical storage                      |
 | Job status and core job actions            | Done    | Done     | rerun is a single action; chunk defaults remain mode-aware                                                |
-| Student summary/profile/bindings           | Done    | Partial  | student archive/restore is live; broader workspace hardening continues                                    |
+| Student summary/profile/bindings           | Done    | Partial  | student archive/restore is live; same-origin profile revision calls preserve path-like profile IDs        |
 | Student timeline + provenance              | Done    | Done     | support-facing provenance now includes rerun audio fallback notices; continue ergonomics pass             |
 | Student memory inspection + replay tooling | Done    | Done     | backend routes, prompt-package provenance, replay tools, and the minimal workspace inspection UI are live |
 | Direct generation provider/model selection | Done    | Done     | keep quota semantics aligned                                                                              |
