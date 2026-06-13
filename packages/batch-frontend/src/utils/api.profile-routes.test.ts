@@ -40,64 +40,59 @@ describe('utils/api profile route encoding', () => {
     expect(apiClient.get).toHaveBeenCalledWith(`/api/profiles/${encodedProfileId}`);
   });
 
-  it('encodes path-like profile ids when listing profile revisions', async () => {
+  it('sends path-like profile ids as query params when listing profile revisions', async () => {
     vi.mocked(apiClient.get).mockResolvedValueOnce({ data: { items: [] } } as never);
 
     await listProfileRevisions(profileId, { limit: 25, offset: 0, order: 'desc' });
 
-    expect(buildApiProxyPath).toHaveBeenCalledWith(`/profiles/${encodedProfileId}/revisions`);
-    expect(apiClient.get).toHaveBeenCalledWith(`/api/profiles/${encodedProfileId}/revisions`, {
-      params: { limit: 25, offset: 0, order: 'desc' },
+    expect(buildApiProxyPath).toHaveBeenCalledWith('/profiles/revisions');
+    expect(apiClient.get).toHaveBeenCalledWith('/api/profiles/revisions', {
+      params: { limit: 25, offset: 0, order: 'desc', profileId },
     });
   });
 
-  it('encodes path-like profile ids when loading revision details', async () => {
+  it('sends path-like profile ids as query params when loading revision details', async () => {
     vi.mocked(apiClient.get).mockResolvedValueOnce({ data: { id: revisionId } } as never);
 
     await getProfileRevision(profileId, revisionId);
 
-    expect(buildApiProxyPath).toHaveBeenCalledWith(
-      `/profiles/${encodedProfileId}/revisions/${revisionId}`,
-    );
-    expect(apiClient.get).toHaveBeenCalledWith(
-      `/api/profiles/${encodedProfileId}/revisions/${revisionId}`,
-    );
+    expect(buildApiProxyPath).toHaveBeenCalledWith(`/profiles/revisions/${revisionId}`);
+    expect(apiClient.get).toHaveBeenCalledWith(`/api/profiles/revisions/${revisionId}`, {
+      params: { profileId },
+    });
   });
 
-  it('encodes path-like profile ids when saving draft revisions', async () => {
+  it('sends path-like profile ids in the body when saving draft revisions', async () => {
     vi.mocked(apiClient.post).mockResolvedValueOnce({ data: { id: revisionId } } as never);
 
     await saveProfileDraftRevision(profileId, { content: '# Profile' });
 
-    expect(buildApiProxyPath).toHaveBeenCalledWith(`/profiles/${encodedProfileId}/revisions`);
-    expect(apiClient.post).toHaveBeenCalledWith(`/api/profiles/${encodedProfileId}/revisions`, {
+    expect(buildApiProxyPath).toHaveBeenCalledWith('/profiles/revisions');
+    expect(apiClient.post).toHaveBeenCalledWith('/api/profiles/revisions', {
       content: '# Profile',
+      profileId,
     });
   });
 
-  it('encodes path-like profile ids when restoring revisions', async () => {
+  it('sends path-like profile ids in the body when restoring revisions', async () => {
     vi.mocked(apiClient.post).mockResolvedValueOnce({ data: { id: profileId } } as never);
 
     await restoreProfileRevision(profileId, revisionId);
 
-    expect(buildApiProxyPath).toHaveBeenCalledWith(
-      `/profiles/${encodedProfileId}/revisions/${revisionId}/restore`,
-    );
-    expect(apiClient.post).toHaveBeenCalledWith(
-      `/api/profiles/${encodedProfileId}/revisions/${revisionId}/restore`,
-    );
+    expect(buildApiProxyPath).toHaveBeenCalledWith(`/profiles/revisions/${revisionId}/restore`);
+    expect(apiClient.post).toHaveBeenCalledWith(`/api/profiles/revisions/${revisionId}/restore`, {
+      profileId,
+    });
   });
 
-  it('encodes path-like profile ids when activating revisions', async () => {
+  it('sends path-like profile ids in the body when activating revisions', async () => {
     vi.mocked(apiClient.post).mockResolvedValueOnce({ data: { id: profileId } } as never);
 
     await activateProfileRevision(profileId, revisionId);
 
-    expect(buildApiProxyPath).toHaveBeenCalledWith(
-      `/profiles/${encodedProfileId}/revisions/${revisionId}/activate`,
-    );
-    expect(apiClient.post).toHaveBeenCalledWith(
-      `/api/profiles/${encodedProfileId}/revisions/${revisionId}/activate`,
-    );
+    expect(buildApiProxyPath).toHaveBeenCalledWith(`/profiles/revisions/${revisionId}/activate`);
+    expect(apiClient.post).toHaveBeenCalledWith(`/api/profiles/revisions/${revisionId}/activate`, {
+      profileId,
+    });
   });
 });
