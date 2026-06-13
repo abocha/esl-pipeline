@@ -5,7 +5,7 @@
 - Audience: founder-maintainer and implementing agents.
 - Read Time: 5 minutes.
 - Authority Level: canonical provider/model/quota policy.
-- Last Verified Against: 2026-04-28 repo state.
+- Last Verified Against: 2026-06-13 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly or after provider policy/availability changes.
 - Status: `reference`.
