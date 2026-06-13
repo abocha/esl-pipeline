@@ -331,6 +331,319 @@ export function registerProfileTemplateRoutes(
     },
   );
 
+  app.post(
+    '/profiles/revisions',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'POST /profiles/revisions');
+      const schema = z
+        .object({
+          profileId: z.string().min(1),
+          content: z.string().optional(),
+          structuredContent: foundationalProfileSchema.optional(),
+        })
+        .refine((body) => typeof body.content === 'string' || body.structuredContent, {
+          message: 'Either content or structuredContent is required.',
+          path: ['content'],
+        });
+
+      try {
+        const body = schema.parse(request.body ?? {});
+        const structuredContent = body.structuredContent ?? null;
+        const content =
+          typeof body.content === 'string'
+            ? body.content
+            : structuredContent
+              ? renderFoundationalProfileContent(structuredContent)
+              : '';
+
+        const saved = await saveProfileRevisionContent(body.profileId, content, {
+          source: 'update',
+          status: 'draft',
+          createdBy: getAuthenticatedUser(request)?.id ?? null,
+          structuredContent,
+        });
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 201,
+          profileId: body.profileId,
+        });
+
+        return reply.code(201).send(saved);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid request body',
+            details: error.issues,
+          });
+        }
+        if (error instanceof ProfileContentError) {
+          return reply.code(error.status).send({
+            error: error.code,
+            message: error.message,
+            code: error.code,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.get(
+    '/profiles/revisions',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'GET /profiles/revisions');
+      const querySchema = z.object({
+        profileId: z.string().min(1),
+        limit: z.coerce.number().int().min(1).max(500).optional(),
+        offset: z.coerce.number().int().min(0).optional(),
+        order: z.enum(['asc', 'desc']).optional(),
+      });
+
+      try {
+        const { profileId, ...query } = querySchema.parse(request.query ?? {});
+        const revisions = await listProfileRevisionsForProfile(profileId, query);
+        if (!revisions) {
+          return errorResponse(reply, 'not_found');
+        }
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          profileId,
+        });
+
+        return reply.send(revisions);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid request parameters',
+            details: error.issues,
+          });
+        }
+        if (error instanceof ProfileContentError) {
+          return reply.code(error.status).send({
+            error: error.code,
+            message: error.message,
+            code: error.code,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.get(
+    '/profiles/revisions/:revisionId',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'GET /profiles/revisions/:revisionId');
+      const paramsSchema = z.object({
+        revisionId: z.string().uuid(),
+      });
+      const querySchema = z.object({
+        profileId: z.string().min(1),
+      });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const query = querySchema.parse(request.query ?? {});
+        const revision = await getProfileRevisionForProfile(query.profileId, params.revisionId);
+        if (!revision) {
+          return errorResponse(reply, 'not_found');
+        }
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          profileId: query.profileId,
+          revisionId: params.revisionId,
+        });
+
+        return reply.send(revision);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid request parameters',
+            details: error.issues,
+          });
+        }
+        if (error instanceof ProfileContentError) {
+          return reply.code(error.status).send({
+            error: error.code,
+            message: error.message,
+            code: error.code,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.post(
+    '/profiles/revisions/:revisionId/restore',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'POST /profiles/revisions/:revisionId/restore');
+      const paramsSchema = z.object({
+        revisionId: z.string().uuid(),
+      });
+      const profileIdSchema = z.object({
+        profileId: z.string().min(1),
+      });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const { profileId } = profileIdSchema.parse({
+          ...(request.query as Record<string, unknown> | undefined),
+          ...(request.body as Record<string, unknown> | undefined),
+        });
+        const restored = await restoreProfileRevision(profileId, params.revisionId, {
+          createdBy: getAuthenticatedUser(request)?.id ?? null,
+        });
+        if (!restored) {
+          return errorResponse(reply, 'not_found');
+        }
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          profileId,
+          revisionId: params.revisionId,
+        });
+
+        return reply.send(restored);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid request parameters',
+            details: error.issues,
+          });
+        }
+        if (error instanceof ProfileContentError) {
+          return reply.code(error.status).send({
+            error: error.code,
+            message: error.message,
+            code: error.code,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.post(
+    '/profiles/revisions/:revisionId/activate',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'POST /profiles/revisions/:revisionId/activate');
+      const paramsSchema = z.object({
+        revisionId: z.string().uuid(),
+      });
+      const profileIdSchema = z.object({
+        profileId: z.string().min(1),
+      });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const { profileId } = profileIdSchema.parse({
+          ...(request.query as Record<string, unknown> | undefined),
+          ...(request.body as Record<string, unknown> | undefined),
+        });
+        const activated = await activateProfileRevisionForProfile(profileId, params.revisionId);
+        if (!activated) {
+          return errorResponse(reply, 'not_found');
+        }
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          profileId,
+          revisionId: params.revisionId,
+        });
+
+        return reply.send(activated);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid request parameters',
+            details: error.issues,
+          });
+        }
+        if (error instanceof ProfileContentError) {
+          return reply.code(error.status).send({
+            error: error.code,
+            message: error.message,
+            code: error.code,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
   app.get(
     '/profiles/:id/revisions',
     {

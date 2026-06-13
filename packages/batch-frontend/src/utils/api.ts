@@ -19,8 +19,8 @@
  * - GET /students/:id/bindings, /students/:id/bindings/active
  * - POST /students, PUT /students/:id, DELETE /students/:id
  * - GET /profiles, /profiles/:id, PUT /profiles/:id, DELETE /profiles/:id
- * - GET /profiles/:id/revisions, GET /profiles/:id/revisions/:revisionId
- * - POST /profiles/:id/revisions/:revisionId/restore
+ * - GET /profiles/revisions, GET /profiles/revisions/:revisionId
+ * - POST /profiles/revisions/:revisionId/restore
  * - GET /prompt-packages/:id/lineage
  * - POST /generation/drafts
  * - GET /drafts/:id
@@ -2052,10 +2052,9 @@ export async function listProfileRevisions(
   } = {},
 ): Promise<ProfileRevisionListResponse> {
   try {
-    const response = await apiClient.get(
-      buildApiProxyPath(`/profiles/${encodeURIComponent(profileId)}/revisions`),
-      { params },
-    );
+    const response = await apiClient.get(buildApiProxyPath('/profiles/revisions'), {
+      params: { ...params, profileId },
+    });
     return response.data;
   } catch (error: unknown) {
     const axiosError = toAxiosError(error);
@@ -2072,9 +2071,8 @@ export async function getProfileRevision(
 ): Promise<ProfileRevisionDetailResponse> {
   try {
     const response = await apiClient.get(
-      buildApiProxyPath(
-        `/profiles/${encodeURIComponent(profileId)}/revisions/${encodeURIComponent(revisionId)}`,
-      ),
+      buildApiProxyPath(`/profiles/revisions/${encodeURIComponent(revisionId)}`),
+      { params: { profileId } },
     );
     return response.data;
   } catch (error: unknown) {
@@ -2092,9 +2090,8 @@ export async function restoreProfileRevision(
 ): Promise<ProfileContentResponse> {
   try {
     const response = await apiClient.post(
-      buildApiProxyPath(
-        `/profiles/${encodeURIComponent(profileId)}/revisions/${encodeURIComponent(revisionId)}/restore`,
-      ),
+      buildApiProxyPath(`/profiles/revisions/${encodeURIComponent(revisionId)}/restore`),
+      { profileId },
     );
     return response.data;
   } catch (error: unknown) {
@@ -2111,10 +2108,10 @@ export async function saveProfileDraftRevision(
   payload: SaveProfileDraftRevisionRequest,
 ): Promise<ProfileRevisionDetailResponse> {
   try {
-    const response = await apiClient.post(
-      buildApiProxyPath(`/profiles/${encodeURIComponent(profileId)}/revisions`),
-      payload,
-    );
+    const response = await apiClient.post(buildApiProxyPath('/profiles/revisions'), {
+      ...payload,
+      profileId,
+    });
     return response.data;
   } catch (error: unknown) {
     const axiosError = toAxiosError(error);
@@ -2131,9 +2128,8 @@ export async function activateProfileRevision(
 ): Promise<ProfileContentResponse> {
   try {
     const response = await apiClient.post(
-      buildApiProxyPath(
-        `/profiles/${encodeURIComponent(profileId)}/revisions/${encodeURIComponent(revisionId)}/activate`,
-      ),
+      buildApiProxyPath(`/profiles/revisions/${encodeURIComponent(revisionId)}/activate`),
+      { profileId },
     );
     return response.data;
   } catch (error: unknown) {
