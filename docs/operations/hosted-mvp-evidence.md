@@ -9,10 +9,10 @@
 ## Deployment Snapshot
 
 ```text
-Date: 2026-06-11
+Date: 2026-06-13
 Operator: founder/operator
-Git commit deployed: server checkout included hotfixes from this stabilization branch; commit pending
-Branch: codex/lightsail-hosted-rehearsal-stabilization
+Git commit deployed: dac03f3a6de34febeeca907436d0b6ddaf8c7148
+Branch: main after PR #96 merge
 Hosting provider: AWS Lightsail
 Instance size: 2 GB RAM, 2 vCPUs, 60 GB SSD
 Region: Singapore / ap-southeast-1
@@ -27,7 +27,7 @@ Internal backend URL: http://127.0.0.1:8080
 # Build/deploy command:
 export CADDY_PUBLIC_HOSTNAME=esl-pipeline.run.place
 export CADDY_ACME_EMAIL=<operator-email>
-pnpm docker:prod:edge
+bash scripts/deploy/deploy-prod-images.sh dac03f3a6de34febeeca907436d0b6ddaf8c7148
 
 # Migration status command:
 docker compose -p esl-pipeline-prod -f docker-compose.prod.yml exec batch-backend node dist/tools/migrate-db.js status
@@ -88,13 +88,14 @@ Response summary: ok=true, service=batch-backend
 Postgres check: ok=true
 Redis check: ok=true
 Same-origin /api proxy check: https://esl-pipeline.run.place/api/meta/version returned contract metadata
+2026-06-13 pull-based deploy smoke also passed backend health, frontend API health, and public HTTPS edge health.
 ```
 
 ## Migration Evidence
 
 ```text
-Migration status before: restored DB had no pending migrations after restore
-Migration command result: no pending database migrations
+Migration status before 2026-06-13 deploy: no pending migrations
+Migration command result: 38 discovered, 38 applied, 0 pending
 Migration status after: db=0.20.0, head=0038_alpha_invites_and_signup_workspace
 DB verify result: migration verification passed
 Prompt assets bootstrap result: verified after correcting production prompt paths to docs/prompt-gallery/...
@@ -115,10 +116,10 @@ Private transcript/backup visibility checked: backup bucket list/upload worked w
 ## Backup Evidence
 
 ```text
-Backup command: PG_BACKUP_ALERT_TELEGRAM_DISABLE=true pnpm docker:prod:db:backup:s3 -- alpha_post_restore_check
-Backup timestamp: 2026-06-10 23:16 UTC from server output
-Backup S3 key: post-restore alpha_post_restore_check set uploaded under backups/postgres/dev/esl_batch/
-List command result: pnpm docker:prod:db:list:s3 listed remote backup objects including the post-restore set
+Backup command: deploy-prod-images.sh created the pre-migration backup via postgres-prod-backup-s3.sh backup-upload
+Backup timestamp: 2026-06-13 deploy window
+Backup S3 key: uploaded by production backup script; exact private object key intentionally not committed
+List command result: deploy script checksum-verified the local backup artifacts before continuing
 Restore drill mode: destructive restore was performed from latest nightly before this evidence; use --download-only for routine drills
 Restore drill result: DB restored, migrations verified, backend and worker recovered
 ```
@@ -164,6 +165,15 @@ Optional bot service is not restart-looping: not started by default
   TELEGRAM_OPS_BOT_* when an invalid message thread id is configured.
 - The first live recording flow needed a dedicated transcribe-worker service. A generic
   batch-worker alone does not consume transcribe jobs.
+- The first pull-based deploy exposed stale caddy-edge runtime config drift: the running Caddyfile
+  still proxied to batch-frontend:80 after the frontend image moved to port 8080. Recreating
+  caddy-edge fixed the live edge without a database restore. Follow-up branch
+  codex/invited-tutor-readiness force-recreates caddy-edge during deploy and verifies the mounted
+  Caddyfile targets reverse_proxy batch-frontend:8080.
+- Pre-tutor product blocker found after student creation: profile IDs such as
+  profiles/students/<student-id>.md must remain URL-escaped through the frontend nginx /api proxy.
+  Branch codex/invited-tutor-readiness updates the same-origin proxy path to preserve encoded %2F
+  and adds regression tests before the next tutor invite rehearsal.
 ```
 
 ## Slice 1 Pass/Fail
@@ -172,16 +182,16 @@ Optional bot service is not restart-looping: not started by default
 Hosted app URL exists: yes
 Backend health check passes: yes
 Worker is running: yes
-Transcribe worker is running: yes after manual incident workaround; now required in prod Compose
+Transcribe worker is running: yes
 Database persists after redeploy/restart: yes
 Uploaded/generated file persists in S3: S3 smoke passed; assignment artifact not recorded in this doc
-Published HTML artifact reachable: not recorded in this committed doc
+Published HTML artifact reachable: not yet refreshed after the 2026-06-13 pull-based deploy
 Hosted logs accessible: yes
 Failed job diagnosis path exists: yes
 Backup exists in S3: yes
 Restore path documented: yes
-One hosted end-to-end assignment publish succeeded: yes after manually starting transcribe worker
-Same-origin frontend API calls work: yes
+One hosted end-to-end assignment publish succeeded: yes in rehearsal; still needs one fresh invited-tutor-path rehearsal after the profile route fix deploys
+Same-origin frontend API calls work: health/version yes; path-like profile revision IDs need the codex/invited-tutor-readiness fix deployed and smoke-tested
 Prompt assets bootstrapped: yes after path correction
 Telegram ops bot absent/profile-gated/intentionally enabled: absent/profile-gated
 ```
@@ -189,7 +199,7 @@ Telegram ops bot absent/profile-gated/intentionally enabled: absent/profile-gate
 Final decision:
 
 ```text
-Slice 1 status: pass after stabilization PR lands and prod Compose starts transcribe-worker by default
-Blocker if any: hosted reproducibility depends on committing the transcribe-worker service and orchestrator runtime hotfix
-Next slice allowed: yes after one clean redeploy from committed code and one live recording transcription check
+Slice 1 status: pull-based deployment baseline passed on 2026-06-13
+Blocker if any: invited tutor path still depends on deploying the profile-route/nginx proxy fix and proving one clean invite-to-assignment rehearsal
+Next slice allowed: yes for focused invited-tutor readiness only; defer broader polish until the hosted path is boring
 ```

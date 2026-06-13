@@ -1,5 +1,108 @@
 # Restart Tomorrow (ADHD-Friendly, ELI5)
 
+## Current Handoff (2026-06-13)
+
+- What I finished:
+  - PR #96 was merged to `main`.
+  - The first pull-based GHCR deployment succeeded on the AWS Lightsail VPS.
+  - Deployed merge commit:
+    - `dac03f3a6de34febeeca907436d0b6ddaf8c7148`
+  - Official deploy script completed successfully:
+    - `bash scripts/deploy/deploy-prod-images.sh dac03f3a6de34febeeca907436d0b6ddaf8c7148`
+  - Deployment state was recorded under:
+    - `/var/lib/esl-pipeline/deploy/current-images.env`
+    - `/var/lib/esl-pipeline/deploy/deployments.log`
+  - Pre-migration backup was created, checksum-verified, and uploaded to S3.
+  - Migrations reported:
+    - 38 discovered
+    - 38 applied
+    - 0 pending
+  - Deploy smoke checks passed:
+    - migration verification
+    - S3 storage smoke
+    - backend health
+    - frontend API health
+    - public HTTPS edge health
+  - Final health probes returned `200`:
+    - `http://127.0.0.1:8080/health`
+    - `http://127.0.0.1:5173/api/health`
+    - `https://esl-pipeline.run.place/api/health`
+
+- Production deployment lesson:
+  - The first deploy attempt failed during smoke checks because `caddy-edge` still had runtime config
+    drift from an older mounted `Caddyfile` that proxied to `batch-frontend:80`.
+  - The new rootless frontend listens on container port `8080`.
+  - Direct probes showed backend and frontend were healthy, while public HTTPS returned `502`.
+  - Recreating only `caddy-edge` with the current production Compose file remounted
+    `deploy/caddy/Caddyfile`, which now uses `reverse_proxy batch-frontend:8080`.
+  - No database restore was needed. Migrations had no pending work.
+
+- First step for next session:
+  - Verify production is still boring:
+
+    ```bash
+    curl -fsS https://esl-pipeline.run.place/api/health | jq .
+    docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml ps
+    docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml logs --tail=80 caddy-edge
+    ```
+
+- Current blocker:
+  - Pre-test product blocker being fixed on branch `codex/invited-tutor-readiness`: after creating a
+    new student, the app can report:
+    - `Route GET:/profiles/profiles/students/<student-id>.md/revisions?limit=25&offset=0&order=desc not found`
+  - Suspected cause: student profile IDs are path-like strings such as
+    `profiles/students/<student-id>.md`, while the backend revision route is
+    `GET /profiles/:id/revisions`. If the ID reaches Fastify with raw slashes instead of encoded
+    `%2F`, it becomes extra path segments and misses the route.
+  - Current branch finding:
+    - frontend API helpers already encode profile IDs with `encodeURIComponent`;
+    - same-origin production traffic goes through `packages/batch-frontend/nginx.conf`;
+    - the nginx `/api/` proxy must strip only `/api` and preserve escaped `%2F`;
+    - `scripts/deploy/deploy-prod-images.sh` should force-recreate `caddy-edge` and assert its
+      mounted Caddyfile still targets `reverse_proxy batch-frontend:8080`.
+  - Test both direct backend and public edge/proxied paths after deploying this branch before
+    calling this fixed.
+
+- Tomorrow's real-tutor test prep:
+  - A real invited tutor is expected to test the app tomorrow. Optimize for one successful,
+    low-drama hosted path, not broad platform polish.
+  - Before sending or reusing the invite link:
+    - verify `https://esl-pipeline.run.place/api/health`;
+    - verify production Compose containers are healthy/running;
+    - verify exactly one intended tutor invite exists and is unexpired;
+    - sign up through the hosted invite path once in a clean browser/session if possible;
+    - confirm the new tutor lands with a usable workspace, membership, settings, and business
+      settings;
+    - create one student and confirm the profile/revisions UI does not hit the route blocker
+      above;
+    - run one tiny assignment publish all the way through worker/transcribe/artifact output.
+
+- Actual deployment/product todo:
+  - Slice 1 closeout:
+    - `docs/operations/hosted-mvp-evidence.md` now records the clean pull-based deployment result;
+    - run and record one fresh hosted assignment publish including recording/transcription;
+    - deploy the branch that hardens the deploy/edge path so stale Caddy config cannot silently
+      survive;
+    - consider changing hosted backup labeling from `PG_BACKUP_S3_ENV=dev` to `alpha` if still
+      applicable on the VPS.
+  - Slice 2 priority because of the real tester:
+    - make invite-only tutor signup boring;
+    - prevent public/admin self-registration paths from surprising us;
+    - verify default workspace/settings/membership/business settings creation;
+    - verify first-student creation and first-assignment flow in production;
+    - treat the profile revisions route miss as a Slice 2 blocker until fixed or safely worked
+      around.
+
+- Discoverable follow-up todo:
+  - Improve the deploy/edge path so Caddy config drift is harder to miss.
+  - Options:
+    - make `deploy-prod-images.sh` force-recreate `caddy-edge` when the edge profile is enabled;
+    - or add a preflight/smoke check that proves the running Caddy upstream targets
+      `batch-frontend:8080`, not the old `batch-frontend:80`.
+  - Keep in mind: `current-images.env` only stores image refs/digests. `CADDY_PUBLIC_HOSTNAME` and
+    `CADDY_ACME_EMAIL` still need to be present in the shell environment when deploying or
+    recreating `caddy-edge`.
+
 ## Current Handoff (2026-06-11)
 
 - What I finished:
