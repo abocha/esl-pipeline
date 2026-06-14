@@ -108,7 +108,7 @@ jobs:
         run: pnpm lint
 
       - name: Unit tests
-        run: pnpm test
+        run: pnpm test:unit:prebuilt
 
   coverage-report:
     name: coverage report (non-blocking)

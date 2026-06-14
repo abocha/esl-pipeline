@@ -143,11 +143,16 @@ Update together:
 
 Required repo checks for behavior changes:
 
-- `pnpm build`
-- `pnpm lint`
-- `pnpm test`
-- `pnpm test:integration`
-- `pnpm check:fast`
+- During editing, run the narrowest relevant package, file, or `vitest related --run` lane first.
+- Before handoff, run `pnpm --silent run check:fast:agent` unless the task is docs-only and a more
+  specific docs lane is clearly sufficient.
+- `check:fast` is affected-package validation. It must include committed, staged, unstaged, and
+  untracked changes; expand to workspace dependents; run cheap global guards; apply explicit
+  path-risk rules; and fail conservatively to a broader lane when the affected scope is uncertain.
+- Run `pnpm check:pre-pr` before broad or cross-cutting PRs. This lane is the broad build,
+  typecheck, lint, and core unit regression sweep.
+- Run `pnpm check` when reproducing CI locally or when DB, migration, worker, integration, or
+  similarly broad behavior changed.
 
 Docs-heavy changes also require:
 

@@ -71,8 +71,9 @@ If resuming after context loss, start with
 ## Command Baseline
 
 - Install: `pnpm install`
-- Fast check (agent default): `pnpm --silent run check:fast:agent`
-- Fast check (raw human output): `pnpm check:fast`
+- Affected check (agent default): `pnpm --silent run check:fast:agent`
+- Affected check (raw human output): `pnpm check:fast`
+- Broad pre-PR check: `pnpm check:pre-pr`
 - Full check: `pnpm check`
 - Docs check: `pnpm docs:check`
 - Docs indexes: `pnpm docs:generate:indexes`
@@ -82,10 +83,16 @@ If resuming after context loss, start with
   `bash scripts/deploy/deploy-prod-images.sh <40-char-git-sha>`
 
 Agents should prefer `:agent` validation commands when they exist. These commands are intentionally
-silent on success and terse on failure; do not treat quiet output as a hang. On failure, read the
-reported `tmp/check-logs/...` or `tmp/test-logs/...` artifact before rerunning raw commands. Use raw
-lanes only when the agent lane is missing or when the artifact shows that full stream output is
-needed for diagnosis. For Vitest-heavy work, prefer the matching agent lane first:
+terse on success and write detailed artifacts under `tmp/check-logs/...` or `tmp/test-logs/...`; do
+not treat quiet output as a hang. `check:fast` is an affected-package lane: it compares against
+`origin/main`, includes committed/staged/unstaged/untracked files, runs cheap global guards, expands
+workspace dependents, applies path-risk rules, and prints why packages or lanes were selected. On
+failure, read the reported artifact before rerunning raw commands. Use raw lanes only when the agent
+lane is missing or when the artifact shows that full stream output is needed for diagnosis.
+
+Run `pnpm check:pre-pr` before broad or cross-cutting PRs, and run `pnpm check` when reproducing CI
+or when DB, migration, worker, integration, or similarly broad behavior changed. For Vitest-heavy
+work, prefer the matching agent lane first:
 `pnpm --silent run test:unit:prebuilt:fast:agent`, `pnpm --silent run test:agent:html-publisher`,
 or another existing `:agent` test script.
 
