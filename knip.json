@@ -17,6 +17,7 @@
     "gray-matter",
     "js-yaml",
     "remark-parse",
+    "turbo",
     "unified",
     "zod",
     "pino-pretty"
