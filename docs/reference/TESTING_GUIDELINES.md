@@ -38,10 +38,21 @@ If this guide conflicts with [`docs/reference/agents-ssot.md`](agents-ssot.md), 
 - Root integration lane: `pnpm test:integration`
 - Root prebuilt integration lane: `pnpm test:integration:prebuilt`
 - Root backend DB + worker lane: `pnpm test:backend:db:worker`
+- Root affected check: `pnpm check:fast`
+  - Resolves a comparison base against `origin/main`.
+  - Includes committed branch changes plus staged, unstaged, and untracked files.
+  - Runs cheap global guards, changed-file checks, affected workspace package tasks, and
+    path-triggered validation.
+  - Uses Turborepo for workspace task ordering, dependency builds, concurrency, local cache, and run
+    summaries.
+  - Falls back conservatively to `check:pre-pr` when the changed scope cannot be classified.
+- Root affected check, agent output: `pnpm check:fast:agent`
+- Root affected dry-run: `pnpm check:fast:dry-run`
+- Root broad pre-PR check: `pnpm check:pre-pr`
+  - Runs repo guards, contract consistency, build, typecheck, lint, and the fast prebuilt core unit
+    subset for orchestrator, batch-backend, and batch-frontend.
 - Root full check: `pnpm check`
   - Runs `build`, `typecheck`, `lint`, `test:unit:prebuilt`, `test:integration:prebuilt`, and the backend DB + worker lane.
-- Root fast check: `pnpm check:fast`
-  - Runs repo guards, `build`, `lint`, and the prebuilt unit subset for orchestrator, batch-backend, and batch-frontend.
 - Root lint lane:
   - `pnpm lint` runs Biome for baseline JS/TS/TSX/JSON linting, then ESLint for specialized React and Vitest checks.
 - Root lane behavior:
@@ -52,6 +63,22 @@ If this guide conflicts with [`docs/reference/agents-ssot.md`](agents-ssot.md), 
   - `pnpm test:integration` runs `pnpm build` first, then delegates to `pnpm test:integration:prebuilt`.
   - `pnpm test:integration:prebuilt` runs package-level integration scripts in parallel (`--if-present`).
   - `pnpm test:timings:unit` runs the repo-wide timing lane across the targeted packages, and `pnpm test:timings:frontend` remains as a backwards-compatible alias.
+
+## Feedback Ladder
+
+Use the narrowest lane that answers the question at hand:
+
+| Lane               | Use                                                               | Typical command                                                   |
+| ------------------ | ----------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Related            | Editing loop for one source file or feature                       | `pnpm --filter <package> exec vitest related --run <source-file>` |
+| Explicit test file | Editing loop when the exact suite is known                        | `pnpm --filter <package> exec vitest run <test-file>`             |
+| Affected           | Agent/human task completion                                       | `pnpm --silent run check:fast:agent` or `pnpm check:fast`         |
+| Pre-PR             | Broad or cross-cutting changes                                    | `pnpm check:pre-pr`                                               |
+| Full               | Local CI reproduction, DB, migration, worker, or integration risk | `pnpm check`                                                      |
+
+Do not use `check:pre-pr` as a routine editing-loop command. The local default should answer
+"did this change break anything it can reach?" while CI remains the source of truth for broad merge
+safety.
 
 ## Script Methodology
 
@@ -147,20 +174,55 @@ For interval- or polling-driven behavior:
 
 Use this order when updating tests:
 
-1. Run targeted package tests first.
-2. Run lane-level checks:
+1. Run targeted package or related tests first.
+2. Run affected validation before handoff:
+   - `pnpm --silent run check:fast:agent`
+   - Use `pnpm check:fast:dry-run` when you need to inspect routing without executing lanes.
+3. Run lane-level checks when the risk class calls for them:
    - `pnpm test`
    - `pnpm test:unit` when specifically validating package entrypoint normalization
    - `pnpm test:unit:prebuilt` when the workspace is already built
    - `pnpm test:integration`
    - `pnpm test:integration:prebuilt` when the workspace is already built
    - `pnpm test:backend:db:worker` when backend PG/Redis behavior changed
-3. Run `pnpm check:fast` before PR when changes have broader behavior risk.
-4. Run `pnpm check` before merge for changes that can affect DB-backed backend or worker behavior.
-5. When touching backend migrations, `packages/batch-backend/schema.sql`, or `packages/contracts/src/contract-versions.ts`, also run:
+4. Run `pnpm check:pre-pr` before broad or cross-cutting PRs.
+5. Run `pnpm check` before merge for changes that can affect DB-backed backend or worker behavior.
+6. When touching backend migrations, `packages/batch-backend/schema.sql`, or `packages/contracts/src/contract-versions.ts`, also run:
    - `pnpm release:verify:contracts`
    - `pnpm --filter @esl-pipeline/batch-backend run db:verify-baseline`
    - regenerate baseline first with `pnpm --filter @esl-pipeline/batch-backend run db:generate-baseline` if verification reports drift
+
+## Affected Check Routing
+
+`check:fast` is implemented by `scripts/check/run-affected-check.mjs` and should fail
+conservatively. It must not report success with no affected work when Git state, workspace metadata,
+or changed root files are uncertain.
+
+The wrapper:
+
+- verifies `origin/main`, merge-base availability, and remote freshness;
+- collects committed, staged, unstaged, and untracked files;
+- maps files to workspace packages from `pnpm-workspace.yaml`;
+- expands changed packages to transitive dependents;
+- asks Turbo to run package tasks only for packages that expose each script;
+- runs changed-file Biome, changed-file Prettier, specialized ESLint, docs, workflow, shell,
+  Docker, DB, HTTP, and worker lanes when path rules trigger;
+- prints the base, changed files, package expansion, triggered lanes, skipped broad lanes, artifacts,
+  and reproduction commands.
+
+Important path rules:
+
+- `docs/**`, `AGENTS.md`, and `.github/pull_request_template.md` trigger docs and formatting lanes.
+- `.github/workflows/**` triggers `lint:workflows`.
+- `scripts/**/*.sh` triggers `lint:shell`.
+- Docker Compose files, Dockerfiles, `scripts/docker/**`, and `scripts/deploy/**` trigger Docker
+  lint/config checks.
+- `packages/batch-backend/migrations/**` and `packages/batch-backend/schema.sql` trigger backend
+  DB baseline, migration, and PostgreSQL lanes.
+- backend worker, queue, and `process-*-job.ts` paths trigger worker integration.
+- backend HTTP transport route and middleware paths trigger HTTP integration.
+- root validation config, package manager metadata, Turbo config, and validation-runner files fall
+  back to `check:pre-pr`.
 
 ## CI Check Mapping
 
@@ -169,6 +231,9 @@ Deployment/test gating currently uses these blocking names:
 - `static checks (node 24.x)`
 - `integration lane (blocking)`
 - `backend db + worker integration (blocking)`
+
+The static CI job builds before unit tests and therefore uses `pnpm test:unit:prebuilt` to avoid
+duplicating package-level setup builds from `pnpm test`.
 
 ## Related
 

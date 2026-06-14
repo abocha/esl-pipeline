@@ -7,7 +7,9 @@
 
 - [ ] `pnpm format`
 - [ ] `pnpm run lint:repo-hygiene`
-- [ ] `pnpm check:fast`
+- [ ] `pnpm check:fast` or `pnpm --silent run check:fast:agent` (affected validation)
+- [ ] Risk-specific lanes, such as DB, migration, worker, HTTP, Docker, workflow, or docs checks
+- [ ] `pnpm check:pre-pr` when the change is broad or cross-cutting
 - [ ] `pnpm release:verify:contracts` and `pnpm --filter @esl-pipeline/batch-backend run db:verify-baseline` when migrations/schema/contracts changed
 - [ ] Targeted package tests (if applicable)
 - [ ] Manual smoke test (if applicable)

@@ -1,0 +1,52 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": [
+    ".nvmrc",
+    "biome.json",
+    "eslint.config.js",
+    "pnpm-workspace.yaml",
+    "vitest.config.ts"
+  ],
+  "globalEnv": [
+    "BATCH_BACKEND_*",
+    "CI",
+    "NODE_ENV",
+    "PG_*",
+    "REDIS_*",
+    "TZ",
+    "VITE_*"
+  ],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", "*.tsbuildinfo", "tsconfig*.tsbuildinfo"]
+    },
+    "typecheck": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "lint": {
+      "outputs": []
+    },
+    "test:unit:prebuilt": {
+      "dependsOn": ["build", "^build"],
+      "outputs": []
+    },
+    "test:integration": {
+      "cache": false,
+      "dependsOn": ["build", "^build"]
+    },
+    "test:db:migrations": {
+      "cache": false
+    },
+    "test:db:postgres": {
+      "cache": false
+    },
+    "test:integration:worker": {
+      "cache": false
+    },
+    "test:integration:http": {
+      "cache": false
+    }
+  }
+}
