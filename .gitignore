@@ -19,6 +19,7 @@ packages/orchestrator/configs/students/*.json
 .pnpm-store
 .roo
 .vscode
+.turbo
 .agent
 .agents
 .changeset

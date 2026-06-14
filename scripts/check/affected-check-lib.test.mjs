@@ -1,0 +1,227 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+
+import {
+  buildAffectedCheckPlan,
+  collectChangedFiles,
+  expandTransitiveDependents,
+  resolveComparisonBase,
+} from './affected-check-lib.mjs';
+
+const workspacePackages = [
+  pkg('@esl-pipeline/contracts', 'packages/contracts', [], ['build', 'typecheck']),
+  pkg('@esl-pipeline/batch-frontend', 'packages/batch-frontend', ['@esl-pipeline/contracts']),
+  pkg('@esl-pipeline/batch-backend', 'packages/batch-backend', ['@esl-pipeline/contracts']),
+  pkg('@esl-pipeline/tts-provider-google', 'packages/tts-provider-google', []),
+  pkg('@esl-pipeline/orchestrator', 'packages/orchestrator', [
+    '@esl-pipeline/contracts',
+    '@esl-pipeline/tts-provider-google',
+  ]),
+];
+
+test('changed file collection includes committed, staged, unstaged, and untracked files', async () => {
+  const calls = [];
+  const changedFiles = await collectChangedFiles({
+    mergeBase: 'abc123',
+    runGit: async (args) => {
+      calls.push(args);
+      if (args.includes('--cached')) return 'packages/contracts/src/dto.ts\n';
+      if (args.includes('--others')) return 'docs/reference/TESTING_GUIDELINES.md\n';
+      if (args.includes('abc123...HEAD')) return 'packages/batch-frontend/src/App.tsx\n';
+      return 'packages/batch-backend/src/application/submit-job.ts\n';
+    },
+  });
+
+  assert.deepEqual(changedFiles, [
+    'docs/reference/TESTING_GUIDELINES.md',
+    'packages/batch-backend/src/application/submit-job.ts',
+    'packages/batch-frontend/src/App.tsx',
+    'packages/contracts/src/dto.ts',
+  ]);
+  assert.equal(calls.length, 4);
+});
+
+test('dependent expansion walks the full reverse workspace graph', () => {
+  assert.deepEqual(
+    expandTransitiveDependents({
+      packageNames: ['@esl-pipeline/contracts'],
+      workspacePackages,
+    }),
+    [
+      '@esl-pipeline/batch-backend',
+      '@esl-pipeline/batch-frontend',
+      '@esl-pipeline/contracts',
+      '@esl-pipeline/orchestrator',
+    ],
+  );
+});
+
+test('frontend-only changes select frontend Turbo work without backend tests', () => {
+  const plan = buildAffectedCheckPlan({
+    baseRef: 'origin/main',
+    mergeBase: 'abc123',
+    changedFiles: ['packages/batch-frontend/src/App.tsx'],
+    workspacePackages,
+  });
+
+  assert.equal(plan.fallback, null);
+  assert.deepEqual(plan.changedPackages, ['@esl-pipeline/batch-frontend']);
+  assert.deepEqual(plan.affectedPackages, ['@esl-pipeline/batch-frontend']);
+  assert.deepEqual(plan.turbo.filters, ['@esl-pipeline/batch-frontend']);
+  assert.deepEqual(
+    plan.turbo.taskGroups.map((group) => group.task),
+    ['build', 'typecheck', 'test:unit:prebuilt'],
+  );
+  assert.equal(
+    plan.triggeredLanes.some((lane) => lane.id === 'test:integration:worker'),
+    false,
+  );
+});
+
+test('contracts changes expand to consumers and keep contract verification explicit', () => {
+  const plan = buildAffectedCheckPlan({
+    baseRef: 'origin/main',
+    mergeBase: 'abc123',
+    changedFiles: ['packages/contracts/src/contract-versions.ts'],
+    workspacePackages,
+  });
+
+  assert.equal(plan.fallback, null);
+  assert.deepEqual(plan.affectedPackages, [
+    '@esl-pipeline/batch-backend',
+    '@esl-pipeline/batch-frontend',
+    '@esl-pipeline/contracts',
+    '@esl-pipeline/orchestrator',
+  ]);
+  assert.equal(
+    plan.triggeredLanes.some((lane) => lane.id === 'release:verify:contracts'),
+    true,
+  );
+  assert.deepEqual(
+    plan.turbo.taskGroups.find((group) => group.task === 'test:unit:prebuilt')?.filters,
+    ['@esl-pipeline/batch-backend', '@esl-pipeline/batch-frontend', '@esl-pipeline/orchestrator'],
+  );
+});
+
+test('docs-only changes run docs checks without package Turbo work', () => {
+  const plan = buildAffectedCheckPlan({
+    baseRef: 'origin/main',
+    mergeBase: 'abc123',
+    changedFiles: ['docs/reference/TESTING_GUIDELINES.md'],
+    workspacePackages,
+  });
+
+  assert.equal(plan.fallback, null);
+  assert.deepEqual(plan.changedPackages, []);
+  assert.deepEqual(plan.affectedPackages, []);
+  assert.equal(plan.turbo, null);
+  assert.equal(
+    plan.triggeredLanes.some((lane) => lane.id === 'docs:check'),
+    true,
+  );
+  assert.equal(
+    plan.triggeredLanes.some((lane) => lane.id === 'format:prettier:changed'),
+    true,
+  );
+});
+
+test('migration changes trigger backend graph, DB baseline, migration, and postgres lanes', () => {
+  const plan = buildAffectedCheckPlan({
+    baseRef: 'origin/main',
+    mergeBase: 'abc123',
+    changedFiles: ['packages/batch-backend/migrations/20260615000000_example.sql'],
+    workspacePackages,
+  });
+
+  assert.equal(plan.fallback, null);
+  assert.deepEqual(plan.affectedPackages, ['@esl-pipeline/batch-backend']);
+  assert.deepEqual(
+    plan.triggeredLanes.map((lane) => lane.id).filter((id) => id.startsWith('backend:')),
+    ['backend:db:verify-baseline', 'backend:test:db:migrations', 'backend:test:db:postgres'],
+  );
+});
+
+test('unclassified root changes fall back to broad pre-PR validation', () => {
+  const plan = buildAffectedCheckPlan({
+    baseRef: 'origin/main',
+    mergeBase: 'abc123',
+    changedFiles: ['unclassified-root-file.txt'],
+    workspacePackages,
+  });
+
+  assert.equal(plan.fallback?.lane, 'check:pre-pr');
+  assert.match(plan.fallback?.reason ?? '', /unclassified root file/u);
+  assert.equal(plan.turbo, null);
+});
+
+test('gitignore changes are classified as root validation fallback', () => {
+  const plan = buildAffectedCheckPlan({
+    baseRef: 'origin/main',
+    mergeBase: 'abc123',
+    changedFiles: ['.gitignore'],
+    workspacePackages,
+  });
+
+  assert.equal(plan.fallback?.lane, 'check:pre-pr');
+  assert.match(plan.fallback?.reason ?? '', /root validation/u);
+});
+
+test('comparison base fails conservatively when origin main is missing', async () => {
+  await assert.rejects(
+    resolveComparisonBase({
+      baseRef: 'origin/main',
+      runGit: async (args) => {
+        if (args[0] === 'rev-parse') {
+          const error = new Error('unknown revision');
+          error.exitCode = 128;
+          throw error;
+        }
+        return '';
+      },
+    }),
+    /origin\/main is unavailable/u,
+  );
+});
+
+test('comparison base fails conservatively when remote main is newer than local origin main', async () => {
+  await assert.rejects(
+    resolveComparisonBase({
+      baseRef: 'origin/main',
+      runGit: async (args) => {
+        if (args[0] === 'rev-parse') return 'local-sha\n';
+        if (args[0] === 'merge-base') return 'merge-base-sha\n';
+        if (args[0] === 'ls-remote') return 'remote-sha\trefs/heads/main\n';
+        return '';
+      },
+    }),
+    /origin\/main is stale/u,
+  );
+});
+
+test('comparison base reports merge base when local origin main is fresh', async () => {
+  const base = await resolveComparisonBase({
+    baseRef: 'origin/main',
+    runGit: async (args) => {
+      if (args[0] === 'rev-parse') return 'same-sha\n';
+      if (args[0] === 'merge-base') return 'merge-base-sha\n';
+      if (args[0] === 'ls-remote') return 'same-sha\trefs/heads/main\n';
+      return '';
+    },
+  });
+
+  assert.deepEqual(base, {
+    baseRef: 'origin/main',
+    mergeBase: 'merge-base-sha',
+    baseSha: 'same-sha',
+    remoteSha: 'same-sha',
+  });
+});
+
+function pkg(name, dir, dependencies, scripts = ['build', 'typecheck', 'test:unit:prebuilt']) {
+  return {
+    name,
+    dir,
+    dependencies,
+    scripts,
+  };
+}

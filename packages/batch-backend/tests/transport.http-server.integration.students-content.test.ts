@@ -667,14 +667,11 @@ describeHttpServerIntegrationSuite(
       });
 
       expect(response.statusCode).toBe(200);
-      expect(mockListProfileRevisionsForProfile).toHaveBeenCalledWith(
-        'profiles/students/alex.md',
-        {
-          limit: 10,
-          offset: 0,
-          order: 'desc',
-        },
-      );
+      expect(mockListProfileRevisionsForProfile).toHaveBeenCalledWith('profiles/students/alex.md', {
+        limit: 10,
+        offset: 0,
+        order: 'desc',
+      });
     });
 
     it('GET /profiles/:id/revisions/:revisionId returns revision detail', async () => {
