@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [8.2.3] - 2026-06-14
+
+### Changed
+
+- Automated release from PR #99: build(checks): make fast validation affected-aware (https://github.com/abocha/esl-pipeline/pull/99)
+
 ## [8.2.2] - 2026-06-13
 
 ### Changed
