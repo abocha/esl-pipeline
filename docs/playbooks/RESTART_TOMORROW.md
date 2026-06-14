@@ -1,303 +1,197 @@
-# Restart Tomorrow (ADHD-Friendly, ELI5)
+# Restart Tomorrow
 
 ## Current Handoff (2026-06-13)
 
-- What I finished:
-  - PR #96 was merged to `main`.
-  - The first pull-based GHCR deployment succeeded on the AWS Lightsail VPS.
-  - Deployed merge commit:
-    - `dac03f3a6de34febeeca907436d0b6ddaf8c7148`
-  - Official deploy script completed successfully:
-    - `bash scripts/deploy/deploy-prod-images.sh dac03f3a6de34febeeca907436d0b6ddaf8c7148`
-  - Deployment state was recorded under:
-    - `/var/lib/esl-pipeline/deploy/current-images.env`
-    - `/var/lib/esl-pipeline/deploy/deployments.log`
-  - Pre-migration backup was created, checksum-verified, and uploaded to S3.
-  - Migrations reported:
-    - 38 discovered
-    - 38 applied
-    - 0 pending
-  - Deploy smoke checks passed:
-    - migration verification
-    - S3 storage smoke
-    - backend health
-    - frontend API health
-    - public HTTPS edge health
-  - Final health probes returned `200`:
-    - `http://127.0.0.1:8080/health`
-    - `http://127.0.0.1:5173/api/health`
-    - `https://esl-pipeline.run.place/api/health`
+- First external tutor test:
+  - Hosted invite and basic assignment flow were usable enough for the first external test.
+  - Several runtime gaps and UX blockers surfaced. Prioritize fixes below before the next invite
+    wave.
 
-- Production deployment lesson:
-  - The first deploy attempt failed during smoke checks because `caddy-edge` still had runtime config
-    drift from an older mounted `Caddyfile` that proxied to `batch-frontend:80`.
-  - The new rootless frontend listens on container port `8080`.
-  - Direct probes showed backend and frontend were healthy, while public HTTPS returned `502`.
-  - Recreating only `caddy-edge` with the current production Compose file remounted
-    `deploy/caddy/Caddyfile`, which now uses `reverse_proxy batch-frontend:8080`.
-  - No database restore was needed. Migrations had no pending work.
-
-- First step for next session:
-  - Verify production is still boring:
+- First step next session:
+  - Check the active PR/branch contains every live hotfix that was applied on the VPS.
+  - Do not recreate `batch-backend`, `batch-worker`, `batch-frontend`, or `caddy-edge` until the
+    corresponding image/Compose/config fix is present.
+  - Verify production state:
 
     ```bash
     curl -fsS https://esl-pipeline.run.place/api/health | jq .
     docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml ps
-    docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml logs --tail=80 caddy-edge
+    docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml images
+    docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml logs --tail=120 batch-worker
+    docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml logs --tail=120 transcribe-worker
     ```
 
-- Current blocker:
-  - Pre-test product blocker being fixed on branch `codex/invited-tutor-readiness`: after creating a
-    new student, the app can report:
-    - `Route GET:/profiles/profiles/students/<student-id>.md/revisions?limit=25&offset=0&order=desc not found`
-  - Suspected cause: student profile IDs are path-like strings such as
-    `profiles/students/<student-id>.md`, while the backend revision route is
-    `GET /profiles/:id/revisions`. If the ID reaches Fastify with raw slashes instead of encoded
-    `%2F`, it becomes extra path segments and misses the route.
-  - Current branch finding:
-    - frontend API helpers already encode profile IDs with `encodeURIComponent`;
-    - same-origin production traffic goes through `packages/batch-frontend/nginx.conf`;
-    - the nginx `/api/` proxy must strip only `/api` and preserve escaped `%2F`;
-    - `scripts/deploy/deploy-prod-images.sh` should force-recreate `caddy-edge` and assert its
-      mounted Caddyfile still targets `reverse_proxy batch-frontend:8080`.
-  - Test both direct backend and public edge/proxied paths after deploying this branch before
-    calling this fixed.
+- P0 production/runtime blockers:
+  - Add `student-memory-worker` to production Compose.
+    - Current production stack does not include it.
+    - Result: student memories and lesson memories are not created.
+    - Use the same backend runtime image and `.env.batch-backend`.
+    - Set a distinct `PG_APPLICATION_NAME`.
+    - Command:
+      - `node dist/transport/student-memory-worker.js`
+    - Add health/log verification and include it in deploy smoke evidence.
+  - Preserve live hotfixes in source before the next deploy:
+    - `packages/batch-frontend/nginx.conf` must include:
 
-- Tomorrow's real-tutor test prep:
-  - A real invited tutor is expected to test the app tomorrow. Optimize for one successful,
-    low-drama hosted path, not broad platform polish.
-  - Before sending or reusing the invite link:
-    - verify `https://esl-pipeline.run.place/api/health`;
-    - verify production Compose containers are healthy/running;
-    - verify exactly one intended tutor invite exists and is unexpired;
-    - sign up through the hosted invite path once in a clean browser/session if possible;
-    - confirm the new tutor lands with a usable workspace, membership, settings, and business
-      settings;
-    - create one student and confirm the profile/revisions UI does not hit the route blocker
-      above;
-    - run one tiny assignment publish all the way through worker/transcribe/artifact output.
+      ```nginx
+      resolver 127.0.0.11 ipv6=off valid=30s;
+      ```
 
-- Actual deployment/product todo:
-  - Slice 1 closeout:
-    - `docs/operations/hosted-mvp-evidence.md` now records the clean pull-based deployment result;
-    - run and record one fresh hosted assignment publish including recording/transcription;
-    - deploy the branch that hardens the deploy/edge path so stale Caddy config cannot silently
-      survive;
-    - consider changing hosted backup labeling from `PG_BACKUP_S3_ENV=dev` to `alpha` if still
-      applicable on the VPS.
-  - Slice 2 priority because of the real tester:
-    - make invite-only tutor signup boring;
-    - prevent public/admin self-registration paths from surprising us;
-    - verify default workspace/settings/membership/business settings creation;
-    - verify first-student creation and first-assignment flow in production;
-    - treat the profile revisions route miss as a Slice 2 blocker until fixed or safely worked
-      around.
+    - profile revision APIs must use query/body aliases instead of path-like profile IDs in the URL;
+    - `scripts/deploy/deploy-prod-images.sh` should force-recreate `caddy-edge` when edge mode is
+      enabled and assert the running Caddyfile contains `reverse_proxy batch-frontend:8080`;
+    - `packages/batch-backend/Dockerfile` must create writable runtime dirs before `USER node`:
 
-- Discoverable follow-up todo:
-  - Improve the deploy/edge path so Caddy config drift is harder to miss.
-  - Options:
-    - make `deploy-prod-images.sh` force-recreate `caddy-edge` when the edge profile is enabled;
-    - or add a preflight/smoke check that proves the running Caddy upstream targets
-      `batch-frontend:8080`, not the old `batch-frontend:80`.
-  - Keep in mind: `current-images.env` only stores image refs/digests. `CADDY_PUBLIC_HOSTNAME` and
-    `CADDY_ACME_EMAIL` still need to be present in the shell environment when deploying or
-    recreating `caddy-edge`.
+      ```dockerfile
+      RUN mkdir -p /app/tmp /app/uploads \
+          && chown -R node:node /app/tmp /app/uploads
+      ```
 
-## Current Handoff (2026-06-11)
+    - `docker-compose.prod.yml` must mount VPS-local `.secrets` read-only for backend-image services
+      that may touch Google STT/TTS:
 
-- What I finished:
-  - First private hosted rehearsal is live at `https://esl-pipeline.run.place/` on AWS Lightsail.
-  - DNSExit `A` record points `esl-pipeline.run.place` at the static Lightsail IPv4 address.
-  - Caddy edge mode is running with HTTPS.
-  - Production Compose stack is up after the deployment stabilization changes:
-    - `batch-frontend`
-    - `batch-backend`
-    - `batch-worker`
-    - `transcribe-worker`
-    - `postgres`
-    - `redis`
-    - `caddy-edge`
-  - Public health checks passed:
-    - `https://esl-pipeline.run.place/api/health`
-    - `https://esl-pipeline.run.place/api/meta/version`
-  - Backend health reported `api`, `postgres`, and `redis` all `ok: true`.
-  - Worker logs show `Worker started`.
-  - Restored production-ish DB state from the configured S3 backup prefix.
-  - Migration verification passed at:
-    - `db=0.20.0`
-    - `dbMigrationHead=0038_alpha_invites_and_signup_workspace`
-  - S3 smoke passed against bucket `esl-notion-tts`, with upload, presigned URL generation, and delete all successful.
-  - Post-restore backup uploaded successfully under the configured S3 backup prefix.
-  - First live recording job initially waited forever at `transcribe_queue_waiting`; it completed only after starting a transcribe worker manually.
+      ```yaml
+      - type: bind
+        source: ./.secrets
+        target: /app/secrets
+        read_only: true
+        bind:
+          create_host_path: false
+      ```
 
-- First step for next session:
-  - Review, commit, and push the deployment stabilization PR:
-    - `packages/orchestrator/tsup.config.ts`
-    - `packages/orchestrator/package.json`
-    - `pnpm-lock.yaml`
-    - `docker-compose.prod.yml`
-    - Lightsail deployment docs and evidence
+    - apply that mount to `batch-backend`, `batch-worker`, and `transcribe-worker`; also apply it to
+      `student-memory-worker` if it can use Google credentials.
+    - real credential file on VPS:
+      - `/opt/esl-pipeline/.secrets/google-service-account.json`
+    - container env expects:
+      - `GOOGLE_APPLICATION_CREDENTIALS=/app/secrets/google-service-account.json`
+  - Remove Edge TTS from the production image.
+    - Edge TTS is not used anymore.
+    - Remove `edge-tts`, Python, venv setup, and related env from the backend Dockerfile/runtime
+      image.
+    - Verify no runtime code path still depends on `ESL_EDGE_TTS_*`.
 
-- Current blocker:
-  - No hosted runtime blocker after the manual transcribe worker was started, but the VPS must not rely on manual one-off worker starts.
-  - Do not forget to preserve the server-local `.env.batch-backend`; it contains real secrets and host-specific fixes.
+- P1 product blockers before the next invite wave:
+  - Redesign new student creation.
+    - Current flow contains legacy paths that are unused, unclear, or broken.
+    - Remove `.md`-file mental model from student creation and profile UX.
+    - Student info is DB-only; path-like profile IDs no longer serve the product.
+  - Finish new student profile UI fixes.
+    - Frontend can show `not_found This learner profile has not been structured yet.` even after
+      the profile works internally.
+    - Student learning page can show `Current Revision Current` instead of `v1`, `v5`, etc.
+    - Creating an empty profile then activating a draft can show both `not_found` and
+      `Draft activated.`
+    - Active profile versions should not show a `Restore` action.
+    - Old student profile drafts should not surface in student overview.
+  - Clean up tutor-facing UI copy and density.
+    - Remove flavor text and instructional text that does not directly support a user action.
+    - Remove duplicated instructions and repeated metadata.
+    - Stop showing student support ID in multiple unrelated places.
+    - Remove unused buttons and extra cards.
+  - Wall off assignment templates from regular users.
+    - Templates should be admin-only for now.
+    - Hide regular-user routes/buttons/API affordances for template management.
+  - Simplify assignment generation settings.
+    - Replace provider/model/RPM/RPD/token UI with one `Generate assignment` action.
+    - Keep a simple usage indicator later, e.g. `quota left: 5 assignments`, once the business model
+      is decided.
+    - Do not hide noisy expert settings under a spoiler for regular tutors.
+  - Rename HTML/publishing language.
+    - Replace `HTML pages` / `published HTML` with user-facing language such as
+      `Assignment Handout`.
+  - Change cancel UX.
+    - Remove cancel reason field.
+    - Put `Cancel` next to `Share assignment`.
+    - Enable `Cancel` only while a job is underway.
+  - Audio and publishing defaults.
+    - Default voice engine should be `inworld`.
+    - Remove reading style selector.
+  - Schedule and billing defaults.
+    - Add-lesson default date should be today, not the fixed `07.05.2026`.
+    - Default duration and timezone should inherit from tutor settings.
+    - If a homework assignment is added to a past lesson, mark the lesson completed automatically.
+  - Profile candidate promotion queue.
+    - Show new unapproved candidates.
+    - Do not default the queue to approved candidates.
 
-## Tomorrow Todo (Lightsail Hosted Alpha)
+- P2 follow-up architecture/product work:
+  - Revise audio caching.
+    - Current behavior regenerates all audio if the draft changes by one character.
+    - Desired default: reuse existing audio when audio-relevant text is unchanged, even if unrelated
+      draft details changed after sharing.
+    - Regenerate only audio parts whose source text changed.
+    - The current `republish current draft` behavior is closer to the desired default.
+    - Any audio regeneration should be explicit in the UI.
+  - Rework Telegram bot for tutors instead of operators.
+    - Operator mode is no longer a product goal.
+    - Tutor bot should support tutor workflows, not host-machine operations.
+  - Revisit invite registration polish after runtime blockers are fixed.
+    - Invites worked for the first external test, but the earlier registration-flow mishap remains
+      unexplored.
 
-1. Commit the production boot hotfix.
-   - Root cause: backend crashed because the orchestrator bundle embedded Google Cloud TTS CommonJS code, which triggered `Dynamic require of "stream" is not supported`.
-   - Fix already applied locally:
-     - externalize `@google-cloud/text-to-speech` in `packages/orchestrator/tsup.config.ts`
-     - add `@google-cloud/text-to-speech` as an orchestrator runtime dependency
-   - Validation already run:
-     - `pnpm --filter @esl-pipeline/orchestrator build`
-     - direct `node import('./packages/orchestrator/dist/index.js')`
-     - `pnpm --filter @esl-pipeline/orchestrator test:unit:prebuilt`
-     - `pnpm --filter @esl-pipeline/batch-backend build`
-   - Backend unit prebuilt failed only because local Postgres was not running at `127.0.0.1:5432`; do not treat that as related without reproducing with DB up.
+- Deployment state notes:
+  - PR #96 deployed successfully at:
+    - `dac03f3a6de34febeeca907436d0b6ddaf8c7148`
+  - Later invited-tutor readiness deploy attempted:
+    - `83b75a515453df708cb5d7ed4d81781db1d2369b`
+  - That deploy pulled images, backed up Postgres to S3, verified migrations, and updated services,
+    but failed before final deploy-state promotion during public edge smoke.
+  - `/var/lib/esl-pipeline/deploy/current-images.env` may point at the earlier SHA even if
+    containers are running newer images.
+  - `.env.batch-backend` and `.secrets/google-service-account.json` are server-local and must not be
+    overwritten by git.
 
-2. Commit the production `transcribe-worker` service.
-   - Root cause: generic `batch-worker` does not consume transcription jobs.
-   - Required production service:
-     - same backend runtime image and `.env.batch-backend`
-     - `PG_APPLICATION_NAME=esl-pipeline-transcribe-worker`
-     - command `node dist/transport/transcribe-worker.js`
-     - `restart: unless-stopped`
-   - Fresh `pnpm docker:prod:edge` must start it automatically.
+- Generation model env note:
+  - To disable assignment-generation budget/safety blockers on the VPS:
 
-3. Clean up deployment docs.
-   - Replace active DigitalOcean/Droplet assumptions with AWS Lightsail.
-   - Keep the actual decision as:
-     - single VPS
-     - Docker Compose
-     - Caddy HTTPS edge
-     - local Docker Postgres and Redis for now
-     - AWS S3 for artifacts and Postgres backups
-   - Likely files:
-     - `docs/alpha-deployment-decisions.md`
-     - `docs/plans/slice-1-private-hosted-environment.md`
-     - `docs/operations/postgres-backup-s3.md`
-     - `docs/operations/hosted-mvp-evidence.md`
-     - generated plans index after docs generation
+    ```bash
+    GEN_SAFETY_MODE=off
+    GEN_STRICT_NO_PAID=false
+    GEN_ALLOW_PAID_SPEND=true
+    ```
 
-4. Record hosted evidence.
-   - Fill `docs/operations/hosted-mvp-evidence.md` with:
-     - hosted URL
-     - Lightsail region/shape
-     - commit deployed
-     - compose command
-     - health output summary
-     - migration output summary
-     - S3 smoke result
-     - backup result without exact private object keys
-     - worker/backend/transcribe-worker log evidence
-
-5. Fix server env rough edges.
-   - Change `PG_BACKUP_S3_ENV=dev` to `PG_BACKUP_S3_ENV=alpha` for future hosted backups.
-   - Confirm prompt paths stay relative or `/app/...`, not `/docs/...`:
-     - `PROMPT_TEMPLATE_PATH=docs/prompt-gallery/templates/hw_prompt_definitive.md`
-     - `PROMPT_PROFILE_PATH=docs/prompt-gallery/profiles/PROFILE_2025-11-16.md`
-   - Keep prod restore targeting explicit:
-     - `PG_CONTAINER_NAME=esl-pipeline-prod-postgres-1`
-     - `PG_COMPOSE_PROJECT=esl-pipeline-prod`
-     - `PG_COMPOSE_FILE=docker-compose.prod.yml`
-   - Set the real Caddy ACME email if it was left as a placeholder.
-
-6. Fix Telegram backup notification confusion.
-   - Backup/restore completion Telegram uses `PG_BACKUP_ALERT_TELEGRAM_*`, not `TELEGRAM_OPS_BOT_*`.
-   - Current safe setting:
-     - `PG_BACKUP_ALERT_TELEGRAM_DISABLE=true`
-   - If enabling later, only set `PG_BACKUP_ALERT_TELEGRAM_THREAD_ID` if the exact forum topic exists.
-   - The previous error was:
-     - `Bad Request: message thread not found`
-
-7. Commit the Compose image/tag polish patch.
-   - `batch-worker` references `image: esl-pipeline/batch-backend:local`.
-   - `batch-backend` currently builds with a Compose-generated image name unless explicitly tagged.
-   - This caused the initial pull error for `esl-pipeline/batch-backend:local`.
-   - Make the image naming/build dependency unambiguous before the next fresh host deploy.
-
-8. Run final morning verification.
-   - On VPS:
-     - `curl -fsS https://esl-pipeline.run.place/api/health | jq .`
-     - `curl -fsS https://esl-pipeline.run.place/api/meta/version | jq .`
-     - `docker compose -p esl-pipeline-prod -f docker-compose.prod.yml ps`
-     - `docker compose -p esl-pipeline-prod -f docker-compose.prod.yml logs --tail=80 batch-worker`
-     - `docker compose -p esl-pipeline-prod -f docker-compose.prod.yml logs --tail=80 transcribe-worker`
-   - Optional:
-     - submit one small hosted assignment job and confirm worker completion.
+  - If using OpenRouter with `GEN_SAFETY_MODE=hard_stop`, do not leave these at zero:
+    - `GEN_OPENROUTER_DAILY_TOKEN_BUDGET`
+    - `GEN_OPENROUTER_DAILY_REQUEST_BUDGET`
+    - `GEN_OPENROUTER_RPM_BUDGET`
+  - Recreate backend after env changes.
 
 ## Purpose
 
-Use this when your brain feels scattered and you want to restart without re-reading everything.
-This is the "no-thinking required" re-entry path.
+Use this file to regain production/runtime context without re-reading recent chats.
 
-## The Only 4 Files You Need
+## Core Files
 
 1. `docs/playbooks/RESTART_TOMORROW.md` (this file)
 2. `docs/reference/PRESET_V2_SPEC.md` (preset model truth)
-3. `docs/reference/V1_IMPLEMENTATION_TRACKER.md` (what to do)
-4. `docs/playbooks/WEEKLY_PRODUCT_REVIEW_TEMPLATE.md` (how to stay grounded)
+3. `docs/reference/V1_IMPLEMENTATION_TRACKER.md` (roadmap status)
+4. `docs/playbooks/WEEKLY_PRODUCT_REVIEW_TEMPLATE.md` (review notes)
 
-If you open only these 4 files, you are back on track.
-
-If you are touching backup operations, also open:
+If touching backup operations, also open:
 
 - `docs/operations/postgres-backup-s3.md` (daily/monthly scheduler + restore drill commands)
 
-## 10-Minute Reboot (Do in Order)
+## Restart Procedure
 
-1. Run `git status --short` and do not fix everything. Just observe.
+1. Run `git status --short`.
 2. Open `docs/reference/PRESET_V2_SPEC.md`.
 3. Open `docs/reference/V1_IMPLEMENTATION_TRACKER.md`.
-4. Find the active workstream and its `Now` task.
-5. Pick exactly one micro-task that can fit in 30-90 minutes.
-6. Write this sentence in your notes:
-   - "Today I only need to finish: \_\_\_\_."
-
-## Session Modes (Choose One, No Guilt)
-
-### Mode 1: Low energy (15-30 min)
-
-- Read tracker for 5 minutes.
-- Pick one micro-task.
-- Do only one small action:
-  - update a TODO checkbox,
-  - write one failing test,
-  - add one API/type skeleton,
-  - or clean one doc section.
-
-Success condition: one concrete improvement exists in the repo.
-
-### Mode 2: Normal energy (60-90 min)
-
-- Complete one micro-task end-to-end.
-- Update tracker status/evidence link.
-- Add one line to "next first step" before stopping.
-
-Success condition: one shippable unit is done.
-
-### Mode 3: High energy (2-3 hours)
-
-- Complete one full checklist block for active workstream.
-- Run relevant tests.
-- Update tracker + weekly template.
-
-Success condition: one meaningful roadmap step is closed.
+4. Check the current handoff above for active production blockers.
+5. Pick one task from the highest-priority active section.
+6. Record the next stopping point before ending the session.
 
 ## What to Work on First (Default Priority)
-
-When in doubt, always use this order:
 
 1. The current `Today "Now" slice` in `docs/reference/V1_IMPLEMENTATION_TRACKER.md`
 2. The current stabilization or readiness follow-through named in that tracker
 3. The active plan README linked from `docs/plans/README.md` if the tracker points to a deeper workstream
 4. Reliability-only follow-up if readiness metrics are red
-5. Weekly review cleanup in `docs/playbooks/WEEKLY_PRODUCT_REVIEW_TEMPLATE.md` if you need a low-energy closeout
+5. Weekly review cleanup in `docs/playbooks/WEEKLY_PRODUCT_REVIEW_TEMPLATE.md`
 
 This order keeps the restart path aligned with the live tracker instead of a frozen workstream list.
 
-Scope lock reminder:
+Scope lock:
 
 - In this phase, ship `general-english` preset content only.
 - Baseline homework method lives in
@@ -305,7 +199,7 @@ Scope lock reminder:
 - The bootstrap seed template remains
   `docs/prompt-gallery/templates/hw_prompt_definitive.md`.
 
-## Anti-Spiral Rules
+## Scope Rules
 
 1. No "perfect system" work before the next concrete deliverable.
 2. No jumping workstreams unless blocked.
@@ -322,40 +216,6 @@ Before stopping, write:
 - What I finished:
 - First step for next session:
 - Current blocker (if any):
-
-This is mandatory. It is your bridge back in tomorrow.
-
-## Copy-Paste Daily Log Template
-
-```md
-## Session YYYY-MM-DD
-
-Mode: low / normal / high
-Workstream: WS\_\_
-Today's one target:
-
-Done:
-
--
-
-Evidence link:
-
--
-
-First step next session:
-
--
-
-Blocker:
-
--
-```
-
-## Grounding Reminder
-
-You are not trying to impress anyone with speed.
-You are building a reliable tutor tool that saves real time and reduces chaos.
-Small, consistent completions beat heroic bursts.
 
 ## Related
 
