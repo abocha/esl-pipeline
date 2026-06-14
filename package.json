@@ -25,8 +25,10 @@
   "scripts": {
     "build": "pnpm -r --filter \"./packages/*\" run build",
     "check": "pnpm build && pnpm typecheck && pnpm lint && pnpm test:unit:prebuilt && pnpm test:integration:prebuilt && pnpm test:backend:db:worker",
-    "check:fast": "pnpm guard:orchestrator:boundary && pnpm release:verify:contracts && pnpm build && pnpm lint && pnpm test:unit:prebuilt:fast",
-    "check:fast:agent": "node scripts/check/run-agent-check-fast.mjs",
+    "check:fast": "node scripts/check/run-affected-check.mjs",
+    "check:fast:agent": "node scripts/check/run-affected-check.mjs --agent",
+    "check:fast:dry-run": "node scripts/check/run-affected-check.mjs --dry-run",
+    "check:pre-pr": "pnpm guard:orchestrator:boundary && pnpm release:verify:contracts && pnpm build && pnpm typecheck && pnpm lint && pnpm test:unit:prebuilt:fast",
     "clean": "pnpm -r --filter \"./packages/*\" --if-present run clean",
     "clean:artifacts": "node -e \"const fs=require('node:fs'); for (const dir of ['out','tmp','uploads']) fs.rmSync(dir,{recursive:true,force:true});\"",
     "deps:audit": "pnpm exec knip --dependencies --reporter compact --no-progress --no-exit-code",
@@ -154,6 +156,7 @@
     "prettier": "^3.8.4",
     "prettier-plugin-packagejson": "^3.0.2",
     "tsx": "^4.22.4",
+    "turbo": "^2.9.18",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.61.0",
     "vitest": "^4.1.8"
