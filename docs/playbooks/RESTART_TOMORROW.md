@@ -161,6 +161,17 @@
 
 Use this file to regain production/runtime context without re-reading recent chats.
 
+## Active Chunk Map
+
+The restart handoff has been separated into ordered work chunks in
+[`docs/plans/2026-06-15-production-readiness-restart-chunks.md`](../plans/2026-06-15-production-readiness-restart-chunks.md).
+
+Default next work:
+
+1. Plan Chunk 1 only: production `student-memory-worker` enablement.
+2. Implement Chunk 1 only after that plan is written and reviewed.
+3. Do not pull unrelated P1/P2 UX work into the worker enablement branch.
+
 ## Core Files
 
 1. `docs/playbooks/RESTART_TOMORROW.md` (this file)
