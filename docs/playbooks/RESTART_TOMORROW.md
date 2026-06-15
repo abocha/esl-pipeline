@@ -60,8 +60,8 @@
           create_host_path: false
       ```
 
-    - apply that mount to `batch-backend`, `batch-worker`, and `transcribe-worker`; also apply it to
-      `student-memory-worker` if it can use Google credentials.
+    - apply that mount to `batch-backend`, `batch-worker`, `student-memory-worker`, and
+      `transcribe-worker`.
     - real credential file on VPS:
       - `/opt/esl-pipeline/.secrets/google-service-account.json`
     - container env expects:

@@ -14,10 +14,17 @@ services:
         target: /app/uploads
         bind:
           create_host_path: false
+      - type: bind
+        source: ./.secrets
+        target: /app/secrets
+        read_only: true
+        bind:
+          create_host_path: false
     environment:
       NODE_ENV: production
       PIPELINE_CWD: /app
       FILESYSTEM_UPLOAD_DIR: /app/uploads
+      GOOGLE_APPLICATION_CREDENTIALS: /app/secrets/google-service-account.json
       PG_BACKUP_ENV_FILE: /dev/null
       PG_CONTAINER_NAME: ${COMPOSE_PROJECT_NAME:-esl-pipeline-prod}-postgres-1
       PG_BACKUP_RESTORE_DRILL_REPORT_LATEST: /app/tmp/logs/backup/restore-drill-report-latest.json
@@ -59,10 +66,17 @@ services:
         target: /app/uploads
         bind:
           create_host_path: false
+      - type: bind
+        source: ./.secrets
+        target: /app/secrets
+        read_only: true
+        bind:
+          create_host_path: false
     environment:
       NODE_ENV: production
       PIPELINE_CWD: /app
       FILESYSTEM_UPLOAD_DIR: /app/uploads
+      GOOGLE_APPLICATION_CREDENTIALS: /app/secrets/google-service-account.json
       PG_APPLICATION_NAME: esl-pipeline-batch-worker
       PG_POOL_MAX: '6'
     env_file:
@@ -170,10 +184,17 @@ services:
         target: /app/uploads
         bind:
           create_host_path: false
+      - type: bind
+        source: ./.secrets
+        target: /app/secrets
+        read_only: true
+        bind:
+          create_host_path: false
     environment:
       NODE_ENV: production
       PIPELINE_CWD: /app
       FILESYSTEM_UPLOAD_DIR: /app/uploads
+      GOOGLE_APPLICATION_CREDENTIALS: /app/secrets/google-service-account.json
       PG_APPLICATION_NAME: esl-pipeline-student-memory-worker
       PG_POOL_MAX: '4'
     env_file:
@@ -207,10 +228,17 @@ services:
         target: /app/uploads
         bind:
           create_host_path: false
+      - type: bind
+        source: ./.secrets
+        target: /app/secrets
+        read_only: true
+        bind:
+          create_host_path: false
     environment:
       NODE_ENV: production
       PIPELINE_CWD: /app
       FILESYSTEM_UPLOAD_DIR: /app/uploads
+      GOOGLE_APPLICATION_CREDENTIALS: /app/secrets/google-service-account.json
       PG_APPLICATION_NAME: esl-pipeline-transcribe-worker
       PG_POOL_MAX: '4'
     env_file:

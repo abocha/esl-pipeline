@@ -6,14 +6,15 @@
 - Status: active.
 - Last Verified Against: 2026-06-15 repo state.
 - Exit Trigger: archive after the restart backlog is converted into shipped implementation PRs or superseded by the next invite-wave readiness plan.
-- Current Focus: separate the restart handoff into ordered chunks, with production student-memory-worker enablement first.
+- Current Focus: preserve production hotfix source parity, then continue with the next P0 runtime
+  image cleanup chunk.
 
 ## Purpose
 
 Turn the restart handoff into a small set of independently plannable work chunks. This document is
 not an implementation plan yet; it is the intake map for the next implementation plans.
 
-The first implementation plan should target Chunk 1 only.
+Chunk 1 has been implemented. The current implementation plan targets Chunk 2 only.
 
 ## Priority Order
 
@@ -25,6 +26,8 @@ The first implementation plan should target Chunk 1 only.
 6. Chunk 6: fix scheduling, billing, and candidate queue defaults.
 7. Chunk 7: improve audio caching and explicit regeneration.
 8. Chunk 8: re-scope Telegram and invite-registration follow-up.
+9. Chunk 9: reduce deployment env friction for Caddy edge commands.
+10. Chunk 10: improve student-memory generation throughput and prompt quality.
 
 ## Chunk 1: Production Student-Memory Worker
 
@@ -118,6 +121,24 @@ Acceptance gates:
 - Each hotfix has source evidence or a documented "already present" note.
 - Production Compose remains pull-based and SHA-image driven.
 - Deployment smoke covers edge routing, backend health, worker logs, and image refs.
+
+Source evidence:
+
+- `packages/batch-frontend/nginx.conf` already contains
+  `resolver 127.0.0.11 ipv6=off valid=30s;`.
+- `packages/batch-frontend/src/utils/api.profile-routes.test.ts` verifies path-like profile IDs use
+  query/body aliases for profile revision routes, and
+  `packages/batch-backend/src/transport/extended-routes/profiles-templates-routes.ts` accepts those
+  aliases while keeping legacy path routes.
+- `scripts/deploy/deploy-prod-images.sh` force-recreates `caddy-edge` when edge mode is enabled and
+  asserts the running Caddyfile contains `reverse_proxy batch-frontend:8080`; this is covered by
+  `scripts/deploy/deploy-prod-images.test.mjs`.
+- `packages/batch-backend/Dockerfile` creates and chowns `/app/tmp` and `/app/uploads` before
+  `USER node`; this is covered by `scripts/docker/backend-dockerfile-runtime.test.mjs`.
+- `docker-compose.prod.yml` mounts server-local `./.secrets` read-only at `/app/secrets` and sets
+  `GOOGLE_APPLICATION_CREDENTIALS=/app/secrets/google-service-account.json` for `batch-backend`,
+  `batch-worker`, `student-memory-worker`, and `transcribe-worker`; this is covered by
+  `scripts/docker/prod-compose-config.test.mjs`.
 
 ## Chunk 3: Remove Edge TTS From Production Runtime
 
@@ -276,6 +297,74 @@ Acceptance gates:
 - A later product plan defines tutor bot workflows or removes them from near-term scope.
 - Invite registration polish has concrete reproduction notes before implementation.
 
+## Chunk 9: Caddy Edge Deploy Env Ergonomics
+
+Priority: P2.
+
+Goal: stop requiring operators to manually export Caddy edge env values before every
+`scripts/deploy/deploy-prod-images.sh` run when those values already exist in the server-local
+`.env.batch-backend`.
+
+Observed during the successful 2026-06-15 production upgrade:
+
+```bash
+export CADDY_PUBLIC_HOSTNAME=esl-pipeline.run.place
+export CADDY_ACME_EMAIL=abocha.true@gmail.com
+```
+
+The values are already present in `.env.batch-backend`, but the deploy path still requires them in
+the shell environment for edge validation/deploy commands.
+
+Implementation boundaries:
+
+- Keep `.env.batch-backend` server-local and uncommitted.
+- Do not duplicate real production values into committed docs or Compose defaults.
+- Prefer a small deploy-script or validator change that can safely read the existing server-local env
+  file when running on the VPS.
+- Preserve local validation behavior for placeholder/example edge env values.
+
+Acceptance gates:
+
+- Running the deploy script from `/opt/esl-pipeline` can reuse `CADDY_PUBLIC_HOSTNAME` and
+  `CADDY_ACME_EMAIL` from `.env.batch-backend` when they are not exported.
+- Explicit shell exports still override file values.
+- The edge env validator still rejects missing, malformed, local-only, or URL-like hostnames.
+- Docs explain whether the source of truth is shell env, `.env.batch-backend`, or both.
+
+## Chunk 10: Student-Memory Generation Throughput and Prompt Quality
+
+Priority: P2.
+
+Goal: make background student-memory generation more resilient to backlog bursts and improve the
+quality/cost shape of memory extraction requests.
+
+Observed during the 2026-06-15 production upgrade:
+
+- Student-memory requests using `gpt-5.4-mini` hit the Tier 1 `200k` TPM limit while clearing a
+  backlog.
+- Normal student-memory work is background and not time-sensitive, so queue latency is acceptable.
+- The OpenAI `v1/batch` endpoint may be a better fit for backlog replay or other non-urgent memory
+  extraction work.
+- Prompt tuning and more structured requests are worth exploring for student-memory extraction.
+
+Implementation boundaries:
+
+- Treat this as exploration before implementation; verify current OpenAI Batch API constraints,
+  model support, request format, result polling, and error handling before designing code.
+- Keep normal online assignment generation separate from async memory extraction.
+- Preserve deterministic backend ownership of what memory inputs are selected.
+- Do not make prompt packages depend on immediate completion of background memory jobs.
+- Consider rate-limit-aware throttling/backoff even if Batch API is adopted for backlog work.
+
+Acceptance gates:
+
+- A short design note compares the existing worker path, rate-limit-aware worker throttling, and
+  OpenAI Batch API for backlog memory generation.
+- The design states when to use normal queue processing versus batch submission.
+- Prompt/request changes are measured against structured output quality, token use, replayability,
+  and provenance.
+- Operators have a safe replay/backfill path that does not stampede Tier 1 TPM limits.
+
 ## Deployment State Notes to Preserve
 
 These notes are operational context, not a standalone implementation chunk:
@@ -312,5 +401,6 @@ Recreate backend services after production env changes.
 
 ## Next Step
 
-Write the Chunk 1 implementation plan for production `student-memory-worker` enablement. Keep it
-focused on Compose/runtime/docs/smoke evidence and avoid combining it with the broader UX backlog.
+After Chunk 2 lands, write the Chunk 3 implementation plan for removing Edge TTS from the backend
+production runtime image. Keep it focused on production-image dependencies and provider-path
+verification.
