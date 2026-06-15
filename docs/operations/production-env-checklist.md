@@ -323,8 +323,9 @@ On the Ubuntu 24.04 VPS:
 - Backups can be uploaded to S3.
 - Logs can be viewed through Docker Compose.
 - Container log rotation is configured at the Docker daemon or service level.
-- `batch-worker` and `transcribe-worker` are both running; recording uploads require the dedicated
-  transcribe worker.
+- `batch-worker`, `transcribe-worker`, and `student-memory-worker` are running; recording uploads
+  require the dedicated transcribe worker, and memory artifacts require the dedicated
+  student-memory worker.
 - In edge mode, public HTTP/HTTPS goes through Caddy only.
 - Backend, frontend, Postgres, and Redis host ports stay bound to `127.0.0.1` unless deliberately
   exposed for private founder rehearsal.
@@ -377,6 +378,12 @@ curl -fsS http://127.0.0.1:${BATCH_FRONTEND_HOST_PORT:-5173}/api/meta/version
 curl -fsS http://127.0.0.1:${BATCH_FRONTEND_HOST_PORT:-5173}/api/health
 docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml \
   --env-file /var/lib/esl-pipeline/deploy/current-images.env \
+  ps student-memory-worker
+docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml \
+  --env-file /var/lib/esl-pipeline/deploy/current-images.env \
+  logs --tail=120 student-memory-worker
+docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml \
+  --env-file /var/lib/esl-pipeline/deploy/current-images.env \
   exec batch-backend node dist/tools/migrate-db.js status
 docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml \
   --env-file /var/lib/esl-pipeline/deploy/current-images.env \
@@ -406,8 +413,8 @@ curl -fsS https://<public-hostname>/api/meta/version
 
 The HTTP check should show Caddy redirecting to HTTPS.
 Also verify from outside the VPS that raw frontend, backend, Postgres, Redis, and worker ports are
-not publicly reachable, that `transcribe-worker` has no public port, and that the `caddy_data` and
-`caddy_config` Docker volumes persist across container recreation.
+not publicly reachable, that `transcribe-worker` and `student-memory-worker` have no public ports,
+and that the `caddy_data` and `caddy_config` Docker volumes persist across container recreation.
 
 The production image copies `docs/prompt-gallery` into `/app/docs/prompt-gallery` so prompt asset
 bootstrap can use the documented prompt-gallery paths inside the runtime container.

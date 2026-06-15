@@ -157,6 +157,30 @@ services:
       timeout: 3s
       retries: 10
 
+  student-memory-worker:
+    image: ${BATCH_BACKEND_IMAGE:?Set BATCH_BACKEND_IMAGE to a GHCR image reference tagged with the deployed Git SHA}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - type: bind
+        source: ./uploads
+        target: /app/uploads
+        bind:
+          create_host_path: false
+    environment:
+      NODE_ENV: production
+      PIPELINE_CWD: /app
+      FILESYSTEM_UPLOAD_DIR: /app/uploads
+      PG_APPLICATION_NAME: esl-pipeline-student-memory-worker
+      PG_POOL_MAX: '4'
+    env_file:
+      - .env.batch-backend
+    command: ['node', 'dist/transport/student-memory-worker.js']
+    restart: unless-stopped
+
   telegram-ops-bot:
     image: ${TELEGRAM_OPS_BOT_IMAGE:-ghcr.io/abocha/esl-pipeline/telegram-ops-bot:disabled}
     depends_on:
