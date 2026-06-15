@@ -5,7 +5,7 @@
 - Audience: operators and implementation agents maintaining the batch backend.
 - Read Time: 5 minutes.
 - Authority Level: active operations runbook.
-- Last Verified Against: 2026-03-21 repo state.
+- Last Verified Against: 2026-06-15 repo state.
 - Owner: batch-backend maintainers + automation agents.
 - Review Cadence: after student-memory tooling changes.
 - Status: `active`.
@@ -24,6 +24,31 @@
 4. Use provider/model overrides only when intentionally re-running extraction on a different
    structured-output-capable model path.
 5. Assignment-level provenance inspection remains on `GET /prompt-packages/:id`.
+6. Compose-managed production must run `student-memory-worker`; `batch-worker` does not consume
+   lesson-memory, homework-memory, or snapshot jobs.
+
+## Production Worker Runtime
+
+Production Compose includes a dedicated `student-memory-worker` service using the backend runtime
+image and command:
+
+```bash
+node dist/transport/student-memory-worker.js
+```
+
+After deploying or replaying memory work on the VPS, collect bounded worker evidence:
+
+```bash
+docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml \
+  --env-file /var/lib/esl-pipeline/deploy/current-images.env \
+  ps student-memory-worker
+docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml \
+  --env-file /var/lib/esl-pipeline/deploy/current-images.env \
+  logs --tail=120 student-memory-worker
+```
+
+If replay commands request work but the worker is absent or stopped, memory rows may remain pending
+and the student workspace can look stale even though the replay command accepted the request.
 
 ## Homework Memory Replay
 

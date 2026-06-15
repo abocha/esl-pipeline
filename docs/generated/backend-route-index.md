@@ -59,6 +59,11 @@
 | GET    | `/profiles/:id/revisions/:revisionId`                               | `packages/batch-backend/src/transport/extended-routes/profiles-templates-routes.ts` |
 | POST   | `/profiles/:id/revisions/:revisionId/activate`                      | `packages/batch-backend/src/transport/extended-routes/profiles-templates-routes.ts` |
 | POST   | `/profiles/:id/revisions/:revisionId/restore`                       | `packages/batch-backend/src/transport/extended-routes/profiles-templates-routes.ts` |
+| GET    | `/profiles/revisions`                                               | `packages/batch-backend/src/transport/extended-routes/profiles-templates-routes.ts` |
+| POST   | `/profiles/revisions`                                               | `packages/batch-backend/src/transport/extended-routes/profiles-templates-routes.ts` |
+| GET    | `/profiles/revisions/:revisionId`                                   | `packages/batch-backend/src/transport/extended-routes/profiles-templates-routes.ts` |
+| POST   | `/profiles/revisions/:revisionId/activate`                          | `packages/batch-backend/src/transport/extended-routes/profiles-templates-routes.ts` |
+| POST   | `/profiles/revisions/:revisionId/restore`                           | `packages/batch-backend/src/transport/extended-routes/profiles-templates-routes.ts` |
 | GET    | `/prompt-packages/:promptPackageId`                                 | `packages/batch-backend/src/transport/extended-routes/recordings-routes.ts`         |
 | POST   | `/prompt-packages/:promptPackageId/draft`                           | `packages/batch-backend/src/transport/extended-routes/recordings-routes.ts`         |
 | GET    | `/prompt-packages/:promptPackageId/lineage`                         | `packages/batch-backend/src/transport/extended-routes/recordings-routes.ts`         |
