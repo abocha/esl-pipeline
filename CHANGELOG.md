@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [8.2.4] - 2026-06-15
+
+### Changed
+
+- Automated release from PR #100: Refresh production restart and deployment docs (https://github.com/abocha/esl-pipeline/pull/100)
+
 ## [8.2.3] - 2026-06-14
 
 ### Changed
