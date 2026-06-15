@@ -5,7 +5,7 @@
 - Audience: maintainers/operators deploying batch services.
 - Read Time: 6 minutes.
 - Authority Level: Deployment runbook.
-- Last Verified Against: 2026-06-12 repo state.
+- Last Verified Against: 2026-06-15 repo state.
 - Owner: backend/frontend maintainers + automation agents.
 - Review Cadence: monthly or after deployment workflow changes.
 - Status: `runbook`.
@@ -58,10 +58,10 @@ editing, full test suites, hot-reload servers, repeated Docker builds, experimen
 production database, uncommitted server checkout changes, and manual edits inside running
 containers.
 
-Production Compose is pull-based for app services. Backend, frontend, worker, transcribe-worker, and
-optional Telegram bot images come from GHCR image refs supplied by environment/state files. Do not
-use the VPS for routine image builds, and do not restore production `build:`, `:local`,
-`pull_policy: never`, or `up --build` paths for app services.
+Production Compose is pull-based for app services. Backend, frontend, worker, transcribe-worker,
+student-memory-worker, and optional Telegram bot images come from GHCR image refs supplied by
+environment/state files. Do not use the VPS for routine image builds, and do not restore production
+`build:`, `:local`, `pull_policy: never`, or `up --build` paths for app services.
 
 ## Local Development Stack (Compose)
 
@@ -145,9 +145,11 @@ pnpm docker:prod:ps
 In edge mode, Caddy is the only intended public entrypoint on ports `80` and `443`. It reverse
 proxies to `batch-frontend:8080`; the frontend nginx config keeps same-origin `/api/*` traffic routed
 to `batch-backend:8080`. Do not expose or proxy the backend directly for the normal alpha path.
-Default production Compose also starts the generic `batch-worker` and the dedicated
-`transcribe-worker`; the latter is required for recording uploads to leave the
-`transcribe_queue_waiting` state.
+Default production Compose also starts the generic `batch-worker`, the dedicated
+`transcribe-worker`, and the dedicated `student-memory-worker`. The transcribe worker is required for
+recording uploads to leave the `transcribe_queue_waiting` state. The student-memory worker is
+required for queued lesson-memory, homework-memory, and student-memory snapshot jobs to become ready
+after normal tutor activity.
 
 After DNS points to the VPS, verify:
 
@@ -180,6 +182,20 @@ A reviewed production deployment should broadly follow:
    pre-migration backup, runs migrations once, updates services, and runs bounded smoke checks.
 5. If checks fail after services update, follow the script's application rollback instructions using
    `/var/lib/esl-pipeline/deploy/previous-images.env`.
+
+Post-deploy service evidence should include the dedicated memory worker:
+
+```bash
+docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml \
+  --env-file /var/lib/esl-pipeline/deploy/current-images.env \
+  ps student-memory-worker
+docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml \
+  --env-file /var/lib/esl-pipeline/deploy/current-images.env \
+  logs --tail=120 student-memory-worker
+```
+
+Treat missing `student-memory-worker` logs or a non-running container as a production readiness
+blocker for student-memory features; `batch-worker` does not consume those BullMQ jobs.
 
 Record the deployed Git SHA or image version in
 [`docs/operations/hosted-mvp-evidence.md`](../operations/hosted-mvp-evidence.md) or the active

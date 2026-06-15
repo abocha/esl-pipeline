@@ -5,7 +5,7 @@
 - Audience: AI agents and maintainers for batch frontend/backend tasks.
 - Read Time: 6 minutes.
 - Authority Level: Active system map.
-- Last Verified Against: 2026-06-10 repo state.
+- Last Verified Against: 2026-06-15 repo state.
 - Owner: backend/frontend maintainers + automation agents.
 - Review Cadence: monthly or after major batch workflow changes.
 - Status: `active`.
@@ -28,6 +28,8 @@
 - Backend exposes extended API routes and queue-backed processing.
 - Prompt templates/profiles are runtime-managed from Postgres revisions (DB-canonical).
 - Canonical student-memory artifacts, inspection routes, and replay tooling are backend-live.
+- Compose-managed production must run the dedicated `student-memory-worker` service; `batch-worker`
+  does not consume lesson-memory, homework-memory, or snapshot jobs.
 - Orchestrator remains the publish execution engine after approval handoff.
 
 ## Architecture
@@ -63,6 +65,14 @@ Operator repair/backfill surfaces:
 - `pnpm --filter @esl-pipeline/batch-backend lesson-memory:refresh`
 - `pnpm --filter @esl-pipeline/batch-backend exec tsx --tsconfig tsconfig.json src/tools/refresh-homework-memory.ts`
 - `pnpm --filter @esl-pipeline/batch-backend exec tsx --tsconfig tsconfig.json src/tools/refresh-student-memory-snapshots.ts`
+
+In Compose-managed production, those commands enqueue or refresh canonical memory work that is
+processed asynchronously by `student-memory-worker`. Deployment smoke evidence should include
+
+```bash
+docker compose ... ps student-memory-worker
+docker compose ... logs --tail=120 student-memory-worker
+```
 
 Event fanout behavior (Redis bridge):
 

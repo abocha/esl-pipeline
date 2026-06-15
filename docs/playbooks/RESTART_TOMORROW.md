@@ -19,6 +19,7 @@
     docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml images
     docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml logs --tail=120 batch-worker
     docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml logs --tail=120 transcribe-worker
+    docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml logs --tail=120 student-memory-worker
     ```
 
 - P0 production/runtime blockers:
@@ -65,6 +66,7 @@
       - `/opt/esl-pipeline/.secrets/google-service-account.json`
     - container env expects:
       - `GOOGLE_APPLICATION_CREDENTIALS=/app/secrets/google-service-account.json`
+
   - Remove Edge TTS from the production image.
     - Edge TTS is not used anymore.
     - Remove `edge-tts`, Python, venv setup, and related env from the backend Dockerfile/runtime
