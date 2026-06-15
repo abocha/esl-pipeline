@@ -47,3 +47,25 @@ test('production Compose includes the dedicated student-memory worker service', 
   assert.equal(service.depends_on.postgres.condition, 'service_healthy');
   assert.equal(service.depends_on.redis.condition, 'service_started');
 });
+
+test('production backend-image services mount Google credentials read-only', () => {
+  const config = renderProdComposeConfig();
+  const services = ['batch-backend', 'batch-worker', 'student-memory-worker', 'transcribe-worker'];
+
+  for (const serviceName of services) {
+    const service = config.services[serviceName];
+    assert.ok(service, `${serviceName} service should be present`);
+    assert.equal(
+      service.environment.GOOGLE_APPLICATION_CREDENTIALS,
+      '/app/secrets/google-service-account.json',
+      `${serviceName} should use the mounted container credential path`,
+    );
+
+    const secretsMount = service.volumes.find((volume) => {
+      const source = String(volume.source ?? '').replaceAll('\\', '/');
+      return source.endsWith('/.secrets') && volume.target === '/app/secrets';
+    });
+    assert.ok(secretsMount, `${serviceName} should mount the server-local .secrets directory`);
+    assert.equal(secretsMount.read_only, true, `${serviceName} .secrets mount should be read-only`);
+  }
+});

@@ -125,6 +125,36 @@ test('docs-only changes run docs checks without package Turbo work', () => {
   );
 });
 
+test('generated docs are not formatted by changed-file lanes', () => {
+  const plan = buildAffectedCheckPlan({
+    baseRef: 'origin/main',
+    mergeBase: 'abc123',
+    changedFiles: ['docs/generated/plans-index.md'],
+    workspacePackages,
+  });
+
+  assert.equal(plan.fallback, null);
+  assert.deepEqual(plan.changedPackages, []);
+  assert.deepEqual(plan.affectedPackages, []);
+  assert.equal(plan.turbo, null);
+  assert.equal(
+    plan.triggeredLanes.some((lane) => lane.id === 'docs:check'),
+    true,
+  );
+  assert.equal(
+    plan.triggeredLanes.some((lane) => lane.id === 'docs:generate:indexes'),
+    true,
+  );
+  assert.equal(
+    plan.triggeredLanes.some((lane) => lane.id === 'format:prettier:changed'),
+    false,
+  );
+  assert.equal(
+    plan.triggeredLanes.some((lane) => lane.id === 'biome:changed-files'),
+    false,
+  );
+});
+
 test('migration changes trigger backend graph, DB baseline, migration, and postgres lanes', () => {
   const plan = buildAffectedCheckPlan({
     baseRef: 'origin/main',

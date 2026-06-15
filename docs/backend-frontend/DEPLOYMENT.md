@@ -151,6 +151,12 @@ recording uploads to leave the `transcribe_queue_waiting` state. The student-mem
 required for queued lesson-memory, homework-memory, and student-memory snapshot jobs to become ready
 after normal tutor activity.
 
+Backend-image services that may touch Google STT/TTS mount the server-local `.secrets` directory
+read-only at `/app/secrets`. Keep the real service-account file on the VPS at
+`/opt/esl-pipeline/.secrets/google-service-account.json`; production containers use
+`GOOGLE_APPLICATION_CREDENTIALS=/app/secrets/google-service-account.json`. Do not commit `.secrets`
+or replace it from git during deploys.
+
 After DNS points to the VPS, verify:
 
 ```bash
@@ -217,6 +223,17 @@ cp .env.batch-backend.example .env.batch-backend
 
 Populate required credentials/keys referenced in:
 [`docs/reference/env.md`](../reference/env.md)
+
+If Google STT/TTS uses a service-account file, create it outside git on the VPS before deployment:
+
+```bash
+mkdir -p /opt/esl-pipeline/.secrets
+# Place google-service-account.json in /opt/esl-pipeline/.secrets with restricted permissions.
+```
+
+Production Compose mounts that directory into backend-image services as read-only `/app/secrets`;
+the container path is
+`GOOGLE_APPLICATION_CREDENTIALS=/app/secrets/google-service-account.json`.
 
 ## Database Migration Flow
 

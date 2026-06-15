@@ -55,6 +55,9 @@ WORKDIR /app
 COPY --from=build --chown=node:node /app/deployed/ ./
 COPY --chown=node:node docs/prompt-gallery ./docs/prompt-gallery
 
+RUN mkdir -p /app/tmp /app/uploads \
+    && chown -R node:node /app/tmp /app/uploads
+
 EXPOSE 8080
 
 USER node
