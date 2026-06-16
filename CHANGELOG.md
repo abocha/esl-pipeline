@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [9.0.1] - 2026-06-16
+
+### Changed
+
+- Automated release from PR #102: Fix student profile readiness UX (https://github.com/abocha/esl-pipeline/pull/102)
+
 ## [9.0.0] - 2026-06-16
 
 ### Changed
