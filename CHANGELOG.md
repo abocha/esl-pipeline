@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [9.1.0] - 2026-06-16
+
+### Changed
+
+- Automated release from PR #103: feat: simplify student-owned profile creation (https://github.com/abocha/esl-pipeline/pull/103)
+
 ## [9.0.1] - 2026-06-16
 
 ### Changed
