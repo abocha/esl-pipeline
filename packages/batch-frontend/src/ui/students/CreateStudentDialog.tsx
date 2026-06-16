@@ -74,7 +74,7 @@ export function CreateStudentDialog({
               <option value="">No learner profile selected</option>
               {profileOptions.map((profile) => (
                 <option key={profile.id} value={profile.id}>
-                  {profile.label} ({profile.id})
+                  {profile.label}
                 </option>
               ))}
             </select>
