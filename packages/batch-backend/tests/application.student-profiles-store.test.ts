@@ -516,6 +516,52 @@ describe('student-profiles-store', () => {
     });
   });
 
+  it('creates a starter profile revision from partial canonical foundational fields', async () => {
+    const deps = createInMemoryDeps();
+    const saveRevisionCalls: {
+      profileId: string;
+      content: string;
+      options?: {
+        source?: string;
+        status?: 'draft' | 'active' | 'deprecated';
+        createdBy?: string | null;
+        structuredContent?: unknown;
+      };
+    }[] = [];
+    const originalSaveRevision = deps.profiles.saveRevision;
+    deps.profiles.saveRevision = async (profileId, content, options) => {
+      saveRevisionCalls.push({ profileId, content, options });
+      return originalSaveRevision(profileId, content, options);
+    };
+
+    const created = await createStudentProfile(
+      {
+        student: 'Canonical Starter',
+        starterProfile: {
+          overallLevel: 'B1',
+          stableStrengths: 'Prepared and curious.',
+          durableConstraints: 'Mostly studies on mobile.',
+        },
+      },
+      { deps },
+    );
+
+    expect(created.profileId).toBe(`profiles/students/${created.id}.md`);
+    expect(saveRevisionCalls).toHaveLength(1);
+    expect(saveRevisionCalls[0]?.options?.structuredContent).toEqual({
+      schemaVersion: 'foundational_profile_v1',
+      overallLevel: 'B1',
+      primaryGoals: [],
+      communicationContexts: [],
+      interestsAndUsefulThemes: [],
+      stableStrengths: ['Prepared and curious.'],
+      persistentChallenges: [],
+      studyPreferences: [],
+      durableConstraints: ['Mostly studies on mobile.'],
+      teacherNotes: null,
+    });
+  });
+
   it('rejects starterProfile create requests that point at an already active profile', async () => {
     const deps = createInMemoryDeps();
     await deps.profiles.upsert({

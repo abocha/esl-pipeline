@@ -192,18 +192,25 @@ export interface StudentProfile {
 }
 
 export interface StarterProfileInput {
-  level?: string | null;
-  goals?: string | null;
-  professionOrContext?: string | null;
-  interests?: string | null;
-  longRunningChallenges?: string | null;
-  studyPreferencesOrConstraints?: string | null;
+  overallLevel?: string | null;
+  primaryGoals?: string | null;
+  communicationContexts?: string | null;
+  interestsAndUsefulThemes?: string | null;
+  stableStrengths?: string | null;
+  persistentChallenges?: string | null;
+  studyPreferences?: string | null;
+  durableConstraints?: string | null;
   teacherNotes?: string | null;
 }
 
-export type StudentProfileInput = Omit<StudentProfile, 'id'> & {
+export interface StudentProfileInput {
+  student: string;
+  dbId?: string | null;
+  pageParentId?: string | null;
+  voices?: Record<string, string>;
+  profileId?: string | null;
   starterProfile?: StarterProfileInput | null;
-};
+}
 export type StudentProfileUpdate = Partial<StudentProfileInput>;
 
 export interface StudentProfileListResponse {

@@ -22,6 +22,7 @@ describeHttpServerIntegrationSuite(
     mockSaveProfileRevisionContent,
     mockDeleteTemplateContent,
     mockRestoreStudentProfile,
+    mockUpdateStudentProfile,
   }) => {
     it('GET /students returns student profiles', async () => {
       const response = await app.inject({
@@ -127,6 +128,47 @@ describeHttpServerIntegrationSuite(
       });
     });
 
+    it('POST /students accepts partial canonical starterProfile fields', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/students',
+        payload: {
+          student: 'Canonical Starter Student',
+          starterProfile: {
+            overallLevel: 'B1',
+            stableStrengths: 'Prepared and curious.',
+            durableConstraints: 'Mostly studies on mobile.',
+          },
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(response.json()).toMatchObject({
+        student: expect.any(String),
+      });
+    });
+
+    it('POST /students ignores legacy advanced write fields', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/students',
+        payload: {
+          student: 'No Advanced Student',
+          colorPreset: 'legacy-color',
+          accentPreference: 'legacy-accent',
+          manifestPreset: 'legacy-manifest',
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(response.json()).toMatchObject({
+        student: expect.any(String),
+        colorPreset: null,
+        accentPreference: null,
+        manifestPreset: null,
+      });
+    });
+
     it('PUT /students/:id updates a student profile', async () => {
       const response = await app.inject({
         method: 'PUT',
@@ -138,15 +180,14 @@ describeHttpServerIntegrationSuite(
       });
 
       expect(response.statusCode).toBe(200);
-      expect(response.json()).toEqual({
-        id: deriveStudentId('Anna'),
-        student: 'Anna',
-        dbId: null,
-        pageParentId: null,
-        colorPreset: 'b1-default',
-        accentPreference: null,
-        voices: {},
-        manifestPreset: null,
+      expect(mockUpdateStudentProfile).toHaveBeenCalledWith(
+        deriveStudentId('Anna'),
+        { profileId: 'profile.md' },
+        expect.objectContaining({
+          workspaceId: expect.any(String),
+        }),
+      );
+      expect(response.json()).toMatchObject({
         profileId: 'profile.md',
       });
     });
