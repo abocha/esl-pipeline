@@ -492,6 +492,81 @@ describe('StudentLearningPage', () => {
     expect(screen.getByText(/Draft profile populated from the latest lesson memory/i)).toBeTruthy();
   });
 
+  it('shows the active revision version label from revision history instead of a synthetic current label', async () => {
+    renderLearningPage();
+
+    await screen.findByDisplayValue('B1');
+
+    const currentRevisionCard = screen.getByText('Current Revision').closest('article');
+    expect(currentRevisionCard?.querySelector('strong')?.textContent).toBe('v1');
+  });
+
+  it('hides restore actions for active profile revisions', async () => {
+    renderLearningPage();
+
+    await screen.findByText('Profile Versions');
+
+    expect(screen.queryByRole('button', { name: /^Restore$/i })).toBeNull();
+  });
+
+  it('does not show a draft activation success beside a failed profile reload', async () => {
+    const user = userEvent.setup();
+    const refreshStudent = vi.fn(async () => {});
+    useStudentAreaContextMock.mockReturnValue({
+      student: {
+        id: 'student-alex',
+        student: 'Alex',
+        profileId: null,
+      },
+      studentId: 'student-alex',
+      studentLoading: false,
+      studentError: null,
+      refreshStudent,
+    });
+    apiMocks.activateProfileRevision.mockResolvedValueOnce({
+      id: 'revision-draft-empty-1',
+      profileId: 'profiles/students/alex.md',
+      contentHash: 'hash-empty-1',
+      source: 'create',
+      status: 'active',
+      versionNumber: 1,
+      versionLabel: 'v1',
+      activatedAt: NOW,
+      deprecatedAt: null,
+      createdAt: NOW,
+      createdBy: 'teacher-1',
+      restoredFromRevisionId: null,
+      content: '# Foundational Profile',
+      structuredContent: {
+        schemaVersion: 'foundational_profile_v1',
+        overallLevel: null,
+        primaryGoals: [],
+        communicationContexts: [],
+        interestsAndUsefulThemes: [],
+        stableStrengths: [],
+        persistentChallenges: [],
+        studyPreferences: [],
+        durableConstraints: [],
+        teacherNotes: null,
+      },
+    });
+    apiMocks.getProfileContent.mockRejectedValueOnce(
+      new Error('not_found This learner profile has not been structured yet.'),
+    );
+
+    renderLearningPage();
+
+    await user.click(await screen.findByRole('button', { name: /Start Empty Profile/i }));
+    await screen.findByText(/Empty draft created/i);
+
+    await user.click(await screen.findByRole('button', { name: /Activate Draft/i }));
+
+    expect(await screen.findByText('Draft activated.')).toBeTruthy();
+    expect(
+      screen.queryByText('not_found This learner profile has not been structured yet.'),
+    ).toBeNull();
+  });
+
   it('ignores stale profile, memory, binding, and candidate responses after switching students', async () => {
     const studentAProfile = createDeferred<{
       id: string;

@@ -62,4 +62,33 @@ describe('StudentWorkspace student creation', () => {
 
     expect(screen.getByText(/Created student Alex/i)).toBeTruthy();
   });
+
+  it('creates a DB-only student when no starter profile details are entered', async () => {
+    const user = userEvent.setup();
+    studentWorkspaceApiMocks.createStudentProfile.mockResolvedValue({
+      id: 'student-mila',
+      student: 'Mila',
+      profileId: null,
+    });
+
+    await renderWorkspaceForStudentCreation();
+
+    await user.click(screen.getByRole('button', { name: /Create Student/i }));
+    fireEvent.change(screen.getByLabelText(/Student Name/i), { target: { value: 'Mila' } });
+    await user.click(screen.getByRole('button', { name: /^Create Student$/i }));
+
+    await waitFor(() => {
+      expect(studentWorkspaceApiMocks.createStudentProfile).toHaveBeenCalledWith({
+        student: 'Mila',
+      });
+    });
+  });
+
+  it('does not expose profile file IDs as the normal student creation path', async () => {
+    renderCreateStudentDialogOpen();
+
+    expect(screen.getByRole('heading', { name: /Create student/i })).toBeTruthy();
+    expect(screen.queryByText(/profile-default\.md/i)).toBeNull();
+    expect(screen.queryByText(/profile-alt\.md/i)).toBeNull();
+  });
 });
