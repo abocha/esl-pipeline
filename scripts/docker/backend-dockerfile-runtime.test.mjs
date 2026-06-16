@@ -7,6 +7,8 @@ const dockerfile = readFileSync(
   'utf8',
 );
 
+const runtimeStage = dockerfile.slice(dockerfile.indexOf('FROM node:24-alpine AS runtime'));
+
 test('backend runtime image creates writable tmp and uploads before dropping privileges', () => {
   const mkdirIndex = dockerfile.indexOf('mkdir -p /app/tmp /app/uploads');
   const chownIndex = dockerfile.indexOf('chown -R node:node /app/tmp /app/uploads');
@@ -17,4 +19,14 @@ test('backend runtime image creates writable tmp and uploads before dropping pri
   assert.notEqual(userNodeIndex, -1, 'Dockerfile should drop privileges with USER node');
   assert.ok(mkdirIndex < userNodeIndex, 'runtime dirs must be created before USER node');
   assert.ok(chownIndex < userNodeIndex, 'runtime dirs must be chowned before USER node');
+});
+
+test('backend production runtime image does not install Edge TTS dependencies', () => {
+  assert.notEqual(runtimeStage.length, 0, 'Dockerfile should include a runtime stage');
+  assert.doesNotMatch(runtimeStage, /edge-tts/i);
+  assert.doesNotMatch(runtimeStage, /EDGE_TTS/);
+  assert.doesNotMatch(runtimeStage, /ESL_EDGE_TTS/);
+  assert.doesNotMatch(runtimeStage, /py3-pip/);
+  assert.doesNotMatch(runtimeStage, /python3 -m venv/);
+  assert.match(runtimeStage, /ffmpeg/);
 });
