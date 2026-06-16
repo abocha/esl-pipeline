@@ -1218,7 +1218,6 @@ export const StudentWorkspace: React.FC = () => {
             isBusy={createStudentBusy}
             error={createStudentError}
             success={createStudentSuccess}
-            profileOptions={profileOptions}
             createStudentForm={createStudentForm}
             onToggleOpen={() => {
               setCreateStudentSuccess(null);

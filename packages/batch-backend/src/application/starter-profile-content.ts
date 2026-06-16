@@ -6,35 +6,49 @@ import {
 } from './foundational-profile.js';
 
 export interface StarterProfileInput {
-  level?: string | null;
-  goals: string;
-  professionOrContext: string;
-  interests: string;
-  longRunningChallenges: string;
-  studyPreferencesOrConstraints: string;
+  overallLevel?: string | null;
+  primaryGoals?: string | null;
+  communicationContexts?: string | null;
+  interestsAndUsefulThemes?: string | null;
+  stableStrengths?: string | null;
+  persistentChallenges?: string | null;
+  studyPreferences?: string | null;
+  durableConstraints?: string | null;
   teacherNotes?: string | null;
+  /**
+   * Legacy compact starter-profile aliases accepted for compatibility.
+   * New public write paths should use the canonical foundational fields above.
+   */
+  level?: string | null;
+  goals?: string | null;
+  professionOrContext?: string | null;
+  interests?: string | null;
+  longRunningChallenges?: string | null;
+  studyPreferencesOrConstraints?: string | null;
 }
 
 export interface NormalizedStarterProfileInput {
-  level: string | null;
-  goals: string;
-  professionOrContext: string;
-  interests: string;
-  longRunningChallenges: string;
-  studyPreferencesOrConstraints: string;
+  overallLevel: string | null;
+  primaryGoals: string;
+  communicationContexts: string;
+  interestsAndUsefulThemes: string;
+  stableStrengths: string;
+  persistentChallenges: string;
+  studyPreferences: string;
+  durableConstraints: string;
   teacherNotes: string | null;
 }
 
-function normalizeRequiredField(value: string, fieldName: string): string {
+function normalizeTextBlock(value?: string | null): string {
+  if (typeof value !== 'string') {
+    return '';
+  }
+
   const normalized = value
     .split('\n')
     .map((line) => line.trimEnd())
     .join('\n')
     .trim();
-
-  if (!normalized) {
-    throw new Error(`${fieldName} is required`);
-  }
 
   return normalized;
 }
@@ -57,21 +71,20 @@ export function normalizeStarterProfileInput(
   input: StarterProfileInput,
 ): NormalizedStarterProfileInput {
   return {
-    level: normalizeOptionalField(input.level),
-    goals: normalizeRequiredField(input.goals, 'starterProfile.goals'),
-    professionOrContext: normalizeRequiredField(
-      input.professionOrContext,
-      'starterProfile.professionOrContext',
+    overallLevel: normalizeOptionalField(input.overallLevel ?? input.level),
+    primaryGoals: normalizeTextBlock(input.primaryGoals ?? input.goals),
+    communicationContexts: normalizeTextBlock(
+      input.communicationContexts ?? input.professionOrContext,
     ),
-    interests: normalizeRequiredField(input.interests, 'starterProfile.interests'),
-    longRunningChallenges: normalizeRequiredField(
-      input.longRunningChallenges,
-      'starterProfile.longRunningChallenges',
+    interestsAndUsefulThemes: normalizeTextBlock(input.interestsAndUsefulThemes ?? input.interests),
+    stableStrengths: normalizeTextBlock(input.stableStrengths),
+    persistentChallenges: normalizeTextBlock(
+      input.persistentChallenges ?? input.longRunningChallenges,
     ),
-    studyPreferencesOrConstraints: normalizeRequiredField(
-      input.studyPreferencesOrConstraints,
-      'starterProfile.studyPreferencesOrConstraints',
+    studyPreferences: normalizeTextBlock(
+      input.studyPreferences ?? input.studyPreferencesOrConstraints,
     ),
+    durableConstraints: normalizeTextBlock(input.durableConstraints),
     teacherNotes: normalizeOptionalField(input.teacherNotes),
   };
 }
@@ -80,12 +93,16 @@ function renderMultilineBlock(text: string): string[] {
   return text.split('\n').map((line) => (line.trim().length > 0 ? line : ''));
 }
 
+function renderStarterSectionLines(text: string, emptyMessage: string): string[] {
+  return text.length > 0 ? renderMultilineBlock(text) : [emptyMessage];
+}
+
 export function renderStarterProfileContent(args: {
   studentName: string;
   starterProfile: StarterProfileInput;
 }): string {
   const normalized = normalizeStarterProfileInput(args.starterProfile);
-  const level = normalized.level ?? 'Unknown';
+  const level = normalized.overallLevel ?? 'Unknown';
   const teacherNotesLines = normalized.teacherNotes
     ? renderMultilineBlock(normalized.teacherNotes)
     : ['No additional teacher-authored notes yet.'];
@@ -95,24 +112,42 @@ export function renderStarterProfileContent(args: {
     `**Profile Origin:** Starter profile form | **Current Level:** ${level}`,
     '',
     '## 1. Goals And Motivation',
-    ...renderMultilineBlock(normalized.goals),
+    ...renderStarterSectionLines(normalized.primaryGoals, 'No durable goals recorded yet.'),
     '',
-    '## 2. Work And Communication Context',
-    ...renderMultilineBlock(normalized.professionOrContext),
+    '## 2. Communication Contexts',
+    ...renderStarterSectionLines(
+      normalized.communicationContexts,
+      'No durable communication contexts recorded yet.',
+    ),
     '',
-    '## 3. Interests And Personal Context',
-    ...renderMultilineBlock(normalized.interests),
+    '## 3. Interests And Useful Themes',
+    ...renderStarterSectionLines(
+      normalized.interestsAndUsefulThemes,
+      'No engagement themes recorded yet.',
+    ),
     '',
-    '## 4. Long-Running Challenges',
-    ...renderMultilineBlock(normalized.longRunningChallenges),
+    '## 4. Stable Strengths',
+    ...renderStarterSectionLines(normalized.stableStrengths, 'No stable strengths recorded yet.'),
     '',
-    '## 5. Study Preferences And Constraints',
-    ...renderMultilineBlock(normalized.studyPreferencesOrConstraints),
+    '## 5. Persistent Challenges',
+    ...renderStarterSectionLines(
+      normalized.persistentChallenges,
+      'No persistent challenges recorded yet.',
+    ),
     '',
-    '## 6. Teacher Notes',
+    '## 6. Study Preferences',
+    ...renderStarterSectionLines(normalized.studyPreferences, 'No study preferences recorded yet.'),
+    '',
+    '## 7. Durable Constraints',
+    ...renderStarterSectionLines(
+      normalized.durableConstraints,
+      'No durable constraints recorded yet.',
+    ),
+    '',
+    '## 8. Teacher Notes',
     ...teacherNotesLines,
     '',
-    '## 7. Profile Governance Notes',
+    '## 9. Profile Governance Notes',
     '- This is the teacher-authored foundational profile baseline for this student.',
     '- Recent lesson continuity, homework continuity, and unresolved short-term issues belong in canonical student memory rather than this profile.',
   ].join('\n');
@@ -125,14 +160,14 @@ export function buildStarterProfileStructuredContent(
 
   return normalizeFoundationalProfile({
     schemaVersion: FOUNDATIONAL_PROFILE_SCHEMA_VERSION,
-    overallLevel: normalized.level,
-    primaryGoals: splitStructuredProfileItems(normalized.goals),
-    communicationContexts: splitStructuredProfileItems(normalized.professionOrContext),
-    interestsAndUsefulThemes: splitStructuredProfileItems(normalized.interests),
-    stableStrengths: [],
-    persistentChallenges: splitStructuredProfileItems(normalized.longRunningChallenges),
-    studyPreferences: splitStructuredProfileItems(normalized.studyPreferencesOrConstraints),
-    durableConstraints: [],
+    overallLevel: normalized.overallLevel,
+    primaryGoals: splitStructuredProfileItems(normalized.primaryGoals),
+    communicationContexts: splitStructuredProfileItems(normalized.communicationContexts),
+    interestsAndUsefulThemes: splitStructuredProfileItems(normalized.interestsAndUsefulThemes),
+    stableStrengths: splitStructuredProfileItems(normalized.stableStrengths),
+    persistentChallenges: splitStructuredProfileItems(normalized.persistentChallenges),
+    studyPreferences: splitStructuredProfileItems(normalized.studyPreferences),
+    durableConstraints: splitStructuredProfileItems(normalized.durableConstraints),
     teacherNotes: normalized.teacherNotes,
   });
 }

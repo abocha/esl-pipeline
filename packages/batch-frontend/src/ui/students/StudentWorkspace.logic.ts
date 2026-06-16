@@ -5,21 +5,6 @@ import type {
   StudentProfileInput,
 } from '../../utils/api';
 
-export interface CreateStudentFormState {
-  student: string;
-  profileId: string;
-  colorPreset: string;
-  accentPreference: string;
-  manifestPreset: string;
-  starterLevel: string;
-  starterGoals: string;
-  starterProfessionOrContext: string;
-  starterInterests: string;
-  starterLongRunningChallenges: string;
-  starterStudyPreferencesOrConstraints: string;
-  starterTeacherNotes: string;
-}
-
 export interface FoundationalProfileFormState {
   overallLevel: string;
   primaryGoals: string;
@@ -32,19 +17,21 @@ export interface FoundationalProfileFormState {
   teacherNotes: string;
 }
 
+export interface CreateStudentFormState extends FoundationalProfileFormState {
+  student: string;
+}
+
 export const INITIAL_CREATE_STUDENT_FORM: CreateStudentFormState = {
   student: '',
-  profileId: '',
-  colorPreset: '',
-  accentPreference: '',
-  manifestPreset: '',
-  starterLevel: '',
-  starterGoals: '',
-  starterProfessionOrContext: '',
-  starterInterests: '',
-  starterLongRunningChallenges: '',
-  starterStudyPreferencesOrConstraints: '',
-  starterTeacherNotes: '',
+  overallLevel: '',
+  primaryGoals: '',
+  communicationContexts: '',
+  interestsAndUsefulThemes: '',
+  stableStrengths: '',
+  persistentChallenges: '',
+  studyPreferences: '',
+  durableConstraints: '',
+  teacherNotes: '',
 };
 
 export const INITIAL_FOUNDATIONAL_PROFILE_FORM: FoundationalProfileFormState = {
@@ -60,13 +47,10 @@ export const INITIAL_FOUNDATIONAL_PROFILE_FORM: FoundationalProfileFormState = {
 };
 
 export const CREATE_STUDENT_NAME_REQUIRED_MESSAGE = 'Student name is required.';
-export const CREATE_STUDENT_STARTER_PROFILE_REQUIRED_MESSAGE =
-  'Complete all required starter profile fields or clear the starter profile section before creating the student.';
 
 export interface StarterProfileBuildResult {
   starterProfile?: StarterProfileInput;
   hasAnyValue: boolean;
-  hasMissingRequired: boolean;
 }
 
 export interface CreateStudentPayloadBuildResult {
@@ -288,32 +272,38 @@ export function getApprovedCandidatesReadyForPromotion(
   return candidates.filter((candidate) => isSelectableForPromotion(candidate));
 }
 
-export function buildStarterProfileInput(form: CreateStudentFormState): StarterProfileBuildResult {
-  const starterProfile: StarterProfileInput = {
-    level: form.starterLevel.trim() || undefined,
-    goals: form.starterGoals.trim() || undefined,
-    professionOrContext: form.starterProfessionOrContext.trim() || undefined,
-    interests: form.starterInterests.trim() || undefined,
-    longRunningChallenges: form.starterLongRunningChallenges.trim() || undefined,
-    studyPreferencesOrConstraints: form.starterStudyPreferencesOrConstraints.trim() || undefined,
-    teacherNotes: form.starterTeacherNotes.trim() || undefined,
-  };
+function assignTrimmedStarterField(
+  target: StarterProfileInput,
+  key: keyof StarterProfileInput,
+  value: string,
+): void {
+  const trimmed = value.trim();
+  if (trimmed.length > 0) {
+    target[key] = trimmed;
+  }
+}
 
-  const requiredFields = [
-    starterProfile.goals,
-    starterProfile.professionOrContext,
-    starterProfile.interests,
-    starterProfile.longRunningChallenges,
-    starterProfile.studyPreferencesOrConstraints,
-  ];
+export function buildStarterProfileInput(form: CreateStudentFormState): StarterProfileBuildResult {
+  const starterProfile: StarterProfileInput = {};
+  assignTrimmedStarterField(starterProfile, 'overallLevel', form.overallLevel);
+  assignTrimmedStarterField(starterProfile, 'primaryGoals', form.primaryGoals);
+  assignTrimmedStarterField(starterProfile, 'communicationContexts', form.communicationContexts);
+  assignTrimmedStarterField(
+    starterProfile,
+    'interestsAndUsefulThemes',
+    form.interestsAndUsefulThemes,
+  );
+  assignTrimmedStarterField(starterProfile, 'stableStrengths', form.stableStrengths);
+  assignTrimmedStarterField(starterProfile, 'persistentChallenges', form.persistentChallenges);
+  assignTrimmedStarterField(starterProfile, 'studyPreferences', form.studyPreferences);
+  assignTrimmedStarterField(starterProfile, 'durableConstraints', form.durableConstraints);
+  assignTrimmedStarterField(starterProfile, 'teacherNotes', form.teacherNotes);
+
   const hasAnyValue = Object.values(starterProfile).some((value) => value && value.length > 0);
-  const hasMissingRequired =
-    hasAnyValue && requiredFields.some((value) => !value || value.trim().length === 0);
 
   return {
-    starterProfile: hasAnyValue && !hasMissingRequired ? starterProfile : undefined,
+    starterProfile: hasAnyValue ? starterProfile : undefined,
     hasAnyValue,
-    hasMissingRequired,
   };
 }
 
@@ -329,19 +319,8 @@ export function buildCreateStudentPayload(
   }
 
   const starterProfile = buildStarterProfileInput(form);
-  if (starterProfile.hasMissingRequired) {
-    return {
-      validationError: CREATE_STUDENT_STARTER_PROFILE_REQUIRED_MESSAGE,
-      starterProfile,
-    };
-  }
-
   const payload: StudentProfileInput = {
     student,
-    ...(!starterProfile.starterProfile && form.profileId ? { profileId: form.profileId } : {}),
-    ...(form.colorPreset ? { colorPreset: form.colorPreset } : {}),
-    ...(form.accentPreference ? { accentPreference: form.accentPreference } : {}),
-    ...(form.manifestPreset ? { manifestPreset: form.manifestPreset } : {}),
     ...(starterProfile.starterProfile ? { starterProfile: starterProfile.starterProfile } : {}),
   };
 

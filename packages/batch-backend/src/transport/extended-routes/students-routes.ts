@@ -98,13 +98,21 @@ function workspaceContextErrorResponse(reply: FastifyReply, error: unknown) {
 export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRoutesContext): void {
   const { authenticate } = context;
   const starterProfileSchema = z.object({
-    level: z.string().nullable().optional(),
-    goals: z.string().min(1),
-    professionOrContext: z.string().min(1),
-    interests: z.string().min(1),
-    longRunningChallenges: z.string().min(1),
-    studyPreferencesOrConstraints: z.string().min(1),
+    overallLevel: z.string().nullable().optional(),
+    primaryGoals: z.string().nullable().optional(),
+    communicationContexts: z.string().nullable().optional(),
+    interestsAndUsefulThemes: z.string().nullable().optional(),
+    stableStrengths: z.string().nullable().optional(),
+    persistentChallenges: z.string().nullable().optional(),
+    studyPreferences: z.string().nullable().optional(),
+    durableConstraints: z.string().nullable().optional(),
     teacherNotes: z.string().nullable().optional(),
+    level: z.string().nullable().optional(),
+    goals: z.string().nullable().optional(),
+    professionOrContext: z.string().nullable().optional(),
+    interests: z.string().nullable().optional(),
+    longRunningChallenges: z.string().nullable().optional(),
+    studyPreferencesOrConstraints: z.string().nullable().optional(),
   });
   const lessonStatusSchema = z.enum(['scheduled', 'completed', 'canceled', 'no_show']);
   const optionalTextSchema = z.string().trim().max(2000).nullable().optional();
@@ -1696,10 +1704,7 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
         student: z.string().min(1),
         dbId: z.string().nullable().optional(),
         pageParentId: z.string().nullable().optional(),
-        colorPreset: z.string().nullable().optional(),
-        accentPreference: z.string().nullable().optional(),
         voices: z.record(z.string(), z.string()).optional(),
-        manifestPreset: z.string().nullable().optional(),
         profileId: z.string().nullable().optional(),
         starterProfile: starterProfileSchema.nullable().optional(),
       });
@@ -1769,10 +1774,7 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
           student: z.string().min(1).optional(),
           dbId: z.string().nullable().optional(),
           pageParentId: z.string().nullable().optional(),
-          colorPreset: z.string().nullable().optional(),
-          accentPreference: z.string().nullable().optional(),
           voices: z.record(z.string(), z.string()).optional(),
-          manifestPreset: z.string().nullable().optional(),
           profileId: z.string().nullable().optional(),
         })
         .partial();
