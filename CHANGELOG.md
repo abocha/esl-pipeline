@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [9.0.0] - 2026-06-16
+
+### Changed
+
+- Automated release from PR #101: build(prod): harden production runtime readiness (https://github.com/abocha/esl-pipeline/pull/101)
+
 ## [8.2.4] - 2026-06-15
 
 ### Changed
