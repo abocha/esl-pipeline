@@ -15,6 +15,7 @@
       "vitest.config.ts",
       "!**/dist",
       "!coverage",
+      "!docs/generated",
       "!out",
       "!**/playwright-report",
       "!**/test-results",

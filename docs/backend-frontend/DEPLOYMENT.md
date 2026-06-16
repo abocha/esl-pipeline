@@ -132,8 +132,8 @@ For the Ubuntu 24.04 VPS closed-alpha path, use the optional Caddy edge profile 
 to the host:
 
 ```bash
-# Export these in the same shell where you run the edge commands; Compose may read `.env`, but the
-# Node validator invoked by the pnpm scripts reads the current process environment.
+# Export these in the same shell where you run local edge validation commands; Compose may read
+# `.env`, but the Node validator invoked by the pnpm scripts reads the current process environment.
 export CADDY_PUBLIC_HOSTNAME=alpha.example.com
 export CADDY_ACME_EMAIL=ops@example.com
 pnpm docker:prod:edge:config
@@ -150,6 +150,12 @@ Default production Compose also starts the generic `batch-worker`, the dedicated
 recording uploads to leave the `transcribe_queue_waiting` state. The student-memory worker is
 required for queued lesson-memory, homework-memory, and student-memory snapshot jobs to become ready
 after normal tutor activity.
+
+Backend-image services that may touch Google STT/TTS mount the server-local `.secrets` directory
+read-only at `/app/secrets`. Keep the real service-account file on the VPS at
+`/opt/esl-pipeline/.secrets/google-service-account.json`; production containers use
+`GOOGLE_APPLICATION_CREDENTIALS=/app/secrets/google-service-account.json`. Do not commit `.secrets`
+or replace it from git during deploys.
 
 After DNS points to the VPS, verify:
 
@@ -176,6 +182,11 @@ A reviewed production deployment should broadly follow:
    cd /opt/esl-pipeline
    bash scripts/deploy/deploy-prod-images.sh <40-char-git-sha>
    ```
+
+   On the VPS, the deploy script reads `CADDY_PUBLIC_HOSTNAME` and `CADDY_ACME_EMAIL` from
+   server-local `/opt/esl-pipeline/.env.batch-backend` when those values are not already exported.
+   Explicit shell exports still take precedence for one-off overrides. Do not put these values in
+   the generated deploy state files under `/var/lib/esl-pipeline/deploy`.
 
 4. The script pulls the requested images, records image refs and digests under
    `/var/lib/esl-pipeline/deploy`, checks disk space, verifies Postgres health, creates and verifies a
@@ -217,6 +228,20 @@ cp .env.batch-backend.example .env.batch-backend
 
 Populate required credentials/keys referenced in:
 [`docs/reference/env.md`](../reference/env.md)
+
+If Google STT/TTS uses a service-account file, create it outside git on the VPS before deployment:
+
+```bash
+mkdir -p /opt/esl-pipeline/.secrets
+# Place google-service-account.json in /opt/esl-pipeline/.secrets with restricted permissions.
+```
+
+Production Compose mounts that directory into backend-image services as read-only `/app/secrets`;
+the container path is
+`GOOGLE_APPLICATION_CREDENTIALS=/app/secrets/google-service-account.json`.
+
+The production backend image includes ffmpeg and uses provider-backed pronunciation/audio paths:
+ElevenLabs, Google, or Inworld. It does not provision a separate pronunciation helper runtime.
 
 ## Database Migration Flow
 

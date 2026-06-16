@@ -2,6 +2,7 @@ node_modules
 dist
 out
 coverage
+docs/generated
 packages/**/dist
 .pnpm-store
 fixtures

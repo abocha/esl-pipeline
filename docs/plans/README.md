@@ -87,6 +87,7 @@
 6. `docs/plans/slice-1-private-hosted-environment.md`
 7. `docs/plans/slice-2-invite-workspace-first-student.md`
 8. `docs/plans/2026-06-15-production-readiness-restart-chunks.md`
+9. `docs/plans/2026-06-16-student-memory-throughput-design-note.md`
 
 ## Historical and Generated Aids
 

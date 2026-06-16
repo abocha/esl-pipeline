@@ -56,11 +56,10 @@ export interface CustomRerunInput {
   rerunPronunciationMainModel: string;
   rerunPronunciationMainVoiceId: string;
   rerunPronunciationMainVoiceAccent: string;
-  rerunPronunciationChunkProvider: 'edge-tts' | 'elevenlabs' | 'google' | 'inworld';
+  rerunPronunciationChunkProvider: 'elevenlabs' | 'google' | 'inworld';
   rerunPronunciationChunkModel: string;
   rerunPronunciationChunkVoiceId: string;
   rerunPronunciationChunkVoiceAccent: string;
-  rerunPronunciationChunkEdgeVoice: string;
 }
 
 export type CustomRerunPayloadResult =
@@ -252,14 +251,8 @@ export function buildCustomRerunPayload(input: CustomRerunInput): CustomRerunPay
     payload.pronunciationChunkVoiceId = input.rerunPronunciationChunkVoiceId.trim() || undefined;
     payload.pronunciationChunkVoiceAccent =
       input.rerunPronunciationChunkVoiceAccent.trim() || undefined;
-    if (input.rerunPronunciationChunkProvider === 'edge-tts') {
-      payload.pronunciationChunkEdgeVoice =
-        input.rerunPronunciationChunkEdgeVoice.trim() || undefined;
-    } else {
-      if (input.rerunPronunciationChunkModel.trim()) {
-        payload.pronunciationChunkTtsModel =
-          input.rerunPronunciationChunkModel.trim() as TtsModelId;
-      }
+    if (input.rerunPronunciationChunkModel.trim()) {
+      payload.pronunciationChunkTtsModel = input.rerunPronunciationChunkModel.trim() as TtsModelId;
     }
   }
 

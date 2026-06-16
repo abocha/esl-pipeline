@@ -60,18 +60,16 @@
           create_host_path: false
       ```
 
-    - apply that mount to `batch-backend`, `batch-worker`, and `transcribe-worker`; also apply it to
-      `student-memory-worker` if it can use Google credentials.
+    - apply that mount to `batch-backend`, `batch-worker`, `student-memory-worker`, and
+      `transcribe-worker`.
     - real credential file on VPS:
       - `/opt/esl-pipeline/.secrets/google-service-account.json`
     - container env expects:
       - `GOOGLE_APPLICATION_CREDENTIALS=/app/secrets/google-service-account.json`
 
-  - Remove Edge TTS from the production image.
-    - Edge TTS is not used anymore.
-    - Remove `edge-tts`, Python, venv setup, and related env from the backend Dockerfile/runtime
-      image.
-    - Verify no runtime code path still depends on `ESL_EDGE_TTS_*`.
+  - Remove the legacy pronunciation helper from runtime paths.
+    - Keep pronunciation audio on ElevenLabs, Google, or Inworld.
+    - Verify no runtime code path still depends on its old env or Docker setup.
 
 - P1 product blockers before the next invite wave:
   - Redesign new student creation.

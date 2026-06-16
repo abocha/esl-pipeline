@@ -197,7 +197,6 @@ export interface RerunFlags {
   pronunciationChunkVoiceId?: string;
   pronunciationChunkTtsProvider?: PronunciationChunkTtsProviderId;
   pronunciationChunkTtsModel?: TtsModelId;
-  pronunciationChunkEdgeVoice?: string;
 }
 
 export type RerunAssignmentRequest = RerunFlags;

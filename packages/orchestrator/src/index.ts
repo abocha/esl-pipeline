@@ -149,10 +149,9 @@ function normalizeCancellationReason(reason: unknown): string | undefined {
 
 function normalizePronunciationProviderFromManifest(
   provider?: string | null,
-): 'elevenlabs' | 'google' | 'inworld' | 'edge-tts' | undefined {
+): 'elevenlabs' | 'google' | 'inworld' | undefined {
   if (!provider) return undefined;
   if (provider === 'elevenlabs' || provider === 'google' || provider === 'inworld') return provider;
-  if (provider === 'edge') return 'edge-tts';
   return undefined;
 }
 
@@ -204,23 +203,6 @@ function resolveProviderCompatibleVoiceId(args: {
   return args.fallbackCandidates?.find(
     (candidate) => candidate.voiceId && candidate.provider === args.effectiveProvider,
   )?.voiceId;
-}
-
-function resolveProviderCompatibleEdgeVoice(args: {
-  explicitEdgeVoice?: string;
-  effectiveProvider?: 'edge-tts' | 'elevenlabs' | 'google' | 'inworld';
-  previousVoiceId?: string;
-  previousProvider?: 'edge-tts' | 'elevenlabs' | 'google' | 'inworld';
-}): string | undefined {
-  if (args.explicitEdgeVoice !== undefined) {
-    return args.explicitEdgeVoice;
-  }
-
-  if (args.effectiveProvider === 'edge-tts' && args.previousProvider === 'edge-tts') {
-    return args.previousVoiceId;
-  }
-
-  return undefined;
 }
 
 interface RerunTtsWarning {
@@ -337,7 +319,7 @@ async function applyRerunVoicePreferences(flags: RerunFlags): Promise<void> {
   flags.pronunciationChunkVoiceAccent = pronunciationChunkPreferences.accentPreference;
 }
 
-function resolveDefaultChunkProvider(_mode?: string | null): 'edge-tts' | 'elevenlabs' | 'google' {
+function resolveDefaultChunkProvider(_mode?: string | null): 'elevenlabs' | 'google' {
   return 'google';
 }
 
@@ -1379,24 +1361,15 @@ export async function rerunAssignment(
           previousProvider: previousPrimaryProvider,
           fallbackCandidates: fallbackVoiceCandidates,
         });
-        const resolvedChunkVoiceId =
-          effectiveChunkProvider === 'edge-tts'
-            ? undefined
-            : resolveProviderCompatibleVoiceId({
-                explicitVoiceId: flags.pronunciationChunkVoiceId,
-                effectiveProvider: effectiveChunkProvider,
-                previousVoiceId: previousChunkClip?.voiceId,
-                previousProvider:
-                  previousChunkProvider === 'elevenlabs' || previousChunkProvider === 'google'
-                    ? previousChunkProvider
-                    : undefined,
-                fallbackCandidates: fallbackVoiceCandidates,
-              });
-        const resolvedChunkEdgeVoice = resolveProviderCompatibleEdgeVoice({
-          explicitEdgeVoice: flags.pronunciationChunkEdgeVoice,
+        const resolvedChunkVoiceId = resolveProviderCompatibleVoiceId({
+          explicitVoiceId: flags.pronunciationChunkVoiceId,
           effectiveProvider: effectiveChunkProvider,
           previousVoiceId: previousChunkClip?.voiceId,
-          previousProvider: previousChunkProvider,
+          previousProvider:
+            previousChunkProvider === 'elevenlabs' || previousChunkProvider === 'google'
+              ? previousChunkProvider
+              : undefined,
+          fallbackCandidates: fallbackVoiceCandidates,
         });
 
         if (
@@ -1415,8 +1388,7 @@ export async function rerunAssignment(
           flags.regeneratePronunciationChunkAudio &&
           previousChunkClip?.voiceId &&
           !previousChunkProvider &&
-          flags.pronunciationChunkVoiceId === undefined &&
-          flags.pronunciationChunkEdgeVoice === undefined
+          flags.pronunciationChunkVoiceId === undefined
         ) {
           pushRerunTtsWarning(rerunTtsWarnings, logger, {
             code: 'rerun_pronunciation_chunk_unknown_previous_provider',
@@ -1442,7 +1414,6 @@ export async function rerunAssignment(
         }
         if (
           flags.regeneratePronunciationChunkAudio &&
-          effectiveChunkProvider !== 'edge-tts' &&
           effectiveChunkProvider !== null &&
           resolvedChunkVoiceId === undefined
         ) {
@@ -1487,7 +1458,6 @@ export async function rerunAssignment(
               modelId: previousChunkModelId,
             }),
           chunkVoiceId: resolvedChunkVoiceId,
-          chunkEdgeVoice: resolvedChunkEdgeVoice,
           logger,
         });
         audioArtifacts.pronunciation = generatedPronunciation
