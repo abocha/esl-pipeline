@@ -223,24 +223,38 @@ function getProfileSnapshot(form: FoundationalProfileFormState): string {
 function buildRevisionDetailFromProfile(
   profileId: string,
   profile: ProfileContentResponse,
+  summary?: ProfileRevisionSummaryResponse | null,
 ): ProfileRevisionDetailResponse | null {
   if (!profile.currentRevisionId) return null;
   return {
     id: profile.currentRevisionId,
     profileId,
-    contentHash: '',
-    source: 'update',
-    status: 'active',
-    versionNumber: 0,
-    versionLabel: 'Current',
-    activatedAt: profile.updatedAt ?? null,
-    deprecatedAt: null,
-    createdAt: profile.updatedAt ?? new Date().toISOString(),
-    createdBy: null,
-    restoredFromRevisionId: null,
+    contentHash: summary?.contentHash ?? '',
+    source: summary?.source ?? 'update',
+    status: summary?.status ?? 'active',
+    versionNumber: summary?.versionNumber,
+    versionLabel: summary?.versionLabel,
+    activatedAt: summary?.activatedAt ?? profile.updatedAt ?? null,
+    deprecatedAt: summary?.deprecatedAt ?? null,
+    createdAt: summary?.createdAt ?? profile.updatedAt ?? new Date().toISOString(),
+    createdBy: summary?.createdBy ?? null,
+    restoredFromRevisionId: summary?.restoredFromRevisionId ?? null,
     content: profile.content,
     structuredContent: profile.structuredContent,
   };
+}
+
+function findCurrentProfileRevisionSummary(
+  profile: ProfileContentResponse,
+  revisions: readonly ProfileRevisionSummaryResponse[],
+): ProfileRevisionSummaryResponse | null {
+  if (profile.currentRevisionId?.trim()) {
+    const matchingRevision = revisions.find(
+      (revision) => revision.id === profile.currentRevisionId,
+    );
+    if (matchingRevision) return matchingRevision;
+  }
+  return revisions.find((revision) => revision.status === 'active') ?? null;
 }
 
 function countListItems(value: string): number {
@@ -549,9 +563,17 @@ export const StudentLearningPage: React.FC = () => {
         const revision =
           profile.currentRevisionId && profile.currentRevisionId.trim()
             ? await getProfileRevision(profileId, profile.currentRevisionId).catch(() =>
-                buildRevisionDetailFromProfile(profileId, profile),
+                buildRevisionDetailFromProfile(
+                  profileId,
+                  profile,
+                  findCurrentProfileRevisionSummary(profile, revisions.items ?? []),
+                ),
               )
-            : buildRevisionDetailFromProfile(profileId, profile);
+            : buildRevisionDetailFromProfile(
+                profileId,
+                profile,
+                findCurrentProfileRevisionSummary(profile, revisions.items ?? []),
+              );
         if (!isCurrentPageLoadRequest(requestId)) {
           return;
         }
@@ -722,9 +744,13 @@ export const StudentLearningPage: React.FC = () => {
 
         if (surface.profile) {
           setBootstrapProfileId(surface.profile.id);
+          const currentSummary = findCurrentProfileRevisionSummary(
+            surface.profile,
+            surface.revisions.items ?? [],
+          );
           const revision =
             surface.profile.currentRevisionId && surface.profile.currentRevisionId.trim()
-              ? buildRevisionDetailFromProfile(surface.profile.id, surface.profile)
+              ? buildRevisionDetailFromProfile(surface.profile.id, surface.profile, currentSummary)
               : null;
           const form = foundationalProfileToFormState(
             revision?.structuredContent ?? surface.profile.structuredContent,
@@ -869,6 +895,7 @@ export const StudentLearningPage: React.FC = () => {
     try {
       await activateProfileRevision(profileId, currentRevision.id);
       await Promise.all([reloadCurrentLearningSurface(), refreshStudent()]);
+      setProfileError(null);
       setProfileSuccess('Draft activated.');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to activate the draft.';
@@ -1521,14 +1548,16 @@ export const StudentLearningPage: React.FC = () => {
                   >
                     Open
                   </button>
-                  <button
-                    type="button"
-                    className="workspace-secondary-btn"
-                    onClick={() => void handleRestoreRevision(revision.id)}
-                    disabled={profileBusy !== null}
-                  >
-                    Restore
-                  </button>
+                  {revision.status !== 'active' ? (
+                    <button
+                      type="button"
+                      className="workspace-secondary-btn"
+                      onClick={() => void handleRestoreRevision(revision.id)}
+                      disabled={profileBusy !== null}
+                    >
+                      Restore
+                    </button>
+                  ) : null}
                 </div>
               </div>
             ))}
