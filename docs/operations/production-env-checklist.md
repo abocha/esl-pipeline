@@ -149,6 +149,9 @@ CADDY_ACME_EMAIL=<operator-email-for-acme-notices>
 
 Export these values in the same shell that runs `pnpm docker:prod:edge:*`. Docker Compose reads
 `.env`, but the Node validator behind the pnpm edge scripts reads the current process environment.
+For the production deploy script on the VPS, the same values may live in server-local
+`/opt/esl-pipeline/.env.batch-backend`; `scripts/deploy/deploy-prod-images.sh` reads them from that
+file when shell exports are absent, and explicit shell exports still override the file.
 
 Edge-mode public traffic flow:
 
@@ -268,16 +271,21 @@ ESL_TTS_DEFAULT_PROVIDER=elevenlabs
 ESL_TTS_PROVIDER_ELEVENLABS_API_KEY=<if ElevenLabs TTS is enabled>
 GOOGLE_STT_PROJECT_ID=<if Google STT is enabled>
 GOOGLE_STT_GCS_STAGING_BUCKET=<if Google STT handles non-gs uploads>
-GOOGLE_APPLICATION_CREDENTIALS=<if Google STT/TTS uses a service account file>
+GOOGLE_APPLICATION_CREDENTIALS=/app/secrets/google-service-account.json
 ```
 
 Budget/safety policy must remain fail-safe for alpha. Verify current names in `docs/reference/GENERATION_PROVIDER_POLICY.md` and `.env.batch-backend.example`.
+Pronunciation audio should use the configured ElevenLabs, Google, or Inworld provider paths.
 
 Important:
 
 - Do not enable expensive provider paths accidentally.
 - Do not log provider request payloads with sensitive student data unless explicitly debugging and short-lived.
 - Keep any debug logging disabled by default.
+- If Google STT/TTS uses a service-account file, keep the real file server-local at
+  `/opt/esl-pipeline/.secrets/google-service-account.json`. Production Compose mounts `./.secrets`
+  read-only at `/app/secrets` for backend-image services; do not commit or overwrite `.secrets` from
+  git.
 
 ## Telegram Ops Bot
 
@@ -318,6 +326,8 @@ On the Ubuntu 24.04 VPS:
 - Repo is cloned.
 - Server checkout is on the reviewed deployment commit; no uncommitted server edits remain.
 - `.env.batch-backend` exists on server and is not committed.
+- `.secrets/google-service-account.json` exists on server if Google STT/TTS service-account auth is
+  enabled, and Compose mounts it read-only at `/app/secrets/google-service-account.json`.
 - `uploads/` host path exists if compose bind mount requires it.
 - Docker volumes exist for Postgres and Redis.
 - Backups can be uploaded to S3.

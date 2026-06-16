@@ -1,7 +1,5 @@
 # syntax=docker/dockerfile:1.6
 
-ARG EDGE_TTS_VERSION=7.2.8
-
 FROM node:24-alpine AS build
 
 ENV PNPM_HOME=/root/.local/share/pnpm
@@ -28,14 +26,7 @@ RUN find packages -name '*.tsbuildinfo' -delete \
 
 FROM node:24-alpine AS runtime
 
-ARG EDGE_TTS_VERSION
-
-ENV EDGE_TTS_VENV=/opt/edge-tts
-ENV PATH="${EDGE_TTS_VENV}/bin:${PATH}" \
-    ESL_EDGE_TTS_BIN=/opt/edge-tts/bin/edge-tts \
-    ESL_EDGE_TTS_PYTHON=/opt/edge-tts/bin/python \
-    ESL_EDGE_TTS_VOICE=en-US-AriaNeural \
-    NODE_ENV=production \
+ENV NODE_ENV=production \
     CI=true \
     PIPELINE_CWD=/app \
     FILESYSTEM_UPLOAD_DIR=/app/uploads
@@ -43,17 +34,15 @@ ENV PATH="${EDGE_TTS_VENV}/bin:${PATH}" \
 RUN apk add --no-cache \
         ca-certificates \
         curl \
-        ffmpeg \
-        py3-pip \
-        python3 \
-    && python3 -m venv "${EDGE_TTS_VENV}" \
-    && "${EDGE_TTS_VENV}/bin/pip" install --no-cache-dir "edge-tts==${EDGE_TTS_VERSION}" \
-    && chmod -R a+rX "${EDGE_TTS_VENV}"
+        ffmpeg
 
 WORKDIR /app
 
 COPY --from=build --chown=node:node /app/deployed/ ./
 COPY --chown=node:node docs/prompt-gallery ./docs/prompt-gallery
+
+RUN mkdir -p /app/tmp /app/uploads \
+    && chown -R node:node /app/tmp /app/uploads
 
 EXPOSE 8080
 

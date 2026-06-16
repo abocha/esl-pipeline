@@ -197,7 +197,6 @@ async function runRerunPipeline(
     pronunciationChunkVoiceId: payload.pronunciationChunkVoiceId ?? undefined,
     pronunciationChunkTtsProvider: payload.pronunciationChunkTtsProvider ?? undefined,
     pronunciationChunkTtsModel: payload.pronunciationChunkTtsModel ?? undefined,
-    pronunciationChunkEdgeVoice: payload.pronunciationChunkEdgeVoice ?? undefined,
   };
   if (payload.manifestMd) {
     (flags as RerunFlags & { manifestMd?: string }).manifestMd = payload.manifestMd;

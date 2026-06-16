@@ -553,6 +553,10 @@ function isDocsIndexFile(file) {
   );
 }
 
+function isGeneratedDocsFile(file) {
+  return file.startsWith('docs/generated/');
+}
+
 function isDockerFile(file) {
   return (
     file === 'docker-compose.yml' ||
@@ -591,13 +595,17 @@ function isBiomeLintCandidate(file) {
   return (
     /^(packages|scripts)\//u.test(file) &&
     /\.(?:js|mjs|cjs|ts|tsx|json|jsonc)$/u.test(file) &&
+    !isGeneratedDocsFile(file) &&
     !file.includes('/dist/') &&
     !file.includes('/node_modules/')
   );
 }
 
 function isPrettierCandidate(file) {
-  return /\.(?:md|ya?ml)$/u.test(file) || /(^|\/)package\.json$/u.test(file);
+  return (
+    !isGeneratedDocsFile(file) &&
+    (/\.(?:md|ya?ml)$/u.test(file) || /(^|\/)package\.json$/u.test(file))
+  );
 }
 
 function isSpecializedEslintCandidate(file) {

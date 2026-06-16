@@ -10,7 +10,7 @@ export type ElevenLabsTtsModelId =
   | 'eleven_multilingual_v2'
   | 'eleven_flash_v2_5'
   | 'eleven_flash_v2';
-export type PronunciationChunkTtsProviderId = TtsProviderId | 'edge-tts';
+export type PronunciationChunkTtsProviderId = TtsProviderId;
 export type SttProviderId = 'deepgram' | 'elevenlabs' | 'google';
 export type GoogleTtsModel = 'chirp3_hd' | 'studio' | 'neural2' | 'wavenet';
 export type InworldTtsModel = 'inworld-tts-2' | 'inworld-tts-1.5-max' | 'inworld-tts-1.5-mini';

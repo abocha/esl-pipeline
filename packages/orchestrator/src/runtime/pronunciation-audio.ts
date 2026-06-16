@@ -18,7 +18,6 @@ import {
 
 import type { AudioArtifactManifest, PronunciationAudioWarning } from '../manifest.js';
 import type { PronunciationAudioArtifact } from './audio-artifacts.js';
-import { synthesizeEdgeTtsClip } from './edge-tts.js';
 
 type PronunciationClipRecord = PronunciationAudioClip & AudioArtifactManifest;
 
@@ -33,12 +32,11 @@ interface PronunciationAudioSynthesisOptions {
   regenerateItems?: boolean;
   primaryTtsProvider?: TtsProviderId;
   primaryTtsModel?: TtsModelId;
-  chunkTtsProvider?: TtsProviderId | 'edge-tts';
+  chunkTtsProvider?: TtsProviderId;
   chunkTtsModel?: TtsModelId;
   logger?: PipelineLogger;
   primaryVoiceId?: string | null;
   chunkVoiceId?: string | null;
-  chunkEdgeVoice?: string | null;
 }
 
 interface ProviderClipSynthesisConfig {
@@ -47,11 +45,6 @@ interface ProviderClipSynthesisConfig {
   voiceId?: string | null;
 }
 
-const EDGE_TTS_PROVIDER_FALLBACK_WARNING: PronunciationAudioWarning = {
-  code: 'edge_tts_unavailable_provider_fallback',
-  message:
-    'edge-tts was unavailable for word/pair pronunciation clips, so provider pronunciation audio was used instead.',
-};
 const PRONUNCIATION_ITEM_SYNTHESIS_CONCURRENCY = 3;
 const IPA_TRANSCRIPTION_ONLY_REGEX = /^\/[^/\n]+\/$/;
 const DEFAULT_ELEVENLABS_PRONUNCIATION_MODEL = 'eleven_flash_v2_5' satisfies TtsModelId;
@@ -187,76 +180,6 @@ async function synthesizeProviderClip(
   });
 }
 
-async function synthesizeEdgeClip(
-  clip: PronunciationAudioClip,
-  options: PronunciationAudioSynthesisOptions,
-): Promise<PronunciationClipRecord> {
-  const result = await synthesizeEdgeTtsClip({
-    text: clip.text,
-    outPath: options.outPath,
-    preview: options.preview,
-    force: options.force,
-    logger: options.logger,
-    fileStem: clip.id,
-    kind: clip.kind,
-    voice: options.chunkEdgeVoice ?? undefined,
-  });
-  return toPrimaryClip(clip, {
-    path: result.path,
-    hash: result.hash,
-    voiceId: result.voice,
-    tts: {
-      provider: 'edge',
-      generatedCharacters: result.generatedCharacters,
-      cachedCharacters: result.cachedCharacters,
-    },
-  });
-}
-
-async function synthesizeEdgeClipWithProviderFallback(params: {
-  clip: PronunciationAudioClip;
-  options: PronunciationAudioSynthesisOptions;
-  providerConfig: ProviderClipSynthesisConfig;
-  warnings: PronunciationAudioWarning[];
-  state: { fallbackWarningLogged: boolean };
-}): Promise<PronunciationClipRecord> {
-  const { clip, options, providerConfig, warnings, state } = params;
-
-  try {
-    return await synthesizeEdgeClip(clip, options);
-  } catch (error) {
-    if (!state.fallbackWarningLogged) {
-      state.fallbackWarningLogged = true;
-      warnings.push({ ...EDGE_TTS_PROVIDER_FALLBACK_WARNING });
-      options.logger?.log({
-        level: 'warn',
-        stage: 'tts',
-        message: EDGE_TTS_PROVIDER_FALLBACK_WARNING.message,
-        detail: {
-          code: EDGE_TTS_PROVIDER_FALLBACK_WARNING.code,
-          mode: clip.kind,
-          clipId: clip.id,
-          error: error instanceof Error ? error.message : String(error),
-        },
-      });
-    }
-
-    const providerClip = await synthesizeProviderClip(
-      {
-        ...clip,
-        engine: 'provider',
-      },
-      options,
-      providerConfig,
-    );
-    if (providerClip) {
-      return providerClip;
-    }
-
-    throw error;
-  }
-}
-
 async function synthesizeShadowPrimary(
   focus: Extract<PronunciationFocus, { mode: 'shadow_sentence' }>,
   options: PronunciationAudioSynthesisOptions,
@@ -320,8 +243,8 @@ function buildGenericPrimaryText(focus: PronunciationFocus): string | null {
 
 function resolveChunkProvider(
   focus: PronunciationFocus,
-  requested?: TtsProviderId | 'edge-tts',
-): TtsProviderId | 'edge-tts' | null {
+  requested?: TtsProviderId,
+): TtsProviderId | null {
   if (requested) return requested;
   switch (focus.mode) {
     case 'shadow_sentence':
@@ -353,7 +276,6 @@ export async function synthesizePronunciationAudio(
   let primaryClip: PronunciationClipRecord | null = null;
   const itemClips: PronunciationClipRecord[] = [];
   const warnings: PronunciationAudioWarning[] = [];
-  const fallbackState = { fallbackWarningLogged: false };
   const shouldGeneratePrimary = options.regeneratePrimary !== false;
   const shouldGenerateItems = options.regenerateItems !== false;
   const resolvedPrimaryModel =
@@ -362,9 +284,7 @@ export async function synthesizePronunciationAudio(
       ? resolveDefaultPronunciationModel(options.primaryTtsProvider)
       : undefined);
   const chunkProvider = resolveChunkProvider(focus, options.chunkTtsProvider);
-  const chunkProviderForModel =
-    chunkProvider === 'edge-tts' ? options.primaryTtsProvider : chunkProvider;
-  const fallbackChunkProvider = chunkProviderForModel ?? options.primaryTtsProvider;
+  const fallbackChunkProvider = chunkProvider ?? options.primaryTtsProvider;
   const resolvedChunkModel =
     options.chunkTtsModel ??
     (fallbackChunkProvider === 'google'
@@ -399,17 +319,8 @@ export async function synthesizePronunciationAudio(
   };
   const synthesizeItemClip = async (
     clip: PronunciationAudioClip,
-    useEdgeFallback: boolean,
   ): Promise<PronunciationClipRecord | null> =>
-    useEdgeFallback
-      ? synthesizeEdgeClipWithProviderFallback({
-          clip,
-          options,
-          providerConfig: chunkProviderConfig,
-          warnings,
-          state: fallbackState,
-        })
-      : synthesizeProviderClip(clip, options, chunkProviderConfig);
+    synthesizeProviderClip(clip, options, chunkProviderConfig);
 
   switch (focus.mode) {
     case 'shadow_sentence': {
@@ -421,57 +332,36 @@ export async function synthesizePronunciationAudio(
       }
 
       if (!shouldGenerateItems) break;
-      const tasks: { clip: PronunciationAudioClip; useEdgeFallback: boolean }[] = [];
+      const tasks: PronunciationAudioClip[] = [];
       for (const [index, word] of focus.words.entries()) {
         const normalizedWord = normalizeSpeechText(word.text);
         if (!normalizedWord) continue;
-        if (chunkProvider === 'edge-tts') {
-          tasks.push({
-            clip: {
-              id: `shadow-word-${index + 1}-edge`,
-              itemIndex: index,
-              kind: 'word_item',
-              engine: 'edge',
-              text: normalizedWord,
-              label: 'Word',
-              note: word.note,
-            },
-            useEdgeFallback: true,
-          });
-        } else {
-          tasks.push({
-            clip: {
-              id: `shadow-word-${index + 1}`,
-              itemIndex: index,
-              kind: 'word_item',
-              engine: 'provider',
-              text: normalizedWord,
-              label: 'Word',
-              note: word.note,
-            },
-            useEdgeFallback: false,
-          });
-        }
+        tasks.push({
+          id: `shadow-word-${index + 1}`,
+          itemIndex: index,
+          kind: 'word_item',
+          engine: 'provider',
+          text: normalizedWord,
+          label: 'Word',
+          note: word.note,
+        });
 
         if (isLongShadowDrill(normalizedWord)) {
           tasks.push({
-            clip: {
-              id: `shadow-word-${index + 1}-natural`,
-              itemIndex: index,
-              kind: 'sentence_item',
-              engine: 'provider',
-              text: normalizedWord,
-              label: 'Natural',
-              note: word.note,
-            },
-            useEdgeFallback: false,
+            id: `shadow-word-${index + 1}-natural`,
+            itemIndex: index,
+            kind: 'sentence_item',
+            engine: 'provider',
+            text: normalizedWord,
+            label: 'Natural',
+            note: word.note,
           });
         }
       }
       const clips = await mapWithConcurrency(
         tasks,
         PRONUNCIATION_ITEM_SYNTHESIS_CONCURRENCY,
-        (task) => synthesizeItemClip(task.clip, task.useEdgeFallback),
+        (clip) => synthesizeItemClip(clip),
       );
       itemClips.push(...clips.filter((clip): clip is PronunciationClipRecord => Boolean(clip)));
       break;
@@ -484,30 +374,28 @@ export async function synthesizePronunciationAudio(
             id: `minimal-pair-${index + 1}-left`,
             itemIndex: index,
             kind: 'pair_left' as const,
-            engine: chunkProvider === 'edge-tts' ? ('edge' as const) : ('provider' as const),
+            engine: 'provider' as const,
             text: normalizeSpeechText(pair.left.text),
             label: 'Left',
             note: pair.note,
           },
-          useEdgeFallback: chunkProvider === 'edge-tts',
         },
         {
           clip: {
             id: `minimal-pair-${index + 1}-right`,
             itemIndex: index,
             kind: 'pair_right' as const,
-            engine: chunkProvider === 'edge-tts' ? ('edge' as const) : ('provider' as const),
+            engine: 'provider' as const,
             text: normalizeSpeechText(pair.right.text),
             label: 'Right',
             note: pair.note,
           },
-          useEdgeFallback: chunkProvider === 'edge-tts',
         },
       ]);
       const clips = await mapWithConcurrency(
         tasks,
         PRONUNCIATION_ITEM_SYNTHESIS_CONCURRENCY,
-        (task) => synthesizeItemClip(task.clip, task.useEdgeFallback),
+        (task) => synthesizeItemClip(task.clip),
       );
       itemClips.push(...clips.filter((clip): clip is PronunciationClipRecord => Boolean(clip)));
       break;
@@ -537,19 +425,18 @@ export async function synthesizePronunciationAudio(
               id: `connected-speech-${index + 1}`,
               itemIndex: index,
               kind: 'connected_target' as const,
-              engine: chunkProvider === 'edge-tts' ? ('edge' as const) : ('provider' as const),
+              engine: 'provider' as const,
               text: spokenText,
               label: 'Play',
               note: line.note,
             },
-            useEdgeFallback: chunkProvider === 'edge-tts',
           },
         ];
       });
       const clips = await mapWithConcurrency(
         tasks,
         PRONUNCIATION_ITEM_SYNTHESIS_CONCURRENCY,
-        (task) => synthesizeItemClip(task.clip, task.useEdgeFallback),
+        (task) => synthesizeItemClip(task.clip),
       );
       itemClips.push(...clips.filter((clip): clip is PronunciationClipRecord => Boolean(clip)));
       break;
@@ -579,18 +466,17 @@ export async function synthesizePronunciationAudio(
             id: `${focus.mode}-${index + 1}`,
             itemIndex: index,
             kind: 'sentence_item' as const,
-            engine: chunkProvider === 'edge-tts' ? ('edge' as const) : ('provider' as const),
+            engine: 'provider' as const,
             text: normalizedDrill,
             label: 'Play',
             note: drill.note,
           },
-          useEdgeFallback: chunkProvider === 'edge-tts',
         };
       });
       const clips = await mapWithConcurrency(
         tasks,
         PRONUNCIATION_ITEM_SYNTHESIS_CONCURRENCY,
-        (task) => synthesizeItemClip(task.clip, task.useEdgeFallback),
+        (task) => synthesizeItemClip(task.clip),
       );
       itemClips.push(...clips.filter((clip): clip is PronunciationClipRecord => Boolean(clip)));
       break;

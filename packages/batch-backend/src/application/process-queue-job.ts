@@ -30,7 +30,7 @@ import { requestHomeworkMemoryGeneration } from './request-homework-memory-gener
 
 function resolveInheritedVoiceIdForProviderChange(args: {
   explicitVoiceId?: string;
-  explicitProvider?: 'elevenlabs' | 'google' | 'inworld' | 'edge-tts';
+  explicitProvider?: 'elevenlabs' | 'google' | 'inworld';
   persistedProvider?: 'elevenlabs' | 'google' | 'inworld';
   persistedVoiceId?: string | null;
 }): string | undefined {
@@ -236,7 +236,6 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
                 }),
                 pronunciationChunkTtsProvider: payload.rerun?.pronunciationChunkTtsProvider,
                 pronunciationChunkTtsModel: payload.rerun?.pronunciationChunkTtsModel,
-                pronunciationChunkEdgeVoice: payload.rerun?.pronunciationChunkEdgeVoice,
                 settings: userSettings,
               },
               runId,
