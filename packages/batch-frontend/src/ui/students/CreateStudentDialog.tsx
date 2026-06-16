@@ -1,6 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react';
 
-import type { ProfileContentOption } from '../../utils/api';
 import { type CreateStudentFormState } from './StudentWorkspace.logic';
 
 export interface CreateStudentDialogProps {
@@ -8,7 +7,6 @@ export interface CreateStudentDialogProps {
   isBusy: boolean;
   error: string | null;
   success: string | null;
-  profileOptions: ProfileContentOption[];
   createStudentForm: CreateStudentFormState;
   onToggleOpen: () => void;
   onCancel: () => void;
@@ -21,7 +19,6 @@ export function CreateStudentDialog({
   isBusy,
   error,
   success,
-  profileOptions,
   createStudentForm,
   onToggleOpen,
   onCancel,
@@ -37,7 +34,7 @@ export function CreateStudentDialog({
             {isOpen ? 'Close Create Form' : 'Create Student'}
           </button>
         </div>
-        <p>Create a student record and optionally seed the first learner profile.</p>
+        <p>Start with a name. Add profile notes only if they are useful today.</p>
       </header>
 
       {success ? <p className="workspace-success">{success}</p> : null}
@@ -59,195 +56,172 @@ export function CreateStudentDialog({
             />
           </label>
 
-          <label className="workspace-field">
-            Initial Profile (optional)
-            <select
-              aria-label="Initial Profile"
-              value={createStudentForm.profileId}
-              onChange={(event) =>
-                setCreateStudentForm((current) => ({
-                  ...current,
-                  profileId: event.target.value,
-                }))
-              }
-            >
-              <option value="">No learner profile selected</option>
-              {profileOptions.map((profile) => (
-                <option key={profile.id} value={profile.id}>
-                  {profile.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <details className="workspace-starter-profile">
+            <summary className="workspace-starter-summary">
+              <span>
+                <span className="workspace-starter-title">Starter profile</span>
+                <span className="workspace-starter-description">
+                  Optional notes for the first learning profile
+                </span>
+              </span>
+              <span className="workspace-starter-badge">Optional</span>
+            </summary>
+            <div className="workspace-starter-groups">
+              <fieldset className="workspace-starter-group">
+                <legend>Learning direction</legend>
+                <label className="workspace-field">
+                  Current Level
+                  <input
+                    aria-label="Current Level"
+                    value={createStudentForm.overallLevel}
+                    onChange={(event) =>
+                      setCreateStudentForm((current) => ({
+                        ...current,
+                        overallLevel: event.target.value,
+                      }))
+                    }
+                    placeholder="A2, B1, mixed"
+                  />
+                </label>
 
-          <details className="workspace-advanced">
-            <summary>Starter profile (optional)</summary>
-            <p className="workspace-muted">
-              Use this when you want the system to create the initial learner profile from teacher
-              input. If you fill this in, it takes precedence over the existing-profile picker.
-            </p>
-            <div className="workspace-grid">
-              <label className="workspace-field">
-                Starter Level
-                <input
-                  aria-label="Starter Level"
-                  value={createStudentForm.starterLevel}
-                  onChange={(event) =>
-                    setCreateStudentForm((current) => ({
-                      ...current,
-                      starterLevel: event.target.value,
-                    }))
-                  }
-                  placeholder="e.g. A2"
-                />
-              </label>
+                <label className="workspace-field workspace-field-span-2">
+                  Primary Goals
+                  <textarea
+                    aria-label="Primary Goals"
+                    value={createStudentForm.primaryGoals}
+                    onChange={(event) =>
+                      setCreateStudentForm((current) => ({
+                        ...current,
+                        primaryGoals: event.target.value,
+                      }))
+                    }
+                    rows={2}
+                    placeholder="Work calls, travel, exams"
+                  />
+                </label>
+              </fieldset>
 
-              <label className="workspace-field workspace-field-span-2">
-                Starter Goals
-                <textarea
-                  aria-label="Starter Goals"
-                  value={createStudentForm.starterGoals}
-                  onChange={(event) =>
-                    setCreateStudentForm((current) => ({
-                      ...current,
-                      starterGoals: event.target.value,
-                    }))
-                  }
-                  rows={3}
-                  placeholder="What is this student trying to achieve?"
-                />
-              </label>
+              <fieldset className="workspace-starter-group">
+                <legend>Context</legend>
+                <label className="workspace-field workspace-field-span-2">
+                  Communication Contexts
+                  <textarea
+                    aria-label="Communication Contexts"
+                    value={createStudentForm.communicationContexts}
+                    onChange={(event) =>
+                      setCreateStudentForm((current) => ({
+                        ...current,
+                        communicationContexts: event.target.value,
+                      }))
+                    }
+                    rows={2}
+                    placeholder="Meetings, clients, daily life"
+                  />
+                </label>
 
-              <label className="workspace-field workspace-field-span-2">
-                Profession Or Context
-                <textarea
-                  aria-label="Profession Or Context"
-                  value={createStudentForm.starterProfessionOrContext}
-                  onChange={(event) =>
-                    setCreateStudentForm((current) => ({
-                      ...current,
-                      starterProfessionOrContext: event.target.value,
-                    }))
-                  }
-                  rows={2}
-                  placeholder="Work, life context, communication situations"
-                />
-              </label>
+                <label className="workspace-field workspace-field-span-2">
+                  Interests & Useful Themes
+                  <textarea
+                    aria-label="Interests & Useful Themes"
+                    value={createStudentForm.interestsAndUsefulThemes}
+                    onChange={(event) =>
+                      setCreateStudentForm((current) => ({
+                        ...current,
+                        interestsAndUsefulThemes: event.target.value,
+                      }))
+                    }
+                    rows={2}
+                    placeholder="Topics that make practice stick"
+                  />
+                </label>
+              </fieldset>
 
-              <label className="workspace-field workspace-field-span-2">
-                Interests
-                <textarea
-                  aria-label="Interests"
-                  value={createStudentForm.starterInterests}
-                  onChange={(event) =>
-                    setCreateStudentForm((current) => ({
-                      ...current,
-                      starterInterests: event.target.value,
-                    }))
-                  }
-                  rows={2}
-                  placeholder="Topics or hobbies that help personalize homework"
-                />
-              </label>
+              <fieldset className="workspace-starter-group">
+                <legend>Teaching notes</legend>
+                <label className="workspace-field workspace-field-span-2">
+                  Stable Strengths
+                  <textarea
+                    aria-label="Stable Strengths"
+                    value={createStudentForm.stableStrengths}
+                    onChange={(event) =>
+                      setCreateStudentForm((current) => ({
+                        ...current,
+                        stableStrengths: event.target.value,
+                      }))
+                    }
+                    rows={2}
+                    placeholder="What already works"
+                  />
+                </label>
 
-              <label className="workspace-field workspace-field-span-2">
-                Long-Running Challenges
-                <textarea
-                  aria-label="Long-Running Challenges"
-                  value={createStudentForm.starterLongRunningChallenges}
-                  onChange={(event) =>
-                    setCreateStudentForm((current) => ({
-                      ...current,
-                      starterLongRunningChallenges: event.target.value,
-                    }))
-                  }
-                  rows={2}
-                  placeholder="Persistent issues, constraints, or caution areas"
-                />
-              </label>
+                <label className="workspace-field workspace-field-span-2">
+                  Persistent Challenges
+                  <textarea
+                    aria-label="Persistent Challenges"
+                    value={createStudentForm.persistentChallenges}
+                    onChange={(event) =>
+                      setCreateStudentForm((current) => ({
+                        ...current,
+                        persistentChallenges: event.target.value,
+                      }))
+                    }
+                    rows={2}
+                    placeholder="Recurring friction"
+                  />
+                </label>
 
-              <label className="workspace-field workspace-field-span-2">
-                Study Preferences Or Constraints
-                <textarea
-                  aria-label="Study Preferences Or Constraints"
-                  value={createStudentForm.starterStudyPreferencesOrConstraints}
-                  onChange={(event) =>
-                    setCreateStudentForm((current) => ({
-                      ...current,
-                      starterStudyPreferencesOrConstraints: event.target.value,
-                    }))
-                  }
-                  rows={2}
-                  placeholder="Preferences, habits, formatting requests, constraints"
-                />
-              </label>
+                <label className="workspace-field workspace-field-span-2">
+                  Study Preferences
+                  <textarea
+                    aria-label="Study Preferences"
+                    value={createStudentForm.studyPreferences}
+                    onChange={(event) =>
+                      setCreateStudentForm((current) => ({
+                        ...current,
+                        studyPreferences: event.target.value,
+                      }))
+                    }
+                    rows={2}
+                    placeholder="Correction style, homework habits"
+                  />
+                </label>
 
-              <label className="workspace-field workspace-field-span-2">
-                Starter Teacher Notes
-                <textarea
-                  aria-label="Starter Teacher Notes"
-                  value={createStudentForm.starterTeacherNotes}
-                  onChange={(event) =>
-                    setCreateStudentForm((current) => ({
-                      ...current,
-                      starterTeacherNotes: event.target.value,
-                    }))
-                  }
-                  rows={2}
-                  placeholder="Anything the first profile draft should preserve"
-                />
-              </label>
+                <label className="workspace-field workspace-field-span-2">
+                  Durable Constraints
+                  <textarea
+                    aria-label="Durable Constraints"
+                    value={createStudentForm.durableConstraints}
+                    onChange={(event) =>
+                      setCreateStudentForm((current) => ({
+                        ...current,
+                        durableConstraints: event.target.value,
+                      }))
+                    }
+                    rows={2}
+                    placeholder="Time, device, schedule"
+                  />
+                </label>
+
+                <label className="workspace-field workspace-field-span-2">
+                  Teacher Notes
+                  <textarea
+                    aria-label="Teacher Notes"
+                    value={createStudentForm.teacherNotes}
+                    onChange={(event) =>
+                      setCreateStudentForm((current) => ({
+                        ...current,
+                        teacherNotes: event.target.value,
+                      }))
+                    }
+                    rows={2}
+                    placeholder="Anything else to preserve"
+                  />
+                </label>
+              </fieldset>
             </div>
           </details>
 
-          <details className="workspace-advanced">
-            <summary>Advanced fields</summary>
-            <div className="workspace-grid">
-              <label className="workspace-field">
-                Color Preset
-                <input
-                  aria-label="Color Preset"
-                  value={createStudentForm.colorPreset}
-                  onChange={(event) =>
-                    setCreateStudentForm((current) => ({
-                      ...current,
-                      colorPreset: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-
-              <label className="workspace-field">
-                Accent Preference
-                <input
-                  aria-label="Accent Preference"
-                  value={createStudentForm.accentPreference}
-                  onChange={(event) =>
-                    setCreateStudentForm((current) => ({
-                      ...current,
-                      accentPreference: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-
-              <label className="workspace-field">
-                Manifest Preset
-                <input
-                  aria-label="Manifest Preset"
-                  value={createStudentForm.manifestPreset}
-                  onChange={(event) =>
-                    setCreateStudentForm((current) => ({
-                      ...current,
-                      manifestPreset: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-            </div>
-          </details>
-
-          <div className="workspace-inline">
+          <div className="workspace-create-actions">
             <button
               type="button"
               className="workspace-primary-btn"

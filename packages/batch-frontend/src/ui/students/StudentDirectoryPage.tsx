@@ -4,9 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
   archiveStudentProfile,
   createStudentProfile,
-  listProfileContents,
   listStudents,
-  type ProfileContentOption,
   restoreStudentProfile,
   type StudentProfile,
 } from '../../utils/api';
@@ -31,7 +29,6 @@ export const StudentDirectoryPage: React.FC = () => {
   const [studentStatus, setStudentStatus] = useState<StudentDirectoryStatus>('active');
   const [busyStudentId, setBusyStudentId] = useState<string | null>(null);
   const [openActionsStudentId, setOpenActionsStudentId] = useState<string | null>(null);
-  const [profileOptions, setProfileOptions] = useState<ProfileContentOption[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -66,21 +63,12 @@ export const StudentDirectoryPage: React.FC = () => {
     }
   }, [studentStatus]);
 
-  const loadProfileOptions = useCallback(async () => {
-    try {
-      const response = await listProfileContents();
-      setProfileOptions(response.profiles ?? []);
-    } catch {
-      setProfileOptions([]);
-    }
-  }, []);
-
   useEffect(() => {
-    void Promise.all([loadStudents(), loadProfileOptions()]);
+    void loadStudents();
     return () => {
       latestStudentsRequestRef.current += 1;
     };
-  }, [loadProfileOptions, loadStudents]);
+  }, [loadStudents]);
 
   const handleCreateStudent = useCallback(async () => {
     const built = buildCreateStudentPayload(createStudentForm);
@@ -172,7 +160,6 @@ export const StudentDirectoryPage: React.FC = () => {
           isBusy={createBusy}
           error={createError}
           success={createSuccess}
-          profileOptions={profileOptions}
           createStudentForm={createStudentForm}
           onToggleOpen={() => {
             setCreateOpen((current) => !current);

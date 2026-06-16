@@ -962,10 +962,6 @@ const DEFAULT_CREATE_STUDENT_DIALOG_PROPS: Omit<
 > & {
   createStudentForm?: CreateStudentFormState;
 } = {
-  profileOptions: [
-    { id: 'profile-default.md', label: 'Default Profile' },
-    { id: 'profile-alt.md', label: 'Alt Profile' },
-  ],
   createStudentForm: INITIAL_CREATE_STUDENT_FORM,
 };
 
@@ -1161,7 +1157,6 @@ const DEFAULT_CANDIDATES_PANEL_PROPS: Omit<
 
 export interface CreateStudentDialogRenderOptions {
   createStudentForm?: Partial<CreateStudentFormState>;
-  profileOptions?: CreateStudentDialogProps['profileOptions'];
   isOpen?: boolean;
   isBusy?: boolean;
   error?: string | null;
@@ -1194,9 +1189,6 @@ export function renderCreateStudentDialog(
         isBusy={isBusy}
         error={error}
         success={success}
-        profileOptions={
-          options.profileOptions ?? DEFAULT_CREATE_STUDENT_DIALOG_PROPS.profileOptions
-        }
         createStudentForm={createStudentForm}
         onToggleOpen={() => setIsOpen((current) => !current)}
         onCancel={() => {

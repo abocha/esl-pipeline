@@ -5,7 +5,6 @@ import {
   buildCreateStudentPayload,
   buildStarterProfileInput,
   CREATE_STUDENT_NAME_REQUIRED_MESSAGE,
-  CREATE_STUDENT_STARTER_PROFILE_REQUIRED_MESSAGE,
   formatCandidateSectionLabel,
   formatCandidateStateLabel,
   groupVisibleCandidatesBySection,
@@ -15,63 +14,54 @@ import {
 } from './StudentWorkspace.logic';
 
 describe('StudentWorkspace logic', () => {
-  it('builds a profile-bound payload when the starter profile is empty', () => {
+  it('builds a student-owned payload and ignores legacy advanced fields', () => {
     const result = buildCreateStudentPayload({
       ...INITIAL_CREATE_STUDENT_FORM,
       student: 'Alex',
       profileId: 'profile-alt.md',
+      colorPreset: 'legacy-color',
+      accentPreference: 'legacy-accent',
       manifestPreset: 'lesson-manifest',
-    });
+    } as never);
 
     expect(result.validationError).toBeUndefined();
     expect(result.payload).toEqual({
       student: 'Alex',
-      profileId: 'profile-alt.md',
-      manifestPreset: 'lesson-manifest',
     });
     expect(result.starterProfile).toEqual({
       starterProfile: undefined,
       hasAnyValue: false,
-      hasMissingRequired: false,
     });
   });
 
-  it('builds a starter-profile payload and suppresses the profile picker binding', () => {
+  it('builds a partial canonical starter-profile payload', () => {
     const result = buildCreateStudentPayload({
       ...INITIAL_CREATE_STUDENT_FORM,
       student: 'Mira',
-      profileId: 'profile-alt.md',
-      starterLevel: 'B1',
-      starterGoals: 'Speak more clearly at work.',
-      starterProfessionOrContext: 'CSM with intl clients.',
-      starterInterests: 'Travel and books.',
-      starterLongRunningChallenges: 'Needs clearer tense control.',
-      starterStudyPreferencesOrConstraints: 'Prefers structured review blocks.',
+      overallLevel: 'B1',
+      primaryGoals: 'Speak more clearly at work.',
+      stableStrengths: 'Prepared and curious.',
+      durableConstraints: 'Mostly studies on mobile.',
     });
 
     expect(result.validationError).toBeUndefined();
     expect(result.payload).toEqual({
       student: 'Mira',
       starterProfile: {
-        level: 'B1',
-        goals: 'Speak more clearly at work.',
-        professionOrContext: 'CSM with intl clients.',
-        interests: 'Travel and books.',
-        longRunningChallenges: 'Needs clearer tense control.',
-        studyPreferencesOrConstraints: 'Prefers structured review blocks.',
+        overallLevel: 'B1',
+        primaryGoals: 'Speak more clearly at work.',
+        stableStrengths: 'Prepared and curious.',
+        durableConstraints: 'Mostly studies on mobile.',
       },
     });
     expect(result.starterProfile).toEqual({
       starterProfile: {
-        level: 'B1',
-        goals: 'Speak more clearly at work.',
-        professionOrContext: 'CSM with intl clients.',
-        interests: 'Travel and books.',
-        longRunningChallenges: 'Needs clearer tense control.',
-        studyPreferencesOrConstraints: 'Prefers structured review blocks.',
+        overallLevel: 'B1',
+        primaryGoals: 'Speak more clearly at work.',
+        stableStrengths: 'Prepared and curious.',
+        durableConstraints: 'Mostly studies on mobile.',
       },
       hasAnyValue: true,
-      hasMissingRequired: false,
     });
   });
 
@@ -87,34 +77,33 @@ describe('StudentWorkspace logic', () => {
       buildCreateStudentPayload({
         ...INITIAL_CREATE_STUDENT_FORM,
         student: 'Mira',
-        starterGoals: 'Speak more clearly at work.',
+        primaryGoals: 'Speak more clearly at work.',
       }).validationError,
-    ).toBe(CREATE_STUDENT_STARTER_PROFILE_REQUIRED_MESSAGE);
+    ).toBeUndefined();
   });
 
   it('trims starter profile values consistently', () => {
     expect(
       buildStarterProfileInput({
         ...INITIAL_CREATE_STUDENT_FORM,
-        starterLevel: ' B1 ',
-        starterGoals: ' Speak more clearly at work. ',
-        starterProfessionOrContext: ' CSM with intl clients. ',
-        starterInterests: ' Travel and books. ',
-        starterLongRunningChallenges: ' Needs clearer tense control. ',
-        starterStudyPreferencesOrConstraints: ' Prefers structured review blocks. ',
-        starterTeacherNotes: '  ',
+        overallLevel: ' B1 ',
+        primaryGoals: ' Speak more clearly at work. ',
+        communicationContexts: ' CSM with intl clients. ',
+        interestsAndUsefulThemes: ' Travel and books. ',
+        persistentChallenges: ' Needs clearer tense control. ',
+        studyPreferences: ' Prefers structured review blocks. ',
+        teacherNotes: '  ',
       }),
     ).toEqual({
       starterProfile: {
-        level: 'B1',
-        goals: 'Speak more clearly at work.',
-        professionOrContext: 'CSM with intl clients.',
-        interests: 'Travel and books.',
-        longRunningChallenges: 'Needs clearer tense control.',
-        studyPreferencesOrConstraints: 'Prefers structured review blocks.',
+        overallLevel: 'B1',
+        primaryGoals: 'Speak more clearly at work.',
+        communicationContexts: 'CSM with intl clients.',
+        interestsAndUsefulThemes: 'Travel and books.',
+        persistentChallenges: 'Needs clearer tense control.',
+        studyPreferences: 'Prefers structured review blocks.',
       },
       hasAnyValue: true,
-      hasMissingRequired: false,
     });
   });
 

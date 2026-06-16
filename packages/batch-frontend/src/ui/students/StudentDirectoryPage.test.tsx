@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -62,6 +62,34 @@ describe('StudentDirectoryPage', () => {
       '/students/student-alex-rivera/overview',
     );
     expect(screen.queryByRole('link', { name: /Open Overview/i })).toBeNull();
+  });
+
+  it('uses the same student-owned create form without loading profile options', async () => {
+    const user = userEvent.setup();
+    apiMocks.createStudentProfile.mockResolvedValue({
+      id: 'student-nadia',
+      student: 'Nadia',
+      profileId: 'profiles/students/student-nadia.md',
+    });
+
+    renderDirectory();
+
+    await user.click(screen.getByRole('button', { name: /Create Student/i }));
+    expect(screen.queryByLabelText(/Initial Profile/i)).toBeNull();
+    expect(screen.queryByText(/Advanced fields/i)).toBeNull();
+    fireEvent.change(screen.getByLabelText(/Student Name/i), { target: { value: 'Nadia' } });
+    fireEvent.change(screen.getByLabelText(/Stable Strengths/i), {
+      target: { value: 'Comfortable with prepared speaking.' },
+    });
+    await user.click(screen.getByRole('button', { name: /^Create Student$/i }));
+
+    expect(apiMocks.createStudentProfile).toHaveBeenCalledWith({
+      student: 'Nadia',
+      starterProfile: {
+        stableStrengths: 'Comfortable with prepared speaking.',
+      },
+    });
+    expect(apiMocks.listProfileContents).not.toHaveBeenCalled();
   });
 
   it('keeps archived tab results when the active tab load resolves later', async () => {
