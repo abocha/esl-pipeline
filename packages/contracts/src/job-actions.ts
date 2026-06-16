@@ -39,7 +39,6 @@ export interface RerunJobPayload {
   pronunciationChunkTtsModel?: TtsModelId;
   pronunciationChunkVoiceId?: string;
   pronunciationChunkVoiceAccent?: string;
-  pronunciationChunkEdgeVoice?: string;
 }
 
 export type EditMetadataJobPayload = JobConfigOverrides;

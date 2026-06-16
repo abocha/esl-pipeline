@@ -49,7 +49,6 @@ function createDefaultCustomRerunInput(
     rerunPronunciationChunkModel: '',
     rerunPronunciationChunkVoiceId: '',
     rerunPronunciationChunkVoiceAccent: '',
-    rerunPronunciationChunkEdgeVoice: '',
   };
 }
 
@@ -241,7 +240,6 @@ export function useAdvancedActionsController({
 
   useEffect(() => {
     if (
-      form.rerunPronunciationChunkProvider !== 'edge-tts' &&
       form.rerunPronunciationChunkProvider !== 'elevenlabs' &&
       form.rerunPronunciationChunkProvider !== 'google' &&
       form.rerunPronunciationChunkProvider !== 'inworld'
@@ -333,10 +331,7 @@ export function useAdvancedActionsController({
   ]);
 
   useEffect(() => {
-    if (
-      form.rerunPronunciationChunkProvider !== 'edge-tts' &&
-      form.rerunPronunciationChunkProvider !== 'elevenlabs'
-    ) {
+    if (form.rerunPronunciationChunkProvider !== 'elevenlabs') {
       const providerModelOptions = getTtsModelOptions(form.rerunPronunciationChunkProvider);
       if (
         !form.rerunPronunciationChunkModel ||
@@ -621,8 +616,8 @@ export function AdvancedActionsStage({
               </button>
             </div>
             <p className="minimal-help">
-              Pronunciation chunks default to Google. You can still force ElevenLabs or `edge-tts`
-              for a rerun when needed.
+              Pronunciation chunks default to Google. You can still force ElevenLabs or Inworld for
+              a rerun when needed.
             </p>
             {controller.showCustomRerun ? (
               <section className="minimal-custom-rerun" aria-label="Custom rerun selection">
@@ -937,77 +932,61 @@ export function AdvancedActionsStage({
                           ))}
                         </select>
                       </label>
-                      {controller.form.rerunPronunciationChunkProvider === 'edge-tts' ? (
+                      <>
                         <label className="minimal-field minimal-rerun-field">
-                          <span>Edge voice</span>
-                          <input
-                            value={controller.form.rerunPronunciationChunkEdgeVoice}
+                          <span>Pronunciation chunk model</span>
+                          <select
+                            value={controller.form.rerunPronunciationChunkModel}
                             onChange={(event) =>
                               controller.setFormField(
-                                'rerunPronunciationChunkEdgeVoice',
+                                'rerunPronunciationChunkModel',
                                 event.target.value,
                               )
                             }
-                            placeholder="e.g. en-US-AriaNeural"
-                          />
-                        </label>
-                      ) : (
-                        <>
-                          <label className="minimal-field minimal-rerun-field">
-                            <span>Pronunciation chunk model</span>
-                            <select
-                              value={controller.form.rerunPronunciationChunkModel}
-                              onChange={(event) =>
-                                controller.setFormField(
-                                  'rerunPronunciationChunkModel',
-                                  event.target.value,
+                          >
+                            {(controller.form.rerunPronunciationChunkProvider === 'google'
+                              ? modelOptionsForProvider(
+                                  controller.form.rerunPronunciationChunkProvider,
                                 )
-                              }
-                            >
-                              {(controller.form.rerunPronunciationChunkProvider === 'google'
+                              : controller.form.rerunPronunciationChunkProvider === 'inworld'
                                 ? modelOptionsForProvider(
                                     controller.form.rerunPronunciationChunkProvider,
                                   )
-                                : controller.form.rerunPronunciationChunkProvider === 'inworld'
-                                  ? modelOptionsForProvider(
-                                      controller.form.rerunPronunciationChunkProvider,
-                                    )
-                                  : elevenlabsStandardModelOptions
-                              ).map((model) => (
-                                <option key={model} value={model}>
-                                  {model}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <label className="minimal-field minimal-rerun-field">
-                            <span>Pronunciation chunk voice ID</span>
-                            <input
-                              value={controller.form.rerunPronunciationChunkVoiceId}
-                              onChange={(event) =>
-                                controller.setFormField(
-                                  'rerunPronunciationChunkVoiceId',
-                                  event.target.value,
-                                )
-                              }
-                              placeholder="voice id override"
-                            />
-                          </label>
-                          <label className="minimal-field minimal-rerun-field">
-                            <span>Pronunciation chunk accent</span>
-                            <input
-                              value={controller.form.rerunPronunciationChunkVoiceAccent}
-                              onChange={(event) =>
-                                controller.setFormField(
-                                  'rerunPronunciationChunkVoiceAccent',
-                                  event.target.value,
-                                )
-                              }
-                              placeholder="accent override"
-                            />
-                          </label>
-                        </>
-                      )}
+                                : elevenlabsStandardModelOptions
+                            ).map((model) => (
+                              <option key={model} value={model}>
+                                {model}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="minimal-field minimal-rerun-field">
+                          <span>Pronunciation chunk voice ID</span>
+                          <input
+                            value={controller.form.rerunPronunciationChunkVoiceId}
+                            onChange={(event) =>
+                              controller.setFormField(
+                                'rerunPronunciationChunkVoiceId',
+                                event.target.value,
+                              )
+                            }
+                            placeholder="voice id override"
+                          />
+                        </label>
+                        <label className="minimal-field minimal-rerun-field">
+                          <span>Pronunciation chunk accent</span>
+                          <input
+                            value={controller.form.rerunPronunciationChunkVoiceAccent}
+                            onChange={(event) =>
+                              controller.setFormField(
+                                'rerunPronunciationChunkVoiceAccent',
+                                event.target.value,
+                              )
+                            }
+                            placeholder="accent override"
+                          />
+                        </label>
+                      </>
                     </div>
                   </div>
                 ) : null}

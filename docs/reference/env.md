@@ -41,7 +41,7 @@ Primary groups:
 - HTML publishing / manifests:
   - `AWS_*`, `S3_*`, `STORAGE_*`, `ESL_PIPELINE_MANIFEST_*`
 - Speech runtime:
-  - `ESL_TTS_*`, `ESL_STT_*`, `ESL_EDGE_TTS_*`, `VOICE_ALIGNMENT_V2_*`
+  - `ESL_TTS_*`, `ESL_STT_*`, `VOICE_ALIGNMENT_V2_*`
   - Inworld TTS uses `INWORLD_API_KEY` or `ESL_TTS_PROVIDER_INWORLD_API_KEY`, plus optional `ESL_TTS_PROVIDER_INWORLD_*` model/voice/runtime overrides.
   - Expressive TTS planning uses opt-in `ESL_TTS_SPEECH_PLANNER_ENABLED`, optional `ESL_TTS_SPEECH_PLANNER_MODEL`, optional `ESL_TTS_SPEECH_PLANNER_MAX_OUTPUT_TOKENS`, and separate `ESL_TTS_SPEECH_PLANNER_*_BUDGET` limits. The planner reuses server-side `GEMINI_API_KEY`.
   - Inworld voice planning uses `ESL_TTS_VOICE_RANKER_ENABLED`, optional `ESL_TTS_VOICE_RANKER_MODEL`, optional `ESL_TTS_VOICE_RANKER_MAX_OUTPUT_TOKENS`, and separate `ESL_TTS_VOICE_RANKER_*_BUDGET` limits. The default semantic ranker is `gemma-4-31b-it`.
@@ -134,8 +134,8 @@ Read next:
 ## Default and Safety Notes
 
 - Prefer namespaced canonical variables over legacy aliases when both exist.
-- Container images provision `edge-tts` for server-side pronunciation synthesis and expose
-  `ESL_EDGE_TTS_BIN` / `ESL_EDGE_TTS_PYTHON` defaults; override them only when using a custom runtime install.
+- Pronunciation synthesis uses the configured provider stack; container images do not provision a
+  separate pronunciation helper runtime.
 - Budget values of `0` are intentional hard stops, not “unset”.
 - Generation battle-testing defaults should stay fail-safe:
   - `GEN_SAFETY_MODE=hard_stop`

@@ -21,11 +21,8 @@ test('backend runtime image creates writable tmp and uploads before dropping pri
   assert.ok(chownIndex < userNodeIndex, 'runtime dirs must be chowned before USER node');
 });
 
-test('backend production runtime image does not install Edge TTS dependencies', () => {
+test('backend production runtime image keeps only supported audio runtime dependencies', () => {
   assert.notEqual(runtimeStage.length, 0, 'Dockerfile should include a runtime stage');
-  assert.doesNotMatch(runtimeStage, /edge-tts/i);
-  assert.doesNotMatch(runtimeStage, /EDGE_TTS/);
-  assert.doesNotMatch(runtimeStage, /ESL_EDGE_TTS/);
   assert.doesNotMatch(runtimeStage, /py3-pip/);
   assert.doesNotMatch(runtimeStage, /python3 -m venv/);
   assert.match(runtimeStage, /ffmpeg/);

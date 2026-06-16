@@ -40,9 +40,8 @@ export interface QueueJobPayload {
     pronunciationMainTtsModel?: TtsModelId;
     pronunciationChunkVoiceAccent?: string;
     pronunciationChunkVoiceId?: string;
-    pronunciationChunkTtsProvider?: 'edge-tts' | 'elevenlabs' | 'google' | 'inworld';
+    pronunciationChunkTtsProvider?: 'elevenlabs' | 'google' | 'inworld';
     pronunciationChunkTtsModel?: TtsModelId;
-    pronunciationChunkEdgeVoice?: string;
   };
 }
 

@@ -240,9 +240,8 @@ Production Compose mounts that directory into backend-image services as read-onl
 the container path is
 `GOOGLE_APPLICATION_CREDENTIALS=/app/secrets/google-service-account.json`.
 
-The production backend image includes ffmpeg but does not install Edge TTS or Python venv tooling.
-Keep production pronunciation/audio provider paths on ElevenLabs, Google, or Inworld. `edge-tts`
-compatibility remains a local/custom runtime concern, not a production backend image dependency.
+The production backend image includes ffmpeg and uses provider-backed pronunciation/audio paths:
+ElevenLabs, Google, or Inworld. It does not provision a separate pronunciation helper runtime.
 
 ## Database Migration Flow
 

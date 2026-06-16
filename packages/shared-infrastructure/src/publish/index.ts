@@ -27,7 +27,7 @@ export type PronunciationAudioMode =
   | 'connected_speech'
   | 'minimal_pair';
 
-export type PronunciationAudioEngine = 'provider' | 'edge';
+export type PronunciationAudioEngine = 'provider';
 
 export type PronunciationAudioClipKind =
   | 'primary'

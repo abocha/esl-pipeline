@@ -191,9 +191,8 @@ export interface RunRerunAssignmentPayload {
   pronunciationMainTtsModel?: TtsModelId | null;
   pronunciationChunkVoiceAccent?: string | null;
   pronunciationChunkVoiceId?: string | null;
-  pronunciationChunkTtsProvider?: 'edge-tts' | TtsProvider | null;
+  pronunciationChunkTtsProvider?: TtsProvider | null;
   pronunciationChunkTtsModel?: TtsModelId | null;
-  pronunciationChunkEdgeVoice?: string | null;
   settings?: RunJobSettings;
 }
 

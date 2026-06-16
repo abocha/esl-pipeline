@@ -63,12 +63,7 @@ import './MinimalAssignment.css';
 
 const AUDIO_EXTENSIONS = ['.wav', '.mp3', '.m4a', '.aac', '.ogg', '.opus'];
 const FALLBACK_TTS_PROVIDERS = ['elevenlabs', 'google', 'inworld'] as const;
-const FALLBACK_PRONUNCIATION_CHUNK_TTS_PROVIDERS = [
-  'google',
-  'elevenlabs',
-  'inworld',
-  'edge-tts',
-] as const;
+const FALLBACK_PRONUNCIATION_CHUNK_TTS_PROVIDERS = ['google', 'elevenlabs', 'inworld'] as const;
 const FALLBACK_GOOGLE_TTS_MODELS = ['chirp3_hd', 'studio', 'neural2', 'wavenet'] as const;
 const FALLBACK_INWORLD_TTS_MODELS = [
   'inworld-tts-2',
