@@ -23,14 +23,9 @@ vi.mock('@esl-pipeline/tts-core', () => ({
         : 'eleven_multilingual_v2',
 }));
 
-vi.mock('../src/runtime/edge-tts.js', () => ({
-  synthesizeEdgeTtsClip: vi.fn(),
-}));
-
 import { extractPronunciationFocus } from '@esl-pipeline/pmd';
 import { buildPronunciationTextMp3 } from '@esl-pipeline/tts-core';
 
-import { synthesizeEdgeTtsClip } from '../src/runtime/edge-tts.js';
 import { synthesizePronunciationAudio } from '../src/runtime/pronunciation-audio.js';
 
 describe('runtime/pronunciation-audio', () => {
@@ -38,67 +33,7 @@ describe('runtime/pronunciation-audio', () => {
     vi.clearAllMocks();
   });
 
-  it('falls back to provider pronunciation audio when edge-tts is unavailable', async () => {
-    vi.mocked(extractPronunciationFocus).mockReturnValue({
-      mode: 'minimal_pair',
-      pairs: [
-        {
-          line: 1,
-          left: { text: 'ship', transcription: '/ʃɪp/', line: 1 },
-          right: { text: 'sheep', transcription: '/ʃiːp/', line: 1 },
-        },
-      ],
-      sectionStartLine: 1,
-      issues: [],
-    });
-    vi.mocked(synthesizeEdgeTtsClip).mockRejectedValue(new Error('edge-tts missing'));
-    vi.mocked(buildPronunciationTextMp3).mockImplementation(async ({ text }) => ({
-      path: `/tmp/${String(text).replaceAll(/\s+/g, '-')}.mp3`,
-      hash: `hash-${String(text).replaceAll(/\s+/g, '-')}`,
-      voiceId: 'provider-voice',
-      provider: 'google',
-      generatedCharacters: String(text).length,
-      cachedCharacters: 0,
-    }));
-
-    const logs: unknown[] = [];
-    const result = await synthesizePronunciationAudio({
-      context: {} as never,
-      mdPath: '/tmp/example.md',
-      outPath: '/tmp',
-      title: 'Pronunciation',
-      chunkTtsProvider: 'edge-tts',
-      chunkVoiceId: 'voice-1',
-      logger: {
-        log: (entry: unknown) => logs.push(entry),
-      } as never,
-    });
-
-    expect(result?.mode).toBe('minimal_pair');
-    expect(result?.warnings).toEqual([
-      {
-        code: 'edge_tts_unavailable_provider_fallback',
-        message:
-          'edge-tts was unavailable for word/pair pronunciation clips, so provider pronunciation audio was used instead.',
-      },
-    ]);
-    expect(result?.primaryClip).toBeNull();
-    expect(
-      result?.itemClips?.every((entry: { engine: string }) => entry.engine === 'provider'),
-    ).toBe(true);
-    expect(vi.mocked(buildPronunciationTextMp3)).toHaveBeenCalledTimes(2);
-    expect(logs).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          level: 'warn',
-          message:
-            'edge-tts was unavailable for word/pair pronunciation clips, so provider pronunciation audio was used instead.',
-        }),
-      ]),
-    );
-  });
-
-  it('defaults pronunciation chunk clips to google without invoking edge-tts', async () => {
+  it('defaults pronunciation chunk clips to google provider synthesis', async () => {
     vi.mocked(extractPronunciationFocus).mockReturnValue({
       mode: 'minimal_pair',
       pairs: [
@@ -133,7 +68,6 @@ describe('runtime/pronunciation-audio', () => {
 
     expect(result?.mode).toBe('minimal_pair');
     expect(result?.itemClips).toHaveLength(2);
-    expect(vi.mocked(synthesizeEdgeTtsClip)).not.toHaveBeenCalled();
     expect(vi.mocked(buildPronunciationTextMp3)).toHaveBeenCalledTimes(2);
     expect(vi.mocked(buildPronunciationTextMp3)).toHaveBeenNthCalledWith(
       1,
@@ -263,41 +197,6 @@ describe('runtime/pronunciation-audio', () => {
         ttsModel: 'chirp3_hd',
       }),
     );
-  });
-
-  it('persists the resolved edge voice on chunk artifacts for future reruns', async () => {
-    vi.mocked(extractPronunciationFocus).mockReturnValue({
-      mode: 'minimal_pair',
-      pairs: [
-        {
-          line: 1,
-          left: { text: 'ship', transcription: '/ʃɪp/', line: 1 },
-          right: { text: 'sheep', transcription: '/ʃiːp/', line: 1 },
-        },
-      ],
-      sectionStartLine: 1,
-      issues: [],
-    });
-    vi.mocked(synthesizeEdgeTtsClip).mockImplementation(async ({ text, voice }) => ({
-      path: `/tmp/${String(text).replaceAll(/\s+/g, '-')}.mp3`,
-      hash: `edge-hash-${String(text).replaceAll(/\s+/g, '-')}`,
-      voice: voice ?? 'en-US-AriaNeural',
-      generatedCharacters: String(text).length,
-      cachedCharacters: 0,
-    }));
-
-    const result = await synthesizePronunciationAudio({
-      context: {} as never,
-      mdPath: '/tmp/example.md',
-      outPath: '/tmp',
-      title: 'Pronunciation',
-      chunkTtsProvider: 'edge-tts',
-      chunkEdgeVoice: 'en-GB-SoniaNeural',
-    });
-
-    expect(result?.itemClips).toHaveLength(2);
-    expect(result?.itemClips?.every((clip) => clip.voiceId === 'en-GB-SoniaNeural')).toBe(true);
-    expect(result?.itemClips?.every((clip) => clip.tts?.provider === 'edge')).toBe(true);
   });
 
   it('synthesizes independent item clips with bounded concurrency while preserving order', async () => {

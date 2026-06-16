@@ -127,7 +127,6 @@ describe('MinimalAssignment logic helpers', () => {
       rerunPronunciationChunkModel: 'chirp3_hd',
       rerunPronunciationChunkVoiceId: '',
       rerunPronunciationChunkVoiceAccent: '',
-      rerunPronunciationChunkEdgeVoice: '',
     };
 
     expect(buildPresetRerunPayload('pronunciation', customDefaults)).toEqual({
@@ -198,7 +197,6 @@ describe('MinimalAssignment logic helpers', () => {
         rerunPronunciationChunkModel: '',
         rerunPronunciationChunkVoiceId: ' chunk-voice ',
         rerunPronunciationChunkVoiceAccent: ' australian ',
-        rerunPronunciationChunkEdgeVoice: 'en-US-JennyNeural',
       }),
     ).toEqual({
       ok: true,
@@ -247,7 +245,6 @@ describe('MinimalAssignment logic helpers', () => {
         rerunPronunciationChunkModel: '',
         rerunPronunciationChunkVoiceId: '',
         rerunPronunciationChunkVoiceAccent: '',
-        rerunPronunciationChunkEdgeVoice: '',
       }),
     ).toEqual({
       ok: false,

@@ -275,8 +275,7 @@ GOOGLE_APPLICATION_CREDENTIALS=/app/secrets/google-service-account.json
 ```
 
 Budget/safety policy must remain fail-safe for alpha. Verify current names in `docs/reference/GENERATION_PROVIDER_POLICY.md` and `.env.batch-backend.example`.
-The production backend image does not install Edge TTS or Python venv tooling; do not rely on
-`ESL_EDGE_TTS_*` for production pronunciation audio.
+Pronunciation audio should use the configured ElevenLabs, Google, or Inworld provider paths.
 
 Important:
 

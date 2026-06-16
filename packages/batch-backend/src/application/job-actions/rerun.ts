@@ -38,13 +38,10 @@ const rerunSchema = z
     pronunciationMainTtsModel: publishTtsModelSchema.optional(),
     pronunciationMainVoiceId: z.string().min(1).optional(),
     pronunciationMainVoiceAccent: z.string().min(1).optional(),
-    pronunciationChunkTtsProvider: z
-      .enum(['edge-tts', 'elevenlabs', 'google', 'inworld'])
-      .optional(),
+    pronunciationChunkTtsProvider: z.enum(['elevenlabs', 'google', 'inworld']).optional(),
     pronunciationChunkTtsModel: publishTtsModelSchema.optional(),
     pronunciationChunkVoiceId: z.string().min(1).optional(),
     pronunciationChunkVoiceAccent: z.string().min(1).optional(),
-    pronunciationChunkEdgeVoice: z.string().min(1).optional(),
   })
   .superRefine((payload, ctx) => {
     const republishOnly = payload.republishOnly === true;
@@ -114,7 +111,6 @@ const rerunSchema = z
 
     if (
       payload.pronunciationChunkTtsProvider &&
-      payload.pronunciationChunkTtsProvider !== 'edge-tts' &&
       payload.pronunciationChunkTtsModel &&
       !isTtsModelForProvider(
         payload.pronunciationChunkTtsProvider,
@@ -458,7 +454,6 @@ export async function rerun(jobId: string, action: RerunAction): Promise<JobActi
       pronunciationChunkVoiceId: payload.pronunciationChunkVoiceId ?? undefined,
       pronunciationChunkTtsProvider: payload.pronunciationChunkTtsProvider ?? undefined,
       pronunciationChunkTtsModel: payload.pronunciationChunkTtsModel,
-      pronunciationChunkEdgeVoice: payload.pronunciationChunkEdgeVoice,
     },
   });
 

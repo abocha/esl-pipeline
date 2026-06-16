@@ -47,12 +47,6 @@
 | `ENABLE_MULTIPART_UPLOADS` | `.env.batch-backend.example` | batch_backend | `packages/batch-backend/README.md` |
 | `ENABLE_RATE_LIMITING` | `.env.batch-backend.example` | batch_backend | `packages/batch-backend/README.md` |
 | `ENABLE_SECURITY_LOGGING` | `.env.batch-backend.example` | batch_backend | `packages/batch-backend/README.md` |
-| `ESL_EDGE_TTS_BIN` | `.env.batch-backend.example` | misc | `docs/reference/env.md` |
-| `ESL_EDGE_TTS_BIN` | `.env.example` | misc | `docs/reference/env.md` |
-| `ESL_EDGE_TTS_PYTHON` | `.env.batch-backend.example` | misc | `docs/reference/env.md` |
-| `ESL_EDGE_TTS_PYTHON` | `.env.example` | misc | `docs/reference/env.md` |
-| `ESL_EDGE_TTS_VOICE` | `.env.batch-backend.example` | misc | `docs/reference/env.md` |
-| `ESL_EDGE_TTS_VOICE` | `.env.example` | misc | `docs/reference/env.md` |
 | `ESL_PIPELINE_CONFIG_CACHE_STALE_IF_ERROR_MS` | `.env.batch-backend.example` | shared_runtime | `docs/reference/env.md` |
 | `ESL_PIPELINE_CONFIG_CACHE_STALE_IF_ERROR_MS` | `.env.example` | shared_runtime | `docs/reference/env.md` |
 | `ESL_PIPELINE_CONFIG_CACHE_TTL_MS` | `.env.batch-backend.example` | shared_runtime | `docs/reference/env.md` |

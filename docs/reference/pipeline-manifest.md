@@ -79,9 +79,9 @@ This document captures the canonical schema so remote stores and services can va
       },
       "itemClips": [
         {
-          "id": "shadow-word-1-edge",
+          "id": "shadow-word-1",
           "kind": "word_item",
-          "engine": "edge",
+          "engine": "provider",
           "itemIndex": 0,
           "text": "review",
           "path": "./lessons/audio-pronunciation-item.mp3",

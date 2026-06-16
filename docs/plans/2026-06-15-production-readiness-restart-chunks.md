@@ -21,7 +21,7 @@ design-only Chunk 10 note on the same readiness branch.
 
 1. Chunk 1: enable `student-memory-worker` in production.
 2. Chunk 2: preserve and verify live production hotfixes in source.
-3. Chunk 3: remove Edge TTS from production runtime images.
+3. Chunk 3: remove the legacy pronunciation helper from runtime images.
 4. Chunk 4: repair new-student and profile revision UX correctness.
 5. Chunk 5: simplify tutor assignment creation and publishing controls.
 6. Chunk 6: fix scheduling, billing, and candidate queue defaults.
@@ -141,41 +141,40 @@ Source evidence:
   `batch-worker`, `student-memory-worker`, and `transcribe-worker`; this is covered by
   `scripts/docker/prod-compose-config.test.mjs`.
 
-## Chunk 3: Remove Edge TTS From Production Runtime
+## Chunk 3: Remove Legacy Pronunciation Helper Runtime
 
 Priority: P0.
 
-Goal: remove unused Edge TTS dependencies from backend production images without breaking supported
-provider pronunciation audio paths.
+Goal: remove unused legacy pronunciation-helper dependencies from runtime images without breaking
+supported provider pronunciation audio paths.
 
 Items from the restart handoff:
 
-- Remove `edge-tts`, Python, venv setup, and related env from the backend Dockerfile/runtime image.
-- Verify no production runtime path still depends on `ESL_EDGE_TTS_*`.
+- Remove the legacy helper, Python venv setup, and related env from Docker runtime images.
+- Verify no runtime path still depends on old helper env or provider values.
 
 Implementation boundaries:
 
-- This chunk should decide whether Edge TTS remains a development or orchestrator compatibility
-  path outside the backend production image.
+- This chunk removes the helper from production, development, orchestrator, backend, frontend, and
+  contract surfaces.
 - Keep supported production TTS providers explicit: ElevenLabs, Google, and Inworld.
 - Do not combine this with broad audio UX simplification unless the implementation is tiny and
   validation stays focused.
 
 Acceptance gates:
 
-- Backend production image no longer installs Edge TTS.
-- Tests or source inspection prove production publish paths do not require Edge TTS.
-- Documentation and env references no longer imply Edge TTS is required for production.
+- Runtime images no longer install the legacy helper.
+- Tests or source inspection prove publish paths use only supported provider TTS.
+- Documentation and env references no longer imply a separate helper runtime is available.
 
 Source evidence:
 
-- `packages/batch-backend/Dockerfile` keeps ffmpeg in the production runtime stage but removes
-  Edge TTS, Python, venv setup, and `ESL_EDGE_TTS_*` defaults.
-- `scripts/docker/backend-dockerfile-runtime.test.mjs` verifies the production runtime stage does
-  not include Edge TTS dependencies.
-- `.env.example`, `.env.batch-backend.example`, `docs/backend-frontend/DEPLOYMENT.md`, and
-  `docs/operations/production-env-checklist.md` document Edge TTS as local/custom runtime
-  compatibility only, not production backend image setup.
+- Backend and orchestrator Dockerfiles keep ffmpeg in runtime stages and remove the legacy helper
+  setup.
+- `scripts/check/no-legacy-pronunciation-helper.test.mjs` verifies the removed integration is not
+  present in tracked source or docs.
+- Env examples and production docs document ElevenLabs, Google, and Inworld as the supported audio
+  provider paths.
 
 ## Chunk 4: New Student and Profile UX Correctness
 
