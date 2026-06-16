@@ -6,15 +6,16 @@
 - Status: active.
 - Last Verified Against: 2026-06-15 repo state.
 - Exit Trigger: archive after the restart backlog is converted into shipped implementation PRs or superseded by the next invite-wave readiness plan.
-- Current Focus: preserve production hotfix source parity, then continue with the next P0 runtime
-  image cleanup chunk.
+- Current Focus: finish the combined production-runtime readiness branch covering Chunks 2, 3, 9,
+  and the Chunk 10 design note.
 
 ## Purpose
 
 Turn the restart handoff into a small set of independently plannable work chunks. This document is
 not an implementation plan yet; it is the intake map for the next implementation plans.
 
-Chunk 1 has been implemented. The current implementation plan targets Chunk 2 only.
+Chunks 1 and 2 have been implemented. The current implementation plan adds Chunks 3 and 9 plus a
+design-only Chunk 10 note on the same readiness branch.
 
 ## Priority Order
 
@@ -165,6 +166,16 @@ Acceptance gates:
 - Backend production image no longer installs Edge TTS.
 - Tests or source inspection prove production publish paths do not require Edge TTS.
 - Documentation and env references no longer imply Edge TTS is required for production.
+
+Source evidence:
+
+- `packages/batch-backend/Dockerfile` keeps ffmpeg in the production runtime stage but removes
+  Edge TTS, Python, venv setup, and `ESL_EDGE_TTS_*` defaults.
+- `scripts/docker/backend-dockerfile-runtime.test.mjs` verifies the production runtime stage does
+  not include Edge TTS dependencies.
+- `.env.example`, `.env.batch-backend.example`, `docs/backend-frontend/DEPLOYMENT.md`, and
+  `docs/operations/production-env-checklist.md` document Edge TTS as local/custom runtime
+  compatibility only, not production backend image setup.
 
 ## Chunk 4: New Student and Profile UX Correctness
 
@@ -331,6 +342,16 @@ Acceptance gates:
 - The edge env validator still rejects missing, malformed, local-only, or URL-like hostnames.
 - Docs explain whether the source of truth is shell env, `.env.batch-backend`, or both.
 
+Source evidence:
+
+- `scripts/deploy/deploy-prod-images.sh` parses only `CADDY_PUBLIC_HOSTNAME` and
+  `CADDY_ACME_EMAIL` from `${APP_DIR}/.env.batch-backend` when edge mode is enabled and shell
+  exports are absent.
+- `scripts/deploy/deploy-prod-images.test.mjs` verifies the env-file fallback, shell-export
+  precedence, and validation ordering.
+- Deployment docs state that pnpm edge validation commands still need current-process exports, while
+  the VPS deploy script can reuse the server-local batch backend env file.
+
 ## Chunk 10: Student-Memory Generation Throughput and Prompt Quality
 
 Priority: P2.
@@ -364,6 +385,11 @@ Acceptance gates:
 - Prompt/request changes are measured against structured output quality, token use, replayability,
   and provenance.
 - Operators have a safe replay/backfill path that does not stampede Tier 1 TPM limits.
+
+Source evidence:
+
+- `docs/plans/2026-06-16-student-memory-throughput-design-note.md` captures the design-only
+  recommendation and Batch API constraints to verify before implementation.
 
 ## Deployment State Notes to Preserve
 
@@ -401,6 +427,6 @@ Recreate backend services after production env changes.
 
 ## Next Step
 
-After Chunk 2 lands, write the Chunk 3 implementation plan for removing Edge TTS from the backend
-production runtime image. Keep it focused on production-image dependencies and provider-path
-verification.
+After this readiness PR lands, start Chunk 4 as a separate product/UX correctness branch. Treat any
+student-memory Batch API implementation as a later Chunk 10 implementation branch after the design
+note is reviewed.

@@ -149,6 +149,9 @@ CADDY_ACME_EMAIL=<operator-email-for-acme-notices>
 
 Export these values in the same shell that runs `pnpm docker:prod:edge:*`. Docker Compose reads
 `.env`, but the Node validator behind the pnpm edge scripts reads the current process environment.
+For the production deploy script on the VPS, the same values may live in server-local
+`/opt/esl-pipeline/.env.batch-backend`; `scripts/deploy/deploy-prod-images.sh` reads them from that
+file when shell exports are absent, and explicit shell exports still override the file.
 
 Edge-mode public traffic flow:
 
@@ -272,6 +275,8 @@ GOOGLE_APPLICATION_CREDENTIALS=/app/secrets/google-service-account.json
 ```
 
 Budget/safety policy must remain fail-safe for alpha. Verify current names in `docs/reference/GENERATION_PROVIDER_POLICY.md` and `.env.batch-backend.example`.
+The production backend image does not install Edge TTS or Python venv tooling; do not rely on
+`ESL_EDGE_TTS_*` for production pronunciation audio.
 
 Important:
 

@@ -66,6 +66,68 @@ edge_enabled() {
   bool_is_true "$DEPLOY_INCLUDE_EDGE" || [[ ",${COMPOSE_PROFILES:-}," == *",edge,"* ]]
 }
 
+trim_whitespace() {
+  local value="${1:-}"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s' "$value"
+}
+
+strip_optional_env_quotes() {
+  local value="$1"
+  if [[ "${#value}" -ge 2 && "$value" == \"*\" && "$value" == *\" ]]; then
+    value="${value:1:${#value}-2}"
+  elif [[ "${#value}" -ge 2 && "$value" == \'*\' && "$value" == *\' ]]; then
+    value="${value:1:${#value}-2}"
+  fi
+  printf '%s' "$value"
+}
+
+read_env_file_value() {
+  local env_file="$1"
+  local key="$2"
+  local line value
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="$(trim_whitespace "$line")"
+    [[ -z "$line" ]] && continue
+    [[ "$line" == \#* ]] && continue
+    if [[ "$line" == export[[:space:]]* ]]; then
+      line="${line#export}"
+      line="$(trim_whitespace "$line")"
+    fi
+    [[ "$line" == "${key}="* ]] || continue
+
+    value="${line#*=}"
+    value="$(trim_whitespace "$value")"
+    strip_optional_env_quotes "$value"
+    return 0
+  done <"$env_file"
+
+  return 1
+}
+
+load_edge_env_from_batch_backend_env_file() {
+  if ! edge_enabled; then
+    return 0
+  fi
+
+  local env_file="${APP_DIR}/.env.batch-backend"
+  local value
+
+  if [[ -n "${CADDY_PUBLIC_HOSTNAME:-}" ]]; then
+    :
+  elif value="$(read_env_file_value "$env_file" CADDY_PUBLIC_HOSTNAME)"; then
+    export CADDY_PUBLIC_HOSTNAME="$value"
+  fi
+
+  if [[ -n "${CADDY_ACME_EMAIL:-}" ]]; then
+    :
+  elif value="$(read_env_file_value "$env_file" CADDY_ACME_EMAIL)"; then
+    export CADDY_ACME_EMAIL="$value"
+  fi
+}
+
 validate_edge_configuration() {
   if ! edge_enabled; then
     return 0
@@ -73,10 +135,8 @@ validate_edge_configuration() {
 
   local hostname="${CADDY_PUBLIC_HOSTNAME:-}"
   local email="${CADDY_ACME_EMAIL:-}"
-  hostname="${hostname#"${hostname%%[![:space:]]*}"}"
-  hostname="${hostname%"${hostname##*[![:space:]]}"}"
-  email="${email#"${email%%[![:space:]]*}"}"
-  email="${email%"${email##*[![:space:]]}"}"
+  hostname="$(trim_whitespace "$hostname")"
+  email="$(trim_whitespace "$email")"
 
   [[ -n "$hostname" ]] || die "CADDY_PUBLIC_HOSTNAME is required when the edge profile is enabled"
   [[ -n "$email" ]] || die "CADDY_ACME_EMAIL is required when the edge profile is enabled"
@@ -436,6 +496,7 @@ main() {
 
   [[ -f "$COMPOSE_FILE" ]] || die "compose file not found: ${COMPOSE_FILE}"
   [[ -f "${APP_DIR}/.env.batch-backend" ]] || die "missing required env file: ${APP_DIR}/.env.batch-backend"
+  load_edge_env_from_batch_backend_env_file
   validate_edge_configuration
 
   ensure_state_dir
