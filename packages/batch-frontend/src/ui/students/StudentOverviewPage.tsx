@@ -134,6 +134,45 @@ function getStudentSummary(profile: FoundationalProfile | null | undefined): str
   return 'Learner context is ready to be shaped into a clearer teaching picture.';
 }
 
+function getCurrentActiveRevision(args: {
+  profile: ProfileContentResponse | null;
+  revisions: readonly ProfileRevisionSummaryResponse[];
+}): ProfileRevisionSummaryResponse | null {
+  if (!args.profile) return null;
+  if (args.profile.currentRevisionId?.trim()) {
+    const matchingRevision = args.revisions.find(
+      (revision) => revision.id === args.profile?.currentRevisionId,
+    );
+    if (matchingRevision) return matchingRevision;
+  }
+  return args.revisions.find((revision) => revision.status === 'active') ?? null;
+}
+
+function isRevisionNewerThanActiveDraftCandidate(
+  revision: ProfileRevisionSummaryResponse,
+  activeRevision: ProfileRevisionSummaryResponse | null,
+): boolean {
+  if (revision.status !== 'draft') return false;
+  if (!activeRevision) return true;
+  if (
+    typeof revision.versionNumber === 'number' &&
+    typeof activeRevision.versionNumber === 'number'
+  ) {
+    return revision.versionNumber > activeRevision.versionNumber;
+  }
+  return new Date(revision.createdAt).getTime() > new Date(activeRevision.createdAt).getTime();
+}
+
+function getActionableDraftRevisions(args: {
+  profile: ProfileContentResponse | null;
+  revisions: readonly ProfileRevisionSummaryResponse[];
+}): ProfileRevisionSummaryResponse[] {
+  const activeRevision = getCurrentActiveRevision(args);
+  return args.revisions.filter((revision) =>
+    isRevisionNewerThanActiveDraftCandidate(revision, activeRevision),
+  );
+}
+
 function getProfileStatus(args: {
   profile: ProfileContentResponse | null;
   revisions: readonly ProfileRevisionSummaryResponse[];
@@ -151,7 +190,10 @@ function getProfileStatus(args: {
     };
   }
 
-  const draftCount = args.revisions.filter((revision) => revision.status === 'draft').length;
+  const draftCount = getActionableDraftRevisions({
+    profile: args.profile,
+    revisions: args.revisions,
+  }).length;
   if (draftCount > 0) {
     return {
       label: 'Draft waiting',
@@ -240,7 +282,10 @@ function getAttentionItem(args: {
     };
   }
 
-  const draft = args.revisions.find((revision) => revision.status === 'draft');
+  const draft = getActionableDraftRevisions({
+    profile: args.profile,
+    revisions: args.revisions,
+  })[0];
   if (draft) {
     return {
       label: 'Profile draft waiting',

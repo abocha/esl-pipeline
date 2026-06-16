@@ -1482,14 +1482,16 @@ export const StudentWorkspace: React.FC = () => {
                     </div>
                   </div>
                   <div className="workspace-inline">
-                    <button
-                      type="button"
-                      className="workspace-secondary-btn"
-                      onClick={() => void handleRestoreRevision(revision.id)}
-                      disabled={profileBusy !== null}
-                    >
-                      Restore
-                    </button>
+                    {revision.status !== 'active' ? (
+                      <button
+                        type="button"
+                        className="workspace-secondary-btn"
+                        onClick={() => void handleRestoreRevision(revision.id)}
+                        disabled={profileBusy !== null}
+                      >
+                        Restore
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       className="workspace-secondary-btn"

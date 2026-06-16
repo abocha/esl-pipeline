@@ -366,6 +366,55 @@ describe('StudentOverviewPage', () => {
     expect(screen.getByText('1 candidate profile update waiting.')).toBeTruthy();
   });
 
+  it('does not surface older profile drafts when an active revision is current', async () => {
+    apiMocks.getStudentOverviewSurface.mockResolvedValue(
+      makeOverviewSurface({
+        revisions: {
+          items: [
+            {
+              id: 'revision-active-5',
+              profileId: 'profiles/students/alex.md',
+              contentHash: 'hash-active-5',
+              source: 'update',
+              status: 'active',
+              versionNumber: 5,
+              versionLabel: 'v5',
+              activatedAt: NOW,
+              deprecatedAt: null,
+              createdAt: NOW,
+              createdBy: 'teacher-1',
+              restoredFromRevisionId: null,
+            },
+            {
+              id: 'revision-draft-old',
+              profileId: 'profiles/students/alex.md',
+              contentHash: 'hash-draft-old',
+              source: 'update',
+              status: 'draft',
+              versionNumber: 2,
+              versionLabel: 'v2',
+              activatedAt: null,
+              deprecatedAt: null,
+              createdAt: '2026-04-20T10:30:00.000Z',
+              createdBy: 'teacher-1',
+              restoredFromRevisionId: null,
+            },
+          ],
+          total: 2,
+          limit: 20,
+          offset: 0,
+          order: 'desc',
+        },
+      }),
+    );
+
+    renderOverview();
+
+    expect(await screen.findByText('On track')).toBeTruthy();
+    expect(screen.queryByText('Draft waiting')).toBeNull();
+    expect(screen.queryByText('Profile draft waiting')).toBeNull();
+  });
+
   it('handles students without an active learner profile', async () => {
     apiMocks.getStudentOverviewSurface.mockResolvedValue(
       makeOverviewSurface({
