@@ -4,7 +4,7 @@
 
 - Audience: founder-maintainer, Codex, implementation agents, deployment agents.
 - Status: active.
-- Last Verified Against: 2026-06-15 repo state.
+- Last Verified Against: 2026-06-16 repo state.
 - Exit Trigger: archive after the restart backlog is converted into shipped implementation PRs or superseded by the next invite-wave readiness plan.
 - Current Focus: finish the combined production-runtime readiness branch covering Chunks 2, 3, 9,
   and the Chunk 10 design note.
@@ -25,10 +25,11 @@ design-only Chunk 10 note on the same readiness branch.
 4. Chunk 4: repair new-student and profile revision UX correctness.
 5. Chunk 5: simplify tutor assignment creation and publishing controls.
 6. Chunk 6: fix scheduling, billing, and candidate queue defaults.
-7. Chunk 7: improve audio caching and explicit regeneration.
+7. Chunk 7: fix pronunciation source text, then improve audio caching and explicit regeneration.
 8. Chunk 8: re-scope Telegram and invite-registration follow-up.
 9. Chunk 9: reduce deployment env friction for Caddy edge commands.
 10. Chunk 10: improve student-memory generation throughput and prompt quality.
+11. Chunk 11: split PR validation from production image publishing workflows.
 
 ## Chunk 1: Production Student-Memory Worker
 
@@ -261,14 +262,21 @@ Acceptance gates:
 - Past-lesson homework creates the expected completed lesson state.
 - Candidate review starts with actionable unapproved candidates.
 
-## Chunk 7: Audio Caching and Explicit Regeneration
+## Chunk 7: Pronunciation Source Text, Audio Caching, and Explicit Regeneration
 
-Priority: P2.
+Priority: P1 for pronunciation source-text correctness; P2 for broader caching and regeneration
+ergonomics.
 
-Goal: avoid regenerating all audio when draft edits do not change audio-relevant source text.
+Goal: make pronunciation audio read the tutor/student-facing text, then avoid regenerating all audio
+when draft edits do not change audio-relevant source text.
 
 Items from the restart handoff:
 
+- In homework assignment pronunciation mode, `connected_speech` tasks should synthesize the normal
+  written phrase from the left side of the task, not the pseudo-transcription/right-side analysis.
+- Current pronunciation chunks can be generated from rough pseudo-transcription such as
+  `ə-tuft-uv-feathers`, which makes provider TTS read broken audio. The intended spoken source is
+  normal orthography such as `a tuft of feathers`.
 - Reuse existing audio when audio-relevant text is unchanged.
 - Regenerate only audio parts whose source text changed.
 - Make audio regeneration explicit in the UI.
@@ -276,11 +284,20 @@ Items from the restart handoff:
 
 Implementation boundaries:
 
+- First isolate the pronunciation item data model and renderer contract for left-side display text
+  versus right-side pronunciation guidance/transcription.
+- Do not discard the right-side pronunciation guidance; keep it visible/usable for the learner while
+  selecting the normal written phrase as the TTS source.
 - This is architecture/product work and should not block Chunk 1 through Chunk 6.
 - Plan from orchestrator manifest and rerun-family contracts before implementation.
 
 Acceptance gates:
 
+- `connected_speech` pronunciation chunks use normal written phrase text for TTS.
+- Pseudo-transcription or pronunciation guidance can appear in the homework UI, but is not used as
+  the provider synthesis input unless a future mode explicitly requires phonetic reading.
+- Tests cover a representative connected-speech item, e.g. left side `a tuft of feathers` and right
+  side `ə-tuft-uv-feathers`, proving the generated audio request uses the left side.
 - Minor non-audio draft edits do not force full audio regeneration.
 - Audio-affecting edits regenerate only the relevant artifacts.
 - UI clearly separates republish from regenerate-audio behavior.
@@ -389,6 +406,41 @@ Source evidence:
 
 - `docs/plans/2026-06-16-student-memory-throughput-design-note.md` captures the design-only
   recommendation and Batch API constraints to verify before implementation.
+
+## Chunk 11: PR Validation and Production Image Publishing Workflow Split
+
+Priority: P2.
+
+Goal: avoid duplicate CI work by running validation on PRs and publishing production container
+images only after merge to `main`.
+
+Observed after the first successful production image deploys:
+
+- Production container images should be built/pushed only from trusted merged `main` commits, not
+  from PR branches.
+- The full CI suite should run on PRs, where it gates review and merge.
+- After a PR has passed CI and merged, the `main` workflow should not rerun the whole suite just to
+  prove the same merge content again; it should focus on release/image publication and any minimal
+  post-merge guards needed for safety.
+
+Implementation boundaries:
+
+- Keep PR validation comprehensive enough to protect `main`.
+- Keep production image publication tied to immutable merged SHAs.
+- Preserve release-label and release-on-merge behavior.
+- Before changing workflows, inspect `.github/workflows/ci.yml`,
+  `.github/workflows/release-on-merge.yml`, image build/push jobs, and any deployment consumers of
+  GHCR tags.
+- Do not weaken required PR checks; this chunk is about event routing and avoiding duplicate
+  post-merge work, not reducing PR confidence.
+
+Acceptance gates:
+
+- PR workflows run validation but do not publish production runtime images.
+- Merge-to-`main` workflows publish production images for the merged SHA without rerunning the full
+  PR validation suite.
+- Required checks and release label guards still protect PRs before merge.
+- Deployment docs or release notes explain which workflow creates production images and when.
 
 ## Deployment State Notes to Preserve
 
