@@ -145,6 +145,53 @@ describe('runtime/pronunciation-audio', () => {
     );
   });
 
+  it('uses the normal written connected-speech phrase for item audio', async () => {
+    vi.mocked(extractPronunciationFocus).mockReturnValue({
+      mode: 'connected_speech',
+      naturalSentence: 'I saw a tuft of feathers on the path.',
+      lines: [
+        {
+          line: 1,
+          careful: 'a tuft of feathers',
+          connected: 'ə-tuft-uv-feathers',
+        },
+      ],
+      sectionStartLine: 1,
+      issues: [],
+    });
+    vi.mocked(buildPronunciationTextMp3).mockImplementation(async ({ text }) => ({
+      path: `/tmp/${String(text).replaceAll(/\s+/g, '-')}.mp3`,
+      hash: `hash-${String(text).replaceAll(/\s+/g, '-')}`,
+      voiceId: 'provider-voice',
+      provider: 'google',
+      modelId: 'chirp3_hd',
+      generatedCharacters: String(text).length,
+      cachedCharacters: 0,
+    }));
+
+    const result = await synthesizePronunciationAudio({
+      context: {} as never,
+      mdPath: '/tmp/example.md',
+      outPath: '/tmp',
+      title: 'Pronunciation',
+      regeneratePrimary: false,
+      primaryTtsProvider: 'google',
+      primaryVoiceId: 'voice-1',
+    });
+
+    expect(result?.mode).toBe('connected_speech');
+    expect(result?.itemClips).toHaveLength(1);
+    expect(result?.itemClips?.[0]?.text).toBe('a tuft of feathers');
+    expect(vi.mocked(buildPronunciationTextMp3)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(buildPronunciationTextMp3)).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        text: 'a tuft of feathers',
+      }),
+      expect.any(Object),
+    );
+  });
+
   it('uses the Google chunk default voice for sentence-level item clips when no chunk voice override is provided', async () => {
     vi.mocked(extractPronunciationFocus).mockReturnValue({
       mode: 'sentence_stress',

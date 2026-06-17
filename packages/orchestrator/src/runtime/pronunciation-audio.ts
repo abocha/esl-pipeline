@@ -78,26 +78,39 @@ function resolveConnectedSpeechSpeechText(
   line: Extract<PronunciationFocus, { mode: 'connected_speech' }>['lines'][number],
   logger?: PipelineLogger,
 ): string {
+  const careful = normalizeSpeechText(line.careful);
   const connected = normalizeConnectedSpeechText(line.connected);
-  if (connected && !looksLikeIpaTranscription(connected)) {
-    return connected;
+
+  if (careful) {
+    if (connected && looksLikeIpaTranscription(connected)) {
+      logger?.log({
+        level: 'warn',
+        stage: 'tts',
+        message:
+          'Connected-speech pronunciation target was IPA-only; using careful text for provider TTS',
+        detail: {
+          line: line.line,
+          connected,
+          careful,
+        },
+      });
+    }
+    return careful;
   }
 
-  const careful = normalizeSpeechText(line.careful);
-  if (connected && careful) {
+  if (connected && looksLikeIpaTranscription(connected)) {
     logger?.log({
       level: 'warn',
       stage: 'tts',
       message:
-        'Connected-speech pronunciation target was IPA-only; using careful text for provider TTS',
+        'Connected-speech pronunciation target was IPA-only and no careful text was available',
       detail: {
         line: line.line,
         connected,
-        careful,
       },
     });
   }
-  return careful || connected;
+  return connected;
 }
 
 function isLongShadowDrill(text: string): boolean {
