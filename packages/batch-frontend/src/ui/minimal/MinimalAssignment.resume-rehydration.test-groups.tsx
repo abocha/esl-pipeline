@@ -14,7 +14,6 @@ import {
   makeRecording,
   makeTranscript,
   now,
-  openPublishingSettings,
   previewCurrentDraft,
   renderMinimalAssignment,
   testScreen as screen,
@@ -45,7 +44,7 @@ export function registerResumeBasicTests() {
       expect(screen.getByRole('heading', { name: /Add lesson source/i })).toBeTruthy();
       expect(screen.getByRole('heading', { name: /Review and share/i })).toBeTruthy();
       expect(screen.queryByRole('combobox', { name: /Share to/i })).toBeNull();
-      expect(screen.getByText(/Assignments publish as HTML pages/i)).toBeTruthy();
+      expect(screen.getByText(/Assignments publish as an Assignment Handout/i)).toBeTruthy();
     });
 
     it('does not auto-resume queued or running jobs on a naked initial load', async () => {
@@ -308,15 +307,11 @@ export function registerResumeBasicTests() {
       renderMinimalAssignment();
 
       expect(await screen.findByDisplayValue('Session transcript')).toBeTruthy();
-      expect(await screen.findByDisplayValue('Session prompt')).toBeTruthy();
       expect(await screen.findByDisplayValue('# Session draft')).toBeTruthy();
       expect(((await screen.findByLabelText(/Teacher notes/i)) as HTMLTextAreaElement).value).toBe(
         'Remember the travel vocab.',
       );
-      openPublishingSettings();
-      expect(
-        (screen.getByRole('combobox', { name: /Learning preset/i }) as HTMLSelectElement).value,
-      ).toBe('b1-default');
+      expect(screen.queryByRole('combobox', { name: /Learning preset/i })).toBeNull();
       vi.useFakeTimers();
       await act(async () => {
         await vi.advanceTimersByTimeAsync(1500);
@@ -770,7 +765,6 @@ export function registerResumeBasicTests() {
       expect(screen.queryByRole('listbox', { name: /Recent assignments/i })).toBeNull();
 
       expect(await screen.findByDisplayValue('Recovered transcript')).toBeTruthy();
-      expect(await screen.findByDisplayValue('Recovered prompt')).toBeTruthy();
       expect(await screen.findByDisplayValue('# Recovered draft')).toBeTruthy();
       vi.useFakeTimers();
       await act(async () => {
@@ -778,22 +772,16 @@ export function registerResumeBasicTests() {
       });
       expect(api.createAssignmentSession).not.toHaveBeenCalled();
       vi.useRealTimers();
-      openPublishingSettings();
-      expect(
-        ((await screen.findByRole('combobox', { name: /Learning preset/i })) as HTMLSelectElement)
-          .value,
-      ).toBe('b2-default');
+      expect(screen.queryByRole('combobox', { name: /Learning preset/i })).toBeNull();
       resolveProfileOptions({ profiles: [{ id: 'profile-default.md', label: 'Default Profile' }] });
       expect(screen.getAllByText(/fetch failed/i).length).toBeGreaterThan(0);
-      await user.click(screen.getByRole('button', { name: /Refresh instructions/i }));
+      await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
       await waitFor(() => {
-        expect(api.createPromptPackage).toHaveBeenCalledWith(
-          expect.any(String),
-          expect.objectContaining({
-            templateId: 'tpl-default',
-            profileId: 'profiles/alex.md',
-          }),
-        );
+        expect(api.generateDraft).toHaveBeenCalledWith({
+          promptPackageId: 'pkg-resume',
+          provider: 'openai',
+          model: 'gpt-5.2',
+        });
       });
 
       globalThis.history.replaceState(null, '', '/');
@@ -912,9 +900,7 @@ export function registerResumePresetRaceTests() {
         expect(api.getJobStatus).toHaveBeenCalledWith('job-stale-preset');
       });
 
-      openPublishingSettings();
-      const presetSelect = await screen.findByRole('combobox', { name: /Learning preset/i });
-      expect((presetSelect as HTMLSelectElement).value).toBe('b1-default');
+      expect(screen.queryByRole('combobox', { name: /Learning preset/i })).toBeNull();
     });
 
     it('clears resumed stale preset when preset catalog is empty and omits preset on publish', async () => {
@@ -997,9 +983,7 @@ export function registerResumePresetRaceTests() {
         expect(api.getJobStatus).toHaveBeenCalledWith('job-empty-presets');
       });
 
-      openPublishingSettings();
-      const presetSelect = await screen.findByRole('combobox', { name: /Learning preset/i });
-      expect((presetSelect as HTMLSelectElement).value).toBe('');
+      expect(screen.queryByRole('combobox', { name: /Learning preset/i })).toBeNull();
 
       await previewCurrentDraft(user);
       await user.click(screen.getByRole('button', { name: /Share assignment/i }));
@@ -1091,9 +1075,8 @@ export function registerResumePresetRaceTests() {
           expect(api.getJobStatus).toHaveBeenCalledWith('job-race-preset');
         });
         expect(await screen.findByDisplayValue('# Draft markdown')).toBeTruthy();
-        expect(await screen.findByDisplayValue('Prompt package output')).toBeTruthy();
+        expect(screen.getByRole('button', { name: /^Generate assignment$/i })).toBeTruthy();
 
-        openPublishingSettings();
         await previewCurrentDraft(user);
         await user.click(screen.getByRole('button', { name: /Share assignment/i }));
 
@@ -1114,9 +1097,8 @@ export function registerResumePresetRaceTests() {
           supportedActions: [],
         });
 
-        const presetSelect = await screen.findByRole('combobox', { name: /Learning preset/i });
         await waitFor(() => {
-          expect((presetSelect as HTMLSelectElement).value).toBe('b2-default');
+          expect(api.fetchJobOptions).toHaveBeenCalled();
         });
 
         await previewCurrentDraft(user);
@@ -1128,8 +1110,9 @@ export function registerResumePresetRaceTests() {
         expect(secondPublishCall?.jobOverrides).toEqual({
           publishTarget: 'html',
           withTts: true,
-          ttsProvider: 'elevenlabs',
+          ttsProvider: 'inworld',
           ttsStrategy: 'auto',
+          ttsModel: 'inworld-tts-2',
         });
       },
       INTEGRATION_TEST_TIMEOUT_MS,
@@ -1226,11 +1209,7 @@ export function registerResumePresetRaceTests() {
       await waitFor(() => {
         expect(api.getJobStatus).toHaveBeenCalledWith('job-learning-race');
       });
-      openPublishingSettings();
-      const presetSelect = await screen.findByRole('combobox', { name: /Learning preset/i });
-      await waitFor(() => {
-        expect((presetSelect as HTMLSelectElement).value).toBe('general-english');
-      });
+      expect(screen.queryByRole('combobox', { name: /Learning preset/i })).toBeNull();
 
       await previewCurrentDraft(user);
       await user.click(screen.getByRole('button', { name: /Share assignment/i }));
@@ -1243,124 +1222,11 @@ export function registerResumePresetRaceTests() {
         publishTarget: 'html',
         learningPresetId: 'general-english',
         withTts: true,
-        ttsProvider: 'elevenlabs',
+        ttsProvider: 'inworld',
         ttsStrategy: 'auto',
+        ttsModel: 'inworld-tts-2',
       });
       expect(publishCall?.jobOverrides).not.toHaveProperty('preset');
     });
-
-    it('rehydrates explicit publish strategy and elevenlabs model from resumed job status', async () => {
-      vi.mocked(api.listUserJobs).mockResolvedValueOnce({
-        jobs: [
-          makeJobStatus({
-            jobId: 'job-dialogue-1',
-            draftId: 'draft-1',
-            state: 'succeeded',
-          }),
-        ],
-        total: 1,
-        limit: 20,
-        offset: 0,
-      });
-      vi.mocked(api.getJobStatus).mockResolvedValueOnce(
-        makeJobStatus({
-          jobId: 'job-dialogue-1',
-          draftId: 'draft-1',
-          state: 'succeeded',
-          ttsProvider: 'elevenlabs',
-          ttsStrategy: 'dialogue',
-          ttsModel: 'eleven_v3',
-        }),
-      );
-
-      globalThis.history.replaceState(null, '', '/?jobId=job-dialogue-1');
-      renderMinimalAssignment();
-
-      await waitFor(() => {
-        expect(api.getJobStatus).toHaveBeenCalledWith('job-dialogue-1');
-      });
-      openPublishingSettings();
-      expect(
-        (
-          (await screen.findByRole('combobox', {
-            name: /Reading style/i,
-          })) as HTMLSelectElement
-        ).value,
-      ).toBe('dialogue');
-      expect(
-        (screen.getByRole('combobox', { name: /Voice model/i }) as HTMLSelectElement).value,
-      ).toBe('eleven_v3');
-    });
-
-    it(
-      'preserves resumed publish strategy until delayed job options finish loading',
-      async () => {
-        let resolveJobOptions: (value: Awaited<ReturnType<typeof api.fetchJobOptions>>) => void =
-          () => {};
-
-        vi.mocked(api.fetchJobOptions).mockReset();
-        vi.mocked(api.fetchJobOptions).mockImplementationOnce(
-          () =>
-            new Promise((resolve) => {
-              resolveJobOptions = resolve;
-            }),
-        );
-        vi.mocked(api.listUserJobs).mockResolvedValueOnce({
-          jobs: [
-            makeJobStatus({
-              jobId: 'job-dialogue-race',
-              draftId: 'draft-1',
-              state: 'succeeded',
-            }),
-          ],
-          total: 1,
-          limit: 20,
-          offset: 0,
-        });
-        vi.mocked(api.getJobStatus).mockResolvedValueOnce(
-          makeJobStatus({
-            jobId: 'job-dialogue-race',
-            draftId: 'draft-1',
-            state: 'succeeded',
-            ttsProvider: 'elevenlabs',
-            ttsStrategy: 'dialogue',
-            ttsModel: 'eleven_v3',
-          }),
-        );
-
-        globalThis.history.replaceState(null, '', '/?jobId=job-dialogue-race');
-        renderMinimalAssignment();
-
-        await waitFor(() => {
-          expect(api.getJobStatus).toHaveBeenCalledWith('job-dialogue-race');
-        });
-        openPublishingSettings();
-        const strategySelect = (await screen.findByRole('combobox', {
-          name: /Reading style/i,
-        })) as HTMLSelectElement;
-        const modelSelect = screen.getByRole('combobox', {
-          name: /Voice model/i,
-        }) as HTMLSelectElement;
-
-        expect(strategySelect.value).toBe('dialogue');
-        expect(modelSelect.value).toBe('eleven_v3');
-
-        resolveJobOptions({
-          presets: ['b2-default'],
-          cefrLevels: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'],
-          cefrDefault: 'B1',
-          voiceAccents: ['american'],
-          voices: [{ id: 'voice-a', name: 'Voice A', accent: 'american' }],
-          ttsStrategies: ['auto', 'dialogue', 'tts'],
-          supportedActions: [],
-        });
-
-        await waitFor(() => {
-          expect(strategySelect.value).toBe('dialogue');
-        });
-        expect(modelSelect.value).toBe('eleven_v3');
-      },
-      INTEGRATION_TEST_TIMEOUT_MS,
-    );
   });
 }

@@ -10,9 +10,6 @@ import {
   testExpect as expect,
   INTEGRATION_TEST_TIMEOUT_MS,
   now,
-  openAdvancedActions,
-  openGenerationLimits,
-  openGenerationSettings,
   preparePromptReady,
   previewCurrentDraft,
   renderGenerationReadyAssignment,
@@ -26,16 +23,6 @@ import {
   testWaitFor as waitFor,
 } from './MinimalAssignment.test-harness';
 
-const selectOpenAiGenerationModel = () => {
-  openGenerationSettings();
-  fireEvent.change(screen.getByRole('combobox', { name: /Generation provider/i }), {
-    target: { value: 'openai' },
-  });
-  fireEvent.change(screen.getByRole('combobox', { name: /Generation model/i }), {
-    target: { value: 'gpt-5.2' },
-  });
-};
-
 export function registerGenerationDefaultsTests() {
   describe('MinimalAssignment - generation defaults', () => {
     beforeEach(() => {
@@ -46,90 +33,29 @@ export function registerGenerationDefaultsTests() {
       vi.useRealTimers();
     });
 
-    it('initializes generation provider/model from job options defaults', async () => {
-      renderMinimalAssignment();
-
-      const providerSelect = await screen.findByRole('combobox', { name: /Generation provider/i });
-      const modelSelect = await screen.findByRole('combobox', { name: /Generation model/i });
-
-      await waitFor(() => {
-        expect((providerSelect as HTMLSelectElement).value).toBe('openai');
-        expect((modelSelect as HTMLSelectElement).value).toBe('gpt-5.2');
-      });
-    });
-
-    it('shows quota panel from job options before first draft generation', async () => {
-      renderMinimalAssignment();
-
-      openGenerationSettings();
-      openGenerationLimits();
-      await screen.findByText(/Source: Hybrid/i);
-      expect(screen.getByText(/RPM: 5/i)).toBeTruthy();
-      expect(screen.getByText(/TPM: 250000/i)).toBeTruthy();
-      expect(screen.getByText(/RPD: 20/i)).toBeTruthy();
-      expect(screen.getByText(/Updated: .*?\(.+?\)/i)).toBeTruthy();
-    });
-
-    it('refreshes baseline quota panel values when job options are reloaded', async () => {
+    it('uses generation defaults without exposing provider, model, or quota controls', async () => {
       const user = createMinimalUser();
-      await renderResumedAssignment({}, { user, waitFor: 'promptReady' });
+      await renderGenerationReadyAssignment();
 
-      openGenerationSettings();
-      openGenerationLimits();
-      await screen.findByText(/Source: Hybrid/i);
-      expect(screen.getByText(/RPM: 5/i)).toBeTruthy();
+      expect(screen.queryByRole('combobox', { name: /Generation provider/i })).toBeNull();
+      expect(screen.queryByRole('combobox', { name: /Generation model/i })).toBeNull();
+      expect(screen.queryByText(/Generation settings/i)).toBeNull();
+      expect(screen.queryByText(/Generation limits/i)).toBeNull();
+      expect(screen.queryByText(/RPM:/i)).toBeNull();
+      expect(screen.queryByText(/TPM:/i)).toBeNull();
+      expect(screen.queryByText(/RPD:/i)).toBeNull();
 
-      vi.mocked(api.fetchJobOptions).mockResolvedValueOnce({
-        presets: ['b1-default', 'b2-default'],
-        cefrLevels: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'],
-        cefrDefault: 'B1',
-        generation: {
-          providers: ['openai', 'google_ai_studio', 'openrouter'],
-          defaultProvider: 'openai',
-          modelOptions: [
-            {
-              provider: 'openai',
-              id: 'gpt-5.2',
-              tier: 'primary',
-              fallbackRank: 0,
-              defaultSelected: true,
-              enabled: true,
-            },
-          ],
-          defaultModelByProvider: {
-            openai: 'gpt-5.2',
-          },
-          quota: {
-            source: 'configured',
-            lastUpdatedAt: '2026-02-18T00:20:00.000Z',
-            requestsPerMinute: 99,
-            requestsPerDay: 999,
-          },
-        },
-        voiceAccents: ['american'],
-        voices: [{ id: 'voice-a', name: 'Voice A', accent: 'american' }],
-        ttsStrategies: ['auto', 'dialogue', 'tts'],
-        supportedActions: [],
-      });
-
-      openAdvancedActions();
-      await user.click(screen.getByRole('button', { name: /Refresh actions/i }));
+      await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
 
       await waitFor(() => {
-        expect(api.fetchJobOptions).toHaveBeenCalledTimes(2);
-        expect(screen.getByText(/Source: Configured/i)).toBeTruthy();
-        expect(screen.getByText(/RPM: 99/i)).toBeTruthy();
-        expect(screen.getByText(/RPD: 999/i)).toBeTruthy();
+        expect(api.generateDraft).toHaveBeenCalledWith({
+          promptPackageId: 'pkg-1',
+          provider: 'openai',
+          model: 'gpt-5.2',
+        });
       });
-      expect(screen.queryByText(/RPM: 5/i)).toBeNull();
-    });
-
-    it('shows relative and absolute freshness in quota panel', async () => {
-      renderMinimalAssignment();
-
-      openGenerationSettings();
-      openGenerationLimits();
-      await screen.findByText(/Updated: (just now|\d+[mhd] ago) \(.+\)/i);
+      expect(await screen.findByDisplayValue('# Generated assignment draft')).toBeTruthy();
+      expect(screen.getByText(/Assignment draft ready\. Saved automatically\./i)).toBeTruthy();
     });
 
     it(
@@ -139,12 +65,11 @@ export function registerGenerationDefaultsTests() {
         renderMinimalAssignment();
 
         const generateDraftButton = screen.getByRole('button', {
-          name: /Generate assignment content/i,
+          name: /^Generate assignment$/i,
         });
         expect((generateDraftButton as HTMLButtonElement).disabled).toBe(true);
 
         await preparePromptReady(user);
-        selectOpenAiGenerationModel();
 
         await waitFor(() => {
           expect((generateDraftButton as HTMLButtonElement).disabled).toBe(false);
@@ -158,9 +83,8 @@ export function registerGenerationDefaultsTests() {
       async () => {
         const user = createMinimalUser();
         await renderGenerationReadyAssignment();
-        selectOpenAiGenerationModel();
 
-        await user.click(screen.getByRole('button', { name: /Generate assignment content/i }));
+        await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
 
         await waitFor(() => {
           expect(api.generateDraft).toHaveBeenCalledWith({
@@ -170,7 +94,7 @@ export function registerGenerationDefaultsTests() {
           });
         });
         expect(await screen.findByDisplayValue('# Generated assignment draft')).toBeTruthy();
-        expect(screen.getByText(/Generated with openai\/gpt-5.2/i)).toBeTruthy();
+        expect(screen.getByText(/Assignment draft ready\. Saved automatically\./i)).toBeTruthy();
         await waitFor(() => {
           expect(api.updateDraft).toHaveBeenCalledWith('draft-1', '# Generated assignment draft');
         });
@@ -189,7 +113,6 @@ export function registerGenerationDefaultsTests() {
         fireEvent.change(screen.getByRole('textbox', { name: /Teacher notes/i }), {
           target: { value: 'Use more travel vocabulary.' },
         });
-        selectOpenAiGenerationModel();
 
         await act(async () => {
           vi.advanceTimersByTime(1500);
@@ -301,10 +224,9 @@ export function registerGenerationThrottleTests() {
           });
 
           await renderResumedAssignment();
-          selectOpenAiGenerationModel();
 
           const generateDraftButton = screen.getByRole('button', {
-            name: /Generate assignment content/i,
+            name: /^Generate assignment$/i,
           });
           await user.click(generateDraftButton);
 
@@ -322,7 +244,7 @@ export function registerGenerationThrottleTests() {
             expect(
               (
                 screen.getByRole('button', {
-                  name: /Generate assignment content/i,
+                  name: /^Generate assignment$/i,
                 }) as HTMLButtonElement
               ).disabled,
             ).toBe(false);
@@ -349,8 +271,7 @@ export function registerGenerationThrottleTests() {
         );
 
         await renderGenerationReadyAssignment();
-        selectOpenAiGenerationModel();
-        await user.click(screen.getByRole('button', { name: /Generate assignment content/i }));
+        await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
 
         await waitFor(() => {
           expect(api.generateDraft).toHaveBeenCalledWith({
@@ -361,7 +282,7 @@ export function registerGenerationThrottleTests() {
         });
 
         await screen.findByText(
-          /Provider timed out\. Retry or choose a faster model\/provider\. Request ID: req-timeout-1/i,
+          /Assignment generation timed out\. Retry shortly\. Request ID: req-timeout-1/i,
         );
       },
       INTEGRATION_TEST_TIMEOUT_MS,
@@ -381,7 +302,6 @@ export function registerGenerationThrottleTests() {
           },
         });
         await renderGenerationReadyAssignment();
-        selectOpenAiGenerationModel();
 
         const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
         fireEvent.change(draftTextarea, { target: { value: '# Existing draft' } });
@@ -391,7 +311,7 @@ export function registerGenerationThrottleTests() {
         expect((publishButton as HTMLButtonElement).disabled).toBe(false);
 
         const generateDraftButton = screen.getByRole('button', {
-          name: /Generate assignment content/i,
+          name: /^Generate assignment$/i,
         });
         await waitFor(() => {
           expect((generateDraftButton as HTMLButtonElement).disabled).toBe(false);
@@ -425,9 +345,8 @@ export function registerGenerationThrottleTests() {
         );
 
         await renderResumedAssignment();
-        selectOpenAiGenerationModel();
 
-        await user.click(screen.getByRole('button', { name: /Generate assignment content/i }));
+        await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
         await waitFor(() => {
           expect(api.generateDraft).toHaveBeenCalledWith({
             promptPackageId: 'pkg-1',
@@ -457,7 +376,7 @@ export function registerGenerationThrottleTests() {
           },
           { timeout: UI_WAIT_TIMEOUT_MS },
         );
-        expect(screen.queryByText(/Generated with openai\/gpt-5.2/i)).toBeNull();
+        expect(screen.queryByText(/Assignment draft ready/i)).toBeNull();
       },
       INTEGRATION_TEST_TIMEOUT_MS,
     );

@@ -6,7 +6,7 @@
 - Status: active.
 - Last Verified Against: 2026-06-17 repo state.
 - Exit Trigger: archive after the restart backlog is converted into shipped implementation PRs or superseded by the next invite-wave readiness plan.
-- Current Focus: finish Chunk 7 P1 connected-speech pronunciation source-text correctness.
+- Current Focus: finish Chunk 5 P1 tutor assignment creation and publishing UX.
 
 ## Purpose
 
@@ -235,6 +235,20 @@ Acceptance gates:
 - Normal tutor flow is one clear generation path with no provider/budget jargon.
 - Template management is not reachable by regular users.
 - Publishing language and cancel behavior match the tutor-facing product model.
+
+Source evidence:
+
+- `packages/batch-frontend/src/ui/minimal/MinimalAssignment.stages.tsx` presents one
+  tutor-facing `Generate assignment` action, hides template/provider/quota/audio model selectors,
+  uses `Assignment Handout` copy, and places `Cancel` beside `Share assignment`.
+- `packages/batch-frontend/src/ui/minimal/MinimalAssignment.authoring.ts` keeps template,
+  provider, model, and TTS defaults internal while defaulting publishing audio to Inworld and using
+  tutor-facing generation errors.
+- `packages/batch-frontend/src/ui/minimal/MinimalAssignment.advanced.tsx` removes the public cancel
+  reason field while keeping advanced rerun/support tools behind the advanced actions section.
+- Targeted frontend tests assert hidden template/provider/quota/audio controls, one-button
+  assignment generation, Inworld publish defaults, cancel-without-reason behavior, and resume/publish
+  copy using the Assignment Handout model.
 
 ## Chunk 6: Schedule, Billing, and Candidate Queue Defaults
 

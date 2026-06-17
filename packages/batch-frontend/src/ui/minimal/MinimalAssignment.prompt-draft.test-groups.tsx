@@ -128,10 +128,13 @@ export function registerPromptEditorTests() {
         screen.getByRole('combobox', { name: /^Student$/i }),
         'student-alex',
       );
-      await screen.findByRole('heading', { name: /Current learner profile/i });
+      await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+      await screen.findByDisplayValue('Student transcript text');
+      await screen.findByRole('heading', { name: /Learning profile context/i });
 
       expect(screen.queryByRole('textbox', { name: /Profile content/i })).toBeNull();
       expect(screen.queryByRole('button', { name: /Save profile/i })).toBeNull();
+      expect(screen.queryByText(/profiles\/alex\.md/i)).toBeNull();
       expect(screen.getByText(/Lead project updates clearly\./i)).toBeTruthy();
       expect(screen.getByText(/Strong listening comprehension\./i)).toBeTruthy();
       expect(screen.getByRole('link', { name: /Open Learning page/i }).getAttribute('href')).toBe(
@@ -156,8 +159,10 @@ export function registerPromptEditorTests() {
         screen.getByRole('combobox', { name: /^Student$/i }),
         'student-alex',
       );
+      await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+      await screen.findByDisplayValue('Student transcript text');
 
-      await screen.findByText(/No learner profile is selected for this student yet\./i);
+      await screen.findByText(/No structured Learning page context is available yet\./i);
       expect(screen.queryByText(/Lead project updates clearly\./i)).toBeNull();
     });
 
@@ -170,10 +175,11 @@ export function registerPromptEditorTests() {
           profileId: 'profiles/alex.md',
         });
       });
-      expect(screen.getByDisplayValue('Prompt package output')).toBeTruthy();
+      expect(screen.getByRole('button', { name: /^Generate assignment$/i })).toBeTruthy();
+      expect(screen.getByRole('textbox', { name: /Draft markdown/i })).toBeTruthy();
     });
 
-    it('lets the operator choose a prompt template for the current assignment session', async () => {
+    it('uses the default prompt template without exposing template selection', async () => {
       vi.mocked(api.fetchPromptOptions).mockResolvedValueOnce({
         templates: [
           { id: 'tpl-default', label: 'Default Template' },
@@ -197,14 +203,13 @@ export function registerPromptEditorTests() {
       await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
       await screen.findByDisplayValue('Student transcript text');
 
-      const templateSelect = await screen.findByRole('combobox', { name: /Prompt template/i });
-      await user.selectOptions(templateSelect, 'tpl-focused');
-      expect(screen.getByText(/Uses Focused Follow-up with Alex active profile\./i)).toBeTruthy();
-      await user.click(screen.getByRole('button', { name: /Generate instructions/i }));
+      expect(screen.queryByRole('combobox', { name: /Prompt template/i })).toBeNull();
+      expect(screen.queryByText(/Focused Follow-up/i)).toBeNull();
+      await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
 
       await waitFor(() => {
         expect(api.createPromptPackage).toHaveBeenCalledWith('rec-1', {
-          templateId: 'tpl-focused',
+          templateId: 'tpl-default',
           profileId: 'profiles/alex.md',
         });
       });
@@ -227,7 +232,7 @@ export function registerPromptEditorTests() {
       fireEvent.change(teacherNotesInput, {
         target: { value: ' Focus on article usage and stress patterns. ' },
       });
-      await user.click(screen.getByRole('button', { name: /Generate instructions/i }));
+      await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
 
       await waitFor(() => {
         expect(api.createPromptPackage).toHaveBeenCalledWith('rec-1', {
@@ -319,7 +324,7 @@ export function registerPromptStudentSelectionTests() {
         expect(screen.getByDisplayValue('Student transcript text')).toBeTruthy();
       });
 
-      await user.click(screen.getByRole('button', { name: /Generate instructions/i }));
+      await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
 
       await waitFor(() => {
         expect(api.createPromptPackage).toHaveBeenCalledWith('rec-1', {
@@ -360,7 +365,7 @@ export function registerPromptStudentSelectionTests() {
       await waitFor(() => {
         expect(screen.getByDisplayValue('Student transcript text')).toBeTruthy();
       });
-      await user.click(screen.getByRole('button', { name: /Generate instructions/i }));
+      await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
 
       await waitFor(() => {
         expect(api.createAssignmentSession).toHaveBeenCalledWith(
@@ -426,7 +431,7 @@ export function registerPromptStudentSelectionTests() {
       await waitFor(() => {
         expect(screen.getByDisplayValue('Student transcript text')).toBeTruthy();
       });
-      await user.click(screen.getByRole('button', { name: /Generate instructions/i }));
+      await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
 
       await waitFor(() => {
         expect(api.updateAssignmentSession).toHaveBeenCalledWith(
@@ -485,7 +490,7 @@ export function registerPromptStudentSelectionTests() {
 
       await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
       await screen.findByDisplayValue('Student transcript text');
-      await user.click(screen.getByRole('button', { name: /Generate instructions/i }));
+      await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
 
       await waitFor(() => {
         expect(api.createAssignmentSession).toHaveBeenCalledWith(
