@@ -4,10 +4,9 @@
 
 - Audience: founder-maintainer, Codex, implementation agents, deployment agents.
 - Status: active.
-- Last Verified Against: 2026-06-16 repo state.
+- Last Verified Against: 2026-06-17 repo state.
 - Exit Trigger: archive after the restart backlog is converted into shipped implementation PRs or superseded by the next invite-wave readiness plan.
-- Current Focus: finish the combined production-runtime readiness branch covering Chunks 2, 3, 9,
-  and the Chunk 10 design note.
+- Current Focus: finish Chunk 11 PR-validation and production-image workflow split.
 
 ## Purpose
 
@@ -455,6 +454,18 @@ Acceptance gates:
 - The release bot's `chore(release)` push does not rerun the full PR validation suite.
 - Required checks and release label guards still protect PRs before merge.
 - Deployment docs or release notes explain which workflow creates production images and when.
+
+Source evidence:
+
+- `.github/workflows/ci.yml` runs validation only on PR events and no longer builds or publishes
+  production container images.
+- `.github/workflows/release-on-merge.yml` publishes production images only after `Release On Merge`
+  completes the bot-authored release commit and tag push; this avoids relying on a tag-push workflow
+  that would not be triggered by the release job's `GITHUB_TOKEN`.
+- Production images are tagged with both the release commit SHA and release tag; the deploy script
+  continues to consume the release commit SHA.
+- `docs/backend-frontend/DEPLOYMENT.md` documents the PR CI -> release bot -> release-tag image
+  publication -> VPS deploy sequence.
 
 ## Deployment State Notes to Preserve
 
