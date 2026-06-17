@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [9.1.3] - 2026-06-17
+
+### Changed
+
+- Automated release from PR #106: Publish production images after release bump (https://github.com/abocha/esl-pipeline/pull/106)
+
 ## [9.1.2] - 2026-06-17
 
 ### Changed
