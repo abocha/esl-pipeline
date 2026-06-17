@@ -504,6 +504,49 @@ export async function createStudentLesson(
   });
 }
 
+export async function completeElapsedScheduledLessonForHomework(
+  studentId: string,
+  lessonId: string,
+  actorUserId?: string | null,
+): Promise<boolean> {
+  return withPgTransaction(async (client) => {
+    const context = await requireStudentContext(client, studentId);
+    const existing = await getLessonRow(client, studentId, lessonId);
+    if (!existing || existing.status !== 'scheduled' || !isLessonHomeworkFollowUpDue(existing)) {
+      return false;
+    }
+
+    const nextStatus: StudentLessonStatus = 'completed';
+    const nextStartsAt = existing.starts_at.toISOString();
+    const nextOverrideKind = getNextOverrideKind(
+      existing,
+      { status: nextStatus, consumesCredit: true },
+      nextStatus,
+      nextStartsAt,
+    );
+    await client.query(
+      `
+      UPDATE student_lessons
+      SET
+        status = 'completed',
+        consumes_credit = true,
+        updated_by = $3,
+        recurrence_override_kind = $4,
+        completed_by = CASE
+          WHEN status <> 'completed' THEN $3
+          ELSE completed_by
+        END,
+        updated_at = NOW()
+      WHERE id = $1
+        AND student_id = $2
+      `,
+      [lessonId, context.id, actorUserId ?? null, nextOverrideKind],
+    );
+    await reconcileLessonCreditEvent(client, lessonId, actorUserId ?? null);
+    return true;
+  });
+}
+
 export async function updateStudentLesson(
   studentId: string,
   lessonId: string,

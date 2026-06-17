@@ -580,6 +580,44 @@ describeIfPg('application/student-schedule-billing', () => {
     });
   });
 
+  it('marks an elapsed scheduled lesson completed when homework is added through an assignment session', async () => {
+    const { studentId, userId } = await seedStudent();
+    await addStudentPackage(studentId, { lessons: 1 }, userId);
+    const lessonId = await insertBusinessLesson({
+      studentId,
+      startsAt: '2000-01-01T10:00:00.000Z',
+      status: 'scheduled',
+      consumesCredit: false,
+    });
+
+    await createAssignmentSessionForUser(userId, {
+      studentId,
+      lessonId,
+      currentStage: 'source',
+    });
+
+    const surface = await getStudentScheduleBillingSurface(studentId);
+    expect(surface).not.toBeNull();
+    if (!surface) {
+      throw new Error('Expected schedule surface');
+    }
+    expect(surface.lessons.find((lesson) => lesson.id === lessonId)).toMatchObject({
+      status: 'completed',
+      consumesCredit: true,
+    });
+    expect(surface.creditSummary.remaining).toBe(0);
+    expect(
+      surface.creditEvents.filter((event) => event.eventType === 'credit_consumed'),
+    ).toHaveLength(1);
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      const result = await client.query<{ completed_by: string | null }>(
+        'SELECT completed_by FROM student_lessons WHERE id = $1',
+        [lessonId],
+      );
+      expect(result.rows[0]?.completed_by).toBe(userId);
+    });
+  });
+
   it('self-heals the default workspace for baseline-created students without workspace data', async () => {
     const { studentId, userId } = await seedStudentWithoutWorkspace();
 

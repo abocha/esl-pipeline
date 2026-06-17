@@ -6,7 +6,7 @@
 - Status: active.
 - Last Verified Against: 2026-06-17 repo state.
 - Exit Trigger: archive after the restart backlog is converted into shipped implementation PRs or superseded by the next invite-wave readiness plan.
-- Current Focus: finish Chunk 5 P1 tutor assignment creation and publishing UX.
+- Current Focus: finish Chunk 6 P1 schedule, billing, and candidate queue defaults.
 
 ## Purpose
 
@@ -275,6 +275,20 @@ Acceptance gates:
 - Past-lesson homework creates the expected completed lesson state.
 - Candidate review starts with actionable unapproved candidates.
 
+Source evidence:
+
+- `packages/batch-frontend/src/ui/students/StudentScheduleBillingPage.tsx` initializes the
+  add-lesson start field to today at 10:00 and refreshes duration/timezone from the loaded lesson
+  plan; `StudentScheduleBillingPage.test.tsx` verifies the create payload uses those defaults.
+- Schedule reminder and lesson-row `Add homework` actions now complete scheduled elapsed lessons
+  with `consumesCredit: true` before opening lesson-linked assignment context; the backend
+  `completeElapsedScheduledLessonForHomework` helper preserves the same invariant when assignment
+  sessions are linked directly to elapsed lessons.
+- `packages/batch-frontend/src/ui/students/WorkspaceCandidatesPanel.tsx` and the legacy workspace
+  candidate panel keep the initial review bucket focused on pending/unreviewed candidates and show
+  approved-candidate promotion controls only in the reviewed bucket; targeted frontend tests cover
+  the default pending queue.
+
 ## Chunk 7: Pronunciation Source Text, Audio Caching, and Explicit Regeneration
 
 Priority: P1 for pronunciation source-text correctness; P2 for broader caching and regeneration
@@ -530,6 +544,6 @@ Recreate backend services after production env changes.
 
 ## Next Step
 
-After this readiness PR lands, start Chunk 4 as a separate product/UX correctness branch. Treat any
-student-memory Batch API implementation as a later Chunk 10 implementation branch after the design
-note is reviewed.
+After this readiness PR lands and deploy behavior does not need immediate VPS follow-up, start Chunk
+7 with the remaining P2 audio caching and explicit regeneration ergonomics, or choose Chunk 10 if
+student-memory throughput becomes the next observed bottleneck.

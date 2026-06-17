@@ -25,7 +25,6 @@ import {
 } from './StudentAreaDesignSystem';
 import './StudentScheduleBillingPage.css';
 
-const DEFAULT_LESSON_START = '2026-05-07T10:00';
 const WEEKDAYS = [
   { value: 1, label: 'Mon' },
   { value: 2, label: 'Tue' },
@@ -107,9 +106,13 @@ function todayInput(): string {
   ).padStart(2, '0')}`;
 }
 
+function defaultLessonStartInput(): string {
+  return `${todayInput()}T10:00`;
+}
+
 function toDateTimeLocal(value: string): string {
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return DEFAULT_LESSON_START;
+  if (Number.isNaN(date.getTime())) return defaultLessonStartInput();
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
@@ -150,7 +153,7 @@ export const StudentScheduleBillingPage: React.FC = () => {
     note: '',
   });
   const [lessonForm, setLessonForm] = useState({
-    startsAt: DEFAULT_LESSON_START,
+    startsAt: defaultLessonStartInput(),
     durationMinutes: '60',
     timezone: 'UTC',
     title: '',
@@ -164,7 +167,7 @@ export const StudentScheduleBillingPage: React.FC = () => {
   });
   const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
   const [lessonEditForm, setLessonEditForm] = useState({
-    startsAt: DEFAULT_LESSON_START,
+    startsAt: defaultLessonStartInput(),
     durationMinutes: '60',
     timezone: 'UTC',
     title: '',
@@ -238,17 +241,31 @@ export const StudentScheduleBillingPage: React.FC = () => {
     return Number.isFinite(endsAt) && endsAt <= Date.now();
   };
 
-  const startHomeworkFromReminder = async (
-    reminder: StudentScheduleBillingSurface['reminders'][number],
+  const startHomeworkForLesson = async (
+    lessonId: string,
+    lessonStatus?: StudentScheduleBillingSurface['lessons'][number]['status'] | null,
   ): Promise<StudentScheduleBillingSurface> => {
-    if (!reminder.lessonId) {
+    if (!lessonId) {
       throw new Error('Lesson follow-up is missing lesson context.');
     }
     if (!surface) {
       throw new Error('Schedule surface is not loaded.');
     }
-    navigateToLessonAssignment(reminder.lessonId);
-    return surface;
+    const nextSurface =
+      lessonStatus === 'scheduled'
+        ? await updateStudentLesson(studentId, lessonId, {
+            status: 'completed',
+            consumesCredit: true,
+          })
+        : surface;
+    navigateToLessonAssignment(lessonId);
+    return nextSurface;
+  };
+
+  const startHomeworkFromReminder = async (
+    reminder: StudentScheduleBillingSurface['reminders'][number],
+  ): Promise<StudentScheduleBillingSurface> => {
+    return startHomeworkForLesson(reminder.lessonId ?? '', reminder.lessonStatus);
   };
 
   const hideReminder = async (
@@ -746,7 +763,15 @@ export const StudentScheduleBillingPage: React.FC = () => {
                     </a>
                   ) : null}
                   {canAddHomeworkForLesson(lesson) ? (
-                    <button type="button" onClick={() => navigateToLessonAssignment(lesson.id)}>
+                    <button
+                      type="button"
+                      disabled={saving === lesson.id}
+                      onClick={() => {
+                        void runAction(lesson.id, () =>
+                          startHomeworkForLesson(lesson.id, lesson.status),
+                        );
+                      }}
+                    >
                       Add homework
                     </button>
                   ) : null}

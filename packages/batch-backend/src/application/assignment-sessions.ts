@@ -15,6 +15,7 @@ import {
   updateAssignmentSession,
 } from '../domain/assignment-session-repository.js';
 import { withPgClient } from '../infrastructure/db.js';
+import { completeElapsedScheduledLessonForHomework } from './student-schedule-billing.js';
 
 export async function createAssignmentSessionForUser(
   userId: string,
@@ -25,6 +26,7 @@ export async function createAssignmentSessionForUser(
     userId,
     ...request,
   });
+  await completeLinkedElapsedLessonForHomework(userId, session);
   return toAssignmentSessionDto(session);
 }
 
@@ -39,6 +41,9 @@ export async function updateAssignmentSessionForUser(
     userId,
     ...request,
   });
+  if (session) {
+    await completeLinkedElapsedLessonForHomework(userId, session);
+  }
   return session ? toAssignmentSessionDto(session) : null;
 }
 
@@ -97,6 +102,14 @@ export function toAssignmentSessionDto(session: AssignmentSessionRecord): Assign
     updatedAt: session.updatedAt.toISOString(),
     archivedAt: session.archivedAt?.toISOString() ?? null,
   };
+}
+
+async function completeLinkedElapsedLessonForHomework(
+  userId: string,
+  session: AssignmentSessionRecord,
+): Promise<void> {
+  if (!session.studentId || !session.lessonId) return;
+  await completeElapsedScheduledLessonForHomework(session.studentId, session.lessonId, userId);
 }
 
 async function validateLessonStudentPair(
