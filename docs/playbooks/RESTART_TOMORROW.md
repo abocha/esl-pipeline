@@ -136,6 +136,8 @@
   - Split PR validation from production image publishing.
     - Build/push production container images only after merge to `main`.
     - Keep full CI on PRs, not duplicated after merge when the PR has already passed.
+    - Account for the release bot that commits `chore(release): vX.Y.Z` and pushes the release tag
+      after merge; image publishing should not race or ignore that version-bump step.
     - Preserve any minimal post-merge release/image safety guards needed for production images.
 
 - Deployment state notes:
