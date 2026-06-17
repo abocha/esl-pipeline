@@ -5,7 +5,7 @@
 - Audience: maintainers/operators deploying batch services.
 - Read Time: 6 minutes.
 - Authority Level: Deployment runbook.
-- Last Verified Against: 2026-06-15 repo state.
+- Last Verified Against: 2026-06-17 repo state.
 - Owner: backend/frontend maintainers + automation agents.
 - Review Cadence: monthly or after deployment workflow changes.
 - Status: `runbook`.
@@ -35,7 +35,7 @@
 The intended workflow is:
 
 ```text
-local development -> Git push -> CI validation and image build -> reviewed deployment -> VPS runtime and smoke checks
+local development -> PR CI validation -> merge -> release bot image publish -> reviewed deployment -> VPS runtime and smoke checks
 ```
 
 Use the developer laptop for normal development: code edits, dependency installs, dev servers, hot
@@ -44,12 +44,12 @@ data. The local Compose stack should reproduce production services where practic
 development affordances such as source mounts, exposed loopback ports, debug logging, and fast
 resets.
 
-Use GitHub Actions as the clean validation authority: install dependencies from scratch, lint,
-format-check, type-check, run automated tests, test database migrations, and build deployable
-production Docker images. The blocking CI lanes are listed below in
-[CI Expectations](#ci-expectations). CI publishes custom production images to GHCR on `main` after
-validation succeeds. Images are tagged with the full Git commit SHA and deployed by explicit
-SHA-tagged refs, not mutable tags such as `latest`.
+Use GitHub Actions as the clean validation authority on pull requests: install dependencies from
+scratch, lint, format-check, type-check, run automated tests, and test database migrations. The
+blocking CI lanes are listed below in [CI Expectations](#ci-expectations). After a PR merges, the
+release bot commits the version bump, pushes a `vX.Y.Z` tag, and then publishes custom production
+images to GHCR from that bot-authored release commit. Images are tagged with the release commit SHA
+and the release tag, and deployments use explicit SHA-tagged refs, not mutable tags such as `latest`.
 
 Use the AWS Lightsail VPS as production runtime, not as the normal coding machine. SSH is for
 deployment, container/service status, logs, CPU/RAM/disk checks, reviewed migrations, backup/restore
@@ -174,8 +174,10 @@ port, Postgres, Redis, and worker ports are not publicly reachable.
 
 A reviewed production deployment should broadly follow:
 
-1. CI passes for the selected commit.
-2. CI publishes the backend, frontend, and Telegram bot images to GHCR with the full Git SHA tag.
+1. PR CI passes before merge.
+2. After merge, `Release On Merge` creates the release commit and `vX.Y.Z` tag, then publishes the
+   backend, frontend, and Telegram bot images to GHCR with the release commit SHA tag and the
+   `vX.Y.Z` tag.
 3. SSH to the VPS checkout and run:
 
    ```bash
@@ -370,10 +372,17 @@ Deployment changes should preserve green CI for:
 - `integration lane (blocking)`
 - `backend db + worker integration (blocking)`
 - `telegram command-loop compose smoke`
-- `production container images`
+
+Production image publication is intentionally separate from PR validation. It runs only after the
+release bot creates the release commit and tag, and must publish:
+
+- `ghcr.io/abocha/esl-pipeline/batch-backend:<release-commit-sha>`
+- `ghcr.io/abocha/esl-pipeline/batch-frontend:<release-commit-sha>`
+- `ghcr.io/abocha/esl-pipeline/telegram-ops-bot:<release-commit-sha>`
 
 CI must remain separate from the production VPS. Do not install a self-hosted GitHub Actions runner
 on the Lightsail server.
 
 Workflow source:
-[`/.github/workflows/ci.yml`](../../.github/workflows/ci.yml)
+[`/.github/workflows/ci.yml`](../../.github/workflows/ci.yml) and
+[`/.github/workflows/release-on-merge.yml`](../../.github/workflows/release-on-merge.yml)
