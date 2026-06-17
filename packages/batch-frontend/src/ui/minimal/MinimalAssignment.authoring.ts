@@ -111,7 +111,7 @@ function detectPronunciationModeFromDraft(text: string): PronunciationMode | nul
     : null;
 }
 
-const DEFAULT_TTS_PROVIDER: UiTtsProvider = 'elevenlabs';
+const DEFAULT_TTS_PROVIDER: UiTtsProvider = 'inworld';
 const DEFAULT_TTS_STRATEGY: UiPublishTtsStrategy = 'auto';
 const DEFAULT_PUBLISH_TARGET: MinimalPublishTarget = 'html';
 const DRAFT_AUTOSAVE_DEBOUNCE_MS = 1500;
@@ -489,13 +489,13 @@ function mapGenerationError(error: unknown): string {
         : '';
     const baseMessage =
       code === 'provider_rate_limit'
-        ? 'Provider rate limit reached. Try again shortly or choose another model/provider.'
+        ? 'Assignment generation is busy. Try again shortly.'
         : code === 'provider_timeout'
-          ? 'Provider timed out. Retry or choose a faster model/provider.'
+          ? 'Assignment generation timed out. Retry shortly.'
           : code === 'provider_contract_error'
-            ? 'Provider request failed due to compatibility/contract error. Try another model/provider.'
+            ? 'Assignment generation failed because the service rejected the request. Retry or contact support.'
             : code === 'budget_exceeded'
-              ? `Generation blocked by safety budget policy.${limitDetails} Switch model/provider or wait for reset.`
+              ? `Assignment generation is paused by the safety budget.${limitDetails} Try again after reset.`
               : error instanceof Error
                 ? error.message
                 : 'Unable to generate draft.';
@@ -561,8 +561,9 @@ export interface AuthoringController extends AuthoringState {
   setSelectedPreset: (value: string) => void;
   setPublishError: (value: string | null) => void;
   setPromptError: (value: string | null) => void;
-  generatePrompt: () => Promise<void>;
+  generatePrompt: () => Promise<PromptPackageResponse | null>;
   copyPrompt: () => Promise<void>;
+  generateAssignment: () => Promise<GenerateDraftResponse | null>;
   generateDraft: () => Promise<GenerateDraftResponse | null>;
   runValidation: () => Promise<MarkdownValidationResponse>;
   saveDraft: () => Promise<DraftResponse | null>;
@@ -913,26 +914,26 @@ export function useMinimalAssignmentAuthoringController({
     }
   }, [persistDraftText, runValidation, state.draftText, state.promptPackage]);
 
-  const generatePrompt = useCallback(async () => {
+  const generatePrompt = useCallback(async (): Promise<PromptPackageResponse | null> => {
     if (!recordingId) {
       dispatch({ type: 'prompt_generate_failed', payload: { error: 'Upload a recording first.' } });
-      return;
+      return null;
     }
     if (!selectedTemplateId) {
       dispatch({
         type: 'prompt_generate_failed',
         payload: {
-          error: 'Prompt template defaults are missing. Check prompt templates in settings.',
+          error: 'Assignment defaults are missing. Check settings before generating.',
         },
       });
-      return;
+      return null;
     }
     if (transcriptStatus !== 'ready') {
       dispatch({
         type: 'prompt_generate_failed',
         payload: { error: 'Transcript is not ready yet.' },
       });
-      return;
+      return null;
     }
 
     invalidatePendingGeneration();
@@ -953,9 +954,11 @@ export function useMinimalAssignmentAuthoringController({
           promptText: response.text ?? '',
         },
       });
+      return response;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to generate prompt.';
       dispatch({ type: 'prompt_generate_failed', payload: { error: message } });
+      return null;
     }
   }, [
     invalidatePendingGeneration,
@@ -984,88 +987,108 @@ export function useMinimalAssignmentAuthoringController({
     }, 2000);
   }, [state.promptText]);
 
+  const generateDraftForPromptPackageId = useCallback(
+    async (promptPackageId: string | null | undefined): Promise<GenerateDraftResponse | null> => {
+      if (!promptPackageId) {
+        dispatch({
+          type: 'draft_generate_failed',
+          payload: { error: 'Generate the assignment first.' },
+        });
+        return null;
+      }
+      dispatch({ type: 'draft_generate_started' });
+      const requestVersion = generationRequestVersionRef.current + 1;
+      generationRequestVersionRef.current = requestVersion;
+
+      try {
+        const fallbackProvider =
+          state.selectedGenerationProvider ||
+          generationOptions?.defaultProvider ||
+          generationOptions?.providers?.[0] ||
+          undefined;
+        const fallbackModel =
+          state.selectedGenerationModel ||
+          (fallbackProvider
+            ? generationOptions?.defaultModelByProvider?.[
+                fallbackProvider as keyof NonNullable<
+                  typeof generationOptions
+                >['defaultModelByProvider']
+              ]
+            : undefined) ||
+          generationOptions?.modelOptions.find((option) => option.provider === fallbackProvider)
+            ?.id ||
+          undefined;
+        const generated = await generateDraft({
+          promptPackageId,
+          provider: fallbackProvider as GenerateDraftRequest['provider'],
+          model: fallbackModel,
+        });
+        if (generationRequestVersionRef.current !== requestVersion) {
+          return null;
+        }
+        const generatedText = generated.text ?? '';
+        draftTextRef.current = generatedText;
+        dispatch({
+          type: 'draft_generate_succeeded',
+          payload: {
+            draftText: generatedText,
+            quota: generated.quota ?? null,
+            runtimeSelection: {
+              provider: generated.provider,
+              model: generated.model,
+            },
+            successMessage: 'Assignment draft ready. Saved automatically.',
+            quotaWindowTickMs: Date.now(),
+          },
+        });
+        if (generated.text?.trim()) {
+          try {
+            await persistDraftText(generated.text);
+            draftAutosaveLastSavedAtRef.current = Date.now();
+          } catch (error) {
+            const message =
+              error instanceof Error
+                ? error.message
+                : 'Generated draft is visible, but could not be saved yet.';
+            dispatch({ type: 'draft_save_failed', payload: { error: message } });
+          }
+        }
+        return generated;
+      } catch (error) {
+        if (generationRequestVersionRef.current !== requestVersion) {
+          return null;
+        }
+        dispatch({
+          type: 'draft_generate_failed',
+          payload: { error: mapGenerationError(error) },
+        });
+        return null;
+      }
+    },
+    [
+      generationOptions,
+      persistDraftText,
+      state.selectedGenerationModel,
+      state.selectedGenerationProvider,
+    ],
+  );
+
   const generateDraftHandler = useCallback(async (): Promise<GenerateDraftResponse | null> => {
     if (!state.promptPackage?.id) {
       dispatch({
         type: 'draft_generate_failed',
-        payload: { error: 'Generate a prompt package first.' },
+        payload: { error: 'Generate the assignment first.' },
       });
       return null;
     }
-    if (generationOptions && !state.selectedGenerationProvider) {
-      dispatch({
-        type: 'draft_generate_failed',
-        payload: { error: 'Select a generation provider.' },
-      });
-      return null;
-    }
-    if (generationOptions && !state.selectedGenerationModel) {
-      dispatch({
-        type: 'draft_generate_failed',
-        payload: { error: 'Select a generation model.' },
-      });
-      return null;
-    }
+    return generateDraftForPromptPackageId(state.promptPackage.id);
+  }, [generateDraftForPromptPackageId, state.promptPackage?.id]);
 
-    dispatch({ type: 'draft_generate_started' });
-    const requestVersion = generationRequestVersionRef.current + 1;
-    generationRequestVersionRef.current = requestVersion;
-
-    try {
-      const generated = await generateDraft({
-        promptPackageId: state.promptPackage.id,
-        provider: (state.selectedGenerationProvider ||
-          undefined) as GenerateDraftRequest['provider'],
-        model: state.selectedGenerationModel || undefined,
-      });
-      if (generationRequestVersionRef.current !== requestVersion) {
-        return null;
-      }
-      const generatedText = generated.text ?? '';
-      draftTextRef.current = generatedText;
-      dispatch({
-        type: 'draft_generate_succeeded',
-        payload: {
-          draftText: generatedText,
-          quota: generated.quota ?? null,
-          runtimeSelection: {
-            provider: generated.provider,
-            model: generated.model,
-          },
-          successMessage: `Generated with ${generated.provider}/${generated.model}. Draft saved automatically.`,
-          quotaWindowTickMs: Date.now(),
-        },
-      });
-      if (generated.text?.trim()) {
-        try {
-          await persistDraftText(generated.text);
-          draftAutosaveLastSavedAtRef.current = Date.now();
-        } catch (error) {
-          const message =
-            error instanceof Error
-              ? error.message
-              : 'Generated draft is visible, but could not be saved yet.';
-          dispatch({ type: 'draft_save_failed', payload: { error: message } });
-        }
-      }
-      return generated;
-    } catch (error) {
-      if (generationRequestVersionRef.current !== requestVersion) {
-        return null;
-      }
-      dispatch({
-        type: 'draft_generate_failed',
-        payload: { error: mapGenerationError(error) },
-      });
-      return null;
-    }
-  }, [
-    generationOptions,
-    persistDraftText,
-    state.promptPackage?.id,
-    state.selectedGenerationModel,
-    state.selectedGenerationProvider,
-  ]);
+  const generateAssignment = useCallback(async (): Promise<GenerateDraftResponse | null> => {
+    const promptPackage = state.promptPackage?.id ? state.promptPackage : await generatePrompt();
+    if (!promptPackage?.id) return null;
+    return generateDraftForPromptPackageId(promptPackage.id);
+  }, [generateDraftForPromptPackageId, generatePrompt, state.promptPackage]);
 
   const previewDraft = useCallback(async () => {
     const normalizedDraft = state.draftText.trim();
@@ -1279,9 +1302,11 @@ export function useMinimalAssignmentAuthoringController({
   useEffect(() => {
     if (ttsProviders.length === 0) return;
     const preferredProvider =
+      ttsProviders.find((provider) => provider === DEFAULT_TTS_PROVIDER) ??
       (defaultTtsProvider && ttsProviders.includes(defaultTtsProvider)
         ? defaultTtsProvider
-        : ttsProviders[0]) ?? DEFAULT_TTS_PROVIDER;
+        : ttsProviders[0]) ??
+      DEFAULT_TTS_PROVIDER;
     if (!ttsProviders.includes(state.selectedTtsProvider)) {
       dispatch({
         type: 'publish_config_updated',
@@ -1510,6 +1535,7 @@ export function useMinimalAssignmentAuthoringController({
     setPromptError,
     generatePrompt,
     copyPrompt,
+    generateAssignment,
     generateDraft: generateDraftHandler,
     runValidation,
     saveDraft,

@@ -9,7 +9,6 @@ import {
   INTEGRATION_TEST_TIMEOUT_MS,
   makeJobStatus,
   openAdvancedActions,
-  openPublishingSettings,
   previewCurrentDraft,
   renderDraftReadyAssignment,
   renderMinimalAssignment,
@@ -68,7 +67,7 @@ export function registerPublishValidationTests() {
       }
       fireEvent.change(draftTextarea, { target: { value: '# Broken draft' } });
 
-      await user.click(screen.getByRole('button', { name: /Save assignment content/i }));
+      await user.click(screen.getByRole('button', { name: /Save draft/i }));
 
       await screen.findByText('Fix validation errors before saving.');
       expect(api.createDraft).not.toHaveBeenCalled();
@@ -83,10 +82,6 @@ export function registerPublishValidationTests() {
         throw new Error('Expected draft textarea to be rendered');
       }
       fireEvent.change(draftTextarea, { target: { value: '# Final draft' } });
-      openPublishingSettings();
-      fireEvent.change(screen.getByRole('combobox', { name: /Learning preset/i }), {
-        target: { value: 'b2-default' },
-      });
       await previewCurrentDraft(user);
       await user.click(screen.getByRole('button', { name: /Share assignment/i }));
 
@@ -103,8 +98,9 @@ export function registerPublishValidationTests() {
           jobOverrides: {
             publishTarget: 'html',
             withTts: true,
-            ttsProvider: 'elevenlabs',
+            ttsProvider: 'inworld',
             ttsStrategy: 'auto',
+            ttsModel: 'inworld-tts-2',
           },
         }),
       );
@@ -468,303 +464,6 @@ export function registerJobActionTests() {
     );
 
     it(
-      'disables publish model selection in auto mode and filters elevenlabs models by strategy',
-      async () => {
-        await renderPublishedAssignment();
-
-        openPublishingSettings();
-        const strategySelect = screen.getByRole('combobox', { name: /Reading style/i });
-        const modelSelect = screen.getByRole('combobox', { name: /Voice model/i });
-
-        expect((strategySelect as HTMLSelectElement).value).toBe('auto');
-        expect((modelSelect as HTMLSelectElement).disabled).toBe(true);
-        expect(
-          screen.getByText(
-            /Auto follows the assignment at runtime\. Choose Dialogue or TTS to lock a model\./i,
-          ),
-        ).toBeTruthy();
-
-        fireEvent.change(strategySelect, { target: { value: 'dialogue' } });
-        await waitFor(() => {
-          expect((modelSelect as HTMLSelectElement).value).toBe('eleven_v3');
-        });
-        expect(
-          within(modelSelect)
-            .getAllByRole('option')
-            .map((option) => option.textContent),
-        ).toEqual(['eleven_v3']);
-
-        fireEvent.change(strategySelect, { target: { value: 'tts' } });
-        await waitFor(() => {
-          expect((modelSelect as HTMLSelectElement).disabled).toBe(false);
-        });
-        expect(within(modelSelect).queryByRole('option', { name: 'eleven_v3' })).toBeNull();
-      },
-      INTEGRATION_TEST_TIMEOUT_MS,
-    );
-
-    it(
-      'falls back to eleven_multilingual_v2 for tts strategy when only eleven_v3 is configured',
-      async () => {
-        vi.mocked(api.fetchJobOptions).mockResolvedValueOnce({
-          presets: ['b1-default', 'b2-default'],
-          cefrLevels: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'],
-          cefrDefault: 'B1',
-          generation: {
-            providers: ['openai'],
-            defaultProvider: 'openai',
-            modelOptions: [
-              {
-                provider: 'openai',
-                id: 'gpt-5.2',
-                tier: 'primary',
-                fallbackRank: 0,
-                defaultSelected: true,
-                enabled: true,
-              },
-            ],
-            defaultModelByProvider: {
-              openai: 'gpt-5.2',
-            },
-            quota: {
-              source: 'hybrid',
-              lastUpdatedAt: '2026-02-18T00:00:00.000Z',
-              requestsPerMinute: 5,
-              tokensPerMinute: 250000,
-              requestsPerDay: 20,
-            },
-          },
-          voiceAccents: ['american'],
-          voices: [{ id: 'voice-a', name: 'Voice A', accent: 'american' }],
-          sttProviders: ['deepgram', 'elevenlabs', 'google'],
-          defaultSttProvider: 'deepgram',
-          sttModelOptionsByProvider: {
-            deepgram: ['nova-3'],
-            elevenlabs: ['scribe_v2'],
-            google: ['latest_long'],
-          },
-          defaultSttModelByProvider: {
-            deepgram: 'nova-3',
-            elevenlabs: 'scribe_v2',
-            google: 'latest_long',
-          },
-          ttsStrategies: ['auto', 'dialogue', 'tts'],
-          ttsProviders: ['elevenlabs', 'google'],
-          ttsModelOptionsByProvider: {
-            elevenlabs: ['eleven_v3'],
-            google: ['chirp3_hd'],
-          },
-          defaultTtsProvider: 'elevenlabs',
-          defaultTtsModelByProvider: {
-            elevenlabs: 'eleven_v3',
-            google: 'chirp3_hd',
-          },
-          supportedActions: [
-            {
-              type: 'rerun',
-              label: 'Rerun',
-              description: 'Republish current draft or selectively regenerate audio families',
-              implemented: true,
-            },
-            {
-              type: 'cancel',
-              label: 'Cancel',
-              description: 'Cancel active job',
-              implemented: true,
-            },
-          ],
-        });
-
-        await renderPublishedAssignment();
-
-        openPublishingSettings();
-        const strategySelect = screen.getByRole('combobox', { name: /Reading style/i });
-        const modelSelect = screen.getByRole('combobox', { name: /Voice model/i });
-
-        fireEvent.change(strategySelect, { target: { value: 'tts' } });
-
-        await waitFor(() => {
-          expect((modelSelect as HTMLSelectElement).value).toBe('eleven_multilingual_v2');
-        });
-        expect(
-          within(modelSelect)
-            .getAllByRole('option')
-            .map((option) => option.textContent),
-        ).toEqual(['eleven_multilingual_v2']);
-      },
-      INTEGRATION_TEST_TIMEOUT_MS,
-    );
-
-    it(
-      'prefers eleven_multilingual_v2 for tts strategy when no elevenlabs default is configured',
-      async () => {
-        vi.mocked(api.fetchJobOptions).mockResolvedValueOnce({
-          presets: ['b1-default', 'b2-default'],
-          cefrLevels: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'],
-          cefrDefault: 'B1',
-          generation: {
-            providers: ['openai'],
-            defaultProvider: 'openai',
-            modelOptions: [
-              {
-                provider: 'openai',
-                id: 'gpt-5.2',
-                tier: 'primary',
-                fallbackRank: 0,
-                defaultSelected: true,
-                enabled: true,
-              },
-            ],
-            defaultModelByProvider: {
-              openai: 'gpt-5.2',
-            },
-            quota: {
-              source: 'hybrid',
-              lastUpdatedAt: '2026-02-18T00:00:00.000Z',
-              requestsPerMinute: 5,
-              tokensPerMinute: 250000,
-              requestsPerDay: 20,
-            },
-          },
-          voiceAccents: ['american'],
-          voices: [{ id: 'voice-a', name: 'Voice A', accent: 'american' }],
-          sttProviders: ['deepgram', 'elevenlabs', 'google'],
-          defaultSttProvider: 'deepgram',
-          sttModelOptionsByProvider: {
-            deepgram: ['nova-3'],
-            elevenlabs: ['scribe_v2'],
-            google: ['latest_long'],
-          },
-          defaultSttModelByProvider: {
-            deepgram: 'nova-3',
-            elevenlabs: 'scribe_v2',
-            google: 'latest_long',
-          },
-          ttsStrategies: ['auto', 'dialogue', 'tts'],
-          ttsProviders: ['elevenlabs', 'google'],
-          ttsModelOptionsByProvider: {
-            elevenlabs: ['eleven_flash_v2_5', 'eleven_multilingual_v2'],
-            google: ['chirp3_hd'],
-          },
-          defaultTtsProvider: 'elevenlabs',
-          defaultTtsModelByProvider: {
-            google: 'chirp3_hd',
-          },
-          supportedActions: [
-            {
-              type: 'rerun',
-              label: 'Rerun',
-              description: 'Republish current draft or selectively regenerate audio families',
-              implemented: true,
-            },
-            {
-              type: 'cancel',
-              label: 'Cancel',
-              description: 'Cancel active job',
-              implemented: true,
-            },
-          ],
-        });
-
-        await renderPublishedAssignment();
-
-        openPublishingSettings();
-        const strategySelect = screen.getByRole('combobox', { name: /Reading style/i });
-        const modelSelect = screen.getByRole('combobox', { name: /Voice model/i });
-
-        fireEvent.change(strategySelect, { target: { value: 'tts' } });
-
-        await waitFor(() => {
-          expect((modelSelect as HTMLSelectElement).value).toBe('eleven_multilingual_v2');
-        });
-        expect(
-          within(modelSelect)
-            .getAllByRole('option')
-            .map((option) => option.textContent),
-        ).toEqual(['eleven_flash_v2_5', 'eleven_multilingual_v2']);
-      },
-      INTEGRATION_TEST_TIMEOUT_MS,
-    );
-
-    it(
-      'publishes explicit dialogue strategy with eleven_v3 and google strategy with google model',
-      async () => {
-        const { user } = await renderPreviewReadyAssignment();
-
-        openPublishingSettings();
-        fireEvent.change(screen.getByRole('combobox', { name: /Reading style/i }), {
-          target: { value: 'dialogue' },
-        });
-        await waitFor(() => {
-          expect(
-            (screen.getByRole('combobox', { name: /Voice model/i }) as HTMLSelectElement).value,
-          ).toBe('eleven_v3');
-        });
-        await user.click(screen.getByRole('button', { name: /Share assignment/i }));
-
-        await waitFor(() => {
-          expect(api.materializeDraft).toHaveBeenCalled();
-        });
-        expect(vi.mocked(api.materializeDraft).mock.calls.at(-1)?.[1]?.jobOverrides).toEqual(
-          expect.objectContaining({
-            publishTarget: 'html',
-            withTts: true,
-            ttsProvider: 'elevenlabs',
-            ttsStrategy: 'dialogue',
-            ttsModel: 'eleven_v3',
-          }),
-        );
-
-        vi.mocked(api.materializeDraft).mockClear();
-        fireEvent.change(screen.getByRole('combobox', { name: /Voice engine/i }), {
-          target: { value: 'google' },
-        });
-        fireEvent.change(screen.getByRole('combobox', { name: /Voice model/i }), {
-          target: { value: 'studio' },
-        });
-        await user.click(screen.getByRole('button', { name: /Share assignment/i }));
-
-        await waitFor(() => {
-          expect(api.materializeDraft).toHaveBeenCalled();
-        });
-        expect(vi.mocked(api.materializeDraft).mock.calls.at(-1)?.[1]?.jobOverrides).toEqual(
-          expect.objectContaining({
-            publishTarget: 'html',
-            withTts: true,
-            ttsProvider: 'google',
-            ttsStrategy: 'dialogue',
-            ttsModel: 'studio',
-          }),
-        );
-      },
-      INTEGRATION_TEST_TIMEOUT_MS,
-    );
-
-    it(
-      'limits publish study-text strategies to the advertised job options',
-      async () => {
-        const defaultOptions = await api.fetchJobOptions();
-        vi.mocked(api.fetchJobOptions).mockReset();
-        vi.mocked(api.fetchJobOptions).mockResolvedValueOnce({
-          ...defaultOptions,
-          ttsStrategies: ['auto'],
-        });
-
-        await renderPreviewReadyAssignment();
-
-        openPublishingSettings();
-        const strategySelect = screen.getByRole('combobox', { name: /Reading style/i });
-        expect(
-          within(strategySelect)
-            .getAllByRole('option')
-            .map((option) => option.textContent),
-        ).toEqual(['Auto from draft']);
-        expect((strategySelect as HTMLSelectElement).value).toBe('auto');
-      },
-      INTEGRATION_TEST_TIMEOUT_MS,
-    );
-
-    it(
       'queues a republish-only rerun action for the current job',
       async () => {
         vi.useFakeTimers({ shouldAdvanceTime: true });
@@ -817,7 +516,7 @@ export function registerJobActionTests() {
     );
 
     it(
-      'submits cancel action with an optional reason when job is running',
+      'puts cancel beside share and submits cancellation without a reason field while a job is running',
       async () => {
         vi.useFakeTimers({ shouldAdvanceTime: true });
         const user = createTimerAwareMinimalUser();
@@ -840,18 +539,20 @@ export function registerJobActionTests() {
             error: 'cancelled: duplicate run',
           } as never);
 
-        openAdvancedActions();
-        const reasonInput = screen.getByPlaceholderText('reason for cancellation');
-        fireEvent.change(reasonInput, { target: { value: 'duplicate run' } });
-        const actionsHeading = screen.getByRole('heading', { name: /Advanced actions/i });
-        const actionsSection = actionsHeading.closest('section');
-        if (!actionsSection) {
-          throw new Error('Expected job actions section to be rendered');
+        const reviewHeading = screen.getByRole('heading', { name: /Review and share/i });
+        const reviewSection = reviewHeading.closest('section');
+        if (!reviewSection) {
+          throw new Error('Expected review section to be rendered');
         }
-        await user.click(within(actionsSection).getByRole('button', { name: /Cancel job/i }));
+        expect(
+          within(reviewSection).getByRole('button', { name: /Share assignment/i }),
+        ).toBeTruthy();
+        expect(screen.queryByPlaceholderText('reason for cancellation')).toBeNull();
+
+        await user.click(within(reviewSection).getByRole('button', { name: /^Cancel$/i }));
 
         await waitFor(() => {
-          expect(api.cancelJob).toHaveBeenCalledWith('job-1', { reason: 'duplicate run' });
+          expect(api.cancelJob).toHaveBeenCalledWith('job-1');
         });
         expect(screen.getByText(/Job cancelled/i)).toBeTruthy();
       },

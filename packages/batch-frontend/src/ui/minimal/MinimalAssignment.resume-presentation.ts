@@ -49,7 +49,7 @@ function getPublishSurfaceLabel(job: JobStatus): string {
     return job.htmlUrl ? 'Publish failed' : 'Processing failed';
   }
   if (job.htmlUrl) {
-    return 'Published to HTML';
+    return 'Assignment Handout';
   }
   return 'Not published yet';
 }

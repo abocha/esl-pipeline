@@ -9,7 +9,6 @@ import {
   INTEGRATION_TEST_TIMEOUT_MS,
   makeRecording,
   openAdvancedActions,
-  openPublishingSettings,
   previewCurrentDraft,
   renderMinimalAssignment,
   renderPublishedAssignment,
@@ -69,10 +68,10 @@ describe('MinimalAssignment - staged workflow UI', () => {
       fireEvent.change(screen.getByRole('textbox', { name: /Teacher notes/i }), {
         target: { value: 'Focus on past tense corrections and follow-up questions.' },
       });
-      await user.click(screen.getByRole('button', { name: /Generate instructions/i }));
-      await screen.findByDisplayValue('Prompt package output');
+      await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
+      await screen.findByDisplayValue('# Generated assignment draft');
       await waitFor(() => {
-        expect(screen.getByText(/Current focus: Create assignment/i)).toBeTruthy();
+        expect(screen.getByText(/Current focus: Review and share/i)).toBeTruthy();
       });
 
       fireEvent.change(screen.getByRole('textbox', { name: /Draft markdown/i }), {
@@ -83,10 +82,6 @@ describe('MinimalAssignment - staged workflow UI', () => {
       });
 
       await previewCurrentDraft(user);
-      openPublishingSettings();
-      fireEvent.change(screen.getByRole('combobox', { name: /Learning preset/i }), {
-        target: { value: 'b2-default' },
-      });
       await user.click(screen.getByRole('button', { name: /Share assignment/i }));
 
       await screen.findAllByText(/Job ID: job-1/i);
@@ -94,6 +89,62 @@ describe('MinimalAssignment - staged workflow UI', () => {
         expect(screen.getByText(/Current focus: Advanced actions/i)).toBeTruthy();
       });
       expect(screen.getByRole('button', { name: /Show advanced actions/i })).toBeTruthy();
+    },
+    INTEGRATION_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'keeps provider, template, quota, and audio model controls out of the normal tutor flow',
+    async () => {
+      const user = createMinimalUser();
+      renderMinimalAssignment();
+
+      await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
+      await screen.findByRole('option', { name: 'Alex' });
+      await user.selectOptions(
+        screen.getByRole('combobox', { name: /^Student$/i }),
+        'student-alex',
+      );
+      await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+      await screen.findByDisplayValue('Student transcript text');
+
+      expect(screen.queryByRole('combobox', { name: /Prompt template/i })).toBeNull();
+      expect(screen.queryByText(/Prompt text/i)).toBeNull();
+      expect(screen.queryByText(/Generation settings/i)).toBeNull();
+      expect(screen.queryByRole('combobox', { name: /Generation provider/i })).toBeNull();
+      expect(screen.queryByRole('combobox', { name: /Generation model/i })).toBeNull();
+      expect(screen.queryByText(/Generation limits/i)).toBeNull();
+      expect(screen.queryByText(/\bRPM\b/i)).toBeNull();
+      expect(screen.queryByText(/\bTPM\b/i)).toBeNull();
+      expect(screen.queryByText(/\bRPD\b/i)).toBeNull();
+      expect(screen.queryByText(/Assignments publish as HTML pages/i)).toBeNull();
+      expect(screen.queryByText(/Audio and publishing settings/i)).toBeNull();
+      expect(screen.queryByRole('combobox', { name: /Voice engine/i })).toBeNull();
+      expect(screen.queryByRole('combobox', { name: /Reading style/i })).toBeNull();
+      expect(screen.queryByRole('combobox', { name: /Voice model/i })).toBeNull();
+
+      const generateAssignmentButton = screen.getByRole('button', {
+        name: /^Generate assignment$/i,
+      });
+      await waitFor(() => {
+        expect((generateAssignmentButton as HTMLButtonElement).disabled).toBe(false);
+      });
+      await user.click(generateAssignmentButton);
+
+      await waitFor(() => {
+        expect(api.createPromptPackage).toHaveBeenCalledWith(
+          'rec-1',
+          expect.objectContaining({
+            templateId: 'tpl-default',
+          }),
+        );
+        expect(api.generateDraft).toHaveBeenCalledWith({
+          promptPackageId: 'pkg-1',
+          provider: 'openai',
+          model: 'gpt-5.2',
+        });
+      });
+      expect(await screen.findByDisplayValue('# Generated assignment draft')).toBeTruthy();
     },
     INTEGRATION_TEST_TIMEOUT_MS,
   );
@@ -171,6 +222,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
   });
 
   it('keeps advanced controls collapsed until the teacher opens them', async () => {
+    const user = createMinimalUser();
     await renderResumedAssignment(
       {
         status: {
@@ -183,7 +235,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
     expect(screen.getByRole('button', { name: /Show advanced actions/i })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Refresh actions/i })).toBeNull();
 
-    openAdvancedActions();
+    await user.click(screen.getByRole('button', { name: /Show advanced actions/i }));
 
     expect(await screen.findByRole('button', { name: /Refresh actions/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /Republish current draft/i })).toBeTruthy();

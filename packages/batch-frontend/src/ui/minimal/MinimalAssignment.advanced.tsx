@@ -68,11 +68,9 @@ export interface AdvancedActionsController {
   cancelAllowedState: boolean;
   customRerunHasSelection: boolean;
   customRerunSummary: string[];
-  cancelReason: string;
   form: CustomRerunInput;
   toggleAdvancedActions: () => void;
   toggleCustomRerun: () => void;
-  setCancelReason: (value: string) => void;
   setFormField: <K extends keyof CustomRerunInput>(field: K, value: CustomRerunInput[K]) => void;
   setPronunciationChunkProvider: (provider: UiPronunciationChunkTtsProvider) => void;
   refreshLineage: () => Promise<void>;
@@ -116,7 +114,6 @@ export function useAdvancedActionsController({
   const [jobProvenance, setJobProvenance] = useState<JobProvenanceResponse | null>(null);
   const [jobProvenanceLoading, setJobProvenanceLoading] = useState(false);
   const [jobProvenanceError, setJobProvenanceError] = useState<string | null>(null);
-  const [cancelReason, setCancelReason] = useState('');
   const [form, setForm] = useState<CustomRerunInput>(() =>
     createDefaultCustomRerunInput(selectedTtsProvider, jobStatus),
   );
@@ -203,7 +200,6 @@ export function useAdvancedActionsController({
       setActionBusy(null);
       setActionError(null);
       setShowCustomRerun(false);
-      setCancelReason('');
       setRerunPronunciationChunkProviderDirty(false);
       setForm(createDefaultCustomRerunInput(selectedTtsProvider, jobStatus));
       return;
@@ -215,7 +211,6 @@ export function useAdvancedActionsController({
     setActionSuccess(null);
     setShowAdvancedActions(false);
     setShowCustomRerun(false);
-    setCancelReason('');
     setRerunPronunciationChunkProviderDirty(false);
     setForm(createDefaultCustomRerunInput(selectedTtsProvider, jobStatus));
   }, [jobStatus, jobStatus?.jobId, selectedTtsProvider]);
@@ -448,15 +443,11 @@ export function useAdvancedActionsController({
   const handleCancelJob = useCallback(async () => {
     if (!jobStatus?.jobId) return;
 
-    const trimmedReason = cancelReason.trim();
     setActionBusy('cancel');
     setActionError(null);
     setActionSuccess(null);
     try {
-      const result = await cancelJob(
-        jobStatus.jobId,
-        trimmedReason ? { reason: trimmedReason } : undefined,
-      );
+      const result = await cancelJob(jobStatus.jobId);
       setActionSuccess(result.message ?? 'Job cancellation requested.');
       const refreshed = await getJobStatus(jobStatus.jobId);
       applyJobStatusTransition(refreshed);
@@ -468,13 +459,7 @@ export function useAdvancedActionsController({
     } finally {
       setActionBusy(null);
     }
-  }, [
-    applyJobStatusTransition,
-    cancelReason,
-    jobStatus?.jobId,
-    loadJobProvenance,
-    refreshResumeJobs,
-  ]);
+  }, [applyJobStatusTransition, jobStatus?.jobId, loadJobProvenance, refreshResumeJobs]);
 
   const refreshLineage = useCallback(async () => {
     if (!jobStatus?.jobId) return;
@@ -497,11 +482,9 @@ export function useAdvancedActionsController({
     cancelAllowedState,
     customRerunHasSelection,
     customRerunSummary,
-    cancelReason,
     form,
     toggleAdvancedActions: () => setShowAdvancedActions((current) => !current),
     toggleCustomRerun: () => setShowCustomRerun((current) => !current),
-    setCancelReason,
     setFormField,
     setPronunciationChunkProvider,
     refreshLineage,
@@ -1017,24 +1000,14 @@ export function AdvancedActionsStage({
               </p>
             </div>
             <div className="minimal-block">
-              <div className="minimal-inline">
-                <label className="minimal-field grow">
-                  <span>Cancel reason (optional)</span>
-                  <input
-                    value={controller.cancelReason}
-                    onChange={(event) => controller.setCancelReason(event.target.value)}
-                    placeholder="reason for cancellation"
-                  />
-                </label>
-                <button
-                  type="button"
-                  className="minimal-secondary"
-                  onClick={() => void controller.handleCancelJob()}
-                  disabled={!controller.cancelEnabled}
-                >
-                  {controller.actionBusy === 'cancel' ? 'Cancelling...' : 'Cancel job'}
-                </button>
-              </div>
+              <button
+                type="button"
+                className="minimal-secondary"
+                onClick={() => void controller.handleCancelJob()}
+                disabled={!controller.cancelEnabled}
+              >
+                {controller.actionBusy === 'cancel' ? 'Cancelling...' : 'Cancel job'}
+              </button>
               {!controller.cancelAllowedState && jobStatus ? (
                 <p className="minimal-muted">
                   Cancel is only available for queued or running jobs.

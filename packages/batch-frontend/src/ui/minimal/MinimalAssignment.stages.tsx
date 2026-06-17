@@ -173,37 +173,15 @@ interface AssignmentStageSectionProps {
   promptLoading: boolean;
   promptReady: boolean;
   promptOptionsReady: boolean;
-  promptTemplates: { id: string; label: string }[];
-  selectedTemplateId: string;
-  selectedTemplateLabel: string;
-  selectedProfileLabel: string;
-  onSelectedTemplateIdChange: (templateId: string) => void;
-  onGeneratePrompt: () => void;
-  onCopyPrompt: () => void;
-  promptCopyState: 'idle' | 'copied' | 'error';
   onReloadPromptOptions: () => void;
   promptError: string | null;
-  promptPackage: PromptPackageResponse | null;
-  promptText: string;
-  onPromptTextChange: (value: string) => void;
   onSaveDraft: () => void;
   validating: boolean;
   draftDirty: boolean;
   generationOptionsAvailable: boolean;
-  selectedGenerationProvider: string;
-  onSelectedGenerationProviderChange: (value: string) => void;
-  generationProviders: readonly string[];
-  selectedGenerationModel: string;
-  onSelectedGenerationModelChange: (value: string) => void;
-  generationModelsForProvider: { provider: string; id: string }[];
-  onGenerateDraft: () => void;
+  onGenerateAssignment: () => void;
   generatingDraft: boolean;
   generationBlockedByQuota: boolean;
-  activeGenerationQuota: GenerateDraftResponse['quota'] | null;
-  generationQuotaSourceLabel: string | null;
-  generationQuotaUpdatedRelative: string | null;
-  generationQuotaUpdatedAbsolute: string | null;
-  generationQuotaHasNumericValues: boolean;
   generationQuotaBlockedReason: string | null;
   generationError: string | null;
   generationSuccess: string | null;
@@ -220,27 +198,15 @@ interface ReviewStageSectionProps {
   headingRef?: React.Ref<HTMLHeadingElement>;
   previewButtonRef?: React.Ref<HTMLButtonElement>;
   onPublish: () => void;
+  onCancelJob: () => void;
   canPublishWithPreview: boolean;
+  cancelEnabled: boolean;
+  actionBusy: 'rerun' | 'cancel' | null;
   publishing: boolean;
   previewing: boolean;
   onPreviewDraft: () => void;
   draftHasContent: boolean;
   previewReadyForCurrentDraft: boolean;
-  selectedPreset: string;
-  onSelectedPresetChange: (value: string) => void;
-  presetOptions: { id: string; label: string }[];
-  jobOptionsLoaded: boolean;
-  selectedTtsProvider: 'elevenlabs' | 'google' | 'inworld';
-  onSelectedTtsProviderChange: (value: 'elevenlabs' | 'google' | 'inworld') => void;
-  ttsProviders: readonly ('elevenlabs' | 'google' | 'inworld')[];
-  selectedTtsStrategy: 'auto' | 'dialogue' | 'tts';
-  onSelectedTtsStrategyChange: (value: 'auto' | 'dialogue' | 'tts') => void;
-  availablePublishTtsStrategies: readonly ('auto' | 'dialogue' | 'tts')[];
-  formatPublishTtsStrategyLabel: (strategy: 'auto' | 'dialogue' | 'tts') => string;
-  selectedTtsModel: string;
-  onSelectedTtsModelChange: (value: string) => void;
-  publishModelSelectionDisabled: boolean;
-  selectedTtsModelOptions: readonly string[];
   previewError: string | null;
   previewHtml: string | null;
   publishError: string | null;
@@ -701,10 +667,7 @@ export function SourceStageSection({
             </select>
           </label>
           {selectedStudent ? (
-            <p className="minimal-muted">
-              Selected: {selectedStudent.name}
-              {selectedStudent.profileId ? ` (profile: ${selectedStudent.profileId})` : ''}
-            </p>
+            <p className="minimal-muted">Selected: {selectedStudent.name}</p>
           ) : (
             <p className="minimal-help">Select a student before uploading a recording.</p>
           )}
@@ -840,7 +803,7 @@ export function SourceStageSection({
                 <div className="minimal-alert warning" role="note">
                   Transcript contains characters outside expected English/Russian text:{' '}
                   <strong>{unexpectedTranscriptCharacters.join(' ')}</strong>. Check these spots
-                  before generating instructions.
+                  before creating the assignment.
                 </div>
               ) : null}
               <textarea
@@ -883,7 +846,7 @@ export function ContextStageSection({
   const isInRouterContext = useInRouterContext();
   const contextGuidance =
     stage.status === 'current'
-      ? 'Next step: review the learner context, add lesson goals here, then generate instructions in the next section.'
+      ? 'Next step: review the learner context, add lesson goals here, then create the assignment in the next section.'
       : null;
 
   return (
@@ -897,10 +860,10 @@ export function ContextStageSection({
         <div className="minimal-stage-panel">
           <div className="minimal-stage-panel-header">
             <div className="minimal-stage-panel-title">
-              <h3>Current learner profile</h3>
+              <h3>Learning profile context</h3>
               <p>
-                Review the durable learner context that will be injected into prompt packaging. Use
-                the dedicated Learning page for any profile edits.
+                Review the durable learner context from the student's Learning page. Use the
+                dedicated Learning page for profile edits.
               </p>
             </div>
           </div>
@@ -909,8 +872,8 @@ export function ContextStageSection({
             <div className="minimal-profile-card">
               <div className="minimal-profile-meta-grid">
                 <div>
-                  <span>Profile</span>
-                  <strong>{profilePreview.profileId}</strong>
+                  <span>Source</span>
+                  <strong>Student Learning page</strong>
                 </div>
                 <div>
                   <span>Level</span>
@@ -954,14 +917,14 @@ export function ContextStageSection({
             </div>
           ) : selectedProfileId ? (
             <p className="minimal-muted">
-              This learner profile has not been structured yet. Open the Learning page to review it
-              there.
+              This student's Learning page context has not been structured yet. Add lesson guidance
+              here or update the Learning page before creating the assignment.
             </p>
           ) : null}
           {!selectedProfileId ? (
             <p className="minimal-muted">
-              No learner profile is selected for this student yet. Open the Learning page to create
-              or choose the active learner profile before generating instructions.
+              No structured Learning page context is available yet. You can still create the
+              assignment, add lesson guidance here, or update the student's Learning page later.
             </p>
           ) : null}
           <div className="minimal-inline">
@@ -1005,7 +968,7 @@ export function ContextStageSection({
             placeholder="Add lesson-specific context, corrections, or priorities for this assignment..."
           />
           <p className="minimal-help">
-            This gets woven into the assignment instructions as extra teaching context.
+            This gets woven into the assignment as extra teaching context.
           </p>
         </div>
       </div>
@@ -1022,37 +985,15 @@ export function AssignmentStageSection({
   promptLoading,
   promptReady,
   promptOptionsReady,
-  promptTemplates,
-  selectedTemplateId,
-  selectedTemplateLabel,
-  selectedProfileLabel,
-  onSelectedTemplateIdChange,
-  onGeneratePrompt,
-  onCopyPrompt,
-  promptCopyState,
   onReloadPromptOptions,
   promptError,
-  promptPackage,
-  promptText,
-  onPromptTextChange,
   onSaveDraft,
   validating,
   draftDirty,
   generationOptionsAvailable,
-  selectedGenerationProvider,
-  onSelectedGenerationProviderChange,
-  generationProviders,
-  selectedGenerationModel,
-  onSelectedGenerationModelChange,
-  generationModelsForProvider,
-  onGenerateDraft,
+  onGenerateAssignment,
   generatingDraft,
   generationBlockedByQuota,
-  activeGenerationQuota,
-  generationQuotaSourceLabel,
-  generationQuotaUpdatedRelative,
-  generationQuotaUpdatedAbsolute,
-  generationQuotaHasNumericValues,
   generationQuotaBlockedReason,
   generationError,
   generationSuccess,
@@ -1062,12 +1003,20 @@ export function AssignmentStageSection({
   validationError,
   draftError,
 }: AssignmentStageSectionProps) {
-  const instructionsReadyToGenerate = transcriptReady && !promptReady;
+  const assignmentBusy = promptLoading || generatingDraft;
+  const canGenerateAssignment =
+    transcriptReady &&
+    promptOptionsReady &&
+    generationOptionsAvailable &&
+    !assignmentBusy &&
+    !generationBlockedByQuota;
   const assignmentGuidance =
     stage.status === 'current'
-      ? 'Next step: generate the assignment content or paste your own version, then save the draft.'
-      : stage.status === 'available' && instructionsReadyToGenerate
-        ? 'Ready when you are: generate instructions here after you finish reviewing the teaching context.'
+      ? draftText.trim()
+        ? 'Next step: preview the assignment, then share it.'
+        : 'Next step: generate the assignment or paste your own version here.'
+      : stage.status === 'available' && transcriptReady
+        ? 'Ready when you are: create the assignment after you finish reviewing the teaching context.'
         : null;
 
   return (
@@ -1081,288 +1030,51 @@ export function AssignmentStageSection({
         <div className="minimal-stage-panel">
           <div className="minimal-stage-panel-header">
             <div className="minimal-stage-panel-title">
-              <h3>Assignment instructions</h3>
-              <p>
-                Generate the teaching instructions first, then tweak them before you create the
-                assignment content.
-              </p>
+              <h3>Create the assignment</h3>
+              <p>Generate a first draft from the lesson source and teaching context.</p>
             </div>
             <div className="minimal-inline">
-              <label className="minimal-select minimal-template-select">
-                Prompt template
-                <select
-                  value={selectedTemplateId}
-                  onChange={(event) => onSelectedTemplateIdChange(event.target.value)}
-                  disabled={!promptOptionsReady || promptTemplates.length === 0 || promptLoading}
-                >
-                  {promptTemplates.length === 0 ? (
-                    <option value="">No templates available</option>
-                  ) : null}
-                  {promptTemplates.map((template) => (
-                    <option key={template.id} value={template.id}>
-                      {template.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
               <button
+                ref={generateDraftButtonRef}
                 type="button"
                 className={`minimal-primary${
-                  instructionsReadyToGenerate ? ' minimal-guided-button' : ''
+                  stage.status === 'current' && !draftText.trim() ? ' minimal-guided-button' : ''
                 }`}
-                onClick={onGeneratePrompt}
-                disabled={!transcriptReady || promptLoading || !promptOptionsReady}
+                onClick={onGenerateAssignment}
+                disabled={!canGenerateAssignment}
               >
-                {promptLoading
-                  ? 'Generating...'
-                  : promptReady
-                    ? 'Refresh instructions'
-                    : 'Generate instructions'}
-              </button>
-              <button
-                type="button"
-                className="minimal-secondary"
-                onClick={onCopyPrompt}
-                disabled={!promptText.trim()}
-              >
-                {promptCopyState === 'copied' ? 'Copied' : 'Copy instructions'}
+                {assignmentBusy ? 'Generating assignment...' : 'Generate assignment'}
               </button>
               {promptOptionsReady ? null : (
                 <button type="button" className="minimal-secondary" onClick={onReloadPromptOptions}>
-                  Reload instructions
+                  Reload settings
                 </button>
               )}
-            </div>
-          </div>
-          <p className="minimal-help">
-            Uses {selectedTemplateLabel} with {selectedProfileLabel}.
-          </p>
-          {promptError ? <p className="minimal-error">{promptError}</p> : null}
-          {promptPackage?.profileDrift?.detected ? (
-            <div className="minimal-alert warning">
-              <strong>Profile drift detected</strong>
-              <p className="minimal-help">
-                The learner profile changed after these instructions were generated (
-                {promptPackage.profileDrift.reason}). Refresh the instructions to pick up the latest
-                version.
-              </p>
-            </div>
-          ) : null}
-          {promptText ? (
-            <textarea
-              aria-label="Prompt text"
-              value={promptText}
-              onChange={(event) => onPromptTextChange(event.target.value)}
-              rows={12}
-            />
-          ) : (
-            <p className="minimal-muted">Generate instructions to continue.</p>
-          )}
-        </div>
-
-        <div className="minimal-stage-panel">
-          <div className="minimal-stage-panel-header">
-            <div className="minimal-stage-panel-title">
-              <h3>Assignment content</h3>
-              <p>
-                Generate the assignment content from the instructions, or paste and edit your own
-                version here.
-              </p>
-            </div>
-            <div className="minimal-inline">
               <button
                 type="button"
-                className="minimal-primary"
+                className="minimal-secondary"
                 onClick={onSaveDraft}
-                disabled={!promptReady || validating}
+                disabled={!promptReady || validating || !draftText.trim()}
               >
-                {validating ? 'Validating...' : 'Save assignment content'}
+                {validating ? 'Checking...' : 'Save draft'}
               </button>
               {draftDirty ? <span className="minimal-muted">Unsaved changes</span> : null}
             </div>
           </div>
-          <details className="minimal-details">
-            <summary>Generation settings</summary>
-            <div className="minimal-generation-block">
-              <div className="minimal-inline">
-                <label className="minimal-select">
-                  Generation provider
-                  <select
-                    value={selectedGenerationProvider}
-                    onChange={(event) => onSelectedGenerationProviderChange(event.target.value)}
-                    disabled={
-                      !generationOptionsAvailable ||
-                      generatingDraft ||
-                      generationProviders.length === 0
-                    }
-                  >
-                    {generationProviders.length === 0 ? (
-                      <option value="">No providers available</option>
-                    ) : null}
-                    {generationProviders.map((provider) => (
-                      <option key={provider} value={provider}>
-                        {provider}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="minimal-select">
-                  Generation model
-                  <select
-                    value={selectedGenerationModel}
-                    onChange={(event) => onSelectedGenerationModelChange(event.target.value)}
-                    disabled={
-                      !generationOptionsAvailable ||
-                      generatingDraft ||
-                      !selectedGenerationProvider ||
-                      generationModelsForProvider.length === 0
-                    }
-                  >
-                    {generationModelsForProvider.length === 0 ? (
-                      <option value="">No models available</option>
-                    ) : null}
-                    {generationModelsForProvider.map((modelOption) => (
-                      <option
-                        key={`${modelOption.provider}:${modelOption.id}`}
-                        value={modelOption.id}
-                      >
-                        {modelOption.id}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <button
-                  ref={generateDraftButtonRef}
-                  type="button"
-                  className={`minimal-secondary${
-                    stage.status === 'current'
-                      ? ' minimal-guided-button minimal-guided-button--secondary'
-                      : ''
-                  }`}
-                  onClick={onGenerateDraft}
-                  disabled={
-                    !promptReady ||
-                    generatingDraft ||
-                    !generationOptionsAvailable ||
-                    !selectedGenerationProvider ||
-                    !selectedGenerationModel ||
-                    generationBlockedByQuota
-                  }
-                >
-                  {generatingDraft ? 'Generating assignment...' : 'Generate assignment content'}
-                </button>
-              </div>
-              {generationOptionsAvailable ? (
-                <details className="minimal-details" open>
-                  <summary>Generation limits and provider notes</summary>
-                  {activeGenerationQuota ? (
-                    <>
-                      <div className="minimal-meta">
-                        <span>Source: {generationQuotaSourceLabel}</span>
-                        <span>
-                          Updated: {generationQuotaUpdatedRelative} (
-                          {generationQuotaUpdatedAbsolute})
-                        </span>
-                      </div>
-                      {generationQuotaHasNumericValues ? (
-                        <div className="minimal-quota-grid">
-                          {activeGenerationQuota.requestsPerMinute === undefined ||
-                          activeGenerationQuota.requestsPerMinute === null ? null : (
-                            <div className="minimal-quota-item">
-                              RPM: {activeGenerationQuota.requestsPerMinute}
-                            </div>
-                          )}
-                          {activeGenerationQuota.tokensPerMinute === undefined ||
-                          activeGenerationQuota.tokensPerMinute === null ? null : (
-                            <div className="minimal-quota-item">
-                              TPM: {activeGenerationQuota.tokensPerMinute}
-                            </div>
-                          )}
-                          {activeGenerationQuota.requestsPerDay === undefined ||
-                          activeGenerationQuota.requestsPerDay === null ? null : (
-                            <div className="minimal-quota-item">
-                              RPD: {activeGenerationQuota.requestsPerDay}
-                            </div>
-                          )}
-                          {activeGenerationQuota.dailyTokenBudget === undefined ||
-                          activeGenerationQuota.dailyTokenBudget === null ? null : (
-                            <div className="minimal-quota-item">
-                              Daily token budget: {activeGenerationQuota.dailyTokenBudget}
-                            </div>
-                          )}
-                          {activeGenerationQuota.dailyTokenRemaining === undefined ||
-                          activeGenerationQuota.dailyTokenRemaining === null ? null : (
-                            <div className="minimal-quota-item">
-                              Daily token remaining: {activeGenerationQuota.dailyTokenRemaining}
-                            </div>
-                          )}
-                          {activeGenerationQuota.dailyRequestBudget === undefined ||
-                          activeGenerationQuota.dailyRequestBudget === null ? null : (
-                            <div className="minimal-quota-item">
-                              Daily request budget: {activeGenerationQuota.dailyRequestBudget}
-                            </div>
-                          )}
-                          {activeGenerationQuota.dailyRequestRemaining === undefined ||
-                          activeGenerationQuota.dailyRequestRemaining === null ? null : (
-                            <div className="minimal-quota-item">
-                              Daily request remaining: {activeGenerationQuota.dailyRequestRemaining}
-                            </div>
-                          )}
-                          {activeGenerationQuota.rpmBudget === undefined ||
-                          activeGenerationQuota.rpmBudget === null ? null : (
-                            <div className="minimal-quota-item">
-                              RPM budget: {activeGenerationQuota.rpmBudget}
-                            </div>
-                          )}
-                          {activeGenerationQuota.rpmRemaining === undefined ||
-                          activeGenerationQuota.rpmRemaining === null ? null : (
-                            <div className="minimal-quota-item">
-                              RPM remaining: {activeGenerationQuota.rpmRemaining}
-                            </div>
-                          )}
-                          {activeGenerationQuota.usedRequestsToday === undefined ||
-                          activeGenerationQuota.usedRequestsToday === null ? null : (
-                            <div className="minimal-quota-item">
-                              Used requests today: {activeGenerationQuota.usedRequestsToday}
-                            </div>
-                          )}
-                          {activeGenerationQuota.usedTokensToday === undefined ||
-                          activeGenerationQuota.usedTokensToday === null ? null : (
-                            <div className="minimal-quota-item">
-                              Used tokens today: {activeGenerationQuota.usedTokensToday}
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <p className="minimal-muted">No numeric limits available for this model.</p>
-                      )}
-                      {activeGenerationQuota.dashboardUrl ? (
-                        <a
-                          className="minimal-secondary minimal-link-button"
-                          href={activeGenerationQuota.dashboardUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          View provider limits
-                        </a>
-                      ) : null}
-                      {generationQuotaBlockedReason ? (
-                        <p className="minimal-error">{generationQuotaBlockedReason}</p>
-                      ) : null}
-                    </>
-                  ) : (
-                    <p className="minimal-muted">Quota snapshot unavailable.</p>
-                  )}
-                </details>
-              ) : (
-                <p className="minimal-muted">
-                  Generation options unavailable. Reload assignment settings if needed.
-                </p>
-              )}
-              {generationError ? <p className="minimal-error">{generationError}</p> : null}
-              {generationSuccess ? <p className="minimal-success">{generationSuccess}</p> : null}
-            </div>
-          </details>
+          {!generationOptionsAvailable ? (
+            <p className="minimal-muted">
+              Assignment setup is still loading. Reload settings if this does not clear.
+            </p>
+          ) : null}
+          {generationBlockedByQuota ? (
+            <p className="minimal-error">
+              {generationQuotaBlockedReason ??
+                'Assignment generation is temporarily unavailable. Try again shortly.'}
+            </p>
+          ) : null}
+          {promptError ? <p className="minimal-error">{promptError}</p> : null}
+          {generationError ? <p className="minimal-error">{generationError}</p> : null}
+          {generationSuccess ? <p className="minimal-success">{generationSuccess}</p> : null}
           <textarea
             aria-label="Draft markdown"
             value={draftText}
@@ -1403,27 +1115,15 @@ export function ReviewStageSection({
   headingRef,
   previewButtonRef,
   onPublish,
+  onCancelJob,
   canPublishWithPreview,
+  cancelEnabled,
+  actionBusy,
   publishing,
   previewing,
   onPreviewDraft,
   draftHasContent,
   previewReadyForCurrentDraft,
-  selectedPreset,
-  onSelectedPresetChange,
-  presetOptions,
-  jobOptionsLoaded,
-  selectedTtsProvider,
-  onSelectedTtsProviderChange,
-  ttsProviders,
-  selectedTtsStrategy,
-  onSelectedTtsStrategyChange,
-  availablePublishTtsStrategies,
-  formatPublishTtsStrategyLabel,
-  selectedTtsModel,
-  onSelectedTtsModelChange,
-  publishModelSelectionDisabled,
-  selectedTtsModelOptions,
   previewError,
   previewHtml,
   publishError,
@@ -1448,18 +1148,28 @@ export function ReviewStageSection({
       headingRef={headingRef}
       guidance={reviewGuidance}
       actions={
-        <button
-          type="button"
-          className={`minimal-primary${
-            stage.status === 'current' && previewReadyForCurrentDraft
-              ? ' minimal-guided-button'
-              : ''
-          }`}
-          onClick={onPublish}
-          disabled={!canPublishWithPreview}
-        >
-          {publishing ? 'Sharing...' : 'Share assignment'}
-        </button>
+        <>
+          <button
+            type="button"
+            className={`minimal-primary${
+              stage.status === 'current' && previewReadyForCurrentDraft
+                ? ' minimal-guided-button'
+                : ''
+            }`}
+            onClick={onPublish}
+            disabled={!canPublishWithPreview}
+          >
+            {publishing ? 'Sharing...' : 'Share assignment'}
+          </button>
+          <button
+            type="button"
+            className="minimal-secondary"
+            onClick={onCancelJob}
+            disabled={!cancelEnabled}
+          >
+            {actionBusy === 'cancel' ? 'Cancelling...' : 'Cancel'}
+          </button>
+        </>
       }
     >
       <div className="minimal-stage-layout">
@@ -1492,84 +1202,7 @@ export function ReviewStageSection({
               </span>
             </div>
           </div>
-          <p className="minimal-help">Assignments publish as HTML pages.</p>
-          <details className="minimal-details">
-            <summary>Audio and publishing settings</summary>
-            <div className="minimal-grid">
-              <label className="minimal-select">
-                Learning preset
-                <select
-                  value={selectedPreset}
-                  onChange={(event) => onSelectedPresetChange(event.target.value)}
-                  disabled={!jobOptionsLoaded || presetOptions.length === 0}
-                >
-                  {presetOptions.length > 0 ? null : <option value="">No presets available</option>}
-                  {presetOptions.map((preset) => (
-                    <option key={preset.id} value={preset.id}>
-                      {preset.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="minimal-select">
-                Voice engine
-                <select
-                  value={selectedTtsProvider}
-                  onChange={(event) =>
-                    onSelectedTtsProviderChange(
-                      event.target.value as 'elevenlabs' | 'google' | 'inworld',
-                    )
-                  }
-                  disabled={ttsProviders.length === 0}
-                >
-                  {ttsProviders.map((provider) => (
-                    <option key={provider} value={provider}>
-                      {provider}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="minimal-select">
-                Reading style
-                <select
-                  value={selectedTtsStrategy}
-                  onChange={(event) =>
-                    onSelectedTtsStrategyChange(event.target.value as 'auto' | 'dialogue' | 'tts')
-                  }
-                >
-                  {availablePublishTtsStrategies.map((strategy) => (
-                    <option key={strategy} value={strategy}>
-                      {formatPublishTtsStrategyLabel(strategy)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="minimal-select">
-                Voice model
-                <select
-                  value={selectedTtsModel}
-                  onChange={(event) => onSelectedTtsModelChange(event.target.value)}
-                  disabled={publishModelSelectionDisabled || selectedTtsModelOptions.length === 0}
-                >
-                  {publishModelSelectionDisabled ? (
-                    <option value="">Auto follows the assignment</option>
-                  ) : selectedTtsModelOptions.length === 0 ? (
-                    <option value="">No models available</option>
-                  ) : null}
-                  {selectedTtsModelOptions.map((model) => (
-                    <option key={model} value={model}>
-                      {model}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            {publishModelSelectionDisabled ? (
-              <p className="minimal-muted">
-                Auto follows the assignment at runtime. Choose Dialogue or TTS to lock a model.
-              </p>
-            ) : null}
-          </details>
+          <p className="minimal-help">Assignments publish as an Assignment Handout.</p>
           {previewError ? <p className="minimal-error">{previewError}</p> : null}
           {previewHtml ? (
             <details className="minimal-preview" open>
