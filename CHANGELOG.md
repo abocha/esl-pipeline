@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [9.1.6] - 2026-06-17
+
+### Changed
+
+- Automated release from PR #109: Reuse unchanged pronunciation audio clips (https://github.com/abocha/esl-pipeline/pull/109)
+
 ## [9.1.5] - 2026-06-17
 
 ### Changed
