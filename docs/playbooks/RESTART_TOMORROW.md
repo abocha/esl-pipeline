@@ -107,6 +107,10 @@
   - Audio and publishing defaults.
     - Default voice engine should be `inworld`.
     - Remove reading style selector.
+    - Fix `connected_speech` pronunciation audio source text.
+      - TTS should read the normal written phrase, e.g. `a tuft of feathers`.
+      - Do not synthesize rough pseudo-transcription/right-side guidance such as
+        `ə-tuft-uv-feathers`.
   - Schedule and billing defaults.
     - Add-lesson default date should be today, not the fixed `07.05.2026`.
     - Default duration and timezone should inherit from tutor settings.
@@ -129,6 +133,12 @@
   - Revisit invite registration polish after runtime blockers are fixed.
     - Invites worked for the first external test, but the earlier registration-flow mishap remains
       unexplored.
+  - Split PR validation from production image publishing.
+    - Build/push production container images only after merge to `main`.
+    - Keep full CI on PRs, not duplicated after merge when the PR has already passed.
+    - Account for the release bot that commits `chore(release): vX.Y.Z` and pushes the release tag
+      after merge; image publishing should not race or ignore that version-bump step.
+    - Preserve any minimal post-merge release/image safety guards needed for production images.
 
 - Deployment state notes:
   - PR #96 deployed successfully at:
