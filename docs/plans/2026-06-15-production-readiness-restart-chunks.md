@@ -6,7 +6,7 @@
 - Status: active.
 - Last Verified Against: 2026-06-17 repo state.
 - Exit Trigger: archive after the restart backlog is converted into shipped implementation PRs or superseded by the next invite-wave readiness plan.
-- Current Focus: finish Chunk 11 PR-validation and production-image workflow split.
+- Current Focus: finish Chunk 7 P1 connected-speech pronunciation source-text correctness.
 
 ## Purpose
 
@@ -300,6 +300,19 @@ Acceptance gates:
 - Minor non-audio draft edits do not force full audio regeneration.
 - Audio-affecting edits regenerate only the relevant artifacts.
 - UI clearly separates republish from regenerate-audio behavior.
+
+Source evidence for P1 source-text correctness:
+
+- `packages/orchestrator/src/runtime/pronunciation-audio.ts` selects the connected-speech
+  `careful` phrase as the provider TTS text for item clips and falls back to the connected guidance
+  only when no careful phrase is available.
+- `packages/orchestrator/tests/runtime.pronunciation-audio.test.ts` covers the representative
+  `a tuft of feathers` / `ə-tuft-uv-feathers` case and proves provider TTS receives the normal
+  written phrase.
+- `packages/html-publisher/tests/rendering.pronunciation-behavior.test.ts` keeps the same
+  pseudo-respelling visible as learner-facing connected-speech guidance.
+- The P2 caching and explicit regeneration items remain open; do not treat this P1 source-text fix
+  as completion of the broader Chunk 7 regeneration scope.
 
 ## Chunk 8: Telegram and Invite Registration Follow-Up
 
