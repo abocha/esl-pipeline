@@ -322,8 +322,12 @@ export async function preparePromptReady(_user: ReturnType<typeof userEvent.setu
   fireEvent.click(screen.getByRole('button', { name: /Drop audio file/i }));
   await screen.findByDisplayValue('Student transcript text', {}, { timeout: UI_WAIT_TIMEOUT_MS });
 
-  fireEvent.click(screen.getByRole('button', { name: /Generate instructions/i }));
-  await screen.findByDisplayValue('Prompt package output', {}, { timeout: UI_WAIT_TIMEOUT_MS });
+  fireEvent.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
+  await screen.findByDisplayValue(
+    '# Generated assignment draft',
+    {},
+    { timeout: UI_WAIT_TIMEOUT_MS },
+  );
 }
 
 function hydrateResumedAssignment(
@@ -383,8 +387,13 @@ function hydrateResumedAssignment(
   return status;
 }
 
-async function waitForResumedPromptReady(text = 'Prompt package output') {
-  await screen.findByDisplayValue(text, {}, { timeout: UI_WAIT_TIMEOUT_MS });
+async function waitForResumedPromptReady(_text = 'Prompt package output') {
+  await screen.findByRole(
+    'button',
+    { name: /^Generate assignment$/i },
+    { timeout: UI_WAIT_TIMEOUT_MS },
+  );
+  await screen.findByRole('textbox', { name: /Draft markdown/i }, { timeout: UI_WAIT_TIMEOUT_MS });
 }
 
 async function waitForJobActionsReady(jobId = 'job-1') {
@@ -637,13 +646,15 @@ export function setupMinimalAssignmentTest() {
       google: 'latest_long',
     },
     ttsStrategies: ['auto', 'dialogue', 'tts'],
-    ttsProviders: ['elevenlabs', 'google'],
+    ttsProviders: ['inworld', 'elevenlabs', 'google'],
     ttsModelOptionsByProvider: {
+      inworld: ['inworld-tts-2', 'inworld-tts-1.5-mini'],
       elevenlabs: ['eleven_v3', 'eleven_multilingual_v2', 'eleven_flash_v2_5', 'eleven_flash_v2'],
       google: ['chirp3_hd', 'studio', 'neural2', 'wavenet'],
     },
-    defaultTtsProvider: 'elevenlabs',
+    defaultTtsProvider: 'inworld',
     defaultTtsModelByProvider: {
+      inworld: 'inworld-tts-2',
       elevenlabs: 'eleven_multilingual_v2',
       google: 'chirp3_hd',
     },

@@ -125,12 +125,6 @@ function buildAssignmentSessionSettingsKey(settings: {
   return JSON.stringify(settings);
 }
 
-function formatPublishTtsStrategyLabel(strategy: UiPublishTtsStrategy): string {
-  if (strategy === 'auto') return 'Auto from draft';
-  if (strategy === 'dialogue') return 'Dialogue';
-  return 'TTS';
-}
-
 function clearAssignmentResumeQuery(): void {
   if (globalThis.window === undefined) return;
   const nextUrl = new URL(globalThis.location.href);
@@ -636,14 +630,6 @@ export const MinimalAssignment: React.FC = () => {
     ],
   );
 
-  const handleSelectedTemplateChange = useCallback(
-    (templateId: string) => {
-      markAssignmentUserEdit();
-      setOperatorSelectedTemplateId(templateId);
-    },
-    [markAssignmentUserEdit],
-  );
-
   const handleStartNewAssignmentWithSessionReset = useCallback(() => {
     assignmentSessionMutationQueueRef.current = Promise.resolve(null);
     if (assignmentSessionSettingsTimeoutRef.current) {
@@ -1109,7 +1095,7 @@ export const MinimalAssignment: React.FC = () => {
     return buildCurrentAssignmentCard(jobStatus, studentNameById);
   }, [jobStatus, studentNameById]);
   const publishUrl = jobStatus?.htmlUrl;
-  const publishLabel = 'Open published HTML';
+  const publishLabel = 'Open Assignment Handout';
   const publishPending = 'HTML link pending...';
   const hasTeachingContext = Boolean(
     context.selectedProfileId || teacherNotes.trim() || authoring.promptReady,
@@ -1141,25 +1127,6 @@ export const MinimalAssignment: React.FC = () => {
         };
       });
   }, [linkedLessonId, scheduleSurface]);
-  const selectedTemplateLabel = useMemo(() => {
-    if (!selectedTemplateId) return 'no template selected';
-    const template = promptOptions?.templates.find((option) => option.id === selectedTemplateId);
-    const label = template?.label ?? selectedTemplateId;
-    return selectedTemplateId === promptOptions?.defaults.templateId
-      ? `${label} (default template)`
-      : label;
-  }, [promptOptions?.defaults.templateId, promptOptions?.templates, selectedTemplateId]);
-  const selectedProfileLabel = useMemo(() => {
-    if (!context.selectedProfileId) return 'no learner profile selected';
-    const profile = promptOptions?.profiles.find(
-      (option) => option.id === context.selectedProfileId,
-    );
-    const label = profile?.label ?? context.selectedProfileId;
-    return context.selectedProfileId === promptOptions?.defaults.profileId
-      ? `${label} (default profile)`
-      : label;
-  }, [context.selectedProfileId, promptOptions?.defaults.profileId, promptOptions?.profiles]);
-
   useEffect(() => {
     if (!hasStartedFlow || startStageMode !== 'idle') return;
     setStartStageMode('start');
@@ -1222,11 +1189,11 @@ export const MinimalAssignment: React.FC = () => {
         id: 'context',
         title: 'Add teaching context',
         description: authoring.promptReady
-          ? 'Learner context has been applied to the instructions.'
+          ? 'Learner context is ready for the assignment.'
           : transcriptReady
             ? hasTeachingContext
-              ? 'Context is ready. Generate instructions when you are happy with it.'
-              : 'Choose a learner profile or add lesson guidance for this lesson.'
+              ? 'Context is ready. Create the assignment when you are happy with it.'
+              : "Add lesson guidance or continue with the student's Learning page context."
             : 'Unlocks after the transcript is ready.',
         status: contextStatus,
       },
@@ -1238,7 +1205,7 @@ export const MinimalAssignment: React.FC = () => {
           : authoring.promptReady
             ? 'Generate or edit the assignment content.'
             : transcriptReady
-              ? 'Generate instructions after you finish reviewing teaching context.'
+              ? 'Create the assignment after you finish reviewing teaching context.'
               : 'Unlocks after the transcript is ready.',
         status: assignmentStatus,
       },
@@ -1346,7 +1313,7 @@ export const MinimalAssignment: React.FC = () => {
         label: 'Student',
         value: source.selectedStudent?.name ?? 'No student yet',
         note: context.selectedProfileId
-          ? `Profile: ${context.selectedProfileId}`
+          ? 'Learning profile ready.'
           : 'Select a student to unlock recording upload.',
       },
       {
@@ -1359,7 +1326,7 @@ export const MinimalAssignment: React.FC = () => {
         value: hasAssignmentContent
           ? 'Drafted'
           : authoring.promptReady
-            ? 'Instructions ready'
+            ? 'Ready to draft'
             : 'Not started',
         note: authoring.draftDirty ? 'You have unsaved assignment edits.' : undefined,
       },
@@ -1516,25 +1483,8 @@ export const MinimalAssignment: React.FC = () => {
         promptLoading={authoring.promptLoading}
         promptReady={authoring.promptReady}
         promptOptionsReady={Boolean(promptOptions)}
-        promptTemplates={promptOptions?.templates ?? []}
-        selectedTemplateId={selectedTemplateId}
-        selectedTemplateLabel={selectedTemplateLabel}
-        selectedProfileLabel={selectedProfileLabel}
-        onSelectedTemplateIdChange={handleSelectedTemplateChange}
-        onGeneratePrompt={() => {
-          markAssignmentUserEdit();
-          void authoring.generatePrompt();
-        }}
-        onCopyPrompt={authoring.copyPrompt}
-        promptCopyState={authoring.promptCopyState}
         onReloadPromptOptions={() => void loadPromptOptions()}
         promptError={authoring.promptError}
-        promptPackage={authoring.promptPackage}
-        promptText={authoring.promptText}
-        onPromptTextChange={(value) => {
-          markAssignmentUserEdit();
-          authoring.setPromptText(value);
-        }}
         onSaveDraft={() => {
           markAssignmentUserEdit();
           void authoring.saveDraft();
@@ -1542,29 +1492,12 @@ export const MinimalAssignment: React.FC = () => {
         validating={authoring.validating}
         draftDirty={authoring.draftDirty}
         generationOptionsAvailable={Boolean(generationOptions)}
-        selectedGenerationProvider={authoring.selectedGenerationProvider}
-        onSelectedGenerationProviderChange={(value) => {
+        onGenerateAssignment={() => {
           markAssignmentUserEdit();
-          authoring.setSelectedGenerationProvider(value);
-        }}
-        generationProviders={authoring.generationProviders}
-        selectedGenerationModel={authoring.selectedGenerationModel}
-        onSelectedGenerationModelChange={(value) => {
-          markAssignmentUserEdit();
-          authoring.setSelectedGenerationModel(value);
-        }}
-        generationModelsForProvider={authoring.generationModelsForProvider}
-        onGenerateDraft={() => {
-          markAssignmentUserEdit();
-          void authoring.generateDraft();
+          void authoring.generateAssignment();
         }}
         generatingDraft={authoring.generatingDraft}
         generationBlockedByQuota={authoring.generationBlockedByQuota}
-        activeGenerationQuota={authoring.activeGenerationQuota}
-        generationQuotaSourceLabel={authoring.generationQuotaSourceLabel}
-        generationQuotaUpdatedRelative={authoring.generationQuotaUpdatedRelative}
-        generationQuotaUpdatedAbsolute={authoring.generationQuotaUpdatedAbsolute}
-        generationQuotaHasNumericValues={authoring.generationQuotaHasNumericValues}
         generationQuotaBlockedReason={authoring.generationQuotaBlockedReason}
         generationError={authoring.generationError}
         generationSuccess={authoring.generationSuccess}
@@ -1590,39 +1523,15 @@ export const MinimalAssignment: React.FC = () => {
             completeAssignmentSession: archiveActiveAssignmentSession,
           })
         }
+        onCancelJob={() => void advancedActions.handleCancelJob()}
         canPublishWithPreview={authoring.canPublishWithPreview}
+        cancelEnabled={advancedActions.cancelEnabled}
+        actionBusy={advancedActions.actionBusy}
         publishing={authoring.publishing}
         previewing={authoring.previewing}
         onPreviewDraft={() => void authoring.previewDraft()}
         draftHasContent={authoring.draftText.trim().length > 0}
         previewReadyForCurrentDraft={authoring.previewReadyForCurrentDraft}
-        selectedPreset={authoring.selectedPreset}
-        onSelectedPresetChange={(value) => {
-          markAssignmentUserEdit();
-          authoring.setSelectedPreset(value);
-        }}
-        presetOptions={presetOptions}
-        jobOptionsLoaded={Boolean(jobOptions)}
-        selectedTtsProvider={authoring.selectedTtsProvider}
-        onSelectedTtsProviderChange={(value) => {
-          markAssignmentUserEdit();
-          authoring.setSelectedTtsProvider(value);
-        }}
-        ttsProviders={ttsProviders}
-        selectedTtsStrategy={authoring.selectedTtsStrategy}
-        onSelectedTtsStrategyChange={(value) => {
-          markAssignmentUserEdit();
-          authoring.setSelectedTtsStrategy(value);
-        }}
-        availablePublishTtsStrategies={authoring.availablePublishTtsStrategies}
-        formatPublishTtsStrategyLabel={formatPublishTtsStrategyLabel}
-        selectedTtsModel={authoring.selectedTtsModel}
-        onSelectedTtsModelChange={(value) => {
-          markAssignmentUserEdit();
-          authoring.setSelectedTtsModel(value);
-        }}
-        publishModelSelectionDisabled={authoring.publishModelSelectionDisabled}
-        selectedTtsModelOptions={authoring.selectedTtsModelOptions}
         previewError={authoring.previewError}
         previewHtml={authoring.previewHtml}
         publishError={authoring.publishError}
