@@ -197,6 +197,45 @@ describe('StudentScheduleBillingPage', () => {
     });
   });
 
+  it('creates new lessons with today plus tutor duration and timezone defaults', async () => {
+    const today = new Date();
+    const expectedStart = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(
+      2,
+      '0',
+    )}-${String(today.getDate()).padStart(2, '0')}T10:00`;
+    apiMocks.getStudentScheduleBillingSurface.mockResolvedValue(
+      makeSurface({
+        lessonPlan: {
+          ...makeSurface().lessonPlan,
+          timezone: 'Asia/Kolkata',
+          defaultDurationMinutes: 75,
+        },
+      }),
+    );
+
+    renderPage();
+
+    const startsInput = (await screen.findByLabelText('Starts')) as HTMLInputElement;
+    expect(startsInput.value).toBe(expectedStart);
+    expect((screen.getAllByLabelText('Duration')[1] as HTMLInputElement).value).toBe('75');
+    expect((screen.getAllByLabelText('Timezone')[1] as HTMLInputElement).value).toBe(
+      'Asia/Kolkata',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add lesson' }));
+
+    await waitFor(() => {
+      expect(apiMocks.createStudentLesson).toHaveBeenCalledWith(
+        'student-alex',
+        expect.objectContaining({
+          startsAt: new Date(expectedStart).toISOString(),
+          durationMinutes: 75,
+          timezone: 'Asia/Kolkata',
+        }),
+      );
+    });
+  });
+
   it('marks scheduled lessons complete and chargeable', async () => {
     renderPage();
 
@@ -241,9 +280,12 @@ describe('StudentScheduleBillingPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Add homework from reminder' }));
 
     await waitFor(() => {
+      expect(apiMocks.updateStudentLesson).toHaveBeenCalledWith('student-alex', 'lesson-1', {
+        status: 'completed',
+        consumesCredit: true,
+      });
       expect(navigateMock).toHaveBeenCalledWith('/?studentId=student-alex&lessonId=lesson-1');
     });
-    expect(apiMocks.updateStudentLesson).not.toHaveBeenCalled();
   });
 
   it('shows lesson context, hides follow-up reminders, and offers latest undo', async () => {

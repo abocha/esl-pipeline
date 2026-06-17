@@ -24,6 +24,8 @@ describe('StudentWorkspace candidates', () => {
     expect(
       screen.queryByText(/Prefers structured homework with built-in review blocks\./i),
     ).toBeNull();
+    expect(screen.queryByRole('button', { name: /Select All Approved/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Generate Draft Revision/i })).toBeNull();
   });
 
   it('renders pending candidates as compact review cards with details collapsed by default', async () => {
