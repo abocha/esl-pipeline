@@ -334,6 +334,7 @@ Use these exact mode contracts:
   - `1. "<careful form>" -> <connected form>`
   - `<careful form>` must be the normal written phrase or sentence.
   - `<connected form>` must be a learner-facing plain-text spoken-form respelling such as `help-sus`, `wanna`, `as-heavy-as`, or `gonna`, not IPA and not slash transcription.
+  - Provider TTS uses `<careful form>` as the spoken source; `<connected form>` remains visible pronunciation guidance for the learner.
   - Do not write the right-hand side as `/.../`.
   - After the numbered drills, add exactly one final line:
   - `**Natural sentence practice:** <full sentence>`

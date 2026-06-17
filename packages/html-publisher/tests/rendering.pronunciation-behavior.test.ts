@@ -74,7 +74,7 @@ describe('rendering', () => {
   
   **Mode:** connected_speech
   
-  1. "Change helps us." -> Change help-sus.
+  1. "a tuft of feathers" -> ə-tuft-uv-feathers
   2. "It gives us food." -> It give-sus food.
   3. "Light feels stronger." -> Light feel-stronger.
 
@@ -88,7 +88,7 @@ describe('rendering', () => {
             itemIndex: 0,
             kind: 'connected_target',
             engine: 'provider',
-            text: 'Change help-sus.',
+            text: 'a tuft of feathers',
             url: 'https://example.com/connected-1.mp3',
             label: 'Play',
           },
@@ -105,17 +105,17 @@ describe('rendering', () => {
     });
     const renderedDocument = createRenderedDocument(html);
     const listItems = [...renderedDocument.querySelectorAll('.markdown-body li')];
-    const firstItem = listItems.find((item) => item.textContent?.includes('Change helps us.'));
+    const firstItem = listItems.find((item) => item.textContent?.includes('a tuft of feathers'));
     const sentenceAnchor = renderedDocument.querySelector('.pronunciation-natural-sentence');
 
     expect(html).toContain('connected_speech');
     expect(html).toContain('Play connected speech line');
     expect(firstItem?.querySelector('.pronunciation-connected-line')).toBeTruthy();
     expect(firstItem?.querySelector('.pronunciation-connected-careful')?.textContent).toContain(
-      'Change helps us.',
+      'a tuft of feathers',
     );
     expect(firstItem?.querySelector('.pronunciation-connected-target')?.textContent).toContain(
-      'Change help-sus.',
+      'ə-tuft-uv-feathers',
     );
     expect(sentenceAnchor?.textContent).toContain('Natural sentence practice:');
     expect(sentenceAnchor?.textContent).toContain('The device is as heavy as the old one.');
