@@ -342,6 +342,8 @@ export const StudentWorkspace: React.FC = () => {
       formatCandidateSectionLabel(left).localeCompare(formatCandidateSectionLabel(right)),
     );
   }, [visibleProfileCandidates]);
+  const showingReviewedProfileCandidates =
+    profileCandidateFilter === PROFILE_CANDIDATE_REVIEWED_FILTER;
 
   const approvedCandidatesReadyForPromotion = useMemo(
     () => profileCandidates.filter((candidate) => isSelectableForPromotion(candidate)),
@@ -1543,59 +1545,64 @@ export const StudentWorkspace: React.FC = () => {
             </button>
           </div>
 
-          <div className="workspace-create-panel">
-            <div className="workspace-inline workspace-header-row">
-              <div>
-                <strong>Promotion queue</strong>
-                <div className="workspace-muted">
-                  {approvedCandidatesReadyForPromotion.length} approved candidate
-                  {approvedCandidatesReadyForPromotion.length === 1 ? '' : 's'} ready for promotion.
+          {showingReviewedProfileCandidates ? (
+            <div className="workspace-create-panel">
+              <div className="workspace-inline workspace-header-row">
+                <div>
+                  <strong>Promotion queue</strong>
+                  <div className="workspace-muted">
+                    {approvedCandidatesReadyForPromotion.length} approved candidate
+                    {approvedCandidatesReadyForPromotion.length === 1 ? '' : 's'} ready for
+                    promotion.
+                  </div>
                 </div>
+
+                <button
+                  type="button"
+                  className="workspace-secondary-btn"
+                  onClick={handleSelectAllApprovedCandidates}
+                  disabled={approvedCandidatesReadyForPromotion.length === 0}
+                >
+                  Select All Approved
+                </button>
               </div>
 
-              <button
-                type="button"
-                className="workspace-secondary-btn"
-                onClick={handleSelectAllApprovedCandidates}
-                disabled={approvedCandidatesReadyForPromotion.length === 0}
-              >
-                Select All Approved
-              </button>
+              <label className="workspace-field">
+                Promotion Note
+                <textarea
+                  aria-label="Promotion Note"
+                  value={profileCandidatePromotionNote}
+                  onChange={(event) => setProfileCandidatePromotionNote(event.target.value)}
+                  rows={2}
+                  placeholder="Optional note explaining this promotion batch"
+                  disabled={!selectedStudentId || profileCandidatePromotionBusy}
+                />
+              </label>
+
+              <div className="workspace-inline">
+                <span className="workspace-muted">
+                  {selectedCandidateIds.length} selected for draft revision generation
+                </span>
+                <button
+                  type="button"
+                  className="workspace-primary-btn"
+                  onClick={() => void handlePromoteProfileCandidates()}
+                  disabled={!selectedStudentId || profileCandidatePromotionBusy}
+                >
+                  {profileCandidatePromotionBusy
+                    ? 'Generating Draft...'
+                    : 'Generate Draft Revision'}
+                </button>
+              </div>
+
+              {profileCandidatePromotionError ? (
+                <p className="workspace-error">{profileCandidatePromotionError}</p>
+              ) : null}
+              {profileCandidatePromotionSuccess ? (
+                <p className="workspace-success">{profileCandidatePromotionSuccess}</p>
+              ) : null}
             </div>
-
-            <label className="workspace-field">
-              Promotion Note
-              <textarea
-                aria-label="Promotion Note"
-                value={profileCandidatePromotionNote}
-                onChange={(event) => setProfileCandidatePromotionNote(event.target.value)}
-                rows={2}
-                placeholder="Optional note explaining this promotion batch"
-                disabled={!selectedStudentId || profileCandidatePromotionBusy}
-              />
-            </label>
-
-            <div className="workspace-inline">
-              <span className="workspace-muted">
-                {selectedCandidateIds.length} selected for draft revision generation
-              </span>
-              <button
-                type="button"
-                className="workspace-primary-btn"
-                onClick={() => void handlePromoteProfileCandidates()}
-                disabled={!selectedStudentId || profileCandidatePromotionBusy}
-              >
-                {profileCandidatePromotionBusy ? 'Generating Draft...' : 'Generate Draft Revision'}
-              </button>
-            </div>
-
-            {profileCandidatePromotionError ? (
-              <p className="workspace-error">{profileCandidatePromotionError}</p>
-            ) : null}
-            {profileCandidatePromotionSuccess ? (
-              <p className="workspace-success">{profileCandidatePromotionSuccess}</p>
-            ) : null}
-          </div>
+          ) : null}
 
           {profileCandidatesError ? (
             <p className="workspace-error">{profileCandidatesError}</p>
