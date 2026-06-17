@@ -468,6 +468,18 @@ Acceptance gates:
 - Required checks and release label guards still protect PRs before merge.
 - Deployment docs or release notes explain which workflow creates production images and when.
 
+Source evidence:
+
+- `.github/workflows/ci.yml` runs validation only on PR events and no longer builds or publishes
+  production container images.
+- `.github/workflows/release-on-merge.yml` publishes production images only after `Release On Merge`
+  completes the bot-authored release commit and tag push; this avoids relying on a tag-push workflow
+  that would not be triggered by the release job's `GITHUB_TOKEN`.
+- Production images are tagged with both the release commit SHA and release tag; the deploy script
+  continues to consume the release commit SHA.
+- `docs/backend-frontend/DEPLOYMENT.md` documents the PR CI -> release bot -> release-tag image
+  publication -> VPS deploy sequence.
+
 ## Deployment State Notes to Preserve
 
 These notes are operational context, not a standalone implementation chunk:

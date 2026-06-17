@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  packages: write
   pull-requests: read
 
 concurrency:
@@ -19,6 +20,9 @@ jobs:
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    outputs:
+      release_sha: ${{ steps.release_ref.outputs.sha }}
+      release_tag: ${{ steps.release_ref.outputs.tag }}
     steps:
       - name: Checkout main
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -87,3 +91,103 @@ jobs:
         run: |
           git tag -a "v${{ steps.next.outputs.next }}" -m "Release v${{ steps.next.outputs.next }}"
           git push origin "v${{ steps.next.outputs.next }}"
+
+      - name: Expose release image refs
+        id: release_ref
+        run: |
+          set -euo pipefail
+          release_sha="$(git rev-parse HEAD)"
+          if [[ ! "$release_sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Release commit resolved to invalid SHA: ${release_sha}"
+            exit 1
+          fi
+          echo "sha=${release_sha}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${{ steps.next.outputs.next }}" >> "$GITHUB_OUTPUT"
+
+  publish-images:
+    name: publish production images
+    needs: release
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      IMAGE_PREFIX: ghcr.io/${{ github.repository }}
+      RELEASE_SHA: ${{ needs.release.outputs.release_sha }}
+      RELEASE_TAG: ${{ needs.release.outputs.release_tag }}
+    steps:
+      - name: Checkout release commit
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ needs.release.outputs.release_sha }}
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
+        with:
+          node-version-file: .nvmrc
+
+      - name: Verify release ref
+        run: |
+          set -euo pipefail
+
+          git fetch origin main:refs/remotes/origin/main --no-tags
+          if [[ ! "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Release commit is not a 40-character SHA: ${RELEASE_SHA}"
+            exit 1
+          fi
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release tag is not a vX.Y.Z tag: ${RELEASE_TAG}"
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$RELEASE_SHA" origin/main; then
+            echo "Release commit ${RELEASE_SHA} is not reachable from origin/main"
+            exit 1
+          fi
+          package_version="$(node -p "require('./package.json').version")"
+          if [[ "v${package_version}" != "$RELEASE_TAG" ]]; then
+            echo "Release tag ${RELEASE_TAG} does not match package.json version ${package_version}"
+            exit 1
+          fi
+
+      - name: Docker buildx version
+        run: docker buildx version
+
+      - name: Create Docker buildx builder
+        run: docker buildx create --use --name esl-pipeline-builder
+
+      - name: Login to GHCR
+        run: echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Publish production images
+        run: |
+          set -euo pipefail
+
+          common_args=(
+            --platform linux/amd64
+            --provenance=false
+            --sbom=false
+            --label "org.opencontainers.image.revision=${RELEASE_SHA}"
+            --label "org.opencontainers.image.version=${RELEASE_TAG}"
+            --label "org.opencontainers.image.source=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}"
+          )
+
+          build_image() {
+            local name="$1"
+            local dockerfile="$2"
+            local sha_image="${IMAGE_PREFIX}/${name}:${RELEASE_SHA}"
+            local version_image="${IMAGE_PREFIX}/${name}:${RELEASE_TAG}"
+
+            docker buildx build \
+              "${common_args[@]}" \
+              --cache-from "type=gha,scope=${name}" \
+              --cache-to "type=gha,mode=max,scope=${name}" \
+              --file "$dockerfile" \
+              --tag "$sha_image" \
+              --tag "$version_image" \
+              --push \
+              .
+          }
+
+          build_image batch-backend packages/batch-backend/Dockerfile
+          build_image batch-frontend packages/batch-frontend/Dockerfile
+          build_image telegram-ops-bot packages/telegram-ops-bot/Dockerfile
