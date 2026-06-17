@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [9.1.4] - 2026-06-17
+
+### Changed
+
+- Automated release from PR #107: Simplify tutor assignment workflow (https://github.com/abocha/esl-pipeline/pull/107)
+
 ## [9.1.3] - 2026-06-17
 
 ### Changed
