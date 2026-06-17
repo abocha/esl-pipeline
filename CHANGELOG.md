@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [9.1.1] - 2026-06-17
+
+### Changed
+
+- Automated release from PR #104: docs: queue pronunciation and CI workflow follow-ups (https://github.com/abocha/esl-pipeline/pull/104)
+
 ## [9.1.0] - 2026-06-16
 
 ### Changed
