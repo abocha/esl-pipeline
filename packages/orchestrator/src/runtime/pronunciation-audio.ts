@@ -37,6 +37,7 @@ interface PronunciationAudioSynthesisOptions {
   logger?: PipelineLogger;
   primaryVoiceId?: string | null;
   chunkVoiceId?: string | null;
+  previousAudio?: PronunciationAudioArtifact;
 }
 
 interface ProviderClipSynthesisConfig {
@@ -151,11 +152,103 @@ function toPrimaryClip(
   return { ...base, ...artifact };
 }
 
+function hasReusableAudioPayload(clip: PronunciationClipRecord): boolean {
+  return Boolean(clip.url || clip.path || clip.hash);
+}
+
+function findPreviousClip(
+  previousAudio: PronunciationAudioArtifact | undefined,
+  clip: PronunciationAudioClip,
+): PronunciationClipRecord | undefined {
+  const clips = [
+    ...(previousAudio?.primaryClip ? [previousAudio.primaryClip] : []),
+    ...(previousAudio?.itemClips ?? []),
+  ];
+  return clips.find(
+    (candidate) =>
+      candidate.id === clip.id &&
+      candidate.kind === clip.kind &&
+      candidate.itemIndex === clip.itemIndex,
+  );
+}
+
+function ttsConfigMatchesPreviousClip(
+  previous: PronunciationClipRecord,
+  config: ProviderClipSynthesisConfig,
+): boolean {
+  const voiceId = config.voiceId?.trim();
+  if (voiceId && previous.voiceId !== voiceId) {
+    return false;
+  }
+
+  if (config.ttsProvider && previous.tts?.provider !== config.ttsProvider) {
+    return false;
+  }
+
+  if (config.ttsModel && previous.tts?.modelId !== config.ttsModel) {
+    return false;
+  }
+
+  return true;
+}
+
+function canReusePreviousClip(
+  clip: PronunciationAudioClip,
+  previous: PronunciationClipRecord | undefined,
+  config: ProviderClipSynthesisConfig,
+): previous is PronunciationClipRecord {
+  return Boolean(
+    previous &&
+      hasReusableAudioPayload(previous) &&
+      previous.engine === clip.engine &&
+      previous.kind === clip.kind &&
+      previous.itemIndex === clip.itemIndex &&
+      previous.text === clip.text &&
+      ttsConfigMatchesPreviousClip(previous, config),
+  );
+}
+
+function buildReusedClip(
+  clip: PronunciationAudioClip,
+  previous: PronunciationClipRecord,
+): PronunciationClipRecord {
+  const previousTts = previous.tts
+    ? {
+        ...(previous.tts.provider !== undefined ? { provider: previous.tts.provider } : {}),
+        ...(previous.tts.modelId !== undefined ? { modelId: previous.tts.modelId } : {}),
+        ...(previous.tts.costPer1kCharsUsd !== undefined
+          ? { costPer1kCharsUsd: previous.tts.costPer1kCharsUsd }
+          : {}),
+        ...(previous.tts.estimatedSpendUsd !== undefined
+          ? { estimatedSpendUsd: previous.tts.estimatedSpendUsd }
+          : {}),
+      }
+    : undefined;
+
+  return {
+    ...clip,
+    ...(previous.path !== undefined ? { path: previous.path } : {}),
+    ...(previous.url !== undefined ? { url: previous.url } : {}),
+    ...(previous.hash !== undefined ? { hash: previous.hash } : {}),
+    ...(previous.key !== undefined ? { key: previous.key } : {}),
+    ...(previous.etag !== undefined ? { etag: previous.etag } : {}),
+    ...(previous.sizeBytes !== undefined ? { sizeBytes: previous.sizeBytes } : {}),
+    ...(previous.reused !== undefined ? { reused: previous.reused } : {}),
+    ...(previous.voiceId !== undefined ? { voiceId: previous.voiceId } : {}),
+    ...(previousTts && Object.keys(previousTts).length > 0 ? { tts: previousTts } : {}),
+  };
+}
+
 async function synthesizeProviderClip(
   clip: PronunciationAudioClip,
   options: PronunciationAudioSynthesisOptions,
   config: ProviderClipSynthesisConfig,
 ): Promise<PronunciationClipRecord | null> {
+  const previous = findPreviousClip(options.previousAudio, clip);
+  if (canReusePreviousClip(clip, previous, config)) {
+    return buildReusedClip(clip, previous);
+  }
+
   if (!config.voiceId?.trim()) {
     return null;
   }
@@ -197,7 +290,25 @@ async function synthesizeShadowPrimary(
   focus: Extract<PronunciationFocus, { mode: 'shadow_sentence' }>,
   options: PronunciationAudioSynthesisOptions,
 ): Promise<PronunciationClipRecord | null> {
-  if (!focus.shadowSentence?.trim() || !options.primaryVoiceId?.trim()) {
+  const normalizedText = focus.shadowSentence ? normalizeSpeechText(focus.shadowSentence) : '';
+  const baseClip: PronunciationAudioClip = {
+    id: 'primary-shadow-sentence',
+    kind: 'shadow_sentence',
+    engine: 'provider',
+    text: normalizedText,
+    label: 'Sentence',
+  };
+  const primaryConfig: ProviderClipSynthesisConfig = {
+    ttsProvider: options.primaryTtsProvider,
+    ttsModel: options.primaryTtsModel,
+    voiceId: options.primaryVoiceId,
+  };
+  const previous = findPreviousClip(options.previousAudio, baseClip);
+  if (canReusePreviousClip(baseClip, previous, primaryConfig)) {
+    return buildReusedClip(baseClip, previous);
+  }
+
+  if (!normalizedText || !options.primaryVoiceId?.trim()) {
     return null;
   }
 
@@ -218,11 +329,7 @@ async function synthesizeShadowPrimary(
   );
 
   return {
-    id: 'primary-shadow-sentence',
-    kind: 'shadow_sentence',
-    engine: 'provider',
-    text: normalizeSpeechText(focus.shadowSentence),
-    label: 'Sentence',
+    ...baseClip,
     path: result.path,
     hash: result.hash,
     voiceId: result.voiceId,

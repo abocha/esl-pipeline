@@ -62,6 +62,9 @@ For deep system maps, prefer the linked docs rather than growing this file again
 - Rerun family selection is contract-level:
   - unchecked study-text / pronunciation families must preserve prior published artifacts and persisted family defaults
   - checked families must replace the published artifact for that family even when deterministic upload keys or hashes are unchanged
+  - pronunciation-family reruns may reuse individual prior clips only when the previous manifest
+    proves the clip-level audio identity is unchanged; changed clips in a selected family still
+    require replacement upload semantics
 - `batch-backend` may orchestrate and persist work, but it must not invent alternate pipeline semantics.
 
 ### Contracts and compatibility

@@ -285,6 +285,53 @@ function emitPronunciationProviderCharacterMetrics(
   }
 }
 
+type PronunciationArtifactClip = NonNullable<PronunciationAudioArtifact['primaryClip']>;
+
+function findPreviousPronunciationClip(
+  previousAudio: PronunciationAudioArtifact | undefined,
+  clip: PronunciationArtifactClip | undefined,
+): PronunciationArtifactClip | undefined {
+  if (!clip) return undefined;
+  const previousClips = [
+    ...(previousAudio?.primaryClip ? [previousAudio.primaryClip] : []),
+    ...(previousAudio?.itemClips ?? []),
+  ];
+  return previousClips.find(
+    (candidate) =>
+      candidate.id === clip.id &&
+      candidate.kind === clip.kind &&
+      candidate.itemIndex === clip.itemIndex,
+  );
+}
+
+function pronunciationClipAudioIdentityMatches(
+  current: PronunciationArtifactClip,
+  previous: PronunciationArtifactClip | undefined,
+): boolean {
+  return Boolean(
+    previous &&
+      current.engine === previous.engine &&
+      current.kind === previous.kind &&
+      current.itemIndex === previous.itemIndex &&
+      current.text === previous.text &&
+      current.voiceId === previous.voiceId &&
+      current.tts?.provider === previous.tts?.provider &&
+      current.tts?.modelId === previous.tts?.modelId &&
+      (previous.url === undefined || current.url === previous.url),
+  );
+}
+
+function wasPronunciationClipRegenerated(
+  clip: PronunciationArtifactClip | undefined,
+  previousAudio: PronunciationAudioArtifact | undefined,
+): boolean {
+  if (!clip) return false;
+  return !pronunciationClipAudioIdentityMatches(
+    clip,
+    findPreviousPronunciationClip(previousAudio, clip),
+  );
+}
+
 async function applyRerunVoicePreferences(flags: RerunFlags): Promise<void> {
   const studyTextPreferences = {
     voiceId: flags.studyTextVoiceId,
@@ -1118,6 +1165,7 @@ export async function rerunAssignment(
       rerunPlan.detectedPronunciationMode ??
       null;
     const audioArtifacts = resolveAudioArtifactsFromManifest(manifest);
+    const previousPronunciationAudio = audioArtifacts.pronunciation;
     const previousPrimaryClip = audioArtifacts.pronunciation?.primaryClip;
     const previousChunkClip = audioArtifacts.pronunciation?.itemClips?.[0];
     const effectiveStudyTextTtsStrategy = flags.studyTextTtsStrategy ?? manifest.ttsStrategy;
@@ -1458,6 +1506,7 @@ export async function rerunAssignment(
               modelId: previousChunkModelId,
             }),
           chunkVoiceId: resolvedChunkVoiceId,
+          previousAudio: previousPronunciationAudio,
           logger,
         });
         audioArtifacts.pronunciation = generatedPronunciation
@@ -1525,12 +1574,19 @@ export async function rerunAssignment(
         {
           kind: 'pronunciation_primary',
           artifact: audioArtifacts.pronunciation?.primaryClip ?? undefined,
-          regenerated: flags.regeneratePronunciationMainAudio === true,
+          regenerated:
+            flags.regeneratePronunciationMainAudio === true &&
+            wasPronunciationClipRegenerated(
+              audioArtifacts.pronunciation?.primaryClip ?? undefined,
+              previousPronunciationAudio,
+            ),
         },
         ...(audioArtifacts.pronunciation?.itemClips ?? []).map((artifact) => ({
           kind: 'pronunciation_item' as const,
           artifact,
-          regenerated: flags.regeneratePronunciationChunkAudio === true,
+          regenerated:
+            flags.regeneratePronunciationChunkAudio === true &&
+            wasPronunciationClipRegenerated(artifact, previousPronunciationAudio),
         })),
       ];
       const uploadable = rerunArtifactEntries.filter((entry) => {

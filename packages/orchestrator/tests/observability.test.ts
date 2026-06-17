@@ -386,6 +386,114 @@ describe('orchestrator observability', () => {
     );
   }, 20_000);
 
+  it('does not force-upload unchanged pronunciation item clips during chunk reruns', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'orchestrator-rerun-partial-chunk-upload-'));
+    const mdPath = join(dir, 'assignment.md');
+    const audioPath = join(dir, 'lesson.mp3');
+    const unchangedItemPath = join(dir, 'pron-item-unchanged.mp3');
+    const changedItemPath = join(dir, 'pron-item-changed.mp3');
+
+    const markdown = await readFile(
+      join(import.meta.dirname, '../../md-validator/fixtures/ok.md'),
+      'utf8',
+    );
+    await writeFile(mdPath, markdown);
+    await writeFile(audioPath, 'dummy audio');
+    await writeFile(unchangedItemPath, 'unchanged pronunciation audio');
+    await writeFile(changedItemPath, 'changed pronunciation audio');
+
+    process.env.S3_BUCKET = 'observability-bucket';
+    process.env.AWS_REGION = 'us-east-1';
+
+    const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-core');
+    vi.mocked(buildStudyTextMp3).mockResolvedValue({
+      path: audioPath,
+      hash: 'study-hash',
+      voices: [{ speaker: 'Anna', voiceId: 'voice_id_default', source: 'default' }],
+    });
+    vi.mocked(synthesizePronunciationAudio)
+      .mockResolvedValueOnce({
+        mode: 'connected_speech',
+        itemClips: [
+          {
+            id: 'connected-speech-1',
+            itemIndex: 0,
+            kind: 'connected_target',
+            engine: 'provider',
+            text: 'a tuft of feathers',
+            path: unchangedItemPath,
+            hash: 'unchanged-item-hash',
+            url: 'https://s3.amazonaws.com/audio/file.mp3',
+          },
+          {
+            id: 'connected-speech-2',
+            itemIndex: 1,
+            kind: 'connected_target',
+            engine: 'provider',
+            text: 'old phrase',
+            path: join(dir, 'pron-item-old.mp3'),
+            hash: 'old-item-hash',
+            url: 'https://cdn.example/audio/old-item.mp3',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        mode: 'connected_speech',
+        itemClips: [
+          {
+            id: 'connected-speech-1',
+            itemIndex: 0,
+            kind: 'connected_target',
+            engine: 'provider',
+            text: 'a tuft of feathers',
+            path: unchangedItemPath,
+            hash: 'unchanged-item-hash',
+            url: 'https://s3.amazonaws.com/audio/file.mp3',
+          },
+          {
+            id: 'connected-speech-2',
+            itemIndex: 1,
+            kind: 'connected_target',
+            engine: 'provider',
+            text: 'a cup of tea',
+            path: changedItemPath,
+            hash: 'changed-item-hash',
+          },
+        ],
+      });
+
+    const { newAssignment, rerunAssignment } = await import('../src/index.js');
+    await newAssignment(
+      {
+        md: mdPath,
+        preset: 'default',
+        withTts: true,
+        upload: 's3',
+        voices: 'packages/orchestrator/configs/voices.yml',
+        dryRun: false,
+      },
+      {},
+      { runId: 'run-initial' },
+    );
+
+    vi.mocked(uploadFile).mockClear();
+    vi.mocked(buildStudyTextMp3).mockClear();
+
+    await rerunAssignment(
+      {
+        md: mdPath,
+        regeneratePronunciationChunkAudio: true,
+        upload: 's3',
+        dryRun: false,
+      },
+      { runId: 'run-rerun' },
+    );
+
+    const uploadedKeys = vi.mocked(uploadFile).mock.calls.map((call) => call[1]?.key);
+    expect(uploadedKeys).not.toContain('audio/pronunciation-item/unchanged-item-hash.mp3');
+    expect(uploadedKeys).toContain('audio/pronunciation-item/changed-item-hash.mp3');
+  }, 20_000);
+
   it('does not reuse a previous provider voice id when rerun chunk synthesis switches providers', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orchestrator-rerun-provider-switch-'));
     const mdPath = join(dir, 'assignment.md');
