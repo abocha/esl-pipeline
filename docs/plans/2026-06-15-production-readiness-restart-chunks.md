@@ -422,23 +422,37 @@ Observed after the first successful production image deploys:
 - After a PR has passed CI and merged, the `main` workflow should not rerun the whole suite just to
   prove the same merge content again; it should focus on release/image publication and any minimal
   post-merge guards needed for safety.
+- The existing release bot is part of this flow: `.github/workflows/release-on-merge.yml` runs after
+  a PR merges, resolves the release label, commits `chore(release): vX.Y.Z` to `main`, and pushes
+  tag `vX.Y.Z`.
+- Production image publishing must account for that bot-authored version bump so image metadata,
+  tags, release notes, and deployable SHAs do not drift.
 
 Implementation boundaries:
 
 - Keep PR validation comprehensive enough to protect `main`.
-- Keep production image publication tied to immutable merged SHAs.
+- Decide explicitly whether production images are built from the original merged PR SHA, the
+  bot-authored `chore(release)` SHA, or the release tag; prefer the release bot commit/tag unless
+  there is a concrete reason deploys must target the pre-release merge SHA.
+- Keep production image publication tied to immutable SHAs/tags, not mutable branch names.
 - Preserve release-label and release-on-merge behavior.
 - Before changing workflows, inspect `.github/workflows/ci.yml`,
   `.github/workflows/release-on-merge.yml`, image build/push jobs, and any deployment consumers of
   GHCR tags.
+- Prevent the release bot's `main` push from causing a duplicate full validation run. If a
+  post-merge workflow is still needed, scope it to release/image safety checks and image
+  publication.
 - Do not weaken required PR checks; this chunk is about event routing and avoiding duplicate
   post-merge work, not reducing PR confidence.
 
 Acceptance gates:
 
 - PR workflows run validation but do not publish production runtime images.
-- Merge-to-`main` workflows publish production images for the merged SHA without rerunning the full
-  PR validation suite.
+- Merge-to-`main` or release-tag workflows publish production images only after the release bot has
+  either completed or been deliberately bypassed by documented design.
+- Production image tags/labels make it clear whether the deployable image corresponds to the
+  original merge SHA, the bot-authored release commit SHA, or the release tag.
+- The release bot's `chore(release)` push does not rerun the full PR validation suite.
 - Required checks and release label guards still protect PRs before merge.
 - Deployment docs or release notes explain which workflow creates production images and when.
 
