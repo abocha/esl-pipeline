@@ -5,7 +5,7 @@
 - Audience: founder, maintainers, prompt/runtime implementers, AI agents.
 - Read Time: 9 minutes.
 - Authority Level: active system prompting and assembly guidance for homework drafting.
-- Last Verified Against: 2026-03-27 repo state.
+- Last Verified Against: 2026-06-17 repo state.
 - Owner: founder-maintainer + backend/frontend maintainers.
 - Review Cadence: after prompt-assembly or model-guidance changes.
 - Status: `reference`.
@@ -292,6 +292,8 @@ Important nuance:
 - the prompt and validator know all 6 modes explicitly
 - the renderer should render all 6 cleanly
 - provider-backed pronunciation audio is still not fully symmetrical across all modes
+- for `connected_speech`, the left-hand `<careful form>` is the provider TTS source; the
+  right-hand `<connected form>` is learner-facing pronunciation guidance, not synthesis input
 
 Recommendation:
 

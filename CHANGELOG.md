@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [9.1.2] - 2026-06-17
+
+### Changed
+
+- Automated release from PR #105: Fix connected-speech pronunciation audio source text (https://github.com/abocha/esl-pipeline/pull/105)
+
 ## [9.1.1] - 2026-06-17
 
 ### Changed
