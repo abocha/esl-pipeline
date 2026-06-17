@@ -192,6 +192,106 @@ describe('runtime/pronunciation-audio', () => {
     );
   });
 
+  it('reuses unchanged pronunciation item clips while synthesizing changed clips', async () => {
+    vi.mocked(extractPronunciationFocus).mockReturnValue({
+      mode: 'connected_speech',
+      naturalSentence: 'I saw a tuft of feathers and a cup of tea.',
+      lines: [
+        {
+          line: 1,
+          careful: 'a tuft of feathers',
+          connected: 'ə-tuft-uv-feathers',
+        },
+        {
+          line: 2,
+          careful: 'a cup of tea',
+          connected: 'ə-cup-uv-tea',
+        },
+      ],
+      sectionStartLine: 1,
+      issues: [],
+    });
+    vi.mocked(buildPronunciationTextMp3).mockImplementation(async ({ text }) => ({
+      path: `/tmp/${String(text).replaceAll(/\s+/g, '-')}.mp3`,
+      hash: `hash-${String(text).replaceAll(/\s+/g, '-')}`,
+      voiceId: 'chunk-voice',
+      provider: 'google',
+      modelId: 'chirp3_hd',
+      generatedCharacters: String(text).length,
+      cachedCharacters: 0,
+    }));
+
+    const result = await synthesizePronunciationAudio({
+      context: {} as never,
+      mdPath: '/tmp/example.md',
+      outPath: '/tmp',
+      title: 'Pronunciation',
+      regeneratePrimary: false,
+      primaryTtsProvider: 'google',
+      primaryVoiceId: 'voice-1',
+      chunkVoiceId: 'chunk-voice',
+      previousAudio: {
+        mode: 'connected_speech',
+        itemClips: [
+          {
+            id: 'connected-speech-1',
+            itemIndex: 0,
+            kind: 'connected_target',
+            engine: 'provider',
+            text: 'a tuft of feathers',
+            label: 'Play',
+            url: 'https://cdn.example/audio/a-tuft-of-feathers.mp3',
+            hash: 'old-hash-a-tuft-of-feathers',
+            voiceId: 'chunk-voice',
+            tts: {
+              provider: 'google',
+              modelId: 'chirp3_hd',
+              generatedCharacters: 18,
+              cachedCharacters: 0,
+            },
+          },
+          {
+            id: 'connected-speech-2',
+            itemIndex: 1,
+            kind: 'connected_target',
+            engine: 'provider',
+            text: 'old phrase',
+            label: 'Play',
+            url: 'https://cdn.example/audio/old-phrase.mp3',
+            hash: 'old-hash-old-phrase',
+            voiceId: 'chunk-voice',
+            tts: {
+              provider: 'google',
+              modelId: 'chirp3_hd',
+              generatedCharacters: 10,
+              cachedCharacters: 0,
+            },
+          },
+        ],
+      },
+    });
+
+    expect(result?.itemClips).toHaveLength(2);
+    expect(result?.itemClips?.[0]).toEqual(
+      expect.objectContaining({
+        text: 'a tuft of feathers',
+        url: 'https://cdn.example/audio/a-tuft-of-feathers.mp3',
+        hash: 'old-hash-a-tuft-of-feathers',
+      }),
+    );
+    expect(result?.itemClips?.[1]).toEqual(
+      expect.objectContaining({
+        text: 'a cup of tea',
+        hash: 'hash-a-cup-of-tea',
+      }),
+    );
+    expect(vi.mocked(buildPronunciationTextMp3)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(buildPronunciationTextMp3)).toHaveBeenCalledWith(
+      expect.objectContaining({ text: 'a cup of tea' }),
+      expect.any(Object),
+    );
+  });
+
   it('uses the Google chunk default voice for sentence-level item clips when no chunk voice override is provided', async () => {
     vi.mocked(extractPronunciationFocus).mockReturnValue({
       mode: 'sentence_stress',

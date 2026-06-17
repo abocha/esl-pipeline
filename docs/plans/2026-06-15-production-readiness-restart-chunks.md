@@ -6,15 +6,15 @@
 - Status: active.
 - Last Verified Against: 2026-06-17 repo state.
 - Exit Trigger: archive after the restart backlog is converted into shipped implementation PRs or superseded by the next invite-wave readiness plan.
-- Current Focus: finish Chunk 6 P1 schedule, billing, and candidate queue defaults.
+- Current Focus: finish Chunk 7 P2 audio caching and explicit regeneration ergonomics.
 
 ## Purpose
 
 Turn the restart handoff into a small set of independently plannable work chunks. This document is
 not an implementation plan yet; it is the intake map for the next implementation plans.
 
-Chunks 1 and 2 have been implemented. The current implementation plan adds Chunks 3 and 9 plus a
-design-only Chunk 10 note on the same readiness branch.
+Chunks 1 through 6 have been implemented. The current implementation plan finishes the remaining
+Chunk 7 audio caching and explicit regeneration ergonomics.
 
 ## Priority Order
 
@@ -339,8 +339,20 @@ Source evidence for P1 source-text correctness:
   written phrase.
 - `packages/html-publisher/tests/rendering.pronunciation-behavior.test.ts` keeps the same
   pseudo-respelling visible as learner-facing connected-speech guidance.
-- The P2 caching and explicit regeneration items remain open; do not treat this P1 source-text fix
-  as completion of the broader Chunk 7 regeneration scope.
+- `packages/orchestrator/src/runtime/pronunciation-audio.ts` now receives prior pronunciation audio
+  from the manifest on rerun and reuses unchanged clip artifacts when the audio-relevant identity
+  still matches: clip identity, spoken text, provider, model, and voice.
+- `packages/orchestrator/src/index.ts` preserves rerun-family replacement semantics for genuinely
+  regenerated clips while avoiding forced upload replacement for unchanged pronunciation item clips
+  that carry forward the existing durable URL.
+- `packages/orchestrator/tests/runtime.pronunciation-audio.test.ts` covers reusing an unchanged
+  connected-speech item while synthesizing a changed item in the same pronunciation chunk rerun.
+- `packages/orchestrator/tests/observability.test.ts` covers upload behavior for mixed changed and
+  unchanged pronunciation item clips, proving only the changed item is force-uploaded.
+- `packages/batch-frontend/src/ui/minimal/MinimalAssignment.logic.ts` and
+  `packages/batch-frontend/src/ui/minimal/MinimalAssignment.publish-actions.test-groups.tsx`
+  expose and verify separate quick actions for republishing the current draft without regenerating
+  audio versus explicitly regenerating pronunciation or all audio.
 
 ## Chunk 8: Telegram and Invite Registration Follow-Up
 
@@ -544,6 +556,6 @@ Recreate backend services after production env changes.
 
 ## Next Step
 
-After this readiness PR lands and deploy behavior does not need immediate VPS follow-up, start Chunk
-7 with the remaining P2 audio caching and explicit regeneration ergonomics, or choose Chunk 10 if
-student-memory throughput becomes the next observed bottleneck.
+After the Chunk 7 PR lands and deploy behavior does not need immediate VPS follow-up, choose between
+Chunk 10 student-memory throughput/prompt quality and Chunk 11 PR-validation/image-publishing
+workflow split based on the next observed bottleneck.
