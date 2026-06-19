@@ -5,7 +5,7 @@
 - Audience: founder-maintainer and implementing agents.
 - Read Time: 5 minutes.
 - Authority Level: canonical provider/model/quota policy.
-- Last Verified Against: 2026-06-13 repo state.
+- Last Verified Against: 2026-06-19 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly or after provider policy/availability changes.
 - Status: `reference`.
@@ -25,6 +25,13 @@
 
 ### OpenAI
 
+- Current production-default activation remains unchanged until a credentialed live evaluation report
+  is reviewed. `GEN_OPENAI_TARGET_MODELS_ENABLED` defaults to `false` and is the explicit operator
+  gate; it is not a paywall or user-plan control.
+- Evaluated target ladder (only after that gate is deliberately enabled):
+  - assignment creation: `gpt-5.5`
+  - lesson/homework/snapshot memory and profile drafts: `gpt-5.4-mini`
+  - memory fallback and the closed `apply`/`no_change` candidate-patch decision: `gpt-5.4-nano`
 - direct draft generation:
   - primary: `gpt-5.4-mini`
   - fallback: `gpt-5.4-nano`
@@ -106,6 +113,10 @@ Additional rules:
 - preset semantics and provider semantics must stay decoupled
 - student-memory extraction capability is governed separately by
   [`docs/reference/STUDENT_MEMORY_EXTRACTION_CAPABILITY_POLICY.md`](STUDENT_MEMORY_EXTRACTION_CAPABILITY_POLICY.md)
+- generation changes require the versioned offline fixture command before merging:
+  `pnpm --filter @esl-pipeline/batch-backend generation:eval`
+- target-default activation additionally requires a successful, retained report from
+  `GENERATION_LIVE_EVAL_ENABLED=true pnpm --filter @esl-pipeline/batch-backend generation:eval:live`
 
 ## Detailed Provider References
 

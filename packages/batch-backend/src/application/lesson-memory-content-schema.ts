@@ -11,6 +11,7 @@ export const LessonMemoryFactAuthoritySchema = z.enum(FactAuthorityValues);
 
 export const FactEvidenceSchema = z
   .object({
+    sourceId: NonEmptyStringSchema.default('legacy'),
     quote: NonEmptyStringSchema,
     speakerRole: z.enum(SpeakerRoleValues).nullable(),
     evidenceNote: NonEmptyStringSchema.nullable(),
@@ -20,6 +21,7 @@ export const FactEvidenceSchema = z
 
 export const MistakeEvidenceSchema = z
   .object({
+    sourceId: NonEmptyStringSchema.default('legacy'),
     observedForm: NonEmptyStringSchema,
     suggestedTarget: NonEmptyStringSchema.nullable(),
     evidenceQuote: NonEmptyStringSchema.nullable(),
@@ -30,6 +32,7 @@ export const MistakeEvidenceSchema = z
 
 export const PronunciationEvidenceSchema = z
   .object({
+    sourceId: NonEmptyStringSchema.default('legacy'),
     observedIssue: NonEmptyStringSchema,
     focusWords: z.array(NonEmptyStringSchema),
     evidenceQuote: NonEmptyStringSchema.nullable(),
@@ -133,31 +136,41 @@ const factEvidenceJsonSchema = {
   type: 'object',
   additionalProperties: false,
   properties: {
+    sourceId: { type: 'string', minLength: 1 },
     quote: { type: 'string', minLength: 1 },
     speakerRole: nullableEnumJsonSchema(SpeakerRoleValues),
     evidenceNote: nullableStringJsonSchema(),
     transcriptSpan: nullableStringJsonSchema(),
   },
-  required: ['quote', 'speakerRole', 'evidenceNote', 'transcriptSpan'],
+  required: ['sourceId', 'quote', 'speakerRole', 'evidenceNote', 'transcriptSpan'],
 } as const;
 
 const mistakeEvidenceJsonSchema = {
   type: 'object',
   additionalProperties: false,
   properties: {
+    sourceId: { type: 'string', minLength: 1 },
     observedForm: { type: 'string', minLength: 1 },
     suggestedTarget: nullableStringJsonSchema(),
     evidenceQuote: nullableStringJsonSchema(),
     evidenceNote: nullableStringJsonSchema(),
     confidenceNote: nullableStringJsonSchema(),
   },
-  required: ['observedForm', 'suggestedTarget', 'evidenceQuote', 'evidenceNote', 'confidenceNote'],
+  required: [
+    'sourceId',
+    'observedForm',
+    'suggestedTarget',
+    'evidenceQuote',
+    'evidenceNote',
+    'confidenceNote',
+  ],
 } as const;
 
 const pronunciationEvidenceJsonSchema = {
   type: 'object',
   additionalProperties: false,
   properties: {
+    sourceId: { type: 'string', minLength: 1 },
     observedIssue: { type: 'string', minLength: 1 },
     focusWords: {
       type: 'array',
@@ -167,7 +180,14 @@ const pronunciationEvidenceJsonSchema = {
     evidenceNote: nullableStringJsonSchema(),
     confidenceNote: nullableStringJsonSchema(),
   },
-  required: ['observedIssue', 'focusWords', 'evidenceQuote', 'evidenceNote', 'confidenceNote'],
+  required: [
+    'sourceId',
+    'observedIssue',
+    'focusWords',
+    'evidenceQuote',
+    'evidenceNote',
+    'confidenceNote',
+  ],
 } as const;
 
 export const LESSON_MEMORY_CONTENT_JSON_SCHEMA = {

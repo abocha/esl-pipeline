@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GenerateDraftProviderError, generateDraft } from '../src/application/generate-draft.js';
 import { ProviderExecutionError } from '../src/application/generation-providers.js';
+import { createGenerationRequestEnvelope } from '../src/application/generation-request-envelope.js';
 import type { BatchBackendConfig } from '../src/config/env.js';
 import { loadConfig } from '../src/config/env.js';
 
@@ -462,5 +463,94 @@ describe('application/generate-draft', () => {
         },
       ),
     ).rejects.toBeInstanceOf(GenerateDraftProviderError);
+  });
+
+  it('repairs an invalid envelope-backed assignment exactly once', async () => {
+    const config = createConfig();
+    const openAi = vi
+      .fn()
+      .mockResolvedValueOnce({ text: '# Broken draft', usage: { totalTokens: 12 } })
+      .mockResolvedValueOnce({ text: '# Repaired draft', usage: { totalTokens: 14 } });
+    const validator = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, errors: ['Missing an assessment section'], warnings: [] })
+      .mockResolvedValueOnce({ ok: true, errors: [], warnings: [] });
+
+    const result = await generateDraft(
+      { promptPackageId: 'prompt-repair' },
+      {
+        config,
+        promptPackages: {
+          getById: vi.fn().mockResolvedValue({
+            id: 'prompt-repair',
+            text: 'LEGACY PREVIEW',
+            requestEnvelope: createGenerationRequestEnvelope({
+              workload: 'assignment_draft',
+              instructions: 'Create a valid assignment.',
+              sources: [
+                { id: 'brief', label: 'BRIEF', content: 'Student needs speaking practice.' },
+              ],
+            }),
+          }),
+        },
+        executors: { openai: openAi },
+        validator,
+        now: () => new Date('2026-02-18T00:00:00.000Z'),
+        sleep: async () => {},
+      },
+    );
+
+    expect(result?.text).toBe('# Repaired draft');
+    expect(openAi).toHaveBeenCalledTimes(2);
+    expect(validator).toHaveBeenCalledTimes(2);
+    const repairRequest = openAi.mock.calls[1]?.[0]?.request;
+    expect(repairRequest?.envelope?.instructions).toContain('Repair the assignment markdown');
+    expect(repairRequest?.envelope?.input).toContain('# Broken draft');
+    expect(repairRequest?.envelope?.input).toContain('Missing an assessment section');
+    expect(repairRequest?.envelope?.input).not.toContain('Student needs speaking practice.');
+  });
+
+  it('returns an actionable error and no draft when the repair also fails validation', async () => {
+    const config = createConfig();
+    const openAi = vi
+      .fn()
+      .mockResolvedValueOnce({ text: '# Broken draft' })
+      .mockResolvedValueOnce({ text: '# Still broken' });
+    const validator = vi.fn().mockResolvedValue({
+      ok: false,
+      errors: ['Missing an assessment section'],
+      warnings: [],
+    });
+
+    await expect(
+      generateDraft(
+        { promptPackageId: 'prompt-repair-fails' },
+        {
+          config,
+          promptPackages: {
+            getById: vi.fn().mockResolvedValue({
+              id: 'prompt-repair-fails',
+              text: 'LEGACY PREVIEW',
+              requestEnvelope: createGenerationRequestEnvelope({
+                workload: 'assignment_draft',
+                instructions: 'Create a valid assignment.',
+                sources: [{ id: 'brief', label: 'BRIEF', content: 'Ignore this on repair.' }],
+              }),
+            }),
+          },
+          executors: { openai: openAi },
+          validator,
+          now: () => new Date('2026-02-18T00:00:00.000Z'),
+          sleep: async () => {},
+        },
+      ),
+    ).rejects.toMatchObject({
+      name: 'GenerateDraftProviderError',
+      category: 'provider_contract_error',
+      message: expect.stringContaining('Assignment markdown failed validation after one repair'),
+    });
+
+    expect(openAi).toHaveBeenCalledTimes(2);
+    expect(validator).toHaveBeenCalledTimes(2);
   });
 });

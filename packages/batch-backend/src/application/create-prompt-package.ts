@@ -27,7 +27,7 @@ import {
   deriveFoundationalProfileFromMarkdown,
   renderFoundationalProfileContent,
 } from './foundational-profile.js';
-import { stitchPromptPayload } from './prompt-assembly.js';
+import { stitchPromptEnvelope, stitchPromptPayload } from './prompt-assembly.js';
 import { PromptOptionError, resolvePromptSelection } from './prompt-options.js';
 import { requestLessonMemoryGeneration } from './request-lesson-memory-generation.js';
 import { buildStudentMemoryPackageContext } from './student-memory-package.js';
@@ -57,6 +57,7 @@ export interface PromptPackageResponse {
   notes: string | null;
   storageUri: string;
   text: string;
+  requestEnvelope?: unknown | null;
   profileSnapshot?: {
     resolvedProfileId: string;
     resolvedProfileHash: string;
@@ -250,6 +251,16 @@ export async function createPromptPackage(
     transcript: transcriptText,
     notes: params.notes,
   });
+  const requestEnvelope = stitchPromptEnvelope({
+    template: artifacts.template.content,
+    profile: artifacts.profile.content,
+    studentMemorySnapshot: memoryContext.studentMemorySnapshotBlock,
+    recentLessonMemory: memoryContext.recentLessonMemoryBlock,
+    recentHomeworkMemory: memoryContext.recentHomeworkMemoryBlock,
+    unresolvedIssues: memoryContext.unresolvedIssuesBlock,
+    transcript: transcriptText,
+    notes: params.notes,
+  });
 
   const promptPackageId = randomUUID();
   const stored = await storage.putPromptPackage({
@@ -284,6 +295,7 @@ export async function createPromptPackage(
     templateVersion: selection.templateId,
     notes: params.notes ?? null,
     storageUri: stored.uri,
+    requestEnvelope,
   });
 
   const response = toPromptPackageResponse(promptPackage, payload);
@@ -351,6 +363,9 @@ export function toPromptPackageResponse(
     notes: promptPackage.notes ?? null,
     storageUri: promptPackage.storageUri,
     text,
+    ...(promptPackage.requestEnvelope !== null && promptPackage.requestEnvelope !== undefined
+      ? { requestEnvelope: promptPackage.requestEnvelope }
+      : {}),
     ...(hasProfileSnapshot
       ? {
           profileSnapshot: {

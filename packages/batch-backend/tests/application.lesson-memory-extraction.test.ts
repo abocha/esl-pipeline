@@ -10,6 +10,7 @@ import {
   extractLessonMemoryContent,
   LessonMemoryExtractionValidationError,
 } from '../src/application/lesson-memory-extraction.js';
+import { buildLessonMemoryEnvelope } from '../src/application/lesson-memory-prompt.js';
 import type { BatchBackendConfig } from '../src/config/env.js';
 import { loadConfig } from '../src/config/env.js';
 
@@ -29,6 +30,7 @@ function createLessonMemoryContent() {
         confidence: 'high' as const,
         evidence: [
           {
+            sourceId: 'transcript:transcript-1',
             observedForm: 'I booked ticket',
             suggestedTarget: 'I booked a ticket',
             evidenceQuote: 'I booked ticket yesterday',
@@ -48,6 +50,7 @@ function createLessonMemoryContent() {
         confidence: 'medium' as const,
         evidence: [
           {
+            sourceId: 'transcript:transcript-1',
             observedIssue: 'Stress drift on itinerary',
             focusWords: ['itinerary'],
             evidenceQuote: null,
@@ -65,6 +68,7 @@ function createLessonMemoryContent() {
         confidence: 'high' as const,
         evidence: [
           {
+            sourceId: 'transcript:transcript-1',
             quote: 'I want to go to Japan this summer.',
             speakerRole: 'student' as const,
             evidenceNote: null,
@@ -105,6 +109,18 @@ describe('application/lesson-memory-content-schema', () => {
 });
 
 describe('application/lesson-memory-extraction', () => {
+  it('builds a labelled transcript envelope with trusted extraction policy', () => {
+    const envelope = buildLessonMemoryEnvelope({
+      transcriptId: 'transcript-1',
+      transcriptText: 'Student: I goed there.',
+      teacherNotes: 'Focus on past tense.',
+    });
+
+    expect(envelope.instructions).toContain('canonical structured lesson memory');
+    expect(envelope.input).toContain('id="transcript:transcript-1"');
+    expect(envelope.input).toContain('Focus on past tense.');
+  });
+
   it('uses the structured schema contract and returns validated content', async () => {
     const executor = vi.fn().mockResolvedValue({
       output: createLessonMemoryContent(),
@@ -166,5 +182,31 @@ describe('application/lesson-memory-extraction', () => {
         },
       }),
     ).rejects.toBeInstanceOf(LessonMemoryExtractionValidationError);
+  });
+
+  it('rejects evidence that is not present in the envelope manifest', async () => {
+    const content = createLessonMemoryContent();
+    content.studentFacts[0]!.evidence[0]!.sourceId = 'unselected-source';
+
+    await expect(
+      extractLessonMemoryContent({
+        config: createGenerationConfig(),
+        request: {
+          provider: 'openai',
+          model: 'gpt-5.4-mini',
+          prompt: 'Extract lesson memory',
+          envelope: buildLessonMemoryEnvelope({
+            transcriptId: 'transcript-1',
+            transcriptText: 'Student: I want to go to Japan this summer.',
+          }),
+        },
+        executors: {
+          openai: vi.fn().mockResolvedValue({ output: content, rawText: '{}' }),
+        },
+      }),
+    ).rejects.toMatchObject({
+      name: 'SourceEvidenceValidationError',
+      invalidSourceIds: ['unselected-source'],
+    });
   });
 });

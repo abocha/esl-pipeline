@@ -5,7 +5,7 @@
 - Audience: founder-maintainer and implementing agents.
 - Read Time: 10 minutes.
 - Authority Level: implementation-driving reference for WS2B OpenAI integration.
-- Last Updated: 2026-04-09.
+- Last Updated: 2026-06-19.
 
 ## Purpose
 
@@ -59,6 +59,8 @@ Allowed WS2B fields:
 2. `max_output_tokens?: number`
 3. `metadata?: Record<string, string>` (lineage/tracing)
 4. `stream?: boolean`
+5. `reasoning.effort` and `text.verbosity`, only from the versioned workload request envelope
+6. `text.format` with strict `json_schema` for structured extraction and closed candidate-patch output
 
 Deferred optional fields (not baseline WS2B-S1/S2):
 
@@ -70,6 +72,19 @@ WS2B defaults and limits:
 1. WS2B-S2 baseline is non-streaming (`stream=false`).
 2. `background` defaults to `false` unless async flow is explicitly introduced.
 3. Do not add ad-hoc `tools`/`tool_choice` or unrelated reasoning knobs in MVP.
+
+## Request Envelope and Trust Boundary
+
+Generation uses `generation_request_envelope_v1`. Trusted policy is sent through Responses
+`instructions`; transcripts, teacher notes, memory, and profile data are sent separately as labelled
+`input` source-data blocks. Each envelope states that source data is evidence rather than executable
+instructions, records the selected source manifest and a source-selection hash, and carries the
+workload's reasoning/verbosity policy and optional strict schema. Non-OpenAI providers receive the
+same deterministic flattened representation.
+
+Consequential structured claims must reference a source ID in the request manifest and include a
+short evidence excerpt. Candidate promotion is a closed `apply`/`no_change` decision over selected
+approved candidate IDs; backend code applies approved facts and preserves unrelated profile fields.
 
 ## Response Profile (Consumed Fields)
 

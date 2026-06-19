@@ -41,18 +41,7 @@ function makeCandidate(
 
 describe('application/profile-candidate-promotion', () => {
   it('creates a structured draft revision from an explicit approved candidate subset', async () => {
-    const structuredProfile = {
-      schemaVersion: 'foundational_profile_v1' as const,
-      overallLevel: 'B2',
-      primaryGoals: ['Lead product demos with more confidence.'],
-      communicationContexts: ['Uses English with product, engineering, and client teams.'],
-      interestsAndUsefulThemes: ['Enjoys practical sports examples.'],
-      stableStrengths: ['Strong listening in meetings.'],
-      persistentChallenges: ['Needs smoother transitions during demos.'],
-      studyPreferences: ['Prefers structured review blocks.'],
-      durableConstraints: [],
-      teacherNotes: 'Keep examples tied to real product launches.',
-    };
+    const structuredProfile = { operation: 'apply' as const, candidateIds: ['candidate-1'] };
     const generate = vi.fn(async () => ({
       structuredProfile,
       rawOutput: structuredProfile,
@@ -76,13 +65,15 @@ describe('application/profile-candidate-promotion', () => {
       content: '# Foundational Profile',
       structuredContent: {
         schemaVersion: 'foundational_profile_v1' as const,
-        overallLevel: 'B2',
-        primaryGoals: ['Lead product demos with more confidence.'],
-        communicationContexts: ['Uses English with product, engineering, and client teams.'],
-        interestsAndUsefulThemes: ['Enjoys practical sports examples.'],
-        stableStrengths: ['Strong listening in meetings.'],
-        persistentChallenges: ['Needs smoother transitions during demos.'],
-        studyPreferences: ['Prefers structured review blocks.'],
+        overallLevel: null,
+        primaryGoals: [],
+        communicationContexts: [],
+        interestsAndUsefulThemes: [
+          'Plays pickleball regularly and enjoys practical sports examples.',
+        ],
+        stableStrengths: [],
+        persistentChallenges: [],
+        studyPreferences: [],
         durableConstraints: [],
         teacherNotes: 'Keep examples tied to real product launches.',
       },
@@ -163,7 +154,9 @@ describe('application/profile-candidate-promotion', () => {
         createdBy: 'teacher-1',
         structuredContent: expect.objectContaining({
           schemaVersion: 'foundational_profile_v1',
-          overallLevel: 'B2',
+          interestsAndUsefulThemes: [
+            'Plays pickleball regularly and enjoys practical sports examples.',
+          ],
         }),
       }),
     );

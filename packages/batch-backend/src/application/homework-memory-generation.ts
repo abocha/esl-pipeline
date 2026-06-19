@@ -4,6 +4,7 @@ import type { BatchBackendConfig } from '../config/env.js';
 import type { HomeworkMemoryRecord } from '../domain/homework-memory-model.js';
 import { insertCanonicalReadyHomeworkMemoryEntry } from '../domain/homework-memory-repository.js';
 import type { ProviderStructuredExecutionResult } from './generation-providers.js';
+import type { GenerationRequestEnvelopeV1 } from './generation-request-envelope.js';
 import {
   type ExtractHomeworkMemoryContentRequest,
   extractHomeworkMemoryContent,
@@ -19,6 +20,7 @@ export interface GenerateHomeworkMemoryFromSourceRequest {
   provider: GenerationProvider;
   model: string;
   prompt: string;
+  envelope?: GenerationRequestEnvelopeV1;
   maxOutputTokens?: number;
 }
 
@@ -53,6 +55,7 @@ export async function generateHomeworkMemoryFromSource(args: {
       provider: args.request.provider,
       model: args.request.model,
       prompt: args.request.prompt,
+      ...(args.request.envelope ? { envelope: args.request.envelope } : {}),
       maxOutputTokens: args.request.maxOutputTokens,
     } satisfies ExtractHomeworkMemoryContentRequest,
   });

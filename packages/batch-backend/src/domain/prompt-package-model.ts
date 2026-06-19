@@ -25,6 +25,7 @@ export interface PromptPackageRecord {
   templateVersion: string;
   notes?: string | null;
   storageUri: string;
+  requestEnvelope?: unknown | null;
   createdAt: Date;
   updatedAt: Date;
 }

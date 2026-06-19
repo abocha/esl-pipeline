@@ -19,6 +19,15 @@ import {
   type FoundationalProfile,
   renderFoundationalProfileContent,
 } from './foundational-profile.js';
+import { createGenerationRequestEnvelope } from './generation-request-envelope.js';
+import {
+  applyProfileCandidatePatch,
+  PROFILE_CANDIDATE_PATCH_JSON_SCHEMA,
+  PROFILE_CANDIDATE_PATCH_RESPONSE_SCHEMA_DESCRIPTION,
+  PROFILE_CANDIDATE_PATCH_RESPONSE_SCHEMA_NAME,
+  type ProfileCandidatePatch,
+  validateProfileCandidatePatch,
+} from './profile-candidate-patch.js';
 import type { ProfileRevisionDetailResponse } from './profile-content.js';
 import { saveProfileRevisionContent } from './profile-content.js';
 import {
@@ -165,13 +174,27 @@ export async function promoteStudentProfileCandidates(args: {
     selectedCandidates,
     reviewerNote: request.reviewerNote ?? null,
   });
+  const envelope = buildPromotionEnvelope({
+    studentName: student.student,
+    baseStructuredProfile,
+    selectedCandidates,
+    reviewerNote: request.reviewerNote ?? null,
+  });
 
   const drafting = await dependencies.drafting.generate({
     request: {
       prompt,
+      envelope,
       operation: 'candidate_promotion',
       maxOutputTokens:
         request.maxOutputTokens ?? dependencies.config.generation.maxOutputTokensHard,
+      responseSchema: {
+        name: PROFILE_CANDIDATE_PATCH_RESPONSE_SCHEMA_NAME,
+        description: PROFILE_CANDIDATE_PATCH_RESPONSE_SCHEMA_DESCRIPTION,
+        schema: PROFILE_CANDIDATE_PATCH_JSON_SCHEMA,
+        strict: true,
+      },
+      validateOutput: validateProfileCandidatePatch,
     },
     overrides: {
       config: dependencies.config,
@@ -185,7 +208,36 @@ export async function promoteStudentProfileCandidates(args: {
       renderStructuredProfileForComparison(baseStructuredProfile) ?? baseRevision?.content ?? '',
   });
 
-  const structuredDraft = drafting.structuredProfile;
+  const candidatePatch = drafting.structuredProfile as ProfileCandidatePatch;
+  if (candidatePatch.operation === 'no_change') {
+    throw new ProfileCandidatePromotionError(
+      'No selected candidate was safe to promote; no draft revision was saved.',
+      'profile_candidate_no_change',
+      409,
+    );
+  }
+
+  let structuredDraft: FoundationalProfile | null;
+  try {
+    structuredDraft = applyProfileCandidatePatch({
+      baseProfile: baseStructuredProfile,
+      patch: candidatePatch,
+      selectedCandidates,
+    });
+  } catch (error) {
+    throw new ProfileCandidatePromotionError(
+      error instanceof Error ? error.message : String(error),
+      'profile_candidate_patch_invalid',
+      502,
+    );
+  }
+  if (!structuredDraft) {
+    throw new ProfileCandidatePromotionError(
+      'Candidate patch did not produce a profile change; no draft revision was saved.',
+      'profile_candidate_no_change',
+      409,
+    );
+  }
   const renderedDraft = renderFoundationalProfileContent(structuredDraft);
 
   const draftRevision = await dependencies.profileContent.saveRevision(profileId, renderedDraft, {
@@ -347,6 +399,50 @@ function buildPromotionPrompt(args: {
     '',
     'Output only valid JSON.',
   ].join('\n');
+}
+
+function buildPromotionEnvelope(args: {
+  studentName: string;
+  baseStructuredProfile: FoundationalProfile | null;
+  selectedCandidates: ProfilePromotionCandidate[];
+  reviewerNote: string | null;
+}) {
+  return createGenerationRequestEnvelope({
+    workload: 'profile_candidate_patch',
+    instructions: [
+      'Decide whether selected approved candidates are safe to promote into the student profile.',
+      'Return only a closed profile_candidate_patch_v1 JSON object.',
+      'Use operation apply only with IDs from SELECTED_APPROVED_CANDIDATES.',
+      'Use no_change with no IDs when no selected candidate should be promoted.',
+      'Do not rewrite profile fields or invent wording; the backend preserves unrelated fields and applies approved facts.',
+    ].join('\n'),
+    sources: [
+      { id: 'student-name', label: 'STUDENT_NAME', content: args.studentName },
+      {
+        id: 'base-profile',
+        label: 'BASE_STRUCTURED_PROFILE',
+        content: args.baseStructuredProfile
+          ? JSON.stringify(args.baseStructuredProfile)
+          : 'Not available.',
+      },
+      {
+        id: 'approved-candidates',
+        label: 'SELECTED_APPROVED_CANDIDATES',
+        content: JSON.stringify(args.selectedCandidates),
+      },
+      {
+        id: 'reviewer-note',
+        label: 'REVIEWER_NOTE',
+        content: args.reviewerNote ?? 'Not available.',
+      },
+    ],
+    responseSchema: {
+      name: PROFILE_CANDIDATE_PATCH_RESPONSE_SCHEMA_NAME,
+      description: PROFILE_CANDIDATE_PATCH_RESPONSE_SCHEMA_DESCRIPTION,
+      schema: PROFILE_CANDIDATE_PATCH_JSON_SCHEMA,
+      strict: true,
+    },
+  });
 }
 
 function assertCandidatePromotionDraftIsComplete(args: {

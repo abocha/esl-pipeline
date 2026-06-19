@@ -72,6 +72,7 @@ const factEvidenceJsonSchema = {
   type: 'object',
   additionalProperties: false,
   properties: {
+    sourceId: { type: 'string', minLength: 1 },
     quote: { type: 'string', minLength: 1 },
     speakerRole: {
       anyOf: [{ type: 'string', enum: ['student', 'teacher'] }, { type: 'null' }],
@@ -79,7 +80,7 @@ const factEvidenceJsonSchema = {
     evidenceNote: nullableStringJsonSchema(),
     transcriptSpan: nullableStringJsonSchema(),
   },
-  required: ['quote', 'speakerRole', 'evidenceNote', 'transcriptSpan'],
+  required: ['sourceId', 'quote', 'speakerRole', 'evidenceNote', 'transcriptSpan'],
 } as const;
 
 export const STUDENT_MEMORY_SNAPSHOT_CONTENT_JSON_SCHEMA = {

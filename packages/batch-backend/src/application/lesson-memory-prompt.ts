@@ -1,8 +1,57 @@
+import { createGenerationRequestEnvelope } from './generation-request-envelope.js';
+import {
+  LESSON_MEMORY_CONTENT_JSON_SCHEMA,
+  LESSON_MEMORY_RESPONSE_SCHEMA_DESCRIPTION,
+  LESSON_MEMORY_RESPONSE_SCHEMA_NAME,
+} from './lesson-memory-content-schema.js';
 import { extractStudentOnlyTranscript } from './student-lesson-history.js';
 
 export interface BuildLessonMemoryPromptParams {
+  transcriptId?: string;
   transcriptText: string;
   teacherNotes?: string | null;
+}
+
+export function buildLessonMemoryEnvelope(params: BuildLessonMemoryPromptParams) {
+  const transcriptText = params.transcriptText.trim();
+  const studentOnlyTranscript = extractStudentOnlyTranscript(transcriptText);
+  const notes = params.teacherNotes?.trim() ?? '';
+  const transcriptId = params.transcriptId?.trim() || 'unknown';
+
+  return createGenerationRequestEnvelope({
+    workload: 'lesson_memory',
+    instructions: [
+      'You are generating canonical structured lesson memory for one ESL tutoring lesson.',
+      'Use the full lesson transcript as the primary source of truth.',
+      'Teacher notes are supporting context and may clarify pedagogic intent.',
+      'Prefer omission over low-confidence claims.',
+      'Every fact, mistake, or pronunciation evidence item must cite a sourceId from the source manifest and preserve a short excerpt.',
+      'Focus on topics discussed, mistakes, grammar, vocabulary, pronunciation, student facts, progress signals, and useful follow-up recommendations.',
+    ].join('\n'),
+    sources: [
+      {
+        id: `transcript:${transcriptId}`,
+        label: 'FULL_TRANSCRIPT',
+        content: transcriptText || '(empty transcript)',
+      },
+      {
+        id: `teacher-notes:${transcriptId}`,
+        label: 'TEACHER_NOTES',
+        content: notes || 'Not available.',
+      },
+      {
+        id: `student-helper:${transcriptId}`,
+        label: 'STUDENT_ONLY_HELPER_TRANSCRIPT',
+        content: studentOnlyTranscript || 'Not available.',
+      },
+    ],
+    responseSchema: {
+      name: LESSON_MEMORY_RESPONSE_SCHEMA_NAME,
+      description: LESSON_MEMORY_RESPONSE_SCHEMA_DESCRIPTION,
+      schema: LESSON_MEMORY_CONTENT_JSON_SCHEMA,
+      strict: true,
+    },
+  });
 }
 
 export function buildLessonMemoryPrompt(params: BuildLessonMemoryPromptParams): string {
