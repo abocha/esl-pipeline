@@ -1,10 +1,18 @@
+import { createGenerationRequestEnvelope } from './generation-request-envelope.js';
+import {
+  HOMEWORK_MEMORY_CONTENT_JSON_SCHEMA,
+  HOMEWORK_MEMORY_RESPONSE_SCHEMA_DESCRIPTION,
+  HOMEWORK_MEMORY_RESPONSE_SCHEMA_NAME,
+} from './homework-memory-content-schema.js';
 import type { NormalizedHomeworkMarkdown } from './homework-memory-normalization.js';
 import type { HomeworkMemorySourceBundle } from './homework-memory-source.js';
-import { createGenerationRequestEnvelope } from './generation-request-envelope.js';
 
 export function buildHomeworkMemoryEnvelope(args: {
   normalizedMarkdown: NormalizedHomeworkMarkdown;
-  source: Pick<HomeworkMemorySourceBundle, 'publishTargets' | 'publishedAt' | 'assignmentLineageKey'>;
+  source: Pick<
+    HomeworkMemorySourceBundle,
+    'publishTargets' | 'publishedAt' | 'assignmentLineageKey'
+  >;
 }) {
   return createGenerationRequestEnvelope({
     workload: 'homework_memory',
@@ -29,6 +37,12 @@ export function buildHomeworkMemoryEnvelope(args: {
         ),
       },
     ],
+    responseSchema: {
+      name: HOMEWORK_MEMORY_RESPONSE_SCHEMA_NAME,
+      description: HOMEWORK_MEMORY_RESPONSE_SCHEMA_DESCRIPTION,
+      schema: HOMEWORK_MEMORY_CONTENT_JSON_SCHEMA,
+      strict: true,
+    },
   });
 }
 

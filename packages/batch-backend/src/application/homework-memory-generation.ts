@@ -4,12 +4,12 @@ import type { BatchBackendConfig } from '../config/env.js';
 import type { HomeworkMemoryRecord } from '../domain/homework-memory-model.js';
 import { insertCanonicalReadyHomeworkMemoryEntry } from '../domain/homework-memory-repository.js';
 import type { ProviderStructuredExecutionResult } from './generation-providers.js';
+import type { GenerationRequestEnvelopeV1 } from './generation-request-envelope.js';
 import {
   type ExtractHomeworkMemoryContentRequest,
   extractHomeworkMemoryContent,
 } from './homework-memory-extraction.js';
 import type { HomeworkMemorySourceBundle } from './homework-memory-source.js';
-import type { GenerationRequestEnvelopeV1 } from './generation-request-envelope.js';
 
 export const HOMEWORK_MEMORY_SCHEMA_VERSION = 'homework-memory.v1';
 

@@ -4,7 +4,7 @@
 
 - Audience: founder-maintainer, backend agents.
 - Status: `draft`.
-- Last Verified Against: 2026-06-18 repo state and OpenAI Batch/GPT-5.5 docs.
+- Last Verified Against: 2026-06-19 repo state and OpenAI Batch/GPT-5.5 docs.
 - Exit Trigger: archive or replace after the Chunk 10 implementation plan is accepted.
 - Current Focus: compare normal queue processing, rate-limit-aware throttling, and OpenAI Batch API
   backlog replay before implementation.
@@ -19,6 +19,14 @@ once. These jobs are important, but they do not need interactive latency.
 This note captures the design findings before Chunk 10 changes begin. It is intentionally not an
 implementation record: model defaults, env names, schema changes, queue behavior, and persistence
 contracts still need normal repo review before they change.
+
+## PR1 Implementation Record (2026-06-19)
+
+PR1 now has a versioned request envelope with an explicit source-data trust boundary, persisted
+prompt-package envelope lineage, deterministic assignment validation plus one bounded repair attempt,
+closed candidate-patch semantics, and an offline fixture command. The evaluated target model ladder
+remains disabled by default behind `GEN_OPENAI_TARGET_MODELS_ENABLED`; no production default has been
+activated by this implementation. PR2 pacing and PR3 Batch replay remain separate delivery work.
 
 ## Current Request Shape
 

@@ -6,7 +6,6 @@ import {
 } from '@esl-pipeline/provider-runtime';
 
 import type { BatchBackendConfig } from '../config/env.js';
-import type { GenerationRequestEnvelopeV1 } from './generation-request-envelope.js';
 import { loadConfig } from '../config/env.js';
 import type { GenerationBudgetUsage } from '../domain/generation-budget-repository.js';
 import { logger } from '../infrastructure/logger.js';
@@ -33,6 +32,8 @@ import {
   type ProviderStructuredExecutionRequest,
   type ProviderStructuredExecutionResult,
 } from './generation-providers.js';
+import type { GenerationRequestEnvelopeV1 } from './generation-request-envelope.js';
+import type { ProfileCandidatePatch } from './profile-candidate-patch.js';
 
 type ProviderExecutor = (args: {
   config: BatchBackendConfig['generation'];
@@ -114,10 +115,12 @@ export interface GenerateProfileRevisionDraftRequest {
   maxOutputTokens?: number;
   providerOverride?: GenerationProvider;
   modelOverride?: string;
+  responseSchema?: ProviderStructuredExecutionRequest['responseSchema'];
+  validateOutput?: (output: unknown) => FoundationalProfile | ProfileCandidatePatch;
 }
 
 export interface GenerateProfileRevisionDraftResult {
-  structuredProfile: FoundationalProfile;
+  structuredProfile: FoundationalProfile | ProfileCandidatePatch;
   rawOutput: unknown;
   rawText: string;
   provider: GenerationProvider;
@@ -199,7 +202,7 @@ export async function generateProfileRevisionDraft(args: {
           prompt: args.request.prompt,
           ...(args.request.envelope ? { envelope: args.request.envelope } : {}),
           maxOutputTokens: args.request.maxOutputTokens,
-          responseSchema: {
+          responseSchema: args.request.responseSchema ?? {
             name: FOUNDATIONAL_PROFILE_RESPONSE_SCHEMA_NAME,
             description: FOUNDATIONAL_PROFILE_RESPONSE_SCHEMA_DESCRIPTION,
             schema: FOUNDATIONAL_PROFILE_JSON_SCHEMA,
@@ -273,7 +276,9 @@ export async function generateProfileRevisionDraft(args: {
   });
 
   return {
-    structuredProfile: validateFoundationalProfileOutput(execution.result.output),
+    structuredProfile: args.request.validateOutput
+      ? args.request.validateOutput(execution.result.output)
+      : validateFoundationalProfileOutput(execution.result.output),
     rawOutput: execution.result.output,
     rawText: execution.result.rawText,
     provider: execution.candidate.provider,

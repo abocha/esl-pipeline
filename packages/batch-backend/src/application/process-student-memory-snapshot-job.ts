@@ -16,7 +16,10 @@ import {
   type GenerateStudentMemorySnapshotDependencies,
   generateStudentMemorySnapshot,
 } from './student-memory-snapshot-generation.js';
-import { buildStudentMemorySnapshotEnvelope, buildStudentMemorySnapshotPrompt } from './student-memory-snapshot-prompt.js';
+import {
+  buildStudentMemorySnapshotEnvelope,
+  buildStudentMemorySnapshotPrompt,
+} from './student-memory-snapshot-prompt.js';
 
 export interface ProcessStudentMemorySnapshotJobPayload {
   kind: 'student-memory-snapshot-refresh';

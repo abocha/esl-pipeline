@@ -80,6 +80,30 @@ describe('config/env - core defaults', () => {
   });
 });
 
+describe('config/env - OpenAI target-model gate', () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it('keeps target model defaults disabled until an operator explicitly enables them', async () => {
+    await withEnv({ NODE_ENV: 'test', GEN_OPENAI_TARGET_MODELS_ENABLED: 'false' }, async () => {
+      const cfg = await loadConfigFresh();
+      expect(cfg.generation.models.openai.targetModelsEnabled).toBe(false);
+      expect(cfg.generation.models.openai.primary).toBe('gpt-5.4-mini');
+    });
+  });
+
+  it('selects the evaluated target ladder only behind the explicit gate', async () => {
+    await withEnv({ NODE_ENV: 'test', GEN_OPENAI_TARGET_MODELS_ENABLED: 'true' }, async () => {
+      const cfg = await loadConfigFresh();
+      expect(cfg.generation.models.openai.targetModelsEnabled).toBe(true);
+      expect(cfg.generation.models.openai.primary).toBe('gpt-5.5');
+      expect(cfg.generation.models.openai.studentMemoryPrimary).toBe('gpt-5.4-mini');
+      expect(cfg.generation.models.openai.profileDraftPrimary).toBe('gpt-5.4-mini');
+    });
+  });
+});
+
 describe('config/env - speech planner debug logging', () => {
   beforeEach(() => {
     vi.resetModules();

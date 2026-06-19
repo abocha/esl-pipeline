@@ -45,7 +45,11 @@ export function stitchPromptEnvelope(options: PromptStitchOptions): GenerationRe
         label: 'STUDENT_MEMORY_SNAPSHOT',
         content: options.studentMemorySnapshot,
       },
-      { id: 'recent-lesson-memory', label: 'RECENT_LESSON_MEMORY', content: options.recentLessonMemory },
+      {
+        id: 'recent-lesson-memory',
+        label: 'RECENT_LESSON_MEMORY',
+        content: options.recentLessonMemory,
+      },
       {
         id: 'recent-homework-memory',
         label: 'RECENT_HOMEWORK_MEMORY',

@@ -8,7 +8,10 @@ import {
   supersedePendingHomeworkMemoryEntriesForAssignmentLineage,
 } from '../domain/homework-memory-repository.js';
 import { generateHomeworkMemoryFromSource } from './homework-memory-generation.js';
-import { buildHomeworkMemoryEnvelope, buildHomeworkMemoryPrompt } from './homework-memory-prompt.js';
+import {
+  buildHomeworkMemoryEnvelope,
+  buildHomeworkMemoryPrompt,
+} from './homework-memory-prompt.js';
 import { resolveHomeworkMemorySourceFromSucceededJob } from './homework-memory-source.js';
 import { requestStudentMemorySnapshotRefresh } from './request-student-memory-snapshot-refresh.js';
 

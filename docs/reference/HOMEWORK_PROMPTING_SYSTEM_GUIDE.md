@@ -64,15 +64,20 @@ This means prompt changes must be reasoned about in two layers:
 
 ### Final model input path
 
-The final drafting request is assembled once during prompt-package creation and then passed through directly to the generation provider.
+The final drafting request is assembled once during prompt-package creation and persisted as both the
+legacy preview text and a versioned request envelope. The envelope keeps trusted template policy in
+`instructions` and sends learner/profile/transcript material as labelled source data in `input`.
 
 Current flow:
 
 1. Resolve active template revision from DB.
 2. Resolve active profile revision from DB.
 3. Stitch provider-neutral runtime context blocks after the static template.
-4. Store the finished prompt package.
-5. Send the stored prompt-package text to the provider for draft generation.
+4. Store the finished prompt package and its request envelope.
+5. Send separate `instructions` and `input` to OpenAI; fallback providers receive a deterministic
+   flattened envelope.
+6. Validate the resulting Markdown deterministically. If it fails, make exactly one repair request
+   containing only the failed draft and validator diagnostics; never persist a second failed draft.
 
 Implication:
 
