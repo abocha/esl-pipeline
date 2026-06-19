@@ -131,6 +131,7 @@ const inMemoryGenerationBudgetRepository: GenerationBudgetRepository = {
     const day = getCounter(inMemoryBudgetCounters, dayKey);
 
     const nextMinuteRequests = minute.requests + 1;
+    const nextMinuteReservedTokens = minute.reservedTokens + input.estimatedTokens;
     const nextDayRequests = day.requests + 1;
     const nextReservedTokens = day.reservedTokens + input.estimatedTokens;
 
@@ -147,6 +148,29 @@ const inMemoryGenerationBudgetRepository: GenerationBudgetRepository = {
           window: 'minute',
           limit: input.limits.rpmBudget,
           used: minute.requests,
+        },
+        usage: {
+          requestsPerMinuteUsed: minute.requests,
+          requestsToday: day.requests,
+          reservedTokensToday: day.reservedTokens,
+          actualTokensToday: day.actualTokens,
+        },
+      };
+    }
+
+    if (
+      input.limits.tpmBudget !== undefined &&
+      input.limits.tpmBudget !== null &&
+      input.limits.tpmBudget >= 0 &&
+      nextMinuteReservedTokens > input.limits.tpmBudget
+    ) {
+      return {
+        allowed: false,
+        reason: {
+          limitType: 'tpm',
+          window: 'minute',
+          limit: input.limits.tpmBudget,
+          used: minute.reservedTokens,
         },
         usage: {
           requestsPerMinuteUsed: minute.requests,
@@ -204,6 +228,7 @@ const inMemoryGenerationBudgetRepository: GenerationBudgetRepository = {
     }
 
     minute.requests = nextMinuteRequests;
+    minute.reservedTokens = nextMinuteReservedTokens;
     day.requests = nextDayRequests;
     day.reservedTokens = nextReservedTokens;
 
@@ -265,6 +290,7 @@ function resolveProviderLimits(
   if (provider === 'openai') {
     return {
       rpmBudget: config.providers.openai.rpmBudget,
+      tpmBudget: config.providers.openai.tpmBudget,
       dailyRequestBudget: config.providers.openai.dailyRequestBudget,
       dailyTokenBudget: config.providers.openai.dailyTokenBudget,
     };

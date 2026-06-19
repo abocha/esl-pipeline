@@ -433,6 +433,7 @@ describe('config/env - generation provider mapping', () => {
           expect.arrayContaining(['gemini-3-flash-preview', 'gemini-3.5-flash']),
         );
         expect(cfg.generation.providers.openai.dailyTokenBudget).toBe(120000);
+        expect(cfg.generation.providers.openai.tpmBudget).toBe(160000);
         expect(cfg.generation.providers.openrouter.dailyTokenBudget).toBe(0);
       },
     );
@@ -457,6 +458,7 @@ describe('config/env - generation provider mapping', () => {
         GEN_OPENAI_MODEL_PROFILE_DRAFT_TERTIARY: 'gpt-big-tertiary',
         GEN_ALLOWED_MODELS_OPENAI: 'gpt-test,gpt-mini',
         OPENAI_API_KEY: 'openai-key',
+        GEN_OPENAI_TPM_BUDGET: '777',
         GEMINI_API_KEY: 'google-key',
         OPENROUTER_API_KEY: 'router-key',
       },
@@ -477,6 +479,7 @@ describe('config/env - generation provider mapping', () => {
         expect(cfg.generation.models.openai.profileDraftTertiary).toBe('gpt-big-tertiary');
         expect(cfg.generation.models.openai.allowed).toEqual(['gpt-test', 'gpt-mini']);
         expect(cfg.generation.providers.openai.apiKey).toBe('openai-key');
+        expect(cfg.generation.providers.openai.tpmBudget).toBe(777);
         expect(cfg.generation.providers.googleAiStudio.apiKey).toBe('google-key');
         expect(cfg.generation.providers.openrouter.apiKey).toBe('router-key');
       },
