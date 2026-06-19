@@ -26,6 +26,8 @@ describe('generation request envelope', () => {
     expect(envelope.sourceManifest).toEqual([
       { id: 'transcript:rec-1', label: 'FULL_TRANSCRIPT' },
     ]);
+    expect(envelope.promptVersion).toBe('generation_request_envelope_v1');
+    expect(envelope.settings).toEqual({ reasoningEffort: 'low', textVerbosity: 'low' });
   });
 
   it('produces a deterministic fallback representation and source-selection hash', () => {
@@ -45,5 +47,20 @@ describe('generation request envelope', () => {
     expect(flattenGenerationRequestEnvelope(first)).toBe(
       `${first.instructions}\n\n${first.input}`,
     );
+  });
+
+  it('preserves an optional strict structured-output schema', () => {
+    const envelope = createGenerationRequestEnvelope({
+      workload: 'lesson_memory',
+      instructions: 'Extract memory.',
+      sources: [{ id: 'transcript:1', label: 'FULL_TRANSCRIPT', content: 'Hello.' }],
+      responseSchema: { name: 'lesson_memory', schema: { type: 'object' }, strict: true },
+    });
+
+    expect(envelope.responseSchema).toEqual({
+      name: 'lesson_memory',
+      schema: { type: 'object' },
+      strict: true,
+    });
   });
 });

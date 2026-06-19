@@ -18,9 +18,20 @@ export interface GenerationEnvelopeSource {
 
 export interface GenerationRequestEnvelopeV1 {
   version: typeof GENERATION_REQUEST_ENVELOPE_VERSION;
+  promptVersion: typeof GENERATION_REQUEST_ENVELOPE_VERSION;
   workload: GenerationEnvelopeWorkload;
   instructions: string;
   input: string;
+  settings: {
+    reasoningEffort: 'low' | 'medium' | 'high';
+    textVerbosity: 'low' | 'medium' | 'high';
+  };
+  responseSchema?: {
+    name: string;
+    description?: string;
+    schema: Record<string, unknown>;
+    strict: boolean;
+  };
   sourceManifest: Array<Pick<GenerationEnvelopeSource, 'id' | 'label'>>;
   sourceSelectionHash: string;
 }
@@ -29,6 +40,7 @@ export function createGenerationRequestEnvelope(args: {
   workload: GenerationEnvelopeWorkload;
   instructions: string;
   sources: readonly GenerationEnvelopeSource[];
+  responseSchema?: GenerationRequestEnvelopeV1['responseSchema'];
 }): GenerationRequestEnvelopeV1 {
   const sourceManifest = args.sources.map((source) => ({
     id: requireNonEmpty(source.id, 'source id'),
@@ -40,6 +52,7 @@ export function createGenerationRequestEnvelope(args: {
 
   return {
     version: GENERATION_REQUEST_ENVELOPE_VERSION,
+    promptVersion: GENERATION_REQUEST_ENVELOPE_VERSION,
     workload: args.workload,
     instructions: [
       requireNonEmpty(args.instructions, 'instructions'),
@@ -56,6 +69,8 @@ export function createGenerationRequestEnvelope(args: {
     ].join('\n\n'),
     sourceManifest,
     sourceSelectionHash,
+    settings: { reasoningEffort: 'low', textVerbosity: 'low' },
+    ...(args.responseSchema ? { responseSchema: args.responseSchema } : {}),
   };
 }
 
@@ -70,6 +85,7 @@ export function isGenerationRequestEnvelope(value: unknown): value is Generation
     candidate.version === GENERATION_REQUEST_ENVELOPE_VERSION &&
     typeof candidate.instructions === 'string' &&
     typeof candidate.input === 'string' &&
+    typeof candidate.promptVersion === 'string' &&
     typeof candidate.sourceSelectionHash === 'string' &&
     Array.isArray(candidate.sourceManifest)
   );
