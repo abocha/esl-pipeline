@@ -63,6 +63,18 @@ export function flattenGenerationRequestEnvelope(envelope: GenerationRequestEnve
   return `${envelope.instructions}\n\n${envelope.input}`;
 }
 
+export function isGenerationRequestEnvelope(value: unknown): value is GenerationRequestEnvelopeV1 {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<GenerationRequestEnvelopeV1>;
+  return (
+    candidate.version === GENERATION_REQUEST_ENVELOPE_VERSION &&
+    typeof candidate.instructions === 'string' &&
+    typeof candidate.input === 'string' &&
+    typeof candidate.sourceSelectionHash === 'string' &&
+    Array.isArray(candidate.sourceManifest)
+  );
+}
+
 function requireNonEmpty(value: string, label: string): string {
   const normalized = value.trim();
   if (!normalized) {

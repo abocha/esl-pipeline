@@ -324,7 +324,8 @@ CREATE TABLE public.drafts (
     created_by uuid,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    lesson_id uuid
+    lesson_id uuid,
+    request_envelope jsonb
 );
 
 CREATE TABLE public.generation_budget_counters (

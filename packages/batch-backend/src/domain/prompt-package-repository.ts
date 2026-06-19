@@ -32,6 +32,7 @@ interface PromptPackageRow {
   template_version: string;
   notes: string | null;
   storage_uri: string;
+  request_envelope: Record<string, unknown> | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -63,6 +64,7 @@ export interface InsertPromptPackageParams {
   templateVersion: string;
   notes?: string | null;
   storageUri: string;
+  requestEnvelope?: unknown | null;
 }
 
 export async function insertPromptPackage(
@@ -101,13 +103,14 @@ export async function insertPromptPackage(
         template_version,
         notes,
         storage_uri,
+        request_envelope,
         created_at,
         updated_at
       )
       VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
         $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-        $21, $22, $23, $24, $25, $26, $27, $28
+        $21, $22, $23, $24, $25, $26, $27, $28, $29
       )
       RETURNING
         id,
@@ -136,6 +139,7 @@ export async function insertPromptPackage(
         template_version,
         notes,
         storage_uri,
+        request_envelope,
         created_at,
         updated_at
       `,
@@ -166,6 +170,7 @@ export async function insertPromptPackage(
         params.templateVersion,
         params.notes ?? null,
         params.storageUri,
+        params.requestEnvelope ?? null,
         now,
         now,
       ],
@@ -191,7 +196,7 @@ export async function getPromptPackageById(id: string): Promise<PromptPackageRec
              resolved_template_id, resolved_template_hash,
              resolved_template_revision_id, resolved_template_updated_at,
              resolved_template_version_label, resolved_template_status,
-             notes, storage_uri, created_at, updated_at
+             notes, storage_uri, request_envelope, created_at, updated_at
       FROM prompt_packages
       WHERE id = $1
       `,
@@ -231,6 +236,7 @@ function mapRowToPromptPackage(row: PromptPackageRow): PromptPackageRecord {
     templateVersion: row.template_version,
     notes: row.notes ?? null,
     storageUri: row.storage_uri,
+    requestEnvelope: row.request_envelope ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
