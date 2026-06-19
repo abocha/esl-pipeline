@@ -16,7 +16,7 @@ import {
   type GenerateLessonMemoryEntryDependencies,
   generateLessonMemoryEntry,
 } from './generate-lesson-memory-entry.js';
-import { buildLessonMemoryPrompt } from './lesson-memory-prompt.js';
+import { buildLessonMemoryEnvelope, buildLessonMemoryPrompt } from './lesson-memory-prompt.js';
 import { requestStudentMemorySnapshotRefresh } from './request-student-memory-snapshot-refresh.js';
 
 export interface ProcessLessonMemoryJobPayload {
@@ -101,6 +101,11 @@ export async function processLessonMemoryJob(args: {
       transcriptText,
       teacherNotes: promptPackage?.notes ?? null,
     });
+    const envelope = buildLessonMemoryEnvelope({
+      transcriptId: args.payload.transcriptId,
+      transcriptText,
+      teacherNotes: promptPackage?.notes ?? null,
+    });
 
     const result = await generator({
       config: args.config,
@@ -111,6 +116,7 @@ export async function processLessonMemoryJob(args: {
         provider: args.payload.provider,
         model: args.payload.model,
         prompt,
+        envelope,
       },
       overrides: args.overrides,
     });

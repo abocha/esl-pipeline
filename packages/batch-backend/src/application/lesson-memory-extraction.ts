@@ -10,6 +10,7 @@ import {
   type ProviderStructuredExecutionRequest,
   type ProviderStructuredExecutionResult,
 } from './generation-providers.js';
+import type { GenerationRequestEnvelopeV1 } from './generation-request-envelope.js';
 import {
   LESSON_MEMORY_CONTENT_JSON_SCHEMA,
   LESSON_MEMORY_RESPONSE_SCHEMA_DESCRIPTION,
@@ -33,6 +34,7 @@ export interface ExtractLessonMemoryContentRequest {
   provider: GenerationProvider;
   model: string;
   prompt: string;
+  envelope?: GenerationRequestEnvelopeV1;
   maxOutputTokens?: number;
 }
 
@@ -75,9 +77,10 @@ export async function extractLessonMemoryContent(args: {
 
   const result = await executor({
     config: args.config,
-    request: {
-      model: args.request.model,
-      prompt: args.request.prompt,
+      request: {
+        model: args.request.model,
+        prompt: args.request.prompt,
+        ...(args.request.envelope ? { envelope: args.request.envelope } : {}),
       maxOutputTokens: args.request.maxOutputTokens,
       responseSchema: {
         name: LESSON_MEMORY_RESPONSE_SCHEMA_NAME,
