@@ -198,6 +198,7 @@ export interface BatchBackendConfig {
         dailyTokenBudget?: number;
         dailyRequestBudget?: number;
         rpmBudget?: number;
+        tpmBudget?: number;
       };
       googleAiStudio: {
         apiKey?: string;
@@ -724,6 +725,7 @@ export function loadConfig(): BatchBackendConfig {
   const generationOpenAiRetryMax = readInt('GEN_OPENAI_RETRY_MAX', 1);
   const generationOpenAiRetryBackoffMs = readInt('GEN_OPENAI_RETRY_BACKOFF_MS', 250);
   const generationOpenAiRpmBudget = readInt('GEN_OPENAI_RPM_BUDGET', 3);
+  const generationOpenAiTpmBudget = readInt('GEN_OPENAI_TPM_BUDGET', 160_000);
   const generationOpenAiDailyRequestBudget = readInt('GEN_OPENAI_DAILY_REQUEST_BUDGET', 40);
   const generationGoogleTimeoutMs = readInt('GEN_GOOGLE_REQUEST_TIMEOUT_MS', 240_000);
   const generationGoogleRetryMax = readInt('GEN_GOOGLE_RETRY_MAX', 1);
@@ -948,6 +950,7 @@ export function loadConfig(): BatchBackendConfig {
           dailyTokenBudget: generationOpenAiDailyTokenBudget,
           dailyRequestBudget: generationOpenAiDailyRequestBudget,
           rpmBudget: generationOpenAiRpmBudget,
+          tpmBudget: generationOpenAiTpmBudget,
         },
         googleAiStudio: {
           apiKey: geminiApiKey,
