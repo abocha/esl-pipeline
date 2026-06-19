@@ -6,6 +6,7 @@ import type { BatchBackendConfig } from '../config/env.js';
 import type { StudentMemorySnapshotRecord } from '../domain/student-memory-snapshot-model.js';
 import { insertCanonicalReadyStudentMemorySnapshot } from '../domain/student-memory-snapshot-repository.js';
 import type { ProviderStructuredExecutionResult } from './generation-providers.js';
+import type { GenerationRequestEnvelopeV1 } from './generation-request-envelope.js';
 import {
   type ExtractStudentMemorySnapshotContentRequest,
   extractStudentMemorySnapshotContent,
@@ -22,6 +23,7 @@ export interface GenerateStudentMemorySnapshotRequest {
   provider: GenerationProvider;
   model: string;
   prompt: string;
+  envelope?: GenerationRequestEnvelopeV1;
   maxOutputTokens?: number;
 }
 
@@ -56,6 +58,7 @@ export async function generateStudentMemorySnapshot(args: {
       provider: args.request.provider,
       model: args.request.model,
       prompt: args.request.prompt,
+      ...(args.request.envelope ? { envelope: args.request.envelope } : {}),
       maxOutputTokens: args.request.maxOutputTokens,
     } satisfies ExtractStudentMemorySnapshotContentRequest,
   });

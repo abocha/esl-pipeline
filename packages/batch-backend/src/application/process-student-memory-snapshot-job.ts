@@ -16,7 +16,7 @@ import {
   type GenerateStudentMemorySnapshotDependencies,
   generateStudentMemorySnapshot,
 } from './student-memory-snapshot-generation.js';
-import { buildStudentMemorySnapshotPrompt } from './student-memory-snapshot-prompt.js';
+import { buildStudentMemorySnapshotEnvelope, buildStudentMemorySnapshotPrompt } from './student-memory-snapshot-prompt.js';
 
 export interface ProcessStudentMemorySnapshotJobPayload {
   kind: 'student-memory-snapshot-refresh';
@@ -101,6 +101,10 @@ export async function processStudentMemorySnapshotJob(args: {
       lessonMemoryEntries: readyLessonMemory,
       homeworkMemoryEntries: readyHomeworkMemory,
     });
+    const envelope = buildStudentMemorySnapshotEnvelope({
+      lessonMemoryEntries: readyLessonMemory,
+      homeworkMemoryEntries: readyHomeworkMemory,
+    });
 
     const result = await generator({
       config: args.config,
@@ -113,6 +117,7 @@ export async function processStudentMemorySnapshotJob(args: {
         provider: args.payload.provider,
         model: args.payload.model,
         prompt,
+        envelope,
       },
       overrides: args.overrides,
     });
