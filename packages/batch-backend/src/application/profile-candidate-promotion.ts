@@ -26,6 +26,7 @@ import {
   generateProfileRevisionDraft,
   isCompleteTextGenerationFinishReason,
 } from './profile-revision-drafting.js';
+import { createGenerationRequestEnvelope } from './generation-request-envelope.js';
 import { getStudentProfileById } from './student-profiles-store.js';
 
 export interface ProfilePromotionCandidate {
@@ -165,10 +166,17 @@ export async function promoteStudentProfileCandidates(args: {
     selectedCandidates,
     reviewerNote: request.reviewerNote ?? null,
   });
+  const envelope = buildPromotionEnvelope({
+    studentName: student.student,
+    baseStructuredProfile,
+    selectedCandidates,
+    reviewerNote: request.reviewerNote ?? null,
+  });
 
   const drafting = await dependencies.drafting.generate({
     request: {
       prompt,
+      envelope,
       operation: 'candidate_promotion',
       maxOutputTokens:
         request.maxOutputTokens ?? dependencies.config.generation.maxOutputTokensHard,
@@ -347,6 +355,37 @@ function buildPromotionPrompt(args: {
     '',
     'Output only valid JSON.',
   ].join('\n');
+}
+
+function buildPromotionEnvelope(args: {
+  studentName: string;
+  baseStructuredProfile: FoundationalProfile | null;
+  selectedCandidates: ProfilePromotionCandidate[];
+  reviewerNote: string | null;
+}) {
+  return createGenerationRequestEnvelope({
+    workload: 'profile_candidate_patch',
+    instructions: [
+      'You are drafting a foundational student profile revision for an ESL homework system.',
+      'This is a bounded promotion pass, not a full rewrite from scratch.',
+      'Preserve unrelated teacher-authored truths and integrate only selected approved candidate facts.',
+      'Favor omission over invention.',
+    ].join('\n'),
+    sources: [
+      { id: 'student-name', label: 'STUDENT_NAME', content: args.studentName },
+      {
+        id: 'base-profile',
+        label: 'BASE_STRUCTURED_PROFILE',
+        content: args.baseStructuredProfile ? JSON.stringify(args.baseStructuredProfile) : 'Not available.',
+      },
+      {
+        id: 'approved-candidates',
+        label: 'SELECTED_APPROVED_CANDIDATES',
+        content: JSON.stringify(args.selectedCandidates),
+      },
+      { id: 'reviewer-note', label: 'REVIEWER_NOTE', content: args.reviewerNote ?? 'Not available.' },
+    ],
+  });
 }
 
 function assertCandidatePromotionDraftIsComplete(args: {
