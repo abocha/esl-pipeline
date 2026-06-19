@@ -6,6 +6,7 @@ import {
 } from '@esl-pipeline/provider-runtime';
 
 import type { BatchBackendConfig } from '../config/env.js';
+import type { GenerationRequestEnvelopeV1 } from './generation-request-envelope.js';
 import { loadConfig } from '../config/env.js';
 import type { GenerationBudgetUsage } from '../domain/generation-budget-repository.js';
 import { logger } from '../infrastructure/logger.js';
@@ -108,6 +109,7 @@ export interface GenerateProfileRevisionDraftDependencies {
 
 export interface GenerateProfileRevisionDraftRequest {
   prompt: string;
+  envelope?: GenerationRequestEnvelopeV1;
   operation: ProfileDraftingOperation;
   maxOutputTokens?: number;
   providerOverride?: GenerationProvider;
@@ -195,6 +197,7 @@ export async function generateProfileRevisionDraft(args: {
         request: {
           model: candidate.model,
           prompt: args.request.prompt,
+          ...(args.request.envelope ? { envelope: args.request.envelope } : {}),
           maxOutputTokens: args.request.maxOutputTokens,
           responseSchema: {
             name: FOUNDATIONAL_PROFILE_RESPONSE_SCHEMA_NAME,
