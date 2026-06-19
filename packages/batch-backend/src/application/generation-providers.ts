@@ -62,6 +62,7 @@ export class ProviderExecutionError extends Error {
   readonly status?: number;
   readonly code?: string;
   readonly rawText?: string;
+  readonly retryAfterMs?: number;
 
   constructor(args: {
     provider: GenerationProvider;
@@ -69,6 +70,7 @@ export class ProviderExecutionError extends Error {
     status?: number;
     code?: string;
     rawText?: string;
+    retryAfterMs?: number;
   }) {
     super(args.message);
     this.name = 'ProviderExecutionError';
@@ -76,7 +78,20 @@ export class ProviderExecutionError extends Error {
     this.status = args.status;
     this.code = args.code;
     this.rawText = args.rawText;
+    this.retryAfterMs = args.retryAfterMs;
   }
+}
+
+function parseRetryAfterMs(response: Response): number | undefined {
+  const raw = response.headers.get('retry-after')?.trim();
+  if (!raw) return undefined;
+  const seconds = Number(raw);
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return Math.ceil(seconds * 1_000);
+  }
+  const targetMs = Date.parse(raw);
+  if (Number.isNaN(targetMs)) return undefined;
+  return Math.max(0, targetMs - Date.now());
 }
 
 async function fetchWithTimeout(
@@ -468,6 +483,7 @@ export async function executeOpenAiGeneration(args: {
       code:
         (typeof errorBlock?.code === 'string' ? errorBlock.code : undefined) ??
         (typeof cast.code === 'string' ? cast.code : undefined),
+      retryAfterMs: parseRetryAfterMs(response),
     });
   }
 
@@ -568,6 +584,7 @@ export async function executeOpenAiStructuredGeneration(args: {
       code:
         (typeof errorBlock?.code === 'string' ? errorBlock.code : undefined) ??
         (typeof cast.code === 'string' ? cast.code : undefined),
+      retryAfterMs: parseRetryAfterMs(response),
     });
   }
 
