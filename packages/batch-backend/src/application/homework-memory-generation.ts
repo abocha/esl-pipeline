@@ -9,6 +9,7 @@ import {
   extractHomeworkMemoryContent,
 } from './homework-memory-extraction.js';
 import type { HomeworkMemorySourceBundle } from './homework-memory-source.js';
+import type { GenerationRequestEnvelopeV1 } from './generation-request-envelope.js';
 
 export const HOMEWORK_MEMORY_SCHEMA_VERSION = 'homework-memory.v1';
 
@@ -19,6 +20,7 @@ export interface GenerateHomeworkMemoryFromSourceRequest {
   provider: GenerationProvider;
   model: string;
   prompt: string;
+  envelope?: GenerationRequestEnvelopeV1;
   maxOutputTokens?: number;
 }
 
@@ -53,6 +55,7 @@ export async function generateHomeworkMemoryFromSource(args: {
       provider: args.request.provider,
       model: args.request.model,
       prompt: args.request.prompt,
+      ...(args.request.envelope ? { envelope: args.request.envelope } : {}),
       maxOutputTokens: args.request.maxOutputTokens,
     } satisfies ExtractHomeworkMemoryContentRequest,
   });

@@ -3,6 +3,7 @@ import type { ZodIssue } from 'zod';
 import type { GenerationProvider } from '@esl-pipeline/contracts';
 
 import type { BatchBackendConfig } from '../config/env.js';
+import type { GenerationRequestEnvelopeV1 } from './generation-request-envelope.js';
 import {
   executeGoogleStructuredGeneration,
   executeOpenAiStructuredGeneration,
@@ -33,6 +34,7 @@ export interface ExtractHomeworkMemoryContentRequest {
   provider: GenerationProvider;
   model: string;
   prompt: string;
+  envelope?: GenerationRequestEnvelopeV1;
   maxOutputTokens?: number;
 }
 
@@ -77,6 +79,7 @@ export async function extractHomeworkMemoryContent(args: {
     request: {
       model: args.request.model,
       prompt: args.request.prompt,
+      ...(args.request.envelope ? { envelope: args.request.envelope } : {}),
       maxOutputTokens: args.request.maxOutputTokens,
       responseSchema: {
         name: HOMEWORK_MEMORY_RESPONSE_SCHEMA_NAME,
