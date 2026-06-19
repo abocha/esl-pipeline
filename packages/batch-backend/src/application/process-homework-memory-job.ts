@@ -8,7 +8,7 @@ import {
   supersedePendingHomeworkMemoryEntriesForAssignmentLineage,
 } from '../domain/homework-memory-repository.js';
 import { generateHomeworkMemoryFromSource } from './homework-memory-generation.js';
-import { buildHomeworkMemoryPrompt } from './homework-memory-prompt.js';
+import { buildHomeworkMemoryEnvelope, buildHomeworkMemoryPrompt } from './homework-memory-prompt.js';
 import { resolveHomeworkMemorySourceFromSucceededJob } from './homework-memory-source.js';
 import { requestStudentMemorySnapshotRefresh } from './request-student-memory-snapshot-refresh.js';
 
@@ -84,6 +84,10 @@ export async function processHomeworkMemoryJob(args: {
       normalizedMarkdown: source.normalizedMarkdown,
       source,
     });
+    const envelope = buildHomeworkMemoryEnvelope({
+      normalizedMarkdown: source.normalizedMarkdown,
+      source,
+    });
 
     const result = await generator({
       config: args.config,
@@ -94,6 +98,7 @@ export async function processHomeworkMemoryJob(args: {
         provider: args.payload.provider,
         model: args.payload.model,
         prompt,
+        envelope,
       },
     });
 
