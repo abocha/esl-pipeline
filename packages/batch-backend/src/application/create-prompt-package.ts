@@ -363,7 +363,9 @@ export function toPromptPackageResponse(
     notes: promptPackage.notes ?? null,
     storageUri: promptPackage.storageUri,
     text,
-    requestEnvelope: promptPackage.requestEnvelope ?? null,
+    ...(promptPackage.requestEnvelope !== null && promptPackage.requestEnvelope !== undefined
+      ? { requestEnvelope: promptPackage.requestEnvelope }
+      : {}),
     ...(hasProfileSnapshot
       ? {
           profileSnapshot: {
