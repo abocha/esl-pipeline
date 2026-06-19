@@ -4,6 +4,7 @@ import type {
   GenerationErrorCategory,
   GenerationProvider,
 } from '@esl-pipeline/contracts';
+import { validateMarkdown } from '@esl-pipeline/md-validator';
 import {
   classifyProviderRuntimeFailure,
   type ProviderRuntimeClassificationRules,
@@ -30,8 +31,12 @@ import {
   type ProviderExecutionRequest,
   type ProviderExecutionResult,
 } from './generation-providers.js';
+import {
+  createGenerationRequestEnvelope,
+  flattenGenerationRequestEnvelope,
+  isGenerationRequestEnvelope,
+} from './generation-request-envelope.js';
 import { getPromptPackage } from './get-prompt-package.js';
-import { isGenerationRequestEnvelope } from './generation-request-envelope.js';
 import { requestLessonMemoryGeneration } from './request-lesson-memory-generation.js';
 
 type ProviderExecutor = (args: {
@@ -104,6 +109,7 @@ export interface GenerateDraftDependencies {
   };
   executors: Partial<Record<GenerationProvider, ProviderExecutor>>;
   budget: GenerationBudgetGuardDependencies;
+  validator: typeof validateMarkdown;
   now: () => Date;
   sleep: (ms: number) => Promise<void>;
 }
@@ -127,6 +133,7 @@ export async function generateDraft(
     config,
     overrides: overrides?.budget,
   });
+  const validator = overrides?.validator ?? validateMarkdown;
   const now = overrides?.now ?? (() => new Date());
   const sleep =
     overrides?.sleep ?? ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)));
@@ -287,22 +294,143 @@ export async function generateDraft(
     },
   });
 
+  const validated = await validateAssignmentDraftIfRequired({
+    config,
+    promptPackage,
+    request,
+    execution,
+    executors,
+    validator,
+    budgetRepository,
+    now,
+  });
+
   return {
-    text: execution.result.text,
+    text: validated.result.text,
     provider: execution.candidate.provider,
     model: execution.candidate.model,
     quota: buildQuotaSnapshot({
       config: config.generation,
       provider: execution.candidate.provider,
       model: execution.candidate.model,
-      usage: execution.quotaUsage,
+      usage: validated.quotaUsage,
       now: now(),
     }),
-    ...(execution.result.usage ? { usage: execution.result.usage } : {}),
-    ...(execution.result.providerRequestId
-      ? { providerRequestId: execution.result.providerRequestId }
+    ...(validated.result.usage ? { usage: validated.result.usage } : {}),
+    ...(validated.result.providerRequestId
+      ? { providerRequestId: validated.result.providerRequestId }
       : {}),
   };
+}
+
+async function validateAssignmentDraftIfRequired(args: {
+  config: BatchBackendConfig;
+  promptPackage: Awaited<ReturnType<typeof getPromptPackage>> & {};
+  request: GenerateDraftRequest;
+  execution: {
+    candidate: ReturnType<typeof resolveGenerationCandidates>[number];
+    result: ProviderExecutionResult;
+    quotaUsage: GenerationBudgetUsage;
+  };
+  executors: Record<GenerationProvider, ProviderExecutor>;
+  validator: typeof validateMarkdown;
+  budgetRepository: ReturnType<typeof resolveGenerationBudgetRepository>;
+  now: () => Date;
+}): Promise<{ result: ProviderExecutionResult; quotaUsage: GenerationBudgetUsage }> {
+  const envelope = args.promptPackage.requestEnvelope;
+  if (!isGenerationRequestEnvelope(envelope) || envelope.workload !== 'assignment_draft') {
+    return { result: args.execution.result, quotaUsage: args.execution.quotaUsage };
+  }
+
+  const validation = await args.validator({ markdown: args.execution.result.text, strict: true });
+  if (validation.ok) {
+    return { result: args.execution.result, quotaUsage: args.execution.quotaUsage };
+  }
+
+  const executor = args.executors[args.execution.candidate.provider];
+  if (!executor) {
+    throw new GenerateDraftProviderError({
+      category: 'provider_contract_error',
+      provider: args.execution.candidate.provider,
+      model: args.execution.candidate.model,
+      message: `No generation executor configured for provider: ${args.execution.candidate.provider}`,
+    });
+  }
+
+  const repairEnvelope = createGenerationRequestEnvelope({
+    workload: 'assignment_draft',
+    promptVersion: `${envelope.promptVersion}:validator-repair-v1`,
+    instructions: [
+      'Repair the assignment markdown so it passes the supplied deterministic validator.',
+      'Return only the complete repaired assignment markdown.',
+      'Use only the failed draft and the validator diagnostics supplied as source data.',
+      'Do not add facts, requirements, or instructions that are not present in the failed draft.',
+    ].join('\n'),
+    sources: [
+      { id: 'failed-draft', label: 'FAILED_ASSIGNMENT_DRAFT', content: args.execution.result.text },
+      {
+        id: 'validator-diagnostics',
+        label: 'VALIDATOR_DIAGNOSTICS',
+        content: validation.errors.join('\n'),
+      },
+    ],
+  });
+
+  await enforceGenerationBudgetBeforeAttempt({
+    config: args.config,
+    provider: args.execution.candidate.provider,
+    model: args.execution.candidate.model,
+    prompt: flattenGenerationRequestEnvelope(repairEnvelope),
+    maxOutputTokens: args.request.maxOutputTokens,
+    now: args.now(),
+    repository: args.budgetRepository,
+  });
+
+  let repaired: ProviderExecutionResult;
+  try {
+    repaired = await executor({
+      config: args.config.generation,
+      request: {
+        model: args.execution.candidate.model,
+        prompt: flattenGenerationRequestEnvelope(repairEnvelope),
+        envelope: repairEnvelope,
+        maxOutputTokens: args.request.maxOutputTokens,
+        stream: false,
+      },
+    });
+  } catch (error) {
+    throw mapProviderError({
+      provider: args.execution.candidate.provider,
+      model: args.execution.candidate.model,
+      error,
+    });
+  }
+
+  await recordGenerationBudgetUsageAfterSuccess({
+    config: args.config,
+    provider: args.execution.candidate.provider,
+    model: args.execution.candidate.model,
+    usageTotalTokens: repaired.usage?.totalTokens,
+    now: args.now(),
+    repository: args.budgetRepository,
+  });
+
+  const repairValidation = await args.validator({ markdown: repaired.text, strict: true });
+  if (!repairValidation.ok) {
+    throw new GenerateDraftProviderError({
+      category: 'provider_contract_error',
+      provider: args.execution.candidate.provider,
+      model: args.execution.candidate.model,
+      message: `Assignment markdown failed validation after one repair: ${repairValidation.errors.join('; ')}`,
+    });
+  }
+
+  const quotaUsage = await args.budgetRepository.getUsage({
+    provider: args.execution.candidate.provider,
+    model: args.execution.candidate.model,
+    now: args.now(),
+  });
+  return { result: repaired, quotaUsage };
 }
 
 function retryMaxForProvider(

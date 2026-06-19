@@ -2,7 +2,13 @@ import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
 import { getProfileById } from '../domain/profile-repository.js';
 import { getActiveProfileRevision } from '../domain/profile-revision-repository.js';
-import { renderFoundationalProfileContent } from './foundational-profile.js';
+import {
+  FOUNDATIONAL_PROFILE_JSON_SCHEMA,
+  FOUNDATIONAL_PROFILE_RESPONSE_SCHEMA_DESCRIPTION,
+  FOUNDATIONAL_PROFILE_RESPONSE_SCHEMA_NAME,
+  renderFoundationalProfileContent,
+} from './foundational-profile.js';
+import { createGenerationRequestEnvelope } from './generation-request-envelope.js';
 import type { ProfileRevisionDetailResponse } from './profile-content.js';
 import { saveProfileRevisionContent } from './profile-content.js';
 import {
@@ -127,10 +133,17 @@ export async function normalizeLegacyStudentProfile(args: {
     memoryOverview: overview,
     reviewerNote: request.reviewerNote ?? null,
   });
+  const envelope = buildLegacyNormalizationEnvelope({
+    studentName: student.student,
+    activeProfileContent: activeRevision.content,
+    memoryOverview: overview,
+    reviewerNote: request.reviewerNote ?? null,
+  });
 
   const drafting = await dependencies.drafting.generate({
     request: {
       prompt,
+      envelope,
       operation: 'legacy_normalization',
       maxOutputTokens: request.maxOutputTokens ?? DEFAULT_NORMALIZATION_MAX_OUTPUT_TOKENS,
     },
@@ -139,15 +152,19 @@ export async function normalizeLegacyStudentProfile(args: {
     },
   });
 
+  if (!('schemaVersion' in drafting.structuredProfile)) {
+    throw new Error('Legacy profile normalization requires a foundational profile response.');
+  }
+  const structuredDraft = drafting.structuredProfile;
   const draftRevision = await dependencies.profileContent.saveRevision(
     profileId,
-    renderFoundationalProfileContent(drafting.structuredProfile),
+    renderFoundationalProfileContent(structuredDraft),
     {
       source: 'legacy_normalization',
       status: 'draft',
       createdBy: request.reviewerId ?? null,
       dedupeByHash: false,
-      structuredContent: drafting.structuredProfile,
+      structuredContent: structuredDraft,
     },
   );
 
@@ -164,6 +181,45 @@ export async function normalizeLegacyStudentProfile(args: {
     ...(drafting.providerRequestId ? { providerRequestId: drafting.providerRequestId } : {}),
     ...(drafting.usage ? { usage: drafting.usage } : {}),
   };
+}
+
+function buildLegacyNormalizationEnvelope(args: {
+  studentName: string;
+  activeProfileContent: string;
+  memoryOverview: StudentMemoryOverview;
+  reviewerNote: string | null;
+}) {
+  return createGenerationRequestEnvelope({
+    workload: 'profile_revision',
+    instructions: [
+      'Normalize a legacy ESL student profile into a durable foundational profile.',
+      'Preserve durable teacher-authored truths, omit transient continuity, and do not invent facts.',
+    ].join('\n'),
+    sources: [
+      { id: 'student-name', label: 'STUDENT_NAME', content: args.studentName },
+      {
+        id: 'current-active-profile',
+        label: 'CURRENT_ACTIVE_PROFILE',
+        content: args.activeProfileContent,
+      },
+      {
+        id: 'student-memory-overview',
+        label: 'STUDENT_MEMORY_OVERVIEW',
+        content: JSON.stringify(args.memoryOverview),
+      },
+      {
+        id: 'reviewer-note',
+        label: 'REVIEWER_NOTE',
+        content: args.reviewerNote ?? 'Not available.',
+      },
+    ],
+    responseSchema: {
+      name: FOUNDATIONAL_PROFILE_RESPONSE_SCHEMA_NAME,
+      description: FOUNDATIONAL_PROFILE_RESPONSE_SCHEMA_DESCRIPTION,
+      schema: FOUNDATIONAL_PROFILE_JSON_SCHEMA,
+      strict: true,
+    },
+  });
 }
 
 function getDependencies(

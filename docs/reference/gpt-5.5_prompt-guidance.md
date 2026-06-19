@@ -3,6 +3,7 @@
 Prompt GPT-5.5 with outcome-first goals, concise style controls, retrieval budgets, and validation loops.
 
 ## New in GPT-5.5 vs GPT-5.4
+
 - Shorter, outcome-first prompts usually work better than process-heavy prompt stacks.
 - More efficient reasoning means `low` and `medium` effort should be re-evaluated before escalating.
 - Preambles, `phase` handling, and assistant-item replay remain important for tool-heavy Responses workflows.

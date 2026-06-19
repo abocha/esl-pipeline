@@ -4,9 +4,13 @@ import { getProfileById } from '../domain/profile-repository.js';
 import { getActiveProfileRevision } from '../domain/profile-revision-repository.js';
 import {
   deriveFoundationalProfileFromMarkdown,
+  FOUNDATIONAL_PROFILE_JSON_SCHEMA,
+  FOUNDATIONAL_PROFILE_RESPONSE_SCHEMA_DESCRIPTION,
+  FOUNDATIONAL_PROFILE_RESPONSE_SCHEMA_NAME,
   type FoundationalProfile,
   renderFoundationalProfileContent,
 } from './foundational-profile.js';
+import { createGenerationRequestEnvelope } from './generation-request-envelope.js';
 import type { ProfileRevisionDetailResponse } from './profile-content.js';
 import { saveProfileRevisionContent } from './profile-content.js';
 import {
@@ -155,10 +159,19 @@ export async function populateFirstProfileFromLesson(args: {
     memoryOverview: overview,
     reviewerNote: request.reviewerNote ?? null,
   });
+  const envelope = buildPopulateEnvelope({
+    studentName: student.student,
+    baseStructuredProfile:
+      activeRevision?.structuredContent ??
+      deriveFoundationalProfileFromMarkdown(activeRevision?.content ?? ''),
+    memoryOverview: overview,
+    reviewerNote: request.reviewerNote ?? null,
+  });
 
   const drafting = await dependencies.drafting.generate({
     request: {
       prompt,
+      envelope,
       operation: 'lesson_population',
       maxOutputTokens: request.maxOutputTokens ?? DEFAULT_POPULATE_MAX_OUTPUT_TOKENS,
     },
@@ -167,6 +180,9 @@ export async function populateFirstProfileFromLesson(args: {
     },
   });
 
+  if (!('schemaVersion' in drafting.structuredProfile)) {
+    throw new Error('Initial profile population requires a foundational profile response.');
+  }
   const structuredDraft = drafting.structuredProfile;
   const draftRevision = await dependencies.profileContent.saveRevision(
     profileId,
@@ -193,6 +209,46 @@ export async function populateFirstProfileFromLesson(args: {
     ...(drafting.providerRequestId ? { providerRequestId: drafting.providerRequestId } : {}),
     ...(drafting.usage ? { usage: drafting.usage } : {}),
   };
+}
+
+function buildPopulateEnvelope(args: {
+  studentName: string;
+  baseStructuredProfile: FoundationalProfile | null;
+  memoryOverview: StudentMemoryOverview;
+  reviewerNote: string | null;
+}) {
+  return createGenerationRequestEnvelope({
+    workload: 'profile_revision',
+    instructions: [
+      'Draft a foundational student profile for an ESL homework system.',
+      'Use only durable context supported by the selected source data.',
+      'Favor omission over invention and preserve teacher-authored truths.',
+    ].join('\n'),
+    sources: [
+      { id: 'student-name', label: 'STUDENT_NAME', content: args.studentName },
+      {
+        id: 'base-structured-profile',
+        label: 'BASE_STRUCTURED_PROFILE',
+        content: JSON.stringify(args.baseStructuredProfile),
+      },
+      {
+        id: 'student-memory-overview',
+        label: 'STUDENT_MEMORY_OVERVIEW',
+        content: JSON.stringify(args.memoryOverview),
+      },
+      {
+        id: 'reviewer-note',
+        label: 'REVIEWER_NOTE',
+        content: args.reviewerNote ?? 'Not available.',
+      },
+    ],
+    responseSchema: {
+      name: FOUNDATIONAL_PROFILE_RESPONSE_SCHEMA_NAME,
+      description: FOUNDATIONAL_PROFILE_RESPONSE_SCHEMA_DESCRIPTION,
+      schema: FOUNDATIONAL_PROFILE_JSON_SCHEMA,
+      strict: true,
+    },
+  });
 }
 
 function getDependencies(

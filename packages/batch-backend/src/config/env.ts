@@ -168,6 +168,7 @@ export interface BatchBackendConfig {
     budgetEmergencyOverride: boolean;
     models: {
       openai: {
+        targetModelsEnabled?: boolean;
         primary: string;
         fallback: string;
         allowed: string[];
@@ -667,12 +668,18 @@ export function loadConfig(): BatchBackendConfig {
   const generationMaxOutputTokensHard = readInt('GEN_MAX_OUTPUT_TOKENS_HARD', 3200);
   const generationAllowPaidSpend = readBool('GEN_ALLOW_PAID_SPEND', false);
   const generationBudgetEmergencyOverride = generationAllowPaidSpend;
+  // These higher-capability defaults are intentionally inert until an operator has
+  // reviewed a credentialed live-eval report and explicitly enables them.
+  const generationOpenAiTargetModelsEnabled = readBool('GEN_OPENAI_TARGET_MODELS_ENABLED', false);
 
-  const generationOpenAiModelPrimary = readString('GEN_OPENAI_MODEL_PRIMARY', 'gpt-5.4-mini')!;
+  const generationOpenAiModelPrimary = readString(
+    'GEN_OPENAI_MODEL_PRIMARY',
+    generationOpenAiTargetModelsEnabled ? 'gpt-5.5' : 'gpt-5.4-mini',
+  )!;
   const generationOpenAiModelFallback = readString('GEN_OPENAI_MODEL_FALLBACK', 'gpt-5.4-nano')!;
   const generationOpenAiMemoryModelPrimary = readString(
     'GEN_OPENAI_MODEL_STUDENT_MEMORY_PRIMARY',
-    generationOpenAiModelFallback,
+    generationOpenAiTargetModelsEnabled ? 'gpt-5.4-mini' : generationOpenAiModelFallback,
   )!;
   const generationOpenAiMemoryModelFallback = readString(
     'GEN_OPENAI_MODEL_STUDENT_MEMORY_FALLBACK',
@@ -680,7 +687,7 @@ export function loadConfig(): BatchBackendConfig {
   )!;
   const generationOpenAiProfileDraftModelPrimary = readString(
     'GEN_OPENAI_MODEL_PROFILE_DRAFT_PRIMARY',
-    'gpt-5.4',
+    generationOpenAiTargetModelsEnabled ? 'gpt-5.4-mini' : 'gpt-5.4',
   )!;
   const generationOpenAiProfileDraftModelFallback = readString(
     'GEN_OPENAI_MODEL_PROFILE_DRAFT_FALLBACK',
@@ -916,6 +923,7 @@ export function loadConfig(): BatchBackendConfig {
       budgetEmergencyOverride: generationBudgetEmergencyOverride,
       models: {
         openai: {
+          targetModelsEnabled: generationOpenAiTargetModelsEnabled,
           primary: generationOpenAiModelPrimary,
           fallback: generationOpenAiModelFallback,
           allowed: generationOpenAiAllowedModels,

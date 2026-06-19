@@ -18,6 +18,7 @@ import {
   type LessonMemoryContent,
   validateLessonMemoryContent,
 } from './lesson-memory-content-schema.js';
+import { assertEvidenceSourcesInEnvelope } from './source-evidence-validation.js';
 
 type StructuredProviderExecutor = (args: {
   config: BatchBackendConfig['generation'];
@@ -77,10 +78,10 @@ export async function extractLessonMemoryContent(args: {
 
   const result = await executor({
     config: args.config,
-      request: {
-        model: args.request.model,
-        prompt: args.request.prompt,
-        ...(args.request.envelope ? { envelope: args.request.envelope } : {}),
+    request: {
+      model: args.request.model,
+      prompt: args.request.prompt,
+      ...(args.request.envelope ? { envelope: args.request.envelope } : {}),
       maxOutputTokens: args.request.maxOutputTokens,
       responseSchema: {
         name: LESSON_MEMORY_RESPONSE_SCHEMA_NAME,
@@ -93,6 +94,7 @@ export async function extractLessonMemoryContent(args: {
 
   try {
     const content = validateLessonMemoryContent(result.output);
+    assertEvidenceSourcesInEnvelope(content, args.request.envelope);
     return {
       content,
       rawOutput: result.output,

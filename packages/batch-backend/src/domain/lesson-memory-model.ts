@@ -6,6 +6,7 @@ export type LessonMemoryEntryStatus = 'pending' | 'ready' | 'failed' | 'supersed
 export type LessonMemorySourceKind = 'lesson_transcript';
 
 export interface FactEvidence {
+  sourceId?: string;
   quote: string;
   speakerRole?: 'student' | 'teacher' | null;
   evidenceNote?: string | null;
@@ -13,6 +14,7 @@ export interface FactEvidence {
 }
 
 export interface MistakeEvidence {
+  sourceId?: string;
   observedForm: string;
   suggestedTarget?: string | null;
   evidenceQuote?: string | null;
@@ -21,6 +23,7 @@ export interface MistakeEvidence {
 }
 
 export interface PronunciationEvidence {
+  sourceId?: string;
   observedIssue: string;
   focusWords: string[];
   evidenceQuote?: string | null;

@@ -3,7 +3,6 @@ import type { ZodIssue } from 'zod';
 import type { GenerationProvider } from '@esl-pipeline/contracts';
 
 import type { BatchBackendConfig } from '../config/env.js';
-import type { GenerationRequestEnvelopeV1 } from './generation-request-envelope.js';
 import {
   executeGoogleStructuredGeneration,
   executeOpenAiStructuredGeneration,
@@ -11,6 +10,8 @@ import {
   type ProviderStructuredExecutionRequest,
   type ProviderStructuredExecutionResult,
 } from './generation-providers.js';
+import type { GenerationRequestEnvelopeV1 } from './generation-request-envelope.js';
+import { assertEvidenceSourcesInEnvelope } from './source-evidence-validation.js';
 import {
   STUDENT_MEMORY_SNAPSHOT_CONTENT_JSON_SCHEMA,
   STUDENT_MEMORY_SNAPSHOT_RESPONSE_SCHEMA_DESCRIPTION,
@@ -93,6 +94,7 @@ export async function extractStudentMemorySnapshotContent(args: {
 
   try {
     const content = validateStudentMemorySnapshotContent(result.output);
+    assertEvidenceSourcesInEnvelope(content, args.request.envelope);
     return {
       content,
       rawOutput: result.output,

@@ -1,6 +1,11 @@
 import type { HomeworkMemoryRecord } from '../domain/homework-memory-model.js';
 import type { LessonMemoryRecord } from '../domain/lesson-memory-model.js';
 import { createGenerationRequestEnvelope } from './generation-request-envelope.js';
+import {
+  STUDENT_MEMORY_SNAPSHOT_CONTENT_JSON_SCHEMA,
+  STUDENT_MEMORY_SNAPSHOT_RESPONSE_SCHEMA_DESCRIPTION,
+  STUDENT_MEMORY_SNAPSHOT_RESPONSE_SCHEMA_NAME,
+} from './student-memory-snapshot-content-schema.js';
 
 export interface BuildStudentMemorySnapshotPromptParams {
   lessonMemoryEntries: LessonMemoryRecord[];
@@ -74,7 +79,14 @@ export function buildStudentMemorySnapshotEnvelope(params: BuildStudentMemorySna
       'You are generating a canonical long-term student-memory snapshot for ESL homework generation.',
       'Treat lesson-memory and homework-memory entries as co-equal canonical history sources.',
       'Be selective and confidence-aware; omit unsupported claims.',
+      'Every personal-fact evidence item must cite a sourceId from the source manifest and preserve a short excerpt.',
     ].join('\n'),
     sources,
+    responseSchema: {
+      name: STUDENT_MEMORY_SNAPSHOT_RESPONSE_SCHEMA_NAME,
+      description: STUDENT_MEMORY_SNAPSHOT_RESPONSE_SCHEMA_DESCRIPTION,
+      schema: STUDENT_MEMORY_SNAPSHOT_CONTENT_JSON_SCHEMA,
+      strict: true,
+    },
   });
 }

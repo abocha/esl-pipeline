@@ -18,7 +18,7 @@ export interface GenerationEnvelopeSource {
 
 export interface GenerationRequestEnvelopeV1 {
   version: typeof GENERATION_REQUEST_ENVELOPE_VERSION;
-  promptVersion: typeof GENERATION_REQUEST_ENVELOPE_VERSION;
+  promptVersion: string;
   workload: GenerationEnvelopeWorkload;
   instructions: string;
   input: string;
@@ -40,6 +40,8 @@ export function createGenerationRequestEnvelope(args: {
   workload: GenerationEnvelopeWorkload;
   instructions: string;
   sources: readonly GenerationEnvelopeSource[];
+  promptVersion?: string;
+  settings?: Partial<GenerationRequestEnvelopeV1['settings']>;
   responseSchema?: GenerationRequestEnvelopeV1['responseSchema'];
 }): GenerationRequestEnvelopeV1 {
   const sourceManifest = args.sources.map((source) => ({
@@ -52,7 +54,7 @@ export function createGenerationRequestEnvelope(args: {
 
   return {
     version: GENERATION_REQUEST_ENVELOPE_VERSION,
-    promptVersion: GENERATION_REQUEST_ENVELOPE_VERSION,
+    promptVersion: args.promptVersion?.trim() || GENERATION_REQUEST_ENVELOPE_VERSION,
     workload: args.workload,
     instructions: [
       requireNonEmpty(args.instructions, 'instructions'),
@@ -69,9 +71,24 @@ export function createGenerationRequestEnvelope(args: {
     ].join('\n\n'),
     sourceManifest,
     sourceSelectionHash,
-    settings: { reasoningEffort: 'low', textVerbosity: 'low' },
+    settings: resolveEnvelopeSettings(args.workload, args.settings),
     ...(args.responseSchema ? { responseSchema: args.responseSchema } : {}),
   };
+}
+
+function resolveEnvelopeSettings(
+  workload: GenerationEnvelopeWorkload,
+  overrides?: Partial<GenerationRequestEnvelopeV1['settings']>,
+): GenerationRequestEnvelopeV1['settings'] {
+  const defaults: Record<GenerationEnvelopeWorkload, GenerationRequestEnvelopeV1['settings']> = {
+    assignment_draft: { reasoningEffort: 'medium', textVerbosity: 'medium' },
+    lesson_memory: { reasoningEffort: 'low', textVerbosity: 'low' },
+    homework_memory: { reasoningEffort: 'low', textVerbosity: 'low' },
+    student_memory_snapshot: { reasoningEffort: 'low', textVerbosity: 'low' },
+    profile_revision: { reasoningEffort: 'medium', textVerbosity: 'low' },
+    profile_candidate_patch: { reasoningEffort: 'low', textVerbosity: 'low' },
+  };
+  return { ...defaults[workload], ...overrides };
 }
 
 export function flattenGenerationRequestEnvelope(envelope: GenerationRequestEnvelopeV1): string {

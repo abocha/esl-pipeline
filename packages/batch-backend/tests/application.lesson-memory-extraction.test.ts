@@ -30,6 +30,7 @@ function createLessonMemoryContent() {
         confidence: 'high' as const,
         evidence: [
           {
+            sourceId: 'transcript:transcript-1',
             observedForm: 'I booked ticket',
             suggestedTarget: 'I booked a ticket',
             evidenceQuote: 'I booked ticket yesterday',
@@ -49,6 +50,7 @@ function createLessonMemoryContent() {
         confidence: 'medium' as const,
         evidence: [
           {
+            sourceId: 'transcript:transcript-1',
             observedIssue: 'Stress drift on itinerary',
             focusWords: ['itinerary'],
             evidenceQuote: null,
@@ -66,6 +68,7 @@ function createLessonMemoryContent() {
         confidence: 'high' as const,
         evidence: [
           {
+            sourceId: 'transcript:transcript-1',
             quote: 'I want to go to Japan this summer.',
             speakerRole: 'student' as const,
             evidenceNote: null,
@@ -179,5 +182,31 @@ describe('application/lesson-memory-extraction', () => {
         },
       }),
     ).rejects.toBeInstanceOf(LessonMemoryExtractionValidationError);
+  });
+
+  it('rejects evidence that is not present in the envelope manifest', async () => {
+    const content = createLessonMemoryContent();
+    content.studentFacts[0]!.evidence[0]!.sourceId = 'unselected-source';
+
+    await expect(
+      extractLessonMemoryContent({
+        config: createGenerationConfig(),
+        request: {
+          provider: 'openai',
+          model: 'gpt-5.4-mini',
+          prompt: 'Extract lesson memory',
+          envelope: buildLessonMemoryEnvelope({
+            transcriptId: 'transcript-1',
+            transcriptText: 'Student: I want to go to Japan this summer.',
+          }),
+        },
+        executors: {
+          openai: vi.fn().mockResolvedValue({ output: content, rawText: '{}' }),
+        },
+      }),
+    ).rejects.toMatchObject({
+      name: 'SourceEvidenceValidationError',
+      invalidSourceIds: ['unselected-source'],
+    });
   });
 });

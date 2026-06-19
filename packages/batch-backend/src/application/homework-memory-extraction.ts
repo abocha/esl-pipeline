@@ -3,7 +3,6 @@ import type { ZodIssue } from 'zod';
 import type { GenerationProvider } from '@esl-pipeline/contracts';
 
 import type { BatchBackendConfig } from '../config/env.js';
-import type { GenerationRequestEnvelopeV1 } from './generation-request-envelope.js';
 import {
   executeGoogleStructuredGeneration,
   executeOpenAiStructuredGeneration,
@@ -11,6 +10,7 @@ import {
   type ProviderStructuredExecutionRequest,
   type ProviderStructuredExecutionResult,
 } from './generation-providers.js';
+import type { GenerationRequestEnvelopeV1 } from './generation-request-envelope.js';
 import {
   HOMEWORK_MEMORY_CONTENT_JSON_SCHEMA,
   HOMEWORK_MEMORY_RESPONSE_SCHEMA_DESCRIPTION,
