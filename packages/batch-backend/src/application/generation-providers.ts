@@ -452,6 +452,12 @@ export async function executeOpenAiGeneration(args: {
         model: args.request.model,
         input: args.request.envelope?.input ?? prompt,
         ...(args.request.envelope ? { instructions: args.request.envelope.instructions } : {}),
+        ...(args.request.envelope
+          ? {
+              reasoning: { effort: args.request.envelope.settings.reasoningEffort },
+              text: { verbosity: args.request.envelope.settings.textVerbosity },
+            }
+          : {}),
         stream: false,
         ...(typeof args.request.maxOutputTokens === 'number'
           ? { max_output_tokens: args.request.maxOutputTokens }
@@ -544,6 +550,9 @@ export async function executeOpenAiStructuredGeneration(args: {
         ...(args.request.envelope ? { instructions: args.request.envelope.instructions } : {}),
         stream: false,
         text: {
+          ...(args.request.envelope
+            ? { verbosity: args.request.envelope.settings.textVerbosity }
+            : {}),
           format: {
             type: 'json_schema',
             name: args.request.responseSchema.name,
@@ -554,6 +563,9 @@ export async function executeOpenAiStructuredGeneration(args: {
               : {}),
           },
         },
+        ...(args.request.envelope
+          ? { reasoning: { effort: args.request.envelope.settings.reasoningEffort } }
+          : {}),
         ...(typeof args.request.maxOutputTokens === 'number'
           ? { max_output_tokens: args.request.maxOutputTokens }
           : {}),
