@@ -1,10 +1,15 @@
 import type { GenerateDraftUsage, GenerationProvider } from '@esl-pipeline/contracts';
 
 import type { BatchBackendConfig } from '../config/env.js';
+import {
+  flattenGenerationRequestEnvelope,
+  type GenerationRequestEnvelopeV1,
+} from './generation-request-envelope.js';
 
 export interface ProviderExecutionRequest {
   model: string;
-  prompt: string;
+  prompt?: string;
+  envelope?: GenerationRequestEnvelopeV1;
   maxOutputTokens?: number;
   stream?: boolean;
 }
@@ -18,9 +23,23 @@ export interface StructuredOutputSchema {
 
 export interface ProviderStructuredExecutionRequest {
   model: string;
-  prompt: string;
+  prompt?: string;
+  envelope?: GenerationRequestEnvelopeV1;
   responseSchema: StructuredOutputSchema;
   maxOutputTokens?: number;
+}
+
+function resolveProviderPrompt(request: {
+  prompt?: string;
+  envelope?: GenerationRequestEnvelopeV1;
+}): string {
+  if (request.envelope) {
+    return flattenGenerationRequestEnvelope(request.envelope);
+  }
+  if (request.prompt?.trim()) {
+    return request.prompt;
+  }
+  throw new Error('Provider generation request requires prompt or envelope');
 }
 
 export interface ProviderExecutionResult {
@@ -405,6 +424,7 @@ export async function executeOpenAiGeneration(args: {
     });
   }
 
+  const prompt = resolveProviderPrompt(args.request);
   const response = await fetchWithTimeout(
     'https://api.openai.com/v1/responses',
     {
@@ -415,7 +435,8 @@ export async function executeOpenAiGeneration(args: {
       },
       body: JSON.stringify({
         model: args.request.model,
-        input: args.request.prompt,
+        input: args.request.envelope?.input ?? prompt,
+        ...(args.request.envelope ? { instructions: args.request.envelope.instructions } : {}),
         stream: false,
         ...(typeof args.request.maxOutputTokens === 'number'
           ? { max_output_tokens: args.request.maxOutputTokens }
@@ -492,6 +513,7 @@ export async function executeOpenAiStructuredGeneration(args: {
     });
   }
 
+  const prompt = resolveProviderPrompt(args.request);
   const response = await fetchWithTimeout(
     'https://api.openai.com/v1/responses',
     {
@@ -502,7 +524,8 @@ export async function executeOpenAiStructuredGeneration(args: {
       },
       body: JSON.stringify({
         model: args.request.model,
-        input: args.request.prompt,
+        input: args.request.envelope?.input ?? prompt,
+        ...(args.request.envelope ? { instructions: args.request.envelope.instructions } : {}),
         stream: false,
         text: {
           format: {
