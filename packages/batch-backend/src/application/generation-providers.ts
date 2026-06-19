@@ -1,10 +1,15 @@
 import type { GenerateDraftUsage, GenerationProvider } from '@esl-pipeline/contracts';
 
 import type { BatchBackendConfig } from '../config/env.js';
+import {
+  flattenGenerationRequestEnvelope,
+  type GenerationRequestEnvelopeV1,
+} from './generation-request-envelope.js';
 
 export interface ProviderExecutionRequest {
   model: string;
-  prompt: string;
+  prompt?: string;
+  envelope?: GenerationRequestEnvelopeV1;
   maxOutputTokens?: number;
   stream?: boolean;
 }
@@ -18,9 +23,23 @@ export interface StructuredOutputSchema {
 
 export interface ProviderStructuredExecutionRequest {
   model: string;
-  prompt: string;
+  prompt?: string;
+  envelope?: GenerationRequestEnvelopeV1;
   responseSchema: StructuredOutputSchema;
   maxOutputTokens?: number;
+}
+
+function resolveProviderPrompt(request: {
+  prompt?: string;
+  envelope?: GenerationRequestEnvelopeV1;
+}): string {
+  if (request.envelope) {
+    return flattenGenerationRequestEnvelope(request.envelope);
+  }
+  if (request.prompt?.trim()) {
+    return request.prompt;
+  }
+  throw new Error('Provider generation request requires prompt or envelope');
 }
 
 export interface ProviderExecutionResult {
@@ -43,6 +62,7 @@ export class ProviderExecutionError extends Error {
   readonly status?: number;
   readonly code?: string;
   readonly rawText?: string;
+  readonly retryAfterMs?: number;
 
   constructor(args: {
     provider: GenerationProvider;
@@ -50,6 +70,7 @@ export class ProviderExecutionError extends Error {
     status?: number;
     code?: string;
     rawText?: string;
+    retryAfterMs?: number;
   }) {
     super(args.message);
     this.name = 'ProviderExecutionError';
@@ -57,7 +78,20 @@ export class ProviderExecutionError extends Error {
     this.status = args.status;
     this.code = args.code;
     this.rawText = args.rawText;
+    this.retryAfterMs = args.retryAfterMs;
   }
+}
+
+function parseRetryAfterMs(response: Response): number | undefined {
+  const raw = response.headers.get('retry-after')?.trim();
+  if (!raw) return undefined;
+  const seconds = Number(raw);
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return Math.ceil(seconds * 1_000);
+  }
+  const targetMs = Date.parse(raw);
+  if (Number.isNaN(targetMs)) return undefined;
+  return Math.max(0, targetMs - Date.now());
 }
 
 async function fetchWithTimeout(
@@ -405,6 +439,7 @@ export async function executeOpenAiGeneration(args: {
     });
   }
 
+  const prompt = resolveProviderPrompt(args.request);
   const response = await fetchWithTimeout(
     'https://api.openai.com/v1/responses',
     {
@@ -415,7 +450,14 @@ export async function executeOpenAiGeneration(args: {
       },
       body: JSON.stringify({
         model: args.request.model,
-        input: args.request.prompt,
+        input: args.request.envelope?.input ?? prompt,
+        ...(args.request.envelope ? { instructions: args.request.envelope.instructions } : {}),
+        ...(args.request.envelope
+          ? {
+              reasoning: { effort: args.request.envelope.settings.reasoningEffort },
+              text: { verbosity: args.request.envelope.settings.textVerbosity },
+            }
+          : {}),
         stream: false,
         ...(typeof args.request.maxOutputTokens === 'number'
           ? { max_output_tokens: args.request.maxOutputTokens }
@@ -447,6 +489,7 @@ export async function executeOpenAiGeneration(args: {
       code:
         (typeof errorBlock?.code === 'string' ? errorBlock.code : undefined) ??
         (typeof cast.code === 'string' ? cast.code : undefined),
+      retryAfterMs: parseRetryAfterMs(response),
     });
   }
 
@@ -492,6 +535,7 @@ export async function executeOpenAiStructuredGeneration(args: {
     });
   }
 
+  const prompt = resolveProviderPrompt(args.request);
   const response = await fetchWithTimeout(
     'https://api.openai.com/v1/responses',
     {
@@ -502,9 +546,13 @@ export async function executeOpenAiStructuredGeneration(args: {
       },
       body: JSON.stringify({
         model: args.request.model,
-        input: args.request.prompt,
+        input: args.request.envelope?.input ?? prompt,
+        ...(args.request.envelope ? { instructions: args.request.envelope.instructions } : {}),
         stream: false,
         text: {
+          ...(args.request.envelope
+            ? { verbosity: args.request.envelope.settings.textVerbosity }
+            : {}),
           format: {
             type: 'json_schema',
             name: args.request.responseSchema.name,
@@ -515,6 +563,9 @@ export async function executeOpenAiStructuredGeneration(args: {
               : {}),
           },
         },
+        ...(args.request.envelope
+          ? { reasoning: { effort: args.request.envelope.settings.reasoningEffort } }
+          : {}),
         ...(typeof args.request.maxOutputTokens === 'number'
           ? { max_output_tokens: args.request.maxOutputTokens }
           : {}),
@@ -545,6 +596,7 @@ export async function executeOpenAiStructuredGeneration(args: {
       code:
         (typeof errorBlock?.code === 'string' ? errorBlock.code : undefined) ??
         (typeof cast.code === 'string' ? cast.code : undefined),
+      retryAfterMs: parseRetryAfterMs(response),
     });
   }
 

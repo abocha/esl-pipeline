@@ -10,6 +10,7 @@ import {
   type ProviderStructuredExecutionRequest,
   type ProviderStructuredExecutionResult,
 } from './generation-providers.js';
+import type { GenerationRequestEnvelopeV1 } from './generation-request-envelope.js';
 import {
   LESSON_MEMORY_CONTENT_JSON_SCHEMA,
   LESSON_MEMORY_RESPONSE_SCHEMA_DESCRIPTION,
@@ -17,6 +18,7 @@ import {
   type LessonMemoryContent,
   validateLessonMemoryContent,
 } from './lesson-memory-content-schema.js';
+import { assertEvidenceSourcesInEnvelope } from './source-evidence-validation.js';
 
 type StructuredProviderExecutor = (args: {
   config: BatchBackendConfig['generation'];
@@ -33,6 +35,7 @@ export interface ExtractLessonMemoryContentRequest {
   provider: GenerationProvider;
   model: string;
   prompt: string;
+  envelope?: GenerationRequestEnvelopeV1;
   maxOutputTokens?: number;
 }
 
@@ -78,6 +81,7 @@ export async function extractLessonMemoryContent(args: {
     request: {
       model: args.request.model,
       prompt: args.request.prompt,
+      ...(args.request.envelope ? { envelope: args.request.envelope } : {}),
       maxOutputTokens: args.request.maxOutputTokens,
       responseSchema: {
         name: LESSON_MEMORY_RESPONSE_SCHEMA_NAME,
@@ -90,6 +94,7 @@ export async function extractLessonMemoryContent(args: {
 
   try {
     const content = validateLessonMemoryContent(result.output);
+    assertEvidenceSourcesInEnvelope(content, args.request.envelope);
     return {
       content,
       rawOutput: result.output,

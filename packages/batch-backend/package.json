@@ -19,6 +19,8 @@
     "dev:student-memory-worker": "tsx watch --tsconfig tsconfig.json src/transport/student-memory-worker.ts",
     "dev:transcribe-worker": "tsx watch --tsconfig tsconfig.json src/transport/transcribe-worker.ts",
     "dev:worker": "tsx watch --tsconfig tsconfig.json src/transport/worker-runner.ts",
+    "generation:eval": "tsx --tsconfig tsconfig.json src/tools/evaluate-generation-fixtures.ts",
+    "generation:eval:live": "tsx --tsconfig tsconfig.json src/tools/evaluate-generation-fixtures.ts --live",
     "lesson-memory:refresh": "tsx --tsconfig tsconfig.json src/tools/refresh-student-lesson-history.ts",
     "lesson-memory:refresh:dist": "node dist/tools/refresh-student-lesson-history.js",
     "lesson-memory:refresh:dist:dry": "node dist/tools/refresh-student-lesson-history.js --dry-run",

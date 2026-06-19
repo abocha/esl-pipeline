@@ -80,6 +80,30 @@ describe('config/env - core defaults', () => {
   });
 });
 
+describe('config/env - OpenAI target-model gate', () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it('keeps target model defaults disabled until an operator explicitly enables them', async () => {
+    await withEnv({ NODE_ENV: 'test', GEN_OPENAI_TARGET_MODELS_ENABLED: 'false' }, async () => {
+      const cfg = await loadConfigFresh();
+      expect(cfg.generation.models.openai.targetModelsEnabled).toBe(false);
+      expect(cfg.generation.models.openai.primary).toBe('gpt-5.4-mini');
+    });
+  });
+
+  it('selects the evaluated target ladder only behind the explicit gate', async () => {
+    await withEnv({ NODE_ENV: 'test', GEN_OPENAI_TARGET_MODELS_ENABLED: 'true' }, async () => {
+      const cfg = await loadConfigFresh();
+      expect(cfg.generation.models.openai.targetModelsEnabled).toBe(true);
+      expect(cfg.generation.models.openai.primary).toBe('gpt-5.5');
+      expect(cfg.generation.models.openai.studentMemoryPrimary).toBe('gpt-5.4-mini');
+      expect(cfg.generation.models.openai.profileDraftPrimary).toBe('gpt-5.4-mini');
+    });
+  });
+});
+
 describe('config/env - speech planner debug logging', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -433,6 +457,7 @@ describe('config/env - generation provider mapping', () => {
           expect.arrayContaining(['gemini-3-flash-preview', 'gemini-3.5-flash']),
         );
         expect(cfg.generation.providers.openai.dailyTokenBudget).toBe(120000);
+        expect(cfg.generation.providers.openai.tpmBudget).toBe(160000);
         expect(cfg.generation.providers.openrouter.dailyTokenBudget).toBe(0);
       },
     );
@@ -457,6 +482,7 @@ describe('config/env - generation provider mapping', () => {
         GEN_OPENAI_MODEL_PROFILE_DRAFT_TERTIARY: 'gpt-big-tertiary',
         GEN_ALLOWED_MODELS_OPENAI: 'gpt-test,gpt-mini',
         OPENAI_API_KEY: 'openai-key',
+        GEN_OPENAI_TPM_BUDGET: '777',
         GEMINI_API_KEY: 'google-key',
         OPENROUTER_API_KEY: 'router-key',
       },
@@ -477,6 +503,7 @@ describe('config/env - generation provider mapping', () => {
         expect(cfg.generation.models.openai.profileDraftTertiary).toBe('gpt-big-tertiary');
         expect(cfg.generation.models.openai.allowed).toEqual(['gpt-test', 'gpt-mini']);
         expect(cfg.generation.providers.openai.apiKey).toBe('openai-key');
+        expect(cfg.generation.providers.openai.tpmBudget).toBe(777);
         expect(cfg.generation.providers.googleAiStudio.apiKey).toBe('google-key');
         expect(cfg.generation.providers.openrouter.apiKey).toBe('router-key');
       },

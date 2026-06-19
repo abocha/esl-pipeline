@@ -6,6 +6,7 @@ import { withPgClient } from '../infrastructure/db.js';
 
 export type GenerationBudgetLimitType =
   | 'rpm'
+  | 'tpm'
   | 'daily_requests'
   | 'daily_tokens'
   | 'max_output_tokens'
@@ -22,6 +23,7 @@ export interface GenerationBudgetUsage {
 
 export interface GenerationBudgetLimits {
   rpmBudget?: number | null;
+  tpmBudget?: number | null;
   dailyRequestBudget?: number | null;
   dailyTokenBudget?: number | null;
 }
@@ -230,11 +232,13 @@ export async function reserveGenerationBudget(
       });
 
       const minuteRequests = asNumber(minuteRow.request_count);
+      const minuteReservedTokens = asNumber(minuteRow.reserved_tokens);
       const dayRequests = asNumber(dayRow.request_count);
       const dayReservedTokens = asNumber(dayRow.reserved_tokens);
       const dayActualTokens = asNumber(dayRow.actual_tokens);
 
       const nextMinuteRequests = minuteRequests + 1;
+      const nextMinuteReservedTokens = minuteReservedTokens + estimatedTokens;
       const nextDayRequests = dayRequests + 1;
       const nextDayReservedTokens = dayReservedTokens + estimatedTokens;
 
@@ -252,6 +256,30 @@ export async function reserveGenerationBudget(
             window: 'minute',
             limit: input.limits.rpmBudget,
             used: minuteRequests,
+          },
+          usage: {
+            requestsPerMinuteUsed: minuteRequests,
+            requestsToday: dayRequests,
+            reservedTokensToday: dayReservedTokens,
+            actualTokensToday: dayActualTokens,
+          },
+        };
+      }
+
+      if (
+        input.limits.tpmBudget !== undefined &&
+        input.limits.tpmBudget !== null &&
+        input.limits.tpmBudget >= 0 &&
+        nextMinuteReservedTokens > input.limits.tpmBudget
+      ) {
+        await client.query('ROLLBACK');
+        return {
+          allowed: false,
+          reason: {
+            limitType: 'tpm',
+            window: 'minute',
+            limit: input.limits.tpmBudget,
+            used: minuteReservedTokens,
           },
           usage: {
             requestsPerMinuteUsed: minuteRequests,
@@ -313,13 +341,14 @@ export async function reserveGenerationBudget(
       await client.query(
         `
           UPDATE generation_budget_counters
-          SET request_count = request_count + 1
+          SET request_count = request_count + 1,
+              reserved_tokens = reserved_tokens + $4
           WHERE bucket_type = 'minute'
             AND bucket_start = $1
             AND provider = $2
             AND model = $3
         `,
-        [minuteStart, input.provider, input.model],
+        [minuteStart, input.provider, input.model, estimatedTokens],
       );
 
       await client.query(

@@ -10,6 +10,7 @@ import {
   extractHomeworkMemoryContent,
   HomeworkMemoryExtractionValidationError,
 } from '../src/application/homework-memory-extraction.js';
+import { buildHomeworkMemoryEnvelope } from '../src/application/homework-memory-prompt.js';
 import type { BatchBackendConfig } from '../src/config/env.js';
 import { loadConfig } from '../src/config/env.js';
 
@@ -85,6 +86,19 @@ describe('application/homework-memory-content-schema', () => {
 });
 
 describe('application/homework-memory-extraction', () => {
+  it('builds a labelled published-assignment envelope', () => {
+    const envelope = buildHomeworkMemoryEnvelope({
+      normalizedMarkdown: { frontmatter: null, sections: [], plainText: 'Practice articles.' },
+      source: {
+        assignmentLineageKey: 'assignment-1',
+        publishTargets: [],
+        publishedAt: new Date('2026-06-19T00:00:00.000Z'),
+      },
+    });
+
+    expect(envelope.instructions).toContain('canonical homework memory');
+    expect(envelope.input).toContain('id="assignment:assignment-1"');
+  });
   it('uses the structured schema contract and returns validated content', async () => {
     const executor = vi.fn().mockResolvedValue({
       output: createHomeworkMemoryContent(),

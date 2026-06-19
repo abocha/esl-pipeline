@@ -84,6 +84,8 @@ Primary groups:
   - `OPENAI_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`
 - Model selection and fallbacks:
   - `GEN_PROVIDER_*`, `GEN_*_MODEL_*`
+  - `GEN_OPENAI_TARGET_MODELS_ENABLED` (defaults to `false`; enables the evaluated target ladder only
+    after an operator reviews a credentialed live-eval report)
 - Safety and budgets:
   - `GEN_SAFETY_MODE`, `GEN_STRICT_NO_PAID`, `GEN_ALLOW_PAID_SPEND`, `GEN_*_BUDGET`
 - Timeouts/retries:
@@ -142,6 +144,10 @@ Read next:
   - `GEN_STRICT_NO_PAID=true`
   - `GEN_MAX_OUTPUT_TOKENS_HARD=3200`
 - Direct generation provider requests default to 240000 ms unless overridden per provider.
+- `GEN_OPENAI_TPM_BUDGET` defaults to `160000`; it is an operator capacity setting, not a billing or
+  plan-tier setting.
+- `GENERATION_LIVE_EVAL_ENABLED=true` and `OPENAI_API_KEY` are both required before the opt-in live
+  generation evaluation command will call OpenAI.
 - Telegram mutating ops stay disabled unless `TELEGRAM_OPS_BOT_ENABLE_ACTION_COMMANDS=true`.
 - Backend ops control is additive and should remain off unless explicitly enabled with
   `BATCH_BACKEND_ENABLE_OPS_CONTROL=true`; command execution also requires explicit

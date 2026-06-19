@@ -53,6 +53,7 @@ function createStudentMemorySnapshotContent() {
         confidence: 'high' as const,
         evidence: [
           {
+            sourceId: 'lesson-memory:lesson-1',
             quote: 'I want to go to Japan this summer.',
             speakerRole: 'student' as const,
             evidenceNote: null,
