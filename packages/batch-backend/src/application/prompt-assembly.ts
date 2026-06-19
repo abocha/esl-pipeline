@@ -1,6 +1,11 @@
 // packages/batch-backend/src/application/prompt-assembly.ts
 import path from 'node:path';
 
+import {
+  createGenerationRequestEnvelope,
+  type GenerationRequestEnvelopeV1,
+} from './generation-request-envelope.js';
+
 export interface PromptStitchOptions {
   template: string;
   profile: string;
@@ -27,6 +32,34 @@ export function stitchPromptPayload(options: PromptStitchOptions): string {
     formatLabeledBlock('LATEST_TRANSCRIPT', options.transcript),
     '',
   ].join('\n\n');
+}
+
+export function stitchPromptEnvelope(options: PromptStitchOptions): GenerationRequestEnvelopeV1 {
+  return createGenerationRequestEnvelope({
+    workload: 'assignment_draft',
+    instructions: options.template,
+    sources: [
+      { id: 'foundational-profile', label: 'FOUNDATIONAL_PROFILE', content: options.profile },
+      {
+        id: 'student-memory-snapshot',
+        label: 'STUDENT_MEMORY_SNAPSHOT',
+        content: options.studentMemorySnapshot,
+      },
+      { id: 'recent-lesson-memory', label: 'RECENT_LESSON_MEMORY', content: options.recentLessonMemory },
+      {
+        id: 'recent-homework-memory',
+        label: 'RECENT_HOMEWORK_MEMORY',
+        content: options.recentHomeworkMemory,
+      },
+      { id: 'unresolved-issues', label: 'UNRESOLVED_ISSUES', content: options.unresolvedIssues },
+      {
+        id: 'teacher-notes',
+        label: 'TEACHER_NOTES',
+        content: (options.notes ?? '').trim() || 'No teacher notes provided for this lesson.',
+      },
+      { id: 'latest-transcript', label: 'LATEST_TRANSCRIPT', content: options.transcript },
+    ],
+  });
 }
 
 function formatLabeledBlock(label: string, content: string): string {
