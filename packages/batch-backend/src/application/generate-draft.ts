@@ -31,6 +31,7 @@ import {
   type ProviderExecutionResult,
 } from './generation-providers.js';
 import { getPromptPackage } from './get-prompt-package.js';
+import { isGenerationRequestEnvelope } from './generation-request-envelope.js';
 import { requestLessonMemoryGeneration } from './request-lesson-memory-generation.js';
 
 type ProviderExecutor = (args: {
@@ -217,6 +218,9 @@ export async function generateDraft(
         request: {
           model: candidate.model,
           prompt: promptPackage.text,
+          ...(isGenerationRequestEnvelope(promptPackage.requestEnvelope)
+            ? { envelope: promptPackage.requestEnvelope }
+            : {}),
           maxOutputTokens: request.maxOutputTokens,
           stream: false,
         },
