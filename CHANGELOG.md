@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [9.1.7] - 2026-06-19
+
+### Changed
+
+- Automated release from PR #110: feat(generation): harden OpenAI request envelopes and assignment repair (https://github.com/abocha/esl-pipeline/pull/110)
+
 ## [9.1.6] - 2026-06-17
 
 ### Changed
