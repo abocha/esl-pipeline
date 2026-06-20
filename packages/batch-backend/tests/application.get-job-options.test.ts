@@ -279,7 +279,7 @@ describe('application/get-job-options', () => {
     expect(result.learningPresets).toEqual([
       {
         id: 'general-english',
-        version: 'v1',
+        version: 'v2',
         alias: 'current',
         title: 'General English',
         track: 'general-english',

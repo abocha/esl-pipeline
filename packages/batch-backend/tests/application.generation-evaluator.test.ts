@@ -8,7 +8,6 @@ import { validateMarkdown } from '@esl-pipeline/md-validator';
 import {
   GENERATION_EVAL_ASSIGNMENT_TEMPLATE_BASELINE,
   GENERATION_EVAL_FIXTURES,
-  type GenerationEvalFixture,
 } from '../src/application/generation-eval-fixtures.js';
 import {
   assertLiveGenerationEvalAccess,
@@ -54,7 +53,13 @@ describe('application/generation-evaluator', () => {
       GENERATION_EVAL_ASSIGNMENT_TEMPLATE_BASELINE.content,
     );
     const templateContent = readFileSync(
-      resolve(process.cwd(), GENERATION_EVAL_ASSIGNMENT_TEMPLATE_BASELINE.path),
+      resolve(
+        import.meta.dirname,
+        '..',
+        '..',
+        '..',
+        GENERATION_EVAL_ASSIGNMENT_TEMPLATE_BASELINE.path,
+      ),
       'utf8',
     );
     expect(GENERATION_EVAL_ASSIGNMENT_TEMPLATE_BASELINE).toMatchObject({
