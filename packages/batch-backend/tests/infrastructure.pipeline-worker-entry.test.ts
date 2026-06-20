@@ -109,4 +109,14 @@ describe('infrastructure/pipeline-worker-entry', () => {
     expect(source).toContain('accentPreference: payload.voiceAccent ?? undefined');
     expect(source).toContain('voiceId: payload.voiceId ?? undefined');
   });
+
+  it('maps persisted learning preset versions into new-assignment orchestrator flags', async () => {
+    const sourcePath = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      '../src/infrastructure/pipeline-worker-entry.ts',
+    );
+    const source = await fs.readFile(sourcePath, 'utf8');
+
+    expect(source).toContain('learningPresetVersion: payload.learningPresetVersion');
+  });
 });

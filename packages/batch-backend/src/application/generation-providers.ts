@@ -44,6 +44,7 @@ function resolveProviderPrompt(request: {
 
 export interface ProviderExecutionResult {
   text: string;
+  model?: string;
   providerRequestId?: string;
   usage?: GenerateDraftUsage;
   finishReason?: string;
@@ -52,6 +53,7 @@ export interface ProviderExecutionResult {
 export interface ProviderStructuredExecutionResult {
   output: unknown;
   rawText: string;
+  model?: string;
   providerRequestId?: string;
   usage?: GenerateDraftUsage;
   finishReason?: string;
@@ -515,6 +517,7 @@ export async function executeOpenAiGeneration(args: {
 
   return {
     text,
+    model: typeof cast.model === 'string' ? cast.model : undefined,
     providerRequestId: typeof cast.id === 'string' ? cast.id : undefined,
     usage: parseOpenAiUsage(cast),
     finishReason: extractOpenAiFinishReason(cast),
@@ -637,6 +640,7 @@ export async function executeOpenAiStructuredGeneration(args: {
   return {
     output,
     rawText,
+    model: typeof cast.model === 'string' ? cast.model : undefined,
     providerRequestId: typeof cast.id === 'string' ? cast.id : undefined,
     usage: parseOpenAiUsage(cast),
     finishReason: extractOpenAiFinishReason(cast),

@@ -2,13 +2,14 @@ import type { MarkdownValidationIssue } from '@esl-pipeline/contracts';
 
 import type { RulesetResolution, ValidationRulesetDefinition } from '../rules/types.js';
 import { validateGeneralEnglishRuleset } from './general-english/v1.js';
+import { validateGeneralEnglishV2Ruleset } from './general-english/v2.js';
 
 interface RulesetResolutionInput {
   learningPresetId?: string | null;
   learningPresetVersion?: string | null;
 }
 
-const GENERAL_ENGLISH_RULESET: ValidationRulesetDefinition = {
+const GENERAL_ENGLISH_V1_RULESET: ValidationRulesetDefinition = {
   id: 'general-english',
   version: 'v1',
   track: 'general-english',
@@ -22,17 +23,39 @@ const GENERAL_ENGLISH_RULESET: ValidationRulesetDefinition = {
     }),
 };
 
-const RULESET_REGISTRY = new Map<string, ValidationRulesetDefinition>([
-  [GENERAL_ENGLISH_RULESET.id, GENERAL_ENGLISH_RULESET],
+const GENERAL_ENGLISH_V2_RULESET: ValidationRulesetDefinition = {
+  id: 'general-english',
+  version: 'v2',
+  track: 'general-english',
+  title: 'General English',
+  baseRulesetId: 'base-v1',
+  run: async (input) =>
+    validateGeneralEnglishV2Ruleset({
+      context: input.context,
+      strict: input.strict,
+      path: input.path,
+    }),
+};
+
+const DEFAULT_GENERAL_ENGLISH_RULESET = GENERAL_ENGLISH_V2_RULESET;
+
+const RULESET_REGISTRY = new Map<string, Map<string, ValidationRulesetDefinition>>([
+  [
+    GENERAL_ENGLISH_V1_RULESET.id,
+    new Map([
+      [GENERAL_ENGLISH_V1_RULESET.version, GENERAL_ENGLISH_V1_RULESET],
+      [GENERAL_ENGLISH_V2_RULESET.version, GENERAL_ENGLISH_V2_RULESET],
+    ]),
+  ],
 ]);
 
 const RULESET_ALIAS_REGISTRY = new Map<string, string>([
-  ['general-english-intensive', GENERAL_ENGLISH_RULESET.id],
+  ['general-english-intensive', DEFAULT_GENERAL_ENGLISH_RULESET.id],
 ]);
 
 function resolveRulesetByLearningPresetId(
   requestedId: string,
-): ValidationRulesetDefinition | undefined {
+): Map<string, ValidationRulesetDefinition> | undefined {
   const direct = RULESET_REGISTRY.get(requestedId);
   if (direct) return direct;
 
@@ -41,8 +64,8 @@ function resolveRulesetByLearningPresetId(
 
   // Current learning-preset catalog variants for the General English track
   // are prefixed by the base track id (for example "general-english-*").
-  if (requestedId.startsWith(`${GENERAL_ENGLISH_RULESET.id}-`)) {
-    return GENERAL_ENGLISH_RULESET;
+  if (requestedId.startsWith(`${DEFAULT_GENERAL_ENGLISH_RULESET.id}-`)) {
+    return RULESET_REGISTRY.get(DEFAULT_GENERAL_ENGLISH_RULESET.id);
   }
 
   return undefined;
@@ -77,7 +100,7 @@ function issueForUnknownVersion(
 }
 
 export function resolveValidationRuleset(input: RulesetResolutionInput): RulesetResolution {
-  const fallbackRuleset = GENERAL_ENGLISH_RULESET;
+  const fallbackRuleset = DEFAULT_GENERAL_ENGLISH_RULESET;
   const requestedId = input.learningPresetId?.trim() || null;
   const requestedVersion = input.learningPresetVersion?.trim() || null;
   if (!requestedId) {
@@ -89,8 +112,8 @@ export function resolveValidationRuleset(input: RulesetResolutionInput): Ruleset
       issues: [],
     };
   }
-  const found = resolveRulesetByLearningPresetId(requestedId);
-  if (!found) {
+  const foundVersions = resolveRulesetByLearningPresetId(requestedId);
+  if (!foundVersions) {
     return {
       ruleset: fallbackRuleset,
       requestedId,
@@ -101,14 +124,15 @@ export function resolveValidationRuleset(input: RulesetResolutionInput): Ruleset
     };
   }
 
-  if (requestedVersion && requestedVersion !== found.version) {
+  const found = requestedVersion ? foundVersions.get(requestedVersion) : fallbackRuleset;
+  if (!found) {
     return {
-      ruleset: found,
+      ruleset: fallbackRuleset,
       requestedId,
       requestedVersion,
       fallbackApplied: true,
       fallbackReason: 'unknown_version',
-      issues: [issueForUnknownVersion(requestedVersion, found)],
+      issues: [issueForUnknownVersion(requestedVersion!, fallbackRuleset)],
     };
   }
 
