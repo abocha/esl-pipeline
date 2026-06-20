@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [9.1.8] - 2026-06-20
+
+### Changed
+
+- Automated release from PR #111: fix(generation-eval): harden live qualification gate (https://github.com/abocha/esl-pipeline/pull/111)
+
 ## [9.1.7] - 2026-06-19
 
 ### Changed
