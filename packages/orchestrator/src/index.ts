@@ -543,6 +543,7 @@ export async function newAssignment(
       path: flags.md,
       strict: false,
       learningPresetId: flags.learningPresetId,
+      learningPresetVersion: flags.learningPresetVersion,
       preset: flags.preset,
     });
     throwIfCancelled(signal, 'validate');

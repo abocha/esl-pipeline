@@ -34,7 +34,7 @@ describeMdValidatorSuite(
       const res = await validateMarkdownFile(path.join(fixturesPath, 'ok.md'));
       expect(res.ruleset).toMatchObject({
         id: 'general-english',
-        version: 'v1',
+        version: 'v2',
         fallbackApplied: false,
       });
       expect(Array.isArray(res.issues)).toBe(true);

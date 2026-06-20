@@ -77,8 +77,8 @@ export async function validateMarkdown(input: ValidateMarkdownInput): Promise<Va
 
   // Build legacy-derived issues from pre-resolution payload to avoid duplicating
   // canonical ruleset-resolution issues in `issues`.
-  const legacyIssues = buildIssuesFromLegacyMessages(legacyPayload);
-  const issues = mergeIssues(legacyIssues, rulesetResolution.issues);
+  const rulesetIssues = rulesetResult.issues ?? buildIssuesFromLegacyMessages(legacyPayload);
+  const issues = mergeIssues(rulesetIssues, rulesetResolution.issues);
   const hasExplicitErrors = rulesetResolution.issues.some((issue) => issue.severity === 'error');
 
   const response: MarkdownValidationResponse = {

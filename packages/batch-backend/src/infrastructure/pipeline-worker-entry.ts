@@ -118,6 +118,7 @@ async function runAssignmentPipeline(
     md: payload.md,
     preset: payload.preset,
     learningPresetId: payload.learningPresetId,
+    learningPresetVersion: payload.learningPresetVersion,
     withTts: payload.withTts,
     upload: payload.upload,
     publishTarget: payload.publishTarget,

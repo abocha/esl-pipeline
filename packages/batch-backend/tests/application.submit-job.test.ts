@@ -153,7 +153,7 @@ describe('application/submit-job', () => {
     expect(insertJobSpy).toHaveBeenCalledWith({
       md: fakeJob.md,
       learningPresetId: 'general-english',
-      learningPresetVersion: 'v1',
+      learningPresetVersion: 'v2',
       promptSnapshotVersion: 'hw_prompt_definitive',
       promptAlias: 'current',
       withTts: fakeJob.withTts,
@@ -206,7 +206,7 @@ describe('application/submit-job', () => {
     expect(insertJobSpy).toHaveBeenCalledWith({
       md: fakeJob.md,
       learningPresetId: 'general-english',
-      learningPresetVersion: 'v1',
+      learningPresetVersion: 'v2',
       promptSnapshotVersion: 'hw_prompt_definitive',
       promptAlias: 'current',
       withTts: undefined,
