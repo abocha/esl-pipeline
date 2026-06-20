@@ -65,6 +65,8 @@ describe('markdown caching', () => {
     await newAssignment({
       md: mdPath,
       preset: 'default',
+      learningPresetId: 'general-english',
+      learningPresetVersion: 'v1',
       skipImport: true,
       skipTts: true,
       skipUpload: true,
@@ -76,6 +78,8 @@ describe('markdown caching', () => {
     const call = validateMarkdown.mock.calls[0];
     expect(call?.[0]?.path).toBe(mdPath);
     expect(call?.[0]?.strict).toBe(false);
+    expect(call?.[0]?.learningPresetId).toBe('general-english');
+    expect(call?.[0]?.learningPresetVersion).toBe('v1');
     expect(call?.[0]?.context?.rawMarkdown).toBe(mdContent);
   }, 90000);
 });
