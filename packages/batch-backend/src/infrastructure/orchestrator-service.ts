@@ -146,6 +146,7 @@ export interface RunAssignmentPayload {
   md: string;
   preset?: string;
   learningPresetId?: string;
+  learningPresetVersion?: string;
   withTts?: boolean;
   // Upload backend flag is constrained by orchestrator API:
   // currently only 's3' is supported as an explicit option.

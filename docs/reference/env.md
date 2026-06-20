@@ -146,8 +146,9 @@ Read next:
 - Direct generation provider requests default to 240000 ms unless overridden per provider.
 - `GEN_OPENAI_TPM_BUDGET` defaults to `160000`; it is an operator capacity setting, not a billing or
   plan-tier setting.
-- `GENERATION_LIVE_EVAL_ENABLED=true` and `OPENAI_API_KEY` are both required before the opt-in live
-  generation evaluation command will call OpenAI.
+- The opt-in live generation evaluation entrypoint loads `.env.batch-backend` and then `.env` before
+  it checks `GENERATION_LIVE_EVAL_ENABLED=true` and `OPENAI_API_KEY`; both are required before it
+  will call OpenAI.
 - Telegram mutating ops stay disabled unless `TELEGRAM_OPS_BOT_ENABLE_ACTION_COMMANDS=true`.
 - Backend ops control is additive and should remain off unless explicitly enabled with
   `BATCH_BACKEND_ENABLE_OPS_CONTROL=true`; command execution also requires explicit

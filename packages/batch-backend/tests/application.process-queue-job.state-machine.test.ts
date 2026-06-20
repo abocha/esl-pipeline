@@ -36,11 +36,19 @@ describe('application/process-queue-job', () => {
   });
 
   it('processes queued job: queued -> running -> succeeded on orchestrator success', async () => {
-    const initial = makeJob({ state: 'queued' });
+    const initial = makeJob({
+      state: 'queued',
+      learningPresetId: 'general-english',
+      learningPresetVersion: 'v1',
+    });
     getJobByIdSpy.mockResolvedValue(initial);
 
     // First optimistic update: queued -> running
-    const running = makeJob({ state: 'running', startedAt: new Date('2024-01-01T10:01:00Z') });
+    const running = makeJob({
+      ...initial,
+      state: 'running',
+      startedAt: new Date('2024-01-01T10:01:00Z'),
+    });
     const succeeded = {
       ...running,
       state: 'succeeded',
@@ -75,6 +83,8 @@ describe('application/process-queue-job', () => {
     expect(payload).toMatchObject({
       jobId: 'job-1',
       preset: initial.preset!,
+      learningPresetId: 'general-english',
+      learningPresetVersion: 'v1',
       withTts: initial.withTts!,
       upload: 's3',
       forceTts: initial.forceTts,

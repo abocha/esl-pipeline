@@ -198,6 +198,10 @@ Return the assignment as **raw Markdown only**.
    - `:::video <url>` to embed YouTube/Vimeo videos
    - `:::toggle <Title>` for collapsible sections such as the Answer Key or Teacher's Follow-up Plan
 
+   Emit `:::audio` or `:::video` only when a usable URL is present in the supplied runtime source
+   data. Otherwise omit the directive entirely: never emit a bare marker, placeholder URL, or
+   invented media URL.
+
 3. **Use Markdown Rich Text Formatting Intentionally**
 
 Use Markdown formatting semantically and consistently:

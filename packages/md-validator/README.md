@@ -16,12 +16,15 @@ The validator now uses a ruleset engine layout:
 - `src/validator.ts`: compatibility facade (`validateMarkdown`)
 - `src/core/*`: input normalization + issue/result shaping
 - `src/rules/*`: execution contracts + base rule group placeholders
-- `src/rulesets/registry.ts`: ruleset resolution (`learningPresetId`)
-- `src/rulesets/general-english/v1.ts`: current implemented ruleset logic
+- `src/rulesets/registry.ts`: ruleset resolution (`learningPresetId` + version)
+- `src/rulesets/general-english/v1.ts`: compatibility implementation for persisted v1 jobs
+- `src/rulesets/general-english/v2.ts`: typed strict-diagnostic classification over the v1
+  structural analysis
 
 Current effective ruleset:
 
-- `general-english@v1` (default fallback)
+- `general-english@v2` (default fallback)
+- `general-english@v1` remains available when explicitly requested for persisted-job compatibility.
 
 ## API
 
@@ -32,7 +35,7 @@ const result = await validateMarkdown({
   markdown: '# ...',
   strict: true,
   learningPresetId: 'general-english', // optional
-  learningPresetVersion: 'v1', // optional
+  learningPresetVersion: 'v2', // optional; omit for the current default
 });
 ```
 
@@ -46,9 +49,10 @@ Input sources:
 
 Resolution order:
 
-1. Known `learningPresetId` -> mapped ruleset.
-2. Unknown `learningPresetId` -> fallback to `general-english@v1` + warning issue.
-3. No preset context -> `general-english@v1`.
+1. Known `learningPresetId` + known version -> that exact ruleset.
+2. Known `learningPresetId` without a version -> `general-english@v2`.
+3. Unknown preset or version -> `general-english@v2` + warning issue.
+4. No preset context -> `general-english@v2`.
 
 ## Response model
 
@@ -71,9 +75,14 @@ Additive fields:
 
 ## Strict behavior
 
-- `error` issues always block.
-- Contract warnings block when `strict: true`.
-- Advisory warnings never block.
+- `general-english@v2` obtains strict escalation, stable issue code, category, and
+  `blockingInStrict` from one ordered typed policy table.
+- In v2, `error` issues always block and warnings block exactly when their policy sets
+  `blockingInStrict: true`; unmatched diagnostics receive the blocking stable code
+  `general_english_v2.unclassified_diagnostic`.
+- `:::audio` and `:::video` remain optional. If emitted, each must include a usable URL; a bare
+  marker blocks strict v2 validation. Omitted media directives remain valid.
+- `general-english@v1` retains its legacy strict behavior for explicitly persisted v1 jobs.
 
 ## Tests
 

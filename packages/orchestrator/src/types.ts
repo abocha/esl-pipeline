@@ -109,6 +109,7 @@ export interface NewAssignmentFlags {
   student?: string;
   preset?: string;
   learningPresetId?: string;
+  learningPresetVersion?: string;
   presetsPath?: string;
   accentPreference?: string;
   voiceId?: string;
