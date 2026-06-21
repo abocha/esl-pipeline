@@ -5,7 +5,7 @@
 - Audience: founder-maintainer and implementing agents.
 - Read Time: 5 minutes.
 - Authority Level: canonical provider/model/quota policy.
-- Last Verified Against: 2026-06-19 repo state.
+- Last Verified Against: 2026-06-21 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly or after provider policy/availability changes.
 - Status: `reference`.
@@ -86,10 +86,16 @@
    - `provider_contract_error`
    - `budget_exceeded`
 4. Fallback behavior:
-   - rate limit / quota -> fallback
+   - rate limit / quota -> fallback for fallback-capable generation workloads
    - timeout -> retry then fallback
    - contract/schema failure -> fail fast
    - local safety budget failure -> hard stop
+   - canonical lesson-memory, homework-memory, and student-memory-snapshot extraction are the
+     deliberate exception: a minute RPM/TPM rejection or provider HTTP 429 defers the original
+     BullMQ job with its selected provider/model unchanged. It does not sleep a worker, enqueue a
+     duplicate, or fall back to another provider. Daily limits, hard stops, capability/schema and
+     business-validation failures, timeouts, 5xx responses, and non-429 provider failures retain
+     their ordinary failure behavior.
 
 ## Active Safety Defaults
 

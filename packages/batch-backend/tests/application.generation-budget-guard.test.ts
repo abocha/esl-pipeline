@@ -1,9 +1,22 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { enforceGenerationBudgetBeforeAttempt } from '../src/application/generation-budget-guard.js';
+import {
+  enforceGenerationBudgetBeforeAttempt,
+  estimateGenerationTokens,
+} from '../src/application/generation-budget-guard.js';
 import { loadConfig } from '../src/config/env.js';
 
 describe('generation budget guard', () => {
+  it('uses one exported token estimate for reservations and pacing', () => {
+    expect(
+      estimateGenerationTokens({
+        prompt: 'abcdefgh',
+        requestedMaxOutputTokens: 50,
+        hardCap: 100,
+      }),
+    ).toBe(52);
+  });
+
   it('passes the configured OpenAI TPM budget into the reservation request', async () => {
     const base = loadConfig();
     const reserve = vi.fn().mockResolvedValue({
