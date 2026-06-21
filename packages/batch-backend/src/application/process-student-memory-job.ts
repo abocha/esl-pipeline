@@ -23,7 +23,7 @@ export type StudentMemoryQueuePayload =
   | ProcessStudentProfileCandidateRefreshJobPayload;
 
 export async function processStudentMemoryJob(args: {
-  config: BatchBackendConfig['generation'];
+  config: BatchBackendConfig;
   payload: StudentMemoryQueuePayload;
   attemptsMade?: number;
   maxAttempts?: number;

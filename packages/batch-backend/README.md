@@ -4,7 +4,7 @@
 
 - Audience: maintainers and implementing agents.
 - Authority Level: package entrypoint and operational usage guide.
-- Last Verified Against: 2026-06-13 repo state.
+- Last Verified Against: 2026-06-21 repo state.
 - Owner: batch-backend maintainers + automation agents.
 - Review Cadence: monthly or after major API/worker changes.
 - Status: `active`.
@@ -48,6 +48,12 @@ Useful indexes:
 - Postgres is the durable store.
 - Redis/BullMQ backs queue execution.
 - Local/dev startup runs the API server, batch worker, transcribe worker, and dedicated student-memory worker as separate processes.
+- Canonical lesson/homework/snapshot extraction reserves the shared generation budget before its
+  provider call and records actual token use after success. If that post-success accounting write
+  is unavailable, the completed result is preserved and a privacy-safe metric records the gap;
+  the original reservation remains enforced. Minute RPM/TPM limits and provider 429 responses
+  defer the same BullMQ job/provider/model until its safe timestamp; they do not consume a generic
+  failure retry or silently fall back to another provider.
 - Prompt catalog runtime is DB-canonical.
 - Prompt-package lineage is the canonical assignment-level student-memory provenance surface.
 - Lesson-linked homework lineage is nullable and explicit across assignment sessions, prompt packages, drafts, jobs, and homework-memory entries; schedule surfaces summarize that state for teacher follow-ups.
