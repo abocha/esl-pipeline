@@ -14,6 +14,11 @@ import {
 } from './homework-memory-prompt.js';
 import { resolveHomeworkMemorySourceFromSucceededJob } from './homework-memory-source.js';
 import { requestStudentMemorySnapshotRefresh } from './request-student-memory-snapshot-refresh.js';
+import {
+  createStudentMemoryGenerationPacer,
+  isStudentMemoryPacingDeferredError,
+  type StudentMemoryGenerationPacer,
+} from './student-memory-generation-pacing.js';
 
 export interface ProcessHomeworkMemoryJobPayload {
   kind: 'homework-memory-generate';
@@ -36,10 +41,11 @@ export interface ProcessHomeworkMemoryJobDependencies {
   snapshots: {
     requestRefresh: typeof requestStudentMemorySnapshotRefresh;
   };
+  pacer: StudentMemoryGenerationPacer;
 }
 
 export async function processHomeworkMemoryJob(args: {
-  config: BatchBackendConfig['generation'];
+  config: BatchBackendConfig;
   payload: ProcessHomeworkMemoryJobPayload;
   attemptsMade?: number;
   maxAttempts?: number;
@@ -57,6 +63,7 @@ export async function processHomeworkMemoryJob(args: {
   const snapshots = args.overrides?.snapshots ?? {
     requestRefresh: requestStudentMemorySnapshotRefresh,
   };
+  const pacer = args.overrides?.pacer ?? createStudentMemoryGenerationPacer(args.config);
 
   const pendingEntry = await homeworkMemory.getById(args.payload.pendingEntryId);
   if (!pendingEntry || pendingEntry.status !== 'pending') {
@@ -92,17 +99,24 @@ export async function processHomeworkMemoryJob(args: {
       source,
     });
 
-    const result = await generator({
-      config: args.config,
-      request: {
-        source,
-        pendingEntryId: pendingEntry.id,
-        pendingGenerationNotes: pendingEntry.generationNotes ?? null,
-        provider: args.payload.provider,
-        model: args.payload.model,
-        prompt,
-        envelope,
-      },
+    const result = await pacer.run({
+      workload: 'homework_memory',
+      provider: args.payload.provider,
+      model: args.payload.model,
+      prompt,
+      execute: () =>
+        generator({
+          config: args.config.generation,
+          request: {
+            source,
+            pendingEntryId: pendingEntry.id,
+            pendingGenerationNotes: pendingEntry.generationNotes ?? null,
+            provider: args.payload.provider,
+            model: args.payload.model,
+            prompt,
+            envelope,
+          },
+        }),
     });
 
     await homeworkMemory.supersedePendingForAssignmentLineage({
@@ -112,7 +126,7 @@ export async function processHomeworkMemoryJob(args: {
       maxGeneratedAt: pendingEntry.generatedAt,
     });
     await snapshots.requestRefresh({
-      config: { generation: args.config } as BatchBackendConfig,
+      config: args.config,
       params: {
         studentId: args.payload.studentId,
         trigger: 'homework-memory-ready',
@@ -120,6 +134,9 @@ export async function processHomeworkMemoryJob(args: {
       },
     });
   } catch (error) {
+    if (isStudentMemoryPacingDeferredError(error)) {
+      throw error;
+    }
     await markFailureIfFinalAttempt({
       payload: args.payload,
       attemptsMade: args.attemptsMade,

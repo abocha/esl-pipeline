@@ -1,6 +1,20 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { processHomeworkMemoryJob } from '../src/application/process-homework-memory-job.js';
+import { StudentMemoryPacingDeferredError } from '../src/application/student-memory-generation-pacing.js';
+import { loadConfig } from '../src/config/env.js';
+
+function createTestConfig() {
+  const base = loadConfig();
+  return {
+    ...base,
+    generation: {
+      ...base.generation,
+      strictNoPaid: false,
+      safetyMode: 'off' as const,
+    },
+  };
+}
 
 describe('application/process-homework-memory-job', () => {
   it('returns early when the pending homework-memory entry is no longer pending', async () => {
@@ -9,9 +23,7 @@ describe('application/process-homework-memory-job', () => {
     const requestRefresh = vi.fn();
 
     await processHomeworkMemoryJob({
-      config: {
-        defaultProvider: 'openai',
-      } as never,
+      config: createTestConfig(),
       payload: {
         kind: 'homework-memory-generate',
         jobId: 'job-1',
@@ -48,9 +60,7 @@ describe('application/process-homework-memory-job', () => {
 
     await expect(
       processHomeworkMemoryJob({
-        config: {
-          defaultProvider: 'openai',
-        } as never,
+        config: createTestConfig(),
         payload: {
           kind: 'homework-memory-generate',
           jobId: 'job-1',
@@ -99,9 +109,7 @@ describe('application/process-homework-memory-job', () => {
     const supersedePendingForAssignmentLineage = vi.fn().mockResolvedValue([]);
 
     await processHomeworkMemoryJob({
-      config: {
-        defaultProvider: 'openai',
-      } as never,
+      config: createTestConfig(),
       payload: {
         kind: 'homework-memory-generate',
         jobId: 'job-1',
@@ -182,11 +190,9 @@ describe('application/process-homework-memory-job', () => {
       maxGeneratedAt: new Date('2026-03-20T00:00:00.000Z'),
     });
     expect(requestRefresh).toHaveBeenCalledWith({
-      config: {
-        generation: {
-          defaultProvider: 'openai',
-        },
-      },
+      config: expect.objectContaining({
+        generation: expect.objectContaining({ defaultProvider: 'openai' }),
+      }),
       params: {
         studentId: 'student-1',
         trigger: 'homework-memory-ready',
@@ -215,9 +221,7 @@ describe('application/process-homework-memory-job', () => {
     const requestRefresh = vi.fn();
 
     await processHomeworkMemoryJob({
-      config: {
-        defaultProvider: 'openai',
-      } as never,
+      config: createTestConfig(),
       payload: {
         kind: 'homework-memory-generate',
         jobId: 'job-1',
@@ -271,9 +275,7 @@ describe('application/process-homework-memory-job', () => {
     const requestRefresh = vi.fn().mockResolvedValue(null);
 
     await processHomeworkMemoryJob({
-      config: {
-        defaultProvider: 'openai',
-      } as never,
+      config: createTestConfig(),
       payload: {
         kind: 'homework-memory-generate',
         jobId: 'job-1',
@@ -330,16 +332,76 @@ describe('application/process-homework-memory-job', () => {
       maxGeneratedAt: new Date('2026-03-20T01:30:00.000Z'),
     });
     expect(requestRefresh).toHaveBeenCalledWith({
-      config: {
-        generation: {
-          defaultProvider: 'openai',
-        },
-      },
+      config: expect.objectContaining({
+        generation: expect.objectContaining({ defaultProvider: 'openai' }),
+      }),
       params: {
         studentId: 'student-1',
         trigger: 'homework-memory-ready',
         sourceEntryId: 'homework-memory-replay-1',
       },
     });
+  });
+
+  it('keeps a pending homework-memory row pending when pacing defers the provider call', async () => {
+    const markFailed = vi.fn();
+    const deferred = new StudentMemoryPacingDeferredError({
+      reason: 'provider_rate_limit',
+      provider: 'openai',
+      model: 'gpt-5.4-mini',
+      notBefore: new Date('2026-06-21T10:12:00.000Z'),
+      estimatedTokens: 400,
+    });
+    const run = vi.fn().mockRejectedValue(deferred);
+
+    await expect(
+      processHomeworkMemoryJob({
+        config: createTestConfig(),
+        payload: {
+          kind: 'homework-memory-generate',
+          jobId: 'job-1',
+          studentId: 'student-1',
+          pendingEntryId: 'pending-1',
+          provider: 'openai',
+          model: 'gpt-5.4-mini',
+        },
+        attemptsMade: 4,
+        maxAttempts: 5,
+        overrides: {
+          sourceResolver: vi.fn().mockResolvedValue({
+            assignmentLineageKey: 'lineage-1',
+            studentId: 'student-1',
+            publishedAt: new Date('2026-06-21T10:00:00.000Z'),
+            publishedMarkdown: '# Assignment',
+            contentHash: 'hash-1',
+            publishTargets: [],
+            normalizedMarkdown: { frontmatter: null, sections: [], plainText: '# Assignment' },
+          }),
+          generator: vi.fn(),
+          homeworkMemory: {
+            getById: vi.fn().mockResolvedValue({
+              id: 'pending-1',
+              status: 'pending',
+              generatedAt: new Date('2026-06-21T10:00:00.000Z'),
+              generationNotes: null,
+            }),
+            getLatestReadyByAssignmentLineageKey: vi.fn().mockResolvedValue(null),
+            markFailed,
+            supersedePendingForAssignmentLineage: vi.fn(),
+          },
+          snapshots: { requestRefresh: vi.fn() },
+          pacer: { run } as never,
+        } as never,
+      }),
+    ).rejects.toBe(deferred);
+
+    expect(run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workload: 'homework_memory',
+        provider: 'openai',
+        model: 'gpt-5.4-mini',
+      }),
+    );
+    expect(markFailed).not.toHaveBeenCalled();
   });
 });

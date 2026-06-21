@@ -18,6 +18,11 @@ import {
 } from './generate-lesson-memory-entry.js';
 import { buildLessonMemoryEnvelope, buildLessonMemoryPrompt } from './lesson-memory-prompt.js';
 import { requestStudentMemorySnapshotRefresh } from './request-student-memory-snapshot-refresh.js';
+import {
+  createStudentMemoryGenerationPacer,
+  isStudentMemoryPacingDeferredError,
+  type StudentMemoryGenerationPacer,
+} from './student-memory-generation-pacing.js';
 
 export interface ProcessLessonMemoryJobPayload {
   kind: 'lesson-memory-generate';
@@ -47,10 +52,11 @@ export interface ProcessLessonMemoryJobDependencies {
   snapshots: {
     requestRefresh: typeof requestStudentMemorySnapshotRefresh;
   };
+  pacer: StudentMemoryGenerationPacer;
 }
 
 export async function processLessonMemoryJob(args: {
-  config: BatchBackendConfig['generation'];
+  config: BatchBackendConfig;
   payload: ProcessLessonMemoryJobPayload;
   attemptsMade?: number;
   maxAttempts?: number;
@@ -72,6 +78,7 @@ export async function processLessonMemoryJob(args: {
   const snapshots = args.overrides?.snapshots ?? {
     requestRefresh: requestStudentMemorySnapshotRefresh,
   };
+  const pacer = args.overrides?.pacer ?? createStudentMemoryGenerationPacer(args.config);
 
   const pendingEntry = await lessonMemory.getById(args.payload.pendingEntryId);
   if (!pendingEntry || pendingEntry.status !== 'pending') {
@@ -107,18 +114,25 @@ export async function processLessonMemoryJob(args: {
       teacherNotes: promptPackage?.notes ?? null,
     });
 
-    const result = await generator({
-      config: args.config,
-      request: {
-        studentId: args.payload.studentId,
-        transcriptId: args.payload.transcriptId,
-        recordingId: args.payload.recordingId,
-        provider: args.payload.provider,
-        model: args.payload.model,
-        prompt,
-        envelope,
-      },
-      overrides: args.overrides,
+    const result = await pacer.run({
+      workload: 'lesson_memory',
+      provider: args.payload.provider,
+      model: args.payload.model,
+      prompt,
+      execute: () =>
+        generator({
+          config: args.config.generation,
+          request: {
+            studentId: args.payload.studentId,
+            transcriptId: args.payload.transcriptId,
+            recordingId: args.payload.recordingId,
+            provider: args.payload.provider,
+            model: args.payload.model,
+            prompt,
+            envelope,
+          },
+          overrides: args.overrides,
+        }),
     });
 
     await lessonMemory.supersedePendingForTranscript({
@@ -127,7 +141,7 @@ export async function processLessonMemoryJob(args: {
       supersededAt: result.entry.generatedAt,
     });
     await snapshots.requestRefresh({
-      config: { generation: args.config } as BatchBackendConfig,
+      config: args.config,
       params: {
         studentId: args.payload.studentId,
         trigger: 'lesson-memory-ready',
@@ -135,6 +149,9 @@ export async function processLessonMemoryJob(args: {
       },
     });
   } catch (error) {
+    if (isStudentMemoryPacingDeferredError(error)) {
+      throw error;
+    }
     await markFailureIfFinalAttempt({
       payload: args.payload,
       attemptsMade: args.attemptsMade,
