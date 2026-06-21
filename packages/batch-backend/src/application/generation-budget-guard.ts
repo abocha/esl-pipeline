@@ -324,7 +324,7 @@ function resolveAllowedModels(
   return new Set(config.models.openrouter.allowed.map((model) => model.trim()).filter(Boolean));
 }
 
-function estimateTokens(args: {
+export function estimateGenerationTokens(args: {
   prompt: string;
   requestedMaxOutputTokens?: number;
   hardCap: number;
@@ -422,7 +422,7 @@ export async function enforceGenerationBudgetBeforeAttempt(args: {
     provider: args.provider,
     model: args.model,
     now: args.now,
-    estimatedTokens: estimateTokens({
+    estimatedTokens: estimateGenerationTokens({
       prompt: args.prompt,
       requestedMaxOutputTokens: args.maxOutputTokens,
       hardCap: generationConfig.maxOutputTokensHard,

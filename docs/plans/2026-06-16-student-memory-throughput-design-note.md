@@ -4,12 +4,12 @@
 
 - Audience: founder-maintainer and implementation agents.
 - Status: `roadmap`.
-- Last Verified Against: 2026-06-20 local PR1.1 requalification report and repo state.
+- Last Verified Against: 2026-06-21 PR2 pacing implementation and local validation.
 - Related Chunk: Chunk 10 in `docs/plans/2026-06-15-production-readiness-restart-chunks.md`.
 - Exit Trigger: archive after PR2 pacing and PR3 Batch-replay decisions are shipped or promoted into
   durable runtime and operations documentation.
-- Current Focus: implement PR2 rate-limit-aware online pacing; defer PR3 Batch replay and all
-  production deployment decisions.
+- Current Focus: validate and merge PR2 rate-limit-aware online pacing; defer PR3 Batch replay and
+  all production deployment decisions.
 
 ## Decision Snapshot
 
@@ -17,8 +17,8 @@ Chunk 10 keeps normal online student-memory generation for fresh work, adds rate
 in PR2, and later adds OpenAI Batch only for non-urgent replay/backfill in PR3. Batch remains
 disabled until its operator and product controls are implemented.
 
-PR1 and PR1.1 are complete. **PR2 is ready to implement.** Do not deploy this PR1.1 change to
-production yet; wait until the PR3 design and implementation boundary are settled. Do not enable
+PR1, PR1.1, and PR2 implementation are complete. Do not deploy these changes to production yet;
+wait until the PR3 design and implementation boundary are settled. Do not enable
 `GEN_OPENAI_TARGET_MODELS_ENABLED` without separate maintainer approval.
 
 ## What PR1 And PR1.1 Established
@@ -80,14 +80,32 @@ production deployment.
 
 ## PR2: Rate-Limit-Aware Online Pacing
 
+The former PR2 outline is superseded where it proposed new TPM configuration and budget counters:
+main already has both, including atomic UTC minute/day reservations and actual-usage recording.
+PR2 now integrates that existing guard into each canonical lesson, homework, and snapshot
+extraction path.
+
 Implement token-aware worker pacing before Batch:
 
 1. Estimate per-job token demand and apply model-aware RPM/TPM budgets.
-2. Use bounded concurrency, provider `Retry-After` hints, safe wait/requeue behavior, and
-   operator-visible backlog metrics.
-3. Preserve normal queue processing for fresh tutor work and small manual repairs.
-4. Keep the model split disabled until a separate activation decision; PR2 changes the reliability
-   of the path, not the production default.
+2. Convert only minute RPM/TPM exhaustion and provider HTTP 429 into a typed defer outcome. Move
+   the active BullMQ job to its UTC `notBefore` time and throw BullMQ's `DelayedError`, rather than
+   sleeping a worker, enqueuing a duplicate, or consuming a failure attempt.
+3. On HTTP 429, defer until the later of the next UTC minute and `Retry-After`; without that
+   header, defer until the next UTC minute. Daily limits, hard stops, capability/schema failures,
+   validation failures, timeouts, and non-429 provider failures retain normal failure behavior.
+4. Preserve the queued provider/model/source selection across a defer. Canonical memory must not
+   stampede a fallback provider merely because it is paced.
+5. Emit privacy-safe structured defer/completion diagnostics and use the existing metrics facade
+   for counts/timings/tokens. A post-success actual-usage accounting outage must preserve the
+   completed canonical result (the pre-call reservation remains enforced) and emit a safe failure
+   metric rather than re-running the provider call. The facade is currently noop, so logs—not a
+   nonexistent dashboard—are the operator-visible evidence.
+6. Keep bounded concurrency, normal fresh-work queue behavior, and all PR3 Batch boundaries
+   unchanged.
+
+PR2 needs no migration, schema-baseline update, new environment key, public DTO change, paid live
+eval, target-model activation, or deployment.
 
 ## PR3: Disabled Batch Replay
 

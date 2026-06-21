@@ -1,14 +1,58 @@
 import { fileURLToPath } from 'node:url';
+import { DelayedError, type Job } from 'bullmq';
 
+import type { StudentMemoryQueuePayload } from '../application/process-student-memory-job.js';
 import { processStudentMemoryJob } from '../application/process-student-memory-job.js';
+import { isStudentMemoryPacingDeferredError } from '../application/student-memory-generation-pacing.js';
 import { loadBatchBackendEnv } from '../bootstrap/env.js';
-import { loadConfig } from '../config/env.js';
+import { type BatchBackendConfig, loadConfig } from '../config/env.js';
 import { runMigrationsIfConfigured } from '../infrastructure/migrations.js';
 import { createStudentMemoryWorker } from '../infrastructure/student-memory-queue.js';
 
 async function getLogger() {
   const { logger } = await import('../infrastructure/logger.js');
   return logger;
+}
+
+type StudentMemoryBullJob = Pick<
+  Job<StudentMemoryQueuePayload>,
+  'data' | 'attemptsMade' | 'opts' | 'token' | 'id' | 'moveToDelayed'
+>;
+
+export async function processStudentMemoryBullJob(args: {
+  bullJob: StudentMemoryBullJob;
+  config: BatchBackendConfig;
+  now?: () => Date;
+}): Promise<void> {
+  try {
+    await processStudentMemoryJob({
+      config: args.config,
+      payload: args.bullJob.data,
+      attemptsMade: args.bullJob.attemptsMade,
+      maxAttempts: args.bullJob.opts.attempts,
+    });
+  } catch (error) {
+    if (!isStudentMemoryPacingDeferredError(error)) {
+      throw error;
+    }
+
+    await args.bullJob.moveToDelayed(error.notBefore.getTime(), args.bullJob.token);
+    const deferredAt = args.now?.() ?? new Date();
+    const logger = await getLogger();
+    logger.info('Student-memory job deferred for pacing', {
+      event: 'student_memory_pacing_deferred',
+      jobId: args.bullJob.id?.toString() ?? 'unknown',
+      kind: args.bullJob.data.kind,
+      provider: error.provider,
+      model: error.model,
+      reason: error.reason,
+      notBefore: error.notBefore.toISOString(),
+      deferDurationMs: Math.max(0, error.notBefore.getTime() - deferredAt.getTime()),
+      estimatedTokens: error.estimatedTokens,
+      ...(typeof error.retryAfterMs === 'number' ? { retryAfterMs: error.retryAfterMs } : {}),
+    });
+    throw new DelayedError();
+  }
 }
 
 export async function startStudentMemoryWorker(): Promise<void> {
@@ -27,11 +71,9 @@ export async function startStudentMemoryWorker(): Promise<void> {
   await runMigrationsIfConfigured();
 
   const worker = createStudentMemoryWorker(async (bullJob) => {
-    await processStudentMemoryJob({
-      config: config.generation,
-      payload: bullJob.data,
-      attemptsMade: bullJob.attemptsMade,
-      maxAttempts: bullJob.opts.attempts,
+    await processStudentMemoryBullJob({
+      bullJob,
+      config,
     });
   });
 

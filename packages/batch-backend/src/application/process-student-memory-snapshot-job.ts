@@ -13,6 +13,11 @@ import {
 import { logger } from '../infrastructure/logger.js';
 import { requestStudentProfileCandidateRefresh } from './request-student-profile-candidate-refresh.js';
 import {
+  createStudentMemoryGenerationPacer,
+  isStudentMemoryPacingDeferredError,
+  type StudentMemoryGenerationPacer,
+} from './student-memory-generation-pacing.js';
+import {
   type GenerateStudentMemorySnapshotDependencies,
   generateStudentMemorySnapshot,
 } from './student-memory-snapshot-generation.js';
@@ -47,10 +52,11 @@ export interface ProcessStudentMemorySnapshotJobDependencies {
     requestRefresh: typeof requestStudentProfileCandidateRefresh;
   };
   generator: typeof generateStudentMemorySnapshot;
+  pacer: StudentMemoryGenerationPacer;
 }
 
 export async function processStudentMemorySnapshotJob(args: {
-  config: BatchBackendConfig['generation'];
+  config: BatchBackendConfig;
   payload: ProcessStudentMemorySnapshotJobPayload;
   attemptsMade?: number;
   maxAttempts?: number;
@@ -73,6 +79,7 @@ export async function processStudentMemorySnapshotJob(args: {
     requestRefresh: requestStudentProfileCandidateRefresh,
   };
   const generator = args.overrides?.generator ?? generateStudentMemorySnapshot;
+  const pacer = args.overrides?.pacer ?? createStudentMemoryGenerationPacer(args.config);
 
   const pendingEntry = await snapshots.getById(args.payload.pendingEntryId);
   if (!pendingEntry || pendingEntry.status !== 'pending') {
@@ -109,20 +116,29 @@ export async function processStudentMemorySnapshotJob(args: {
       homeworkMemoryEntries: readyHomeworkMemory,
     });
 
-    const result = await generator({
-      config: args.config,
-      request: {
-        studentId: args.payload.studentId,
-        lessonMemoryEntryIds: readyLessonMemory.map((entry: LessonMemoryRecord) => entry.id),
-        homeworkMemoryEntryIds: readyHomeworkMemory.map((entry: HomeworkMemoryRecord) => entry.id),
-        pendingEntryId: pendingEntry.id,
-        pendingGenerationNotes: pendingEntry.generationNotes ?? null,
-        provider: args.payload.provider,
-        model: args.payload.model,
-        prompt,
-        envelope,
-      },
-      overrides: args.overrides,
+    const result = await pacer.run({
+      workload: 'student_memory_snapshot',
+      provider: args.payload.provider,
+      model: args.payload.model,
+      prompt,
+      execute: () =>
+        generator({
+          config: args.config.generation,
+          request: {
+            studentId: args.payload.studentId,
+            lessonMemoryEntryIds: readyLessonMemory.map((entry: LessonMemoryRecord) => entry.id),
+            homeworkMemoryEntryIds: readyHomeworkMemory.map(
+              (entry: HomeworkMemoryRecord) => entry.id,
+            ),
+            pendingEntryId: pendingEntry.id,
+            pendingGenerationNotes: pendingEntry.generationNotes ?? null,
+            provider: args.payload.provider,
+            model: args.payload.model,
+            prompt,
+            envelope,
+          },
+          overrides: args.overrides,
+        }),
     });
 
     await snapshots.supersedePendingForStudent({
@@ -152,6 +168,9 @@ export async function processStudentMemorySnapshotJob(args: {
       });
     }
   } catch (error) {
+    if (isStudentMemoryPacingDeferredError(error)) {
+      throw error;
+    }
     await markFailureIfFinalAttempt({
       payload: args.payload,
       attemptsMade: args.attemptsMade,
