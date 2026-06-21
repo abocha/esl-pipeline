@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [9.1.9] - 2026-06-21
+
+### Changed
+
+- Automated release from PR #112: fix(batch-backend): add safe student-memory generation pacing (https://github.com/abocha/esl-pipeline/pull/112)
+
 ## [9.1.8] - 2026-06-20
 
 ### Changed
