@@ -4,12 +4,12 @@
 
 - Audience: founder-maintainer and implementation agents.
 - Status: `roadmap`.
-- Last Verified Against: 2026-06-21 PR2 pacing implementation and local validation.
+- Last Verified Against: 2026-06-22 PR3 Batch-replay implementation state.
 - Related Chunk: Chunk 10 in `docs/plans/2026-06-15-production-readiness-restart-chunks.md`.
 - Exit Trigger: archive after PR2 pacing and PR3 Batch-replay decisions are shipped or promoted into
   durable runtime and operations documentation.
-- Current Focus: validate and merge PR2 rate-limit-aware online pacing; defer PR3 Batch replay and
-  all production deployment decisions.
+- Current Focus: use the reconciled, implementation-ready PR3 Batch-replay plan; defer all
+  production enablement and deployment decisions.
 
 ## Decision Snapshot
 
@@ -17,8 +17,8 @@ Chunk 10 keeps normal online student-memory generation for fresh work, adds rate
 in PR2, and later adds OpenAI Batch only for non-urgent replay/backfill in PR3. Batch remains
 disabled until its operator and product controls are implemented.
 
-PR1, PR1.1, and PR2 implementation are complete. Do not deploy these changes to production yet;
-wait until the PR3 design and implementation boundary are settled. Do not enable
+PR1, PR1.1, and PR2 are merged. PR3's disabled operator implementation is complete on its feature
+branch and remains unactivated. Do not deploy these changes to production or enable
 `GEN_OPENAI_TARGET_MODELS_ENABLED` without separate maintainer approval.
 
 ## What PR1 And PR1.1 Established
@@ -109,18 +109,51 @@ eval, target-model activation, or deployment.
 
 ## PR3: Disabled Batch Replay
 
-Batch is for non-urgent replay/backfill, where the current 24-hour completion window is acceptable.
-It must stay a disabled capability, not an active paywall or replacement for fresh online work.
+Batch is for explicit, non-urgent replay/backfill only. The fixed 24-hour completion window is
+acceptable for this lane; it is not acceptable for fresh tutor-triggered work. The paced online
+worker remains the sole fresh-work path.
 
-PR3 needs deterministic JSONL input; one model per batch; stable `custom_id`; persisted batch/file
-IDs, status, model, prompt/schema/source-selection lineage; polling; idempotent success import;
-error-file handling; targeted retry; and explicit feature/entitlement hooks. Reuse the same
-structured schemas as the online path.
+The implementation-ready plan is
+[`tmp/plans/chunk-10-pr3-batch-replay-current-main.md`](../../tmp/plans/chunk-10-pr3-batch-replay-current-main.md).
+Its key decisions are:
+
+1. **One immutable workload/model slice.** A slice contains exactly one canonical workload and one
+   OpenAI model, with deterministic JSONL/custom-ID order. Lesson and homework can run separately;
+   snapshots are selected only after prerequisite memory slices have reconciled.
+2. **Snapshots, not later reads.** Each durable item retains its full request envelope, strict
+   schema/request body, source references, source-version hash, and stable custom ID. A hash alone
+   cannot reproduce or evidence-validate a result received up to 24 hours later.
+3. **Online wins.** Batch selection never calls the normal pending/enqueue helpers. A fresh online
+   request can supersede the Batch claim immediately; a source-version check makes the eventual
+   Batch result terminal `stale` rather than letting it replace current canonical memory.
+4. **Atomic idempotent import.** Existing canonical writers create random IDs and supersede ready
+   entries, so Batch needs a transaction-aware import boundary with stable destination IDs. A
+   repeated reconcile, including after a crash, returns the same canonical record.
+5. **Shared Responses semantics.** Online and Batch paths use the same pure `/v1/responses` body
+   builder, parser, strict validators, evidence checks, and canonical-write mapping. Batch does not
+   recreate a looser provider contract.
+6. **Hard disabled gate.** `STUDENT_MEMORY_OPENAI_BATCH_ENABLED=false` is a typed, provider-boundary
+   gate. Local `dry-run` is non-persistent and makes no provider call; submit/status/poll/reconcile/
+   retry/cancel fail before OpenAI access unless the gate is enabled, and submission additionally
+   requires `--apply`.
+7. **Privacy and retries.** Item snapshots are protected student data with the same Postgres access
+   and deletion lifecycle as their student. JSONL/raw output is never durably written or logged.
+   Only remote/provider/expiry failures are retryable by default; schema, evidence, malformed,
+   unknown/duplicate-ID, and stale results are terminal and auditable.
+
+Current official OpenAI Batch constraints confirm the route: `/v1/responses` is supported; input
+files require one model and unique `custom_id`, complete within `24h`, may return unordered output
+plus a separate error file, and have 50,000-request/200-MB limits. The implementation must verify
+those constraints again against the official docs before code changes.
+
+PR3 is a backward-compatible operator capability and therefore plans for `release:minor`. It does
+not add a tutor-facing endpoint, scheduler, automatic entitlement routing, target-model activation,
+deployment, or a paid Batch call.
 
 ## Guardrails And Handoff
 
-- Do not deploy to Lightsail as part of this PR. Merge is acceptable; deployment waits for PR3
-  decisions.
+- Do not deploy to Lightsail as part of PR3. Merge is acceptable; enablement/deployment waits for
+  separate maintainer approval after implementation and review.
 - Do not enable `GEN_OPENAI_TARGET_MODELS_ENABLED` without explicit approval after reviewing the
   relevant evidence.
 - Before any new model/prompt/default change, add or update deterministic eval coverage and re-run

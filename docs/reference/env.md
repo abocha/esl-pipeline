@@ -88,6 +88,9 @@ Primary groups:
     after an operator reviews a credentialed live-eval report)
 - Safety and budgets:
   - `GEN_SAFETY_MODE`, `GEN_STRICT_NO_PAID`, `GEN_ALLOW_PAID_SPEND`, `GEN_*_BUDGET`
+- Disabled Batch replay:
+  - `STUDENT_MEMORY_OPENAI_BATCH_ENABLED` (defaults to `false`; gates every remote OpenAI Batch
+    action for historical student-memory replay and does not alter normal online generation)
 - Timeouts/retries:
   - `GEN_*_REQUEST_TIMEOUT_MS`, `GEN_*_RETRY_*`
 
@@ -149,6 +152,9 @@ Read next:
 - The opt-in live generation evaluation entrypoint loads `.env.batch-backend` and then `.env` before
   it checks `GENERATION_LIVE_EVAL_ENABLED=true` and `OPENAI_API_KEY`; both are required before it
   will call OpenAI.
+- `STUDENT_MEMORY_OPENAI_BATCH_ENABLED=false` is a separate remote-operation gate. `dry-run`
+  planning is local only; Batch upload, status, polling, reconciliation, retry, and cancellation
+  must remain disabled until an operator explicitly enables this flag.
 - Telegram mutating ops stay disabled unless `TELEGRAM_OPS_BOT_ENABLE_ACTION_COMMANDS=true`.
 - Backend ops control is additive and should remain off unless explicitly enabled with
   `BATCH_BACKEND_ENABLE_OPS_CONTROL=true`; command execution also requires explicit

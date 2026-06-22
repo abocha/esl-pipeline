@@ -99,6 +99,18 @@
 
 ## Active Safety Defaults
 
+## Disabled OpenAI Batch Replay
+
+- Historical lesson-memory, homework-memory, and snapshot replay may use the OpenAI Batch API only
+  through the explicit `student-memory:batch` operator tool. It is not a fresh-work, fallback, or
+  automatic queue path.
+- `STUDENT_MEMORY_OPENAI_BATCH_ENABLED=false` is the separate default-off gate. It must not be
+  replaced with or inferred from `GEN_ALLOW_PAID_SPEND` or `GEN_OPENAI_TARGET_MODELS_ENABLED`.
+- `dry-run` is local and non-persistent. Every remote action requires the Batch gate, an OpenAI key,
+  an allowlisted model, and explicit `--apply` for submit, retry, or cancellation.
+- This policy does not authorize provider calls, activation, or deployment. Those remain separate
+  maintainer decisions after code review.
+
 - `GEN_SAFETY_MODE=hard_stop`
 - `GEN_STRICT_NO_PAID=true`
 - `GEN_MAX_OUTPUT_TOKENS_HARD=3200`

@@ -1,7 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 
-import { loadBatchBackendEnv } from '../bootstrap/env.js';
 import {
   GENERATION_EVAL_FIXTURE_VERSION,
   GENERATION_EVAL_FIXTURES,
@@ -14,6 +13,7 @@ import {
   executeOpenAiGeneration,
   executeOpenAiStructuredGeneration,
 } from '../application/generation-providers.js';
+import { loadBatchBackendEnv } from '../bootstrap/env.js';
 import { loadConfig } from '../config/env.js';
 
 const live = process.argv.includes('--live');
