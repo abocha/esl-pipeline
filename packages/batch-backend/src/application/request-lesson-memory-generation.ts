@@ -5,6 +5,7 @@ import {
   type EnsurePendingLessonMemoryEntryResult,
   ensurePendingLessonMemoryEntry,
 } from '../domain/lesson-memory-repository.js';
+import { supersedeStudentMemoryOpenAiBatchClaimsForOnlineWork } from '../domain/student-memory-openai-batch-repository.js';
 import { logger } from '../infrastructure/logger.js';
 import { createStudentMemoryQueue } from '../infrastructure/student-memory-queue.js';
 import { LESSON_MEMORY_SCHEMA_VERSION } from './generate-lesson-memory-entry.js';
@@ -24,6 +25,9 @@ export interface RequestLessonMemoryGenerationDependencies {
   lessonMemory: {
     ensurePending: typeof ensurePendingLessonMemoryEntry;
   };
+  batchClaims: {
+    supersedeForOnlineWork: typeof supersedeStudentMemoryOpenAiBatchClaimsForOnlineWork;
+  };
   queue: {
     enqueue: ReturnType<typeof createStudentMemoryQueue>['enqueue'];
   };
@@ -42,6 +46,9 @@ export async function requestLessonMemoryGeneration(args: {
   const lessonMemory = args.overrides?.lessonMemory ?? {
     ensurePending: ensurePendingLessonMemoryEntry,
   };
+  const batchClaims = args.overrides?.batchClaims ?? {
+    supersedeForOnlineWork: supersedeStudentMemoryOpenAiBatchClaimsForOnlineWork,
+  };
   const queue = args.overrides?.queue ?? createStudentMemoryQueue();
   const now = args.overrides?.now ?? (() => new Date());
 
@@ -59,6 +66,11 @@ export async function requestLessonMemoryGeneration(args: {
   if (!candidate) {
     throw new Error('No generation candidate is available for lesson-memory extraction');
   }
+
+  await batchClaims.supersedeForOnlineWork({
+    workload: 'lesson_memory',
+    canonicalScopeKey: args.params.transcriptId,
+  });
 
   const requestedAt = now();
   const pending = await lessonMemory.ensurePending({

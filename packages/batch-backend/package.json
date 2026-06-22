@@ -36,6 +36,7 @@
     "storage:s3:smoke": "tsx --tsconfig tsconfig.json src/tools/smoke-s3-storage.ts",
     "storage:s3:smoke:dist": "node dist/tools/smoke-s3-storage.js",
     "student-artifacts:export": "tsx --tsconfig tsconfig.json src/tools/export-student-lesson-artifacts.ts",
+    "student-memory:batch": "tsx --tsconfig tsconfig.json src/tools/student-memory-openai-batch.ts",
     "student-system:backfill": "tsx --tsconfig tsconfig.json src/tools/backfill-student-system.ts",
     "student-system:backfill:dist": "node dist/tools/backfill-student-system.js",
     "student-system:backfill:dist:dry": "node dist/tools/backfill-student-system.js --dry-run",

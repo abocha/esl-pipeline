@@ -208,6 +208,33 @@ BEGIN
 END;
 $$;
 
+CREATE FUNCTION public.set_student_memory_openai_batch_claims_updated_at() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$;
+
+CREATE FUNCTION public.set_student_memory_openai_batch_items_updated_at() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$;
+
+CREATE FUNCTION public.set_student_memory_openai_batch_runs_updated_at() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$;
+
 CREATE FUNCTION public.set_student_memory_snapshots_updated_at() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -679,6 +706,90 @@ CREATE TABLE public.student_lessons (
     CONSTRAINT student_lessons_status_check CHECK ((status = ANY (ARRAY['scheduled'::text, 'completed'::text, 'canceled'::text, 'no_show'::text])))
 );
 
+CREATE TABLE public.student_memory_openai_batch_claims (
+    id uuid NOT NULL,
+    item_id uuid NOT NULL,
+    workload text NOT NULL,
+    canonical_scope_key text NOT NULL,
+    source_version_hash text NOT NULL,
+    state text DEFAULT 'active'::text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT student_memory_openai_batch_claims_state_check CHECK ((state = ANY (ARRAY['active'::text, 'superseded_by_online'::text, 'imported'::text, 'stale'::text, 'terminal_failure'::text, 'retryable_failure'::text]))),
+    CONSTRAINT student_memory_openai_batch_claims_workload_check CHECK ((workload = ANY (ARRAY['lesson_memory'::text, 'homework_memory'::text, 'student_memory_snapshot'::text])))
+);
+
+CREATE TABLE public.student_memory_openai_batch_items (
+    id uuid NOT NULL,
+    run_id uuid NOT NULL,
+    student_id uuid NOT NULL,
+    workload text NOT NULL,
+    provider text DEFAULT 'openai'::text NOT NULL,
+    model text NOT NULL,
+    custom_id text NOT NULL,
+    canonical_scope_key text NOT NULL,
+    source_version_hash text NOT NULL,
+    request_envelope jsonb NOT NULL,
+    response_schema_fingerprint text CONSTRAINT student_memory_openai_batch_response_schema_fingerprin_not_null NOT NULL,
+    request_body jsonb NOT NULL,
+    source_refs jsonb NOT NULL,
+    claim_state text DEFAULT 'active'::text NOT NULL,
+    state text DEFAULT 'planned'::text NOT NULL,
+    submitted_at timestamp with time zone,
+    remote_request_id text,
+    returned_model text,
+    finish_reason text,
+    usage jsonb,
+    normalized_error jsonb,
+    imported_canonical_record_id uuid,
+    retry_of_item_id uuid,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT student_memory_openai_batch_items_claim_state_check CHECK ((claim_state = ANY (ARRAY['active'::text, 'superseded_by_online'::text, 'imported'::text, 'stale'::text, 'terminal_failure'::text, 'retryable_failure'::text]))),
+    CONSTRAINT student_memory_openai_batch_items_provider_check CHECK ((provider = 'openai'::text)),
+    CONSTRAINT student_memory_openai_batch_items_state_check CHECK ((state = ANY (ARRAY['planned'::text, 'submitted'::text, 'completed'::text, 'imported'::text, 'stale'::text, 'superseded_by_online'::text, 'terminal_failure'::text, 'retryable_failure'::text]))),
+    CONSTRAINT student_memory_openai_batch_items_workload_check CHECK ((workload = ANY (ARRAY['lesson_memory'::text, 'homework_memory'::text, 'student_memory_snapshot'::text])))
+);
+
+CREATE TABLE public.student_memory_openai_batch_runs (
+    id uuid NOT NULL,
+    workload text NOT NULL,
+    provider text DEFAULT 'openai'::text NOT NULL,
+    model text NOT NULL,
+    state text DEFAULT 'planned'::text NOT NULL,
+    parent_retry_run_id uuid,
+    input_jsonl_sha256 text NOT NULL,
+    input_bytes integer NOT NULL,
+    item_count integer NOT NULL,
+    endpoint text DEFAULT '/v1/responses'::text NOT NULL,
+    completion_window text DEFAULT '24h'::text NOT NULL,
+    remote_input_file_id text,
+    remote_batch_id text,
+    remote_output_file_id text,
+    remote_error_file_id text,
+    remote_request_counts jsonb,
+    remote_error jsonb,
+    operator_audit jsonb,
+    planned_at timestamp with time zone DEFAULT now() NOT NULL,
+    submitted_at timestamp with time zone,
+    in_progress_at timestamp with time zone,
+    finalizing_at timestamp with time zone,
+    completed_at timestamp with time zone,
+    failed_at timestamp with time zone,
+    expired_at timestamp with time zone,
+    cancelled_at timestamp with time zone,
+    reconciled_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT student_memory_openai_batch_runs_completion_window_check CHECK ((completion_window = '24h'::text)),
+    CONSTRAINT student_memory_openai_batch_runs_endpoint_check CHECK ((endpoint = '/v1/responses'::text)),
+    CONSTRAINT student_memory_openai_batch_runs_input_bytes_check CHECK ((input_bytes >= 0)),
+    CONSTRAINT student_memory_openai_batch_runs_item_count_check CHECK ((item_count > 0)),
+    CONSTRAINT student_memory_openai_batch_runs_provider_check CHECK ((provider = 'openai'::text)),
+    CONSTRAINT student_memory_openai_batch_runs_state_check CHECK ((state = ANY (ARRAY['planned'::text, 'submitted'::text, 'in_progress'::text, 'finalizing'::text, 'completed'::text, 'failed'::text, 'expired'::text, 'cancelled'::text, 'reconciled'::text]))),
+    CONSTRAINT student_memory_openai_batch_runs_workload_check CHECK ((workload = ANY (ARRAY['lesson_memory'::text, 'homework_memory'::text, 'student_memory_snapshot'::text])))
+);
+
 CREATE TABLE public.student_memory_snapshots (
     id uuid NOT NULL,
     student_id uuid NOT NULL,
@@ -1006,6 +1117,21 @@ ALTER TABLE ONLY public.student_lesson_recurrence_slots
 ALTER TABLE ONLY public.student_lessons
     ADD CONSTRAINT student_lessons_pkey PRIMARY KEY (id);
 
+ALTER TABLE ONLY public.student_memory_openai_batch_claims
+    ADD CONSTRAINT student_memory_openai_batch_claims_item_id_key UNIQUE (item_id);
+
+ALTER TABLE ONLY public.student_memory_openai_batch_claims
+    ADD CONSTRAINT student_memory_openai_batch_claims_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.student_memory_openai_batch_items
+    ADD CONSTRAINT student_memory_openai_batch_items_custom_id_key UNIQUE (custom_id);
+
+ALTER TABLE ONLY public.student_memory_openai_batch_items
+    ADD CONSTRAINT student_memory_openai_batch_items_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.student_memory_openai_batch_runs
+    ADD CONSTRAINT student_memory_openai_batch_runs_pkey PRIMARY KEY (id);
+
 ALTER TABLE ONLY public.student_memory_snapshots
     ADD CONSTRAINT student_memory_snapshots_pkey PRIMARY KEY (id);
 
@@ -1213,6 +1339,14 @@ CREATE INDEX idx_student_lessons_workspace_active_schedule ON public.student_les
 
 CREATE INDEX idx_student_lessons_workspace_starts_at ON public.student_lessons USING btree (workspace_id, starts_at, id);
 
+CREATE UNIQUE INDEX idx_student_memory_openai_batch_active_claim ON public.student_memory_openai_batch_claims USING btree (workload, canonical_scope_key, source_version_hash) WHERE (state = 'active'::text);
+
+CREATE INDEX idx_student_memory_openai_batch_items_run ON public.student_memory_openai_batch_items USING btree (run_id, created_at, id);
+
+CREATE INDEX idx_student_memory_openai_batch_items_scope ON public.student_memory_openai_batch_items USING btree (workload, canonical_scope_key, claim_state);
+
+CREATE INDEX idx_student_memory_openai_batch_runs_state ON public.student_memory_openai_batch_runs USING btree (state, planned_at DESC, id DESC);
+
 CREATE INDEX idx_student_memory_snapshots_status_generated_at ON public.student_memory_snapshots USING btree (status, generated_at DESC, id DESC);
 
 CREATE INDEX idx_student_memory_snapshots_student_generated_at ON public.student_memory_snapshots USING btree (student_id, generated_at DESC, id DESC);
@@ -1306,6 +1440,12 @@ CREATE TRIGGER set_profiles_updated_at BEFORE UPDATE ON public.profiles FOR EACH
 CREATE TRIGGER set_prompt_packages_updated_at BEFORE UPDATE ON public.prompt_packages FOR EACH ROW EXECUTE FUNCTION public.set_prompt_packages_updated_at();
 
 CREATE TRIGGER set_recordings_updated_at BEFORE UPDATE ON public.recordings FOR EACH ROW EXECUTE FUNCTION public.set_recordings_updated_at();
+
+CREATE TRIGGER set_student_memory_openai_batch_claims_updated_at BEFORE UPDATE ON public.student_memory_openai_batch_claims FOR EACH ROW EXECUTE FUNCTION public.set_student_memory_openai_batch_claims_updated_at();
+
+CREATE TRIGGER set_student_memory_openai_batch_items_updated_at BEFORE UPDATE ON public.student_memory_openai_batch_items FOR EACH ROW EXECUTE FUNCTION public.set_student_memory_openai_batch_items_updated_at();
+
+CREATE TRIGGER set_student_memory_openai_batch_runs_updated_at BEFORE UPDATE ON public.student_memory_openai_batch_runs FOR EACH ROW EXECUTE FUNCTION public.set_student_memory_openai_batch_runs_updated_at();
 
 CREATE TRIGGER set_student_memory_snapshots_updated_at BEFORE UPDATE ON public.student_memory_snapshots FOR EACH ROW EXECUTE FUNCTION public.set_student_memory_snapshots_updated_at();
 
@@ -1505,6 +1645,21 @@ ALTER TABLE ONLY public.student_lessons
 
 ALTER TABLE ONLY public.student_lessons
     ADD CONSTRAINT student_lessons_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.student_memory_openai_batch_claims
+    ADD CONSTRAINT student_memory_openai_batch_claims_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.student_memory_openai_batch_items(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.student_memory_openai_batch_items
+    ADD CONSTRAINT student_memory_openai_batch_items_retry_of_item_id_fkey FOREIGN KEY (retry_of_item_id) REFERENCES public.student_memory_openai_batch_items(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.student_memory_openai_batch_items
+    ADD CONSTRAINT student_memory_openai_batch_items_run_id_fkey FOREIGN KEY (run_id) REFERENCES public.student_memory_openai_batch_runs(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.student_memory_openai_batch_items
+    ADD CONSTRAINT student_memory_openai_batch_items_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.student_memory_openai_batch_runs
+    ADD CONSTRAINT student_memory_openai_batch_runs_parent_retry_run_id_fkey FOREIGN KEY (parent_retry_run_id) REFERENCES public.student_memory_openai_batch_runs(id) ON DELETE SET NULL;
 
 ALTER TABLE ONLY public.student_memory_snapshots
     ADD CONSTRAINT student_memory_snapshots_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id) ON DELETE CASCADE;
@@ -1718,5 +1873,6 @@ VALUES
   ('0036_inworld_tts_provider', 'd796cd5efc8c71844fdc1db633d90c50aa6c98980dc5f6b523f11fb797c46b5f', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0037_retire_prompt_voice_capabilities', '8bcbad9b5f2d5d866a42fc99b95c4cf49f2f9e825e87a9ec20bd66f42c3440d6', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0038_alpha_invites_and_signup_workspace', '727507071d99af1e7fcf22d6d17993fa9e9941fd9d2b912244f678cb3daad12b', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0039_prompt_request_envelope', 'ff25a865dffa60f11a72df72fa71e1d93b18f65a331cc8398bae7f00d829614d', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0039_prompt_request_envelope', 'ff25a865dffa60f11a72df72fa71e1d93b18f65a331cc8398bae7f00d829614d', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0040_student_memory_openai_batch_replay', '8fe7b93f90e56b0181527c022babd4d0436ac314c89522c84b341a0c638e4116', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;

@@ -1,6 +1,7 @@
 import type { GenerationProvider } from '@esl-pipeline/contracts';
 
 import type { BatchBackendConfig } from '../config/env.js';
+import { supersedeStudentMemoryOpenAiBatchClaimsForOnlineWork } from '../domain/student-memory-openai-batch-repository.js';
 import {
   type EnsurePendingStudentMemorySnapshotResult,
   ensurePendingStudentMemorySnapshot,
@@ -22,6 +23,9 @@ export interface RequestStudentMemorySnapshotRefreshDependencies {
   snapshots: {
     ensurePending: typeof ensurePendingStudentMemorySnapshot;
   };
+  batchClaims: {
+    supersedeForOnlineWork: typeof supersedeStudentMemoryOpenAiBatchClaimsForOnlineWork;
+  };
   queue: {
     enqueue: ReturnType<typeof createStudentMemoryQueue>['enqueue'];
   };
@@ -36,6 +40,9 @@ export async function requestStudentMemorySnapshotRefresh(args: {
   const snapshots = args.overrides?.snapshots ?? {
     ensurePending: ensurePendingStudentMemorySnapshot,
   };
+  const batchClaims = args.overrides?.batchClaims ?? {
+    supersedeForOnlineWork: supersedeStudentMemoryOpenAiBatchClaimsForOnlineWork,
+  };
   const queue = args.overrides?.queue ?? createStudentMemoryQueue();
   const now = args.overrides?.now ?? (() => new Date());
 
@@ -48,6 +55,11 @@ export async function requestStudentMemorySnapshotRefresh(args: {
   if (!candidate) {
     throw new Error('No generation candidate is available for student-memory snapshot extraction');
   }
+
+  await batchClaims.supersedeForOnlineWork({
+    workload: 'student_memory_snapshot',
+    canonicalScopeKey: args.params.studentId,
+  });
 
   const requestedAt = now();
   const pending = await snapshots.ensurePending({

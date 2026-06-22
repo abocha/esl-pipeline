@@ -377,6 +377,7 @@ function createConfig(): BatchBackendConfig {
     studentMemory: {
       queueName: 'student-memory-queue',
       maxConcurrency: 1,
+      openAiBatchEnabled: false,
     },
     stt: {
       defaultProvider: 'deepgram',
