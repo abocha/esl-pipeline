@@ -436,28 +436,18 @@ Observed during the 2026-06-15 production upgrade:
   extraction work.
 - Prompt tuning and more structured requests are worth exploring for student-memory extraction.
 
-Implementation boundaries:
+Completion: PR1 (#110), PR1.1 (#111), PR2 (#112), and PR3 (#113) implemented this chunk. Normal
+fresh work remains online; rate-limit-aware deferrals protect that lane; Batch is an explicit,
+disabled replay/backfill operator capability with atomic canonical import.
 
-- Treat this as exploration before implementation; verify current OpenAI Batch API constraints,
-  model support, request format, result polling, and error handling before designing code.
-- Keep normal online assignment generation separate from async memory extraction.
-- Preserve deterministic backend ownership of what memory inputs are selected.
-- Do not make prompt packages depend on immediate completion of background memory jobs.
-- Consider rate-limit-aware throttling/backoff even if Batch API is adopted for backlog work.
-
-Acceptance gates:
-
-- A short design note compares the existing worker path, rate-limit-aware worker throttling, and
-  OpenAI Batch API for backlog memory generation.
-- The design states when to use normal queue processing versus batch submission.
-- Prompt/request changes are measured against structured output quality, token use, replayability,
-  and provenance.
-- Operators have a safe replay/backfill path that does not stampede Tier 1 TPM limits.
+The 2026-06-23 paid live evaluation passed all six workloads and is recorded in
+`tmp/generation-evals/live-eval-2026-06-23.json`. It supports a later target-model activation
+decision, but this chunk closeout does not enable target models, Batch submission, or deployment.
 
 Source evidence:
 
-- `docs/plans/2026-06-16-student-memory-throughput-design-note.md` captures the design-only
-  recommendation and Batch API constraints to verify before implementation.
+- [`docs/archive/plans/completed/2026-06-16-student-memory-throughput-design-note.md`](../archive/plans/completed/2026-06-16-student-memory-throughput-design-note.md)
+  preserves the implementation record, live-eval result, and unactivated operational boundaries.
 
 ## Chunk 11: PR Validation and Production Image Publishing Workflow Split
 
