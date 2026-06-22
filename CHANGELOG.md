@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [9.2.0] - 2026-06-22
+
+### Changed
+
+- Automated release from PR #114: docs(chunk10): close rollout and establish minor release line (https://github.com/abocha/esl-pipeline/pull/114)
+
 ## [9.1.10] - 2026-06-22
 
 ### Changed
