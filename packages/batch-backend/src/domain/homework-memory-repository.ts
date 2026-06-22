@@ -248,12 +248,13 @@ export async function insertHomeworkMemoryEntry(
 
 export async function insertCanonicalReadyHomeworkMemoryEntry(
   params: InsertCanonicalReadyHomeworkMemoryParams,
+  options?: { client?: PoolClient },
 ): Promise<HomeworkMemoryRecord> {
   const id = params.id ?? randomUUID();
   const generatedAt = params.generatedAt ?? new Date();
 
-  const row = await withPgClient(async (client: PoolClient) => {
-    await client.query('BEGIN');
+  const write = async (client: PoolClient) => {
+    if (!options?.client) await client.query('BEGIN');
     try {
       await client.query('SELECT id FROM jobs WHERE id = $1 FOR UPDATE', [
         params.assignmentLineageKey,
@@ -348,13 +349,14 @@ export async function insertCanonicalReadyHomeworkMemoryEntry(
         [id, generatedAt, params.assignmentLineageKey],
       );
 
-      await client.query('COMMIT');
+      if (!options?.client) await client.query('COMMIT');
       return insertResult.rows[0];
     } catch (error) {
-      await client.query('ROLLBACK');
+      if (!options?.client) await client.query('ROLLBACK');
       throw error;
     }
-  });
+  };
+  const row = options?.client ? await write(options.client) : await withPgClient(write);
 
   logger.info('Canonical ready homework memory entry inserted', {
     homeworkMemoryEntryId: id,
@@ -363,6 +365,13 @@ export async function insertCanonicalReadyHomeworkMemoryEntry(
   });
 
   return mapRowToHomeworkMemory(row);
+}
+
+export async function insertCanonicalReadyHomeworkMemoryEntryWithinTransaction(
+  client: PoolClient,
+  params: InsertCanonicalReadyHomeworkMemoryParams,
+): Promise<HomeworkMemoryRecord> {
+  return insertCanonicalReadyHomeworkMemoryEntry(params, { client });
 }
 
 export async function ensurePendingHomeworkMemoryEntry(

@@ -362,6 +362,7 @@
 | `STORAGE_PATH_PREFIX` | `.env.batch-backend.example` | shared_runtime | `docs/reference/env.md` |
 | `STORAGE_PROVIDER` | `.env.batch-backend.example` | shared_runtime | `docs/reference/env.md` |
 | `STT_PROVIDER` | `.env.batch-backend.example` | speech_runtime | `docs/reference/env.md` |
+| `STUDENT_MEMORY_OPENAI_BATCH_ENABLED` | `.env.batch-backend.example` | misc | `docs/reference/env.md` |
 | `TELEGRAM_OPS_BOT_ALLOWED_USER_IDS` | `.env.batch-backend.example` | telegram_ops | `docs/operations/telegram-ops-control-panel.md` |
 | `TELEGRAM_OPS_BOT_API_BASE_URL` | `.env.batch-backend.example` | telegram_ops | `docs/operations/telegram-ops-control-panel.md` |
 | `TELEGRAM_OPS_BOT_APP_BASE_URL` | `.env.batch-backend.example` | telegram_ops | `docs/operations/telegram-ops-control-panel.md` |

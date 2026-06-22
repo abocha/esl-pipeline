@@ -54,6 +54,7 @@ export interface BatchBackendConfig {
   studentMemory: {
     queueName: string;
     maxConcurrency: number;
+    openAiBatchEnabled: boolean;
   };
   recordings: {
     maxFileSize: number;
@@ -391,6 +392,7 @@ export function loadConfig(): BatchBackendConfig {
   const transcribeQueueName = readString('TRANSCRIBE_QUEUE_NAME', 'transcribe-queue')!;
   const studentMemoryQueueName = readString('STUDENT_MEMORY_QUEUE_NAME', 'student-memory-queue')!;
   const studentMemoryMaxConcurrency = readInt('STUDENT_MEMORY_MAX_CONCURRENCY', 2);
+  const studentMemoryOpenAiBatchEnabled = readBool('STUDENT_MEMORY_OPENAI_BATCH_ENABLED', false);
 
   const recordingsMaxFileSize = readInt('RECORDINGS_MAX_FILE_SIZE', 100 * 1024 * 1024);
   const transcribeMode = readString('TRANSCRIBE_MODE', 'timeline') as 'timeline' | 'stack';
@@ -809,6 +811,7 @@ export function loadConfig(): BatchBackendConfig {
     studentMemory: {
       queueName: studentMemoryQueueName,
       maxConcurrency: studentMemoryMaxConcurrency,
+      openAiBatchEnabled: studentMemoryOpenAiBatchEnabled,
     },
     recordings: {
       maxFileSize: recordingsMaxFileSize,

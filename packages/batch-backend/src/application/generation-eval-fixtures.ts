@@ -2,13 +2,13 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import type { StructuredOutputSchema } from './generation-providers.js';
-import type { GenerationEnvelopeWorkload } from './generation-request-envelope.js';
 import {
   FOUNDATIONAL_PROFILE_JSON_SCHEMA,
   FOUNDATIONAL_PROFILE_RESPONSE_SCHEMA_DESCRIPTION,
   FOUNDATIONAL_PROFILE_RESPONSE_SCHEMA_NAME,
 } from './foundational-profile.js';
+import type { StructuredOutputSchema } from './generation-providers.js';
+import type { GenerationEnvelopeWorkload } from './generation-request-envelope.js';
 import {
   HOMEWORK_MEMORY_CONTENT_JSON_SCHEMA,
   HOMEWORK_MEMORY_RESPONSE_SCHEMA_DESCRIPTION,

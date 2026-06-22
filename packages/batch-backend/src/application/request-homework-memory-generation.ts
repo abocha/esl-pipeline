@@ -5,6 +5,7 @@ import {
   type EnsurePendingHomeworkMemoryEntryResult,
   ensurePendingHomeworkMemoryEntry,
 } from '../domain/homework-memory-repository.js';
+import { supersedeStudentMemoryOpenAiBatchClaimsForOnlineWork } from '../domain/student-memory-openai-batch-repository.js';
 import { logger } from '../infrastructure/logger.js';
 import { createStudentMemoryQueue } from '../infrastructure/student-memory-queue.js';
 import { resolveGenerationCandidates } from './generation-policy.js';
@@ -17,6 +18,9 @@ export interface RequestHomeworkMemoryGenerationDependencies {
   };
   homeworkMemory: {
     ensurePending: typeof ensurePendingHomeworkMemoryEntry;
+  };
+  batchClaims: {
+    supersedeForOnlineWork: typeof supersedeStudentMemoryOpenAiBatchClaimsForOnlineWork;
   };
   queue: {
     enqueue: ReturnType<typeof createStudentMemoryQueue>['enqueue'];
@@ -45,6 +49,9 @@ export async function requestHomeworkMemoryGeneration(args: {
   const homeworkMemory = args.overrides?.homeworkMemory ?? {
     ensurePending: ensurePendingHomeworkMemoryEntry,
   };
+  const batchClaims = args.overrides?.batchClaims ?? {
+    supersedeForOnlineWork: supersedeStudentMemoryOpenAiBatchClaimsForOnlineWork,
+  };
   const queue = args.overrides?.queue ?? createStudentMemoryQueue();
   const now = args.overrides?.now ?? (() => new Date());
 
@@ -68,6 +75,11 @@ export async function requestHomeworkMemoryGeneration(args: {
     });
     return null;
   }
+
+  await batchClaims.supersedeForOnlineWork({
+    workload: 'homework_memory',
+    canonicalScopeKey: sourceBundle.assignmentLineageKey,
+  });
 
   const requestedAt = now();
   const pending = await homeworkMemory.ensurePending({

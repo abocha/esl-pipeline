@@ -48,6 +48,15 @@ Explicitly not part of WS2B MVP implementation:
 
 ## Request Profile (WS2B)
 
+### Disabled Student-Memory Batch Extension
+
+The operator-only student-memory replay lane serializes the same `/v1/responses` request body into
+OpenAI Batch JSONL. It is limited to one workload/model slice, uses `/v1/responses` with a `24h`
+completion window, and remains disabled by `STUDENT_MEMORY_OPENAI_BATCH_ENABLED=false`. Its output
+is parsed and validated by the same structured-output/evidence contract as online generation. Batch
+files are read in memory only; durable state retains request snapshots, canonical content, and safe
+diagnostics, never raw output files.
+
 Endpoint and required fields:
 
 1. `POST /v1/responses` via `client.responses.create(...)`
