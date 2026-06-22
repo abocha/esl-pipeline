@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createStudentMemoryOpenAiBatchPlan } from '../src/application/student-memory-openai-batch-operations.js';
+import {
+  createAndSubmitStudentMemoryOpenAiBatchPlan,
+  createStudentMemoryOpenAiBatchPlan,
+} from '../src/application/student-memory-openai-batch-operations.js';
+import { loadConfig } from '../src/config/env.js';
 
 describe('application/student-memory-openai-batch-operations', () => {
   it('builds a source-text-free dry-run summary without persistence or transport', async () => {
@@ -36,5 +40,47 @@ describe('application/student-memory-openai-batch-operations', () => {
       customIds: ['student-memory-batch:v1:lesson_memory:1'],
     });
     expect(JSON.stringify(plan.summary)).not.toContain('sensitive source text');
+  });
+
+  it('submits a persisted retry slice immediately after creating it', async () => {
+    const createRun = vi.fn().mockResolvedValue({ id: 'child-run' });
+    const markSubmitted = vi.fn();
+    const transport = {
+      uploadInput: vi.fn().mockResolvedValue({ id: 'file_1' }),
+      createBatch: vi.fn().mockResolvedValue({ id: 'batch_1' }),
+    };
+
+    const result = await createAndSubmitStudentMemoryOpenAiBatchPlan({
+      config: loadConfig(),
+      workload: 'lesson_memory',
+      model: 'gpt-5.4-nano',
+      parentRetryRunId: 'parent-run',
+      items: [
+        {
+          retryOfItemId: 'parent-item',
+          studentId: 'student-1',
+          customId: 'lesson:scope:retry:parent-run',
+          model: 'gpt-5.4-nano',
+          body: { model: 'gpt-5.4-nano' },
+          canonicalScopeKey: 'scope',
+          sourceVersionHash: 'a'.repeat(64),
+          requestEnvelope: { version: 'generation_request_envelope_v1' } as never,
+          responseSchemaFingerprint: 'schema',
+          sourceRefs: { sourceSelectionHash: 'selection' },
+        },
+      ],
+      transport: transport as never,
+      repository: { createRun, markSubmitted },
+    });
+
+    expect(createRun).toHaveBeenCalledOnce();
+    expect(transport.uploadInput).toHaveBeenCalledOnce();
+    expect(transport.createBatch).toHaveBeenCalledOnce();
+    expect(markSubmitted).toHaveBeenCalledWith({
+      runId: 'child-run',
+      remoteInputFileId: 'file_1',
+      remoteBatchId: 'batch_1',
+    });
+    expect(result).toMatchObject({ runId: 'child-run', remoteBatchId: 'batch_1' });
   });
 });

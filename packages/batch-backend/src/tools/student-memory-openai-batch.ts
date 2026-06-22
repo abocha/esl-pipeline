@@ -9,6 +9,7 @@ import {
   buildStudentMemorySnapshotBatchCandidates,
 } from '../application/student-memory-openai-batch-candidates.js';
 import {
+  createAndSubmitStudentMemoryOpenAiBatchPlan,
   createStudentMemoryOpenAiBatchPlan,
   submitStudentMemoryOpenAiBatchPlan,
 } from '../application/student-memory-openai-batch-operations.js';
@@ -116,7 +117,54 @@ async function run(): Promise<void> {
 
   if (!options.runId) throw new Error('--run-id is required');
   const batchRun = await getStudentMemoryOpenAiBatchRunById(options.runId);
-  if (!batchRun?.remoteBatchId) throw new Error('Batch run is missing a remote Batch id');
+  if (!batchRun) throw new Error(`OpenAI Batch run was not found: ${options.runId}`);
+  if (options.action === 'retry') {
+    if (!options.apply) throw new Error('retry requires --apply');
+    if (batchRun.state !== 'reconciled') {
+      throw new Error('retry requires a fully reconciled Batch run');
+    }
+    assertStudentMemoryOpenAiBatchAccess({ config, model: batchRun.model, action: 'retry' });
+    const retryableItems = (await listStudentMemoryOpenAiBatchItems({ runId: batchRun.id })).filter(
+      (item) => item.state === 'retryable_failure',
+    );
+    const retryItems = (
+      await Promise.all(
+        retryableItems.map(async (item) =>
+          (await hasStudentMemoryOpenAiBatchRetryChild(item.id)) ? null : item,
+        ),
+      )
+    ).filter((item): item is (typeof retryableItems)[number] => item !== null);
+    if (retryItems.length === 0) throw new Error('No retryable Batch items are available');
+    const submitted = await createAndSubmitStudentMemoryOpenAiBatchPlan({
+      config,
+      workload: batchRun.workload,
+      model: batchRun.model,
+      parentRetryRunId: batchRun.id,
+      items: retryItems.map((item) => ({
+        retryOfItemId: item.id,
+        studentId: item.studentId,
+        customId: `${item.customId}:retry:${batchRun.id}`,
+        model: item.model,
+        body: item.requestBody,
+        canonicalScopeKey: item.canonicalScopeKey,
+        sourceVersionHash: item.sourceVersionHash,
+        requestEnvelope: item.requestEnvelope as never,
+        responseSchemaFingerprint: item.responseSchemaFingerprint,
+        sourceRefs: item.sourceRefs,
+      })),
+    });
+    console.log(
+      JSON.stringify({
+        ...submitted.summary,
+        runId: submitted.runId,
+        parentRunId: batchRun.id,
+        remoteInputFileId: submitted.remoteInputFileId,
+        remoteBatchId: submitted.remoteBatchId,
+      }),
+    );
+    return;
+  }
+  if (!batchRun.remoteBatchId) throw new Error('Batch run is missing a remote Batch id');
   const transport = createStudentMemoryOpenAiBatchTransport();
   if (options.action === 'cancel') {
     if (!options.apply) throw new Error('cancel requires --apply');
@@ -186,41 +234,6 @@ async function run(): Promise<void> {
     );
     return;
   }
-  if (!options.apply) throw new Error('retry requires --apply');
-  if (batchRun.state !== 'reconciled') {
-    throw new Error('retry requires a fully reconciled Batch run');
-  }
-  assertStudentMemoryOpenAiBatchAccess({ config, model: batchRun.model, action: 'retry' });
-  const retryableItems = (await listStudentMemoryOpenAiBatchItems({ runId: batchRun.id })).filter(
-    (item) => item.state === 'retryable_failure',
-  );
-  const retryItems = (
-    await Promise.all(
-      retryableItems.map(async (item) =>
-        (await hasStudentMemoryOpenAiBatchRetryChild(item.id)) ? null : item,
-      ),
-    )
-  ).filter((item): item is (typeof retryableItems)[number] => item !== null);
-  if (retryItems.length === 0) throw new Error('No retryable Batch items are available');
-  const plan = await createStudentMemoryOpenAiBatchPlan({
-    workload: batchRun.workload,
-    model: batchRun.model,
-    persist: true,
-    parentRetryRunId: batchRun.id,
-    items: retryItems.map((item) => ({
-      retryOfItemId: item.id,
-      studentId: item.studentId,
-      customId: `${item.customId}:retry:${batchRun.id}`,
-      model: item.model,
-      body: item.requestBody,
-      canonicalScopeKey: item.canonicalScopeKey,
-      sourceVersionHash: item.sourceVersionHash,
-      requestEnvelope: item.requestEnvelope as never,
-      responseSchemaFingerprint: item.responseSchemaFingerprint,
-      sourceRefs: item.sourceRefs,
-    })),
-  });
-  console.log(JSON.stringify({ ...plan.summary, runId: plan.runId, parentRunId: batchRun.id }));
 }
 
 function requireValue(value: string | undefined, flag: string): string {
