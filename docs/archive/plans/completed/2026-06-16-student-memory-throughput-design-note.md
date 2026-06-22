@@ -3,13 +3,12 @@
 ## Meta
 
 - Audience: founder-maintainer and implementation agents.
-- Status: `roadmap`.
-- Last Verified Against: 2026-06-22 PR3 Batch-replay implementation state.
+- Status: `archive`.
+- Last Verified Against: 2026-06-23 Chunk 10 completion and live-eval state.
 - Related Chunk: Chunk 10 in `docs/plans/2026-06-15-production-readiness-restart-chunks.md`.
-- Exit Trigger: archive after PR2 pacing and PR3 Batch-replay decisions are shipped or promoted into
-  durable runtime and operations documentation.
-- Current Focus: use the reconciled, implementation-ready PR3 Batch-replay plan; defer all
-  production enablement and deployment decisions.
+- Completion: PR1 (#110), PR1.1 (#111), PR2 (#112), and PR3 (#113) are merged. The original
+  patch-labelled release is `v9.1.10`; this closeout PR carries the intended `release:minor`
+  classification without rewriting that release.
 
 ## Decision Snapshot
 
@@ -17,8 +16,8 @@ Chunk 10 keeps normal online student-memory generation for fresh work, adds rate
 in PR2, and later adds OpenAI Batch only for non-urgent replay/backfill in PR3. Batch remains
 disabled until its operator and product controls are implemented.
 
-PR1, PR1.1, and PR2 are merged. PR3's disabled operator implementation is complete on its feature
-branch and remains unactivated. Do not deploy these changes to production or enable
+PR1, PR1.1, PR2, and PR3 are merged. PR3's disabled operator implementation remains unactivated.
+Do not deploy these changes to production or enable
 `GEN_OPENAI_TARGET_MODELS_ENABLED` without separate maintainer approval.
 
 ## What PR1 And PR1.1 Established
@@ -53,18 +52,18 @@ missed canonical validation/grounding coverage, and exited zero despite failures
 result drove the hardening above; it is not release evidence.
 
 The explicitly authorized passing report is
-`packages/batch-backend/tmp/generation-evals/generation-eval-2026-06-20T18-54-33.592Z.json`:
+`tmp/generation-evals/live-eval-2026-06-23.json`:
 
 - All six workloads passed; there were no provider, schema, grounding, assignment-validation,
   injection, or completeness failures.
 - Assignment requested `gpt-5.5`, returned `gpt-5.5-2026-04-23`, passed strict v2 validation and
-  injection evaluation, used 9,788 tokens, and took 81,461 ms.
-- Lesson memory, homework memory, snapshot, foundational profile, and candidate patch all returned
-  their requested model revisions, passed schema/grounding/injection checks, and completed normally.
-- Aggregate observed usage was 13,164 tokens and 92,787 ms latency.
+  injection evaluation, used 9,605 tokens, and took 46,644 ms.
+- Lesson memory, homework memory, snapshot, foundational profile, and candidate patch passed their
+  schema/grounding/injection checks and completed normally on their evaluated model revisions.
+- Aggregate observed usage was 12,763 tokens and 55,590 ms summed latency.
 
-This qualifies the harness and supports PR2. It does **not** authorize target-model activation or
-production deployment.
+This qualifies the harness as a live activation gate. Target-model activation and production
+deployment remain separate maintainer approvals.
 
 ## Current Architecture And Policy
 
@@ -149,6 +148,19 @@ those constraints again against the official docs before code changes.
 PR3 is a backward-compatible operator capability and therefore plans for `release:minor`. It does
 not add a tutor-facing endpoint, scheduler, automatic entitlement routing, target-model activation,
 deployment, or a paid Batch call.
+
+## Completion Record
+
+- PR1 (#110) established the versioned request envelope, validators, and offline evaluator; PR1.1
+  (#111) hardened the live evaluator; PR2 (#112) added paced online processing; and PR3 (#113)
+  added the disabled Batch replay capability and atomic canonical import.
+- PR3 merged under the `release:patch` label and published `v9.1.10`. This documentation closeout
+  uses `release:minor` so the normal release workflow publishes the intended `v9.2.0` line; it does
+  not alter the existing tag or images.
+- The 2026-06-23 live evaluation passed all six workloads. It is evidence for a later activation
+  decision, not an activation or deployment action in this PR.
+- `STUDENT_MEMORY_OPENAI_BATCH_ENABLED` remains false. No Batch submission, provider call,
+  deployment, or production feature-flag change is authorized by this archived plan.
 
 ## Guardrails And Handoff
 
