@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [9.1.10] - 2026-06-22
+
+### Changed
+
+- Automated release from PR #113: feat(student-memory): add disabled OpenAI Batch replay lane (https://github.com/abocha/esl-pipeline/pull/113)
+
 ## [9.1.9] - 2026-06-21
 
 ### Changed
