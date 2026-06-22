@@ -127,3 +127,43 @@ export async function submitStudentMemoryOpenAiBatchPlan(args: {
   });
   return { remoteInputFileId: uploaded.id, remoteBatchId: batch.id };
 }
+
+export async function createAndSubmitStudentMemoryOpenAiBatchPlan(args: {
+  config: BatchBackendConfig;
+  workload: StudentMemoryBatchWorkload;
+  model: string;
+  items: StudentMemoryOpenAiBatchPlanItem[];
+  parentRetryRunId?: string | null;
+  transport?: ReturnType<typeof createStudentMemoryOpenAiBatchTransport>;
+  repository?: {
+    createRun: typeof createStudentMemoryOpenAiBatchRun;
+    markSubmitted: typeof markStudentMemoryOpenAiBatchRunSubmitted;
+  };
+}): Promise<{
+  summary: StudentMemoryOpenAiBatchPlanSummary;
+  jsonl: string;
+  runId: string;
+  remoteInputFileId: string;
+  remoteBatchId: string;
+}> {
+  const plan = await createStudentMemoryOpenAiBatchPlan({
+    workload: args.workload,
+    model: args.model,
+    items: args.items,
+    persist: true,
+    parentRetryRunId: args.parentRetryRunId ?? null,
+    repository: { createRun: args.repository?.createRun ?? createStudentMemoryOpenAiBatchRun },
+  });
+  if (!plan.runId) throw new Error('Persisted OpenAI Batch plan did not return a run id');
+  const submitted = await submitStudentMemoryOpenAiBatchPlan({
+    config: args.config,
+    model: args.model,
+    runId: plan.runId,
+    jsonl: plan.jsonl,
+    transport: args.transport,
+    repository: {
+      markSubmitted: args.repository?.markSubmitted ?? markStudentMemoryOpenAiBatchRunSubmitted,
+    },
+  });
+  return { ...plan, runId: plan.runId, ...submitted };
+}
