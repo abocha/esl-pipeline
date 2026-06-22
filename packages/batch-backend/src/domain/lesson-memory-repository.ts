@@ -198,12 +198,13 @@ export async function insertLessonMemoryEntry(
 
 export async function insertCanonicalReadyLessonMemoryEntry(
   params: InsertCanonicalReadyLessonMemoryParams,
+  options?: { client?: PoolClient },
 ): Promise<LessonMemoryRecord> {
   const id = params.id ?? randomUUID();
   const generatedAt = params.generatedAt ?? new Date();
 
-  const row = await withPgClient(async (client: PoolClient) => {
-    await client.query('BEGIN');
+  const write = async (client: PoolClient) => {
+    if (!options?.client) await client.query('BEGIN');
     try {
       // Serialize canonical ready replacement per transcript to avoid supersession races.
       await client.query('SELECT id FROM transcripts WHERE id = $1 FOR UPDATE', [
@@ -304,13 +305,14 @@ export async function insertCanonicalReadyLessonMemoryEntry(
         [id, generatedAt, params.transcriptId],
       );
 
-      await client.query('COMMIT');
+      if (!options?.client) await client.query('COMMIT');
       return insertResult.rows[0];
     } catch (error) {
-      await client.query('ROLLBACK');
+      if (!options?.client) await client.query('ROLLBACK');
       throw error;
     }
-  });
+  };
+  const row = options?.client ? await write(options.client) : await withPgClient(write);
 
   logger.info('Canonical ready lesson memory entry inserted', {
     lessonMemoryEntryId: id,
@@ -318,6 +320,13 @@ export async function insertCanonicalReadyLessonMemoryEntry(
   });
 
   return mapRowToLessonMemory(row);
+}
+
+export async function insertCanonicalReadyLessonMemoryEntryWithinTransaction(
+  client: PoolClient,
+  params: InsertCanonicalReadyLessonMemoryParams,
+): Promise<LessonMemoryRecord> {
+  return insertCanonicalReadyLessonMemoryEntry(params, { client });
 }
 
 export async function ensurePendingLessonMemoryEntry(

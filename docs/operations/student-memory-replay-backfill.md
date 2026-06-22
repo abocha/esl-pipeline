@@ -15,6 +15,7 @@
 - Explain how to replay canonical student-memory artifacts from source truth.
 - Keep repair workflows backend-first and read-only with respect to generated memory rows.
 - Document the homework-memory and student-memory snapshot tools that ship with the backend.
+- Document the separately gated OpenAI Batch replay tool without authorizing its use.
 
 ## Core Rules
 
@@ -26,6 +27,30 @@
 5. Assignment-level provenance inspection remains on `GET /prompt-packages/:id`.
 6. Compose-managed production must run `student-memory-worker`; `batch-worker` does not consume
    lesson-memory, homework-memory, or snapshot jobs.
+7. OpenAI Batch replay is disabled by default and is not a deployment, target-model, or paid-call
+   authorization.
+
+## Disabled OpenAI Batch Replay
+
+Use the Batch tool only for explicit, non-urgent historical replay after separate maintainer
+authorization. It never replaces fresh online student-memory work.
+
+```bash
+pnpm --filter @esl-pipeline/batch-backend student-memory:batch -- dry-run \
+  --workload lesson_memory --model <allowlisted-openai-model> --id <transcript-id>
+```
+
+- `dry-run` is local and writes neither database state nor provider requests.
+- `submit --apply`, `status`, `poll`, `reconcile`, `retry --apply`, and `cancel --apply` require
+  `STUDENT_MEMORY_OPENAI_BATCH_ENABLED=true`, an OpenAI API key, and an allowlisted model before
+  any remote access. Do not enable that flag as part of normal deployment.
+- Submit one workload/model slice at a time. Reconcile only terminal runs. The importer locks the
+  item and claim, rechecks source freshness, writes the stable canonical destination, and marks the
+  item imported in one database transaction.
+- Unknown, duplicate, malformed, grounding-invalid, and stale results are terminal/audited. Only
+  provider errors and incomplete work from an expired Batch may be retried after reconciliation.
+- CLI output is safe diagnostics only: do not redirect envelopes, JSONL, raw source text, or raw
+  provider output to durable local files.
 
 ## Production Worker Runtime
 

@@ -4,10 +4,12 @@ const {
   enqueueMock,
   resolveHomeworkMemorySourceFromSucceededJobMock,
   ensurePendingHomeworkMemoryEntryMock,
+  supersedeClaimsMock,
 } = vi.hoisted(() => ({
   enqueueMock: vi.fn(),
   resolveHomeworkMemorySourceFromSucceededJobMock: vi.fn(),
   ensurePendingHomeworkMemoryEntryMock: vi.fn(),
+  supersedeClaimsMock: vi.fn(),
 }));
 
 vi.mock('../src/infrastructure/student-memory-queue.js', () => ({
@@ -37,6 +39,10 @@ vi.mock('../src/application/homework-memory-source.js', async () => {
 
 vi.mock('../src/domain/homework-memory-repository.js', () => ({
   ensurePendingHomeworkMemoryEntry: ensurePendingHomeworkMemoryEntryMock,
+}));
+
+vi.mock('../src/domain/student-memory-openai-batch-repository.js', () => ({
+  supersedeStudentMemoryOpenAiBatchClaimsForOnlineWork: supersedeClaimsMock,
 }));
 
 vi.mock('../src/infrastructure/logger.js', () => ({
@@ -70,6 +76,7 @@ describe('application/request-homework-memory-generation', () => {
         id: 'pending-1',
       },
     });
+    supersedeClaimsMock.mockResolvedValue([]);
   });
 
   it('uses the pending entry id as the BullMQ job key so forced reruns enqueue fresh work', async () => {
@@ -102,6 +109,20 @@ describe('application/request-homework-memory-generation', () => {
         jobId: 'homework-memory:pending-1',
       }),
     );
+  });
+
+  it('supersedes an eligible Batch claim without delaying the fresh online request', async () => {
+    await requestHomeworkMemoryGeneration({
+      config: { generation: {} } as never,
+      params: { jobId: 'job-2', studentId: 'student-1' },
+    });
+
+    expect(supersedeClaimsMock).toHaveBeenCalledWith({
+      workload: 'homework_memory',
+      canonicalScopeKey: 'job-2',
+    });
+    expect(ensurePendingHomeworkMemoryEntryMock).toHaveBeenCalled();
+    expect(enqueueMock).toHaveBeenCalled();
   });
 
   it('re-enqueues an existing pending row so replay can recover from transient queue misses', async () => {

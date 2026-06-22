@@ -4,7 +4,7 @@
 
 - Audience: maintainers and implementing agents.
 - Authority Level: package entrypoint and operational usage guide.
-- Last Verified Against: 2026-06-21 repo state.
+- Last Verified Against: 2026-06-22 repo state.
 - Owner: batch-backend maintainers + automation agents.
 - Review Cadence: monthly or after major API/worker changes.
 - Status: `active`.
@@ -83,6 +83,9 @@ Student-memory operator workflows:
 - lesson memory replay: `pnpm --filter @esl-pipeline/batch-backend lesson-memory:refresh`
 - homework memory replay: `pnpm --filter @esl-pipeline/batch-backend exec tsx --tsconfig tsconfig.json src/tools/refresh-homework-memory.ts`
 - student-memory snapshot replay: `pnpm --filter @esl-pipeline/batch-backend exec tsx --tsconfig tsconfig.json src/tools/refresh-student-memory-snapshots.ts`
+- OpenAI Batch replay is operator-only and disabled by default through
+  `STUDENT_MEMORY_OPENAI_BATCH_ENABLED=false`; it must not be used as a substitute for fresh
+  paced worker generation.
 - student lesson artifact export: `pnpm --filter @esl-pipeline/batch-backend student-artifacts:export -- --student-id <student-id> [--out tmp/student-artifacts/<student-id>.zip]`
 - focused runbook: [`docs/operations/student-memory-replay-backfill.md`](../../docs/operations/student-memory-replay-backfill.md)
 

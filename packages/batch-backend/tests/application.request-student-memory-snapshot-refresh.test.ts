@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { enqueueMock, ensurePendingMock } = vi.hoisted(() => ({
+const { enqueueMock, ensurePendingMock, supersedeClaimsMock } = vi.hoisted(() => ({
   enqueueMock: vi.fn(),
   ensurePendingMock: vi.fn(),
+  supersedeClaimsMock: vi.fn(),
 }));
 
 vi.mock('../src/infrastructure/student-memory-queue.js', () => ({
@@ -13,6 +14,10 @@ vi.mock('../src/infrastructure/student-memory-queue.js', () => ({
 
 vi.mock('../src/domain/student-memory-snapshot-repository.js', () => ({
   ensurePendingStudentMemorySnapshot: ensurePendingMock,
+}));
+
+vi.mock('../src/domain/student-memory-openai-batch-repository.js', () => ({
+  supersedeStudentMemoryOpenAiBatchClaimsForOnlineWork: supersedeClaimsMock,
 }));
 
 vi.mock('../src/application/generation-policy.js', () => ({
@@ -43,6 +48,7 @@ describe('application/request-student-memory-snapshot-refresh', () => {
         id: 'snapshot-pending-1',
       },
     });
+    supersedeClaimsMock.mockResolvedValue([]);
   });
 
   it('uses the source entry id in the queue key when available so new source rows can trigger follow-up refreshes', async () => {
@@ -67,6 +73,20 @@ describe('application/request-student-memory-snapshot-refresh', () => {
         jobId: 'student-memory-snapshot:student-1:snapshot-pending-1',
       }),
     );
+  });
+
+  it('supersedes an eligible Batch claim without delaying the fresh online request', async () => {
+    await requestStudentMemorySnapshotRefresh({
+      config: { generation: {} } as never,
+      params: { studentId: 'student-1', trigger: 'manual-replay' },
+    });
+
+    expect(supersedeClaimsMock).toHaveBeenCalledWith({
+      workload: 'student_memory_snapshot',
+      canonicalScopeKey: 'student-1',
+    });
+    expect(ensurePendingMock).toHaveBeenCalled();
+    expect(enqueueMock).toHaveBeenCalled();
   });
 
   it('uses the pending snapshot id as the queue key for manual replay too', async () => {

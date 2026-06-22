@@ -5,6 +5,10 @@ import {
   flattenGenerationRequestEnvelope,
   type GenerationRequestEnvelopeV1,
 } from './generation-request-envelope.js';
+import {
+  buildOpenAiResponsesRequestBody,
+  parseOpenAiResponsesPayload,
+} from './openai-responses-contract.js';
 
 export interface ProviderExecutionRequest {
   model: string;
@@ -441,7 +445,6 @@ export async function executeOpenAiGeneration(args: {
     });
   }
 
-  const prompt = resolveProviderPrompt(args.request);
   const response = await fetchWithTimeout(
     'https://api.openai.com/v1/responses',
     {
@@ -450,21 +453,7 @@ export async function executeOpenAiGeneration(args: {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        model: args.request.model,
-        input: args.request.envelope?.input ?? prompt,
-        ...(args.request.envelope ? { instructions: args.request.envelope.instructions } : {}),
-        ...(args.request.envelope
-          ? {
-              reasoning: { effort: args.request.envelope.settings.reasoningEffort },
-              text: { verbosity: args.request.envelope.settings.textVerbosity },
-            }
-          : {}),
-        stream: false,
-        ...(typeof args.request.maxOutputTokens === 'number'
-          ? { max_output_tokens: args.request.maxOutputTokens }
-          : {}),
-      }),
+      body: JSON.stringify(buildOpenAiResponsesRequestBody(args.request)),
     },
     args.config.providers.openai.requestTimeoutMs,
   );
@@ -495,33 +484,16 @@ export async function executeOpenAiGeneration(args: {
     });
   }
 
-  if (!payload || typeof payload !== 'object') {
+  try {
+    return parseOpenAiResponsesPayload(payload);
+  } catch (error) {
     throw new ProviderExecutionError({
       provider: 'openai',
-      message: 'OpenAI returned malformed payload',
+      message: error instanceof Error ? error.message : 'OpenAI returned malformed payload',
       status: 502,
       code: 'malformed_payload',
     });
   }
-
-  const cast = payload as Record<string, unknown>;
-  const text = extractOpenAiText(cast);
-  if (!text) {
-    throw new ProviderExecutionError({
-      provider: 'openai',
-      message: 'OpenAI response did not contain output text',
-      status: 502,
-      code: 'malformed_payload',
-    });
-  }
-
-  return {
-    text,
-    model: typeof cast.model === 'string' ? cast.model : undefined,
-    providerRequestId: typeof cast.id === 'string' ? cast.id : undefined,
-    usage: parseOpenAiUsage(cast),
-    finishReason: extractOpenAiFinishReason(cast),
-  };
 }
 
 export async function executeOpenAiStructuredGeneration(args: {
@@ -538,7 +510,6 @@ export async function executeOpenAiStructuredGeneration(args: {
     });
   }
 
-  const prompt = resolveProviderPrompt(args.request);
   const response = await fetchWithTimeout(
     'https://api.openai.com/v1/responses',
     {
@@ -547,32 +518,7 @@ export async function executeOpenAiStructuredGeneration(args: {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        model: args.request.model,
-        input: args.request.envelope?.input ?? prompt,
-        ...(args.request.envelope ? { instructions: args.request.envelope.instructions } : {}),
-        stream: false,
-        text: {
-          ...(args.request.envelope
-            ? { verbosity: args.request.envelope.settings.textVerbosity }
-            : {}),
-          format: {
-            type: 'json_schema',
-            name: args.request.responseSchema.name,
-            schema: args.request.responseSchema.schema,
-            strict: args.request.responseSchema.strict ?? true,
-            ...(typeof args.request.responseSchema.description === 'string'
-              ? { description: args.request.responseSchema.description }
-              : {}),
-          },
-        },
-        ...(args.request.envelope
-          ? { reasoning: { effort: args.request.envelope.settings.reasoningEffort } }
-          : {}),
-        ...(typeof args.request.maxOutputTokens === 'number'
-          ? { max_output_tokens: args.request.maxOutputTokens }
-          : {}),
-      }),
+      body: JSON.stringify(buildOpenAiResponsesRequestBody(args.request)),
     },
     args.config.providers.openai.requestTimeoutMs,
   );
@@ -603,21 +549,13 @@ export async function executeOpenAiStructuredGeneration(args: {
     });
   }
 
-  if (!payload || typeof payload !== 'object') {
+  let parsed;
+  try {
+    parsed = parseOpenAiResponsesPayload(payload);
+  } catch (error) {
     throw new ProviderExecutionError({
       provider: 'openai',
-      message: 'OpenAI returned malformed payload',
-      status: 502,
-      code: 'malformed_payload',
-    });
-  }
-
-  const cast = payload as Record<string, unknown>;
-  const rawText = extractOpenAiText(cast);
-  if (!rawText) {
-    throw new ProviderExecutionError({
-      provider: 'openai',
-      message: 'OpenAI structured response did not contain output text',
+      message: error instanceof Error ? error.message : 'OpenAI returned malformed payload',
       status: 502,
       code: 'malformed_payload',
     });
@@ -625,7 +563,7 @@ export async function executeOpenAiStructuredGeneration(args: {
 
   let output: unknown;
   try {
-    output = extractJsonValue(rawText);
+    output = extractJsonValue(parsed.text);
   } catch (error) {
     throw new ProviderExecutionError({
       provider: 'openai',
@@ -633,17 +571,14 @@ export async function executeOpenAiStructuredGeneration(args: {
         error instanceof Error ? error.message : 'OpenAI structured response JSON parsing failed',
       status: 502,
       code: 'malformed_structured_output',
-      rawText,
+      rawText: parsed.text,
     });
   }
 
   return {
     output,
-    rawText,
-    model: typeof cast.model === 'string' ? cast.model : undefined,
-    providerRequestId: typeof cast.id === 'string' ? cast.id : undefined,
-    usage: parseOpenAiUsage(cast),
-    finishReason: extractOpenAiFinishReason(cast),
+    rawText: parsed.text,
+    ...parsed,
   };
 }
 

@@ -56,8 +56,9 @@ export interface HomeworkMemoryGenerationDecision {
 
 export async function resolveHomeworkMemorySourceFromSucceededJob(
   jobId: string,
+  options?: { client?: PoolClient },
 ): Promise<HomeworkMemorySourceBundle> {
-  const currentJob = await loadSucceededJob(jobId);
+  const currentJob = await loadSucceededJob(jobId, options?.client);
   if (!currentJob) {
     throw new Error(`Succeeded publish job not found: ${jobId}`);
   }
@@ -65,10 +66,10 @@ export async function resolveHomeworkMemorySourceFromSucceededJob(
     throw new Error(`Succeeded publish job ${jobId} is missing student_id`);
   }
 
-  const assignmentLineageKey = await resolveAssignmentLineageKey(jobId);
+  const assignmentLineageKey = await resolveAssignmentLineageKey(jobId, options?.client);
   const publishedMarkdown = await readPublishedMarkdownFromJob(currentJob);
   const contentHash = sha256(publishedMarkdown);
-  const lineageJobs = await listSucceededLineageJobs(assignmentLineageKey);
+  const lineageJobs = await listSucceededLineageJobs(assignmentLineageKey, options?.client);
 
   const sameContentJobs: HomeworkSourceJobRow[] = [];
   for (const lineageJob of lineageJobs) {
@@ -128,8 +129,11 @@ export async function evaluateHomeworkMemoryGenerationForSucceededJob(
   return { shouldGenerate: false, reason: 'no_material_change', source };
 }
 
-async function loadSucceededJob(jobId: string): Promise<HomeworkSourceJobRow | null> {
-  return withPgClient(async (client: PoolClient) => {
+async function loadSucceededJob(
+  jobId: string,
+  providedClient?: PoolClient,
+): Promise<HomeworkSourceJobRow | null> {
+  const load = async (client: PoolClient) => {
     const result = await client.query<HomeworkSourceJobRow>(
       `
       SELECT
@@ -155,11 +159,15 @@ async function loadSucceededJob(jobId: string): Promise<HomeworkSourceJobRow | n
       [jobId],
     );
     return result.rows[0] ?? null;
-  });
+  };
+  return providedClient ? load(providedClient) : withPgClient(load);
 }
 
-async function resolveAssignmentLineageKey(jobId: string): Promise<string> {
-  return withPgClient(async (client: PoolClient) => {
+async function resolveAssignmentLineageKey(
+  jobId: string,
+  providedClient?: PoolClient,
+): Promise<string> {
+  const load = async (client: PoolClient) => {
     const result = await client.query<{ id: string }>(
       `
       WITH RECURSIVE upstream AS (
@@ -181,13 +189,15 @@ async function resolveAssignmentLineageKey(jobId: string): Promise<string> {
       [jobId],
     );
     return result.rows[0]?.id ?? jobId;
-  });
+  };
+  return providedClient ? load(providedClient) : withPgClient(load);
 }
 
 async function listSucceededLineageJobs(
   assignmentLineageKey: string,
+  providedClient?: PoolClient,
 ): Promise<HomeworkSourceJobRow[]> {
-  return withPgClient(async (client: PoolClient) => {
+  const load = async (client: PoolClient) => {
     const result = await client.query<HomeworkSourceJobRow>(
       `
       WITH RECURSIVE lineage AS (
@@ -238,7 +248,8 @@ async function listSucceededLineageJobs(
       [assignmentLineageKey],
     );
     return result.rows;
-  });
+  };
+  return providedClient ? load(providedClient) : withPgClient(load);
 }
 
 async function readPublishedMarkdownFromJob(job: HomeworkSourceJobRow): Promise<string> {
