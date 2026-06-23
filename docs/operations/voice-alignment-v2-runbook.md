@@ -31,7 +31,7 @@ validation, and TTS execution.
    - The watcher defaults to every 24 hours. Override with
      `ESL_ELEVENLABS_VOICES_SYNC_INTERVAL_HOURS=<hours>` or
      `pnpm voices:sync -- --watch --interval-hours <hours>`.
-   - Both commands load `.env.batch-backend` and `.env` without overriding shell variables.
+   - Both commands load canonical `.env` without overriding shell variables.
 2. Confirm catalog was written:
    - Check `generatedAt` and `voices` in `packages/orchestrator/configs/elevenlabs.voices.json`
 3. Commit updated catalog when intentional:

@@ -77,7 +77,7 @@ symlink_node_toolchain() {
 }
 
 ensure_env_files() {
-  local env_files=(".env" ".env.batch-backend")
+  local env_files=(".env")
   local target=""
   for target in "${env_files[@]}"; do
     if [[ -f "$target" ]]; then

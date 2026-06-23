@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DEFAULT_ENV_FILE="${ROOT_DIR}/.env.batch-backend"
+DEFAULT_ENV_FILE="${ROOT_DIR}/.env"
 DEFAULT_LOG_DIR="${ROOT_DIR}/tmp/logs/backup"
 
 ENV_FILE="${PG_BACKUP_ENV_FILE:-$DEFAULT_ENV_FILE}"

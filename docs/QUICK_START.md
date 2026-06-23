@@ -26,7 +26,7 @@
 corepack enable
 pnpm install
 cp .env.example .env
-cp .env.batch-backend.example .env.batch-backend
+pnpm env:validate -- --profile=development
 ```
 
 Local pnpm commands use the repo-local `storeDir: .pnpm-store/v10` setting in

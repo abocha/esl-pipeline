@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 DEFAULT_BACKUP_DIR="${ROOT_DIR}/tmp/backups/postgres"
 DEFAULT_RESTORE_SCRIPT="${ROOT_DIR}/scripts/docker/postgres-backup-restore.sh"
-DEFAULT_ENV_FILE="${ROOT_DIR}/.env.batch-backend"
+DEFAULT_ENV_FILE="${ROOT_DIR}/.env"
 
 ENV_FILE="${PG_BACKUP_ENV_FILE:-$DEFAULT_ENV_FILE}"
 if [[ -f "$ENV_FILE" ]]; then
@@ -52,7 +52,7 @@ Usage:
 Environment overrides:
   PG_BACKUP_DIR            (default: <repo>/tmp/backups/postgres)
   PG_BACKUP_LOCAL_SCRIPT   (default: <repo>/scripts/docker/postgres-backup-restore.sh)
-  PG_BACKUP_ENV_FILE       (default: <repo>/.env.batch-backend when present)
+  PG_BACKUP_ENV_FILE       (default: <repo>/.env when present)
   PG_DATABASE              (default: esl_batch)
 
   PG_BACKUP_S3_BUCKET      (required)

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DEFAULT_ENV_FILE="${ROOT_DIR}/.env.batch-backend"
+DEFAULT_ENV_FILE="${ROOT_DIR}/.env"
 DEFAULT_LOG_DIR="${ROOT_DIR}/tmp/logs/backup"
 DEFAULT_BACKUP_DIR="${ROOT_DIR}/tmp/backups/postgres"
 BACKUP_SCRIPT="${ROOT_DIR}/scripts/docker/postgres-backup-s3.sh"

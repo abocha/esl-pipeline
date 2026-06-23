@@ -176,7 +176,7 @@ pnpm --filter @esl-pipeline/batch-backend student-artifacts:export -- --student-
 
 Operator notes:
 
-1. The tool loads `.env.batch-backend` and normalizes host Postgres access automatically for Linux
+1. The tool loads `.env` and normalizes host Postgres access automatically for Linux
    host runs.
 2. The export defaults to canonical ready lesson-memory and homework-memory artifacts only.
 3. Homework memory that cannot be tied back to a transcript or recording is placed under an

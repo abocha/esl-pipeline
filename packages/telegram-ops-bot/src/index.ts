@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 
-import { loadCliEnv } from '@esl-pipeline/shared-infrastructure';
+import { loadApplicationEnv } from '@esl-pipeline/shared-infrastructure';
 
 import { PostgresApprovalReplayStore } from './approval-replay-store.js';
 import { createAuditLogger } from './audit.js';
@@ -15,9 +15,8 @@ import { ForumTopicRouter } from './topic-router.js';
 import { type RunningWebhookUpdateServer, startWebhookUpdateServer } from './webhook-server.js';
 
 export async function startTelegramOpsBot(): Promise<void> {
-  loadCliEnv({
+  loadApplicationEnv({
     moduleUrl: import.meta.url,
-    files: ['.env.batch-backend', '.env'],
     memoizeKey: 'telegram-ops-bot',
   });
 
