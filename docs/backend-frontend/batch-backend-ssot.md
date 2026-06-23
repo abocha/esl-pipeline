@@ -143,11 +143,10 @@ Recommended checks when changing backend behavior:
 2. `pnpm --filter @esl-pipeline/batch-backend test`
 3. Postgres-backed tests in CI must remain green (`postgres tests`, `worker integration`).
 
-Student-memory repair tooling:
-
-1. `pnpm --filter @esl-pipeline/batch-backend lesson-memory:refresh`
-2. `pnpm --filter @esl-pipeline/batch-backend exec tsx --tsconfig tsconfig.json src/tools/refresh-homework-memory.ts`
-3. `pnpm --filter @esl-pipeline/batch-backend exec tsx --tsconfig tsconfig.json src/tools/refresh-student-memory-snapshots.ts`
+Student-memory repair is described once in
+[`docs/operations/student-memory-replay-backfill.md`](../operations/student-memory-replay-backfill.md).
+Use its source-checkout or compiled production-container commands; all resulting work is consumed
+by `student-memory-worker`.
 
 ## Change Policy
 
