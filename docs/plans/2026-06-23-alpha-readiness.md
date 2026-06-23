@@ -34,7 +34,7 @@ The authoritative launch-stage policy is
 | 1–6            | complete | Production-worker, hotfix-parity, legacy-runtime, student/profile, assignment UX, and schedule/candidate work are shipped.  |
 | 7              | complete | Pronunciation source correctness, selective audio reuse, and explicit regeneration are shipped.                             |
 | 8              | deferred | Telegram tutor workflows and non-blocking invite polish are post-alpha work.                                                |
-| 9              | complete | VPS deploys can read Caddy edge values from server-local `.env.batch-backend`.                                              |
+| 9              | complete | VPS deploys read Caddy edge values from the canonical server-local `.env`.                                                  |
 | 10             | complete | Student-memory pacing, disabled Batch replay, canonical import, and live-eval evidence are shipped; Batch remains disabled. |
 | 11             | complete | PR CI, release commits/tags, and post-release production image publishing are split.                                        |
 

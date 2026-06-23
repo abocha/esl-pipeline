@@ -217,7 +217,7 @@ function classifyEnvSurface(key) {
 }
 
 async function generateEnvSurfaceIndex() {
-  const exampleFiles = ['.env.example', '.env.batch-backend.example'];
+  const exampleFiles = ['.env.example'];
   const rows = [];
 
   for (const exampleFile of exampleFiles) {
@@ -243,7 +243,7 @@ async function generateEnvSurfaceIndex() {
     formatGeneratedHeader(
       'Environment Surface Index',
       'Provide an exhaustive lookup table for env keys surfaced in the checked example env files without duplicating the policy narrative from `docs/reference/env.md`.',
-      'Keys are extracted from `.env.example` and `.env.batch-backend.example`; surface ownership is classified by prefix and documented next-hop links.',
+      'Keys are extracted from `.env.example`; surface ownership is classified by prefix and documented next-hop links.',
     ),
     '## Environment Keys',
     '',

@@ -86,7 +86,7 @@ preserve append-only history and add a new migration instead.
 
 ## Required Env (Telegram + IAM)
 
-Set in `.env.batch-backend`:
+Set in `.env`:
 
 ```bash
 PG_BACKUP_ALERT_TELEGRAM_BOT_TOKEN=123456789:token

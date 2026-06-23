@@ -107,12 +107,12 @@ read_env_file_value() {
   return 1
 }
 
-load_edge_env_from_batch_backend_env_file() {
+load_edge_env_from_application_env_file() {
   if ! edge_enabled; then
     return 0
   fi
 
-  local env_file="${APP_DIR}/.env.batch-backend"
+  local env_file="${APP_DIR}/.env"
   local value
 
   if [[ -n "${CADDY_PUBLIC_HOSTNAME:-}" ]]; then
@@ -495,8 +495,8 @@ main() {
   require_command aws
 
   [[ -f "$COMPOSE_FILE" ]] || die "compose file not found: ${COMPOSE_FILE}"
-  [[ -f "${APP_DIR}/.env.batch-backend" ]] || die "missing required env file: ${APP_DIR}/.env.batch-backend"
-  load_edge_env_from_batch_backend_env_file
+  [[ -f "${APP_DIR}/.env" ]] || die "missing required env file: ${APP_DIR}/.env"
+  load_edge_env_from_application_env_file
   validate_edge_configuration
 
   ensure_state_dir

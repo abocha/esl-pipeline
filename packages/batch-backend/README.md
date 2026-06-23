@@ -78,6 +78,10 @@ High-signal env groups for this package:
 - auth/security/upload controls: `JWT_*`, `REFRESH_*`, `ENABLE_*`
 - optional ops control: `BATCH_BACKEND_OPS_CONTROL_*`
 
+All local, Compose, and production application settings come from the repository-root `.env`.
+Validate it with `pnpm env:validate -- --profile=development`; use the production profile before a
+VPS deployment. Mounted `.secrets/` files and generated deploy image-state files are separate.
+
 Student-memory operator workflows:
 
 - Use the focused replay/backfill runbook. It distinguishes source-checkout `pnpm`/`tsx` commands

@@ -70,7 +70,7 @@ Before changing anything, inspect these files:
 ```text
 docker-compose.prod.yml
 package.json
-.env.batch-backend.example
+.env.example
 docs/backend-frontend/DEPLOYMENT.md
 docs/reference/env.md
 docs/operations/docker-host-paths.md
@@ -181,7 +181,7 @@ TELEGRAM_OPS_BOT_ENABLED=false unless explicitly needed
 
 Security rules:
 
-- Do not commit `.env.batch-backend` with real values.
+- Do not commit `.env` with real values.
 - Do not use AWS root credentials.
 - Use least-privilege IAM credentials.
 - Keep private transcripts/backups private.
@@ -447,8 +447,8 @@ sudo apt install -y git ca-certificates curl
 
 git clone <repo-url> esl-pipeline
 cd esl-pipeline
-cp .env.batch-backend.example .env.batch-backend
-# edit .env.batch-backend with production values, never commit it
+cp .env.example .env
+# edit .env with production values, never commit it
 export CADDY_PUBLIC_HOSTNAME=<public-hostname>
 export CADDY_ACME_EMAIL=<operator-email>
 pnpm docker:prepare

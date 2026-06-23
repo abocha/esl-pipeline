@@ -658,6 +658,9 @@ importers:
       '@esl-pipeline/provider-runtime':
         specifier: workspace:*
         version: link:../provider-runtime
+      '@esl-pipeline/shared-infrastructure':
+        specifier: workspace:*
+        version: link:../shared-infrastructure
       '@esl-pipeline/tts-core':
         specifier: workspace:*
         version: link:../tts-core

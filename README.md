@@ -10,7 +10,7 @@ publish, with student memory, scheduling, and lesson-credit support around it.
 corepack enable
 pnpm install
 cp .env.example .env
-cp .env.batch-backend.example .env.batch-backend
+pnpm env:validate -- --profile=development
 pnpm dev:batch
 ```
 

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DEFAULT_ENV_FILE="${ROOT_DIR}/.env.batch-backend"
+DEFAULT_ENV_FILE="${ROOT_DIR}/.env"
 DEFAULT_LOG_DIR="${ROOT_DIR}/tmp/logs/backup"
 DEFAULT_STATE_FILE="${ROOT_DIR}/tmp/state/postgres-ops-alert-state.json"
 STATUS_SCRIPT="${ROOT_DIR}/scripts/docker/postgres-ops-status.sh"

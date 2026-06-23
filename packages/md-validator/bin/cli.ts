@@ -4,11 +4,11 @@ import path from 'node:path';
 import { Command } from 'commander';
 import pc from 'picocolors';
 
-import { loadCliEnv } from '@esl-pipeline/shared-infrastructure';
+import { loadApplicationEnv } from '@esl-pipeline/shared-infrastructure';
 
 import { validateMarkdown } from '../src/validator.js';
 
-loadCliEnv({
+loadApplicationEnv({
   moduleUrl: import.meta.url,
   memoizeKey: 'md-validator-cli',
 });

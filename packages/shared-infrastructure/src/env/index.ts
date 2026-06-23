@@ -1,4 +1,9 @@
-export { type LoadCliEnvOptions, loadCliEnv } from './cli.js';
+export {
+  type LoadApplicationEnvOptions,
+  type LoadCliEnvOptions,
+  loadApplicationEnv,
+  loadCliEnv,
+} from './cli.js';
 export {
   type LoadEnvOptions,
   type LoadEnvSummary,
