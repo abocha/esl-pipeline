@@ -86,6 +86,14 @@ Host-run command:
 pnpm --filter @esl-pipeline/batch-backend exec tsx --tsconfig tsconfig.json src/tools/refresh-homework-memory.ts [options]
 ```
 
+Production-container command:
+
+```bash
+docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml \
+  --env-file /var/lib/esl-pipeline/deploy/current-images.env \
+  exec batch-backend node dist/tools/refresh-homework-memory.js [options]
+```
+
 Supported options:
 
 - `--dry-run`
@@ -119,6 +127,14 @@ Host-run command:
 
 ```bash
 pnpm --filter @esl-pipeline/batch-backend exec tsx --tsconfig tsconfig.json src/tools/refresh-student-memory-snapshots.ts [options]
+```
+
+Production-container command:
+
+```bash
+docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml \
+  --env-file /var/lib/esl-pipeline/deploy/current-images.env \
+  exec batch-backend node dist/tools/refresh-student-memory-snapshots.js [options]
 ```
 
 Supported options:
