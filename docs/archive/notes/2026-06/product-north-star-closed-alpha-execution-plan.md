@@ -1,14 +1,21 @@
-# Product North Star and Closed Alpha Execution Plan
+# Product North Star and Closed Alpha Execution Plan (Historical)
 
 ## Meta
 
 - Audience: maintainers, implementation agents, product/engineering contributors.
-- Authority level: active product execution source of truth.
-- Status: active roadmap.
-- Intended location: `docs/product-north-star-closed-alpha.md`.
+- Authority level: historical planning record; non-authoritative.
+- Status: archive.
+- Active replacements: `docs/reference/PRODUCT_NORTH_STAR_AND_READINESS.md` and
+  `docs/plans/2026-06-23-alpha-readiness.md`.
 - Review cadence: weekly while the product is moving toward closed alpha.
 - Scope: managed SaaS for solo ESL tutors.
 - Default implementation mode: small vertical slices with evidence, tests, and documented tradeoffs.
+
+## Historical Context
+
+This pre-alpha execution plan is retained for historical decisions and delivery trace. Its cohort
+counts, active-phase claims, and implementation checklists are superseded by the active readiness
+reference and Alpha Readiness plan named above.
 
 ## 1. Current Mission
 

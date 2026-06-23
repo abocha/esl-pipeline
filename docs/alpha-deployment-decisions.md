@@ -5,9 +5,10 @@
 - Audience: founder/operator, Codex, implementation agents.
 - Authority level: active decision record for closed-alpha infrastructure and first implementation slices.
 - Status: active until replaced by a later decision record.
-- Related source of truth: `docs/product-north-star-closed-alpha.md`.
+- Related sources of truth: `docs/reference/PRODUCT_NORTH_STAR_AND_READINESS.md` and
+  `docs/plans/2026-06-23-alpha-readiness.md`.
 - Scope: ESL Pipeline closed-alpha preparation.
-- Current phase: hosted deployment plus invite-only tutor signup.
+- Current phase: pre-alpha tutor evidence with one active tutor.
 
 ## Purpose
 
@@ -24,7 +25,8 @@ The order is locked for now:
 2. Prove the current app works hosted.
 3. Finish invite/signup -> workspace -> first student flow.
 4. Invite one real tutor.
-5. Expand to 3 to 5 tutors only after the one-tutor dry run is healthy.
+5. Expand to 3 to 5 tutors only after the one-tutor pre-alpha evidence is healthy.
+6. Expand to 6 to 10 tutors only after an explicit closed-alpha decision.
 ```
 
 Short rule:
@@ -357,8 +359,8 @@ follow-up: Add a CI image-publish path with commit-SHA tags when the deployment 
 Before coding any slice, Codex should:
 
 1. Read this file.
-2. Read `docs/product-north-star-closed-alpha.md`.
-3. Read the slice plan file.
+2. Read `docs/reference/PRODUCT_NORTH_STAR_AND_READINESS.md`.
+3. Read `docs/plans/2026-06-23-alpha-readiness.md` and the selected slice plan.
 4. Inspect existing repo implementation before proposing new architecture.
 5. State non-goals.
 6. Make the smallest vertical change that produces slice evidence.

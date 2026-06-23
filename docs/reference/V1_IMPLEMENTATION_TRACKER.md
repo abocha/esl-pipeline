@@ -5,7 +5,7 @@
 - Audience: founder-maintainer and AI execution support.
 - Read Time: 5 minutes.
 - Authority Level: V1 execution source of truth.
-- Last Verified Against: 2026-05-12 repo state.
+- Last Verified Against: 2026-06-23 alpha-readiness planning state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: weekly while V1 execution remains active.
 - Status: `roadmap`.
@@ -36,15 +36,15 @@ Historical shipped detail moved to:
 
 ## Current Focus
 
-- Active workstream: `Post-MVP beta hardening`
+- Active workstream: `Pre-alpha tutor evidence and UI distillation`
 - Current objective:
-  - preserve the MVP readiness evidence gate
-  - keep broader beta readiness gated on repeated real tutor use
-  - prioritize reliability fixes if readiness metrics regress
+  - make the one-tutor core flow calm, legible, and repeatable
+  - convert reproduced tutor friction into narrow fixes
+  - admit the 3–5 tutor closed-alpha cohort only from observed evidence
 - Today `Now` slice:
-  - use the 2026-05-12 MVP evidence run as the release-tip baseline
-  - monitor real founder-operator/tutor runs for repeatability before widening beta
-  - if a publish, quota, or billing regression appears, treat it as reliability-only follow-up
+  - execute Chunk 12 in `docs/plans/2026-06-23-alpha-readiness.md`
+  - record the next tutor session against the canonical readiness scorecard
+  - if two or more readiness metrics are red, treat the next slice as reliability-only
 
 ## Delivery Rules
 
@@ -54,19 +54,19 @@ Historical shipped detail moved to:
 
 ## Workstream Status
 
-| Workstream                     | Status      | Gate / Note                           |
-| ------------------------------ | ----------- | ------------------------------------- |
-| WS0 delivered foundations      | complete    | historical baseline                   |
-| WS1 CEFR baseline presets      | complete    | shipped                               |
-| WS6 readiness instrumentation  | complete    | shipped                               |
-| WS2A preset plumbing MVP       | complete    | shipped                               |
-| WS2B direct LLM generation     | complete    | shipped                               |
-| WS3 TTS abstraction + fallback | complete    | shipped                               |
-| WS5 cost and quota policy      | complete    | MVP guardrails shipped; monitor usage |
-| WS4 CRM-lite lesson ledger     | complete    | MVP student/business surfaces shipped |
-| Stabilization and gate review  | complete    | current release-tip checks passed     |
-| MVP readiness evidence         | complete    | founder-operator proof passed         |
-| Post-MVP beta hardening        | in progress | requires repeated real tutor evidence |
+| Workstream                     | Status      | Gate / Note                            |
+| ------------------------------ | ----------- | -------------------------------------- |
+| WS0 delivered foundations      | complete    | historical baseline                    |
+| WS1 CEFR baseline presets      | complete    | shipped                                |
+| WS6 readiness instrumentation  | complete    | shipped                                |
+| WS2A preset plumbing MVP       | complete    | shipped                                |
+| WS2B direct LLM generation     | complete    | shipped                                |
+| WS3 TTS abstraction + fallback | complete    | shipped                                |
+| WS5 cost and quota policy      | complete    | MVP guardrails shipped; monitor usage  |
+| WS4 CRM-lite lesson ledger     | complete    | MVP student/business surfaces shipped  |
+| Stabilization and gate review  | complete    | current release-tip checks passed      |
+| MVP readiness evidence         | complete    | founder-operator proof passed          |
+| Pre-alpha tutor evidence       | in progress | one-tutor core-flow proof and Chunk 12 |
 
 ## Latest Evidence
 
@@ -139,5 +139,6 @@ Targeted follow-through depends on the current slice:
   - [`docs/reference/GENERATION_PROVIDER_POLICY.md`](GENERATION_PROVIDER_POLICY.md)
 - broader planning surfaces:
   - [`docs/plans/README.md`](../plans/README.md)
+  - [`docs/plans/2026-06-23-alpha-readiness.md`](../plans/2026-06-23-alpha-readiness.md)
 - weekly reset / low-energy continuity:
   - [`docs/playbooks/RESTART_TOMORROW.md`](../playbooks/RESTART_TOMORROW.md)

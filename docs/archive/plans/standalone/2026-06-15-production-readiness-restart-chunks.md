@@ -3,10 +3,9 @@
 ## Meta
 
 - Audience: founder-maintainer, Codex, implementation agents, deployment agents.
-- Status: active.
-- Last Verified Against: 2026-06-17 repo state.
-- Exit Trigger: archive after the restart backlog is converted into shipped implementation PRs or superseded by the next invite-wave readiness plan.
-- Current Focus: finish Chunk 7 P2 audio caching and explicit regeneration ergonomics.
+- Status: archive.
+- Last Verified Against: 2026-06-23 supersession by the Alpha Readiness plan.
+- Completion: Chunks 1–7 and 9–11 are shipped; Chunk 8 is deferred until after closed alpha.
 
 ## Purpose
 
