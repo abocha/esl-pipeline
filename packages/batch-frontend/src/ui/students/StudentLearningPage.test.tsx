@@ -19,6 +19,7 @@ const apiMocks = vi.hoisted(() => ({
   listStudentProfileCandidates: vi.fn(),
   populateFirstProfileFromLesson: vi.fn(),
   promoteStudentProfileCandidates: vi.fn(),
+  refreshProfileDraftFromApprovedCandidates: vi.fn(),
   rejectStudentProfileCandidate: vi.fn(),
   restoreProfileRevision: vi.fn(),
   saveProfileDraftRevision: vi.fn(),
@@ -1070,6 +1071,70 @@ describe('StudentLearningPage', () => {
 
     await user.click(screen.getByRole('button', { name: 'Generate Draft Revision' }));
 
+    expect(apiMocks.promoteStudentProfileCandidates).not.toHaveBeenCalled();
+  });
+
+  it('routes draft revision generation to the full profile draft refresh API', async () => {
+    const user = userEvent.setup();
+    apiMocks.getStudentLearningSurface.mockResolvedValueOnce(
+      makeLearningSurface({
+        candidates: {
+          items: [makeProfileCandidate()],
+          total: 1,
+          limit: 50,
+          offset: 0,
+          order: 'desc',
+        },
+      }),
+    );
+    apiMocks.refreshProfileDraftFromApprovedCandidates.mockResolvedValueOnce({
+      draftRevisionId: 'revision-draft-2',
+      profileId: 'profiles/students/alex.md',
+      includedCandidateIds: ['candidate-alex'],
+      excludedCandidateIds: [],
+      contentHash: 'hash-draft-2',
+      draftRevision: {
+        id: 'revision-draft-2',
+        profileId: 'profiles/students/alex.md',
+        contentHash: 'hash-draft-2',
+        source: 'profile_revision_refresh',
+        status: 'draft',
+        versionNumber: 2,
+        versionLabel: 'v2',
+        activatedAt: null,
+        deprecatedAt: null,
+        createdAt: NOW,
+        createdBy: 'teacher-1',
+        restoredFromRevisionId: null,
+        content: '# Foundational Profile',
+        structuredContent: {
+          schemaVersion: 'foundational_profile_v1',
+          overallLevel: 'B1',
+          primaryGoals: ['Lead standups clearly.'],
+          communicationContexts: ['Team updates'],
+          interestsAndUsefulThemes: ['Product work'],
+          stableStrengths: ['High motivation'],
+          persistentChallenges: ['Article usage'],
+          studyPreferences: ['Short practical review loops'],
+          durableConstraints: ['Limited evening time'],
+          teacherNotes: 'Refreshed from approved candidates.',
+        },
+      },
+    });
+
+    renderLearningPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Select candidate-alex' }));
+    await user.click(screen.getByRole('button', { name: 'Generate Draft Revision' }));
+
+    await waitFor(() => {
+      expect(apiMocks.refreshProfileDraftFromApprovedCandidates).toHaveBeenCalledWith(
+        'student-alex',
+        {
+          candidateIds: ['candidate-alex'],
+        },
+      );
+    });
     expect(apiMocks.promoteStudentProfileCandidates).not.toHaveBeenCalled();
   });
 

@@ -18,6 +18,10 @@ import {
   listProfileRevisionsForProfile,
 } from '../../application/profile-content.js';
 import {
+  ProfileDraftRefreshError,
+  refreshProfileDraftFromApprovedCandidates,
+} from '../../application/profile-draft-refresh.js';
+import {
   getStudentMemoryOverview,
   listStudentHomeworkMemory,
   listStudentLessonMemory,
@@ -1093,6 +1097,89 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
           });
         }
         if (error instanceof ProfileCandidatePromotionError) {
+          return reply.code(error.status).send({
+            error: error.code,
+            message: error.message,
+            code: error.code,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.post(
+    '/students/:id/profile-drafts/refresh-from-approved-candidates',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(
+        request,
+        'POST /students/:id/profile-drafts/refresh-from-approved-candidates',
+      );
+      const paramsSchema = z.object({
+        id: z.string().min(1),
+      });
+      const bodySchema = z.object({
+        candidateIds: z.array(z.string().min(1)).min(1),
+        baseRevisionId: z.string().min(1).optional(),
+        reviewerNote: z.string().trim().min(1).optional(),
+      });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const body = bodySchema.parse(request.body ?? {});
+        const authenticatedUser = getAuthenticatedUser(request);
+        const result = await refreshProfileDraftFromApprovedCandidates({
+          request: {
+            studentId: params.id,
+            candidateIds: body.candidateIds,
+            baseRevisionId: body.baseRevisionId ?? null,
+            reviewerId: authenticatedUser?.id ?? null,
+            reviewerNote: body.reviewerNote ?? null,
+          },
+          overrides: {
+            config: context.config,
+          },
+        });
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          studentId: params.id,
+        });
+
+        return reply.send({
+          draftRevisionId: result.draftRevision.id,
+          profileId: result.profileId,
+          baseRevisionId: result.baseRevisionId,
+          includedCandidateIds: result.includedCandidateIds,
+          contentHash: result.draftRevision.contentHash,
+          draftRevision: result.draftRevision,
+          provider: result.provider,
+          model: result.model,
+          providerRequestId: result.providerRequestId,
+          usage: result.usage,
+        });
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid request body',
+            details: error.issues,
+          });
+        }
+        if (error instanceof ProfileDraftRefreshError) {
           return reply.code(error.status).send({
             error: error.code,
             message: error.message,

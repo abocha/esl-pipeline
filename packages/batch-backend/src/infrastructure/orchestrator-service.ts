@@ -169,6 +169,7 @@ interface RunJobSettings {
 export interface RunRerunAssignmentPayload {
   jobId: string;
   md: string;
+  preset?: string;
   manifestMd?: string;
   republishOnly?: boolean;
   regenerateStudyTextAudio?: boolean;

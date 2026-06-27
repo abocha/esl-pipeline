@@ -889,7 +889,8 @@ BEGIN
         'starter_profile_form',
         'candidate_promotion',
         'legacy_normalization',
-        'lesson_population'
+        'lesson_population',
+        'profile_revision_refresh'
       )
     );
 END $$;`,

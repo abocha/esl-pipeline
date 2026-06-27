@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 const LEGACY_BEGIN_MARKER = 'LEGACY_SCHEMA_PATCH_CATALOG_BEGIN';
 const LEGACY_END_MARKER = 'LEGACY_SCHEMA_PATCH_CATALOG_END';
 const EXPECTED_LEGACY_PATCH_CATALOG_HASH =
-  'bdf1543ca864350c4fcee0121ea58aab00ed7a0b8465cc032ec6969fd17bafca';
+  'a041b8bdaf1950042f0b3fef0d5e023a8f7290c1f4dd3d8120065849b1123335';
 
 describe('infrastructure/db legacy schema guard', () => {
   it('keeps legacy runtime schema patch catalog frozen', async () => {

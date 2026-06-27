@@ -500,6 +500,126 @@ describe('application/prompt-package', () => {
     expect(result?.profilePath).toBe('profiles/student-a.md');
   });
 
+  it('includes the selected student canonical name in assignment prompt packages', async () => {
+    const allowedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-prompt-student-name-'));
+    const templatePath = path.join(allowedDir, 'template.md');
+    const defaultProfilePath = path.join(allowedDir, 'default-profile.md');
+    const studentProfilePath = path.join(allowedDir, 'profiles', 'student-a.md');
+
+    await fs.mkdir(path.dirname(studentProfilePath), { recursive: true });
+    await fs.writeFile(
+      templatePath,
+      'Write the assignment header for the selected learner.\nEND\n',
+      'utf8',
+    );
+    await fs.writeFile(defaultProfilePath, 'DEFAULT PROFILE\n', 'utf8');
+    await fs.writeFile(studentProfilePath, 'STUDENT PROFILE CONTENT\n', 'utf8');
+
+    const transcript = createTranscriptRecord();
+    const insertedParams: InsertPromptPackageParams[] = [];
+    const storage = createStorageStub({
+      getText: async () => 'Teacher: Let us practice travel situations today.',
+      putPromptPackage: async ({ promptPackageId, text }) => {
+        expect(text).toContain('[CANONICAL_STUDENT_NAME]\nStudent One');
+        return { uri: `local://prompt-packages/${promptPackageId}.txt`, bytes: text.length };
+      },
+    });
+
+    const result = await createPromptPackage(
+      {
+        recordingId: transcript.recordingId,
+        templateId: 'template.md',
+      },
+      {
+        config: createConfig(templatePath, defaultProfilePath),
+        storage,
+        transcripts: {
+          getByRecordingId: async () => transcript,
+        },
+        recordings: {
+          getById: async () => ({
+            id: transcript.recordingId,
+            source: 'upload',
+            studentId: 'student-1',
+            sourcePath: null,
+            storageUri: 'local://recordings/recording-1.opus',
+            sha256: null,
+            bytes: 1,
+            durationSec: null,
+            channels: null,
+            status: 'transcribed',
+            error: null,
+            createdAt: new Date('2024-01-01T00:00:00Z'),
+            updatedAt: new Date('2024-01-01T00:00:00Z'),
+          }),
+        },
+        students: {
+          getById: async () => ({
+            id: 'student-1',
+            student: 'Student One',
+            profileId: 'profiles/student-a.md',
+          }),
+        },
+        promptPackages: {
+          insert: async (params: InsertPromptPackageParams): Promise<PromptPackageRecord> => {
+            insertedParams.push({ ...params });
+            return {
+              id: params.id ?? 'prompt-1',
+              recordingId: params.recordingId,
+              transcriptId: params.transcriptId,
+              studentId: params.studentId ?? null,
+              lessonId: params.lessonId ?? null,
+              studentMemorySnapshotId: params.studentMemorySnapshotId ?? null,
+              studentMemorySnapshotHash: params.studentMemorySnapshotHash ?? null,
+              selectedLessonMemoryIds: params.selectedLessonMemoryIds ?? [],
+              selectedHomeworkMemoryIds: params.selectedHomeworkMemoryIds ?? [],
+              retrievalPolicyVersion: params.retrievalPolicyVersion ?? null,
+              profilePath: params.profilePath ?? null,
+              resolvedProfileId: params.resolvedProfileId ?? null,
+              resolvedProfileHash: params.resolvedProfileHash ?? null,
+              resolvedProfileRevisionId: params.resolvedProfileRevisionId ?? null,
+              resolvedProfileUpdatedAt: params.resolvedProfileUpdatedAt ?? null,
+              resolvedProfileVersionLabel: params.resolvedProfileVersionLabel ?? null,
+              resolvedProfileStatus: params.resolvedProfileStatus ?? null,
+              resolvedTemplateId: params.resolvedTemplateId ?? null,
+              resolvedTemplateHash: params.resolvedTemplateHash ?? null,
+              resolvedTemplateRevisionId: params.resolvedTemplateRevisionId ?? null,
+              resolvedTemplateUpdatedAt: params.resolvedTemplateUpdatedAt ?? null,
+              resolvedTemplateVersionLabel: params.resolvedTemplateVersionLabel ?? null,
+              resolvedTemplateStatus: params.resolvedTemplateStatus ?? null,
+              templateVersion: params.templateVersion,
+              notes: params.notes ?? null,
+              storageUri: params.storageUri,
+              requestEnvelope: params.requestEnvelope ?? null,
+              createdAt: new Date('2024-01-01T00:00:00Z'),
+              updatedAt: new Date('2024-01-01T00:00:00Z'),
+            };
+          },
+        },
+        profileRevisions: createProfileRevisionRepositoryStub(),
+        templateRevisions: createTemplateRevisionRepositoryStub(),
+        bindings: createBindingResolverStub(),
+        promptOptions: createPromptOptionsStub(),
+      },
+    );
+
+    expect(result?.text).toContain('[CANONICAL_STUDENT_NAME]\nStudent One');
+    expect(insertedParams[0]?.requestEnvelope).toEqual(
+      expect.objectContaining({
+        workload: 'assignment_draft',
+        sourceManifest: expect.arrayContaining([
+          expect.objectContaining({
+            id: 'canonical-student-name',
+            label: 'CANONICAL_STUDENT_NAME',
+          }),
+        ]),
+      }),
+    );
+    expect(JSON.stringify(insertedParams[0]?.requestEnvelope)).toContain(
+      'Use CANONICAL_STUDENT_NAME as the authoritative learner name',
+    );
+  });
+
   it('keeps explicit profileId and profilePath overrides ahead of student-linked defaults', async () => {
     const allowedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-prompt-allowed-'));
     const templatePath = path.join(allowedDir, 'template.md');
