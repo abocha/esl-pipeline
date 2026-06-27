@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [9.2.1] - 2026-06-27
+
+### Changed
+
+- Automated release from PR #115: fix(env): make OpenAI target model activation config-driven (https://github.com/abocha/esl-pipeline/pull/115)
+
 ## [9.2.0] - 2026-06-22
 
 ### Changed
