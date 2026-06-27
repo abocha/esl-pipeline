@@ -5,7 +5,7 @@
 - Audience: maintainers/operators deploying batch services.
 - Read Time: 6 minutes.
 - Authority Level: Deployment runbook.
-- Last Verified Against: 2026-06-17 repo state.
+- Last Verified Against: 2026-06-27 repo state.
 - Owner: backend/frontend maintainers + automation agents.
 - Review Cadence: monthly or after deployment workflow changes.
 - Status: `runbook`.
@@ -141,6 +141,12 @@ pnpm docker:caddy:validate
 pnpm docker:prod:edge
 pnpm docker:prod:ps
 ```
+
+TODO for the next deployment tooling rollout: remove this validator/export mismatch by making the
+edge validation commands load the canonical application `.env` with the same precedence as
+`scripts/deploy/deploy-prod-images.sh`, or by adding a wrapper that does so. Until then, export
+`CADDY_PUBLIC_HOSTNAME` and `CADDY_ACME_EMAIL` in the shell before running `pnpm docker:prod:edge:*`
+or `pnpm docker:caddy:validate`.
 
 In edge mode, Caddy is the only intended public entrypoint on ports `80` and `443`. It reverse
 proxies to `batch-frontend:8080`; the frontend nginx config keeps same-origin `/api/*` traffic routed
