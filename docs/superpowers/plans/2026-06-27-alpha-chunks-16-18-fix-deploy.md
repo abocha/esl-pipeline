@@ -81,6 +81,7 @@ git switch -c codex/alpha-chunks-16-18-fixes
 ### Task 1: Baseline Reproduction And Branch Hygiene
 
 **Files:**
+
 - Read: `AGENTS.md`
 - Read: `docs/reference/agents-ssot.md`
 - Read: `docs/plans/2026-06-23-alpha-readiness.md`
@@ -129,6 +130,7 @@ Expected: tests pass before new failing assertions are added. If any fail, read 
 ### Task 2: Chunk 16 Failing Tests For Rerun Theme Preservation
 
 **Files:**
+
 - Modify: `packages/orchestrator/tests/rerun-publish-student-name.test.ts`
 - Modify: `packages/batch-backend/tests/infrastructure.pipeline-worker-entry.test.ts`
 
@@ -228,6 +230,7 @@ Expected: both new assertions fail because `RerunFlags` has no `preset` and the 
 ### Task 3: Chunk 16 Minimal Implementation
 
 **Files:**
+
 - Modify: `packages/orchestrator/src/types.ts`
 - Modify: `packages/orchestrator/src/index.ts`
 - Modify: `packages/batch-backend/src/infrastructure/pipeline-worker-entry.ts`
@@ -309,6 +312,7 @@ git commit -m "fix(orchestrator): preserve rerun html theme preset"
 ### Task 4: Chunk 17 Failing Tests For Full Draft Refresh Routing
 
 **Files:**
+
 - Modify: `packages/batch-backend/tests/application.profile-candidate-promotion.test.ts`
 - Create: `packages/batch-backend/tests/application.profile-draft-refresh.test.ts`
 - Modify: `packages/batch-frontend/src/ui/students/StudentLearningPage.test.tsx`
@@ -397,6 +401,7 @@ Expected: the new service/import/helper tests fail because the route and fronten
 ### Task 5: Chunk 17 Backend Full Draft Refresh Implementation
 
 **Files:**
+
 - Create: `packages/batch-backend/src/application/profile-draft-refresh.ts`
 - Modify: `packages/batch-backend/src/application/profile-revision-drafting.ts`
 - Modify: `packages/batch-backend/src/transport/extended-routes/students-routes.ts`
@@ -549,6 +554,7 @@ Expected: tests pass and candidate promotion remains a patch-only schema path.
 ### Task 6: Chunk 17 Frontend Routing Implementation
 
 **Files:**
+
 - Modify: `packages/batch-frontend/src/utils/api.ts`
 - Modify: `packages/batch-frontend/src/ui/students/StudentLearningPage.tsx`
 - Modify: `packages/batch-frontend/src/ui/students/StudentLearningPage.test.tsx`
@@ -635,6 +641,7 @@ If `WorkspaceCandidatesPanel.tsx` is unchanged, omit it from `git add`.
 ### Task 7: Chunk 18 Failing Tests For Canonical Student Name Grounding
 
 **Files:**
+
 - Modify: `packages/batch-backend/tests/application.prompt-package.resolution.test.ts`
 - Modify: `packages/batch-backend/tests/application.prompt-package.test-harness.ts`
 
@@ -683,6 +690,7 @@ Expected: the new assertions fail because prompt assembly does not include `CANO
 ### Task 8: Chunk 18 Minimal Implementation
 
 **Files:**
+
 - Modify: `packages/batch-backend/src/application/create-prompt-package.ts`
 - Modify: `packages/batch-backend/src/application/prompt-assembly.ts`
 - Modify: `packages/batch-backend/tests/application.prompt-package.resolution.test.ts`
@@ -716,7 +724,7 @@ In `stitchPromptEnvelope`, prepend this instruction to the existing template:
 [
   'Use CANONICAL_STUDENT_NAME as the authoritative learner name for assignment headers and student-facing copy. Do not infer or invent the learner name from the transcript.',
   options.template,
-].join('\n\n')
+].join('\n\n');
 ```
 
 Add this source before the profile source:
@@ -773,6 +781,7 @@ git commit -m "fix(batch): ground assignment prompts with student name"
 ### Task 9: Integrated Validation
 
 **Files:**
+
 - Read: `tmp/check-logs/**` if agent lanes fail
 - Optional Modify: implementation files only for failures directly tied to the chunks
 
@@ -838,6 +847,7 @@ pnpm docker:dev:down
 ### Task 10: Docs, PR, Merge, And Deploy
 
 **Files:**
+
 - Modify: `docs/plans/2026-06-23-alpha-readiness.md`
 - Optional Modify: `docs/operations/hosted-mvp-evidence.md`
 - Read: `docs/backend-frontend/DEPLOYMENT.md`
@@ -869,11 +879,13 @@ Fill the PR template sections exactly:
 
 ```markdown
 ## Summary
+
 - Preserves HTML color theme preset through assignment reruns.
 - Routes profile draft revision generation to full foundational-profile drafting while keeping candidate promotion patch-only.
 - Adds canonical student display name to assignment prompt envelopes.
 
 ## Validation
+
 - pnpm --filter @esl-pipeline/orchestrator vitest run tests/rerun-publish-student-name.test.ts
 - pnpm --filter @esl-pipeline/batch-backend vitest run ...
 - pnpm --filter @esl-pipeline/batch-frontend vitest run ...
@@ -883,10 +895,12 @@ Fill the PR template sections exactly:
 - pnpm check:pre-pr
 
 ## Risk Notes
+
 - No migrations or contract-version files changed.
 - Production deploy uses release images from the merge commit/release commit, not server-local edits.
 
 ## Checklist
+
 - [x] Tests updated or not needed
 - [x] Docs updated or not needed
 - [x] Release label selected

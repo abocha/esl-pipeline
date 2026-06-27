@@ -1874,5 +1874,6 @@ VALUES
   ('0037_retire_prompt_voice_capabilities', '8bcbad9b5f2d5d866a42fc99b95c4cf49f2f9e825e87a9ec20bd66f42c3440d6', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0038_alpha_invites_and_signup_workspace', '727507071d99af1e7fcf22d6d17993fa9e9941fd9d2b912244f678cb3daad12b', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0039_prompt_request_envelope', 'ff25a865dffa60f11a72df72fa71e1d93b18f65a331cc8398bae7f00d829614d', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0040_student_memory_openai_batch_replay', '8fe7b93f90e56b0181527c022babd4d0436ac314c89522c84b341a0c638e4116', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0040_student_memory_openai_batch_replay', '8fe7b93f90e56b0181527c022babd4d0436ac314c89522c84b341a0c638e4116', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0041_profile_revision_refresh_source', '997ca6ddcb3a771a409b8546189d2e7cbf3b0a7e641800deb770413555f25256', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;

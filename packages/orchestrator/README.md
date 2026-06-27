@@ -4,7 +4,7 @@
 
 - Audience: maintainers and implementing agents.
 - Authority Level: package entrypoint and API usage guide.
-- Last Verified Against: 2026-06-13 repo state.
+- Last Verified Against: 2026-06-27 repo state.
 - Owner: orchestrator maintainers + automation agents.
 - Review Cadence: monthly or after major API/runtime changes.
 - Status: `active`.
@@ -43,6 +43,13 @@ Additive v2 envelopes:
 - `executeRerunAssignmentV2`
 - `executeGetAssignmentStatusV2`
 - `executePlanRerunAssignmentV2`
+
+## Rerun Contract
+
+`rerunAssignment` treats a supplied `preset` as the selected assignment theme and otherwise falls
+back to the persisted manifest preset. Batch-backend worker payloads must forward the job preset into
+rerun flags so rerun HTML uses the same heading color theme as the original assignment unless the
+operator intentionally changes it.
 
 ## Read Next
 

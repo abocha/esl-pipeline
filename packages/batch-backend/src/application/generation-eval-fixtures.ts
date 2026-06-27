@@ -86,6 +86,11 @@ export const GENERATION_EVAL_FIXTURES: readonly GenerationEvalFixture[] = [
     },
     sources: [
       {
+        id: 'canonical-student-name',
+        label: 'CANONICAL_STUDENT_NAME',
+        content: 'Synthetic eval context. Canonical learner display name: Eval Persona One.',
+      },
+      {
         id: 'foundational-profile',
         label: 'FOUNDATIONAL_PROFILE',
         content:
