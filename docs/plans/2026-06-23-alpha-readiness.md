@@ -4,7 +4,7 @@
 
 - Audience: founder-maintainer and implementation agents.
 - Status: `roadmap`.
-- Last Verified Against: 2026-06-23 repository and launch-readiness state.
+- Last Verified Against: 2026-06-27 repository and launch-readiness state.
 - Exit Trigger: archive after the product reaches v1 production-readiness or this plan is replaced by
   a later evidence-backed launch plan.
 - Current Focus: Chunk 12 — tutor-facing UI distillation for the assignment and student workflows.
@@ -132,12 +132,107 @@ Acceptance evidence:
 - Weekly evidence identifies the top three tutor pain points and the chosen follow-up.
 - The team can make an explicit, evidence-backed decision to enter closed beta or remain in alpha.
 
-## Deferred: Telegram And Invite Follow-Up
+### Chunk 16: Rerun Theme Preservation
+
+Priority: P1.
+
+Goal: make rerun-generated pages preserve the normal run color theme so republished or regenerated
+assignment pages do not lose the yellow visual treatment that tutors and students expect.
+
+Scope:
+
+- Reproduce the difference between a normal run and a rerun using the same lesson/student inputs.
+- Trace whether the missing theme is caused by rerun DTO construction, manifest reuse, publisher
+  inputs, stored artifact metadata, or frontend rendering.
+- Add a focused regression test around the smallest layer that drops the theme.
+- Fix only the theme preservation path; do not turn this into a broader assignment redesign.
+
+Acceptance evidence:
+
+- Rerun pages preserve the same color-theme metadata and yellow styling as equivalent normal runs.
+- The regression test fails before the fix and passes after the fix.
+- A manual or screenshot-based smoke check compares one normal run and one rerun artifact.
+
+### Chunk 17: Profile Draft Revision Generation Repair
+
+Priority: P1.
+
+Goal: restore the "generate draft revision" action so it asks the model to write a complete new
+student-profile draft from the available profile data, lesson evidence, and approved facts, rather
+than accidentally invoking the candidate-promotion safety prompt.
+
+Observed failure:
+
+- The current request prompt says to decide whether selected approved candidates are safe to promote
+  into the student profile and return `profile_candidate_patch_v1` JSON.
+- The model correctly follows that prompt, but the frontend expects a full draft profile and reports:
+  "Profile draft generation appears truncated compared with the base profile. No draft was saved."
+
+Scope:
+
+- Reproduce the button path from the tutor-facing UI and capture which backend endpoint, prompt
+  asset, and response schema it actually uses.
+- Identify why the draft-generation action is routed to the candidate-promotion prompt/schema.
+- Restore the intended draft-generation prompt, response contract, and frontend expectation as one
+  coherent path.
+- Preserve the separate candidate-promotion safety flow; do not weaken its closed-schema behavior.
+- Use fixtures or recorded prompt inspection where possible; do not require live provider calls for
+  the regression.
+
+Acceptance evidence:
+
+- Tests prove "generate draft revision" sends the draft-generation prompt/schema, not
+  `profile_candidate_patch_v1`.
+- Tests prove candidate promotion still uses the candidate-patch safety prompt and closed schema.
+- The frontend no longer raises the truncated-draft error for a valid generated draft.
+- Manual tutor-flow smoke confirms a draft revision can be generated and saved from the UI.
+
+### Chunk 18: Assignment Prompt Student-Name Grounding
+
+Priority: P1.
+
+Goal: include the canonical student name in the assignment-creation prompt envelope so generated
+assignments do not infer the learner's name from transcript text or invent a name for the assignment
+header.
+
+Observed failure:
+
+- The assignment-generation request includes lesson data but does not explicitly provide the actual
+  selected student name.
+- The model must infer the name from transcript content or invent one when the assignment header
+  needs a student name.
+
+Scope:
+
+- Reproduce the assignment-generation prompt envelope for a selected student and confirm where the
+  student identity is absent.
+- Add the canonical student display name to the prompt envelope at the backend boundary that already
+  binds assignment generation to the selected student.
+- Update prompt instructions, schemas, snapshots, or fixtures so the model treats the provided
+  student name as authoritative for headers and student-facing copy.
+- Preserve privacy boundaries: include the minimum student identity needed for the assignment output,
+  not unrelated profile metadata.
+- Do not rely on transcript parsing as the source of truth for the student's name.
+
+Acceptance evidence:
+
+- Tests prove assignment-generation requests include the selected student's canonical display name.
+- Tests or prompt snapshots prove the model is instructed to use that name for assignment headers
+  instead of inferring or inventing it.
+- A tutor-flow smoke check confirms a generated assignment header uses the selected student's real
+  name when the transcript omits or ambiguously mentions names.
+
+## Deferred Follow-Ups
 
 Telegram is intentionally deferred until after closed alpha. Reopen it only when several tutors
 demonstrate a repeated communication or coordination need that the primary product cannot meet more
 simply. Invite-registration polish is similarly evidence-led: investigate and fix a concrete
 reproduction, not a remembered concern.
+
+Inworld STT is also deferred. Reopen it as a provider-evaluation chunk when the alpha flow is stable
+enough to compare transcription quality, latency, reliability, cost, and operational fit against
+Deepgram. The goal is to test whether Inworld can eventually replace Deepgram STT, not to change the
+current alpha STT provider without evidence.
 
 ## Operating Boundaries
 
