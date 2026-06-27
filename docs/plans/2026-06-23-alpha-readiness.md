@@ -7,7 +7,8 @@
 - Last Verified Against: 2026-06-27 repository and launch-readiness state.
 - Exit Trigger: archive after the product reaches v1 production-readiness or this plan is replaced by
   a later evidence-backed launch plan.
-- Current Focus: Chunk 12 — tutor-facing UI distillation for the assignment and student workflows.
+- Current Focus: Chunks 16–18 are implemented and locally validated; PR review and production
+  deployment remain pending.
 
 ## Purpose
 
@@ -221,6 +222,34 @@ Acceptance evidence:
   instead of inferring or inventing it.
 - A tutor-flow smoke check confirms a generated assignment header uses the selected student's real
   name when the transcript omits or ambiguously mentions names.
+
+## 2026-06-27 Chunks 16–18 Implementation Evidence
+
+Status: implementation validated locally on branch `codex/alpha-chunks-16-18-fixes`; production
+deployment has not been performed.
+
+Implemented:
+
+- Chunk 16 preserves the selected/persisted color preset through rerun worker payloads and
+  orchestrator rerun flags so republished HTML keeps the original heading theme.
+- Chunk 17 routes "generate draft revision" to a full foundational-profile draft refresh endpoint
+  and keeps candidate promotion on the closed `profile_candidate_patch_v1` path. This required the
+  additive migration `0041_profile_revision_refresh_source` because profile revisions persist their
+  source in a database check constraint.
+- Chunk 18 adds `CANONICAL_STUDENT_NAME` to assignment prompt text and request envelopes, with
+  instructions treating that value as authoritative for assignment headers and student-facing copy.
+
+Validation run:
+
+- `pnpm --filter @esl-pipeline/orchestrator exec vitest run tests/rerun-publish-student-name.test.ts`
+- `pnpm --filter @esl-pipeline/batch-backend exec vitest run --config ../../vitest.config.ts tests/infrastructure.pipeline-worker-entry.test.ts tests/application.profile-candidate-promotion.test.ts tests/application.profile-draft-refresh.test.ts tests/application.prompt-package.resolution.test.ts tests/transport.http-server.integration.students-content.test.ts`
+- `pnpm --filter @esl-pipeline/batch-frontend exec vitest run src/ui/students/StudentLearningPage.test.tsx src/ui/students/StudentWorkspace.candidates.test.tsx`
+- `pnpm format`
+- `pnpm run lint:repo-hygiene`
+- `pnpm release:verify:contracts`
+- `pnpm --filter @esl-pipeline/batch-backend run db:verify-baseline`
+- `pnpm --silent run check:fast:agent`
+- `pnpm check:pre-pr`
 
 ## Deferred Follow-Ups
 

@@ -14,13 +14,13 @@ import {
   promoteStudentProfileCandidates,
 } from '../../application/profile-candidate-promotion.js';
 import {
-  ProfileDraftRefreshError,
-  refreshProfileDraftFromApprovedCandidates,
-} from '../../application/profile-draft-refresh.js';
-import {
   getProfileContent,
   listProfileRevisionsForProfile,
 } from '../../application/profile-content.js';
+import {
+  ProfileDraftRefreshError,
+  refreshProfileDraftFromApprovedCandidates,
+} from '../../application/profile-draft-refresh.js';
 import {
   getStudentMemoryOverview,
   listStudentHomeworkMemory,
