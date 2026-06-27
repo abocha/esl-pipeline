@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [9.3.0] - 2026-06-27
+
+### Changed
+
+- Automated release from PR #116: fix: repair alpha rerun and profile draft flows (https://github.com/abocha/esl-pipeline/pull/116)
+
 ## [9.2.1] - 2026-06-27
 
 ### Changed
