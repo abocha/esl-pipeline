@@ -102,6 +102,33 @@ describe('config/env - OpenAI target-model gate', () => {
       expect(cfg.generation.models.openai.profileDraftPrimary).toBe('gpt-5.4-mini');
     });
   });
+
+  it('allows every default OpenAI workload model when the target ladder is enabled', async () => {
+    await withEnv({ NODE_ENV: 'test', GEN_OPENAI_TARGET_MODELS_ENABLED: 'true' }, async () => {
+      delete process.env.GEN_OPENAI_MODEL_PRIMARY;
+      delete process.env.GEN_OPENAI_MODEL_FALLBACK;
+      delete process.env.GEN_OPENAI_MODEL_STUDENT_MEMORY_PRIMARY;
+      delete process.env.GEN_OPENAI_MODEL_STUDENT_MEMORY_FALLBACK;
+      delete process.env.GEN_OPENAI_MODEL_PROFILE_DRAFT_PRIMARY;
+      delete process.env.GEN_OPENAI_MODEL_PROFILE_DRAFT_FALLBACK;
+      delete process.env.GEN_OPENAI_MODEL_PROFILE_DRAFT_TERTIARY;
+      delete process.env.GEN_ALLOWED_MODELS_OPENAI;
+
+      const cfg = await loadConfigFresh();
+
+      expect(cfg.generation.models.openai.allowed).toEqual(
+        expect.arrayContaining([
+          cfg.generation.models.openai.primary,
+          cfg.generation.models.openai.fallback,
+          cfg.generation.models.openai.studentMemoryPrimary,
+          cfg.generation.models.openai.studentMemoryFallback,
+          cfg.generation.models.openai.profileDraftPrimary,
+          cfg.generation.models.openai.profileDraftFallback,
+          cfg.generation.models.openai.profileDraftTertiary,
+        ]),
+      );
+    });
+  });
 });
 
 describe('config/env - speech planner debug logging', () => {

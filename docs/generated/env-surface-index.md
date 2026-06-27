@@ -12,12 +12,12 @@
 | Key | Example File | Surface | Details |
 | --- | --- | --- | --- |
 | `ALLOWED_MIME_TYPES` | `.env.example` | batch_backend | `packages/batch-backend/README.md` |
-| `APP_ROOT` | `.env.example` | misc | `docs/reference/env.md` |
 | `AWS_ACCESS_KEY_ID` | `.env.example` | shared_runtime | `docs/reference/env.md` |
 | `AWS_REGION` | `.env.example` | shared_runtime | `docs/reference/env.md` |
 | `AWS_SECRET_ACCESS_KEY` | `.env.example` | shared_runtime | `docs/reference/env.md` |
 | `BATCH_BACKEND_ENABLE_EXTENDED_API` | `.env.example` | batch_backend | `packages/batch-backend/README.md` |
 | `BATCH_BACKEND_ENABLE_OPS_CONTROL` | `.env.example` | misc | `docs/reference/env.md` |
+| `BATCH_BACKEND_HOST_PORT` | `.env.example` | misc | `docs/reference/env.md` |
 | `BATCH_BACKEND_HTTP_PORT` | `.env.example` | batch_backend | `packages/batch-backend/README.md` |
 | `BATCH_BACKEND_JOB_OPTIONS_ALLOW_STATIC_FALLBACK` | `.env.example` | misc | `docs/reference/env.md` |
 | `BATCH_BACKEND_OPS_CONTROL_ACTION_HISTORY_LIMIT` | `.env.example` | telegram_ops | `docs/operations/telegram-ops-control-panel.md` |
@@ -28,6 +28,8 @@
 | `BATCH_BACKEND_OPS_CONTROL_RESTORE_DRILL_COMMAND` | `.env.example` | telegram_ops | `docs/operations/telegram-ops-control-panel.md` |
 | `BATCH_BACKEND_OPS_CONTROL_STATUS_COMMAND` | `.env.example` | telegram_ops | `docs/operations/telegram-ops-control-panel.md` |
 | `BATCH_BACKEND_TEST_PG` | `.env.example` | misc | `docs/reference/env.md` |
+| `BATCH_FRONTEND_BIND_ADDR` | `.env.example` | misc | `docs/reference/env.md` |
+| `BATCH_FRONTEND_HOST_PORT` | `.env.example` | misc | `docs/reference/env.md` |
 | `BATCH_JOBS_QUEUE_NAME` | `.env.example` | batch_backend | `packages/batch-backend/README.md` |
 | `BATCH_TTS_CACHE_DIR` | `.env.example` | misc | `docs/reference/env.md` |
 | `BATCH_TTS_CACHE_MAINTENANCE_INTERVAL_MINUTES` | `.env.example` | misc | `docs/reference/env.md` |
@@ -35,8 +37,13 @@
 | `BATCH_TTS_CACHE_MAX_AGE_DAYS` | `.env.example` | misc | `docs/reference/env.md` |
 | `BATCH_TTS_CACHE_MAX_BYTES` | `.env.example` | misc | `docs/reference/env.md` |
 | `BCRYPT_ROUNDS` | `.env.example` | batch_backend | `packages/batch-backend/README.md` |
+| `CADDY_ACME_EMAIL` | `.env.example` | misc | `docs/reference/env.md` |
+| `CADDY_PUBLIC_HOSTNAME` | `.env.example` | misc | `docs/reference/env.md` |
+| `COMPOSE_PROJECT_NAME` | `.env.example` | misc | `docs/reference/env.md` |
 | `CORS_CREDENTIALS` | `.env.example` | batch_backend | `packages/batch-backend/README.md` |
 | `CORS_ORIGIN` | `.env.example` | batch_backend | `packages/batch-backend/README.md` |
+| `DEPLOY_INCLUDE_EDGE` | `.env.example` | misc | `docs/reference/env.md` |
+| `DEPLOY_INCLUDE_OPS_BOT` | `.env.example` | misc | `docs/reference/env.md` |
 | `DRAFT_LOCAL_EXPORT` | `.env.example` | batch_backend | `packages/batch-backend/README.md` |
 | `ENABLE_CORS` | `.env.example` | batch_backend | `packages/batch-backend/README.md` |
 | `ENABLE_FILE_SANITIZATION` | `.env.example` | batch_backend | `packages/batch-backend/README.md` |
@@ -69,13 +76,9 @@
 | `ESL_TTS_DEFAULT_PROVIDER` | `.env.example` | speech_runtime | `docs/reference/env.md` |
 | `ESL_TTS_PROVIDER_ELEVENLABS_API_KEY` | `.env.example` | speech_runtime | `docs/reference/env.md` |
 | `ESL_TTS_PROVIDER_ELEVENLABS_API_TOKEN` | `.env.example` | speech_runtime | `docs/reference/env.md` |
-| `ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_LANGUAGE` | `.env.example` | speech_runtime | `docs/reference/env.md` |
-| `ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_SEED` | `.env.example` | speech_runtime | `docs/reference/env.md` |
-| `ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_STABILITY` | `.env.example` | speech_runtime | `docs/reference/env.md` |
 | `ESL_TTS_PROVIDER_ELEVENLABS_MAX_CHARS` | `.env.example` | speech_runtime | `docs/reference/env.md` |
 | `ESL_TTS_PROVIDER_ELEVENLABS_MODEL_ID` | `.env.example` | speech_runtime | `docs/reference/env.md` |
 | `ESL_TTS_PROVIDER_ELEVENLABS_OUTPUT_FORMAT` | `.env.example` | speech_runtime | `docs/reference/env.md` |
-| `ESL_TTS_PROVIDER_ELEVENLABS_PRONUNCIATION_MODEL_ID` | `.env.example` | speech_runtime | `docs/reference/env.md` |
 | `ESL_TTS_PROVIDER_ELEVENLABS_SILENCE_TAIL_SECONDS` | `.env.example` | speech_runtime | `docs/reference/env.md` |
 | `ESL_TTS_PROVIDER_ELEVENLABS_STRATEGY` | `.env.example` | speech_runtime | `docs/reference/env.md` |
 | `ESL_TTS_PROVIDER_ELEVENLABS_VOICES_PATH` | `.env.example` | speech_runtime | `docs/reference/env.md` |
@@ -114,7 +117,6 @@
 | `GEN_ALLOWED_MODELS_GOOGLE` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
 | `GEN_ALLOWED_MODELS_OPENAI` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
 | `GEN_ALLOWED_MODELS_OPENROUTER` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
-| `GEN_BUDGET_EMERGENCY_OVERRIDE` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
 | `GEN_GOOGLE_DAILY_REQUEST_BUDGET` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
 | `GEN_GOOGLE_MODEL_FALLBACK` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
 | `GEN_GOOGLE_MODEL_PRIMARY` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
@@ -137,6 +139,8 @@
 | `GEN_OPENAI_RETRY_BACKOFF_MS` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
 | `GEN_OPENAI_RETRY_MAX` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
 | `GEN_OPENAI_RPM_BUDGET` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
+| `GEN_OPENAI_TARGET_MODELS_ENABLED` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
+| `GEN_OPENAI_TPM_BUDGET` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
 | `GEN_OPENROUTER_DAILY_REQUEST_BUDGET` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
 | `GEN_OPENROUTER_DAILY_TOKEN_BUDGET` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
 | `GEN_OPENROUTER_MODEL_FALLBACK` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
@@ -220,7 +224,6 @@
 | `PG_USER` | `.env.example` | batch_backend | `packages/batch-backend/README.md` |
 | `PIPELINE_CWD` | `.env.example` | batch_backend | `packages/batch-backend/README.md` |
 | `PRESIGNED_URL_EXPIRES_IN` | `.env.example` | misc | `docs/reference/env.md` |
-| `PROJECT_ROOT` | `.env.example` | misc | `docs/reference/env.md` |
 | `PROMPT_PROFILE_PATH` | `.env.example` | misc | `docs/reference/env.md` |
 | `PROMPT_TEMPLATE_PATH` | `.env.example` | misc | `docs/reference/env.md` |
 | `RECORDINGS_MAX_FILE_SIZE` | `.env.example` | shared_runtime | `docs/reference/env.md` |
@@ -234,7 +237,6 @@
 | `REFRESH_COOKIE_SAMESITE` | `.env.example` | batch_backend | `packages/batch-backend/README.md` |
 | `REFRESH_COOKIE_SECURE` | `.env.example` | batch_backend | `packages/batch-backend/README.md` |
 | `REFRESH_TOKEN_EXPIRES_IN` | `.env.example` | batch_backend | `packages/batch-backend/README.md` |
-| `REPO_ROOT` | `.env.example` | misc | `docs/reference/env.md` |
 | `S3_ACCESS_KEY_ID` | `.env.example` | shared_runtime | `docs/reference/env.md` |
 | `S3_BUCKET` | `.env.example` | shared_runtime | `docs/reference/env.md` |
 | `S3_BUCKET_NAME` | `.env.example` | shared_runtime | `docs/reference/env.md` |
@@ -250,7 +252,9 @@
 | `STORAGE_PATH_PREFIX` | `.env.example` | shared_runtime | `docs/reference/env.md` |
 | `STORAGE_PROVIDER` | `.env.example` | shared_runtime | `docs/reference/env.md` |
 | `STT_PROVIDER` | `.env.example` | speech_runtime | `docs/reference/env.md` |
+| `STUDENT_MEMORY_MAX_CONCURRENCY` | `.env.example` | misc | `docs/reference/env.md` |
 | `STUDENT_MEMORY_OPENAI_BATCH_ENABLED` | `.env.example` | misc | `docs/reference/env.md` |
+| `STUDENT_MEMORY_QUEUE_NAME` | `.env.example` | misc | `docs/reference/env.md` |
 | `TELEGRAM_OPS_BOT_ALLOWED_USER_IDS` | `.env.example` | telegram_ops | `docs/operations/telegram-ops-control-panel.md` |
 | `TELEGRAM_OPS_BOT_API_BASE_URL` | `.env.example` | telegram_ops | `docs/operations/telegram-ops-control-panel.md` |
 | `TELEGRAM_OPS_BOT_APP_BASE_URL` | `.env.example` | telegram_ops | `docs/operations/telegram-ops-control-panel.md` |
