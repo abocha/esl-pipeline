@@ -1175,6 +1175,7 @@ export async function rerunAssignment(
     const effectiveStudyTextDialogueStability =
       flags.studyTextDialogueStability ?? manifest.dialogueStability;
     const effectiveStudyTextDialogueSeed = flags.studyTextDialogueSeed ?? manifest.dialogueSeed;
+    const effectivePreset = flags.preset ?? manifest.preset;
     const effectiveStudyTextTitleFallback = basename(manifestMd).replace(/\.[^.]+$/, '');
     const studentFacingAudioTitle = resolveMarkdownTitle(
       mdContents,
@@ -1683,8 +1684,8 @@ export async function rerunAssignment(
       const pronunciationAudioUrl = audioArtifacts.pronunciation?.primaryClip?.url;
       if (!flags.dryRun) {
         let headingTheme: { h2?: string; h3?: string } | undefined;
-        if (manifest.preset) {
-          headingTheme = await loadHeadingThemeForPreset(manifest.preset, DEFAULT_PRESETS_PATH);
+        if (effectivePreset) {
+          headingTheme = await loadHeadingThemeForPreset(effectivePreset, DEFAULT_PRESETS_PATH);
         }
 
         const publishMarkdown = insertGeneratedAudioLinks(mdContents, {
@@ -1743,6 +1744,7 @@ export async function rerunAssignment(
       htmlKey,
       htmlEtag,
       htmlReused,
+      preset: effectivePreset ?? manifest.preset,
       audioArtifacts: {
         studyText: audioArtifacts.studyText,
         pronunciation: audioArtifacts.pronunciation,

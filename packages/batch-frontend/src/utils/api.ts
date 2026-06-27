@@ -263,7 +263,8 @@ export interface ProfileRevisionSummaryResponse {
     | 'starter_profile_form'
     | 'candidate_promotion'
     | 'legacy_normalization'
-    | 'lesson_population';
+    | 'lesson_population'
+    | 'profile_revision_refresh';
   status?: 'draft' | 'active' | 'deprecated';
   versionNumber?: number;
   versionLabel?: string;
@@ -2861,6 +2862,27 @@ export async function promoteStudentProfileCandidates(
     const axiosError = toAxiosError(error);
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to promote profile candidates.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function refreshProfileDraftFromApprovedCandidates(
+  studentId: string,
+  payload: StudentProfileCandidatePromotionRequest,
+): Promise<StudentProfileCandidatePromotionResponse> {
+  try {
+    const response = await apiClient.post(
+      buildApiProxyPath(
+        `/students/${encodeURIComponent(studentId)}/profile-drafts/refresh-from-approved-candidates`,
+      ),
+      payload,
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to refresh profile drafts.');
     }
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }

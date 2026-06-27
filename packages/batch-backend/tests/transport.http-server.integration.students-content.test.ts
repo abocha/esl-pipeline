@@ -416,6 +416,42 @@ describeHttpServerIntegrationSuite(
       });
     });
 
+    it('POST /students/:id/profile-drafts/refresh-from-approved-candidates creates a full draft revision', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: `/students/${deriveStudentId('Anna')}/profile-drafts/refresh-from-approved-candidates`,
+        payload: {
+          candidateIds: ['candidate-1'],
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({
+        draftRevisionId: 'profile-revision-refreshed-draft',
+        profileId: 'profiles/anna.md',
+        baseRevisionId: 'profile-revision-active',
+        includedCandidateIds: ['candidate-1'],
+        contentHash: 'profile-refreshed-draft-hash',
+        draftRevision: {
+          id: 'profile-revision-refreshed-draft',
+          profileId: 'profiles/anna.md',
+          contentHash: 'profile-refreshed-draft-hash',
+          source: 'profile_revision_refresh',
+          status: 'draft',
+          versionNumber: 4,
+          versionLabel: 'v4',
+          activatedAt: null,
+          deprecatedAt: null,
+          createdAt: '2024-01-01T00:00:00.000Z',
+          createdBy: 'test-user-id',
+          restoredFromRevisionId: null,
+          content: '# Refreshed foundational profile',
+        },
+        provider: 'google_ai_studio',
+        model: 'gemini-3-flash-preview',
+      });
+    });
+
     it('POST /students/:id/profile-drafts/populate-first-from-lesson creates the initial structured draft', async () => {
       const response = await app.inject({
         method: 'POST',

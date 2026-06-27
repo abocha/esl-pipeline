@@ -14,7 +14,10 @@ import {
 } from '../src/application/profile-content.js';
 import { renderStarterProfileContent } from '../src/application/starter-profile-content.js';
 import type { ProfileRecord } from '../src/domain/profile-model.js';
-import type { ProfileRevisionRecord } from '../src/domain/profile-revision-model.js';
+import type {
+  ProfileRevisionRecord,
+  ProfileRevisionSource,
+} from '../src/domain/profile-revision-model.js';
 
 function createInMemoryDependencies(seed?: {
   profiles?: { id: string; label: string; content: string }[];
@@ -27,14 +30,7 @@ function createInMemoryDependencies(seed?: {
     content: string;
     structuredContent?: ProfileRevisionRecord['structuredContent'];
     contentHash: string;
-    source:
-      | 'create'
-      | 'update'
-      | 'restore'
-      | 'starter_profile_form'
-      | 'candidate_promotion'
-      | 'legacy_normalization'
-      | 'lesson_population';
+    source: ProfileRevisionSource;
     status?: 'draft' | 'active' | 'deprecated';
     createdBy?: string | null;
     restoredFromRevisionId?: string | null;
@@ -167,14 +163,7 @@ function createInMemoryDependencies(seed?: {
         content: string;
         structuredContent?: ProfileRevisionRecord['structuredContent'];
         contentHash: string;
-        source?:
-          | 'create'
-          | 'update'
-          | 'restore'
-          | 'starter_profile_form'
-          | 'candidate_promotion'
-          | 'legacy_normalization'
-          | 'lesson_population';
+        source?: ProfileRevisionSource;
         status?: 'draft' | 'active' | 'deprecated';
         createdBy?: string | null;
         restoredFromRevisionId?: string | null;
