@@ -336,7 +336,7 @@ function quoteCmdArg(arg) {
 }
 
 async function buildBackendDbEnv() {
-  loadEnvFile(path.join(repoRoot, '.env.batch-backend'));
+  loadEnvFile(path.join(repoRoot, '.env'));
 
   const pgUrl = normalizeServiceUrl(process.env.BATCH_BACKEND_TEST_PG, {
     protocols: ['postgres:', 'postgresql:'],
@@ -344,7 +344,7 @@ async function buildBackendDbEnv() {
   });
   if (!pgUrl) {
     throw new Error(
-      'BATCH_BACKEND_TEST_PG is required for backend DB checks. Define it in the shell or in .env.batch-backend.',
+      'BATCH_BACKEND_TEST_PG is required for backend DB checks. Define it in the shell or in .env.',
     );
   }
 
@@ -360,7 +360,7 @@ async function buildBackendDbEnv() {
   });
   if (!redisUrl) {
     throw new Error(
-      'BATCH_BACKEND_TEST_REDIS is required for backend DB checks. Define it in the shell or in .env.batch-backend.',
+      'BATCH_BACKEND_TEST_REDIS is required for backend DB checks. Define it in the shell or in .env.',
     );
   }
 

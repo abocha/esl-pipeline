@@ -2,9 +2,9 @@ import { mkdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { loadCliEnv } from '../src/env/cli.js';
+import { loadApplicationEnv, loadCliEnv } from '../src/env/cli.js';
 import {
   loadEnvFiles,
   loadEnvFilesWithSummary,
@@ -263,6 +263,71 @@ describe('env utilities', () => {
       expect(first.loadedFiles).toEqual(second.loadedFiles);
       expect(second.assignedKeys).toEqual([]);
       expect(second.overriddenKeys).toEqual([]);
+    });
+  });
+
+  describe('loadApplicationEnv', () => {
+    let testRoot: string;
+    let moduleUrl: string;
+    const originalEnv = process.env;
+
+    beforeEach(() => {
+      testRoot = join(
+        tmpdir(),
+        `test-application-env-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      );
+      const modulePath = join(testRoot, 'packages', 'tool', 'dist', 'cli.js');
+      mkdirSync(join(testRoot, 'packages', 'tool', 'dist'), { recursive: true });
+      writeFileSync(modulePath, '');
+      writeFileSync(join(testRoot, 'pnpm-workspace.yaml'), 'packages:\n  - packages/*\n');
+      moduleUrl = pathToFileURL(modulePath).href;
+      process.env = { ...originalEnv };
+    });
+
+    afterEach(() => {
+      rmSync(testRoot, { recursive: true, force: true });
+      process.env = originalEnv;
+      vi.restoreAllMocks();
+    });
+
+    it('loads only the canonical .env file', () => {
+      writeFileSync(join(testRoot, '.env'), 'CANONICAL_VALUE=canonical\n');
+
+      loadApplicationEnv({ moduleUrl, cwd: testRoot, memoize: false });
+
+      expect(process.env.CANONICAL_VALUE).toBe('canonical');
+    });
+
+    it('bridges a legacy file with a deprecation warning when .env is absent', () => {
+      writeFileSync(join(testRoot, '.env.batch-backend'), 'LEGACY_VALUE=legacy\n');
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+      loadApplicationEnv({ moduleUrl, cwd: testRoot, memoize: false });
+
+      expect(process.env.LEGACY_VALUE).toBe('legacy');
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('.env.batch-backend is deprecated'),
+      );
+    });
+
+    it('fails when both canonical and legacy application env files exist', () => {
+      writeFileSync(join(testRoot, '.env'), 'CANONICAL_VALUE=canonical\n');
+      writeFileSync(join(testRoot, '.env.batch-backend'), 'LEGACY_VALUE=legacy\n');
+
+      expect(() => loadApplicationEnv({ moduleUrl, cwd: testRoot, memoize: false })).toThrow(
+        /both \.env and \.env\.batch-backend/,
+      );
+      expect(process.env.CANONICAL_VALUE).toBeUndefined();
+      expect(process.env.LEGACY_VALUE).toBeUndefined();
+    });
+
+    it('keeps explicitly exported shell values ahead of the canonical file', () => {
+      process.env.CANONICAL_VALUE = 'shell';
+      writeFileSync(join(testRoot, '.env'), 'CANONICAL_VALUE=canonical\n');
+
+      loadApplicationEnv({ moduleUrl, cwd: testRoot, memoize: false });
+
+      expect(process.env.CANONICAL_VALUE).toBe('shell');
     });
   });
 });

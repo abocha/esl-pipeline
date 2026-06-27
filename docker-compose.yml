@@ -112,7 +112,7 @@ services:
       PNPM_STORE_DIR: /pnpm/store
       NPM_CONFIG_STORE_DIR: /pnpm/store
     env_file:
-      - .env.batch-backend
+      - .env
     ports:
       - '127.0.0.1:${BATCH_BACKEND_HOST_PORT:-8080}:8080'
     command: >
@@ -166,7 +166,7 @@ services:
       PNPM_STORE_DIR: /pnpm/store
       NPM_CONFIG_STORE_DIR: /pnpm/store
     env_file:
-      - .env.batch-backend
+      - .env
     command: >
       sh -lc "
         pnpm --filter @esl-pipeline/batch-backend dev:worker
@@ -281,7 +281,7 @@ services:
       PNPM_STORE_DIR: /pnpm/store
       NPM_CONFIG_STORE_DIR: /pnpm/store
     env_file:
-      - .env.batch-backend
+      - .env
     command: >
       sh -lc "
         pnpm --filter @esl-pipeline/batch-backend dev:student-memory-worker
@@ -304,7 +304,7 @@ services:
       PNPM_STORE_DIR: /pnpm/store
       NPM_CONFIG_STORE_DIR: /pnpm/store
     env_file:
-      - .env.batch-backend
+      - .env
     command: >
       sh -lc "
         pnpm --filter @esl-pipeline/telegram-ops-bot dev
@@ -481,7 +481,7 @@ services:
       PNPM_STORE_DIR: /pnpm/store
       NPM_CONFIG_STORE_DIR: /pnpm/store
     env_file:
-      - .env.batch-backend
+      - .env
     command: >
       sh -lc "
         pnpm --filter @esl-pipeline/batch-backend dev:transcribe-worker

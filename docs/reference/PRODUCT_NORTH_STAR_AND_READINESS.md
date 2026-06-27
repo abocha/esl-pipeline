@@ -5,7 +5,7 @@
 - Audience: Founder, maintainers, product and engineering collaborators.
 - Read Time: 10 minutes.
 - Authority Level: Product direction and readiness scaffold.
-- Last Verified Against: 2026-05-12 repo state.
+- Last Verified Against: 2026-06-23 alpha-readiness planning state.
 - Owner: founder-maintainer + product/engineering collaborators.
 - Review Cadence: monthly or after product-surface milestone changes.
 - Status: `reference`.
@@ -227,17 +227,27 @@ Every week:
 
 - You can run the flow repeatedly with low failure and no setup surprises.
 
-### Gate B: Concierge Alpha (3-5 Tutors)
+### Gate B: Pre-Alpha (1 Tutor)
+
+- One real tutor can complete the core flow repeatedly with bounded support.
+- Use each session to remove a concrete reliability or usability blocker before admitting the
+  closed-alpha cohort.
+
+### Gate C: Closed Alpha (3-5 Tutors)
 
 - Most tutors can complete the core flow with minimal hand-holding.
+- Keep the cohort supervised and prioritize only observed tutor blockers.
 
-### Gate C: Closed Beta (10-30 Tutors)
+### Gate D: Closed Beta (6-10 Tutors)
 
 - Reliability, support load, and time-saved metrics sustain at acceptable levels.
 
-### Gate D: Paid Launch Readiness
+### Gate E: v1 Production Readiness
 
-- Product utility and business viability metrics are consistently green.
+- Product utility, reliability, support load, and business viability are mostly green for at least
+  two consecutive weeks.
+- This is an explicit founder decision after beta evidence; it is not implied by reaching a cohort
+  count alone.
 
 ## Related
 

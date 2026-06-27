@@ -18,15 +18,40 @@
 ## Canonical Files
 
 - `.env`
-  - shared executable defaults and orchestrator/library usage
-- `.env.batch-backend`
-  - local/dev stack for `@esl-pipeline/batch-backend` and related services
+  - the sole application configuration file for local development, Compose, backend services,
+    workers, host tools, backups, and VPS deployment
+- `.secrets/`
+  - mounted credential files only; not a dotenv replacement
+- `/var/lib/esl-pipeline/deploy/*.env`
+  - generated image-state only; never application configuration
 - Generated lookup:
   - [`docs/generated/env-surface-index.md`](../generated/env-surface-index.md)
 
+Direct CLI/tool entrypoints accept a legacy `.env.batch-backend` only when `.env` is absent, emit a
+deprecation warning, and never merge the two files. That bridge is removed next release. Compose
+and production deployment already require `.env`.
+
+## Validation and Migration
+
+```bash
+# Local development
+pnpm env:validate -- --profile=development
+
+# VPS preflight (also run edge/image validators when those surfaces apply)
+pnpm env:validate -- --profile=production
+pnpm docker:prod:edge:env
+pnpm docker:prod:images:env
+```
+
+To migrate an existing VPS: back up `/opt/esl-pipeline/.env.batch-backend`, rename it to `.env`,
+run the production validation plus applicable edge/image preflights, then recreate/deploy and verify
+the backend, workers, and backup tooling. The validator checks file shape, duplicate keys, selected
+profile requirements, and backend-supported values without printing secrets.
+
 ## Bootstrap Policy
 
-- New executable entrypoints should load env through shared `loadCliEnv()` from `@esl-pipeline/shared-infrastructure`, or a thin wrapper that delegates to it.
+- New direct executable entrypoints should load env through shared `loadApplicationEnv()` from
+  `@esl-pipeline/shared-infrastructure`.
 - Do not add ad-hoc dotenv parsing in package entrypoints.
 - Host-invoked tools and container runtime are different contexts:
   - Compose-safe defaults like `PG_HOST=postgres` remain canonical for containers.
@@ -149,8 +174,8 @@ Read next:
 - Direct generation provider requests default to 240000 ms unless overridden per provider.
 - `GEN_OPENAI_TPM_BUDGET` defaults to `160000`; it is an operator capacity setting, not a billing or
   plan-tier setting.
-- The opt-in live generation evaluation entrypoint loads `.env.batch-backend` and then `.env` before
-  it checks `GENERATION_LIVE_EVAL_ENABLED=true` and `OPENAI_API_KEY`; both are required before it
+- The opt-in live generation evaluation entrypoint loads `.env` before it checks
+  `GENERATION_LIVE_EVAL_ENABLED=true` and `OPENAI_API_KEY`; both are required before it
   will call OpenAI.
 - `STUDENT_MEMORY_OPENAI_BATCH_ENABLED=false` is a separate remote-operation gate. `dry-run`
   planning is local only; Batch upload, status, polling, reconciliation, retry, and cancellation

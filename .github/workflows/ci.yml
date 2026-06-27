@@ -43,6 +43,9 @@ jobs:
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
+      - name: Validate environment template
+        run: pnpm env:validate:example
+
       - name: Install repo hygiene tools
         run: |
           sudo apt-get update

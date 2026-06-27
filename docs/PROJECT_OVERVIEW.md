@@ -31,17 +31,12 @@
 
 ## Component Map
 
-- `packages/orchestrator`: pipeline assembly and library-only programmatic API entrypoints.
-- `packages/md-validator`: markdown validation.
-- `packages/pmd`: PMD parsing and study-text extraction.
-- `packages/tts-core`: TTS provider registry + shared contracts.
-- `packages/tts-provider-elevenlabs`: ElevenLabs TTS provider adapter.
-- `packages/tts-provider-google`: Google Cloud TTS provider adapter.
-- `packages/storage-uploader`: upload adapter support.
-- `packages/html-publisher`: HTML rendering/publishing helpers.
-- `packages/provider-runtime`: provider policy/runtime helpers.
-- `packages/batch-backend`: authenticated API + workers + queue processing.
-- `packages/batch-frontend`: assignment console.
+- Pipeline: `orchestrator`, `md-validator`, and `pmd` own execution, validation, and parsing.
+- Provider runtime: `provider-runtime`, `tts-core`, `tts-provider-*`, `stt-core`, and
+  `stt-provider-*` own provider contracts and adapters.
+- Product runtime: `contracts`, `shared-infrastructure`, `batch-backend`, `batch-frontend`, and
+  `telegram-ops-bot` own DTOs, shared runtime support, API/workers, UI, and optional ops bot.
+- Publishing: `html-publisher` and `storage-uploader` own rendered artifacts and storage.
 
 ## Do / Don't
 

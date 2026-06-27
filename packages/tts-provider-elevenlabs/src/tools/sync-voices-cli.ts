@@ -1,13 +1,12 @@
 #!/usr/bin/env tsx
-import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
-import { parseEnv } from 'node:util';
+
+import { loadApplicationEnv } from '@esl-pipeline/shared-infrastructure';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
-const envFiles = ['.env.batch-backend', '.env'];
 const defaultIntervalHours = 24;
 const defaultVoicesOut = 'packages/orchestrator/configs/elevenlabs.voices.json';
 
@@ -20,8 +19,8 @@ interface CliOptions {
 function printUsage(): void {
   console.log(`Usage: pnpm voices:sync [--out <path>] [--watch] [--interval-hours <hours>]
 
-Loads .env.batch-backend and .env without overriding shell variables, then refreshes the
-ElevenLabs voice catalog. Without --out, ESL_TTS_PROVIDER_ELEVENLABS_VOICES_PATH wins over
+Loads .env without overriding shell variables, then refreshes the ElevenLabs voice catalog. Without --out,
+ESL_TTS_PROVIDER_ELEVENLABS_VOICES_PATH wins over
 the default ${defaultVoicesOut}.
 `);
 }
@@ -88,28 +87,6 @@ function parseArgs(argv: string[]): CliOptions {
   return options;
 }
 
-async function loadEnvFiles(): Promise<string[]> {
-  const loaded: string[] = [];
-  for (const rel of envFiles) {
-    const abs = path.resolve(repoRoot, rel);
-    try {
-      const parsed = parseEnv(await readFile(abs, 'utf8'));
-      loaded.push(rel);
-      for (const [key, value] of Object.entries(parsed)) {
-        if (value !== undefined && process.env[key] === undefined) {
-          process.env[key] = value;
-        }
-      }
-    } catch (error) {
-      if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
-        continue;
-      }
-      throw error;
-    }
-  }
-  return loaded;
-}
-
 function resolveOutPath(options: CliOptions): string {
   return (
     options.out?.trim() ||
@@ -128,9 +105,15 @@ async function runSync(options: CliOptions): Promise<void> {
 
 async function main(): Promise<void> {
   const options = parseArgs(process.argv.slice(2));
-  const loaded = await loadEnvFiles();
-  if (loaded.length > 0) {
-    console.log(`Loaded env from ${loaded.join(', ')}.`);
+  const env = loadApplicationEnv({
+    moduleUrl: import.meta.url,
+    cwd: repoRoot,
+    memoizeKey: 'elevenlabs-voices-sync',
+  });
+  if (env.loadedFiles.length > 0) {
+    console.log(
+      `Loaded env from ${env.loadedFiles.map((file) => path.basename(file)).join(', ')}.`,
+    );
   }
 
   if (!options.watch) {

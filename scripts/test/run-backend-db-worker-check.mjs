@@ -4,7 +4,7 @@ import net from 'node:net';
 import path from 'node:path';
 
 const repoRoot = process.cwd();
-const envFilePath = path.join(repoRoot, '.env.batch-backend');
+const envFilePath = path.join(repoRoot, '.env');
 
 function normalizeEnvValue(value) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
@@ -162,7 +162,7 @@ const pgUrl = normalizeServiceUrl(process.env.BATCH_BACKEND_TEST_PG, {
 });
 if (!pgUrl) {
   throw new Error(
-    'BATCH_BACKEND_TEST_PG is required for backend DB checks. Define it in the shell or in .env.batch-backend.',
+    'BATCH_BACKEND_TEST_PG is required for backend DB checks. Define it in the shell or in .env.',
   );
 }
 
@@ -178,7 +178,7 @@ const redisUrl = normalizeServiceUrl(redisCandidate, {
 });
 if (!redisUrl) {
   throw new Error(
-    'BATCH_BACKEND_TEST_REDIS is required for backend DB checks. Define it in the shell or in .env.batch-backend.',
+    'BATCH_BACKEND_TEST_REDIS is required for backend DB checks. Define it in the shell or in .env.',
   );
 }
 

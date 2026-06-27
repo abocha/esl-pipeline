@@ -14,7 +14,7 @@ const defaultElevenLabsVoicesPath = path.join(
   'configs',
   'elevenlabs.voices.json',
 );
-const envFiles = ['.env.batch-backend', '.env'];
+const envFiles = ['.env'];
 const productionRuntimeUid = 1000;
 const productionRuntimeGid = 1000;
 

@@ -116,11 +116,11 @@ For `@esl-pipeline/batch-backend`:
 - DB safety invariant:
   - `BATCH_BACKEND_TEST_PG` must point to a database name ending in `_test`; non-`_test` targets are rejected by the test env helper to prevent destructive test SQL from hitting dev/runtime data.
 - Local Docker/Postgres note:
-  - `packages/batch-backend` PG-backed suites now bootstrap `.env.batch-backend` automatically before importing the DB layer.
-  - `BATCH_BACKEND_TEST_PG` remains the canonical explicit override, but host-run suites can also derive it from `PG_CONNECTION_STRING` or `PG_DATABASE` in `.env.batch-backend`.
+  - `packages/batch-backend` PG-backed suites now bootstrap `.env` automatically before importing the DB layer.
+  - `BATCH_BACKEND_TEST_PG` remains the canonical explicit override, but host-run suites can also derive it from `PG_CONNECTION_STRING` or `PG_DATABASE` in `.env`.
   - Package lanes like `pnpm --filter @esl-pipeline/batch-backend test:db:migrations` and `test:db:postgres` should now work directly against the local host Postgres when the dev stack is running.
   - `pnpm test:backend:db:worker` and `pnpm check` still normalize host-run env automatically:
-    - load `.env.batch-backend` when present
+    - load `.env` when present
     - map Docker DNS hosts like `postgres` / `redis` to `127.0.0.1` for host execution
     - set `PG_CONNECTION_STRING` from `BATCH_BACKEND_TEST_PG`
     - set safe temp envs on WSL/Linux host runs
@@ -131,7 +131,7 @@ For `@esl-pipeline/batch-backend`:
 ```bash
 mkdir -p /tmp/codex-tmp
 set -a
-source .env.batch-backend
+source .env
 set +a
 export TMPDIR=/tmp/codex-tmp TMP=/tmp/codex-tmp TEMP=/tmp/codex-tmp
 export PG_CONNECTION_STRING="$BATCH_BACKEND_TEST_PG"

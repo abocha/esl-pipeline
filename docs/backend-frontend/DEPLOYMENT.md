@@ -186,7 +186,7 @@ A reviewed production deployment should broadly follow:
    ```
 
    On the VPS, the deploy script reads `CADDY_PUBLIC_HOSTNAME` and `CADDY_ACME_EMAIL` from
-   server-local `/opt/esl-pipeline/.env.batch-backend` when those values are not already exported.
+   server-local `/opt/esl-pipeline/.env` when those values are not already exported.
    Explicit shell exports still take precedence for one-off overrides. Do not put these values in
    the generated deploy state files under `/var/lib/esl-pipeline/deploy`.
 
@@ -225,11 +225,28 @@ migration if the migration was not compatible with the previous runtime.
 Create/update:
 
 ```bash
-cp .env.batch-backend.example .env.batch-backend
+cp .env.example .env
 ```
 
 Populate required credentials/keys referenced in:
 [`docs/reference/env.md`](../reference/env.md)
+
+### One-time environment migration
+
+If this VPS still has `.env.batch-backend`, back it up and rename it before deploying:
+
+```bash
+cd /opt/esl-pipeline
+cp .env.batch-backend .env.batch-backend.backup
+mv .env.batch-backend .env
+pnpm env:validate -- --profile=production
+pnpm docker:prod:edge:env # when the Caddy edge profile is enabled
+pnpm docker:prod:images:env # when generated image state is present
+```
+
+Then deploy/recreate services and verify backend health, all workers, and backup tooling. Compose and
+the deploy script require `.env`; the legacy filename is accepted only by direct host tools during
+this release bridge.
 
 If Google STT/TTS uses a service-account file, create it outside git on the VPS before deployment:
 

@@ -86,7 +86,7 @@
 5. `docs/plans/2026-05-20-cross-workstream-change-intake.md`
 6. `docs/plans/slice-1-private-hosted-environment.md`
 7. `docs/plans/slice-2-invite-workspace-first-student.md`
-8. `docs/plans/2026-06-15-production-readiness-restart-chunks.md`
+8. `docs/plans/2026-06-23-alpha-readiness.md`
 
 ## Historical and Generated Aids
 
