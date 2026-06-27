@@ -173,6 +173,7 @@ async function runRerunPipeline(
 ): Promise<PipelineRunResult> {
   const flags: RerunFlags = {
     md: payload.md,
+    preset: payload.preset,
     republishOnly: payload.republishOnly ?? false,
     regenerateStudyTextAudio: payload.regenerateStudyTextAudio ?? false,
     regeneratePronunciationMainAudio: payload.regeneratePronunciationMainAudio ?? false,

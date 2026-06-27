@@ -171,6 +171,7 @@ export interface GetAssignmentStatusRequestV2 {
 export interface RerunFlags {
   md: string;
   manifestMd?: string;
+  preset?: string;
   voices?: string;
   out?: string;
   dryRun?: boolean;
