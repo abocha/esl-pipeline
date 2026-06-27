@@ -165,6 +165,10 @@ describe('application/profile-candidate-promotion', () => {
         request: expect.objectContaining({
           operation: 'candidate_promotion',
           maxOutputTokens: loadConfig().generation.maxOutputTokensHard,
+          responseSchema: expect.objectContaining({
+            name: 'profile_candidate_patch_v1',
+            strict: true,
+          }),
         }),
       }),
     );

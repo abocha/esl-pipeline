@@ -7,7 +7,8 @@ export type ProfileRevisionSource =
   | 'starter_profile_form'
   | 'candidate_promotion'
   | 'legacy_normalization'
-  | 'lesson_population';
+  | 'lesson_population'
+  | 'profile_revision_refresh';
 export type RevisionStatus = 'draft' | 'active' | 'deprecated';
 
 export interface ProfileRevisionRecord {

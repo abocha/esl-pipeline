@@ -24,6 +24,7 @@ import * as listRecordingsModule from '../src/application/list-recordings.js';
 import * as materializeDraftModule from '../src/application/materialize-draft.js';
 import * as populateFirstProfileModule from '../src/application/populate-first-profile-from-lesson.js';
 import * as profileCandidatePromotionModule from '../src/application/profile-candidate-promotion.js';
+import * as profileDraftRefreshModule from '../src/application/profile-draft-refresh.js';
 import * as profileContentModule from '../src/application/profile-content.js';
 import { ProfilePathError } from '../src/application/profile-path.js';
 import * as readinessMetricsModule from '../src/application/readiness-metrics.js';
@@ -255,6 +256,22 @@ vi.mock('../src/application/profile-candidate-promotion', () => {
   };
 });
 
+vi.mock('../src/application/profile-draft-refresh', () => {
+  return {
+    refreshProfileDraftFromApprovedCandidates: vi.fn(),
+    ProfileDraftRefreshError: class ProfileDraftRefreshError extends Error {
+      code: string;
+      status: number;
+
+      constructor(message: string, code = 'profile_draft_refresh_error', status = 400) {
+        super(message);
+        this.code = code;
+        this.status = status;
+      }
+    },
+  };
+});
+
 vi.mock('../src/application/populate-first-profile-from-lesson', () => {
   return {
     populateFirstProfileFromLesson: vi.fn(),
@@ -424,6 +441,9 @@ export function describeHttpServerIntegrationSuite(
     );
     const mockPromoteStudentProfileCandidates = vi.mocked(
       profileCandidatePromotionModule.promoteStudentProfileCandidates,
+    );
+    const mockRefreshProfileDraftFromApprovedCandidates = vi.mocked(
+      profileDraftRefreshModule.refreshProfileDraftFromApprovedCandidates,
     );
     const mockPopulateFirstProfileFromLesson = vi.mocked(
       populateFirstProfileModule.populateFirstProfileFromLesson,
@@ -925,6 +945,29 @@ export function describeHttpServerIntegrationSuite(
         provider: 'google_ai_studio',
         model: 'gemini-3-flash-preview',
       });
+      mockRefreshProfileDraftFromApprovedCandidates.mockResolvedValue({
+        studentId: deriveStudentId('Anna'),
+        profileId: 'profiles/anna.md',
+        baseRevisionId: 'profile-revision-active',
+        draftRevision: {
+          id: 'profile-revision-refreshed-draft',
+          profileId: 'profiles/anna.md',
+          contentHash: 'profile-refreshed-draft-hash',
+          source: 'profile_revision_refresh',
+          status: 'draft',
+          versionNumber: 4,
+          versionLabel: 'v4',
+          activatedAt: null,
+          deprecatedAt: null,
+          createdAt: '2024-01-01T00:00:00.000Z',
+          createdBy: 'test-user-id',
+          restoredFromRevisionId: null,
+          content: '# Refreshed foundational profile',
+        },
+        includedCandidateIds: ['candidate-1'],
+        provider: 'google_ai_studio',
+        model: 'gemini-3-flash-preview',
+      });
       mockPopulateFirstProfileFromLesson.mockResolvedValue({
         studentId: deriveStudentId('Anna'),
         profileId: 'profiles/anna.md',
@@ -1257,6 +1300,7 @@ export function describeHttpServerIntegrationSuite(
       mockRejectStudentProfileCandidate,
       mockDeferStudentProfileCandidate,
       mockPromoteStudentProfileCandidates,
+      mockRefreshProfileDraftFromApprovedCandidates,
       mockPopulateFirstProfileFromLesson,
       mockInitializeStudentProfileDraft,
       mockListStudentProfileBindingsForStudent,
