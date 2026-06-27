@@ -204,8 +204,10 @@ export async function createPromptPackage(
       : (recording?.createdAt ?? new Date());
 
   let studentProfileId: string | null = null;
+  let canonicalStudentName: string | null = null;
   if (recording?.studentId) {
     const studentProfile = await students.getById(recording.studentId, { config });
+    canonicalStudentName = studentProfile?.student ?? null;
     studentProfileId = studentProfile?.profileId ?? null;
     if (!studentProfileId) {
       const binding = await bindings
@@ -249,6 +251,7 @@ export async function createPromptPackage(
     recentHomeworkMemory: memoryContext.recentHomeworkMemoryBlock,
     unresolvedIssues: memoryContext.unresolvedIssuesBlock,
     transcript: transcriptText,
+    canonicalStudentName,
     notes: params.notes,
   });
   const requestEnvelope = stitchPromptEnvelope({
@@ -259,6 +262,7 @@ export async function createPromptPackage(
     recentHomeworkMemory: memoryContext.recentHomeworkMemoryBlock,
     unresolvedIssues: memoryContext.unresolvedIssuesBlock,
     transcript: transcriptText,
+    canonicalStudentName,
     notes: params.notes,
   });
 

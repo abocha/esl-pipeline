@@ -14,12 +14,17 @@ export interface PromptStitchOptions {
   recentHomeworkMemory: string;
   unresolvedIssues: string;
   transcript: string;
+  canonicalStudentName?: string | null;
   notes?: string | null;
 }
 
 export function stitchPromptPayload(options: PromptStitchOptions): string {
   return [
     options.template.trimEnd(),
+    formatLabeledBlock(
+      'CANONICAL_STUDENT_NAME',
+      (options.canonicalStudentName ?? '').trim() || 'Not available.',
+    ),
     formatLabeledBlock('FOUNDATIONAL_PROFILE', options.profile),
     formatLabeledBlock('STUDENT_MEMORY_SNAPSHOT', options.studentMemorySnapshot),
     formatLabeledBlock('RECENT_LESSON_MEMORY', options.recentLessonMemory),
@@ -35,10 +40,19 @@ export function stitchPromptPayload(options: PromptStitchOptions): string {
 }
 
 export function stitchPromptEnvelope(options: PromptStitchOptions): GenerationRequestEnvelopeV1 {
+  const canonicalStudentName = (options.canonicalStudentName ?? '').trim() || 'Not available.';
   return createGenerationRequestEnvelope({
     workload: 'assignment_draft',
-    instructions: options.template,
+    instructions: [
+      'Use CANONICAL_STUDENT_NAME as the authoritative learner name for assignment headers and student-facing copy. Do not infer or invent the learner name from the transcript.',
+      options.template,
+    ].join('\n\n'),
     sources: [
+      {
+        id: 'canonical-student-name',
+        label: 'CANONICAL_STUDENT_NAME',
+        content: canonicalStudentName,
+      },
       { id: 'foundational-profile', label: 'FOUNDATIONAL_PROFILE', content: options.profile },
       {
         id: 'student-memory-snapshot',
