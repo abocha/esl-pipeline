@@ -86,6 +86,14 @@ Host-run command:
 pnpm --filter @esl-pipeline/batch-backend exec tsx --tsconfig tsconfig.json src/tools/refresh-homework-memory.ts [options]
 ```
 
+Production-container command:
+
+```bash
+docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml \
+  --env-file /var/lib/esl-pipeline/deploy/current-images.env \
+  exec batch-backend node dist/tools/refresh-homework-memory.js [options]
+```
+
 Supported options:
 
 - `--dry-run`
@@ -119,6 +127,14 @@ Host-run command:
 
 ```bash
 pnpm --filter @esl-pipeline/batch-backend exec tsx --tsconfig tsconfig.json src/tools/refresh-student-memory-snapshots.ts [options]
+```
+
+Production-container command:
+
+```bash
+docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml \
+  --env-file /var/lib/esl-pipeline/deploy/current-images.env \
+  exec batch-backend node dist/tools/refresh-student-memory-snapshots.js [options]
 ```
 
 Supported options:
@@ -160,7 +176,7 @@ pnpm --filter @esl-pipeline/batch-backend student-artifacts:export -- --student-
 
 Operator notes:
 
-1. The tool loads `.env.batch-backend` and normalizes host Postgres access automatically for Linux
+1. The tool loads `.env` and normalizes host Postgres access automatically for Linux
    host runs.
 2. The export defaults to canonical ready lesson-memory and homework-memory artifacts only.
 3. Homework memory that cannot be tied back to a transcript or recording is placed under an

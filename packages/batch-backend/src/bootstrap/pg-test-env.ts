@@ -114,6 +114,6 @@ export function requirePgTestRuntimeEnv(env: NodeJS.ProcessEnv = process.env): P
   }
 
   throw new Error(
-    'BATCH_BACKEND_TEST_PG is required for this test suite. Define it directly or provide PG_CONNECTION_STRING/PG_DATABASE in .env.batch-backend.',
+    'BATCH_BACKEND_TEST_PG is required for this test suite. Define it directly or provide PG_CONNECTION_STRING/PG_DATABASE in .env.',
   );
 }

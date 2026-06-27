@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 DEFAULT_BACKUP_DIR="${ROOT_DIR}/tmp/backups/postgres"
 DEFAULT_COMPOSE_FILE="${ROOT_DIR}/docker-compose.yml"
-DEFAULT_ENV_FILE="${ROOT_DIR}/.env.batch-backend"
+DEFAULT_ENV_FILE="${ROOT_DIR}/.env"
 
 ENV_FILE="${PG_BACKUP_ENV_FILE:-$DEFAULT_ENV_FILE}"
 RESOLVED_CONTAINER_REF=""
@@ -55,7 +55,7 @@ Environment overrides:
   PG_DATABASE        (default: esl_batch)
   PG_USER            (default: esl)
   PG_BACKUP_DIR      (default: <repo>/tmp/backups/postgres)
-  PG_BACKUP_ENV_FILE (default: <repo>/.env.batch-backend if present)
+  PG_BACKUP_ENV_FILE (default: <repo>/.env if present)
   PG_BACKUP_ALLOW_EMPTY_SOURCE (default: false)
   PG_BACKUP_NOTIFY_SUPPRESS (default: false; internal use)
 

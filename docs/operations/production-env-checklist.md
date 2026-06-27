@@ -10,7 +10,7 @@
 
 This file lists the production environment values that must be decided and set on the hosted server before the private alpha deployment can be considered real.
 
-Do not commit real `.env.batch-backend` values.
+Do not commit real `.env` values.
 
 ## Deployment Policy
 
@@ -150,7 +150,7 @@ CADDY_ACME_EMAIL=<operator-email-for-acme-notices>
 Export these values in the same shell that runs `pnpm docker:prod:edge:*`. Docker Compose reads
 `.env`, but the Node validator behind the pnpm edge scripts reads the current process environment.
 For the production deploy script on the VPS, the same values may live in server-local
-`/opt/esl-pipeline/.env.batch-backend`; `scripts/deploy/deploy-prod-images.sh` reads them from that
+`/opt/esl-pipeline/.env`; `scripts/deploy/deploy-prod-images.sh` reads them from that
 file when shell exports are absent, and explicit shell exports still override the file.
 
 Edge-mode public traffic flow:
@@ -240,7 +240,7 @@ The manual deploy script writes image refs and digests only under:
 /var/lib/esl-pipeline/deploy/deployments.log
 ```
 
-Do not put application secrets in those state files. Keep `.env.batch-backend` in the application
+Do not put application secrets in those state files. Keep `.env` in the application
 checkout with restrictive permissions. Authenticate to GHCR on the VPS with a read-only production
 credential where possible:
 
@@ -274,7 +274,7 @@ GOOGLE_STT_GCS_STAGING_BUCKET=<if Google STT handles non-gs uploads>
 GOOGLE_APPLICATION_CREDENTIALS=/app/secrets/google-service-account.json
 ```
 
-Budget/safety policy must remain fail-safe for alpha. Verify current names in `docs/reference/GENERATION_PROVIDER_POLICY.md` and `.env.batch-backend.example`.
+Budget/safety policy must remain fail-safe for alpha. Verify current names in `docs/reference/GENERATION_PROVIDER_POLICY.md` and `.env.example`.
 Pronunciation audio should use the configured ElevenLabs, Google, or Inworld provider paths.
 
 Important:
@@ -325,7 +325,7 @@ On the Ubuntu 24.04 VPS:
 - Docker and Docker Compose are installed.
 - Repo is cloned.
 - Server checkout is on the reviewed deployment commit; no uncommitted server edits remain.
-- `.env.batch-backend` exists on server and is not committed.
+- `.env` exists on server and is not committed.
 - `.secrets/google-service-account.json` exists on server if Google STT/TTS service-account auth is
   enabled, and Compose mounts it read-only at `/app/secrets/google-service-account.json`.
 - `uploads/` host path exists if compose bind mount requires it.

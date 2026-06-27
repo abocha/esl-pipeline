@@ -338,6 +338,10 @@ function readStringList(name: string, fallback: string): string[] {
     .filter(Boolean);
 }
 
+function uniqueStringList(values: string[]): string[] {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+}
+
 // loadConfig.declaration()
 export function loadConfig(): BatchBackendConfig {
   const nodeEnv = (process.env.NODE_ENV as NodeEnv) || 'development';
@@ -701,7 +705,15 @@ export function loadConfig(): BatchBackendConfig {
   )!;
   const generationOpenAiAllowedModels = readStringList(
     'GEN_ALLOWED_MODELS_OPENAI',
-    `${generationOpenAiModelPrimary},${generationOpenAiModelFallback}`,
+    uniqueStringList([
+      generationOpenAiModelPrimary,
+      generationOpenAiModelFallback,
+      generationOpenAiMemoryModelPrimary,
+      generationOpenAiMemoryModelFallback,
+      generationOpenAiProfileDraftModelPrimary,
+      generationOpenAiProfileDraftModelFallback,
+      generationOpenAiProfileDraftModelTertiary,
+    ]).join(','),
   );
   const generationGoogleModelPrimary = readString(
     'GEN_GOOGLE_MODEL_PRIMARY',

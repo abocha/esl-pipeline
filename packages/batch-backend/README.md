@@ -78,11 +78,14 @@ High-signal env groups for this package:
 - auth/security/upload controls: `JWT_*`, `REFRESH_*`, `ENABLE_*`
 - optional ops control: `BATCH_BACKEND_OPS_CONTROL_*`
 
+All local, Compose, and production application settings come from the repository-root `.env`.
+Validate it with `pnpm env:validate -- --profile=development`; use the production profile before a
+VPS deployment. Mounted `.secrets/` files and generated deploy image-state files are separate.
+
 Student-memory operator workflows:
 
-- lesson memory replay: `pnpm --filter @esl-pipeline/batch-backend lesson-memory:refresh`
-- homework memory replay: `pnpm --filter @esl-pipeline/batch-backend exec tsx --tsconfig tsconfig.json src/tools/refresh-homework-memory.ts`
-- student-memory snapshot replay: `pnpm --filter @esl-pipeline/batch-backend exec tsx --tsconfig tsconfig.json src/tools/refresh-student-memory-snapshots.ts`
+- Use the focused replay/backfill runbook. It distinguishes source-checkout `pnpm`/`tsx` commands
+  from compiled production-container `node dist/tools/...` commands.
 - OpenAI Batch replay is operator-only and disabled by default through
   `STUDENT_MEMORY_OPENAI_BATCH_ENABLED=false`; it must not be used as a substitute for fresh
   paced worker generation.

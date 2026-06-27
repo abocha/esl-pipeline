@@ -35,6 +35,7 @@ skills-lock.json
 
 # Secrets and env
 .env
+# Kept ignored only for the one-release direct-tool migration bridge.
 .env.batch-backend
 .secrets
 *.pem

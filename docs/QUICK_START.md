@@ -26,7 +26,7 @@
 corepack enable
 pnpm install
 cp .env.example .env
-cp .env.batch-backend.example .env.batch-backend
+pnpm env:validate -- --profile=development
 ```
 
 Local pnpm commands use the repo-local `storeDir: .pnpm-store/v10` setting in
@@ -73,16 +73,16 @@ BATCH_BACKEND_HOST_PORT=8081 pnpm docker:up
 
 Common cause: another app (for example qBittorrent Web UI) uses `8080`.
 
-Production-style local validation uses image builds instead of the live source bind mount:
+Production-style local Compose never builds application images. Validate its shape without images:
 
 ```bash
-pnpm docker:prod
-pnpm docker:prod:ps
+pnpm docker:prod:config
 ```
 
-Use `pnpm docker:prod:down` to stop that stack. The production-style stack remains local
-single-host Compose; real hosting should provide secrets and persistent services through the
-chosen platform.
+To run it locally, first build or pull the exact SHA-tagged images, export `BATCH_BACKEND_IMAGE`
+and `BATCH_FRONTEND_IMAGE`, then run `pnpm docker:prod`. Use `pnpm docker:prod:down` to stop it.
+For the production image and deployment flow, read
+[`docs/backend-frontend/DEPLOYMENT.md`](backend-frontend/DEPLOYMENT.md).
 
 ## Prompt Gallery Bootstrap (DB-Canonical)
 

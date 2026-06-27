@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
 
-import { loadCliEnv } from '@esl-pipeline/shared-infrastructure';
+import { loadApplicationEnv } from '@esl-pipeline/shared-infrastructure';
 
 import { uploadFile } from '../src/index.js';
 
@@ -12,7 +12,7 @@ interface StorageUploaderCliOptions {
   presign?: number;
 }
 
-loadCliEnv({
+loadApplicationEnv({
   moduleUrl: import.meta.url,
   memoizeKey: 'storage-uploader-cli',
 });

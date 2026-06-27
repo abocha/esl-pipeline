@@ -5,7 +5,8 @@
 - Audience: founder-maintainer and implementation agents.
 - Status: `archive`.
 - Last Verified Against: 2026-06-23 Chunk 10 completion and live-eval state.
-- Related Chunk: Chunk 10 in `docs/plans/2026-06-15-production-readiness-restart-chunks.md`.
+- Related Chunk: historical Chunk 10 record in
+  `docs/archive/plans/standalone/2026-06-15-production-readiness-restart-chunks.md`.
 - Completion: PR1 (#110), PR1.1 (#111), PR2 (#112), and PR3 (#113) are merged. The original
   patch-labelled release is `v9.1.10`; this closeout PR carries the intended `release:minor`
   classification without rewriting that release.

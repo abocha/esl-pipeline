@@ -82,7 +82,7 @@ Wrapper commands:
 
 ## Required Environment
 
-Set these in `.env.batch-backend` (or shell env):
+Set these in `.env` (or shell env):
 
 ```bash
 PG_BACKUP_S3_BUCKET=esl-pipeline-db-backups
@@ -98,7 +98,7 @@ PG_BACKUP_S3_ENV=dev
 Use `PG_BACKUP_S3_ENV=alpha` on the private hosted Lightsail deployment so hosted rehearsal backups
 do not blend into the local/dev prefix.
 
-By default, `postgres-backup-s3.sh` auto-loads `.env.batch-backend` when present.
+By default, `postgres-backup-s3.sh` auto-loads `.env` when present.
 Override with `PG_BACKUP_ENV_FILE=/path/to/env`.
 
 Defaults:
@@ -115,7 +115,7 @@ Defaults:
 
 ### Environment Checklist
 
-Make sure these are present in `.env.batch-backend`:
+Make sure these are present in `.env`:
 
 ```bash
 PG_BACKUP_S3_BUCKET=...

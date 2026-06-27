@@ -5,15 +5,15 @@
 - Audience: AI agents and maintainers coordinating backend/frontend delivery.
 - Read Time: 5 minutes.
 - Authority Level: canonical status tracker.
-- Last Verified Against: 2026-06-13 repo state.
+- Last Verified Against: 2026-06-23 repository and alpha-readiness state.
 - Owner: backend/frontend maintainers + automation agents.
 - Review Cadence: weekly while active roadmap work continues.
 - Status: `active`.
 
 ## Purpose
 
-- Track what is live across backend and frontend.
-- Show the remaining blockers without retelling implementation history.
+- Track the current shared capability boundary.
+- Route active product work to the Alpha Readiness plan instead of retaining a feature-history log.
 
 ## Read This When
 
@@ -31,67 +31,22 @@ Provider-specific generation details stay in:
 - [`docs/reference/GENERATION_PROVIDER_POLICY.md`](../reference/GENERATION_PROVIDER_POLICY.md)
 - WS2B provider profile docs under `docs/reference/`
 
-## Recent Highlights
-
-- direct generation, TTS fallback, and generation safety guardrails are shipped
-- prompt catalog runtime is DB-canonical
-- STT provider architecture now mirrors TTS
-- student-memory backend surfaces, prompt runtime packaging, provenance, replay tooling, and minimal workspace inspection UI are live
-- support-facing provenance surfaces now show rerun audio fallback notices without requiring worker-log access
-- Telegram ops control surface is live for operator workflows
-- rerun is now a single regeneration-intent workflow with explicit study-text / pronunciation-main / pronunciation-chunk controls
-- student-area overview/learning/history route-level payloads are live, and job/recording SSE subscriptions can now target specific IDs instead of requiring wildcard streams
-- student retirement is archive-first: `/students/:id/archive` and `/students/:id/restore` preserve audit/history, while default student reads hide archived learners
-- resumable assignment sessions are live for pre-publish work; publish `jobs` remain reserved for materialized/approved pipeline runs
-- elapsed schedule-to-homework follow-ups are live as teacher-confirmed in-app actions with durable lesson lineage through assignment sessions, prompt packages, drafts, jobs, and homework memory
-- same-origin `/api/*` frontend proxying preserves encoded `%2F` segments for path-like profile IDs such as `profiles/students/<id>.md`
-
 ## Capability Matrix
 
-| Capability                                 | Backend | Frontend | Next Note                                                                                                 |
-| ------------------------------------------ | ------- | -------- | --------------------------------------------------------------------------------------------------------- |
-| Auth routes                                | Done    | Done     | maintain parity in errors/session UX                                                                      |
-| Recording upload/read/transcript flow      | Done    | Done     | keep polling/SSE fallback explicit                                                                        |
-| Manual transcription retry                 | Done    | Done     | none                                                                                                      |
-| Prompt options / prompt package flow       | Done    | Done     | keep allowlists aligned                                                                                   |
-| Draft save/materialize/publish approve     | Done    | Done     | none                                                                                                      |
-| Pre-publish assignment session resume      | Done    | Done     | sessions store refs only; transcript/prompt/draft bodies remain in canonical storage                      |
-| Job status and core job actions            | Done    | Done     | rerun is a single action; chunk defaults remain mode-aware                                                |
-| Student summary/profile/bindings           | Done    | Partial  | student archive/restore is live; same-origin profile revision calls preserve path-like profile IDs        |
-| Student timeline + provenance              | Done    | Done     | support-facing provenance now includes rerun audio fallback notices; continue ergonomics pass             |
-| Student memory inspection + replay tooling | Done    | Done     | backend routes, prompt-package provenance, replay tools, and the minimal workspace inspection UI are live |
-| Direct generation provider/model selection | Done    | Done     | keep quota semantics aligned                                                                              |
-| Generation safety guardrails               | Done    | Done     | continue battle-testing telemetry                                                                         |
-| STT provider metadata + persistence        | Done    | Done     | keep defaults aligned with env policy                                                                     |
-| Voice-alignment provenance and readiness   | Done    | Partial  | dashboard UX remains thin                                                                                 |
-| Telegram ops control panel                 | Done    | Partial  | Telegram is the operator UI for this slice                                                                |
-| Schedule-to-homework follow-ups            | Done    | Done     | in-app only; Telegram/email delivery remains deferred                                                     |
+| Capability                            | Backend | Frontend | Current boundary                                                                     |
+| ------------------------------------- | ------- | -------- | ------------------------------------------------------------------------------------ |
+| Core assignment flow                  | Done    | Done     | recording → transcript → draft → approve → publish                                   |
+| Assignment sessions and job lifecycle | Done    | Done     | sessions cover pre-publish work; jobs cover materialized pipeline runs               |
+| Student workspace and schedule        | Done    | Done     | ongoing tutor-facing copy/interaction distillation belongs to Chunk 12               |
+| Student memory                        | Done    | Done     | inspection and repair are backend-owned; production requires `student-memory-worker` |
+| Generation and safety policy          | Done    | Done     | target-model activation remains an explicit operator decision                        |
+| Rerun and audio regeneration          | Done    | Done     | detailed contract lives in the orchestrator and speech-performance references        |
+| Telegram ops                          | Done    | Partial  | existing operator surface; no new Telegram work before post-alpha review             |
 
-## Current Blockers
+## Current Focus
 
-1. Frontend SSE resilience now supports targeted subscriptions, but some assignment polling fallback hardening remains.
-2. Student workspace needs continued UX hardening even though the core route is live.
-3. Voice-alignment readiness counters and thresholds still need fuller frontend treatment.
-4. Parser-only telemetry cutover remains deferred; parity monitoring is still active.
-
-## Rerun Contract Snapshot
-
-- The old split `rerun_audio` / `rerun_publish` UI is retired.
-- The live rerun surface is one canonical action with:
-  - republish-only
-  - study-text regeneration
-  - main pronunciation regeneration
-  - pronunciation chunk regeneration
-- Regeneration intent derives the runtime stage chain automatically; operators do not select `tts` / `upload` / `add-audio` directly.
-- Unchecked rerun families must keep the previously published audio and their existing persisted provider/model defaults.
-- Checked rerun families must replace the published audio for that family, even if regeneration produces the same deterministic object key.
-- Provider-specific voice IDs must not be inherited across rerun provider changes. When a family switches providers, the runtime may keep the accent preference but must resolve any replacement voice from that provider's own catalog.
-- Pronunciation chunk provider defaults are mode-aware:
-  - `google` for all pronunciation chunk modes by default
-  - explicit reruns can still force `elevenlabs` or `inworld`
-- Study-text ElevenLabs reruns preserve original-run defaults unless the user explicitly selects another model:
-  - `dialogue` -> `eleven_v3`
-  - `tts` -> `eleven_multilingual_v2`
+- Execute the active work in [`docs/plans/2026-06-23-alpha-readiness.md`](../plans/2026-06-23-alpha-readiness.md).
+- Treat reproduced tutor reliability failures as priority work; do not maintain speculative blocker lists here.
 
 ## Rules
 

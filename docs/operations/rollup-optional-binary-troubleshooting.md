@@ -4,7 +4,7 @@
 
 - Audience: maintainers and AI agents debugging local build/test runtime issues.
 - Authority Level: operations troubleshooting runbook.
-- Last Verified Against: 2026-05-12 repo state.
+- Last Verified Against: 2026-06-27 repo state.
 - Owner: maintainer + automation agents.
 - Review Cadence: quarterly or after tooling upgrades.
 - Status: `runbook`.
@@ -32,10 +32,17 @@ store-path drift, or interrupted dependency setup).
 From repo root:
 
 ```bash
-CI=true PNPM_STORE_DIR=/home/abocha/.pnpm-store pnpm install --reporter=append-only
+CI=true corepack pnpm install --reporter=append-only
 ```
 
 Then rerun the failed test command.
+
+On Windows PowerShell, use the same pinned pnpm via Corepack:
+
+```powershell
+$env:CI = 'true'
+corepack pnpm install --reporter=append-only
+```
 
 ## If It Still Fails
 
@@ -43,18 +50,19 @@ Then rerun the failed test command.
 
 ```bash
 rm -rf node_modules
-CI=true PNPM_STORE_DIR=/home/abocha/.pnpm-store pnpm install --reporter=append-only
+CI=true corepack pnpm install --reporter=append-only
 ```
 
 2. Re-run a targeted command to verify:
 
 ```bash
-CI=true pnpm --filter @esl-pipeline/html-publisher test -- tests/rendering.test.ts
+CI=true corepack pnpm --filter @esl-pipeline/html-publisher test -- tests/rendering.test.ts
 ```
 
 ## Notes for Agents
 
-- Prefer the explicit `PNPM_STORE_DIR=/home/abocha/.pnpm-store` form for reproducibility in this repo.
-- Normal local pnpm commands use `storeDir: .pnpm-store/v10` from `pnpm-workspace.yaml`; the
-  explicit `PNPM_STORE_DIR` form above is only for recovery runs that need a known-good host store.
+- Prefer `corepack pnpm` so recovery uses the repo-pinned package manager version.
+- Normal local pnpm commands use `storeDir: .pnpm-store/v10` from `pnpm-workspace.yaml`.
+- If store-path drift is suspected, set `PNPM_STORE_DIR` to the repo-local `.pnpm-store/v10`
+  explicitly for that recovery run instead of using a machine-specific absolute path.
 - If Vitest fails before test discovery with Rollup module errors, treat dependency hydration as the first diagnostic step.

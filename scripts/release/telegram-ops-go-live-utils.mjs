@@ -65,7 +65,7 @@ function parseDotEnvContent(content) {
 }
 
 export async function loadEnvFromFiles(args = {}) {
-  const files = Array.isArray(args.files) ? args.files : ['.env.batch-backend', '.env'];
+  const files = Array.isArray(args.files) ? args.files : ['.env'];
   const env = {
     ...(args.baseEnv ?? process.env),
   };

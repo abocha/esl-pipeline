@@ -5,7 +5,7 @@
 - Audience: AI agents and maintainers for batch frontend/backend tasks.
 - Read Time: 6 minutes.
 - Authority Level: Active system map.
-- Last Verified Against: 2026-06-15 repo state.
+- Last Verified Against: 2026-06-23 repository and production-runtime state.
 - Owner: backend/frontend maintainers + automation agents.
 - Review Cadence: monthly or after major batch workflow changes.
 - Status: `active`.
@@ -60,14 +60,11 @@ Batch Frontend (React + Vite)
 - Approval and status: `/jobs/:jobId/approve`, `/jobs/:jobId`, `/jobs/events`
 - Validation: `/validation/markdown`
 
-Operator repair/backfill surfaces:
-
-- `pnpm --filter @esl-pipeline/batch-backend lesson-memory:refresh`
-- `pnpm --filter @esl-pipeline/batch-backend exec tsx --tsconfig tsconfig.json src/tools/refresh-homework-memory.ts`
-- `pnpm --filter @esl-pipeline/batch-backend exec tsx --tsconfig tsconfig.json src/tools/refresh-student-memory-snapshots.ts`
-
-In Compose-managed production, those commands enqueue or refresh canonical memory work that is
-processed asynchronously by `student-memory-worker`. Deployment smoke evidence should include
+Student-memory replay and backfill are operator workflows, documented in
+[`docs/operations/student-memory-replay-backfill.md`](../operations/student-memory-replay-backfill.md).
+Source-checkout commands use `pnpm`/`tsx`; production commands run compiled `node dist/tools/...`
+inside the backend container. Both enqueue work for `student-memory-worker`. Deployment smoke
+evidence should include
 
 ```bash
 docker compose ... ps student-memory-worker
