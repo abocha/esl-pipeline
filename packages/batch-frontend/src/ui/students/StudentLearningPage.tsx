@@ -21,7 +21,7 @@ import {
   listStudentProfileBindings,
   listStudentProfileCandidates,
   populateFirstProfileFromLesson,
-  promoteStudentProfileCandidates,
+  refreshProfileDraftFromApprovedCandidates,
   rejectStudentProfileCandidate,
   restoreProfileRevision,
   saveProfileDraftRevision,
@@ -985,7 +985,7 @@ export const StudentLearningPage: React.FC = () => {
     setProfileCandidatePromotionError(null);
     setProfileCandidatePromotionSuccess(null);
     try {
-      const response = await promoteStudentProfileCandidates(studentId, {
+      const response = await refreshProfileDraftFromApprovedCandidates(studentId, {
         candidateIds,
         ...(profileCandidatePromotionNote.trim()
           ? { reviewerNote: profileCandidatePromotionNote.trim() }

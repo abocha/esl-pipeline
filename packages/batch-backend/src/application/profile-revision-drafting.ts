@@ -65,7 +65,8 @@ const GENERATION_RUNTIME_CLASSIFICATION_RULES: ProviderRuntimeClassificationRule
 export type ProfileDraftingOperation =
   | 'candidate_promotion'
   | 'legacy_normalization'
-  | 'lesson_population';
+  | 'lesson_population'
+  | 'profile_revision_refresh';
 
 export class ProfileRevisionDraftingError extends Error {
   readonly category: GenerationErrorCategory;
