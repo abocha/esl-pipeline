@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { copyFile, mkdir, readFile, stat, unlink, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
-import yaml from 'js-yaml';
+import * as yaml from 'js-yaml';
 
 import {
   ConfigurationError,

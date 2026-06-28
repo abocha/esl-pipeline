@@ -4,7 +4,7 @@
 
 - Audience: maintainers and AI agents running the repo from Windows, Linux, or WSL.
 - Authority Level: operations runbook.
-- Last Verified Against: 2026-05-17 repo state.
+- Last Verified Against: 2026-06-28 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: monthly or after local workflow changes.
 - Status: `runbook`.
@@ -40,7 +40,7 @@ The Compose project should report the active checkout path in its config labels.
 
 Host dependencies and Docker dependencies are intentionally separate:
 
-- Host commands use repo-local `node_modules` plus `.pnpm-store/v10`.
+- Host commands use repo-local `node_modules` plus `.pnpm-store/v11`.
 - Docker dev services use named volumes for `/app/node_modules`, each workspace
   package's `node_modules`, the orchestrator example service `node_modules`, and `/pnpm`.
 - Do not copy `node_modules` between Windows, WSL, Linux, and Docker.

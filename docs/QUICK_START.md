@@ -5,7 +5,7 @@
 - Audience: AI agents, maintainers.
 - Read Time: 4 minutes.
 - Authority Level: Operational quickstart.
-- Last Verified Against: 2026-06-17 repo state.
+- Last Verified Against: 2026-06-28 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly.
 - Status: `active`.
@@ -29,7 +29,7 @@ cp .env.example .env
 pnpm env:validate -- --profile=development
 ```
 
-Local pnpm commands use the repo-local `storeDir: .pnpm-store/v10` setting in
+Local pnpm commands use the repo-local `storeDir: .pnpm-store/v11` setting in
 [`pnpm-workspace.yaml`](../pnpm-workspace.yaml); project `.npmrc` is intentionally absent so npm
 commands do not inherit pnpm-only config.
 

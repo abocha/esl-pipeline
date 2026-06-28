@@ -1,11 +1,11 @@
 import { readFile } from 'node:fs/promises';
-import matter from 'gray-matter';
 import remarkDirective from 'remark-directive';
 import remarkFrontmatter from 'remark-frontmatter';
 import remarkGfm from 'remark-gfm';
 import remarkParse from 'remark-parse';
 import { unified } from 'unified';
 
+import { parseYamlFrontmatter } from './frontmatter.js';
 import { normalizeMarkdownSource } from './source.js';
 import type {
   PmdBlock,
@@ -38,14 +38,6 @@ interface MdastNode {
   attributes?: Record<string, unknown>;
   children?: MdastNode[];
   position?: PmdPosition;
-}
-
-function parseFrontmatter(input: string): {
-  frontmatter: Record<string, unknown>;
-  content: string;
-} {
-  const parsed = matter(input);
-  return { frontmatter: parsed.data as Record<string, unknown>, content: parsed.content };
 }
 
 function preprocessDirectives(input: string): string {
@@ -246,7 +238,7 @@ export function parsePmdDocument(markdown: string, opts: ParseOptions = {}): Pmd
   const source = normalized.source;
   const format = normalized.format;
 
-  const { frontmatter, content } = parseFrontmatter(source);
+  const { frontmatter, content } = parseYamlFrontmatter(source);
   const preprocessed = preprocessDirectives(content);
 
   const tree = unified()

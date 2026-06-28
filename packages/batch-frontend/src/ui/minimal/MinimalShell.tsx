@@ -4,6 +4,7 @@ import { NavLink, Outlet } from 'react-router-dom';
 import type { User } from '../../context/AuthContext';
 
 import './MinimalShell.css';
+
 interface MinimalShellProps {
   user: User;
   onLogout: () => void;
