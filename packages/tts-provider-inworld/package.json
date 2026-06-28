@@ -40,13 +40,12 @@
     "@esl-pipeline/provider-runtime": "workspace:*",
     "@esl-pipeline/tts-core": "workspace:*",
     "@inworld/tts": "^1.1.1",
-    "js-yaml": "^4.2.0"
+    "js-yaml": "^5.2.0"
   },
   "devDependencies": {
-    "@types/js-yaml": "^4.0.9",
     "@types/node": "^25.9.2",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.9"
   },
   "engines": {
     "node": ">=24.11.1"

@@ -53,4 +53,24 @@ describe('parsePmdDocument', () => {
     expect(found).toHaveLength(1);
     expect(missing).toHaveLength(0);
   });
+
+  it('parses YAML frontmatter without gray-matter', () => {
+    const doc = parsePmdDocument(
+      [
+        '---',
+        'title: Test',
+        'student: A',
+        'topic:',
+        '  - weather',
+        '  - forecast',
+        '---',
+        '',
+        'Plain paragraph.',
+      ].join('\n'),
+    );
+
+    expect(doc.frontmatter.title).toBe('Test');
+    expect(doc.frontmatter.topic).toEqual(['weather', 'forecast']);
+    expect(doc.body[0]).toMatchObject({ type: 'paragraph', text: 'Plain paragraph.' });
+  });
 });

@@ -7,6 +7,7 @@ import type { AuthMode } from './auth/AuthDialog';
 import { MinimalShell } from './minimal/MinimalShell';
 
 import './AppShell.css';
+
 const AuthDialog = lazy(async () => {
   const module = await import('./auth/AuthDialog');
   return { default: module.AuthDialog };

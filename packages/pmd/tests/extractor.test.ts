@@ -65,6 +65,11 @@ describe('pmd extractor', () => {
     expect(fm.level).toBe('A2');
   });
 
+  it('tracks content line offset after frontmatter', () => {
+    expect(context.contentLineOffset).toBe(8);
+    expect(context.contentLines[1]).toBe('## 1. study text');
+  });
+
   it('study-text', () => {
     const st = extractStudyText(context);
     expect(st.type).toBe('dialogue');

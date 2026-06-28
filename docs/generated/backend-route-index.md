@@ -103,6 +103,7 @@
 | POST | `/students/:id/profile-candidates/promote` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | POST | `/students/:id/profile-drafts/initialize` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | POST | `/students/:id/profile-drafts/populate-first-from-lesson` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
+| POST | `/students/:id/profile-drafts/refresh-from-approved-candidates` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | POST | `/students/:id/restore` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | GET | `/students/:id/surfaces/history` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | GET | `/students/:id/surfaces/learning` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
