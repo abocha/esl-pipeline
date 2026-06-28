@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [9.3.1] - 2026-06-28
+
+### Changed
+
+- Automated release from PR #117: chore(tooling): upgrade pnpm and refresh dependencies (https://github.com/abocha/esl-pipeline/pull/117)
+
 ## [9.3.0] - 2026-06-27
 
 ### Changed
