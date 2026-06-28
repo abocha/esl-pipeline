@@ -37,19 +37,18 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@elevenlabs/elevenlabs-js": "^2.46.0",
+    "@elevenlabs/elevenlabs-js": "^2.54.0",
     "@esl-pipeline/contracts": "workspace:*",
     "@esl-pipeline/pmd": "workspace:*",
     "@esl-pipeline/provider-runtime": "workspace:*",
     "@esl-pipeline/shared-infrastructure": "workspace:*",
     "@esl-pipeline/tts-core": "workspace:*",
-    "js-yaml": "^4.2.0"
+    "js-yaml": "^5.2.0"
   },
   "devDependencies": {
-    "@types/js-yaml": "^4.0.9",
     "@types/node": "^25.9.2",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.9"
   },
   "engines": {
     "node": ">=24.11.1"

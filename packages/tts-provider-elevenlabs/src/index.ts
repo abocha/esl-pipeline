@@ -5,7 +5,7 @@ import { dirname, resolve } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web';
-import yaml from 'js-yaml';
+import * as yaml from 'js-yaml';
 
 import {
   ConfigurationError,

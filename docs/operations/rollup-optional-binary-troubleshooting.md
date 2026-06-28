@@ -4,7 +4,7 @@
 
 - Audience: maintainers and AI agents debugging local build/test runtime issues.
 - Authority Level: operations troubleshooting runbook.
-- Last Verified Against: 2026-06-27 repo state.
+- Last Verified Against: 2026-06-28 repo state.
 - Owner: maintainer + automation agents.
 - Review Cadence: quarterly or after tooling upgrades.
 - Status: `runbook`.
@@ -62,7 +62,7 @@ CI=true corepack pnpm --filter @esl-pipeline/html-publisher test -- tests/render
 ## Notes for Agents
 
 - Prefer `corepack pnpm` so recovery uses the repo-pinned package manager version.
-- Normal local pnpm commands use `storeDir: .pnpm-store/v10` from `pnpm-workspace.yaml`.
-- If store-path drift is suspected, set `PNPM_STORE_DIR` to the repo-local `.pnpm-store/v10`
+- Normal local pnpm commands use `storeDir: .pnpm-store/v11` from `pnpm-workspace.yaml`.
+- If store-path drift is suspected, set `PNPM_STORE_DIR` to the repo-local `.pnpm-store/v11`
   explicitly for that recovery run instead of using a machine-specific absolute path.
 - If Vitest fails before test discovery with Rollup module errors, treat dependency hydration as the first diagnostic step.
