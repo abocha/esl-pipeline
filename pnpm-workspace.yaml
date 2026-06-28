@@ -2,11 +2,24 @@ packages:
   - packages/*
   - packages/orchestrator/examples/*
 
-storeDir: .pnpm-store/v10
+storeDir: .pnpm-store/v11
 
-onlyBuiltDependencies:
-  - '@swc/core'
-  - bcrypt
-  - esbuild
-  - msgpackr-extract
-  - unrs-resolver
+overrides:
+  '@tootallnate/once': ^3.0.1
+  'ajv@>=8.0.0 <8.18.0': ^8.18.0
+  fast-uri: ^3.1.2
+  fast-xml-builder: ^1.2.0
+  fast-xml-parser: ^5.5.8
+  ioredis: ^5.10.1
+  minimatch: ^10.2.4
+  rollup: ^4.59.0
+  uuid: ^11.1.1
+  yaml: ^2.8.3
+
+allowBuilds:
+  '@swc/core': true
+  bcrypt: true
+  esbuild: true
+  msgpackr-extract: true
+  protobufjs: true
+  unrs-resolver: true
