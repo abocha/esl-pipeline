@@ -4,12 +4,13 @@
 
 - Audience: maintainers and student-memory agents.
 - Authority Level: active staged roadmap.
-- Last Verified Against: 2026-05-17 repo state.
+- Last Verified Against: 2026-06-28 repo state.
 - Owner: founder-maintainer + backend/frontend maintainers.
 - Review Cadence: after student-memory implementation PRs.
 - Status: `roadmap`.
 - Exit Trigger: archive after the canonical student-memory model is shipped and represented in SSOT, prompt/runtime docs, and relevant package READMEs.
-- Current Focus: use this README as the active memory architecture roadmap; archived phase docs are historical trace.
+- Current Focus: execute the v1.1 bounded snapshot refresh hardening slice before Closed Alpha,
+  then return this README to roadmap-only status.
 
 ## Summary
 
@@ -25,6 +26,17 @@ The current repo already has a useful seed:
 
 This upgrade promotes those beginnings into a durable architecture with explicit memory artifact
 types, rollups, retrieval rules, provenance, and a rewritten stateless system prompt.
+
+## Active Phase Detail
+
+The canonical v1 memory architecture is now implemented enough that the current risk is not missing
+artifact types; it is unbounded normal snapshot refresh.
+
+Active execution plan:
+
+1. [`v1-1-bounded-snapshot-refresh.md`](v1-1-bounded-snapshot-refresh.md) - bounded incremental
+   snapshot refresh, token budgets, candidate gating, and operator observability before Closed
+   Alpha.
 
 ## Locked Decisions
 
