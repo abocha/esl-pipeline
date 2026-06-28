@@ -1,5 +1,4 @@
-import matter from 'gray-matter';
-
+import { parseYamlFrontmatter } from './frontmatter.js';
 import { type ParseOptions, parsePmdDocument } from './parser.js';
 import { normalizeMarkdownSource } from './source.js';
 import type { ParsedMarkdownContext } from './types.js';
@@ -32,7 +31,7 @@ export function parseMarkdownContext(
   const rawMarkdown = normalizeNewlines(markdown);
   const rawLines = rawMarkdown.split('\n');
   const normalized = normalizeMarkdownSource(rawMarkdown);
-  const parsed = matter(normalized.source);
+  const parsed = parseYamlFrontmatter(normalized.source);
   const content = normalizeNewlines(parsed.content);
   const contentLines = content.split('\n');
   const document = parsePmdDocument(rawMarkdown, opts);
