@@ -213,7 +213,26 @@ describe('application/process-student-memory-snapshot-job', () => {
     expect(markFailed).toHaveBeenCalledWith({
       id: 'snapshot-pending-1',
       errorMessage: 'structured output failed',
+      generationNotes: expect.objectContaining({
+        trigger: 'manual-replay',
+        sourceEntryId: null,
+        strategy: 'full_rebuild_v1',
+        triggerSourceKind: 'manual',
+        triggerSourceEntryId: null,
+        includedLessonMemoryEntryIds: ['lesson-1'],
+        includedHomeworkMemoryEntryIds: [],
+        coveredLessonMemoryEntryIds: ['lesson-1'],
+        coveredHomeworkMemoryEntryIds: [],
+        includedLessonMemoryCount: 1,
+        includedHomeworkMemoryCount: 0,
+        coveredLessonMemoryCount: 1,
+        coveredHomeworkMemoryCount: 0,
+        materialChange: null,
+      }),
     });
+    const failedNotes = markFailed.mock.calls[0]?.[0].generationNotes;
+    expect(failedNotes.promptByteLength).toBeGreaterThan(0);
+    expect(failedNotes.inputTokenEstimate).toBeGreaterThan(0);
   });
 
   it('keeps a pending snapshot row pending when pacing defers the provider call', async () => {

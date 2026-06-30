@@ -27,6 +27,7 @@ import {
 import {
   buildStudentMemorySnapshotGenerationNotes,
   resolveStudentMemorySnapshotTriggerSourceKind,
+  type StudentMemorySnapshotV11GenerationNotes,
 } from './student-memory-snapshot-generation-notes.js';
 import {
   buildStudentMemorySnapshotEnvelope,
@@ -113,6 +114,8 @@ export async function processStudentMemorySnapshotJob(args: {
     return;
   }
 
+  let generationNotes: StudentMemorySnapshotV11GenerationNotes | null = null;
+
   try {
     const prompt = buildStudentMemorySnapshotPrompt({
       lessonMemoryEntries: readyLessonMemory,
@@ -131,7 +134,7 @@ export async function processStudentMemorySnapshotJob(args: {
     const homeworkMemoryEntryIds = readyHomeworkMemory.map(
       (entry: HomeworkMemoryRecord) => entry.id,
     );
-    const generationNotes = buildStudentMemorySnapshotGenerationNotes({
+    generationNotes = buildStudentMemorySnapshotGenerationNotes({
       existingNotes: pendingEntry.generationNotes ?? null,
       strategy: 'full_rebuild_v1',
       trigger: args.payload.trigger,
@@ -221,6 +224,7 @@ export async function processStudentMemorySnapshotJob(args: {
       maxAttempts: args.maxAttempts,
       snapshots,
       error,
+      generationNotes,
     });
     throw error;
   }
@@ -277,6 +281,7 @@ async function markFailureIfFinalAttempt(args: {
     markFailed: typeof markStudentMemorySnapshotFailed;
   };
   error: unknown;
+  generationNotes?: StudentMemorySnapshotV11GenerationNotes | null;
 }): Promise<void> {
   const maxAttempts = args.maxAttempts ?? 1;
   const attemptNumber = (args.attemptsMade ?? 0) + 1;
@@ -287,5 +292,6 @@ async function markFailureIfFinalAttempt(args: {
   await args.snapshots.markFailed({
     id: args.payload.pendingEntryId,
     errorMessage: args.error instanceof Error ? args.error.message : String(args.error),
+    generationNotes: args.generationNotes ?? undefined,
   });
 }
