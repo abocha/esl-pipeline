@@ -621,6 +621,7 @@ export async function supersedePendingStudentMemorySnapshotsForStudent(params: {
 export async function markStudentMemorySnapshotFailed(params: {
   id: string;
   errorMessage: string;
+  generationNotes?: StudentMemorySnapshotGenerationNotes | null;
   providerRequestId?: string | null;
   usage?: unknown;
 }): Promise<StudentMemorySnapshotRecord | null> {
@@ -631,10 +632,14 @@ export async function markStudentMemorySnapshotFailed(params: {
 
   const generationNotes: StudentMemorySnapshotGenerationNotes = {
     ...existing.generationNotes,
+    ...(params.generationNotes ?? {}),
     error: params.errorMessage,
     providerRequestId:
-      params.providerRequestId ?? existing.generationNotes?.providerRequestId ?? null,
-    usage: params.usage ?? existing.generationNotes?.usage ?? null,
+      params.providerRequestId ??
+      params.generationNotes?.providerRequestId ??
+      existing.generationNotes?.providerRequestId ??
+      null,
+    usage: params.usage ?? params.generationNotes?.usage ?? existing.generationNotes?.usage ?? null,
     failedAt: new Date().toISOString(),
   };
 
