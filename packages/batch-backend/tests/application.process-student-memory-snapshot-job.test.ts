@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { estimateGenerationTokens } from '../src/application/generation-budget-guard.js';
 import { processStudentMemorySnapshotJob } from '../src/application/process-student-memory-snapshot-job.js';
 import { StudentMemoryPacingDeferredError } from '../src/application/student-memory-generation-pacing.js';
 import { loadConfig } from '../src/config/env.js';
@@ -55,10 +56,37 @@ describe('application/process-student-memory-snapshot-job', () => {
               progressSignals: [],
               followUpRecommendations: [],
             },
+            {
+              id: 'lesson-2',
+              generatedAt: new Date('2026-03-20T00:30:00.000Z'),
+              lessonSummary: 'Second lesson',
+              topicsDiscussed: [],
+              mistakePatterns: [],
+              grammarReviewed: [],
+              grammarWatchlist: [],
+              vocabularyFocus: [],
+              pronunciationFocus: [],
+              studentFacts: [],
+              progressSignals: [],
+              followUpRecommendations: [],
+            },
           ]),
         },
         homeworkMemory: {
-          list: vi.fn().mockResolvedValue([]),
+          list: vi.fn().mockResolvedValue([
+            {
+              id: 'homework-1',
+              generatedAt: new Date('2026-03-20T00:45:00.000Z'),
+              homeworkSummary: 'Homework plan',
+              topic: 'travel',
+              grammarTargets: [],
+              vocabularyTargets: [],
+              reviewTargets: [],
+              taskList: [],
+              pronunciationFocus: [],
+              teacherFollowUpCues: [],
+            },
+          ]),
         },
         snapshots: {
           getById: vi.fn().mockResolvedValue({
@@ -83,14 +111,36 @@ describe('application/process-student-memory-snapshot-job', () => {
       expect.objectContaining({
         request: expect.objectContaining({
           studentId: 'student-1',
-          lessonMemoryEntryIds: ['lesson-1'],
-          homeworkMemoryEntryIds: [],
+          lessonMemoryEntryIds: ['lesson-1', 'lesson-2'],
+          homeworkMemoryEntryIds: ['homework-1'],
           pendingEntryId: 'snapshot-pending-1',
           provider: 'openai',
           model: 'gpt-5.2',
         }),
       }),
     );
+    const request = generator.mock.calls[0]?.[0].request;
+    expect(request.pendingGenerationNotes).toMatchObject({
+      trigger: 'lesson-memory-ready',
+      sourceEntryId: 'lesson-1',
+      strategy: 'full_rebuild_v1',
+      triggerSourceKind: 'lesson_memory',
+      triggerSourceEntryId: 'lesson-1',
+      includedLessonMemoryEntryIds: ['lesson-1', 'lesson-2'],
+      includedHomeworkMemoryEntryIds: ['homework-1'],
+      coveredLessonMemoryEntryIds: ['lesson-1', 'lesson-2'],
+      coveredHomeworkMemoryEntryIds: ['homework-1'],
+      includedLessonMemoryCount: 2,
+      includedHomeworkMemoryCount: 1,
+      coveredLessonMemoryCount: 2,
+      coveredHomeworkMemoryCount: 1,
+      promptByteLength: Buffer.byteLength(request.prompt, 'utf8'),
+      inputTokenEstimate: estimateGenerationTokens({
+        prompt: request.prompt,
+        hardCap: 0,
+      }),
+      materialChange: null,
+    });
     expect(supersedePendingForStudent).toHaveBeenCalled();
     expect(requestRefresh).toHaveBeenCalledWith({
       params: {

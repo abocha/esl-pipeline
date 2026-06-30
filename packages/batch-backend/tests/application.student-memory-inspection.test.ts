@@ -67,7 +67,16 @@ describe('application/student-memory-inspection', () => {
   });
 
   it('returns paginated snapshot inspection for an existing student', async () => {
-    const list = vi.fn().mockResolvedValue([{ id: 'snapshot-1', status: 'ready' }]);
+    const generationNotes = {
+      strategy: 'full_rebuild_v1',
+      inputTokenEstimate: 1234,
+      promptByteLength: 4321,
+      includedLessonMemoryCount: 2,
+      includedHomeworkMemoryCount: 1,
+    };
+    const list = vi.fn().mockResolvedValue([
+      { id: 'snapshot-1', status: 'ready', generationNotes },
+    ]);
 
     const result = await listStudentMemorySnapshotsForStudent({
       studentId: 'student-1',
@@ -99,7 +108,7 @@ describe('application/student-memory-inspection', () => {
       offset: 5,
       order: 'asc',
       statuses: ['ready'],
-      items: [{ id: 'snapshot-1', status: 'ready' }],
+      items: [{ id: 'snapshot-1', status: 'ready', generationNotes }],
     });
   });
 

@@ -1,9 +1,51 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { buildStudentMemorySnapshotGenerationNotes } from '../src/application/student-memory-snapshot-generation-notes.js';
 import { generateStudentMemorySnapshot } from '../src/application/student-memory-snapshot-generation.js';
 import type { StudentMemorySnapshotRecord } from '../src/domain/student-memory-snapshot-model.js';
 
 describe('application/student-memory-snapshot-generation', () => {
+  it('builds typed v1.1 generation notes for the legacy full rebuild strategy', () => {
+    expect(
+      buildStudentMemorySnapshotGenerationNotes({
+        existingNotes: {
+          trigger: 'homework-memory-ready',
+          sourceEntryId: 'homework-1',
+          requestedAt: '2026-07-01T10:00:00.000Z',
+        },
+        strategy: 'full_rebuild_v1',
+        trigger: 'homework-memory-ready',
+        triggerSourceKind: 'homework_memory',
+        triggerSourceEntryId: 'homework-1',
+        includedLessonMemoryEntryIds: ['lesson-1'],
+        includedHomeworkMemoryEntryIds: ['homework-1', 'homework-2'],
+        coveredLessonMemoryEntryIds: ['lesson-1'],
+        coveredHomeworkMemoryEntryIds: ['homework-1', 'homework-2'],
+        inputTokenEstimate: 1234,
+        promptByteLength: 4321,
+        materialChange: null,
+      }),
+    ).toEqual({
+      trigger: 'homework-memory-ready',
+      sourceEntryId: 'homework-1',
+      requestedAt: '2026-07-01T10:00:00.000Z',
+      strategy: 'full_rebuild_v1',
+      triggerSourceKind: 'homework_memory',
+      triggerSourceEntryId: 'homework-1',
+      includedLessonMemoryEntryIds: ['lesson-1'],
+      includedHomeworkMemoryEntryIds: ['homework-1', 'homework-2'],
+      coveredLessonMemoryEntryIds: ['lesson-1'],
+      coveredHomeworkMemoryEntryIds: ['homework-1', 'homework-2'],
+      includedLessonMemoryCount: 1,
+      includedHomeworkMemoryCount: 2,
+      coveredLessonMemoryCount: 1,
+      coveredHomeworkMemoryCount: 2,
+      inputTokenEstimate: 1234,
+      promptByteLength: 4321,
+      materialChange: null,
+    });
+  });
+
   it('persists extracted student-memory snapshot content with content hash and source ids', async () => {
     const extractor = vi.fn().mockResolvedValue({
       content: {
