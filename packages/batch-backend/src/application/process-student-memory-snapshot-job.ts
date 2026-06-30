@@ -1,3 +1,5 @@
+import { Buffer } from 'node:buffer';
+
 import type { GenerationProvider } from '@esl-pipeline/contracts';
 
 import type { BatchBackendConfig } from '../config/env.js';
@@ -12,6 +14,7 @@ import {
 } from '../domain/student-memory-snapshot-repository.js';
 import { logger } from '../infrastructure/logger.js';
 import { requestStudentProfileCandidateRefresh } from './request-student-profile-candidate-refresh.js';
+import { estimateGenerationTokens } from './generation-budget-guard.js';
 import {
   createStudentMemoryGenerationPacer,
   isStudentMemoryPacingDeferredError,
@@ -21,6 +24,10 @@ import {
   type GenerateStudentMemorySnapshotDependencies,
   generateStudentMemorySnapshot,
 } from './student-memory-snapshot-generation.js';
+import {
+  buildStudentMemorySnapshotGenerationNotes,
+  resolveStudentMemorySnapshotTriggerSourceKind,
+} from './student-memory-snapshot-generation-notes.js';
 import {
   buildStudentMemorySnapshotEnvelope,
   buildStudentMemorySnapshotPrompt,
@@ -115,6 +122,45 @@ export async function processStudentMemorySnapshotJob(args: {
       lessonMemoryEntries: readyLessonMemory,
       homeworkMemoryEntries: readyHomeworkMemory,
     });
+    const promptByteLength = Buffer.byteLength(prompt, 'utf8');
+    const inputTokenEstimate = estimateGenerationTokens({
+      prompt,
+      hardCap: 0,
+    });
+    const lessonMemoryEntryIds = readyLessonMemory.map((entry: LessonMemoryRecord) => entry.id);
+    const homeworkMemoryEntryIds = readyHomeworkMemory.map(
+      (entry: HomeworkMemoryRecord) => entry.id,
+    );
+    const generationNotes = buildStudentMemorySnapshotGenerationNotes({
+      existingNotes: pendingEntry.generationNotes ?? null,
+      strategy: 'full_rebuild_v1',
+      trigger: args.payload.trigger,
+      triggerSourceKind: resolveStudentMemorySnapshotTriggerSourceKind(args.payload.trigger),
+      triggerSourceEntryId: args.payload.sourceEntryId ?? null,
+      includedLessonMemoryEntryIds: lessonMemoryEntryIds,
+      includedHomeworkMemoryEntryIds: homeworkMemoryEntryIds,
+      coveredLessonMemoryEntryIds: lessonMemoryEntryIds,
+      coveredHomeworkMemoryEntryIds: homeworkMemoryEntryIds,
+      inputTokenEstimate,
+      promptByteLength,
+      materialChange: null,
+    });
+
+    logger.info('Student-memory snapshot prompt metrics recorded', {
+      event: 'student_memory_snapshot_prompt_metrics_recorded',
+      studentId: args.payload.studentId,
+      pendingEntryId: pendingEntry.id,
+      strategy: generationNotes.strategy,
+      trigger: generationNotes.trigger,
+      triggerSourceKind: generationNotes.triggerSourceKind,
+      triggerSourceEntryId: generationNotes.triggerSourceEntryId,
+      includedLessonMemoryCount: generationNotes.includedLessonMemoryCount,
+      includedHomeworkMemoryCount: generationNotes.includedHomeworkMemoryCount,
+      coveredLessonMemoryCount: generationNotes.coveredLessonMemoryCount,
+      coveredHomeworkMemoryCount: generationNotes.coveredHomeworkMemoryCount,
+      inputTokenEstimate,
+      promptByteLength,
+    });
 
     const result = await pacer.run({
       workload: 'student_memory_snapshot',
@@ -126,12 +172,10 @@ export async function processStudentMemorySnapshotJob(args: {
           config: args.config.generation,
           request: {
             studentId: args.payload.studentId,
-            lessonMemoryEntryIds: readyLessonMemory.map((entry: LessonMemoryRecord) => entry.id),
-            homeworkMemoryEntryIds: readyHomeworkMemory.map(
-              (entry: HomeworkMemoryRecord) => entry.id,
-            ),
+            lessonMemoryEntryIds,
+            homeworkMemoryEntryIds,
             pendingEntryId: pendingEntry.id,
-            pendingGenerationNotes: pendingEntry.generationNotes ?? null,
+            pendingGenerationNotes: generationNotes,
             provider: args.payload.provider,
             model: args.payload.model,
             prompt,
