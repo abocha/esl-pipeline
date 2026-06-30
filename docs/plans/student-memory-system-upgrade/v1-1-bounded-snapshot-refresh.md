@@ -21,7 +21,7 @@ batch-backend student-memory queue, existing batch-frontend Learning page.
 
 - Audience: implementation agents, founder-maintainer, backend/frontend maintainers.
 - Status: `active`.
-- Last Verified Against: 2026-06-28 repo state.
+- Last Verified Against: 2026-07-01 repo state.
 - Exit Trigger: archive after v1.1 is implemented, validated, and represented in the student-memory
   roadmap plus backend/frontend docs.
 - Current Focus: execute Phases 0-4 before admitting the Closed Alpha cohort.
@@ -30,13 +30,13 @@ batch-backend student-memory queue, existing batch-frontend Learning page.
 
 ## Release Schedule Mapping
 
-| Readiness stage | v1.1 expectation | Required phases |
-| --- | --- | --- |
-| Gate A: Founder-Operator Stability | Founder can see snapshot cost/size and reproduce the existing full-history waste. | Phase 0 |
-| Gate B: Pre-Alpha, 1 tutor | Normal refresh is incremental, bounded, budget-guarded, and does not create avoidable candidate noise. | Phases 1-3 |
-| Gate C: Closed Alpha, 3-5 tutors | Founder/operator can inspect stale/failed/expensive memory state in-app without using OpenAI Platform logs as the primary debug surface. | Phase 4 |
-| Closed Alpha follow-up | Improve display polish and optional grouping/diff views only after tutor evidence shows need. | Phase 5 |
-| Beta or later | Embeddings, semantic ranking, public explainability, lifecycle/privacy workflows, and memory editing UX. | Not in this plan |
+| Readiness stage                    | v1.1 expectation                                                                                                                         | Required phases  |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| Gate A: Founder-Operator Stability | Founder can see snapshot cost/size and reproduce the existing full-history waste.                                                        | Phase 0          |
+| Gate B: Pre-Alpha, 1 tutor         | Normal refresh is incremental, bounded, budget-guarded, and does not create avoidable candidate noise.                                   | Phases 1-3       |
+| Gate C: Closed Alpha, 3-5 tutors   | Founder/operator can inspect stale/failed/expensive memory state in-app without using OpenAI Platform logs as the primary debug surface. | Phase 4          |
+| Closed Alpha follow-up             | Improve display polish and optional grouping/diff views only after tutor evidence shows need.                                            | Phase 5          |
+| Beta or later                      | Embeddings, semantic ranking, public explainability, lifecycle/privacy workflows, and memory editing UX.                                 | Not in this plan |
 
 ## File Map
 
@@ -96,13 +96,13 @@ Release tie: Gate A and Gate B entry. This phase is behavior-preserving.
     `inputTokenEstimate`, `promptByteLength`, and `materialChange` are represented in one typed
     helper.
 - [ ] Reuse `estimateGenerationTokens` from the existing generation-budget path for snapshot prompt
-  estimates.
+      estimates.
 - [ ] Record prompt byte length, estimated input tokens, source counts, strategy, and trigger before
-  the provider call.
+      the provider call.
 - [ ] Preserve current prompt content and current full-history behavior.
 - [ ] Expose the new metrics through the existing memory snapshot list/overview records.
 - [ ] Add tests that prove current normal refresh records `full_rebuild_v1` and all included source
-  counts without changing generator inputs.
+      counts without changing generator inputs.
 - [ ] Run:
   - `pnpm --filter @esl-pipeline/batch-backend exec vitest run --config ../../vitest.config.ts tests/application.process-student-memory-snapshot-job.test.ts tests/application.student-memory-snapshot-generation.test.ts tests/application.student-memory-inspection.test.ts`
 
@@ -123,18 +123,18 @@ Release tie: Gate B blocker. This phase changes normal snapshot behavior.
   - recent ready lesson memory limited to 2,
   - recent ready homework memory limited to 1.
 - [ ] Add `buildIncrementalStudentMemorySnapshotPrompt` and
-  `buildIncrementalStudentMemorySnapshotEnvelope`.
+      `buildIncrementalStudentMemorySnapshotEnvelope`.
 - [ ] Add bootstrap prompt behavior with strategy `bootstrap_incremental_v1_1` when no previous
-  ready snapshot exists.
+      ready snapshot exists.
 - [ ] Keep the existing full-history prompt builder, but route it only through explicit manual
-  rebuild/backfill strategy.
+      rebuild/backfill strategy.
 - [ ] Store included source ids separately from covered source ids in `generation_notes`.
 - [ ] Update the refresh/backfill tool so manual replay requires or derives an explicit strategy and
-  operator reason.
+      operator reason.
 - [ ] Add tests proving normal `lesson-memory-ready` and `homework-memory-ready` jobs do not call the
-  full-history list-all path.
+      full-history list-all path.
 - [ ] Add tests proving incremental prompts include previous snapshot, trigger source, and bounded
-  supporting context.
+      supporting context.
 - [ ] Run:
   - `pnpm --filter @esl-pipeline/batch-backend exec vitest run --config ../../vitest.config.ts tests/application.process-student-memory-snapshot-job.test.ts tests/application.request-student-memory-snapshot-refresh.test.ts tests/application.student-memory-snapshot-generation.test.ts`
 
@@ -172,7 +172,7 @@ Exit criteria:
 Release tie: Gate B blocker, with direct support-load impact before Gate C.
 
 - [ ] Add exact normalized hash helpers for snapshot personal facts and whole snapshot content where
-  needed.
+      needed.
 - [ ] Gate profile-candidate refresh after snapshot generation using:
   - trigger source contains non-transient profile-worthy `studentFacts`, or
   - personal-facts hash changed, or
@@ -181,7 +181,7 @@ Release tie: Gate B blocker, with direct support-load impact before Gate C.
 - [ ] Stop inserting duplicate/stale candidate records by default.
 - [ ] Return and record skipped duplicate/stale/no-profile-worthy-delta counts.
 - [ ] Preserve a future debug/audit seam, but do not expose rejected duplicates as first-class review
-  artifacts by default.
+      artifacts by default.
 - [ ] Add tests proving candidate refresh is skipped when no profile-worthy delta exists.
 - [ ] Add tests proving existing pending/approved/promoted candidates suppress duplicate insertion.
 - [ ] Run:
@@ -198,11 +198,12 @@ Release tie: Gate C entry. This phase makes supervised alpha support practical.
 
 - [ ] Extend `student-memory-inspection.ts` to return a compact memory health/debug payload.
 - [ ] Include latest snapshot strategy, trigger, parent id, prompt metrics, included counts, covered
-  counts, content hash, material-change status, latest failed reason, and candidate refresh counts.
+      counts, content hash, material-change status, latest failed reason, and candidate refresh counts.
 - [ ] Extend `packages/batch-frontend/src/utils/api.ts` types and fetch helpers.
-- [ ] Extend the Learning page memory section or support `<details>` with operator-facing details.
-- [ ] Keep manual full rebuild hidden from normal tutor-facing UI unless the founder chooses to
-  expose a guarded control.
+- [ ] Extend the Learning page memory section with a collapsed support/details section for
+      operator-facing memory details.
+- [ ] Keep manual full rebuild hidden from normal tutor-facing UI. Gate B rebuild remains CLI-only;
+      a guarded operator app action can be considered no earlier than Gate C.
 - [ ] Add frontend tests for the rendered support details and fallback states.
 - [ ] Run:
   - `pnpm --filter @esl-pipeline/batch-backend exec vitest run --config ../../vitest.config.ts tests/application.student-memory-inspection.test.ts`
@@ -211,21 +212,21 @@ Release tie: Gate C entry. This phase makes supervised alpha support practical.
 Exit criteria:
 
 - Founder/operator can answer why a student's memory is stale, failed, expensive, or not producing
-  candidates without starting in OpenAI Platform logs.
+  candidates from the Learning page support details without starting in OpenAI Platform logs.
 - Normal tutor UI remains focused on the Learning task.
 
 ## Phase 5: Closed Alpha Follow-Up Polish
 
 Release tie: during Closed Alpha only if tutor/operator evidence justifies it.
 
-- [ ] Decide whether support details stay on Learning, move behind a stronger admin gate, or become
-  a separate internal route.
+- [ ] Reassess whether the Learning page support/details section has become noisy enough to move
+      behind a stronger admin gate or separate internal route.
 - [ ] Add candidate grouping/filtering only if rejected/stale history remains useful after Phase 3.
 - [ ] Add snapshot diff display only if support sessions repeatedly need it.
 - [ ] Consider explicit columns only if operators need cross-student filtering, sorting, or cost
-  reports.
+      reports.
 - [ ] Keep memory editing UX, semantic retrieval, embeddings, public explainability, and
-  data-lifecycle workflows out of this phase.
+      data-lifecycle workflows out of this phase.
 
 Exit criteria:
 
@@ -244,12 +245,14 @@ Exit criteria:
   - `pnpm release:verify:contracts`
   - `pnpm --filter @esl-pipeline/batch-backend run db:verify-baseline`
 
-## Founder Product Decisions
+## Locked Founder Product Decisions
 
-These should not block backend Phases 0-3:
+These decisions are locked for v1.1 and should not block backend Phases 0-3:
 
-1. Put operator memory details directly on Learning, behind a `<details>` disclosure, or on a
-   separate internal route?
-2. Show tutors memory stale/failed states, or keep them founder/operator-only until Closed Alpha
-   evidence shows tutor-facing value?
-3. Expose manual full rebuild in the app during Gate B, or keep it CLI-only until Gate C?
+1. Put operator memory details directly on the student Learning page behind a collapsed
+   support/details section. Defer a separate internal route unless the Learning surface becomes noisy
+   after Gate C.
+2. Keep memory stale/failed states founder/operator-only for v1.1. Do not expose technical memory
+   health labels to normal tutors until Closed Alpha evidence shows tutor-facing value.
+3. Keep manual full rebuild CLI-only during Gate B. Consider a guarded operator app action no earlier
+   than Gate C; normal tutor-facing rebuild controls are out of scope.
