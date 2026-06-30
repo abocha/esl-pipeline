@@ -2,23 +2,23 @@
 
 ## Meta
 
-* Suggested path: `docs/reference/STUDENT_MEMORY_V1_1_DESIGN.md`
-* Audience: founder-maintainer, Codex implementation agents, backend/frontend maintainers.
-* Authority level: design reference for the v1.1 student-memory hardening slice.
-* Status: validated design reference; execution is split under `docs/plans/student-memory-system-upgrade/`.
-* Intended timing: before Closed Alpha.
-* Scope type: structural v1 improvement, not a v2 rewrite.
-* Last verified against: 2026-06-28 repo state.
-* Related:
+- Suggested path: `docs/reference/STUDENT_MEMORY_V1_1_DESIGN.md`
+- Audience: founder-maintainer, Codex implementation agents, backend/frontend maintainers.
+- Authority level: design reference for the v1.1 student-memory hardening slice.
+- Status: validated design reference; execution is split under `docs/plans/student-memory-system-upgrade/`.
+- Intended timing: before Closed Alpha.
+- Scope type: structural v1 improvement, not a v2 rewrite.
+- Last verified against: 2026-07-01 repo state.
+- Related:
 
-  * `docs/reference/PRODUCT_NORTH_STAR_AND_READINESS.md`
-  * `docs/plans/student-memory-system-upgrade/README.md`
-  * `docs/plans/student-profile-enrichment/README.md`
-  * `docs/reference/HOMEWORK_PROMPTING_SYSTEM_GUIDE.md`
-  * `packages/batch-backend/src/application/process-student-memory-snapshot-job.ts`
-  * `packages/batch-backend/src/application/student-memory-snapshot-prompt.ts`
-  * `packages/batch-backend/src/application/student-profile-candidates.ts`
-  * `packages/batch-backend/schema.sql`
+  - `docs/reference/PRODUCT_NORTH_STAR_AND_READINESS.md`
+  - `docs/plans/student-memory-system-upgrade/README.md`
+  - `docs/plans/student-profile-enrichment/README.md`
+  - `docs/reference/HOMEWORK_PROMPTING_SYSTEM_GUIDE.md`
+  - `packages/batch-backend/src/application/process-student-memory-snapshot-job.ts`
+  - `packages/batch-backend/src/application/student-memory-snapshot-prompt.ts`
+  - `packages/batch-backend/src/application/student-profile-candidates.ts`
+  - `packages/batch-backend/schema.sql`
 
 ## Executive Summary
 
@@ -26,10 +26,10 @@ Student Memory v1 is architecturally sound, but its long-term snapshot refresh p
 
 The assignment-generation path is stable and should not be disturbed. Current observed token usage is acceptable for:
 
-* lesson memory generation: approximately 11k–13k input tokens
-* homework memory generation: approximately 11k–13k input tokens
-* assignment generation: approximately 18k input tokens
-* profile draft generation: approximately 21k input tokens
+- lesson memory generation: approximately 11k–13k input tokens
+- homework memory generation: approximately 11k–13k input tokens
+- assignment generation: approximately 18k input tokens
+- profile draft generation: approximately 21k input tokens
 
 The problem is the long-term student-memory snapshot refresh path, which currently sends approximately 120k–130k input tokens for active students. That is too large for the current pre-alpha/alpha readiness phase. It creates provider cost, latency, noise, duplicate downstream profile candidates, and unnecessary operational complexity.
 
@@ -103,10 +103,10 @@ This work should happen before Closed Alpha, not between Alpha and Beta.
 
 Reasoning:
 
-* Gate A, Founder-Operator Stability, requires repeated flow operation with low failure and no setup surprises.
-* Gate B, Pre-Alpha, requires one real tutor to complete the core flow repeatedly with bounded support.
-* Gate C, Closed Alpha, should admit 3–5 tutors only after obvious reliability and usability blockers are removed.
-* A memory job that regularly sends 120k–130k input tokens is an obvious reliability/cost/operability blocker.
+- Gate A, Founder-Operator Stability, requires repeated flow operation with low failure and no setup surprises.
+- Gate B, Pre-Alpha, requires one real tutor to complete the core flow repeatedly with bounded support.
+- Gate C, Closed Alpha, should admit 3–5 tutors only after obvious reliability and usability blockers are removed.
+- A memory job that regularly sends 120k–130k input tokens is an obvious reliability/cost/operability blocker.
 
 ## Current Architecture
 
@@ -116,10 +116,11 @@ Student Memory v1 already has the right high-level architecture:
 2. The live homework-generation path remains one prepared prompt package, one provider call, one reply.
 3. Student context is split into:
 
-   * foundational profile
-   * lesson memory
-   * homework memory
-   * student memory snapshot / rollup
+   - foundational profile
+   - lesson memory
+   - homework memory
+   - student memory snapshot / rollup
+
 4. Foundational profile remains the highest-authority student document.
 5. Inferred facts from lesson or homework memory do not automatically mutate the foundational profile.
 6. Memory artifacts are DB-canonical, versioned, and provenance-aware.
@@ -136,12 +137,12 @@ The assignment-generation path is performing well enough and is not the target o
 
 The live assignment package already uses bounded student memory retrieval:
 
-* latest student memory snapshot
-* latest 3 lesson memory entries
-* latest 2 homework memory entries
-* unresolved issues
-* teacher notes
-* latest transcript
+- latest student memory snapshot
+- latest 3 lesson memory entries
+- latest 2 homework memory entries
+- unresolved issues
+- teacher notes
+- latest transcript
 
 Observed assignment input token size is approximately 18k, which is acceptable.
 
@@ -153,8 +154,8 @@ Lesson memory and homework memory are also acceptable for v1.1.
 
 Observed token usage:
 
-* lesson memory input: approximately 11k–13k
-* homework memory input: approximately 11k–13k
+- lesson memory input: approximately 11k–13k
+- homework memory input: approximately 11k–13k
 
 These jobs should remain structurally similar. They are not the current source of waste.
 
@@ -210,15 +211,15 @@ Deduplication catches some of this, but too much useless work is happening befor
 
 Important memory-system internals are not visible enough in the UI:
 
-* latest snapshot status
-* strategy used
-* input token estimate
-* included lesson/homework memory count
-* candidate count
-* skipped duplicate count
-* failed job reason
-* snapshot staleness
-* retry/full rebuild actions
+- latest snapshot status
+- strategy used
+- input token estimate
+- included lesson/homework memory count
+- candidate count
+- skipped duplicate count
+- failed job reason
+- snapshot staleness
+- retry/full rebuild actions
 
 The backend is deeper than the current UI reveals.
 
@@ -262,13 +263,13 @@ Do not replace the architecture. Tighten it.
 
 Keep:
 
-* DB-canonical artifacts
-* deterministic backend-owned retrieval
-* stateless provider calls
-* provenance-aware memory records
-* foundational profile authority
-* prompt-package lineage
-* bounded online assignment generation
+- DB-canonical artifacts
+- deterministic backend-owned retrieval
+- stateless provider calls
+- provenance-aware memory records
+- foundational profile authority
+- prompt-package lineage
+- bounded online assignment generation
 
 ### 2. Snapshot Is State, Not Archive
 
@@ -293,12 +294,12 @@ previous snapshot
 
 Full-history rebuild remains useful for:
 
-* repair
-* migration
-* backfill
-* manual replay
-* debugging
-* quality audit
+- repair
+- migration
+- backfill
+- manual replay
+- debugging
+- quality audit
 
 But it must not be the default refresh path.
 
@@ -306,13 +307,13 @@ But it must not be the default refresh path.
 
 Every memory-generation path should record enough prompt metrics to diagnose waste:
 
-* estimated input tokens
-* output tokens when available
-* source counts
-* strategy
-* trigger
-* model/provider
-* created/skipped candidate counts
+- estimated input tokens
+- output tokens when available
+- source counts
+- strategy
+- trigger
+- model/provider
+- created/skipped candidate counts
 
 ### 6. Useful Work Only
 
@@ -338,12 +339,12 @@ type StudentMemorySnapshotRefreshStrategy =
 
 Recommended behavior:
 
-| Strategy              | Normal path? | Input shape                                                           | Purpose                             |
-| --------------------- | -----------: | --------------------------------------------------------------------- | ----------------------------------- |
-| `incremental_v1_1`    |          yes | previous ready snapshot + trigger source + bounded supporting context | normal operation                    |
-| `bootstrap_incremental_v1_1` | yes, first snapshot only | latest bounded lesson/homework memory set | first snapshot without full history |
-| `full_rebuild_v1`     |           no | all ready lesson/homework memory                                      | legacy compatibility and comparison |
-| `manual_rebuild_v1_1` |           no | explicitly selected broader memory set                                | repair/backfill/admin action        |
+| Strategy                     |             Normal path? | Input shape                                                           | Purpose                             |
+| ---------------------------- | -----------------------: | --------------------------------------------------------------------- | ----------------------------------- |
+| `incremental_v1_1`           |                      yes | previous ready snapshot + trigger source + bounded supporting context | normal operation                    |
+| `bootstrap_incremental_v1_1` | yes, first snapshot only | latest bounded lesson/homework memory set                             | first snapshot without full history |
+| `full_rebuild_v1`            |                       no | all ready lesson/homework memory                                      | legacy compatibility and comparison |
+| `manual_rebuild_v1_1`        |                       no | explicitly selected broader memory set                                | repair/backfill/admin action        |
 
 ### Snapshot Coverage Metadata
 
@@ -387,8 +388,8 @@ interface StudentMemorySnapshotCoverage {
 
 Important distinction:
 
-* `included*Ids` means sources included in the current model request.
-* `covered*Ids` means sources represented by the resulting snapshot.
+- `included*Ids` means sources included in the current model request.
+- `covered*Ids` means sources represented by the resulting snapshot.
 
 For incremental refresh, `included*Ids` should be small. `covered*Ids` may refer to the prior coverage plus the new trigger source.
 
@@ -413,14 +414,16 @@ Recommended incremental input:
 1. Previous ready snapshot.
 2. Trigger source entry:
 
-   * the lesson memory entry that just became ready, or
-   * the homework memory entry that just became ready.
+   - the lesson memory entry that just became ready, or
+   - the homework memory entry that just became ready.
+
 3. Limited supporting context:
 
-   * last 2 lesson memory entries, excluding the trigger if already included
-   * last 1 homework memory entry, excluding the trigger if already included
-   * unresolved issues from previous snapshot
-   * active review backlog from previous snapshot
+   - last 2 lesson memory entries, excluding the trigger if already included
+   - last 1 homework memory entry, excluding the trigger if already included
+   - unresolved issues from previous snapshot
+   - active review backlog from previous snapshot
+
 4. Optional compact provenance summary from previous snapshot.
 
 Do not include all historical lesson/homework memory entries.
@@ -457,10 +460,10 @@ If no previous ready snapshot exists, use a bounded bootstrap strategy instead o
 
 Recommended bootstrap input:
 
-* latest 5 lesson memory entries
-* latest 3 homework memory entries
-* optionally all unresolved/high-confidence items if already available
-* no full-history load unless explicitly requested
+- latest 5 lesson memory entries
+- latest 3 homework memory entries
+- optionally all unresolved/high-confidence items if already available
+- no full-history load unless explicitly requested
 
 Name:
 
@@ -477,13 +480,16 @@ Add an explicit admin/manual path for full rebuild.
 
 Use cases:
 
-* migration
-* corrupted snapshot
-* suspected bad incremental drift
-* intentional quality reset
-* backfill for one student
+- migration
+- corrupted snapshot
+- suspected bad incremental drift
+- intentional quality reset
+- backfill for one student
 
-Manual full rebuild should be visible in logs/UI and should not be automatically triggered by every lesson/homework memory update.
+Manual full rebuild should be visible in logs and operator inspection metadata, and should not be
+automatically triggered by every lesson/homework memory update. During Gate B, keep this as a
+CLI/admin action rather than an app control. A guarded operator app action can be considered no
+earlier than Gate C after incremental refresh semantics are proven.
 
 Recommended CLI/admin action:
 
@@ -519,10 +525,10 @@ const STUDENT_MEMORY_SNAPSHOT_FULL_REBUILD_WARN_TOKENS = 60_000;
 
 Behavior:
 
-* Estimate token/byte size before provider call.
-* If incremental prompt exceeds hard budget, compact supporting context or drop optional supporting context first.
-* If still over budget, fail the job with a clear error instead of sending a surprise 120k request.
-* Full rebuild may exceed this budget, but should log and display a warning.
+- Estimate token/byte size before provider call.
+- If incremental prompt exceeds hard budget, compact supporting context or drop optional supporting context first.
+- If still over budget, fail the job with a clear error instead of sending a surprise 120k request.
+- Full rebuild may exceed this budget, but should log and display a warning.
 
 Use the existing `estimateGenerationTokens` budget-guard path. Byte length should still be recorded
 for quick debugging, but it should not become a second policy estimator unless the budget helper is
@@ -538,9 +544,9 @@ Recommended lightweight approach:
 2. Compare previous ready snapshot hash to new snapshot hash.
 3. If unchanged or nearly unchanged:
 
-   * store the refresh result as no-op or ready-with-same-content according to existing repository patterns
-   * do not enqueue profile candidate refresh
-   * log `snapshot_no_material_change`
+   - store the refresh result as no-op or ready-with-same-content according to existing repository patterns
+   - do not enqueue profile candidate refresh
+   - log `snapshot_no_material_change`
 
 If “near equality” is too much for v1.1, exact normalized hash equality is enough.
 
@@ -571,14 +577,14 @@ v1.1 decision needed:
 
 Option A, audit-heavy:
 
-* continue inserting rejected duplicate/stale candidate records
-* add UI aggregation and hide them by default
+- continue inserting rejected duplicate/stale candidate records
+- add UI aggregation and hide them by default
 
 Option B, lean:
 
-* do not insert duplicate/stale candidate records by default
-* log skipped duplicates as metrics only
-* keep optional debug/audit mode for detailed duplicate records
+- do not insert duplicate/stale candidate records by default
+- log skipped duplicates as metrics only
+- keep optional debug/audit mode for detailed duplicate records
 
 Recommended v1.1 default: Option B.
 
@@ -589,11 +595,11 @@ Reason: the current pain is useless work and noisy output. The system should not
 Extend the existing memory inspection surfaces. This is not a polished tutor-facing dashboard. It is
 founder/operator observability.
 
-Recommended placement:
+Locked placement:
 
-* existing student-area Learning page memory card
-* existing memory snapshot list route/API
-* internal/admin route only if the existing student-area surface becomes too noisy
+- existing student-area Learning page memory card, behind a collapsed support/details section
+- existing memory snapshot list route/API
+- internal/admin route only if the existing student-area surface becomes too noisy after Gate C
 
 Minimum fields per student:
 
@@ -636,8 +642,9 @@ Actions
 This can be plain and ugly. It should be useful, not beautiful.
 
 Product boundary: normal tutors should see memory health only when it helps them recover or trust the
-workflow. Token estimates, strategy ids, content hashes, and manual rebuild actions are operator
-details unless the founder decides to expose an advanced/support mode.
+workflow. For v1.1, stale/failed memory labels remain founder/operator-only support signals. Token
+estimates, strategy ids, content hashes, and manual rebuild actions are operator details; they are
+not normal tutor-facing product UI.
 
 ### Memory Job Metrics
 
@@ -692,11 +699,12 @@ Tasks:
 
 1. Add snapshot prompt metrics:
 
-   * prompt byte length
-   * rough input token estimate
-   * lesson memory count
-   * homework memory count
-   * strategy label, initially `full_rebuild_v1`
+   - prompt byte length
+   - rough input token estimate
+   - lesson memory count
+   - homework memory count
+   - strategy label, initially `full_rebuild_v1`
+
 2. Log metrics before provider call.
 3. Store metrics in typed `generation_notes`.
 4. Surface these metrics through the existing memory inspection API and Learning page support
@@ -704,9 +712,9 @@ Tasks:
 
 Exit criteria:
 
-* For a real active student, the system displays or logs that long-term snapshot refresh uses ~120k–130k input tokens.
-* Assignment generation remains unchanged.
-* Lesson/homework memory generation remains unchanged.
+- For a real active student, the system displays or logs that long-term snapshot refresh uses ~120k–130k input tokens.
+- Assignment generation remains unchanged.
+- Lesson/homework memory generation remains unchanged.
 
 ### Phase 1: Add Incremental Snapshot Path
 
@@ -717,26 +725,29 @@ Tasks:
 1. Add latest ready snapshot lookup to snapshot job dependencies.
 2. Add trigger source loading:
 
-   * if trigger is `lesson-memory-ready`, load source lesson memory by `sourceEntryId`
-   * if trigger is `homework-memory-ready`, load source homework memory by `sourceEntryId`
+   - if trigger is `lesson-memory-ready`, load source lesson memory by `sourceEntryId`
+   - if trigger is `homework-memory-ready`, load source homework memory by `sourceEntryId`
+
 3. Reuse existing bounded supporting context queries:
 
-   * recent lesson memory limit 2
-   * recent homework memory limit 1
-   * exclude trigger source from duplicate inclusion
+   - recent lesson memory limit 2
+   - recent homework memory limit 1
+   - exclude trigger source from duplicate inclusion
+
 4. Add new incremental prompt builder:
 
-   * `buildIncrementalStudentMemorySnapshotPrompt`
-   * `buildIncrementalStudentMemorySnapshotEnvelope`
+   - `buildIncrementalStudentMemorySnapshotPrompt`
+   - `buildIncrementalStudentMemorySnapshotEnvelope`
+
 5. Keep existing full-history prompt builder for manual rebuild only.
 6. Store snapshot strategy and coverage metadata in typed `generation_notes`.
 
 Exit criteria:
 
-* Normal lesson/homework memory completion triggers `incremental_v1_1`, not full-history rebuild.
-* Normal snapshot refresh does not list all historical memory entries.
-* Normal snapshot refresh input target is roughly 15k–30k for active students.
-* Full rebuild still exists as manual/admin path.
+- Normal lesson/homework memory completion triggers `incremental_v1_1`, not full-history rebuild.
+- Normal snapshot refresh does not list all historical memory entries.
+- Normal snapshot refresh input target is roughly 15k–30k for active students.
+- Full rebuild still exists as manual/admin path.
 
 ### Phase 2: Add Hard Budgets and Safe Failure
 
@@ -752,9 +763,9 @@ Tasks:
 
 Exit criteria:
 
-* The system cannot accidentally send a 120k normal incremental snapshot refresh.
-* Oversized jobs fail before provider call with actionable diagnostics.
-* Manual full rebuild can still bypass or use a higher explicit budget.
+- The system cannot accidentally send a 120k normal incremental snapshot refresh.
+- Oversized jobs fail before provider call with actionable diagnostics.
+- Manual full rebuild can still bypass or use a higher explicit budget.
 
 ### Phase 3: Gate Candidate Refresh
 
@@ -767,17 +778,18 @@ Tasks:
 3. Enqueue candidate refresh only when useful.
 4. Add candidate refresh metrics:
 
-   * created
-   * skipped duplicate
-   * skipped stale
-   * skipped because no profile-worthy delta
+   - created
+   - skipped duplicate
+   - skipped stale
+   - skipped because no profile-worthy delta
+
 5. Prefer not inserting duplicate/stale candidate records by default unless audit mode is enabled.
 
 Exit criteria:
 
-* Candidate refresh is not triggered after every snapshot blindly.
-* Duplicate/stale candidate noise drops sharply.
-* UI/debug output shows why candidate refresh ran or was skipped.
+- Candidate refresh is not triggered after every snapshot blindly.
+- Duplicate/stale candidate noise drops sharply.
+- UI/debug output shows why candidate refresh ran or was skipped.
 
 ### Phase 4: Minimal Memory Debug Panel
 
@@ -790,16 +802,16 @@ Tasks:
 3. Show latest snapshot metrics, memory counts, candidate counts, and recent failures.
 4. Add manual actions:
 
-   * retry failed snapshot
-   * run incremental refresh
-   * run manual full rebuild
-   * dry-run token estimate if cheap
+   - retry failed snapshot
+   - run incremental refresh
+   - run manual full rebuild
+   - dry-run token estimate if cheap
 
 Exit criteria:
 
-* Founder/operator can answer “why is this student memory stale or expensive?” inside the app.
-* OpenAI Platform logs are no longer the only practical observability surface.
-* UI remains minimal and internal; no broad product UX redesign required.
+- Founder/operator can answer “why is this student memory stale or expensive?” inside the app.
+- OpenAI Platform logs are no longer the only practical observability surface.
+- UI remains minimal and internal; no broad product UX redesign required.
 
 ### Phase 5: Minimal Regression Checks
 
@@ -818,8 +830,8 @@ Add a small number of deterministic tests/fixtures:
 
 Exit criteria:
 
-* The system has basic guardrails against reintroducing full-history normal refresh.
-* No AI-lab-style repeated model evaluation is required.
+- The system has basic guardrails against reintroducing full-history normal refresh.
+- No AI-lab-style repeated model evaluation is required.
 
 ## Priority Classification
 
@@ -851,10 +863,11 @@ These are important but not needed to fix the current bottleneck.
 
 1. Legal/data lifecycle:
 
-   * export
-   * delete
-   * redaction
-   * privacy review flows
+   - export
+   - delete
+   - redaction
+   - privacy review flows
+
 2. Embedding retrieval.
 3. Semantic memory ranking.
 4. Advanced tutor customization of memory rules.
@@ -900,16 +913,16 @@ Decision for v1.1: use typed `generation_notes` first.
 
 Pros:
 
-* faster
-* fewer migrations
-* lower risk before alpha
-* fits the existing snapshot record and inspection API shape
+- faster
+- fewer migrations
+- lower risk before alpha
+- fits the existing snapshot record and inspection API shape
 
 Cons:
 
-* less queryable
-* debug UI may need JSON parsing
-* harder to index later
+- less queryable
+- debug UI may need JSON parsing
+- harder to index later
 
 Deferred option: add explicit columns.
 
@@ -965,9 +978,10 @@ Migration approach:
 2. Mark missing strategy as `full_rebuild_v1`.
 3. When first v1.1 incremental snapshot is created:
 
-   * parent = latest ready v1 snapshot
-   * strategy = `incremental_v1_1`
-   * coverage = inherited/best-effort
+   - parent = latest ready v1 snapshot
+   - strategy = `incremental_v1_1`
+   - coverage = inherited/best-effort
+
 4. Do not force full rebuild for all students.
 5. Allow manual rebuild per student if a snapshot appears corrupted or stale.
 
@@ -995,19 +1009,27 @@ v1.1 is successful when:
    Add an audit/debug mode later only if needed.
 3. Reuse the existing generation-budget token estimator; also record prompt byte length.
 4. Bootstrap with latest 5 lesson memory entries and latest 3 homework memory entries.
-5. CLI first, by extending the existing refresh tool with explicit strategy and reason. Add a
-   guarded UI action after backend semantics are clear.
+5. CLI first, by extending the existing refresh tool with explicit strategy and reason. Keep manual
+   full rebuild CLI-only during Gate B; consider a guarded operator app action no earlier than Gate C.
 6. Use exact normalized content-hash equality for v1.1 material-change detection.
 7. Gate candidate refresh after snapshot generation using trigger-source profile-worthiness plus
    exact personal-facts hash/material-change checks.
+8. Put v1.1 operator memory details on the student Learning page behind a collapsed support/details
+   section. Move to a separate internal route only if the Learning surface becomes noisy after Gate C.
+9. Keep stale/failed memory labels operator-only for v1.1. Do not expose technical memory health
+   states to normal tutors before Closed Alpha evidence shows a tutor-facing need.
+10. Keep manual full rebuild CLI-only during Gate B. Do not add a normal tutor-facing rebuild
+    action; a guarded operator action may be considered in Gate C.
 
-## Product Decisions To Review
+## Locked Product Decisions
 
-1. Should operator-only memory support details live directly on Learning, behind a `<details>`
-   disclosure, or on a separate internal route?
-2. Should tutors ever see "memory stale" or "memory refresh failed" labels, or should those remain
-   founder/operator support signals until Closed Alpha evidence says otherwise?
-3. Should manual full rebuild be exposed in the app during Gate B, or kept CLI-only until Gate C?
+1. Operator-only memory support details live on the student Learning page behind a collapsed
+   support/details section for v1.1. A separate internal route is deferred until the Learning surface
+   proves too noisy.
+2. Memory stale/failed labels remain founder/operator-only for v1.1. Normal tutors should not see
+   technical memory job states unless Closed Alpha evidence shows a clear trust or recovery need.
+3. Manual full rebuild stays CLI-only during Gate B. A guarded operator app action can be considered
+   in Gate C; normal tutor-facing rebuild controls are out of scope.
 
 ## Implementation Warning
 
