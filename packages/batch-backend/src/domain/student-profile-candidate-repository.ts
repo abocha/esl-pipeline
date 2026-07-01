@@ -329,7 +329,14 @@ export async function listLatestStudentProfileCandidatesByKeys(
       FROM student_profile_candidates
       WHERE student_id = $1
         AND candidate_key = ANY($2::text[])
-      ORDER BY candidate_key, created_at DESC, id DESC
+      ORDER BY
+        candidate_key,
+        CASE
+          WHEN status IN ('pending_review', 'approved', 'promoted') THEN 0
+          ELSE 1
+        END,
+        created_at DESC,
+        id DESC
       `,
       [studentId, candidateKeys],
     );

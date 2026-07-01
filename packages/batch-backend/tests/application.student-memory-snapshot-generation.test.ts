@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { buildStudentMemorySnapshotGenerationNotes } from '../src/application/student-memory-snapshot-generation-notes.js';
 import { generateStudentMemorySnapshot } from '../src/application/student-memory-snapshot-generation.js';
+import { buildStudentMemorySnapshotGenerationNotes } from '../src/application/student-memory-snapshot-generation-notes.js';
 import {
   buildIncrementalStudentMemorySnapshotEnvelope,
   buildIncrementalStudentMemorySnapshotPrompt,

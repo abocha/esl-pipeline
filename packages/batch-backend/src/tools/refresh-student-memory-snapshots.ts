@@ -23,6 +23,7 @@ interface CliOptions {
   provider?: GenerationProvider;
   model?: string;
   studentId?: string;
+  requestCandidateRefresh: boolean;
   dryRun: boolean;
 }
 
@@ -31,6 +32,7 @@ function parseArgs(argv: string[]): CliOptions {
     limit: 80,
     selection: 'missing',
     strategy: 'manual_rebuild_v1_1',
+    requestCandidateRefresh: false,
     dryRun: false,
   };
 
@@ -42,6 +44,11 @@ function parseArgs(argv: string[]): CliOptions {
 
     if (arg === '--dry-run') {
       options.dryRun = true;
+      continue;
+    }
+
+    if (arg === '--candidate-refresh') {
+      options.requestCandidateRefresh = true;
       continue;
     }
 
@@ -186,6 +193,9 @@ async function run(): Promise<void> {
       `[student-memory-snapshot-refresh] strategy=${options.strategy} reason=${options.reason ?? 'none'}`,
     );
     console.log(
+      `[student-memory-snapshot-refresh] candidateRefresh=${options.requestCandidateRefresh}`,
+    );
+    console.log(
       `[student-memory-snapshot-refresh] selection=${options.selection} processed=${targets.length} requested=0`,
     );
     console.log('[student-memory-snapshot-refresh] dryRun=true');
@@ -197,6 +207,7 @@ async function run(): Promise<void> {
     targets,
     strategy: options.strategy,
     operatorReason: options.reason?.trim() ?? '',
+    requestCandidateRefresh: options.requestCandidateRefresh,
     providerOverride: options.provider,
     modelOverride: options.model,
   });
@@ -206,6 +217,9 @@ async function run(): Promise<void> {
   );
   console.log(
     `[student-memory-snapshot-refresh] strategy=${options.strategy} reason=${options.reason}`,
+  );
+  console.log(
+    `[student-memory-snapshot-refresh] candidateRefresh=${options.requestCandidateRefresh}`,
   );
   console.log(
     `[student-memory-snapshot-refresh] selection=${options.selection} processed=${targets.length} requested=${result.requested}`,

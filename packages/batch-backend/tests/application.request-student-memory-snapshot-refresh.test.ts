@@ -145,6 +145,35 @@ describe('application/request-student-memory-snapshot-refresh', () => {
     );
   });
 
+  it('carries explicit manual candidate-refresh requests into pending notes and the queue payload', async () => {
+    await requestStudentMemorySnapshotRefresh({
+      config: {
+        generation: {},
+      } as never,
+      params: {
+        studentId: 'student-1',
+        trigger: 'manual-replay',
+        strategy: 'manual_rebuild_v1_1',
+        operatorReason: 'Backfill missing alpha snapshots',
+        requestCandidateRefresh: true,
+      },
+    });
+
+    expect(ensurePendingMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        generationNotes: expect.objectContaining({
+          requestCandidateRefresh: true,
+        }),
+      }),
+    );
+    expect(enqueueMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestCandidateRefresh: true,
+      }),
+      expect.any(Object),
+    );
+  });
+
   it('requires explicit strategy and operator reason for manual replay', async () => {
     await expect(
       requestStudentMemorySnapshotRefresh({

@@ -125,7 +125,11 @@ describe('application/student-profile-candidates', () => {
     });
   });
 
-  it('does not reinsert a matching pending candidate', async () => {
+  it.each([
+    'pending_review',
+    'approved',
+    'promoted',
+  ] as const)('skips duplicate insertion when a matching %s candidate already exists', async (status) => {
     const insert = vi.fn();
 
     const result = await refreshStudentProfileCandidatesFromCanonicalMemory({
@@ -166,7 +170,7 @@ describe('application/student-profile-candidates', () => {
                 'goals_motivation:wants to speak english more confidently at work',
                 {
                   id: 'candidate-existing',
-                  status: 'pending_review',
+                  status,
                 },
               ],
             ]),
@@ -177,19 +181,84 @@ describe('application/student-profile-candidates', () => {
       },
     });
 
-    expect(insert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        status: 'rejected',
-        reviewState: 'rejected',
-        dedupDecision: expect.objectContaining({
-          decision: 'duplicate',
-          model: 'gemini-3.1-flash-lite',
-        }),
-      }),
-    );
-    expect(result?.skippedCandidateKeys).toEqual([
-      'goals_motivation:wants to speak english more confidently at work',
-    ]);
+    expect(insert).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      created: [],
+      skippedCandidateKeys: ['goals_motivation:wants to speak english more confidently at work'],
+      skippedDuplicateCandidateKeys: [
+        'goals_motivation:wants to speak english more confidently at work',
+      ],
+      skippedDuplicateCount: 1,
+      skippedStaleCount: 0,
+    });
+  });
+
+  it('skips stale candidate insertion when latest lesson repeats existing snapshot personal facts', async () => {
+    const insert = vi.fn();
+
+    const result = await refreshStudentProfileCandidatesFromCanonicalMemory({
+      studentId: 'student-1',
+      overrides: {
+        students: {
+          getById: vi.fn().mockResolvedValue({ id: 'student-1' }),
+        },
+        snapshots: {
+          getLatestReadyByStudentId: vi.fn().mockResolvedValue({
+            id: 'snapshot-1',
+            personalFacts: [
+              {
+                fact: 'Prefers structured homework checklists.',
+                category: 'study preference',
+                authority: 'student_stated',
+                confidence: 'high',
+                reviewNeeded: false,
+                evidence: [],
+              },
+            ],
+          }),
+        },
+        lessonMemory: {
+          listRecentReadyByStudentId: vi.fn().mockResolvedValue([
+            {
+              id: 'lesson-1',
+              generatedAt: new Date('2026-03-21T10:00:00.000Z'),
+              createdAt: new Date('2026-03-21T10:00:00.000Z'),
+              topicsDiscussed: [],
+              studentFacts: [
+                {
+                  fact: 'Prefers structured homework checklists.',
+                  category: 'study preference',
+                  authority: 'student_stated',
+                  confidence: 'high',
+                  reviewNeeded: false,
+                  evidence: [],
+                },
+              ],
+            },
+          ]),
+        },
+        candidates: {
+          getById: vi.fn(),
+          insert,
+          listLatestByKeys: vi.fn().mockResolvedValue(new Map()),
+          supersedePending: vi.fn(),
+          updateReview: vi.fn(),
+        },
+      },
+    });
+
+    expect(insert).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      created: [],
+      skippedCandidateKeys: [
+        'learning_preferences_study_habits:prefers structured homework checklists',
+      ],
+      skippedStaleCandidateKeys: [
+        'learning_preferences_study_habits:prefers structured homework checklists',
+      ],
+      skippedDuplicateCount: 0,
+      skippedStaleCount: 1,
+    });
   });
 
   it('allows approved candidates to store edited fact text', async () => {

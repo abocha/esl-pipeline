@@ -1,5 +1,3 @@
-import { createHash } from 'node:crypto';
-
 import type { GenerationProvider } from '@esl-pipeline/contracts';
 
 import type { BatchBackendConfig } from '../config/env.js';
@@ -11,6 +9,7 @@ import {
   type ExtractStudentMemorySnapshotContentRequest,
   extractStudentMemorySnapshotContent,
 } from './student-memory-snapshot-extraction.js';
+import { hashStudentMemorySnapshotContent } from './student-memory-snapshot-hashes.js';
 
 export const STUDENT_MEMORY_SNAPSHOT_SCHEMA_VERSION = 'student-memory-snapshot.v1';
 
@@ -64,7 +63,7 @@ export async function generateStudentMemorySnapshot(args: {
   });
 
   const generatedAt = now();
-  const contentHash = createHash('sha256').update(JSON.stringify(extraction.content)).digest('hex');
+  const contentHash = hashStudentMemorySnapshotContent(extraction.content);
 
   const snapshot = await repository.insertCanonicalReady({
     studentId: args.request.studentId,

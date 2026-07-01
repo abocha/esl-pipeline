@@ -19,6 +19,12 @@ import {
   supersedePendingStudentProfileCandidates,
   updateStudentProfileCandidateReview,
 } from '../domain/student-profile-candidate-repository.js';
+import {
+  buildStudentProfileCandidateKey,
+  classifyStudentProfileCandidateTargetSection,
+  isTransientStudentProfileFact,
+  normalizeProfileFactText,
+} from './student-profile-candidate-facts.js';
 import { getStudentProfileById } from './student-profiles-store.js';
 
 const DEFAULT_CORROBORATING_LESSON_LIMIT = 12;
@@ -79,6 +85,11 @@ export interface RefreshStudentProfileCandidatesResult {
   sourceSnapshotId: string | null;
   created: StudentProfileCandidateRecord[];
   skippedCandidateKeys: string[];
+  skippedDuplicateCandidateKeys: string[];
+  skippedStaleCandidateKeys: string[];
+  skippedDuplicateCount: number;
+  skippedStaleCount: number;
+  skippedNoProfileWorthyDeltaCount: number;
 }
 
 interface StudentProfileCandidateDependencies {
@@ -115,6 +126,7 @@ export class StudentProfileCandidateServiceError extends Error {
 export async function refreshStudentProfileCandidatesFromCanonicalMemory(args: {
   studentId: string;
   lessonLimit?: number;
+  insertRejectedDuplicateArtifacts?: boolean;
   overrides?: Partial<StudentProfileCandidateDependencies>;
 }): Promise<RefreshStudentProfileCandidatesResult | null> {
   const students = args.overrides?.students ?? {
@@ -152,6 +164,11 @@ export async function refreshStudentProfileCandidatesFromCanonicalMemory(args: {
       sourceSnapshotId: null,
       created: [],
       skippedCandidateKeys: [],
+      skippedDuplicateCandidateKeys: [],
+      skippedStaleCandidateKeys: [],
+      skippedDuplicateCount: 0,
+      skippedStaleCount: 0,
+      skippedNoProfileWorthyDeltaCount: 0,
     };
   }
 
@@ -166,64 +183,42 @@ export async function refreshStudentProfileCandidatesFromCanonicalMemory(args: {
 
   const created: StudentProfileCandidateRecord[] = [];
   const skippedCandidateKeys: string[] = [];
+  const skippedDuplicateCandidateKeys: string[] = [];
+  const skippedStaleCandidateKeys: string[] = [];
 
   for (const proposal of proposals) {
     if (proposal.dedupDecision.decision !== 'created') {
       skippedCandidateKeys.push(proposal.candidateKey);
-      await candidates.insert({
-        studentId: args.studentId,
-        targetSection: proposal.targetSection,
-        candidateKey: proposal.candidateKey,
-        fact: proposal.fact,
-        category: proposal.category,
-        authority: proposal.authority,
-        confidence: proposal.confidence,
-        reviewNeeded: proposal.reviewNeeded,
-        sourceSnapshotId: proposal.sourceSnapshotId,
-        sourceLessonMemoryIds: proposal.sourceLessonMemoryIds,
-        sourceLessonId: proposal.sourceLessonId,
-        sourceLessonStartedAt: proposal.sourceLessonStartedAt,
-        sourceLessonTitle: proposal.sourceLessonTitle,
-        sourceMemoryIds: proposal.sourceMemoryIds,
-        provenance: proposal.provenance,
-        dedupDecision: proposal.dedupDecision,
-        evidence: proposal.evidence,
-        status: 'rejected',
-        reviewState: 'rejected',
-      });
+      skippedStaleCandidateKeys.push(proposal.candidateKey);
+      if (args.insertRejectedDuplicateArtifacts) {
+        await insertRejectedCandidateArtifact({
+          studentId: args.studentId,
+          candidates,
+          proposal,
+          dedupDecision: proposal.dedupDecision,
+        });
+      }
       continue;
     }
 
     const existing = existingByKey.get(proposal.candidateKey);
     if (!shouldInsertCandidateProposal(proposal, existing)) {
       skippedCandidateKeys.push(proposal.candidateKey);
-      await candidates.insert({
-        studentId: args.studentId,
-        targetSection: proposal.targetSection,
-        candidateKey: proposal.candidateKey,
-        fact: proposal.fact,
-        category: proposal.category,
-        authority: proposal.authority,
-        confidence: proposal.confidence,
-        reviewNeeded: proposal.reviewNeeded,
-        sourceSnapshotId: proposal.sourceSnapshotId,
-        sourceLessonMemoryIds: proposal.sourceLessonMemoryIds,
-        sourceLessonId: proposal.sourceLessonId,
-        sourceLessonStartedAt: proposal.sourceLessonStartedAt,
-        sourceLessonTitle: proposal.sourceLessonTitle,
-        sourceMemoryIds: proposal.sourceMemoryIds,
-        provenance: proposal.provenance,
-        dedupDecision: {
-          decision: 'duplicate',
-          reason: `Existing candidate ${existing?.id ?? 'unknown'} already covers this fact.`,
-          model: PROFILE_CANDIDATE_DEDUP_MODEL,
-          matchedCandidateId: existing?.id ?? null,
-          matchedStatus: existing?.status ?? null,
-        },
-        evidence: proposal.evidence,
-        status: 'rejected',
-        reviewState: 'rejected',
-      });
+      skippedDuplicateCandidateKeys.push(proposal.candidateKey);
+      if (args.insertRejectedDuplicateArtifacts) {
+        await insertRejectedCandidateArtifact({
+          studentId: args.studentId,
+          candidates,
+          proposal,
+          dedupDecision: {
+            decision: 'duplicate',
+            reason: `Existing candidate ${existing?.id ?? 'unknown'} already covers this fact.`,
+            model: PROFILE_CANDIDATE_DEDUP_MODEL,
+            matchedCandidateId: existing?.id ?? null,
+            matchedStatus: existing?.status ?? null,
+          },
+        });
+      }
       continue;
     }
 
@@ -262,7 +257,41 @@ export async function refreshStudentProfileCandidatesFromCanonicalMemory(args: {
     sourceSnapshotId: snapshot?.id ?? null,
     created,
     skippedCandidateKeys,
+    skippedDuplicateCandidateKeys,
+    skippedStaleCandidateKeys,
+    skippedDuplicateCount: skippedDuplicateCandidateKeys.length,
+    skippedStaleCount: skippedStaleCandidateKeys.length,
+    skippedNoProfileWorthyDeltaCount: proposals.length === 0 ? 1 : 0,
   };
+}
+
+async function insertRejectedCandidateArtifact(args: {
+  studentId: string;
+  candidates: StudentProfileCandidateDependencies['candidates'];
+  proposal: StudentProfileCandidateDraft;
+  dedupDecision: StudentProfileCandidateDedupDecision;
+}): Promise<void> {
+  await args.candidates.insert({
+    studentId: args.studentId,
+    targetSection: args.proposal.targetSection,
+    candidateKey: args.proposal.candidateKey,
+    fact: args.proposal.fact,
+    category: args.proposal.category,
+    authority: args.proposal.authority,
+    confidence: args.proposal.confidence,
+    reviewNeeded: args.proposal.reviewNeeded,
+    sourceSnapshotId: args.proposal.sourceSnapshotId,
+    sourceLessonMemoryIds: args.proposal.sourceLessonMemoryIds,
+    sourceLessonId: args.proposal.sourceLessonId,
+    sourceLessonStartedAt: args.proposal.sourceLessonStartedAt,
+    sourceLessonTitle: args.proposal.sourceLessonTitle,
+    sourceMemoryIds: args.proposal.sourceMemoryIds,
+    provenance: args.proposal.provenance,
+    dedupDecision: args.dedupDecision,
+    evidence: args.proposal.evidence,
+    status: 'rejected',
+    reviewState: 'rejected',
+  });
 }
 
 export async function approveStudentProfileCandidate(args: {
@@ -392,7 +421,7 @@ function buildCandidateDrafts(args: {
 
   for (const [candidateKey, observation] of latestLessonObservations) {
     if (
-      isTransientFact(observation.fact) ||
+      isTransientStudentProfileFact(observation.fact) ||
       !isStrengthEligible(observation.targetSection, observation.lessonMemoryIds.size)
     ) {
       continue;
@@ -446,7 +475,7 @@ function collectLessonFactObservations(
   for (const entry of lessonMemoryEntries) {
     for (const fact of entry.studentFacts) {
       const targetSection = classifyTargetSection(fact);
-      if (!targetSection || isTransientFact(fact.fact)) {
+      if (!targetSection || isTransientStudentProfileFact(fact.fact)) {
         continue;
       }
 
@@ -522,119 +551,14 @@ function proposalIsMateriallyImproved(
 function classifyTargetSection(
   fact: Pick<StudentFact, 'category' | 'fact'>,
 ): StudentProfileCandidateTargetSection | null {
-  const haystack = `${fact.category} ${fact.fact}`.toLowerCase();
-
-  if (
-    matchesAny(haystack, [
-      'goal',
-      'motivat',
-      'wants to',
-      'wants',
-      'aims to',
-      'needs english',
-      'career transition',
-    ])
-  ) {
-    return 'goals_motivation';
-  }
-  if (
-    matchesAny(haystack, [
-      'profession',
-      'job',
-      'work',
-      'client',
-      'meeting',
-      'colleague',
-      'career',
-      'communication context',
-    ])
-  ) {
-    return 'work_communication_context';
-  }
-  if (
-    matchesAny(haystack, [
-      'hobby',
-      'interest',
-      'likes',
-      'family',
-      'location',
-      'lives in',
-      'personal',
-      'routine',
-    ])
-  ) {
-    return 'interests_personal_context';
-  }
-  if (
-    matchesAny(haystack, [
-      'prefers',
-      'benefits from',
-      'study habit',
-      'study preference',
-      'uses',
-      'practices',
-      'one-take',
-      'notebook',
-      'chatgpt',
-      'methodical',
-      'logical',
-      'formula',
-    ])
-  ) {
-    return 'learning_preferences_study_habits';
-  }
-  if (
-    matchesAny(haystack, [
-      'strength',
-      'strong at',
-      'responds well',
-      'retains',
-      'comfortable with',
-      'benefits from structured',
-    ])
-  ) {
-    return 'long_running_strengths';
-  }
-  if (
-    matchesAny(haystack, [
-      'challenge',
-      'constraint',
-      'struggles',
-      'difficulty',
-      'under pressure',
-      'perfectionist',
-      'limited time',
-      'persistent',
-      'tends to',
-    ])
-  ) {
-    return 'persistent_challenges_constraints';
-  }
-
-  return null;
-}
-
-function matchesAny(haystack: string, needles: string[]): boolean {
-  return needles.some((needle) => haystack.includes(needle));
+  return classifyStudentProfileCandidateTargetSection(fact);
 }
 
 function buildCandidateKey(
   targetSection: StudentProfileCandidateTargetSection,
   fact: string,
 ): string {
-  return `${targetSection}:${normalizeFact(fact)}`;
-}
-
-function normalizeFact(fact: string): string {
-  return fact
-    .toLowerCase()
-    .replaceAll(/[^a-z0-9\s]/g, ' ')
-    .replaceAll(/\s+/g, ' ')
-    .trim();
-}
-
-function isTransientFact(fact: string): boolean {
-  return /\b(today|this lesson|tonight|yesterday|last lesson|this week|recently)\b/i.test(fact);
+  return buildStudentProfileCandidateKey(targetSection, fact);
 }
 
 function isStrengthEligible(
