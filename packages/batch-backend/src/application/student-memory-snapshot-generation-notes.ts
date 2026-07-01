@@ -23,6 +23,7 @@ export type StudentMemorySnapshotV11GenerationNotes = StudentMemorySnapshotGener
   sourceEntryId: string | null;
   triggerSourceKind: StudentMemorySnapshotTriggerSourceKind;
   triggerSourceEntryId: string | null;
+  parentSnapshotId: string | null;
   includedLessonMemoryEntryIds: string[];
   includedHomeworkMemoryEntryIds: string[];
   coveredLessonMemoryEntryIds: string[];
@@ -42,6 +43,7 @@ export interface BuildStudentMemorySnapshotGenerationNotesParams {
   trigger: StudentMemorySnapshotRefreshTrigger;
   triggerSourceKind: StudentMemorySnapshotTriggerSourceKind;
   triggerSourceEntryId: string | null;
+  parentSnapshotId?: string | null;
   includedLessonMemoryEntryIds: string[];
   includedHomeworkMemoryEntryIds: string[];
   coveredLessonMemoryEntryIds: string[];
@@ -61,6 +63,7 @@ export function buildStudentMemorySnapshotGenerationNotes(
     sourceEntryId: params.triggerSourceEntryId,
     triggerSourceKind: params.triggerSourceKind,
     triggerSourceEntryId: params.triggerSourceEntryId,
+    parentSnapshotId: params.parentSnapshotId ?? null,
     includedLessonMemoryEntryIds: params.includedLessonMemoryEntryIds,
     includedHomeworkMemoryEntryIds: params.includedHomeworkMemoryEntryIds,
     coveredLessonMemoryEntryIds: params.coveredLessonMemoryEntryIds,

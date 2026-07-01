@@ -2,9 +2,100 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { buildStudentMemorySnapshotGenerationNotes } from '../src/application/student-memory-snapshot-generation-notes.js';
 import { generateStudentMemorySnapshot } from '../src/application/student-memory-snapshot-generation.js';
+import {
+  buildIncrementalStudentMemorySnapshotEnvelope,
+  buildIncrementalStudentMemorySnapshotPrompt,
+} from '../src/application/student-memory-snapshot-prompt.js';
 import type { StudentMemorySnapshotRecord } from '../src/domain/student-memory-snapshot-model.js';
 
 describe('application/student-memory-snapshot-generation', () => {
+  it('builds incremental prompts from previous snapshot, trigger source, and bounded supporting context', () => {
+    const previousSnapshot = {
+      id: 'snapshot-parent',
+      generatedAt: new Date('2026-03-19T22:00:00.000Z'),
+      snapshotSummary: 'Parent summary with known tense issues.',
+      stableStrengths: [{ label: 'Confidence', note: 'Speaks more freely.' }],
+      recurringIssues: [],
+      activeReviewBacklog: [{ label: 'Past tense', note: 'Keep recycling travel stories.' }],
+      recentProgress: [],
+      personalFacts: [],
+      recommendedAssignmentDirections: [],
+      unresolvedIssues: [],
+    };
+    const triggerSource = {
+      kind: 'lesson_memory' as const,
+      entry: {
+        id: 'lesson-trigger',
+        generatedAt: new Date('2026-03-20T00:00:00.000Z'),
+        lessonSummary: 'Trigger lesson focused on airport conversations.',
+        topicsDiscussed: [],
+        mistakePatterns: [],
+        grammarReviewed: [],
+        grammarWatchlist: [],
+        vocabularyFocus: [],
+        pronunciationFocus: [],
+        studentFacts: [],
+        progressSignals: [],
+        followUpRecommendations: [],
+      },
+    };
+    const supportingLesson = {
+      id: 'lesson-support',
+      generatedAt: new Date('2026-03-18T00:00:00.000Z'),
+      lessonSummary: 'Supporting lesson about hotel check-in.',
+      topicsDiscussed: [],
+      mistakePatterns: [],
+      grammarReviewed: [],
+      grammarWatchlist: [],
+      vocabularyFocus: [],
+      pronunciationFocus: [],
+      studentFacts: [],
+      progressSignals: [],
+      followUpRecommendations: [],
+    };
+    const supportingHomework = {
+      id: 'homework-support',
+      generatedAt: new Date('2026-03-18T01:00:00.000Z'),
+      homeworkSummary: 'Supporting homework practiced travel advice.',
+      topic: 'travel',
+      grammarTargets: [],
+      vocabularyTargets: [],
+      reviewTargets: [],
+      taskList: [],
+      pronunciationFocus: [],
+      teacherFollowUpCues: [],
+    };
+
+    const prompt = buildIncrementalStudentMemorySnapshotPrompt({
+      previousSnapshot,
+      triggerSource,
+      supportingLessonMemoryEntries: [supportingLesson],
+      supportingHomeworkMemoryEntries: [supportingHomework],
+    } as never);
+    const envelope = buildIncrementalStudentMemorySnapshotEnvelope({
+      previousSnapshot,
+      triggerSource,
+      supportingLessonMemoryEntries: [supportingLesson],
+      supportingHomeworkMemoryEntries: [supportingHomework],
+    } as never);
+
+    expect(prompt).toContain('You are updating an existing long-term ESL student-memory snapshot.');
+    expect(prompt).toContain('[PREVIOUS_SNAPSHOT]');
+    expect(prompt).toContain('Parent summary with known tense issues.');
+    expect(prompt).toContain('[TRIGGER_SOURCE]');
+    expect(prompt).toContain('Trigger lesson focused on airport conversations.');
+    expect(prompt).toContain('[SUPPORTING_LESSON_MEMORY_ENTRIES]');
+    expect(prompt).toContain('Supporting lesson about hotel check-in.');
+    expect(prompt).toContain('[SUPPORTING_HOMEWORK_MEMORY_ENTRIES]');
+    expect(prompt).toContain('Supporting homework practiced travel advice.');
+    expect(envelope.sourceManifest.map((source) => source.id)).toEqual([
+      'student-memory-snapshot:snapshot-parent',
+      'lesson-memory:lesson-trigger',
+      'lesson-memory:lesson-support',
+      'homework-memory:homework-support',
+    ]);
+  });
+
   it('builds typed v1.1 generation notes for the legacy full rebuild strategy', () => {
     expect(
       buildStudentMemorySnapshotGenerationNotes({
@@ -30,6 +121,7 @@ describe('application/student-memory-snapshot-generation', () => {
       sourceEntryId: 'homework-1',
       requestedAt: '2026-07-01T10:00:00.000Z',
       strategy: 'full_rebuild_v1',
+      parentSnapshotId: null,
       triggerSourceKind: 'homework_memory',
       triggerSourceEntryId: 'homework-1',
       includedLessonMemoryEntryIds: ['lesson-1'],
