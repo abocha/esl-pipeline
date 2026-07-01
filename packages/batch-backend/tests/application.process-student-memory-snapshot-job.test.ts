@@ -4,6 +4,7 @@ import { estimateGenerationTokens } from '../src/application/generation-budget-g
 import { processStudentMemorySnapshotJob } from '../src/application/process-student-memory-snapshot-job.js';
 import { StudentMemoryPacingDeferredError } from '../src/application/student-memory-generation-pacing.js';
 import { loadConfig } from '../src/config/env.js';
+import { logger } from '../src/infrastructure/logger.js';
 
 function createTestConfig() {
   const base = loadConfig();
@@ -61,6 +62,10 @@ function homeworkMemoryEntry(id: string, generatedAt: string, summary = id) {
     pronunciationFocus: [],
     teacherFollowUpCues: [],
   };
+}
+
+function largeText(prefix: string, tokenEstimate: number): string {
+  return `${prefix} ${'x'.repeat(tokenEstimate * 4)}`;
 }
 
 function readySnapshot() {
@@ -307,6 +312,280 @@ describe('application/process-student-memory-snapshot-job', () => {
       includedLessonMemoryCount: 5,
       includedHomeworkMemoryCount: 3,
     });
+  });
+
+  it('fails oversized incremental prompts before provider execution', async () => {
+    const markFailed = vi.fn().mockResolvedValue(null);
+    const generator = vi.fn().mockResolvedValue({
+      snapshot: {
+        id: 'snapshot-ready-oversized',
+        generatedAt: new Date('2026-03-20T02:00:00.000Z'),
+      },
+    });
+    const pacer = {
+      run: vi.fn(async ({ execute }) => execute()),
+    };
+    const triggerLesson = lessonMemoryEntry(
+      'lesson-oversized',
+      '2026-03-20T00:00:00.000Z',
+      largeText('Trigger lesson is too large for incremental refresh.', 36_000),
+    );
+
+    await expect(
+      processStudentMemorySnapshotJob({
+        config: createTestConfig(),
+        payload: {
+          kind: 'student-memory-snapshot-refresh',
+          studentId: 'student-1',
+          pendingEntryId: 'snapshot-pending-1',
+          provider: 'openai',
+          model: 'gpt-5.2',
+          trigger: 'lesson-memory-ready',
+          sourceEntryId: 'lesson-oversized',
+        },
+        attemptsMade: 0,
+        maxAttempts: 5,
+        overrides: {
+          lessonMemory: {
+            list: vi.fn(),
+            getById: vi.fn().mockResolvedValue(triggerLesson),
+            listRecentReadyByStudentId: vi.fn().mockResolvedValue([
+              lessonMemoryEntry('lesson-support', '2026-03-19T00:00:00.000Z'),
+            ]),
+          },
+          homeworkMemory: {
+            list: vi.fn(),
+            getById: vi.fn(),
+            listRecentReadyByStudentId: vi.fn().mockResolvedValue([
+              homeworkMemoryEntry('homework-support', '2026-03-19T01:00:00.000Z'),
+            ]),
+          },
+          snapshots: {
+            getById: vi.fn().mockResolvedValue({
+              id: 'snapshot-pending-1',
+              status: 'pending',
+              generatedAt: new Date('2026-03-20T01:00:00.000Z'),
+              generationNotes: {
+                trigger: 'lesson-memory-ready',
+              },
+            }),
+            getLatestReadyByStudentId: vi.fn().mockResolvedValue(readySnapshot()),
+            markFailed,
+            supersedePendingForStudent: vi.fn(),
+          },
+          profileCandidates: {
+            requestRefresh: vi.fn(),
+          },
+          generator,
+          pacer,
+        } as never,
+      }),
+    ).rejects.toThrow(
+      'Student-memory snapshot incremental prompt exceeds hard input-token budget',
+    );
+
+    expect(pacer.run).not.toHaveBeenCalled();
+    expect(generator).not.toHaveBeenCalled();
+    expect(markFailed).toHaveBeenCalledWith({
+      id: 'snapshot-pending-1',
+      errorMessage: expect.stringContaining(
+        'Student-memory snapshot incremental prompt exceeds hard input-token budget',
+      ),
+      generationNotes: expect.objectContaining({
+        strategy: 'incremental_v1_1',
+        trigger: 'lesson-memory-ready',
+        budgetDecision: expect.objectContaining({
+          action: 'fail_before_provider',
+          optionalSupportingContextDropped: true,
+          incrementalTargetInputTokens: 25_000,
+          incrementalHardInputTokens: 35_000,
+          failureCode: 'incremental_prompt_input_tokens_exceeded_hard_budget',
+        }),
+        failureDetails: expect.objectContaining({
+          code: 'incremental_prompt_input_tokens_exceeded_hard_budget',
+          stage: 'snapshot_prompt_budget_preflight',
+        }),
+      }),
+    });
+  });
+
+  it('drops optional incremental supporting context above target before provider execution', async () => {
+    const generator = vi.fn().mockResolvedValue({
+      snapshot: {
+        id: 'snapshot-ready-compacted',
+        generatedAt: new Date('2026-03-20T02:00:00.000Z'),
+      },
+    });
+    const triggerLesson = lessonMemoryEntry(
+      'lesson-compact-trigger',
+      '2026-03-20T00:00:00.000Z',
+      'Small trigger source stays within hard budget after compaction.',
+    );
+    const supportingLesson = lessonMemoryEntry(
+      'lesson-support-large',
+      '2026-03-19T00:00:00.000Z',
+      largeText('OPTIONAL_SUPPORTING_CONTEXT_SHOULD_BE_DROPPED', 26_000),
+    );
+    const supportingHomework = homeworkMemoryEntry(
+      'homework-support-large',
+      '2026-03-19T01:00:00.000Z',
+      largeText('OPTIONAL_HOMEWORK_CONTEXT_SHOULD_BE_DROPPED', 2_000),
+    );
+
+    await processStudentMemorySnapshotJob({
+      config: createTestConfig(),
+      payload: {
+        kind: 'student-memory-snapshot-refresh',
+        studentId: 'student-1',
+        pendingEntryId: 'snapshot-pending-1',
+        provider: 'openai',
+        model: 'gpt-5.2',
+        trigger: 'lesson-memory-ready',
+        sourceEntryId: 'lesson-compact-trigger',
+      },
+      overrides: {
+        lessonMemory: {
+          list: vi.fn(),
+          getById: vi.fn().mockResolvedValue(triggerLesson),
+          listRecentReadyByStudentId: vi.fn().mockResolvedValue([supportingLesson]),
+        },
+        homeworkMemory: {
+          list: vi.fn(),
+          getById: vi.fn(),
+          listRecentReadyByStudentId: vi.fn().mockResolvedValue([supportingHomework]),
+        },
+        snapshots: {
+          getById: vi.fn().mockResolvedValue({
+            id: 'snapshot-pending-1',
+            status: 'pending',
+            generatedAt: new Date('2026-03-20T01:00:00.000Z'),
+            generationNotes: {
+              trigger: 'lesson-memory-ready',
+            },
+          }),
+          getLatestReadyByStudentId: vi.fn().mockResolvedValue(readySnapshot()),
+          markFailed: vi.fn(),
+          supersedePendingForStudent: vi.fn().mockResolvedValue([]),
+        },
+        profileCandidates: {
+          requestRefresh: vi.fn().mockImplementation(async () => {}),
+        },
+        generator,
+      } as never,
+    });
+
+    expect(generator).toHaveBeenCalled();
+    const request = generator.mock.calls[0]?.[0].request;
+    expect(request.prompt).toContain('lesson-compact-trigger');
+    expect(request.prompt).not.toContain('OPTIONAL_SUPPORTING_CONTEXT_SHOULD_BE_DROPPED');
+    expect(request.prompt).not.toContain('OPTIONAL_HOMEWORK_CONTEXT_SHOULD_BE_DROPPED');
+    expect(request.envelope.sourceManifest).toEqual([
+      {
+        id: 'student-memory-snapshot:snapshot-ready-parent',
+        label: 'PREVIOUS_STUDENT_MEMORY_SNAPSHOT',
+      },
+      {
+        id: 'lesson-memory:lesson-compact-trigger',
+        label: 'TRIGGER_LESSON_MEMORY_ENTRY',
+      },
+    ]);
+    expect(request.pendingGenerationNotes).toMatchObject({
+      strategy: 'incremental_v1_1',
+      includedLessonMemoryEntryIds: ['lesson-compact-trigger'],
+      includedHomeworkMemoryEntryIds: [],
+      coveredLessonMemoryEntryIds: ['lesson-parent', 'lesson-compact-trigger'],
+      coveredHomeworkMemoryEntryIds: ['homework-parent'],
+      budgetDecision: expect.objectContaining({
+        action: 'drop_optional_context',
+        optionalSupportingContextDropped: true,
+        incrementalTargetInputTokens: 25_000,
+        incrementalHardInputTokens: 35_000,
+        initialInputTokenEstimate: expect.any(Number),
+        inputTokenEstimate: expect.any(Number),
+      }),
+    });
+    expect(request.pendingGenerationNotes.budgetDecision.initialInputTokenEstimate).toBeGreaterThan(
+      25_000,
+    );
+    expect(request.pendingGenerationNotes.inputTokenEstimate).toBeLessThanOrEqual(25_000);
+  });
+
+  it('allows oversized explicit manual rebuilds and records warning metadata', async () => {
+    const generator = vi.fn().mockResolvedValue({
+      snapshot: {
+        id: 'snapshot-ready-manual',
+        generatedAt: new Date('2026-03-20T02:00:00.000Z'),
+      },
+    });
+    const manualLesson = lessonMemoryEntry(
+      'lesson-manual-large',
+      '2026-03-20T00:00:00.000Z',
+      largeText('Manual rebuild intentionally includes a large history.', 61_000),
+    );
+    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+
+    await processStudentMemorySnapshotJob({
+      config: createTestConfig(),
+      payload: {
+        kind: 'student-memory-snapshot-refresh',
+        studentId: 'student-1',
+        pendingEntryId: 'snapshot-pending-1',
+        provider: 'openai',
+        model: 'gpt-5.2',
+        trigger: 'manual-replay',
+        strategy: 'manual_rebuild_v1_1',
+        operatorReason: 'Intentional quality reset after drift check',
+      },
+      overrides: {
+        lessonMemory: {
+          list: vi.fn().mockResolvedValue([manualLesson]),
+        },
+        homeworkMemory: {
+          list: vi.fn().mockResolvedValue([]),
+        },
+        snapshots: {
+          getById: vi.fn().mockResolvedValue({
+            id: 'snapshot-pending-1',
+            status: 'pending',
+            generatedAt: new Date('2026-03-20T01:00:00.000Z'),
+            generationNotes: {
+              trigger: 'manual-replay',
+              strategy: 'manual_rebuild_v1_1',
+              operatorReason: 'Intentional quality reset after drift check',
+            },
+          }),
+          markFailed: vi.fn(),
+          supersedePendingForStudent: vi.fn().mockResolvedValue([]),
+        },
+        profileCandidates: {
+          requestRefresh: vi.fn().mockImplementation(async () => {}),
+        },
+        generator,
+      } as never,
+    });
+
+    expect(generator).toHaveBeenCalled();
+    const request = generator.mock.calls[0]?.[0].request;
+    expect(request.pendingGenerationNotes).toMatchObject({
+      strategy: 'manual_rebuild_v1_1',
+      trigger: 'manual-replay',
+      operatorReason: 'Intentional quality reset after drift check',
+      budgetDecision: expect.objectContaining({
+        action: 'warn_allow',
+        fullRebuildWarnInputTokens: 60_000,
+        warningCode: 'manual_full_rebuild_prompt_over_warning_budget',
+      }),
+    });
+    expect(request.pendingGenerationNotes.inputTokenEstimate).toBeGreaterThan(60_000);
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Student-memory snapshot manual rebuild prompt exceeds warning budget',
+      expect.objectContaining({
+        event: 'student_memory_snapshot_manual_rebuild_prompt_over_warning_budget',
+        inputTokenEstimate: request.pendingGenerationNotes.inputTokenEstimate,
+        fullRebuildWarnInputTokens: 60_000,
+      }),
+    );
+    warnSpy.mockRestore();
   });
 
   it('rejects a lesson-memory trigger source that belongs to another student', async () => {

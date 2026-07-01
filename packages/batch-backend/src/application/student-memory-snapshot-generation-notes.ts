@@ -17,6 +17,36 @@ export type StudentMemorySnapshotTriggerSourceKind =
   | 'manual'
   | null;
 
+export type StudentMemorySnapshotBudgetAction =
+  | 'allow'
+  | 'drop_optional_context'
+  | 'fail_before_provider'
+  | 'warn_allow';
+
+export interface StudentMemorySnapshotBudgetDecision {
+  action: StudentMemorySnapshotBudgetAction;
+  inputTokenEstimate: number;
+  promptByteLength: number;
+  incrementalTargetInputTokens: number;
+  incrementalHardInputTokens: number;
+  fullRebuildWarnInputTokens: number;
+  optionalSupportingContextDropped: boolean;
+  initialInputTokenEstimate?: number;
+  initialPromptByteLength?: number;
+  failureCode?: 'incremental_prompt_input_tokens_exceeded_hard_budget';
+  warningCode?: 'manual_full_rebuild_prompt_over_warning_budget';
+  message?: string;
+}
+
+export interface StudentMemorySnapshotFailureDetails {
+  code: 'incremental_prompt_input_tokens_exceeded_hard_budget';
+  stage: 'snapshot_prompt_budget_preflight';
+  message: string;
+  inputTokenEstimate: number;
+  hardInputTokens: number;
+  targetInputTokens: number;
+}
+
 export type StudentMemorySnapshotV11GenerationNotes = StudentMemorySnapshotGenerationNotes & {
   strategy: StudentMemorySnapshotRefreshStrategy;
   trigger: StudentMemorySnapshotRefreshTrigger;
@@ -35,6 +65,8 @@ export type StudentMemorySnapshotV11GenerationNotes = StudentMemorySnapshotGener
   inputTokenEstimate: number;
   promptByteLength: number;
   materialChange: boolean | null;
+  budgetDecision?: StudentMemorySnapshotBudgetDecision;
+  failureDetails?: StudentMemorySnapshotFailureDetails;
 };
 
 export interface BuildStudentMemorySnapshotGenerationNotesParams {
@@ -51,6 +83,8 @@ export interface BuildStudentMemorySnapshotGenerationNotesParams {
   inputTokenEstimate: number;
   promptByteLength: number;
   materialChange: boolean | null;
+  budgetDecision?: StudentMemorySnapshotBudgetDecision | null;
+  failureDetails?: StudentMemorySnapshotFailureDetails | null;
 }
 
 export function buildStudentMemorySnapshotGenerationNotes(
@@ -75,6 +109,8 @@ export function buildStudentMemorySnapshotGenerationNotes(
     inputTokenEstimate: params.inputTokenEstimate,
     promptByteLength: params.promptByteLength,
     materialChange: params.materialChange,
+    ...(params.budgetDecision ? { budgetDecision: params.budgetDecision } : {}),
+    ...(params.failureDetails ? { failureDetails: params.failureDetails } : {}),
   };
 }
 

@@ -37,6 +37,8 @@ import {
 import {
   buildStudentMemorySnapshotGenerationNotes,
   resolveStudentMemorySnapshotTriggerSourceKind,
+  type StudentMemorySnapshotBudgetDecision,
+  type StudentMemorySnapshotFailureDetails,
   type StudentMemorySnapshotRefreshStrategy,
   type StudentMemorySnapshotV11GenerationNotes,
 } from './student-memory-snapshot-generation-notes.js';
@@ -47,6 +49,32 @@ import {
   buildStudentMemorySnapshotPrompt,
   type IncrementalStudentMemorySnapshotTriggerSource,
 } from './student-memory-snapshot-prompt.js';
+
+export const STUDENT_MEMORY_SNAPSHOT_INCREMENTAL_TARGET_INPUT_TOKENS = 25_000;
+export const STUDENT_MEMORY_SNAPSHOT_INCREMENTAL_HARD_INPUT_TOKENS = 35_000;
+export const STUDENT_MEMORY_SNAPSHOT_FULL_REBUILD_WARN_INPUT_TOKENS = 60_000;
+
+interface StudentMemorySnapshotPromptBudget {
+  incrementalTargetInputTokens: number;
+  incrementalHardInputTokens: number;
+  fullRebuildWarnInputTokens: number;
+}
+
+const DEFAULT_STUDENT_MEMORY_SNAPSHOT_PROMPT_BUDGET: StudentMemorySnapshotPromptBudget = {
+  incrementalTargetInputTokens: STUDENT_MEMORY_SNAPSHOT_INCREMENTAL_TARGET_INPUT_TOKENS,
+  incrementalHardInputTokens: STUDENT_MEMORY_SNAPSHOT_INCREMENTAL_HARD_INPUT_TOKENS,
+  fullRebuildWarnInputTokens: STUDENT_MEMORY_SNAPSHOT_FULL_REBUILD_WARN_INPUT_TOKENS,
+};
+
+class StudentMemorySnapshotPromptBudgetError extends Error {
+  readonly generationNotes: StudentMemorySnapshotV11GenerationNotes;
+
+  constructor(args: { message: string; generationNotes: StudentMemorySnapshotV11GenerationNotes }) {
+    super(args.message);
+    this.name = 'StudentMemorySnapshotPromptBudgetError';
+    this.generationNotes = args.generationNotes;
+  }
+}
 
 export interface ProcessStudentMemorySnapshotJobPayload {
   kind: 'student-memory-snapshot-refresh';
@@ -82,6 +110,7 @@ export interface ProcessStudentMemorySnapshotJobDependencies {
   };
   generator: typeof generateStudentMemorySnapshot;
   pacer: StudentMemoryGenerationPacer;
+  snapshotPromptBudget: StudentMemorySnapshotPromptBudget;
 }
 
 export async function processStudentMemorySnapshotJob(args: {
@@ -114,6 +143,8 @@ export async function processStudentMemorySnapshotJob(args: {
   };
   const generator = args.overrides?.generator ?? generateStudentMemorySnapshot;
   const pacer = args.overrides?.pacer ?? createStudentMemoryGenerationPacer(args.config);
+  const snapshotPromptBudget =
+    args.overrides?.snapshotPromptBudget ?? DEFAULT_STUDENT_MEMORY_SNAPSHOT_PROMPT_BUDGET;
 
   const pendingEntry = await snapshots.getById(args.payload.pendingEntryId);
   if (!pendingEntry || pendingEntry.status !== 'pending') {
@@ -129,13 +160,10 @@ export async function processStudentMemorySnapshotJob(args: {
       lessonMemory,
       homeworkMemory,
       snapshots,
+      snapshotPromptBudget,
     });
     const { prompt, envelope, lessonMemoryEntryIds, homeworkMemoryEntryIds } = buildResult;
-    const promptByteLength = Buffer.byteLength(prompt, 'utf8');
-    const inputTokenEstimate = estimateGenerationTokens({
-      prompt,
-      hardCap: 0,
-    });
+    const { promptByteLength, inputTokenEstimate } = buildResult.promptMetrics;
     generationNotes = buildStudentMemorySnapshotGenerationNotes({
       existingNotes: pendingEntry.generationNotes ?? null,
       strategy: buildResult.strategy,
@@ -150,6 +178,8 @@ export async function processStudentMemorySnapshotJob(args: {
       inputTokenEstimate,
       promptByteLength,
       materialChange: null,
+      budgetDecision: buildResult.budgetDecision,
+      failureDetails: buildResult.failureDetails,
     });
 
     logger.info('Student-memory snapshot prompt metrics recorded', {
@@ -166,7 +196,37 @@ export async function processStudentMemorySnapshotJob(args: {
       coveredHomeworkMemoryCount: generationNotes.coveredHomeworkMemoryCount,
       inputTokenEstimate,
       promptByteLength,
+      budgetDecision: generationNotes.budgetDecision,
     });
+
+    if (buildResult.budgetDecision.action === 'warn_allow') {
+      logger.warn('Student-memory snapshot manual rebuild prompt exceeds warning budget', {
+        event: 'student_memory_snapshot_manual_rebuild_prompt_over_warning_budget',
+        studentId: args.payload.studentId,
+        pendingEntryId: pendingEntry.id,
+        strategy: generationNotes.strategy,
+        inputTokenEstimate,
+        promptByteLength,
+        fullRebuildWarnInputTokens: buildResult.budgetDecision.fullRebuildWarnInputTokens,
+      });
+    }
+
+    if (buildResult.failureDetails) {
+      logger.warn('Student-memory snapshot prompt failed budget preflight', {
+        event: 'student_memory_snapshot_prompt_budget_preflight_failed',
+        studentId: args.payload.studentId,
+        pendingEntryId: pendingEntry.id,
+        strategy: generationNotes.strategy,
+        trigger: generationNotes.trigger,
+        inputTokenEstimate,
+        promptByteLength,
+        failureDetails: buildResult.failureDetails,
+      });
+      throw new StudentMemorySnapshotPromptBudgetError({
+        message: buildResult.failureDetails.message,
+        generationNotes,
+      });
+    }
 
     const result = await pacer.run({
       workload: 'student_memory_snapshot',
@@ -221,6 +281,15 @@ export async function processStudentMemorySnapshotJob(args: {
     if (isStudentMemoryPacingDeferredError(error)) {
       throw error;
     }
+    if (error instanceof StudentMemorySnapshotPromptBudgetError) {
+      generationNotes = error.generationNotes;
+      await snapshots.markFailed({
+        id: args.payload.pendingEntryId,
+        errorMessage: error.message,
+        generationNotes,
+      });
+      throw error;
+    }
     await markFailureIfFinalAttempt({
       payload: args.payload,
       attemptsMade: args.attemptsMade,
@@ -239,6 +308,7 @@ async function buildSnapshotRefreshRequest(args: {
   lessonMemory: ProcessStudentMemorySnapshotJobDependencies['lessonMemory'];
   homeworkMemory: ProcessStudentMemorySnapshotJobDependencies['homeworkMemory'];
   snapshots: Pick<ProcessStudentMemorySnapshotJobDependencies['snapshots'], 'getLatestReadyByStudentId'>;
+  snapshotPromptBudget: StudentMemorySnapshotPromptBudget;
 }): Promise<{
   strategy: StudentMemorySnapshotRefreshStrategy;
   parentSnapshotId: string | null;
@@ -248,6 +318,9 @@ async function buildSnapshotRefreshRequest(args: {
   homeworkMemoryEntryIds: string[];
   includedLessonMemoryEntryIds: string[];
   includedHomeworkMemoryEntryIds: string[];
+  promptMetrics: StudentMemorySnapshotPromptMetrics;
+  budgetDecision: StudentMemorySnapshotBudgetDecision;
+  failureDetails: StudentMemorySnapshotFailureDetails | null;
 }> {
   if (args.payload.trigger === 'manual-replay') {
     const strategy = resolveManualSnapshotRefreshStrategy({
@@ -279,6 +352,11 @@ async function buildSnapshotRefreshRequest(args: {
     const homeworkMemoryEntryIds = readyHomeworkMemory.map(
       (entry: HomeworkMemoryRecord) => entry.id,
     );
+    const promptMetrics = estimateStudentMemorySnapshotPromptMetrics(prompt);
+    const budgetDecision = buildManualSnapshotBudgetDecision({
+      budget: args.snapshotPromptBudget,
+      promptMetrics,
+    });
     return {
       strategy,
       parentSnapshotId: null,
@@ -288,6 +366,9 @@ async function buildSnapshotRefreshRequest(args: {
       homeworkMemoryEntryIds,
       includedLessonMemoryEntryIds: lessonMemoryEntryIds,
       includedHomeworkMemoryEntryIds: homeworkMemoryEntryIds,
+      promptMetrics,
+      budgetDecision,
+      failureDetails: null,
     };
   }
 
@@ -302,45 +383,251 @@ async function buildSnapshotRefreshRequest(args: {
     homeworkMemory: args.homeworkMemory,
     limits: contextLimits,
   });
-  const prompt = buildIncrementalStudentMemorySnapshotPrompt({
-    previousSnapshot: latestReadySnapshot,
-    triggerSource: context.triggerSource,
-    supportingLessonMemoryEntries: context.supportingLessonMemoryEntries,
-    supportingHomeworkMemoryEntries: context.supportingHomeworkMemoryEntries,
-  });
-  const envelope = buildIncrementalStudentMemorySnapshotEnvelope({
-    previousSnapshot: latestReadySnapshot,
-    triggerSource: context.triggerSource,
-    supportingLessonMemoryEntries: context.supportingLessonMemoryEntries,
-    supportingHomeworkMemoryEntries: context.supportingHomeworkMemoryEntries,
-  });
-  const includedLessonMemoryEntryIds = uniqueIds([
-    ...(context.triggerSource.kind === 'lesson_memory' ? [context.triggerSource.entry.id] : []),
-    ...context.supportingLessonMemoryEntries.map((entry) => entry.id),
-  ]);
-  const includedHomeworkMemoryEntryIds = uniqueIds([
-    ...(context.triggerSource.kind === 'homework_memory' ? [context.triggerSource.entry.id] : []),
-    ...context.supportingHomeworkMemoryEntries.map((entry) => entry.id),
-  ]);
   const previousCoverage = resolvePreviousSnapshotCoverage(latestReadySnapshot);
-  const lessonMemoryEntryIds = uniqueIds([
-    ...previousCoverage.lessonMemoryEntryIds,
-    ...includedLessonMemoryEntryIds,
-  ]);
-  const homeworkMemoryEntryIds = uniqueIds([
-    ...previousCoverage.homeworkMemoryEntryIds,
-    ...includedHomeworkMemoryEntryIds,
-  ]);
-
-  return {
+  const incrementalResult = buildBudgetedIncrementalSnapshotRequest({
     strategy: latestReadySnapshot ? 'incremental_v1_1' : 'bootstrap_incremental_v1_1',
     parentSnapshotId: latestReadySnapshot?.id ?? null,
+    previousSnapshot: latestReadySnapshot,
+    context,
+    previousCoverage,
+    budget: args.snapshotPromptBudget,
+  });
+
+  return {
+    ...incrementalResult,
+  };
+}
+
+interface StudentMemorySnapshotPromptMetrics {
+  inputTokenEstimate: number;
+  promptByteLength: number;
+}
+
+function estimateStudentMemorySnapshotPromptMetrics(prompt: string): StudentMemorySnapshotPromptMetrics {
+  return {
+    promptByteLength: Buffer.byteLength(prompt, 'utf8'),
+    inputTokenEstimate: estimateGenerationTokens({
+      prompt,
+      hardCap: 0,
+    }),
+  };
+}
+
+function buildManualSnapshotBudgetDecision(args: {
+  budget: StudentMemorySnapshotPromptBudget;
+  promptMetrics: StudentMemorySnapshotPromptMetrics;
+}): StudentMemorySnapshotBudgetDecision {
+  const overWarning =
+    args.promptMetrics.inputTokenEstimate > args.budget.fullRebuildWarnInputTokens;
+  return {
+    action: overWarning ? 'warn_allow' : 'allow',
+    inputTokenEstimate: args.promptMetrics.inputTokenEstimate,
+    promptByteLength: args.promptMetrics.promptByteLength,
+    incrementalTargetInputTokens: args.budget.incrementalTargetInputTokens,
+    incrementalHardInputTokens: args.budget.incrementalHardInputTokens,
+    fullRebuildWarnInputTokens: args.budget.fullRebuildWarnInputTokens,
+    optionalSupportingContextDropped: false,
+    ...(overWarning
+      ? {
+          warningCode: 'manual_full_rebuild_prompt_over_warning_budget' as const,
+          message: `Explicit manual student-memory snapshot rebuild prompt is estimated at ${args.promptMetrics.inputTokenEstimate} input tokens, above the ${args.budget.fullRebuildWarnInputTokens} warning threshold.`,
+        }
+      : {}),
+  };
+}
+
+function buildBudgetedIncrementalSnapshotRequest(args: {
+  strategy: Extract<
+    StudentMemorySnapshotRefreshStrategy,
+    'incremental_v1_1' | 'bootstrap_incremental_v1_1'
+  >;
+  parentSnapshotId: string | null;
+  previousSnapshot: StudentMemorySnapshotRecord | null;
+  context: {
+    triggerSource: IncrementalStudentMemorySnapshotTriggerSource;
+    supportingLessonMemoryEntries: LessonMemoryRecord[];
+    supportingHomeworkMemoryEntries: HomeworkMemoryRecord[];
+  };
+  previousCoverage: {
+    lessonMemoryEntryIds: string[];
+    homeworkMemoryEntryIds: string[];
+  };
+  budget: StudentMemorySnapshotPromptBudget;
+}): {
+  strategy: StudentMemorySnapshotRefreshStrategy;
+  parentSnapshotId: string | null;
+  prompt: string;
+  envelope: ReturnType<typeof buildStudentMemorySnapshotEnvelope>;
+  lessonMemoryEntryIds: string[];
+  homeworkMemoryEntryIds: string[];
+  includedLessonMemoryEntryIds: string[];
+  includedHomeworkMemoryEntryIds: string[];
+  promptMetrics: StudentMemorySnapshotPromptMetrics;
+  budgetDecision: StudentMemorySnapshotBudgetDecision;
+  failureDetails: StudentMemorySnapshotFailureDetails | null;
+} {
+  const initial = buildIncrementalSnapshotRequestFromContext({
+    strategy: args.strategy,
+    parentSnapshotId: args.parentSnapshotId,
+    previousSnapshot: args.previousSnapshot,
+    triggerSource: args.context.triggerSource,
+    supportingLessonMemoryEntries: args.context.supportingLessonMemoryEntries,
+    supportingHomeworkMemoryEntries: args.context.supportingHomeworkMemoryEntries,
+    previousCoverage: args.previousCoverage,
+  });
+
+  if (initial.promptMetrics.inputTokenEstimate <= args.budget.incrementalTargetInputTokens) {
+    return {
+      ...initial,
+      budgetDecision: buildIncrementalSnapshotBudgetDecision({
+        budget: args.budget,
+        promptMetrics: initial.promptMetrics,
+        optionalSupportingContextDropped: false,
+      }),
+      failureDetails: null,
+    };
+  }
+
+  const compacted = buildIncrementalSnapshotRequestFromContext({
+    strategy: args.strategy,
+    parentSnapshotId: args.parentSnapshotId,
+    previousSnapshot: args.previousSnapshot,
+    triggerSource: args.context.triggerSource,
+    supportingLessonMemoryEntries: [],
+    supportingHomeworkMemoryEntries: [],
+    previousCoverage: args.previousCoverage,
+  });
+  const overHard =
+    compacted.promptMetrics.inputTokenEstimate > args.budget.incrementalHardInputTokens;
+  const failureDetails = overHard
+    ? buildIncrementalSnapshotBudgetFailure({
+        budget: args.budget,
+        promptMetrics: compacted.promptMetrics,
+      })
+    : null;
+
+  return {
+    ...compacted,
+    budgetDecision: buildIncrementalSnapshotBudgetDecision({
+      budget: args.budget,
+      promptMetrics: compacted.promptMetrics,
+      optionalSupportingContextDropped: true,
+      initialPromptMetrics: initial.promptMetrics,
+      failureDetails,
+    }),
+    failureDetails,
+  };
+}
+
+function buildIncrementalSnapshotRequestFromContext(args: {
+  strategy: Extract<
+    StudentMemorySnapshotRefreshStrategy,
+    'incremental_v1_1' | 'bootstrap_incremental_v1_1'
+  >;
+  parentSnapshotId: string | null;
+  previousSnapshot: StudentMemorySnapshotRecord | null;
+  triggerSource: IncrementalStudentMemorySnapshotTriggerSource;
+  supportingLessonMemoryEntries: LessonMemoryRecord[];
+  supportingHomeworkMemoryEntries: HomeworkMemoryRecord[];
+  previousCoverage: {
+    lessonMemoryEntryIds: string[];
+    homeworkMemoryEntryIds: string[];
+  };
+}): {
+  strategy: StudentMemorySnapshotRefreshStrategy;
+  parentSnapshotId: string | null;
+  prompt: string;
+  envelope: ReturnType<typeof buildStudentMemorySnapshotEnvelope>;
+  lessonMemoryEntryIds: string[];
+  homeworkMemoryEntryIds: string[];
+  includedLessonMemoryEntryIds: string[];
+  includedHomeworkMemoryEntryIds: string[];
+  promptMetrics: StudentMemorySnapshotPromptMetrics;
+} {
+  const prompt = buildIncrementalStudentMemorySnapshotPrompt({
+    previousSnapshot: args.previousSnapshot,
+    triggerSource: args.triggerSource,
+    supportingLessonMemoryEntries: args.supportingLessonMemoryEntries,
+    supportingHomeworkMemoryEntries: args.supportingHomeworkMemoryEntries,
+  });
+  const envelope = buildIncrementalStudentMemorySnapshotEnvelope({
+    previousSnapshot: args.previousSnapshot,
+    triggerSource: args.triggerSource,
+    supportingLessonMemoryEntries: args.supportingLessonMemoryEntries,
+    supportingHomeworkMemoryEntries: args.supportingHomeworkMemoryEntries,
+  });
+  const includedLessonMemoryEntryIds = uniqueIds([
+    ...(args.triggerSource.kind === 'lesson_memory' ? [args.triggerSource.entry.id] : []),
+    ...args.supportingLessonMemoryEntries.map((entry) => entry.id),
+  ]);
+  const includedHomeworkMemoryEntryIds = uniqueIds([
+    ...(args.triggerSource.kind === 'homework_memory' ? [args.triggerSource.entry.id] : []),
+    ...args.supportingHomeworkMemoryEntries.map((entry) => entry.id),
+  ]);
+  return {
+    strategy: args.strategy,
+    parentSnapshotId: args.parentSnapshotId,
     prompt,
     envelope,
-    lessonMemoryEntryIds,
-    homeworkMemoryEntryIds,
+    lessonMemoryEntryIds: uniqueIds([
+      ...args.previousCoverage.lessonMemoryEntryIds,
+      ...includedLessonMemoryEntryIds,
+    ]),
+    homeworkMemoryEntryIds: uniqueIds([
+      ...args.previousCoverage.homeworkMemoryEntryIds,
+      ...includedHomeworkMemoryEntryIds,
+    ]),
     includedLessonMemoryEntryIds,
     includedHomeworkMemoryEntryIds,
+    promptMetrics: estimateStudentMemorySnapshotPromptMetrics(prompt),
+  };
+}
+
+function buildIncrementalSnapshotBudgetDecision(args: {
+  budget: StudentMemorySnapshotPromptBudget;
+  promptMetrics: StudentMemorySnapshotPromptMetrics;
+  optionalSupportingContextDropped: boolean;
+  initialPromptMetrics?: StudentMemorySnapshotPromptMetrics;
+  failureDetails?: StudentMemorySnapshotFailureDetails | null;
+}): StudentMemorySnapshotBudgetDecision {
+  return {
+    action: args.failureDetails
+      ? 'fail_before_provider'
+      : args.optionalSupportingContextDropped
+        ? 'drop_optional_context'
+        : 'allow',
+    inputTokenEstimate: args.promptMetrics.inputTokenEstimate,
+    promptByteLength: args.promptMetrics.promptByteLength,
+    incrementalTargetInputTokens: args.budget.incrementalTargetInputTokens,
+    incrementalHardInputTokens: args.budget.incrementalHardInputTokens,
+    fullRebuildWarnInputTokens: args.budget.fullRebuildWarnInputTokens,
+    optionalSupportingContextDropped: args.optionalSupportingContextDropped,
+    ...(args.initialPromptMetrics
+      ? {
+          initialInputTokenEstimate: args.initialPromptMetrics.inputTokenEstimate,
+          initialPromptByteLength: args.initialPromptMetrics.promptByteLength,
+        }
+      : {}),
+    ...(args.failureDetails
+      ? {
+          failureCode: args.failureDetails.code,
+          message: args.failureDetails.message,
+        }
+      : {}),
+  };
+}
+
+function buildIncrementalSnapshotBudgetFailure(args: {
+  budget: StudentMemorySnapshotPromptBudget;
+  promptMetrics: StudentMemorySnapshotPromptMetrics;
+}): StudentMemorySnapshotFailureDetails {
+  return {
+    code: 'incremental_prompt_input_tokens_exceeded_hard_budget',
+    stage: 'snapshot_prompt_budget_preflight',
+    inputTokenEstimate: args.promptMetrics.inputTokenEstimate,
+    hardInputTokens: args.budget.incrementalHardInputTokens,
+    targetInputTokens: args.budget.incrementalTargetInputTokens,
+    message: `Student-memory snapshot incremental prompt exceeds hard input-token budget after dropping optional supporting context (estimated ${args.promptMetrics.inputTokenEstimate} input tokens, hard budget ${args.budget.incrementalHardInputTokens}).`,
   };
 }
 
