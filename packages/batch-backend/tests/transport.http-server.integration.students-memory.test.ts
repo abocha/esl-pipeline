@@ -6,6 +6,7 @@ describeHttpServerIntegrationSuite(
     app,
     deriveStudentId,
     expect,
+    mockGetStudentMemoryHealth,
     it,
     mockGetStudentMemoryOverview,
     mockGetProfileContent,
@@ -76,6 +77,81 @@ describeHttpServerIntegrationSuite(
       });
     });
 
+    it('GET /students/:id/memory/health returns the operator memory health payload', async () => {
+      const studentId = deriveStudentId('Anna');
+      mockGetStudentMemoryHealth.mockResolvedValueOnce({
+        studentId,
+        latestSnapshot: {
+          id: 'snapshot-1',
+          status: 'ready',
+          generatedAt: new Date('2024-01-05T00:00:00.000Z'),
+          strategy: 'incremental_v1_1',
+          trigger: 'lesson-memory-ready',
+          triggerSourceKind: 'lesson_memory',
+          triggerSourceEntryId: 'lesson-1',
+          parentSnapshotId: 'snapshot-parent',
+          inputTokenEstimate: 12_345,
+          outputTokenEstimate: null,
+          promptByteLength: 49_380,
+          includedLessonMemoryCount: 2,
+          includedHomeworkMemoryCount: 1,
+          coveredLessonMemoryCount: 8,
+          coveredHomeworkMemoryCount: 3,
+          contentHash: 'snapshot-hash',
+          materialChange: true,
+          budgetDecision: { action: 'allow' },
+          candidateRefresh: { requested: true },
+        },
+        memoryCounts: {
+          lesson: {
+            ready: { count: 8, capped: false, limit: 500 },
+            pending: { count: 1, capped: false, limit: 500 },
+            failed: { count: 0, capped: false, limit: 500 },
+          },
+          homework: {
+            ready: { count: 3, capped: false, limit: 500 },
+            pending: { count: 0, capped: false, limit: 500 },
+            failed: { count: 1, capped: false, limit: 500 },
+          },
+        },
+        latestFailedReason: null,
+        profileCandidateCounts: {
+          pending: 2,
+          approved: 1,
+          rejected: 0,
+          deferred: 1,
+        },
+      });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/students/${studentId}/memory/health`,
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(mockGetStudentMemoryHealth).toHaveBeenCalledWith(
+        expect.objectContaining({ studentId }),
+      );
+      expect(response.json()).toMatchObject({
+        studentId,
+        latestSnapshot: {
+          id: 'snapshot-1',
+          strategy: 'incremental_v1_1',
+          contentHash: 'snapshot-hash',
+        },
+        memoryCounts: {
+          lesson: { ready: { count: 8, capped: false, limit: 500 } },
+          homework: { failed: { count: 1, capped: false, limit: 500 } },
+        },
+        profileCandidateCounts: {
+          pending: 2,
+          approved: 1,
+          rejected: 0,
+          deferred: 1,
+        },
+      });
+    });
+
     it('GET /students/:id/surfaces/overview composes the overview route payload', async () => {
       const studentId = deriveStudentId('Anna');
       mockGetProfileContent.mockClear();
@@ -120,6 +196,7 @@ describeHttpServerIntegrationSuite(
     it('GET /students/:id/surfaces/learning composes profile, memory, binding, and candidate data', async () => {
       const studentId = deriveStudentId('Anna');
       mockGetStudentMemoryOverview.mockClear();
+      mockGetStudentMemoryHealth.mockClear();
       mockListStudentProfileBindingsForStudent.mockClear();
       mockListStudentProfileCandidatesForStudent.mockClear();
 
@@ -132,6 +209,9 @@ describeHttpServerIntegrationSuite(
       expect(mockGetStudentMemoryOverview).toHaveBeenCalledWith(
         expect.objectContaining({ studentId, lessonLimit: 5, homeworkLimit: 3 }),
       );
+      expect(mockGetStudentMemoryHealth).toHaveBeenCalledWith(
+        expect.objectContaining({ studentId }),
+      );
       expect(mockListStudentProfileBindingsForStudent).toHaveBeenCalledWith(
         studentId,
         expect.objectContaining({ limit: 20 }),
@@ -140,6 +220,7 @@ describeHttpServerIntegrationSuite(
         profile: { id: 'profile.md' },
         revisions: { items: [{ id: 'revision-1' }] },
         memory: { studentId },
+        memoryHealth: { studentId },
         bindings: { items: [{ id: 'binding-1' }] },
         candidates: { items: [] },
       });

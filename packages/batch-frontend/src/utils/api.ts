@@ -649,6 +649,62 @@ export interface StudentMemoryOverviewResponse {
   unresolvedIssues: StudentMemoryUnresolvedIssue[];
 }
 
+export interface StudentMemoryLatestSnapshotHealth {
+  id: string;
+  status: StudentMemorySnapshotStatus;
+  generatedAt: string;
+  strategy: string | null;
+  trigger: string | null;
+  triggerSourceKind: string | null;
+  triggerSourceEntryId: string | null;
+  parentSnapshotId: string | null;
+  inputTokenEstimate: number | null;
+  outputTokenEstimate: number | null;
+  promptByteLength: number | null;
+  includedLessonMemoryCount: number | null;
+  includedHomeworkMemoryCount: number | null;
+  coveredLessonMemoryCount: number | null;
+  coveredHomeworkMemoryCount: number | null;
+  contentHash: string | null;
+  materialChange: boolean | null;
+  budgetDecision: Record<string, unknown> | null;
+  candidateRefresh: Record<string, unknown> | null;
+}
+
+export interface StudentMemoryStatusCount {
+  count: number;
+  capped: boolean;
+  limit: number;
+}
+
+export interface StudentMemoryHealthResponse {
+  studentId: string;
+  latestSnapshot: StudentMemoryLatestSnapshotHealth | null;
+  memoryCounts: {
+    lesson: {
+      ready: StudentMemoryStatusCount;
+      pending: StudentMemoryStatusCount;
+      failed: StudentMemoryStatusCount;
+    };
+    homework: {
+      ready: StudentMemoryStatusCount;
+      pending: StudentMemoryStatusCount;
+      failed: StudentMemoryStatusCount;
+    };
+  };
+  latestFailedReason: {
+    source: 'lesson' | 'homework' | 'snapshot';
+    artifactId: string;
+    message: string;
+  } | null;
+  profileCandidateCounts: {
+    pending: number;
+    approved: number;
+    rejected: number;
+    deferred: number;
+  };
+}
+
 export interface StudentLessonMemoryListResponse {
   studentId: string;
   items: LessonMemoryRecord[];
@@ -897,6 +953,7 @@ export interface StudentLearningSurfaceResponse {
   profile: ProfileContentResponse | null;
   revisions: ProfileRevisionListResponse;
   memory: StudentMemoryOverviewResponse;
+  memoryHealth?: StudentMemoryHealthResponse | null;
   bindings: StudentProfileBindingListResponse;
   candidates: StudentProfileCandidateListResponse;
 }
@@ -2419,6 +2476,23 @@ export async function getStudentMemoryOverview(
     const axiosError = toAxiosError(error);
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to view student memory.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function getStudentMemoryHealth(
+  studentId: string,
+): Promise<StudentMemoryHealthResponse> {
+  try {
+    const response = await apiClient.get(
+      buildApiProxyPath(`/students/${encodeURIComponent(studentId)}/memory/health`),
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to view student memory health.');
     }
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }
