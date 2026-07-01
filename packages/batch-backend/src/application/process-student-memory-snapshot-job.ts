@@ -21,10 +21,11 @@ import {
   getStudentMemorySnapshotById,
   markStudentMemorySnapshotFailed,
   supersedePendingStudentMemorySnapshotsForStudent,
+  updateStudentMemorySnapshotGenerationNotes,
 } from '../domain/student-memory-snapshot-repository.js';
 import { logger } from '../infrastructure/logger.js';
-import { requestStudentProfileCandidateRefresh } from './request-student-profile-candidate-refresh.js';
 import { estimateGenerationTokens } from './generation-budget-guard.js';
+import { requestStudentProfileCandidateRefresh } from './request-student-profile-candidate-refresh.js';
 import {
   createStudentMemoryGenerationPacer,
   isStudentMemoryPacingDeferredError,
@@ -43,12 +44,18 @@ import {
   type StudentMemorySnapshotV11GenerationNotes,
 } from './student-memory-snapshot-generation-notes.js';
 import {
+  hashStudentMemorySnapshotContent,
+  hashStudentMemorySnapshotDurablePreferencesConstraints,
+  hashStudentMemorySnapshotPersonalFacts,
+} from './student-memory-snapshot-hashes.js';
+import {
   buildIncrementalStudentMemorySnapshotEnvelope,
   buildIncrementalStudentMemorySnapshotPrompt,
   buildStudentMemorySnapshotEnvelope,
   buildStudentMemorySnapshotPrompt,
   type IncrementalStudentMemorySnapshotTriggerSource,
 } from './student-memory-snapshot-prompt.js';
+import { isProfileWorthyStudentFact } from './student-profile-candidate-facts.js';
 
 export const STUDENT_MEMORY_SNAPSHOT_INCREMENTAL_TARGET_INPUT_TOKENS = 25_000;
 export const STUDENT_MEMORY_SNAPSHOT_INCREMENTAL_HARD_INPUT_TOKENS = 35_000;
@@ -86,6 +93,7 @@ export interface ProcessStudentMemorySnapshotJobPayload {
   sourceEntryId?: string | null;
   strategy?: StudentMemorySnapshotRefreshStrategy | null;
   operatorReason?: string | null;
+  requestCandidateRefresh?: boolean | null;
 }
 
 export interface ProcessStudentMemorySnapshotJobDependencies {
@@ -104,6 +112,7 @@ export interface ProcessStudentMemorySnapshotJobDependencies {
     getLatestReadyByStudentId: typeof getLatestReadyStudentMemorySnapshotByStudentId;
     markFailed: typeof markStudentMemorySnapshotFailed;
     supersedePendingForStudent: typeof supersedePendingStudentMemorySnapshotsForStudent;
+    updateGenerationNotes: typeof updateStudentMemorySnapshotGenerationNotes;
   };
   profileCandidates: {
     requestRefresh: typeof requestStudentProfileCandidateRefresh;
@@ -132,11 +141,19 @@ export async function processStudentMemorySnapshotJob(args: {
     getById: getHomeworkMemoryEntryById,
     listRecentReadyByStudentId: listRecentReadyHomeworkMemoryByStudentId,
   };
-  const snapshots = args.overrides?.snapshots ?? {
+  const defaultSnapshots = {
     getById: getStudentMemorySnapshotById,
     getLatestReadyByStudentId: getLatestReadyStudentMemorySnapshotByStudentId,
     markFailed: markStudentMemorySnapshotFailed,
     supersedePendingForStudent: supersedePendingStudentMemorySnapshotsForStudent,
+    updateGenerationNotes: updateStudentMemorySnapshotGenerationNotes,
+  };
+  const snapshots = {
+    ...defaultSnapshots,
+    ...(args.overrides?.snapshots ?? {}),
+    ...(args.overrides?.snapshots && !args.overrides.snapshots.updateGenerationNotes
+      ? { updateGenerationNotes: async () => null }
+      : {}),
   };
   const profileCandidates = args.overrides?.profileCandidates ?? {
     requestRefresh: requestStudentProfileCandidateRefresh,
@@ -258,6 +275,33 @@ export async function processStudentMemorySnapshotJob(args: {
       maxGeneratedAt: pendingEntry.generatedAt,
     });
 
+    const candidateRefreshDecision = buildCandidateRefreshDecision({
+      payload: args.payload,
+      pendingGenerationNotes: pendingEntry.generationNotes ?? null,
+      parentSnapshot: buildResult.parentSnapshot,
+      generatedSnapshot: result.snapshot,
+      triggerProfileWorthyStudentFactCount: buildResult.triggerProfileWorthyStudentFactCount,
+    });
+    generationNotes = {
+      ...(result.snapshot.generationNotes ?? generationNotes ?? {}),
+      materialChange: candidateRefreshDecision.materialChange,
+      candidateRefresh: candidateRefreshDecision.metadata,
+    } as StudentMemorySnapshotV11GenerationNotes;
+    await snapshots.updateGenerationNotes({
+      id: result.snapshot.id,
+      generationNotes,
+    });
+
+    if (!candidateRefreshDecision.requested) {
+      logger.info('Student profile candidate refresh skipped after snapshot generation', {
+        event: 'student_profile_candidate_refresh_skipped_no_profile_worthy_delta',
+        studentId: args.payload.studentId,
+        sourceSnapshotId: result.snapshot.id,
+        candidateRefresh: candidateRefreshDecision.metadata,
+      });
+      return;
+    }
+
     try {
       await profileCandidates.requestRefresh({
         params: {
@@ -307,7 +351,10 @@ async function buildSnapshotRefreshRequest(args: {
   pendingGenerationNotes: Record<string, unknown> | null;
   lessonMemory: ProcessStudentMemorySnapshotJobDependencies['lessonMemory'];
   homeworkMemory: ProcessStudentMemorySnapshotJobDependencies['homeworkMemory'];
-  snapshots: Pick<ProcessStudentMemorySnapshotJobDependencies['snapshots'], 'getLatestReadyByStudentId'>;
+  snapshots: Pick<
+    ProcessStudentMemorySnapshotJobDependencies['snapshots'],
+    'getLatestReadyByStudentId'
+  >;
   snapshotPromptBudget: StudentMemorySnapshotPromptBudget;
 }): Promise<{
   strategy: StudentMemorySnapshotRefreshStrategy;
@@ -321,6 +368,8 @@ async function buildSnapshotRefreshRequest(args: {
   promptMetrics: StudentMemorySnapshotPromptMetrics;
   budgetDecision: StudentMemorySnapshotBudgetDecision;
   failureDetails: StudentMemorySnapshotFailureDetails | null;
+  parentSnapshot: StudentMemorySnapshotRecord | null;
+  triggerProfileWorthyStudentFactCount: number;
 }> {
   if (args.payload.trigger === 'manual-replay') {
     const strategy = resolveManualSnapshotRefreshStrategy({
@@ -369,10 +418,14 @@ async function buildSnapshotRefreshRequest(args: {
       promptMetrics,
       budgetDecision,
       failureDetails: null,
+      parentSnapshot: null,
+      triggerProfileWorthyStudentFactCount: 0,
     };
   }
 
-  const latestReadySnapshot = await args.snapshots.getLatestReadyByStudentId(args.payload.studentId);
+  const latestReadySnapshot = await args.snapshots.getLatestReadyByStudentId(
+    args.payload.studentId,
+  );
   const contextLimits = resolveIncrementalContextLimits({
     trigger: args.payload.trigger,
     hasParentSnapshot: Boolean(latestReadySnapshot),
@@ -395,7 +448,122 @@ async function buildSnapshotRefreshRequest(args: {
 
   return {
     ...incrementalResult,
+    parentSnapshot: latestReadySnapshot,
+    triggerProfileWorthyStudentFactCount: countProfileWorthyTriggerStudentFacts(
+      context.triggerSource,
+    ),
   };
+}
+
+interface StudentMemorySnapshotCandidateRefreshMetadata {
+  requested: boolean;
+  reasons: CandidateRefreshReason[];
+  triggerProfileWorthyStudentFactCount: number;
+  personalFactsHashBefore: string;
+  personalFactsHashAfter: string;
+  personalFactsHashChanged: boolean;
+  durablePreferencesConstraintsHashBefore: string;
+  durablePreferencesConstraintsHashAfter: string;
+  durablePreferencesConstraintsHashChanged: boolean;
+  snapshotContentHashBefore: string | null;
+  snapshotContentHashAfter: string;
+  snapshotContentHashChanged: boolean;
+  manualReplayRequestedCandidateRefresh: boolean;
+  skippedNoProfileWorthyDeltaCount: number;
+}
+
+type CandidateRefreshReason =
+  | 'trigger_profile_worthy_student_fact'
+  | 'personal_facts_hash_changed'
+  | 'durable_preferences_constraints_changed'
+  | 'manual_replay_requested_candidate_refresh';
+
+function buildCandidateRefreshDecision(args: {
+  payload: ProcessStudentMemorySnapshotJobPayload;
+  pendingGenerationNotes: Record<string, unknown> | null;
+  parentSnapshot: StudentMemorySnapshotRecord | null;
+  generatedSnapshot: StudentMemorySnapshotRecord;
+  triggerProfileWorthyStudentFactCount: number;
+}): {
+  requested: boolean;
+  materialChange: boolean;
+  metadata: StudentMemorySnapshotCandidateRefreshMetadata;
+} {
+  const personalFactsHashBefore = hashStudentMemorySnapshotPersonalFacts(
+    args.parentSnapshot?.personalFacts,
+  );
+  const personalFactsHashAfter = hashStudentMemorySnapshotPersonalFacts(
+    args.generatedSnapshot.personalFacts,
+  );
+  const durablePreferencesConstraintsHashBefore =
+    hashStudentMemorySnapshotDurablePreferencesConstraints(args.parentSnapshot?.personalFacts);
+  const durablePreferencesConstraintsHashAfter =
+    hashStudentMemorySnapshotDurablePreferencesConstraints(args.generatedSnapshot.personalFacts);
+  const snapshotContentHashBefore = args.parentSnapshot
+    ? hashStudentMemorySnapshotContent(args.parentSnapshot)
+    : null;
+  const snapshotContentHashAfter = hashStudentMemorySnapshotContent(args.generatedSnapshot);
+  const personalFactsHashChanged = personalFactsHashBefore !== personalFactsHashAfter;
+  const durablePreferencesConstraintsHashChanged =
+    durablePreferencesConstraintsHashBefore !== durablePreferencesConstraintsHashAfter;
+  const snapshotContentHashChanged = snapshotContentHashBefore !== snapshotContentHashAfter;
+  const manualReplayRequestedCandidateRefresh =
+    args.payload.trigger === 'manual-replay' &&
+    resolveCandidateRefreshBoolean(
+      args.payload.requestCandidateRefresh ??
+        args.pendingGenerationNotes?.requestCandidateRefresh ??
+        null,
+    );
+  const reasons: CandidateRefreshReason[] = [];
+
+  if (manualReplayRequestedCandidateRefresh) {
+    reasons.push('manual_replay_requested_candidate_refresh');
+  } else if (args.payload.trigger !== 'manual-replay') {
+    if (args.triggerProfileWorthyStudentFactCount > 0) {
+      reasons.push('trigger_profile_worthy_student_fact');
+    }
+    if (personalFactsHashChanged) {
+      reasons.push('personal_facts_hash_changed');
+    }
+    if (durablePreferencesConstraintsHashChanged) {
+      reasons.push('durable_preferences_constraints_changed');
+    }
+  }
+
+  const requested = reasons.length > 0;
+  return {
+    requested,
+    materialChange: snapshotContentHashChanged,
+    metadata: {
+      requested,
+      reasons,
+      triggerProfileWorthyStudentFactCount: args.triggerProfileWorthyStudentFactCount,
+      personalFactsHashBefore,
+      personalFactsHashAfter,
+      personalFactsHashChanged,
+      durablePreferencesConstraintsHashBefore,
+      durablePreferencesConstraintsHashAfter,
+      durablePreferencesConstraintsHashChanged,
+      snapshotContentHashBefore,
+      snapshotContentHashAfter,
+      snapshotContentHashChanged,
+      manualReplayRequestedCandidateRefresh,
+      skippedNoProfileWorthyDeltaCount: requested ? 0 : 1,
+    },
+  };
+}
+
+function countProfileWorthyTriggerStudentFacts(
+  triggerSource: IncrementalStudentMemorySnapshotTriggerSource,
+): number {
+  if (triggerSource.kind !== 'lesson_memory') {
+    return 0;
+  }
+  return triggerSource.entry.studentFacts.filter(isProfileWorthyStudentFact).length;
+}
+
+function resolveCandidateRefreshBoolean(value: unknown): boolean {
+  return value === true;
 }
 
 interface StudentMemorySnapshotPromptMetrics {
@@ -403,7 +571,9 @@ interface StudentMemorySnapshotPromptMetrics {
   promptByteLength: number;
 }
 
-function estimateStudentMemorySnapshotPromptMetrics(prompt: string): StudentMemorySnapshotPromptMetrics {
+function estimateStudentMemorySnapshotPromptMetrics(
+  prompt: string,
+): StudentMemorySnapshotPromptMetrics {
   return {
     promptByteLength: Buffer.byteLength(prompt, 'utf8'),
     inputTokenEstimate: estimateGenerationTokens({
@@ -675,7 +845,10 @@ async function loadIncrementalSnapshotContext(args: {
         kind: 'lesson_memory',
         entry: triggerEntry,
       },
-      supportingLessonMemoryEntries: excludeEntryById(supportingLessonMemoryEntries, triggerEntry.id),
+      supportingLessonMemoryEntries: excludeEntryById(
+        supportingLessonMemoryEntries,
+        triggerEntry.id,
+      ),
       supportingHomeworkMemoryEntries,
     };
   }

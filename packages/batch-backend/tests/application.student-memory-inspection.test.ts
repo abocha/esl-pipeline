@@ -74,9 +74,9 @@ describe('application/student-memory-inspection', () => {
       includedLessonMemoryCount: 2,
       includedHomeworkMemoryCount: 1,
     };
-    const list = vi.fn().mockResolvedValue([
-      { id: 'snapshot-1', status: 'ready', generationNotes },
-    ]);
+    const list = vi
+      .fn()
+      .mockResolvedValue([{ id: 'snapshot-1', status: 'ready', generationNotes }]);
 
     const result = await listStudentMemorySnapshotsForStudent({
       studentId: 'student-1',

@@ -43,8 +43,12 @@ export async function listStudentMemorySnapshotBackfillTargets(args: {
 export async function requestStudentMemorySnapshotBackfill(args: {
   config: BatchBackendConfig;
   targets: StudentMemorySnapshotBackfillTarget[];
-  strategy: Extract<StudentMemorySnapshotRefreshStrategy, 'manual_rebuild_v1_1' | 'full_rebuild_v1'>;
+  strategy: Extract<
+    StudentMemorySnapshotRefreshStrategy,
+    'manual_rebuild_v1_1' | 'full_rebuild_v1'
+  >;
   operatorReason: string;
+  requestCandidateRefresh?: boolean;
   providerOverride?: GenerationProvider;
   modelOverride?: string;
 }): Promise<{
@@ -60,6 +64,7 @@ export async function requestStudentMemorySnapshotBackfill(args: {
         trigger: 'manual-replay',
         strategy: args.strategy,
         operatorReason: args.operatorReason,
+        requestCandidateRefresh: args.requestCandidateRefresh === true,
         providerOverride: args.providerOverride,
         modelOverride: args.modelOverride,
       },

@@ -18,6 +18,7 @@ export interface RequestStudentMemorySnapshotRefreshParams {
   sourceEntryId?: string | null;
   strategy?: StudentMemorySnapshotRefreshStrategy;
   operatorReason?: string | null;
+  requestCandidateRefresh?: boolean | null;
   providerOverride?: GenerationProvider;
   modelOverride?: string;
 }
@@ -95,6 +96,7 @@ export async function requestStudentMemorySnapshotRefresh(args: {
       sourceEntryId,
       strategy: args.params.strategy ?? null,
       operatorReason: args.params.operatorReason?.trim() || null,
+      requestCandidateRefresh: args.params.requestCandidateRefresh === true,
       requestedAt: requestedAt.toISOString(),
     },
   });
@@ -110,6 +112,7 @@ export async function requestStudentMemorySnapshotRefresh(args: {
       sourceEntryId,
       strategy: args.params.strategy ?? null,
       operatorReason: args.params.operatorReason?.trim() || null,
+      requestCandidateRefresh: args.params.requestCandidateRefresh === true,
     },
     {
       jobId: `student-memory-snapshot:${args.params.studentId}:${pending.entry.id}`,

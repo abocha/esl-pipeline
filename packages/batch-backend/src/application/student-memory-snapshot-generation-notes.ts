@@ -47,6 +47,28 @@ export interface StudentMemorySnapshotFailureDetails {
   targetInputTokens: number;
 }
 
+export interface StudentMemorySnapshotCandidateRefreshDecision {
+  requested: boolean;
+  reasons: (
+    | 'trigger_profile_worthy_student_fact'
+    | 'personal_facts_hash_changed'
+    | 'durable_preferences_constraints_changed'
+    | 'manual_replay_requested_candidate_refresh'
+  )[];
+  triggerProfileWorthyStudentFactCount: number;
+  personalFactsHashBefore: string;
+  personalFactsHashAfter: string;
+  personalFactsHashChanged: boolean;
+  durablePreferencesConstraintsHashBefore: string;
+  durablePreferencesConstraintsHashAfter: string;
+  durablePreferencesConstraintsHashChanged: boolean;
+  snapshotContentHashBefore: string | null;
+  snapshotContentHashAfter: string;
+  snapshotContentHashChanged: boolean;
+  manualReplayRequestedCandidateRefresh: boolean;
+  skippedNoProfileWorthyDeltaCount: number;
+}
+
 export type StudentMemorySnapshotV11GenerationNotes = StudentMemorySnapshotGenerationNotes & {
   strategy: StudentMemorySnapshotRefreshStrategy;
   trigger: StudentMemorySnapshotRefreshTrigger;
@@ -67,6 +89,7 @@ export type StudentMemorySnapshotV11GenerationNotes = StudentMemorySnapshotGener
   materialChange: boolean | null;
   budgetDecision?: StudentMemorySnapshotBudgetDecision;
   failureDetails?: StudentMemorySnapshotFailureDetails;
+  candidateRefresh?: StudentMemorySnapshotCandidateRefreshDecision;
 };
 
 export interface BuildStudentMemorySnapshotGenerationNotesParams {

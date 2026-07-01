@@ -687,6 +687,62 @@ export async function markStudentMemorySnapshotFailed(params: {
   return row ? mapRowToStudentMemorySnapshot(row) : null;
 }
 
+export async function updateStudentMemorySnapshotGenerationNotes(params: {
+  id: string;
+  generationNotes: StudentMemorySnapshotGenerationNotes;
+}): Promise<StudentMemorySnapshotRecord | null> {
+  const existing = await getStudentMemorySnapshotById(params.id);
+  if (!existing) {
+    return null;
+  }
+
+  const generationNotes: StudentMemorySnapshotGenerationNotes = {
+    ...(existing.generationNotes ?? {}),
+    ...params.generationNotes,
+  };
+
+  const row = await withPgClient(async (client: PoolClient) => {
+    const result = await client.query(
+      `
+      UPDATE student_memory_snapshots
+      SET
+        generation_notes = $2::jsonb,
+        updated_at = NOW()
+      WHERE id = $1
+      RETURNING
+        id,
+        student_id,
+        schema_version,
+        generated_at,
+        provider,
+        model,
+        status,
+        source_kind,
+        lesson_memory_entry_ids,
+        homework_memory_entry_ids,
+        content_hash,
+        generation_notes,
+        stable_strengths,
+        recurring_issues,
+        active_review_backlog,
+        recent_progress,
+        personal_facts,
+        recommended_assignment_directions,
+        unresolved_issues,
+        snapshot_summary,
+        superseded_by_id,
+        superseded_at,
+        created_at,
+        updated_at
+      `,
+      [params.id, JSON.stringify(generationNotes)],
+    );
+    return result.rows[0];
+  });
+
+  return row ? mapRowToStudentMemorySnapshot(row) : null;
+}
+
 export async function listStudentMemorySnapshots(
   options: ListStudentMemorySnapshotsOptions,
 ): Promise<StudentMemorySnapshotRecord[]> {

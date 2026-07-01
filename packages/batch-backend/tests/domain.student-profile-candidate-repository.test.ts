@@ -186,6 +186,53 @@ describeIfPg('domain/student-profile-candidate-repository', () => {
     expect(all.items.find((item) => item.id === first.id)?.status).toBe('superseded');
   });
 
+  it('prefers active candidates over newer rejected duplicates for deterministic key lookup', async () => {
+    const studentId = randomUUID();
+
+    await withPgClient(async (client) => {
+      await client.query(
+        `INSERT INTO students (id, student, created_at, updated_at) VALUES ($1, 'Ari', NOW(), NOW())`,
+        [studentId],
+      );
+    });
+
+    const active = await insertStudentProfileCandidate({
+      id: '00000000-0000-0000-0000-000000000011',
+      studentId,
+      targetSection: 'goals_motivation',
+      candidateKey: 'goals_motivation:wants more confidence at work',
+      fact: 'Wants more confidence at work.',
+      category: 'goal',
+      authority: 'student_stated',
+      confidence: 'high',
+      reviewNeeded: false,
+      sourceLessonMemoryIds: [],
+      evidence: [],
+    });
+    const rejected = await insertStudentProfileCandidate({
+      id: '00000000-0000-0000-0000-000000000012',
+      studentId,
+      targetSection: 'goals_motivation',
+      candidateKey: 'goals_motivation:wants more confidence at work',
+      fact: 'Wants more confidence at work.',
+      category: 'goal',
+      authority: 'student_stated',
+      confidence: 'high',
+      reviewNeeded: false,
+      sourceLessonMemoryIds: [],
+      evidence: [],
+      status: 'rejected',
+      reviewState: 'rejected',
+    });
+
+    const latestByKey = await listLatestStudentProfileCandidatesByKeys(studentId, [
+      'goals_motivation:wants more confidence at work',
+    ]);
+
+    expect(rejected.createdAt.getTime()).toBeGreaterThanOrEqual(active.createdAt.getTime());
+    expect(latestByKey.get('goals_motivation:wants more confidence at work')?.id).toBe(active.id);
+  });
+
   it('promotes candidates for any linked draft revision even after a newer draft is linked later', async () => {
     const studentId = randomUUID();
     const profileId = randomUUID();
