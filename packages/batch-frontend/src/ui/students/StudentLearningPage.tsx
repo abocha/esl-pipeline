@@ -4,7 +4,9 @@ import type {
   ProfileContentResponse,
   ProfileRevisionDetailResponse,
   ProfileRevisionSummaryResponse,
+  StudentMemoryHealthResponse,
   StudentMemoryOverviewResponse,
+  StudentMemoryStatusCount,
   StudentProfileBindingListResponse,
   StudentProfileCandidate,
 } from '../../utils/api';
@@ -15,6 +17,7 @@ import {
   getProfileContent,
   getProfileRevision,
   getStudentLearningSurface,
+  getStudentMemoryHealth,
   getStudentMemoryOverview,
   initializeStudentProfileDraft,
   listProfileRevisions,
@@ -306,6 +309,146 @@ function getSnapshotLabel(
   }`;
 }
 
+function formatHealthValue(value: string | number | boolean | null | undefined): string {
+  if (value === null || value === undefined || value === '') return 'not available';
+  if (typeof value === 'boolean') return value ? 'yes' : 'no';
+  return String(value);
+}
+
+function formatMemoryStatusCount(statusCount: StudentMemoryStatusCount): string {
+  return statusCount.capped ? `${statusCount.count}+` : String(statusCount.count);
+}
+
+function formatCandidateRefresh(refresh: Record<string, unknown> | null): string {
+  if (!refresh) return 'not recorded';
+  const requested = refresh.requested === true ? 'requested' : 'not requested';
+  const factCount =
+    typeof refresh.triggerProfileWorthyStudentFactCount === 'number'
+      ? refresh.triggerProfileWorthyStudentFactCount
+      : 0;
+  const skipped =
+    typeof refresh.skippedNoProfileWorthyDeltaCount === 'number'
+      ? refresh.skippedNoProfileWorthyDeltaCount
+      : 0;
+  return `${requested}; profile-worthy facts ${factCount}; skipped no-delta ${skipped}`;
+}
+
+function formatBudgetDecision(decision: Record<string, unknown> | null): string {
+  if (!decision) return 'not recorded';
+  return formatHealthValue(decision.action as string | undefined);
+}
+
+function MemoryHealthDetails({
+  health,
+  open,
+  onToggle,
+}: {
+  health: StudentMemoryHealthResponse | null;
+  open: boolean;
+  onToggle: () => void;
+}): React.JSX.Element {
+  const snapshot = health?.latestSnapshot ?? null;
+  return (
+    <section className="student-learning-memory-support">
+      <button
+        type="button"
+        className="workspace-secondary-btn student-learning-memory-support-toggle"
+        aria-expanded={open}
+        onClick={onToggle}
+      >
+        Memory support details
+      </button>
+      {open ? (
+        <div className="student-learning-memory-support-body">
+          {health ? (
+            <div className="student-learning-memory-support-grid">
+              <section>
+                <h3>Latest Snapshot</h3>
+                {snapshot ? (
+                  <dl>
+                    <dt>Status</dt>
+                    <dd>{snapshot.status}</dd>
+                    <dt>Strategy</dt>
+                    <dd>{formatHealthValue(snapshot.strategy)}</dd>
+                    <dt>Trigger</dt>
+                    <dd>{formatHealthValue(snapshot.trigger)}</dd>
+                    <dt>Parent snapshot</dt>
+                    <dd>{formatHealthValue(snapshot.parentSnapshotId)}</dd>
+                    <dt>Input tokens</dt>
+                    <dd>{formatHealthValue(snapshot.inputTokenEstimate)}</dd>
+                    <dt>Prompt bytes</dt>
+                    <dd>{formatHealthValue(snapshot.promptByteLength)}</dd>
+                    <dt>Included sources</dt>
+                    <dd>
+                      {formatHealthValue(snapshot.includedLessonMemoryCount)} lesson /{' '}
+                      {formatHealthValue(snapshot.includedHomeworkMemoryCount)} homework
+                    </dd>
+                    <dt>Covered sources</dt>
+                    <dd>
+                      {formatHealthValue(snapshot.coveredLessonMemoryCount)} lesson /{' '}
+                      {formatHealthValue(snapshot.coveredHomeworkMemoryCount)} homework
+                    </dd>
+                    <dt>Content hash</dt>
+                    <dd>{formatHealthValue(snapshot.contentHash)}</dd>
+                    <dt>Material change</dt>
+                    <dd>{formatHealthValue(snapshot.materialChange)}</dd>
+                    <dt>Budget decision</dt>
+                    <dd>{formatBudgetDecision(snapshot.budgetDecision)}</dd>
+                    <dt>Candidate refresh</dt>
+                    <dd>{formatCandidateRefresh(snapshot.candidateRefresh)}</dd>
+                  </dl>
+                ) : (
+                  <p className="workspace-muted">No snapshot has been recorded yet.</p>
+                )}
+              </section>
+
+              <section>
+                <h3>Memory Entries</h3>
+                <dl>
+                  <dt>Lesson memory</dt>
+                  <dd>
+                    ready {formatMemoryStatusCount(health.memoryCounts.lesson.ready)}; pending{' '}
+                    {formatMemoryStatusCount(health.memoryCounts.lesson.pending)}; failed{' '}
+                    {formatMemoryStatusCount(health.memoryCounts.lesson.failed)}
+                  </dd>
+                  <dt>Homework memory</dt>
+                  <dd>
+                    ready {formatMemoryStatusCount(health.memoryCounts.homework.ready)}; pending{' '}
+                    {formatMemoryStatusCount(health.memoryCounts.homework.pending)}; failed{' '}
+                    {formatMemoryStatusCount(health.memoryCounts.homework.failed)}
+                  </dd>
+                  <dt>Latest failed reason</dt>
+                  <dd>
+                    {health.latestFailedReason
+                      ? `${health.latestFailedReason.source}: ${health.latestFailedReason.message}`
+                      : 'none recorded'}
+                  </dd>
+                </dl>
+              </section>
+
+              <section>
+                <h3>Profile Candidates</h3>
+                <dl>
+                  <dt>Pending</dt>
+                  <dd>{health.profileCandidateCounts.pending}</dd>
+                  <dt>Approved</dt>
+                  <dd>{health.profileCandidateCounts.approved}</dd>
+                  <dt>Rejected</dt>
+                  <dd>{health.profileCandidateCounts.rejected}</dd>
+                  <dt>Deferred</dt>
+                  <dd>{health.profileCandidateCounts.deferred}</dd>
+                </dl>
+              </section>
+            </div>
+          ) : (
+            <p className="workspace-muted">Memory support details unavailable.</p>
+          )}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 function getDraftSourceLabel(revision: ProfileRevisionDetailResponse | null): string {
   if (!revision) return 'Start the first profile draft to make this page actionable.';
   if (revision.status === 'draft') {
@@ -421,6 +564,8 @@ export const StudentLearningPage: React.FC = () => {
   const [profileLegacyNotice, setProfileLegacyNotice] = useState<string | null>(null);
 
   const [memoryOverview, setMemoryOverview] = useState<StudentMemoryOverviewResponse | null>(null);
+  const [memoryHealth, setMemoryHealth] = useState<StudentMemoryHealthResponse | null>(null);
+  const [memoryHealthDetailsOpen, setMemoryHealthDetailsOpen] = useState(false);
   const [memoryOverviewLoading, setMemoryOverviewLoading] = useState(false);
   const [memoryOverviewError, setMemoryOverviewError] = useState<string | null>(null);
 
@@ -482,6 +627,8 @@ export const StudentLearningPage: React.FC = () => {
     setLoadedProfileForm(INITIAL_FOUNDATIONAL_PROFILE_FORM);
     setProfileLegacyNotice(null);
     setMemoryOverview(null);
+    setMemoryHealth(null);
+    setMemoryHealthDetailsOpen(false);
     setBindingHistory([]);
     setProfileCandidates([]);
     setProfileCandidateDrafts({});
@@ -608,19 +755,25 @@ export const StudentLearningPage: React.FC = () => {
           return;
         }
         setMemoryOverview(null);
+        setMemoryHealth(null);
+        setMemoryHealthDetailsOpen(false);
         return;
       }
       setMemoryOverviewLoading(true);
       setMemoryOverviewError(null);
       try {
-        const nextMemoryOverview = await getStudentMemoryOverview(studentId, {
-          lessonLimit: 3,
-          homeworkLimit: 2,
-        });
+        const [nextMemoryOverview, nextMemoryHealth] = await Promise.all([
+          getStudentMemoryOverview(studentId, {
+            lessonLimit: 3,
+            homeworkLimit: 2,
+          }),
+          getStudentMemoryHealth(studentId).catch(() => null),
+        ]);
         if (!isCurrentPageLoadRequest(requestId)) {
           return;
         }
         setMemoryOverview(nextMemoryOverview);
+        setMemoryHealth(nextMemoryHealth);
       } catch (error) {
         if (!isCurrentPageLoadRequest(requestId)) {
           return;
@@ -769,6 +922,8 @@ export const StudentLearningPage: React.FC = () => {
         }
 
         setMemoryOverview(surface.memory);
+        setMemoryHealth(surface.memoryHealth ?? null);
+        setMemoryHealthDetailsOpen(false);
         setBindingHistory(surface.bindings.items ?? []);
         setProfileCandidates(surface.candidates.items ?? []);
       } catch (error: unknown) {
@@ -1466,6 +1621,13 @@ export const StudentLearningPage: React.FC = () => {
                 </p>
               </div>
             )}
+            {memoryHealth || latestSnapshot ? (
+              <MemoryHealthDetails
+                health={memoryHealth}
+                open={memoryHealthDetailsOpen}
+                onToggle={() => setMemoryHealthDetailsOpen((current) => !current)}
+              />
+            ) : null}
           </article>
 
           <WorkspaceCandidatesPanel

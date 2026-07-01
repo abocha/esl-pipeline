@@ -22,6 +22,7 @@ import {
   refreshProfileDraftFromApprovedCandidates,
 } from '../../application/profile-draft-refresh.js';
 import {
+  getStudentMemoryHealth,
   getStudentMemoryOverview,
   listStudentHomeworkMemory,
   listStudentLessonMemory,
@@ -348,11 +349,15 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
           return errorResponse(reply, 'not_found');
         }
 
-        const [memory, bindings, candidates] = await Promise.all([
+        const [memory, memoryHealth, bindings, candidates] = await Promise.all([
           getStudentMemoryOverview({
             studentId: params.id,
             lessonLimit: 5,
             homeworkLimit: 3,
+            config: context.config,
+          }),
+          getStudentMemoryHealth({
+            studentId: params.id,
             config: context.config,
           }),
           listStudentProfileBindingsForStudent(params.id, {
@@ -383,6 +388,7 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
         return reply.send({
           ...profilePayload,
           memory,
+          memoryHealth,
           bindings,
           candidates,
         });
@@ -1549,6 +1555,57 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
         });
 
         return reply.send(overview);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid request parameters',
+            details: error.issues,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.get(
+    '/students/:id/memory/health',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'GET /students/:id/memory/health');
+      const paramsSchema = z.object({
+        id: z.string().min(1),
+      });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const health = await getStudentMemoryHealth({
+          studentId: params.id,
+          config: context.config,
+        });
+
+        if (!health) {
+          return errorResponse(reply, 'not_found');
+        }
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          studentId: params.id,
+        });
+
+        return reply.send(health);
       } catch (error: unknown) {
         if (error instanceof z.ZodError) {
           return reply.code(400).send({

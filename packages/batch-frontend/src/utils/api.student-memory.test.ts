@@ -6,6 +6,7 @@ import {
   archiveStudentProfile,
   getStudentHistorySurface,
   getStudentLearningSurface,
+  getStudentMemoryHealth,
   getStudentMemoryOverview,
   getStudentOverviewSurface,
   listStudentHomeworkMemoryEntries,
@@ -75,6 +76,24 @@ describe('utils/api student memory fetchers', () => {
         homeworkLimit: 2,
       },
     });
+    expect(result).toEqual(response);
+  });
+
+  it('loads the student memory health debug payload', async () => {
+    const response = {
+      studentId: 'student-1',
+      latestSnapshot: {
+        id: 'snapshot-1',
+        status: 'ready',
+        strategy: 'incremental_v1_1',
+      },
+    };
+    vi.mocked(apiClient.get).mockResolvedValueOnce({ data: response } as never);
+
+    const result = await getStudentMemoryHealth('student-1');
+
+    expect(buildApiProxyPath).toHaveBeenCalledWith('/students/student-1/memory/health');
+    expect(apiClient.get).toHaveBeenCalledWith('/api/students/student-1/memory/health');
     expect(result).toEqual(response);
   });
 
