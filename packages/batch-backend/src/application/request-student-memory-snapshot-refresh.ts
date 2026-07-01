@@ -10,11 +10,14 @@ import { logger } from '../infrastructure/logger.js';
 import { createStudentMemoryQueue } from '../infrastructure/student-memory-queue.js';
 import { resolveGenerationCandidates } from './generation-policy.js';
 import { STUDENT_MEMORY_SNAPSHOT_SCHEMA_VERSION } from './student-memory-snapshot-generation.js';
+import type { StudentMemorySnapshotRefreshStrategy } from './student-memory-snapshot-generation-notes.js';
 
 export interface RequestStudentMemorySnapshotRefreshParams {
   studentId: string;
   trigger: 'lesson-memory-ready' | 'homework-memory-ready' | 'manual-replay';
   sourceEntryId?: string | null;
+  strategy?: StudentMemorySnapshotRefreshStrategy;
+  operatorReason?: string | null;
   providerOverride?: GenerationProvider;
   modelOverride?: string;
 }
@@ -45,6 +48,24 @@ export async function requestStudentMemorySnapshotRefresh(args: {
   };
   const queue = args.overrides?.queue ?? createStudentMemoryQueue();
   const now = args.overrides?.now ?? (() => new Date());
+  const sourceEntryId = args.params.sourceEntryId?.trim() || null;
+
+  if (args.params.trigger === 'manual-replay') {
+    if (!args.params.strategy) {
+      throw new Error('Manual student-memory snapshot replay requires --strategy');
+    }
+    if (!args.params.operatorReason?.trim()) {
+      throw new Error('Manual student-memory snapshot replay requires --reason');
+    }
+    if (
+      args.params.strategy !== 'manual_rebuild_v1_1' &&
+      args.params.strategy !== 'full_rebuild_v1'
+    ) {
+      throw new Error('Manual student-memory snapshot replay requires a manual rebuild strategy');
+    }
+  } else if (!sourceEntryId) {
+    throw new Error('Student-memory snapshot refresh requires sourceEntryId');
+  }
 
   const candidate = resolveGenerationCandidates({
     config: args.config.generation,
@@ -68,10 +89,12 @@ export async function requestStudentMemorySnapshotRefresh(args: {
     generatedAt: requestedAt,
     provider: candidate.provider,
     model: candidate.model,
-    sourceEntryId: args.params.sourceEntryId ?? null,
+    sourceEntryId,
     generationNotes: {
       trigger: args.params.trigger,
-      sourceEntryId: args.params.sourceEntryId ?? null,
+      sourceEntryId,
+      strategy: args.params.strategy ?? null,
+      operatorReason: args.params.operatorReason?.trim() || null,
       requestedAt: requestedAt.toISOString(),
     },
   });
@@ -84,7 +107,9 @@ export async function requestStudentMemorySnapshotRefresh(args: {
       provider: candidate.provider,
       model: candidate.model,
       trigger: args.params.trigger,
-      sourceEntryId: args.params.sourceEntryId ?? null,
+      sourceEntryId,
+      strategy: args.params.strategy ?? null,
+      operatorReason: args.params.operatorReason?.trim() || null,
     },
     {
       jobId: `student-memory-snapshot:${args.params.studentId}:${pending.entry.id}`,
@@ -95,7 +120,7 @@ export async function requestStudentMemorySnapshotRefresh(args: {
     event: 'student_memory_snapshot_refresh_requested',
     studentId: args.params.studentId,
     trigger: args.params.trigger,
-    sourceEntryId: args.params.sourceEntryId ?? null,
+    sourceEntryId,
     pendingEntryId: pending.entry.id,
     outcome: pending.outcome,
   });
