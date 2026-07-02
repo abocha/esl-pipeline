@@ -5,7 +5,7 @@
 - Audience: operators and implementation agents maintaining the batch backend.
 - Read Time: 5 minutes.
 - Authority Level: active operations runbook.
-- Last Verified Against: 2026-06-15 repo state.
+- Last Verified Against: 2026-07-02 repo state.
 - Owner: batch-backend maintainers + automation agents.
 - Review Cadence: after student-memory tooling changes.
 - Status: `active`.
@@ -122,7 +122,8 @@ pnpm --filter @esl-pipeline/batch-backend exec tsx --tsconfig tsconfig.json src/
 
 Snapshot replay rebuilds the student rollup from canonical ready lesson-memory and homework-memory
 artifacts. Normal lesson/homework-triggered snapshot refresh is incremental; this tool is the
-explicit manual rebuild/backfill path.
+explicit manual rebuild/backfill path. During Gate B, manual full rebuild remains CLI-only; a
+guarded operator app action is a possible Gate C follow-up, not current product behavior.
 
 Host-run command:
 
