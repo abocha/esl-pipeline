@@ -212,6 +212,53 @@
   border-radius: 8px;
 }
 
+.student-learning-memory-support {
+  display: grid;
+  gap: 0.8rem;
+  padding-top: 0.95rem;
+  border-top: 1px solid var(--student-area-line);
+}
+
+.student-learning-memory-support-toggle {
+  justify-self: start;
+}
+
+.student-learning-memory-support-body {
+  display: grid;
+  gap: 0.75rem;
+  color: var(--student-area-muted);
+}
+
+.student-learning-memory-support-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.student-learning-memory-support-grid section {
+  min-width: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.student-learning-memory-support-grid dl {
+  display: grid;
+  grid-template-columns: minmax(8rem, 0.75fr) minmax(0, 1fr);
+  gap: 0.35rem 0.75rem;
+  margin: 0;
+}
+
+.student-learning-memory-support-grid dt {
+  color: var(--text-tertiary);
+  font-weight: 700;
+}
+
+.student-learning-memory-support-grid dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .student-learning-block-header {
   display: grid;
   gap: 0.5rem;

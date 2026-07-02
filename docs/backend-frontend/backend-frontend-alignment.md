@@ -5,7 +5,7 @@
 - Audience: AI agents and maintainers coordinating backend/frontend delivery.
 - Read Time: 5 minutes.
 - Authority Level: canonical status tracker.
-- Last Verified Against: 2026-06-23 repository and alpha-readiness state.
+- Last Verified Against: 2026-07-02 repository and alpha-readiness state.
 - Owner: backend/frontend maintainers + automation agents.
 - Review Cadence: weekly while active roadmap work continues.
 - Status: `active`.
@@ -33,15 +33,15 @@ Provider-specific generation details stay in:
 
 ## Capability Matrix
 
-| Capability                            | Backend | Frontend | Current boundary                                                                     |
-| ------------------------------------- | ------- | -------- | ------------------------------------------------------------------------------------ |
-| Core assignment flow                  | Done    | Done     | recording → transcript → draft → approve → publish                                   |
-| Assignment sessions and job lifecycle | Done    | Done     | sessions cover pre-publish work; jobs cover materialized pipeline runs               |
-| Student workspace and schedule        | Done    | Done     | ongoing tutor-facing copy/interaction distillation belongs to Chunk 12               |
-| Student memory                        | Done    | Done     | inspection and repair are backend-owned; production requires `student-memory-worker` |
-| Generation and safety policy          | Done    | Done     | target-model activation remains an explicit operator decision                        |
-| Rerun and audio regeneration          | Done    | Done     | detailed contract lives in the orchestrator and speech-performance references        |
-| Telegram ops                          | Done    | Partial  | existing operator surface; no new Telegram work before post-alpha review             |
+| Capability                            | Backend | Frontend | Current boundary                                                                                                                             |
+| ------------------------------------- | ------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Core assignment flow                  | Done    | Done     | recording → transcript → draft → approve → publish                                                                                           |
+| Assignment sessions and job lifecycle | Done    | Done     | sessions cover pre-publish work; jobs cover materialized pipeline runs                                                                       |
+| Student workspace and schedule        | Done    | Done     | ongoing tutor-facing copy/interaction distillation belongs to Chunk 12                                                                       |
+| Student memory                        | Done    | Done     | normal refresh is incremental/budgeted; operator health is on Learning + `/students/:id/memory/health`; manual full rebuild remains CLI-only |
+| Generation and safety policy          | Done    | Done     | target-model activation remains an explicit operator decision                                                                                |
+| Rerun and audio regeneration          | Done    | Done     | detailed contract lives in the orchestrator and speech-performance references                                                                |
+| Telegram ops                          | Done    | Partial  | existing operator surface; no new Telegram work before post-alpha review                                                                     |
 
 ## Current Focus
 

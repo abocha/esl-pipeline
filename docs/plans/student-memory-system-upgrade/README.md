@@ -4,12 +4,13 @@
 
 - Audience: maintainers and student-memory agents.
 - Authority Level: active staged roadmap.
-- Last Verified Against: 2026-05-17 repo state.
+- Last Verified Against: 2026-07-02 repo state.
 - Owner: founder-maintainer + backend/frontend maintainers.
 - Review Cadence: after student-memory implementation PRs.
 - Status: `roadmap`.
 - Exit Trigger: archive after the canonical student-memory model is shipped and represented in SSOT, prompt/runtime docs, and relevant package READMEs.
-- Current Focus: use this README as the active memory architecture roadmap; archived phase docs are historical trace.
+- Current Focus: PR-ready validation for completed v1.1 Phases 0-4; Phase 5 is Closed Alpha
+  follow-up polish.
 
 ## Summary
 
@@ -25,6 +26,37 @@ The current repo already has a useful seed:
 
 This upgrade promotes those beginnings into a durable architecture with explicit memory artifact
 types, rollups, retrieval rules, provenance, and a rewritten stateless system prompt.
+
+## Active Phase Detail
+
+The canonical v1 memory architecture is now implemented enough that the current risk is not missing
+artifact types; it is unbounded normal snapshot refresh.
+
+Current v1.1 closeout:
+
+1. [`v1-1-bounded-snapshot-refresh.md`](v1-1-bounded-snapshot-refresh.md) - bounded incremental
+   snapshot refresh, token budgets, candidate gating, and operator observability. Phases 0-4 are
+   the current PR scope; Phase 5 remains Closed Alpha follow-up polish after tutor/operator evidence.
+
+Implemented v1.1 boundaries:
+
+1. Normal lesson/homework-triggered snapshot refresh is incremental or bounded bootstrap by default,
+   not a full-history rebuild.
+2. Incremental snapshot prompts are preflighted against target/hard budgets before provider calls.
+3. Profile-candidate refresh runs only for profile-worthy deltas or explicit manual replay, and
+   duplicate/stale candidate inserts are skipped by default.
+4. Operator memory health is available from the Learning page support details and
+   `GET /students/:id/memory/health`.
+5. Manual full rebuild remains CLI-only during Gate B through the snapshot replay/backfill tool.
+6. Strategy, coverage, budget, and candidate-refresh metadata remain in typed `generation_notes`;
+   no v1.1 schema or contract migration is required.
+
+Known Closed Alpha follow-ups:
+
+1. Add exact DB count helpers for memory health if capped counts become insufficient.
+2. Move support details to a future internal route only if the Learning page becomes noisy.
+3. Consider a guarded operator rebuild action no earlier than Gate C; keep normal tutor-facing
+   rebuild controls out of scope.
 
 ## Locked Decisions
 

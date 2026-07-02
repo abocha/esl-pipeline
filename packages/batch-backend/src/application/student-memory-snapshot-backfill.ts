@@ -6,6 +6,7 @@ import type { BatchBackendConfig } from '../config/env.js';
 import { withPgClient } from '../infrastructure/db.js';
 import { resolveGenerationCandidates } from './generation-policy.js';
 import { requestStudentMemorySnapshotRefresh } from './request-student-memory-snapshot-refresh.js';
+import type { StudentMemorySnapshotRefreshStrategy } from './student-memory-snapshot-generation-notes.js';
 
 export type StudentMemorySnapshotBackfillSelection = 'missing' | 'failed' | 'all';
 
@@ -42,6 +43,12 @@ export async function listStudentMemorySnapshotBackfillTargets(args: {
 export async function requestStudentMemorySnapshotBackfill(args: {
   config: BatchBackendConfig;
   targets: StudentMemorySnapshotBackfillTarget[];
+  strategy: Extract<
+    StudentMemorySnapshotRefreshStrategy,
+    'manual_rebuild_v1_1' | 'full_rebuild_v1'
+  >;
+  operatorReason: string;
+  requestCandidateRefresh?: boolean;
   providerOverride?: GenerationProvider;
   modelOverride?: string;
 }): Promise<{
@@ -55,6 +62,9 @@ export async function requestStudentMemorySnapshotBackfill(args: {
       params: {
         studentId: target.studentId,
         trigger: 'manual-replay',
+        strategy: args.strategy,
+        operatorReason: args.operatorReason,
+        requestCandidateRefresh: args.requestCandidateRefresh === true,
         providerOverride: args.providerOverride,
         modelOverride: args.modelOverride,
       },

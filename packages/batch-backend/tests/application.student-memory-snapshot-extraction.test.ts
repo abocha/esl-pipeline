@@ -138,6 +138,106 @@ describe('application/student-memory-snapshot-extraction', () => {
     });
   });
 
+  it('accepts preserved personal-fact evidence that cites the previous snapshot source', async () => {
+    const executor = vi.fn().mockResolvedValue({
+      output: {
+        ...createStudentMemorySnapshotContent(),
+        personalFacts: [
+          {
+            fact: 'The student plans to travel to Japan this summer.',
+            category: 'personal_plan',
+            authority: 'student_stated',
+            confidence: 'high',
+            evidence: [
+              {
+                sourceId: 'student-memory-snapshot:snapshot-parent',
+                quote: 'I want to go to Japan this summer.',
+                speakerRole: 'student',
+                evidenceNote: 'Preserved from previous snapshot.',
+                transcriptSpan: null,
+              },
+            ],
+            reviewNeeded: false,
+          },
+        ],
+      },
+      rawText: '{"snapshotSummary":"..."}',
+    });
+
+    await expect(
+      extractStudentMemorySnapshotContent({
+        config: createGenerationConfig(),
+        request: {
+          provider: 'openai',
+          model: 'gpt-5.4',
+          prompt: 'Extract student memory snapshot',
+          envelope: {
+            version: 'generation_request_envelope_v1',
+            promptVersion: 'generation_request_envelope_v1',
+            workload: 'student_memory_snapshot',
+            instructions: 'Use bounded sources.',
+            input: '',
+            settings: { reasoningEffort: 'low', textVerbosity: 'low' },
+            sourceManifest: [
+              { id: 'student-memory-snapshot:snapshot-parent', label: 'PREVIOUS_SNAPSHOT' },
+              { id: 'lesson-memory:lesson-trigger', label: 'TRIGGER_LESSON_MEMORY_ENTRY' },
+            ],
+            sourceSelectionHash: 'hash',
+          },
+        },
+        executors: {
+          openai: executor,
+        },
+      }),
+    ).resolves.toMatchObject({
+      content: {
+        personalFacts: [
+          expect.objectContaining({
+            evidence: [
+              expect.objectContaining({
+                sourceId: 'student-memory-snapshot:snapshot-parent',
+              }),
+            ],
+          }),
+        ],
+      },
+    });
+  });
+
+  it('rejects preserved personal-fact evidence that cites an old source outside the manifest', async () => {
+    const executor = vi.fn().mockResolvedValue({
+      output: createStudentMemorySnapshotContent(),
+      rawText: '{"snapshotSummary":"..."}',
+    });
+
+    await expect(
+      extractStudentMemorySnapshotContent({
+        config: createGenerationConfig(),
+        request: {
+          provider: 'openai',
+          model: 'gpt-5.4',
+          prompt: 'Extract student memory snapshot',
+          envelope: {
+            version: 'generation_request_envelope_v1',
+            promptVersion: 'generation_request_envelope_v1',
+            workload: 'student_memory_snapshot',
+            instructions: 'Use bounded sources.',
+            input: '',
+            settings: { reasoningEffort: 'low', textVerbosity: 'low' },
+            sourceManifest: [
+              { id: 'student-memory-snapshot:snapshot-parent', label: 'PREVIOUS_SNAPSHOT' },
+              { id: 'lesson-memory:lesson-trigger', label: 'TRIGGER_LESSON_MEMORY_ENTRY' },
+            ],
+            sourceSelectionHash: 'hash',
+          },
+        },
+        executors: {
+          openai: executor,
+        },
+      }),
+    ).rejects.toThrow('Generated evidence references source IDs outside the request manifest');
+  });
+
   it('raises a dedicated validation error for malformed structured content', async () => {
     const executor = vi.fn().mockResolvedValue({
       output: {

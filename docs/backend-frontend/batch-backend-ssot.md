@@ -5,7 +5,7 @@
 - Audience: maintainers and implementing agents.
 - Read Time: 8 minutes.
 - Authority Level: Backend architecture and service-boundary reference.
-- Last Verified Against: 2026-06-10 repo state.
+- Last Verified Against: 2026-07-02 repo state.
 - Owner: backend/frontend maintainers + automation agents.
 - Review Cadence: monthly or after major backend workflow changes.
 - Status: `reference`.
@@ -28,7 +28,8 @@
 It owns:
 
 - Authenticated HTTP surface for recording/transcript/prompt/draft/job workflows.
-- Authenticated student-memory inspection surfaces and prompt-package provenance inspection.
+- Authenticated student-memory inspection and operator health surfaces plus prompt-package
+  provenance inspection.
 - Queue-backed job orchestration and worker lifecycle.
 - Persistence of workflow artifacts in Postgres.
 - Integration bridge to orchestrator for final publish execution.
@@ -74,6 +75,7 @@ Env reference: [`docs/reference/env.md`](../reference/env.md)
   - `POST /drafts/:id/materialize`
 - Students and student memory:
   - `GET /students/:id/memory`
+  - `GET /students/:id/memory/health`
   - `GET /students/:id/lesson-memory`
   - `GET /students/:id/homework-memory`
   - `GET /students/:id/memory-snapshots`
@@ -146,7 +148,8 @@ Recommended checks when changing backend behavior:
 Student-memory repair is described once in
 [`docs/operations/student-memory-replay-backfill.md`](../operations/student-memory-replay-backfill.md).
 Use its source-checkout or compiled production-container commands; all resulting work is consumed
-by `student-memory-worker`.
+by `student-memory-worker`. Normal lesson/homework-triggered snapshot refresh is incremental and
+budget-guarded; manual full rebuild remains an explicit CLI replay/backfill action.
 
 ## Change Policy
 

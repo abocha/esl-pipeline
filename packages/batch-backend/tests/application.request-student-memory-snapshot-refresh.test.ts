@@ -78,7 +78,12 @@ describe('application/request-student-memory-snapshot-refresh', () => {
   it('supersedes an eligible Batch claim without delaying the fresh online request', async () => {
     await requestStudentMemorySnapshotRefresh({
       config: { generation: {} } as never,
-      params: { studentId: 'student-1', trigger: 'manual-replay' },
+      params: {
+        studentId: 'student-1',
+        trigger: 'manual-replay',
+        strategy: 'manual_rebuild_v1_1',
+        operatorReason: 'Backfill missing alpha snapshots',
+      },
     });
 
     expect(supersedeClaimsMock).toHaveBeenCalledWith({
@@ -97,6 +102,8 @@ describe('application/request-student-memory-snapshot-refresh', () => {
       params: {
         studentId: 'student-1',
         trigger: 'manual-replay',
+        strategy: 'manual_rebuild_v1_1',
+        operatorReason: 'Backfill missing alpha snapshots',
       },
     });
 
@@ -104,6 +111,8 @@ describe('application/request-student-memory-snapshot-refresh', () => {
       expect.objectContaining({
         kind: 'student-memory-snapshot-refresh',
         pendingEntryId: 'snapshot-pending-1',
+        strategy: 'manual_rebuild_v1_1',
+        operatorReason: 'Backfill missing alpha snapshots',
       }),
       expect.objectContaining({
         jobId: 'student-memory-snapshot:student-1:snapshot-pending-1',
@@ -119,6 +128,8 @@ describe('application/request-student-memory-snapshot-refresh', () => {
       params: {
         studentId: 'student-1',
         trigger: 'manual-replay',
+        strategy: 'manual_rebuild_v1_1',
+        operatorReason: 'Backfill missing alpha snapshots',
         providerOverride: 'openrouter',
         modelOverride: 'qwen/qwen3.5',
       },
@@ -132,6 +143,71 @@ describe('application/request-student-memory-snapshot-refresh', () => {
       }),
       expect.any(Object),
     );
+  });
+
+  it('carries explicit manual candidate-refresh requests into pending notes and the queue payload', async () => {
+    await requestStudentMemorySnapshotRefresh({
+      config: {
+        generation: {},
+      } as never,
+      params: {
+        studentId: 'student-1',
+        trigger: 'manual-replay',
+        strategy: 'manual_rebuild_v1_1',
+        operatorReason: 'Backfill missing alpha snapshots',
+        requestCandidateRefresh: true,
+      },
+    });
+
+    expect(ensurePendingMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        generationNotes: expect.objectContaining({
+          requestCandidateRefresh: true,
+        }),
+      }),
+    );
+    expect(enqueueMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestCandidateRefresh: true,
+      }),
+      expect.any(Object),
+    );
+  });
+
+  it('requires explicit strategy and operator reason for manual replay', async () => {
+    await expect(
+      requestStudentMemorySnapshotRefresh({
+        config: { generation: {} } as never,
+        params: { studentId: 'student-1', trigger: 'manual-replay' },
+      }),
+    ).rejects.toThrow('Manual student-memory snapshot replay requires --strategy');
+
+    await expect(
+      requestStudentMemorySnapshotRefresh({
+        config: { generation: {} } as never,
+        params: {
+          studentId: 'student-1',
+          trigger: 'manual-replay',
+          strategy: 'manual_rebuild_v1_1',
+        },
+      }),
+    ).rejects.toThrow('Manual student-memory snapshot replay requires --reason');
+  });
+
+  it('requires source entry id for normal lesson and homework refresh requests', async () => {
+    await expect(
+      requestStudentMemorySnapshotRefresh({
+        config: { generation: {} } as never,
+        params: { studentId: 'student-1', trigger: 'lesson-memory-ready' },
+      }),
+    ).rejects.toThrow('Student-memory snapshot refresh requires sourceEntryId');
+
+    await expect(
+      requestStudentMemorySnapshotRefresh({
+        config: { generation: {} } as never,
+        params: { studentId: 'student-1', trigger: 'homework-memory-ready', sourceEntryId: ' ' },
+      }),
+    ).rejects.toThrow('Student-memory snapshot refresh requires sourceEntryId');
   });
 
   it('reuses the existing pending snapshot row when the same source entry is requested again', async () => {

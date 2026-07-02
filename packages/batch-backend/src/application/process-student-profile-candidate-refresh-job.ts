@@ -22,5 +22,8 @@ export async function processStudentProfileCandidateRefreshJob(args: {
     trigger: args.payload.trigger,
     created: result?.created.length ?? 0,
     skipped: result?.skippedCandidateKeys.length ?? 0,
+    skippedDuplicate: result?.skippedDuplicateCount ?? 0,
+    skippedStale: result?.skippedStaleCount ?? 0,
+    skippedNoProfileWorthyDelta: result?.skippedNoProfileWorthyDeltaCount ?? 0,
   });
 }
