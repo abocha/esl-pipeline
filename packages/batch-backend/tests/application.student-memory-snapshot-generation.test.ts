@@ -96,6 +96,81 @@ describe('application/student-memory-snapshot-generation', () => {
     ]);
   });
 
+  it('normalizes previous snapshot personal-fact evidence to the previous snapshot source', () => {
+    const previousSnapshot = {
+      id: 'snapshot-parent',
+      generatedAt: new Date('2026-03-19T22:00:00.000Z'),
+      snapshotSummary: 'Parent summary.',
+      stableStrengths: [],
+      recurringIssues: [],
+      activeReviewBacklog: [],
+      recentProgress: [],
+      personalFacts: [
+        {
+          fact: 'The student plans to visit Japan.',
+          category: 'personal_plan',
+          authority: 'student_stated',
+          confidence: 'high',
+          evidence: [
+            {
+              sourceId: 'lesson-memory:old-lesson',
+              quote: 'I want to visit Japan.',
+              speakerRole: 'student',
+              evidenceNote: 'Original lesson note.',
+              transcriptSpan: null,
+            },
+          ],
+          reviewNeeded: false,
+        },
+      ],
+      recommendedAssignmentDirections: [],
+      unresolvedIssues: [],
+    };
+    const triggerSource = {
+      kind: 'lesson_memory' as const,
+      entry: {
+        id: 'lesson-trigger',
+        generatedAt: new Date('2026-03-20T00:00:00.000Z'),
+        lessonSummary: 'Trigger lesson.',
+        topicsDiscussed: [],
+        mistakePatterns: [],
+        grammarReviewed: [],
+        grammarWatchlist: [],
+        vocabularyFocus: [],
+        pronunciationFocus: [],
+        studentFacts: [],
+        progressSignals: [],
+        followUpRecommendations: [],
+      },
+    };
+
+    const prompt = buildIncrementalStudentMemorySnapshotPrompt({
+      previousSnapshot,
+      triggerSource,
+      supportingLessonMemoryEntries: [],
+      supportingHomeworkMemoryEntries: [],
+    } as never);
+    const envelope = buildIncrementalStudentMemorySnapshotEnvelope({
+      previousSnapshot,
+      triggerSource,
+      supportingLessonMemoryEntries: [],
+      supportingHomeworkMemoryEntries: [],
+    } as never);
+
+    expect(prompt).toContain('"sourceId": "student-memory-snapshot:snapshot-parent"');
+    expect(prompt).not.toContain('"sourceId": "lesson-memory:old-lesson"');
+    expect(prompt).toContain('Original sourceId: lesson-memory:old-lesson');
+    expect(prompt).toContain(
+      'When preserving prior personal facts, cite the previous snapshot source unless the trigger or supporting sources provide newer evidence.',
+    );
+    expect(envelope.input).toContain('"sourceId":"student-memory-snapshot:snapshot-parent"');
+    expect(envelope.input).not.toContain('"sourceId":"lesson-memory:old-lesson"');
+    expect(envelope.sourceManifest.map((source) => source.id)).toEqual([
+      'student-memory-snapshot:snapshot-parent',
+      'lesson-memory:lesson-trigger',
+    ]);
+  });
+
   it('builds typed v1.1 generation notes for the legacy full rebuild strategy', () => {
     expect(
       buildStudentMemorySnapshotGenerationNotes({
@@ -215,6 +290,7 @@ describe('application/student-memory-snapshot-generation', () => {
         provider: 'openai',
         model: 'gpt-5.4',
         prompt: 'extract student memory snapshot',
+        expectedLatestReadySnapshotId: 'snapshot-parent',
       },
       overrides: {
         extractor,
@@ -243,6 +319,7 @@ describe('application/student-memory-snapshot-generation', () => {
         homeworkMemoryEntryIds: ['homework-1', 'homework-2'],
         provider: 'openai',
         model: 'gpt-5.4',
+        expectedLatestReadySnapshotId: 'snapshot-parent',
         snapshotSummary:
           'The student is more fluent and willing to speak, but tense contrast remains unresolved.',
       }),

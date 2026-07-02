@@ -1,5 +1,9 @@
 import type { HomeworkMemoryRecord } from '../domain/homework-memory-model.js';
-import type { LessonMemoryRecord } from '../domain/lesson-memory-model.js';
+import type {
+  FactEvidence,
+  LessonMemoryRecord,
+  StudentFact,
+} from '../domain/lesson-memory-model.js';
 import type { StudentMemorySnapshotRecord } from '../domain/student-memory-snapshot-model.js';
 import { createGenerationRequestEnvelope } from './generation-request-envelope.js';
 import {
@@ -85,6 +89,7 @@ export function buildIncrementalStudentMemorySnapshotPrompt(
     'You are updating an existing long-term ESL student-memory snapshot.',
     'Do not rebuild from full history. Use the previous snapshot as durable state, incorporate the new canonical source, and use supporting context only to avoid local contradictions or duplicate backlog items.',
     'Preserve still-valid long-term facts from the previous snapshot. Remove or de-emphasize stale items only when the new evidence clearly contradicts them.',
+    'When preserving prior personal facts, cite the previous snapshot source unless the trigger or supporting sources provide newer evidence.',
     'Do not invent facts. Do not duplicate semantically identical items. Keep the snapshot compact and useful for homework generation.',
     '',
     '[PREVIOUS_SNAPSHOT]',
@@ -173,6 +178,7 @@ export function buildIncrementalStudentMemorySnapshotEnvelope(
       'You are updating a canonical long-term student-memory snapshot for ESL homework generation.',
       'Use previous snapshot state, one new canonical trigger source, and bounded supporting context.',
       'Be selective and confidence-aware; omit unsupported claims.',
+      'When preserving prior personal facts, cite the previous snapshot source unless the trigger or supporting sources provide newer evidence.',
       'Every personal-fact evidence item must cite a sourceId from the source manifest and preserve a short excerpt.',
     ].join('\n'),
     sources,
@@ -197,11 +203,44 @@ function buildPreviousSnapshotPayload(snapshot: StudentMemorySnapshotRecord | nu
     recurringIssues: snapshot.recurringIssues,
     activeReviewBacklog: snapshot.activeReviewBacklog,
     recentProgress: snapshot.recentProgress,
-    personalFacts: snapshot.personalFacts,
+    personalFacts: normalizePreviousSnapshotPersonalFacts(snapshot),
     recommendedAssignmentDirections: snapshot.recommendedAssignmentDirections,
     unresolvedIssues: snapshot.unresolvedIssues,
     contentHash: snapshot.contentHash ?? null,
   };
+}
+
+function normalizePreviousSnapshotPersonalFacts(
+  snapshot: StudentMemorySnapshotRecord,
+): StudentFact[] {
+  const previousSnapshotSourceId = `student-memory-snapshot:${snapshot.id}`;
+  return snapshot.personalFacts.map((fact) => ({
+    ...fact,
+    evidence: fact.evidence.map((evidence) =>
+      normalizePreviousSnapshotEvidence(evidence, previousSnapshotSourceId),
+    ),
+  }));
+}
+
+function normalizePreviousSnapshotEvidence(
+  evidence: FactEvidence,
+  previousSnapshotSourceId: string,
+): FactEvidence {
+  const originalSourceId = evidence.sourceId?.trim() || null;
+  const shouldPreserveOriginalSource =
+    originalSourceId !== null && originalSourceId !== previousSnapshotSourceId;
+  return {
+    ...evidence,
+    sourceId: previousSnapshotSourceId,
+    evidenceNote: shouldPreserveOriginalSource
+      ? appendEvidenceNote(evidence.evidenceNote, `Original sourceId: ${originalSourceId}`)
+      : evidence.evidenceNote,
+  };
+}
+
+function appendEvidenceNote(existing: string | null | undefined, addition: string): string {
+  const normalized = existing?.trim();
+  return normalized ? `${normalized} ${addition}` : addition;
 }
 
 function buildTriggerSourcePayload(source: IncrementalStudentMemorySnapshotTriggerSource) {

@@ -24,6 +24,7 @@ export interface GenerateStudentMemorySnapshotRequest {
   prompt: string;
   envelope?: GenerationRequestEnvelopeV1;
   maxOutputTokens?: number;
+  expectedLatestReadySnapshotId?: string | null;
 }
 
 export interface GenerateStudentMemorySnapshotResult {
@@ -88,6 +89,9 @@ export async function generateStudentMemorySnapshot(args: {
     recommendedAssignmentDirections: extraction.content.recommendedAssignmentDirections,
     unresolvedIssues: extraction.content.unresolvedIssues,
     snapshotSummary: extraction.content.snapshotSummary,
+    ...(args.request.expectedLatestReadySnapshotId !== undefined
+      ? { expectedLatestReadySnapshotId: args.request.expectedLatestReadySnapshotId }
+      : {}),
   });
 
   return {
