@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [9.4.0] - 2026-07-02
+
+### Changed
+
+- Automated release from PR #118: feat(student-memory): bound snapshot refresh and add operator health (https://github.com/abocha/esl-pipeline/pull/118)
+
 ## [9.3.1] - 2026-06-28
 
 ### Changed
