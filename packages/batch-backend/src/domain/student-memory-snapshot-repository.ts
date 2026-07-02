@@ -71,7 +71,29 @@ export interface InsertStudentMemorySnapshotParams {
 export type InsertCanonicalReadyStudentMemorySnapshotParams = Omit<
   InsertStudentMemorySnapshotParams,
   'status'
->;
+> & {
+  expectedLatestReadySnapshotId?: string | null;
+};
+
+export class StudentMemorySnapshotParentChangedError extends Error {
+  readonly studentId: string;
+  readonly expectedLatestReadySnapshotId: string | null;
+  readonly actualLatestReadySnapshotId: string | null;
+
+  constructor(args: {
+    studentId: string;
+    expectedLatestReadySnapshotId: string | null;
+    actualLatestReadySnapshotId: string | null;
+  }) {
+    super(
+      `Latest ready student-memory snapshot changed before finalize for student ${args.studentId}: expected ${args.expectedLatestReadySnapshotId ?? 'none'}, actual ${args.actualLatestReadySnapshotId ?? 'none'}`,
+    );
+    this.name = 'StudentMemorySnapshotParentChangedError';
+    this.studentId = args.studentId;
+    this.expectedLatestReadySnapshotId = args.expectedLatestReadySnapshotId;
+    this.actualLatestReadySnapshotId = args.actualLatestReadySnapshotId;
+  }
+}
 
 export interface EnsurePendingStudentMemorySnapshotParams {
   id?: string;
@@ -360,6 +382,28 @@ export async function insertCanonicalReadyStudentMemorySnapshot(
     if (!options?.client) await client.query('BEGIN');
     try {
       await client.query('SELECT id FROM students WHERE id = $1 FOR UPDATE', [params.studentId]);
+
+      if (params.expectedLatestReadySnapshotId !== undefined) {
+        const latestResult = await client.query<{ id: string }>(
+          `
+          SELECT id
+          FROM student_memory_snapshots
+          WHERE student_id = $1
+            AND status = 'ready'
+          ORDER BY generated_at DESC, created_at DESC, id DESC
+          LIMIT 1
+          `,
+          [params.studentId],
+        );
+        const actualLatestReadySnapshotId = latestResult.rows[0]?.id ?? null;
+        if (actualLatestReadySnapshotId !== params.expectedLatestReadySnapshotId) {
+          throw new StudentMemorySnapshotParentChangedError({
+            studentId: params.studentId,
+            expectedLatestReadySnapshotId: params.expectedLatestReadySnapshotId,
+            actualLatestReadySnapshotId,
+          });
+        }
+      }
 
       const insertResult = await client.query(
         `

@@ -38,13 +38,25 @@ export interface StudentMemorySnapshotBudgetDecision {
   message?: string;
 }
 
-export interface StudentMemorySnapshotFailureDetails {
+export type StudentMemorySnapshotFailureDetails =
+  | StudentMemorySnapshotPromptBudgetFailureDetails
+  | StudentMemorySnapshotParentChangedFailureDetails;
+
+export interface StudentMemorySnapshotPromptBudgetFailureDetails {
   code: 'incremental_prompt_input_tokens_exceeded_hard_budget';
   stage: 'snapshot_prompt_budget_preflight';
   message: string;
   inputTokenEstimate: number;
   hardInputTokens: number;
   targetInputTokens: number;
+}
+
+export interface StudentMemorySnapshotParentChangedFailureDetails {
+  code: 'student_memory_snapshot_parent_changed_before_finalize';
+  stage: 'snapshot_ready_finalization';
+  message: string;
+  expectedLatestReadySnapshotId: string | null;
+  actualLatestReadySnapshotId: string | null;
 }
 
 export interface StudentMemorySnapshotCandidateRefreshDecision {

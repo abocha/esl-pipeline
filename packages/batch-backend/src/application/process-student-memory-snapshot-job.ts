@@ -20,6 +20,7 @@ import {
   getLatestReadyStudentMemorySnapshotByStudentId,
   getStudentMemorySnapshotById,
   markStudentMemorySnapshotFailed,
+  StudentMemorySnapshotParentChangedError,
   supersedePendingStudentMemorySnapshotsForStudent,
   updateStudentMemorySnapshotGenerationNotes,
 } from '../domain/student-memory-snapshot-repository.js';
@@ -40,6 +41,7 @@ import {
   resolveStudentMemorySnapshotTriggerSourceKind,
   type StudentMemorySnapshotBudgetDecision,
   type StudentMemorySnapshotFailureDetails,
+  type StudentMemorySnapshotPromptBudgetFailureDetails,
   type StudentMemorySnapshotRefreshStrategy,
   type StudentMemorySnapshotV11GenerationNotes,
 } from './student-memory-snapshot-generation-notes.js';
@@ -263,6 +265,9 @@ export async function processStudentMemorySnapshotJob(args: {
             model: args.payload.model,
             prompt,
             envelope,
+            ...(isGuardedSnapshotRefreshStrategy(buildResult.strategy)
+              ? { expectedLatestReadySnapshotId: buildResult.parentSnapshotId }
+              : {}),
           },
           overrides: args.overrides,
         }),
@@ -334,6 +339,28 @@ export async function processStudentMemorySnapshotJob(args: {
       });
       throw error;
     }
+    if (error instanceof StudentMemorySnapshotParentChangedError) {
+      generationNotes = addParentChangedFailureDetails({
+        generationNotes,
+        error,
+      });
+      logger.warn('Student-memory snapshot parent changed before ready finalization; retrying', {
+        event: 'student_memory_snapshot_parent_changed_retry',
+        studentId: args.payload.studentId,
+        pendingEntryId: args.payload.pendingEntryId,
+        expectedLatestReadySnapshotId: error.expectedLatestReadySnapshotId,
+        actualLatestReadySnapshotId: error.actualLatestReadySnapshotId,
+      });
+      await markFailureIfFinalAttempt({
+        payload: args.payload,
+        attemptsMade: args.attemptsMade,
+        maxAttempts: args.maxAttempts,
+        snapshots,
+        error,
+        generationNotes,
+      });
+      throw error;
+    }
     await markFailureIfFinalAttempt({
       payload: args.payload,
       attemptsMade: args.attemptsMade,
@@ -344,6 +371,29 @@ export async function processStudentMemorySnapshotJob(args: {
     });
     throw error;
   }
+}
+
+function isGuardedSnapshotRefreshStrategy(strategy: StudentMemorySnapshotRefreshStrategy): boolean {
+  return strategy === 'incremental_v1_1' || strategy === 'bootstrap_incremental_v1_1';
+}
+
+function addParentChangedFailureDetails(args: {
+  generationNotes?: StudentMemorySnapshotV11GenerationNotes | null;
+  error: StudentMemorySnapshotParentChangedError;
+}): StudentMemorySnapshotV11GenerationNotes | null {
+  if (!args.generationNotes) {
+    return null;
+  }
+  return {
+    ...args.generationNotes,
+    failureDetails: {
+      code: 'student_memory_snapshot_parent_changed_before_finalize',
+      stage: 'snapshot_ready_finalization',
+      message: args.error.message,
+      expectedLatestReadySnapshotId: args.error.expectedLatestReadySnapshotId,
+      actualLatestReadySnapshotId: args.error.actualLatestReadySnapshotId,
+    },
+  };
 }
 
 async function buildSnapshotRefreshRequest(args: {
@@ -758,7 +808,7 @@ function buildIncrementalSnapshotBudgetDecision(args: {
   promptMetrics: StudentMemorySnapshotPromptMetrics;
   optionalSupportingContextDropped: boolean;
   initialPromptMetrics?: StudentMemorySnapshotPromptMetrics;
-  failureDetails?: StudentMemorySnapshotFailureDetails | null;
+  failureDetails?: StudentMemorySnapshotPromptBudgetFailureDetails | null;
 }): StudentMemorySnapshotBudgetDecision {
   return {
     action: args.failureDetails
@@ -790,7 +840,7 @@ function buildIncrementalSnapshotBudgetDecision(args: {
 function buildIncrementalSnapshotBudgetFailure(args: {
   budget: StudentMemorySnapshotPromptBudget;
   promptMetrics: StudentMemorySnapshotPromptMetrics;
-}): StudentMemorySnapshotFailureDetails {
+}): StudentMemorySnapshotPromptBudgetFailureDetails {
   return {
     code: 'incremental_prompt_input_tokens_exceeded_hard_budget',
     stage: 'snapshot_prompt_budget_preflight',
