@@ -12,6 +12,7 @@ const apiMocks = vi.hoisted(() => ({
   getProfileContent: vi.fn(),
   getProfileRevision: vi.fn(),
   getStudentLearningSurface: vi.fn(),
+  getStudentMemoryHealth: vi.fn(),
   getStudentMemoryOverview: vi.fn(),
   initializeStudentProfileDraft: vi.fn(),
   listProfileRevisions: vi.fn(),
@@ -216,6 +217,8 @@ function seedLearningPageMocks() {
     unresolvedIssues: [],
   });
 
+  apiMocks.getStudentMemoryHealth.mockResolvedValue(makeMemoryHealth());
+
   apiMocks.listStudentProfileCandidates.mockResolvedValue({
     items: [],
     total: 0,
@@ -227,7 +230,7 @@ function seedLearningPageMocks() {
   apiMocks.getStudentLearningSurface.mockImplementation(async (studentId: string) => {
     const context = useStudentAreaContextMock();
     const profileId = context.student?.profileId ?? null;
-    const [profile, revisions, memory, bindings, candidates] = await Promise.all([
+    const [profile, revisions, memory, memoryHealth, bindings, candidates] = await Promise.all([
       profileId ? apiMocks.getProfileContent(profileId) : Promise.resolve(null),
       profileId
         ? apiMocks.listProfileRevisions(profileId, {
@@ -237,6 +240,7 @@ function seedLearningPageMocks() {
           })
         : Promise.resolve({ items: [], total: 0, limit: 0, offset: 0, order: 'desc' }),
       apiMocks.getStudentMemoryOverview(studentId, { lessonLimit: 3, homeworkLimit: 2 }),
+      apiMocks.getStudentMemoryHealth(studentId),
       apiMocks.listStudentProfileBindings(studentId, { limit: 5, offset: 0, order: 'desc' }),
       apiMocks.listStudentProfileCandidates(studentId, { limit: 200, offset: 0, order: 'desc' }),
     ]);
@@ -244,6 +248,7 @@ function seedLearningPageMocks() {
       profile,
       revisions,
       memory,
+      memoryHealth,
       bindings,
       candidates,
     };
@@ -325,6 +330,61 @@ function renderLearningPage() {
   );
 }
 
+function makeMemoryHealth(overrides: Record<string, unknown> = {}) {
+  return {
+    studentId: 'student-alex',
+    latestSnapshot: {
+      id: 'snapshot-1',
+      status: 'ready',
+      generatedAt: NOW,
+      strategy: 'incremental_v1_1',
+      trigger: 'lesson-memory-ready',
+      triggerSourceKind: 'lesson_memory',
+      triggerSourceEntryId: 'lesson-1',
+      parentSnapshotId: 'snapshot-parent',
+      inputTokenEstimate: 18_500,
+      outputTokenEstimate: null,
+      promptByteLength: 74_000,
+      includedLessonMemoryCount: 2,
+      includedHomeworkMemoryCount: 1,
+      coveredLessonMemoryCount: 9,
+      coveredHomeworkMemoryCount: 4,
+      contentHash: 'snapshot-hash',
+      materialChange: true,
+      budgetDecision: { action: 'allow' },
+      candidateRefresh: {
+        requested: true,
+        triggerProfileWorthyStudentFactCount: 2,
+        skippedNoProfileWorthyDeltaCount: 0,
+      },
+    },
+    memoryCounts: {
+      lesson: {
+        ready: { count: 9, capped: false, limit: 500 },
+        pending: { count: 1, capped: false, limit: 500 },
+        failed: { count: 0, capped: false, limit: 500 },
+      },
+      homework: {
+        ready: { count: 4, capped: false, limit: 500 },
+        pending: { count: 0, capped: false, limit: 500 },
+        failed: { count: 1, capped: false, limit: 500 },
+      },
+    },
+    latestFailedReason: {
+      source: 'homework',
+      artifactId: 'homework-failed',
+      message: 'Homework memory extraction failed.',
+    },
+    profileCandidateCounts: {
+      pending: 3,
+      approved: 2,
+      rejected: 1,
+      deferred: 4,
+    },
+    ...overrides,
+  };
+}
+
 function makeLearningSurface(overrides: Record<string, unknown> = {}) {
   return {
     profile: {
@@ -375,6 +435,7 @@ function makeLearningSurface(overrides: Record<string, unknown> = {}) {
       recentReadyHomeworkMemory: [],
       unresolvedIssues: [],
     },
+    memoryHealth: makeMemoryHealth(),
     bindings: {
       items: [],
       total: 0,
@@ -491,6 +552,189 @@ describe('StudentLearningPage', () => {
     expect(await screen.findByDisplayValue('B2')).toBeTruthy();
     expect(screen.getByDisplayValue('Present roadmap updates with confidence.')).toBeTruthy();
     expect(screen.getByText(/Draft profile populated from the latest lesson memory/i)).toBeTruthy();
+  });
+
+  it('keeps operator memory health details collapsed until opened', async () => {
+    const user = userEvent.setup();
+    apiMocks.getStudentLearningSurface.mockResolvedValueOnce(
+      makeLearningSurface({
+        memory: {
+          studentId: 'student-alex',
+          latestReadyStudentMemorySnapshot: {
+            id: 'snapshot-1',
+            studentId: 'student-alex',
+            schemaVersion: 'student-memory-snapshot.v1',
+            generatedAt: NOW,
+            provider: 'openai',
+            model: 'gpt-5.4',
+            status: 'ready',
+            sourceKind: 'student_memory_rollup',
+            lessonMemoryEntryIds: ['lesson-1'],
+            homeworkMemoryEntryIds: ['homework-1'],
+            contentHash: 'snapshot-hash',
+            generationNotes: null,
+            stableStrengths: [],
+            recurringIssues: [],
+            activeReviewBacklog: [],
+            recentProgress: [],
+            personalFacts: [],
+            recommendedAssignmentDirections: [],
+            unresolvedIssues: [],
+            snapshotSummary: 'Recent learner memory summary.',
+            supersededById: null,
+            supersededAt: null,
+            createdAt: NOW,
+            updatedAt: NOW,
+          },
+          recentReadyLessonMemory: [],
+          recentReadyHomeworkMemory: [],
+          unresolvedIssues: [],
+        },
+      }),
+    );
+
+    renderLearningPage();
+
+    expect(await screen.findByText('Recent learner memory summary.')).toBeTruthy();
+    expect(screen.queryByText('incremental_v1_1')).toBeNull();
+    expect(screen.queryByText('snapshot-hash')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: /Memory support details/i }));
+
+    expect(screen.getByText('incremental_v1_1')).toBeTruthy();
+    expect(screen.getByText('snapshot-hash')).toBeTruthy();
+    expect(screen.getByText(/Homework memory extraction failed/i)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /manual full rebuild/i })).toBeNull();
+  });
+
+  it('shows non-technical memory fallback states when health details are unavailable', async () => {
+    apiMocks.getStudentLearningSurface.mockResolvedValueOnce(
+      makeLearningSurface({
+        memory: {
+          studentId: 'student-alex',
+          latestReadyStudentMemorySnapshot: null,
+          recentReadyLessonMemory: [],
+          recentReadyHomeworkMemory: [],
+          unresolvedIssues: [],
+        },
+        memoryHealth: null,
+      }),
+    );
+
+    renderLearningPage();
+
+    expect(
+      await screen.findByText(/No ready student-memory snapshot is available yet/i),
+    ).toBeTruthy();
+    expect(screen.queryByText('incremental_v1_1')).toBeNull();
+    expect(screen.queryByText('Content hash')).toBeNull();
+  });
+
+  it('shows failed latest snapshot details even when no ready snapshot exists', async () => {
+    const user = userEvent.setup();
+    apiMocks.getStudentLearningSurface.mockResolvedValueOnce(
+      makeLearningSurface({
+        memory: {
+          studentId: 'student-alex',
+          latestReadyStudentMemorySnapshot: null,
+          recentReadyLessonMemory: [],
+          recentReadyHomeworkMemory: [],
+          unresolvedIssues: [],
+        },
+        memoryHealth: makeMemoryHealth({
+          latestSnapshot: {
+            id: 'snapshot-failed',
+            status: 'failed',
+            generatedAt: NOW,
+            strategy: 'incremental_v1_1',
+            trigger: 'lesson-memory-ready',
+            triggerSourceKind: 'lesson_memory',
+            triggerSourceEntryId: 'lesson-1',
+            parentSnapshotId: 'snapshot-parent',
+            inputTokenEstimate: 36_200,
+            outputTokenEstimate: null,
+            promptByteLength: 144_800,
+            includedLessonMemoryCount: 2,
+            includedHomeworkMemoryCount: 1,
+            coveredLessonMemoryCount: 9,
+            coveredHomeworkMemoryCount: 4,
+            contentHash: 'snapshot-failed-hash',
+            materialChange: false,
+            budgetDecision: { action: 'fail_before_provider' },
+            candidateRefresh: null,
+          },
+          latestFailedReason: {
+            source: 'snapshot',
+            artifactId: 'snapshot-failed',
+            message: 'Incremental snapshot prompt exceeded the hard budget.',
+          },
+        }),
+      }),
+    );
+
+    renderLearningPage();
+
+    expect(
+      await screen.findByText(/No ready student-memory snapshot is available yet/i),
+    ).toBeTruthy();
+    expect(screen.queryByText('incremental_v1_1')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: /Memory support details/i }));
+
+    expect(screen.getByText('incremental_v1_1')).toBeTruthy();
+    expect(screen.getByText('snapshot-failed-hash')).toBeTruthy();
+    expect(screen.getByText(/Incremental snapshot prompt exceeded the hard budget/i)).toBeTruthy();
+  });
+
+  it('keeps a quiet support fallback when health diagnostics are unavailable', async () => {
+    const user = userEvent.setup();
+    apiMocks.getStudentLearningSurface.mockResolvedValueOnce(
+      makeLearningSurface({
+        memory: {
+          studentId: 'student-alex',
+          latestReadyStudentMemorySnapshot: {
+            id: 'snapshot-1',
+            studentId: 'student-alex',
+            schemaVersion: 'student-memory-snapshot.v1',
+            generatedAt: NOW,
+            provider: 'openai',
+            model: 'gpt-5.4',
+            status: 'ready',
+            sourceKind: 'student_memory_rollup',
+            lessonMemoryEntryIds: ['lesson-1'],
+            homeworkMemoryEntryIds: ['homework-1'],
+            contentHash: 'snapshot-hash',
+            generationNotes: null,
+            stableStrengths: [],
+            recurringIssues: [],
+            activeReviewBacklog: [],
+            recentProgress: [],
+            personalFacts: [],
+            recommendedAssignmentDirections: [],
+            unresolvedIssues: [],
+            snapshotSummary: 'Recent learner memory summary.',
+            supersededById: null,
+            supersededAt: null,
+            createdAt: NOW,
+            updatedAt: NOW,
+          },
+          recentReadyLessonMemory: [],
+          recentReadyHomeworkMemory: [],
+          unresolvedIssues: [],
+        },
+        memoryHealth: null,
+      }),
+    );
+
+    renderLearningPage();
+
+    expect(await screen.findByText('Recent learner memory summary.')).toBeTruthy();
+    expect(screen.queryByText('Content hash')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: /Memory support details/i }));
+
+    expect(screen.getByText(/Memory support details unavailable/i)).toBeTruthy();
+    expect(screen.queryByText('snapshot-hash')).toBeNull();
   });
 
   it('shows the active revision version label from revision history instead of a synthetic current label', async () => {

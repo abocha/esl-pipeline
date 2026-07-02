@@ -1,5 +1,3 @@
-import { createHash } from 'node:crypto';
-
 import type { GenerationProvider } from '@esl-pipeline/contracts';
 
 import type { BatchBackendConfig } from '../config/env.js';
@@ -11,6 +9,7 @@ import {
   type ExtractStudentMemorySnapshotContentRequest,
   extractStudentMemorySnapshotContent,
 } from './student-memory-snapshot-extraction.js';
+import { hashStudentMemorySnapshotContent } from './student-memory-snapshot-hashes.js';
 
 export const STUDENT_MEMORY_SNAPSHOT_SCHEMA_VERSION = 'student-memory-snapshot.v1';
 
@@ -25,6 +24,7 @@ export interface GenerateStudentMemorySnapshotRequest {
   prompt: string;
   envelope?: GenerationRequestEnvelopeV1;
   maxOutputTokens?: number;
+  expectedLatestReadySnapshotId?: string | null;
 }
 
 export interface GenerateStudentMemorySnapshotResult {
@@ -64,7 +64,7 @@ export async function generateStudentMemorySnapshot(args: {
   });
 
   const generatedAt = now();
-  const contentHash = createHash('sha256').update(JSON.stringify(extraction.content)).digest('hex');
+  const contentHash = hashStudentMemorySnapshotContent(extraction.content);
 
   const snapshot = await repository.insertCanonicalReady({
     studentId: args.request.studentId,
@@ -89,6 +89,9 @@ export async function generateStudentMemorySnapshot(args: {
     recommendedAssignmentDirections: extraction.content.recommendedAssignmentDirections,
     unresolvedIssues: extraction.content.unresolvedIssues,
     snapshotSummary: extraction.content.snapshotSummary,
+    ...(args.request.expectedLatestReadySnapshotId !== undefined
+      ? { expectedLatestReadySnapshotId: args.request.expectedLatestReadySnapshotId }
+      : {}),
   });
 
   return {

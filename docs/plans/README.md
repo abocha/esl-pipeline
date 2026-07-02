@@ -5,7 +5,7 @@
 - Audience: maintainers and AI agents working from plan docs.
 - Read Time: 4 minutes.
 - Authority Level: planning router.
-- Last Verified Against: 2026-03-13 repo state.
+- Last Verified Against: 2026-07-02 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: monthly or after major planning-topology changes.
 - Status: `router`.
@@ -87,6 +87,9 @@
 6. `docs/plans/slice-1-private-hosted-environment.md`
 7. `docs/plans/slice-2-invite-workspace-first-student.md`
 8. `docs/plans/2026-06-23-alpha-readiness.md`
+9. `docs/plans/student-memory-system-upgrade/v1-1-bounded-snapshot-refresh.md` - Phases 0-4
+   implemented and in PR-ready validation; archive after merge, with Phase 5 remaining Closed Alpha
+   follow-up polish.
 
 ## Historical and Generated Aids
 

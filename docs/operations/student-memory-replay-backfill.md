@@ -5,7 +5,7 @@
 - Audience: operators and implementation agents maintaining the batch backend.
 - Read Time: 5 minutes.
 - Authority Level: active operations runbook.
-- Last Verified Against: 2026-06-15 repo state.
+- Last Verified Against: 2026-07-02 repo state.
 - Owner: batch-backend maintainers + automation agents.
 - Review Cadence: after student-memory tooling changes.
 - Status: `active`.
@@ -121,7 +121,9 @@ pnpm --filter @esl-pipeline/batch-backend exec tsx --tsconfig tsconfig.json src/
 ## Student-Memory Snapshot Replay
 
 Snapshot replay rebuilds the student rollup from canonical ready lesson-memory and homework-memory
-artifacts.
+artifacts. Normal lesson/homework-triggered snapshot refresh is incremental; this tool is the
+explicit manual rebuild/backfill path. During Gate B, manual full rebuild remains CLI-only; a
+guarded operator app action is a possible Gate C follow-up, not current product behavior.
 
 Host-run command:
 
@@ -143,6 +145,8 @@ Supported options:
 - `--limit <n>`
 - `--selection missing|failed|all`
 - `--student-id <student-id>`
+- `--strategy manual_rebuild_v1_1|full_rebuild_v1`
+- `--reason <operator-reason>` (required unless `--dry-run`)
 - `--provider openai|google_ai_studio|openrouter`
 - `--model <model-id>`
 
@@ -152,11 +156,14 @@ Operator notes:
    older than newer canonical lesson/homework memory.
 2. Snapshot replay is eventually consistent and does not block prompt-package creation.
 3. Snapshot replay only uses canonical ready lesson-memory and homework-memory inputs.
+4. Non-dry-run replay must name the strategy and operator reason so manual rebuilds are auditable.
+5. Prefer `manual_rebuild_v1_1` for v1.1 manual replay. Use `full_rebuild_v1` only for explicit
+   legacy comparison or compatibility checks.
 
 Example:
 
 ```bash
-pnpm --filter @esl-pipeline/batch-backend exec tsx --tsconfig tsconfig.json src/tools/refresh-student-memory-snapshots.ts --selection missing --limit 20
+pnpm --filter @esl-pipeline/batch-backend exec tsx --tsconfig tsconfig.json src/tools/refresh-student-memory-snapshots.ts --selection missing --limit 20 --strategy manual_rebuild_v1_1 --reason "Backfill missing alpha snapshots"
 ```
 
 ## Student Lesson Artifact Export

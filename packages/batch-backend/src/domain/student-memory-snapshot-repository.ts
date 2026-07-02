@@ -71,7 +71,29 @@ export interface InsertStudentMemorySnapshotParams {
 export type InsertCanonicalReadyStudentMemorySnapshotParams = Omit<
   InsertStudentMemorySnapshotParams,
   'status'
->;
+> & {
+  expectedLatestReadySnapshotId?: string | null;
+};
+
+export class StudentMemorySnapshotParentChangedError extends Error {
+  readonly studentId: string;
+  readonly expectedLatestReadySnapshotId: string | null;
+  readonly actualLatestReadySnapshotId: string | null;
+
+  constructor(args: {
+    studentId: string;
+    expectedLatestReadySnapshotId: string | null;
+    actualLatestReadySnapshotId: string | null;
+  }) {
+    super(
+      `Latest ready student-memory snapshot changed before finalize for student ${args.studentId}: expected ${args.expectedLatestReadySnapshotId ?? 'none'}, actual ${args.actualLatestReadySnapshotId ?? 'none'}`,
+    );
+    this.name = 'StudentMemorySnapshotParentChangedError';
+    this.studentId = args.studentId;
+    this.expectedLatestReadySnapshotId = args.expectedLatestReadySnapshotId;
+    this.actualLatestReadySnapshotId = args.actualLatestReadySnapshotId;
+  }
+}
 
 export interface EnsurePendingStudentMemorySnapshotParams {
   id?: string;
@@ -361,6 +383,28 @@ export async function insertCanonicalReadyStudentMemorySnapshot(
     try {
       await client.query('SELECT id FROM students WHERE id = $1 FOR UPDATE', [params.studentId]);
 
+      if (params.expectedLatestReadySnapshotId !== undefined) {
+        const latestResult = await client.query<{ id: string }>(
+          `
+          SELECT id
+          FROM student_memory_snapshots
+          WHERE student_id = $1
+            AND status = 'ready'
+          ORDER BY generated_at DESC, created_at DESC, id DESC
+          LIMIT 1
+          `,
+          [params.studentId],
+        );
+        const actualLatestReadySnapshotId = latestResult.rows[0]?.id ?? null;
+        if (actualLatestReadySnapshotId !== params.expectedLatestReadySnapshotId) {
+          throw new StudentMemorySnapshotParentChangedError({
+            studentId: params.studentId,
+            expectedLatestReadySnapshotId: params.expectedLatestReadySnapshotId,
+            actualLatestReadySnapshotId,
+          });
+        }
+      }
+
       const insertResult = await client.query(
         `
         INSERT INTO student_memory_snapshots (
@@ -621,6 +665,7 @@ export async function supersedePendingStudentMemorySnapshotsForStudent(params: {
 export async function markStudentMemorySnapshotFailed(params: {
   id: string;
   errorMessage: string;
+  generationNotes?: StudentMemorySnapshotGenerationNotes | null;
   providerRequestId?: string | null;
   usage?: unknown;
 }): Promise<StudentMemorySnapshotRecord | null> {
@@ -631,10 +676,14 @@ export async function markStudentMemorySnapshotFailed(params: {
 
   const generationNotes: StudentMemorySnapshotGenerationNotes = {
     ...existing.generationNotes,
+    ...(params.generationNotes ?? {}),
     error: params.errorMessage,
     providerRequestId:
-      params.providerRequestId ?? existing.generationNotes?.providerRequestId ?? null,
-    usage: params.usage ?? existing.generationNotes?.usage ?? null,
+      params.providerRequestId ??
+      params.generationNotes?.providerRequestId ??
+      existing.generationNotes?.providerRequestId ??
+      null,
+    usage: params.usage ?? params.generationNotes?.usage ?? existing.generationNotes?.usage ?? null,
     failedAt: new Date().toISOString(),
   };
 
@@ -648,6 +697,62 @@ export async function markStudentMemorySnapshotFailed(params: {
         updated_at = NOW()
       WHERE id = $1
         AND status = 'pending'
+      RETURNING
+        id,
+        student_id,
+        schema_version,
+        generated_at,
+        provider,
+        model,
+        status,
+        source_kind,
+        lesson_memory_entry_ids,
+        homework_memory_entry_ids,
+        content_hash,
+        generation_notes,
+        stable_strengths,
+        recurring_issues,
+        active_review_backlog,
+        recent_progress,
+        personal_facts,
+        recommended_assignment_directions,
+        unresolved_issues,
+        snapshot_summary,
+        superseded_by_id,
+        superseded_at,
+        created_at,
+        updated_at
+      `,
+      [params.id, JSON.stringify(generationNotes)],
+    );
+    return result.rows[0];
+  });
+
+  return row ? mapRowToStudentMemorySnapshot(row) : null;
+}
+
+export async function updateStudentMemorySnapshotGenerationNotes(params: {
+  id: string;
+  generationNotes: StudentMemorySnapshotGenerationNotes;
+}): Promise<StudentMemorySnapshotRecord | null> {
+  const existing = await getStudentMemorySnapshotById(params.id);
+  if (!existing) {
+    return null;
+  }
+
+  const generationNotes: StudentMemorySnapshotGenerationNotes = {
+    ...(existing.generationNotes ?? {}),
+    ...params.generationNotes,
+  };
+
+  const row = await withPgClient(async (client: PoolClient) => {
+    const result = await client.query(
+      `
+      UPDATE student_memory_snapshots
+      SET
+        generation_notes = $2::jsonb,
+        updated_at = NOW()
+      WHERE id = $1
       RETURNING
         id,
         student_id,

@@ -6,15 +6,24 @@ import {
   resolveStudentMemorySnapshotBackfillCandidate,
   type StudentMemorySnapshotBackfillSelection,
 } from '../application/student-memory-snapshot-backfill.js';
+import type { StudentMemorySnapshotRefreshStrategy } from '../application/student-memory-snapshot-generation-notes.js';
 import { loadBatchBackendEnv } from '../bootstrap/env.js';
 import { loadConfig } from '../config/env.js';
+
+type ManualSnapshotRefreshStrategy = Extract<
+  StudentMemorySnapshotRefreshStrategy,
+  'manual_rebuild_v1_1' | 'full_rebuild_v1'
+>;
 
 interface CliOptions {
   limit: number;
   selection: StudentMemorySnapshotBackfillSelection;
+  strategy: ManualSnapshotRefreshStrategy;
+  reason?: string;
   provider?: GenerationProvider;
   model?: string;
   studentId?: string;
+  requestCandidateRefresh: boolean;
   dryRun: boolean;
 }
 
@@ -22,6 +31,8 @@ function parseArgs(argv: string[]): CliOptions {
   const options: CliOptions = {
     limit: 80,
     selection: 'missing',
+    strategy: 'manual_rebuild_v1_1',
+    requestCandidateRefresh: false,
     dryRun: false,
   };
 
@@ -33,6 +44,11 @@ function parseArgs(argv: string[]): CliOptions {
 
     if (arg === '--dry-run') {
       options.dryRun = true;
+      continue;
+    }
+
+    if (arg === '--candidate-refresh') {
+      options.requestCandidateRefresh = true;
       continue;
     }
 
@@ -55,6 +71,29 @@ function parseArgs(argv: string[]): CliOptions {
         throw new Error('Invalid --selection. Use missing, failed, or all');
       }
       options.selection = value;
+      index += 1;
+      continue;
+    }
+
+    if (arg === '--strategy') {
+      const value = argv[index + 1]?.trim();
+      if (!value) {
+        throw new Error('Missing value for --strategy');
+      }
+      if (value !== 'manual_rebuild_v1_1' && value !== 'full_rebuild_v1') {
+        throw new Error('Invalid --strategy. Use manual_rebuild_v1_1 or full_rebuild_v1');
+      }
+      options.strategy = value;
+      index += 1;
+      continue;
+    }
+
+    if (arg === '--reason') {
+      const value = argv[index + 1]?.trim();
+      if (!value) {
+        throw new Error('Missing value for --reason');
+      }
+      options.reason = value;
       index += 1;
       continue;
     }
@@ -128,6 +167,10 @@ async function run(): Promise<void> {
     providerOverride: options.provider,
     modelOverride: options.model,
   });
+  if (!options.dryRun && !options.reason?.trim()) {
+    throw new Error('--reason is required when requesting manual student-memory snapshot replay');
+  }
+
   const targets = await listStudentMemorySnapshotBackfillTargets({
     limit: options.limit,
     selection: options.selection,
@@ -147,6 +190,12 @@ async function run(): Promise<void> {
       `[student-memory-snapshot-refresh] provider=${candidate.provider} model=${candidate.model}`,
     );
     console.log(
+      `[student-memory-snapshot-refresh] strategy=${options.strategy} reason=${options.reason ?? 'none'}`,
+    );
+    console.log(
+      `[student-memory-snapshot-refresh] candidateRefresh=${options.requestCandidateRefresh}`,
+    );
+    console.log(
       `[student-memory-snapshot-refresh] selection=${options.selection} processed=${targets.length} requested=0`,
     );
     console.log('[student-memory-snapshot-refresh] dryRun=true');
@@ -156,12 +205,21 @@ async function run(): Promise<void> {
   const result = await requestStudentMemorySnapshotBackfill({
     config,
     targets,
+    strategy: options.strategy,
+    operatorReason: options.reason?.trim() ?? '',
+    requestCandidateRefresh: options.requestCandidateRefresh,
     providerOverride: options.provider,
     modelOverride: options.model,
   });
 
   console.log(
     `[student-memory-snapshot-refresh] provider=${candidate.provider} model=${candidate.model}`,
+  );
+  console.log(
+    `[student-memory-snapshot-refresh] strategy=${options.strategy} reason=${options.reason}`,
+  );
+  console.log(
+    `[student-memory-snapshot-refresh] candidateRefresh=${options.requestCandidateRefresh}`,
   );
   console.log(
     `[student-memory-snapshot-refresh] selection=${options.selection} processed=${targets.length} requested=${result.requested}`,

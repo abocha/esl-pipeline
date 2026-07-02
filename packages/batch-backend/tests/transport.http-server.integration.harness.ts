@@ -214,6 +214,7 @@ vi.mock('../src/application/student-timeline', () => {
 
 vi.mock('../src/application/student-memory-inspection', () => {
   return {
+    getStudentMemoryHealth: vi.fn(),
     getStudentMemoryOverview: vi.fn(),
     listStudentLessonMemory: vi.fn(),
     listStudentHomeworkMemory: vi.fn(),
@@ -417,6 +418,9 @@ export function describeHttpServerIntegrationSuite(
     const mockGetStudentTimeline = vi.mocked(studentTimelineModule.getStudentTimeline);
     const mockGetStudentMemoryOverview = vi.mocked(
       studentMemoryInspectionModule.getStudentMemoryOverview,
+    );
+    const mockGetStudentMemoryHealth = vi.mocked(
+      studentMemoryInspectionModule.getStudentMemoryHealth,
     );
     const mockListStudentLessonMemory = vi.mocked(
       studentMemoryInspectionModule.listStudentLessonMemory,
@@ -809,6 +813,29 @@ export function describeHttpServerIntegrationSuite(
         recentReadyLessonMemory: [],
         recentReadyHomeworkMemory: [],
         unresolvedIssues: [],
+      });
+      mockGetStudentMemoryHealth.mockResolvedValue({
+        studentId: deriveStudentId('Anna'),
+        latestSnapshot: null,
+        memoryCounts: {
+          lesson: {
+            ready: { count: 0, capped: false, limit: 500 },
+            pending: { count: 0, capped: false, limit: 500 },
+            failed: { count: 0, capped: false, limit: 500 },
+          },
+          homework: {
+            ready: { count: 0, capped: false, limit: 500 },
+            pending: { count: 0, capped: false, limit: 500 },
+            failed: { count: 0, capped: false, limit: 500 },
+          },
+        },
+        latestFailedReason: null,
+        profileCandidateCounts: {
+          pending: 0,
+          approved: 0,
+          rejected: 0,
+          deferred: 0,
+        },
       });
       mockListStudentLessonMemory.mockResolvedValue({
         studentId: deriveStudentId('Anna'),
@@ -1291,6 +1318,7 @@ export function describeHttpServerIntegrationSuite(
       mockRestoreTemplateRevision,
       mockActivateTemplateRevisionForTemplate,
       mockGetStudentTimeline,
+      mockGetStudentMemoryHealth,
       mockGetStudentMemoryOverview,
       mockListStudentLessonMemory,
       mockListStudentHomeworkMemory,
