@@ -21,10 +21,11 @@ batch-backend student-memory queue, existing batch-frontend Learning page.
 
 - Audience: implementation agents, founder-maintainer, backend/frontend maintainers.
 - Status: `active`.
-- Last Verified Against: 2026-07-01 repo state.
+- Last Verified Against: 2026-07-02 repo state.
 - Exit Trigger: archive after v1.1 is implemented, validated, and represented in the student-memory
   roadmap plus backend/frontend docs.
-- Current Focus: execute Phases 0-4 before admitting the Closed Alpha cohort.
+- Current Focus: PR-ready validation for completed Phases 0-4; Phase 5 is Closed Alpha follow-up
+  polish.
 - Source Design: [`docs/reference/STUDENT_MEMORY_V1_1_DESIGN.md`](../../reference/STUDENT_MEMORY_V1_1_DESIGN.md).
 - Release Anchor: [`docs/reference/PRODUCT_NORTH_STAR_AND_READINESS.md`](../../reference/PRODUCT_NORTH_STAR_AND_READINESS.md).
 
@@ -37,6 +38,31 @@ batch-backend student-memory queue, existing batch-frontend Learning page.
 | Gate C: Closed Alpha, 3-5 tutors   | Founder/operator can inspect stale/failed/expensive memory state in-app without using OpenAI Platform logs as the primary debug surface. | Phase 4          |
 | Closed Alpha follow-up             | Improve display polish and optional grouping/diff views only after tutor evidence shows need.                                            | Phase 5          |
 | Beta or later                      | Embeddings, semantic ranking, public explainability, lifecycle/privacy workflows, and memory editing UX.                                 | Not in this plan |
+
+## Closeout Status
+
+Phases 0-4 are complete in the v1.1 implementation branch:
+
+1. Phase 0 records snapshot strategy, trigger, source coverage, prompt byte length, input-token
+   estimates, and material-change metadata in typed `generation_notes`.
+2. Phase 1 makes normal lesson/homework-triggered snapshot refresh incremental or bounded bootstrap
+   by default, while preserving explicit manual rebuild/backfill strategies.
+3. Phase 2 preflights incremental snapshot prompts against target/hard budgets, drops optional
+   supporting context first, and fails oversized normal refreshes before provider calls.
+4. Phase 3 gates profile-candidate refreshes on profile-worthy deltas and skips duplicate/stale
+   candidate inserts by default while recording counts.
+5. Phase 4 exposes compact operator memory health through `GET /students/:id/memory/health` and the
+   Learning page's collapsed memory support details.
+
+Scope confirmations:
+
+1. Manual full rebuild remains CLI-only for Gate B through
+   `packages/batch-backend/src/tools/refresh-student-memory-snapshots.ts`; no normal tutor-facing or
+   operator app rebuild button shipped in Phases 0-4.
+2. The stable assignment-generation path was not refactored by v1.1. Normal homework generation
+   still consumes the bounded memory package assembled by the existing prompt-package path.
+3. No migration, `schema.sql`, or contract-version change was introduced for v1.1. Strategy,
+   coverage, budget, and candidate-refresh metadata stay in typed `generation_notes`.
 
 ## File Map
 
@@ -90,20 +116,20 @@ Docs:
 
 Release tie: Gate A and Gate B entry. This phase is behavior-preserving.
 
-- [ ] Add typed snapshot generation-note helpers for v1.1 metadata.
+- [x] Add typed snapshot generation-note helpers for v1.1 metadata.
   - `strategy` initially records `full_rebuild_v1` for current normal behavior.
   - `trigger`, `triggerSourceKind`, `triggerSourceEntryId`, `included*Ids`, `covered*Ids`,
     `inputTokenEstimate`, `promptByteLength`, and `materialChange` are represented in one typed
     helper.
-- [ ] Reuse `estimateGenerationTokens` from the existing generation-budget path for snapshot prompt
+- [x] Reuse `estimateGenerationTokens` from the existing generation-budget path for snapshot prompt
       estimates.
-- [ ] Record prompt byte length, estimated input tokens, source counts, strategy, and trigger before
+- [x] Record prompt byte length, estimated input tokens, source counts, strategy, and trigger before
       the provider call.
-- [ ] Preserve current prompt content and current full-history behavior.
-- [ ] Expose the new metrics through the existing memory snapshot list/overview records.
-- [ ] Add tests that prove current normal refresh records `full_rebuild_v1` and all included source
+- [x] Preserve current prompt content and current full-history behavior.
+- [x] Expose the new metrics through the existing memory snapshot list/overview records.
+- [x] Add tests that prove current normal refresh records `full_rebuild_v1` and all included source
       counts without changing generator inputs.
-- [ ] Run:
+- [x] Run:
   - `pnpm --filter @esl-pipeline/batch-backend exec vitest run --config ../../vitest.config.ts tests/application.process-student-memory-snapshot-job.test.ts tests/application.student-memory-snapshot-generation.test.ts tests/application.student-memory-inspection.test.ts`
 
 Exit criteria:
@@ -116,26 +142,26 @@ Exit criteria:
 
 Release tie: Gate B blocker. This phase changes normal snapshot behavior.
 
-- [ ] Add dependency seams in `process-student-memory-snapshot-job.ts` for:
+- [x] Add dependency seams in `process-student-memory-snapshot-job.ts` for:
   - latest ready snapshot lookup,
   - lesson-memory source lookup by `sourceEntryId`,
   - homework-memory source lookup by `sourceEntryId`,
   - recent ready lesson memory limited to 2,
   - recent ready homework memory limited to 1.
-- [ ] Add `buildIncrementalStudentMemorySnapshotPrompt` and
+- [x] Add `buildIncrementalStudentMemorySnapshotPrompt` and
       `buildIncrementalStudentMemorySnapshotEnvelope`.
-- [ ] Add bootstrap prompt behavior with strategy `bootstrap_incremental_v1_1` when no previous
+- [x] Add bootstrap prompt behavior with strategy `bootstrap_incremental_v1_1` when no previous
       ready snapshot exists.
-- [ ] Keep the existing full-history prompt builder, but route it only through explicit manual
+- [x] Keep the existing full-history prompt builder, but route it only through explicit manual
       rebuild/backfill strategy.
-- [ ] Store included source ids separately from covered source ids in `generation_notes`.
-- [ ] Update the refresh/backfill tool so manual replay requires or derives an explicit strategy and
+- [x] Store included source ids separately from covered source ids in `generation_notes`.
+- [x] Update the refresh/backfill tool so manual replay requires or derives an explicit strategy and
       operator reason.
-- [ ] Add tests proving normal `lesson-memory-ready` and `homework-memory-ready` jobs do not call the
+- [x] Add tests proving normal `lesson-memory-ready` and `homework-memory-ready` jobs do not call the
       full-history list-all path.
-- [ ] Add tests proving incremental prompts include previous snapshot, trigger source, and bounded
+- [x] Add tests proving incremental prompts include previous snapshot, trigger source, and bounded
       supporting context.
-- [ ] Run:
+- [x] Run:
   - `pnpm --filter @esl-pipeline/batch-backend exec vitest run --config ../../vitest.config.ts tests/application.process-student-memory-snapshot-job.test.ts tests/application.request-student-memory-snapshot-refresh.test.ts tests/application.student-memory-snapshot-generation.test.ts`
 
 Exit criteria:
@@ -149,17 +175,17 @@ Exit criteria:
 
 Release tie: Gate B blocker. This phase prevents silent regressions.
 
-- [ ] Add configurable constants or env-backed config for:
+- [x] Add configurable constants or env-backed config for:
   - incremental target input tokens: 25,000,
   - incremental hard input tokens: 35,000,
   - full rebuild warning input tokens: 60,000.
-- [ ] Preflight incremental prompts before provider calls.
-- [ ] Drop optional supporting context before failing an oversized incremental prompt.
-- [ ] Fail the pending snapshot with a clear diagnostic if the hard budget is still exceeded.
-- [ ] Warn but allow explicit manual rebuilds over the full-rebuild warning threshold.
-- [ ] Store budget decision and failure details in `generation_notes`.
-- [ ] Add tests proving oversized incremental prompts fail before provider execution.
-- [ ] Run:
+- [x] Preflight incremental prompts before provider calls.
+- [x] Drop optional supporting context before failing an oversized incremental prompt.
+- [x] Fail the pending snapshot with a clear diagnostic if the hard budget is still exceeded.
+- [x] Warn but allow explicit manual rebuilds over the full-rebuild warning threshold.
+- [x] Store budget decision and failure details in `generation_notes`.
+- [x] Add tests proving oversized incremental prompts fail before provider execution.
+- [x] Run:
   - `pnpm --filter @esl-pipeline/batch-backend exec vitest run --config ../../vitest.config.ts tests/application.process-student-memory-snapshot-job.test.ts tests/application.student-memory-generation-pacing.test.ts`
 
 Exit criteria:
@@ -171,20 +197,20 @@ Exit criteria:
 
 Release tie: Gate B blocker, with direct support-load impact before Gate C.
 
-- [ ] Add exact normalized hash helpers for snapshot personal facts and whole snapshot content where
+- [x] Add exact normalized hash helpers for snapshot personal facts and whole snapshot content where
       needed.
-- [ ] Gate profile-candidate refresh after snapshot generation using:
+- [x] Gate profile-candidate refresh after snapshot generation using:
   - trigger source contains non-transient profile-worthy `studentFacts`, or
   - personal-facts hash changed, or
   - durable preferences/constraints changed, or
   - manual replay explicitly requested candidate refresh.
-- [ ] Stop inserting duplicate/stale candidate records by default.
-- [ ] Return and record skipped duplicate/stale/no-profile-worthy-delta counts.
-- [ ] Preserve a future debug/audit seam, but do not expose rejected duplicates as first-class review
+- [x] Stop inserting duplicate/stale candidate records by default.
+- [x] Return and record skipped duplicate/stale/no-profile-worthy-delta counts.
+- [x] Preserve a future debug/audit seam, but do not expose rejected duplicates as first-class review
       artifacts by default.
-- [ ] Add tests proving candidate refresh is skipped when no profile-worthy delta exists.
-- [ ] Add tests proving existing pending/approved/promoted candidates suppress duplicate insertion.
-- [ ] Run:
+- [x] Add tests proving candidate refresh is skipped when no profile-worthy delta exists.
+- [x] Add tests proving existing pending/approved/promoted candidates suppress duplicate insertion.
+- [x] Run:
   - `pnpm --filter @esl-pipeline/batch-backend exec vitest run --config ../../vitest.config.ts tests/application.process-student-memory-snapshot-job.test.ts tests/application.student-profile-candidates.test.ts`
 
 Exit criteria:
@@ -196,16 +222,16 @@ Exit criteria:
 
 Release tie: Gate C entry. This phase makes supervised alpha support practical.
 
-- [ ] Extend `student-memory-inspection.ts` to return a compact memory health/debug payload.
-- [ ] Include latest snapshot strategy, trigger, parent id, prompt metrics, included counts, covered
+- [x] Extend `student-memory-inspection.ts` to return a compact memory health/debug payload.
+- [x] Include latest snapshot strategy, trigger, parent id, prompt metrics, included counts, covered
       counts, content hash, material-change status, latest failed reason, and candidate refresh counts.
-- [ ] Extend `packages/batch-frontend/src/utils/api.ts` types and fetch helpers.
-- [ ] Extend the Learning page memory section with a collapsed support/details section for
+- [x] Extend `packages/batch-frontend/src/utils/api.ts` types and fetch helpers.
+- [x] Extend the Learning page memory section with a collapsed support/details section for
       operator-facing memory details.
-- [ ] Keep manual full rebuild hidden from normal tutor-facing UI. Gate B rebuild remains CLI-only;
+- [x] Keep manual full rebuild hidden from normal tutor-facing UI. Gate B rebuild remains CLI-only;
       a guarded operator app action can be considered no earlier than Gate C.
-- [ ] Add frontend tests for the rendered support details and fallback states.
-- [ ] Run:
+- [x] Add frontend tests for the rendered support details and fallback states.
+- [x] Run:
   - `pnpm --filter @esl-pipeline/batch-backend exec vitest run --config ../../vitest.config.ts tests/application.student-memory-inspection.test.ts`
   - `pnpm --filter @esl-pipeline/batch-frontend exec vitest run src/utils/api.student-memory.test.ts src/ui/students/StudentLearningPage.test.tsx`
 
@@ -227,6 +253,10 @@ Release tie: during Closed Alpha only if tutor/operator evidence justifies it.
       reports.
 - [ ] Keep memory editing UX, semantic retrieval, embeddings, public explainability, and
       data-lifecycle workflows out of this phase.
+- [ ] Add exact DB count helpers for memory health if capped counts become insufficient for
+      operator diagnosis.
+- [ ] Consider a guarded operator rebuild action no earlier than Gate C; manual full rebuild remains
+      CLI-only until that follow-up is intentionally designed.
 
 Exit criteria:
 
