@@ -4,7 +4,7 @@
 
 - Audience: maintainers and implementing agents.
 - Authority Level: package entrypoint and operational usage guide.
-- Last Verified Against: 2026-07-02 repo state.
+- Last Verified Against: 2026-07-03 repo state.
 - Owner: batch-frontend maintainers + automation agents.
 - Review Cadence: monthly or after major UI/workflow changes.
 - Status: `active`.
@@ -32,6 +32,13 @@ Canonical behavior and current status live in:
 - API traffic goes through `src/utils/api.ts` and `@esl-pipeline/contracts`.
 - Base URL resolution uses runtime override first, then Vite env, then `/api`.
 - The app assumes the extended backend API is enabled.
+- Local UI iteration can use the Vite mock-auth sandbox without a backend:
+  - PowerShell:
+    ` $env:VITE_BATCH_FRONTEND_SANDBOX='mock-auth'; pnpm --filter @esl-pipeline/batch-frontend dev -- --host 127.0.0.1 --port 5173`
+  - POSIX:
+    `VITE_BATCH_FRONTEND_SANDBOX=mock-auth pnpm --filter @esl-pipeline/batch-frontend dev -- --host 127.0.0.1 --port 5173`
+  - The sandbox is dev-only, marks the UI with `Mock data`, bypasses frontend auth only, and uses
+    seeded mock API responses for the assignment builder.
 - Student-area pages prefer route-level payloads under `/students/:id/surfaces/*`, with granular student APIs retained as compatibility/fallback paths.
 - The Learning page can read `/students/:id/memory/health` for collapsed operator support details;
   manual full snapshot rebuild remains outside the frontend and CLI-only for v1.1.
