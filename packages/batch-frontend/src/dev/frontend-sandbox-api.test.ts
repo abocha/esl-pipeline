@@ -48,6 +48,35 @@ describe('frontend sandbox API adapter', () => {
     });
   });
 
+  it('serves a completed resume fixture for the all-stages-unlocked sandbox path', async () => {
+    const adapter = createFrontendSandboxApiAdapter();
+
+    const jobs = await adapter(requestConfig('get', '/api/user/jobs'));
+    const job = await adapter(requestConfig('get', '/api/jobs/job-sandbox'));
+    const prompt = await adapter(requestConfig('get', '/api/prompt-packages/prompt-sandbox'));
+    const draft = await adapter(requestConfig('get', '/api/drafts/draft-sandbox'));
+    const provenance = await adapter(requestConfig('get', '/api/jobs/job-sandbox/provenance'));
+
+    expect(jobs.data).toMatchObject({
+      jobs: [expect.objectContaining({ jobId: 'job-sandbox', state: 'succeeded' })],
+      total: 1,
+    });
+    expect(job.data).toMatchObject({
+      jobId: 'job-sandbox',
+      recordingId: 'recording-sandbox',
+      transcriptId: 'transcript-sandbox',
+      promptPackageId: 'prompt-sandbox',
+      draftId: 'draft-sandbox',
+    });
+    expect(prompt.data.text).toContain('[STUDENT_MEMORY_SNAPSHOT]');
+    expect(draft.data.text).toContain('Workplace Update Practice');
+    expect(provenance.data).toMatchObject({
+      job: expect.objectContaining({ id: 'job-sandbox', state: 'succeeded' }),
+      promptPackage: expect.objectContaining({ id: 'prompt-sandbox' }),
+      draft: expect.objectContaining({ id: 'draft-sandbox' }),
+    });
+  });
+
   it('returns a 404-style Axios error for uncovered endpoints', async () => {
     const adapter = createFrontendSandboxApiAdapter();
 

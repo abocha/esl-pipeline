@@ -23,7 +23,7 @@ import {
   type MinimalPublishTarget,
   type PublishJobOverridesInput,
 } from './MinimalAssignment.logic';
-import { isActivelyProcessingJobState, isTerminalJobState } from './MinimalAssignment.polling';
+import { isActivelyProcessingJobState } from './MinimalAssignment.polling';
 
 type UiTtsProvider = PublishJobOverridesInput['selectedTtsProvider'];
 type UiPublishTtsStrategy = PublishJobOverridesInput['selectedTtsStrategy'];
@@ -190,7 +190,6 @@ export function useMinimalAssignmentResume({
   const [selectedResumeJobId, setSelectedResumeJobId] = useState('');
   const [resumeLoading, setResumeLoading] = useState(false);
   const [resumeError, setResumeError] = useState<string | null>(null);
-  const [pinnedJobExpanded, setPinnedJobExpanded] = useState(true);
   const resumeInitializedRef = useRef(false);
   const latestAssignmentSessionsRef = useRef<AssignmentSession[]>([]);
 
@@ -198,7 +197,6 @@ export function useMinimalAssignmentResume({
     (job: JobStatus) => {
       applyCurrentJobStatus(job);
       setSelectedResumeJobId(job.jobId);
-      setPinnedJobExpanded(!isTerminalJobState(job.state));
       writeResumeTargetToQuery({ jobId: job.jobId });
     },
     [applyCurrentJobStatus],
@@ -491,7 +489,6 @@ export function useMinimalAssignmentResume({
 
         applyHydratedSnapshot(snapshot);
         setSelectedResumeJobId(status.jobId);
-        setPinnedJobExpanded(!isTerminalJobState(status.state));
         setActiveAssignmentSession(null);
         writeResumeTargetToQuery({ jobId: status.jobId });
       } catch (error) {
@@ -634,7 +631,6 @@ export function useMinimalAssignmentResume({
         applyHydratedSnapshot(snapshot);
         setActiveAssignmentSession(session);
         setSelectedResumeJobId(`session:${session.id}`);
-        setPinnedJobExpanded(true);
         writeResumeTargetToQuery({ sessionId: session.id });
       } catch (error) {
         if (!isCurrentHydration(hydration)) return;
@@ -710,8 +706,6 @@ export function useMinimalAssignmentResume({
     setSelectedResumeJobId,
     resumeLoading,
     resumeError,
-    pinnedJobExpanded,
-    setPinnedJobExpanded,
     loadResumeJobs,
     handleResumeSelectedJob,
     applyJobStatusTransition,

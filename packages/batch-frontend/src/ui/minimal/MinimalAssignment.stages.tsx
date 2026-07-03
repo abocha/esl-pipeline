@@ -26,12 +26,6 @@ export interface WorkflowStage {
   status: WorkflowStageStatus;
 }
 
-export interface WorkflowSummaryItem {
-  label: string;
-  value: string;
-  note?: string;
-}
-
 export interface ResumeJobListItem {
   jobId: string;
   title: string;
@@ -46,7 +40,6 @@ export interface ResumeJobListItem {
 
 export interface CurrentAssignmentCard {
   title: string;
-  subtitle: string;
   statusLabel: string;
   statusTone: ResumeJobListItem['statusTone'];
   meta: string[];
@@ -56,7 +49,6 @@ export interface CurrentAssignmentCard {
 interface WorkflowOverviewProps {
   currentStageTitle: string;
   stages: WorkflowStage[];
-  summaryItems: WorkflowSummaryItem[];
 }
 
 interface StageSectionProps {
@@ -91,14 +83,6 @@ interface StartStageSectionProps {
   publishUrl: string | null | undefined;
   publishLabel: string;
   publishPending: string;
-  pinnedJobExpanded: boolean;
-  onTogglePinnedJobExpanded: () => void;
-  onRegeneratePronunciationAudio: () => void;
-  onRepublishCurrentDraft: () => void;
-  onCancelJob: () => void;
-  rerunEnabled: boolean;
-  cancelEnabled: boolean;
-  actionBusy: 'rerun' | 'cancel' | null;
 }
 
 interface SourceStageSectionProps {
@@ -225,33 +209,14 @@ function formatWorkflowStageStatusLabel(status: WorkflowStageStatus): string {
   return 'Locked';
 }
 
-export function WorkflowOverview({
-  currentStageTitle,
-  stages,
-  summaryItems,
-}: WorkflowOverviewProps) {
+export function WorkflowOverview({ currentStageTitle, stages }: WorkflowOverviewProps) {
   return (
     <section className="minimal-overview" aria-labelledby="assignment-builder-title">
       <div className="minimal-overview-header">
         <div className="minimal-overview-copy">
-          <span className="minimal-eyebrow">Assignment Builder</span>
           <h1 id="assignment-builder-title">Build and share a lesson assignment</h1>
-          <p>
-            Move from recording to published lesson in guided stages, with the technical controls
-            tucked away until you actually need them.
-          </p>
         </div>
         <div className="minimal-stage-state is-current">Current focus: {currentStageTitle}</div>
-      </div>
-
-      <div className="minimal-summary-grid">
-        {summaryItems.map((item) => (
-          <div key={item.label} className="minimal-summary-card">
-            <span className="minimal-summary-label">{item.label}</span>
-            <span className="minimal-summary-value">{item.value}</span>
-            {item.note ? <span className="minimal-summary-note">{item.note}</span> : null}
-          </div>
-        ))}
       </div>
 
       <ol className="minimal-stage-list" aria-label="Assignment progress">
@@ -264,7 +229,6 @@ export function WorkflowOverview({
               {formatWorkflowStageStatusLabel(stage.status)}
             </div>
             <span className="minimal-stage-name">{stage.title}</span>
-            <span className="minimal-stage-description">{stage.description}</span>
           </li>
         ))}
       </ol>
@@ -288,6 +252,11 @@ export function StageSection({
   guidance,
   children,
 }: StageSectionProps) {
+  const isLocked = stage.status === 'locked';
+  const stageActions = isLocked ? null : actions;
+  const stageGuidance = isLocked ? null : guidance;
+  const stageContent = isLocked ? null : children;
+
   return (
     <section ref={sectionRef} className={`minimal-section minimal-stage-card is-${stage.status}`}>
       <div className="minimal-stage-header">
@@ -301,11 +270,11 @@ export function StageSection({
           <span className={`minimal-stage-state is-${stage.status}`}>
             {formatWorkflowStageStatusLabel(stage.status)}
           </span>
-          {actions}
+          {stageActions}
         </div>
       </div>
-      {guidance ? <StageGuidance>{guidance}</StageGuidance> : null}
-      {children}
+      {stageGuidance ? <StageGuidance>{stageGuidance}</StageGuidance> : null}
+      {stageContent}
     </section>
   );
 }
@@ -333,14 +302,6 @@ export function StartStageSection({
   publishUrl,
   publishLabel,
   publishPending,
-  pinnedJobExpanded,
-  onTogglePinnedJobExpanded,
-  onRegeneratePronunciationAudio,
-  onRepublishCurrentDraft,
-  onCancelJob,
-  rerunEnabled,
-  cancelEnabled,
-  actionBusy,
 }: StartStageSectionProps) {
   const showResumePanel = mode === 'resume';
   const showStartedSummary = mode === 'start';
@@ -349,10 +310,6 @@ export function StartStageSection({
     <StageSection stage={stage} sectionRef={sectionRef} headingRef={headingRef}>
       <div className="minimal-stage-layout">
         <div className="minimal-stage-panel">
-          <div className="minimal-stage-panel-title">
-            <h3>Choose how you want to continue</h3>
-            <p>Pick a lane once, then we will steer you to the next useful step automatically.</p>
-          </div>
           <div className="minimal-choice-grid" aria-label="Assignment start options">
             <button
               type="button"
@@ -362,9 +319,6 @@ export function StartStageSection({
             >
               <span className="minimal-choice-eyebrow">Resume</span>
               <span className="minimal-choice-title">Resume recent work</span>
-              <span className="minimal-choice-copy">
-                Reopen an existing assignment and jump back into editing or sharing.
-              </span>
             </button>
             <button
               type="button"
@@ -374,9 +328,6 @@ export function StartStageSection({
             >
               <span className="minimal-choice-eyebrow">New</span>
               <span className="minimal-choice-title">Start new assignment</span>
-              <span className="minimal-choice-copy">
-                Begin clean and move straight into student selection and recording upload.
-              </span>
             </button>
           </div>
 
@@ -388,9 +339,6 @@ export function StartStageSection({
                   Next up: choose the student and upload the lesson recording in the next section.
                 </p>
               </div>
-              <button type="button" className="minimal-secondary" onClick={onShowResumeChoice}>
-                Switch to resume
-              </button>
             </div>
           ) : null}
 
@@ -399,7 +347,6 @@ export function StartStageSection({
               <div className="minimal-stage-panel-header">
                 <div className="minimal-stage-panel-title">
                   <h3>Recent assignments</h3>
-                  <p>Choose one assignment to reopen, then continue exactly where you left off.</p>
                 </div>
                 <div className="minimal-inline">
                   <button
@@ -423,7 +370,6 @@ export function StartStageSection({
               {resumeJobItems.length > 0 ? (
                 <>
                   <div className="minimal-list-heading">
-                    <span>Recent assignments</span>
                     <span className="minimal-muted">
                       {resumeJobItems.length === totalResumeJobs
                         ? `${totalResumeJobs} ${totalResumeJobs === 1 ? 'assignment' : 'assignments'}`
@@ -480,17 +426,9 @@ export function StartStageSection({
               ) : (
                 <p className="minimal-muted">No saved assignments yet.</p>
               )}
-              <button type="button" className="minimal-text-action" onClick={onStartNewAssignment}>
-                Start new instead
-              </button>
             </div>
           ) : null}
 
-          {mode === 'idle' ? (
-            <p className="minimal-help">
-              Pick one path to unlock the next recommended step in the builder.
-            </p>
-          ) : null}
           {resumeError ? <p className="minimal-error">{resumeError}</p> : null}
         </div>
 
@@ -506,15 +444,7 @@ export function StartStageSection({
                     {currentAssignmentCard.statusLabel}
                   </span>
                 </div>
-                <p>{currentAssignmentCard.subtitle}</p>
               </div>
-              <button
-                type="button"
-                className="minimal-secondary"
-                onClick={onTogglePinnedJobExpanded}
-              >
-                {pinnedJobExpanded ? 'Hide details' : 'Show details'}
-              </button>
             </div>
             <div className="minimal-pinned-job-meta">
               {currentAssignmentCard.meta.map((item) => (
@@ -529,34 +459,6 @@ export function StartStageSection({
                 <span className="minimal-muted">{publishPending}</span>
               )}
             </div>
-            {pinnedJobExpanded ? (
-              <div className="minimal-inline">
-                <button
-                  type="button"
-                  className="minimal-secondary"
-                  onClick={onRegeneratePronunciationAudio}
-                  disabled={!rerunEnabled}
-                >
-                  {actionBusy === 'rerun' ? 'Queuing rerun...' : 'Refresh pronunciation audio'}
-                </button>
-                <button
-                  type="button"
-                  className="minimal-secondary"
-                  onClick={onRepublishCurrentDraft}
-                  disabled={!rerunEnabled}
-                >
-                  {actionBusy === 'rerun' ? 'Queuing rerun...' : 'Republish current draft'}
-                </button>
-                <button
-                  type="button"
-                  className="minimal-secondary"
-                  onClick={onCancelJob}
-                  disabled={!cancelEnabled}
-                >
-                  {actionBusy === 'cancel' ? 'Cancelling...' : 'Cancel job'}
-                </button>
-              </div>
-            ) : null}
           </div>
         ) : null}
       </div>
@@ -635,15 +537,13 @@ export function SourceStageSection({
         <div className="minimal-stage-panel">
           <div className="minimal-stage-panel-header">
             <div className="minimal-stage-panel-title">
-              <h3>Lesson recording</h3>
-              <p>
-                Choose a student, upload a recording, and let the transcript start in the
-                background.
-              </p>
+              <h3>Recording</h3>
             </div>
-            <button type="button" className="minimal-secondary" onClick={onRefreshStudents}>
-              Refresh students
-            </button>
+            {!recording ? (
+              <button type="button" className="minimal-secondary" onClick={onRefreshStudents}>
+                Refresh students
+              </button>
+            ) : null}
           </div>
           <label className="minimal-select">
             Student
@@ -656,7 +556,7 @@ export function SourceStageSection({
               }
               value={selectedStudentId}
               onChange={(event) => onSelectedStudentIdChange(event.target.value)}
-              disabled={Boolean(linkedLessonId)}
+              disabled={Boolean(linkedLessonId) || Boolean(recording)}
             >
               <option value="">Select a student</option>
               {studentOptions.map((student) => (
@@ -666,11 +566,6 @@ export function SourceStageSection({
               ))}
             </select>
           </label>
-          {selectedStudent ? (
-            <p className="minimal-muted">Selected: {selectedStudent.name}</p>
-          ) : (
-            <p className="minimal-help">Select a student before uploading a recording.</p>
-          )}
           {linkedLessonContextLabel ? (
             <p className="minimal-muted">{linkedLessonContextLabel}</p>
           ) : null}
@@ -696,44 +591,45 @@ export function SourceStageSection({
             <p className="minimal-muted">Recent lesson suggestions unavailable.</p>
           ) : null}
           {studentOptionsError ? <p className="minimal-error">{studentOptionsError}</p> : null}
-          <details className="minimal-details">
-            <summary>Recording settings</summary>
-            <label className="minimal-select">
-              Transcript engine
-              <select
-                value={selectedSttProvider}
-                onChange={(event) => onSelectedSttProviderChange(event.target.value as SttProvider)}
-                disabled={sttProviders.length === 0}
+          {!recording ? (
+            <>
+              <details className="minimal-details">
+                <summary>Recording settings</summary>
+                <label className="minimal-select">
+                  Transcript engine
+                  <select
+                    value={selectedSttProvider}
+                    onChange={(event) =>
+                      onSelectedSttProviderChange(event.target.value as SttProvider)
+                    }
+                    disabled={sttProviders.length === 0}
+                  >
+                    {sttProviders.map((provider) => (
+                      <option key={provider} value={provider}>
+                        {formatSttProviderLabel(provider)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </details>
+              <div
+                className={
+                  stage.status === 'current' && selectedStudentId
+                    ? 'minimal-guided-surface'
+                    : undefined
+                }
               >
-                {sttProviders.map((provider) => (
-                  <option key={provider} value={provider}>
-                    {formatSttProviderLabel(provider)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </details>
-          <div
-            className={
-              stage.status === 'current' && selectedStudentId && !recording
-                ? 'minimal-guided-surface'
-                : undefined
-            }
-          >
-            <DropZone
-              title={uploading ? 'Uploading...' : 'Drop audio file'}
-              description={
-                selectedStudentId
-                  ? 'Drag a recording here or click to browse'
-                  : 'Choose a student first to unlock recording upload'
-              }
-              hint="Single file upload"
-              accept={{ 'audio/*': [...audioExtensions] }}
-              multiple={false}
-              disabled={uploading || !selectedStudentId}
-              onFiles={onFiles}
-            />
-          </div>
+                <DropZone
+                  title={uploading ? 'Uploading...' : 'Drop audio file'}
+                  hint="Single file upload"
+                  accept={{ 'audio/*': [...audioExtensions] }}
+                  multiple={false}
+                  disabled={uploading || !selectedStudentId}
+                  onFiles={onFiles}
+                />
+              </div>
+            </>
+          ) : null}
           {uploading ? (
             <UploadProgress
               fileName={selectedFileName}
@@ -745,7 +641,7 @@ export function SourceStageSection({
           {uploadCacheNotice ? <p className="minimal-success">{uploadCacheNotice}</p> : null}
           {recording ? (
             <div className="minimal-meta">
-              <span>Recording ID: {recording.recordingId}</span>
+              <span>Recording: {recording.displayName || recording.recordingId}</span>
               <span>Status: {recordingStatus ?? 'unknown'}</span>
               <span>Transcript engine: {formatSttProviderLabel(selectedSttProvider)}</span>
               {selectedStudent ? <span>Student: {selectedStudent.name}</span> : null}
@@ -758,10 +654,6 @@ export function SourceStageSection({
           <div className="minimal-stage-panel-header">
             <div className="minimal-stage-panel-title">
               <h3>Transcript</h3>
-              <p>
-                Review the transcript here. You can refresh, retry, and make manual edits before
-                continuing.
-              </p>
             </div>
             <button
               type="button"
@@ -860,11 +752,7 @@ export function ContextStageSection({
         <div className="minimal-stage-panel">
           <div className="minimal-stage-panel-header">
             <div className="minimal-stage-panel-title">
-              <h3>Learning profile context</h3>
-              <p>
-                Review the durable learner context from the student's Learning page. Use the
-                dedicated Learning page for profile edits.
-              </p>
+              <h3>Learner context</h3>
             </div>
           </div>
           {profileRevisionError ? <p className="minimal-error">{profileRevisionError}</p> : null}
@@ -955,10 +843,6 @@ export function ContextStageSection({
         <div className="minimal-stage-panel">
           <div className="minimal-stage-panel-title">
             <h3>Lesson guidance</h3>
-            <p>
-              Optional lesson-specific goals, corrections, or priorities you want the assignment to
-              reflect.
-            </p>
           </div>
           <textarea
             aria-label="Teacher notes"
@@ -967,9 +851,6 @@ export function ContextStageSection({
             rows={8}
             placeholder="Add lesson-specific context, corrections, or priorities for this assignment..."
           />
-          <p className="minimal-help">
-            This gets woven into the assignment as extra teaching context.
-          </p>
         </div>
       </div>
     </StageSection>
@@ -1030,8 +911,7 @@ export function AssignmentStageSection({
         <div className="minimal-stage-panel">
           <div className="minimal-stage-panel-header">
             <div className="minimal-stage-panel-title">
-              <h3>Create the assignment</h3>
-              <p>Generate a first draft from the lesson source and teaching context.</p>
+              <h3>Assignment draft</h3>
             </div>
             <div className="minimal-inline">
               <button
@@ -1177,15 +1057,14 @@ export function ReviewStageSection({
           <div className="minimal-stage-panel-header">
             <div className="minimal-stage-panel-title">
               <h3>Preview before you share</h3>
-              <p>
-                Preview locks the current version, so you always know exactly what will be shared.
-              </p>
             </div>
             <div className="minimal-inline">
               <button
                 ref={previewButtonRef}
                 type="button"
                 className={`minimal-secondary${
+                  !previewReadyForCurrentDraft ? ' minimal-preview-attention' : ''
+                }${
                   stage.status === 'current' && !previewReadyForCurrentDraft
                     ? ' minimal-guided-button minimal-guided-button--secondary'
                     : ''
@@ -1195,14 +1074,8 @@ export function ReviewStageSection({
               >
                 {previewing ? 'Rendering preview...' : 'Preview assignment'}
               </button>
-              <span className={previewReadyForCurrentDraft ? 'minimal-success' : 'minimal-muted'}>
-                {previewReadyForCurrentDraft
-                  ? 'Preview ready for current assignment.'
-                  : 'Preview required before sharing.'}
-              </span>
             </div>
           </div>
-          <p className="minimal-help">Assignments publish as an Assignment Handout.</p>
           {previewError ? <p className="minimal-error">{previewError}</p> : null}
           {previewHtml ? (
             <details className="minimal-preview" open>

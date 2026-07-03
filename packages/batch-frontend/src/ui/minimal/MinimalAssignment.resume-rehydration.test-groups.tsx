@@ -44,7 +44,7 @@ export function registerResumeBasicTests() {
       expect(screen.getByRole('heading', { name: /Add lesson source/i })).toBeTruthy();
       expect(screen.getByRole('heading', { name: /Review and share/i })).toBeTruthy();
       expect(screen.queryByRole('combobox', { name: /Share to/i })).toBeNull();
-      expect(screen.getByText(/Assignments publish as an Assignment Handout/i)).toBeTruthy();
+      expect(screen.queryByText(/Assignments publish as an Assignment Handout/i)).toBeNull();
     });
 
     it('does not auto-resume queued or running jobs on a naked initial load', async () => {
