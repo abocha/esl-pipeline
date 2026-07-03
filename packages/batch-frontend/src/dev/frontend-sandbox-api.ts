@@ -227,6 +227,95 @@ const promptPackage = {
   updatedAt: now,
 };
 
+const draft = {
+  id: 'draft-sandbox',
+  promptPackageId: 'prompt-sandbox',
+  studentId: 'student-alex',
+  lessonId: null,
+  storageUri: 'memory://sandbox/draft-sandbox',
+  createdBy: 'sandbox-tutor',
+  text: [
+    '# Alex - Workplace Update Practice',
+    '',
+    '## Warm-up',
+    'Practice three ways to connect ideas: first, also, as a result.',
+    '',
+    '## Mission',
+    'Write a short project update and one polite follow-up question.',
+  ].join('\n'),
+  createdAt: now,
+  updatedAt: now,
+};
+
+function jobProvenance() {
+  return {
+    job: {
+      id: 'job-sandbox',
+      state: 'succeeded',
+      createdAt: now,
+      updatedAt: now,
+      startedAt: now,
+      finishedAt: now,
+      sourceJobId: null,
+      manifestPath: null,
+      htmlUrl: 'https://example.test/sandbox-assignment.html',
+      error: null,
+    },
+    sourceJob: null,
+    recording: {
+      id: 'recording-sandbox',
+      status: 'transcribed',
+      displayName: 'sandbox-lesson.mp3',
+      durationSec: 180,
+      createdAt: now,
+      updatedAt: now,
+    },
+    transcript: {
+      id: 'transcript-sandbox',
+      recordingId: 'recording-sandbox',
+      text: 'Alex practiced giving a concise project update and asking one follow-up question.',
+      createdAt: now,
+      updatedAt: now,
+    },
+    promptPackage: {
+      id: 'prompt-sandbox',
+      storageUri: 'memory://sandbox/prompt-sandbox',
+      createdAt: now,
+      updatedAt: now,
+    },
+    draft: {
+      id: 'draft-sandbox',
+      storageUri: 'memory://sandbox/draft-sandbox',
+      createdAt: now,
+      updatedAt: now,
+    },
+    tts: {
+      provider: 'inworld',
+      generatedCharacters: 420,
+      cachedCharacters: 0,
+      estimatedSpendUsd: 0.0042,
+    },
+    pronunciationWarnings: [],
+    lineage: {
+      profile: {
+        snapshot: {
+          revisionId: 'profile-revision-sandbox',
+        },
+      },
+      template: {
+        snapshot: {
+          revisionId: 'template-revision-sandbox',
+        },
+      },
+      bindingAtCreation: {
+        profileId: 'profiles/alex.md',
+        effectiveFrom: now,
+      },
+    },
+    actions: [],
+  };
+}
+
 export function createFrontendSandboxApiAdapter(): AxiosAdapter {
   return async (config: InternalAxiosRequestConfig): Promise<AxiosResponse> => {
     const method = (config.method ?? 'get').toLowerCase();
@@ -304,12 +393,25 @@ export function createFrontendSandboxApiAdapter(): AxiosAdapter {
         ttsModelOptionsByProvider: { inworld: ['inworld-tts-2'] },
         defaultTtsProvider: 'inworld',
         defaultTtsModelByProvider: { inworld: 'inworld-tts-2' },
-        supportedActions: [],
+        supportedActions: [
+          {
+            type: 'rerun',
+            label: 'Rerun',
+            description: 'Republish current draft or selectively regenerate audio families',
+            implemented: true,
+          },
+          {
+            type: 'cancel',
+            label: 'Cancel',
+            description: 'Cancel active job',
+            implemented: true,
+          },
+        ],
       });
     }
 
     if (method === 'get' && path === '/user/jobs') {
-      return responseFor(config, { jobs: [], total: 0, limit: 20, offset: 0 });
+      return responseFor(config, { jobs: [jobStatus()], total: 1, limit: 20, offset: 0 });
     }
 
     if (method === 'get' && path === '/user/assignment-sessions') {
@@ -387,17 +489,9 @@ export function createFrontendSandboxApiAdapter(): AxiosAdapter {
 
     if (method === 'post' && path === '/generation/drafts') {
       return responseFor(config, {
-        id: 'draft-sandbox',
-        promptPackageId: 'prompt-sandbox',
-        text: [
-          '# Alex - Workplace Update Practice',
-          '',
-          '## Warm-up',
-          'Practice three ways to connect ideas: first, also, as a result.',
-          '',
-          '## Mission',
-          'Write a short project update and one polite follow-up question.',
-        ].join('\n'),
+        id: draft.id,
+        promptPackageId: draft.promptPackageId,
+        text: draft.text,
         provider: 'openai',
         model: 'gpt-5.2',
         quota: {
@@ -405,6 +499,14 @@ export function createFrontendSandboxApiAdapter(): AxiosAdapter {
           lastUpdatedAt: now,
         },
       });
+    }
+
+    if (method === 'get' && path === '/prompt-packages/prompt-sandbox') {
+      return responseFor(config, promptPackage);
+    }
+
+    if (method === 'get' && path === '/drafts/draft-sandbox') {
+      return responseFor(config, draft);
     }
 
     if (method === 'post' && path === '/validation/markdown') {
@@ -446,6 +548,10 @@ export function createFrontendSandboxApiAdapter(): AxiosAdapter {
 
     if (method === 'get' && path === '/jobs/job-sandbox') {
       return responseFor(config, jobStatus());
+    }
+
+    if (method === 'get' && path === '/jobs/job-sandbox/provenance') {
+      return responseFor(config, jobProvenance());
     }
 
     throw notFoundFor(config);

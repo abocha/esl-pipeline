@@ -147,12 +147,6 @@ export function buildCurrentAssignmentCard(
   const status = getResumeStatusPresentation(job.state);
   return {
     title: buildResumeStudentLabel(job, studentNameById),
-    subtitle:
-      job.state === 'failed'
-        ? 'This assignment needs attention before you share or continue editing.'
-        : job.state === 'queued' || job.state === 'running'
-          ? 'This assignment is still processing. You can keep an eye on it here.'
-          : 'Latest shared assignment ready to reopen, review, or republish.',
     statusLabel: status.statusLabel,
     statusTone: status.statusTone,
     meta: [

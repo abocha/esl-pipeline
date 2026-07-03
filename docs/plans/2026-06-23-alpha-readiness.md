@@ -4,11 +4,13 @@
 
 - Audience: founder-maintainer and implementation agents.
 - Status: `roadmap`.
-- Last Verified Against: 2026-06-27 repository and launch-readiness state.
+- Last Verified Against: 2026-07-03 repository and launch-readiness state.
 - Exit Trigger: archive after the product reaches v1 production-readiness or this plan is replaced by
   a later evidence-backed launch plan.
-- Current Focus: Chunks 16–18 are implemented and locally validated; PR review and production
-  deployment remain pending.
+- Current Focus: Chunk 12 tutor-facing UI distillation. Lesson-source, locked-stage, and unlocked
+  resumed-stage distillation slices are implemented locally; run focused visual review before
+  treating Chunk 12 as complete. Chunks 16–18 are merged and release images were published;
+  production deployment and hosted smoke evidence remain separate approval-gated work.
 
 ## Purpose
 
@@ -225,8 +227,9 @@ Acceptance evidence:
 
 ## 2026-06-27 Chunks 16–18 Implementation Evidence
 
-Status: implementation validated locally on branch `codex/alpha-chunks-16-18-fixes`; production
-deployment has not been performed.
+Status: implementation validated locally on branch `codex/alpha-chunks-16-18-fixes`, merged through
+PR #116, and release images published by the release workflow. Production deployment and hosted smoke
+evidence have not been performed.
 
 Implemented:
 
@@ -250,6 +253,72 @@ Validation run:
 - `pnpm --filter @esl-pipeline/batch-backend run db:verify-baseline`
 - `pnpm --silent run check:fast:agent`
 - `pnpm check:pre-pr`
+
+## 2026-07-02 Chunk 12 Lesson-Source Distillation Slice
+
+Status: focused implementation slices in progress on branch `codex/chunk-12-ui-distillation`; this
+does not complete all of Chunk 12.
+
+Implemented:
+
+- The lesson-source screen keeps the stage heading, Student field, recording upload control, and one
+  state-aware next-step message.
+- Repeated static helper copy was removed from the lesson recording panel and upload area.
+- The source stage description now reports state instead of repeating the next action.
+- Locked future stages now show only title, lock status, and short unlock copy; profile previews,
+  draft controls, review actions, and advanced support details stay hidden until their stage unlocks.
+- Resumed assignments with saved prompt, draft, or share artifacts still mark earlier stages complete
+  so valid persisted work remains visible instead of being hidden by missing earlier source metadata.
+
+Validation run:
+
+- `pnpm --filter @esl-pipeline/batch-frontend exec vitest run src/ui/minimal/MinimalAssignment.workflow-ui.test.tsx`
+- `corepack pnpm --filter @esl-pipeline/batch-frontend exec vitest run src/ui/minimal/MinimalAssignment.workflow-ui.test.tsx src/ui/minimal/MinimalAssignment.prompt-student-selection.test.tsx`
+- `corepack pnpm --filter @esl-pipeline/batch-frontend exec vitest run src/ui/minimal/MinimalAssignment.generation-defaults.test.tsx src/ui/minimal/MinimalAssignment.resume-basic.test.tsx src/ui/minimal/MinimalAssignment.resume-preset-races.test.tsx src/ui/minimal/MinimalAssignment.prompt-student-selection.test.tsx`
+- `corepack pnpm --filter @esl-pipeline/batch-frontend exec vitest run src/ui/minimal/MinimalAssignment.generation-defaults.test.tsx src/ui/minimal/MinimalAssignment.generation-quota.test-groups.tsx src/ui/minimal/MinimalAssignment.job-actions.test.tsx src/ui/minimal/MinimalAssignment.logic.test.ts src/ui/minimal/MinimalAssignment.generation-throttle.test.tsx src/ui/minimal/MinimalAssignment.workflow-ui.test.tsx src/ui/minimal/MinimalAssignment.resume-rehydration.test-groups.tsx src/ui/minimal/MinimalAssignment.resume-preset-races.test.tsx src/ui/minimal/MinimalAssignment.resume-basic.test.tsx src/ui/minimal/MinimalAssignment.quota-window.test.ts src/ui/minimal/MinimalAssignment.publish-validation.test.tsx src/ui/minimal/MinimalAssignment.publish-actions.test-groups.tsx src/ui/minimal/MinimalAssignment.prompt-student-selection.test.tsx src/ui/minimal/MinimalAssignment.prompt-editor.test.tsx src/ui/minimal/MinimalAssignment.prompt-draft.test-groups.tsx src/ui/minimal/MinimalAssignment.polling.test.ts`
+- `corepack pnpm docs:generate:indexes`
+- `corepack pnpm docs:check`
+
+Remaining Chunk 12 work:
+
+- Run a focused visual review at desktop and narrow widths after the broader stage pass.
+
+## 2026-07-03 Chunk 12 Unlocked-Stage Distillation Slice
+
+Status: focused implementation slice in progress on branch `codex/chunk-12-ui-distillation`; this
+continues the same Chunk 12 work and keeps the backend contract unchanged.
+
+Implemented:
+
+- The Vite `mock-auth` sandbox can now serve a completed assignment fixture at `?jobId=job-sandbox`
+  with recording, transcript, prompt package, draft, and provenance responses.
+- Resumed completed assignments keep all workflow stages unlocked for local UI review without
+  Docker rebuilds, backend auth, or live provider calls.
+- Completed source views hide the upload drop zone, recording settings, refresh-students action,
+  and duplicate selected-student line while retaining the locked student and recording summary.
+- Transcript, learner-context, assignment draft, review, and advanced actions remove static helper
+  paragraphs that repeated nearby headings, labels, or button text.
+- Resume/start now relies on the two path choices and recent-assignment list instead of duplicate
+  "choose how to continue" helper copy.
+- Quick reruns and custom rerun keep their buttons, checkboxes, model controls, capability warnings,
+  and support details while dropping repeated action descriptions.
+- The remaining duplicate resume/start shortcuts, custom-rerun model explainer, overview tagline,
+  and completed-state summary notes were removed so the header stays closer to status-only.
+- The assignment overview header was further reduced to the page title, current focus, and compact
+  stage progress; the eyebrow, summary cards, and progress descriptions were removed.
+- The pinned resumed-assignment card no longer repeats advanced-action buttons, details toggles, or
+  helper copy; preview-required guidance moved from text into the preview button's attention state.
+- Custom rerun keeps the study-text, main pronunciation, and pronunciation chunk settings headings,
+  while field labels drop repeated family prefixes and keep only `Provider`, `Model`, `Voice ID`,
+  `Accent`, and `Strategy`.
+- Tutor-facing tests cover the all-stages-unlocked sandbox fixture and the removed unlocked-stage
+  copy.
+
+Validation run:
+
+- `corepack pnpm --filter @esl-pipeline/batch-frontend exec vitest run src/dev/frontend-sandbox-api.test.ts src/ui/minimal/MinimalAssignment.workflow-ui.test.tsx`
+- `corepack pnpm --filter @esl-pipeline/batch-frontend exec vitest run src/dev/frontend-sandbox-api.test.ts src/dev/frontend-sandbox.test.ts src/ui/minimal/MinimalAssignment.generation-defaults.test.tsx src/ui/minimal/MinimalAssignment.generation-quota.test-groups.tsx src/ui/minimal/MinimalAssignment.job-actions.test.tsx src/ui/minimal/MinimalAssignment.logic.test.ts src/ui/minimal/MinimalAssignment.generation-throttle.test.tsx src/ui/minimal/MinimalAssignment.workflow-ui.test.tsx src/ui/minimal/MinimalAssignment.resume-rehydration.test-groups.tsx src/ui/minimal/MinimalAssignment.resume-preset-races.test.tsx src/ui/minimal/MinimalAssignment.resume-basic.test.tsx src/ui/minimal/MinimalAssignment.quota-window.test.ts src/ui/minimal/MinimalAssignment.publish-validation.test.tsx src/ui/minimal/MinimalAssignment.publish-actions.test-groups.tsx src/ui/minimal/MinimalAssignment.prompt-student-selection.test.tsx src/ui/minimal/MinimalAssignment.prompt-editor.test.tsx src/ui/minimal/MinimalAssignment.prompt-draft.test-groups.tsx src/ui/minimal/MinimalAssignment.polling.test.ts`
+- `corepack pnpm --filter @esl-pipeline/batch-frontend exec vitest run src/ui/minimal/MinimalAssignment.workflow-ui.test.tsx src/ui/minimal/MinimalAssignment.job-actions.test.tsx src/ui/minimal/MinimalAssignment.publish-validation.test.tsx`
 
 ## Deferred Follow-Ups
 
