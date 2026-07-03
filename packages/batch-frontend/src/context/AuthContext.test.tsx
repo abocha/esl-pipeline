@@ -18,9 +18,24 @@ const apiClientMocks = vi.hoisted(() => ({
   setApiAuthToken: vi.fn(),
 }));
 
+const sandboxMocks = vi.hoisted(() => ({
+  isFrontendSandboxEnabled: vi.fn(() => false),
+}));
+
 vi.mock('../utils/api', () => apiMocks);
 
 vi.mock('../utils/api-client', () => apiClientMocks);
+
+vi.mock('../dev/frontend-sandbox', () => ({
+  FRONTEND_SANDBOX_ACCESS_TOKEN: 'sandbox-access-token',
+  getFrontendSandboxUser: () => ({
+    id: 'sandbox-tutor',
+    email: 'sandbox.tutor@example.test',
+    role: 'user',
+    isActive: true,
+  }),
+  isFrontendSandboxEnabled: sandboxMocks.isFrontendSandboxEnabled,
+}));
 
 function AuthProbe(): React.JSX.Element {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -52,6 +67,7 @@ function RegisterControls(): React.JSX.Element {
 describe('AuthProvider', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    sandboxMocks.isFrontendSandboxEnabled.mockReturnValue(false);
     apiMocks.refreshToken.mockResolvedValue({
       user: {
         id: 'user-1',
@@ -63,6 +79,20 @@ describe('AuthProvider', () => {
       expiresIn: 1800,
       message: 'Token refresh successful',
     });
+  });
+
+  it('uses a dev-only sandbox user without refreshing against the backend', async () => {
+    sandboxMocks.isFrontendSandboxEnabled.mockReturnValue(true);
+
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>,
+    );
+
+    expect(await screen.findByText('sandbox.tutor@example.test')).toBeTruthy();
+    expect(apiMocks.refreshToken).not.toHaveBeenCalled();
+    expect(apiClientMocks.setApiAuthToken).toHaveBeenCalledWith('sandbox-access-token');
   });
 
   it('deduplicates session hydration refreshes under React StrictMode', async () => {
