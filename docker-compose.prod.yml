@@ -139,6 +139,7 @@ services:
         '-c',
         'listen_addresses=*',
       ]
+    restart: unless-stopped
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U esl -d esl_batch']
       interval: 5s
@@ -165,6 +166,7 @@ services:
         '--latency-monitor-threshold',
         '100',
       ]
+    restart: unless-stopped
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
