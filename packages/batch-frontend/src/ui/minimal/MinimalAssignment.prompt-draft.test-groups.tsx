@@ -51,7 +51,7 @@ export function registerPromptEditorTests() {
         );
 
         await waitFor(() => {
-          expect(screen.getByText(/Recording ID: rec-1/i)).toBeTruthy();
+          expect(screen.getByText(/Recording: lesson\.mp3/i)).toBeTruthy();
         });
         expect(screen.getByText(/Status: transcribed/i)).toBeTruthy();
       } finally {
@@ -130,7 +130,7 @@ export function registerPromptEditorTests() {
       );
       await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
       await screen.findByDisplayValue('Student transcript text');
-      await screen.findByRole('heading', { name: /Learning profile context/i });
+      await screen.findByRole('heading', { name: /Learner context/i });
 
       expect(screen.queryByRole('textbox', { name: /Profile content/i })).toBeNull();
       expect(screen.queryByRole('button', { name: /Save profile/i })).toBeNull();
@@ -254,7 +254,11 @@ export function registerPromptStudentSelectionTests() {
     });
 
     it('requires explicit student selection before upload', async () => {
+      const user = createMinimalUser();
       renderMinimalAssignment();
+
+      expect(screen.queryByRole('combobox', { name: /^Student$/i })).toBeNull();
+      await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
 
       const studentSelect = await screen.findByRole('combobox', { name: /^Student$/i });
       expect((studentSelect as HTMLSelectElement).value).toBe('');

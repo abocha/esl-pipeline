@@ -8,6 +8,11 @@ import {
   useState,
 } from 'react';
 
+import {
+  FRONTEND_SANDBOX_ACCESS_TOKEN,
+  getFrontendSandboxUser,
+  isFrontendSandboxEnabled,
+} from '../dev/frontend-sandbox';
 import type { UserRole as ApiUserRole, RegisterRole, UserProfile } from '../utils/api';
 import {
   login as loginRequest,
@@ -54,6 +59,60 @@ interface AuthProviderProps {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
+  if (isFrontendSandboxEnabled()) {
+    return <SandboxAuthProvider>{children}</SandboxAuthProvider>;
+  }
+  return <BackendAuthProvider>{children}</BackendAuthProvider>;
+}
+
+function SandboxAuthProvider({ children }: AuthProviderProps) {
+  const [user, setUser] = useState<User | null>(() => getFrontendSandboxUser());
+
+  useEffect(() => {
+    setApiAuthToken(FRONTEND_SANDBOX_ACCESS_TOKEN);
+    setApiAuthRefreshHandler(async () => ({ accessToken: FRONTEND_SANDBOX_ACCESS_TOKEN }));
+
+    return () => {
+      setApiAuthRefreshHandler(null);
+      setApiAuthToken(null);
+    };
+  }, []);
+
+  const login = useCallback(async () => {
+    setUser(getFrontendSandboxUser());
+  }, []);
+
+  const register = useCallback(async () => undefined, []);
+
+  const logout = useCallback(async () => {
+    setUser(null);
+    setApiAuthToken(null);
+  }, []);
+
+  const refresh = useCallback(async () => {
+    setUser((currentUser) => currentUser ?? getFrontendSandboxUser());
+    setApiAuthToken(FRONTEND_SANDBOX_ACCESS_TOKEN);
+  }, []);
+
+  const setUserFromProfile = useCallback((nextUser: User | null) => {
+    setUser(nextUser);
+  }, []);
+
+  const value: AuthContextType = {
+    user,
+    isAuthenticated: !!user,
+    isLoading: false,
+    login,
+    register,
+    logout,
+    refresh,
+    setUserFromProfile,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+function BackendAuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [accessTokenValue, setAccessTokenValue] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);

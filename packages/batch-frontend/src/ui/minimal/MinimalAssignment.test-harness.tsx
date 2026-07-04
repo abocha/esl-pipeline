@@ -304,13 +304,7 @@ export function makeStudentLesson(
 
 export async function previewCurrentDraft(_user: ReturnType<typeof userEvent.setup>) {
   fireEvent.click(screen.getByRole('button', { name: /Preview assignment/i }));
-  await screen.findByText(
-    'Preview ready for current assignment.',
-    {},
-    {
-      timeout: UI_WAIT_TIMEOUT_MS,
-    },
-  );
+  await screen.findByTitle('Draft preview', {}, { timeout: UI_WAIT_TIMEOUT_MS });
 }
 
 export async function preparePromptReady(_user: ReturnType<typeof userEvent.setup>) {

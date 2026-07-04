@@ -23,6 +23,13 @@ import {
   testWithin as within,
 } from './MinimalAssignment.test-harness';
 
+function getCustomRerunSettingsGroup(name: RegExp): HTMLElement {
+  const heading = screen.getByText(name);
+  const group = heading.closest('.minimal-rerun-control-group');
+  expect(group).toBeTruthy();
+  return group as HTMLElement;
+}
+
 export function registerPublishValidationTests() {
   describe('MinimalAssignment - publish validation', () => {
     beforeEach(() => {
@@ -138,8 +145,10 @@ export function registerJobActionTests() {
         fireEvent.change(draftTextarea, { target: { value: '# Preview gated draft' } });
 
         const publishButton = screen.getByRole('button', { name: /Share assignment/i });
+        const previewButton = screen.getByRole('button', { name: /Preview assignment/i });
         expect((publishButton as HTMLButtonElement).disabled).toBe(true);
-        expect(screen.getByText('Preview required before sharing.')).toBeTruthy();
+        expect(previewButton.className).toContain('minimal-preview-attention');
+        expect(screen.queryByText('Preview required before sharing.')).toBeNull();
         expect(api.materializeDraft).not.toHaveBeenCalled();
 
         await previewCurrentDraft(user);
@@ -151,7 +160,8 @@ export function registerJobActionTests() {
         await waitFor(() => {
           expect((publishButton as HTMLButtonElement).disabled).toBe(true);
         });
-        expect(screen.getByText('Preview required before sharing.')).toBeTruthy();
+        expect(previewButton.className).toContain('minimal-preview-attention');
+        expect(screen.queryByText('Preview required before sharing.')).toBeNull();
       },
       INTEGRATION_TEST_TIMEOUT_MS,
     );
@@ -218,15 +228,13 @@ export function registerJobActionTests() {
           pronunciationChunkTtsModel: 'chirp3_hd',
         },
       },
-    ])('queues the $label quick rerun payload', async ({ label, description, payload }) => {
+    ])('queues the $label quick rerun payload', async ({ label, payload }) => {
       vi.useFakeTimers({ shouldAdvanceTime: true });
       const user = createTimerAwareMinimalUser();
       await renderPublishedActionsAssignment({ status: { state: 'succeeded' } });
       openAdvancedActions();
 
       const quickReruns = screen.getByRole('region', { name: /Quick reruns/i });
-      expect(within(quickReruns).getByText(description)).toBeTruthy();
-
       await user.click(within(quickReruns).getByRole('button', { name: label }));
 
       await waitFor(() => {
@@ -244,17 +252,22 @@ export function registerJobActionTests() {
 
         await user.click(screen.getByRole('button', { name: /^Custom rerun$/i }));
         await user.click(screen.getByRole('checkbox', { name: /Study-text audio/i }));
-        fireEvent.change(screen.getByRole('textbox', { name: /Study-text voice ID/i }), {
+        const studyTextSettings = getCustomRerunSettingsGroup(/^Study-text settings$/i);
+        fireEvent.change(within(studyTextSettings).getByRole('textbox', { name: /^Voice ID$/i }), {
           target: { value: 'voice-new' },
         });
-        fireEvent.change(screen.getByRole('textbox', { name: /Study-text accent/i }), {
+        fireEvent.change(within(studyTextSettings).getByRole('textbox', { name: /^Accent$/i }), {
           target: { value: 'british' },
         });
-        fireEvent.change(screen.getByRole('combobox', { name: /Study-text strategy/i }), {
+        fireEvent.change(within(studyTextSettings).getByRole('combobox', { name: /^Strategy$/i }), {
           target: { value: 'dialogue' },
         });
         expect(
-          (screen.getByRole('combobox', { name: /Study-text model/i }) as HTMLSelectElement).value,
+          (
+            within(studyTextSettings).getByRole('combobox', {
+              name: /^Model$/i,
+            }) as HTMLSelectElement
+          ).value,
         ).toBe('eleven_v3');
         fireEvent.change(screen.getByPlaceholderText('e.g. es'), { target: { value: 'es' } });
         fireEvent.change(screen.getByPlaceholderText('0.42'), { target: { value: '0.42' } });
@@ -311,11 +324,12 @@ export function registerJobActionTests() {
 
         await user.click(screen.getByRole('button', { name: /^Custom rerun$/i }));
         await user.click(screen.getByRole('checkbox', { name: /Pronunciation chunk audio/i }));
+        const chunkSettings = getCustomRerunSettingsGroup(/^Pronunciation chunk settings$/i);
 
         expect(
           (
-            screen.getByRole('combobox', {
-              name: /Pronunciation chunk provider/i,
+            within(chunkSettings).getByRole('combobox', {
+              name: /^Provider$/i,
             }) as HTMLSelectElement
           ).value,
         ).toBe('google');
@@ -337,11 +351,12 @@ export function registerJobActionTests() {
 
         await user.click(screen.getByRole('button', { name: /^Custom rerun$/i }));
         await user.click(screen.getByRole('checkbox', { name: /Pronunciation chunk audio/i }));
+        const chunkSettings = getCustomRerunSettingsGroup(/^Pronunciation chunk settings$/i);
 
         expect(
           (
-            screen.getByRole('combobox', {
-              name: /Pronunciation chunk provider/i,
+            within(chunkSettings).getByRole('combobox', {
+              name: /^Provider$/i,
             }) as HTMLSelectElement
           ).value,
         ).toBe('google');
@@ -360,19 +375,22 @@ export function registerJobActionTests() {
         await user.click(screen.getByRole('checkbox', { name: /Study-text audio/i }));
         await user.click(screen.getByRole('checkbox', { name: /Main pronunciation audio/i }));
         await user.click(screen.getByRole('checkbox', { name: /Pronunciation chunk audio/i }));
-        fireEvent.change(screen.getByRole('combobox', { name: /Pronunciation chunk provider/i }), {
+        const studySettings = getCustomRerunSettingsGroup(/^Study-text settings$/i);
+        const mainSettings = getCustomRerunSettingsGroup(/^Main pronunciation settings$/i);
+        const chunkSettings = getCustomRerunSettingsGroup(/^Pronunciation chunk settings$/i);
+        fireEvent.change(within(chunkSettings).getByRole('combobox', { name: /^Provider$/i }), {
           target: { value: 'elevenlabs' },
         });
 
-        const studyModel = screen.getByRole('combobox', { name: /Study-text model/i });
-        const mainModel = screen.getByRole('combobox', { name: /Main pronunciation model/i });
-        const chunkModel = screen.getByRole('combobox', { name: /Pronunciation chunk model/i });
+        const studyModel = within(studySettings).getByRole('combobox', { name: /^Model$/i });
+        const mainModel = within(mainSettings).getByRole('combobox', { name: /^Model$/i });
+        const chunkModel = within(chunkSettings).getByRole('combobox', { name: /^Model$/i });
 
         expect(within(studyModel).queryByRole('option', { name: 'eleven_v3' })).toBeNull();
         expect(within(mainModel).queryByRole('option', { name: 'eleven_v3' })).toBeNull();
         expect(within(chunkModel).queryByRole('option', { name: 'eleven_v3' })).toBeNull();
 
-        fireEvent.change(screen.getByRole('combobox', { name: /Study-text strategy/i }), {
+        fireEvent.change(within(studySettings).getByRole('combobox', { name: /^Strategy$/i }), {
           target: { value: 'dialogue' },
         });
         expect(within(studyModel).getByRole('option', { name: 'eleven_v3' })).toBeTruthy();
@@ -405,10 +423,11 @@ export function registerJobActionTests() {
 
         await user.click(screen.getByRole('button', { name: /^Custom rerun$/i }));
         await user.click(screen.getByRole('checkbox', { name: /Study-text audio/i }));
-        fireEvent.change(screen.getByRole('textbox', { name: /Study-text voice ID/i }), {
+        let studySettings = getCustomRerunSettingsGroup(/^Study-text settings$/i);
+        fireEvent.change(within(studySettings).getByRole('textbox', { name: /^Voice ID$/i }), {
           target: { value: 'voice-from-a' },
         });
-        fireEvent.change(screen.getByRole('combobox', { name: /Study-text provider/i }), {
+        fireEvent.change(within(studySettings).getByRole('combobox', { name: /^Provider$/i }), {
           target: { value: 'elevenlabs' },
         });
 
@@ -423,7 +442,7 @@ export function registerJobActionTests() {
           actions: [],
         } as never);
 
-        await user.click(screen.getByRole('button', { name: /Switch to resume/i }));
+        await user.click(screen.getByRole('button', { name: /Resume recent work/i }));
         const resumeList = await screen.findByRole('listbox', { name: /Recent assignments/i });
         fireEvent.click(within(resumeList).getByRole('option', { name: /ID job-b/i }));
         await user.click(screen.getByRole('button', { name: /Resume selected assignment/i }));
@@ -435,16 +454,22 @@ export function registerJobActionTests() {
         openAdvancedActions();
         await user.click(screen.getByRole('button', { name: /^Custom rerun$/i }));
         await user.click(screen.getByRole('checkbox', { name: /Study-text audio/i }));
+        studySettings = getCustomRerunSettingsGroup(/^Study-text settings$/i);
 
         expect(
-          (screen.getByRole('combobox', { name: /Study-text provider/i }) as HTMLSelectElement)
-            .value,
+          (
+            within(studySettings).getByRole('combobox', {
+              name: /^Provider$/i,
+            }) as HTMLSelectElement
+          ).value,
         ).toBe('google');
         expect(
-          (screen.getByRole('combobox', { name: /Study-text model/i }) as HTMLSelectElement).value,
+          (within(studySettings).getByRole('combobox', { name: /^Model$/i }) as HTMLSelectElement)
+            .value,
         ).toBe('studio');
         expect(
-          (screen.getByRole('textbox', { name: /Study-text voice ID/i }) as HTMLInputElement).value,
+          (within(studySettings).getByRole('textbox', { name: /^Voice ID$/i }) as HTMLInputElement)
+            .value,
         ).toBe('');
 
         await user.click(screen.getByRole('button', { name: /Queue custom rerun/i }));
@@ -560,22 +585,31 @@ export function registerJobActionTests() {
     );
 
     it(
-      'keeps cancel disabled for terminal jobs',
+      'keeps cancel disabled for terminal jobs in review without duplicating it in advanced actions',
       async () => {
         vi.useFakeTimers({ shouldAdvanceTime: true });
         await renderPublishedAssignment({ status: { state: 'succeeded' } });
         openAdvancedActions();
+
+        const reviewHeading = screen.getByRole('heading', { name: /Review and share/i });
+        const reviewSection = reviewHeading.closest('section');
+        if (!reviewSection) {
+          throw new Error('Expected review section to be rendered');
+        }
+        const cancelButton = within(reviewSection).getByRole('button', { name: /^Cancel$/i });
+        expect(cancelButton.getAttribute('disabled')).not.toBeNull();
 
         const actionsHeading = screen.getByRole('heading', { name: /Advanced actions/i });
         const actionsSection = actionsHeading.closest('section');
         if (!actionsSection) {
           throw new Error('Expected job actions section to be rendered');
         }
-        const cancelButton = within(actionsSection).getByRole('button', { name: /Cancel job/i });
-        expect(cancelButton.getAttribute('disabled')).not.toBeNull();
+        expect(within(actionsSection).queryByRole('heading', { name: /Job controls/i })).toBeNull();
+        expect(within(actionsSection).queryByRole('button', { name: /Cancel job/i })).toBeNull();
         expect(
-          screen.getByText(/Cancel is only available for queued or running jobs\./i),
-        ).toBeTruthy();
+          screen.queryByText(/Cancel is only available for queued or running jobs\./i),
+        ).toBeNull();
+        expect(within(actionsSection).getByText(/^Support details$/i)).toBeTruthy();
       },
       INTEGRATION_TEST_TIMEOUT_MS,
     );

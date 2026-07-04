@@ -57,7 +57,6 @@ import {
   type WorkflowStage,
   type WorkflowStageId,
   type WorkflowStageStatus,
-  type WorkflowSummaryItem,
 } from './MinimalAssignment.stages';
 import './MinimalAssignment.css';
 
@@ -837,7 +836,6 @@ export const MinimalAssignment: React.FC = () => {
     refreshResumeJobs: resume.loadResumeJobs,
   });
   const resumeLoadResumeJobs = resume.loadResumeJobs;
-  const resumeSetPinnedJobExpanded = resume.setPinnedJobExpanded;
   const resumeSetSelectedResumeJobId = resume.setSelectedResumeJobId;
 
   const handleShowResumeChoice = useCallback(() => {
@@ -1042,17 +1040,11 @@ export const MinimalAssignment: React.FC = () => {
     if (!jobStatus) return;
     resumeSetSelectedResumeJobId((current) => current || jobStatus.jobId);
     if (isTerminalJobState(jobStatus.state)) {
-      resumeSetPinnedJobExpanded(false);
       if (jobStatus.state === 'failed' && jobStatus.error) {
         setAuthoringPublishError(describeJobFailureReason(jobStatus));
       }
     }
-  }, [
-    jobStatus,
-    resumeSetPinnedJobExpanded,
-    resumeSetSelectedResumeJobId,
-    setAuthoringPublishError,
-  ]);
+  }, [jobStatus, resumeSetSelectedResumeJobId, setAuthoringPublishError]);
 
   const transcriptReady = source.transcriptReady;
   const jobReady = Boolean(jobStatus?.jobId);
@@ -1133,24 +1125,28 @@ export const MinimalAssignment: React.FC = () => {
   }, [hasStartedFlow, startStageMode]);
 
   const workflowStages = useMemo<WorkflowStage[]>(() => {
+    const downstreamArtifactReady = authoring.promptReady || hasAssignmentContent || jobReady;
     const startStatus: WorkflowStageStatus = hasStartedFlow ? 'complete' : 'current';
     const sourceStatus: WorkflowStageStatus = !hasStartedFlow
       ? 'locked'
-      : transcriptReady
+      : transcriptReady || downstreamArtifactReady
         ? 'complete'
         : 'current';
-    const contextStatus: WorkflowStageStatus = !transcriptReady
-      ? 'locked'
-      : authoring.promptReady
-        ? 'complete'
-        : 'current';
-    const assignmentStatus: WorkflowStageStatus = !transcriptReady
-      ? 'locked'
-      : hasAssignmentContent
-        ? 'complete'
+    const contextStatus: WorkflowStageStatus = downstreamArtifactReady
+      ? 'complete'
+      : !transcriptReady
+        ? 'locked'
         : authoring.promptReady
-          ? 'current'
-          : 'available';
+          ? 'complete'
+          : 'current';
+    const assignmentStatus: WorkflowStageStatus =
+      hasAssignmentContent || jobReady
+        ? 'complete'
+        : !transcriptReady
+          ? 'locked'
+          : authoring.promptReady
+            ? 'current'
+            : 'available';
     const reviewStatus: WorkflowStageStatus = jobReady
       ? 'complete'
       : hasAssignmentContent
@@ -1179,10 +1175,12 @@ export const MinimalAssignment: React.FC = () => {
         id: 'source',
         title: 'Add lesson source',
         description: transcriptReady
-          ? 'Transcript is ready for review and editing.'
+          ? 'Transcript ready.'
           : source.recording
             ? 'Audio is uploaded. Finish the transcript before moving on.'
-            : 'Choose a student and upload a recording.',
+            : source.selectedStudentId
+              ? 'Student selected. Recording needed.'
+              : 'Student not selected yet.',
         status: sourceStatus,
       },
       {
@@ -1224,9 +1222,7 @@ export const MinimalAssignment: React.FC = () => {
       {
         id: 'advanced',
         title: 'Advanced actions',
-        description: jobReady
-          ? 'Update shared output, refresh audio, or open support details.'
-          : 'Available after the assignment has been shared once.',
+        description: jobReady ? 'Shared assignment ready.' : 'Available after sharing.',
         status: advancedStatus,
       },
     ];
@@ -1307,49 +1303,6 @@ export const MinimalAssignment: React.FC = () => {
     };
   }, [actionableStageId]);
 
-  const workflowSummaryItems = useMemo<WorkflowSummaryItem[]>(
-    () => [
-      {
-        label: 'Student',
-        value: source.selectedStudent?.name ?? 'No student yet',
-        note: context.selectedProfileId
-          ? 'Learning profile ready.'
-          : 'Select a student to unlock recording upload.',
-      },
-      {
-        label: 'Transcript',
-        value: transcriptReady ? 'Ready' : source.recording ? source.transcriptStatus : 'Waiting',
-        note: transcriptReady ? 'You can still edit wording before moving on.' : undefined,
-      },
-      {
-        label: 'Assignment',
-        value: hasAssignmentContent
-          ? 'Drafted'
-          : authoring.promptReady
-            ? 'Ready to draft'
-            : 'Not started',
-        note: authoring.draftDirty ? 'You have unsaved assignment edits.' : undefined,
-      },
-      {
-        label: 'Share status',
-        value: jobStatus?.state ?? 'Not shared yet',
-        note: publishUrl ? publishLabel : 'Preview before publishing.',
-      },
-    ],
-    [
-      authoring.draftDirty,
-      authoring.promptReady,
-      hasAssignmentContent,
-      jobStatus?.state,
-      publishLabel,
-      publishUrl,
-      source.recording,
-      source.selectedStudent?.name,
-      context.selectedProfileId,
-      transcriptReady,
-      source.transcriptStatus,
-    ],
-  );
   const startStage = workflowStages[0] ?? workflowStages.at(-1)!;
   const sourceStage = workflowStages[1] ?? startStage;
   const contextStage = workflowStages[2] ?? sourceStage;
@@ -1359,11 +1312,7 @@ export const MinimalAssignment: React.FC = () => {
 
   return (
     <div className="minimal-assignment">
-      <WorkflowOverview
-        currentStageTitle={currentStageTitle}
-        stages={workflowStages}
-        summaryItems={workflowSummaryItems}
-      />
+      <WorkflowOverview currentStageTitle={currentStageTitle} stages={workflowStages} />
 
       <StartStageSection
         stage={startStage}
@@ -1388,16 +1337,6 @@ export const MinimalAssignment: React.FC = () => {
         publishUrl={publishUrl}
         publishLabel={publishLabel}
         publishPending={publishPending}
-        pinnedJobExpanded={resume.pinnedJobExpanded}
-        onTogglePinnedJobExpanded={() => resume.setPinnedJobExpanded((current) => !current)}
-        onRegeneratePronunciationAudio={() =>
-          void advancedActions.handleRegeneratePronunciationAudio()
-        }
-        onRepublishCurrentDraft={() => void advancedActions.handleRepublishCurrentDraft()}
-        onCancelJob={() => void advancedActions.handleCancelJob()}
-        rerunEnabled={advancedActions.rerunEnabled}
-        cancelEnabled={advancedActions.cancelEnabled}
-        actionBusy={advancedActions.actionBusy}
       />
 
       <SourceStageSection

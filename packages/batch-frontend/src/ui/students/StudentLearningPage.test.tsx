@@ -539,8 +539,20 @@ describe('StudentLearningPage', () => {
 
     expect(await screen.findByDisplayValue('B1')).toBeTruthy();
     expect(screen.queryByRole('heading', { name: /Pedagogical Home/i })).toBeNull();
-    expect(screen.getByText('Revision State')).toBeTruthy();
+    expect(screen.queryByText('Revision State')).toBeNull();
     expect(screen.getByText('Profile Readiness')).toBeTruthy();
+    expect(screen.getByText('Pending Candidates')).toBeTruthy();
+    expect(screen.getByText('Promotion Queue')).toBeTruthy();
+    expect(
+      screen.queryByText(/Review the learner profile, student memory, and candidate facts/i),
+    ).toBeNull();
+    expect(screen.queryByText('Profile helpers')).toBeNull();
+    expect(screen.queryByText('Profile actions')).toBeNull();
+    expect(screen.queryByText(/Structured edits here shape future assignments/i)).toBeNull();
+    expect(screen.queryByText(/Use automated memory evidence/i)).toBeNull();
+    expect(screen.queryByText(/Open earlier versions when you need to compare/i)).toBeNull();
+    expect(screen.queryByText(/Use the most useful working label/i)).toBeNull();
+    expect(screen.queryAllByText('Support details')).toHaveLength(0);
 
     await user.click(
       await screen.findByRole('button', { name: /Populate First Profile From Lesson/i }),
