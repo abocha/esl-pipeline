@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [9.4.1] - 2026-07-04
+
+### Changed
+
+- Automated release from PR #119: refactor(batch-frontend): distill student learning surfaces (https://github.com/abocha/esl-pipeline/pull/119)
+
 ## [9.4.0] - 2026-07-02
 
 ### Changed
