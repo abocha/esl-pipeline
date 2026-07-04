@@ -142,6 +142,404 @@ function profileContent() {
   };
 }
 
+function studentProfile() {
+  return {
+    id: 'student-alex',
+    student: 'Alex',
+    profileId: 'profiles/alex.md',
+    dbId: null,
+    pageParentId: null,
+    colorPreset: 'blue',
+    accentPreference: 'american',
+    voices: {},
+    manifestPreset: null,
+    archivedAt: null,
+    archivedBy: null,
+    archiveReason: null,
+  };
+}
+
+function profileRevisionSummary() {
+  return {
+    id: 'profile-revision-sandbox',
+    profileId: 'profiles/alex.md',
+    contentHash: 'profile-hash-sandbox',
+    source: 'update',
+    status: 'active',
+    versionNumber: 1,
+    versionLabel: 'v1',
+    activatedAt: now,
+    deprecatedAt: null,
+    createdAt: now,
+    createdBy: 'sandbox-tutor',
+    restoredFromRevisionId: null,
+  };
+}
+
+function profileRevisionList() {
+  return {
+    items: [profileRevisionSummary()],
+    total: 1,
+    limit: 25,
+    offset: 0,
+    order: 'desc',
+  };
+}
+
+function memoryOverview() {
+  return {
+    studentId: 'student-alex',
+    latestReadyStudentMemorySnapshot: {
+      id: 'snapshot-sandbox',
+      studentId: 'student-alex',
+      schemaVersion: 'student-memory-snapshot.v1',
+      generatedAt: now,
+      provider: 'openai',
+      model: 'gpt-5.2',
+      status: 'ready',
+      sourceKind: 'student_memory_rollup',
+      lessonMemoryEntryIds: ['lesson-memory-sandbox'],
+      homeworkMemoryEntryIds: ['homework-memory-sandbox'],
+      contentHash: 'snapshot-hash-sandbox',
+      generationNotes: null,
+      stableStrengths: [{ label: 'Listening', note: 'Strong listening comprehension.' }],
+      recurringIssues: [{ label: 'Transitions', note: 'Needs smoother transitions.' }],
+      activeReviewBacklog: [],
+      recentProgress: [{ label: 'Updates', note: 'Clearer workplace status updates.' }],
+      personalFacts: [],
+      recommendedAssignmentDirections: [
+        {
+          direction: 'Practice concise workplace updates.',
+          rationale: 'Alex benefits from short, practical speaking loops.',
+        },
+      ],
+      unresolvedIssues: [],
+      snapshotSummary: 'Alex is building clearer workplace updates with smoother transitions.',
+      supersededById: null,
+      supersededAt: null,
+      createdAt: now,
+      updatedAt: now,
+    },
+    recentReadyLessonMemory: [
+      {
+        id: 'lesson-memory-sandbox',
+        studentId: 'student-alex',
+        lessonId: 'lesson-sandbox-next',
+        status: 'ready',
+        lessonSummary: 'Practiced concise project updates and a polite follow-up question.',
+        createdAt: now,
+        updatedAt: now,
+      },
+    ],
+    recentReadyHomeworkMemory: [
+      {
+        id: 'homework-memory-sandbox',
+        studentId: 'student-alex',
+        jobId: 'job-sandbox',
+        status: 'ready',
+        topic: 'Workplace update practice',
+        homeworkSummary: 'Assignment focused on linking ideas with first, also, and as a result.',
+        createdAt: now,
+        updatedAt: now,
+      },
+    ],
+    unresolvedIssues: [],
+  };
+}
+
+function memoryHealth() {
+  return {
+    studentId: 'student-alex',
+    latestSnapshot: {
+      id: 'snapshot-sandbox',
+      status: 'ready',
+      generatedAt: now,
+      strategy: 'incremental_v1_1',
+      trigger: 'lesson-memory-ready',
+      triggerSourceKind: 'lesson_memory',
+      triggerSourceEntryId: 'lesson-memory-sandbox',
+      parentSnapshotId: null,
+      inputTokenEstimate: 12800,
+      outputTokenEstimate: null,
+      promptByteLength: 42000,
+      includedLessonMemoryCount: 1,
+      includedHomeworkMemoryCount: 1,
+      coveredLessonMemoryCount: 3,
+      coveredHomeworkMemoryCount: 1,
+      contentHash: 'snapshot-hash-sandbox',
+      materialChange: true,
+      budgetDecision: { action: 'allow' },
+      candidateRefresh: {
+        requested: true,
+        triggerProfileWorthyStudentFactCount: 1,
+        skippedNoProfileWorthyDeltaCount: 0,
+      },
+    },
+    memoryCounts: {
+      lesson: {
+        ready: { count: 3, capped: false, limit: 500 },
+        pending: { count: 0, capped: false, limit: 500 },
+        failed: { count: 0, capped: false, limit: 500 },
+      },
+      homework: {
+        ready: { count: 1, capped: false, limit: 500 },
+        pending: { count: 0, capped: false, limit: 500 },
+        failed: { count: 0, capped: false, limit: 500 },
+      },
+    },
+    latestFailedReason: null,
+    profileCandidateCounts: {
+      pending: 0,
+      approved: 0,
+      rejected: 0,
+      deferred: 0,
+    },
+  };
+}
+
+function bindingHistory() {
+  return {
+    items: [
+      {
+        id: 'binding-sandbox',
+        studentId: 'student-alex',
+        profileId: 'profiles/alex.md',
+        effectiveFrom: now,
+        effectiveTo: null,
+        reason: 'Sandbox seed',
+        changedBy: 'sandbox-tutor',
+        createdAt: now,
+      },
+    ],
+    total: 1,
+    limit: 5,
+    offset: 0,
+    order: 'desc',
+  };
+}
+
+function emptyCandidateList() {
+  return {
+    items: [],
+    total: 0,
+    limit: 200,
+    offset: 0,
+    order: 'desc',
+  };
+}
+
+function profileCandidateList() {
+  return {
+    items: [
+      {
+        id: 'candidate-sandbox-work-context',
+        studentId: 'student-alex',
+        proposedFact: 'Uses English for project updates with product and client teams.',
+        approvedFactText: null,
+        category: 'work_context',
+        targetSection: 'work_communication_context',
+        sourceSummary: 'Recent lessons mention project updates and client follow-ups.',
+        authority: 'student_stated',
+        confidence: 'high',
+        evidence: [
+          {
+            quote: 'I need to explain project changes to clients more clearly.',
+            speakerRole: 'student',
+            transcriptSpan: '00:08-00:15',
+            evidenceNote: 'Direct workplace communication need.',
+            sourceKind: 'lesson_memory',
+            sourceArtifactId: 'lesson-memory-sandbox',
+          },
+        ],
+        sourceSnapshotId: 'snapshot-sandbox',
+        sourceLessonMemoryIds: ['lesson-memory-sandbox'],
+        sourceLessonId: 'lesson-sandbox-next',
+        sourceLessonStartedAt: '2026-07-04T11:00:00.000Z',
+        sourceLessonTitle: 'Workplace update practice',
+        sourceMemoryIds: ['lesson-memory-sandbox'],
+        provenance: { sourceKind: 'latest_lesson_memory' },
+        dedupDecision: {
+          decision: 'created',
+          reason: 'Sandbox candidate for Learning page inspection.',
+        },
+        status: 'pending_review',
+        reviewState: 'unreviewed',
+        reviewerId: null,
+        reviewerNote: null,
+        reviewedAt: null,
+        promotedRevisionId: null,
+        promotedAt: null,
+        supersededById: null,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: 'candidate-sandbox-study-preference',
+        studentId: 'student-alex',
+        proposedFact: 'Prefers short practical review loops.',
+        approvedFactText: 'Prefers short practical review loops.',
+        category: 'study_preferences',
+        targetSection: 'learning_preferences_study_habits',
+        sourceSummary: 'Repeated preference across recent lesson and homework memory.',
+        authority: 'teacher_confirmed',
+        confidence: 'high',
+        evidence: [
+          {
+            quote: 'Short review tasks help me remember the grammar.',
+            speakerRole: 'student',
+            transcriptSpan: '00:30-00:35',
+            evidenceNote: 'Direct study preference.',
+            sourceKind: 'student_memory_snapshot',
+            sourceArtifactId: 'snapshot-sandbox',
+          },
+        ],
+        sourceSnapshotId: 'snapshot-sandbox',
+        sourceLessonMemoryIds: ['lesson-memory-sandbox'],
+        sourceLessonId: 'lesson-sandbox-next',
+        sourceLessonStartedAt: '2026-07-04T11:00:00.000Z',
+        sourceLessonTitle: 'Workplace update practice',
+        sourceMemoryIds: ['snapshot-sandbox'],
+        provenance: { sourceKind: 'student_memory_snapshot' },
+        dedupDecision: {
+          decision: 'created',
+          reason: 'Sandbox approved candidate for draft promotion inspection.',
+        },
+        status: 'approved',
+        reviewState: 'approved',
+        reviewerId: 'sandbox-tutor',
+        reviewerNote: 'Useful durable preference.',
+        reviewedAt: now,
+        promotedRevisionId: null,
+        promotedAt: null,
+        supersededById: null,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: 'candidate-sandbox-interests-deferred',
+        studentId: 'student-alex',
+        proposedFact: 'May enjoy product-design vocabulary tasks.',
+        approvedFactText: null,
+        category: 'interests',
+        targetSection: 'interests_personal_context',
+        sourceSummary: 'Mentioned design tools once during a lesson warm-up.',
+        authority: 'model_inferred',
+        confidence: 'medium',
+        evidence: [
+          {
+            quote: 'I sometimes read product-design articles for work.',
+            speakerRole: 'student',
+            transcriptSpan: '00:42-00:47',
+            evidenceNote: 'Single interest signal.',
+            sourceKind: 'lesson_memory',
+            sourceArtifactId: 'lesson-memory-sandbox',
+          },
+        ],
+        sourceSnapshotId: 'snapshot-sandbox',
+        sourceLessonMemoryIds: ['lesson-memory-sandbox'],
+        sourceLessonId: 'lesson-sandbox-next',
+        sourceLessonStartedAt: '2026-07-04T11:00:00.000Z',
+        sourceLessonTitle: 'Workplace update practice',
+        sourceMemoryIds: ['lesson-memory-sandbox'],
+        provenance: { sourceKind: 'latest_lesson_memory' },
+        dedupDecision: {
+          decision: 'created',
+          reason: 'Sandbox deferred candidate for Learning page inspection.',
+        },
+        status: 'pending_review',
+        reviewState: 'deferred',
+        reviewerId: 'sandbox-tutor',
+        reviewerNote: 'Wait for another signal before adding to the profile.',
+        reviewedAt: now,
+        promotedRevisionId: null,
+        promotedAt: null,
+        supersededById: null,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: 'candidate-sandbox-rejected',
+        studentId: 'student-alex',
+        proposedFact: 'Needs long grammar lectures before each assignment.',
+        approvedFactText: null,
+        category: 'study_preferences',
+        targetSection: 'learning_preferences_study_habits',
+        sourceSummary: 'Rejected because stronger signals favor short practical review loops.',
+        authority: 'model_inferred',
+        confidence: 'low',
+        evidence: [],
+        sourceSnapshotId: 'snapshot-sandbox',
+        sourceLessonMemoryIds: ['lesson-memory-sandbox'],
+        sourceLessonId: 'lesson-sandbox-next',
+        sourceLessonStartedAt: '2026-07-04T11:00:00.000Z',
+        sourceLessonTitle: 'Workplace update practice',
+        sourceMemoryIds: ['snapshot-sandbox'],
+        provenance: { sourceKind: 'student_memory_snapshot' },
+        dedupDecision: {
+          decision: 'created',
+          reason: 'Sandbox rejected candidate for Learning page inspection.',
+        },
+        status: 'rejected',
+        reviewState: 'rejected',
+        reviewerId: 'sandbox-tutor',
+        reviewerNote: 'Contradicts the durable study preference.',
+        reviewedAt: now,
+        promotedRevisionId: null,
+        promotedAt: null,
+        supersededById: null,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: 'candidate-sandbox-promoted',
+        studentId: 'student-alex',
+        proposedFact: 'Uses role-play to prepare for client conversations.',
+        approvedFactText: 'Uses role-play to prepare for client conversations.',
+        category: 'study_preferences',
+        targetSection: 'learning_preferences_study_habits',
+        sourceSummary: 'Already promoted into the active profile.',
+        authority: 'teacher_confirmed',
+        confidence: 'high',
+        evidence: [
+          {
+            quote: 'Role-play helps me prepare for client conversations.',
+            speakerRole: 'student',
+            transcriptSpan: '00:55-01:01',
+            evidenceNote: 'Durable practice preference.',
+            sourceKind: 'student_memory_snapshot',
+            sourceArtifactId: 'snapshot-sandbox',
+          },
+        ],
+        sourceSnapshotId: 'snapshot-sandbox',
+        sourceLessonMemoryIds: ['lesson-memory-sandbox'],
+        sourceLessonId: 'lesson-sandbox-next',
+        sourceLessonStartedAt: '2026-07-04T11:00:00.000Z',
+        sourceLessonTitle: 'Workplace update practice',
+        sourceMemoryIds: ['snapshot-sandbox'],
+        provenance: { sourceKind: 'student_memory_snapshot' },
+        dedupDecision: {
+          decision: 'created',
+          reason: 'Sandbox promoted candidate for Learning page inspection.',
+        },
+        status: 'promoted',
+        reviewState: 'approved',
+        reviewerId: 'sandbox-tutor',
+        reviewerNote: 'Already reflected in the active profile.',
+        reviewedAt: now,
+        promotedRevisionId: 'profile-revision-sandbox',
+        promotedAt: now,
+        supersededById: null,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ],
+    total: 5,
+    limit: 200,
+    offset: 0,
+    order: 'desc',
+  };
+}
+
 function scheduleBillingSurface() {
   return {
     studentId: 'student-alex',
@@ -327,6 +725,54 @@ export function createFrontendSandboxApiAdapter(): AxiosAdapter {
           { id: 'student-alex', name: 'Alex', profileId: 'profiles/alex.md' },
           { id: 'student-bella', name: 'Bella', profileId: 'profiles/bella.md' },
         ],
+      });
+    }
+
+    if (method === 'get' && path === '/students') {
+      return responseFor(config, {
+        items: [studentProfile()],
+        total: 1,
+        limit: 200,
+        offset: 0,
+        order: 'asc',
+      });
+    }
+
+    if (method === 'get' && path === '/students/student-alex') {
+      return responseFor(config, studentProfile());
+    }
+
+    if (method === 'get' && path === '/students/student-alex/surfaces/overview') {
+      return responseFor(config, {
+        profile: profileContent(),
+        revisions: profileRevisionList(),
+        memory: memoryOverview(),
+        pendingCandidates: emptyCandidateList(),
+        recentTimeline: {
+          items: [
+            {
+              type: 'lesson_memory_ready',
+              displayName: 'Lesson memory ready',
+              createdAt: now,
+            },
+          ],
+          total: 1,
+          limit: 10,
+          offset: 0,
+          order: 'desc',
+        },
+        scheduleBilling: scheduleBillingSurface(),
+      });
+    }
+
+    if (method === 'get' && path === '/students/student-alex/surfaces/learning') {
+      return responseFor(config, {
+        profile: profileContent(),
+        revisions: profileRevisionList(),
+        memory: memoryOverview(),
+        memoryHealth: memoryHealth(),
+        bindings: bindingHistory(),
+        candidates: profileCandidateList(),
       });
     }
 

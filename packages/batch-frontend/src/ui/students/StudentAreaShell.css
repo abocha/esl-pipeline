@@ -110,11 +110,6 @@
   color: var(--app-blue);
 }
 
-.student-area-page-summary {
-  max-width: 42rem;
-  margin-top: 0.35rem;
-}
-
 .student-area-nav {
   display: flex;
   flex-wrap: wrap;

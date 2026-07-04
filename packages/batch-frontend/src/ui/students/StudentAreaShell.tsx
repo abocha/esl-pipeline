@@ -12,29 +12,24 @@ type StudentAreaDensity = 'overview' | 'learning' | 'reading' | 'operations';
 
 interface StudentAreaPageMeta {
   label: string;
-  summary: string;
   density: StudentAreaDensity;
 }
 
 const STUDENT_AREA_PAGE_META: Record<StudentAreaPageKey, StudentAreaPageMeta> = {
   overview: {
     label: 'Overview',
-    summary: 'A calm control surface for the current learning relationship.',
     density: 'overview',
   },
   learning: {
     label: 'Learning',
-    summary: 'Learner profile, student memory, and memory evidence for future assignments.',
     density: 'learning',
   },
   history: {
     label: 'History',
-    summary: 'A chronological teaching ledger for lessons, materials, and profile changes.',
     density: 'reading',
   },
   'schedule-billing': {
     label: 'Schedule & Billing',
-    summary: 'The future home for lessons, credits, reminders, invoices, and calendar state.',
     density: 'operations',
   },
 };
@@ -126,7 +121,6 @@ export const StudentAreaShell: React.FC = () => {
             <span className="student-area-eyebrow">{activePageMeta.label}</span>
             <h1>{studentName}</h1>
             <p>{studentError ?? formatStudentSubtitle(student)}</p>
-            <p className="student-area-page-summary">{activePageMeta.summary}</p>
           </div>
         </div>
 
