@@ -311,6 +311,10 @@ Implemented:
 - Custom rerun keeps the study-text, main pronunciation, and pronunciation chunk settings headings,
   while field labels drop repeated family prefixes and keep only `Provider`, `Model`, `Voice ID`,
   `Accent`, and `Strategy`.
+- Quick reruns now render as a plain button row, and learner context now renders as structured text
+  instead of nested profile cards.
+- Advanced actions no longer duplicates the review-stage cancel control; support details stay in the
+  rerun/support area.
 - Tutor-facing tests cover the all-stages-unlocked sandbox fixture and the removed unlocked-stage
   copy.
 

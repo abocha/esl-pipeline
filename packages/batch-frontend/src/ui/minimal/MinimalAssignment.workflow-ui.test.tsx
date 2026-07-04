@@ -291,7 +291,11 @@ describe('MinimalAssignment - staged workflow UI', () => {
 
       expect(screen.getByRole('heading', { name: /Advanced actions/i })).toBeTruthy();
       expect(screen.getByRole('button', { name: /Refresh actions/i })).toBeTruthy();
-      expect(screen.getByRole('region', { name: /Quick reruns/i })).toBeTruthy();
+      const quickReruns = screen.getByRole('region', { name: /Quick reruns/i });
+      expect(quickReruns).toBeTruthy();
+      expect(quickReruns.className).not.toContain('minimal-rerun-quick');
+      expect(quickReruns.querySelector('.minimal-rerun-action-card')).toBeNull();
+      expect(within(quickReruns).getAllByRole('button')).toHaveLength(4);
       expect(screen.queryByText(/Each action changes only what it says/i)).toBeNull();
       expect(screen.queryByText(/Replace study-text, main pronunciation/i)).toBeNull();
 
@@ -321,6 +325,9 @@ describe('MinimalAssignment - staged workflow UI', () => {
       const previewButton = screen.getByRole('button', { name: /Preview assignment/i });
       expect(previewButton.className).toContain('minimal-preview-attention');
       expect(screen.queryByText(/Preview required before sharing/i)).toBeNull();
+      expect(screen.queryByRole('heading', { name: /Job controls/i })).toBeNull();
+      expect(screen.queryByRole('button', { name: /^Cancel job$/i })).toBeNull();
+      expect(screen.queryByText(/Cancel is only available/i)).toBeNull();
       expect(screen.getByText(/^Support details$/i)).toBeTruthy();
 
       await user.click(screen.getByRole('button', { name: /Resume recent work/i }));
@@ -331,6 +338,37 @@ describe('MinimalAssignment - staged workflow UI', () => {
       await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
 
       expect(screen.queryByRole('button', { name: /Switch to resume/i })).toBeNull();
+    },
+    INTEGRATION_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'presents learner context as structured text without nested cards',
+    async () => {
+      await renderPublishedAssignment(
+        {
+          draftText: '# Draft markdown',
+          status: {
+            studentId: 'student-alex',
+          },
+        },
+        { user: createMinimalUser() },
+      );
+
+      const learnerContext = screen
+        .getByRole('heading', { name: /Learner context/i })
+        .closest('.minimal-stage-panel');
+      expect(learnerContext).toBeTruthy();
+      const learnerScope = within(learnerContext as HTMLElement);
+
+      expect(learnerContext?.querySelector('.minimal-profile-card')).toBeNull();
+      expect(learnerContext?.querySelector('.minimal-profile-meta-grid')).toBeNull();
+      expect(learnerContext?.querySelector('.minimal-profile-scan-group')).toBeNull();
+      expect(learnerScope.getByText(/^Source$/i)).toBeTruthy();
+      expect(learnerScope.getByText(/^Student Learning page$/i)).toBeTruthy();
+      expect(learnerScope.getByText(/^Goals \/ context$/i)).toBeTruthy();
+      expect(learnerScope.getByText(/Lead project updates clearly/i)).toBeTruthy();
+      expect(learnerScope.getByRole('link', { name: /Open Learning page/i })).toBeTruthy();
     },
     INTEGRATION_TEST_TIMEOUT_MS,
   );
