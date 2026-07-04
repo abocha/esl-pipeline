@@ -231,7 +231,7 @@
 }
 
 .workspace-filter-row {
-  align-items: end;
+  align-items: center;
 }
 
 .workspace-meta {
@@ -280,20 +280,100 @@
   gap: var(--space-2);
 }
 
+.workspace-candidate-list {
+  max-height: none;
+  overflow: visible;
+  padding-right: 0;
+}
+
+.student-history-filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.student-history-filters span {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.student-history-filters button {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.student-history-filters button.active {
+  background: var(--bg-secondary);
+  border-color: var(--color-primary-600);
+  color: var(--color-primary-600);
+}
+
+.student-history-filters button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .workspace-candidate-details {
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
   background: var(--bg-secondary);
   padding: var(--space-2) var(--space-3);
+  display: grid;
+  gap: var(--space-2);
+}
+
+.workspace-candidate-item {
+  display: grid;
+  align-items: stretch;
+  justify-content: stretch;
 }
 
 .workspace-candidate-summary {
   list-style: none;
-  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
+}
+
+.workspace-candidate-copy {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.workspace-candidate-copy strong {
+  overflow-wrap: anywhere;
+}
+
+.workspace-candidate-source {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+}
+
+.workspace-candidate-status,
+.workspace-candidate-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.workspace-candidate-select {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
 }
 
 .workspace-candidate-summary::-webkit-details-marker {

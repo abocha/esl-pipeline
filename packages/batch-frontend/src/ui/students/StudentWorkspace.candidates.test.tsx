@@ -34,19 +34,26 @@ describe('StudentWorkspace candidates', () => {
 
     const card = screen.getByTestId('profile-candidate-card-candidate-pending');
     expect(card.textContent).toContain('Uses English with product and engineering teams at work.');
-    expect(card.textContent).toContain('Work and communication context');
+    expect(card.textContent).not.toContain('Work and communication context');
     expect(card.textContent).toContain('Pending review');
-    expect(card.textContent).toContain('high confidence');
-    expect(card.textContent).toContain('1 evidence excerpt');
-    expect(card.textContent).toContain('Repeatedly mentioned sprint planning and client calls.');
+    expect(card.textContent).not.toContain('high confidence');
+    expect(card.textContent).not.toContain('1 evidence excerpt');
+    expect(card.textContent).not.toContain('student stated');
+    expect(card.textContent).not.toContain(
+      'Repeatedly mentioned sprint planning and client calls.',
+    );
+    expect(screen.queryByText(/Review candidate profile facts here/i)).toBeNull();
+    expect(screen.queryByLabelText(/Profile Candidate Review Bucket/i)).toBeNull();
+    expect(screen.queryByRole('button', { name: /Refresh Candidates/i })).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: /Review details for candidate-pending/i }),
+    ).toBeNull();
     expect(screen.queryByText(/Lesson memory IDs/i)).toBeNull();
     expect(screen.queryByLabelText(/Approved Fact Text candidate-pending/i)).toBeNull();
 
-    await user.click(screen.getByRole('button', { name: /Review details for candidate-pending/i }));
+    await user.click(screen.getByRole('button', { name: 'Details' }));
 
-    expect(
-      screen.getByRole('button', { name: /Hide details for candidate-pending/i }),
-    ).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Hide details' })).toBeTruthy();
     expect(screen.getByText(/Lesson memory IDs/i)).toBeTruthy();
     expect(screen.getByText(/Source lesson:/i)).toBeTruthy();
     expect(screen.getByText('Sprint planning')).toBeTruthy();
@@ -55,23 +62,59 @@ describe('StudentWorkspace candidates', () => {
     expect(screen.getByLabelText(/Approved Fact Text candidate-pending/i)).toBeTruthy();
   });
 
-  it('shows reviewed profile candidates including deferred items', async () => {
+  it('shows all candidate views and filters by exact review state', async () => {
     const user = userEvent.setup();
     renderWorkspaceCandidatesPanel();
 
-    await user.selectOptions(screen.getByLabelText(/Profile Candidate Review Bucket/i), 'reviewed');
+    expect(screen.getByRole('button', { name: 'All' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Pending' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Reviewed' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Approved' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Deferred' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Rejected' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Promoted' })).toBeTruthy();
+
+    await user.click(screen.getByRole('button', { name: 'All' }));
+
+    expect(
+      screen.getAllByText(/Uses English with product and engineering teams at work\./i).length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText(/Prefers structured homework with built-in review blocks\./i).length,
+    ).toBeGreaterThan(0);
+
+    await user.click(screen.getByRole('button', { name: 'Approved' }));
 
     await screen.findAllByText(/Prefers structured homework with built-in review blocks\./i);
+    expect(
+      screen.queryByText(/Might be interested in pickleball strategy vocabulary\./i),
+    ).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Deferred' }));
+
     expect(
       screen.getAllByText(/Might be interested in pickleball strategy vocabulary\./i).length,
     ).toBeGreaterThan(0);
     expect(screen.getAllByText(/Deferred/i).length).toBeGreaterThan(0);
+
+    await user.click(screen.getByRole('button', { name: 'Rejected' }));
+
+    expect(
+      screen.getAllByText(/Wants long grammar lectures before practice\./i).length,
+    ).toBeGreaterThan(0);
+
+    await user.click(screen.getByRole('button', { name: 'Promoted' }));
+
+    expect(
+      screen.getAllByText(/Uses role-play to prepare for client calls\./i).length,
+    ).toBeGreaterThan(0);
   });
 
   it('approves a profile candidate with edited text and a reviewer note', async () => {
     const user = userEvent.setup();
     await renderWorkspaceWithProfileCandidates();
 
+    await user.click(screen.getByRole('button', { name: 'Details' }));
     const approvedText = await screen.findByLabelText(
       /Approved Fact Text candidate-pending/i,
       {},
@@ -101,7 +144,7 @@ describe('StudentWorkspace candidates', () => {
     const user = userEvent.setup();
     const onPromoteProfileCandidates = vi.fn();
     renderWorkspaceCandidatesPanel({
-      profileCandidateFilter: 'reviewed',
+      profileCandidateFilter: 'approved',
       selectedCandidateIds: ['candidate-approved'],
       profileCandidatePromotionNote: '',
       onPromoteProfileCandidates,
@@ -119,7 +162,7 @@ describe('StudentWorkspace candidates', () => {
     const user = userEvent.setup();
     const onPromoteProfileCandidates = vi.fn();
     renderWorkspaceCandidatesPanel({
-      profileCandidateFilter: 'reviewed',
+      profileCandidateFilter: 'approved',
       selectedCandidateIds: [],
       onPromoteProfileCandidates,
     });
@@ -145,7 +188,7 @@ describe('StudentWorkspace candidates', () => {
     const user = userEvent.setup();
     await renderWorkspaceWithProfileCandidates();
 
-    await user.selectOptions(screen.getByLabelText(/Profile Candidate Review Bucket/i), 'reviewed');
+    await user.click(screen.getByRole('button', { name: 'Approved' }));
     await user.click(screen.getByLabelText(/Select candidate candidate-approved for promotion/i));
     await user.click(screen.getByRole('button', { name: /Generate Draft Revision/i }));
 

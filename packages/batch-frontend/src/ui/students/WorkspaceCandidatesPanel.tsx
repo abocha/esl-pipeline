@@ -8,8 +8,8 @@ import {
   getApprovedCandidatesReadyForPromotion,
   groupVisibleCandidatesBySection,
   isSelectableForPromotion,
-  PROFILE_CANDIDATE_PENDING_FILTER,
-  PROFILE_CANDIDATE_REVIEWED_FILTER,
+  PROFILE_CANDIDATE_APPROVED_FILTER,
+  PROFILE_CANDIDATE_FILTER_OPTIONS,
   type ProfileCandidateFilter,
 } from './StudentWorkspace.logic';
 
@@ -42,18 +42,6 @@ export interface WorkspaceCandidatesPanelProps {
   ) => void | Promise<void>;
 }
 
-function formatEvidenceCount(count: number): string {
-  return `${count} evidence excerpt${count === 1 ? '' : 's'}`;
-}
-
-function formatConfidenceLabel(confidence: StudentProfileCandidate['confidence']): string {
-  return confidence ? `${confidence} confidence` : 'confidence n/a';
-}
-
-function formatAuthorityLabel(authority: StudentProfileCandidate['authority']): string {
-  return authority ? authority.replaceAll('_', ' ') : 'authority n/a';
-}
-
 function formatCandidateDate(value?: string | null): string {
   if (!value) return 'n/a';
   const date = new Date(value);
@@ -83,7 +71,6 @@ export function WorkspaceCandidatesPanel({
   profileCandidatePromotionBusy,
   profileCandidatePromotionError,
   profileCandidatePromotionSuccess,
-  onRefreshCandidates,
   onPromoteProfileCandidates,
   onReviewProfileCandidate,
 }: WorkspaceCandidatesPanelProps) {
@@ -107,7 +94,7 @@ export function WorkspaceCandidatesPanel({
     () => groupVisibleCandidatesBySection(profileCandidates, profileCandidateFilter),
     [profileCandidateFilter, profileCandidates],
   );
-  const showingReviewedCandidates = profileCandidateFilter === PROFILE_CANDIDATE_REVIEWED_FILTER;
+  const showingPromotionQueue = profileCandidateFilter === PROFILE_CANDIDATE_APPROVED_FILTER;
   const toggleCandidateDetails = useCallback((candidateId: string) => {
     setOpenCandidateIds((current) =>
       current.includes(candidateId)
@@ -120,39 +107,25 @@ export function WorkspaceCandidatesPanel({
     <article className={['workspace-card workspace-panel', className].filter(Boolean).join(' ')}>
       <header>
         <h2>Profile Candidates</h2>
-        <p>
-          Review candidate profile facts here, then generate a draft revision and activate it
-          through the normal profile revision controls.
-        </p>
       </header>
 
-      <div className="workspace-inline workspace-filter-row">
-        <label className="workspace-field">
-          Review bucket
-          <select
-            aria-label="Profile Candidate Review Bucket"
-            value={profileCandidateFilter}
-            onChange={(event) =>
-              setProfileCandidateFilter(event.target.value as ProfileCandidateFilter)
-            }
+      <div className="student-history-filters" role="group" aria-label="Candidate filter">
+        <span>Show</span>
+        {PROFILE_CANDIDATE_FILTER_OPTIONS.map((option) => (
+          <button
+            key={option.filter}
+            type="button"
+            className={profileCandidateFilter === option.filter ? 'active' : ''}
+            aria-pressed={profileCandidateFilter === option.filter}
+            onClick={() => setProfileCandidateFilter(option.filter)}
             disabled={!selectedStudentId}
           >
-            <option value={PROFILE_CANDIDATE_PENDING_FILTER}>Pending</option>
-            <option value={PROFILE_CANDIDATE_REVIEWED_FILTER}>Reviewed</option>
-          </select>
-        </label>
-
-        <button
-          type="button"
-          className="workspace-secondary-btn"
-          onClick={() => void onRefreshCandidates()}
-          disabled={!selectedStudentId || profileCandidatesLoading}
-        >
-          {profileCandidatesLoading ? 'Refreshing...' : 'Refresh Candidates'}
-        </button>
+            {option.label}
+          </button>
+        ))}
       </div>
 
-      {showingReviewedCandidates ? (
+      {showingPromotionQueue ? (
         <div className="workspace-create-panel">
           <div className="workspace-inline workspace-header-row">
             <div>
@@ -224,12 +197,7 @@ export function WorkspaceCandidatesPanel({
         ) : groupedProfileCandidates.length > 0 ? (
           groupedProfileCandidates.map(([section, candidates]) => (
             <section key={section} className="workspace-candidate-group">
-              <div className="workspace-inline workspace-header-row">
-                <h3>{formatCandidateSectionLabel(section)}</h3>
-                <span className="workspace-muted">
-                  {candidates.length} candidate{candidates.length === 1 ? '' : 's'}
-                </span>
-              </div>
+              <h3>{formatCandidateSectionLabel(section)}</h3>
 
               <div className="workspace-list workspace-candidate-list">
                 {candidates.map((candidate) => {
@@ -253,12 +221,6 @@ export function WorkspaceCandidatesPanel({
                       <div className="workspace-candidate-summary">
                         <div className="workspace-candidate-copy">
                           <strong>{approvedFactText}</strong>
-                          <div className="workspace-muted">
-                            {formatCandidateSectionLabel(candidate.targetSection)}
-                          </div>
-                          {candidate.sourceSummary ? (
-                            <p className="workspace-candidate-source">{candidate.sourceSummary}</p>
-                          ) : null}
                           {decisionLabel ? (
                             <p className="workspace-candidate-source">
                               Dedup decision: {decisionLabel}
@@ -293,25 +255,14 @@ export function WorkspaceCandidatesPanel({
                         </div>
                       </div>
 
-                      <div className="workspace-candidate-meta-row">
-                        <span>{formatConfidenceLabel(candidate.confidence)}</span>
-                        <span>{formatEvidenceCount(candidate.evidence.length)}</span>
-                        <span>{formatAuthorityLabel(candidate.authority)}</span>
-                      </div>
-
                       <div className="workspace-inline workspace-candidate-actions">
                         <button
                           type="button"
                           className="workspace-secondary-btn"
                           onClick={() => toggleCandidateDetails(candidate.id)}
                           aria-expanded={isDetailsOpen}
-                          aria-label={
-                            isDetailsOpen
-                              ? `Hide details for ${candidate.id}`
-                              : `Review details for ${candidate.id}`
-                          }
                         >
-                          {isDetailsOpen ? 'Hide details' : `Review details for ${candidate.id}`}
+                          {isDetailsOpen ? 'Hide details' : 'Details'}
                         </button>
                         <button
                           type="button"

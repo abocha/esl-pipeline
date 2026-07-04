@@ -17,6 +17,7 @@
   --student-learning-blue-focus: color-mix(in srgb, var(--student-area-blue) 14%, transparent);
   --student-learning-ink-tint: color-mix(in srgb, var(--student-area-ink) 5%, transparent);
   --student-learning-ink-border: color-mix(in srgb, var(--student-area-ink) 10%, transparent);
+  --student-learning-divider: color-mix(in srgb, var(--student-area-ink) 12%, transparent);
   --student-learning-rose-tint: color-mix(in srgb, var(--student-area-rose-soft) 92%, transparent);
   --student-learning-rose-border: color-mix(in srgb, var(--student-area-rose) 20%, transparent);
   --student-learning-success-tint: color-mix(
@@ -114,7 +115,6 @@
 }
 
 .student-learning-status-grid,
-.student-learning-profile-summary,
 .student-learning-memory-summary,
 .student-learning-rail-summary {
   display: grid;
@@ -130,12 +130,19 @@
   min-width: 0;
   display: grid;
   gap: 0.3rem;
-  padding: 0.8rem 0.15rem 0;
+  padding: 0 0.15rem;
   border: 0;
-  border-top: 1px solid var(--student-area-line);
   border-radius: 0;
   background: transparent;
   box-shadow: none;
+}
+
+.student-learning-metric.student-area-metric-card::before {
+  content: "";
+  display: block;
+  height: 1px;
+  margin-bottom: 0.8rem;
+  background: var(--student-learning-divider);
 }
 
 .student-learning-metric strong {
@@ -152,27 +159,6 @@
   line-height: 1.45;
 }
 
-.student-learning-metric-success.student-area-metric-card {
-  border-color: color-mix(in srgb, var(--color-success-500) 18%, var(--student-area-line));
-}
-
-.student-learning-metric-accent.student-area-metric-card {
-  border-color: color-mix(in srgb, var(--student-area-amber) 22%, var(--student-area-line));
-}
-
-.student-learning-action-grid {
-  display: grid;
-  gap: 0.85rem;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-}
-
-.student-learning-action-cluster {
-  display: grid;
-  gap: 0.65rem;
-  padding: 0.85rem 0 0;
-  border-top: 1px solid var(--student-area-line);
-}
-
 .student-learning-action-row,
 .student-learning-inline,
 .workspace-inline {
@@ -180,36 +166,6 @@
   flex-wrap: wrap;
   gap: 0.75rem;
   align-items: center;
-}
-
-.student-learning-support-details {
-  display: grid;
-  gap: 0.35rem;
-  padding: 0.85rem 0 0;
-  border-top: 1px solid var(--student-area-line);
-  color: var(--student-area-muted);
-}
-
-.student-learning-support-details summary,
-.student-learning-binding summary {
-  width: fit-content;
-  color: var(--student-area-blue);
-  cursor: pointer;
-  font-weight: 700;
-  list-style: none;
-}
-
-.student-learning-support-details summary::-webkit-details-marker,
-.student-learning-binding summary::-webkit-details-marker {
-  display: none;
-}
-
-.student-learning-support-details code,
-.student-learning-binding code {
-  font-size: 0.92rem;
-  background: var(--student-learning-panel);
-  padding: 0.2rem 0.45rem;
-  border-radius: 8px;
 }
 
 .student-learning-memory-support {
@@ -350,8 +306,7 @@
 .student-learning-field input:focus-visible,
 .student-learning-field textarea:focus-visible,
 .workspace-primary-btn:focus-visible,
-.workspace-secondary-btn:focus-visible,
-.student-learning-binding a:focus-visible {
+.workspace-secondary-btn:focus-visible {
   outline: 2px solid transparent;
   border-color: var(--student-learning-blue-border-strong);
   box-shadow: 0 0 0 4px var(--student-learning-blue-focus);
@@ -359,8 +314,7 @@
 
 .workspace-primary-btn,
 .workspace-secondary-btn,
-.student-learning-empty a,
-.student-learning-binding a {
+.student-learning-empty a {
   width: fit-content;
   min-height: 44px;
   border: 0;
@@ -406,8 +360,7 @@
 }
 
 .workspace-secondary-btn,
-.student-learning-empty a,
-.student-learning-binding a {
+.student-learning-empty a {
   background: var(--student-area-blue-soft);
   color: var(--student-area-blue);
 }
@@ -471,6 +424,43 @@
   max-height: none;
   overflow: visible;
   padding-right: 0;
+}
+
+.student-history-filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.student-history-filters span {
+  color: var(--student-area-muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.student-history-filters button {
+  padding: 0.65rem 1rem;
+  border: 1px solid var(--student-area-line);
+  border-radius: 12px;
+  background: var(--student-learning-panel);
+  color: var(--student-area-ink);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.student-history-filters button.active {
+  background: var(--student-area-blue-soft);
+  border-color: var(--student-learning-blue-border);
+  color: var(--student-area-blue);
+}
+
+.student-history-filters button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .workspace-candidate-details {
@@ -580,7 +570,6 @@ details > .workspace-candidate-summary::-webkit-details-marker {
 
 .student-learning-editor-footer,
 .student-learning-empty-block,
-.student-learning-binding,
 .student-learning-memory-highlight {
   display: grid;
   gap: 0.45rem;
@@ -589,8 +578,7 @@ details > .workspace-candidate-summary::-webkit-details-marker {
 }
 
 .student-learning-memory-highlight strong,
-.student-learning-editor-footer strong,
-.student-learning-binding strong {
+.student-learning-editor-footer strong {
   font-size: 0.98rem;
 }
 
@@ -623,7 +611,7 @@ details > .workspace-candidate-summary::-webkit-details-marker {
 
 .student-learning-revision-list .workspace-list-item {
   padding: 0.9rem 0;
-  border-top: 1px solid var(--student-area-line);
+  border-top: 1px solid var(--student-learning-divider);
   border-radius: 0;
   background: transparent;
 }

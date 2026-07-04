@@ -37,6 +37,7 @@ import {
   foundationalProfileToFormState,
   getApprovedCandidatesReadyForPromotion,
   INITIAL_FOUNDATIONAL_PROFILE_FORM,
+  isPendingCandidate,
   isSelectableForPromotion,
   PROFILE_CANDIDATE_PENDING_FILTER,
   type ProfileCandidateFilter,
@@ -260,13 +261,6 @@ function findCurrentProfileRevisionSummary(
   return revisions.find((revision) => revision.status === 'active') ?? null;
 }
 
-function countListItems(value: string): number {
-  return value
-    .split('\n')
-    .map((line) => line.replace(/^[-*]\s+/, '').trim())
-    .filter(Boolean).length;
-}
-
 function countFilledProfileSections(form: FoundationalProfileFormState): number {
   return [
     form.overallLevel,
@@ -279,13 +273,6 @@ function countFilledProfileSections(form: FoundationalProfileFormState): number 
     form.durableConstraints,
     form.teacherNotes,
   ].filter((value) => value.trim().length > 0).length;
-}
-
-function getRevisionStateLabel(revision: ProfileRevisionDetailResponse | null): string {
-  if (!revision) return 'No Revision Yet';
-  if (revision.status === 'draft') return 'Draft In Progress';
-  if (revision.status === 'deprecated') return 'Deprecated Revision';
-  return 'Active Revision';
 }
 
 function getProfileReadinessLabel(populatedFields: number): string {
@@ -449,14 +436,6 @@ function MemoryHealthDetails({
   );
 }
 
-function getDraftSourceLabel(revision: ProfileRevisionDetailResponse | null): string {
-  if (!revision) return 'Start the first profile draft to make this page actionable.';
-  if (revision.status === 'draft') {
-    return 'This draft is editable but will not shape future assignments until activation.';
-  }
-  return 'This active learner profile shapes future assignment generation.';
-}
-
 function LearningMetricCard({
   eyebrow,
   value,
@@ -476,7 +455,6 @@ function LearningMetricCard({
 
 function LearningField({ config, value, onChange }: LearningFieldProps): React.JSX.Element {
   const inputId = `learning-${config.key}`;
-  const helpId = `${inputId}-help`;
   const fieldClassName =
     config.span === 'full'
       ? 'student-learning-field student-learning-field-full'
@@ -494,7 +472,6 @@ function LearningField({ config, value, onChange }: LearningFieldProps): React.J
           value={value}
           onChange={(event) => onChange(config.key, event.target.value)}
           placeholder={config.placeholder}
-          aria-describedby={helpId}
         />
       ) : (
         <textarea
@@ -505,10 +482,8 @@ function LearningField({ config, value, onChange }: LearningFieldProps): React.J
           onChange={(event) => onChange(config.key, event.target.value)}
           rows={config.rows ?? 4}
           placeholder={config.placeholder}
-          aria-describedby={helpId}
         />
       )}
-      <p id={helpId}>{config.help}</p>
     </div>
   );
 }
@@ -605,6 +580,10 @@ export const StudentLearningPage: React.FC = () => {
 
   const approvedCandidatesReadyForPromotion = useMemo(
     () => getApprovedCandidatesReadyForPromotion(profileCandidates),
+    [profileCandidates],
+  );
+  const pendingProfileCandidateCount = useMemo(
+    () => profileCandidates.filter((candidate) => isPendingCandidate(candidate)).length,
     [profileCandidates],
   );
   const approvedCandidateIdsReadyForPromotion = useMemo(
@@ -1343,23 +1322,7 @@ export const StudentLearningPage: React.FC = () => {
   return (
     <section className="student-learning-layout student-area-theme">
       <article className="student-area-panel student-learning-hero">
-        <div className="student-learning-hero-copy">
-          <span className="student-learning-eyebrow">Learning</span>
-          <p>
-            Review the learner profile, student memory, and candidate facts in one calm editing
-            surface.
-          </p>
-        </div>
-
         <div className="student-learning-status-grid">
-          <LearningMetricCard
-            eyebrow="Revision State"
-            value={getRevisionStateLabel(currentRevision)}
-            detail={`${
-              currentRevision?.versionLabel ?? currentRevision?.id ?? 'No revision yet'
-            } • ${formatDateTime(currentRevision?.createdAt ?? activeBinding?.createdAt)}`}
-            tone={currentRevision?.status === 'draft' ? 'accent' : 'success'}
-          />
           <LearningMetricCard
             eyebrow="Profile Readiness"
             value={getProfileReadinessLabel(populatedProfileFields)}
@@ -1377,73 +1340,56 @@ export const StudentLearningPage: React.FC = () => {
             }
           />
           <LearningMetricCard
+            eyebrow="Pending Candidates"
+            value={`${pendingProfileCandidateCount} New`}
+            detail="Profile facts waiting for teacher review."
+            tone={pendingProfileCandidateCount > 0 ? 'accent' : 'success'}
+          />
+          <LearningMetricCard
             eyebrow="Promotion Queue"
             value={`${approvedCandidatesReadyForPromotion.length} Ready`}
             detail="Approved profile candidates that can become the next draft revision."
           />
         </div>
 
-        <div className="student-learning-action-grid">
-          <div className="student-learning-action-cluster">
-            <span className="student-learning-card-eyebrow">Profile helpers</span>
-            <div className="student-learning-action-row">
-              <button
-                type="button"
-                className="workspace-secondary-btn"
-                onClick={() => void handlePopulateFirstProfile()}
-                disabled={profileBusy !== null}
-              >
-                {profileBusy === 'populating'
-                  ? 'Populating…'
-                  : 'Populate First Profile From Lesson'}
-              </button>
-              <button
-                type="button"
-                className="workspace-secondary-btn"
-                onClick={() =>
-                  void handleRefreshDraftFromCandidates(
-                    approvedCandidatesReadyForPromotion.map((candidate) => candidate.id),
-                  )
-                }
-                disabled={profileBusy !== null || approvedCandidatesReadyForPromotion.length === 0}
-              >
-                {profileBusy === 'promoting'
-                  ? 'Refreshing…'
-                  : 'Refresh Draft From Approved Candidates'}
-              </button>
-            </div>
-          </div>
-
-          <div className="student-learning-action-cluster">
-            <span className="student-learning-card-eyebrow">Profile actions</span>
-            <div className="student-learning-action-row">
-              <button
-                type="button"
-                className="workspace-primary-btn"
-                onClick={() => void handleSaveDraft()}
-                disabled={profileBusy !== null || !profileDirty}
-              >
-                {profileBusy === 'saving' ? 'Saving…' : 'Save Draft'}
-              </button>
-              <button
-                type="button"
-                className="workspace-primary-btn"
-                onClick={() => void handleActivateDraft()}
-                disabled={profileBusy !== null || !canActivateDraft}
-              >
-                {profileBusy === 'activating' ? 'Activating…' : 'Activate Draft'}
-              </button>
-            </div>
-          </div>
+        <div className="student-learning-action-row student-learning-action-row-main">
+          <button
+            type="button"
+            className="workspace-secondary-btn"
+            onClick={() => void handlePopulateFirstProfile()}
+            disabled={profileBusy !== null}
+          >
+            {profileBusy === 'populating' ? 'Populating…' : 'Populate First Profile From Lesson'}
+          </button>
+          <button
+            type="button"
+            className="workspace-secondary-btn"
+            onClick={() =>
+              void handleRefreshDraftFromCandidates(
+                approvedCandidatesReadyForPromotion.map((candidate) => candidate.id),
+              )
+            }
+            disabled={profileBusy !== null || approvedCandidatesReadyForPromotion.length === 0}
+          >
+            {profileBusy === 'promoting' ? 'Refreshing…' : 'Refresh Draft From Approved Candidates'}
+          </button>
+          <button
+            type="button"
+            className="workspace-primary-btn"
+            onClick={() => void handleSaveDraft()}
+            disabled={profileBusy !== null || !profileDirty}
+          >
+            {profileBusy === 'saving' ? 'Saving…' : 'Save Draft'}
+          </button>
+          <button
+            type="button"
+            className="workspace-primary-btn"
+            onClick={() => void handleActivateDraft()}
+            disabled={profileBusy !== null || !canActivateDraft}
+          >
+            {profileBusy === 'activating' ? 'Activating…' : 'Activate Draft'}
+          </button>
         </div>
-
-        <details className="student-learning-support-details">
-          <summary>Support details</summary>
-          <p>
-            <strong>{formatStudentShortId(studentId)}</strong>
-          </p>
-          <p>{getDraftSourceLabel(currentRevision)}</p>
-        </details>
 
         {profileError ? (
           <p className="workspace-error" aria-live="polite">
@@ -1461,38 +1407,8 @@ export const StudentLearningPage: React.FC = () => {
         <div className="student-learning-primary-column">
           <article className="student-area-panel workspace-card student-learning-profile-card">
             <header className="student-learning-block-header">
-              <div>
-                <span className="student-learning-card-eyebrow">Learner profile</span>
-                <h2>Foundational Profile</h2>
-              </div>
-              <p>
-                Structured edits here shape future assignments and should stay focused on stable
-                learner context.
-              </p>
+              <h2>Foundational Profile</h2>
             </header>
-
-            <div className="student-learning-profile-summary">
-              <LearningMetricCard
-                eyebrow="Goals"
-                value={`${countListItems(profileForm.primaryGoals)}`}
-                detail="durable targets"
-              />
-              <LearningMetricCard
-                eyebrow="Contexts"
-                value={`${countListItems(profileForm.communicationContexts)}`}
-                detail="real-world use cases"
-              />
-              <LearningMetricCard
-                eyebrow="Strengths"
-                value={`${countListItems(profileForm.stableStrengths)}`}
-                detail="stable assets to lean on"
-              />
-              <LearningMetricCard
-                eyebrow="Challenges"
-                value={`${countListItems(profileForm.persistentChallenges)}`}
-                detail="recurring issues to track"
-              />
-            </div>
 
             <div className="student-learning-section-grid">
               {PROFILE_SECTION_CONFIGS.map((section) => (
@@ -1508,10 +1424,6 @@ export const StudentLearningPage: React.FC = () => {
             <footer className="student-learning-editor-footer">
               <div>
                 <strong>{profileDirty ? 'Unsaved structured edits' : 'No unsaved changes'}</strong>
-                <p>
-                  Save the whole profile as one draft revision, then activate explicitly when the
-                  learner profile looks right.
-                </p>
               </div>
               {profileLegacyNotice ? (
                 <p className="workspace-muted">{profileLegacyNotice}</p>
@@ -1521,14 +1433,7 @@ export const StudentLearningPage: React.FC = () => {
 
           <article className="student-area-panel workspace-card student-learning-memory-card">
             <header className="student-learning-block-header">
-              <div>
-                <span className="student-learning-card-eyebrow">Student memory</span>
-                <h2>Student Memory</h2>
-              </div>
-              <p>
-                Use automated memory evidence to update the profile and plan lessons without turning
-                this page into a chronology dump.
-              </p>
+              <h2>Student Memory</h2>
             </header>
 
             {memoryOverviewError ? (
@@ -1658,11 +1563,7 @@ export const StudentLearningPage: React.FC = () => {
 
         <aside className="student-area-panel workspace-card student-learning-sidebar">
           <header className="student-learning-block-header">
-            <div>
-              <span className="student-learning-card-eyebrow">Version history</span>
-              <h2>Profile Versions</h2>
-            </div>
-            <p>Open earlier versions when you need to compare or restore the learner profile.</p>
+            <h2>Profile Versions</h2>
           </header>
 
           <div className="student-learning-rail-summary">
@@ -1724,21 +1625,6 @@ export const StudentLearningPage: React.FC = () => {
               </div>
             ))}
           </div>
-
-          <details className="student-learning-binding">
-            <summary>Support details</summary>
-            {activeBinding ? (
-              <p className="workspace-muted">
-                {formatStudentShortId(studentId)} • profile active since{' '}
-                {formatDateTime(activeBinding.effectiveFrom)}.
-              </p>
-            ) : (
-              <p className="workspace-muted">Profile activation history is not available yet.</p>
-            )}
-            <p className="workspace-muted">
-              Learning now owns the active learner profile workflow.
-            </p>
-          </details>
         </aside>
       </div>
     </section>

@@ -121,11 +121,33 @@ export const INITIAL_TIMELINE_FILTERS: TimelineFilters = {
   to: '',
 };
 
+export const PROFILE_CANDIDATE_ALL_FILTER = 'all';
 export const PROFILE_CANDIDATE_PENDING_FILTER = 'pending';
 export const PROFILE_CANDIDATE_REVIEWED_FILTER = 'reviewed';
+export const PROFILE_CANDIDATE_APPROVED_FILTER = 'approved';
+export const PROFILE_CANDIDATE_DEFERRED_FILTER = 'deferred';
+export const PROFILE_CANDIDATE_REJECTED_FILTER = 'rejected';
+export const PROFILE_CANDIDATE_PROMOTED_FILTER = 'promoted';
 export type ProfileCandidateFilter =
+  | typeof PROFILE_CANDIDATE_ALL_FILTER
   | typeof PROFILE_CANDIDATE_PENDING_FILTER
-  | typeof PROFILE_CANDIDATE_REVIEWED_FILTER;
+  | typeof PROFILE_CANDIDATE_REVIEWED_FILTER
+  | typeof PROFILE_CANDIDATE_APPROVED_FILTER
+  | typeof PROFILE_CANDIDATE_DEFERRED_FILTER
+  | typeof PROFILE_CANDIDATE_REJECTED_FILTER
+  | typeof PROFILE_CANDIDATE_PROMOTED_FILTER;
+export const PROFILE_CANDIDATE_FILTER_OPTIONS: {
+  filter: ProfileCandidateFilter;
+  label: string;
+}[] = [
+  { filter: PROFILE_CANDIDATE_ALL_FILTER, label: 'All' },
+  { filter: PROFILE_CANDIDATE_PENDING_FILTER, label: 'Pending' },
+  { filter: PROFILE_CANDIDATE_REVIEWED_FILTER, label: 'Reviewed' },
+  { filter: PROFILE_CANDIDATE_APPROVED_FILTER, label: 'Approved' },
+  { filter: PROFILE_CANDIDATE_DEFERRED_FILTER, label: 'Deferred' },
+  { filter: PROFILE_CANDIDATE_REJECTED_FILTER, label: 'Rejected' },
+  { filter: PROFILE_CANDIDATE_PROMOTED_FILTER, label: 'Promoted' },
+];
 export type CandidateActionKind = 'approve' | 'reject' | 'defer';
 
 function splitProfileListField(value: string): string[] {
@@ -185,6 +207,38 @@ export function isPendingCandidate(candidate: StudentProfileCandidate): boolean 
 
 export function isReviewedCandidate(candidate: StudentProfileCandidate): boolean {
   return !isPendingCandidate(candidate);
+}
+
+function isVisibleForCandidateFilter(
+  candidate: StudentProfileCandidate,
+  filter: ProfileCandidateFilter,
+): boolean {
+  switch (filter) {
+    case PROFILE_CANDIDATE_ALL_FILTER: {
+      return true;
+    }
+    case PROFILE_CANDIDATE_PENDING_FILTER: {
+      return isPendingCandidate(candidate);
+    }
+    case PROFILE_CANDIDATE_REVIEWED_FILTER: {
+      return isReviewedCandidate(candidate);
+    }
+    case PROFILE_CANDIDATE_APPROVED_FILTER: {
+      return candidate.status === 'approved';
+    }
+    case PROFILE_CANDIDATE_DEFERRED_FILTER: {
+      return candidate.reviewState === 'deferred';
+    }
+    case PROFILE_CANDIDATE_REJECTED_FILTER: {
+      return candidate.status === 'rejected' || candidate.reviewState === 'rejected';
+    }
+    case PROFILE_CANDIDATE_PROMOTED_FILTER: {
+      return candidate.status === 'promoted';
+    }
+    default: {
+      return false;
+    }
+  }
 }
 
 export function isSelectableForPromotion(candidate: StudentProfileCandidate): boolean {
@@ -248,9 +302,7 @@ export function groupVisibleCandidatesBySection(
   candidates: StudentProfileCandidate[],
   filter: ProfileCandidateFilter,
 ): [string, StudentProfileCandidate[]][] {
-  const visible = candidates.filter((candidate) =>
-    filter === 'pending' ? isPendingCandidate(candidate) : isReviewedCandidate(candidate),
-  );
+  const visible = candidates.filter((candidate) => isVisibleForCandidateFilter(candidate, filter));
   const groups = new Map<string, StudentProfileCandidate[]>();
   for (const candidate of visible) {
     const key = candidate.targetSection || 'other';
