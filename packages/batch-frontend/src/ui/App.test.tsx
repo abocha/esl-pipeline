@@ -13,10 +13,15 @@ const toastMock = vi.hoisted(() => ({
   success: vi.fn(),
   error: vi.fn(),
 }));
+const sandboxModeMock = vi.hoisted(() => vi.fn(() => false));
 const UI_WAIT_TIMEOUT_MS = 10_000;
 
 vi.mock('../context/AuthContext', () => ({
   useAuth: useAuthMock,
+}));
+
+vi.mock('../dev/frontend-sandbox', () => ({
+  isFrontendSandboxEnabled: sandboxModeMock,
 }));
 
 vi.mock('./minimal/MinimalAssignment', () => ({
@@ -107,6 +112,7 @@ function renderApp(initialEntries: string[] = ['/']) {
 describe('App', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    sandboxModeMock.mockReturnValue(false);
     window.history.replaceState(null, '', '/');
   });
 
@@ -223,6 +229,26 @@ describe('App', () => {
     await user.click(screen.getByRole('link', { name: /Skip to main content/i }));
 
     expect(document.activeElement).toBe(document.getElementById('main-content'));
+  });
+
+  it('marks authenticated screens when the dev sandbox is active', async () => {
+    sandboxModeMock.mockReturnValue(true);
+    useAuthMock.mockReturnValue(
+      createAuthState({
+        user: {
+          id: 'sandbox-tutor',
+          email: 'sandbox.tutor@example.test',
+          role: 'user',
+          isActive: true,
+        },
+        isAuthenticated: true,
+      }),
+    );
+
+    renderApp();
+
+    expect(await screen.findByText('Minimal assignment content')).toBeTruthy();
+    expect(screen.getByLabelText(/Frontend sandbox mode/i).textContent).toContain('Mock data');
   });
 
   it('navigates to the student directory route from shell navigation', async () => {

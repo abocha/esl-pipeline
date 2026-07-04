@@ -70,7 +70,7 @@ describe('StudentAreaShell', () => {
     vi.clearAllMocks();
   });
 
-  it('renders the shared student masthead, active page summary, and density wrapper', async () => {
+  it('renders the distilled shared student masthead and density wrapper', async () => {
     apiMocks.getStudentProfile.mockResolvedValue({
       id: 'student-alex-rivera',
       student: 'Alex Rivera',
@@ -86,10 +86,10 @@ describe('StudentAreaShell', () => {
     expect(screen.getByRole('heading', { name: 'Alex Rivera' })).toBeTruthy();
     expect(screen.getByText('Support ID: alex-riv')).toBeTruthy();
     expect(
-      screen.getByText(
+      screen.queryByText(
         'A chronological teaching ledger for lessons, materials, and profile changes.',
       ),
-    ).toBeTruthy();
+    ).toBeNull();
     expect(screen.getByRole('link', { name: 'History' }).getAttribute('aria-current')).toBe('page');
     expect(screen.getByTestId('student-area-body').className).toContain(
       'student-area-body-reading',

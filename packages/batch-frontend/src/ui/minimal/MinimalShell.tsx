@@ -8,10 +8,16 @@ import './MinimalShell.css';
 interface MinimalShellProps {
   user: User;
   onLogout: () => void;
+  sandboxMode?: boolean;
   children?: React.ReactNode;
 }
 
-export const MinimalShell: React.FC<MinimalShellProps> = ({ user, onLogout, children }) => {
+export const MinimalShell: React.FC<MinimalShellProps> = ({
+  user,
+  onLogout,
+  sandboxMode = false,
+  children,
+}) => {
   return (
     <div className="app-shell">
       <a
@@ -62,6 +68,11 @@ export const MinimalShell: React.FC<MinimalShellProps> = ({ user, onLogout, chil
           </NavLink>
         </nav>
         <div className="app-actions">
+          {sandboxMode ? (
+            <span className="app-sandbox-badge" aria-label="Frontend sandbox mode">
+              Mock data
+            </span>
+          ) : null}
           <span className="app-user" translate="no">
             {user.email}
           </span>

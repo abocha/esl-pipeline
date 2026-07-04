@@ -1,5 +1,8 @@
 import axios, { AxiosError, AxiosInstance, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 
+import { isFrontendSandboxEnabled } from '../dev/frontend-sandbox';
+import { createFrontendSandboxApiAdapter } from '../dev/frontend-sandbox-api';
+
 type MaybeString = string | undefined | null;
 type AuthRefreshHandler = () => Promise<{ accessToken?: MaybeString }>;
 
@@ -90,6 +93,7 @@ const apiClient: AxiosInstance = axios.create({
   baseURL: backendBaseUrl || undefined,
   timeout: 240_000, // 240 seconds — matches backend GEN_*_REQUEST_TIMEOUT_MS
   withCredentials: true,
+  adapter: isFrontendSandboxEnabled() ? createFrontendSandboxApiAdapter() : undefined,
   headers: {
     'Content-Type': 'application/json',
   },

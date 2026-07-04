@@ -561,32 +561,23 @@ export function AdvancedActionsStage({
             <div className="minimal-stage-panel-header">
               <div className="minimal-stage-panel-title">
                 <h3>Republish and rerun</h3>
-                <p>Choose exactly what to regenerate. Anything you leave unchecked stays as-is.</p>
               </div>
               <button type="button" className="minimal-secondary" onClick={onRefreshActions}>
                 Refresh actions
               </button>
             </div>
-            <section className="minimal-rerun-quick" aria-label="Quick reruns">
-              <div className="minimal-list-heading">
-                <strong>Quick reruns</strong>
-                <span className="minimal-muted">Each action changes only what it says.</span>
-              </div>
-              <div className="minimal-rerun-action-grid">
-                {presetRerunActions.map((action) => (
-                  <div key={action.kind} className="minimal-rerun-action-card">
-                    <button
-                      type="button"
-                      className="minimal-primary"
-                      onClick={() => void controller.handlePresetRerun(action.kind)}
-                      disabled={!controller.rerunEnabled}
-                    >
-                      {controller.actionBusy === 'rerun' ? 'Queuing rerun...' : action.label}
-                    </button>
-                    <p className="minimal-muted">{action.description}</p>
-                  </div>
-                ))}
-              </div>
+            <section className="minimal-rerun-actions" aria-label="Quick reruns">
+              {presetRerunActions.map((action) => (
+                <button
+                  key={action.kind}
+                  type="button"
+                  className="minimal-primary"
+                  onClick={() => void controller.handlePresetRerun(action.kind)}
+                  disabled={!controller.rerunEnabled}
+                >
+                  {controller.actionBusy === 'rerun' ? 'Queuing rerun...' : action.label}
+                </button>
+              ))}
             </section>
             <div className="minimal-inline">
               <button
@@ -598,17 +589,10 @@ export function AdvancedActionsStage({
                 {controller.showCustomRerun ? 'Hide custom rerun' : 'Custom rerun'}
               </button>
             </div>
-            <p className="minimal-help">
-              Pronunciation chunks default to Google. You can still force ElevenLabs or Inworld for
-              a rerun when needed.
-            </p>
             {controller.showCustomRerun ? (
               <section className="minimal-custom-rerun" aria-label="Custom rerun selection">
                 <div className="minimal-list-heading">
                   <strong>Custom rerun</strong>
-                  <span className="minimal-muted">
-                    Select individual audio families and overrides.
-                  </span>
                 </div>
                 <div className="minimal-rerun-picker-grid">
                   <label
@@ -625,7 +609,6 @@ export function AdvancedActionsStage({
                     />
                     <span className="minimal-rerun-picker-copy">
                       <span>Study-text audio</span>
-                      <span>Rebuild the lesson narration.</span>
                     </span>
                   </label>
                   <label
@@ -642,7 +625,6 @@ export function AdvancedActionsStage({
                     />
                     <span className="minimal-rerun-picker-copy">
                       <span>Main pronunciation audio</span>
-                      <span>Replace the primary pronunciation clip.</span>
                     </span>
                   </label>
                   <label
@@ -662,7 +644,6 @@ export function AdvancedActionsStage({
                     />
                     <span className="minimal-rerun-picker-copy">
                       <span>Pronunciation chunk audio</span>
-                      <span>Refresh word and chunk clips.</span>
                     </span>
                   </label>
                 </div>
@@ -675,7 +656,7 @@ export function AdvancedActionsStage({
                     </div>
                     <div className="minimal-rerun-control-grid">
                       <label className="minimal-field minimal-rerun-field">
-                        <span>Study-text provider</span>
+                        <span>Provider</span>
                         <select
                           value={controller.form.rerunStudyTextProvider}
                           onChange={(event) =>
@@ -693,7 +674,7 @@ export function AdvancedActionsStage({
                         </select>
                       </label>
                       <label className="minimal-field minimal-rerun-field">
-                        <span>Study-text model</span>
+                        <span>Model</span>
                         <select
                           value={controller.form.rerunStudyTextModel}
                           onChange={(event) =>
@@ -731,7 +712,7 @@ export function AdvancedActionsStage({
                         </select>
                       </label>
                       <label className="minimal-field minimal-rerun-field">
-                        <span>Study-text voice ID</span>
+                        <span>Voice ID</span>
                         <input
                           value={controller.form.rerunStudyTextVoiceId}
                           onChange={(event) =>
@@ -741,7 +722,7 @@ export function AdvancedActionsStage({
                         />
                       </label>
                       <label className="minimal-field minimal-rerun-field">
-                        <span>Study-text accent</span>
+                        <span>Accent</span>
                         <input
                           value={controller.form.rerunStudyTextVoiceAccent}
                           onChange={(event) =>
@@ -751,7 +732,7 @@ export function AdvancedActionsStage({
                         />
                       </label>
                       <label className="minimal-field minimal-rerun-field">
-                        <span>Study-text strategy</span>
+                        <span>Strategy</span>
                         <select
                           value={controller.form.rerunStudyTextStrategy}
                           onChange={(event) =>
@@ -818,7 +799,7 @@ export function AdvancedActionsStage({
                     </div>
                     <div className="minimal-rerun-control-grid">
                       <label className="minimal-field minimal-rerun-field">
-                        <span>Main pronunciation provider</span>
+                        <span>Provider</span>
                         <select
                           value={controller.form.rerunPronunciationMainProvider}
                           onChange={(event) =>
@@ -836,7 +817,7 @@ export function AdvancedActionsStage({
                         </select>
                       </label>
                       <label className="minimal-field minimal-rerun-field">
-                        <span>Main pronunciation model</span>
+                        <span>Model</span>
                         <select
                           value={controller.form.rerunPronunciationMainModel}
                           onChange={(event) =>
@@ -863,7 +844,7 @@ export function AdvancedActionsStage({
                         </select>
                       </label>
                       <label className="minimal-field minimal-rerun-field">
-                        <span>Main pronunciation voice ID</span>
+                        <span>Voice ID</span>
                         <input
                           value={controller.form.rerunPronunciationMainVoiceId}
                           onChange={(event) =>
@@ -876,7 +857,7 @@ export function AdvancedActionsStage({
                         />
                       </label>
                       <label className="minimal-field minimal-rerun-field">
-                        <span>Main pronunciation accent</span>
+                        <span>Accent</span>
                         <input
                           value={controller.form.rerunPronunciationMainVoiceAccent}
                           onChange={(event) =>
@@ -899,7 +880,7 @@ export function AdvancedActionsStage({
                     </div>
                     <div className="minimal-rerun-control-grid">
                       <label className="minimal-field minimal-rerun-field">
-                        <span>Pronunciation chunk provider</span>
+                        <span>Provider</span>
                         <select
                           value={controller.form.rerunPronunciationChunkProvider}
                           onChange={(event) =>
@@ -917,7 +898,7 @@ export function AdvancedActionsStage({
                       </label>
                       <>
                         <label className="minimal-field minimal-rerun-field">
-                          <span>Pronunciation chunk model</span>
+                          <span>Model</span>
                           <select
                             value={controller.form.rerunPronunciationChunkModel}
                             onChange={(event) =>
@@ -944,7 +925,7 @@ export function AdvancedActionsStage({
                           </select>
                         </label>
                         <label className="minimal-field minimal-rerun-field">
-                          <span>Pronunciation chunk voice ID</span>
+                          <span>Voice ID</span>
                           <input
                             value={controller.form.rerunPronunciationChunkVoiceId}
                             onChange={(event) =>
@@ -957,7 +938,7 @@ export function AdvancedActionsStage({
                           />
                         </label>
                         <label className="minimal-field minimal-rerun-field">
-                          <span>Pronunciation chunk accent</span>
+                          <span>Accent</span>
                           <input
                             value={controller.form.rerunPronunciationChunkVoiceAccent}
                             onChange={(event) =>
@@ -983,42 +964,13 @@ export function AdvancedActionsStage({
                     {controller.actionBusy === 'rerun' ? 'Queuing rerun...' : 'Queue custom rerun'}
                   </button>
                 </div>
-                <p className="minimal-help">
-                  `eleven_v3` is dialogue-only. `eleven_flash_v2` is the only ElevenLabs model that
-                  supports IPA. `eleven_flash_v2_5` is the fast, cheap pronunciation option.
-                </p>
               </section>
             ) : null}
-          </div>
-
-          <div className="minimal-stage-panel">
-            <div className="minimal-stage-panel-title">
-              <h3>Cancel and support details</h3>
-              <p>
-                Use these tools when you need to stop a job or review the support details behind the
-                current output.
-              </p>
-            </div>
-            <div className="minimal-block">
-              <button
-                type="button"
-                className="minimal-secondary"
-                onClick={() => void controller.handleCancelJob()}
-                disabled={!controller.cancelEnabled}
-              >
-                {controller.actionBusy === 'cancel' ? 'Cancelling...' : 'Cancel job'}
-              </button>
-              {!controller.cancelAllowedState && jobStatus ? (
-                <p className="minimal-muted">
-                  Cancel is only available for queued or running jobs.
-                </p>
-              ) : null}
-            </div>
             {jobOptionsError ? <p className="minimal-error">{jobOptionsError}</p> : null}
-            {!controller.rerunImplemented || !controller.cancelImplemented ? (
+            {!controller.rerunImplemented ? (
               <p className="minimal-muted">
-                Some actions are unavailable because backend capability metadata does not mark them
-                as implemented.
+                Reruns are unavailable because backend capability metadata does not mark them as
+                implemented.
               </p>
             ) : null}
             {controller.actionError ? (
@@ -1140,9 +1092,7 @@ export function AdvancedActionsStage({
           </div>
         </div>
       ) : (
-        <p className="minimal-help">
-          Advanced actions are available, but currently tucked away until you open them.
-        </p>
+        <p className="minimal-help">Open advanced actions when you need reruns or diagnostics.</p>
       )}
     </StageSection>
   );

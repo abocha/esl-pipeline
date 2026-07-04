@@ -4,7 +4,7 @@
 
 - Audience: maintainers and AI agents operating backup health automation.
 - Authority Level: operations runbook.
-- Last Verified Against: 2026-05-19 repo state.
+- Last Verified Against: 2026-07-05 repo state.
 - Owner: ops maintainer + automation agents.
 - Review Cadence: monthly or after alerting logic changes.
 - Status: `runbook`.

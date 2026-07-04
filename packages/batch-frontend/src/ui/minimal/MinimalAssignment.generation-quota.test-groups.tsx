@@ -59,21 +59,16 @@ export function registerGenerationDefaultsTests() {
     });
 
     it(
-      'enables generate draft only after prompt is ready',
+      'keeps generate draft hidden until the assignment stage is ready',
       async () => {
         const user = createMinimalUser();
         renderMinimalAssignment();
 
-        const generateDraftButton = screen.getByRole('button', {
-          name: /^Generate assignment$/i,
-        });
-        expect((generateDraftButton as HTMLButtonElement).disabled).toBe(true);
+        expect(screen.queryByRole('button', { name: /^Generate assignment$/i })).toBeNull();
 
         await preparePromptReady(user);
 
-        await waitFor(() => {
-          expect((generateDraftButton as HTMLButtonElement).disabled).toBe(false);
-        });
+        expect(await screen.findByDisplayValue('# Generated assignment draft')).toBeTruthy();
       },
       INTEGRATION_TEST_TIMEOUT_MS,
     );
@@ -327,7 +322,10 @@ export function registerGenerationThrottleTests() {
           expect(screen.getByDisplayValue('# Generated assignment draft')).toBeTruthy();
         });
         expect((publishButton as HTMLButtonElement).disabled).toBe(true);
-        expect(screen.getByText('Preview required before sharing.')).toBeTruthy();
+        expect(screen.getByRole('button', { name: /Preview assignment/i }).className).toContain(
+          'minimal-preview-attention',
+        );
+        expect(screen.queryByText('Preview required before sharing.')).toBeNull();
       },
       INTEGRATION_TEST_TIMEOUT_MS,
     );

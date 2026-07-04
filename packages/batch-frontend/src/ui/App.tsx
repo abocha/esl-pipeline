@@ -3,6 +3,7 @@ import { toast } from 'react-hot-toast';
 import { Navigate, Route, Routes } from 'react-router-dom';
 
 import { useAuth } from '../context/AuthContext';
+import { isFrontendSandboxEnabled } from '../dev/frontend-sandbox';
 import type { AuthMode } from './auth/AuthDialog';
 import { MinimalShell } from './minimal/MinimalShell';
 
@@ -190,7 +191,11 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ user, onLogout }) =
   if (!user) return null;
   return (
     <Routes>
-      <Route element={<MinimalShell user={user} onLogout={onLogout} />}>
+      <Route
+        element={
+          <MinimalShell user={user} onLogout={onLogout} sandboxMode={isFrontendSandboxEnabled()} />
+        }
+      >
         <Route
           path="/"
           element={
