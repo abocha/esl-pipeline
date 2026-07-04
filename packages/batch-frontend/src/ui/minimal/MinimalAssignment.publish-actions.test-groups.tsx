@@ -585,22 +585,31 @@ export function registerJobActionTests() {
     );
 
     it(
-      'keeps cancel disabled for terminal jobs',
+      'keeps cancel disabled for terminal jobs in review without duplicating it in advanced actions',
       async () => {
         vi.useFakeTimers({ shouldAdvanceTime: true });
         await renderPublishedAssignment({ status: { state: 'succeeded' } });
         openAdvancedActions();
+
+        const reviewHeading = screen.getByRole('heading', { name: /Review and share/i });
+        const reviewSection = reviewHeading.closest('section');
+        if (!reviewSection) {
+          throw new Error('Expected review section to be rendered');
+        }
+        const cancelButton = within(reviewSection).getByRole('button', { name: /^Cancel$/i });
+        expect(cancelButton.getAttribute('disabled')).not.toBeNull();
 
         const actionsHeading = screen.getByRole('heading', { name: /Advanced actions/i });
         const actionsSection = actionsHeading.closest('section');
         if (!actionsSection) {
           throw new Error('Expected job actions section to be rendered');
         }
-        const cancelButton = within(actionsSection).getByRole('button', { name: /Cancel job/i });
-        expect(cancelButton.getAttribute('disabled')).not.toBeNull();
+        expect(within(actionsSection).queryByRole('heading', { name: /Job controls/i })).toBeNull();
+        expect(within(actionsSection).queryByRole('button', { name: /Cancel job/i })).toBeNull();
         expect(
-          screen.getByText(/Cancel is only available for queued or running jobs\./i),
-        ).toBeTruthy();
+          screen.queryByText(/Cancel is only available for queued or running jobs\./i),
+        ).toBeNull();
+        expect(within(actionsSection).getByText(/^Support details$/i)).toBeTruthy();
       },
       INTEGRATION_TEST_TIMEOUT_MS,
     );

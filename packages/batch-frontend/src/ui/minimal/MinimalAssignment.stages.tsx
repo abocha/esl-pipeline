@@ -757,26 +757,26 @@ export function ContextStageSection({
           </div>
           {profileRevisionError ? <p className="minimal-error">{profileRevisionError}</p> : null}
           {selectedProfileId && profilePreview ? (
-            <div className="minimal-profile-card">
-              <div className="minimal-profile-meta-grid">
-                <div>
-                  <span>Source</span>
-                  <strong>Student Learning page</strong>
+            <div className="minimal-profile-summary">
+              <dl className="minimal-profile-meta-row">
+                <div className="minimal-profile-meta-item">
+                  <dt>Source</dt>
+                  <dd>Student Learning page</dd>
                 </div>
-                <div>
-                  <span>Level</span>
-                  <strong>{profilePreview.overallLevel ?? 'Not set yet'}</strong>
+                <div className="minimal-profile-meta-item">
+                  <dt>Level</dt>
+                  <dd>{profilePreview.overallLevel ?? 'Not set yet'}</dd>
                 </div>
                 {profilePreview.updatedAt ? (
-                  <div>
-                    <span>Updated</span>
-                    <strong>{new Date(profilePreview.updatedAt).toLocaleString()}</strong>
+                  <div className="minimal-profile-meta-item">
+                    <dt>Updated</dt>
+                    <dd>{new Date(profilePreview.updatedAt).toLocaleString()}</dd>
                   </div>
                 ) : null}
-              </div>
-              <div className="minimal-profile-scan-grid">
+              </dl>
+              <div className="minimal-profile-text-grid">
                 {profilePreview.goalsAndContexts.length > 0 ? (
-                  <section className="minimal-profile-scan-group">
+                  <section className="minimal-profile-text-group">
                     <h4>Goals / context</h4>
                     <ul>
                       {profilePreview.goalsAndContexts.map((item) => (
@@ -786,7 +786,7 @@ export function ContextStageSection({
                   </section>
                 ) : null}
                 {profilePreview.strengthsAndChallenges.length > 0 ? (
-                  <section className="minimal-profile-scan-group">
+                  <section className="minimal-profile-text-group">
                     <h4>Strengths / challenges</h4>
                     <ul>
                       {profilePreview.strengthsAndChallenges.map((item) => (
@@ -796,7 +796,7 @@ export function ContextStageSection({
                   </section>
                 ) : null}
                 {profilePreview.teacherNoteSnippet ? (
-                  <section className="minimal-profile-scan-group minimal-profile-scan-group-wide">
+                  <section className="minimal-profile-text-group minimal-profile-text-group-wide">
                     <h4>Teacher note</h4>
                     <p>{profilePreview.teacherNoteSnippet}</p>
                   </section>

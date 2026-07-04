@@ -566,24 +566,18 @@ export function AdvancedActionsStage({
                 Refresh actions
               </button>
             </div>
-            <section className="minimal-rerun-quick" aria-label="Quick reruns">
-              <div className="minimal-list-heading">
-                <strong>Quick reruns</strong>
-              </div>
-              <div className="minimal-rerun-action-grid">
-                {presetRerunActions.map((action) => (
-                  <div key={action.kind} className="minimal-rerun-action-card">
-                    <button
-                      type="button"
-                      className="minimal-primary"
-                      onClick={() => void controller.handlePresetRerun(action.kind)}
-                      disabled={!controller.rerunEnabled}
-                    >
-                      {controller.actionBusy === 'rerun' ? 'Queuing rerun...' : action.label}
-                    </button>
-                  </div>
-                ))}
-              </div>
+            <section className="minimal-rerun-actions" aria-label="Quick reruns">
+              {presetRerunActions.map((action) => (
+                <button
+                  key={action.kind}
+                  type="button"
+                  className="minimal-primary"
+                  onClick={() => void controller.handlePresetRerun(action.kind)}
+                  disabled={!controller.rerunEnabled}
+                >
+                  {controller.actionBusy === 'rerun' ? 'Queuing rerun...' : action.label}
+                </button>
+              ))}
             </section>
             <div className="minimal-inline">
               <button
@@ -972,32 +966,11 @@ export function AdvancedActionsStage({
                 </div>
               </section>
             ) : null}
-          </div>
-
-          <div className="minimal-stage-panel">
-            <div className="minimal-stage-panel-title">
-              <h3>Job controls</h3>
-            </div>
-            <div className="minimal-block">
-              <button
-                type="button"
-                className="minimal-secondary"
-                onClick={() => void controller.handleCancelJob()}
-                disabled={!controller.cancelEnabled}
-              >
-                {controller.actionBusy === 'cancel' ? 'Cancelling...' : 'Cancel job'}
-              </button>
-              {!controller.cancelAllowedState && jobStatus ? (
-                <p className="minimal-muted">
-                  Cancel is only available for queued or running jobs.
-                </p>
-              ) : null}
-            </div>
             {jobOptionsError ? <p className="minimal-error">{jobOptionsError}</p> : null}
-            {!controller.rerunImplemented || !controller.cancelImplemented ? (
+            {!controller.rerunImplemented ? (
               <p className="minimal-muted">
-                Some actions are unavailable because backend capability metadata does not mark them
-                as implemented.
+                Reruns are unavailable because backend capability metadata does not mark them as
+                implemented.
               </p>
             ) : null}
             {controller.actionError ? (
