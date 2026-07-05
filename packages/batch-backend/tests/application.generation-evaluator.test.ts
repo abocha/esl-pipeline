@@ -67,6 +67,10 @@ describe('application/generation-evaluator', () => {
       content: templateContent,
       contentHash: createHash('sha256').update(templateContent).digest('hex'),
     });
+    expect(assignmentFixture.instructions).toContain('**`[CANONICAL_STUDENT_NAME]`**');
+    expect(assignmentFixture.instructions).toContain(
+      'Use **`[CANONICAL_STUDENT_NAME]`** as the authoritative learner display name',
+    );
     expect(envelope.sourceManifest).toEqual(
       stitchPromptEnvelope({
         template: 'unused in source-manifest comparison',

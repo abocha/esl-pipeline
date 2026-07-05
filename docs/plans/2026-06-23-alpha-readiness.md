@@ -4,13 +4,12 @@
 
 - Audience: founder-maintainer and implementation agents.
 - Status: `roadmap`.
-- Last Verified Against: 2026-07-03 repository and launch-readiness state.
+- Last Verified Against: 2026-07-05 repository and launch-readiness issue intake.
 - Exit Trigger: archive after the product reaches v1 production-readiness or this plan is replaced by
   a later evidence-backed launch plan.
-- Current Focus: Chunk 12 tutor-facing UI distillation. Lesson-source, locked-stage, and unlocked
-  resumed-stage distillation slices are implemented locally; run focused visual review before
-  treating Chunk 12 as complete. Chunks 16–18 are merged and release images were published;
-  production deployment and hosted smoke evidence remain separate approval-gated work.
+- Current Focus: post-deploy alpha issue intake. Chunks 19-21 are newly logged from tutor testing
+  after the Chunk 12 and Chunks 16-18 fixes; implementation, production changes, and hosted smoke
+  evidence remain separate approval-gated work.
 
 ## Purpose
 
@@ -224,6 +223,104 @@ Acceptance evidence:
   instead of inferring or inventing it.
 - A tutor-flow smoke check confirms a generated assignment header uses the selected student's real
   name when the transcript omits or ambiguously mentions names.
+
+### Chunk 19: Assignment Name Instruction Prompt-Envelope Placement
+
+Priority: P1.
+
+Goal: move the `CANONICAL_STUDENT_NAME` assignment instruction into the proper structured prompt
+envelope location instead of prepending it as a standalone instruction before the assembled prompt.
+
+Observed concern:
+
+- The current instruction says:
+  `Use CANONICAL_STUDENT_NAME as the authoritative learner name for assignment headers and student-facing copy. Do not infer or invent the learner name from the transcript.`
+- That guidance is directionally correct, but placing it before the prompt body may violate the
+  prompt-assembly guidelines and make the envelope harder to reason about.
+
+Scope:
+
+- Inspect the assignment prompt assembly path and identify the correct structured section for
+  authoritative assignment instructions.
+- Keep the canonical student name available in the request envelope and prompt context.
+- Integrate the instruction with the existing prompt contract rather than duplicating it as an
+  out-of-band preamble.
+- Preserve the privacy boundary from Chunk 18: include only the minimum selected-student identity
+  needed for assignment output.
+- Do not change model selection, assignment schemas, or unrelated prompt content in this chunk.
+
+Acceptance evidence:
+
+- Prompt snapshots or request-envelope tests prove the canonical-name instruction appears in the
+  intended structured prompt section.
+- Tests prove the instruction is no longer simply prepended before the prompt body.
+- Assignment-generation tests still prove headers and student-facing copy use
+  `CANONICAL_STUDENT_NAME` instead of transcript-inferred names.
+
+### Chunk 20: Memory Candidate Promotion Status Finalization
+
+Priority: P1.
+
+Goal: ensure memory candidates that have been promoted into the student profile are marked as
+promoted, not left in the approved state.
+
+Observed failure:
+
+- After promotion, memory candidates remain visible or persisted as `approved`.
+- This makes the tutor-facing status misleading and risks repeated promotion attempts or confusing
+  review queues.
+
+Scope:
+
+- Reproduce the candidate-promotion flow from the tutor-facing UI and backend API.
+- Trace the promotion transaction, candidate status update, candidate listing query, and frontend
+  refresh/cache behavior.
+- Make the intended lifecycle explicit: selected candidates that successfully enter the profile
+  should become `promoted` or be hidden from approved-only review views by an equivalent canonical
+  state transition.
+- Preserve candidate audit/history semantics and avoid deleting evidence rows.
+- Do not weaken the candidate-promotion safety prompt, validation, or closed response schema.
+
+Acceptance evidence:
+
+- Backend tests prove successful promotion transitions selected approved candidates to promoted
+  status, or to the documented canonical post-promotion state.
+- Listing/API tests prove promoted candidates no longer appear as still-approved work.
+- Frontend tests or a manual tutor-flow smoke check prove promoted candidates no longer remain in
+  the approved queue after refresh.
+
+### Chunk 21: Memory Support Source Count Verification
+
+Priority: P2.
+
+Goal: verify whether the memory support details source-count display is correct when it reports
+`Included sources 2 lesson / 2 homework`, given expected recent evidence may be 3 lessons and 2
+homework items.
+
+Observed concern:
+
+- In the memory support details, tested students show `Included sources 2 lesson / 2 homework`.
+- The expected count may be 3 lessons and 2 homework items, but this has only been observed across
+  two tested students so far and could be normal source selection rather than a bug.
+
+Scope:
+
+- Identify the intended source selection policy for memory support details, including lesson and
+  homework caps, recency rules, and eligibility filters.
+- Compare the displayed counts with the actual selected source manifest or backend response for
+  students that have at least 3 lesson sources and 2 homework sources.
+- Determine whether the issue is display copy, selection policy, source eligibility, or missing
+  backend data.
+- Keep this as an investigation-first chunk; do not change the selection count until the intended
+  policy is confirmed.
+
+Acceptance evidence:
+
+- A fixture or targeted backend/frontend test covers students with 3 eligible lesson sources and 2
+  eligible homework sources.
+- The support details display matches the actual selected sources, or the documented policy explains
+  why only 2 lesson sources are included.
+- If the display is wrong, the fix includes a regression test for the corrected source counts.
 
 ## 2026-06-27 Chunks 16–18 Implementation Evidence
 
