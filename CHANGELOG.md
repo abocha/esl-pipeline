@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [9.4.3] - 2026-07-05
+
+### Changed
+
+- Automated release from PR #121: Remove legacy student workspace (https://github.com/abocha/esl-pipeline/pull/121)
+
 ## [9.4.2] - 2026-07-05
 
 ### Changed
