@@ -812,9 +812,12 @@ export const StudentWorkspace: React.FC = () => {
     setProfileSuccess(null);
     try {
       await activateProfileRevision(selectedProfileId, revisionId);
-      await loadSelectedProfile(selectedProfileId);
+      await Promise.all([
+        loadSelectedProfile(selectedProfileId),
+        loadProfileCandidates(selectedStudentId),
+        loadTimeline(selectedStudentId, timelineFiltersAppliedRef.current),
+      ]);
       setProfileSuccess('Profile revision activated.');
-      await loadTimeline(selectedStudentId, timelineFiltersAppliedRef.current);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Unable to activate profile revision.';

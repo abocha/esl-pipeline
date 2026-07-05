@@ -297,4 +297,85 @@ describeIfPg('domain/student-profile-candidate-repository', () => {
     });
     expect(promoted?.promotedAt).toBeInstanceOf(Date);
   });
+
+  it('moves linked approved candidates from approved listings to promoted listings', async () => {
+    const studentId = randomUUID();
+    const profileId = randomUUID();
+    const revisionId = randomUUID();
+
+    await withPgClient(async (client) => {
+      await client.query(
+        `INSERT INTO students (id, student, created_at, updated_at) VALUES ($1, 'Ari', NOW(), NOW())`,
+        [studentId],
+      );
+      await client.query(
+        `INSERT INTO profiles (id, label, active_revision_id, created_at, updated_at)
+         VALUES ($1, 'Ari', NULL, NOW(), NOW())`,
+        [profileId],
+      );
+      await client.query(
+        `INSERT INTO profile_revisions (
+           id, profile_id, content, content_hash, source, status, version_number, version_label,
+           activated_at, deprecated_at, created_at, created_by, restored_from_revision_id
+         )
+         VALUES ($1, $2, 'Draft', 'hash-a', 'profile_revision_refresh', 'draft', 1, 'v1', NULL, NULL, NOW(), NULL, NULL)`,
+        [revisionId, profileId],
+      );
+    });
+
+    const candidate = await insertStudentProfileCandidate({
+      studentId,
+      targetSection: 'learning_preferences_study_habits',
+      candidateKey: 'learning_preferences_study_habits:prefers clear review blocks',
+      fact: 'Prefers clear review blocks.',
+      category: 'study_preference',
+      authority: 'teacher_confirmed',
+      confidence: 'high',
+      reviewNeeded: false,
+      sourceLessonMemoryIds: [],
+      evidence: [],
+      status: 'approved',
+      reviewState: 'approved',
+    });
+
+    await linkStudentProfileCandidatesToDraftRevision({
+      studentId,
+      candidateIds: [candidate.id],
+      draftRevisionId: revisionId,
+    });
+
+    const approvedBefore = await listStudentProfileCandidates({
+      studentId,
+      statuses: ['approved'],
+      limit: 25,
+      offset: 0,
+      order: 'desc',
+    });
+    expect(approvedBefore.items.map((item) => item.id)).toContain(candidate.id);
+
+    await markStudentProfileCandidatesPromotedByRevision(revisionId);
+
+    const approvedAfter = await listStudentProfileCandidates({
+      studentId,
+      statuses: ['approved'],
+      limit: 25,
+      offset: 0,
+      order: 'desc',
+    });
+    const promotedAfter = await listStudentProfileCandidates({
+      studentId,
+      statuses: ['promoted'],
+      limit: 25,
+      offset: 0,
+      order: 'desc',
+    });
+
+    expect(approvedAfter.items.map((item) => item.id)).not.toContain(candidate.id);
+    expect(promotedAfter.items).toHaveLength(1);
+    expect(promotedAfter.items[0]).toMatchObject({
+      id: candidate.id,
+      status: 'promoted',
+      promotedRevisionId: revisionId,
+    });
+  });
 });
