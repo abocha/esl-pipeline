@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [9.4.2] - 2026-07-05
+
+### Changed
+
+- Automated release from PR #120: Fix alpha readiness chunks 19 and 20 (https://github.com/abocha/esl-pipeline/pull/120)
+
 ## [9.4.1] - 2026-07-04
 
 ### Changed
