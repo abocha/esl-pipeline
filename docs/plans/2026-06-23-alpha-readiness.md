@@ -343,8 +343,8 @@ Scope:
 - Remove the dead `StudentWorkspace` component, CSS, test harness, and tests that only render or
   validate the legacy all-in-one workspace.
 - Before deleting, inventory imports from `StudentLearningPage`, `CreateStudentDialog`,
-  `WorkspaceCandidatesPanel`, `WorkspaceHistoryPanel`, and related live pages so active shared
-  logic is preserved or moved into neutral modules.
+  `ProfileCandidatesPanel`, and related live pages so active shared logic is preserved or moved
+  into neutral modules.
 - Keep the current student learning page, candidate review panel, history panel, and student
   creation flows covered by live-surface tests after the legacy harness is gone.
 - Remove stale references that tell tutors or agents to open the legacy workspace.

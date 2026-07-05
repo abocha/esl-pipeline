@@ -4,7 +4,7 @@
 
 - Audience: maintainers and implementing agents.
 - Authority Level: package entrypoint and operational usage guide.
-- Last Verified Against: 2026-07-03 repo state.
+- Last Verified Against: 2026-07-06 repo state.
 - Owner: batch-frontend maintainers + automation agents.
 - Review Cadence: monthly or after major UI/workflow changes.
 - Status: `active`.
@@ -17,7 +17,7 @@ This package is the operator-facing frontend for:
 
 - authenticated assignment flow
 - recording/transcript/prompt/draft/publish workflow
-- student workspace and provenance views
+- student-area directory, overview, learning, history, and schedule/billing views
 - student Learning page memory health support details for founder/operator diagnosis
 - student and business schedule follow-up actions that mark elapsed lessons completed and open lesson-linked homework assignment context
 - capability-gated job actions

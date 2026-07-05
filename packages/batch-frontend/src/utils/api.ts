@@ -21,7 +21,6 @@
  * - GET /profiles, /profiles/:id, PUT /profiles/:id, DELETE /profiles/:id
  * - GET /profiles/revisions, GET /profiles/revisions/:revisionId
  * - POST /profiles/revisions/:revisionId/restore
- * - GET /prompt-packages/:id/lineage
  * - POST /generation/drafts
  * - GET /drafts/:id
  * - GET /jobs/events (SSE) for live updates
@@ -3222,23 +3221,6 @@ export async function fetchPromptPackage(promptPackageId: string): Promise<Promp
     const axiosError = toAxiosError(error);
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to view prompt packages.');
-    }
-    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
-  }
-}
-
-export async function fetchPromptPackageLineage(
-  promptPackageId: string,
-): Promise<PromptPackageLineageResponse> {
-  try {
-    const response = await apiClient.get(
-      buildApiProxyPath(`/prompt-packages/${encodeURIComponent(promptPackageId)}/lineage`),
-    );
-    return response.data;
-  } catch (error: unknown) {
-    const axiosError = toAxiosError(error);
-    if (axiosError && isAuthError(axiosError)) {
-      throw new Error('Authentication required. Please login to view prompt lineage.');
     }
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }
