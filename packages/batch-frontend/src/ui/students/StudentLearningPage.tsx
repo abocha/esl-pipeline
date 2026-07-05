@@ -29,6 +29,7 @@ import {
   restoreProfileRevision,
   saveProfileDraftRevision,
 } from '../../utils/api';
+import { ProfileCandidatesPanel } from './ProfileCandidatesPanel';
 import { useStudentAreaContext } from './StudentAreaContext';
 import {
   type CandidateActionKind,
@@ -41,9 +42,8 @@ import {
   isSelectableForPromotion,
   PROFILE_CANDIDATE_PENDING_FILTER,
   type ProfileCandidateFilter,
-} from './StudentWorkspace.logic';
+} from './StudentProfileUi.logic';
 import { formatStudentShortId } from './studentIdentity';
-import { WorkspaceCandidatesPanel } from './WorkspaceCandidatesPanel';
 import './StudentLearningPage.css';
 
 const DATE_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
@@ -1535,7 +1535,7 @@ export const StudentLearningPage: React.FC = () => {
             ) : null}
           </article>
 
-          <WorkspaceCandidatesPanel
+          <ProfileCandidatesPanel
             className="student-area-panel student-learning-candidates-card"
             selectedStudentId={studentId}
             profileCandidates={profileCandidates}
