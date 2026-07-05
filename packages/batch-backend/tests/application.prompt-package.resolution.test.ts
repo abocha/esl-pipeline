@@ -616,6 +616,9 @@ describe('application/prompt-package', () => {
       }),
     );
     expect(JSON.stringify(insertedParams[0]?.requestEnvelope)).toContain(
+      '"label":"CANONICAL_STUDENT_NAME"',
+    );
+    expect(JSON.stringify(insertedParams[0]?.requestEnvelope)).not.toContain(
       'Use CANONICAL_STUDENT_NAME as the authoritative learner name',
     );
   });
