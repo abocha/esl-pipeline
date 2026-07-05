@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -206,4 +206,147 @@ describe('StudentWorkspace candidates', () => {
       'Lead product demos with more confidence.',
     );
   });
+
+  it('reloads profile candidates after activating a profile revision', async () => {
+    const user = userEvent.setup();
+    const now = '2026-04-20T09:00:00.000Z';
+    const pendingCandidate = {
+      id: 'candidate-pending',
+      studentId: 'student-default',
+      proposedFact: 'Uses English with product and engineering teams at work.',
+      approvedFactText: null,
+      category: 'work_context',
+      targetSection: 'work_communication_context',
+      sourceSummary: 'Repeatedly mentioned sprint planning and client calls.',
+      authority: 'student_stated',
+      confidence: 'high',
+      evidence: [],
+      sourceSnapshotId: 'snapshot-1',
+      sourceLessonMemoryIds: ['lesson-1'],
+      status: 'pending_review',
+      reviewState: 'unreviewed',
+      reviewerId: null,
+      reviewerNote: null,
+      reviewedAt: null,
+      promotedRevisionId: null,
+      promotedAt: null,
+      supersededById: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const approvedCandidate = {
+      id: 'candidate-approved',
+      studentId: 'student-default',
+      proposedFact: 'Prefers structured homework with clear review blocks.',
+      approvedFactText: 'Prefers structured homework with built-in review blocks.',
+      category: 'study_preferences',
+      targetSection: 'learning_preferences_study_habits',
+      sourceSummary: 'Consistent request across recent assignments.',
+      authority: 'teacher_confirmed',
+      confidence: 'high',
+      evidence: [],
+      sourceSnapshotId: 'snapshot-1',
+      sourceLessonMemoryIds: ['lesson-1'],
+      status: 'approved',
+      reviewState: 'approved',
+      reviewerId: 'user-1',
+      reviewerNote: 'Matches long-running pattern.',
+      reviewedAt: now,
+      promotedRevisionId: null,
+      promotedAt: null,
+      supersededById: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const promotedCandidate = {
+      ...approvedCandidate,
+      status: 'promoted',
+      promotedRevisionId: 'revision-draft-2',
+      promotedAt: now,
+      updatedAt: now,
+    };
+    const candidateResponse = (items: unknown[]) => ({
+      studentId: 'student-default',
+      items,
+      total: items.length,
+      limit: 200,
+      offset: 0,
+      order: 'desc',
+    });
+
+    studentWorkspaceApiMocks.listProfileRevisions.mockResolvedValue({
+      items: [
+        {
+          id: 'revision-draft-2',
+          profileId: 'profile-default.md',
+          contentHash: 'draft-hash-2',
+          source: 'profile_revision_refresh',
+          status: 'draft',
+          versionNumber: 2,
+          versionLabel: 'v2',
+          activatedAt: null,
+          deprecatedAt: null,
+          createdAt: now,
+          createdBy: 'user-1',
+          restoredFromRevisionId: null,
+        },
+        {
+          id: 'revision-1',
+          profileId: 'profile-default.md',
+          contentHash: 'hash-1',
+          source: 'create',
+          status: 'active',
+          versionNumber: 1,
+          versionLabel: 'v1',
+          activatedAt: now,
+          deprecatedAt: null,
+          createdAt: now,
+          createdBy: 'user-1',
+          restoredFromRevisionId: null,
+        },
+      ],
+      total: 2,
+      limit: 25,
+      offset: 0,
+      order: 'desc',
+    });
+    studentWorkspaceApiMocks.listStudentProfileCandidates
+      .mockResolvedValueOnce(candidateResponse([pendingCandidate, approvedCandidate]))
+      .mockResolvedValueOnce(candidateResponse([pendingCandidate, promotedCandidate]));
+
+    await renderWorkspaceWithProfileCandidates();
+
+    await user.click(screen.getByRole('button', { name: 'Approved' }));
+    expect(
+      await screen.findByText(/Prefers structured homework with built-in review blocks\./i),
+    ).toBeTruthy();
+
+    const draftRevisionLabel = await screen.findByText('v2');
+    const draftRevisionItem = draftRevisionLabel.closest('.workspace-list-item');
+    if (!draftRevisionItem) {
+      throw new Error('Expected draft revision row to be rendered.');
+    }
+    await user.click(
+      within(draftRevisionItem as HTMLElement).getByRole('button', { name: 'Activate' }),
+    );
+
+    await waitFor(
+      () => {
+        expect(studentWorkspaceApiMocks.activateProfileRevision).toHaveBeenCalledWith(
+          'profile-default.md',
+          'revision-draft-2',
+        );
+        expect(studentWorkspaceApiMocks.listStudentProfileCandidates).toHaveBeenCalledTimes(2);
+      },
+      { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+    );
+    await waitFor(() => {
+      expect(
+        screen.queryByText(/Prefers structured homework with built-in review blocks\./i),
+      ).toBeNull();
+    });
+    expect(
+      screen.getByText(/No approved profile candidates visible for this student\./i),
+    ).toBeTruthy();
+  }, 10000);
 });

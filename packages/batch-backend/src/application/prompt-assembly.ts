@@ -43,10 +43,7 @@ export function stitchPromptEnvelope(options: PromptStitchOptions): GenerationRe
   const canonicalStudentName = (options.canonicalStudentName ?? '').trim() || 'Not available.';
   return createGenerationRequestEnvelope({
     workload: 'assignment_draft',
-    instructions: [
-      'Use CANONICAL_STUDENT_NAME as the authoritative learner name for assignment headers and student-facing copy. Do not infer or invent the learner name from the transcript.',
-      options.template,
-    ].join('\n\n'),
+    instructions: options.template,
     sources: [
       {
         id: 'canonical-student-name',

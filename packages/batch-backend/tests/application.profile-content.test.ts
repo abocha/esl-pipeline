@@ -475,4 +475,31 @@ describe('application/profile-content (DB-only)', () => {
     expect(activated?.status).toBe('active');
     expect(promotions).toEqual([draft.id]);
   });
+
+  it('marks linked approved candidates as promoted when a profile-refresh revision is activated', async () => {
+    const deps = createInMemoryDependencies({
+      profiles: [{ id: 'default.md', label: 'Default Profile', content: 'Version 1' }],
+    });
+    const markPromotedByRevision = async (revisionId: string) => {
+      promotions.push(revisionId);
+    };
+    const promotions: string[] = [];
+    deps.candidates.markPromotedByRevision = markPromotedByRevision;
+
+    const draft = await saveProfileRevisionContent(
+      'default.md',
+      'Version 2 refresh draft',
+      {
+        source: 'profile_revision_refresh',
+        status: 'draft',
+        createdBy: 'teacher-1',
+      },
+      deps,
+    );
+
+    const activated = await activateProfileRevisionForProfile('default.md', draft.id, deps);
+
+    expect(activated?.status).toBe('active');
+    expect(promotions).toEqual([draft.id]);
+  });
 });
