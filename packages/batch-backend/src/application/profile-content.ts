@@ -475,9 +475,7 @@ export async function activateProfileRevisionForProfile(
   if (!activated) return null;
 
   await dependencies.profiles.setActive(normalizedProfileId, activated.id);
-  if (activated.source === 'candidate_promotion') {
-    await dependencies.candidates.markPromotedByRevision(activated.id);
-  }
+  await dependencies.candidates.markPromotedByRevision(activated.id);
 
   return {
     ...toProfileRevisionSummary(activated),

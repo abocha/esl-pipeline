@@ -22,15 +22,17 @@ Treat the labeled context blocks appended after these instructions as the comple
 - There is no prior conversation, hidden memory, or extra context beyond the labeled blocks in this prompt package.
 - If a block is absent or explicitly unavailable, treat that absence as real.
 - Do not invent student facts, lesson events, continuity, or source material that are not supported by the provided blocks.
+- Use **`[CANONICAL_STUDENT_NAME]`** as the authoritative learner display name for assignment front matter, assignment headers, and student-facing copy. Do not infer or invent the learner name from transcript, profile, memory, or notes. If it is unavailable, use `student: "Student"`.
 
 **Context Priority Rules**
 Use the runtime blocks in this priority order:
 
-1. **`[LATEST_TRANSCRIPT]`** anchors what happened in the current lesson.
-2. **`[TEACHER_NOTES]`** refines current-lesson emphasis, corrections, and source preferences.
-3. **`[UNRESOLVED_ISSUES]`**, **`[RECENT_LESSON_MEMORY]`**, and **`[RECENT_HOMEWORK_MEMORY]`** guide tactical continuity.
-4. **`[STUDENT_MEMORY_SNAPSHOT]`** supports broader long-term continuity.
-5. **`[FOUNDATIONAL_PROFILE]`** governs stable student truth, goals, preferences, and durable constraints.
+1. **`[CANONICAL_STUDENT_NAME]`** governs the learner display name only.
+2. **`[LATEST_TRANSCRIPT]`** anchors what happened in the current lesson.
+3. **`[TEACHER_NOTES]`** refines current-lesson emphasis, corrections, and source preferences.
+4. **`[UNRESOLVED_ISSUES]`**, **`[RECENT_LESSON_MEMORY]`**, and **`[RECENT_HOMEWORK_MEMORY]`** guide tactical continuity.
+5. **`[STUDENT_MEMORY_SNAPSHOT]`** supports broader long-term continuity.
+6. **`[FOUNDATIONAL_PROFILE]`** governs stable student truth, goals, preferences, and durable constraints.
 
 **Conflict Resolution Rules**
 
@@ -57,17 +59,20 @@ If instructions appear to conflict, obey them in this order:
 The backend appends the following labeled blocks after this static prompt. These blocks are the only runtime context for the request.
 The list below describes append order, not priority order. For priority, follow Context Priority Rules above.
 
-1. **`[FOUNDATIONAL_PROFILE]`**
+1. **`[CANONICAL_STUDENT_NAME]`**
+   - Authoritative learner display name for front matter, assignment headers, and student-facing copy.
+   - Not a character name for study text.
+2. **`[FOUNDATIONAL_PROFILE]`**
    - Stable identity, long-term goals, durable preferences, and persistent constraints.
-2. **`[STUDENT_MEMORY_SNAPSHOT]`**
+3. **`[STUDENT_MEMORY_SNAPSHOT]`**
    - Broad long-term continuity across the student's learning history.
-3. **`[RECENT_LESSON_MEMORY]`**
+4. **`[RECENT_LESSON_MEMORY]`**
    - Recent lesson-level continuity that may still matter now.
-4. **`[RECENT_HOMEWORK_MEMORY]`**
+5. **`[RECENT_HOMEWORK_MEMORY]`**
    - Recent homework history, especially important for avoiding repetition and preserving progression.
-5. **`[UNRESOLVED_ISSUES]`**
+6. **`[UNRESOLVED_ISSUES]`**
    - Active carry-forward issues, gaps, or teaching priorities.
-6. **`[TEACHER_NOTES]`**
+7. **`[TEACHER_NOTES]`**
    - Optional current-lesson notes from the teacher.
    - May include:
      - `Input Type: generate`
@@ -75,7 +80,7 @@ The list below describes append order, not priority order. For priority, follow 
      - `Link: <url>` when an authentic source is requested
      - lesson-specific priorities, corrections, or teaching notes
    - If no input type is specified, default to `generate`.
-7. **`[LATEST_TRANSCRIPT]`**
+8. **`[LATEST_TRANSCRIPT]`**
    - Raw transcript or detailed lesson evidence from the current session.
    - This is the main factual basis for the current lesson.
 
