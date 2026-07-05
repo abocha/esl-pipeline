@@ -4,10 +4,10 @@
 
 - Audience: founder-maintainer and implementation agents.
 - Status: `roadmap`.
-- Last Verified Against: 2026-07-05 repository and launch-readiness issue intake.
+- Last Verified Against: 2026-07-06 repository and launch-readiness issue intake.
 - Exit Trigger: archive after the product reaches v1 production-readiness or this plan is replaced by
   a later evidence-backed launch plan.
-- Current Focus: post-deploy alpha issue intake. Chunks 19-21 are newly logged from tutor testing
+- Current Focus: post-deploy alpha issue intake. Chunks 19-22 are newly logged from tutor testing
   after the Chunk 12 and Chunks 16-18 fixes; implementation, production changes, and hosted smoke
   evidence remain separate approval-gated work.
 
@@ -321,6 +321,43 @@ Acceptance evidence:
 - The support details display matches the actual selected sources, or the documented policy explains
   why only 2 lesson sources are included.
 - If the display is wrong, the fix includes a regression test for the corrected source counts.
+
+### Chunk 22: Legacy Student Workspace Removal
+
+Priority: P1, next PR after Chunks 19-20 ship.
+
+Goal: remove the dead legacy all-in-one student workspace so alpha work stops carrying, building,
+and testing a UI surface that is no longer part of the production tutor flow.
+
+Observed concern:
+
+- The routed student experience uses `StudentLearningPage`; the old `StudentWorkspace` surface is
+  not linked from the current app route.
+- The legacy workspace still has a large harness and multiple tests, so unrelated alpha fixes keep
+  paying a maintenance cost for a dead surface.
+- Shared modules still carry `StudentWorkspace` naming even when they are used by active pages,
+  making it easy to accidentally preserve legacy code instead of deleting it.
+
+Scope:
+
+- Remove the dead `StudentWorkspace` component, CSS, test harness, and tests that only render or
+  validate the legacy all-in-one workspace.
+- Before deleting, inventory imports from `StudentLearningPage`, `CreateStudentDialog`,
+  `WorkspaceCandidatesPanel`, `WorkspaceHistoryPanel`, and related live pages so active shared
+  logic is preserved or moved into neutral modules.
+- Keep the current student learning page, candidate review panel, history panel, and student
+  creation flows covered by live-surface tests after the legacy harness is gone.
+- Remove stale references that tell tutors or agents to open the legacy workspace.
+- Do not remove unrelated backend legacy-schema emergency compatibility or legacy data
+  normalization paths in this cleanup chunk.
+
+Acceptance evidence:
+
+- `rg` shows no production route or live UI imports `StudentWorkspace` after the cleanup.
+- Frontend tests no longer include legacy `StudentWorkspace.*` suites, and equivalent live-surface
+  coverage exists where behavior is still supported.
+- `StudentLearningPage` and student-area routing tests prove the current tutor flow remains intact.
+- Frontend typecheck/build and the affected repo validation lane pass without the legacy workspace.
 
 ## 2026-06-27 Chunks 16–18 Implementation Evidence
 
