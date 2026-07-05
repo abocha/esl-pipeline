@@ -11,9 +11,9 @@ import {
   PROFILE_CANDIDATE_APPROVED_FILTER,
   PROFILE_CANDIDATE_FILTER_OPTIONS,
   type ProfileCandidateFilter,
-} from './StudentWorkspace.logic';
+} from './StudentProfileUi.logic';
 
-export interface WorkspaceCandidatesPanelProps {
+export interface ProfileCandidatesPanelProps {
   className?: string;
   selectedStudentId: string;
   profileCandidates: StudentProfileCandidate[];
@@ -53,7 +53,7 @@ function candidateDecisionLabel(candidate: StudentProfileCandidate): string | nu
   return typeof decision === 'string' && decision !== 'created' ? decision : null;
 }
 
-export function WorkspaceCandidatesPanel({
+export function ProfileCandidatesPanel({
   className,
   selectedStudentId,
   profileCandidates,
@@ -73,7 +73,7 @@ export function WorkspaceCandidatesPanel({
   profileCandidatePromotionSuccess,
   onPromoteProfileCandidates,
   onReviewProfileCandidate,
-}: WorkspaceCandidatesPanelProps) {
+}: ProfileCandidatesPanelProps) {
   const [openCandidateIds, setOpenCandidateIds] = useState<string[]>([]);
   const approvedCandidatesReadyForPromotion = useMemo(
     () => getApprovedCandidatesReadyForPromotion(profileCandidates),

@@ -4,7 +4,7 @@
 
 - Audience: maintainers, backend/frontend agents.
 - Authority Level: implementation roadmap.
-- Last Verified Against: 2026-05-12 repo state.
+- Last Verified Against: 2026-07-06 repo state.
 - Owner: backend/frontend maintainers + automation agents.
 - Review Cadence: monthly or after student-system milestone changes.
 - Status: `roadmap`.
@@ -21,8 +21,7 @@
 - prompt lineage and drift metadata are live
 - student timeline and job provenance are live
 - dedicated student-area routes are live for `Overview`, `Learning`, `History`, and Schedule &
-  Billing
-- the legacy all-in-one workspace route remains as a compatibility/maintenance surface
+  Billing; the legacy all-in-one workspace has been retired from the frontend source
 - Schedule & Billing now owns lesson credits, payments, reminders, and operational scheduling
   state; teacher business dashboard views link back to each student's schedule-billing surface
 - elapsed scheduled lessons can now become teacher-confirmed homework follow-ups; published

@@ -59,68 +59,6 @@ export interface CreateStudentPayloadBuildResult {
   starterProfile: StarterProfileBuildResult;
 }
 
-export type HistoryFilterState =
-  | 'all'
-  | 'queued'
-  | 'running'
-  | 'awaiting_approval'
-  | 'succeeded'
-  | 'failed';
-
-export interface HistoryFilters {
-  state: HistoryFilterState;
-  from: string;
-  to: string;
-}
-
-export type TimelineFilterState =
-  | 'all'
-  | 'recording_ingested'
-  | 'transcript_ready'
-  | 'prompt_package_created'
-  | 'draft_saved'
-  | 'job_awaiting_approval'
-  | 'job_completed'
-  | 'student_profile_binding_changed'
-  | 'profile_revision_saved'
-  | 'profile_revision_restored'
-  | 'profile_revision_activated'
-  | 'template_revision_saved'
-  | 'template_revision_restored'
-  | 'template_revision_activated'
-  | 'job_action_rerun'
-  | 'job_action_cancel'
-  | 'job_action_edit_metadata'
-  | 'lesson_created'
-  | 'lesson_updated'
-  | 'lesson_completed'
-  | 'lesson_canceled'
-  | 'lesson_no_show'
-  | 'lesson_plan_updated'
-  | 'lesson_recurrence_updated'
-  | 'credit_event_recorded'
-  | 'payment_recorded'
-  | 'reminder_hidden'
-  | 'business_settings_updated';
-
-export interface TimelineFilters {
-  type: TimelineFilterState;
-  from: string;
-  to: string;
-}
-
-export const INITIAL_HISTORY_FILTERS: HistoryFilters = {
-  state: 'all',
-  from: '',
-  to: '',
-};
-
-export const INITIAL_TIMELINE_FILTERS: TimelineFilters = {
-  type: 'all',
-  from: '',
-  to: '',
-};
-
 export const PROFILE_CANDIDATE_ALL_FILTER = 'all';
 export const PROFILE_CANDIDATE_PENDING_FILTER = 'pending';
 export const PROFILE_CANDIDATE_REVIEWED_FILTER = 'reviewed';

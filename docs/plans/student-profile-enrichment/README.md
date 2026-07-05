@@ -4,7 +4,7 @@
 
 - Audience: maintainers, backend/frontend agents, product owner.
 - Authority Level: active follow-on plan.
-- Last Verified Against: 2026-03-21 repo state.
+- Last Verified Against: 2026-07-06 repo state.
 - Owner: founder-maintainer + backend/frontend maintainers.
 - Review Cadence: after each implementation phase.
 - Status: `active`.
@@ -60,8 +60,8 @@ would blur the line between curated truth and inferred memory.
    foundational profile.
 6. Candidate fact generation should reuse canonical lesson memory and student-memory snapshots where
    possible instead of re-reading raw transcripts in the first version.
-7. The student workspace remains the operational home for review; no separate profile-enrichment app
-   is introduced.
+7. The student Learning page remains the operational home for review; no separate
+   profile-enrichment app is introduced.
 8. Promotion should default to teacher-selected approved facts, with a convenience path to select
    all approved facts in one action.
 9. Stable strengths may be promoted into the foundational profile only when they satisfy explicit
@@ -296,7 +296,7 @@ To keep enrichment systematic rather than arbitrary, version 1 should follow the
 
 ### Phase 2: Teacher Review Workflow
 
-1. add review UI inside the student workspace
+1. add review UI inside the student Learning page
 2. approve / reject / defer candidate facts
 3. show evidence and source provenance
 
@@ -362,13 +362,13 @@ Refactors are allowed. Backend rewrite assumptions are not.
 
 ### Frontend
 
-The current student workspace may remain intentionally draft-grade while this workflow is being
+The current student Learning page may remain intentionally utilitarian while this workflow is being
 proven.
 
 Frontend expectations for this plan:
 
 1. complete functionality matters more than polished interaction design
-2. utilitarian placement inside the current workspace is acceptable
+2. utilitarian placement inside the current student area is acceptable
 3. visual elegance and long-term information architecture are not blockers
 4. end-to-end operability matters more than UI finish
 
