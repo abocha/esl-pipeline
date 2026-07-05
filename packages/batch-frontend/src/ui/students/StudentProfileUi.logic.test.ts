@@ -11,7 +11,7 @@ import {
   INITIAL_CREATE_STUDENT_FORM,
   isSelectableForPromotion,
   type ProfileCandidateFilter,
-} from './StudentWorkspace.logic';
+} from './StudentProfileUi.logic';
 
 function candidateForFilter(
   id: string,
@@ -44,7 +44,7 @@ function candidateForFilter(
   };
 }
 
-describe('StudentWorkspace logic', () => {
+describe('StudentProfileUi logic', () => {
   it('builds a student-owned payload and ignores legacy advanced fields', () => {
     const result = buildCreateStudentPayload({
       ...INITIAL_CREATE_STUDENT_FORM,

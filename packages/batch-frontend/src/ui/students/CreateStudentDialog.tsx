@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react';
 
-import { type CreateStudentFormState } from './StudentWorkspace.logic';
+import { type CreateStudentFormState } from './StudentProfileUi.logic';
 
 export interface CreateStudentDialogProps {
   isOpen: boolean;

@@ -34,8 +34,8 @@ vi.mock('./StudentAreaContext', () => ({
   useStudentAreaContext: useStudentAreaContextMock,
 }));
 
-vi.mock('./WorkspaceCandidatesPanel', () => ({
-  WorkspaceCandidatesPanel: (props: {
+vi.mock('./ProfileCandidatesPanel', () => ({
+  ProfileCandidatesPanel: (props: {
     profileCandidates: { id: string; status?: string }[];
     selectedCandidateIds: string[];
     setSelectedCandidateIds: (next: string[] | ((current: string[]) => string[])) => void;
@@ -819,6 +819,7 @@ describe('StudentLearningPage', () => {
     await user.click(await screen.findByRole('button', { name: /Activate Draft/i }));
 
     expect(await screen.findByText('Draft activated.')).toBeTruthy();
+    expect(apiMocks.listStudentProfileCandidates).toHaveBeenCalledTimes(2);
     expect(
       screen.queryByText('not_found This learner profile has not been structured yet.'),
     ).toBeNull();

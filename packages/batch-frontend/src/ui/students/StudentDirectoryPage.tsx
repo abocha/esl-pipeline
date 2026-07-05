@@ -14,7 +14,7 @@ import {
   buildCreateStudentPayload,
   type CreateStudentFormState,
   INITIAL_CREATE_STUDENT_FORM,
-} from './StudentWorkspace.logic';
+} from './StudentProfileUi.logic';
 import { formatStudentShortId, getStudentInitials } from './studentIdentity';
 import './StudentDirectoryPage.css';
 
