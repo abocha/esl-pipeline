@@ -1421,6 +1421,14 @@ describe('StudentLearningPage', () => {
     });
     expect(apiMocks.promoteStudentProfileCandidates).not.toHaveBeenCalled();
     expect(screen.getByText('Profile Draft Changes')).toBeTruthy();
+    expect(
+      screen.getByText('Profile Draft Changes').closest('.student-learning-profile-card'),
+    ).toBeNull();
+    expect(screen.getByText('1 field changed')).toBeTruthy();
+    expect(screen.getByText('Review before activating or edit below')).toBeTruthy();
+    expect(screen.getAllByText('Current active profile')).toHaveLength(1);
+    expect(screen.getAllByText('Proposed draft')).toHaveLength(1);
+    expect(screen.getByText('Changed')).toBeTruthy();
     expect(screen.getAllByText('Teacher Notes').length).toBeGreaterThan(1);
     expect(screen.getByText('Responds well to practical speaking tasks.')).toBeTruthy();
     expect(screen.getAllByText('Refreshed from approved candidates.').length).toBeGreaterThan(0);
@@ -1440,6 +1448,81 @@ describe('StudentLearningPage', () => {
         }),
       );
     });
+  });
+
+  it('limits older profile versions behind a view-all control', async () => {
+    const user = userEvent.setup();
+    const revision = (
+      id: string,
+      versionLabel: string,
+      status: 'draft' | 'active' | 'deprecated',
+      createdAt: string,
+    ) => ({
+      id,
+      profileId: 'profiles/students/alex.md',
+      contentHash: `hash-${id}`,
+      source: status === 'draft' ? 'profile_revision_refresh' : 'update',
+      status,
+      versionNumber: Number(versionLabel.replace('v', '')),
+      versionLabel,
+      activatedAt: status === 'active' ? createdAt : null,
+      deprecatedAt: status === 'deprecated' ? createdAt : null,
+      createdAt,
+      createdBy: 'teacher-1',
+      restoredFromRevisionId: null,
+    });
+    apiMocks.getStudentLearningSurface.mockResolvedValueOnce(
+      makeLearningSurface({
+        profile: {
+          id: 'profiles/students/alex.md',
+          label: 'Alex',
+          content: '# Foundational Profile',
+          structuredContent: {
+            schemaVersion: 'foundational_profile_v1',
+            overallLevel: 'B1',
+            primaryGoals: ['Lead standups clearly.'],
+            communicationContexts: ['Team updates'],
+            interestsAndUsefulThemes: ['Product work'],
+            stableStrengths: ['High motivation'],
+            persistentChallenges: ['Article usage'],
+            studyPreferences: ['Short practical review loops'],
+            durableConstraints: ['Limited evening time'],
+            teacherNotes: 'Responds well to practical speaking tasks.',
+          },
+          currentRevisionId: 'revision-draft-6',
+          updatedAt: NOW,
+        },
+        revisions: {
+          items: [
+            revision('revision-draft-6', 'v6', 'draft', '2026-04-22T10:06:00.000Z'),
+            revision('revision-active-5', 'v5', 'active', '2026-04-22T10:05:00.000Z'),
+            revision('revision-old-4', 'v4', 'deprecated', '2026-04-22T10:04:00.000Z'),
+            revision('revision-old-3', 'v3', 'deprecated', '2026-04-22T10:03:00.000Z'),
+            revision('revision-old-2', 'v2', 'deprecated', '2026-04-22T10:02:00.000Z'),
+            revision('revision-old-1', 'v1', 'deprecated', '2026-04-22T10:01:00.000Z'),
+          ],
+          total: 6,
+          limit: 20,
+          offset: 0,
+          order: 'desc',
+        },
+      }),
+    );
+
+    renderLearningPage();
+
+    expect(await screen.findByText('v6')).toBeTruthy();
+    expect(screen.getByText('v5')).toBeTruthy();
+    expect(screen.getByText('v4')).toBeTruthy();
+    expect(screen.getByText('v3')).toBeTruthy();
+    expect(screen.getByText('v2')).toBeTruthy();
+    expect(screen.queryByText('v1')).toBeNull();
+    expect(screen.getByRole('button', { name: 'View all versions' })).toBeTruthy();
+
+    await user.click(screen.getByRole('button', { name: 'View all versions' }));
+
+    expect(screen.getByText('v1')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Hide older versions' })).toBeTruthy();
   });
 
   it('removes reviewed candidates from the promotion selection when they are no longer approved', async () => {
