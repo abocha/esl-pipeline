@@ -164,4 +164,43 @@ describe('application/student-memory-package', () => {
       source: 'none',
     });
   });
+
+  it('marks canonical memory as unavailable when retrieval fails instead of treating it as absent', async () => {
+    getLatestReadyStudentMemorySnapshotByStudentIdMock.mockRejectedValue(
+      new Error('snapshot repository unavailable'),
+    );
+    listRecentReadyLessonMemoryByStudentIdMock.mockResolvedValue([]);
+    listRecentReadyHomeworkMemoryByStudentIdMock.mockResolvedValue([]);
+
+    const result = await buildStudentMemoryPackageContext({
+      studentId: 'student-1',
+      currentTranscriptId: 'transcript-current',
+      config: {
+        pg: {
+          enabled: true,
+        },
+      } as never,
+    });
+
+    expect(result).toMatchObject({
+      studentMemorySnapshotId: null,
+      selectedLessonMemoryIds: [],
+      selectedHomeworkMemoryIds: [],
+      retrievalPolicyVersion: 'student-memory-v1',
+      source: 'unavailable',
+    });
+    expect(result.studentMemorySnapshotBlock).toContain(
+      'Student-memory snapshot retrieval was unavailable',
+    );
+    expect(result.studentMemorySnapshotBlock).not.toContain('snapshot repository unavailable');
+    expect(result.studentMemorySnapshotBlock).toContain(
+      'Inspect backend logs for repository error details.',
+    );
+    expect(result.recentLessonMemoryBlock).toBe(
+      'No recent lesson-memory entries available for retrieval.',
+    );
+    expect(result.recentHomeworkMemoryBlock).toBe(
+      'No recent homework-memory entries available for retrieval.',
+    );
+  });
 });

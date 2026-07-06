@@ -32,6 +32,7 @@ import {
 import { ProfileCandidatesPanel } from './ProfileCandidatesPanel';
 import { useStudentAreaContext } from './StudentAreaContext';
 import {
+  buildProfileDraftDiff,
   type CandidateActionKind,
   type FoundationalProfileFormState,
   foundationalProfileFormToStructuredContent,
@@ -42,6 +43,7 @@ import {
   isSelectableForPromotion,
   PROFILE_CANDIDATE_PENDING_FILTER,
   type ProfileCandidateFilter,
+  type ProfileDraftDiffItem,
 } from './StudentProfileUi.logic';
 import { formatStudentShortId } from './studentIdentity';
 import './StudentLearningPage.css';
@@ -514,6 +516,35 @@ function LearningSectionCard({
   );
 }
 
+function ProfileDraftDiffPanel({ items }: { items: ProfileDraftDiffItem[] }): React.JSX.Element {
+  return (
+    <section className="student-learning-draft-diff">
+      <header className="student-learning-section-header">
+        <span className="student-learning-card-eyebrow">Draft Review</span>
+        <h3>Profile Draft Changes</h3>
+      </header>
+      {items.length > 0 ? (
+        <div className="workspace-list">
+          {items.map((item) => (
+            <div key={item.key} className="workspace-list-item workspace-list-item-stack">
+              <div>
+                <strong>{item.label}</strong>
+                <div className="workspace-muted">{item.changeType}</div>
+              </div>
+              <div className="student-learning-draft-diff-values">
+                <p>{item.before || 'empty'}</p>
+                <p>{item.after || 'empty'}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="workspace-muted">No structured field changes detected.</p>
+      )}
+    </section>
+  );
+}
+
 export const StudentLearningPage: React.FC = () => {
   const { student, studentId, studentLoading, studentError, refreshStudent } =
     useStudentAreaContext();
@@ -527,6 +558,8 @@ export const StudentLearningPage: React.FC = () => {
   const [loadedProfileForm, setLoadedProfileForm] = useState<FoundationalProfileFormState>(
     INITIAL_FOUNDATIONAL_PROFILE_FORM,
   );
+  const [profileDraftDiffBase, setProfileDraftDiffBase] =
+    useState<FoundationalProfileFormState | null>(null);
   const [currentRevision, setCurrentRevision] = useState<ProfileRevisionDetailResponse | null>(
     null,
   );
@@ -577,6 +610,16 @@ export const StudentLearningPage: React.FC = () => {
     () => getProfileSnapshot(profileForm) !== getProfileSnapshot(loadedProfileForm),
     [profileForm, loadedProfileForm],
   );
+  const profileDraftDiffItems = useMemo(
+    () =>
+      currentRevision?.status === 'draft' && profileDraftDiffBase
+        ? buildProfileDraftDiff({
+            base: profileDraftDiffBase,
+            draft: profileForm,
+          })
+        : [],
+    [currentRevision?.status, profileDraftDiffBase, profileForm],
+  );
 
   const approvedCandidatesReadyForPromotion = useMemo(
     () => getApprovedCandidatesReadyForPromotion(profileCandidates),
@@ -604,6 +647,7 @@ export const StudentLearningPage: React.FC = () => {
     setProfileRevisions([]);
     setProfileForm(INITIAL_FOUNDATIONAL_PROFILE_FORM);
     setLoadedProfileForm(INITIAL_FOUNDATIONAL_PROFILE_FORM);
+    setProfileDraftDiffBase(null);
     setProfileLegacyNotice(null);
     setMemoryOverview(null);
     setMemoryHealth(null);
@@ -656,6 +700,7 @@ export const StudentLearningPage: React.FC = () => {
       setCurrentRevision(revision);
       setProfileForm(form);
       setLoadedProfileForm(form);
+      setProfileDraftDiffBase(null);
       setProfileLegacyNotice(getLegacyProfileNotice(revision));
       return revision;
     },
@@ -672,6 +717,7 @@ export const StudentLearningPage: React.FC = () => {
         setProfileRevisions([]);
         setProfileForm(INITIAL_FOUNDATIONAL_PROFILE_FORM);
         setLoadedProfileForm(INITIAL_FOUNDATIONAL_PROFILE_FORM);
+        setProfileDraftDiffBase(null);
         setProfileLegacyNotice(null);
         return;
       }
@@ -709,6 +755,7 @@ export const StudentLearningPage: React.FC = () => {
         setCurrentRevision(revision);
         setProfileForm(form);
         setLoadedProfileForm(form);
+        setProfileDraftDiffBase(null);
         setProfileRevisions(revisions.items ?? []);
         setProfileLegacyNotice(getLegacyProfileNotice(revision ?? profile));
       } catch (error) {
@@ -987,6 +1034,7 @@ export const StudentLearningPage: React.FC = () => {
       setCurrentRevision(response.draftRevision);
       setProfileForm(form);
       setLoadedProfileForm(form);
+      setProfileDraftDiffBase(null);
       setProfileLegacyNotice(null);
       setProfileRevisions([
         {
@@ -1029,6 +1077,7 @@ export const StudentLearningPage: React.FC = () => {
     try {
       await activateProfileRevision(profileId, currentRevision.id);
       await Promise.all([reloadCurrentLearningSurface(), refreshStudent()]);
+      setProfileDraftDiffBase(null);
       setProfileError(null);
       setProfileSuccess('Draft activated.');
     } catch (error) {
@@ -1058,6 +1107,7 @@ export const StudentLearningPage: React.FC = () => {
       setCurrentRevision(restoredRevision);
       setProfileForm(form);
       setLoadedProfileForm(form);
+      setProfileDraftDiffBase(null);
       setProfileLegacyNotice(getLegacyProfileNotice(restoredRevision ?? restored));
       const revisions = await listProfileRevisions(profileId, {
         limit: 25,
@@ -1089,6 +1139,7 @@ export const StudentLearningPage: React.FC = () => {
         setCurrentRevision(revision);
         setProfileForm(form);
         setLoadedProfileForm(form);
+        setProfileDraftDiffBase(null);
         setProfileLegacyNotice(getLegacyProfileNotice(revision));
       }
       const revisions = await listProfileRevisions(response.profileId, {
@@ -1118,6 +1169,7 @@ export const StudentLearningPage: React.FC = () => {
     setProfileCandidatePromotionBusy(true);
     setProfileCandidatePromotionError(null);
     setProfileCandidatePromotionSuccess(null);
+    const draftDiffBase = loadedProfileForm;
     try {
       const response = await refreshProfileDraftFromApprovedCandidates(studentId, {
         candidateIds,
@@ -1133,6 +1185,7 @@ export const StudentLearningPage: React.FC = () => {
         setCurrentRevision(revision);
         setProfileForm(form);
         setLoadedProfileForm(form);
+        setProfileDraftDiffBase(draftDiffBase);
         setProfileLegacyNotice(getLegacyProfileNotice(revision));
       }
       const revisions = await listProfileRevisions(response.profileId, {
@@ -1409,6 +1462,10 @@ export const StudentLearningPage: React.FC = () => {
             <header className="student-learning-block-header">
               <h2>Foundational Profile</h2>
             </header>
+
+            {currentRevision?.status === 'draft' && profileDraftDiffBase ? (
+              <ProfileDraftDiffPanel items={profileDraftDiffItems} />
+            ) : null}
 
             <div className="student-learning-section-grid">
               {PROFILE_SECTION_CONFIGS.map((section) => (
