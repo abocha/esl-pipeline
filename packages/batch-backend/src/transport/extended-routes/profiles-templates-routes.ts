@@ -216,6 +216,7 @@ export function registerProfileTemplateRoutes(
         .object({
           content: z.string().optional(),
           structuredContent: foundationalProfileSchema.optional(),
+          inheritCandidateLinksFromRevisionId: z.string().uuid().nullable().optional(),
         })
         .refine((body) => typeof body.content === 'string' || body.structuredContent, {
           message: 'Either content or structuredContent is required.',
@@ -238,6 +239,7 @@ export function registerProfileTemplateRoutes(
           status: 'draft',
           createdBy: getAuthenticatedUser(request)?.id ?? null,
           structuredContent,
+          inheritCandidateLinksFromRevisionId: body.inheritCandidateLinksFromRevisionId ?? null,
         });
 
         logger.info('HTTP request handled', {
@@ -343,6 +345,7 @@ export function registerProfileTemplateRoutes(
           profileId: z.string().min(1),
           content: z.string().optional(),
           structuredContent: foundationalProfileSchema.optional(),
+          inheritCandidateLinksFromRevisionId: z.string().uuid().nullable().optional(),
         })
         .refine((body) => typeof body.content === 'string' || body.structuredContent, {
           message: 'Either content or structuredContent is required.',
@@ -364,6 +367,7 @@ export function registerProfileTemplateRoutes(
           status: 'draft',
           createdBy: getAuthenticatedUser(request)?.id ?? null,
           structuredContent,
+          inheritCandidateLinksFromRevisionId: body.inheritCandidateLinksFromRevisionId ?? null,
         });
 
         logger.info('HTTP request handled', {

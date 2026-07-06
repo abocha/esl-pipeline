@@ -49,7 +49,10 @@ describe('frontend sandbox API adapter', () => {
     expect(learning.data).toMatchObject({
       profile: expect.objectContaining({ id: 'profiles/alex.md' }),
       revisions: {
-        items: [expect.objectContaining({ id: 'profile-revision-sandbox', status: 'active' })],
+        items: expect.arrayContaining([
+          expect.objectContaining({ id: 'profile-revision-sandbox', status: 'active' }),
+          expect.objectContaining({ id: 'profile-revision-sandbox-v4', status: 'deprecated' }),
+        ]),
       },
       memory: expect.objectContaining({
         studentId: 'student-alex',
@@ -110,6 +113,52 @@ describe('frontend sandbox API adapter', () => {
       id: 'draft-sandbox',
       promptPackageId: 'prompt-sandbox',
       text: expect.stringContaining('Alex'),
+    });
+  });
+
+  it('serves profile draft review endpoints for local Learning page UI iteration', async () => {
+    const adapter = createFrontendSandboxApiAdapter();
+
+    const refresh = await adapter(
+      requestConfig(
+        'post',
+        '/api/students/student-alex/profile-drafts/refresh-from-approved-candidates',
+        { candidateIds: ['candidate-sandbox-study-preference'] },
+      ),
+    );
+    const saved = await adapter(
+      requestConfig('post', '/api/profiles/revisions', {
+        profileId: 'profiles/alex.md',
+        structuredContent: refresh.data.draftRevision.structuredContent,
+        inheritCandidateLinksFromRevisionId: refresh.data.draftRevision.id,
+      }),
+    );
+    const activated = await adapter(
+      requestConfig('post', `/api/profiles/revisions/${saved.data.id}/activate`, {
+        profileId: 'profiles/alex.md',
+      }),
+    );
+
+    expect(refresh.data).toMatchObject({
+      draftRevisionId: 'profile-revision-sandbox-draft',
+      includedCandidateIds: ['candidate-sandbox-study-preference'],
+      draftRevision: expect.objectContaining({
+        id: 'profile-revision-sandbox-draft',
+        status: 'draft',
+        source: 'profile_revision_refresh',
+        structuredContent: expect.objectContaining({
+          studyPreferences: expect.arrayContaining(['Prefers short practical review loops.']),
+        }),
+      }),
+    });
+    expect(saved.data).toMatchObject({
+      id: 'profile-revision-sandbox-saved-draft',
+      status: 'draft',
+      structuredContent: refresh.data.draftRevision.structuredContent,
+    });
+    expect(activated.data).toMatchObject({
+      id: 'profiles/alex.md',
+      currentRevisionId: 'profile-revision-sandbox-saved-draft',
     });
   });
 

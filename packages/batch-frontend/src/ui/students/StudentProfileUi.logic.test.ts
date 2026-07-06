@@ -81,6 +81,8 @@ describe('StudentProfileUi logic', () => {
         before: 'B1',
         after: 'B1+',
         changeType: 'changed',
+        beforeLines: [{ text: 'B1', changeType: 'removed' }],
+        afterLines: [{ text: 'B1+', changeType: 'added' }],
       },
       {
         key: 'communicationContexts',
@@ -88,6 +90,8 @@ describe('StudentProfileUi logic', () => {
         before: '',
         after: 'Client calls',
         changeType: 'added',
+        beforeLines: [],
+        afterLines: [{ text: 'Client calls', changeType: 'added' }],
       },
       {
         key: 'interestsAndUsefulThemes',
@@ -95,6 +99,8 @@ describe('StudentProfileUi logic', () => {
         before: 'Travel',
         after: '',
         changeType: 'removed',
+        beforeLines: [{ text: 'Travel', changeType: 'removed' }],
+        afterLines: [],
       },
     ]);
   });

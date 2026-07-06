@@ -27,6 +27,13 @@ export interface ProfileDraftDiffItem {
   before: string;
   after: string;
   changeType: 'added' | 'removed' | 'changed';
+  beforeLines: ProfileDraftDiffLine[];
+  afterLines: ProfileDraftDiffLine[];
+}
+
+export interface ProfileDraftDiffLine {
+  text: string;
+  changeType: 'unchanged' | 'added' | 'removed';
 }
 
 export const INITIAL_CREATE_STUDENT_FORM: CreateStudentFormState = {
@@ -190,18 +197,64 @@ export function buildProfileDraftDiff(args: {
       before,
       after,
       changeType: before ? (after ? 'changed' : 'removed') : 'added',
+      ...buildProfileDraftDiffLines({ before, after }),
     });
   }
 
   return diff;
 }
 
-function normalizeProfileDiffValue(value: string): string {
+function buildProfileDraftDiffLines(args: {
+  before: string;
+  after: string;
+}): Pick<ProfileDraftDiffItem, 'beforeLines' | 'afterLines'> {
+  const beforeLines = splitProfileDiffLines(args.before);
+  const afterLines = splitProfileDiffLines(args.after);
+  const afterLineCounts = countProfileDiffLines(afterLines);
+  const beforeLineCounts = countProfileDiffLines(beforeLines);
+
+  return {
+    beforeLines: beforeLines.map((line) => ({
+      text: line,
+      changeType: consumeProfileDiffLine(afterLineCounts, line) ? 'unchanged' : 'removed',
+    })),
+    afterLines: afterLines.map((line) => ({
+      text: line,
+      changeType: consumeProfileDiffLine(beforeLineCounts, line) ? 'unchanged' : 'added',
+    })),
+  };
+}
+
+function splitProfileDiffLines(value: string): string[] {
   return value
     .split('\n')
     .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .join('\n');
+    .filter((line) => line.length > 0);
+}
+
+function countProfileDiffLines(lines: string[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const line of lines) {
+    counts.set(line, (counts.get(line) ?? 0) + 1);
+  }
+  return counts;
+}
+
+function consumeProfileDiffLine(counts: Map<string, number>, line: string): boolean {
+  const count = counts.get(line) ?? 0;
+  if (count <= 0) {
+    return false;
+  }
+  if (count === 1) {
+    counts.delete(line);
+    return true;
+  }
+  counts.set(line, count - 1);
+  return true;
+}
+
+function normalizeProfileDiffValue(value: string): string {
+  return splitProfileDiffLines(value).join('\n');
 }
 
 export function isPendingCandidate(candidate: StudentProfileCandidate): boolean {

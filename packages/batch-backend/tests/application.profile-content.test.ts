@@ -145,6 +145,7 @@ function createInMemoryDependencies(seed?: {
     },
     candidates: {
       markPromotedByRevision: async (_revisionId: string) => {},
+      copyDraftLinks: async (_params: { sourceRevisionId: string; targetRevisionId: string }) => {},
     },
     revisions: {
       getLatestByHash: async (profileId: string, contentHash: string) =>
@@ -501,5 +502,52 @@ describe('application/profile-content (DB-only)', () => {
 
     expect(activated?.status).toBe('active');
     expect(promotions).toEqual([draft.id]);
+  });
+
+  it('carries candidate links forward when saving manual edits to a generated draft', async () => {
+    const deps = createInMemoryDependencies({
+      profiles: [{ id: 'default.md', label: 'Default Profile', content: 'Version 1' }],
+    });
+    const copiedLinks: { sourceRevisionId: string; targetRevisionId: string }[] = [];
+    (
+      deps.candidates as typeof deps.candidates & {
+        copyDraftLinks: (params: {
+          sourceRevisionId: string;
+          targetRevisionId: string;
+        }) => Promise<void>;
+      }
+    ).copyDraftLinks = async (params) => {
+      copiedLinks.push(params);
+    };
+
+    const generatedDraft = await saveProfileRevisionContent(
+      'default.md',
+      'Generated draft from approved candidates',
+      {
+        source: 'profile_revision_refresh',
+        status: 'draft',
+        createdBy: 'teacher-1',
+      },
+      deps,
+    );
+
+    const manualDraft = await saveProfileRevisionContent(
+      'default.md',
+      'Teacher-edited generated draft',
+      {
+        source: 'update',
+        status: 'draft',
+        createdBy: 'teacher-1',
+        inheritCandidateLinksFromRevisionId: generatedDraft.id,
+      } as never,
+      deps as never,
+    );
+
+    expect(copiedLinks).toEqual([
+      {
+        sourceRevisionId: generatedDraft.id,
+        targetRevisionId: manualDraft.id,
+      },
+    ]);
   });
 });

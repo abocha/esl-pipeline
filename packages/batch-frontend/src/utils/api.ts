@@ -282,6 +282,7 @@ export interface ProfileRevisionDetailResponse extends ProfileRevisionSummaryRes
 export interface SaveProfileDraftRevisionRequest {
   content?: string;
   structuredContent?: FoundationalProfile;
+  inheritCandidateLinksFromRevisionId?: string | null;
 }
 
 export interface ProfileRevisionListResponse {

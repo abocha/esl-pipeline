@@ -22,7 +22,10 @@ import {
   insertProfileRevision,
   listProfileRevisions,
 } from '../domain/profile-revision-repository.js';
-import { markStudentProfileCandidatesPromotedByRevision } from '../domain/student-profile-candidate-repository.js';
+import {
+  copyStudentProfileCandidateDraftRevisionLinks,
+  markStudentProfileCandidatesPromotedByRevision,
+} from '../domain/student-profile-candidate-repository.js';
 import {
   deriveFoundationalProfileFromMarkdown,
   type FoundationalProfile,
@@ -94,6 +97,7 @@ interface ProfileContentDependencies {
   };
   candidates: {
     markPromotedByRevision: typeof markStudentProfileCandidatesPromotedByRevision;
+    copyDraftLinks: typeof copyStudentProfileCandidateDraftRevisionLinks;
   };
 }
 
@@ -107,6 +111,7 @@ interface UpsertProfileContentOptions {
 export interface SaveProfileRevisionContentOptions extends UpsertProfileContentOptions {
   status?: RevisionStatus;
   dedupeByHash?: boolean;
+  inheritCandidateLinksFromRevisionId?: string | null;
 }
 
 export class ProfileContentError extends Error {
@@ -168,6 +173,7 @@ function getDependencies(
     },
     candidates: overrides?.candidates ?? {
       markPromotedByRevision: markStudentProfileCandidatesPromotedByRevision,
+      copyDraftLinks: copyStudentProfileCandidateDraftRevisionLinks,
     },
   };
 }
@@ -303,6 +309,25 @@ async function saveProfileRevision(
       createdBy: options.createdBy ?? null,
       restoredFromRevisionId: options.restoredFromRevisionId ?? null,
     }));
+
+  if (status === 'draft' && options.inheritCandidateLinksFromRevisionId) {
+    const sourceRevision = await dependencies.revisions.getById(
+      normalizedProfileId,
+      options.inheritCandidateLinksFromRevisionId,
+    );
+    if (!sourceRevision) {
+      throw new ProfileContentError(
+        'Candidate-link source revision was not found',
+        'candidate_link_source_revision_not_found',
+        404,
+      );
+    }
+
+    await dependencies.candidates.copyDraftLinks({
+      sourceRevisionId: sourceRevision.id,
+      targetRevisionId: revision.id,
+    });
+  }
 
   if (status === 'active') {
     await Promise.all([
