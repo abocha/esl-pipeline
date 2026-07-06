@@ -4,7 +4,7 @@
 
 - Audience: maintainers and student-memory agents.
 - Authority Level: active staged roadmap.
-- Last Verified Against: 2026-07-02 repo state.
+- Last Verified Against: 2026-07-06 repo state.
 - Owner: founder-maintainer + backend/frontend maintainers.
 - Review Cadence: after student-memory implementation PRs.
 - Status: `roadmap`.
@@ -37,6 +37,8 @@ Current v1.1 closeout:
 1. [`v1-1-bounded-snapshot-refresh.md`](v1-1-bounded-snapshot-refresh.md) - bounded incremental
    snapshot refresh, token budgets, candidate gating, and operator observability. Phases 0-4 are
    the current PR scope; Phase 5 remains Closed Alpha follow-up polish after tutor/operator evidence.
+2. [`reliability-review.md`](reliability-review.md) - planning note for lifecycle observability,
+   pedagogical usefulness, profile fact fidelity, and profile draft diff follow-ups.
 
 Implemented v1.1 boundaries:
 
@@ -57,6 +59,7 @@ Known Closed Alpha follow-ups:
 2. Move support details to a future internal route only if the Learning page becomes noisy.
 3. Consider a guarded operator rebuild action no earlier than Gate C; keep normal tutor-facing
    rebuild controls out of scope.
+4. Map the reliability review into release-scheduled chunks before implementation.
 
 ## Locked Decisions
 
