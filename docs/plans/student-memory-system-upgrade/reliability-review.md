@@ -333,10 +333,11 @@ Implemented Gate C fixes:
    memory. When a lookup fails, the prompt package receives an explicit unavailable block and keeps
    the `student-memory-v1` retrieval policy marker so `GET /prompt-packages/:id` evidence is
    inspectable.
-2. The Learning page now shows a deterministic `Profile Draft Changes` panel after approved
+2. The Learning page now shows a deterministic `Profile Draft Changes` table after approved
    candidates generate a draft revision. The first pass compares existing structured profile fields
-   against the proposed draft and labels additions, removals, and changes without model-generated
-   classification.
+   against the proposed draft, uses one shared title/current/proposed header row, labels additions,
+   removals, and changes, and highlights deterministic line-level additions/removals without
+   model-generated classification.
 
 Deferred after this pass:
 
@@ -346,3 +347,55 @@ Deferred after this pass:
    `unchanged` classifications.
 4. Exact DB count helpers, snapshot/profile diff history, and guarded operator rebuild actions
    unless Closed Alpha evidence shows they are needed.
+
+## 2026-07-06 Candidate Draft Activation Incident
+
+Manual smoke after the Gate C reliability deployment found a draft-lineage gap:
+
+1. A tutor approved profile candidates and generated a full profile draft from them.
+2. The tutor manually corrected unrelated generated changes, which saved a new draft revision.
+3. Activating the manually edited draft did not promote the approved candidates because the
+   candidate-to-draft links remained attached to the generated draft revision, while activation
+   promotes candidates linked to the exact activated revision.
+
+Root cause:
+
+- `Save Draft` created a new `update` draft revision without preserving candidate-link lineage from
+  the generated draft being edited.
+- `activateProfileRevisionForProfile` correctly promoted linked candidates for the activated
+  revision, but the edited revision had no links.
+
+Implemented fix direction:
+
+1. Draft saves can carry `inheritCandidateLinksFromRevisionId`.
+2. The backend validates that source revision belongs to the same profile and copies candidate draft
+   links to the saved draft revision.
+3. The Learning page passes the current draft revision id when saving manual edits, so candidate
+   links survive the generated-draft -> tutor-edited-draft -> activation path.
+
+Remaining edge case:
+
+- The fix preserves tutor-approved draft lineage. It does not attempt semantic proof that every
+  candidate fact still appears after manual edits. If tutors begin removing selected candidate facts
+  inside draft edits, add explicit candidate inclusion controls or a structured change ledger rather
+  than brittle exact-string matching.
+
+## 2026-07-06 Profile Draft Diff UI Reference
+
+Approved visual reference:
+
+- `docs/plans/student-memory-system-upgrade/assets/profile-draft-diff-viewer-reference.png`
+
+Implementation scope:
+
+1. Use the reference for the `Profile Draft Changes` panel only.
+2. Render draft changes as a standalone three-column table: field title/status, current active
+   profile, and proposed draft. Keep the current/proposed labels in one shared header row rather
+   than repeating them inside every field row.
+3. Use deterministic line-level highlights for additions and removals inside the current/proposed
+   text columns. This is a review aid, not a semantic fact classifier.
+4. Keep the broad profile-versions sidebar redesign out of scope for this pass, but cap inline
+   version history to the current/active context plus three older revisions and put the rest behind
+   `View all versions`.
+5. Prioritize labelled current/proposed columns, clear change-count summary, semantic change pills,
+   and readable before/after text over model-generated semantic classifications.

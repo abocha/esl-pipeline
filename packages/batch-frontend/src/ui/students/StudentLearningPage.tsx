@@ -517,32 +517,100 @@ function LearningSectionCard({
 }
 
 function ProfileDraftDiffPanel({ items }: { items: ProfileDraftDiffItem[] }): React.JSX.Element {
+  const changeCountLabel = `${items.length} ${items.length === 1 ? 'field' : 'fields'} changed`;
+
   return (
-    <section className="student-learning-draft-diff">
-      <header className="student-learning-section-header">
-        <span className="student-learning-card-eyebrow">Draft Review</span>
-        <h3>Profile Draft Changes</h3>
+    <article className="student-area-panel workspace-card student-learning-draft-diff">
+      <header className="student-learning-draft-diff-header">
+        <div>
+          <span className="student-learning-card-eyebrow">Draft Review</span>
+          <h3>Profile Draft Changes</h3>
+        </div>
+        <div className="student-learning-draft-diff-summary" aria-label={changeCountLabel}>
+          <span>{changeCountLabel}</span>
+          <strong>Review before activating or edit below</strong>
+        </div>
       </header>
       {items.length > 0 ? (
-        <div className="workspace-list">
+        <div className="student-learning-draft-diff-list">
+          <div className="student-learning-draft-diff-table-header">
+            <span aria-hidden="true" />
+            <span>Current active profile</span>
+            <span>Proposed draft</span>
+          </div>
           {items.map((item) => (
-            <div key={item.key} className="workspace-list-item workspace-list-item-stack">
-              <div>
+            <article
+              key={item.key}
+              className={`student-learning-draft-diff-item student-learning-draft-diff-item-${item.changeType}`}
+            >
+              <div className="student-learning-draft-diff-item-header">
                 <strong>{item.label}</strong>
-                <div className="workspace-muted">{item.changeType}</div>
+                <span
+                  className={`student-learning-draft-diff-pill student-learning-draft-diff-pill-${item.changeType}`}
+                >
+                  {formatDraftDiffChangeType(item.changeType)}
+                </span>
               </div>
               <div className="student-learning-draft-diff-values">
-                <p>{item.before || 'empty'}</p>
-                <p>{item.after || 'empty'}</p>
+                <div
+                  className="student-learning-draft-diff-value"
+                  aria-label="Current active profile"
+                >
+                  <DraftDiffValueLines
+                    lines={item.beforeLines}
+                    empty={!item.before}
+                    emptyLabel="empty"
+                  />
+                </div>
+                <div className="student-learning-draft-diff-value" aria-label="Proposed draft">
+                  <DraftDiffValueLines
+                    lines={item.afterLines}
+                    empty={!item.after}
+                    emptyLabel="empty"
+                  />
+                </div>
               </div>
-            </div>
+            </article>
           ))}
         </div>
       ) : (
         <p className="workspace-muted">No structured field changes detected.</p>
       )}
-    </section>
+    </article>
   );
+}
+
+function DraftDiffValueLines({
+  lines,
+  empty,
+  emptyLabel,
+}: {
+  lines: ProfileDraftDiffItem['beforeLines'];
+  empty: boolean;
+  emptyLabel: string;
+}): React.JSX.Element {
+  if (empty) {
+    return <p className="student-learning-draft-diff-empty">{emptyLabel}</p>;
+  }
+
+  return (
+    <p>
+      {lines.map((line, index) => (
+        <span
+          key={`${line.text}-${index}`}
+          className={`student-learning-draft-diff-line student-learning-draft-diff-line-${line.changeType}`}
+        >
+          {line.text}
+        </span>
+      ))}
+    </p>
+  );
+}
+
+function formatDraftDiffChangeType(changeType: ProfileDraftDiffItem['changeType']): string {
+  if (changeType === 'added') return 'Added';
+  if (changeType === 'removed') return 'Removed';
+  return 'Changed';
 }
 
 export const StudentLearningPage: React.FC = () => {
@@ -564,6 +632,7 @@ export const StudentLearningPage: React.FC = () => {
     null,
   );
   const [profileRevisions, setProfileRevisions] = useState<ProfileRevisionSummaryResponse[]>([]);
+  const [showAllProfileVersions, setShowAllProfileVersions] = useState(false);
   const [profileBusy, setProfileBusy] = useState<
     'loading' | 'saving' | 'restoring' | 'activating' | 'populating' | 'promoting' | null
   >(null);
@@ -640,11 +709,32 @@ export const StudentLearningPage: React.FC = () => {
   );
 
   const profileHealthDetail = useMemo(() => getProfileReadinessDetail(profileForm), [profileForm]);
+  const profileVersionDisplay = useMemo(() => {
+    const currentRevisionId = currentRevision?.id ?? null;
+    const nonCurrentRevisions = profileRevisions.filter(
+      (revision) => revision.id !== currentRevisionId,
+    );
+    const activeRevision = nonCurrentRevisions.find(
+      (revision) => revision.status === 'active' && revision.id !== currentRevisionId,
+    );
+    const olderRevisions = nonCurrentRevisions.filter(
+      (revision) => revision.id !== activeRevision?.id,
+    );
+    const cappedRevisions = showAllProfileVersions ? olderRevisions : olderRevisions.slice(0, 3);
+
+    return {
+      visibleRevisions: activeRevision ? [activeRevision, ...cappedRevisions] : cappedRevisions,
+      hiddenCount: showAllProfileVersions ? 0 : Math.max(0, olderRevisions.length - 3),
+    };
+  }, [currentRevision?.id, profileRevisions, showAllProfileVersions]);
+  const visibleProfileRevisions = profileVersionDisplay.visibleRevisions;
+  const hiddenProfileRevisionCount = profileVersionDisplay.hiddenCount;
 
   const clearLoadedLearningSurface = useCallback(() => {
     setBootstrapProfileId(null);
     setCurrentRevision(null);
     setProfileRevisions([]);
+    setShowAllProfileVersions(false);
     setProfileForm(INITIAL_FOUNDATIONAL_PROFILE_FORM);
     setLoadedProfileForm(INITIAL_FOUNDATIONAL_PROFILE_FORM);
     setProfileDraftDiffBase(null);
@@ -665,6 +755,10 @@ export const StudentLearningPage: React.FC = () => {
     setBootstrapProfileId(null);
     clearLoadedLearningSurface();
   }, [clearLoadedLearningSurface, studentId]);
+
+  useEffect(() => {
+    setShowAllProfileVersions(false);
+  }, [profileId, studentId]);
 
   useEffect(() => {
     setSelectedCandidateIds((current) =>
@@ -1002,6 +1096,8 @@ export const StudentLearningPage: React.FC = () => {
     try {
       const saved = await saveProfileDraftRevision(profileId, {
         structuredContent: foundationalProfileFormToStructuredContent(profileForm),
+        inheritCandidateLinksFromRevisionId:
+          currentRevision?.status === 'draft' ? currentRevision.id : null,
       });
       const form = foundationalProfileToFormState(saved.structuredContent);
       setCurrentRevision(saved);
@@ -1458,14 +1554,14 @@ export const StudentLearningPage: React.FC = () => {
 
       <div className="student-learning-main">
         <div className="student-learning-primary-column">
+          {currentRevision?.status === 'draft' && profileDraftDiffBase ? (
+            <ProfileDraftDiffPanel items={profileDraftDiffItems} />
+          ) : null}
+
           <article className="student-area-panel workspace-card student-learning-profile-card">
             <header className="student-learning-block-header">
               <h2>Foundational Profile</h2>
             </header>
-
-            {currentRevision?.status === 'draft' && profileDraftDiffBase ? (
-              <ProfileDraftDiffPanel items={profileDraftDiffItems} />
-            ) : null}
 
             <div className="student-learning-section-grid">
               {PROFILE_SECTION_CONFIGS.map((section) => (
@@ -1651,7 +1747,7 @@ export const StudentLearningPage: React.FC = () => {
           ) : null}
 
           <div className="workspace-list student-learning-revision-list">
-            {profileRevisions.map((revision) => (
+            {visibleProfileRevisions.map((revision) => (
               <div key={revision.id} className="workspace-list-item workspace-list-item-stack">
                 <div>
                   <strong>{revision.versionLabel ?? revision.id}</strong>
@@ -1682,6 +1778,15 @@ export const StudentLearningPage: React.FC = () => {
               </div>
             ))}
           </div>
+          {hiddenProfileRevisionCount > 0 || showAllProfileVersions ? (
+            <button
+              type="button"
+              className="workspace-secondary-btn student-learning-version-toggle"
+              onClick={() => setShowAllProfileVersions((current) => !current)}
+            >
+              {showAllProfileVersions ? 'Hide older versions' : 'View all versions'}
+            </button>
+          ) : null}
         </aside>
       </div>
     </section>
