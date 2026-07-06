@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [9.5.1] - 2026-07-06
+
+### Changed
+
+- Automated release from PR #123: Fix student-memory candidate lineage and draft diff review (https://github.com/abocha/esl-pipeline/pull/123)
+
 ## [9.5.0] - 2026-07-06
 
 ### Changed
