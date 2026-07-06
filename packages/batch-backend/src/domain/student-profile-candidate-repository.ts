@@ -114,6 +114,11 @@ export interface LinkStudentProfileCandidatesToDraftRevisionParams {
   draftRevisionId: string;
 }
 
+export interface CopyStudentProfileCandidateDraftRevisionLinksParams {
+  sourceRevisionId: string;
+  targetRevisionId: string;
+}
+
 const SELECT_COLUMNS = `
   id,
   student_id,
@@ -458,6 +463,32 @@ export async function linkStudentProfileCandidatesToDraftRevision(
       ON CONFLICT (candidate_id, revision_id) DO NOTHING
       `,
       [params.studentId, params.candidateIds, params.draftRevisionId],
+    );
+  });
+}
+
+export async function copyStudentProfileCandidateDraftRevisionLinks(
+  params: CopyStudentProfileCandidateDraftRevisionLinksParams,
+): Promise<void> {
+  if (params.sourceRevisionId === params.targetRevisionId) {
+    return;
+  }
+
+  await withPgClient(async (client: PoolClient) => {
+    await client.query(
+      `
+      INSERT INTO student_profile_candidate_draft_revisions (
+        candidate_id,
+        revision_id
+      )
+      SELECT
+        candidate_id,
+        $2
+      FROM student_profile_candidate_draft_revisions
+      WHERE revision_id = $1
+      ON CONFLICT (candidate_id, revision_id) DO NOTHING
+      `,
+      [params.sourceRevisionId, params.targetRevisionId],
     );
   });
 }

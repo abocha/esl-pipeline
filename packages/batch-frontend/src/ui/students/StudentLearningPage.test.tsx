@@ -1378,6 +1378,33 @@ describe('StudentLearningPage', () => {
         },
       },
     });
+    apiMocks.saveProfileDraftRevision.mockResolvedValueOnce({
+      id: 'revision-draft-3',
+      profileId: 'profiles/students/alex.md',
+      contentHash: 'hash-draft-3',
+      source: 'update',
+      status: 'draft',
+      versionNumber: 3,
+      versionLabel: 'v3',
+      activatedAt: null,
+      deprecatedAt: null,
+      createdAt: NOW,
+      createdBy: 'teacher-1',
+      restoredFromRevisionId: null,
+      content: '# Foundational Profile',
+      structuredContent: {
+        schemaVersion: 'foundational_profile_v1',
+        overallLevel: 'B1',
+        primaryGoals: ['Lead standups clearly.'],
+        communicationContexts: ['Team updates'],
+        interestsAndUsefulThemes: ['Product work'],
+        stableStrengths: ['High motivation'],
+        persistentChallenges: ['Article usage'],
+        studyPreferences: ['Short practical review loops'],
+        durableConstraints: ['Limited evening time'],
+        teacherNotes: 'Manual correction after candidate refresh.',
+      },
+    });
 
     renderLearningPage();
 
@@ -1397,6 +1424,22 @@ describe('StudentLearningPage', () => {
     expect(screen.getAllByText('Teacher Notes').length).toBeGreaterThan(1);
     expect(screen.getByText('Responds well to practical speaking tasks.')).toBeTruthy();
     expect(screen.getAllByText('Refreshed from approved candidates.').length).toBeGreaterThan(0);
+
+    await user.clear(screen.getByLabelText('Teacher Notes'));
+    await user.type(
+      screen.getByLabelText('Teacher Notes'),
+      'Manual correction after candidate refresh.',
+    );
+    await user.click(screen.getByRole('button', { name: 'Save Draft' }));
+
+    await waitFor(() => {
+      expect(apiMocks.saveProfileDraftRevision).toHaveBeenCalledWith(
+        'profiles/students/alex.md',
+        expect.objectContaining({
+          inheritCandidateLinksFromRevisionId: 'revision-draft-2',
+        }),
+      );
+    });
   });
 
   it('removes reviewed candidates from the promotion selection when they are no longer approved', async () => {

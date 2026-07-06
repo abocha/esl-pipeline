@@ -1002,6 +1002,8 @@ export const StudentLearningPage: React.FC = () => {
     try {
       const saved = await saveProfileDraftRevision(profileId, {
         structuredContent: foundationalProfileFormToStructuredContent(profileForm),
+        inheritCandidateLinksFromRevisionId:
+          currentRevision?.status === 'draft' ? currentRevision.id : null,
       });
       const form = foundationalProfileToFormState(saved.structuredContent);
       setCurrentRevision(saved);

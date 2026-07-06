@@ -346,3 +346,35 @@ Deferred after this pass:
    `unchanged` classifications.
 4. Exact DB count helpers, snapshot/profile diff history, and guarded operator rebuild actions
    unless Closed Alpha evidence shows they are needed.
+
+## 2026-07-06 Candidate Draft Activation Incident
+
+Manual smoke after the Gate C reliability deployment found a draft-lineage gap:
+
+1. A tutor approved profile candidates and generated a full profile draft from them.
+2. The tutor manually corrected unrelated generated changes, which saved a new draft revision.
+3. Activating the manually edited draft did not promote the approved candidates because the
+   candidate-to-draft links remained attached to the generated draft revision, while activation
+   promotes candidates linked to the exact activated revision.
+
+Root cause:
+
+- `Save Draft` created a new `update` draft revision without preserving candidate-link lineage from
+  the generated draft being edited.
+- `activateProfileRevisionForProfile` correctly promoted linked candidates for the activated
+  revision, but the edited revision had no links.
+
+Implemented fix direction:
+
+1. Draft saves can carry `inheritCandidateLinksFromRevisionId`.
+2. The backend validates that source revision belongs to the same profile and copies candidate draft
+   links to the saved draft revision.
+3. The Learning page passes the current draft revision id when saving manual edits, so candidate
+   links survive the generated-draft -> tutor-edited-draft -> activation path.
+
+Remaining edge case:
+
+- The fix preserves tutor-approved draft lineage. It does not attempt semantic proof that every
+  candidate fact still appears after manual edits. If tutors begin removing selected candidate facts
+  inside draft edits, add explicit candidate inclusion controls or a structured change ledger rather
+  than brittle exact-string matching.

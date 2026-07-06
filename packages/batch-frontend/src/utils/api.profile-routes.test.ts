@@ -62,14 +62,18 @@ describe('utils/api profile route encoding', () => {
     });
   });
 
-  it('sends path-like profile ids in the body when saving draft revisions', async () => {
+  it('sends path-like profile ids and inherited candidate-link revision in the body when saving draft revisions', async () => {
     vi.mocked(apiClient.post).mockResolvedValueOnce({ data: { id: revisionId } } as never);
 
-    await saveProfileDraftRevision(profileId, { content: '# Profile' });
+    await saveProfileDraftRevision(profileId, {
+      content: '# Profile',
+      inheritCandidateLinksFromRevisionId: revisionId,
+    });
 
     expect(buildApiProxyPath).toHaveBeenCalledWith('/profiles/revisions');
     expect(apiClient.post).toHaveBeenCalledWith('/api/profiles/revisions', {
       content: '# Profile',
+      inheritCandidateLinksFromRevisionId: revisionId,
       profileId,
     });
   });
