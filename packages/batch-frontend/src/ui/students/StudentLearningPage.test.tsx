@@ -1393,6 +1393,10 @@ describe('StudentLearningPage', () => {
       );
     });
     expect(apiMocks.promoteStudentProfileCandidates).not.toHaveBeenCalled();
+    expect(screen.getByText('Profile Draft Changes')).toBeTruthy();
+    expect(screen.getAllByText('Teacher Notes').length).toBeGreaterThan(1);
+    expect(screen.getByText('Responds well to practical speaking tasks.')).toBeTruthy();
+    expect(screen.getAllByText('Refreshed from approved candidates.').length).toBeGreaterThan(0);
   });
 
   it('removes reviewed candidates from the promotion selection when they are no longer approved', async () => {

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { StudentProfileCandidate } from '../../utils/api';
 import {
   buildCreateStudentPayload,
+  buildProfileDraftDiff,
   buildStarterProfileInput,
   CREATE_STUDENT_NAME_REQUIRED_MESSAGE,
   formatCandidateSectionLabel,
@@ -45,6 +46,59 @@ function candidateForFilter(
 }
 
 describe('StudentProfileUi logic', () => {
+  it('builds a deterministic profile draft diff from changed structured fields', () => {
+    const diff = buildProfileDraftDiff({
+      base: {
+        ...INITIAL_CREATE_STUDENT_FORM,
+        overallLevel: 'B1',
+        primaryGoals: 'Speak more clearly at work.',
+        communicationContexts: '',
+        interestsAndUsefulThemes: 'Travel',
+        stableStrengths: '',
+        persistentChallenges: 'Articles',
+        studyPreferences: '',
+        durableConstraints: 'Mostly studies on mobile.',
+        teacherNotes: '',
+      },
+      draft: {
+        ...INITIAL_CREATE_STUDENT_FORM,
+        overallLevel: 'B1+',
+        primaryGoals: 'Speak more clearly at work.',
+        communicationContexts: 'Client calls',
+        interestsAndUsefulThemes: '',
+        stableStrengths: '',
+        persistentChallenges: 'Articles',
+        studyPreferences: '',
+        durableConstraints: 'Mostly studies on mobile.',
+        teacherNotes: '',
+      },
+    });
+
+    expect(diff).toEqual([
+      {
+        key: 'overallLevel',
+        label: 'Current Level',
+        before: 'B1',
+        after: 'B1+',
+        changeType: 'changed',
+      },
+      {
+        key: 'communicationContexts',
+        label: 'Communication Contexts',
+        before: '',
+        after: 'Client calls',
+        changeType: 'added',
+      },
+      {
+        key: 'interestsAndUsefulThemes',
+        label: 'Interests & Useful Themes',
+        before: 'Travel',
+        after: '',
+        changeType: 'removed',
+      },
+    ]);
+  });
+
   it('builds a student-owned payload and ignores legacy advanced fields', () => {
     const result = buildCreateStudentPayload({
       ...INITIAL_CREATE_STUDENT_FORM,
