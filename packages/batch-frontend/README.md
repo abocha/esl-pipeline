@@ -19,6 +19,7 @@ This package is the operator-facing frontend for:
 - recording/transcript/prompt/draft/publish workflow
 - student-area directory, overview, learning, history, and schedule/billing views
 - student Learning page memory health support details for founder/operator diagnosis
+- student Learning page profile-draft change review after approved candidate refresh
 - student and business schedule follow-up actions that mark elapsed lessons completed and open lesson-linked homework assignment context
 - capability-gated job actions
 
@@ -44,6 +45,9 @@ Canonical behavior and current status live in:
 - Student-area pages prefer route-level payloads under `/students/:id/surfaces/*`, with granular student APIs retained as compatibility/fallback paths.
 - The Learning page can read `/students/:id/memory/health` for collapsed operator support details;
   manual full snapshot rebuild remains outside the frontend and CLI-only for v1.1.
+- Approved-candidate draft refresh opens a review-mediated profile draft and shows deterministic
+  structured field changes against the active editor baseline; model-generated change
+  classification is intentionally deferred.
 - Lesson follow-up reminders use in-app actions first; Telegram/email delivery remains outside the frontend surface for this slice.
 - Job-event SSE subscriptions should target known `jobId` and `recordingId` values; wildcard all-job streams are explicit.
 

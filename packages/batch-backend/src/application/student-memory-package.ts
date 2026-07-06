@@ -16,8 +16,10 @@ export interface StudentMemoryPackageContext {
   selectedLessonMemoryIds: string[];
   selectedHomeworkMemoryIds: string[];
   retrievalPolicyVersion: string | null;
-  source: 'canonical' | 'none';
+  source: 'canonical' | 'unavailable' | 'none';
 }
+
+type StudentMemoryRetrievalResult<T> = { value: T; error: null } | { value: T; error: unknown };
 
 export async function buildStudentMemoryPackageContext(args: {
   studentId: string | null;
@@ -65,30 +67,55 @@ export async function buildStudentMemoryPackageContext(args: {
     };
   }
 
-  const snapshot = await getLatestReadyStudentMemorySnapshotByStudentId(args.studentId).catch(
-    () => null,
-  );
-  const recentLessons = await listRecentReadyLessonMemoryByStudentId(args.studentId, {
-    excludeTranscriptId: args.currentTranscriptId,
-    limit: 3,
-  }).catch(() => [] as LessonMemoryRecord[]);
-  const recentHomework = await listRecentReadyHomeworkMemoryByStudentId(args.studentId, {
-    limit: 2,
-  }).catch(() => [] as HomeworkMemoryRecord[]);
+  const studentId = args.studentId;
+  const [snapshotResult, recentLessonsResult, recentHomeworkResult] = await Promise.all([
+    captureStudentMemoryRetrieval(
+      () => getLatestReadyStudentMemorySnapshotByStudentId(studentId),
+      null,
+    ),
+    captureStudentMemoryRetrieval(
+      () =>
+        listRecentReadyLessonMemoryByStudentId(studentId, {
+          excludeTranscriptId: args.currentTranscriptId,
+          limit: 3,
+        }),
+      [] as LessonMemoryRecord[],
+    ),
+    captureStudentMemoryRetrieval(
+      () =>
+        listRecentReadyHomeworkMemoryByStudentId(studentId, {
+          limit: 2,
+        }),
+      [] as HomeworkMemoryRecord[],
+    ),
+  ]);
+  const snapshot = snapshotResult.value;
+  const recentLessons = recentLessonsResult.value;
+  const recentHomework = recentHomeworkResult.value;
+  const retrievalUnavailable =
+    Boolean(snapshotResult.error) ||
+    Boolean(recentLessonsResult.error) ||
+    Boolean(recentHomeworkResult.error);
 
-  if (snapshot || recentLessons.length > 0 || recentHomework.length > 0) {
+  if (snapshot || recentLessons.length > 0 || recentHomework.length > 0 || retrievalUnavailable) {
     return {
       ...formatStudentMemoryPackageContext({
         snapshot,
         recentLessons,
         recentHomework,
+        snapshotRetrievalError: snapshotResult.error,
+        recentLessonsRetrievalError: recentLessonsResult.error,
+        recentHomeworkRetrievalError: recentHomeworkResult.error,
       }),
       studentMemorySnapshotId: snapshot?.id ?? null,
       studentMemorySnapshotHash: snapshot?.contentHash ?? null,
       selectedLessonMemoryIds: recentLessons.map((entry) => entry.id),
       selectedHomeworkMemoryIds: recentHomework.map((entry) => entry.id),
       retrievalPolicyVersion: 'student-memory-v1',
-      source: 'canonical',
+      source:
+        snapshot || recentLessons.length > 0 || recentHomework.length > 0
+          ? 'canonical'
+          : 'unavailable',
     };
   }
 
@@ -107,10 +134,30 @@ export async function buildStudentMemoryPackageContext(args: {
   };
 }
 
+async function captureStudentMemoryRetrieval<T>(
+  load: () => Promise<T>,
+  fallback: T,
+): Promise<StudentMemoryRetrievalResult<T>> {
+  try {
+    return {
+      value: await load(),
+      error: null,
+    };
+  } catch (error) {
+    return {
+      value: fallback,
+      error,
+    };
+  }
+}
+
 function formatStudentMemoryPackageContext(args: {
   snapshot: StudentMemorySnapshotRecord | null;
   recentLessons: LessonMemoryRecord[];
   recentHomework: HomeworkMemoryRecord[];
+  snapshotRetrievalError?: unknown;
+  recentLessonsRetrievalError?: unknown;
+  recentHomeworkRetrievalError?: unknown;
 }): Pick<
   StudentMemoryPackageContext,
   | 'studentMemorySnapshotBlock'
@@ -119,17 +166,27 @@ function formatStudentMemoryPackageContext(args: {
   | 'unresolvedIssuesBlock'
 > {
   return {
-    studentMemorySnapshotBlock: formatStudentMemorySnapshotBlock(args.snapshot),
-    recentLessonMemoryBlock:
-      args.recentLessons.length > 0
+    studentMemorySnapshotBlock: args.snapshotRetrievalError
+      ? formatRetrievalUnavailableBlock('Student-memory snapshot')
+      : formatStudentMemorySnapshotBlock(args.snapshot),
+    recentLessonMemoryBlock: args.recentLessonsRetrievalError
+      ? formatRetrievalUnavailableBlock('Recent lesson memory')
+      : args.recentLessons.length > 0
         ? args.recentLessons.flatMap((entry) => formatLessonMemoryEntry(entry)).join('\n')
         : 'No recent lesson-memory entries available for retrieval.',
-    recentHomeworkMemoryBlock:
-      args.recentHomework.length > 0
+    recentHomeworkMemoryBlock: args.recentHomeworkRetrievalError
+      ? formatRetrievalUnavailableBlock('Recent homework memory')
+      : args.recentHomework.length > 0
         ? args.recentHomework.flatMap((entry) => formatHomeworkMemoryEntry(entry)).join('\n')
         : 'No recent homework-memory entries available for retrieval.',
-    unresolvedIssuesBlock: formatUnresolvedIssuesBlock(args.snapshot),
+    unresolvedIssuesBlock: args.snapshotRetrievalError
+      ? formatRetrievalUnavailableBlock('Unresolved issues')
+      : formatUnresolvedIssuesBlock(args.snapshot),
   };
+}
+
+function formatRetrievalUnavailableBlock(label: string): string {
+  return `${label} retrieval was unavailable while building this prompt package. Treat this memory layer as unknown, not empty. Inspect backend logs for repository error details.`;
 }
 
 function formatStudentMemorySnapshotBlock(snapshot: StudentMemorySnapshotRecord | null): string {
