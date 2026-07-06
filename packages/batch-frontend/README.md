@@ -45,9 +45,10 @@ Canonical behavior and current status live in:
 - Student-area pages prefer route-level payloads under `/students/:id/surfaces/*`, with granular student APIs retained as compatibility/fallback paths.
 - The Learning page can read `/students/:id/memory/health` for collapsed operator support details;
   manual full snapshot rebuild remains outside the frontend and CLI-only for v1.1.
-- Approved-candidate draft refresh opens a review-mediated profile draft and shows deterministic
-  structured field changes against the active editor baseline; model-generated change
-  classification is intentionally deferred.
+- Approved-candidate draft refresh opens a review-mediated profile draft and shows a standalone
+  deterministic diff table against the active editor baseline. The table uses shared
+  current/proposed headers, field-level change pills, and line-level addition/removal highlights;
+  model-generated change classification remains intentionally deferred.
 - Lesson follow-up reminders use in-app actions first; Telegram/email delivery remains outside the frontend surface for this slice.
 - Job-event SSE subscriptions should target known `jobId` and `recordingId` values; wildcard all-job streams are explicit.
 

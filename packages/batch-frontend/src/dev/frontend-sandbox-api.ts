@@ -53,6 +53,18 @@ function readRequestText(data: unknown, fallback: string): string {
   return fallback;
 }
 
+function readRequestBody(data: unknown): Record<string, unknown> {
+  if (typeof data === 'string') {
+    try {
+      const parsed = JSON.parse(data) as unknown;
+      return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
+    } catch {
+      return {};
+    }
+  }
+  return data && typeof data === 'object' ? (data as Record<string, unknown>) : {};
+}
+
 function assignmentSession(overrides: Record<string, unknown> = {}) {
   return {
     id: 'session-sandbox',
@@ -133,7 +145,7 @@ function profileContent() {
       interestsAndUsefulThemes: ['Travel', 'Films'],
       stableStrengths: ['Strong listening comprehension.'],
       persistentChallenges: ['Needs smoother transitions and article accuracy.'],
-      studyPreferences: ['Prefers concise, practical homework.'],
+      studyPreferences: [],
       durableConstraints: [],
       teacherNotes: 'Keep examples grounded in real workplace situations.',
     },
@@ -166,8 +178,8 @@ function profileRevisionSummary() {
     contentHash: 'profile-hash-sandbox',
     source: 'update',
     status: 'active',
-    versionNumber: 1,
-    versionLabel: 'v1',
+    versionNumber: 5,
+    versionLabel: 'v5',
     activatedAt: now,
     deprecatedAt: null,
     createdAt: now,
@@ -176,10 +188,79 @@ function profileRevisionSummary() {
   };
 }
 
+function profileRevisionHistorySummary(versionNumber: number) {
+  return {
+    id: `profile-revision-sandbox-v${versionNumber}`,
+    profileId: 'profiles/alex.md',
+    contentHash: `profile-hash-sandbox-v${versionNumber}`,
+    source: 'update',
+    status: 'deprecated',
+    versionNumber,
+    versionLabel: `v${versionNumber}`,
+    activatedAt: null,
+    deprecatedAt: now,
+    createdAt: now,
+    createdBy: 'sandbox-tutor',
+    restoredFromRevisionId: null,
+  };
+}
+
+function profileDraftReviewStructuredContent() {
+  return {
+    schemaVersion: 'foundational_profile_v1',
+    overallLevel: 'B1',
+    primaryGoals: [
+      'Lead project updates clearly.',
+      'Speak with more confidence when explaining changes to clients.',
+    ],
+    communicationContexts: [
+      'Weekly team syncs.',
+      'Client check-ins.',
+      'Short project-status updates with product and client teams.',
+    ],
+    interestsAndUsefulThemes: ['Travel', 'Films'],
+    stableStrengths: ['Strong listening comprehension.'],
+    persistentChallenges: ['Needs smoother transitions and article accuracy.'],
+    studyPreferences: [
+      'Prefers concise, practical homework.',
+      'Prefers short practical review loops.',
+    ],
+    durableConstraints: [],
+    teacherNotes:
+      'Keep examples grounded in real workplace situations and include one short role-play loop.',
+  };
+}
+
+function profileDraftReviewRevision(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'profile-revision-sandbox-draft',
+    profileId: 'profiles/alex.md',
+    contentHash: 'profile-hash-sandbox-draft',
+    source: 'profile_revision_refresh',
+    status: 'draft',
+    versionNumber: 6,
+    versionLabel: 'v6',
+    activatedAt: null,
+    deprecatedAt: null,
+    createdAt: now,
+    createdBy: 'sandbox-tutor',
+    restoredFromRevisionId: null,
+    content: '# Foundational Profile\n\nSandbox profile draft refreshed from approved candidates.',
+    structuredContent: profileDraftReviewStructuredContent(),
+    ...overrides,
+  };
+}
+
 function profileRevisionList() {
   return {
-    items: [profileRevisionSummary()],
-    total: 1,
+    items: [
+      profileRevisionSummary(),
+      profileRevisionHistorySummary(4),
+      profileRevisionHistorySummary(3),
+      profileRevisionHistorySummary(2),
+      profileRevisionHistorySummary(1),
+    ],
+    total: 5,
     limit: 25,
     offset: 0,
     order: 'desc',
@@ -923,6 +1004,73 @@ export function createFrontendSandboxApiAdapter(): AxiosAdapter {
 
     if (method === 'get' && path === '/profiles/profiles%2Falex.md') {
       return responseFor(config, profileContent());
+    }
+
+    if (method === 'get' && path === '/profiles/revisions') {
+      return responseFor(config, profileRevisionList());
+    }
+
+    if (method === 'get' && path === '/profiles/revisions/profile-revision-sandbox') {
+      return responseFor(config, {
+        ...profileRevisionSummary(),
+        content: profileContent().content,
+        structuredContent: profileContent().structuredContent,
+      });
+    }
+
+    if (method === 'get' && path === '/profiles/revisions/profile-revision-sandbox-draft') {
+      return responseFor(config, profileDraftReviewRevision());
+    }
+
+    if (
+      method === 'post' &&
+      path === '/students/student-alex/profile-drafts/refresh-from-approved-candidates'
+    ) {
+      const body = readRequestBody(config.data);
+      const candidateIds = Array.isArray(body.candidateIds)
+        ? body.candidateIds.filter((id): id is string => typeof id === 'string')
+        : ['candidate-sandbox-study-preference'];
+      const includedCandidateIds =
+        candidateIds.length > 0 ? candidateIds : ['candidate-sandbox-study-preference'];
+
+      return responseFor(config, {
+        draftRevisionId: 'profile-revision-sandbox-draft',
+        profileId: 'profiles/alex.md',
+        includedCandidateIds,
+        excludedCandidateIds: [],
+        contentHash: 'profile-hash-sandbox-draft',
+        draftRevision: profileDraftReviewRevision(),
+      });
+    }
+
+    if (method === 'post' && path === '/profiles/revisions') {
+      const body = readRequestBody(config.data);
+      return responseFor(
+        config,
+        profileDraftReviewRevision({
+          id: 'profile-revision-sandbox-saved-draft',
+          contentHash: 'profile-hash-sandbox-saved-draft',
+          source: 'update',
+          structuredContent:
+            body.structuredContent && typeof body.structuredContent === 'object'
+              ? body.structuredContent
+              : profileDraftReviewStructuredContent(),
+        }),
+      );
+    }
+
+    if (
+      method === 'post' &&
+      (path === '/profiles/revisions/profile-revision-sandbox-draft/activate' ||
+        path === '/profiles/revisions/profile-revision-sandbox-saved-draft/activate')
+    ) {
+      return responseFor(config, {
+        ...profileContent(),
+        currentRevisionId: path.includes('saved-draft')
+          ? 'profile-revision-sandbox-saved-draft'
+          : 'profile-revision-sandbox-draft',
+        structuredContent: profileDraftReviewStructuredContent(),
+      });
     }
 
     if (method === 'get' && path === '/students/student-alex/surfaces/schedule-billing') {

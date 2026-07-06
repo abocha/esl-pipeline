@@ -53,8 +53,10 @@ Implemented v1.1 boundaries:
    no v1.1 schema or contract migration is required.
 7. Prompt packages distinguish unavailable canonical memory retrieval from legitimately absent
    memory by carrying explicit unavailable text in the packaged memory block.
-8. Profile draft refresh from approved candidates opens a draft with a deterministic field-level
-   `Profile Draft Changes` view on the Learning page.
+8. Profile draft refresh from approved candidates opens a draft with a standalone deterministic
+   `Profile Draft Changes` table on the Learning page. The table uses field/current/proposed
+   columns, line-level addition/removal highlights, and a capped profile-version history with
+   `View all versions` for older revisions.
 
 Known Closed Alpha follow-ups:
 
