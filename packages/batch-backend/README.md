@@ -57,7 +57,9 @@ Useful indexes:
   defer the same BullMQ job/provider/model until its safe timestamp; they do not consume a generic
   failure retry or silently fall back to another provider.
 - Prompt catalog runtime is DB-canonical.
-- Prompt-package lineage is the canonical assignment-level student-memory provenance surface.
+- Prompt-package lineage is the canonical assignment-level student-memory provenance surface. When
+  canonical memory lookup is unavailable, prompt packages carry explicit unavailable memory text
+  instead of treating the layer as empty.
 - Lesson-linked homework lineage is nullable and explicit across assignment sessions, prompt packages, drafts, jobs, and homework-memory entries; schedule surfaces summarize that state for teacher follow-ups.
 - Student-memory snapshot refresh is incremental and budget-guarded for normal lesson/homework
   triggers; replay/backfill is source-truth driven and version 1 repair uses regenerate workflows

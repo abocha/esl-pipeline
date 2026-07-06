@@ -21,6 +21,14 @@ export interface CreateStudentFormState extends FoundationalProfileFormState {
   student: string;
 }
 
+export interface ProfileDraftDiffItem {
+  key: keyof FoundationalProfileFormState;
+  label: string;
+  before: string;
+  after: string;
+  changeType: 'added' | 'removed' | 'changed';
+}
+
 export const INITIAL_CREATE_STUDENT_FORM: CreateStudentFormState = {
   student: '',
   overallLevel: '',
@@ -47,6 +55,30 @@ export const INITIAL_FOUNDATIONAL_PROFILE_FORM: FoundationalProfileFormState = {
 };
 
 export const CREATE_STUDENT_NAME_REQUIRED_MESSAGE = 'Student name is required.';
+
+const PROFILE_FORM_FIELD_LABELS: Record<keyof FoundationalProfileFormState, string> = {
+  overallLevel: 'Current Level',
+  primaryGoals: 'Primary Goals',
+  communicationContexts: 'Communication Contexts',
+  interestsAndUsefulThemes: 'Interests & Useful Themes',
+  stableStrengths: 'Stable Strengths',
+  persistentChallenges: 'Persistent Challenges',
+  studyPreferences: 'Study Preferences',
+  durableConstraints: 'Durable Constraints',
+  teacherNotes: 'Teacher Notes',
+};
+
+const PROFILE_FORM_DIFF_KEYS: (keyof FoundationalProfileFormState)[] = [
+  'overallLevel',
+  'primaryGoals',
+  'communicationContexts',
+  'interestsAndUsefulThemes',
+  'stableStrengths',
+  'persistentChallenges',
+  'studyPreferences',
+  'durableConstraints',
+  'teacherNotes',
+];
 
 export interface StarterProfileBuildResult {
   starterProfile?: StarterProfileInput;
@@ -137,6 +169,39 @@ export function foundationalProfileFormToStructuredContent(
     durableConstraints: splitProfileListField(form.durableConstraints),
     teacherNotes: teacherNotes.length > 0 ? teacherNotes : null,
   };
+}
+
+export function buildProfileDraftDiff(args: {
+  base: FoundationalProfileFormState;
+  draft: FoundationalProfileFormState;
+}): ProfileDraftDiffItem[] {
+  const diff: ProfileDraftDiffItem[] = [];
+
+  for (const key of PROFILE_FORM_DIFF_KEYS) {
+    const before = normalizeProfileDiffValue(args.base[key]);
+    const after = normalizeProfileDiffValue(args.draft[key]);
+    if (before === after) {
+      continue;
+    }
+
+    diff.push({
+      key,
+      label: PROFILE_FORM_FIELD_LABELS[key],
+      before,
+      after,
+      changeType: before ? (after ? 'changed' : 'removed') : 'added',
+    });
+  }
+
+  return diff;
+}
+
+function normalizeProfileDiffValue(value: string): string {
+  return value
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .join('\n');
 }
 
 export function isPendingCandidate(candidate: StudentProfileCandidate): boolean {

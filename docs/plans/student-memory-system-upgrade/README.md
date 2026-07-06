@@ -9,8 +9,7 @@
 - Review Cadence: after student-memory implementation PRs.
 - Status: `roadmap`.
 - Exit Trigger: archive after the canonical student-memory model is shipped and represented in SSOT, prompt/runtime docs, and relevant package READMEs.
-- Current Focus: PR-ready validation for completed v1.1 Phases 0-4; Phase 5 is Closed Alpha
-  follow-up polish.
+- Current Focus: Gate C reliability hardening for supervised 3-5 tutor Closed Alpha.
 
 ## Summary
 
@@ -52,14 +51,23 @@ Implemented v1.1 boundaries:
 5. Manual full rebuild remains CLI-only during Gate B through the snapshot replay/backfill tool.
 6. Strategy, coverage, budget, and candidate-refresh metadata remain in typed `generation_notes`;
    no v1.1 schema or contract migration is required.
+7. Prompt packages distinguish unavailable canonical memory retrieval from legitimately absent
+   memory by carrying explicit unavailable text in the packaged memory block.
+8. Profile draft refresh from approved candidates opens a draft with a deterministic field-level
+   `Profile Draft Changes` view on the Learning page.
 
 Known Closed Alpha follow-ups:
 
-1. Add exact DB count helpers for memory health if capped counts become insufficient.
-2. Move support details to a future internal route only if the Learning page becomes noisy.
-3. Consider a guarded operator rebuild action no earlier than Gate C; keep normal tutor-facing
+1. Add the full lifecycle integration flight-recorder test if prompt-package provenance remains a
+   support risk after the first Gate C pass.
+2. Add the first small pedagogical fixture harness if low-value-but-valid output becomes the highest
+   remaining trust risk.
+3. Add exact DB count helpers for memory health if capped counts become insufficient.
+4. Move support details to a future internal route only if the Learning page becomes noisy.
+5. Consider a guarded operator rebuild action no earlier than Gate C; keep normal tutor-facing
    rebuild controls out of scope.
-4. Map the reliability review into release-scheduled chunks before implementation.
+6. Defer structured profile-change classification until the deterministic diff view proves
+   insufficient.
 
 ## Locked Decisions
 

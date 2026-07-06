@@ -8,6 +8,8 @@
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: before student-memory reliability implementation chunks.
 - Status: `draft`.
+- Exit Trigger: fold completed items into the student-memory roadmap after the Gate C reliability PR lands.
+- Current Focus: Gate C reliability review, implemented fixes, and post-Gate-C deferrals.
 
 ## Purpose
 
@@ -231,12 +233,12 @@ Required reliability evidence before considering this stable:
 
 Mapped work:
 
-| Work item | Release priority | Why here |
-| --- | --- | --- |
-| Brittle-parts review | P1 | Finds trust gaps before adding more mechanisms. |
-| Source-count verification and support-copy clarity | P2 | Resolves an observed confusion without changing policy prematurely. |
-| Lifecycle integration test | P1 | Gives a flight recorder for the memory path before broader tutor use. |
-| Candidate-promotion lifecycle fix | P1 | Prevents misleading review state around promoted memory facts. |
+| Work item                                          | Release priority | Why here                                                              |
+| -------------------------------------------------- | ---------------- | --------------------------------------------------------------------- |
+| Brittle-parts review                               | P1               | Finds trust gaps before adding more mechanisms.                       |
+| Source-count verification and support-copy clarity | P2               | Resolves an observed confusion without changing policy prematurely.   |
+| Lifecycle integration test                         | P1               | Gives a flight recorder for the memory path before broader tutor use. |
+| Candidate-promotion lifecycle fix                  | P1               | Prevents misleading review state around promoted memory facts.        |
 
 ### Gate C: Closed Alpha, 3-5 Tutors
 
@@ -252,11 +254,11 @@ Gate C preparation work:
 
 Mapped work:
 
-| Work item | Release priority | Why here |
-| --- | --- | --- |
-| Profile draft diff view | P1 if draft refresh is used during tutor sessions; otherwise P2 | Directly reduces the "broken telephone" risk and manual comparison burden. |
-| Pedagogical fixture harness | P2 | Starts quality evidence without turning subjective pedagogy into a large subsystem. |
-| Health/support details polish | Evidence-led P2 | Improve only the confusing parts seen during support sessions. |
+| Work item                     | Release priority                                                | Why here                                                                            |
+| ----------------------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Profile draft diff view       | P1 if draft refresh is used during tutor sessions; otherwise P2 | Directly reduces the "broken telephone" risk and manual comparison burden.          |
+| Pedagogical fixture harness   | P2                                                              | Starts quality evidence without turning subjective pedagogy into a large subsystem. |
+| Health/support details polish | Evidence-led P2                                                 | Improve only the confusing parts seen during support sessions.                      |
 
 Gate C boundary:
 
@@ -305,3 +307,42 @@ Defer until here unless evidence forces earlier action:
    approach is not enough.
 5. Defer all Closed Alpha follow-up and Closed Beta work until the 3-5 tutor alpha gate is actually
    stable.
+
+## 2026-07-06 Gate C Reliability Pass
+
+Findings-first review outcome:
+
+1. Confirmed bug - prompt-package memory packaging treated repository failures as missing memory.
+   `buildStudentMemoryPackageContext` caught snapshot, lesson-memory, and homework-memory lookup
+   errors and returned the same empty blocks used for a legitimately empty student. That made an
+   assignment prompt package look normal while its memory layer was unknown.
+2. Confirmed Gate C trust gap - profile draft refresh already produced review-mediated draft
+   revisions, but the Learning page did not show what changed from the active profile when a draft
+   was generated from approved candidates. Operators had to manually compare the editor against the
+   prior active revision, which is exactly the profile-fact drift risk called out above.
+3. Reviewed and not changed - candidate promotion lifecycle already has an explicit promoted state
+   through linked draft revisions and activation-time promotion. Approved candidates remaining
+   approved while a draft is still unactivated is current product behavior, not a bug fixed in this
+   pass.
+4. Watch-list risk - the full deterministic lifecycle integration test remains valuable, but the
+   smallest Gate C fixes above reduced immediate support risk without adding a new subsystem.
+
+Implemented Gate C fixes:
+
+1. Prompt-package memory retrieval now distinguishes unavailable canonical memory from absent
+   memory. When a lookup fails, the prompt package receives an explicit unavailable block and keeps
+   the `student-memory-v1` retrieval policy marker so `GET /prompt-packages/:id` evidence is
+   inspectable.
+2. The Learning page now shows a deterministic `Profile Draft Changes` panel after approved
+   candidates generate a draft revision. The first pass compares existing structured profile fields
+   against the proposed draft and labels additions, removals, and changes without model-generated
+   classification.
+
+Deferred after this pass:
+
+1. Full lifecycle integration flight-recorder test from memory artifacts through prompt packaging.
+2. Pedagogical fixture harness for low-value-but-valid output.
+3. Structured profile-change ledger with `new fact`, `refined wording`, `contradicted fact`, and
+   `unchanged` classifications.
+4. Exact DB count helpers, snapshot/profile diff history, and guarded operator rebuild actions
+   unless Closed Alpha evidence shows they are needed.
