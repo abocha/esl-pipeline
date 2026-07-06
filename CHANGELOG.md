@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [9.5.0] - 2026-07-06
+
+### Changed
+
+- Automated release from PR #122: feat(student-memory): harden Gate C reliability evidence (https://github.com/abocha/esl-pipeline/pull/122)
+
 ## [9.4.3] - 2026-07-05
 
 ### Changed
