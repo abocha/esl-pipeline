@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import {
+  copyStudentProfileCandidateDraftRevisionLinks,
   getStudentProfileCandidateById,
   insertStudentProfileCandidate,
   linkStudentProfileCandidatesToDraftRevision,
@@ -376,6 +377,69 @@ describeIfPg('domain/student-profile-candidate-repository', () => {
       id: candidate.id,
       status: 'promoted',
       promotedRevisionId: revisionId,
+    });
+  });
+
+  it('copies draft candidate links to a manually edited draft revision', async () => {
+    const studentId = randomUUID();
+    const profileId = randomUUID();
+    const generatedRevisionId = randomUUID();
+    const editedRevisionId = randomUUID();
+
+    await withPgClient(async (client) => {
+      await client.query(
+        `INSERT INTO students (id, student, created_at, updated_at) VALUES ($1, 'Ari', NOW(), NOW())`,
+        [studentId],
+      );
+      await client.query(
+        `INSERT INTO profiles (id, label, active_revision_id, created_at, updated_at)
+         VALUES ($1, 'Ari', NULL, NOW(), NOW())`,
+        [profileId],
+      );
+      await client.query(
+        `INSERT INTO profile_revisions (
+           id, profile_id, content, content_hash, source, status, version_number, version_label,
+           activated_at, deprecated_at, created_at, created_by, restored_from_revision_id
+         )
+         VALUES
+           ($1, $3, 'Generated draft', 'hash-generated', 'profile_revision_refresh', 'draft', 1, 'v1', NULL, NULL, NOW(), NULL, NULL),
+           ($2, $3, 'Edited draft', 'hash-edited', 'update', 'draft', 2, 'v2', NULL, NULL, NOW(), NULL, NULL)`,
+        [generatedRevisionId, editedRevisionId, profileId],
+      );
+    });
+
+    const candidate = await insertStudentProfileCandidate({
+      studentId,
+      targetSection: 'learning_preferences_study_habits',
+      candidateKey: 'learning_preferences_study_habits:prefers clear review blocks',
+      fact: 'Prefers clear review blocks.',
+      category: 'study_preference',
+      authority: 'teacher_confirmed',
+      confidence: 'high',
+      reviewNeeded: false,
+      sourceLessonMemoryIds: [],
+      evidence: [],
+      status: 'approved',
+      reviewState: 'approved',
+    });
+
+    await linkStudentProfileCandidatesToDraftRevision({
+      studentId,
+      candidateIds: [candidate.id],
+      draftRevisionId: generatedRevisionId,
+    });
+    await copyStudentProfileCandidateDraftRevisionLinks({
+      sourceRevisionId: generatedRevisionId,
+      targetRevisionId: editedRevisionId,
+    });
+
+    await markStudentProfileCandidatesPromotedByRevision(editedRevisionId);
+    const promoted = await getStudentProfileCandidateById(studentId, candidate.id);
+
+    expect(promoted).toMatchObject({
+      id: candidate.id,
+      status: 'promoted',
+      promotedRevisionId: editedRevisionId,
     });
   });
 });
