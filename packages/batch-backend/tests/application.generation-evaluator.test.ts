@@ -116,6 +116,7 @@ describe('application/generation-evaluator', () => {
       (candidate) => candidate.id === 'lesson-memory-v1',
     )!;
     const result = validateStructuredEvalOutput(fixture, {
+      lessonTitle: 'Japan Travel Goals',
       lessonSummary: 'The learner wants to visit Japan.',
       topicsDiscussed: [],
       mistakePatterns: [],

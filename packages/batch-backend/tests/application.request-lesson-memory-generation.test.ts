@@ -53,4 +53,32 @@ describe('application/request-lesson-memory-generation', () => {
     expect(ensurePendingMock).toHaveBeenCalled();
     expect(enqueueMock).toHaveBeenCalled();
   });
+
+  it('records teacher-confirmed transcript requests and carries the linked lesson into the queue', async () => {
+    await requestLessonMemoryGeneration({
+      config: { generation: {} } as never,
+      params: {
+        studentId: 'student-1',
+        transcriptId: 'transcript-1',
+        recordingId: 'recording-1',
+        lessonId: 'lesson-1',
+        trigger: 'teacher-confirmed-transcript',
+      },
+    });
+
+    expect(ensurePendingMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        generationNotes: expect.objectContaining({
+          trigger: 'teacher-confirmed-transcript',
+          lessonId: 'lesson-1',
+        }),
+      }),
+    );
+    expect(enqueueMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        lessonId: 'lesson-1',
+      }),
+      { jobId: 'lesson-memory:transcript-1' },
+    );
+  });
 });

@@ -7,6 +7,8 @@ const sandboxFirstProfileId = 'profiles/cora.md';
 const sandboxFirstProfileRecordingId = 'recording-cora';
 const sandboxFirstProfileTranscriptId = 'transcript-cora';
 const sandboxFirstProfileRevisionId = 'profile-revision-cora-first-draft';
+let sandboxFirstProfileLessonMemoryConfirmed = false;
+let sandboxFirstProfileLessonMemoryHealthPolls = 0;
 
 function responseFor(config: InternalAxiosRequestConfig, data: unknown): AxiosResponse {
   return {
@@ -479,33 +481,45 @@ function firstProfileMemoryOverview() {
 }
 
 function firstProfileMemoryHealth() {
+  const ready = sandboxFirstProfileLessonMemoryConfirmed
+    ? sandboxFirstProfileLessonMemoryHealthPolls > 0
+    : false;
+  if (sandboxFirstProfileLessonMemoryConfirmed) {
+    sandboxFirstProfileLessonMemoryHealthPolls += 1;
+  }
   return {
     studentId: sandboxFirstProfileStudentId,
-    latestSnapshot: {
-      id: null,
-      status: null,
-      generatedAt: null,
-      strategy: null,
-      trigger: 'lesson-memory-ready',
-      triggerSourceKind: 'lesson_memory',
-      triggerSourceEntryId: 'lesson-memory-cora',
-      parentSnapshotId: null,
-      inputTokenEstimate: 6200,
-      outputTokenEstimate: null,
-      promptByteLength: 21000,
-      includedLessonMemoryCount: 1,
-      includedHomeworkMemoryCount: 0,
-      coveredLessonMemoryCount: 1,
-      coveredHomeworkMemoryCount: 0,
-      contentHash: null,
-      materialChange: true,
-      budgetDecision: { action: 'allow' },
-      candidateRefresh: null,
-    },
+    latestSnapshot: ready
+      ? {
+          id: null,
+          status: null,
+          generatedAt: null,
+          strategy: null,
+          trigger: 'lesson-memory-ready',
+          triggerSourceKind: 'lesson_memory',
+          triggerSourceEntryId: 'lesson-memory-cora',
+          parentSnapshotId: null,
+          inputTokenEstimate: 6200,
+          outputTokenEstimate: null,
+          promptByteLength: 21000,
+          includedLessonMemoryCount: 1,
+          includedHomeworkMemoryCount: 0,
+          coveredLessonMemoryCount: 1,
+          coveredHomeworkMemoryCount: 0,
+          contentHash: null,
+          materialChange: true,
+          budgetDecision: { action: 'allow' },
+          candidateRefresh: null,
+        }
+      : null,
     memoryCounts: {
       lesson: {
-        ready: { count: 1, capped: false, limit: 500 },
-        pending: { count: 0, capped: false, limit: 500 },
+        ready: { count: ready ? 1 : 0, capped: false, limit: 500 },
+        pending: {
+          count: sandboxFirstProfileLessonMemoryConfirmed && !ready ? 1 : 0,
+          capped: false,
+          limit: 500,
+        },
         failed: { count: 0, capped: false, limit: 500 },
       },
       homework: {
@@ -985,6 +999,8 @@ function jobProvenance() {
 }
 
 export function createFrontendSandboxApiAdapter(): AxiosAdapter {
+  sandboxFirstProfileLessonMemoryConfirmed = false;
+  sandboxFirstProfileLessonMemoryHealthPolls = 0;
   return async (config: InternalAxiosRequestConfig): Promise<AxiosResponse> => {
     const method = (config.method ?? 'get').toLowerCase();
     const path = normalizePath(config.url);
@@ -1067,6 +1083,19 @@ export function createFrontendSandboxApiAdapter(): AxiosAdapter {
 
     if (method === 'get' && path === `/students/${sandboxFirstProfileStudentId}/memory/health`) {
       return responseFor(config, firstProfileMemoryHealth());
+    }
+
+    if (
+      method === 'post' &&
+      path === `/students/${sandboxFirstProfileStudentId}/lesson-memory/requests`
+    ) {
+      sandboxFirstProfileLessonMemoryConfirmed = true;
+      sandboxFirstProfileLessonMemoryHealthPolls = 0;
+      return responseFor(config, {
+        outcome: 'created',
+        lessonMemoryEntryId: 'lesson-memory-cora',
+        lessonTitle: null,
+      });
     }
 
     if (method === 'get' && path === '/config/prompts') {

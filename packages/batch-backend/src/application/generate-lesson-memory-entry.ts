@@ -72,6 +72,7 @@ export async function generateLessonMemoryEntry(args: {
       providerRequestId: extraction.providerRequestId ?? null,
       usage: extraction.usage ?? null,
     },
+    lessonTitle: extraction.content.lessonTitle ?? null,
     lessonSummary: extraction.content.lessonSummary,
     topicsDiscussed: extraction.content.topicsDiscussed,
     mistakePatterns: extraction.content.mistakePatterns,

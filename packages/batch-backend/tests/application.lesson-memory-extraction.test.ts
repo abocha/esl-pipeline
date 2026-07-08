@@ -20,6 +20,7 @@ function createGenerationConfig(): BatchBackendConfig['generation'] {
 
 function createLessonMemoryContent() {
   return {
+    lessonTitle: 'Travel Articles Practice',
     lessonSummary: 'The student practiced travel vocabulary and article usage.',
     topicsDiscussed: [{ topic: 'Travel plans', note: 'Talked about a summer trip to Japan.' }],
     mistakePatterns: [
@@ -97,6 +98,7 @@ describe('application/lesson-memory-content-schema', () => {
   it('validates canonical lesson-memory content', () => {
     const parsed = validateLessonMemoryContent(createLessonMemoryContent());
     expect(parsed.lessonSummary).toContain('travel vocabulary');
+    expect(parsed.lessonTitle).toBe('Travel Articles Practice');
   });
 
   it('rejects missing required top-level fields', () => {

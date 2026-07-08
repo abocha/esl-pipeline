@@ -225,6 +225,52 @@ export async function updateRecordingStatus(params: {
   return mapRowToRecording(row);
 }
 
+export async function updateRecordingStudentId(params: {
+  id: string;
+  studentId: string | null;
+}): Promise<RecordingRecord | null> {
+  const row = await withPgClient(async (client: PoolClient) => {
+    const result = await client.query(
+      `
+      UPDATE recordings
+      SET
+        student_id = $2,
+        updated_at = now()
+      WHERE id = $1
+      RETURNING
+        id,
+        source,
+        student_id,
+        source_path,
+        storage_uri,
+        sha256,
+        bytes,
+        duration_sec,
+        channels,
+        status,
+        error,
+        created_at,
+        updated_at
+      `,
+      [params.id, params.studentId],
+    );
+    return result.rows[0];
+  });
+
+  if (!row) {
+    logger.warn('Recording student binding update skipped; record missing', {
+      recordingId: params.id,
+    });
+    return null;
+  }
+
+  logger.info('Recording student binding updated', {
+    recordingId: params.id,
+    studentId: row.student_id ?? null,
+  });
+  return mapRowToRecording(row);
+}
+
 export interface RecordingListOptions {
   statuses?: RecordingStatus[];
   sources?: RecordingSource[];

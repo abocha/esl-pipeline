@@ -15,8 +15,13 @@ export interface RequestLessonMemoryGenerationParams {
   studentId: string | null;
   transcriptId: string;
   recordingId: string;
+  lessonId?: string | null;
   promptPackageId?: string | null;
-  trigger: 'prompt-package-created' | 'draft-generation-fallback' | 'replay';
+  trigger:
+    | 'prompt-package-created'
+    | 'draft-generation-fallback'
+    | 'teacher-confirmed-transcript'
+    | 'replay';
   providerOverride?: GenerationProvider | null;
   modelOverride?: string | null;
 }
@@ -84,6 +89,7 @@ export async function requestLessonMemoryGeneration(args: {
     generationNotes: {
       trigger: args.params.trigger,
       promptPackageId: args.params.promptPackageId ?? null,
+      lessonId: args.params.lessonId ?? null,
       requestedAt: requestedAt.toISOString(),
     },
   });
@@ -98,6 +104,7 @@ export async function requestLessonMemoryGeneration(args: {
       transcriptId: args.params.transcriptId,
       recordingId: args.params.recordingId,
       studentId: args.params.studentId,
+      lessonId: args.params.lessonId ?? null,
       promptPackageId: args.params.promptPackageId ?? null,
       pendingEntryId: pending.entry.id,
       provider: candidate.provider,
