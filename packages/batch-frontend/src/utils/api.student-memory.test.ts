@@ -13,6 +13,7 @@ import {
   listStudentLessonMemoryEntries,
   listStudentMemorySnapshots,
   listStudentProfileCandidates,
+  requestLessonMemoryFromTranscript,
   restoreStudentProfile,
 } from './api';
 import apiClient, { buildApiProxyPath, handleApiError, isAuthError } from './api-client';
@@ -147,6 +148,29 @@ describe('utils/api student memory fetchers', () => {
     expect(buildApiProxyPath).toHaveBeenCalledWith(
       '/students/student-1/lesson-memory?status=ready%2Cfailed&limit=10&offset=5&order=asc',
     );
+  });
+
+  it('posts confirmed transcript lesson-memory requests', async () => {
+    const response = {
+      outcome: 'created',
+      lessonMemoryEntryId: 'lesson-memory-1',
+      lessonTitle: null,
+    };
+    vi.mocked(apiClient.post).mockResolvedValueOnce({ data: response } as never);
+
+    const result = await requestLessonMemoryFromTranscript('student-1', {
+      recordingId: 'recording-1',
+      transcriptId: 'transcript-1',
+      lessonId: 'lesson-1',
+    });
+
+    expect(buildApiProxyPath).toHaveBeenCalledWith('/students/student-1/lesson-memory/requests');
+    expect(apiClient.post).toHaveBeenCalledWith('/api/students/student-1/lesson-memory/requests', {
+      recordingId: 'recording-1',
+      transcriptId: 'transcript-1',
+      lessonId: 'lesson-1',
+    });
+    expect(result).toEqual(response);
   });
 
   it('builds student homework-memory list URLs with status filters', async () => {

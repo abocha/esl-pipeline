@@ -170,8 +170,12 @@ export function registerPromptEditorTests() {
       await screen.findByDisplayValue('Student transcript text');
 
       await screen.findByText(/No structured Learning page context is available yet\./i);
-      expect(screen.getByRole('status').textContent).toMatch(/Building lesson memory/i);
-      expect(screen.getByText(/\(1-2 minutes\)/i)).toBeTruthy();
+      expect(
+        screen.getByRole('button', {
+          name: /Use this transcript for Alex's learner context/i,
+        }),
+      ).toBeTruthy();
+      expect(screen.queryByRole('status')).toBeNull();
       expect(
         screen.queryByRole('button', { name: /Populate first profile from lesson/i }),
       ).toBeNull();
@@ -220,6 +224,18 @@ export function registerPromptEditorTests() {
       );
       await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
       await screen.findByDisplayValue('Student transcript text');
+      await user.click(
+        screen.getByRole('button', {
+          name: /Use this transcript for Alex's learner context/i,
+        }),
+      );
+      await waitFor(() => {
+        expect(api.requestLessonMemoryFromTranscript).toHaveBeenCalledWith('student-alex', {
+          recordingId: 'rec-1',
+          transcriptId: 'tx-1',
+          lessonId: null,
+        });
+      });
 
       const populateButton = await screen.findByRole('button', {
         name: /Populate first profile from lesson/i,

@@ -27,6 +27,7 @@ export function buildLessonMemoryEnvelope(params: BuildLessonMemoryPromptParams)
       'Prefer omission over low-confidence claims.',
       'Every fact, mistake, or pronunciation evidence item must cite a sourceId from the source manifest and preserve a short excerpt.',
       'Focus on topics discussed, mistakes, grammar, vocabulary, pronunciation, student facts, progress signals, and useful follow-up recommendations.',
+      'Set lessonTitle to a concise 3-7 word lesson name grounded in the transcript; do not invent names or include sensitive details. Use null when the evidence is too weak.',
     ].join('\n'),
     sources: [
       {
@@ -83,6 +84,7 @@ export function buildLessonMemoryPrompt(params: BuildLessonMemoryPromptParams): 
   sections.push(
     '',
     'Focus on topics discussed, mistakes, grammar, vocabulary, pronunciation, student facts, progress signals, and useful follow-up recommendations.',
+    'Set lessonTitle to a concise 3-7 word lesson name grounded in the transcript; do not invent names or include sensitive details. Use null when the evidence is too weak.',
   );
 
   return sections.join('\n');

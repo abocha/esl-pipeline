@@ -158,6 +158,7 @@ export async function generateDraft(
           studentId: promptPackage.studentId,
           transcriptId: promptPackage.transcriptId,
           recordingId: promptPackage.recordingId,
+          lessonId: promptPackage.lessonId ?? null,
           promptPackageId: promptPackage.id,
           trigger: 'draft-generation-fallback',
         },

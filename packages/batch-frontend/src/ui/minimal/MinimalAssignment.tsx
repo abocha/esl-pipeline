@@ -22,6 +22,7 @@ import {
   getStudentMemoryHealth,
   getStudentScheduleBillingSurface,
   populateFirstProfileFromLesson,
+  requestLessonMemoryFromTranscript,
   subscribeToJobEvents,
   updateAssignmentSession,
 } from '../../utils/api';
@@ -248,8 +249,14 @@ export const MinimalAssignment: React.FC = () => {
     draftRevisionId: string;
     structuredContent: FoundationalProfile | null;
   } | null>(null);
+  const [firstProfileLessonMemoryConfirmation, setFirstProfileLessonMemoryConfirmation] = useState<{
+    studentId: string;
+    recordingId: string;
+    transcriptId: string;
+    transcriptUpdatedAt: string | null;
+  } | null>(null);
   const [firstProfileAssistBusy, setFirstProfileAssistBusy] = useState<
-    'drafting' | 'approving' | null
+    'confirming' | 'drafting' | 'approving' | null
   >(null);
   const [firstProfileAssistApproved, setFirstProfileAssistApproved] = useState(false);
   const [firstProfileAssistError, setFirstProfileAssistError] = useState<string | null>(null);
@@ -1069,9 +1076,48 @@ export const MinimalAssignment: React.FC = () => {
   const firstProfileAssistVisible = Boolean(
     source.selectedStudentId && transcriptReady && !context.selectedProfileId,
   );
+  const firstProfileLessonMemoryKey = useMemo(() => {
+    const studentId = source.selectedStudentId;
+    const recordingId = source.recording?.recordingId ?? '';
+    const transcriptId = source.transcript?.transcriptId ?? '';
+    if (!studentId || !recordingId || !transcriptId) {
+      return null;
+    }
+    return {
+      studentId,
+      recordingId,
+      transcriptId,
+      transcriptUpdatedAt: source.transcript?.updatedAt ?? null,
+    };
+  }, [
+    source.recording?.recordingId,
+    source.selectedStudentId,
+    source.transcript?.transcriptId,
+    source.transcript?.updatedAt,
+  ]);
+  const firstProfileLessonMemoryConfirmed = Boolean(
+    firstProfileLessonMemoryKey &&
+      firstProfileLessonMemoryConfirmation &&
+      firstProfileLessonMemoryConfirmation.studentId === firstProfileLessonMemoryKey.studentId &&
+      firstProfileLessonMemoryConfirmation.recordingId ===
+        firstProfileLessonMemoryKey.recordingId &&
+      firstProfileLessonMemoryConfirmation.transcriptId ===
+        firstProfileLessonMemoryKey.transcriptId &&
+      firstProfileLessonMemoryConfirmation.transcriptUpdatedAt ===
+        firstProfileLessonMemoryKey.transcriptUpdatedAt &&
+      !source.transcriptDirty,
+  );
+  const firstProfileLessonMemoryNeedsUpdate = Boolean(
+    firstProfileLessonMemoryConfirmation && !firstProfileLessonMemoryConfirmed,
+  );
 
   const refreshFirstProfileLessonMemory = useCallback(async () => {
-    if (!source.selectedStudentId || !transcriptReady || context.selectedProfileId) {
+    if (
+      !source.selectedStudentId ||
+      !transcriptReady ||
+      context.selectedProfileId ||
+      !firstProfileLessonMemoryConfirmed
+    ) {
       return null;
     }
 
@@ -1100,13 +1146,23 @@ export const MinimalAssignment: React.FC = () => {
       setFirstProfileLessonMemoryStatus('building');
       return null;
     }
-  }, [context.selectedProfileId, source.selectedStudentId, transcriptReady]);
+  }, [
+    context.selectedProfileId,
+    firstProfileLessonMemoryConfirmed,
+    source.selectedStudentId,
+    transcriptReady,
+  ]);
 
   useEffect(() => {
     let active = true;
     let timer: ReturnType<typeof setTimeout> | null = null;
 
-    if (!firstProfileAssistVisible || firstProfileDraft || firstProfileAssistApproved) {
+    if (
+      !firstProfileAssistVisible ||
+      !firstProfileLessonMemoryConfirmed ||
+      firstProfileDraft ||
+      firstProfileAssistApproved
+    ) {
       setFirstProfileLessonMemoryReadyCount(0);
       setFirstProfileLessonMemoryStatus('checking');
       setFirstProfileAssistError(null);
@@ -1132,6 +1188,7 @@ export const MinimalAssignment: React.FC = () => {
   }, [
     firstProfileAssistApproved,
     firstProfileAssistVisible,
+    firstProfileLessonMemoryConfirmed,
     firstProfileDraft,
     refreshFirstProfileLessonMemory,
   ]);
@@ -1143,7 +1200,54 @@ export const MinimalAssignment: React.FC = () => {
     setFirstProfileAssistError(null);
     setFirstProfileLessonMemoryReadyCount(0);
     setFirstProfileLessonMemoryStatus('checking');
+    setFirstProfileLessonMemoryConfirmation(null);
   }, [source.selectedStudentId, source.recording?.recordingId]);
+
+  const handleConfirmFirstProfileLessonMemory = useCallback(async () => {
+    if (!source.selectedStudentId || !firstProfileLessonMemoryKey || source.transcriptDirty) {
+      return;
+    }
+    markAssignmentUserEdit();
+    setFirstProfileAssistBusy('confirming');
+    setFirstProfileAssistError(null);
+    try {
+      const response = await requestLessonMemoryFromTranscript(source.selectedStudentId, {
+        recordingId: firstProfileLessonMemoryKey.recordingId,
+        transcriptId: firstProfileLessonMemoryKey.transcriptId,
+        lessonId: linkedLessonId || null,
+      });
+      setFirstProfileLessonMemoryConfirmation(firstProfileLessonMemoryKey);
+      if (response.outcome === 'ready_exists') {
+        setFirstProfileLessonMemoryReadyCount((current) => Math.max(current, 1));
+        setFirstProfileLessonMemoryStatus('ready');
+      } else {
+        setFirstProfileLessonMemoryReadyCount(0);
+        setFirstProfileLessonMemoryStatus('building');
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unable to confirm the lesson memory request.';
+      setFirstProfileAssistError(message);
+    } finally {
+      setFirstProfileAssistBusy(null);
+    }
+  }, [
+    firstProfileLessonMemoryKey,
+    linkedLessonId,
+    markAssignmentUserEdit,
+    source.selectedStudentId,
+    source.transcriptDirty,
+  ]);
+
+  const handleChangeFirstProfileStudent = useCallback(() => {
+    sourceSectionRef.current?.scrollIntoView({ block: 'start' });
+    sourceStudentSelectRef.current?.focus();
+  }, []);
+
+  const handleReplaceFirstProfileAudio = useCallback(() => {
+    markAssignmentUserEdit();
+    source.resetSourceFlow({ resetStudent: false });
+  }, [markAssignmentUserEdit, source]);
 
   const handlePopulateFirstProfile = useCallback(async () => {
     if (!source.selectedStudentId) return;
@@ -1185,7 +1289,7 @@ export const MinimalAssignment: React.FC = () => {
     } finally {
       setFirstProfileAssistBusy(null);
     }
-  }, [context.selectProfileId, firstProfileDraft, markAssignmentUserEdit]);
+  }, [context, firstProfileDraft, markAssignmentUserEdit]);
 
   const jobReady = Boolean(jobStatus?.jobId);
   const hasAssignmentContent = authoring.draftText.trim().length > 0;
@@ -1378,6 +1482,7 @@ export const MinimalAssignment: React.FC = () => {
     startStageMode,
     reviewReady,
     advancedActions.showAdvancedActions,
+    source.selectedStudentId,
     transcriptReady,
   ]);
 
@@ -1549,6 +1654,12 @@ export const MinimalAssignment: React.FC = () => {
         profileRevisionError={context.profileRevisionError}
         firstProfileAssist={{
           visible: firstProfileAssistVisible,
+          confirmationState: firstProfileLessonMemoryConfirmed
+            ? 'confirmed'
+            : firstProfileLessonMemoryNeedsUpdate
+              ? 'edited'
+              : 'unconfirmed',
+          confirmDisabled: source.transcriptDirty || !firstProfileLessonMemoryKey,
           lessonMemoryStatus:
             firstProfileLessonMemoryReadyCount > 0 ? 'ready' : firstProfileLessonMemoryStatus,
           draftProfileId: firstProfileDraft?.profileId ?? null,
@@ -1557,6 +1668,9 @@ export const MinimalAssignment: React.FC = () => {
           busy: firstProfileAssistBusy,
           approved: firstProfileAssistApproved,
           error: firstProfileAssistError,
+          onConfirm: handleConfirmFirstProfileLessonMemory,
+          onChangeStudent: handleChangeFirstProfileStudent,
+          onReplaceAudio: handleReplaceFirstProfileAudio,
           onPopulate: handlePopulateFirstProfile,
           onApprove: handleApproveFirstProfileDraft,
           onRefresh: () => void refreshFirstProfileLessonMemory(),

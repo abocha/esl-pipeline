@@ -1050,6 +1050,59 @@
   align-items: center;
 }
 
+.minimal-memory-confirmation-gate {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.minimal-memory-confirmation-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-success-600);
+  font-size: var(--text-sm);
+  font-weight: 800;
+}
+
+.minimal-memory-confirm-button {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--space-2);
+  justify-content: center;
+  min-height: 3rem;
+  width: 100%;
+}
+
+.minimal-memory-confirmation-actions {
+  display: grid;
+  gap: var(--space-2);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.minimal-memory-confirmation-actions .minimal-secondary {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--space-2);
+  justify-content: center;
+  min-height: 2.75rem;
+}
+
+.minimal-memory-confirmation-note {
+  align-items: center;
+  border: 1px solid color-mix(in srgb, var(--color-warning-500) 28%, var(--border-light));
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  display: flex;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+}
+
+.minimal-memory-confirmation-note svg {
+  color: var(--color-warning-600);
+  flex: 0 0 auto;
+}
+
 .minimal-memory-progress {
   display: inline-flex;
   align-items: center;
@@ -1092,6 +1145,10 @@
 
   .minimal-first-profile-assist-header {
     flex-direction: column;
+  }
+
+  .minimal-memory-confirmation-actions {
+    grid-template-columns: 1fr;
   }
 }
 

@@ -89,6 +89,7 @@ export interface LessonMemoryRecord {
   status: LessonMemoryEntryStatus;
   sourceKind: LessonMemorySourceKind;
   generationNotes?: LessonMemoryGenerationNotes | null;
+  lessonTitle?: string | null;
   lessonSummary?: string | null;
   topicsDiscussed: TopicNote[];
   mistakePatterns: MistakePattern[];

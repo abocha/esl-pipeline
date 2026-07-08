@@ -30,6 +30,7 @@ interface LessonMemoryRow {
   status: string;
   source_kind: string;
   generation_notes: LessonMemoryGenerationNotes | null;
+  lesson_title: string | null;
   lesson_summary: string | null;
   topics_discussed: TopicNote[] | null;
   mistake_patterns: MistakePattern[] | null;
@@ -62,6 +63,7 @@ export interface InsertLessonMemoryParams {
   model: string;
   status: LessonMemoryEntryStatus;
   generationNotes?: LessonMemoryGenerationNotes | null;
+  lessonTitle?: string | null;
   lessonSummary?: string | null;
   topicsDiscussed?: TopicNote[];
   mistakePatterns?: MistakePattern[];
@@ -119,6 +121,7 @@ export async function insertLessonMemoryEntry(
         status,
         source_kind,
         generation_notes,
+        lesson_title,
         lesson_summary,
         topics_discussed,
         mistake_patterns,
@@ -132,7 +135,7 @@ export async function insertLessonMemoryEntry(
       )
       VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, 'lesson_transcript', $10, $11,
-        $12, $13, $14, $15, $16, $17, $18, $19, $20
+        $12, $13, $14, $15, $16, $17, $18, $19, $20, $21
       )
       RETURNING
         id,
@@ -146,6 +149,7 @@ export async function insertLessonMemoryEntry(
         status,
         source_kind,
         generation_notes,
+        lesson_title,
         lesson_summary,
         topics_discussed,
         mistake_patterns,
@@ -172,6 +176,7 @@ export async function insertLessonMemoryEntry(
         params.model,
         params.status,
         params.generationNotes ?? null,
+        params.lessonTitle ?? null,
         params.lessonSummary ?? null,
         JSON.stringify(params.topicsDiscussed ?? []),
         JSON.stringify(params.mistakePatterns ?? []),
@@ -225,6 +230,7 @@ export async function insertCanonicalReadyLessonMemoryEntry(
           status,
           source_kind,
           generation_notes,
+          lesson_title,
           lesson_summary,
           topics_discussed,
           mistake_patterns,
@@ -238,7 +244,7 @@ export async function insertCanonicalReadyLessonMemoryEntry(
         )
         VALUES (
           $1, $2, $3, $4, $5, $6, $7, $8, 'ready', 'lesson_transcript', $9, $10,
-          $11, $12, $13, $14, $15, $16, $17, $18, $19
+          $11, $12, $13, $14, $15, $16, $17, $18, $19, $20
         )
         RETURNING
           id,
@@ -252,6 +258,7 @@ export async function insertCanonicalReadyLessonMemoryEntry(
           status,
           source_kind,
           generation_notes,
+          lesson_title,
           lesson_summary,
           topics_discussed,
           mistake_patterns,
@@ -277,6 +284,7 @@ export async function insertCanonicalReadyLessonMemoryEntry(
           params.provider,
           params.model,
           params.generationNotes ?? null,
+          params.lessonTitle ?? null,
           params.lessonSummary ?? null,
           JSON.stringify(params.topicsDiscussed ?? []),
           JSON.stringify(params.mistakePatterns ?? []),
@@ -362,6 +370,7 @@ export async function ensurePendingLessonMemoryEntry(
           status,
           source_kind,
           generation_notes,
+          lesson_title,
           lesson_summary,
           topics_discussed,
           mistake_patterns,
@@ -408,6 +417,7 @@ export async function ensurePendingLessonMemoryEntry(
           status,
           source_kind,
           generation_notes,
+          lesson_title,
           lesson_summary,
           topics_discussed,
           mistake_patterns,
@@ -454,6 +464,7 @@ export async function ensurePendingLessonMemoryEntry(
           status,
           source_kind,
           generation_notes,
+          lesson_title,
           lesson_summary,
           topics_discussed,
           mistake_patterns,
@@ -467,7 +478,7 @@ export async function ensurePendingLessonMemoryEntry(
         )
         VALUES (
           $1, $2, $3, $4, $5, $6, $7, $8, 'pending', 'lesson_transcript', $9, $10,
-          $11, $12, $13, $14, $15, $16, $17, $18, $19
+          $11, $12, $13, $14, $15, $16, $17, $18, $19, $20
         )
         RETURNING
           id,
@@ -481,6 +492,7 @@ export async function ensurePendingLessonMemoryEntry(
           status,
           source_kind,
           generation_notes,
+          lesson_title,
           lesson_summary,
           topics_discussed,
           mistake_patterns,
@@ -506,6 +518,7 @@ export async function ensurePendingLessonMemoryEntry(
           params.provider,
           params.model,
           params.generationNotes ?? null,
+          params.lessonTitle ?? null,
           params.lessonSummary ?? null,
           JSON.stringify(params.topicsDiscussed ?? []),
           JSON.stringify(params.mistakePatterns ?? []),
@@ -573,6 +586,7 @@ export async function getLessonMemoryEntryById(id: string): Promise<LessonMemory
         status,
         source_kind,
         generation_notes,
+        lesson_title,
         lesson_summary,
         topics_discussed,
         mistake_patterns,
@@ -616,6 +630,7 @@ export async function getLatestReadyLessonMemoryByTranscriptId(
         lesson_memory_entries.status,
         lesson_memory_entries.source_kind,
         lesson_memory_entries.generation_notes,
+        lesson_memory_entries.lesson_title,
         lesson_memory_entries.lesson_summary,
         lesson_memory_entries.topics_discussed,
         lesson_memory_entries.mistake_patterns,
@@ -664,6 +679,7 @@ export async function getLatestPendingLessonMemoryByTranscriptId(
         status,
         source_kind,
         generation_notes,
+        lesson_title,
         lesson_summary,
         topics_discussed,
         mistake_patterns,
@@ -750,6 +766,7 @@ export async function listLessonMemoryEntries(
         lesson_memory_entries.status,
         lesson_memory_entries.source_kind,
         lesson_memory_entries.generation_notes,
+        lesson_memory_entries.lesson_title,
         lesson_memory_entries.lesson_summary,
         lesson_memory_entries.topics_discussed,
         lesson_memory_entries.mistake_patterns,
@@ -812,6 +829,7 @@ export async function listRecentReadyLessonMemoryByStudentId(
         lesson_memory_entries.status,
         lesson_memory_entries.source_kind,
         lesson_memory_entries.generation_notes,
+        lesson_memory_entries.lesson_title,
         lesson_memory_entries.lesson_summary,
         lesson_memory_entries.topics_discussed,
         lesson_memory_entries.mistake_patterns,
@@ -878,6 +896,7 @@ export async function supersedeReadyLessonMemoryEntriesForTranscript(params: {
         status,
         source_kind,
         generation_notes,
+        lesson_title,
         lesson_summary,
         topics_discussed,
         mistake_patterns,
@@ -939,6 +958,7 @@ export async function supersedePendingLessonMemoryEntriesForTranscript(params: {
         status,
         source_kind,
         generation_notes,
+        lesson_title,
         lesson_summary,
         topics_discussed,
         mistake_patterns,
@@ -1004,6 +1024,7 @@ export async function markLessonMemoryEntryFailed(params: {
         status,
         source_kind,
         generation_notes,
+        lesson_title,
         lesson_summary,
         topics_discussed,
         mistake_patterns,
@@ -1040,6 +1061,7 @@ function mapRowToLessonMemory(row: LessonMemoryRow): LessonMemoryRecord {
     status: LessonMemoryEntryStatusSchema.parse(row.status),
     sourceKind: LessonMemorySourceKindSchema.parse(row.source_kind),
     generationNotes: row.generation_notes ?? null,
+    lessonTitle: row.lesson_title ?? null,
     lessonSummary: row.lesson_summary ?? null,
     topicsDiscussed: row.topics_discussed ?? [],
     mistakePatterns: row.mistake_patterns ?? [],

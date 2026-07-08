@@ -29,6 +29,7 @@ import { withPgClient } from '../infrastructure/db.js';
 const DEFAULT_WORKSPACE_ID = '00000000-0000-4000-8000-000000000001';
 const DEFAULT_TIMEZONE = 'UTC';
 const DEFAULT_DURATION_MINUTES = 60;
+const AUTOMATIC_UNTITLED_LESSON_TITLE = 'Untitled lesson';
 const DEFAULT_LOW_BALANCE_THRESHOLD = 2;
 const DEFAULT_GENERATION_HORIZON_DAYS = 56;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -544,6 +545,39 @@ export async function completeElapsedScheduledLessonForHomework(
     );
     await reconcileLessonCreditEvent(client, lessonId, actorUserId ?? null);
     return true;
+  });
+}
+
+export async function applyGeneratedLessonTitleIfPlaceholder(params: {
+  studentId: string;
+  lessonId: string;
+  title: string | null | undefined;
+}): Promise<boolean> {
+  const title = params.title?.trim();
+  if (!title) {
+    return false;
+  }
+
+  return withPgTransaction(async (client) => {
+    const context = await requireStudentContext(client, params.studentId);
+    const result = await client.query(
+      `
+      UPDATE student_lessons
+      SET
+        title = $3,
+        updated_at = NOW()
+      WHERE id = $1
+        AND student_id = $2
+        AND (
+          title IS NULL
+          OR btrim(title) = ''
+          OR title = $4
+        )
+      RETURNING id
+      `,
+      [params.lessonId, context.id, title, AUTOMATIC_UNTITLED_LESSON_TITLE],
+    );
+    return (result.rowCount ?? 0) > 0;
   });
 }
 

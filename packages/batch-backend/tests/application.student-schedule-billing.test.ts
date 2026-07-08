@@ -10,6 +10,7 @@ import {
 import {
   addStudentPackage,
   adjustStudentCredits,
+  applyGeneratedLessonTitleIfPlaceholder,
   createStudentLesson,
   getStudentScheduleBillingSurface,
   hideStudentLessonFollowupReminder,
@@ -578,6 +579,73 @@ describeIfPg('application/student-schedule-billing', () => {
       studentId,
       lessonId: matchingLessonId,
     });
+  });
+
+  it('applies generated lesson titles only to automatic placeholders', async () => {
+    const { studentId } = await seedStudent();
+    const nullTitleLessonId = await insertBusinessLesson({
+      studentId,
+      startsAt: '2026-05-18T10:00:00.000Z',
+      title: null,
+    });
+    const blankTitleLessonId = await insertBusinessLesson({
+      studentId,
+      startsAt: '2026-05-19T10:00:00.000Z',
+      title: '   ',
+    });
+    const placeholderLessonId = await insertBusinessLesson({
+      studentId,
+      startsAt: '2026-05-20T10:00:00.000Z',
+      title: 'Untitled lesson',
+    });
+    const authoredLessonId = await insertBusinessLesson({
+      studentId,
+      startsAt: '2026-05-21T10:00:00.000Z',
+      title: 'Tutor title',
+    });
+
+    await expect(
+      applyGeneratedLessonTitleIfPlaceholder({
+        studentId,
+        lessonId: nullTitleLessonId,
+        title: 'Travel Plans Review',
+      }),
+    ).resolves.toBe(true);
+    await expect(
+      applyGeneratedLessonTitleIfPlaceholder({
+        studentId,
+        lessonId: blankTitleLessonId,
+        title: 'Article Practice',
+      }),
+    ).resolves.toBe(true);
+    await expect(
+      applyGeneratedLessonTitleIfPlaceholder({
+        studentId,
+        lessonId: placeholderLessonId,
+        title: 'Past Tense Storytelling',
+      }),
+    ).resolves.toBe(true);
+    await expect(
+      applyGeneratedLessonTitleIfPlaceholder({
+        studentId,
+        lessonId: authoredLessonId,
+        title: 'Generated Title',
+      }),
+    ).resolves.toBe(false);
+
+    const surface = await getStudentScheduleBillingSurface(studentId);
+    expect(surface?.lessons.find((lesson) => lesson.id === nullTitleLessonId)?.title).toBe(
+      'Travel Plans Review',
+    );
+    expect(surface?.lessons.find((lesson) => lesson.id === blankTitleLessonId)?.title).toBe(
+      'Article Practice',
+    );
+    expect(surface?.lessons.find((lesson) => lesson.id === placeholderLessonId)?.title).toBe(
+      'Past Tense Storytelling',
+    );
+    expect(surface?.lessons.find((lesson) => lesson.id === authoredLessonId)?.title).toBe(
+      'Tutor title',
+    );
   });
 
   it('marks an elapsed scheduled lesson completed when homework is added through an assignment session', async () => {

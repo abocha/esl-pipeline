@@ -506,6 +506,7 @@ export interface LessonMemoryRecord {
   status: LessonMemoryEntryStatus;
   sourceKind: 'lesson_transcript';
   generationNotes?: Record<string, unknown> | null;
+  lessonTitle?: string | null;
   lessonSummary?: string | null;
   topicsDiscussed: TopicNote[];
   mistakePatterns: MistakePattern[];
@@ -712,6 +713,18 @@ export interface StudentLessonMemoryListResponse {
   offset: number;
   order: 'asc' | 'desc';
   statuses: LessonMemoryEntryStatus[] | null;
+}
+
+export interface RequestLessonMemoryFromTranscriptPayload {
+  recordingId: string;
+  transcriptId: string;
+  lessonId?: string | null;
+}
+
+export interface RequestLessonMemoryFromTranscriptResponse {
+  outcome: 'created' | 'pending_exists' | 'ready_exists';
+  lessonMemoryEntryId: string;
+  lessonTitle?: string | null;
 }
 
 export interface StudentHomeworkMemoryListResponse {
@@ -2991,6 +3004,25 @@ export async function populateFirstProfileFromLesson(
     const axiosError = toAxiosError(error);
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to populate the learner profile.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function requestLessonMemoryFromTranscript(
+  studentId: string,
+  payload: RequestLessonMemoryFromTranscriptPayload,
+): Promise<RequestLessonMemoryFromTranscriptResponse> {
+  try {
+    const response = await apiClient.post(
+      buildApiProxyPath(`/students/${encodeURIComponent(studentId)}/lesson-memory/requests`),
+      payload,
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to confirm lesson memory.');
     }
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }
