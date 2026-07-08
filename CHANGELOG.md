@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [9.6.0] - 2026-07-08
+
+### Changed
+
+- Automated release from PR #124: Polish first-profile alpha onboarding flow (https://github.com/abocha/esl-pipeline/pull/124)
+
 ## [9.5.1] - 2026-07-06
 
 ### Changed
