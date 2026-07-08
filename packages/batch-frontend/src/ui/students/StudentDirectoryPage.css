@@ -16,17 +16,107 @@
   box-shadow: var(--student-area-shadow-soft);
 }
 
-.student-directory-hero h1,
 .student-directory-list h2,
 .student-directory-card h3,
-.student-directory-card p,
-.student-directory-hero p {
+.student-directory-card p {
   margin: 0;
 }
 
 .student-directory-list {
   display: grid;
   gap: 1rem;
+}
+
+.student-directory-layout .workspace-create-panel {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.student-directory-layout .workspace-starter-profile {
+  border: 1px solid var(--student-area-line);
+  border-radius: var(--student-area-radius-sm);
+  padding: 0.85rem;
+  background: var(--student-area-paper);
+}
+
+.student-directory-layout .workspace-starter-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  cursor: pointer;
+}
+
+.student-directory-layout .workspace-starter-summary > span:first-child {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.student-directory-layout .workspace-starter-title {
+  font-weight: 800;
+}
+
+.student-directory-layout .workspace-starter-description {
+  color: var(--student-area-muted);
+  font-size: 0.9rem;
+}
+
+.student-directory-layout .workspace-starter-badge {
+  border: 1px solid var(--student-area-line);
+  border-radius: 999px;
+  padding: 0.25rem 0.55rem;
+  color: var(--student-area-muted);
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.student-directory-layout .workspace-starter-groups {
+  display: grid;
+  gap: 0.85rem;
+  margin-top: 0.85rem;
+}
+
+.student-directory-layout .workspace-starter-group {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  border: 1px solid var(--student-area-line);
+  border-radius: var(--student-area-radius-sm);
+  padding: 0.85rem;
+}
+
+.student-directory-layout .workspace-starter-group legend {
+  padding: 0 0.35rem;
+  color: var(--student-area-blue);
+  font-size: 0.76rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.student-directory-layout .workspace-field {
+  display: grid;
+  gap: 0.35rem;
+  font-weight: 700;
+}
+
+.student-directory-layout .workspace-field-span-2 {
+  grid-column: 1 / -1;
+}
+
+.student-directory-layout .workspace-field input,
+.student-directory-layout .workspace-field textarea {
+  width: 100%;
+  border: 1px solid var(--student-area-line);
+  border-radius: 0.65rem;
+  padding: 0.7rem 0.8rem;
+  background: var(--student-area-panel);
+  color: var(--student-area-ink);
+  font: inherit;
+}
+
+.student-directory-layout .workspace-field textarea {
+  resize: vertical;
 }
 
 .student-directory-list-header {

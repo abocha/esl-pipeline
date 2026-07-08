@@ -7,6 +7,9 @@ import './AuthDialog.css';
 
 export type AuthMode = 'login' | 'register';
 
+const PASSWORD_REQUIREMENT =
+  'Use at least 8 characters. Spaces are okay; no symbols or numbers are required.';
+
 interface AuthDialogProps {
   mode: AuthMode | null;
   initialEmail?: string;
@@ -163,12 +166,12 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({
       }
 
       if (mode === 'register' && !inviteToken) {
-        setError('Invite link is required for closed alpha registration');
+        setError('Open the invitation link from your email to create an account.');
         return;
       }
 
-      if (password.length < 6) {
-        setError('Password must be at least 6 characters');
+      if (mode === 'register' && password.length < 8) {
+        setError('Use at least 8 characters.');
         return;
       }
 
@@ -181,6 +184,8 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({
         } else {
           await register(email, password, 'user', inviteToken ?? undefined);
           onRegistered?.(email);
+          toast.success('Account created. Welcome in.');
+          onClose();
         }
       } catch (error_: unknown) {
         const message = error_ instanceof Error ? error_.message : 'Something went wrong';
@@ -288,8 +293,10 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({
           <h2 id="auth-dialog-title">{mode === 'login' ? 'Welcome back' : 'Create account'}</h2>
           <p id="auth-dialog-description">
             {mode === 'login'
-              ? 'Sign in to access your batch jobs'
-              : 'Start processing lessons in minutes'}
+              ? 'Sign in to access your teaching workspace'
+              : inviteToken
+                ? 'Finish your invited closed-alpha account'
+                : 'Closed alpha accounts require an invitation link'}
           </p>
         </div>
 
@@ -298,6 +305,19 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({
             <div className="form-error animate-fade-in" role="alert" aria-live="assertive">
               <span aria-hidden="true">⚠️</span>
               {error}
+            </div>
+          )}
+
+          {mode === 'register' && (
+            <div className={inviteToken ? 'invite-status invite-status-ready' : 'invite-status'}>
+              <strong>
+                {inviteToken ? 'Invitation link detected' : 'Invitation link required'}
+              </strong>
+              <span>
+                {inviteToken
+                  ? 'Use the invited email address, then you will enter the workspace automatically.'
+                  : 'Open the private invite link from your email before creating an account.'}
+              </span>
             </div>
           )}
 
@@ -342,6 +362,7 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({
                 {showPassword ? <EyeOffIcon /> : <EyeIcon />}
               </button>
             </div>
+            {mode === 'register' && <p className="form-hint">{PASSWORD_REQUIREMENT}</p>}
           </div>
 
           {mode === 'register' && (

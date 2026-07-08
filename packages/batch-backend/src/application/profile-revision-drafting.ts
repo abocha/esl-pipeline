@@ -116,6 +116,7 @@ export interface GenerateProfileRevisionDraftRequest {
   maxOutputTokens?: number;
   providerOverride?: GenerationProvider;
   modelOverride?: string;
+  includeProviderFallbacks?: boolean;
   responseSchema?: ProviderStructuredExecutionRequest['responseSchema'];
   validateOutput?: (output: unknown) => FoundationalProfile | ProfileCandidatePatch;
 }
@@ -153,6 +154,7 @@ export async function generateProfileRevisionDraft(args: {
     workload: 'profile_revision_drafting',
     providerOverride: args.request.providerOverride,
     modelOverride: args.request.modelOverride,
+    includeProviderFallbacks: args.request.includeProviderFallbacks,
   });
 
   if (candidates.length === 0) {

@@ -94,11 +94,16 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
           role: user.role,
         });
 
+        const tokens = authService.generateTokens(user.id, user.email, user.role);
+        setRefreshCookie(reply, config, tokens.refreshToken, tokens.refreshExpiresIn);
+
         const sanitizedUser = sanitizeUser(user);
 
         return reply.code(201).send({
           message: 'User registered successfully',
           user: sanitizedUser,
+          accessToken: tokens.accessToken,
+          expiresIn: tokens.expiresIn,
         });
       } catch (error: unknown) {
         if (error instanceof AlphaInviteError) {

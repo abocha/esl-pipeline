@@ -2,6 +2,11 @@ import type { AxiosAdapter, AxiosResponse, InternalAxiosRequestConfig } from 'ax
 import { AxiosError } from 'axios';
 
 const now = '2026-07-03T00:00:00.000Z';
+const sandboxFirstProfileStudentId = 'student-cora';
+const sandboxFirstProfileId = 'profiles/cora.md';
+const sandboxFirstProfileRecordingId = 'recording-cora';
+const sandboxFirstProfileTranscriptId = 'transcript-cora';
+const sandboxFirstProfileRevisionId = 'profile-revision-cora-first-draft';
 
 function responseFor(config: InternalAxiosRequestConfig, data: unknown): AxiosResponse {
   return {
@@ -63,6 +68,12 @@ function readRequestBody(data: unknown): Record<string, unknown> {
     }
   }
   return data && typeof data === 'object' ? (data as Record<string, unknown>) : {};
+}
+
+function readStudentIdParam(config: InternalAxiosRequestConfig): string | null {
+  const params = config.params as Record<string, unknown> | undefined;
+  const studentId = params?.studentId;
+  return typeof studentId === 'string' && studentId.trim() ? studentId.trim() : null;
 }
 
 function assignmentSession(overrides: Record<string, unknown> = {}) {
@@ -171,6 +182,34 @@ function studentProfile() {
   };
 }
 
+function firstProfileStudentProfile() {
+  return {
+    id: sandboxFirstProfileStudentId,
+    student: 'Cora Preview',
+    profileId: null,
+    dbId: null,
+    pageParentId: null,
+    colorPreset: 'green',
+    accentPreference: 'american',
+    voices: {},
+    manifestPreset: null,
+    archivedAt: null,
+    archivedBy: null,
+    archiveReason: null,
+  };
+}
+
+function firstProfileContent() {
+  return {
+    id: sandboxFirstProfileId,
+    label: 'Cora Preview Profile',
+    content: 'Cora wants practical English for short client updates.',
+    structuredContent: firstProfileDraftStructuredContent(),
+    currentRevisionId: sandboxFirstProfileRevisionId,
+    updatedAt: now,
+  };
+}
+
 function profileRevisionSummary() {
   return {
     id: 'profile-revision-sandbox',
@@ -231,6 +270,22 @@ function profileDraftReviewStructuredContent() {
   };
 }
 
+function firstProfileDraftStructuredContent() {
+  return {
+    schemaVersion: 'foundational_profile_v1',
+    overallLevel: 'A2',
+    primaryGoals: ['Give short client updates with confidence.'],
+    communicationContexts: ['First lessons', 'Simple client status updates'],
+    interestsAndUsefulThemes: ['Work routines', 'Everyday clarification phrases'],
+    stableStrengths: ['Comfortable asking for clarification when prompted.'],
+    persistentChallenges: ['Needs support organizing short spoken updates.'],
+    studyPreferences: ['Prefers practical examples connected to current work.'],
+    durableConstraints: [],
+    teacherNotes:
+      'Keep the first assignment short and concrete: introduce, update, ask one clarification question.',
+  };
+}
+
 function profileDraftReviewRevision(overrides: Record<string, unknown> = {}) {
   return {
     id: 'profile-revision-sandbox-draft',
@@ -261,6 +316,31 @@ function profileRevisionList() {
       profileRevisionHistorySummary(1),
     ],
     total: 5,
+    limit: 25,
+    offset: 0,
+    order: 'desc',
+  };
+}
+
+function firstProfileRevisionList() {
+  return {
+    items: [
+      {
+        id: sandboxFirstProfileRevisionId,
+        profileId: sandboxFirstProfileId,
+        contentHash: 'profile-hash-cora-first-draft',
+        source: 'lesson_population',
+        status: 'draft',
+        versionNumber: 1,
+        versionLabel: 'v1',
+        activatedAt: null,
+        deprecatedAt: null,
+        createdAt: now,
+        createdBy: 'sandbox-tutor',
+        restoredFromRevisionId: null,
+      },
+    ],
+    total: 1,
     limit: 25,
     offset: 0,
     order: 'desc',
@@ -364,6 +444,72 @@ function memoryHealth() {
       },
       homework: {
         ready: { count: 1, capped: false, limit: 500 },
+        pending: { count: 0, capped: false, limit: 500 },
+        failed: { count: 0, capped: false, limit: 500 },
+      },
+    },
+    latestFailedReason: null,
+    profileCandidateCounts: {
+      pending: 0,
+      approved: 0,
+      rejected: 0,
+      deferred: 0,
+    },
+  };
+}
+
+function firstProfileMemoryOverview() {
+  return {
+    studentId: sandboxFirstProfileStudentId,
+    latestReadyStudentMemorySnapshot: null,
+    recentReadyLessonMemory: [
+      {
+        id: 'lesson-memory-cora',
+        studentId: sandboxFirstProfileStudentId,
+        lessonId: 'lesson-cora-first',
+        status: 'ready',
+        lessonSummary: 'Cora practiced a short client update and one clarification question.',
+        createdAt: now,
+        updatedAt: now,
+      },
+    ],
+    recentReadyHomeworkMemory: [],
+    unresolvedIssues: [],
+  };
+}
+
+function firstProfileMemoryHealth() {
+  return {
+    studentId: sandboxFirstProfileStudentId,
+    latestSnapshot: {
+      id: null,
+      status: null,
+      generatedAt: null,
+      strategy: null,
+      trigger: 'lesson-memory-ready',
+      triggerSourceKind: 'lesson_memory',
+      triggerSourceEntryId: 'lesson-memory-cora',
+      parentSnapshotId: null,
+      inputTokenEstimate: 6200,
+      outputTokenEstimate: null,
+      promptByteLength: 21000,
+      includedLessonMemoryCount: 1,
+      includedHomeworkMemoryCount: 0,
+      coveredLessonMemoryCount: 1,
+      coveredHomeworkMemoryCount: 0,
+      contentHash: null,
+      materialChange: true,
+      budgetDecision: { action: 'allow' },
+      candidateRefresh: null,
+    },
+    memoryCounts: {
+      lesson: {
+        ready: { count: 1, capped: false, limit: 500 },
+        pending: { count: 0, capped: false, limit: 500 },
+        failed: { count: 0, capped: false, limit: 500 },
+      },
+      homework: {
+        ready: { count: 0, capped: false, limit: 500 },
         pending: { count: 0, capped: false, limit: 500 },
         failed: { count: 0, capped: false, limit: 500 },
       },
@@ -726,6 +872,49 @@ const draft = {
   updatedAt: now,
 };
 
+const firstProfilePromptPackage = {
+  id: 'prompt-cora',
+  recordingId: sandboxFirstProfileRecordingId,
+  transcriptId: sandboxFirstProfileTranscriptId,
+  studentId: sandboxFirstProfileStudentId,
+  lessonId: null,
+  profilePath: sandboxFirstProfileId,
+  templateVersion: 'v1',
+  notes: 'Sandbox first-profile teacher notes',
+  storageUri: 'memory://sandbox/prompt-cora',
+  text: [
+    '## Sandbox Prompt Package',
+    '',
+    '[LATEST_TRANSCRIPT]',
+    'Cora practiced a short client update and asked for one clarification phrase.',
+    '',
+    '[STUDENT_PROFILE]',
+    'Cora is A2 and wants practical English for short client updates.',
+  ].join('\n'),
+  createdAt: now,
+  updatedAt: now,
+};
+
+const firstProfileDraft = {
+  id: 'draft-cora',
+  promptPackageId: 'prompt-cora',
+  studentId: sandboxFirstProfileStudentId,
+  lessonId: null,
+  storageUri: 'memory://sandbox/draft-cora',
+  createdBy: 'sandbox-tutor',
+  text: [
+    '# Cora - Short Client Update',
+    '',
+    '## Warm-up',
+    'Practice one clear sentence for what changed today.',
+    '',
+    '## Mission',
+    'Write a short client update and one clarification question.',
+  ].join('\n'),
+  createdAt: now,
+  updatedAt: now,
+};
+
 function jobProvenance() {
   return {
     job: {
@@ -805,14 +994,15 @@ export function createFrontendSandboxApiAdapter(): AxiosAdapter {
         students: [
           { id: 'student-alex', name: 'Alex', profileId: 'profiles/alex.md' },
           { id: 'student-bella', name: 'Bella', profileId: 'profiles/bella.md' },
+          { id: sandboxFirstProfileStudentId, name: 'Cora Preview', profileId: null },
         ],
       });
     }
 
     if (method === 'get' && path === '/students') {
       return responseFor(config, {
-        items: [studentProfile()],
-        total: 1,
+        items: [studentProfile(), firstProfileStudentProfile()],
+        total: 2,
         limit: 200,
         offset: 0,
         order: 'asc',
@@ -821,6 +1011,10 @@ export function createFrontendSandboxApiAdapter(): AxiosAdapter {
 
     if (method === 'get' && path === '/students/student-alex') {
       return responseFor(config, studentProfile());
+    }
+
+    if (method === 'get' && path === `/students/${sandboxFirstProfileStudentId}`) {
+      return responseFor(config, firstProfileStudentProfile());
     }
 
     if (method === 'get' && path === '/students/student-alex/surfaces/overview') {
@@ -855,6 +1049,24 @@ export function createFrontendSandboxApiAdapter(): AxiosAdapter {
         bindings: bindingHistory(),
         candidates: profileCandidateList(),
       });
+    }
+
+    if (
+      method === 'get' &&
+      path === `/students/${sandboxFirstProfileStudentId}/surfaces/learning`
+    ) {
+      return responseFor(config, {
+        profile: null,
+        revisions: { items: [], total: 0, limit: 25, offset: 0, order: 'desc' },
+        memory: firstProfileMemoryOverview(),
+        memoryHealth: firstProfileMemoryHealth(),
+        bindings: { items: [], total: 0, limit: 5, offset: 0, order: 'desc' },
+        candidates: emptyCandidateList(),
+      });
+    }
+
+    if (method === 'get' && path === `/students/${sandboxFirstProfileStudentId}/memory/health`) {
+      return responseFor(config, firstProfileMemoryHealth());
     }
 
     if (method === 'get' && path === '/config/prompts') {
@@ -942,18 +1154,75 @@ export function createFrontendSandboxApiAdapter(): AxiosAdapter {
     }
 
     if (method === 'get' && path === '/user/assignment-sessions') {
-      return responseFor(config, { sessions: [], total: 0, limit: 20 });
+      return responseFor(config, {
+        sessions: [
+          assignmentSession({
+            id: 'session-cora',
+            studentId: sandboxFirstProfileStudentId,
+            recordingId: sandboxFirstProfileRecordingId,
+            transcriptId: sandboxFirstProfileTranscriptId,
+            currentStage: 'context',
+          }),
+        ],
+        total: 1,
+        limit: 20,
+      });
     }
 
     if (method === 'post' && path === '/assignment-sessions') {
       return responseFor(config, assignmentSession());
     }
 
+    if (method === 'get' && path === '/assignment-sessions/session-cora') {
+      return responseFor(
+        config,
+        assignmentSession({
+          id: 'session-cora',
+          studentId: sandboxFirstProfileStudentId,
+          recordingId: sandboxFirstProfileRecordingId,
+          transcriptId: sandboxFirstProfileTranscriptId,
+          currentStage: 'context',
+        }),
+      );
+    }
+
     if (method === 'patch' && path === '/assignment-sessions/session-sandbox') {
       return responseFor(config, assignmentSession({ updatedAt: now }));
     }
 
+    if (method === 'patch' && path === '/assignment-sessions/session-cora') {
+      return responseFor(
+        config,
+        assignmentSession({
+          id: 'session-cora',
+          studentId: sandboxFirstProfileStudentId,
+          recordingId: sandboxFirstProfileRecordingId,
+          transcriptId: sandboxFirstProfileTranscriptId,
+          currentStage: 'context',
+          updatedAt: now,
+        }),
+      );
+    }
+
     if (method === 'post' && path === '/recordings/upload') {
+      const requestedStudentId = readStudentIdParam(config);
+      if (requestedStudentId === sandboxFirstProfileStudentId) {
+        return responseFor(config, {
+          recordingId: sandboxFirstProfileRecordingId,
+          status: 'transcribed',
+          transcriptId: sandboxFirstProfileTranscriptId,
+          error: null,
+          source: 'upload',
+          studentId: sandboxFirstProfileStudentId,
+          displayName: 'cora-preview-lesson.mp3',
+          durationSec: 150,
+          channels: 1,
+          bytes: 1024,
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+
       return responseFor(config, {
         recordingId: 'recording-sandbox',
         status: 'transcribed',
@@ -963,6 +1232,23 @@ export function createFrontendSandboxApiAdapter(): AxiosAdapter {
         studentId: 'student-alex',
         displayName: 'sandbox-lesson.mp3',
         durationSec: 180,
+        channels: 1,
+        bytes: 1024,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    if (method === 'get' && path === `/recordings/${sandboxFirstProfileRecordingId}`) {
+      return responseFor(config, {
+        recordingId: sandboxFirstProfileRecordingId,
+        status: 'transcribed',
+        transcriptId: sandboxFirstProfileTranscriptId,
+        error: null,
+        source: 'upload',
+        studentId: sandboxFirstProfileStudentId,
+        displayName: 'cora-preview-lesson.mp3',
+        durationSec: 150,
         channels: 1,
         bytes: 1024,
         createdAt: now,
@@ -987,6 +1273,21 @@ export function createFrontendSandboxApiAdapter(): AxiosAdapter {
       });
     }
 
+    if (method === 'get' && path === `/recordings/${sandboxFirstProfileRecordingId}/transcript`) {
+      return responseFor(config, {
+        recordingId: sandboxFirstProfileRecordingId,
+        transcriptId: sandboxFirstProfileTranscriptId,
+        text: 'Cora practiced a short client update and one polite clarification question.',
+        summaryJson: null,
+        sttProvider: 'deepgram',
+        model: 'nova-3',
+        language: 'en',
+        mode: 'timeline',
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
     if (method === 'get' && path === '/recordings/recording-sandbox/transcript') {
       return responseFor(config, {
         recordingId: 'recording-sandbox',
@@ -1006,7 +1307,15 @@ export function createFrontendSandboxApiAdapter(): AxiosAdapter {
       return responseFor(config, profileContent());
     }
 
+    if (method === 'get' && path === '/profiles/profiles%2Fcora.md') {
+      return responseFor(config, firstProfileContent());
+    }
+
     if (method === 'get' && path === '/profiles/revisions') {
+      const params = config.params as Record<string, unknown> | undefined;
+      if (params?.profileId === sandboxFirstProfileId) {
+        return responseFor(config, firstProfileRevisionList());
+      }
       return responseFor(config, profileRevisionList());
     }
 
@@ -1020,6 +1329,72 @@ export function createFrontendSandboxApiAdapter(): AxiosAdapter {
 
     if (method === 'get' && path === '/profiles/revisions/profile-revision-sandbox-draft') {
       return responseFor(config, profileDraftReviewRevision());
+    }
+
+    if (method === 'get' && path === `/profiles/revisions/${sandboxFirstProfileRevisionId}`) {
+      return responseFor(
+        config,
+        profileDraftReviewRevision({
+          id: sandboxFirstProfileRevisionId,
+          profileId: sandboxFirstProfileId,
+          contentHash: 'profile-hash-cora-first-draft',
+          source: 'lesson_population',
+          versionNumber: 1,
+          versionLabel: 'v1',
+          content: '# Foundational Profile\n\nSandbox first profile draft from Cora lesson memory.',
+          structuredContent: firstProfileDraftStructuredContent(),
+        }),
+      );
+    }
+
+    if (
+      method === 'post' &&
+      path === '/students/student-alex/profile-drafts/populate-first-from-lesson'
+    ) {
+      const draftRevision = profileDraftReviewRevision({
+        id: 'profile-revision-sandbox-first-draft',
+        source: 'lesson_population',
+        structuredContent: {
+          ...profileDraftReviewStructuredContent(),
+          primaryGoals: ['Practice concise workplace updates from recent lessons.'],
+          teacherNotes:
+            'First draft from sandbox lesson memory. Review before activating for real learners.',
+        },
+      });
+
+      return responseFor(config, {
+        draftRevisionId: draftRevision.id,
+        profileId: 'profiles/alex.md',
+        snapshotId: 'snapshot-sandbox',
+        lessonMemoryIds: ['lesson-memory-sandbox'],
+        homeworkMemoryIds: ['homework-memory-sandbox'],
+        draftRevision,
+      });
+    }
+
+    if (
+      method === 'post' &&
+      path === `/students/${sandboxFirstProfileStudentId}/profile-drafts/populate-first-from-lesson`
+    ) {
+      const draftRevision = profileDraftReviewRevision({
+        id: sandboxFirstProfileRevisionId,
+        profileId: sandboxFirstProfileId,
+        contentHash: 'profile-hash-cora-first-draft',
+        source: 'lesson_population',
+        versionNumber: 1,
+        versionLabel: 'v1',
+        content: '# Foundational Profile\n\nSandbox first profile draft from Cora lesson memory.',
+        structuredContent: firstProfileDraftStructuredContent(),
+      });
+
+      return responseFor(config, {
+        draftRevisionId: draftRevision.id,
+        profileId: sandboxFirstProfileId,
+        snapshotId: null,
+        lessonMemoryIds: ['lesson-memory-cora'],
+        homeworkMemoryIds: [],
+        draftRevision,
+      });
     }
 
     if (
@@ -1073,15 +1448,64 @@ export function createFrontendSandboxApiAdapter(): AxiosAdapter {
       });
     }
 
+    if (
+      method === 'post' &&
+      path === `/profiles/revisions/${sandboxFirstProfileRevisionId}/activate`
+    ) {
+      return responseFor(config, firstProfileContent());
+    }
+
     if (method === 'get' && path === '/students/student-alex/surfaces/schedule-billing') {
       return responseFor(config, scheduleBillingSurface());
+    }
+
+    if (
+      method === 'get' &&
+      path === `/students/${sandboxFirstProfileStudentId}/surfaces/schedule-billing`
+    ) {
+      return responseFor(config, {
+        ...scheduleBillingSurface(),
+        studentId: sandboxFirstProfileStudentId,
+        student: {
+          studentId: sandboxFirstProfileStudentId,
+          displayName: 'Cora Preview',
+          defaultRateMinor: 4000,
+          packageBalance: 0,
+          lowCreditThreshold: 2,
+          archivedAt: null,
+          createdAt: now,
+          updatedAt: now,
+        },
+      });
     }
 
     if (method === 'post' && path === '/recordings/recording-sandbox/prompt-package') {
       return responseFor(config, promptPackage);
     }
 
+    if (
+      method === 'post' &&
+      path === `/recordings/${sandboxFirstProfileRecordingId}/prompt-package`
+    ) {
+      return responseFor(config, firstProfilePromptPackage);
+    }
+
     if (method === 'post' && path === '/generation/drafts') {
+      const body = readRequestBody(config.data);
+      if (body.promptPackageId === firstProfilePromptPackage.id) {
+        return responseFor(config, {
+          id: firstProfileDraft.id,
+          promptPackageId: firstProfileDraft.promptPackageId,
+          text: firstProfileDraft.text,
+          provider: 'openai',
+          model: 'gpt-5.2',
+          quota: {
+            source: 'hybrid',
+            lastUpdatedAt: now,
+          },
+        });
+      }
+
       return responseFor(config, {
         id: draft.id,
         promptPackageId: draft.promptPackageId,
@@ -1097,6 +1521,10 @@ export function createFrontendSandboxApiAdapter(): AxiosAdapter {
 
     if (method === 'get' && path === '/prompt-packages/prompt-sandbox') {
       return responseFor(config, promptPackage);
+    }
+
+    if (method === 'get' && path === '/prompt-packages/prompt-cora') {
+      return responseFor(config, firstProfilePromptPackage);
     }
 
     if (method === 'get' && path === '/drafts/draft-sandbox') {

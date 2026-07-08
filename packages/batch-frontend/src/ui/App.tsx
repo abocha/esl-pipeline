@@ -136,10 +136,12 @@ export const App: React.FC = () => {
     }
   }, [logout]);
 
-  const handleRegistered = (email: string) => {
-    setPrefillEmail(email);
-    setAuthMode('login');
-    toast.success('Account created! Please log in.');
+  const handleRegistered = (_email: string) => {
+    setInviteToken(null);
+    setPrefillEmail('');
+    if (window.location.hash.includes('invite')) {
+      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
+    }
   };
 
   let appBody: React.ReactNode = null;
@@ -153,7 +155,11 @@ export const App: React.FC = () => {
   } else if (!isAuthenticated || !user) {
     appBody = (
       <div className="auth-shell">
-        <UnauthenticatedNotice onLogin={openLogin} onRegister={openRegister} />
+        <UnauthenticatedNotice
+          hasInvite={!!inviteToken}
+          onLogin={openLogin}
+          onRegister={openRegister}
+        />
       </div>
     );
   } else {
@@ -325,10 +331,11 @@ const LoadingPanel: React.FC = () => (
   </section>
 );
 
-const UnauthenticatedNotice: React.FC<{ onLogin: () => void; onRegister: () => void }> = ({
-  onLogin,
-  onRegister,
-}) => (
+const UnauthenticatedNotice: React.FC<{
+  hasInvite: boolean;
+  onLogin: () => void;
+  onRegister: () => void;
+}> = ({ hasInvite, onLogin, onRegister }) => (
   <section className="unauth-panel app-state-panel animate-scale-in">
     <div className="unauth-graphic">
       <div className="graphic-circles">
@@ -355,19 +362,20 @@ const UnauthenticatedNotice: React.FC<{ onLogin: () => void; onRegister: () => v
     </div>
 
     <div className="unauth-content">
-      <span className="unauth-eyebrow">Authentication Required</span>
-      <h2>Sign in to get started</h2>
+      <span className="unauth-eyebrow">Closed alpha access</span>
+      <h2>{hasInvite ? 'Accept your invitation' : 'Sign in to get started'}</h2>
       <p>
-        Upload markdown lessons, configure job settings, and monitor processing in real-time. Create
-        an account or log in to access all features.
+        {hasInvite
+          ? 'Create your invited tutor account, then you will enter the teaching workspace automatically.'
+          : 'This private alpha is invite-only. Sign in with your tutor account, or open your invitation link to create one.'}
       </p>
 
       <div className="unauth-buttons">
         <button type="button" onClick={onLogin} className="btn-primary btn-large">
-          Login to your account
+          Sign in
         </button>
         <button type="button" onClick={onRegister} className="btn-secondary btn-large">
-          Create new account
+          {hasInvite ? 'Create invited account' : 'Create account with invite'}
         </button>
       </div>
     </div>

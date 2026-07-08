@@ -16,6 +16,7 @@ import * as api from '../../utils/api';
 import { MinimalAssignment } from './MinimalAssignment';
 
 vi.mock('../../utils/api', () => ({
+  activateProfileRevision: vi.fn(),
   approveJob: vi.fn(),
   archiveAssignmentSession: vi.fn(),
   cancelJob: vi.fn(),
@@ -60,12 +61,14 @@ vi.mock('../../utils/api', () => ({
   getProfileContent: vi.fn(),
   getJobStatus: vi.fn(),
   getRecording: vi.fn(),
+  getStudentMemoryHealth: vi.fn(),
   getStudentScheduleBillingSurface: vi.fn(),
   listUserJobs: vi.fn(),
   listAssignmentSessions: vi.fn(),
   listProfileContents: vi.fn(),
   listProfileRevisions: vi.fn(),
   materializeDraft: vi.fn(),
+  populateFirstProfileFromLesson: vi.fn(),
   restoreProfileRevision: vi.fn(),
   retryRecordingTranscription: vi.fn(),
   rerunJob: vi.fn(),
@@ -745,6 +748,81 @@ export function setupMinimalAssignmentTest() {
     label: 'Alex Profile',
     content: 'PROFILE CONTENT',
     currentRevisionId: 'revision-1',
+    updatedAt: now,
+  });
+  vi.mocked(api.getStudentMemoryHealth).mockResolvedValue({
+    studentId: 'student-alex',
+    latestSnapshot: null,
+    memoryCounts: {
+      lesson: {
+        ready: { count: 0, capped: false, limit: 20 },
+        pending: { count: 1, capped: false, limit: 20 },
+        failed: { count: 0, capped: false, limit: 20 },
+      },
+      homework: {
+        ready: { count: 0, capped: false, limit: 20 },
+        pending: { count: 0, capped: false, limit: 20 },
+        failed: { count: 0, capped: false, limit: 20 },
+      },
+    },
+    latestFailedReason: null,
+    profileCandidateCounts: {
+      pending: 0,
+      approved: 0,
+      rejected: 0,
+      deferred: 0,
+    },
+  });
+  vi.mocked(api.populateFirstProfileFromLesson).mockResolvedValue({
+    draftRevisionId: 'revision-draft-1',
+    profileId: 'profiles/alex.md',
+    snapshotId: 'snapshot-1',
+    lessonMemoryIds: ['lesson-memory-1'],
+    homeworkMemoryIds: [],
+    draftRevision: {
+      id: 'revision-draft-1',
+      profileId: 'profiles/alex.md',
+      contentHash: 'hash-draft-1',
+      source: 'lesson_population',
+      status: 'draft',
+      versionNumber: 2,
+      activatedAt: null,
+      deprecatedAt: null,
+      createdAt: now,
+      createdBy: null,
+      restoredFromRevisionId: null,
+      content: 'PROFILE CONTENT',
+      structuredContent: {
+        schemaVersion: 'foundational_profile_v1',
+        overallLevel: 'B1',
+        primaryGoals: ['Lead project updates clearly.'],
+        communicationContexts: ['Weekly team syncs.'],
+        interestsAndUsefulThemes: ['Travel and films.'],
+        stableStrengths: ['Strong listening comprehension.'],
+        persistentChallenges: ['Needs more confident spoken transitions.'],
+        studyPreferences: ['Prefers concise, practical homework.'],
+        durableConstraints: [],
+        teacherNotes: 'Keep examples grounded in real workplace situations.',
+      },
+    },
+  });
+  vi.mocked(api.activateProfileRevision).mockResolvedValue({
+    id: 'profiles/alex.md',
+    label: 'Alex Profile',
+    content: 'PROFILE CONTENT',
+    structuredContent: {
+      schemaVersion: 'foundational_profile_v1',
+      overallLevel: 'B1',
+      primaryGoals: ['Lead project updates clearly.'],
+      communicationContexts: ['Weekly team syncs.'],
+      interestsAndUsefulThemes: ['Travel and films.'],
+      stableStrengths: ['Strong listening comprehension.'],
+      persistentChallenges: ['Needs more confident spoken transitions.'],
+      studyPreferences: ['Prefers concise, practical homework.'],
+      durableConstraints: [],
+      teacherNotes: 'Keep examples grounded in real workplace situations.',
+    },
+    currentRevisionId: 'revision-draft-1',
     updatedAt: now,
   });
 

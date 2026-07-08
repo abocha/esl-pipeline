@@ -4,11 +4,17 @@ import { describe, expect, it } from 'vitest';
 
 import { createFrontendSandboxApiAdapter } from './frontend-sandbox-api';
 
-function requestConfig(method: string, url: string, data?: unknown): InternalAxiosRequestConfig {
+function requestConfig(
+  method: string,
+  url: string,
+  data?: unknown,
+  params?: Record<string, unknown>,
+): InternalAxiosRequestConfig {
   return {
     method,
     url,
     data,
+    params,
     headers: {} as InternalAxiosRequestConfig['headers'],
   };
 }
@@ -24,6 +30,7 @@ describe('frontend sandbox API adapter', () => {
       students: [
         { id: 'student-alex', name: 'Alex', profileId: 'profiles/alex.md' },
         { id: 'student-bella', name: 'Bella', profileId: 'profiles/bella.md' },
+        { id: 'student-cora', name: 'Cora Preview', profileId: null },
       ],
     });
   });
@@ -38,8 +45,14 @@ describe('frontend sandbox API adapter', () => {
     );
 
     expect(students.data).toMatchObject({
-      items: [{ id: 'student-alex', student: 'Alex', profileId: 'profiles/alex.md' }],
-      total: 1,
+      items: expect.arrayContaining([
+        expect.objectContaining({
+          id: 'student-alex',
+          student: 'Alex',
+          profileId: 'profiles/alex.md',
+        }),
+      ]),
+      total: 2,
     });
     expect(student.data).toMatchObject({
       id: 'student-alex',
@@ -96,6 +109,112 @@ describe('frontend sandbox API adapter', () => {
     });
   });
 
+  it('serves a no-profile first-lesson path for assignment-flow UI iteration', async () => {
+    const adapter = createFrontendSandboxApiAdapter();
+
+    const students = await adapter(requestConfig('get', '/api/students?limit=200&status=active'));
+    const student = await adapter(requestConfig('get', '/api/students/student-cora'));
+    const health = await adapter(requestConfig('get', '/api/students/student-cora/memory/health'));
+    const session = await adapter(requestConfig('get', '/api/assignment-sessions/session-cora'));
+    const recording = await adapter(
+      requestConfig('post', '/api/recordings/upload', undefined, { studentId: 'student-cora' }),
+    );
+    const transcript = await adapter(
+      requestConfig('get', '/api/recordings/recording-cora/transcript'),
+    );
+    const populated = await adapter(
+      requestConfig('post', '/api/students/student-cora/profile-drafts/populate-first-from-lesson'),
+    );
+    const revisions = await adapter(
+      requestConfig('get', '/api/profiles/revisions', undefined, {
+        profileId: 'profiles/cora.md',
+      }),
+    );
+    const revision = await adapter(
+      requestConfig('get', '/api/profiles/revisions/profile-revision-cora-first-draft', undefined, {
+        profileId: 'profiles/cora.md',
+      }),
+    );
+    const activated = await adapter(
+      requestConfig('post', '/api/profiles/revisions/profile-revision-cora-first-draft/activate', {
+        profileId: 'profiles/cora.md',
+      }),
+    );
+
+    expect(students.data).toMatchObject({
+      items: expect.arrayContaining([
+        expect.objectContaining({
+          id: 'student-cora',
+          student: 'Cora Preview',
+          profileId: null,
+        }),
+      ]),
+      total: 2,
+    });
+    expect(student.data).toMatchObject({
+      id: 'student-cora',
+      student: 'Cora Preview',
+      profileId: null,
+    });
+    expect(health.data).toMatchObject({
+      studentId: 'student-cora',
+      memoryCounts: { lesson: { ready: { count: 1 } } },
+    });
+    expect(session.data).toMatchObject({
+      id: 'session-cora',
+      studentId: 'student-cora',
+      recordingId: 'recording-cora',
+      transcriptId: 'transcript-cora',
+      currentStage: 'context',
+    });
+    expect(recording.data).toMatchObject({
+      recordingId: 'recording-cora',
+      transcriptId: 'transcript-cora',
+      studentId: 'student-cora',
+    });
+    expect(transcript.data.text).toContain('Cora practiced a short client update');
+    expect(populated.data).toMatchObject({
+      draftRevisionId: 'profile-revision-cora-first-draft',
+      profileId: 'profiles/cora.md',
+      lessonMemoryIds: ['lesson-memory-cora'],
+      homeworkMemoryIds: [],
+      draftRevision: expect.objectContaining({
+        id: 'profile-revision-cora-first-draft',
+        profileId: 'profiles/cora.md',
+        status: 'draft',
+        source: 'lesson_population',
+        structuredContent: expect.objectContaining({
+          overallLevel: 'A2',
+          primaryGoals: ['Give short client updates with confidence.'],
+        }),
+      }),
+    });
+    expect(revisions.data).toMatchObject({
+      items: [
+        expect.objectContaining({
+          id: 'profile-revision-cora-first-draft',
+          status: 'draft',
+        }),
+      ],
+      total: 1,
+    });
+    expect(revision.data).toMatchObject({
+      id: 'profile-revision-cora-first-draft',
+      profileId: 'profiles/cora.md',
+      status: 'draft',
+      structuredContent: expect.objectContaining({
+        overallLevel: 'A2',
+      }),
+    });
+    expect(activated.data).toMatchObject({
+      id: 'profiles/cora.md',
+      currentRevisionId: 'profile-revision-cora-first-draft',
+      structuredContent: expect.objectContaining({
+        overallLevel: 'A2',
+      }),
+    });
+  });
+
   it('creates prompt and draft responses so the browser sandbox can reach review state', async () => {
     const adapter = createFrontendSandboxApiAdapter();
 
@@ -119,6 +238,9 @@ describe('frontend sandbox API adapter', () => {
   it('serves profile draft review endpoints for local Learning page UI iteration', async () => {
     const adapter = createFrontendSandboxApiAdapter();
 
+    const populated = await adapter(
+      requestConfig('post', '/api/students/student-alex/profile-drafts/populate-first-from-lesson'),
+    );
     const refresh = await adapter(
       requestConfig(
         'post',
@@ -139,6 +261,24 @@ describe('frontend sandbox API adapter', () => {
       }),
     );
 
+    expect(populated.data).toMatchObject({
+      draftRevisionId: 'profile-revision-sandbox-first-draft',
+      profileId: 'profiles/alex.md',
+      snapshotId: 'snapshot-sandbox',
+      lessonMemoryIds: ['lesson-memory-sandbox'],
+      homeworkMemoryIds: ['homework-memory-sandbox'],
+      draftRevision: expect.objectContaining({
+        id: 'profile-revision-sandbox-first-draft',
+        status: 'draft',
+        source: 'lesson_population',
+        structuredContent: expect.objectContaining({
+          overallLevel: 'B1',
+          primaryGoals: expect.arrayContaining([
+            'Practice concise workplace updates from recent lessons.',
+          ]),
+        }),
+      }),
+    });
     expect(refresh.data).toMatchObject({
       draftRevisionId: 'profile-revision-sandbox-draft',
       includedCandidateIds: ['candidate-sandbox-study-preference'],

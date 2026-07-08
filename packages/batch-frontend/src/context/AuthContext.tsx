@@ -167,10 +167,18 @@ function BackendAuthProvider({ children }: AuthProviderProps) {
 
   const register = useCallback(
     async (email: string, password: string, role: RegisterRole = 'user', inviteToken?: string) => {
+      sessionGenerationRef.current += 1;
       const normalizedEmail = email.trim().toLowerCase();
-      await registerRequest({ email: normalizedEmail, password, role, inviteToken });
+      const response = await registerRequest({
+        email: normalizedEmail,
+        password,
+        role,
+        inviteToken,
+      });
+      sessionGenerationRef.current += 1;
+      persistSession(response.user, response.accessToken ?? null);
     },
-    [],
+    [persistSession],
   );
 
   const logout = useCallback(async () => {
