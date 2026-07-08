@@ -1690,14 +1690,14 @@ export async function login(credentials: LoginRequest): Promise<AuthResponse> {
   }
 }
 
-export async function register(userData: RegisterRequest): Promise<void> {
+export async function register(userData: RegisterRequest): Promise<AuthResponse> {
   const attempt = async (path: string) => {
     const response = await apiClient.post(path, userData);
-    return response.data;
+    return response.data as AuthResponse;
   };
 
   try {
-    await attempt(buildApiProxyPath('/auth/register'));
+    return await attempt(buildApiProxyPath('/auth/register'));
   } catch (error: unknown) {
     const err = error as {
       response?: { status?: number; data?: { message?: unknown } };
@@ -1712,8 +1712,7 @@ export async function register(userData: RegisterRequest): Promise<void> {
 
     if (status === 404 && !err.config?.url?.includes('/auth/register')) {
       try {
-        await attempt(buildApiProxyPath('/auth/register'));
-        return;
+        return await attempt(buildApiProxyPath('/auth/register'));
       } catch (fallbackError: unknown) {
         const fallback = fallbackError as { response?: { status?: number } };
         if (fallback.response?.status === 404 || isRouteMissing) {
@@ -1735,8 +1734,22 @@ export async function register(userData: RegisterRequest): Promise<void> {
     }
 
     const axiosError = toAxiosError(error);
-    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+    throw new Error(axiosError ? formatRegisterError(axiosError) : formatUnknownError(error));
   }
+}
+
+function formatRegisterError(error: AxiosError): string {
+  const data = error.response?.data;
+  if (data && typeof data === 'object') {
+    const envelope = data as Partial<ErrorEnvelope> & { details?: unknown };
+    if (envelope.code === 'weak_password' && Array.isArray(envelope.details)) {
+      const details = envelope.details.filter(
+        (detail): detail is string => typeof detail === 'string',
+      );
+      if (details.length > 0) return details.join(' ');
+    }
+  }
+  return handleApiError(error);
 }
 
 export async function refreshToken(): Promise<AuthResponse> {

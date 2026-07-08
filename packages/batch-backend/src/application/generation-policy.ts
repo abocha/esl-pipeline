@@ -105,13 +105,16 @@ export function resolveGenerationCandidates(args: {
   workload?: GenerationWorkload;
   providerOverride?: GenerationProvider;
   modelOverride?: string;
+  includeProviderFallbacks?: boolean;
 }): GenerationCandidate[] {
   const providerOrder = resolveGenerationProviderOrder(args.config);
   const prioritizedProviders = args.providerOverride
-    ? [
-        args.providerOverride,
-        ...providerOrder.filter((provider) => provider !== args.providerOverride),
-      ]
+    ? args.includeProviderFallbacks === false
+      ? [args.providerOverride]
+      : [
+          args.providerOverride,
+          ...providerOrder.filter((provider) => provider !== args.providerOverride),
+        ]
     : providerOrder;
 
   const candidates: GenerationCandidate[] = [];

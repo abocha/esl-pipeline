@@ -108,6 +108,32 @@ body.dialog-open {
   font-size: var(--text-sm);
 }
 
+.invite-status {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--color-warning-400) 35%, transparent);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-warning-400) 10%, transparent);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+}
+
+.invite-status-ready {
+  border-color: color-mix(in srgb, var(--color-success-400) 35%, transparent);
+  background: color-mix(in srgb, var(--color-success-400) 10%, transparent);
+}
+
+.invite-status strong {
+  font-weight: 700;
+}
+
+.invite-status span,
+.form-hint {
+  color: var(--text-secondary);
+}
+
 .form-field {
   display: flex;
   flex-direction: column;
@@ -157,6 +183,12 @@ body.dialog-open {
 .input-toggle:hover {
   color: var(--text-primary);
   background: var(--bg-tertiary);
+}
+
+.form-hint {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: 1.4;
 }
 
 .btn-submit {

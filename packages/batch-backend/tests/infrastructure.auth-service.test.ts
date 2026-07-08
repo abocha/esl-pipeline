@@ -299,6 +299,22 @@ describe('infrastructure/auth-service', () => {
       });
     });
 
+    it('validatePassword accepts a memorable 8-character-or-longer password without composition rules', () => {
+      const authService = new AuthService({
+        jwtSecret: 'test-secret',
+        jwtExpiresIn: '15m',
+        refreshTokenExpiresIn: '7d',
+        bcryptRounds: 12,
+      });
+
+      const result = authService.validatePassword('correct horse battery staple');
+
+      expect(result).toEqual({
+        valid: true,
+        errors: [],
+      });
+    });
+
     it('validatePassword returns errors for weak password', () => {
       const authService = new AuthService({
         jwtSecret: 'test-secret',
@@ -311,12 +327,7 @@ describe('infrastructure/auth-service', () => {
 
       expect(result).toEqual({
         valid: false,
-        errors: expect.arrayContaining([
-          'Password must be at least 8 characters long',
-          'Password must contain at least one uppercase letter',
-          'Password must contain at least one number',
-          'Password must contain at least one special character (@$!%*?&)',
-        ]),
+        errors: ['Password must be at least 8 characters long'],
       });
     });
 
