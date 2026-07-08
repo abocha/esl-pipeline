@@ -135,6 +135,13 @@ export function registerPromptEditorTests() {
       expect(screen.queryByRole('textbox', { name: /Profile content/i })).toBeNull();
       expect(screen.queryByRole('button', { name: /Save profile/i })).toBeNull();
       expect(screen.queryByText(/profiles\/alex\.md/i)).toBeNull();
+      expect(screen.getAllByText(/^Student Learning page$/i).length).toBeGreaterThan(0);
+      expect(screen.getByText(/^Selected$/i)).toBeTruthy();
+      expect(screen.getByText(/^Goals$/i)).toBeTruthy();
+      expect(screen.getByText(/^Communication contexts$/i)).toBeTruthy();
+      expect(screen.getByText(/^Strengths$/i)).toBeTruthy();
+      expect(screen.getByText(/^Challenges$/i)).toBeTruthy();
+      expect(screen.getByText(/^Study preferences$/i)).toBeTruthy();
       expect(screen.getByText(/Lead project updates clearly\./i)).toBeTruthy();
       expect(screen.getByText(/Strong listening comprehension\./i)).toBeTruthy();
       expect(screen.getByRole('link', { name: /Open Learning page/i }).getAttribute('href')).toBe(
@@ -163,7 +170,97 @@ export function registerPromptEditorTests() {
       await screen.findByDisplayValue('Student transcript text');
 
       await screen.findByText(/No structured Learning page context is available yet\./i);
+      expect(screen.getByRole('status').textContent).toMatch(/Building lesson memory/i);
+      expect(screen.getByText(/\(1-2 minutes\)/i)).toBeTruthy();
+      expect(
+        screen.queryByRole('button', { name: /Populate first profile from lesson/i }),
+      ).toBeNull();
       expect(screen.queryByText(/Lead project updates clearly\./i)).toBeNull();
+    });
+
+    it('offers first-profile drafting and approval after lesson memory is ready', async () => {
+      const user = createMinimalUser();
+      vi.mocked(api.fetchStudentOptions).mockResolvedValueOnce({
+        students: [
+          { id: 'student-alex', name: 'Alex', profileId: null },
+          { id: 'student-bella', name: 'Bella', profileId: 'profiles/bella.md' },
+        ],
+      });
+      vi.mocked(api.getStudentMemoryHealth).mockResolvedValue({
+        studentId: 'student-alex',
+        latestSnapshot: null,
+        memoryCounts: {
+          lesson: {
+            ready: { count: 1, capped: false, limit: 20 },
+            pending: { count: 0, capped: false, limit: 20 },
+            failed: { count: 0, capped: false, limit: 20 },
+          },
+          homework: {
+            ready: { count: 0, capped: false, limit: 20 },
+            pending: { count: 0, capped: false, limit: 20 },
+            failed: { count: 0, capped: false, limit: 20 },
+          },
+        },
+        latestFailedReason: null,
+        profileCandidateCounts: {
+          pending: 0,
+          approved: 0,
+          rejected: 0,
+          deferred: 0,
+        },
+      });
+
+      renderMinimalAssignment();
+
+      await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
+      await screen.findByRole('option', { name: 'Alex' });
+      await user.selectOptions(
+        screen.getByRole('combobox', { name: /^Student$/i }),
+        'student-alex',
+      );
+      await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+      await screen.findByDisplayValue('Student transcript text');
+
+      const populateButton = await screen.findByRole('button', {
+        name: /Populate first profile from lesson/i,
+      });
+      await user.click(populateButton);
+
+      await waitFor(() => {
+        expect(api.populateFirstProfileFromLesson).toHaveBeenCalledWith('student-alex');
+      });
+      expect(await screen.findByText(/^First profile draft$/i)).toBeTruthy();
+      expect(screen.getByText(/^Draft ready$/i)).toBeTruthy();
+      expect(screen.getByText(/^Goals$/i)).toBeTruthy();
+      expect(screen.getByText(/^Communication contexts$/i)).toBeTruthy();
+      expect(screen.getByText(/^Strengths$/i)).toBeTruthy();
+      expect(screen.getByText(/^Challenges$/i)).toBeTruthy();
+      expect(screen.getByText(/^Study preferences$/i)).toBeTruthy();
+      expect(screen.getByText(/^Built from first lesson memory$/i)).toBeTruthy();
+      expect(screen.getByText(/^Transcript ready$/i)).toBeTruthy();
+      expect(screen.getByText(/Lead project updates clearly\./i)).toBeTruthy();
+      expect(screen.getByText(/Strong listening comprehension\./i)).toBeTruthy();
+      expect(
+        screen.getByText(/Keep examples grounded in real workplace situations\./i),
+      ).toBeTruthy();
+      expect(
+        screen.getByRole('link', { name: /Edit in Learning page/i }).getAttribute('href'),
+      ).toBe(
+        '/students/student-alex/learning?profileId=profiles%2Falex.md&draftRevisionId=revision-draft-1',
+      );
+
+      const approveButton = await screen.findByRole('button', { name: /Approve profile draft/i });
+      await user.click(approveButton);
+
+      await waitFor(() => {
+        expect(api.activateProfileRevision).toHaveBeenCalledWith(
+          'profiles/alex.md',
+          'revision-draft-1',
+        );
+      });
+      expect((await screen.findAllByText(/^Student Learning page$/i)).length).toBeGreaterThan(0);
+      expect(screen.getByText(/^Selected$/i)).toBeTruthy();
+      expect(await screen.findByText(/Lead project updates clearly\./i)).toBeTruthy();
     });
 
     it('generates a prompt after transcript is ready', async () => {

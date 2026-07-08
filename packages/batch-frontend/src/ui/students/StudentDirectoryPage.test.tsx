@@ -92,6 +92,21 @@ describe('StudentDirectoryPage', () => {
     expect(apiMocks.listProfileContents).not.toHaveBeenCalled();
   });
 
+  it('clears create-student validation when the tutor edits the form', async () => {
+    const user = userEvent.setup();
+
+    renderDirectory();
+
+    await user.click(screen.getByRole('button', { name: /Create Student/i }));
+    await user.click(screen.getByRole('button', { name: /^Create Student$/i }));
+
+    expect(screen.getByText('Student name is required.')).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText(/Student Name/i), { target: { value: 'Mina' } });
+
+    expect(screen.queryByText('Student name is required.')).toBeNull();
+  });
+
   it('keeps archived tab results when the active tab load resolves later', async () => {
     const user = userEvent.setup();
     let resolveActiveLoad: (value: {

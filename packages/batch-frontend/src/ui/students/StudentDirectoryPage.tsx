@@ -38,6 +38,14 @@ export const StudentDirectoryPage: React.FC = () => {
   );
   const latestStudentsRequestRef = useRef(0);
 
+  const updateCreateStudentForm = useCallback<
+    React.Dispatch<React.SetStateAction<CreateStudentFormState>>
+  >((update) => {
+    setCreateStudentForm(update);
+    setCreateError(null);
+    setCreateSuccess(null);
+  }, []);
+
   const loadStudents = useCallback(async () => {
     const requestId = latestStudentsRequestRef.current + 1;
     latestStudentsRequestRef.current = requestId;
@@ -146,14 +154,6 @@ export const StudentDirectoryPage: React.FC = () => {
   return (
     <section className="student-directory-layout student-area-theme">
       <StudentAreaDesignSystemStyles />
-      <article className="student-area-panel student-directory-hero">
-        <div>
-          <span className="student-area-eyebrow">Students</span>
-          <h1>Student area</h1>
-          <p>Open a student’s routed workspace or create a new learner record here.</p>
-        </div>
-      </article>
-
       <article className="student-area-panel">
         <CreateStudentDialog
           isOpen={createOpen}
@@ -171,7 +171,7 @@ export const StudentDirectoryPage: React.FC = () => {
             setCreateError(null);
           }}
           onSubmit={() => void handleCreateStudent()}
-          setCreateStudentForm={setCreateStudentForm}
+          setCreateStudentForm={updateCreateStudentForm}
         />
       </article>
 

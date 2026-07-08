@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type {
   AssignmentSession,
+  FoundationalProfile,
   GenerationProvider,
   JobEvent,
   JobOptionsResponse,
@@ -12,12 +13,15 @@ import type {
   UpdateAssignmentSessionRequest,
 } from '../../utils/api';
 import {
+  activateProfileRevision,
   archiveAssignmentSession,
   createAssignmentSession,
   fetchJobOptions,
   fetchPromptOptions,
   getJobStatus,
+  getStudentMemoryHealth,
   getStudentScheduleBillingSurface,
+  populateFirstProfileFromLesson,
   subscribeToJobEvents,
   updateAssignmentSession,
 } from '../../utils/api';
@@ -77,6 +81,7 @@ const FALLBACK_ELEVENLABS_MODELS = [
   'eleven_flash_v2',
 ] as const;
 const RECENT_LESSON_LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000;
+const FIRST_PROFILE_HEALTH_POLL_MS = 10_000;
 
 type UiTtsProvider = (typeof FALLBACK_TTS_PROVIDERS)[number];
 type UiPronunciationChunkTtsProvider = (typeof FALLBACK_PRONUNCIATION_CHUNK_TTS_PROVIDERS)[number];
@@ -234,6 +239,20 @@ export const MinimalAssignment: React.FC = () => {
   const [jobOptionsError, setJobOptionsError] = useState<string | null>(null);
   const [showAllResumeJobs, setShowAllResumeJobs] = useState(false);
   const [startStageMode, setStartStageMode] = useState<StartStageMode>('idle');
+  const [firstProfileLessonMemoryStatus, setFirstProfileLessonMemoryStatus] = useState<
+    'checking' | 'building' | 'ready'
+  >('checking');
+  const [firstProfileLessonMemoryReadyCount, setFirstProfileLessonMemoryReadyCount] = useState(0);
+  const [firstProfileDraft, setFirstProfileDraft] = useState<{
+    profileId: string;
+    draftRevisionId: string;
+    structuredContent: FoundationalProfile | null;
+  } | null>(null);
+  const [firstProfileAssistBusy, setFirstProfileAssistBusy] = useState<
+    'drafting' | 'approving' | null
+  >(null);
+  const [firstProfileAssistApproved, setFirstProfileAssistApproved] = useState(false);
+  const [firstProfileAssistError, setFirstProfileAssistError] = useState<string | null>(null);
 
   const [rerunTargetPronunciationMode, setRerunTargetPronunciationMode] =
     useState<PronunciationMode | null>(null);
@@ -1047,6 +1066,127 @@ export const MinimalAssignment: React.FC = () => {
   }, [jobStatus, resumeSetSelectedResumeJobId, setAuthoringPublishError]);
 
   const transcriptReady = source.transcriptReady;
+  const firstProfileAssistVisible = Boolean(
+    source.selectedStudentId && transcriptReady && !context.selectedProfileId,
+  );
+
+  const refreshFirstProfileLessonMemory = useCallback(async () => {
+    if (!source.selectedStudentId || !transcriptReady || context.selectedProfileId) {
+      return null;
+    }
+
+    setFirstProfileLessonMemoryStatus((current) => (current === 'ready' ? current : 'checking'));
+    setFirstProfileAssistError(null);
+    try {
+      const health = await getStudentMemoryHealth(source.selectedStudentId);
+      const readyCount = health.memoryCounts.lesson.ready.count;
+      setFirstProfileLessonMemoryReadyCount(readyCount);
+      setFirstProfileLessonMemoryStatus(readyCount > 0 ? 'ready' : 'building');
+      if (
+        readyCount === 0 &&
+        health.memoryCounts.lesson.failed.count > 0 &&
+        health.latestFailedReason?.source === 'lesson'
+      ) {
+        setFirstProfileAssistError(
+          health.latestFailedReason.message ||
+            'Lesson memory processing failed. Try refreshing after the transcript is available.',
+        );
+      }
+      return readyCount;
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unable to check lesson memory readiness.';
+      setFirstProfileAssistError(message);
+      setFirstProfileLessonMemoryStatus('building');
+      return null;
+    }
+  }, [context.selectedProfileId, source.selectedStudentId, transcriptReady]);
+
+  useEffect(() => {
+    let active = true;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    if (!firstProfileAssistVisible || firstProfileDraft || firstProfileAssistApproved) {
+      setFirstProfileLessonMemoryReadyCount(0);
+      setFirstProfileLessonMemoryStatus('checking');
+      setFirstProfileAssistError(null);
+      return;
+    }
+
+    const poll = async () => {
+      const readyCount = await refreshFirstProfileLessonMemory();
+      if (!active) return;
+      if (readyCount === 0) {
+        timer = setTimeout(() => void poll(), FIRST_PROFILE_HEALTH_POLL_MS);
+      }
+    };
+
+    void poll();
+
+    return () => {
+      active = false;
+      if (timer) {
+        clearTimeout(timer);
+      }
+    };
+  }, [
+    firstProfileAssistApproved,
+    firstProfileAssistVisible,
+    firstProfileDraft,
+    refreshFirstProfileLessonMemory,
+  ]);
+
+  useEffect(() => {
+    setFirstProfileDraft(null);
+    setFirstProfileAssistApproved(false);
+    setFirstProfileAssistBusy(null);
+    setFirstProfileAssistError(null);
+    setFirstProfileLessonMemoryReadyCount(0);
+    setFirstProfileLessonMemoryStatus('checking');
+  }, [source.selectedStudentId, source.recording?.recordingId]);
+
+  const handlePopulateFirstProfile = useCallback(async () => {
+    if (!source.selectedStudentId) return;
+    markAssignmentUserEdit();
+    setFirstProfileAssistBusy('drafting');
+    setFirstProfileAssistError(null);
+    try {
+      const response = await populateFirstProfileFromLesson(source.selectedStudentId);
+      setFirstProfileDraft({
+        profileId: response.profileId,
+        draftRevisionId: response.draftRevisionId,
+        structuredContent: response.draftRevision.structuredContent ?? null,
+      });
+      setFirstProfileLessonMemoryReadyCount(response.lessonMemoryIds.length);
+      setFirstProfileLessonMemoryStatus('ready');
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unable to populate the first profile draft.';
+      setFirstProfileAssistError(message);
+    } finally {
+      setFirstProfileAssistBusy(null);
+    }
+  }, [markAssignmentUserEdit, source.selectedStudentId]);
+
+  const handleApproveFirstProfileDraft = useCallback(async () => {
+    if (!firstProfileDraft) return;
+    markAssignmentUserEdit();
+    setFirstProfileAssistBusy('approving');
+    setFirstProfileAssistError(null);
+    try {
+      await activateProfileRevision(firstProfileDraft.profileId, firstProfileDraft.draftRevisionId);
+      context.selectProfileId(firstProfileDraft.profileId);
+      setFirstProfileAssistApproved(true);
+      setFirstProfileDraft(null);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unable to approve the profile draft.';
+      setFirstProfileAssistError(message);
+    } finally {
+      setFirstProfileAssistBusy(null);
+    }
+  }, [context.selectProfileId, firstProfileDraft, markAssignmentUserEdit]);
+
   const jobReady = Boolean(jobStatus?.jobId);
   const hasAssignmentContent = authoring.draftText.trim().length > 0;
   const hasStartedFlow =
@@ -1403,9 +1543,24 @@ export const MinimalAssignment: React.FC = () => {
         sectionRef={contextSectionRef}
         headingRef={contextHeadingRef}
         studentId={source.selectedStudentId}
+        studentName={source.selectedStudent?.name ?? null}
         selectedProfileId={context.selectedProfileId}
         profilePreview={context.profilePreview}
         profileRevisionError={context.profileRevisionError}
+        firstProfileAssist={{
+          visible: firstProfileAssistVisible,
+          lessonMemoryStatus:
+            firstProfileLessonMemoryReadyCount > 0 ? 'ready' : firstProfileLessonMemoryStatus,
+          draftProfileId: firstProfileDraft?.profileId ?? null,
+          draftRevisionId: firstProfileDraft?.draftRevisionId ?? null,
+          draftPreview: firstProfileDraft?.structuredContent ?? null,
+          busy: firstProfileAssistBusy,
+          approved: firstProfileAssistApproved,
+          error: firstProfileAssistError,
+          onPopulate: handlePopulateFirstProfile,
+          onApprove: handleApproveFirstProfileDraft,
+          onRefresh: () => void refreshFirstProfileLessonMemory(),
+        }}
         teacherNotes={teacherNotes}
         onTeacherNotesChange={(value) => {
           markAssignmentUserEdit();

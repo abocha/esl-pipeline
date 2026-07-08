@@ -261,6 +261,24 @@ describe('application/generation-policy', () => {
     ).toEqual(['gpt-5.4', 'gpt-5.4-mini', 'gpt-5.4-nano']);
   });
 
+  it('can constrain override candidates to one provider without provider fallback', () => {
+    const config = buildConfig();
+
+    const candidates = resolveGenerationCandidates({
+      config,
+      workload: 'profile_revision_drafting',
+      providerOverride: 'openai',
+      includeProviderFallbacks: false,
+    });
+
+    expect([...new Set(candidates.map((candidate) => candidate.provider))]).toEqual(['openai']);
+    expect(candidates.map((candidate) => candidate.model).slice(0, 3)).toEqual([
+      'gpt-5.4',
+      'gpt-5.4-mini',
+      'gpt-5.4-nano',
+    ]);
+  });
+
   it('collapses profileDraftTertiary when it equals a prior rung, keeps it when distinct', () => {
     // Default config: profileDraftTertiary = 'gpt-5.4-nano' = general fallback.
     // uniqueNonEmpty deduplicates it, so only two distinct OpenAI rungs remain.

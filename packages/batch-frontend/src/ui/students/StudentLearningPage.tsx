@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 
 import type {
   ProfileContentResponse,
@@ -616,9 +617,18 @@ function formatDraftDiffChangeType(changeType: ProfileDraftDiffItem['changeType'
 export const StudentLearningPage: React.FC = () => {
   const { student, studentId, studentLoading, studentError, refreshStudent } =
     useStudentAreaContext();
+  const location = useLocation();
   const latestPageLoadRequestRef = useRef(0);
   const [bootstrapProfileId, setBootstrapProfileId] = useState<string | null>(null);
-  const profileId = student?.profileId ?? bootstrapProfileId ?? '';
+  const profileDraftHandoff = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    const handoffProfileId = params.get('profileId')?.trim() || null;
+    const draftRevisionId = params.get('draftRevisionId')?.trim() || null;
+    return handoffProfileId && draftRevisionId
+      ? { profileId: handoffProfileId, draftRevisionId }
+      : { profileId: null, draftRevisionId: null };
+  }, [location.search]);
+  const profileId = student?.profileId ?? bootstrapProfileId ?? profileDraftHandoff.profileId ?? '';
 
   const [profileForm, setProfileForm] = useState<FoundationalProfileFormState>(
     INITIAL_FOUNDATIONAL_PROFILE_FORM,
@@ -1041,6 +1051,45 @@ export const StudentLearningPage: React.FC = () => {
           setProfileLegacyNotice(null);
         }
 
+        if (profileDraftHandoff.profileId && profileDraftHandoff.draftRevisionId) {
+          try {
+            setBootstrapProfileId(profileDraftHandoff.profileId);
+            const [handoffRevision, handoffRevisions] = await Promise.all([
+              getProfileRevision(
+                profileDraftHandoff.profileId,
+                profileDraftHandoff.draftRevisionId,
+              ),
+              listProfileRevisions(profileDraftHandoff.profileId, {
+                limit: 25,
+                offset: 0,
+                order: 'desc',
+              }),
+            ]);
+            if (!isCurrentPageLoadRequest(requestId)) {
+              return;
+            }
+            const form = foundationalProfileToFormState(handoffRevision.structuredContent);
+            setCurrentRevision(handoffRevision);
+            setProfileForm(form);
+            setLoadedProfileForm(form);
+            setProfileDraftDiffBase(null);
+            setProfileRevisions(handoffRevisions.items ?? []);
+            setProfileLegacyNotice(getLegacyProfileNotice(handoffRevision));
+            setProfileSuccess(
+              'Profile draft opened from the assignment flow. Review, edit, save, then activate it.',
+            );
+          } catch (error) {
+            if (!isCurrentPageLoadRequest(requestId)) {
+              return;
+            }
+            const message =
+              error instanceof Error
+                ? error.message
+                : 'Unable to open the profile draft from the assignment flow.';
+            setProfileError(message);
+          }
+        }
+
         setMemoryOverview(surface.memory);
         setMemoryHealth(surface.memoryHealth ?? null);
         setMemoryHealthDetailsOpen(false);
@@ -1072,7 +1121,13 @@ export const StudentLearningPage: React.FC = () => {
     return () => {
       latestPageLoadRequestRef.current += 1;
     };
-  }, [clearLoadedLearningSurface, isCurrentPageLoadRequest, studentId]);
+  }, [
+    clearLoadedLearningSurface,
+    isCurrentPageLoadRequest,
+    profileDraftHandoff.draftRevisionId,
+    profileDraftHandoff.profileId,
+    studentId,
+  ]);
 
   const handleProfileFieldChange = useCallback(
     (field: keyof FoundationalProfileFormState, value: string) => {
@@ -1399,6 +1454,18 @@ export const StudentLearningPage: React.FC = () => {
     );
   }
 
+  const latestSnapshot = memoryOverview?.latestReadyStudentMemorySnapshot ?? null;
+  const activeBinding = bindingHistory[0] ?? null;
+  const canActivateDraft = currentRevision?.status === 'draft';
+  const unresolvedIssues = memoryOverview?.unresolvedIssues ?? [];
+  const recentLessons = memoryOverview?.recentReadyLessonMemory ?? [];
+  const recentHomework = memoryOverview?.recentReadyHomeworkMemory ?? [];
+  const readyLessonMemoryCount = memoryHealth?.memoryCounts.lesson.ready.count ?? 0;
+  const canPopulateFirstProfileFromLesson = recentLessons.length > 0 || readyLessonMemoryCount > 0;
+  const populateFirstProfileDisabled = profileBusy !== null || !canPopulateFirstProfileFromLesson;
+  const populateFirstProfileHint =
+    'Upload and process first lesson audio before populating the profile from lesson evidence.';
+
   if (!profileId) {
     return (
       <section className="student-learning-layout student-area-theme student-learning-bootstrap">
@@ -1440,10 +1507,15 @@ export const StudentLearningPage: React.FC = () => {
               type="button"
               className="workspace-secondary-btn"
               onClick={() => void handlePopulateFirstProfile()}
-              disabled={profileBusy !== null}
+              disabled={populateFirstProfileDisabled}
             >
               {profileBusy === 'populating' ? 'Populating…' : 'Populate First Profile From Lesson'}
             </button>
+            {!canPopulateFirstProfileFromLesson ? (
+              <p className="workspace-muted" aria-live="polite">
+                {populateFirstProfileHint}
+              </p>
+            ) : null}
           </article>
         </div>
 
@@ -1460,13 +1532,6 @@ export const StudentLearningPage: React.FC = () => {
       </section>
     );
   }
-
-  const latestSnapshot = memoryOverview?.latestReadyStudentMemorySnapshot ?? null;
-  const activeBinding = bindingHistory[0] ?? null;
-  const canActivateDraft = currentRevision?.status === 'draft';
-  const unresolvedIssues = memoryOverview?.unresolvedIssues ?? [];
-  const recentLessons = memoryOverview?.recentReadyLessonMemory ?? [];
-  const recentHomework = memoryOverview?.recentReadyHomeworkMemory ?? [];
 
   return (
     <section className="student-learning-layout student-area-theme">
@@ -1506,7 +1571,7 @@ export const StudentLearningPage: React.FC = () => {
             type="button"
             className="workspace-secondary-btn"
             onClick={() => void handlePopulateFirstProfile()}
-            disabled={profileBusy !== null}
+            disabled={populateFirstProfileDisabled}
           >
             {profileBusy === 'populating' ? 'Populating…' : 'Populate First Profile From Lesson'}
           </button>
@@ -1539,6 +1604,12 @@ export const StudentLearningPage: React.FC = () => {
             {profileBusy === 'activating' ? 'Activating…' : 'Activate Draft'}
           </button>
         </div>
+
+        {!canPopulateFirstProfileFromLesson ? (
+          <p className="workspace-muted" aria-live="polite">
+            {populateFirstProfileHint}
+          </p>
+        ) : null}
 
         {profileError ? (
           <p className="workspace-error" aria-live="polite">

@@ -212,7 +212,7 @@ function seedLearningPageMocks() {
       createdAt: NOW,
       updatedAt: NOW,
     },
-    recentReadyLessonMemory: [],
+    recentReadyLessonMemory: [{ id: 'lesson-1' }],
     recentReadyHomeworkMemory: [],
     unresolvedIssues: [],
   });
@@ -322,9 +322,9 @@ function seedLearningPageMocks() {
   });
 }
 
-function renderLearningPage() {
+function renderLearningPage(initialEntry = '/students/student-alex/learning') {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[initialEntry]}>
       <StudentLearningPage />
     </MemoryRouter>,
   );
@@ -532,6 +532,71 @@ describe('StudentLearningPage', () => {
     expect(screen.getByText(/Empty draft created/i)).toBeTruthy();
   });
 
+  it('opens an assignment-flow profile draft handoff in the editor', async () => {
+    const user = userEvent.setup();
+
+    useStudentAreaContextMock.mockReturnValue({
+      student: {
+        id: 'student-alex',
+        student: 'Alex',
+        profileId: null,
+      },
+      studentId: 'student-alex',
+      studentLoading: false,
+      studentError: null,
+      refreshStudent: vi.fn(async () => {}),
+    });
+    apiMocks.getProfileRevision.mockResolvedValueOnce({
+      id: 'revision-draft-2',
+      profileId: 'profiles/students/alex.md',
+      contentHash: 'hash-2',
+      source: 'lesson_population',
+      status: 'draft',
+      versionNumber: 2,
+      versionLabel: 'v2',
+      activatedAt: null,
+      deprecatedAt: null,
+      createdAt: NOW,
+      createdBy: 'teacher-1',
+      restoredFromRevisionId: null,
+      content: '# Foundational Profile',
+      structuredContent: {
+        schemaVersion: 'foundational_profile_v1',
+        overallLevel: 'B2',
+        primaryGoals: ['Present roadmap updates with confidence.'],
+        communicationContexts: ['Stakeholder meetings'],
+        interestsAndUsefulThemes: ['Product strategy'],
+        stableStrengths: ['Fast comprehension'],
+        persistentChallenges: ['Spoken transitions'],
+        studyPreferences: ['Short repeatable homework'],
+        durableConstraints: ['Busy release weeks'],
+        teacherNotes: 'Derived from latest lesson memory.',
+      },
+    });
+
+    renderLearningPage(
+      '/students/student-alex/learning?profileId=profiles%2Fstudents%2Falex.md&draftRevisionId=revision-draft-2',
+    );
+
+    await waitFor(() => {
+      expect(apiMocks.getProfileRevision).toHaveBeenCalledWith(
+        'profiles/students/alex.md',
+        'revision-draft-2',
+      );
+    });
+    expect(await screen.findByDisplayValue('B2')).toBeTruthy();
+    expect(screen.getByDisplayValue('Present roadmap updates with confidence.')).toBeTruthy();
+    expect(screen.getByText(/Profile draft opened from the assignment flow/i)).toBeTruthy();
+    expect(
+      (screen.getByRole('button', { name: /Activate Draft/i }) as HTMLButtonElement).disabled,
+    ).toBe(false);
+
+    const saveButton = screen.getByRole('button', { name: /Save Draft/i }) as HTMLButtonElement;
+    expect(saveButton.disabled).toBe(true);
+    await user.type(screen.getByLabelText(/Current Level/i), ' plus');
+    expect(saveButton.disabled).toBe(false);
+  });
+
   it('opens the structured populate-from-lesson draft in the editor', async () => {
     const user = userEvent.setup();
 
@@ -564,6 +629,49 @@ describe('StudentLearningPage', () => {
     expect(await screen.findByDisplayValue('B2')).toBeTruthy();
     expect(screen.getByDisplayValue('Present roadmap updates with confidence.')).toBeTruthy();
     expect(screen.getByText(/Draft profile populated from the latest lesson memory/i)).toBeTruthy();
+  });
+
+  it('keeps populate-from-lesson unavailable until lesson memory is ready', async () => {
+    const user = userEvent.setup();
+    apiMocks.getStudentLearningSurface.mockResolvedValueOnce(
+      makeLearningSurface({
+        memory: {
+          studentId: 'student-alex',
+          latestReadyStudentMemorySnapshot: null,
+          recentReadyLessonMemory: [],
+          recentReadyHomeworkMemory: [],
+          unresolvedIssues: [],
+        },
+        memoryHealth: makeMemoryHealth({
+          memoryCounts: {
+            lesson: {
+              ready: { count: 0, capped: false, limit: 500 },
+              pending: { count: 1, capped: false, limit: 500 },
+              failed: { count: 0, capped: false, limit: 500 },
+            },
+            homework: {
+              ready: { count: 0, capped: false, limit: 500 },
+              pending: { count: 0, capped: false, limit: 500 },
+              failed: { count: 0, capped: false, limit: 500 },
+            },
+          },
+        }),
+      }),
+    );
+
+    renderLearningPage();
+
+    const button = await screen.findByRole('button', {
+      name: /Populate First Profile From Lesson/i,
+    });
+    expect((button as HTMLButtonElement).disabled).toBe(true);
+    expect(
+      screen.getByText(/Upload and process first lesson audio before populating/i),
+    ).toBeTruthy();
+
+    await user.click(button);
+
+    expect(apiMocks.populateFirstProfileFromLesson).not.toHaveBeenCalled();
   });
 
   it('keeps operator memory health details collapsed until opened', async () => {

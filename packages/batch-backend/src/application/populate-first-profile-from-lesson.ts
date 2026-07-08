@@ -150,6 +150,13 @@ export async function populateFirstProfileFromLesson(args: {
       409,
     );
   }
+  if (overview.recentReadyLessonMemory.length === 0) {
+    throw new PopulateFirstProfileFromLessonError(
+      'A ready lesson memory entry is required before populating the first profile from lesson evidence.',
+      'lesson_memory_required',
+      409,
+    );
+  }
 
   const prompt = buildPopulatePrompt({
     studentName: student.student,
@@ -174,6 +181,9 @@ export async function populateFirstProfileFromLesson(args: {
       envelope,
       operation: 'lesson_population',
       maxOutputTokens: request.maxOutputTokens ?? DEFAULT_POPULATE_MAX_OUTPUT_TOKENS,
+      providerOverride: 'openai',
+      modelOverride: dependencies.config.generation.models.openai.profileDraftPrimary,
+      includeProviderFallbacks: false,
     },
     overrides: {
       config: dependencies.config,

@@ -17,11 +17,17 @@ export interface ContextController extends ContextHydrationSnapshot {
   profileRevisionError: string | null;
   profilePreview: LearnerProfilePreview | null;
   applyHydratedSnapshot: (snapshot: ContextHydrationSnapshot) => void;
+  selectProfileId: (profileId: string) => void;
 }
 
 export interface LearnerProfilePreview {
   profileId: string;
   overallLevel: string | null;
+  primaryGoals: string[];
+  communicationContexts: string[];
+  stableStrengths: string[];
+  persistentChallenges: string[];
+  studyPreferences: string[];
   goalsAndContexts: string[];
   strengthsAndChallenges: string[];
   teacherNoteSnippet: string | null;
@@ -59,6 +65,11 @@ function buildProfilePreview(
   return {
     profileId,
     overallLevel: structured.overallLevel ?? null,
+    primaryGoals: compactPreviewList(structured.primaryGoals),
+    communicationContexts: compactPreviewList(structured.communicationContexts),
+    stableStrengths: compactPreviewList(structured.stableStrengths),
+    persistentChallenges: compactPreviewList(structured.persistentChallenges),
+    studyPreferences: compactPreviewList(structured.studyPreferences),
     goalsAndContexts: compactPreviewGoals(structured),
     strengthsAndChallenges: compactPreviewStrengths(structured),
     teacherNoteSnippet: compactTeacherNote(structured.teacherNotes),
@@ -78,6 +89,11 @@ export function useMinimalAssignmentContextController({
   const applyHydratedSnapshot = useCallback((snapshot: ContextHydrationSnapshot) => {
     setSelectedProfileId(snapshot.selectedProfileId);
     setProfileSelectionMode(snapshot.profileSelectionMode);
+  }, []);
+
+  const selectProfileId = useCallback((profileId: string) => {
+    setSelectedProfileId(profileId);
+    setProfileSelectionMode('auto');
   }, []);
 
   useEffect(() => {
@@ -129,5 +145,6 @@ export function useMinimalAssignmentContextController({
     profileRevisionError,
     profilePreview,
     applyHydratedSnapshot,
+    selectProfileId,
   };
 }
