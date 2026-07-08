@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Outlet } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -132,7 +132,7 @@ describe('App', () => {
 
     expect(screen.getByRole('heading', { name: /Sign in to get started/i })).toBeTruthy();
 
-    await user.click(screen.getByRole('button', { name: /Login to your account/i }));
+    await user.click(screen.getByRole('button', { name: /^Sign in$/i }));
 
     expect(
       await screen.findByRole(
@@ -158,7 +158,7 @@ describe('App', () => {
 
     renderApp();
 
-    const loginButton = screen.getByRole('button', { name: /Login to your account/i });
+    const loginButton = screen.getByRole('button', { name: /^Sign in$/i });
     loginButton.focus();
 
     await user.click(loginButton);
@@ -191,10 +191,13 @@ describe('App', () => {
 
     renderApp();
 
-    await user.click(screen.getByRole('button', { name: /Login to your account/i }));
-    await user.click(
-      await screen.findByRole('button', { name: /^Sign in$/i }, { timeout: UI_WAIT_TIMEOUT_MS }),
+    await user.click(screen.getByRole('button', { name: /^Sign in$/i }));
+    const dialog = await screen.findByRole(
+      'dialog',
+      { name: /Welcome back/i },
+      { timeout: UI_WAIT_TIMEOUT_MS },
     );
+    await user.click(within(dialog).getByRole('button', { name: /^Sign in$/i }));
 
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toContain('Please fill in all fields');

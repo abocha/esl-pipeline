@@ -188,7 +188,17 @@ describe('AuthProvider', () => {
   });
 
   it('passes invite tokens through registration without changing the client role default', async () => {
-    apiMocks.register.mockResolvedValue(undefined);
+    apiMocks.register.mockResolvedValue({
+      user: {
+        id: 'user-2',
+        email: 'teacher@example.com',
+        role: 'user',
+        isActive: true,
+      },
+      accessToken: 'access-token-registered',
+      expiresIn: 1800,
+      message: 'User registered successfully',
+    });
 
     render(
       <AuthProvider>
@@ -206,5 +216,33 @@ describe('AuthProvider', () => {
         inviteToken: 'invite-token',
       });
     });
+  });
+
+  it('stores the authenticated registration session returned by the backend', async () => {
+    apiMocks.refreshToken.mockRejectedValue(new Error('No session'));
+    apiMocks.register.mockResolvedValue({
+      user: {
+        id: 'user-2',
+        email: 'teacher@example.com',
+        role: 'user',
+        isActive: true,
+      },
+      accessToken: 'access-token-registered',
+      expiresIn: 1800,
+      message: 'User registered successfully',
+    });
+
+    render(
+      <AuthProvider>
+        <AuthProbe />
+        <RegisterControls />
+      </AuthProvider>,
+    );
+
+    expect(await screen.findByText('Signed out')).toBeTruthy();
+    screen.getByRole('button', { name: 'Register' }).click();
+
+    expect(await screen.findByText('teacher@example.com')).toBeTruthy();
+    expect(apiClientMocks.setApiAuthToken).toHaveBeenCalledWith('access-token-registered');
   });
 });

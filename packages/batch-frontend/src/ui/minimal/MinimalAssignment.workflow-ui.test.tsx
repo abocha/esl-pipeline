@@ -364,9 +364,12 @@ describe('MinimalAssignment - staged workflow UI', () => {
       expect(learnerContext?.querySelector('.minimal-profile-card')).toBeNull();
       expect(learnerContext?.querySelector('.minimal-profile-meta-grid')).toBeNull();
       expect(learnerContext?.querySelector('.minimal-profile-scan-group')).toBeNull();
-      expect(learnerScope.getByText(/^Source$/i)).toBeTruthy();
-      expect(learnerScope.getByText(/^Student Learning page$/i)).toBeTruthy();
-      expect(learnerScope.getByText(/^Goals \/ context$/i)).toBeTruthy();
+      expect(learnerScope.getAllByText(/^Student Learning page$/i).length).toBeGreaterThan(0);
+      expect(learnerScope.getByText(/^Selected$/i)).toBeTruthy();
+      expect(learnerScope.getByText(/^Goals$/i)).toBeTruthy();
+      expect(learnerScope.getByText(/^Communication contexts$/i)).toBeTruthy();
+      expect(learnerScope.getByText(/^Strengths$/i)).toBeTruthy();
+      expect(learnerScope.getByText(/^Challenges$/i)).toBeTruthy();
       expect(learnerScope.getByText(/Lead project updates clearly/i)).toBeTruthy();
       expect(learnerScope.getByRole('link', { name: /Open Learning page/i })).toBeTruthy();
     },

@@ -1,3 +1,16 @@
+import type { LucideIcon } from 'lucide-react';
+import {
+  BarChart3,
+  BookOpenText,
+  CheckCircle2,
+  Database,
+  GraduationCap,
+  MessageSquareText,
+  NotebookText,
+  Star,
+  Target,
+  TrendingUp,
+} from 'lucide-react';
 import React from 'react';
 import { Link, useInRouterContext } from 'react-router-dom';
 
@@ -134,18 +147,284 @@ interface ContextStageSectionProps {
   sectionRef?: React.Ref<HTMLElement>;
   headingRef?: React.Ref<HTMLHeadingElement>;
   studentId: string;
+  studentName: string | null;
   selectedProfileId: string;
   profilePreview: {
     profileId: string;
     overallLevel: string | null;
+    primaryGoals: string[];
+    communicationContexts: string[];
+    stableStrengths: string[];
+    persistentChallenges: string[];
+    studyPreferences: string[];
     goalsAndContexts: string[];
     strengthsAndChallenges: string[];
     teacherNoteSnippet: string | null;
     updatedAt: string | null;
   } | null;
   profileRevisionError: string | null;
+  firstProfileAssist: FirstProfileAssistProps;
   teacherNotes: string;
   onTeacherNotesChange: (value: string) => void;
+}
+
+interface FirstProfileAssistProps {
+  visible: boolean;
+  lessonMemoryStatus: 'checking' | 'building' | 'ready';
+  draftProfileId: string | null;
+  draftRevisionId: string | null;
+  draftPreview: FirstProfileDraftPreview | null;
+  busy: 'drafting' | 'approving' | null;
+  approved: boolean;
+  error: string | null;
+  onPopulate: () => void;
+  onApprove: () => void;
+  onRefresh: () => void;
+}
+
+interface FirstProfileDraftPreview {
+  overallLevel: string | null;
+  primaryGoals: string[];
+  communicationContexts: string[];
+  stableStrengths: string[];
+  persistentChallenges: string[];
+  studyPreferences: string[];
+  teacherNotes: string | null;
+}
+
+interface ProfileDossierSection {
+  id: string;
+  title: string;
+  icon: LucideIcon;
+  items?: string[];
+  body?: string | null;
+  badge?: string | null;
+}
+
+interface ProfileDossierProvenanceItem {
+  icon: LucideIcon;
+  label: string;
+}
+
+interface ProfileDossierProps {
+  title: string;
+  description: string;
+  statusLabel: string;
+  studentName: string | null;
+  studentDetail: string;
+  sections: ProfileDossierSection[];
+  provenance?: ProfileDossierProvenanceItem[];
+  actions?: React.ReactNode;
+}
+
+function compactDossierItems(items: readonly string[]): string[] {
+  return items.map((item) => item.trim()).filter(Boolean);
+}
+
+function formatDossierDate(value: string | null): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toLocaleString();
+}
+
+function getProfileInitials(name: string | null): string {
+  const words = name?.trim().split(/\s+/).filter(Boolean) ?? [];
+  if (words.length === 0) return 'LP';
+  return words
+    .slice(0, 2)
+    .map((word) => word[0]?.toUpperCase() ?? '')
+    .join('');
+}
+
+function buildCurrentProfileDossierSections(
+  profilePreview: NonNullable<ContextStageSectionProps['profilePreview']>,
+): ProfileDossierSection[] {
+  return [
+    {
+      id: 'level',
+      title: 'Level',
+      icon: BarChart3,
+      body: profilePreview.overallLevel ? 'Current profile level' : 'Not set yet',
+      badge: profilePreview.overallLevel ?? 'Not set',
+    },
+    {
+      id: 'goals',
+      title: 'Goals',
+      icon: Target,
+      items: compactDossierItems(profilePreview.primaryGoals),
+    },
+    {
+      id: 'communication-contexts',
+      title: 'Communication contexts',
+      icon: MessageSquareText,
+      items: compactDossierItems(profilePreview.communicationContexts),
+    },
+    {
+      id: 'strengths',
+      title: 'Strengths',
+      icon: Star,
+      items: compactDossierItems(profilePreview.stableStrengths),
+    },
+    {
+      id: 'challenges',
+      title: 'Challenges',
+      icon: TrendingUp,
+      items: compactDossierItems(profilePreview.persistentChallenges),
+    },
+    {
+      id: 'study-preferences',
+      title: 'Study preferences',
+      icon: BookOpenText,
+      items: compactDossierItems(profilePreview.studyPreferences),
+    },
+    {
+      id: 'teacher-note',
+      title: 'Teacher note',
+      icon: NotebookText,
+      body: profilePreview.teacherNoteSnippet,
+    },
+  ];
+}
+
+function buildDraftProfileDossierSections(
+  draft: FirstProfileDraftPreview,
+): ProfileDossierSection[] {
+  return [
+    {
+      id: 'level',
+      title: 'Level',
+      icon: BarChart3,
+      body: draft.overallLevel ? 'Estimated from the first lesson memory.' : 'Not set yet',
+      badge: draft.overallLevel ?? 'Not set',
+    },
+    {
+      id: 'goals',
+      title: 'Goals',
+      icon: Target,
+      items: compactDossierItems(draft.primaryGoals),
+    },
+    {
+      id: 'communication-contexts',
+      title: 'Communication contexts',
+      icon: MessageSquareText,
+      items: compactDossierItems(draft.communicationContexts),
+    },
+    {
+      id: 'strengths',
+      title: 'Strengths',
+      icon: Star,
+      items: compactDossierItems(draft.stableStrengths),
+    },
+    {
+      id: 'challenges',
+      title: 'Challenges',
+      icon: TrendingUp,
+      items: compactDossierItems(draft.persistentChallenges),
+    },
+    {
+      id: 'study-preferences',
+      title: 'Study preferences',
+      icon: BookOpenText,
+      items: compactDossierItems(draft.studyPreferences),
+    },
+    {
+      id: 'teacher-note',
+      title: 'Teacher note',
+      icon: NotebookText,
+      body: draft.teacherNotes,
+    },
+  ];
+}
+
+function ProfileDossier({
+  title,
+  description,
+  statusLabel,
+  studentName,
+  studentDetail,
+  sections,
+  provenance = [],
+  actions,
+}: ProfileDossierProps) {
+  const visibleSections = sections.filter(
+    (section) =>
+      section.badge ||
+      (section.body && section.body.trim()) ||
+      (section.items && section.items.length > 0),
+  );
+
+  return (
+    <div className="minimal-profile-dossier">
+      <div className="minimal-profile-dossier-header">
+        <div className="minimal-profile-dossier-student">
+          <span className="minimal-profile-dossier-avatar" aria-hidden="true">
+            {getProfileInitials(studentName)}
+          </span>
+          <div>
+            <h4>{studentName?.trim() || 'Learner profile'}</h4>
+            <p>{studentDetail}</p>
+          </div>
+        </div>
+        <div className="minimal-profile-dossier-state">
+          <div className="minimal-profile-dossier-title-row">
+            <span className="minimal-profile-dossier-title">
+              <GraduationCap aria-hidden="true" />
+              {title}
+            </span>
+            <span className="minimal-profile-dossier-pill">{statusLabel}</span>
+          </div>
+          <p>{description}</p>
+        </div>
+      </div>
+
+      <div className="minimal-profile-dossier-grid">
+        {visibleSections.map((section) => {
+          const SectionIcon = section.icon;
+          return (
+            <section className="minimal-profile-dossier-section" key={section.id}>
+              <div className="minimal-profile-dossier-section-heading">
+                <span className="minimal-profile-dossier-section-icon" aria-hidden="true">
+                  <SectionIcon />
+                </span>
+                <h5>{section.title}</h5>
+                {section.badge ? (
+                  <span className="minimal-profile-dossier-section-badge">{section.badge}</span>
+                ) : null}
+              </div>
+              {section.items && section.items.length > 0 ? (
+                <ul>
+                  {section.items.map((item) => (
+                    <li key={`${section.id}-${item}`}>{item}</li>
+                  ))}
+                </ul>
+              ) : section.body ? (
+                <p>{section.body}</p>
+              ) : null}
+            </section>
+          );
+        })}
+      </div>
+
+      {provenance.length > 0 || actions ? (
+        <div className="minimal-profile-dossier-footer">
+          {provenance.length > 0 ? (
+            <div className="minimal-profile-dossier-provenance">
+              {provenance.map((item) => {
+                const ItemIcon = item.icon;
+                return (
+                  <span key={item.label}>
+                    <ItemIcon aria-hidden="true" />
+                    {item.label}
+                  </span>
+                );
+              })}
+            </div>
+          ) : null}
+          {actions ? <div className="minimal-profile-dossier-actions">{actions}</div> : null}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 interface AssignmentStageSectionProps {
@@ -729,9 +1008,11 @@ export function ContextStageSection({
   sectionRef,
   headingRef,
   studentId,
+  studentName,
   selectedProfileId,
   profilePreview,
   profileRevisionError,
+  firstProfileAssist,
   teacherNotes,
   onTeacherNotesChange,
 }: ContextStageSectionProps) {
@@ -740,6 +1021,31 @@ export function ContextStageSection({
     stage.status === 'current'
       ? 'Next step: review the learner context, add lesson goals here, then create the assignment in the next section.'
       : null;
+  const renderLearningPageLink = (
+    label: string,
+    className = 'minimal-secondary minimal-link-button',
+    options: { profileId?: string | null; draftRevisionId?: string | null } = {},
+  ) => {
+    if (!studentId) return null;
+    const search = new URLSearchParams();
+    if (options.profileId) {
+      search.set('profileId', options.profileId);
+    }
+    if (options.draftRevisionId) {
+      search.set('draftRevisionId', options.draftRevisionId);
+    }
+    const query = search.toString();
+    const path = `/students/${encodeURIComponent(studentId)}/learning${query ? `?${query}` : ''}`;
+    return isInRouterContext ? (
+      <Link className={className} to={path}>
+        {label}
+      </Link>
+    ) : (
+      <a className={className} href={path}>
+        {label}
+      </a>
+    );
+  };
 
   return (
     <StageSection
@@ -757,52 +1063,26 @@ export function ContextStageSection({
           </div>
           {profileRevisionError ? <p className="minimal-error">{profileRevisionError}</p> : null}
           {selectedProfileId && profilePreview ? (
-            <div className="minimal-profile-summary">
-              <dl className="minimal-profile-meta-row">
-                <div className="minimal-profile-meta-item">
-                  <dt>Source</dt>
-                  <dd>Student Learning page</dd>
-                </div>
-                <div className="minimal-profile-meta-item">
-                  <dt>Level</dt>
-                  <dd>{profilePreview.overallLevel ?? 'Not set yet'}</dd>
-                </div>
-                {profilePreview.updatedAt ? (
-                  <div className="minimal-profile-meta-item">
-                    <dt>Updated</dt>
-                    <dd>{new Date(profilePreview.updatedAt).toLocaleString()}</dd>
-                  </div>
-                ) : null}
-              </dl>
-              <div className="minimal-profile-text-grid">
-                {profilePreview.goalsAndContexts.length > 0 ? (
-                  <section className="minimal-profile-text-group">
-                    <h4>Goals / context</h4>
-                    <ul>
-                      {profilePreview.goalsAndContexts.map((item) => (
-                        <li key={`goal-${item}`}>{item}</li>
-                      ))}
-                    </ul>
-                  </section>
-                ) : null}
-                {profilePreview.strengthsAndChallenges.length > 0 ? (
-                  <section className="minimal-profile-text-group">
-                    <h4>Strengths / challenges</h4>
-                    <ul>
-                      {profilePreview.strengthsAndChallenges.map((item) => (
-                        <li key={`signal-${item}`}>{item}</li>
-                      ))}
-                    </ul>
-                  </section>
-                ) : null}
-                {profilePreview.teacherNoteSnippet ? (
-                  <section className="minimal-profile-text-group minimal-profile-text-group-wide">
-                    <h4>Teacher note</h4>
-                    <p>{profilePreview.teacherNoteSnippet}</p>
-                  </section>
-                ) : null}
-              </div>
-            </div>
+            <ProfileDossier
+              title="Student Learning page"
+              description="This approved profile is selected for the assignment."
+              statusLabel="Selected"
+              studentName={studentName}
+              studentDetail="Structured learner profile"
+              sections={buildCurrentProfileDossierSections(profilePreview)}
+              provenance={[
+                { icon: Database, label: 'Student Learning page' },
+                ...(formatDossierDate(profilePreview.updatedAt)
+                  ? [
+                      {
+                        icon: CheckCircle2,
+                        label: `Updated ${formatDossierDate(profilePreview.updatedAt)}`,
+                      },
+                    ]
+                  : []),
+              ]}
+              actions={renderLearningPageLink('Open Learning page')}
+            />
           ) : selectedProfileId ? (
             <p className="minimal-muted">
               This student's Learning page context has not been structured yet. Add lesson guidance
@@ -815,29 +1095,138 @@ export function ContextStageSection({
               assignment, add lesson guidance here, or update the student's Learning page later.
             </p>
           ) : null}
-          <div className="minimal-inline">
-            {studentId ? (
-              isInRouterContext ? (
-                <Link
-                  className="minimal-primary minimal-link-button"
-                  to={`/students/${encodeURIComponent(studentId)}/learning`}
-                >
-                  Open Learning page
-                </Link>
+          {firstProfileAssist.visible ? (
+            <div className="minimal-first-profile-assist" aria-live="polite">
+              {!firstProfileAssist.draftRevisionId ? (
+                <div className="minimal-first-profile-assist-header">
+                  <div>
+                    <h4>
+                      {firstProfileAssist.approved ? 'First profile ready' : 'First profile setup'}
+                    </h4>
+                    <p>
+                      {firstProfileAssist.approved
+                        ? 'The approved profile is selected for this assignment.'
+                        : firstProfileAssist.lessonMemoryStatus === 'ready'
+                          ? 'Lesson memory is ready. Create the first structured profile before generating the assignment.'
+                          : 'The profile button will appear here as soon as the uploaded lesson finishes processing.'}
+                    </p>
+                  </div>
+                  <span
+                    className={`minimal-first-profile-pill ${
+                      firstProfileAssist.approved ? 'minimal-first-profile-pill-ready' : ''
+                    }`}
+                  >
+                    {firstProfileAssist.approved
+                      ? 'Approved'
+                      : firstProfileAssist.lessonMemoryStatus === 'ready'
+                        ? 'Memory ready'
+                        : 'Building memory'}
+                  </span>
+                </div>
+              ) : null}
+              {firstProfileAssist.approved ? (
+                <p className="minimal-success">Profile approved and ready for this assignment.</p>
+              ) : firstProfileAssist.draftRevisionId ? (
+                <>
+                  {firstProfileAssist.draftPreview ? (
+                    <ProfileDossier
+                      title="First profile draft"
+                      description="Review what will be saved before approving."
+                      statusLabel="Draft ready"
+                      studentName={studentName}
+                      studentDetail="No prior profile"
+                      sections={buildDraftProfileDossierSections(firstProfileAssist.draftPreview)}
+                      provenance={[
+                        { icon: Database, label: 'Built from first lesson memory' },
+                        { icon: CheckCircle2, label: 'Transcript ready' },
+                      ]}
+                      actions={
+                        <>
+                          <button
+                            type="button"
+                            className="minimal-primary"
+                            onClick={firstProfileAssist.onApprove}
+                            disabled={firstProfileAssist.busy === 'approving'}
+                          >
+                            {firstProfileAssist.busy === 'approving'
+                              ? 'Approving...'
+                              : 'Approve profile draft'}
+                          </button>
+                          {renderLearningPageLink('Edit in Learning page', undefined, {
+                            profileId: firstProfileAssist.draftProfileId,
+                            draftRevisionId: firstProfileAssist.draftRevisionId,
+                          })}
+                        </>
+                      }
+                    />
+                  ) : (
+                    <p className="minimal-muted">
+                      The draft was created, but no structured preview was returned.
+                    </p>
+                  )}
+                </>
+              ) : firstProfileAssist.lessonMemoryStatus === 'ready' ? (
+                <>
+                  <div className="minimal-inline minimal-first-profile-actions">
+                    <button
+                      type="button"
+                      className="minimal-primary"
+                      onClick={firstProfileAssist.onPopulate}
+                      disabled={firstProfileAssist.busy === 'drafting'}
+                    >
+                      {firstProfileAssist.busy === 'drafting'
+                        ? 'Populating...'
+                        : 'Populate first profile from lesson'}
+                    </button>
+                    <button
+                      type="button"
+                      className="minimal-secondary"
+                      onClick={firstProfileAssist.onRefresh}
+                    >
+                      Refresh
+                    </button>
+                    {renderLearningPageLink('Open Learning page')}
+                  </div>
+                </>
               ) : (
-                <a
-                  className="minimal-primary minimal-link-button"
-                  href={`/students/${encodeURIComponent(studentId)}/learning`}
-                >
+                <>
+                  <div className="minimal-memory-progress" role="status">
+                    <span className="minimal-memory-spinner" aria-hidden="true" />
+                    <span>
+                      {firstProfileAssist.lessonMemoryStatus === 'checking'
+                        ? 'Checking lesson memory'
+                        : 'Building lesson memory'}{' '}
+                      <span className="minimal-memory-estimate">(1-2 minutes)</span>
+                    </span>
+                  </div>
+                  <div className="minimal-inline minimal-first-profile-actions">
+                    <button
+                      type="button"
+                      className="minimal-secondary"
+                      onClick={firstProfileAssist.onRefresh}
+                    >
+                      Check now
+                    </button>
+                    {renderLearningPageLink('Open Learning page')}
+                  </div>
+                </>
+              )}
+              {firstProfileAssist.error ? (
+                <p className="minimal-error">{firstProfileAssist.error}</p>
+              ) : null}
+            </div>
+          ) : null}
+          {!firstProfileAssist.visible ? (
+            <div className="minimal-inline">
+              {studentId && !(selectedProfileId && profilePreview) ? (
+                renderLearningPageLink('Open Learning page', 'minimal-primary minimal-link-button')
+              ) : !studentId ? (
+                <span className="minimal-primary minimal-link-button" aria-disabled="true">
                   Open Learning page
-                </a>
-              )
-            ) : (
-              <span className="minimal-primary minimal-link-button" aria-disabled="true">
-                Open Learning page
-              </span>
-            )}
-          </div>
+                </span>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         <div className="minimal-stage-panel">
