@@ -597,6 +597,66 @@ describe('StudentLearningPage', () => {
     expect(saveButton.disabled).toBe(false);
   });
 
+  it('does not describe an already-active assignment handoff revision as an editable draft', async () => {
+    useStudentAreaContextMock.mockReturnValue({
+      student: {
+        id: 'student-alex',
+        student: 'Alex',
+        profileId: 'profiles/students/alex.md',
+      },
+      studentId: 'student-alex',
+      studentLoading: false,
+      studentError: null,
+      refreshStudent: vi.fn(async () => {}),
+    });
+    apiMocks.getProfileRevision.mockResolvedValueOnce({
+      id: 'revision-active-1',
+      profileId: 'profiles/students/alex.md',
+      contentHash: 'hash-1',
+      source: 'lesson_population',
+      status: 'active',
+      versionNumber: 1,
+      versionLabel: 'v1',
+      activatedAt: NOW,
+      deprecatedAt: null,
+      createdAt: NOW,
+      createdBy: 'teacher-1',
+      restoredFromRevisionId: null,
+      content: '# Foundational Profile',
+      structuredContent: {
+        schemaVersion: 'foundational_profile_v1',
+        overallLevel: 'B1',
+        primaryGoals: ['Lead project updates clearly.'],
+        communicationContexts: ['Weekly team syncs.'],
+        interestsAndUsefulThemes: ['Travel and films.'],
+        stableStrengths: ['Strong listening comprehension.'],
+        persistentChallenges: ['Needs more confident spoken transitions.'],
+        studyPreferences: ['Prefers concise, practical homework.'],
+        durableConstraints: [],
+        teacherNotes: 'Keep examples grounded in real workplace situations.',
+      },
+    });
+
+    renderLearningPage(
+      '/students/student-alex/learning?profileId=profiles%2Fstudents%2Falex.md&draftRevisionId=revision-active-1',
+    );
+
+    await waitFor(() => {
+      expect(apiMocks.getProfileRevision).toHaveBeenCalledWith(
+        'profiles/students/alex.md',
+        'revision-active-1',
+      );
+    });
+    expect(await screen.findByDisplayValue('B1')).toBeTruthy();
+    expect(
+      screen.getByText(/Profile from the assignment flow is active and ready to use/i),
+    ).toBeTruthy();
+    expect(screen.queryByText(/Review, edit, save, then activate it/i)).toBeNull();
+    expect(
+      (screen.getByRole('button', { name: /Activate Draft/i }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+
   it('opens the structured populate-from-lesson draft in the editor', async () => {
     const user = userEvent.setup();
 

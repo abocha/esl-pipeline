@@ -83,6 +83,7 @@ export interface SourceController extends SourceHydrationSnapshot {
   resetSourceFlow: (options?: { resetStudent?: boolean }) => void;
   applyHydratedSnapshot: (snapshot: SourceHydrationSnapshot) => void;
   resolveBoundProfileId: (studentId: string) => string;
+  bindStudentProfile: (studentId: string, profileId: string) => void;
 }
 
 function isSttProvider(value: string | null | undefined): value is SttProvider {
@@ -153,6 +154,18 @@ export function useMinimalAssignmentSourceController({
       studentOptions.find((student) => student.id === studentId)?.profileId ?? '',
     [studentOptions],
   );
+
+  const bindStudentProfile = useCallback((studentId: string, profileId: string) => {
+    const trimmedStudentId = studentId.trim();
+    const trimmedProfileId = profileId.trim();
+    if (!trimmedStudentId || !trimmedProfileId) return;
+
+    setStudentOptions((current) =>
+      current.map((student) =>
+        student.id === trimmedStudentId ? { ...student, profileId: trimmedProfileId } : student,
+      ),
+    );
+  }, []);
 
   const resetSourceFlow = useCallback(
     (options?: { resetStudent?: boolean }) => {
@@ -569,5 +582,6 @@ export function useMinimalAssignmentSourceController({
     resetSourceFlow,
     applyHydratedSnapshot,
     resolveBoundProfileId,
+    bindStudentProfile,
   };
 }
