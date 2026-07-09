@@ -115,6 +115,16 @@ describe('frontend sandbox API adapter', () => {
     const students = await adapter(requestConfig('get', '/api/students?limit=200&status=active'));
     const student = await adapter(requestConfig('get', '/api/students/student-cora'));
     const health = await adapter(requestConfig('get', '/api/students/student-cora/memory/health'));
+    const confirmed = await adapter(
+      requestConfig('post', '/api/students/student-cora/lesson-memory/requests', {
+        recordingId: 'recording-cora',
+        transcriptId: 'transcript-cora',
+        lessonId: null,
+      }),
+    );
+    const healthAfterConfirm = await adapter(
+      requestConfig('get', '/api/students/student-cora/memory/health'),
+    );
     const session = await adapter(requestConfig('get', '/api/assignment-sessions/session-cora'));
     const recording = await adapter(
       requestConfig('post', '/api/recordings/upload', undefined, { studentId: 'student-cora' }),
@@ -158,7 +168,15 @@ describe('frontend sandbox API adapter', () => {
     });
     expect(health.data).toMatchObject({
       studentId: 'student-cora',
-      memoryCounts: { lesson: { ready: { count: 1 } } },
+      memoryCounts: { lesson: { ready: { count: 0 } } },
+    });
+    expect(confirmed.data).toMatchObject({
+      outcome: 'created',
+      lessonMemoryEntryId: 'lesson-memory-cora',
+    });
+    expect(healthAfterConfirm.data).toMatchObject({
+      studentId: 'student-cora',
+      memoryCounts: { lesson: { pending: { count: 1 } } },
     });
     expect(session.data).toMatchObject({
       id: 'session-cora',

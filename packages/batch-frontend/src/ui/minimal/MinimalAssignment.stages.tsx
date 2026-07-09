@@ -7,18 +7,19 @@ import {
   GraduationCap,
   MessageSquareText,
   NotebookText,
+  RefreshCw,
+  ShieldCheck,
   Star,
   Target,
   TrendingUp,
+  UserRound,
 } from 'lucide-react';
 import React from 'react';
 import { Link, useInRouterContext } from 'react-router-dom';
 
 import type {
-  GenerateDraftResponse,
   JobStatus,
   MarkdownValidationResponse,
-  PromptPackageResponse,
   RecordingListItem,
   RecordingStatus,
   SttProvider,
@@ -170,13 +171,18 @@ interface ContextStageSectionProps {
 
 interface FirstProfileAssistProps {
   visible: boolean;
+  confirmationState: 'unconfirmed' | 'edited' | 'confirmed';
+  confirmDisabled: boolean;
   lessonMemoryStatus: 'checking' | 'building' | 'ready';
   draftProfileId: string | null;
   draftRevisionId: string | null;
   draftPreview: FirstProfileDraftPreview | null;
-  busy: 'drafting' | 'approving' | null;
+  busy: 'confirming' | 'drafting' | 'approving' | null;
   approved: boolean;
   error: string | null;
+  onConfirm: () => void;
+  onChangeStudent: () => void;
+  onReplaceAudio: () => void;
   onPopulate: () => void;
   onApprove: () => void;
   onRefresh: () => void;
@@ -1106,9 +1112,11 @@ export function ContextStageSection({
                     <p>
                       {firstProfileAssist.approved
                         ? 'The approved profile is selected for this assignment.'
-                        : firstProfileAssist.lessonMemoryStatus === 'ready'
-                          ? 'Lesson memory is ready. Create the first structured profile before generating the assignment.'
-                          : 'The profile button will appear here as soon as the uploaded lesson finishes processing.'}
+                        : firstProfileAssist.confirmationState !== 'confirmed'
+                          ? 'Confirm the transcript-student pairing before adding this lesson to learner memory.'
+                          : firstProfileAssist.lessonMemoryStatus === 'ready'
+                            ? 'Lesson memory is ready. Create the first structured profile before generating the assignment.'
+                            : 'Building learner memory from the confirmed transcript.'}
                     </p>
                   </div>
                   <span
@@ -1118,9 +1126,11 @@ export function ContextStageSection({
                   >
                     {firstProfileAssist.approved
                       ? 'Approved'
-                      : firstProfileAssist.lessonMemoryStatus === 'ready'
-                        ? 'Memory ready'
-                        : 'Building memory'}
+                      : firstProfileAssist.confirmationState !== 'confirmed'
+                        ? 'Transcript ready'
+                        : firstProfileAssist.lessonMemoryStatus === 'ready'
+                          ? 'Memory ready'
+                          : 'Building memory'}
                   </span>
                 </div>
               ) : null}
@@ -1165,6 +1175,57 @@ export function ContextStageSection({
                     </p>
                   )}
                 </>
+              ) : firstProfileAssist.confirmationState !== 'confirmed' ? (
+                <div className="minimal-memory-confirmation-gate">
+                  <div className="minimal-memory-confirmation-status">
+                    <CheckCircle2 aria-hidden="true" size={18} />
+                    <span>Transcript ready</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="minimal-primary minimal-memory-confirm-button"
+                    onClick={firstProfileAssist.onConfirm}
+                    disabled={
+                      firstProfileAssist.busy === 'confirming' || firstProfileAssist.confirmDisabled
+                    }
+                  >
+                    <CheckCircle2 aria-hidden="true" size={18} />
+                    <span>
+                      {firstProfileAssist.busy === 'confirming'
+                        ? 'Confirming...'
+                        : firstProfileAssist.confirmationState === 'edited'
+                          ? 'Update learner context from edited transcript'
+                          : `Use this transcript for ${studentName ?? 'this student'}'s learner context`}
+                    </span>
+                  </button>
+                  <div className="minimal-memory-confirmation-actions">
+                    <button
+                      type="button"
+                      className="minimal-secondary"
+                      onClick={firstProfileAssist.onChangeStudent}
+                    >
+                      <UserRound aria-hidden="true" size={17} />
+                      <span>Change student</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="minimal-secondary"
+                      onClick={firstProfileAssist.onReplaceAudio}
+                    >
+                      <RefreshCw aria-hidden="true" size={17} />
+                      <span>Replace audio</span>
+                    </button>
+                  </div>
+                  <p className="minimal-memory-confirmation-note">
+                    <ShieldCheck aria-hidden="true" size={17} />
+                    <span>Nothing is added to learner memory until you confirm.</span>
+                  </p>
+                  {firstProfileAssist.confirmDisabled ? (
+                    <p className="minimal-muted">
+                      Save transcript edits before updating learner context.
+                    </p>
+                  ) : null}
+                </div>
               ) : firstProfileAssist.lessonMemoryStatus === 'ready' ? (
                 <>
                   <div className="minimal-inline minimal-first-profile-actions">
