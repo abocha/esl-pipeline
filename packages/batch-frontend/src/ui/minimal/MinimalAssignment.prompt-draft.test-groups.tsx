@@ -182,6 +182,75 @@ export function registerPromptEditorTests() {
       expect(screen.queryByText(/Lead project updates clearly\./i)).toBeNull();
     });
 
+    it('treats a draft-only bound profile as unstructured learner context', async () => {
+      const user = createMinimalUser();
+      vi.mocked(api.fetchStudentOptions).mockResolvedValueOnce({
+        students: [
+          { id: 'student-alex', name: 'Alex', profileId: 'profiles/alex.md' },
+          { id: 'student-bella', name: 'Bella', profileId: 'profiles/bella.md' },
+        ],
+      });
+      vi.mocked(api.getProfileContent).mockRejectedValueOnce(new Error('not_found'));
+
+      renderMinimalAssignment();
+
+      await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
+      await screen.findByRole('option', { name: 'Alex' });
+      await user.selectOptions(
+        screen.getByRole('combobox', { name: /^Student$/i }),
+        'student-alex',
+      );
+      await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+      await screen.findByDisplayValue('Student transcript text');
+
+      await screen.findByText(/Learning page context has not been structured yet/i);
+      expect(screen.queryByText(/^not_found$/i)).toBeNull();
+      expect(
+        screen.getByRole('button', {
+          name: /Use this transcript for Alex's learner context/i,
+        }),
+      ).toBeTruthy();
+
+      await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
+
+      await waitFor(() => {
+        expect(api.createPromptPackage).toHaveBeenCalledWith('rec-1', {
+          templateId: 'tpl-default',
+        });
+      });
+    });
+
+    it('does not offer first-profile replacement when the bound profile preview fails to load', async () => {
+      const user = createMinimalUser();
+      vi.mocked(api.fetchStudentOptions).mockResolvedValueOnce({
+        students: [
+          { id: 'student-alex', name: 'Alex', profileId: 'profiles/alex.md' },
+          { id: 'student-bella', name: 'Bella', profileId: 'profiles/bella.md' },
+        ],
+      });
+      vi.mocked(api.getProfileContent).mockRejectedValueOnce(
+        new Error('Profile service is temporarily unavailable'),
+      );
+
+      renderMinimalAssignment();
+
+      await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
+      await screen.findByRole('option', { name: 'Alex' });
+      await user.selectOptions(
+        screen.getByRole('combobox', { name: /^Student$/i }),
+        'student-alex',
+      );
+      await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+      await screen.findByDisplayValue('Student transcript text');
+
+      await screen.findByText(/Profile service is temporarily unavailable/i);
+      expect(
+        screen.queryByRole('button', {
+          name: /Use this transcript for Alex's learner context/i,
+        }),
+      ).toBeNull();
+    });
+
     it('offers first-profile drafting and approval after lesson memory is ready', async () => {
       const user = createMinimalUser();
       vi.mocked(api.fetchStudentOptions).mockResolvedValueOnce({
@@ -286,6 +355,96 @@ export function registerPromptEditorTests() {
           profileId: 'profiles/alex.md',
         });
       });
+    });
+
+    it('reloads an already-selected draft-only profile after approving the first draft', async () => {
+      const user = createMinimalUser();
+      vi.mocked(api.fetchStudentOptions).mockResolvedValueOnce({
+        students: [
+          { id: 'student-alex', name: 'Alex', profileId: 'profiles/alex.md' },
+          { id: 'student-bella', name: 'Bella', profileId: 'profiles/bella.md' },
+        ],
+      });
+      vi.mocked(api.getProfileContent)
+        .mockRejectedValueOnce(new Error('not_found'))
+        .mockResolvedValueOnce({
+          id: 'profiles/alex.md',
+          label: 'Alex Profile',
+          content: 'PROFILE CONTENT',
+          structuredContent: {
+            schemaVersion: 'foundational_profile_v1',
+            overallLevel: 'B1',
+            primaryGoals: ['Lead project updates clearly.'],
+            communicationContexts: ['Weekly team syncs.'],
+            interestsAndUsefulThemes: ['Travel and films.'],
+            stableStrengths: ['Strong listening comprehension.'],
+            persistentChallenges: ['Needs more confident spoken transitions.'],
+            studyPreferences: ['Prefers concise, practical homework.'],
+            durableConstraints: [],
+            teacherNotes: 'Keep examples grounded in real workplace situations.',
+          },
+          currentRevisionId: 'revision-draft-1',
+          updatedAt: now,
+        });
+      vi.mocked(api.getStudentMemoryHealth).mockResolvedValue({
+        studentId: 'student-alex',
+        latestSnapshot: null,
+        memoryCounts: {
+          lesson: {
+            ready: { count: 1, capped: false, limit: 20 },
+            pending: { count: 0, capped: false, limit: 20 },
+            failed: { count: 0, capped: false, limit: 20 },
+          },
+          homework: {
+            ready: { count: 0, capped: false, limit: 20 },
+            pending: { count: 0, capped: false, limit: 20 },
+            failed: { count: 0, capped: false, limit: 20 },
+          },
+        },
+        latestFailedReason: null,
+        profileCandidateCounts: {
+          pending: 0,
+          approved: 0,
+          rejected: 0,
+          deferred: 0,
+        },
+      });
+
+      renderMinimalAssignment();
+
+      await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
+      await screen.findByRole('option', { name: 'Alex' });
+      await user.selectOptions(
+        screen.getByRole('combobox', { name: /^Student$/i }),
+        'student-alex',
+      );
+      await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+      await screen.findByDisplayValue('Student transcript text');
+      expect(
+        await screen.findByText(/Learning page context has not been structured yet/i),
+      ).toBeTruthy();
+      expect(screen.queryByText(/^not_found$/i)).toBeNull();
+
+      await user.click(
+        screen.getByRole('button', {
+          name: /Use this transcript for Alex's learner context/i,
+        }),
+      );
+      const populateButton = await screen.findByRole('button', {
+        name: /Populate first profile from lesson/i,
+      });
+      await user.click(populateButton);
+      await screen.findByText(/^First profile draft$/i);
+
+      await user.click(await screen.findByRole('button', { name: /Approve profile draft/i }));
+
+      await waitFor(() => {
+        expect(api.getProfileContent).toHaveBeenCalledTimes(2);
+      });
+      expect((await screen.findAllByText(/^Student Learning page$/i)).length).toBeGreaterThan(0);
+      expect(screen.getByText(/^Selected$/i)).toBeTruthy();
+      expect(screen.queryByText(/^not_found$/i)).toBeNull();
+      expect(await screen.findByText(/Lead project updates clearly\./i)).toBeTruthy();
     });
 
     it('generates a prompt after transcript is ready', async () => {
