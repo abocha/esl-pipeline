@@ -94,6 +94,124 @@ describeHttpServerIntegrationSuite(
       expect(insertRecording).not.toHaveBeenCalled();
     });
 
+    it("POST /recordings/upload clones cached artifacts instead of transferring another student's recording", async () => {
+      const cachedStudentId = deriveStudentId('Anna');
+      const requestedStudentId = deriveStudentId('Bella');
+      const listRecordingsBySha256 = vi.spyOn(recordingRepositoryModule, 'listRecordingsBySha256');
+      const listLatestTranscriptsByRecordingIds = vi.spyOn(
+        transcriptRepositoryModule,
+        'listLatestTranscriptsByRecordingIds',
+      );
+      const insertRecording = vi.spyOn(recordingRepositoryModule, 'insertRecording');
+      const insertTranscript = vi.spyOn(transcriptRepositoryModule, 'insertTranscript');
+
+      listRecordingsBySha256.mockResolvedValueOnce([
+        {
+          id: 'recording-anna',
+          source: 'upload',
+          studentId: cachedStudentId,
+          sourcePath: 'anna-lesson.mp3',
+          storageUri: 'memory://recordings/recording-anna.mp3',
+          sha256: 'abc123',
+          bytes: 1024,
+          durationSec: 90,
+          channels: 1,
+          status: 'transcribed',
+          error: null,
+          createdAt: new Date('2024-01-01T00:00:00.000Z'),
+          updatedAt: new Date('2024-01-01T00:05:00.000Z'),
+        },
+      ]);
+      listLatestTranscriptsByRecordingIds.mockResolvedValueOnce([
+        {
+          id: 'transcript-anna',
+          recordingId: 'recording-anna',
+          storageUri: 'memory://transcripts/transcript-anna.txt',
+          rawResponseUri: 'memory://transcripts/transcript-anna.raw.json',
+          mode: 'timeline',
+          model: 'nova-3',
+          language: 'multi',
+          sttProvider: 'deepgram',
+          fallbackUsed: false,
+          summaryJson: null,
+          createdAt: new Date('2024-01-01T00:05:00.000Z'),
+          updatedAt: new Date('2024-01-01T00:05:00.000Z'),
+        },
+      ]);
+      insertRecording.mockResolvedValueOnce({
+        id: 'recording-bella',
+        source: 'upload',
+        studentId: requestedStudentId,
+        sourcePath: 'bella-lesson.mp3',
+        storageUri: 'memory://recordings/recording-anna.mp3',
+        sha256: 'abc123',
+        bytes: 1024,
+        durationSec: 90,
+        channels: 1,
+        status: 'transcribed',
+        error: null,
+        createdAt: new Date('2024-01-02T00:00:00.000Z'),
+        updatedAt: new Date('2024-01-02T00:00:00.000Z'),
+      });
+      insertTranscript.mockResolvedValueOnce({
+        id: 'transcript-bella',
+        recordingId: 'recording-bella',
+        storageUri: 'memory://transcripts/transcript-anna.txt',
+        rawResponseUri: 'memory://transcripts/transcript-anna.raw.json',
+        mode: 'timeline',
+        model: 'nova-3',
+        language: 'multi',
+        sttProvider: 'deepgram',
+        fallbackUsed: false,
+        summaryJson: null,
+        createdAt: new Date('2024-01-02T00:00:00.000Z'),
+        updatedAt: new Date('2024-01-02T00:00:00.000Z'),
+      });
+
+      const boundary = '----esl-test-boundary';
+      const payload = Buffer.concat([
+        Buffer.from(
+          `--${boundary}\r\n` +
+            'Content-Disposition: form-data; name="file"; filename="bella-lesson.mp3"\r\n' +
+            'Content-Type: audio/mpeg\r\n\r\n',
+        ),
+        Buffer.from('mock-audio-content'),
+        Buffer.from(`\r\n--${boundary}--\r\n`),
+      ]);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/recordings/upload?studentId=${requestedStudentId}`,
+        headers: {
+          'content-type': `multipart/form-data; boundary=${boundary}`,
+        },
+        payload,
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({
+        recordingId: 'recording-bella',
+        transcriptId: 'transcript-bella',
+        cacheHit: true,
+        cacheReason: 'transcript_reused',
+        cacheRecordingId: 'recording-anna',
+      });
+      expect(insertRecording).toHaveBeenCalledWith(
+        expect.objectContaining({
+          studentId: requestedStudentId,
+          storageUri: 'memory://recordings/recording-anna.mp3',
+          status: 'transcribed',
+        }),
+      );
+      const insertedTranscript = insertTranscript.mock.calls[0]?.[0];
+      expect(insertedTranscript).toEqual(
+        expect.objectContaining({
+          storageUri: 'memory://transcripts/transcript-anna.txt',
+        }),
+      );
+      expect(insertedTranscript?.recordingId).not.toBe('recording-anna');
+    });
+
     it('POST /recordings/upload matches cached transcript by effective provider when query omits sttProvider', async () => {
       const listRecordingsBySha256 = vi.spyOn(recordingRepositoryModule, 'listRecordingsBySha256');
       const listLatestTranscriptsByRecordingIds = vi.spyOn(

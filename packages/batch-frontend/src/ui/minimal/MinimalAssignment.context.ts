@@ -8,12 +8,15 @@ export interface ContextHydrationSnapshot {
   profileSelectionMode: 'auto' | 'manual';
 }
 
+export type ProfilePreviewStatus = 'none' | 'loading' | 'ready' | 'unstructured' | 'error';
+
 interface UseMinimalAssignmentContextControllerParams {
   selectedStudentId: string;
   resolveBoundProfileId: (studentId: string) => string;
 }
 
 export interface ContextController extends ContextHydrationSnapshot {
+  profilePreviewStatus: ProfilePreviewStatus;
   profileRevisionError: string | null;
   profilePreview: LearnerProfilePreview | null;
   applyHydratedSnapshot: (snapshot: ContextHydrationSnapshot) => void;
@@ -77,14 +80,22 @@ function buildProfilePreview(
   };
 }
 
+function isUnstructuredProfileError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const message = error.message.trim().toLowerCase();
+  return message === 'not_found' || message.includes('not structured yet');
+}
+
 export function useMinimalAssignmentContextController({
   selectedStudentId,
   resolveBoundProfileId,
 }: UseMinimalAssignmentContextControllerParams): ContextController {
   const [selectedProfileId, setSelectedProfileId] = useState('');
   const [profileSelectionMode, setProfileSelectionMode] = useState<'auto' | 'manual'>('auto');
+  const [profilePreviewStatus, setProfilePreviewStatus] = useState<ProfilePreviewStatus>('none');
   const [profileRevisionError, setProfileRevisionError] = useState<string | null>(null);
   const [profilePreview, setProfilePreview] = useState<LearnerProfilePreview | null>(null);
+  const [profileReloadToken, setProfileReloadToken] = useState(0);
 
   const applyHydratedSnapshot = useCallback((snapshot: ContextHydrationSnapshot) => {
     setSelectedProfileId(snapshot.selectedProfileId);
@@ -94,6 +105,7 @@ export function useMinimalAssignmentContextController({
   const selectProfileId = useCallback((profileId: string) => {
     setSelectedProfileId(profileId);
     setProfileSelectionMode('auto');
+    setProfileReloadToken((current) => current + 1);
   }, []);
 
   useEffect(() => {
@@ -114,19 +126,30 @@ export function useMinimalAssignmentContextController({
     const loadSelectedProfile = async () => {
       if (!selectedProfileId) {
         if (!active) return;
+        setProfilePreviewStatus('none');
         setProfilePreview(null);
         setProfileRevisionError(null);
         return;
       }
 
       try {
+        setProfilePreviewStatus('loading');
         const profile = await getProfileContent(selectedProfileId);
         if (!active) return;
-        setProfilePreview(buildProfilePreview(selectedProfileId, profile));
+        const preview = buildProfilePreview(selectedProfileId, profile);
+        setProfilePreview(preview);
+        setProfilePreviewStatus(preview ? 'ready' : 'unstructured');
         setProfileRevisionError(null);
       } catch (error) {
         if (!active) return;
+        if (isUnstructuredProfileError(error)) {
+          setProfilePreviewStatus('unstructured');
+          setProfilePreview(null);
+          setProfileRevisionError(null);
+          return;
+        }
         const message = error instanceof Error ? error.message : 'Unable to load selected profile.';
+        setProfilePreviewStatus('error');
         setProfilePreview(null);
         setProfileRevisionError(message);
       }
@@ -137,11 +160,12 @@ export function useMinimalAssignmentContextController({
     return () => {
       active = false;
     };
-  }, [selectedProfileId]);
+  }, [profileReloadToken, selectedProfileId]);
 
   return {
     selectedProfileId,
     profileSelectionMode,
+    profilePreviewStatus,
     profileRevisionError,
     profilePreview,
     applyHydratedSnapshot,

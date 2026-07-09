@@ -49,6 +49,9 @@ Useful indexes:
 
 - Postgres is the durable store.
 - Redis/BullMQ backs queue execution.
+- Recording upload cache hits reuse compatible immutable STT artifacts. When identical audio is
+  submitted for another student, the backend clones recording/transcript metadata for that student
+  instead of reassigning the original learner-owned artifacts.
 - Local/dev startup runs the API server, batch worker, transcribe worker, and dedicated student-memory worker as separate processes.
 - Canonical lesson/homework/snapshot extraction reserves the shared generation budget before its
   provider call and records actual token use after success. If that post-success accounting write
