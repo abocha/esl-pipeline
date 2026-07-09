@@ -408,13 +408,14 @@ export const MinimalAssignment: React.FC = () => {
     setTranscriptText,
   } = source;
   const { applyHydratedSnapshot: applyContextHydration } = context;
+  const activeAssignmentProfileId = context.profilePreview ? context.selectedProfileId : '';
 
   const authoring = useMinimalAssignmentAuthoringController({
     recordingId: source.recording?.recordingId ?? null,
     lessonId: linkedLessonId || null,
     transcriptStatus: source.transcriptStatus,
     teacherNotes,
-    selectedProfileId: context.selectedProfileId,
+    selectedProfileId: activeAssignmentProfileId,
     selectedTemplateId,
     currentJobId: jobStatus?.jobId ?? null,
     learningPresetCatalogEnabled,
@@ -1074,7 +1075,9 @@ export const MinimalAssignment: React.FC = () => {
 
   const transcriptReady = source.transcriptReady;
   const firstProfileAssistVisible = Boolean(
-    source.selectedStudentId && transcriptReady && !context.selectedProfileId,
+    source.selectedStudentId &&
+      transcriptReady &&
+      (context.profilePreviewStatus === 'none' || context.profilePreviewStatus === 'unstructured'),
   );
   const firstProfileLessonMemoryKey = useMemo(() => {
     const studentId = source.selectedStudentId;
@@ -1115,7 +1118,7 @@ export const MinimalAssignment: React.FC = () => {
     if (
       !source.selectedStudentId ||
       !transcriptReady ||
-      context.selectedProfileId ||
+      context.profilePreviewStatus === 'ready' ||
       !firstProfileLessonMemoryConfirmed
     ) {
       return null;
@@ -1147,7 +1150,7 @@ export const MinimalAssignment: React.FC = () => {
       return null;
     }
   }, [
-    context.selectedProfileId,
+    context.profilePreviewStatus,
     firstProfileLessonMemoryConfirmed,
     source.selectedStudentId,
     transcriptReady,
@@ -1335,7 +1338,7 @@ export const MinimalAssignment: React.FC = () => {
   const publishLabel = 'Open Assignment Handout';
   const publishPending = 'HTML link pending...';
   const hasTeachingContext = Boolean(
-    context.selectedProfileId || teacherNotes.trim() || authoring.promptReady,
+    context.profilePreviewStatus === 'ready' || teacherNotes.trim() || authoring.promptReady,
   );
   const reviewReady =
     hasAssignmentContent &&

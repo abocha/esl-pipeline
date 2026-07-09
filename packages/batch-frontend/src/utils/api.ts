@@ -2216,7 +2216,7 @@ export async function saveProfileDraftRevision(
 export async function activateProfileRevision(
   profileId: string,
   revisionId: string,
-): Promise<ProfileContentResponse> {
+): Promise<ProfileRevisionDetailResponse> {
   try {
     const response = await apiClient.post(
       buildApiProxyPath(`/profiles/revisions/${encodeURIComponent(revisionId)}/activate`),

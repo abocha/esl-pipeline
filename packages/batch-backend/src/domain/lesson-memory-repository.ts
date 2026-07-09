@@ -387,11 +387,13 @@ export async function ensurePendingLessonMemoryEntry(
           updated_at
         FROM lesson_memory_entries
         WHERE transcript_id = $1
+          AND student_id = $2
+          AND recording_id = $3
           AND status = 'ready'
         ORDER BY generated_at DESC, created_at DESC, id DESC
         LIMIT 1
         `,
-        [params.transcriptId],
+        [params.transcriptId, params.studentId, params.recordingId],
       );
 
       const latestReady = readyResult.rows[0];
@@ -434,11 +436,13 @@ export async function ensurePendingLessonMemoryEntry(
           updated_at
         FROM lesson_memory_entries
         WHERE transcript_id = $1
+          AND student_id = $2
+          AND recording_id = $3
           AND status = 'pending'
         ORDER BY generated_at DESC, created_at DESC, id DESC
         LIMIT 1
         `,
-        [params.transcriptId],
+        [params.transcriptId, params.studentId, params.recordingId],
       );
 
       const latestPending = pendingResult.rows[0];
@@ -546,11 +550,20 @@ export async function ensurePendingLessonMemoryEntry(
           superseded_at = $2,
           updated_at = NOW()
         WHERE transcript_id = $3
+          AND student_id = $5
+          AND recording_id = $6
           AND status = 'pending'
           AND id <> $1
           AND generated_at < $4
         `,
-        [id, generatedAt, params.transcriptId, transcriptUpdatedAt],
+        [
+          id,
+          generatedAt,
+          params.transcriptId,
+          transcriptUpdatedAt,
+          params.studentId,
+          params.recordingId,
+        ],
       );
 
       await client.query('COMMIT');

@@ -29,7 +29,11 @@ import {
 } from '../../application/retry-recording-transcription.js';
 import { ValidationError } from '../../application/submit-job.js';
 import { updateRecordingTranscript } from '../../application/update-recording-transcript.js';
-import { RecordingSourceSchema, RecordingStatusSchema } from '../../domain/recording-model.js';
+import {
+  type RecordingRecord,
+  RecordingSourceSchema,
+  RecordingStatusSchema,
+} from '../../domain/recording-model.js';
 import {
   getRecordingById,
   insertRecording,
@@ -37,7 +41,11 @@ import {
   updateRecordingStatus,
 } from '../../domain/recording-repository.js';
 import { deriveStudentId, normalizeStudentName } from '../../domain/student-utils.js';
-import { listLatestTranscriptsByRecordingIds } from '../../domain/transcript-repository.js';
+import type { TranscriptRecord } from '../../domain/transcript-model.js';
+import {
+  insertTranscript,
+  listLatestTranscriptsByRecordingIds,
+} from '../../domain/transcript-repository.js';
 import { FileSanitizationError } from '../../infrastructure/file-sanitization-service.js';
 import { FileValidationError } from '../../infrastructure/file-validation-service.js';
 import { logger } from '../../infrastructure/logger.js';
@@ -217,12 +225,27 @@ export function registerRecordingRoutes(
             }
 
             providerMatches += 1;
+            const recordingForResponse =
+              studentId && cachedRecording.studentId && cachedRecording.studentId !== studentId
+                ? await cloneCachedRecordingForStudent({
+                    cachedRecording,
+                    cachedTranscript,
+                    studentId,
+                    sourcePath,
+                    sha256: fileSha256,
+                  })
+                : {
+                    recording: cachedRecording,
+                    transcript: cachedTranscript,
+                  };
             logger.info('Recording upload cache hit', {
               event: 'recording_upload_cache_hit',
               route: routePath,
               userId: authenticatedUser.id,
-              recordingId: cachedRecording.id,
-              transcriptId: cachedTranscript.id,
+              recordingId: recordingForResponse.recording.id,
+              transcriptId: recordingForResponse.transcript.id,
+              cacheRecordingId: cachedRecording.id,
+              clonedForStudent: recordingForResponse.recording.id !== cachedRecording.id,
               filename,
               sha256: fileSha256,
               requestedProvider: requestedSttProvider ?? null,
@@ -235,8 +258,8 @@ export function registerRecordingRoutes(
 
             return reply.code(200).send({
               ...recordingToDto({
-                ...cachedRecording,
-                transcriptId: cachedTranscript.id,
+                ...recordingForResponse.recording,
+                transcriptId: recordingForResponse.transcript.id,
               }),
               cacheHit: true,
               cacheReason: 'transcript_reused',
@@ -1279,6 +1302,42 @@ export function registerRecordingRoutes(
       }
     },
   );
+}
+
+async function cloneCachedRecordingForStudent(params: {
+  cachedRecording: RecordingRecord;
+  cachedTranscript: TranscriptRecord;
+  studentId: string;
+  sourcePath: string;
+  sha256: string;
+}) {
+  const recordingId = randomUUID();
+  const recording = await insertRecording({
+    id: recordingId,
+    source: 'upload',
+    studentId: params.studentId,
+    sourcePath: params.sourcePath,
+    storageUri: params.cachedRecording.storageUri,
+    sha256: params.sha256,
+    bytes: params.cachedRecording.bytes,
+    durationSec: params.cachedRecording.durationSec,
+    channels: params.cachedRecording.channels,
+    status: 'transcribed',
+    error: null,
+  });
+  const transcript = await insertTranscript({
+    recordingId,
+    storageUri: params.cachedTranscript.storageUri,
+    rawResponseUri: params.cachedTranscript.rawResponseUri,
+    mode: params.cachedTranscript.mode,
+    model: params.cachedTranscript.model,
+    language: params.cachedTranscript.language,
+    sttProvider: params.cachedTranscript.sttProvider,
+    fallbackUsed: params.cachedTranscript.fallbackUsed,
+    summaryJson: params.cachedTranscript.summaryJson,
+  });
+
+  return { recording, transcript };
 }
 
 function normalizeStatusFilter(status?: string | string[] | null): string[] | null {

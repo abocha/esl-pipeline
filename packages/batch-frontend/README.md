@@ -33,6 +33,8 @@ Canonical behavior and current status live in:
 - API traffic goes through `src/utils/api.ts` and `@esl-pipeline/contracts`.
 - Base URL resolution uses runtime override first, then Vite env, then `/api`.
 - The app assumes the extended backend API is enabled.
+- Cache-hit uploads can reuse transcription artifacts without moving another student's recording;
+  the returned recording/transcript IDs remain owned by the selected student.
 - Local UI iteration can use the Vite mock-auth sandbox without a backend:
   - PowerShell:
     ` $env:VITE_BATCH_FRONTEND_SANDBOX='mock-auth'; pnpm --filter @esl-pipeline/batch-frontend dev -- --host 127.0.0.1 --port 5173`

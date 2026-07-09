@@ -86,6 +86,7 @@
 | POST | `/students/:id/credits/adjustments` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | GET | `/students/:id/homework-memory` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | GET | `/students/:id/lesson-memory` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
+| POST | `/students/:id/lesson-memory/requests` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | POST | `/students/:id/lessons` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | PATCH | `/students/:id/lessons/:lessonId` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | GET | `/students/:id/memory` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
