@@ -277,6 +277,15 @@ export function registerPromptEditorTests() {
       expect((await screen.findAllByText(/^Student Learning page$/i)).length).toBeGreaterThan(0);
       expect(screen.getByText(/^Selected$/i)).toBeTruthy();
       expect(await screen.findByText(/Lead project updates clearly\./i)).toBeTruthy();
+
+      await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
+
+      await waitFor(() => {
+        expect(api.createPromptPackage).toHaveBeenCalledWith('rec-1', {
+          templateId: 'tpl-default',
+          profileId: 'profiles/alex.md',
+        });
+      });
     });
 
     it('generates a prompt after transcript is ready', async () => {

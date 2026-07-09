@@ -1279,6 +1279,7 @@ export const MinimalAssignment: React.FC = () => {
     setFirstProfileAssistError(null);
     try {
       await activateProfileRevision(firstProfileDraft.profileId, firstProfileDraft.draftRevisionId);
+      source.bindStudentProfile(source.selectedStudentId, firstProfileDraft.profileId);
       context.selectProfileId(firstProfileDraft.profileId);
       setFirstProfileAssistApproved(true);
       setFirstProfileDraft(null);
@@ -1289,7 +1290,7 @@ export const MinimalAssignment: React.FC = () => {
     } finally {
       setFirstProfileAssistBusy(null);
     }
-  }, [context, firstProfileDraft, markAssignmentUserEdit]);
+  }, [context, firstProfileDraft, markAssignmentUserEdit, source]);
 
   const jobReady = Boolean(jobStatus?.jobId);
   const hasAssignmentContent = authoring.draftText.trim().length > 0;

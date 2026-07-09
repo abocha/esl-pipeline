@@ -1076,7 +1076,9 @@ export const StudentLearningPage: React.FC = () => {
             setProfileRevisions(handoffRevisions.items ?? []);
             setProfileLegacyNotice(getLegacyProfileNotice(handoffRevision));
             setProfileSuccess(
-              'Profile draft opened from the assignment flow. Review, edit, save, then activate it.',
+              handoffRevision.status === 'draft'
+                ? 'Profile draft opened from the assignment flow. Review, edit, save, then activate it.'
+                : 'Profile from the assignment flow is active and ready to use.',
             );
           } catch (error) {
             if (!isCurrentPageLoadRequest(requestId)) {
