@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [9.7.2] - 2026-07-09
+
+### Changed
+
+- Automated release from PR #127: Fix cached transcript learner context (https://github.com/abocha/esl-pipeline/pull/127)
+
 ## [9.7.1] - 2026-07-09
 
 ### Changed
