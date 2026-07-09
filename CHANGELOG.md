@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [9.7.0] - 2026-07-09
+
+### Changed
+
+- Automated release from PR #125: Confirm transcript before lesson memory (https://github.com/abocha/esl-pipeline/pull/125)
+
 ## [9.6.0] - 2026-07-08
 
 ### Changed
