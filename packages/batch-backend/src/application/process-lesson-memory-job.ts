@@ -8,6 +8,7 @@ import {
 } from '../domain/lesson-memory-repository.js';
 import { getPromptPackageById } from '../domain/prompt-package-repository.js';
 import { getTranscriptByRecordingId } from '../domain/transcript-repository.js';
+import { logger } from '../infrastructure/logger.js';
 import {
   createTranscriptionStorageForUri,
   type TranscriptionStorage,
@@ -23,12 +24,14 @@ import {
   isStudentMemoryPacingDeferredError,
   type StudentMemoryGenerationPacer,
 } from './student-memory-generation-pacing.js';
+import { applyGeneratedLessonTitleIfPlaceholder } from './student-schedule-billing.js';
 
 export interface ProcessLessonMemoryJobPayload {
   kind: 'lesson-memory-generate';
   transcriptId: string;
   recordingId: string;
   studentId: string;
+  lessonId?: string | null;
   promptPackageId?: string | null;
   pendingEntryId: string;
   provider: GenerationProvider;
@@ -51,6 +54,9 @@ export interface ProcessLessonMemoryJobDependencies {
   };
   snapshots: {
     requestRefresh: typeof requestStudentMemorySnapshotRefresh;
+  };
+  lessons: {
+    applyGeneratedTitleIfPlaceholder: typeof applyGeneratedLessonTitleIfPlaceholder;
   };
   pacer: StudentMemoryGenerationPacer;
 }
@@ -77,6 +83,9 @@ export async function processLessonMemoryJob(args: {
   };
   const snapshots = args.overrides?.snapshots ?? {
     requestRefresh: requestStudentMemorySnapshotRefresh,
+  };
+  const lessons = args.overrides?.lessons ?? {
+    applyGeneratedTitleIfPlaceholder: applyGeneratedLessonTitleIfPlaceholder,
   };
   const pacer = args.overrides?.pacer ?? createStudentMemoryGenerationPacer(args.config);
 
@@ -140,6 +149,22 @@ export async function processLessonMemoryJob(args: {
       supersededById: result.entry.id,
       supersededAt: result.entry.generatedAt,
     });
+    if (args.payload.lessonId && result.entry.lessonTitle) {
+      try {
+        await lessons.applyGeneratedTitleIfPlaceholder({
+          studentId: args.payload.studentId,
+          lessonId: args.payload.lessonId,
+          title: result.entry.lessonTitle,
+        });
+      } catch (error) {
+        logger.warn('Generated lesson title application failed; continuing memory refresh', {
+          event: 'lesson_memory_title_apply_failed',
+          lessonId: args.payload.lessonId,
+          lessonMemoryEntryId: result.entry.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
     await snapshots.requestRefresh({
       config: args.config,
       params: {

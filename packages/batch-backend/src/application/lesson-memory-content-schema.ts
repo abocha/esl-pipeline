@@ -101,6 +101,7 @@ export const LessonMemoryPronunciationFocusSchema = z
 
 export const LessonMemoryContentSchema = z
   .object({
+    lessonTitle: z.string().trim().min(1).max(80).nullable(),
     lessonSummary: NonEmptyStringSchema,
     topicsDiscussed: z.array(LessonMemoryTopicSchema),
     mistakePatterns: z.array(LessonMemoryMistakePatternSchema),
@@ -194,6 +195,7 @@ export const LESSON_MEMORY_CONTENT_JSON_SCHEMA = {
   type: 'object',
   additionalProperties: false,
   properties: {
+    lessonTitle: nullableStringJsonSchema(),
     lessonSummary: { type: 'string', minLength: 1 },
     topicsDiscussed: {
       type: 'array',
@@ -324,6 +326,7 @@ export const LESSON_MEMORY_CONTENT_JSON_SCHEMA = {
   },
   required: [
     'lessonSummary',
+    'lessonTitle',
     'topicsDiscussed',
     'mistakePatterns',
     'grammarReviewed',

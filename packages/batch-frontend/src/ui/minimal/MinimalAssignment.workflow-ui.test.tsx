@@ -165,6 +165,71 @@ describe('MinimalAssignment - staged workflow UI', () => {
     INTEGRATION_TEST_TIMEOUT_MS,
   );
 
+  it(
+    'confirms a ready transcript before building first-profile lesson memory',
+    async () => {
+      const user = createMinimalUser();
+      vi.mocked(api.fetchStudentOptions).mockResolvedValue({
+        students: [{ id: 'student-cora', name: 'Cora', profileId: null as never }],
+      });
+      vi.mocked(api.uploadRecording).mockResolvedValue(
+        makeRecording({ studentId: 'student-cora', status: 'transcribed', transcriptId: 'tx-1' }),
+      );
+      vi.mocked(api.getRecording).mockResolvedValue(
+        makeRecording({ studentId: 'student-cora', status: 'transcribed', transcriptId: 'tx-1' }),
+      );
+
+      renderMinimalAssignment();
+      await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
+      await screen.findByRole('option', { name: 'Cora' });
+      await user.selectOptions(
+        screen.getByRole('combobox', { name: /^Student$/i }),
+        'student-cora',
+      );
+      await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+      await screen.findByDisplayValue('Student transcript text');
+
+      expect(api.getStudentMemoryHealth).not.toHaveBeenCalled();
+      expect(screen.queryByText(/Building lesson memory/i)).toBeNull();
+      expect(screen.getAllByText('Transcript ready').length).toBeGreaterThan(0);
+      const confirmButton = screen.getByRole('button', {
+        name: /Use this transcript for Cora's learner context/i,
+      });
+      expect(
+        screen.getByText('Nothing is added to learner memory until you confirm.'),
+      ).toBeTruthy();
+
+      await user.click(confirmButton);
+
+      await waitFor(() => {
+        expect(api.requestLessonMemoryFromTranscript).toHaveBeenCalledWith('student-cora', {
+          recordingId: 'rec-1',
+          transcriptId: 'tx-1',
+          lessonId: null,
+        });
+      });
+      expect(await screen.findByText(/Building lesson memory/i)).toBeTruthy();
+      await waitFor(() => {
+        expect(api.getStudentMemoryHealth).toHaveBeenCalledWith('student-cora');
+      });
+
+      fireEvent.change(screen.getByDisplayValue('Student transcript text'), {
+        target: { value: 'Edited transcript text' },
+      });
+      expect(
+        (
+          screen.getByRole('button', {
+            name: /Update learner context from edited transcript/i,
+          }) as HTMLButtonElement
+        ).disabled,
+      ).toBe(true);
+      expect(
+        screen.getByText(/Save transcript edits before updating learner context/i),
+      ).toBeTruthy();
+    },
+    INTEGRATION_TEST_TIMEOUT_MS,
+  );
+
   it('lands resumed work in a later stage with progress markers', async () => {
     await renderResumedAssignment(
       {

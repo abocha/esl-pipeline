@@ -72,6 +72,7 @@ describe('application/process-lesson-memory-job', () => {
 
   it('supersedes pending lesson-memory entries after a successful ready write', async () => {
     const supersedePendingForTranscript = vi.fn().mockResolvedValue([]);
+    const applyGeneratedTitleIfPlaceholder = vi.fn().mockResolvedValue(true);
 
     await processLessonMemoryJob({
       config: createTestConfig(),
@@ -81,6 +82,7 @@ describe('application/process-lesson-memory-job', () => {
         recordingId: 'recording-1',
         studentId: 'student-1',
         promptPackageId: 'prompt-1',
+        lessonId: 'lesson-1',
         pendingEntryId: 'pending-1',
         provider: 'openai',
         model: 'gpt-5.2',
@@ -105,6 +107,7 @@ describe('application/process-lesson-memory-job', () => {
         generator: vi.fn().mockResolvedValue({
           entry: {
             id: 'ready-1',
+            lessonTitle: 'Travel Plans Review',
             generatedAt: new Date('2026-03-20T00:00:00.000Z'),
           },
         }),
@@ -119,6 +122,9 @@ describe('application/process-lesson-memory-job', () => {
         snapshots: {
           requestRefresh: vi.fn(),
         },
+        lessons: {
+          applyGeneratedTitleIfPlaceholder,
+        },
       },
     });
 
@@ -126,6 +132,11 @@ describe('application/process-lesson-memory-job', () => {
       transcriptId: 'transcript-1',
       supersededById: 'ready-1',
       supersededAt: new Date('2026-03-20T00:00:00.000Z'),
+    });
+    expect(applyGeneratedTitleIfPlaceholder).toHaveBeenCalledWith({
+      studentId: 'student-1',
+      lessonId: 'lesson-1',
+      title: 'Travel Plans Review',
     });
   });
 

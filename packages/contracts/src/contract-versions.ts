@@ -13,8 +13,8 @@ export const API_CONTRACT_VERSION = '3.0.0';
 export const MANIFEST_CONTRACT_VERSION = '3.0.0';
 export const PROMPT_SCHEMA_VERSION = '2.0.0';
 export const VALIDATOR_CONTRACT_VERSION = '2.0.0';
-export const DB_CONTRACT_VERSION = '0.20.0';
-export const DB_MIGRATION_HEAD = '0041_profile_revision_refresh_source';
+export const DB_CONTRACT_VERSION = '0.21.0';
+export const DB_MIGRATION_HEAD = '0042_lesson_memory_titles';
 
 export const CONTRACT_VERSIONS: Readonly<ContractVersionRegistry> = Object.freeze({
   api: API_CONTRACT_VERSION,

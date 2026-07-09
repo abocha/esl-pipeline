@@ -7,6 +7,7 @@ describe('application/generate-lesson-memory-entry', () => {
   it('persists extracted lesson memory and supersedes older ready rows for the transcript', async () => {
     const extractor = vi.fn().mockResolvedValue({
       content: {
+        lessonTitle: 'Travel Plans Review',
         lessonSummary: 'Talked about travel plans and present perfect.',
         topicsDiscussed: [{ topic: 'travel', note: 'Weekend plans and destinations.' }],
         mistakePatterns: [
@@ -52,6 +53,7 @@ describe('application/generate-lesson-memory-entry', () => {
         status: params.status,
         sourceKind: 'lesson_transcript',
         generationNotes: params.generationNotes ?? null,
+        lessonTitle: params.lessonTitle ?? null,
         lessonSummary: params.lessonSummary ?? null,
         topicsDiscussed: params.topicsDiscussed ?? [],
         mistakePatterns: params.mistakePatterns ?? [],
@@ -106,6 +108,7 @@ describe('application/generate-lesson-memory-entry', () => {
         schemaVersion: 'lesson-memory.v1',
         provider: 'openrouter',
         model: 'qwen/qwen3-235b-a22b',
+        lessonTitle: 'Travel Plans Review',
         lessonSummary: 'Talked about travel plans and present perfect.',
       }),
     );

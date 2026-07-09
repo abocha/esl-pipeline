@@ -312,6 +312,7 @@ export async function createPromptPackage(
           studentId: recording.studentId,
           transcriptId: transcript.id,
           recordingId: transcript.recordingId,
+          lessonId: promptPackage.lessonId ?? params.lessonId ?? null,
           promptPackageId: promptPackage.id,
           trigger: 'prompt-package-created',
         },

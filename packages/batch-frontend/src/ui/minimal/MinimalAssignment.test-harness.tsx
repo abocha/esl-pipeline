@@ -69,6 +69,7 @@ vi.mock('../../utils/api', () => ({
   listProfileRevisions: vi.fn(),
   materializeDraft: vi.fn(),
   populateFirstProfileFromLesson: vi.fn(),
+  requestLessonMemoryFromTranscript: vi.fn(),
   restoreProfileRevision: vi.fn(),
   retryRecordingTranscription: vi.fn(),
   rerunJob: vi.fn(),
@@ -805,6 +806,11 @@ export function setupMinimalAssignmentTest() {
         teacherNotes: 'Keep examples grounded in real workplace situations.',
       },
     },
+  });
+  vi.mocked(api.requestLessonMemoryFromTranscript).mockResolvedValue({
+    outcome: 'created',
+    lessonMemoryEntryId: 'lesson-memory-1',
+    lessonTitle: null,
   });
   vi.mocked(api.activateProfileRevision).mockResolvedValue({
     id: 'profiles/alex.md',

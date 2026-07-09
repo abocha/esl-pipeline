@@ -90,6 +90,7 @@
 9. `docs/plans/student-memory-system-upgrade/v1-1-bounded-snapshot-refresh.md` - Phases 0-4
    implemented and in PR-ready validation; archive after merge, with Phase 5 remaining Closed Alpha
    follow-up polish.
+10. `docs/plans/2026-07-09-confirmed-transcript-lesson-memory.md`
 
 ## Historical and Generated Aids
 
