@@ -813,8 +813,18 @@ export function setupMinimalAssignmentTest() {
     lessonTitle: null,
   });
   vi.mocked(api.activateProfileRevision).mockResolvedValue({
-    id: 'profiles/alex.md',
-    label: 'Alex Profile',
+    id: 'revision-draft-1',
+    profileId: 'profiles/alex.md',
+    contentHash: 'hash-draft-1',
+    source: 'lesson_population',
+    status: 'active',
+    versionNumber: 2,
+    versionLabel: 'v2',
+    activatedAt: now,
+    deprecatedAt: null,
+    createdAt: now,
+    createdBy: null,
+    restoredFromRevisionId: null,
     content: 'PROFILE CONTENT',
     structuredContent: {
       schemaVersion: 'foundational_profile_v1',
@@ -828,8 +838,6 @@ export function setupMinimalAssignmentTest() {
       durableConstraints: [],
       teacherNotes: 'Keep examples grounded in real workplace situations.',
     },
-    currentRevisionId: 'revision-draft-1',
-    updatedAt: now,
   });
 
   vi.mocked(api.uploadRecording).mockResolvedValue(makeRecording());

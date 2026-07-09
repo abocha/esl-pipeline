@@ -713,4 +713,132 @@ describe('application/prompt-package', () => {
     );
     expect(explicitPathResult?.profilePath).toBe('profiles/explicit.md');
   });
+
+  it('ignores an implicit student profile fallback when the bound profile has no active revision', async () => {
+    const allowedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-prompt-draft-bound-'));
+    const templatePath = path.join(allowedDir, 'template.md');
+    const defaultProfilePath = path.join(allowedDir, 'default-profile.md');
+    const draftOnlyProfileId = 'profiles/draft-only.md';
+
+    await fs.writeFile(templatePath, 'Hello\nFooter\n', 'utf8');
+    await fs.writeFile(defaultProfilePath, 'DEFAULT PROFILE\n', 'utf8');
+
+    const transcript = createTranscriptRecord();
+    const storage = createStorageStub({
+      getText: async () => 'TRANSCRIPT BODY',
+    });
+
+    const result = await createPromptPackage(
+      {
+        recordingId: transcript.recordingId,
+        templateId: 'template.md',
+      },
+      {
+        config: createConfig(templatePath, defaultProfilePath),
+        storage,
+        transcripts: {
+          getByRecordingId: async () => transcript,
+        },
+        recordings: {
+          getById: async () => ({
+            id: transcript.recordingId,
+            source: 'upload',
+            studentId: 'student-1',
+            sourcePath: null,
+            storageUri: 'local://recordings/recording-1.opus',
+            sha256: null,
+            bytes: 1,
+            durationSec: null,
+            channels: null,
+            status: 'transcribed',
+            error: null,
+            createdAt: new Date('2024-01-01T00:00:00Z'),
+            updatedAt: new Date('2024-01-01T00:00:00Z'),
+          }),
+        },
+        students: {
+          getById: async () => ({
+            id: 'student-1',
+            student: 'Student One',
+            profileId: draftOnlyProfileId,
+          }),
+        },
+        promptPackages: createPromptPackageRepositoryStub(),
+        profileRevisions: createProfileRevisionRepositoryStub({
+          getActive: async (profileId) => {
+            if (profileId === draftOnlyProfileId) return null;
+            return createProfileRevisionRepositoryStub().getActive(profileId);
+          },
+        }),
+        templateRevisions: createTemplateRevisionRepositoryStub(),
+        bindings: createBindingResolverStub(),
+        promptOptions: createPromptOptionsStub({
+          strictAllowlist: true,
+          allowedProfileIds: [],
+        }),
+      },
+    );
+
+    expect(result?.profilePath).toBe('default-profile.md');
+  });
+
+  it('propagates an active-revision lookup failure for an implicit student profile', async () => {
+    const allowedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-prompt-profile-lookup-'));
+    const templatePath = path.join(allowedDir, 'template.md');
+    const defaultProfilePath = path.join(allowedDir, 'default-profile.md');
+    const boundProfileId = 'profiles/bound.md';
+    await fs.writeFile(templatePath, 'Hello\nFooter\n', 'utf8');
+    await fs.writeFile(defaultProfilePath, 'DEFAULT PROFILE\n', 'utf8');
+
+    const transcript = createTranscriptRecord();
+    await expect(
+      createPromptPackage(
+        { recordingId: transcript.recordingId, templateId: 'template.md' },
+        {
+          config: createConfig(templatePath, defaultProfilePath),
+          storage: createStorageStub({ getText: async () => 'TRANSCRIPT BODY' }),
+          transcripts: { getByRecordingId: async () => transcript },
+          recordings: {
+            getById: async () => ({
+              id: transcript.recordingId,
+              source: 'upload',
+              studentId: 'student-1',
+              sourcePath: null,
+              storageUri: 'local://recordings/recording-1.opus',
+              sha256: null,
+              bytes: 1,
+              durationSec: null,
+              channels: null,
+              status: 'transcribed',
+              error: null,
+              createdAt: new Date('2024-01-01T00:00:00Z'),
+              updatedAt: new Date('2024-01-01T00:00:00Z'),
+            }),
+          },
+          students: {
+            getById: async () => ({
+              id: 'student-1',
+              student: 'Student One',
+              profileId: boundProfileId,
+            }),
+          },
+          promptPackages: createPromptPackageRepositoryStub(),
+          profileRevisions: createProfileRevisionRepositoryStub({
+            getActive: async (profileId) => {
+              if (profileId === boundProfileId) {
+                throw new Error('profile revisions database unavailable');
+              }
+              return createProfileRevisionRepositoryStub().getActive(profileId);
+            },
+          }),
+          templateRevisions: createTemplateRevisionRepositoryStub(),
+          bindings: createBindingResolverStub(),
+          promptOptions: createPromptOptionsStub({
+            strictAllowlist: true,
+            allowedProfileIds: [],
+          }),
+        },
+      ),
+    ).rejects.toThrow('profile revisions database unavailable');
+  });
 });

@@ -217,8 +217,14 @@ export async function createPromptPackage(
     }
   }
 
+  let implicitStudentProfileId = studentProfileId;
+  if (!params.profileId && !params.profilePath && implicitStudentProfileId) {
+    const activeStudentProfileRevision = await profileRevisions.getActive(implicitStudentProfileId);
+    implicitStudentProfileId = activeStudentProfileRevision ? implicitStudentProfileId : null;
+  }
+
   const fallbackProfileId =
-    params.profileId ?? (params.profilePath ? undefined : (studentProfileId ?? undefined));
+    params.profileId ?? (params.profilePath ? undefined : (implicitStudentProfileId ?? undefined));
 
   const selection = await promptOptions.resolveSelection(
     {

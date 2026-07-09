@@ -132,4 +132,65 @@ describeIfPg('domain/lesson-memory-repository', () => {
     expect(entries.some((entry) => entry.status === 'ready')).toBe(true);
     expect(entries.some((entry) => entry.status === 'pending')).toBe(true);
   });
+
+  it("does not reuse another student's ready lesson memory for the same transcript", async () => {
+    const originalStudentId = randomUUID();
+    const confirmedStudentId = randomUUID();
+    const recordingId = randomUUID();
+    const transcriptId = randomUUID();
+    const generatedAt = new Date(Date.now() + 60_000);
+
+    await withPgClient(async (client) => {
+      await client.query(
+        `INSERT INTO students (id, student, created_at, updated_at)
+         VALUES ($1, 'Ari', NOW(), NOW()), ($2, 'Bea', NOW(), NOW())`,
+        [originalStudentId, confirmedStudentId],
+      );
+      await client.query(
+        `INSERT INTO recordings (id, source, student_id, source_path, storage_uri, bytes, status, created_at, updated_at)
+         VALUES ($1, 'upload', $2, 'lesson.wav', 'local://recordings/lesson.wav', 100, 'transcribed', NOW(), NOW())`,
+        [recordingId, originalStudentId],
+      );
+      await client.query(
+        `INSERT INTO transcripts (
+           id, recording_id, storage_uri, mode, model, language, stt_provider, fallback_used, created_at, updated_at
+         ) VALUES ($1, $2, 'local://transcripts/lesson.txt', 'timeline', 'nova-3', 'multi', 'deepgram', FALSE, NOW(), NOW())`,
+        [transcriptId, recordingId],
+      );
+    });
+
+    await insertCanonicalReadyLessonMemoryEntry({
+      studentId: originalStudentId,
+      transcriptId,
+      recordingId,
+      schemaVersion: 'lesson-memory.v1',
+      generatedAt,
+      provider: 'openai',
+      model: 'gpt-5.2',
+      lessonSummary: 'Ari lesson memory',
+      topicsDiscussed: [],
+      mistakePatterns: [],
+      grammarReviewed: [],
+      grammarWatchlist: [],
+      vocabularyFocus: [],
+      pronunciationFocus: [],
+      studentFacts: [],
+      progressSignals: [],
+      followUpRecommendations: [],
+    });
+
+    const result = await ensurePendingLessonMemoryEntry({
+      studentId: confirmedStudentId,
+      transcriptId,
+      recordingId,
+      schemaVersion: 'lesson-memory.v1',
+      generatedAt: new Date(generatedAt.getTime() + 60_000),
+      provider: 'openai',
+      model: 'gpt-5.2',
+      generationNotes: null,
+    });
+
+    expect(result.outcome).toBe('created');
+    expect(result.entry.studentId).toBe(confirmedStudentId);
+  });
 });

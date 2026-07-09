@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { fireEvent } from '@testing-library/react';
 import { afterEach, beforeEach, describe, it } from 'vitest';
 
