@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [9.7.1] - 2026-07-09
+
+### Changed
+
+- Automated release from PR #126: Keep approved first profile selected (https://github.com/abocha/esl-pipeline/pull/126)
+
 ## [9.7.0] - 2026-07-09
 
 ### Changed
