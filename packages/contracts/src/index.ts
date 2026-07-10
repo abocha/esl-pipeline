@@ -12,6 +12,8 @@ export type ElevenLabsTtsModelId =
   | 'eleven_flash_v2';
 export type PronunciationChunkTtsProviderId = TtsProviderId;
 export type SttProviderId = 'deepgram' | 'elevenlabs' | 'google';
+export type TranscriptProviderId = SttProviderId | 'manual';
+export type RecordingSourceId = 'upload' | 'manual_transcript';
 export type GoogleTtsModel = 'chirp3_hd' | 'studio' | 'neural2' | 'wavenet';
 export type InworldTtsModel = 'inworld-tts-2' | 'inworld-tts-1.5-max' | 'inworld-tts-1.5-mini';
 export type TtsModelId = ElevenLabsTtsModelId | GoogleTtsModel | InworldTtsModel;
@@ -928,7 +930,7 @@ export interface RecordingEventMessage {
   transcriptId?: string | null;
   error?: string | null;
   studentId?: string | null;
-  source?: 'upload';
+  source?: RecordingSourceId;
   displayName?: string | null;
   durationSec?: number | null;
   channels?: number | null;

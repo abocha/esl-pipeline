@@ -26,6 +26,18 @@ import {
   subscribeToJobEvents,
   updateAssignmentSession,
 } from '../../utils/api';
+import { AssignmentSupport } from '../assignments/AssignmentSupport';
+import { AssignmentWorkflow } from '../assignments/AssignmentWorkflow';
+import {
+  type AssignmentStepId,
+  deriveAssignmentWorkflow,
+  mapSessionStageToStep,
+} from '../assignments/assignment-workflow';
+import { CreateAssignmentStep } from '../assignments/steps/CreateAssignmentStep';
+import { LessonSourceStep } from '../assignments/steps/LessonSourceStep';
+import { ReviewShareStep } from '../assignments/steps/ReviewShareStep';
+import { StudentStep } from '../assignments/steps/StudentStep';
+import { TeachingContextStep } from '../assignments/steps/TeachingContextStep';
 import { AdvancedActionsStage, useAdvancedActionsController } from './MinimalAssignment.advanced';
 import { useMinimalAssignmentAuthoringController } from './MinimalAssignment.authoring';
 import { useMinimalAssignmentContextController } from './MinimalAssignment.context';
@@ -58,14 +70,14 @@ import {
   SourceStageSection,
   type StartStageMode,
   StartStageSection,
-  WorkflowOverview,
   type WorkflowStage,
   type WorkflowStageId,
   type WorkflowStageStatus,
 } from './MinimalAssignment.stages';
 import './MinimalAssignment.css';
 
-const AUDIO_EXTENSIONS = ['.wav', '.mp3', '.m4a', '.aac', '.ogg', '.opus'];
+const AUDIO_EXTENSIONS = ['.opus'] as const;
+const FOCUSED_STEP_ORDER: AssignmentStepId[] = ['student', 'source', 'context', 'create', 'review'];
 const FALLBACK_TTS_PROVIDERS = ['elevenlabs', 'google', 'inworld'] as const;
 const FALLBACK_PRONUNCIATION_CHUNK_TTS_PROVIDERS = ['google', 'elevenlabs', 'inworld'] as const;
 const FALLBACK_GOOGLE_TTS_MODELS = ['chirp3_hd', 'studio', 'neural2', 'wavenet'] as const;
@@ -240,6 +252,7 @@ export const MinimalAssignment: React.FC = () => {
   const [jobOptionsError, setJobOptionsError] = useState<string | null>(null);
   const [showAllResumeJobs, setShowAllResumeJobs] = useState(false);
   const [startStageMode, setStartStageMode] = useState<StartStageMode>('idle');
+  const [activeStep, setActiveStep] = useState<AssignmentStepId>('student');
   const [firstProfileLessonMemoryStatus, setFirstProfileLessonMemoryStatus] = useState<
     'checking' | 'building' | 'ready'
   >('checking');
@@ -445,6 +458,15 @@ export const MinimalAssignment: React.FC = () => {
     assignmentSessionUserEditedRef.current = true;
     assignmentSessionPersistenceSuppressedRef.current = false;
   }, []);
+  const createManualTranscript = source.createManualTranscript;
+
+  const handleCreateManualTranscript = useCallback(
+    async (text: string, displayName?: string) => {
+      markAssignmentUserEdit();
+      await createManualTranscript(text, displayName);
+    },
+    [createManualTranscript, markAssignmentUserEdit],
+  );
 
   const beginHydration = useCallback((mode: HydrationMode): HydrationContext => {
     hydrationIdRef.current += 1;
@@ -1343,6 +1365,102 @@ export const MinimalAssignment: React.FC = () => {
   const reviewReady =
     hasAssignmentContent &&
     (!authoring.draftPreviewGate.previewRequired || authoring.previewReadyForCurrentDraft);
+  const focusedWorkflowSteps = useMemo(
+    () =>
+      deriveAssignmentWorkflow({
+        selectedStudent: Boolean(source.selectedStudentId),
+        transcriptReady,
+        promptReady: authoring.promptReady,
+        draftReady: hasAssignmentContent,
+        previewReady: authoring.previewReadyForCurrentDraft,
+        published: jobReady,
+      }),
+    [
+      authoring.previewReadyForCurrentDraft,
+      authoring.promptReady,
+      hasAssignmentContent,
+      jobReady,
+      source.selectedStudentId,
+      transcriptReady,
+    ],
+  );
+  const focusedWorkflowInput = useMemo(
+    () => ({
+      selectedStudent: Boolean(source.selectedStudentId),
+      transcriptReady,
+      promptReady: authoring.promptReady,
+      draftReady: hasAssignmentContent,
+      previewReady: authoring.previewReadyForCurrentDraft,
+      published: jobReady,
+    }),
+    [
+      authoring.previewReadyForCurrentDraft,
+      authoring.promptReady,
+      hasAssignmentContent,
+      jobReady,
+      source.selectedStudentId,
+      transcriptReady,
+    ],
+  );
+  useEffect(() => {
+    if (!activeAssignmentSession) return;
+    setActiveStep(
+      mapSessionStageToStep(activeAssignmentSession.currentStage, focusedWorkflowInput),
+    );
+  }, [activeAssignmentSession, focusedWorkflowInput]);
+
+  const activeStepIndex = FOCUSED_STEP_ORDER.indexOf(activeStep);
+  const handleFocusedStepRequest = useCallback(
+    (requestedStep: AssignmentStepId) => {
+      const requested = focusedWorkflowSteps.find((step) => step.id === requestedStep);
+      if (
+        requested?.status === 'locked' &&
+        FOCUSED_STEP_ORDER.indexOf(requestedStep) > activeStepIndex
+      ) {
+        return;
+      }
+      setActiveStep(requestedStep);
+    },
+    [activeStepIndex, focusedWorkflowSteps],
+  );
+  const handleFocusedBack = useCallback(() => {
+    setActiveStep(FOCUSED_STEP_ORDER[Math.max(0, activeStepIndex - 1)] ?? 'student');
+  }, [activeStepIndex]);
+  const handleFocusedContinue = useCallback(async () => {
+    if (activeStep === 'context') {
+      const saved = await saveAssignmentSessionProgress({
+        studentId: source.selectedStudentId || null,
+        recordingId: source.recording?.recordingId ?? null,
+        transcriptId: source.transcript?.transcriptId ?? null,
+        teacherNotes: teacherNotes.trim() || null,
+        currentStage: 'assignment',
+      });
+      if (!saved) return;
+    }
+    if (activeStep === 'create' && authoring.draftDirty) {
+      await authoring.saveDraft();
+    }
+    setActiveStep(
+      FOCUSED_STEP_ORDER[Math.min(FOCUSED_STEP_ORDER.length - 1, activeStepIndex + 1)] ?? 'review',
+    );
+  }, [
+    activeStep,
+    activeStepIndex,
+    authoring,
+    saveAssignmentSessionProgress,
+    source.recording?.recordingId,
+    source.selectedStudentId,
+    source.transcript?.transcriptId,
+    teacherNotes,
+  ]);
+  const continueDisabled =
+    activeStep === 'student'
+      ? !hasStartedFlow || !source.selectedStudentId
+      : activeStep === 'source'
+        ? !transcriptReady
+        : activeStep === 'create'
+          ? !hasAssignmentContent
+          : activeStep === 'review';
   const linkedLesson = useMemo(() => {
     if (!linkedLessonId || !scheduleSurface) return null;
     return scheduleSurface.lessons.find((lesson) => lesson.id === linkedLessonId) ?? null;
@@ -1495,12 +1613,6 @@ export const MinimalAssignment: React.FC = () => {
     workflowStages.find((stage) => stage.status === 'available')?.id ??
     null;
 
-  const currentStageTitle =
-    workflowStages.find((stage) => stage.status === 'current')?.title ??
-    workflowStages.find((stage) => stage.status === 'available')?.title ??
-    workflowStages[workflowStages.length - 1]?.title ??
-    'Assignment builder';
-
   useEffect(() => {
     if (!actionableStageId) return;
     if (!hasInitializedGuidedFlowRef.current) {
@@ -1561,221 +1673,306 @@ export const MinimalAssignment: React.FC = () => {
 
   return (
     <div className="minimal-assignment">
-      <WorkflowOverview currentStageTitle={currentStageTitle} stages={workflowStages} />
-
-      <StartStageSection
-        stage={startStage}
-        sectionRef={startSectionRef}
-        headingRef={startHeadingRef}
-        mode={startStageMode}
-        onStartNewAssignment={handleStartNewAssignmentWithSessionReset}
-        onShowResumeChoice={handleShowResumeChoice}
-        onRefreshRecentWork={() => void resume.loadResumeJobs()}
-        onResumeSelectedAssignment={() => void resume.handleResumeSelectedJob()}
-        resumeLoading={resume.resumeLoading}
-        selectedResumeJobId={resume.selectedResumeJobId}
-        onSelectedResumeJobIdChange={resume.setSelectedResumeJobId}
-        resumeJobItems={resumeJobItems}
-        totalResumeJobs={totalResumeItems}
-        canToggleResumeJobs={canToggleResumeJobs}
-        showAllResumeJobs={showAllResumeJobs}
-        onToggleShowAllResumeJobs={() => setShowAllResumeJobs((current) => !current)}
-        resumeError={resume.resumeError}
-        currentJobStatus={jobStatus}
-        currentAssignmentCard={currentAssignmentCard}
-        publishUrl={publishUrl}
-        publishLabel={publishLabel}
-        publishPending={publishPending}
-      />
-
-      <SourceStageSection
-        stage={sourceStage}
-        sectionRef={sourceSectionRef}
-        headingRef={sourceHeadingRef}
-        studentSelectRef={sourceStudentSelectRef}
-        onRefreshStudents={() => void loadStudentOptions()}
-        studentOptions={source.studentOptions}
-        studentOptionsError={source.studentOptionsError}
-        selectedStudentId={source.selectedStudentId}
-        onSelectedStudentIdChange={(value) => {
-          if (linkedLessonId) return;
-          handleStudentSelectionChange(value);
-        }}
-        selectedStudent={source.selectedStudent}
-        linkedLessonId={linkedLessonId || null}
-        linkedLessonContextLabel={linkedLessonContextLabel}
-        lessonSuggestions={lessonSuggestions}
-        lessonSuggestionsError={scheduleSurfaceError}
-        onSelectLessonSuggestion={handleLinkedLessonSelection}
-        selectedSttProvider={source.selectedSttProvider}
-        onSelectedSttProviderChange={(provider) => {
-          markAssignmentUserEdit();
-          handleSelectedSttProviderChange(provider);
-        }}
-        sttProviders={source.sttProviders}
-        formatSttProviderLabel={formatSttProviderLabel}
-        audioExtensions={AUDIO_EXTENSIONS}
-        uploading={source.uploading}
-        selectedFileName={source.selectedFileName}
-        uploadProgress={source.uploadProgress}
-        onFiles={(files) => {
-          markAssignmentUserEdit();
-          handleFiles(files);
-        }}
-        onCancelUpload={handleCancelUpload}
-        uploadError={source.uploadError}
-        uploadCacheNotice={source.uploadCacheNotice}
-        recording={source.recording}
-        recordingStatus={source.recordingStatus}
-        recordingError={source.recordingError}
-        transcriptStatus={source.transcriptStatus}
-        transcriptError={source.transcriptError}
-        transcriptReady={transcriptReady}
-        onRefreshTranscript={() => void loadTranscript()}
-        retryingTranscript={source.retryingTranscript}
-        onRetryTranscript={() => void handleRetryTranscription()}
-        transcriptText={source.transcriptText}
-        onTranscriptTextChange={(value) => {
-          markAssignmentUserEdit();
-          setTranscriptText(value);
-        }}
-        transcriptDirty={source.transcriptDirty}
-        transcriptSaving={source.transcriptSaving}
-        onSaveTranscript={() => {
-          markAssignmentUserEdit();
-          void handleSaveTranscript();
-        }}
-      />
-
-      <ContextStageSection
-        stage={contextStage}
-        sectionRef={contextSectionRef}
-        headingRef={contextHeadingRef}
-        studentId={source.selectedStudentId}
-        studentName={source.selectedStudent?.name ?? null}
-        selectedProfileId={context.selectedProfileId}
-        profilePreview={context.profilePreview}
-        profileRevisionError={context.profileRevisionError}
-        firstProfileAssist={{
-          visible: firstProfileAssistVisible,
-          confirmationState: firstProfileLessonMemoryConfirmed
-            ? 'confirmed'
-            : firstProfileLessonMemoryNeedsUpdate
-              ? 'edited'
-              : 'unconfirmed',
-          confirmDisabled: source.transcriptDirty || !firstProfileLessonMemoryKey,
-          lessonMemoryStatus:
-            firstProfileLessonMemoryReadyCount > 0 ? 'ready' : firstProfileLessonMemoryStatus,
-          draftProfileId: firstProfileDraft?.profileId ?? null,
-          draftRevisionId: firstProfileDraft?.draftRevisionId ?? null,
-          draftPreview: firstProfileDraft?.structuredContent ?? null,
-          busy: firstProfileAssistBusy,
-          approved: firstProfileAssistApproved,
-          error: firstProfileAssistError,
-          onConfirm: handleConfirmFirstProfileLessonMemory,
-          onChangeStudent: handleChangeFirstProfileStudent,
-          onReplaceAudio: handleReplaceFirstProfileAudio,
-          onPopulate: handlePopulateFirstProfile,
-          onApprove: handleApproveFirstProfileDraft,
-          onRefresh: () => void refreshFirstProfileLessonMemory(),
-        }}
-        teacherNotes={teacherNotes}
-        onTeacherNotesChange={(value) => {
-          markAssignmentUserEdit();
-          setTeacherNotes(value);
-        }}
-      />
-
-      <AssignmentStageSection
-        stage={assignmentStage}
-        sectionRef={assignmentSectionRef}
-        headingRef={assignmentHeadingRef}
-        generateDraftButtonRef={assignmentGenerateDraftButtonRef}
-        transcriptReady={transcriptReady}
-        promptLoading={authoring.promptLoading}
-        promptReady={authoring.promptReady}
-        promptOptionsReady={Boolean(promptOptions)}
-        onReloadPromptOptions={() => void loadPromptOptions()}
-        promptError={authoring.promptError}
-        onSaveDraft={() => {
-          markAssignmentUserEdit();
-          void authoring.saveDraft();
-        }}
-        validating={authoring.validating}
-        draftDirty={authoring.draftDirty}
-        generationOptionsAvailable={Boolean(generationOptions)}
-        onGenerateAssignment={() => {
-          markAssignmentUserEdit();
-          void authoring.generateAssignment();
-        }}
-        generatingDraft={authoring.generatingDraft}
-        generationBlockedByQuota={authoring.generationBlockedByQuota}
-        generationQuotaBlockedReason={authoring.generationQuotaBlockedReason}
-        generationError={authoring.generationError}
-        generationSuccess={authoring.generationSuccess}
-        draftText={authoring.draftText}
-        onDraftTextChange={(value) => {
-          markAssignmentUserEdit();
-          authoring.setDraftText(value);
-        }}
-        validation={authoring.validation}
-        validationError={authoring.validationError}
-        draftError={authoring.draftError}
-      />
-
-      <ReviewStageSection
-        stage={reviewStage}
-        sectionRef={reviewSectionRef}
-        headingRef={reviewHeadingRef}
-        previewButtonRef={reviewPreviewButtonRef}
-        onPublish={() =>
-          void authoring.publishAssignment({
-            onPublishedJob: resume.applyJobStatusTransition,
-            refreshResumeJobs: resume.loadResumeJobs,
-            completeAssignmentSession: archiveActiveAssignmentSession,
-          })
+      <AssignmentWorkflow
+        steps={focusedWorkflowSteps}
+        activeStep={activeStep}
+        highestAvailableStep={
+          [...focusedWorkflowSteps].reverse().find((step) => step.status !== 'locked')?.id ??
+          'student'
         }
-        onCancelJob={() => void advancedActions.handleCancelJob()}
-        canPublishWithPreview={authoring.canPublishWithPreview}
-        cancelEnabled={advancedActions.cancelEnabled}
-        actionBusy={advancedActions.actionBusy}
-        publishing={authoring.publishing}
-        previewing={authoring.previewing}
-        onPreviewDraft={() => void authoring.previewDraft()}
-        draftHasContent={authoring.draftText.trim().length > 0}
-        previewReadyForCurrentDraft={authoring.previewReadyForCurrentDraft}
-        previewError={authoring.previewError}
-        previewHtml={authoring.previewHtml}
-        publishError={authoring.publishError}
-        currentJobStatus={jobStatus}
-        jobFailureReason={
-          jobStatus?.state === 'failed' && jobStatus.error
-            ? describeJobFailureReason(jobStatus)
-            : null
+        saveState={activeAssignmentSession ? 'saved' : 'idle'}
+        onStepRequest={handleFocusedStepRequest}
+        onBack={handleFocusedBack}
+        onContinue={handleFocusedContinue}
+        continueLabel={activeStep === 'review' ? 'Assignment ready' : 'Confirm and continue'}
+        continueDisabled={continueDisabled}
+        support={
+          jobReady ? (
+            <AssignmentSupport>
+              <AdvancedActionsStage
+                stage={advancedStage}
+                sectionRef={advancedSectionRef}
+                headingRef={advancedHeadingRef}
+                jobReady={Boolean(jobReady)}
+                jobStatus={jobStatus}
+                controller={advancedActions}
+                onRefreshActions={() => void loadJobOptions()}
+                jobOptionsError={jobOptionsError}
+                ttsProviders={ttsProviders}
+                ttsModelOptionsByProvider={ttsModelOptionsByProvider}
+                elevenlabsStandardModelOptions={elevenlabsStandardModelOptions}
+                pronunciationChunkProviders={FALLBACK_PRONUNCIATION_CHUNK_TTS_PROVIDERS}
+                studyTextStrategies={
+                  jobOptions?.ttsStrategies?.filter(isUiPublishTtsStrategy) ?? [
+                    'auto',
+                    'dialogue',
+                    'tts',
+                  ]
+                }
+              />
+            </AssignmentSupport>
+          ) : null
         }
-        jobReady={Boolean(jobReady)}
-        publishUrl={publishUrl}
-        publishLabel={publishLabel}
-        publishPending={publishPending}
-      />
+      >
+        <div
+          className="assignment-workflow__step-mount"
+          data-active={activeStep === 'student' ? 'true' : 'false'}
+          inert={activeStep === 'student' ? undefined : true}
+        >
+          <StudentStep
+            students={source.studentOptions}
+            selectedStudentId={source.selectedStudentId}
+            selectionLocked={Boolean(linkedLessonId)}
+            error={source.studentOptionsError}
+            onRefresh={() => void loadStudentOptions()}
+            onSelect={handleStudentSelectionChange}
+          >
+            <StartStageSection
+              stage={startStage}
+              sectionRef={startSectionRef}
+              headingRef={startHeadingRef}
+              mode={startStageMode}
+              onStartNewAssignment={handleStartNewAssignmentWithSessionReset}
+              onShowResumeChoice={handleShowResumeChoice}
+              onRefreshRecentWork={() => void resume.loadResumeJobs()}
+              onResumeSelectedAssignment={() => void resume.handleResumeSelectedJob()}
+              resumeLoading={resume.resumeLoading}
+              selectedResumeJobId={resume.selectedResumeJobId}
+              onSelectedResumeJobIdChange={resume.setSelectedResumeJobId}
+              resumeJobItems={resumeJobItems}
+              totalResumeJobs={totalResumeItems}
+              canToggleResumeJobs={canToggleResumeJobs}
+              showAllResumeJobs={showAllResumeJobs}
+              onToggleShowAllResumeJobs={() => setShowAllResumeJobs((current) => !current)}
+              resumeError={resume.resumeError}
+              currentJobStatus={jobStatus}
+              currentAssignmentCard={currentAssignmentCard}
+              publishUrl={publishUrl}
+              publishLabel={publishLabel}
+              publishPending={publishPending}
+            />
+          </StudentStep>
+        </div>
 
-      <AdvancedActionsStage
-        stage={advancedStage}
-        sectionRef={advancedSectionRef}
-        headingRef={advancedHeadingRef}
-        jobReady={Boolean(jobReady)}
-        jobStatus={jobStatus}
-        controller={advancedActions}
-        onRefreshActions={() => void loadJobOptions()}
-        jobOptionsError={jobOptionsError}
-        ttsProviders={ttsProviders}
-        ttsModelOptionsByProvider={ttsModelOptionsByProvider}
-        elevenlabsStandardModelOptions={elevenlabsStandardModelOptions}
-        pronunciationChunkProviders={FALLBACK_PRONUNCIATION_CHUNK_TTS_PROVIDERS}
-        studyTextStrategies={
-          jobOptions?.ttsStrategies?.filter(isUiPublishTtsStrategy) ?? ['auto', 'dialogue', 'tts']
-        }
-      />
+        <div
+          className="assignment-workflow__step-mount"
+          data-active={activeStep === 'source' ? 'true' : 'false'}
+          inert={activeStep === 'source' ? undefined : true}
+        >
+          <LessonSourceStep
+            studentSelected={Boolean(source.selectedStudentId)}
+            manualSaving={source.manualTranscriptSaving}
+            manualError={source.manualTranscriptError}
+            transcriptReady={transcriptReady}
+            onCreateManualTranscript={handleCreateManualTranscript}
+          >
+            <SourceStageSection
+              hideStudentSelection
+              stage={sourceStage}
+              sectionRef={sourceSectionRef}
+              headingRef={sourceHeadingRef}
+              studentSelectRef={sourceStudentSelectRef}
+              onRefreshStudents={() => void loadStudentOptions()}
+              studentOptions={source.studentOptions}
+              studentOptionsError={source.studentOptionsError}
+              selectedStudentId={source.selectedStudentId}
+              onSelectedStudentIdChange={(value) => {
+                if (linkedLessonId) return;
+                handleStudentSelectionChange(value);
+              }}
+              selectedStudent={source.selectedStudent}
+              linkedLessonId={linkedLessonId || null}
+              linkedLessonContextLabel={linkedLessonContextLabel}
+              lessonSuggestions={lessonSuggestions}
+              lessonSuggestionsError={scheduleSurfaceError}
+              onSelectLessonSuggestion={handleLinkedLessonSelection}
+              selectedSttProvider={source.selectedSttProvider}
+              onSelectedSttProviderChange={(provider) => {
+                markAssignmentUserEdit();
+                handleSelectedSttProviderChange(provider);
+              }}
+              sttProviders={source.sttProviders}
+              formatSttProviderLabel={formatSttProviderLabel}
+              audioExtensions={AUDIO_EXTENSIONS}
+              uploading={source.uploading}
+              selectedFileName={source.selectedFileName}
+              uploadProgress={source.uploadProgress}
+              onFiles={(files) => {
+                markAssignmentUserEdit();
+                handleFiles(files);
+              }}
+              onCancelUpload={handleCancelUpload}
+              uploadError={source.uploadError}
+              uploadCacheNotice={source.uploadCacheNotice}
+              recording={source.recording}
+              recordingStatus={source.recordingStatus}
+              recordingError={source.recordingError}
+              transcriptStatus={source.transcriptStatus}
+              transcriptError={source.transcriptError}
+              transcriptReady={transcriptReady}
+              onRefreshTranscript={() => void loadTranscript()}
+              retryingTranscript={source.retryingTranscript}
+              onRetryTranscript={() => void handleRetryTranscription()}
+              transcriptText={source.transcriptText}
+              onTranscriptTextChange={(value) => {
+                markAssignmentUserEdit();
+                setTranscriptText(value);
+              }}
+              transcriptDirty={source.transcriptDirty}
+              transcriptSaving={source.transcriptSaving}
+              onSaveTranscript={() => {
+                markAssignmentUserEdit();
+                void handleSaveTranscript();
+              }}
+            />
+          </LessonSourceStep>
+        </div>
+
+        <div
+          className="assignment-workflow__step-mount"
+          data-active={activeStep === 'context' ? 'true' : 'false'}
+          inert={activeStep === 'context' ? undefined : true}
+        >
+          <TeachingContextStep>
+            <ContextStageSection
+              stage={contextStage}
+              sectionRef={contextSectionRef}
+              headingRef={contextHeadingRef}
+              studentId={source.selectedStudentId}
+              studentName={source.selectedStudent?.name ?? null}
+              selectedProfileId={context.selectedProfileId}
+              profilePreview={context.profilePreview}
+              profileRevisionError={context.profileRevisionError}
+              firstProfileAssist={{
+                visible: firstProfileAssistVisible,
+                confirmationState: firstProfileLessonMemoryConfirmed
+                  ? 'confirmed'
+                  : firstProfileLessonMemoryNeedsUpdate
+                    ? 'edited'
+                    : 'unconfirmed',
+                confirmDisabled: source.transcriptDirty || !firstProfileLessonMemoryKey,
+                lessonMemoryStatus:
+                  firstProfileLessonMemoryReadyCount > 0 ? 'ready' : firstProfileLessonMemoryStatus,
+                draftProfileId: firstProfileDraft?.profileId ?? null,
+                draftRevisionId: firstProfileDraft?.draftRevisionId ?? null,
+                draftPreview: firstProfileDraft?.structuredContent ?? null,
+                busy: firstProfileAssistBusy,
+                approved: firstProfileAssistApproved,
+                error: firstProfileAssistError,
+                onConfirm: handleConfirmFirstProfileLessonMemory,
+                onChangeStudent: handleChangeFirstProfileStudent,
+                onReplaceAudio: handleReplaceFirstProfileAudio,
+                onPopulate: handlePopulateFirstProfile,
+                onApprove: handleApproveFirstProfileDraft,
+                onRefresh: () => void refreshFirstProfileLessonMemory(),
+              }}
+              teacherNotes={teacherNotes}
+              onTeacherNotesChange={(value) => {
+                if (
+                  hasAssignmentContent &&
+                  value !== teacherNotes &&
+                  !globalThis.confirm(
+                    'This will require a new assignment draft. Your lesson source and transcript will stay saved.',
+                  )
+                ) {
+                  return;
+                }
+                markAssignmentUserEdit();
+                setTeacherNotes(value);
+              }}
+            />
+          </TeachingContextStep>
+        </div>
+
+        <div
+          className="assignment-workflow__step-mount"
+          data-active={activeStep === 'create' ? 'true' : 'false'}
+          inert={activeStep === 'create' ? undefined : true}
+        >
+          <CreateAssignmentStep>
+            <AssignmentStageSection
+              stage={assignmentStage}
+              sectionRef={assignmentSectionRef}
+              headingRef={assignmentHeadingRef}
+              generateDraftButtonRef={assignmentGenerateDraftButtonRef}
+              transcriptReady={transcriptReady}
+              promptLoading={authoring.promptLoading}
+              promptReady={authoring.promptReady}
+              promptOptionsReady={Boolean(promptOptions)}
+              onReloadPromptOptions={() => void loadPromptOptions()}
+              promptError={authoring.promptError}
+              onSaveDraft={() => {
+                markAssignmentUserEdit();
+                void authoring.saveDraft();
+              }}
+              validating={authoring.validating}
+              draftDirty={authoring.draftDirty}
+              generationOptionsAvailable={Boolean(generationOptions)}
+              onGenerateAssignment={() => {
+                markAssignmentUserEdit();
+                void authoring.generateAssignment();
+              }}
+              generatingDraft={authoring.generatingDraft}
+              generationBlockedByQuota={authoring.generationBlockedByQuota}
+              generationQuotaBlockedReason={authoring.generationQuotaBlockedReason}
+              generationError={authoring.generationError}
+              generationSuccess={authoring.generationSuccess}
+              draftText={authoring.draftText}
+              onDraftTextChange={(value) => {
+                markAssignmentUserEdit();
+                authoring.setDraftText(value);
+              }}
+              validation={authoring.validation}
+              validationError={authoring.validationError}
+              draftError={authoring.draftError}
+            />
+          </CreateAssignmentStep>
+        </div>
+
+        <div
+          className="assignment-workflow__step-mount"
+          data-active={activeStep === 'review' ? 'true' : 'false'}
+          inert={activeStep === 'review' ? undefined : true}
+        >
+          <ReviewShareStep>
+            <ReviewStageSection
+              stage={reviewStage}
+              sectionRef={reviewSectionRef}
+              headingRef={reviewHeadingRef}
+              previewButtonRef={reviewPreviewButtonRef}
+              onPublish={() =>
+                void authoring.publishAssignment({
+                  onPublishedJob: resume.applyJobStatusTransition,
+                  refreshResumeJobs: resume.loadResumeJobs,
+                  completeAssignmentSession: archiveActiveAssignmentSession,
+                })
+              }
+              onCancelJob={() => void advancedActions.handleCancelJob()}
+              canPublishWithPreview={authoring.canPublishWithPreview}
+              cancelEnabled={advancedActions.cancelEnabled}
+              actionBusy={advancedActions.actionBusy}
+              publishing={authoring.publishing}
+              previewing={authoring.previewing}
+              onPreviewDraft={() => void authoring.previewDraft()}
+              draftHasContent={authoring.draftText.trim().length > 0}
+              previewReadyForCurrentDraft={authoring.previewReadyForCurrentDraft}
+              previewError={authoring.previewError}
+              previewHtml={authoring.previewHtml}
+              publishError={authoring.publishError}
+              currentJobStatus={jobStatus}
+              jobFailureReason={
+                jobStatus?.state === 'failed' && jobStatus.error
+                  ? describeJobFailureReason(jobStatus)
+                  : null
+              }
+              jobReady={Boolean(jobReady)}
+              publishUrl={publishUrl}
+              publishLabel={publishLabel}
+              publishPending={publishPending}
+            />
+          </ReviewShareStep>
+        </div>
+      </AssignmentWorkflow>
     </div>
   );
 };

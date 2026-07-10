@@ -16,7 +16,8 @@ export function inferTranscriptSttProvider(
   transcript: Pick<TranscriptRecord, 'model' | 'summaryJson'> &
     Partial<Pick<TranscriptRecord, 'sttProvider'>>,
 ): SttProviderId | null {
-  if (transcript.sttProvider) return transcript.sttProvider;
+  const directProvider = normalizeSttProvider(transcript.sttProvider);
+  if (directProvider) return directProvider;
 
   const summaryJson = transcript.summaryJson;
   const summaryProvider = normalizeSttProvider(

@@ -154,6 +154,20 @@ async function assertSchemaHealthy(scenario: string): Promise<void> {
     expect(actionDefinition).toContain("'rerun'");
     expect(actionDefinition).not.toContain('rerun_audio');
     expect(actionDefinition).not.toContain('rerun_publish');
+
+    const sourceConstraints = await pool.query<{ conname: string; definition: string }>(
+      `
+      SELECT conname, pg_get_constraintdef(oid) AS definition
+      FROM pg_constraint
+      WHERE conname = ANY($1::text[])
+      `,
+      [['recordings_source_check', 'transcripts_stt_provider_check']],
+    );
+    const constraintDefinitions = new Map(
+      sourceConstraints.rows.map((row) => [row.conname, row.definition]),
+    );
+    expect(constraintDefinitions.get('recordings_source_check')).toContain('manual_transcript');
+    expect(constraintDefinitions.get('transcripts_stt_provider_check')).toContain('manual');
   });
 }
 

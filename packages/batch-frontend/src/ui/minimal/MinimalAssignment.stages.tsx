@@ -141,6 +141,7 @@ interface SourceStageSectionProps {
   transcriptDirty: boolean;
   transcriptSaving: boolean;
   onSaveTranscript: () => void;
+  hideStudentSelection?: boolean;
 }
 
 interface ContextStageSectionProps {
@@ -793,6 +794,7 @@ export function SourceStageSection({
   transcriptDirty,
   transcriptSaving,
   onSaveTranscript,
+  hideStudentSelection = false,
 }: SourceStageSectionProps) {
   const sourceGuidance =
     stage.status === 'current'
@@ -824,33 +826,35 @@ export function SourceStageSection({
             <div className="minimal-stage-panel-title">
               <h3>Recording</h3>
             </div>
-            {!recording ? (
+            {!recording && !hideStudentSelection ? (
               <button type="button" className="minimal-secondary" onClick={onRefreshStudents}>
                 Refresh students
               </button>
             ) : null}
           </div>
-          <label className="minimal-select">
-            Student
-            <select
-              ref={studentSelectRef}
-              className={
-                stage.status === 'current' && !selectedStudentId
-                  ? 'minimal-guided-field'
-                  : undefined
-              }
-              value={selectedStudentId}
-              onChange={(event) => onSelectedStudentIdChange(event.target.value)}
-              disabled={Boolean(linkedLessonId) || Boolean(recording)}
-            >
-              <option value="">Select a student</option>
-              {studentOptions.map((student) => (
-                <option key={student.id} value={student.id}>
-                  {student.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          {!hideStudentSelection ? (
+            <label className="minimal-select">
+              Student
+              <select
+                ref={studentSelectRef}
+                className={
+                  stage.status === 'current' && !selectedStudentId
+                    ? 'minimal-guided-field'
+                    : undefined
+                }
+                value={selectedStudentId}
+                onChange={(event) => onSelectedStudentIdChange(event.target.value)}
+                disabled={Boolean(linkedLessonId) || Boolean(recording)}
+              >
+                <option value="">Select a student</option>
+                {studentOptions.map((student) => (
+                  <option key={student.id} value={student.id}>
+                    {student.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           {linkedLessonContextLabel ? (
             <p className="minimal-muted">{linkedLessonContextLabel}</p>
           ) : null}
@@ -875,7 +879,9 @@ export function SourceStageSection({
           {lessonSuggestionsError ? (
             <p className="minimal-muted">Recent lesson suggestions unavailable.</p>
           ) : null}
-          {studentOptionsError ? <p className="minimal-error">{studentOptionsError}</p> : null}
+          {!hideStudentSelection && studentOptionsError ? (
+            <p className="minimal-error">{studentOptionsError}</p>
+          ) : null}
           {!recording ? (
             <>
               <details className="minimal-details">

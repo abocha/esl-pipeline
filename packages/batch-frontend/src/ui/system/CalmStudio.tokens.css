@@ -1,0 +1,164 @@
+:root {
+  --cs-canvas: #fafbfc;
+  --cs-surface: #ffffff;
+  --cs-surface-muted: #f0f3f6;
+  --cs-ink: #1d2935;
+  --cs-ink-muted: #596777;
+  --cs-action: #214f80;
+  --cs-action-hover: #183f69;
+  --cs-selection: #dce7f2;
+  --cs-border: #d6dde4;
+  --cs-success: #507660;
+  --cs-warning: #8a6518;
+  --cs-error: #a53f35;
+  --cs-radius-control: 4px;
+  --cs-radius-surface: 6px;
+  --cs-text-body: 1rem;
+  --cs-text-support: 0.875rem;
+  --cs-text-meta: 0.75rem;
+  --cs-control-primary: 44px;
+  --cs-control-compact: 40px;
+  --cs-focus: 0 0 0 3px rgb(33 79 128 / 22%);
+  --cs-motion-fast: 160ms cubic-bezier(0.22, 1, 0.36, 1);
+  --cs-z-nav: 100;
+  --cs-z-dialog-backdrop: 300;
+  --cs-z-dialog: 400;
+  --cs-z-toast: 500;
+
+  /* Compatibility aliases for routes that have not yet migrated to cs-prefixed tokens. */
+  --paper: var(--cs-canvas);
+  --ink: var(--cs-ink);
+  --app-paper: var(--cs-canvas);
+  --app-paper-deep: var(--cs-surface-muted);
+  --app-panel: var(--cs-surface);
+  --app-ink: var(--cs-ink);
+  --app-muted: var(--cs-ink-muted);
+  --app-blue: var(--cs-action);
+  --app-blue-soft: var(--cs-selection);
+  --app-line: var(--cs-border);
+  --app-radius-lg: var(--cs-radius-surface);
+  --app-radius-md: var(--cs-radius-surface);
+  --app-radius-sm: var(--cs-radius-control);
+  --app-shadow: 0 1px 2px rgb(29 41 53 / 7%);
+  --app-shadow-soft: 0 1px 2px rgb(29 41 53 / 5%);
+  --app-serif: var(--font-sans);
+  --bg-page: var(--cs-canvas);
+  --bg-surface: var(--cs-surface);
+  --bg-raised: var(--cs-surface);
+  --bg-muted: var(--cs-surface-muted);
+  --text-primary: var(--cs-ink);
+  --text-secondary: var(--cs-ink-muted);
+  --border-subtle: var(--cs-border);
+  --border-light: var(--cs-border);
+  --border-medium: #bdc7d1;
+  --action-primary: var(--cs-action);
+  --action-primary-hover: var(--cs-action-hover);
+  --focus-ring: var(--cs-focus);
+  --radius-sm: var(--cs-radius-control);
+  --radius-md: var(--cs-radius-control);
+  --radius-lg: var(--cs-radius-surface);
+  --radius-xl: var(--cs-radius-surface);
+  --radius-2xl: var(--cs-radius-surface);
+  --radius-3xl: var(--cs-radius-surface);
+  --gradient-primary: var(--cs-action);
+  --gradient-accent: var(--cs-action);
+  --gradient-glass: var(--cs-surface);
+  --shadow-card: 0 1px 2px rgb(29 41 53 / 7%);
+  --shadow-card-hover: 0 2px 6px rgb(29 41 53 / 10%);
+  --shadow-glow: none;
+  --shadow-glow-lg: none;
+}
+
+.product-button {
+  min-height: var(--cs-control-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  padding: 0.65rem 1rem;
+  border: 1px solid transparent;
+  border-radius: var(--cs-radius-control);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background-color var(--cs-motion-fast),
+    border-color var(--cs-motion-fast);
+}
+
+.product-button svg {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+.product-button--primary {
+  background: var(--cs-action);
+  color: white;
+}
+.product-button--primary:hover:not(:disabled) {
+  background: var(--cs-action-hover);
+}
+.product-button--secondary {
+  border-color: var(--cs-border);
+  background: var(--cs-surface);
+  color: var(--cs-ink);
+}
+.product-button--quiet {
+  background: transparent;
+  color: var(--cs-action);
+}
+.product-button--danger {
+  background: var(--cs-error);
+  color: white;
+}
+.product-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.product-notice {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.75rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--cs-border);
+  border-left: 3px solid var(--cs-action);
+  border-radius: var(--cs-radius-surface);
+  background: var(--cs-surface);
+  color: var(--cs-ink);
+}
+
+.product-notice--success {
+  border-left-color: var(--cs-success);
+}
+.product-notice--warning {
+  border-left-color: var(--cs-warning);
+}
+.product-notice--error {
+  border-left-color: var(--cs-error);
+}
+.product-notice__title {
+  margin: 0 0 0.2rem;
+  font-weight: 750;
+}
+.product-notice__body {
+  color: var(--cs-ink-muted);
+  font-size: var(--cs-text-support);
+}
+
+.support-details {
+  border-top: 1px solid var(--cs-border);
+  color: var(--cs-ink-muted);
+  font-size: var(--cs-text-support);
+}
+.support-details > summary {
+  min-height: var(--cs-control-compact);
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--cs-action);
+  font-weight: 700;
+  cursor: pointer;
+}
+.support-details__content {
+  padding: 0.5rem 0 1rem;
+}

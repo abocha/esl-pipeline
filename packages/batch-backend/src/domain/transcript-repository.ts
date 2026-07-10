@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { PoolClient } from 'pg';
 
-import type { SttProviderId } from '@esl-pipeline/contracts';
+import type { TranscriptProviderId } from '@esl-pipeline/contracts';
 
 import { withPgClient } from '../infrastructure/db.js';
 import { logger } from '../infrastructure/logger.js';
@@ -19,7 +19,7 @@ interface TranscriptRow {
   mode: string;
   model: string;
   language: string;
-  stt_provider: SttProviderId;
+  stt_provider: TranscriptProviderId;
   fallback_used: boolean;
   summary_json: Record<string, unknown> | null;
   created_at: Date;
@@ -34,7 +34,7 @@ export interface InsertTranscriptParams {
   mode: TranscriptMode;
   model: string;
   language: string;
-  sttProvider: SttProviderId;
+  sttProvider: TranscriptProviderId;
   fallbackUsed: boolean;
   summaryJson?: Record<string, unknown> | null;
 }
@@ -85,11 +85,14 @@ export async function listLatestTranscriptsByRecordingIds(
   return rows.map((row) => mapRowToTranscript(row));
 }
 
-export async function insertTranscript(params: InsertTranscriptParams): Promise<TranscriptRecord> {
+export async function insertTranscript(
+  params: InsertTranscriptParams,
+  options?: { client?: PoolClient },
+): Promise<TranscriptRecord> {
   const id = params.id ?? randomUUID();
   const now = new Date();
 
-  const row = await withPgClient(async (client: PoolClient) => {
+  const write = async (client: PoolClient) => {
     const result = await client.query(
       `
       INSERT INTO transcripts (
@@ -137,7 +140,8 @@ export async function insertTranscript(params: InsertTranscriptParams): Promise<
       ],
     );
     return result.rows[0];
-  });
+  };
+  const row = options?.client ? await write(options.client) : await withPgClient(write);
 
   logger.info('Transcript inserted', { transcriptId: id, recordingId: params.recordingId });
 
