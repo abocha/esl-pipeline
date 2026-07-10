@@ -54,10 +54,12 @@ import type {
   JobSummaryResponse as ContractJobSummaryResponse,
   MarkdownValidationResponse as ContractMarkdownValidationResponse,
   PronunciationChunkTtsProviderId as ContractPronunciationChunkTtsProviderId,
+  RecordingSourceId as ContractRecordingSourceId,
   RecordingStatus as ContractRecordingStatus,
   RerunJobPayload as ContractRerunJobPayload,
   SttProviderId as ContractSttProviderId,
   StudentSummaryResponse as ContractStudentSummaryResponse,
+  TranscriptProviderId as ContractTranscriptProviderId,
   SubmitJobRequest as ContractSubmitJobRequest,
   TtsModelId as ContractTtsModelId,
   TtsProviderId as ContractTtsProviderId,
@@ -131,7 +133,7 @@ export interface RecordingTranscriptResponse {
   transcriptId: string;
   text: string;
   summaryJson: Record<string, unknown> | null;
-  sttProvider: SttProvider;
+  sttProvider: ContractTranscriptProviderId;
   model: string;
   language: string;
   mode: 'timeline' | 'stack';
@@ -144,7 +146,7 @@ export interface RecordingListItem {
   status: RecordingStatus;
   transcriptId: string | null;
   error: string | null;
-  source: 'upload';
+  source: ContractRecordingSourceId;
   studentId: string | null;
   displayName: string;
   durationSec: number | null;
@@ -163,6 +165,12 @@ export interface RecordingsListResponse {
   offset: number;
   total: number;
   order: 'asc' | 'desc';
+}
+
+export interface CreateManualTranscriptSourceInput {
+  studentId: string;
+  text: string;
+  displayName?: string;
 }
 
 export interface StudentOption {
@@ -1895,6 +1903,24 @@ export async function uploadRecording(
     const axiosError = toAxiosError(error);
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to upload recordings.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function createManualTranscriptSource(
+  input: CreateManualTranscriptSourceInput,
+): Promise<RecordingListItem> {
+  try {
+    const response = await apiClient.post<RecordingListItem>(
+      buildApiProxyPath('/recordings/transcript-source'),
+      input,
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to save a pasted transcript.');
     }
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }

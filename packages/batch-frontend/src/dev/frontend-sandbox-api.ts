@@ -1001,6 +1001,9 @@ function jobProvenance() {
 export function createFrontendSandboxApiAdapter(): AxiosAdapter {
   sandboxFirstProfileLessonMemoryConfirmed = false;
   sandboxFirstProfileLessonMemoryHealthPolls = 0;
+  let manualTranscriptText = '';
+  let manualTranscriptStudentId = 'student-alex';
+  let manualTranscriptDisplayName = 'Pasted lesson transcript';
   return async (config: InternalAxiosRequestConfig): Promise<AxiosResponse> => {
     const method = (config.method ?? 'get').toLowerCase();
     const path = normalizePath(config.url);
@@ -1263,6 +1266,65 @@ export function createFrontendSandboxApiAdapter(): AxiosAdapter {
         durationSec: 180,
         channels: 1,
         bytes: 1024,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    if (method === 'post' && path === '/recordings/transcript-source') {
+      const body = readRequestBody(config.data);
+      manualTranscriptText = typeof body.text === 'string' ? body.text.trim() : '';
+      manualTranscriptStudentId =
+        typeof body.studentId === 'string' && body.studentId.trim()
+          ? body.studentId.trim()
+          : 'student-alex';
+      manualTranscriptDisplayName =
+        typeof body.displayName === 'string' && body.displayName.trim()
+          ? body.displayName.trim()
+          : 'Pasted lesson transcript';
+      return responseFor(config, {
+        recordingId: 'recording-manual-sandbox',
+        status: 'transcribed',
+        transcriptId: 'transcript-manual-sandbox',
+        error: null,
+        source: 'manual_transcript',
+        studentId: manualTranscriptStudentId,
+        displayName: manualTranscriptDisplayName,
+        durationSec: null,
+        channels: null,
+        bytes: new TextEncoder().encode(manualTranscriptText).byteLength,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    if (method === 'get' && path === '/recordings/recording-manual-sandbox') {
+      return responseFor(config, {
+        recordingId: 'recording-manual-sandbox',
+        status: 'transcribed',
+        transcriptId: 'transcript-manual-sandbox',
+        error: null,
+        source: 'manual_transcript',
+        studentId: manualTranscriptStudentId,
+        displayName: manualTranscriptDisplayName,
+        durationSec: null,
+        channels: null,
+        bytes: new TextEncoder().encode(manualTranscriptText).byteLength,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    if (method === 'get' && path === '/recordings/recording-manual-sandbox/transcript') {
+      return responseFor(config, {
+        recordingId: 'recording-manual-sandbox',
+        transcriptId: 'transcript-manual-sandbox',
+        text: manualTranscriptText,
+        summaryJson: { provider: 'manual', origin: 'tutor_paste' },
+        sttProvider: 'manual',
+        model: 'manual-entry',
+        language: 'und',
+        mode: 'timeline',
         createdAt: now,
         updatedAt: now,
       });
