@@ -27,12 +27,14 @@ import {
   updateAssignmentSession,
 } from '../../utils/api';
 import { AssignmentWorkflow } from '../assignments/AssignmentWorkflow';
+import { AssignmentSupport } from '../assignments/AssignmentSupport';
 import {
   type AssignmentStepId,
   deriveAssignmentWorkflow,
   mapSessionStageToStep,
 } from '../assignments/assignment-workflow';
 import { LessonSourceStep } from '../assignments/steps/LessonSourceStep';
+import { ReviewShareStep } from '../assignments/steps/ReviewShareStep';
 import { CreateAssignmentStep } from '../assignments/steps/CreateAssignmentStep';
 import { StudentStep } from '../assignments/steps/StudentStep';
 import { TeachingContextStep } from '../assignments/steps/TeachingContextStep';
@@ -1678,6 +1680,7 @@ export const MinimalAssignment: React.FC = () => {
         continueDisabled={continueDisabled}
         support={
           jobReady ? (
+            <AssignmentSupport>
             <AdvancedActionsStage
               stage={advancedStage}
               sectionRef={advancedSectionRef}
@@ -1699,6 +1702,7 @@ export const MinimalAssignment: React.FC = () => {
                 ]
               }
             />
+            </AssignmentSupport>
           ) : null
         }
       >
@@ -1894,6 +1898,7 @@ export const MinimalAssignment: React.FC = () => {
       ) : null}
 
       {activeStep === 'review' ? (
+      <ReviewShareStep>
       <ReviewStageSection
         stage={reviewStage}
         sectionRef={reviewSectionRef}
@@ -1929,6 +1934,7 @@ export const MinimalAssignment: React.FC = () => {
         publishLabel={publishLabel}
         publishPending={publishPending}
       />
+      </ReviewShareStep>
       ) : null}
       </AssignmentWorkflow>
     </div>
