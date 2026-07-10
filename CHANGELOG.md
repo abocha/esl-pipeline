@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [9.8.0] - 2026-07-10
+
+### Changed
+
+- Automated release from PR #129: feat(frontend): introduce Calm Studio assignment workflow (https://github.com/abocha/esl-pipeline/pull/129)
+
 ## [9.7.2] - 2026-07-09
 
 ### Changed
