@@ -11,6 +11,10 @@ import { getDraft } from '../../application/get-draft.js';
 import { getPromptPackage, getPromptPackageLineage } from '../../application/get-prompt-package.js';
 import { getRecording } from '../../application/get-recording.js';
 import { getRecordingTranscript } from '../../application/get-recording-transcript.js';
+import {
+  ingestManualTranscriptSource,
+  ManualTranscriptSourceValidationError,
+} from '../../application/ingest-manual-transcript-source.js';
 import { ingestRecordingUpload } from '../../application/ingest-recording-upload.js';
 import { listRecordingsWithDefaults } from '../../application/list-recordings.js';
 import { materializeDraft } from '../../application/materialize-draft.js';
@@ -334,6 +338,73 @@ export function registerRecordingRoutes(
         return reply.code(500).send({
           error: 'internal_error',
         });
+      }
+    },
+  );
+
+  app.post(
+    '/recordings/transcript-source',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'POST /recordings/transcript-source');
+      const schema = z.object({
+        studentId: z.string().uuid(),
+        text: z.string().trim().min(1).max(500_000),
+        displayName: z.string().trim().min(1).max(200).optional(),
+      });
+      const authenticatedUser = getAuthenticatedUser(request);
+      if (!authenticatedUser) {
+        return reply.code(401).send({
+          error: 'unauthorized',
+          message: 'Authentication required',
+          code: 'not_authenticated',
+        });
+      }
+
+      try {
+        const body = schema.parse(request.body ?? {});
+        const result = await ingestManualTranscriptSource(body);
+
+        logger.info('Manual transcript source created', {
+          event: 'manual_transcript_source_created',
+          route: routePath,
+          userId: authenticatedUser.id,
+          studentId: body.studentId,
+          recordingId: result.recording.id,
+          transcriptId: result.transcript.id,
+        });
+
+        return reply.code(201).send(
+          recordingToDto({
+            ...result.recording,
+            transcriptId: result.transcript.id,
+          }),
+        );
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid request body',
+            details: error.issues,
+          });
+        }
+        if (error instanceof ManualTranscriptSourceValidationError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: error.message,
+            code: error.code,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'manual_transcript_source_create_failed',
+          route: routePath,
+          userId: authenticatedUser.id,
+          error: 'internal_error',
+        });
+        return errorResponse(reply, 'internal_error');
       }
     },
   );
