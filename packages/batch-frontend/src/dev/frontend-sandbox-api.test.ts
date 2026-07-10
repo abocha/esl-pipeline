@@ -20,6 +20,37 @@ function requestConfig(
 }
 
 describe('frontend sandbox API adapter', () => {
+  it('creates and serves a manual transcript source', async () => {
+    const adapter = createFrontendSandboxApiAdapter();
+
+    const created = await adapter(
+      requestConfig('post', '/api/recordings/transcript-source', {
+        studentId: 'student-alex',
+        text: 'Existing lesson transcript',
+        displayName: 'Lesson on travel',
+      }),
+    );
+    const transcript = await adapter(
+      requestConfig('get', '/api/recordings/recording-manual-sandbox/transcript'),
+    );
+
+    expect(created.data).toMatchObject({
+      recordingId: 'recording-manual-sandbox',
+      transcriptId: 'transcript-manual-sandbox',
+      status: 'transcribed',
+      source: 'manual_transcript',
+      studentId: 'student-alex',
+      displayName: 'Lesson on travel',
+    });
+    expect(transcript.data).toMatchObject({
+      recordingId: 'recording-manual-sandbox',
+      transcriptId: 'transcript-manual-sandbox',
+      text: 'Existing lesson transcript',
+      sttProvider: 'manual',
+      model: 'manual-entry',
+    });
+  });
+
   it('serves seeded students through the same endpoint shape as the real API', async () => {
     const adapter = createFrontendSandboxApiAdapter();
 
