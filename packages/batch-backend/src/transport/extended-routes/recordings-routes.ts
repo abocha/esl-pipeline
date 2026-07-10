@@ -345,7 +345,7 @@ export function registerRecordingRoutes(
   app.post(
     '/recordings/transcript-source',
     {
-      preHandler: [authenticate],
+      preHandler: [authenticate, uploadRateLimitMiddleware],
     },
     async (request, reply) => {
       const routePath = resolveRoutePath(request, 'POST /recordings/transcript-source');

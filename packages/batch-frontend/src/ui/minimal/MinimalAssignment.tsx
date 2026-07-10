@@ -458,6 +458,15 @@ export const MinimalAssignment: React.FC = () => {
     assignmentSessionUserEditedRef.current = true;
     assignmentSessionPersistenceSuppressedRef.current = false;
   }, []);
+  const createManualTranscript = source.createManualTranscript;
+
+  const handleCreateManualTranscript = useCallback(
+    async (text: string, displayName?: string) => {
+      markAssignmentUserEdit();
+      await createManualTranscript(text, displayName);
+    },
+    [createManualTranscript, markAssignmentUserEdit],
+  );
 
   const beginHydration = useCallback((mode: HydrationMode): HydrationContext => {
     hydrationIdRef.current += 1;
@@ -1755,7 +1764,7 @@ export const MinimalAssignment: React.FC = () => {
             manualSaving={source.manualTranscriptSaving}
             manualError={source.manualTranscriptError}
             transcriptReady={transcriptReady}
-            onCreateManualTranscript={source.createManualTranscript}
+            onCreateManualTranscript={handleCreateManualTranscript}
           >
             <SourceStageSection
               hideStudentSelection
