@@ -1,5 +1,5 @@
-import type React from 'react';
 import { ArrowLeft, AudioLines, BookOpen, Check, Send, Sparkles, UserRound } from 'lucide-react';
+import type React from 'react';
 
 import { ProductButton } from '../system/ProductButton';
 import type { AssignmentStepId, AssignmentWorkflowStep } from './assignment-workflow';
@@ -68,9 +68,10 @@ export function AssignmentWorkflow({
         <ol>
           {steps.map((step, index) => {
             const Icon = stepIcons[step.id];
-            const disabled = step.status === 'locked';
+            const visualStatus = step.id === activeStep ? 'current' : step.status;
+            const disabled = visualStatus === 'locked';
             return (
-              <li key={step.id} data-status={step.status}>
+              <li key={step.id} data-status={visualStatus}>
                 <button
                   type="button"
                   disabled={disabled}
@@ -78,7 +79,7 @@ export function AssignmentWorkflow({
                   onClick={() => onStepRequest(step.id)}
                 >
                   <span className="assignment-workflow__step-icon">
-                    {step.status === 'complete' ? (
+                    {visualStatus === 'complete' ? (
                       <Check aria-hidden="true" />
                     ) : (
                       <Icon aria-hidden="true" />
@@ -95,7 +96,9 @@ export function AssignmentWorkflow({
         </ol>
       </nav>
 
-      <div className={`assignment-workflow__layout${guidance ? '' : ' assignment-workflow__layout--single'}`}>
+      <div
+        className={`assignment-workflow__layout${guidance ? '' : ' assignment-workflow__layout--single'}`}
+      >
         <div className="assignment-workflow__canvas">{children}</div>
         {guidance ? <aside className="assignment-workflow__guidance">{guidance}</aside> : null}
       </div>

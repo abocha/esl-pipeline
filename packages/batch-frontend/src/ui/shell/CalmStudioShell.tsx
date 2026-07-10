@@ -1,13 +1,5 @@
+import { CalendarDays, ChartNoAxesCombined, FileText, LogOut, Menu, Users, X } from 'lucide-react';
 import React, { useState } from 'react';
-import {
-  CalendarDays,
-  ChartNoAxesCombined,
-  FileText,
-  LogOut,
-  Menu,
-  Users,
-  X,
-} from 'lucide-react';
 import { NavLink, Outlet } from 'react-router-dom';
 
 import type { User } from '../../context/AuthContext';
@@ -66,15 +58,22 @@ export function CalmStudioShell({
         </div>
         <div className="calm-shell__account">
           {sandboxMode ? (
-            <span className="calm-shell__sandbox" aria-label="Frontend sandbox mode">Mock data</span>
+            <span className="calm-shell__sandbox" aria-label="Frontend sandbox mode">
+              Mock data
+            </span>
           ) : null}
         </div>
       </header>
 
       <aside className="calm-shell__rail" id="workspace-navigation">
         <div className="calm-shell__brand">
-          <span className="calm-shell__mark" aria-hidden="true">ESL</span>
-          <span><strong>ESL Pipeline</strong><small>Teaching workspace</small></span>
+          <span className="calm-shell__mark" aria-hidden="true">
+            ESL
+          </span>
+          <span>
+            <strong>ESL Pipeline</strong>
+            <small>Teaching workspace</small>
+          </span>
         </div>
         <nav className="calm-shell__nav" aria-label="Workspace">
           <p className="calm-shell__nav-label">Workspace</p>
@@ -94,7 +93,9 @@ export function CalmStudioShell({
           ))}
         </nav>
         <div className="calm-shell__rail-footer">
-          <span className="calm-shell__rail-email" translate="no">{user.email}</span>
+          <span className="calm-shell__rail-email" translate="no">
+            {user.email}
+          </span>
           <button type="button" className="calm-shell__logout" onClick={onLogout}>
             <LogOut aria-hidden="true" />
             <span>Logout</span>

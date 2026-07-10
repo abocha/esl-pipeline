@@ -307,6 +307,10 @@ export function makeStudentLesson(
 }
 
 export async function previewCurrentDraft(_user: ReturnType<typeof userEvent.setup>) {
+  const reviewStep = screen.queryByRole('button', { name: /Review & share/i });
+  if (reviewStep && !(reviewStep as HTMLButtonElement).disabled) {
+    fireEvent.click(reviewStep);
+  }
   fireEvent.click(screen.getByRole('button', { name: /Preview assignment/i }));
   await screen.findByTitle('Draft preview', {}, { timeout: UI_WAIT_TIMEOUT_MS });
 }
@@ -317,8 +321,12 @@ export async function preparePromptReady(_user: ReturnType<typeof userEvent.setu
   fireEvent.change(screen.getByRole('combobox', { name: /^Student$/i }), {
     target: { value: 'student-alex' },
   });
+  fireEvent.click(screen.getByRole('button', { name: /Confirm and continue/i }));
   fireEvent.click(screen.getByRole('button', { name: /Drop audio file/i }));
   await screen.findByDisplayValue('Student transcript text', {}, { timeout: UI_WAIT_TIMEOUT_MS });
+
+  fireEvent.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Confirm and continue/i }));
 
   fireEvent.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
   await screen.findByDisplayValue(
@@ -386,6 +394,14 @@ function hydrateResumedAssignment(
 }
 
 async function waitForResumedPromptReady(_text = 'Prompt package output') {
+  const createStep = await screen.findByRole(
+    'button',
+    { name: /Create/i },
+    { timeout: UI_WAIT_TIMEOUT_MS },
+  );
+  if (!(createStep as HTMLButtonElement).disabled) {
+    fireEvent.click(createStep);
+  }
   await screen.findByRole(
     'button',
     { name: /^Generate assignment$/i },
@@ -395,6 +411,15 @@ async function waitForResumedPromptReady(_text = 'Prompt package output') {
 }
 
 async function waitForJobActionsReady(jobId = 'job-1') {
+  const supportSummary = await screen.findByText(
+    /Support details/i,
+    {},
+    { timeout: UI_WAIT_TIMEOUT_MS },
+  );
+  const supportDisclosure = supportSummary.closest('details');
+  if (supportDisclosure && !supportDisclosure.open) {
+    fireEvent.click(supportSummary.closest('summary') ?? supportSummary);
+  }
   await screen.findByRole(
     'heading',
     { name: /Advanced actions/i },

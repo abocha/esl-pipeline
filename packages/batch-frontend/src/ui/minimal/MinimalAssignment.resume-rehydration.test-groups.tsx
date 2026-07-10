@@ -108,7 +108,7 @@ export function registerResumeBasicTests() {
       await waitFor(() => {
         expect(api.getJobStatus).not.toHaveBeenCalled();
       });
-      expect(screen.queryByText(/Current assignment/i)).toBeNull();
+      expect(screen.queryByText(/^Current assignment$/i)).toBeNull();
     });
 
     it('renders recent work as selectable rows with friendly labels and progressive disclosure', async () => {
@@ -321,6 +321,7 @@ export function registerResumeBasicTests() {
       vi.useRealTimers();
 
       vi.useFakeTimers();
+      vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
       const teacherNotesInput = screen.getByRole('textbox', { name: /Teacher notes/i });
       fireEvent.change(teacherNotesInput, {
         target: { value: 'Remember the travel vocab. Add pronunciation contrast.' },

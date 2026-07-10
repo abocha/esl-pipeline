@@ -14,6 +14,6 @@ describe('ProductButton', () => {
 
   it('hides a decorative icon from assistive technology', () => {
     render(<ProductButton icon={<Save data-testid="icon" />}>Save draft</ProductButton>);
-    expect(screen.getByTestId('icon').getAttribute('aria-hidden')).toBe('true');
+    expect(screen.getByTestId('icon').closest('[aria-hidden="true"]')).not.toBeNull();
   });
 });

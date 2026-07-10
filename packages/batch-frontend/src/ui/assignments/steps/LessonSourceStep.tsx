@@ -1,5 +1,5 @@
-import { useState } from 'react';
 import { AudioLines, FileText, RotateCcw } from 'lucide-react';
+import { useState } from 'react';
 
 import { ProductButton } from '../../system/ProductButton';
 import { ProductNotice } from '../../system/ProductNotice';
@@ -30,7 +30,10 @@ export function LessonSourceStep({
             onClick={() => setMode('audio')}
           >
             <AudioLines aria-hidden="true" />
-            <span><strong>Upload lesson audio</strong><small>OPUS audio only during the alpha</small></span>
+            <span>
+              <strong>Upload lesson audio</strong>
+              <small>OPUS audio only during the alpha</small>
+            </span>
           </button>
           <button
             type="button"
@@ -39,7 +42,10 @@ export function LessonSourceStep({
             onClick={() => setMode('transcript')}
           >
             <FileText aria-hidden="true" />
-            <span><strong>Use an existing transcript</strong><small>Paste text you already have</small></span>
+            <span>
+              <strong>Use an existing transcript</strong>
+              <small>Paste text you already have</small>
+            </span>
           </button>
         </div>
       </fieldset>
@@ -83,7 +89,9 @@ export function LessonSourceStep({
           >
             {manualError ? 'Retry saving transcript' : 'Save existing transcript'}
           </ProductButton>
-          {!studentSelected ? <p className="assignment-source-pane__error">Select a student first.</p> : null}
+          {!studentSelected ? (
+            <p className="assignment-source-pane__error">Select a student first.</p>
+          ) : null}
         </div>
       )}
     </div>

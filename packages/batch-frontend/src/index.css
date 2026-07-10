@@ -1577,3 +1577,49 @@ tbody tr:hover {
     background: var(--bg-primary);
   }
 }
+
+/* Calm Studio is the final operational layer; legacy aliases keep unmigrated routes stable. */
+:root {
+  --paper: var(--cs-canvas);
+  --ink: var(--cs-ink);
+  --app-paper: var(--cs-canvas);
+  --app-paper-deep: var(--cs-surface-muted);
+  --app-panel: var(--cs-surface);
+  --app-ink: var(--cs-ink);
+  --app-muted: var(--cs-ink-muted);
+  --app-blue: var(--cs-action);
+  --app-blue-soft: var(--cs-selection);
+  --app-line: var(--cs-border);
+  --app-radius-lg: var(--cs-radius-surface);
+  --app-radius-md: var(--cs-radius-surface);
+  --app-radius-sm: var(--cs-radius-control);
+  --app-shadow: 0 1px 2px rgb(29 41 53 / 7%);
+  --app-shadow-soft: 0 1px 2px rgb(29 41 53 / 5%);
+  --app-serif: var(--font-sans);
+  --font-display: var(--font-sans);
+  --bg-page: var(--cs-canvas);
+  --bg-surface: var(--cs-surface);
+  --bg-raised: var(--cs-surface);
+  --bg-muted: var(--cs-surface-muted);
+  --text-primary: var(--cs-ink);
+  --text-secondary: var(--cs-ink-muted);
+  --border-subtle: var(--cs-border);
+  --border-light: var(--cs-border);
+  --border-medium: #bdc7d1;
+  --action-primary: var(--cs-action);
+  --action-primary-hover: var(--cs-action-hover);
+  --focus-ring: var(--cs-focus);
+  --radius-sm: var(--cs-radius-control);
+  --radius-md: var(--cs-radius-control);
+  --radius-lg: var(--cs-radius-surface);
+  --radius-xl: var(--cs-radius-surface);
+  --radius-2xl: var(--cs-radius-surface);
+  --radius-3xl: var(--cs-radius-surface);
+  --gradient-primary: var(--cs-action);
+  --gradient-accent: var(--cs-action);
+  --gradient-glass: var(--cs-surface);
+  --shadow-card: 0 1px 2px rgb(29 41 53 / 7%);
+  --shadow-card-hover: 0 2px 6px rgb(29 41 53 / 10%);
+  --shadow-glow: none;
+  --shadow-glow-lg: none;
+}
