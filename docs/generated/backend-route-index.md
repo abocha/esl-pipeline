@@ -74,6 +74,7 @@
 | POST | `/recordings/:recordingId/transcribe` | `packages/batch-backend/src/transport/extended-routes/recordings-routes.ts` |
 | GET | `/recordings/:recordingId/transcript` | `packages/batch-backend/src/transport/extended-routes/recordings-routes.ts` |
 | PUT | `/recordings/:recordingId/transcript` | `packages/batch-backend/src/transport/extended-routes/recordings-routes.ts` |
+| POST | `/recordings/transcript-source` | `packages/batch-backend/src/transport/extended-routes/recordings-routes.ts` |
 | POST | `/recordings/upload` | `packages/batch-backend/src/transport/extended-routes/recordings-routes.ts` |
 | GET | `/students` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | POST | `/students` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
