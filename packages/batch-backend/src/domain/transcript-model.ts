@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import type { SttProviderId } from '@esl-pipeline/contracts';
+import type { TranscriptProviderId } from '@esl-pipeline/contracts';
 
 export type TranscriptMode = 'timeline' | 'stack';
 
@@ -12,7 +12,7 @@ export interface TranscriptRecord {
   mode: TranscriptMode;
   model: string;
   language: string;
-  sttProvider: SttProviderId;
+  sttProvider: TranscriptProviderId;
   fallbackUsed: boolean;
   summaryJson?: Record<string, unknown> | null;
   createdAt: Date;

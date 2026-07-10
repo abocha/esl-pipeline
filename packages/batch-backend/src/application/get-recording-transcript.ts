@@ -1,4 +1,4 @@
-import type { SttProviderId } from '@esl-pipeline/contracts';
+import type { TranscriptProviderId } from '@esl-pipeline/contracts';
 
 import type { TranscriptMode, TranscriptRecord } from '../domain/transcript-model.js';
 import { getTranscriptByRecordingId } from '../domain/transcript-repository.js';
@@ -10,7 +10,7 @@ export interface RecordingTranscriptResponse {
   transcriptId: string;
   text: string;
   summaryJson: Record<string, unknown> | null;
-  sttProvider: SttProviderId;
+  sttProvider: TranscriptProviderId;
   model: string;
   language: string;
   mode: TranscriptMode;

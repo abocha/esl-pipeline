@@ -238,7 +238,7 @@ const TRANSCRIPTS_INDEX_PATCHES: string[] = [
      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'transcripts_stt_provider_check') THEN
        ALTER TABLE transcripts
          ADD CONSTRAINT transcripts_stt_provider_check
-         CHECK (stt_provider IN ('deepgram', 'elevenlabs', 'google'));
+         CHECK (stt_provider IN ('deepgram', 'elevenlabs', 'google', 'manual'));
      END IF;
    END $$;`,
 ];
@@ -802,7 +802,7 @@ BEGIN
     ALTER TABLE recordings DROP CONSTRAINT recordings_source_check;
   END IF;
   ALTER TABLE recordings
-    ADD CONSTRAINT recordings_source_check CHECK (source IN ('upload'));
+    ADD CONSTRAINT recordings_source_check CHECK (source IN ('upload', 'manual_transcript'));
 END $$;`,
   `DO $$
 BEGIN
