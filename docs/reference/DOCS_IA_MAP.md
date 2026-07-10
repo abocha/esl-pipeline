@@ -5,7 +5,7 @@
 - Audience: AI agents and maintainers.
 - Read Time: 3 minutes.
 - Authority Level: Active routing map.
-- Last Verified Against: 2026-06-12 repo state.
+- Last Verified Against: 2026-07-10 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly.
 - Status: `router`.
@@ -54,6 +54,7 @@
 | Teacher-wide schedule, stats, and business dashboard planning        | `docs/reference/TEACHER_BUSINESS_DASHBOARD_PRODUCT_DRAFT.md`     | `docs/reference/SCHEDULE_BILLING_PRODUCT_DECISIONS.md`, `docs/reference/STUDENT_SYSTEM_ROADMAP.md`, `docs/reference/agents-ssot.md`                                                                                                                                  |
 | Legacy student-profile normalization during live transition          | `docs/operations/legacy-profile-normalization.md`                | `docs/reference/STUDENT_SYSTEM_ROADMAP.md`, `docs/plans/student-profile-enrichment/README.md`                                                                                                                                                                        |
 | Student profile enrichment planning                                  | `docs/plans/student-profile-enrichment/README.md`                | `docs/reference/STUDENT_SYSTEM_ROADMAP.md`, `docs/plans/student-memory-system-upgrade/README.md`                                                                                                                                                                     |
+| Future assignment decision ledger, learner outcomes, and explainability | `docs/plans/student-memory-decision-ledger/README.md`          | `docs/plans/student-memory-system-upgrade/README.md`, `docs/reference/STUDENT_MEMORY_V1_1_DESIGN.md`, `docs/reference/STUDENT_MEMORY_EXTRACTION_SCHEMA_SPEC.md`, `docs/reference/HOMEWORK_PEDAGOGY_AND_TEMPLATE_SPEC.md`                                                |
 | Student area redesign and future workspace product design            | `docs/plans/student-area-redesign/README.md`                     | `docs/reference/STUDENT_SYSTEM_ROADMAP.md`, `docs/plans/student-profile-enrichment/README.md`, `docs/reference/HOMEWORK_PEDAGOGY_AND_TEMPLATE_SPEC.md`, `docs/reference/HOMEWORK_PROMPTING_SYSTEM_GUIDE.md`                                                          |
 | Product readiness / weekly review planning                           | `docs/reference/PRODUCT_NORTH_STAR_AND_READINESS.md`             | `docs/plans/2026-06-23-alpha-readiness.md`, `docs/playbooks/WEEKLY_PRODUCT_REVIEW_TEMPLATE.md`                                                                                                                                                                       |
 | Manifest schema / compatibility review                               | `docs/reference/pipeline-manifest.md`                            | `docs/reference/ORCHESTRATOR_SYSTEM_REVIEW.md`, `docs/reference/agents-ssot.md`                                                                                                                                                                                      |
