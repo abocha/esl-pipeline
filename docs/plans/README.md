@@ -5,7 +5,7 @@
 - Audience: maintainers and AI agents working from plan docs.
 - Read Time: 4 minutes.
 - Authority Level: planning router.
-- Last Verified Against: 2026-07-02 repo state.
+- Last Verified Against: 2026-07-10 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: monthly or after major planning-topology changes.
 - Status: `router`.
@@ -75,7 +75,8 @@
 7. `docs/plans/student-profile-enrichment/README.md`
 8. `docs/plans/student-area-redesign/README.md`
 9. `docs/plans/schedule-homework-followups/README.md`
-10. `docs/plans/backlog/README.md`
+10. `docs/plans/student-memory-decision-ledger/README.md` - deferred post-release architecture for source-backed assignment decisions, learner outcomes, and explainability. Preserve only until alpha evidence justifies implementation.
+11. `docs/plans/backlog/README.md`
 
 ### Standalone active plans
 
