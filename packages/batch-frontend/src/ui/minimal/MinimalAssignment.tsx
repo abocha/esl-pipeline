@@ -26,6 +26,12 @@ import {
   subscribeToJobEvents,
   updateAssignmentSession,
 } from '../../utils/api';
+import { AssignmentWorkflow } from '../assignments/AssignmentWorkflow';
+import {
+  type AssignmentStepId,
+  deriveAssignmentWorkflow,
+  mapSessionStageToStep,
+} from '../assignments/assignment-workflow';
 import { AdvancedActionsStage, useAdvancedActionsController } from './MinimalAssignment.advanced';
 import { useMinimalAssignmentAuthoringController } from './MinimalAssignment.authoring';
 import { useMinimalAssignmentContextController } from './MinimalAssignment.context';
@@ -58,7 +64,6 @@ import {
   SourceStageSection,
   type StartStageMode,
   StartStageSection,
-  WorkflowOverview,
   type WorkflowStage,
   type WorkflowStageId,
   type WorkflowStageStatus,
@@ -240,6 +245,7 @@ export const MinimalAssignment: React.FC = () => {
   const [jobOptionsError, setJobOptionsError] = useState<string | null>(null);
   const [showAllResumeJobs, setShowAllResumeJobs] = useState(false);
   const [startStageMode, setStartStageMode] = useState<StartStageMode>('idle');
+  const [activeStep, setActiveStep] = useState<AssignmentStepId>('student');
   const [firstProfileLessonMemoryStatus, setFirstProfileLessonMemoryStatus] = useState<
     'checking' | 'building' | 'ready'
   >('checking');
@@ -1343,6 +1349,74 @@ export const MinimalAssignment: React.FC = () => {
   const reviewReady =
     hasAssignmentContent &&
     (!authoring.draftPreviewGate.previewRequired || authoring.previewReadyForCurrentDraft);
+  const focusedWorkflowSteps = useMemo(
+    () =>
+      deriveAssignmentWorkflow({
+        selectedStudent: Boolean(source.selectedStudentId),
+        transcriptReady,
+        promptReady: authoring.promptReady,
+        draftReady: hasAssignmentContent,
+        previewReady: authoring.previewReadyForCurrentDraft,
+        published: jobReady,
+      }),
+    [
+      authoring.previewReadyForCurrentDraft,
+      authoring.promptReady,
+      hasAssignmentContent,
+      jobReady,
+      source.selectedStudentId,
+      transcriptReady,
+    ],
+  );
+  const focusedWorkflowInput = useMemo(
+    () => ({
+      selectedStudent: Boolean(source.selectedStudentId),
+      transcriptReady,
+      promptReady: authoring.promptReady,
+      draftReady: hasAssignmentContent,
+      previewReady: authoring.previewReadyForCurrentDraft,
+      published: jobReady,
+    }),
+    [
+      authoring.previewReadyForCurrentDraft,
+      authoring.promptReady,
+      hasAssignmentContent,
+      jobReady,
+      source.selectedStudentId,
+      transcriptReady,
+    ],
+  );
+  useEffect(() => {
+    if (!activeAssignmentSession) return;
+    setActiveStep(mapSessionStageToStep(activeAssignmentSession.currentStage, focusedWorkflowInput));
+  }, [activeAssignmentSession?.currentStage, focusedWorkflowInput]);
+
+  const focusedStepOrder: AssignmentStepId[] = ['student', 'source', 'context', 'create', 'review'];
+  const activeStepIndex = focusedStepOrder.indexOf(activeStep);
+  const handleFocusedStepRequest = useCallback(
+    (requestedStep: AssignmentStepId) => {
+      const requested = focusedWorkflowSteps.find((step) => step.id === requestedStep);
+      if (requested?.status === 'locked' && focusedStepOrder.indexOf(requestedStep) > activeStepIndex) {
+        return;
+      }
+      setActiveStep(requestedStep);
+    },
+    [activeStepIndex, focusedWorkflowSteps],
+  );
+  const handleFocusedBack = useCallback(() => {
+    setActiveStep(focusedStepOrder[Math.max(0, activeStepIndex - 1)] ?? 'student');
+  }, [activeStepIndex]);
+  const handleFocusedContinue = useCallback(() => {
+    setActiveStep(focusedStepOrder[Math.min(focusedStepOrder.length - 1, activeStepIndex + 1)] ?? 'review');
+  }, [activeStepIndex]);
+  const continueDisabled =
+    activeStep === 'student'
+      ? !hasStartedFlow
+      : activeStep === 'source'
+        ? !transcriptReady
+        : activeStep === 'create'
+          ? !hasAssignmentContent
+          : activeStep === 'review';
   const linkedLesson = useMemo(() => {
     if (!linkedLessonId || !scheduleSurface) return null;
     return scheduleSurface.lessons.find((lesson) => lesson.id === linkedLessonId) ?? null;
@@ -1561,8 +1635,46 @@ export const MinimalAssignment: React.FC = () => {
 
   return (
     <div className="minimal-assignment">
-      <WorkflowOverview currentStageTitle={currentStageTitle} stages={workflowStages} />
-
+      <AssignmentWorkflow
+        steps={focusedWorkflowSteps}
+        activeStep={activeStep}
+        highestAvailableStep={
+          [...focusedWorkflowSteps].reverse().find((step) => step.status !== 'locked')?.id ??
+          'student'
+        }
+        saveState={activeAssignmentSession ? 'saved' : 'idle'}
+        onStepRequest={handleFocusedStepRequest}
+        onBack={handleFocusedBack}
+        onContinue={handleFocusedContinue}
+        continueLabel={activeStep === 'review' ? 'Assignment ready' : 'Confirm and continue'}
+        continueDisabled={continueDisabled}
+        support={
+          jobReady ? (
+            <AdvancedActionsStage
+              stage={advancedStage}
+              sectionRef={advancedSectionRef}
+              headingRef={advancedHeadingRef}
+              jobReady={Boolean(jobReady)}
+              jobStatus={jobStatus}
+              controller={advancedActions}
+              onRefreshActions={() => void loadJobOptions()}
+              jobOptionsError={jobOptionsError}
+              ttsProviders={ttsProviders}
+              ttsModelOptionsByProvider={ttsModelOptionsByProvider}
+              elevenlabsStandardModelOptions={elevenlabsStandardModelOptions}
+              pronunciationChunkProviders={FALLBACK_PRONUNCIATION_CHUNK_TTS_PROVIDERS}
+              studyTextStrategies={
+                jobOptions?.ttsStrategies?.filter(isUiPublishTtsStrategy) ?? [
+                  'auto',
+                  'dialogue',
+                  'tts',
+                ]
+              }
+            />
+          ) : null
+        }
+      >
+      {activeStep === 'student' ? (
       <StartStageSection
         stage={startStage}
         sectionRef={startSectionRef}
@@ -1587,7 +1699,9 @@ export const MinimalAssignment: React.FC = () => {
         publishLabel={publishLabel}
         publishPending={publishPending}
       />
+      ) : null}
 
+      {activeStep === 'source' ? (
       <SourceStageSection
         stage={sourceStage}
         sectionRef={sourceSectionRef}
@@ -1646,7 +1760,9 @@ export const MinimalAssignment: React.FC = () => {
           void handleSaveTranscript();
         }}
       />
+      ) : null}
 
+      {activeStep === 'context' ? (
       <ContextStageSection
         stage={contextStage}
         sectionRef={contextSectionRef}
@@ -1685,7 +1801,9 @@ export const MinimalAssignment: React.FC = () => {
           setTeacherNotes(value);
         }}
       />
+      ) : null}
 
+      {activeStep === 'create' ? (
       <AssignmentStageSection
         stage={assignmentStage}
         sectionRef={assignmentSectionRef}
@@ -1722,7 +1840,9 @@ export const MinimalAssignment: React.FC = () => {
         validationError={authoring.validationError}
         draftError={authoring.draftError}
       />
+      ) : null}
 
+      {activeStep === 'review' ? (
       <ReviewStageSection
         stage={reviewStage}
         sectionRef={reviewSectionRef}
@@ -1758,24 +1878,8 @@ export const MinimalAssignment: React.FC = () => {
         publishLabel={publishLabel}
         publishPending={publishPending}
       />
-
-      <AdvancedActionsStage
-        stage={advancedStage}
-        sectionRef={advancedSectionRef}
-        headingRef={advancedHeadingRef}
-        jobReady={Boolean(jobReady)}
-        jobStatus={jobStatus}
-        controller={advancedActions}
-        onRefreshActions={() => void loadJobOptions()}
-        jobOptionsError={jobOptionsError}
-        ttsProviders={ttsProviders}
-        ttsModelOptionsByProvider={ttsModelOptionsByProvider}
-        elevenlabsStandardModelOptions={elevenlabsStandardModelOptions}
-        pronunciationChunkProviders={FALLBACK_PRONUNCIATION_CHUNK_TTS_PROVIDERS}
-        studyTextStrategies={
-          jobOptions?.ttsStrategies?.filter(isUiPublishTtsStrategy) ?? ['auto', 'dialogue', 'tts']
-        }
-      />
+      ) : null}
+      </AssignmentWorkflow>
     </div>
   );
 };
