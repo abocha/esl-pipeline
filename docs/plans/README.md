@@ -76,7 +76,8 @@
 8. `docs/plans/student-area-redesign/README.md`
 9. `docs/plans/schedule-homework-followups/README.md`
 10. `docs/plans/student-memory-decision-ledger/README.md` - deferred post-release architecture for source-backed assignment decisions, learner outcomes, and explainability. Preserve only until alpha evidence justifies implementation.
-11. `docs/plans/backlog/README.md`
+11. `docs/plans/assignment-platform-v2/README.md` - clean-replacement roadmap from Markdown-first assignments to typed visual authoring, interactive artifacts, outcome evidence, production cutover, and legacy retirement.
+12. `docs/plans/backlog/README.md`
 
 ### Standalone active plans
 
