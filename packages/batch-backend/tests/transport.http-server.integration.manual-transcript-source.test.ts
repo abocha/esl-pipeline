@@ -1,5 +1,6 @@
-import * as ingestManualTranscriptSourceModule from '../src/application/ingest-manual-transcript-source.js';
 import type { FastifyReply, FastifyRequest } from 'fastify';
+
+import * as ingestManualTranscriptSourceModule from '../src/application/ingest-manual-transcript-source.js';
 import { describeHttpServerIntegrationSuite } from './transport.http-server.integration.harness.js';
 
 describeHttpServerIntegrationSuite(

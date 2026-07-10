@@ -53,8 +53,9 @@ describe('application/ingest-manual-transcript-source', () => {
         updatedAt: new Date('2026-07-10T00:00:00.000Z'),
       },
     }));
-    const { ingestManualTranscriptSource } =
-      await import('../src/application/ingest-manual-transcript-source.js');
+    const { ingestManualTranscriptSource } = await import(
+      '../src/application/ingest-manual-transcript-source.js'
+    );
 
     const result = await ingestManualTranscriptSource(
       {
@@ -88,8 +89,9 @@ describe('application/ingest-manual-transcript-source', () => {
   });
 
   it('rejects blank transcript text before writing storage', async () => {
-    const { ingestManualTranscriptSource, ManualTranscriptSourceValidationError } =
-      await import('../src/application/ingest-manual-transcript-source.js');
+    const { ingestManualTranscriptSource, ManualTranscriptSourceValidationError } = await import(
+      '../src/application/ingest-manual-transcript-source.js'
+    );
 
     await expect(
       ingestManualTranscriptSource(
@@ -102,8 +104,9 @@ describe('application/ingest-manual-transcript-source', () => {
   });
 
   it('rejects text over 500000 characters before writing storage', async () => {
-    const { ingestManualTranscriptSource } =
-      await import('../src/application/ingest-manual-transcript-source.js');
+    const { ingestManualTranscriptSource } = await import(
+      '../src/application/ingest-manual-transcript-source.js'
+    );
 
     await expect(
       ingestManualTranscriptSource(
@@ -118,8 +121,9 @@ describe('application/ingest-manual-transcript-source', () => {
   });
 
   it('deletes stored text when database persistence fails', async () => {
-    const { ingestManualTranscriptSource } =
-      await import('../src/application/ingest-manual-transcript-source.js');
+    const { ingestManualTranscriptSource } = await import(
+      '../src/application/ingest-manual-transcript-source.js'
+    );
     const persist = vi.fn().mockRejectedValue(new Error('database write failed'));
 
     await expect(

@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-
 import type { PoolClient } from 'pg';
 
 import type { RecordingRecord } from '../domain/recording-model.js';
