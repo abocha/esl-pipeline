@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { PoolClient } from 'pg';
 
-import type { SttProviderId } from '@esl-pipeline/contracts';
+import type { TranscriptProviderId } from '@esl-pipeline/contracts';
 
 import { withPgClient } from '../infrastructure/db.js';
 import { logger } from '../infrastructure/logger.js';
@@ -19,7 +19,7 @@ interface TranscriptRow {
   mode: string;
   model: string;
   language: string;
-  stt_provider: SttProviderId;
+  stt_provider: TranscriptProviderId;
   fallback_used: boolean;
   summary_json: Record<string, unknown> | null;
   created_at: Date;
@@ -34,7 +34,7 @@ export interface InsertTranscriptParams {
   mode: TranscriptMode;
   model: string;
   language: string;
-  sttProvider: SttProviderId;
+  sttProvider: TranscriptProviderId;
   fallbackUsed: boolean;
   summaryJson?: Record<string, unknown> | null;
 }
