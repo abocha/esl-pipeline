@@ -33,7 +33,9 @@ import {
   mapSessionStageToStep,
 } from '../assignments/assignment-workflow';
 import { LessonSourceStep } from '../assignments/steps/LessonSourceStep';
+import { CreateAssignmentStep } from '../assignments/steps/CreateAssignmentStep';
 import { StudentStep } from '../assignments/steps/StudentStep';
+import { TeachingContextStep } from '../assignments/steps/TeachingContextStep';
 import { AdvancedActionsStage, useAdvancedActionsController } from './MinimalAssignment.advanced';
 import { useMinimalAssignmentAuthoringController } from './MinimalAssignment.authoring';
 import { useMinimalAssignmentContextController } from './MinimalAssignment.context';
@@ -1408,9 +1410,33 @@ export const MinimalAssignment: React.FC = () => {
   const handleFocusedBack = useCallback(() => {
     setActiveStep(focusedStepOrder[Math.max(0, activeStepIndex - 1)] ?? 'student');
   }, [activeStepIndex]);
-  const handleFocusedContinue = useCallback(() => {
-    setActiveStep(focusedStepOrder[Math.min(focusedStepOrder.length - 1, activeStepIndex + 1)] ?? 'review');
-  }, [activeStepIndex]);
+  const handleFocusedContinue = useCallback(async () => {
+    if (activeStep === 'context') {
+      const saved = await saveAssignmentSessionProgress({
+        studentId: source.selectedStudentId || null,
+        recordingId: source.recording?.recordingId ?? null,
+        transcriptId: source.transcript?.transcriptId ?? null,
+        teacherNotes: teacherNotes.trim() || null,
+        currentStage: 'assignment',
+      });
+      if (!saved) return;
+    }
+    if (activeStep === 'create' && authoring.draftDirty) {
+      await authoring.saveDraft();
+    }
+    setActiveStep(
+      focusedStepOrder[Math.min(focusedStepOrder.length - 1, activeStepIndex + 1)] ?? 'review',
+    );
+  }, [
+    activeStep,
+    activeStepIndex,
+    authoring,
+    saveAssignmentSessionProgress,
+    source.recording?.recordingId,
+    source.selectedStudentId,
+    source.transcript?.transcriptId,
+    teacherNotes,
+  ]);
   const continueDisabled =
     activeStep === 'student'
       ? !hasStartedFlow
@@ -1775,6 +1801,7 @@ export const MinimalAssignment: React.FC = () => {
       ) : null}
 
       {activeStep === 'context' ? (
+      <TeachingContextStep>
       <ContextStageSection
         stage={contextStage}
         sectionRef={contextSectionRef}
@@ -1809,13 +1836,24 @@ export const MinimalAssignment: React.FC = () => {
         }}
         teacherNotes={teacherNotes}
         onTeacherNotesChange={(value) => {
+          if (
+            hasAssignmentContent &&
+            value !== teacherNotes &&
+            !globalThis.confirm(
+              'This will require a new assignment draft. Your lesson source and transcript will stay saved.',
+            )
+          ) {
+            return;
+          }
           markAssignmentUserEdit();
           setTeacherNotes(value);
         }}
       />
+      </TeachingContextStep>
       ) : null}
 
       {activeStep === 'create' ? (
+      <CreateAssignmentStep>
       <AssignmentStageSection
         stage={assignmentStage}
         sectionRef={assignmentSectionRef}
@@ -1852,6 +1890,7 @@ export const MinimalAssignment: React.FC = () => {
         validationError={authoring.validationError}
         draftError={authoring.draftError}
       />
+      </CreateAssignmentStep>
       ) : null}
 
       {activeStep === 'review' ? (
