@@ -5,7 +5,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { isFrontendSandboxEnabled } from '../dev/frontend-sandbox';
 import type { AuthMode } from './auth/AuthDialog';
-import { MinimalShell } from './minimal/MinimalShell';
+import { CalmStudioShell } from './shell/CalmStudioShell';
 
 import './AppShell.css';
 
@@ -199,7 +199,11 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ user, onLogout }) =
     <Routes>
       <Route
         element={
-          <MinimalShell user={user} onLogout={onLogout} sandboxMode={isFrontendSandboxEnabled()} />
+          <CalmStudioShell
+            user={user}
+            onLogout={onLogout}
+            sandboxMode={isFrontendSandboxEnabled()}
+          />
         }
       >
         <Route

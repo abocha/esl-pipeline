@@ -30,6 +30,9 @@ It does not redefine orchestrator behavior. Contract and architecture detail sta
 Core surfaces:
 
 - jobs, drafts, prompt packages, recordings, students, auth
+- tutor-pasted transcript sources under `POST /recordings/transcript-source`; these create a
+  student-owned recording/transcript pair with `manual_transcript` source and `manual` provider
+  provenance without enqueueing speech-to-text work
 - student archive/restore under `/students/:id/archive` and `/students/:id/restore`; archived students are hidden from default student reads without deleting history
 - student-area route payloads under `/students/:id/surfaces/overview`, `/students/:id/surfaces/learning`, and `/students/:id/surfaces/history`
 - student schedule/billing route payloads under `/students/:id/surfaces/schedule-billing`, including lesson-credit state and elapsed lesson homework follow-ups
@@ -52,6 +55,8 @@ Useful indexes:
 - Recording upload cache hits reuse compatible immutable STT artifacts. When identical audio is
   submitted for another student, the backend clones recording/transcript metadata for that student
   instead of reassigning the original learner-owned artifacts.
+- Manual transcript sources require a student, retain the pasted text as durable source material,
+  and participate in prompt-package, assignment-history, and resume flows like uploaded lessons.
 - Local/dev startup runs the API server, batch worker, transcribe worker, and dedicated student-memory worker as separate processes.
 - Canonical lesson/homework/snapshot extraction reserves the shared generation budget before its
   provider call and records actual token use after success. If that post-success accounting write

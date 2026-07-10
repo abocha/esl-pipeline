@@ -120,11 +120,14 @@ export async function getRecordingBySourcePath(
   return row ? mapRowToRecording(row) : null;
 }
 
-export async function insertRecording(params: InsertRecordingParams): Promise<RecordingRecord> {
+export async function insertRecording(
+  params: InsertRecordingParams,
+  options?: { client?: PoolClient },
+): Promise<RecordingRecord> {
   const id = params.id ?? randomUUID();
   const now = new Date();
 
-  const row = await withPgClient(async (client: PoolClient) => {
+  const write = async (client: PoolClient) => {
     const result = await client.query(
       `
       INSERT INTO recordings (
@@ -175,7 +178,8 @@ export async function insertRecording(params: InsertRecordingParams): Promise<Re
       ],
     );
     return result.rows[0];
-  });
+  };
+  const row = options?.client ? await write(options.client) : await withPgClient(write);
 
   logger.info('Recording inserted', { recordingId: id });
 

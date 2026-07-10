@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
-export type RecordingSource = 'upload';
+import type { RecordingSourceId } from '@esl-pipeline/contracts';
+
+export type RecordingSource = RecordingSourceId;
 export type RecordingStatus = 'ingested' | 'queued' | 'transcribing' | 'transcribed' | 'failed';
 
 export interface RecordingRecord {
@@ -19,7 +21,7 @@ export interface RecordingRecord {
   updatedAt: Date;
 }
 
-export const RecordingSourceSchema = z.enum(['upload']);
+export const RecordingSourceSchema = z.enum(['upload', 'manual_transcript']);
 export const RecordingStatusSchema = z.enum([
   'ingested',
   'queued',
