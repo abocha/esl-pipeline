@@ -339,6 +339,69 @@ export function registerResumeBasicTests() {
       expect(api.getJobStatus).not.toHaveBeenCalled();
     });
 
+    it('persists a pasted transcript as a user edit after session hydration', async () => {
+      const user = createMinimalUser();
+      vi.mocked(api.listAssignmentSessions).mockResolvedValueOnce({
+        sessions: [
+          makeAssignmentSession({
+            id: 'session-resume',
+            studentId: 'student-alex',
+            currentStage: 'source',
+          }),
+        ],
+        total: 1,
+        limit: 20,
+      });
+      vi.mocked(api.fetchRecordingTranscript).mockResolvedValueOnce(
+        makeTranscript({
+          recordingId: 'rec-manual',
+          transcriptId: 'tx-manual',
+          text: 'Tutor supplied transcript',
+          sttProvider: 'manual',
+        }),
+      );
+      vi.mocked(api.updateAssignmentSession).mockImplementation(async (id, patch) =>
+        makeAssignmentSession({
+          id,
+          studentId: 'student-alex',
+          ...patch,
+        }),
+      );
+
+      globalThis.history.replaceState(null, '', '/?sessionId=session-resume');
+      renderMinimalAssignment();
+
+      await screen.findByRole('heading', { name: /Add lesson source/i });
+      await user.click(screen.getByRole('button', { name: /Use an existing transcript/i }));
+      await user.type(
+        screen.getByRole('textbox', { name: /Existing lesson transcript/i }),
+        'Tutor supplied transcript',
+      );
+      await user.click(screen.getByRole('button', { name: /Save existing transcript/i }));
+
+      await waitFor(() => {
+        expect(api.createManualTranscriptSource).toHaveBeenCalledWith({
+          studentId: 'student-alex',
+          text: 'Tutor supplied transcript',
+          displayName: 'Pasted lesson transcript',
+        });
+      });
+      await waitFor(() => {
+        expect(api.updateAssignmentSession).toHaveBeenCalledWith(
+          'session-resume',
+          expect.objectContaining({
+            recordingId: 'rec-manual',
+          }),
+        );
+        expect(api.updateAssignmentSession).toHaveBeenCalledWith(
+          'session-resume',
+          expect.objectContaining({
+            transcriptId: 'tx-manual',
+          }),
+        );
+      });
+    });
+
     it('does not let a stale initial hydration overwrite a freshly started assignment', async () => {
       let resolveStaleDraft: (value: ApiTypes.DraftResponse) => void = () => {};
       vi.mocked(api.listAssignmentSessions).mockResolvedValueOnce({

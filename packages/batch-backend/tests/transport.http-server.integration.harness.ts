@@ -52,6 +52,12 @@ import * as transcriptionStorageModule from '../src/infrastructure/transcription
 import * as authMiddlewareModule from '../src/transport/auth-middleware.js';
 import { createHttpServer } from '../src/transport/http-server.js';
 
+const rateLimitMocks = vi.hoisted(() => ({
+  uploadRateLimitMiddleware: vi.fn((_request, _reply, done) => {
+    done?.();
+  }),
+}));
+
 vi.mock('../src/transport/auth-middleware.js', async () => {
   const actual = await vi.importActual<typeof import('../src/transport/auth-middleware.js')>(
     '../src/transport/auth-middleware.js',
@@ -81,11 +87,7 @@ vi.mock('../src/transport/rate-limit-middleware', async () => {
   );
   return {
     ...actual,
-    createUploadRateLimitMiddleware: vi.fn(() =>
-      vi.fn((request, reply, done) => {
-        done?.();
-      }),
-    ),
+    createUploadRateLimitMiddleware: vi.fn(() => rateLimitMocks.uploadRateLimitMiddleware),
   };
 });
 
@@ -1259,6 +1261,7 @@ export function describeHttpServerIntegrationSuite(
       DB_MIGRATION_HEAD,
       assignmentSessionsModule,
       authMiddlewareModule,
+      rateLimitMocks,
       approveJobModule,
       createDraftModule,
       createPromptPackageModule,

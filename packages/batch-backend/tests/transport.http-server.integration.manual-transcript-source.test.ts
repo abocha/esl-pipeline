@@ -5,7 +5,7 @@ import { describeHttpServerIntegrationSuite } from './transport.http-server.inte
 
 describeHttpServerIntegrationSuite(
   'transport/http-server - integration (in-process) [manual-transcript-source]',
-  ({ app, authMiddlewareModule, expect, it, vi }) => {
+  ({ app, authMiddlewareModule, expect, it, rateLimitMocks, vi }) => {
     it('POST /recordings/transcript-source requires authentication', async () => {
       vi.mocked(authMiddlewareModule.authenticate).mockImplementationOnce(
         (_request: FastifyRequest, reply: FastifyReply) => {
@@ -41,6 +41,25 @@ describeHttpServerIntegrationSuite(
 
       expect(response.statusCode).toBe(400);
       expect(response.json()).toMatchObject({ error: 'validation_failed' });
+    });
+
+    it('POST /recordings/transcript-source consumes the upload rate limit', async () => {
+      rateLimitMocks.uploadRateLimitMiddleware.mockClear();
+      vi.spyOn(
+        ingestManualTranscriptSourceModule,
+        'ingestManualTranscriptSource',
+      ).mockRejectedValueOnce(new Error('stop after pre-handlers'));
+
+      await app.inject({
+        method: 'POST',
+        url: '/recordings/transcript-source',
+        payload: {
+          studentId: '11111111-1111-4111-8111-111111111111',
+          text: 'Tutor supplied transcript',
+        },
+      });
+
+      expect(rateLimitMocks.uploadRateLimitMiddleware).toHaveBeenCalledTimes(1);
     });
 
     it('POST /recordings/transcript-source rejects oversized text', async () => {

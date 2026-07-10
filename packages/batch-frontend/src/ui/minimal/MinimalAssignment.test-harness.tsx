@@ -22,6 +22,7 @@ vi.mock('../../utils/api', () => ({
   cancelJob: vi.fn(),
   createAssignmentSession: vi.fn(),
   createDraft: vi.fn(),
+  createManualTranscriptSource: vi.fn(),
   createPromptPackage: vi.fn(),
   fetchDraft: vi.fn(),
   fetchAssignmentSession: vi.fn(),
@@ -715,6 +716,16 @@ export function setupMinimalAssignmentTest() {
     limit: 20,
   });
   vi.mocked(api.createAssignmentSession).mockResolvedValue(makeAssignmentSession());
+  vi.mocked(api.createManualTranscriptSource).mockResolvedValue(
+    makeRecording({
+      recordingId: 'rec-manual',
+      transcriptId: 'tx-manual',
+      source: 'manual_transcript',
+      status: 'transcribed',
+      studentId: 'student-alex',
+      displayName: 'Pasted lesson transcript',
+    }),
+  );
   vi.mocked(api.updateAssignmentSession).mockResolvedValue(makeAssignmentSession());
   vi.mocked(api.fetchAssignmentSession).mockResolvedValue(makeAssignmentSession());
   vi.mocked(api.archiveAssignmentSession).mockResolvedValue(
