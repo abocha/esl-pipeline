@@ -28,6 +28,21 @@
 .assignment-workflow__footer { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--cs-border); }
 .assignment-workflow__support { margin-top: 1.5rem; }
 
+.assignment-step { display: grid; gap: 1rem; }
+.assignment-source-choice { margin: 0; padding: 0; border: 0; }
+.assignment-source-choice legend { margin-bottom: 0.65rem; font-size: var(--cs-text-body); font-weight: 750; }
+.assignment-source-choice__options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+.assignment-source-choice__options button { min-height: 76px; display: flex; align-items: center; gap: 0.75rem; padding: 0.85rem; border: 1px solid var(--cs-border); border-radius: var(--cs-radius-surface); background: var(--cs-surface); color: var(--cs-ink); text-align: left; cursor: pointer; }
+.assignment-source-choice__options button.is-selected { border-color: var(--cs-action); background: color-mix(in srgb, var(--cs-selection) 46%, white); box-shadow: var(--cs-focus); }
+.assignment-source-choice__options svg { width: 20px; height: 20px; color: var(--cs-action); }
+.assignment-source-choice__options span { display: grid; gap: 0.15rem; }
+.assignment-source-choice__options small { color: var(--cs-ink-muted); font-size: var(--cs-text-support); }
+.assignment-source-pane { display: grid; gap: 0.9rem; }
+.assignment-source-pane--manual label { font-weight: 750; }
+.assignment-source-pane--manual textarea { width: 100%; min-height: 220px; padding: 0.8rem; border: 1px solid var(--cs-border); border-radius: var(--cs-radius-control); color: var(--cs-ink); background: var(--cs-surface); font: inherit; line-height: 1.55; resize: vertical; }
+.assignment-source-pane__hint { margin: 0; color: var(--cs-ink-muted); font-size: var(--cs-text-support); }
+.assignment-source-pane__error { margin: 0; color: var(--cs-error); font-size: var(--cs-text-support); }
+
 @media (max-width: 900px) {
   .assignment-workflow__step-copy small { display: none; }
   .assignment-workflow__progress button { justify-content: center; }
@@ -43,4 +58,5 @@
   .assignment-workflow__progress ol { min-width: 520px; }
   .assignment-workflow__progress button { min-height: 62px; }
   .assignment-workflow__canvas { padding: 0.9rem; }
+  .assignment-source-choice__options { grid-template-columns: 1fr; }
 }
