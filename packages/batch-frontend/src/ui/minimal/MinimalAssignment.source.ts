@@ -9,6 +9,7 @@ import type {
   StudentOption,
 } from '../../utils/api';
 import {
+  createManualTranscriptSource,
   fetchRecordingTranscript,
   fetchStudentOptions,
   getRecording as getRecordingStatus,
@@ -64,6 +65,8 @@ export interface SourceController extends SourceHydrationSnapshot {
   uploadProgress: number;
   selectedSttProvider: SttProvider;
   transcriptSaving: boolean;
+  manualTranscriptSaving: boolean;
+  manualTranscriptError: string | null;
   retryingTranscript: boolean;
   studentOptions: StudentOption[];
   studentOptionsError: string | null;
@@ -80,6 +83,7 @@ export interface SourceController extends SourceHydrationSnapshot {
   loadTranscript: () => Promise<void>;
   handleSaveTranscript: () => Promise<void>;
   handleRetryTranscription: () => Promise<void>;
+  createManualTranscript: (text: string, displayName?: string) => Promise<void>;
   resetSourceFlow: (options?: { resetStudent?: boolean }) => void;
   applyHydratedSnapshot: (snapshot: SourceHydrationSnapshot) => void;
   resolveBoundProfileId: (studentId: string) => string;
@@ -112,6 +116,8 @@ export function useMinimalAssignmentSourceController({
   const [transcriptError, setTranscriptError] = useState<string | null>(null);
   const [transcriptSaving, setTranscriptSaving] = useState(false);
   const [retryingTranscript, setRetryingTranscript] = useState(false);
+  const [manualTranscriptSaving, setManualTranscriptSaving] = useState(false);
+  const [manualTranscriptError, setManualTranscriptError] = useState<string | null>(null);
   const [studentOptions, setStudentOptions] = useState<StudentOption[]>([]);
   const [studentOptionsError, setStudentOptionsError] = useState<string | null>(null);
   const [selectedStudentId, setSelectedStudentId] = useState(initialSelectedStudentId ?? '');
@@ -184,6 +190,8 @@ export function useMinimalAssignmentSourceController({
       setTranscriptError(null);
       setTranscriptSaving(false);
       setRetryingTranscript(false);
+      setManualTranscriptSaving(false);
+      setManualTranscriptError(null);
       setSelectedFileName(null);
       setUploadError(null);
       setUploadProgress(0);
@@ -525,6 +533,50 @@ export function useMinimalAssignmentSourceController({
     }
   }, [recording?.recordingId, selectedSttProvider]);
 
+  const createManualTranscript = useCallback(
+    async (text: string, displayName = 'Pasted lesson transcript') => {
+      const normalizedText = text.trim();
+      if (!selectedStudentId) {
+        setManualTranscriptError('Select a student before adding an existing transcript.');
+        return;
+      }
+      if (!normalizedText) {
+        setManualTranscriptError('Paste the existing transcript before continuing.');
+        return;
+      }
+
+      setManualTranscriptSaving(true);
+      setManualTranscriptError(null);
+      setUploadError(null);
+      setTranscriptError(null);
+      onBeforeUploadReset();
+      try {
+        const created = await createManualTranscriptSource({
+          studentId: selectedStudentId,
+          text: normalizedText,
+          displayName,
+        });
+        setRecording(created);
+        setRecordingStatus(created.status);
+        setRecordingError(created.error ?? null);
+        setSelectedFileName(created.displayName || displayName);
+        setUploadCacheNotice(null);
+
+        const loaded = await fetchRecordingTranscript(created.recordingId);
+        setTranscript(loaded);
+        setTranscriptText(loaded.text ?? normalizedText);
+        setTranscriptStatus('ready');
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'Unable to save the existing transcript.';
+        setManualTranscriptError(message);
+      } finally {
+        setManualTranscriptSaving(false);
+      }
+    },
+    [onBeforeUploadReset, selectedStudentId],
+  );
+
   useEffect(() => {
     if (sttProviders.length === 0) return;
     const preferredProvider =
@@ -561,6 +613,8 @@ export function useMinimalAssignmentSourceController({
     transcriptStatus,
     transcriptError,
     transcriptSaving,
+    manualTranscriptSaving,
+    manualTranscriptError,
     retryingTranscript,
     studentOptions,
     studentOptionsError,
@@ -579,6 +633,7 @@ export function useMinimalAssignmentSourceController({
     loadTranscript,
     handleSaveTranscript,
     handleRetryTranscription,
+    createManualTranscript,
     resetSourceFlow,
     applyHydratedSnapshot,
     resolveBoundProfileId,

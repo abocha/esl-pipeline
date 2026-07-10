@@ -32,6 +32,8 @@ import {
   deriveAssignmentWorkflow,
   mapSessionStageToStep,
 } from '../assignments/assignment-workflow';
+import { LessonSourceStep } from '../assignments/steps/LessonSourceStep';
+import { StudentStep } from '../assignments/steps/StudentStep';
 import { AdvancedActionsStage, useAdvancedActionsController } from './MinimalAssignment.advanced';
 import { useMinimalAssignmentAuthoringController } from './MinimalAssignment.authoring';
 import { useMinimalAssignmentContextController } from './MinimalAssignment.context';
@@ -70,7 +72,7 @@ import {
 } from './MinimalAssignment.stages';
 import './MinimalAssignment.css';
 
-const AUDIO_EXTENSIONS = ['.wav', '.mp3', '.m4a', '.aac', '.ogg', '.opus'];
+const AUDIO_EXTENSIONS = ['.opus'] as const;
 const FALLBACK_TTS_PROVIDERS = ['elevenlabs', 'google', 'inworld'] as const;
 const FALLBACK_PRONUNCIATION_CHUNK_TTS_PROVIDERS = ['google', 'elevenlabs', 'inworld'] as const;
 const FALLBACK_GOOGLE_TTS_MODELS = ['chirp3_hd', 'studio', 'neural2', 'wavenet'] as const;
@@ -1675,6 +1677,7 @@ export const MinimalAssignment: React.FC = () => {
         }
       >
       {activeStep === 'student' ? (
+      <StudentStep>
       <StartStageSection
         stage={startStage}
         sectionRef={startSectionRef}
@@ -1699,9 +1702,17 @@ export const MinimalAssignment: React.FC = () => {
         publishLabel={publishLabel}
         publishPending={publishPending}
       />
+      </StudentStep>
       ) : null}
 
       {activeStep === 'source' ? (
+      <LessonSourceStep
+        studentSelected={Boolean(source.selectedStudentId)}
+        manualSaving={source.manualTranscriptSaving}
+        manualError={source.manualTranscriptError}
+        transcriptReady={transcriptReady}
+        onCreateManualTranscript={source.createManualTranscript}
+      >
       <SourceStageSection
         stage={sourceStage}
         sectionRef={sourceSectionRef}
@@ -1760,6 +1771,7 @@ export const MinimalAssignment: React.FC = () => {
           void handleSaveTranscript();
         }}
       />
+      </LessonSourceStep>
       ) : null}
 
       {activeStep === 'context' ? (
