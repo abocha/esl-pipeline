@@ -105,6 +105,8 @@ export function registerGenerationDefaultsTests() {
         vi.mocked(api.updateAssignmentSession).mockClear();
         vi.useFakeTimers();
 
+        vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
+
         fireEvent.change(screen.getByRole('textbox', { name: /Teacher notes/i }), {
           target: { value: 'Use more travel vocabulary.' },
         });

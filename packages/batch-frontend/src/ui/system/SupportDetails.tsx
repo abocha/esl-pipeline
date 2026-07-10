@@ -1,5 +1,5 @@
-import type React from 'react';
 import { Wrench } from 'lucide-react';
+import type React from 'react';
 
 export interface SupportDetailsProps {
   summary: React.ReactNode;

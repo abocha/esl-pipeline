@@ -25,7 +25,7 @@ export interface AssignmentWorkflowStep {
   status: AssignmentStepStatus;
 }
 
-const STEP_DEFINITIONS: ReadonlyArray<Pick<AssignmentWorkflowStep, 'id' | 'label'>> = [
+const STEP_DEFINITIONS: readonly Pick<AssignmentWorkflowStep, 'id' | 'label'>[] = [
   { id: 'student', label: 'Student' },
   { id: 'source', label: 'Lesson source' },
   { id: 'context', label: 'Teaching context' },

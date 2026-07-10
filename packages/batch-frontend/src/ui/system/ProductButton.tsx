@@ -1,4 +1,4 @@
-import React from 'react';
+import type React from 'react';
 
 export interface ProductButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'quiet' | 'danger';
@@ -22,7 +22,11 @@ export function ProductButton({
       disabled={disabled || busy}
       aria-busy={busy || undefined}
     >
-      {icon ? React.cloneElement(icon, { 'aria-hidden': true }) : null}
+      {icon ? (
+        <span aria-hidden="true" className="product-button__icon">
+          {icon}
+        </span>
+      ) : null}
       <span>{children}</span>
     </button>
   );

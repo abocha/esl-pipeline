@@ -30,10 +30,12 @@ describe('AssignmentWorkflow', () => {
       </AssignmentWorkflow>,
     );
     expect(screen.getByRole('navigation', { name: 'Assignment progress' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /Lesson source/i }).getAttribute('aria-current')).toBe(
-      'step',
-    );
-    expect((screen.getByRole('button', { name: /Teaching context/i }) as HTMLButtonElement).disabled).toBe(true);
+    expect(
+      screen.getByRole('button', { name: /Lesson source/i }).getAttribute('aria-current'),
+    ).toBe('step');
+    expect(
+      (screen.getByRole('button', { name: /Teaching context/i }) as HTMLButtonElement).disabled,
+    ).toBe(true);
     expect(screen.getByText('Lesson source content')).toBeTruthy();
   });
 

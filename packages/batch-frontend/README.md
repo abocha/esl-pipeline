@@ -39,6 +39,12 @@ Canonical behavior and current status live in:
   transcripts are persisted through `POST /recordings/transcript-source`, retain explicit
   `manual_transcript`/`manual` provenance, and never enqueue speech-to-text work. OPUS is the only
   audio format promised during the current alpha.
+- The authenticated Calm Studio shell uses a persistent workspace rail and a focused five-step
+  assignment flow: Student, Lesson source, Teaching context, Create, and Review & share. Back and
+  completed-step navigation keep the current assignment state; technical recovery, provider,
+  quota, provenance, and rerun controls live under Support details rather than a sixth step.
+- This visual overhaul currently covers the authenticated shell and assignment workflow. Student,
+  Business, and Assignment Templates routes remain operational on their existing content designs.
 - Local UI iteration can use the Vite mock-auth sandbox without a backend:
   - PowerShell:
     ` $env:VITE_BATCH_FRONTEND_SANDBOX='mock-auth'; pnpm --filter @esl-pipeline/batch-frontend dev -- --host 127.0.0.1 --port 5173`

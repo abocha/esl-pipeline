@@ -538,13 +538,14 @@ export function registerPromptStudentSelectionTests() {
       const user = createMinimalUser();
       renderMinimalAssignment();
 
-      expect(screen.queryByRole('combobox', { name: /^Student$/i })).toBeNull();
+      expect(screen.getByRole('combobox', { name: /^Student$/i })).toBeTruthy();
       await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
 
       const studentSelect = await screen.findByRole('combobox', { name: /^Student$/i });
       expect((studentSelect as HTMLSelectElement).value).toBe('');
       expect(
-        (screen.getByRole('button', { name: /Drop audio file/i }) as HTMLButtonElement).disabled,
+        (screen.getByRole('button', { name: /Confirm and continue/i }) as HTMLButtonElement)
+          .disabled,
       ).toBe(true);
       expect(api.uploadRecording).not.toHaveBeenCalled();
     });

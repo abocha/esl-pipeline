@@ -1,4 +1,4 @@
-import React from 'react';
+import type React from 'react';
 
 export interface ProductNoticeProps {
   tone?: 'info' | 'success' | 'warning' | 'error';
@@ -20,7 +20,7 @@ export function ProductNotice({
       className={`product-notice product-notice--${tone} ${className}`.trim()}
       role={tone === 'error' ? 'alert' : undefined}
     >
-      {icon ? React.cloneElement(icon, { 'aria-hidden': true }) : <span aria-hidden="true">•</span>}
+      {icon ? <span aria-hidden="true">{icon}</span> : <span aria-hidden="true">•</span>}
       <div>
         <p className="product-notice__title">{title}</p>
         <div className="product-notice__body">{children}</div>
