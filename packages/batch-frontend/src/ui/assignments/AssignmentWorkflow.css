@@ -1,0 +1,46 @@
+.assignment-workflow { width: min(100%, 1260px); margin: 0 auto; color: var(--cs-ink); }
+.assignment-workflow__header { display: flex; align-items: end; justify-content: space-between; gap: 1rem; margin-bottom: 1.25rem; }
+.assignment-workflow__eyebrow { margin: 0 0 0.25rem; color: var(--cs-action); font-size: var(--cs-text-support); font-weight: 750; }
+.assignment-workflow__header h1 { margin: 0; font: 750 clamp(1.55rem, 3vw, 2rem)/1.15 var(--font-sans); letter-spacing: -0.02em; }
+.assignment-workflow__save { min-height: 32px; display: inline-flex; align-items: center; gap: 0.35rem; color: var(--cs-ink-muted); font-size: var(--cs-text-support); }
+.assignment-workflow__save svg { width: 15px; height: 15px; }
+.assignment-workflow__save--saved { color: var(--cs-success); }
+.assignment-workflow__save--error { color: var(--cs-error); }
+
+.assignment-workflow__progress { position: sticky; top: 58px; z-index: 20; margin-bottom: 1.25rem; border: 1px solid var(--cs-border); border-radius: var(--cs-radius-surface); background: var(--cs-surface); }
+.assignment-workflow__progress ol { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; }
+.assignment-workflow__progress li { position: relative; min-width: 0; }
+.assignment-workflow__progress li:not(:last-child)::after { content: ""; position: absolute; top: 50%; right: -1px; width: 1px; height: 26px; transform: translateY(-50%); background: var(--cs-border); }
+.assignment-workflow__progress button { width: 100%; min-height: 68px; display: flex; align-items: center; gap: 0.65rem; padding: 0.7rem; border: 0; border-bottom: 3px solid transparent; background: transparent; color: var(--cs-ink-muted); text-align: left; cursor: pointer; }
+.assignment-workflow__progress button[aria-current="step"] { border-bottom-color: var(--cs-action); background: color-mix(in srgb, var(--cs-selection) 48%, transparent); color: var(--cs-action); }
+.assignment-workflow__progress button:disabled { cursor: not-allowed; opacity: 0.52; }
+.assignment-workflow__step-icon { width: 30px; height: 30px; display: grid; place-items: center; flex: 0 0 auto; border: 1px solid var(--cs-border); border-radius: var(--cs-radius-control); background: var(--cs-surface); }
+.assignment-workflow__step-icon svg { width: 16px; height: 16px; }
+[data-status="complete"] .assignment-workflow__step-icon { border-color: var(--cs-success); color: var(--cs-success); }
+.assignment-workflow__step-copy { min-width: 0; display: grid; gap: 0.1rem; }
+.assignment-workflow__step-copy small { font-size: var(--cs-text-meta); font-weight: 600; }
+.assignment-workflow__step-copy strong { overflow: hidden; font-size: var(--cs-text-support); text-overflow: ellipsis; white-space: nowrap; }
+
+.assignment-workflow__layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(230px, 300px); align-items: start; gap: 1.25rem; }
+.assignment-workflow__layout--single { grid-template-columns: minmax(0, 1fr); }
+.assignment-workflow__canvas { min-width: 0; padding: clamp(1rem, 2.5vw, 1.75rem); border: 1px solid var(--cs-border); border-radius: var(--cs-radius-surface); background: var(--cs-surface); }
+.assignment-workflow__guidance { display: grid; gap: 0.8rem; position: sticky; top: 150px; }
+.assignment-workflow__footer { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--cs-border); }
+.assignment-workflow__support { margin-top: 1.5rem; }
+
+@media (max-width: 900px) {
+  .assignment-workflow__step-copy small { display: none; }
+  .assignment-workflow__progress button { justify-content: center; }
+  .assignment-workflow__step-copy strong { font-size: var(--cs-text-meta); }
+  .assignment-workflow__layout { grid-template-columns: 1fr; }
+  .assignment-workflow__guidance { position: static; grid-row: 1; }
+}
+
+@media (max-width: 620px) {
+  .assignment-workflow__header { align-items: start; }
+  .assignment-workflow__save { font-size: var(--cs-text-meta); }
+  .assignment-workflow__progress { position: static; overflow-x: auto; }
+  .assignment-workflow__progress ol { min-width: 520px; }
+  .assignment-workflow__progress button { min-height: 62px; }
+  .assignment-workflow__canvas { padding: 0.9rem; }
+}
