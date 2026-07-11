@@ -21,6 +21,19 @@ import {
 import { stitchPromptEnvelope } from '../src/application/prompt-assembly.js';
 
 describe('application/generation-evaluator', () => {
+  it('routes assignment evals to Sol and every other OpenAI eval to Luna', () => {
+    expect(
+      GENERATION_EVAL_FIXTURES.map(({ id, model }) => ({ id, model })),
+    ).toEqual([
+      { id: 'assignment-v1', model: 'gpt-5.6-sol' },
+      { id: 'lesson-memory-v1', model: 'gpt-5.6-luna' },
+      { id: 'homework-memory-v1', model: 'gpt-5.6-luna' },
+      { id: 'snapshot-v1', model: 'gpt-5.6-luna' },
+      { id: 'profile-draft-v1', model: 'gpt-5.6-luna' },
+      { id: 'candidate-patch-v1', model: 'gpt-5.6-luna' },
+    ]);
+  });
+
   it('builds every structured fixture with its canonical strict response schema', () => {
     const structuredFixtures = GENERATION_EVAL_FIXTURES.filter(
       (fixture) => fixture.workload !== 'assignment_draft',
@@ -299,7 +312,7 @@ describe('application/generation-evaluator', () => {
     const structured = vi.fn().mockResolvedValue({
       output: {},
       rawText: '{}',
-      model: 'gpt-5.4-mini-2026-06-01',
+      model: 'gpt-5.6-luna-2026-07-10',
       providerRequestId: 'resp_eval_123',
       finishReason: 'completed',
       usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
@@ -324,8 +337,8 @@ describe('application/generation-evaluator', () => {
       }),
     );
     expect(result.records[0]).toMatchObject({
-      requestedModel: 'gpt-5.4-mini',
-      returnedModel: 'gpt-5.4-mini-2026-06-01',
+      requestedModel: 'gpt-5.6-luna',
+      returnedModel: 'gpt-5.6-luna-2026-07-10',
       providerRequestId: 'resp_eval_123',
       finishReason: 'completed',
       latencyMs: 0,
