@@ -1110,8 +1110,8 @@ export const MinimalAssignment: React.FC = () => {
   const transcriptReady = source.transcriptReady;
   const firstProfileAssistVisible = Boolean(
     source.selectedStudentId &&
-    transcriptReady &&
-    (context.profilePreviewStatus === 'none' || context.profilePreviewStatus === 'unstructured'),
+      transcriptReady &&
+      (context.profilePreviewStatus === 'none' || context.profilePreviewStatus === 'unstructured'),
   );
   const firstProfileLessonMemoryKey = useMemo(() => {
     const studentId = source.selectedStudentId;
@@ -1134,14 +1134,15 @@ export const MinimalAssignment: React.FC = () => {
   ]);
   const firstProfileLessonMemoryConfirmed = Boolean(
     firstProfileLessonMemoryKey &&
-    firstProfileLessonMemoryConfirmation &&
-    firstProfileLessonMemoryConfirmation.studentId === firstProfileLessonMemoryKey.studentId &&
-    firstProfileLessonMemoryConfirmation.recordingId === firstProfileLessonMemoryKey.recordingId &&
-    firstProfileLessonMemoryConfirmation.transcriptId ===
-      firstProfileLessonMemoryKey.transcriptId &&
-    firstProfileLessonMemoryConfirmation.transcriptUpdatedAt ===
-      firstProfileLessonMemoryKey.transcriptUpdatedAt &&
-    !source.transcriptDirty,
+      firstProfileLessonMemoryConfirmation &&
+      firstProfileLessonMemoryConfirmation.studentId === firstProfileLessonMemoryKey.studentId &&
+      firstProfileLessonMemoryConfirmation.recordingId ===
+        firstProfileLessonMemoryKey.recordingId &&
+      firstProfileLessonMemoryConfirmation.transcriptId ===
+        firstProfileLessonMemoryKey.transcriptId &&
+      firstProfileLessonMemoryConfirmation.transcriptUpdatedAt ===
+        firstProfileLessonMemoryKey.transcriptUpdatedAt &&
+      !source.transcriptDirty,
   );
   const firstProfileLessonMemoryNeedsUpdate = Boolean(
     firstProfileLessonMemoryConfirmation && !firstProfileLessonMemoryConfirmed,
@@ -1332,11 +1333,11 @@ export const MinimalAssignment: React.FC = () => {
   const hasAssignmentContent = authoring.draftText.trim().length > 0;
   const hasDownstreamAssignmentState = Boolean(
     authoring.promptReady ||
-    hasAssignmentContent ||
-    authoring.previewReadyForCurrentDraft ||
-    jobStatus?.jobId ||
-    activeAssignmentSession?.promptPackageId ||
-    activeAssignmentSession?.draftId,
+      hasAssignmentContent ||
+      authoring.previewReadyForCurrentDraft ||
+      jobStatus?.jobId ||
+      activeAssignmentSession?.promptPackageId ||
+      activeAssignmentSession?.draftId,
   );
   const hasStartedFlow =
     startStageMode === 'start' ||
@@ -1461,9 +1462,7 @@ export const MinimalAssignment: React.FC = () => {
       recordingId: source.recording?.recordingId ?? null,
       transcriptId: source.transcript?.transcriptId ?? null,
       teacherNotes: normalizedTeacherNotes || null,
-      ...(decision === 'confirm-and-invalidate'
-        ? { promptPackageId: null, draftId: null }
-        : {}),
+      ...(decision === 'confirm-and-invalidate' ? { promptPackageId: null, draftId: null } : {}),
       currentStage: 'assignment',
     });
     if (!saved) return null;
