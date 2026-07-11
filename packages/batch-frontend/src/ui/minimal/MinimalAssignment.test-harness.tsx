@@ -426,14 +426,7 @@ async function waitForJobActionsReady(jobId = 'job-1') {
     { name: /Advanced actions/i },
     { timeout: UI_WAIT_TIMEOUT_MS },
   );
-  const trigger = await screen.findByRole(
-    'button',
-    { name: /(Show|Hide) advanced actions/i },
-    { timeout: UI_WAIT_TIMEOUT_MS },
-  );
-  if (/show advanced actions/i.test(trigger.textContent ?? '')) {
-    fireEvent.click(trigger);
-  }
+  await screen.findByRole('region', { name: /Quick reruns/i }, { timeout: UI_WAIT_TIMEOUT_MS });
   await waitFor(
     () => {
       expect(screen.getAllByText(new RegExp(`Job ID: ${jobId}`, 'i')).length).toBeGreaterThan(0);

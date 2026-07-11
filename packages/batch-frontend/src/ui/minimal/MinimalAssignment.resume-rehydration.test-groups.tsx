@@ -321,7 +321,6 @@ export function registerResumeBasicTests() {
       vi.useRealTimers();
 
       vi.useFakeTimers();
-      vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
       const teacherNotesInput = screen.getByRole('textbox', { name: /Teacher notes/i });
       fireEvent.change(teacherNotesInput, {
         target: { value: 'Remember the travel vocab. Add pronunciation contrast.' },
@@ -329,12 +328,7 @@ export function registerResumeBasicTests() {
       await act(async () => {
         await vi.advanceTimersByTimeAsync(1500);
       });
-      expect(api.updateAssignmentSession).toHaveBeenCalledWith(
-        'session-resume',
-        expect.objectContaining({
-          teacherNotes: 'Remember the travel vocab. Add pronunciation contrast.',
-        }),
-      );
+      expect(api.updateAssignmentSession).not.toHaveBeenCalled();
       vi.useRealTimers();
       expect(api.getJobStatus).not.toHaveBeenCalled();
     });

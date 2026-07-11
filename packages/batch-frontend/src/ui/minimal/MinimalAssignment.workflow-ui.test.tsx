@@ -8,6 +8,7 @@ import {
   createMinimalUser,
   testExpect as expect,
   INTEGRATION_TEST_TIMEOUT_MS,
+  makeAssignmentSession,
   makeRecording,
   openAdvancedActions,
   previewCurrentDraft,
@@ -91,7 +92,14 @@ describe('MinimalAssignment - staged workflow UI', () => {
 
       await screen.findAllByText(/Job ID: job-1/i);
       expect(screen.getAllByText(/Support details/i).length).toBeGreaterThan(0);
-      expect(screen.getByRole('button', { name: /Show advanced actions/i })).toBeTruthy();
+      expect(screen.queryByRole('button', { name: /Show advanced actions/i })).toBeNull();
+      const advancedActions = screen
+        .getByRole('heading', { name: /Advanced actions/i })
+        .closest('section')!;
+      expect(within(advancedActions).getByRole('region', { name: /Quick reruns/i })).toBeTruthy();
+      const support = screen.getByText(/^Support details$/i).closest('details')!;
+      expect(within(support).queryByRole('region', { name: /Quick reruns/i })).toBeNull();
+      expect(within(support).queryByRole('button', { name: /^Custom rerun$/i })).toBeNull();
     },
     INTEGRATION_TEST_TIMEOUT_MS,
   );
@@ -232,6 +240,159 @@ describe('MinimalAssignment - staged workflow UI', () => {
     expect(within(progressList).getByText('Create')).toBeTruthy();
   });
 
+  it('keeps resumed navigation on the teacher-selected step while readiness updates', async () => {
+    const user = createMinimalUser();
+    vi.mocked(api.listAssignmentSessions).mockResolvedValueOnce({
+      sessions: [
+        makeAssignmentSession({
+          id: 'session-resume',
+          studentId: 'student-alex',
+          recordingId: 'rec-1',
+          transcriptId: 'tx-1',
+          promptPackageId: 'pkg-1',
+          currentStage: 'assignment',
+        }),
+      ],
+      total: 1,
+      limit: 20,
+    });
+    vi.mocked(api.updateAssignmentSession).mockImplementation(async (id, patch) =>
+      makeAssignmentSession({
+        id,
+        studentId: 'student-alex',
+        recordingId: 'rec-1',
+        transcriptId: 'tx-1',
+        promptPackageId: 'pkg-1',
+        currentStage: 'assignment',
+        ...patch,
+      }),
+    );
+    globalThis.history.replaceState(null, '', '/?sessionId=session-resume');
+
+    renderMinimalAssignment();
+
+    await screen.findByRole('button', { name: /^Generate assignment$/i });
+    await user.click(screen.getByRole('button', { name: /Teaching context/i }));
+    expect(screen.getByRole('heading', { name: /Learner context/i })).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: /Teaching context/i }).getAttribute('aria-current'),
+    ).toBe('step');
+    await waitFor(() => expect(api.listAssignmentSessions).toHaveBeenCalled());
+    fireEvent.change(screen.getByRole('textbox', { name: /Teacher notes/i }), {
+      target: { value: 'Keep the assignment grounded in the learner context.' },
+    });
+    expect(api.updateAssignmentSession).not.toHaveBeenCalled();
+    expect(screen.getByRole('heading', { name: /Learner context/i })).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: /Teaching context/i }).getAttribute('aria-current'),
+    ).toBe('step');
+  });
+
+  it('routes an explicit forward progress-step click through teacher-note commit confirmation', async () => {
+    const confirmSpy = vi.spyOn(globalThis, 'confirm').mockReturnValue(false);
+    const user = createMinimalUser();
+    vi.mocked(api.listAssignmentSessions).mockResolvedValueOnce({
+      sessions: [
+        makeAssignmentSession({
+          id: 'session-teacher-notes',
+          studentId: 'student-alex',
+          recordingId: 'rec-1',
+          transcriptId: 'tx-1',
+          promptPackageId: 'pkg-1',
+          draftId: 'draft-1',
+          currentStage: 'assignment',
+        }),
+      ],
+      total: 1,
+      limit: 20,
+    });
+    globalThis.history.replaceState(null, '', '/?sessionId=session-teacher-notes');
+    renderMinimalAssignment();
+    await screen.findByRole('button', { name: /^Generate assignment$/i });
+    await user.click(screen.getByRole('button', { name: /Teaching context/i }));
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: /Teaching context/i }).getAttribute('aria-current'),
+      ).toBe('step'),
+    );
+    await user.type(screen.getByRole('textbox', { name: /Teacher notes/i }), 'Focus on articles.');
+
+    expect(confirmSpy).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: /Create/i }));
+
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('heading', { name: /Learner context/i })).toBeTruthy();
+    expect(
+      (screen.getByRole('textbox', { name: /Teacher notes/i }) as HTMLTextAreaElement).value,
+    ).toBe('Focus on articles.');
+  });
+
+  it('lands on Create when a confirmed teacher-note commit invalidates the requested Review step', async () => {
+    const confirmSpy = vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
+    const user = createMinimalUser();
+    const session = makeAssignmentSession({
+      id: 'session-teacher-notes-review',
+      studentId: 'student-alex',
+      recordingId: 'rec-1',
+      transcriptId: 'tx-1',
+      promptPackageId: 'pkg-1',
+      draftId: 'draft-1',
+      currentStage: 'review',
+    });
+    vi.mocked(api.listAssignmentSessions).mockResolvedValueOnce({
+      sessions: [session],
+      total: 1,
+      limit: 20,
+    });
+    vi.mocked(api.updateAssignmentSession).mockImplementation(async (id, patch) =>
+      makeAssignmentSession({ ...session, id, ...patch }),
+    );
+    globalThis.history.replaceState(null, '', '/?sessionId=session-teacher-notes-review');
+    renderMinimalAssignment();
+    await screen.findByRole('button', { name: /^Generate assignment$/i });
+    await user.click(screen.getByRole('button', { name: /Teaching context/i }));
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: /Teaching context/i }).getAttribute('aria-current'),
+      ).toBe('step'),
+    );
+    await user.type(screen.getByRole('textbox', { name: /Teacher notes/i }), 'Focus on articles.');
+
+    await user.click(screen.getByRole('button', { name: /Review & share/i }));
+
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /Create/i }).getAttribute('aria-current')).toBe(
+        'step',
+      ),
+    );
+    expect(
+      screen.getByRole('button', { name: /Review & share/i }).getAttribute('aria-current'),
+    ).toBeNull();
+  });
+
+  it('does not move or scroll the new-assignment workflow after upload completes', async () => {
+    const user = createMinimalUser();
+    const scrollIntoView = vi.spyOn(HTMLElement.prototype, 'scrollIntoView');
+    renderMinimalAssignment();
+
+    await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
+    await screen.findByRole('option', { name: 'Alex' });
+    await user.selectOptions(screen.getByRole('combobox', { name: /^Student$/i }), 'student-alex');
+    await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+    expect(screen.getByRole('heading', { name: /Add lesson source/i })).toBeTruthy();
+    scrollIntoView.mockClear();
+
+    await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+    await screen.findByDisplayValue('Student transcript text');
+
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    expect(screen.getByRole('heading', { name: /Add lesson source/i })).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: /Lesson source/i }).getAttribute('aria-current'),
+    ).toBe('step');
+  });
+
   it('keeps the assignment overview header to title, focus, and compact progress', async () => {
     await renderPublishedAssignment(
       {
@@ -285,6 +446,34 @@ describe('MinimalAssignment - staged workflow UI', () => {
       expect(screen.queryByText(/Assignments publish as an Assignment Handout/i)).toBeNull();
       expect(screen.queryByText(/Anything you leave unchecked stays as-is/i)).toBeNull();
       expect(screen.queryByText(/Pronunciation chunks default to Google/i)).toBeNull();
+    },
+    INTEGRATION_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'starts a fresh workflow from the published completion action',
+    async () => {
+      const user = createMinimalUser();
+      await renderPublishedAssignment(
+        {
+          draftText: '# Draft markdown',
+          status: {
+            studentId: 'student-alex',
+            htmlUrl: '/assignments/job-1',
+          },
+        },
+        { user },
+      );
+
+      await user.click(screen.getByRole('button', { name: /Review & share/i }));
+      expect(
+        screen.getAllByRole('link', { name: /Open Assignment Handout/i }).length,
+      ).toBeGreaterThan(0);
+      await user.click(screen.getByRole('button', { name: /Start another assignment/i }));
+
+      expect(screen.getByRole('heading', { name: /^Student$/i, level: 1 })).toBeTruthy();
+      expect(screen.getByRole('combobox', { name: /^Student$/i })).toBeTruthy();
+      expect(screen.queryAllByRole('link', { name: /Open Assignment Handout/i })).toHaveLength(0);
     },
     INTEGRATION_TEST_TIMEOUT_MS,
   );
@@ -472,8 +661,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
     expect(closeSse).not.toHaveBeenCalled();
   });
 
-  it('keeps advanced controls collapsed until the teacher opens them', async () => {
-    const user = createMinimalUser();
+  it('shows advanced controls directly after a shared assignment exists', async () => {
     await renderResumedAssignment(
       {
         status: {
@@ -483,13 +671,45 @@ describe('MinimalAssignment - staged workflow UI', () => {
       { waitFor: 'promptReady' },
     );
 
-    expect(screen.getByRole('button', { name: /Show advanced actions/i })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: /Refresh actions/i })).toBeNull();
-
-    await user.click(screen.getByRole('button', { name: /Show advanced actions/i }));
-
+    expect(screen.queryByRole('button', { name: /Show advanced actions/i })).toBeNull();
     expect(await screen.findByRole('button', { name: /Refresh actions/i })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /Republish current draft/i })).toBeTruthy();
+    const advancedActions = screen
+      .getByRole('heading', { name: /Advanced actions/i })
+      .closest('section')!;
+    const advancedButtons = within(advancedActions).getAllByRole('button');
+    expect(advancedButtons).not.toHaveLength(0);
+    for (const button of advancedButtons) {
+      expect(button.className).not.toContain('minimal-primary');
+      expect(button.className).not.toContain('minimal-secondary');
+      expect(button.className).toContain('product-button');
+    }
+    expect(
+      within(advancedActions).getByRole('button', { name: /Republish current draft/i }),
+    ).toBeTruthy();
+  });
+
+  it('marks the active advanced operation busy and keeps every rerun disabled', async () => {
+    const user = createMinimalUser();
+    let resolveRerun!: (value: Awaited<ReturnType<typeof api.rerunJob>>) => void;
+    vi.mocked(api.rerunJob).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveRerun = resolve;
+      }),
+    );
+    await renderPublishedAssignment();
+    openAdvancedActions();
+
+    await user.click(screen.getByRole('button', { name: /Republish current draft/i }));
+
+    const busyButtons = screen.getAllByRole('button', { name: /Queuing rerun/i });
+    expect(busyButtons).not.toHaveLength(0);
+    for (const button of busyButtons) {
+      expect(button.getAttribute('aria-busy')).toBe('true');
+      expect((button as HTMLButtonElement).disabled).toBe(true);
+    }
+
+    resolveRerun({ success: true, message: 'Rerun queued', jobId: 'job-1', actionType: 'rerun' });
+    await screen.findByText('Rerun queued');
   });
 
   it('shows support-facing audio notices in advanced support details', async () => {

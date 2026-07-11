@@ -9,10 +9,7 @@ export interface AssignmentSupportProps {
 export function AssignmentSupport({ children }: AssignmentSupportProps) {
   return (
     <SupportDetails summary="Support details">
-      <p>
-        Recovery, rerun, provider, quota, and provenance controls live here so the main assignment
-        flow stays focused.
-      </p>
+      <p>Provider, quota, provenance, identifiers, and diagnostic details for this assignment.</p>
       {children}
     </SupportDetails>
   );

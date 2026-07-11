@@ -98,14 +98,12 @@ export function registerGenerationDefaultsTests() {
     );
 
     it(
-      'persists session notes and generation selections after prompt creation',
+      'does not persist edited session notes before an explicit commit',
       async () => {
         await renderPromptReadyAssignment();
         vi.mocked(api.createAssignmentSession).mockClear();
         vi.mocked(api.updateAssignmentSession).mockClear();
         vi.useFakeTimers();
-
-        vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
 
         fireEvent.change(screen.getByRole('textbox', { name: /Teacher notes/i }), {
           target: { value: 'Use more travel vocabulary.' },
@@ -116,14 +114,7 @@ export function registerGenerationDefaultsTests() {
           await Promise.resolve();
         });
 
-        expect(api.updateAssignmentSession).toHaveBeenCalledWith(
-          'session-1',
-          expect.objectContaining({
-            teacherNotes: 'Use more travel vocabulary.',
-            selectedGenerationProvider: 'openai',
-            selectedGenerationModel: 'gpt-5.2',
-          }),
-        );
+        expect(api.updateAssignmentSession).not.toHaveBeenCalled();
       },
       INTEGRATION_TEST_TIMEOUT_MS,
     );

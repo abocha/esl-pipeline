@@ -27,6 +27,7 @@ import type {
 } from '../../utils/api';
 import { DropZone } from '../shared/DropZone';
 import { UploadProgress } from '../shared/UploadProgress';
+import { ProductButton } from '../system/ProductButton';
 import { getTranscriptUnexpectedCharacterWarnings } from './MinimalAssignment.transcript-warnings';
 
 export type WorkflowStageId = 'start' | 'source' | 'context' | 'assignment' | 'review' | 'advanced';
@@ -1497,14 +1498,15 @@ export function ReviewStageSection({
           >
             {publishing ? 'Sharing...' : 'Share assignment'}
           </button>
-          <button
+          <ProductButton
             type="button"
-            className="minimal-secondary"
+            variant="danger"
             onClick={onCancelJob}
             disabled={!cancelEnabled}
+            busy={actionBusy === 'cancel'}
           >
             {actionBusy === 'cancel' ? 'Cancelling...' : 'Cancel'}
-          </button>
+          </ProductButton>
         </>
       }
     >
