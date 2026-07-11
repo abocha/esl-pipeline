@@ -563,7 +563,9 @@ export interface AuthoringController extends AuthoringState {
   setPromptError: (value: string | null) => void;
   generatePrompt: () => Promise<PromptPackageResponse | null>;
   copyPrompt: () => Promise<void>;
-  generateAssignment: () => Promise<GenerateDraftResponse | null>;
+  generateAssignment: (options?: {
+    forceFreshPrompt?: boolean;
+  }) => Promise<GenerateDraftResponse | null>;
   generateDraft: () => Promise<GenerateDraftResponse | null>;
   runValidation: () => Promise<MarkdownValidationResponse>;
   saveDraft: () => Promise<DraftResponse | null>;
@@ -1084,11 +1086,17 @@ export function useMinimalAssignmentAuthoringController({
     return generateDraftForPromptPackageId(state.promptPackage.id);
   }, [generateDraftForPromptPackageId, state.promptPackage?.id]);
 
-  const generateAssignment = useCallback(async (): Promise<GenerateDraftResponse | null> => {
-    const promptPackage = state.promptPackage?.id ? state.promptPackage : await generatePrompt();
-    if (!promptPackage?.id) return null;
-    return generateDraftForPromptPackageId(promptPackage.id);
-  }, [generateDraftForPromptPackageId, generatePrompt, state.promptPackage]);
+  const generateAssignment = useCallback(
+    async (options?: { forceFreshPrompt?: boolean }): Promise<GenerateDraftResponse | null> => {
+      const promptPackage =
+        !options?.forceFreshPrompt && state.promptPackage?.id
+          ? state.promptPackage
+          : await generatePrompt();
+      if (!promptPackage?.id) return null;
+      return generateDraftForPromptPackageId(promptPackage.id);
+    },
+    [generateDraftForPromptPackageId, generatePrompt, state.promptPackage],
+  );
 
   const previewDraft = useCallback(async () => {
     const normalizedDraft = state.draftText.trim();

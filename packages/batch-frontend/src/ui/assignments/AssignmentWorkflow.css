@@ -170,6 +170,24 @@
   margin-top: 1.5rem;
 }
 
+.assignment-advanced-actions {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding: clamp(1rem, 2.5vw, 1.5rem);
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-radius-surface);
+  background: var(--cs-surface);
+}
+.assignment-advanced-actions__quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.assignment-advanced-actions :is(input, select) {
+  border-radius: var(--cs-radius-control);
+}
+
 /* Existing controller-owned sections retain behavior while adopting the focused canvas. */
 .assignment-workflow__canvas .minimal-stage-card {
   margin: 0;

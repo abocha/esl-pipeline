@@ -532,7 +532,7 @@ export function registerJobActionTests() {
         await waitFor(() => {
           expect(api.rerunJob).toHaveBeenCalledWith('job-1', { republishOnly: true });
           expect(screen.getByText('Republish queued for follow-up job')).toBeTruthy();
-          expect(screen.getByRole('button', { name: /Hide advanced actions/i })).toBeTruthy();
+          expect(screen.queryByRole('button', { name: /Hide advanced actions/i })).toBeNull();
           expect(screen.getByRole('button', { name: /Refresh actions/i })).toBeTruthy();
           expect(screen.getAllByText(/Job ID: job-2/i).length).toBeGreaterThan(0);
         });
@@ -545,6 +545,12 @@ export function registerJobActionTests() {
       async () => {
         vi.useFakeTimers({ shouldAdvanceTime: true });
         const user = createTimerAwareMinimalUser();
+        let resolveCancel!: (value: Awaited<ReturnType<typeof api.cancelJob>>) => void;
+        vi.mocked(api.cancelJob).mockReturnValueOnce(
+          new Promise((resolve) => {
+            resolveCancel = resolve;
+          }),
+        );
         const publishedAssignment = await renderPublishedAssignment({
           status: {
             state: 'running',
@@ -574,7 +580,25 @@ export function registerJobActionTests() {
         ).toBeTruthy();
         expect(screen.queryByPlaceholderText('reason for cancellation')).toBeNull();
 
-        await user.click(within(reviewSection).getByRole('button', { name: /^Cancel$/i }));
+        const cancelButton = within(reviewSection).getByRole('button', { name: /^Cancel$/i });
+        expect(cancelButton.className).toContain('product-button');
+        expect(cancelButton.className).toContain('product-button--danger');
+        expect(cancelButton.className).not.toContain('minimal-secondary');
+
+        await user.click(cancelButton);
+
+        const busyCancelButton = within(reviewSection).getByRole('button', {
+          name: /^Cancelling\.\.\.$/i,
+        });
+        expect(busyCancelButton.getAttribute('aria-busy')).toBe('true');
+        expect((busyCancelButton as HTMLButtonElement).disabled).toBe(true);
+
+        resolveCancel({
+          success: true,
+          message: 'Job cancelled',
+          actionType: 'cancel',
+          jobId: 'job-1',
+        });
 
         await waitFor(() => {
           expect(api.cancelJob).toHaveBeenCalledWith('job-1');
@@ -609,7 +633,14 @@ export function registerJobActionTests() {
         expect(
           screen.queryByText(/Cancel is only available for queued or running jobs\./i),
         ).toBeNull();
-        expect(within(actionsSection).getByText(/^Support details$/i)).toBeTruthy();
+        const support = screen.getByText(/^Support details$/i).closest('details')!;
+        expect(actionsSection.contains(support)).toBe(false);
+        expect(within(support).queryByRole('region', { name: /Quick reruns/i })).toBeNull();
+        expect(within(support).queryByRole('button', { name: /^Custom rerun$/i })).toBeNull();
+        expect(within(actionsSection).getByRole('region', { name: /Quick reruns/i })).toBeTruthy();
+        expect(
+          within(actionsSection).getByRole('button', { name: /^Custom rerun$/i }),
+        ).toBeTruthy();
       },
       INTEGRATION_TEST_TIMEOUT_MS,
     );

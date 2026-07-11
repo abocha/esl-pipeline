@@ -4,7 +4,7 @@
 
 - Audience: maintainers and implementing agents.
 - Authority Level: package entrypoint and operational usage guide.
-- Last Verified Against: 2026-07-06 repo state.
+- Last Verified Against: 2026-07-12 repo state.
 - Owner: batch-frontend maintainers + automation agents.
 - Review Cadence: monthly or after major UI/workflow changes.
 - Status: `active`.
@@ -41,8 +41,11 @@ Canonical behavior and current status live in:
   audio format promised during the current alpha.
 - The authenticated Calm Studio shell uses a persistent workspace rail and a focused five-step
   assignment flow: Student, Lesson source, Teaching context, Create, and Review & share. Back and
-  completed-step navigation keep the current assignment state; technical recovery, provider,
-  quota, provenance, and rerun controls live under Support details rather than a sixth step.
+  completed-step navigation are user-owned and keep the current assignment state instead of
+  redirecting as readiness updates. A published assignment is complete until the tutor explicitly
+  chooses Start another assignment. Advanced actions appear only after sharing and contain
+  post-share rerun and republish operations; technical recovery, provider, quota, provenance, and
+  other diagnostics live under Support details rather than workflow steps.
 - This visual overhaul currently covers the authenticated shell and assignment workflow. Student,
   Business, and Assignment Templates routes remain operational on their existing content designs.
 - Local UI iteration can use the Vite mock-auth sandbox without a backend:

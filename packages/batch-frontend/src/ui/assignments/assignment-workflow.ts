@@ -59,7 +59,7 @@ export function getInvalidatedArtifacts(change: AssignmentInputChange): Assignme
   return ['preview', 'publishedJob'];
 }
 
-export function mapSessionStageToStep(
+export function resolveInitialAssignmentStep(
   stage: AssignmentSessionStage,
   input: AssignmentWorkflowInput,
 ): AssignmentStepId {
@@ -67,4 +67,21 @@ export function mapSessionStageToStep(
   if (stage === 'context') return 'context';
   if (stage === 'assignment') return 'create';
   return 'review';
+}
+
+export const mapSessionStageToStep = resolveInitialAssignmentStep;
+
+export interface TeacherNotesCommitInput {
+  currentNotes: string;
+  committedNotes: string;
+  hasDownstreamAssignment: boolean;
+}
+
+export function getTeacherNotesCommitDecision({
+  currentNotes,
+  committedNotes,
+  hasDownstreamAssignment,
+}: TeacherNotesCommitInput): 'unchanged' | 'commit' | 'confirm-and-invalidate' {
+  if (currentNotes.trim() === committedNotes.trim()) return 'unchanged';
+  return hasDownstreamAssignment ? 'confirm-and-invalidate' : 'commit';
 }

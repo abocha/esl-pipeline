@@ -33,6 +33,51 @@ describe('runtime/pronunciation-audio', () => {
     vi.clearAllMocks();
   });
 
+  it('synthesizes one Word clip per shadow drill without duplicate Natural clips', async () => {
+    vi.mocked(extractPronunciationFocus).mockReturnValue({
+      mode: 'shadow_sentence',
+      shadowSentence: 'She asks me to use a natural workplace phrase.',
+      words: [
+        { line: 1, text: 'asks me to', transcription: '/asks mi tu/' },
+        {
+          line: 2,
+          text: 'a natural workplace phrase',
+          transcription: '/a natural workplace phrase/',
+        },
+      ],
+      sectionStartLine: 1,
+      issues: [],
+    });
+    vi.mocked(buildPronunciationTextMp3).mockImplementation(async ({ text, voiceId }) => ({
+      path: `/tmp/${String(text).replaceAll(/\s+/g, '-')}.mp3`,
+      hash: `hash-${String(text).replaceAll(/\s+/g, '-')}`,
+      voiceId,
+      provider: 'google',
+      modelId: 'chirp3_hd',
+      generatedCharacters: String(text).length,
+      cachedCharacters: 0,
+    }));
+
+    const result = await synthesizePronunciationAudio({
+      context: {} as never,
+      mdPath: '/tmp/example.md',
+      outPath: '/tmp',
+      title: 'Pronunciation',
+      regeneratePrimary: false,
+      primaryTtsProvider: 'google',
+      primaryVoiceId: 'voice-primary',
+    });
+
+    expect(result?.itemClips).toHaveLength(2);
+    expect(result?.itemClips?.map((clip) => clip.text)).toEqual([
+      'asks me to',
+      'a natural workplace phrase',
+    ]);
+    expect(result?.itemClips?.map((clip) => clip.label)).toEqual(['Word', 'Word']);
+    expect(result?.itemClips?.some((clip) => clip.label === 'Natural')).toBe(false);
+    expect(vi.mocked(buildPronunciationTextMp3)).toHaveBeenCalledTimes(2);
+  });
+
   it('defaults pronunciation chunk clips to google provider synthesis', async () => {
     vi.mocked(extractPronunciationFocus).mockReturnValue({
       mode: 'minimal_pair',
@@ -328,6 +373,9 @@ describe('runtime/pronunciation-audio', () => {
     });
 
     expect(result?.mode).toBe('sentence_stress');
+    expect(result?.primaryClip?.text).toBe(
+      'We really need to leave now before traffic gets worse.',
+    );
     expect(result?.primaryClip?.voiceId).toBe('voice-primary');
     expect(result?.primaryClip?.tts?.modelId).toBe('studio');
     expect(result?.itemClips).toHaveLength(1);

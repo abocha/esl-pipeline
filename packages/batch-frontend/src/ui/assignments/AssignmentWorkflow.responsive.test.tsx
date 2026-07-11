@@ -42,4 +42,13 @@ describe('AssignmentWorkflow responsive contract', () => {
     expect(css).toContain('@media (max-width: 620px)');
     expect(css).toContain('grid-template-columns: 1fr');
   });
+
+  it('defines a calm studio surface and wrapping quick controls for advanced actions', () => {
+    const cssPath = join(process.cwd(), 'src/ui/assignments/AssignmentWorkflow.css');
+    const css = readFileSync(cssPath, 'utf8');
+    expect(css).toContain('.assignment-advanced-actions {');
+    expect(css).toContain('.assignment-advanced-actions__quick {');
+    expect(css).toContain('.assignment-advanced-actions :is(input, select) {');
+    expect(css).toContain('border-radius: var(--cs-radius-control)');
+  });
 });
