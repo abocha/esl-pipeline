@@ -8,6 +8,7 @@ import {
   createMinimalUser,
   testExpect as expect,
   INTEGRATION_TEST_TIMEOUT_MS,
+  makeAssignmentSession,
   makeRecording,
   openAdvancedActions,
   previewCurrentDraft,
@@ -230,6 +231,76 @@ describe('MinimalAssignment - staged workflow UI', () => {
     expect(within(progressList).getByText('Review & share')).toBeTruthy();
     expect(within(progressList).queryByText('Advanced actions')).toBeNull();
     expect(within(progressList).getByText('Create')).toBeTruthy();
+  });
+
+  it('keeps resumed navigation on the teacher-selected step while readiness updates', async () => {
+    const user = createMinimalUser();
+    vi.mocked(api.listAssignmentSessions).mockResolvedValueOnce({
+      sessions: [
+        makeAssignmentSession({
+          id: 'session-resume',
+          studentId: 'student-alex',
+          recordingId: 'rec-1',
+          transcriptId: 'tx-1',
+          promptPackageId: 'pkg-1',
+          currentStage: 'assignment',
+        }),
+      ],
+      total: 1,
+      limit: 20,
+    });
+    vi.mocked(api.updateAssignmentSession).mockImplementation(async (id, patch) =>
+      makeAssignmentSession({
+        id,
+        studentId: 'student-alex',
+        recordingId: 'rec-1',
+        transcriptId: 'tx-1',
+        promptPackageId: 'pkg-1',
+        currentStage: 'assignment',
+        ...patch,
+      }),
+    );
+    globalThis.history.replaceState(null, '', '/?sessionId=session-resume');
+
+    renderMinimalAssignment();
+
+    await screen.findByRole('button', { name: /^Generate assignment$/i });
+    await user.click(screen.getByRole('button', { name: /Teaching context/i }));
+    expect(screen.getByRole('heading', { name: /Learner context/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Teaching context/i }).getAttribute('aria-current')).toBe(
+      'step',
+    );
+    await waitFor(() => expect(api.listAssignmentSessions).toHaveBeenCalled());
+    fireEvent.change(screen.getByRole('textbox', { name: /Teacher notes/i }), {
+      target: { value: 'Keep the assignment grounded in the learner context.' },
+    });
+    await waitFor(() => expect(api.updateAssignmentSession).toHaveBeenCalled());
+    expect(screen.getByRole('heading', { name: /Learner context/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Teaching context/i }).getAttribute('aria-current')).toBe(
+      'step',
+    );
+  });
+
+  it('does not move or scroll the new-assignment workflow after upload completes', async () => {
+    const user = createMinimalUser();
+    const scrollIntoView = vi.spyOn(HTMLElement.prototype, 'scrollIntoView');
+    renderMinimalAssignment();
+
+    await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
+    await screen.findByRole('option', { name: 'Alex' });
+    await user.selectOptions(screen.getByRole('combobox', { name: /^Student$/i }), 'student-alex');
+    await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+    expect(screen.getByRole('heading', { name: /Add lesson source/i })).toBeTruthy();
+    scrollIntoView.mockClear();
+
+    await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+    await screen.findByDisplayValue('Student transcript text');
+
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    expect(screen.getByRole('heading', { name: /Add lesson source/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Lesson source/i }).getAttribute('aria-current')).toBe(
+      'step',
+    );
   });
 
   it('keeps the assignment overview header to title, focus, and compact progress', async () => {
