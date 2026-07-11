@@ -31,6 +31,7 @@ import { AssignmentWorkflow } from '../assignments/AssignmentWorkflow';
 import {
   type AssignmentStepId,
   deriveAssignmentWorkflow,
+  getTeacherNotesCommitDecision,
   resolveInitialAssignmentStep,
 } from '../assignments/assignment-workflow';
 import { CreateAssignmentStep } from '../assignments/steps/CreateAssignmentStep';
@@ -309,6 +310,7 @@ export const MinimalAssignment: React.FC = () => {
   const hydrationIdRef = useRef(0);
   const assignmentSessionPersistenceSuppressedRef = useRef(false);
   const assignmentSessionUserEditedRef = useRef(false);
+  const committedTeacherNotesRef = useRef('');
 
   const generationOptions = jobOptions?.generation ?? null;
   const ttsProviders = useMemo<UiTtsProvider[]>(() => {
@@ -484,6 +486,7 @@ export const MinimalAssignment: React.FC = () => {
 
   const resetFlow = useCallback(() => {
     beginHydration('new');
+    committedTeacherNotesRef.current = '';
     invalidateAuthoringGeneration();
     resetAuthoring();
     resetSourceFlow({ resetStudent: true });
@@ -565,6 +568,7 @@ export const MinimalAssignment: React.FC = () => {
         uploadCacheNotice: snapshot.uploadCacheNotice,
       });
       setTeacherNotes(snapshot.teacherNotes);
+      committedTeacherNotesRef.current = snapshot.teacherNotes.trim();
       setRerunTargetPronunciationMode(snapshot.rerunTargetPronunciationMode);
       applyContextHydration({
         selectedProfileId: snapshot.selectedProfileId,
@@ -814,8 +818,13 @@ export const MinimalAssignment: React.FC = () => {
     const selectedGenerationProvider = isGenerationProvider(authoring.selectedGenerationProvider)
       ? authoring.selectedGenerationProvider
       : null;
+    const normalizedTeacherNotes = teacherNotes.trim();
+    const teacherNotesForPersistence =
+      normalizedTeacherNotes === committedTeacherNotesRef.current
+        ? normalizedTeacherNotes
+        : committedTeacherNotesRef.current;
     const settingsKey = buildAssignmentSessionSettingsKey({
-      teacherNotes: teacherNotes.trim() || null,
+      teacherNotes: teacherNotesForPersistence || null,
       selectedGenerationProvider,
       selectedGenerationModel: authoring.selectedGenerationModel || null,
       publishTarget: authoring.publishTarget,
@@ -837,7 +846,7 @@ export const MinimalAssignment: React.FC = () => {
     assignmentSessionSettingsTimeoutRef.current = setTimeout(() => {
       assignmentSessionSettingsTimeoutRef.current = null;
       void saveAssignmentSessionProgress({
-        teacherNotes: teacherNotes.trim() || null,
+        teacherNotes: teacherNotesForPersistence || null,
         selectedGenerationProvider,
         selectedGenerationModel: authoring.selectedGenerationModel || null,
         publishTarget: authoring.publishTarget,
@@ -1412,8 +1421,56 @@ export const MinimalAssignment: React.FC = () => {
   }, [activeAssignmentSession, focusedWorkflowInput]);
 
   const activeStepIndex = FOCUSED_STEP_ORDER.indexOf(activeStep);
+  const commitTeacherNotes = useCallback(async (): Promise<boolean> => {
+    const normalizedTeacherNotes = teacherNotes.trim();
+    const decision = getTeacherNotesCommitDecision({
+      currentNotes: normalizedTeacherNotes,
+      committedNotes: committedTeacherNotesRef.current,
+      hasDownstreamAssignment: hasAssignmentContent,
+    });
+    if (decision === 'unchanged') return true;
+    if (
+      decision === 'confirm-and-invalidate' &&
+      !globalThis.confirm(
+        'This will require a new assignment draft. Your lesson source and transcript will stay saved.',
+      )
+    ) {
+      return false;
+    }
+
+    const saved = await saveAssignmentSessionProgress({
+      studentId: source.selectedStudentId || null,
+      recordingId: source.recording?.recordingId ?? null,
+      transcriptId: source.transcript?.transcriptId ?? null,
+      teacherNotes: normalizedTeacherNotes || null,
+      currentStage: 'assignment',
+    });
+    if (!saved) return false;
+
+    committedTeacherNotesRef.current = normalizedTeacherNotes;
+    if (decision === 'confirm-and-invalidate') {
+      invalidateAuthoringGeneration();
+      resetAuthoring();
+      setJobStatusState(null);
+    }
+    return true;
+  }, [
+    hasAssignmentContent,
+    invalidateAuthoringGeneration,
+    resetAuthoring,
+    saveAssignmentSessionProgress,
+    source.recording?.recordingId,
+    source.selectedStudentId,
+    source.transcript?.transcriptId,
+    teacherNotes,
+  ]);
+  const handleGenerateAssignment = useCallback(async () => {
+    markAssignmentUserEdit();
+    if (!(await commitTeacherNotes())) return;
+    await authoring.generateAssignment();
+  }, [authoring, commitTeacherNotes, markAssignmentUserEdit]);
   const handleFocusedStepRequest = useCallback(
-    (requestedStep: AssignmentStepId) => {
+    async (requestedStep: AssignmentStepId) => {
       const requested = focusedWorkflowSteps.find((step) => step.id === requestedStep);
       if (
         requested?.status === 'locked' &&
@@ -1421,23 +1478,23 @@ export const MinimalAssignment: React.FC = () => {
       ) {
         return;
       }
+      if (
+        activeStep === 'context' &&
+        FOCUSED_STEP_ORDER.indexOf(requestedStep) > activeStepIndex &&
+        !(await commitTeacherNotes())
+      ) {
+        return;
+      }
       setActiveStep(requestedStep);
     },
-    [activeStepIndex, focusedWorkflowSteps],
+    [activeStep, activeStepIndex, commitTeacherNotes, focusedWorkflowSteps],
   );
   const handleFocusedBack = useCallback(() => {
     setActiveStep(FOCUSED_STEP_ORDER[Math.max(0, activeStepIndex - 1)] ?? 'student');
   }, [activeStepIndex]);
   const handleFocusedContinue = useCallback(async () => {
     if (activeStep === 'context') {
-      const saved = await saveAssignmentSessionProgress({
-        studentId: source.selectedStudentId || null,
-        recordingId: source.recording?.recordingId ?? null,
-        transcriptId: source.transcript?.transcriptId ?? null,
-        teacherNotes: teacherNotes.trim() || null,
-        currentStage: 'assignment',
-      });
-      if (!saved) return;
+      if (!(await commitTeacherNotes())) return;
     }
     if (activeStep === 'create' && authoring.draftDirty) {
       await authoring.saveDraft();
@@ -1449,11 +1506,7 @@ export const MinimalAssignment: React.FC = () => {
     activeStep,
     activeStepIndex,
     authoring,
-    saveAssignmentSessionProgress,
-    source.recording?.recordingId,
-    source.selectedStudentId,
-    source.transcript?.transcriptId,
-    teacherNotes,
+    commitTeacherNotes,
   ]);
   const continueDisabled =
     activeStep === 'student'
@@ -1814,15 +1867,6 @@ export const MinimalAssignment: React.FC = () => {
               }}
               teacherNotes={teacherNotes}
               onTeacherNotesChange={(value) => {
-                if (
-                  hasAssignmentContent &&
-                  value !== teacherNotes &&
-                  !globalThis.confirm(
-                    'This will require a new assignment draft. Your lesson source and transcript will stay saved.',
-                  )
-                ) {
-                  return;
-                }
                 markAssignmentUserEdit();
                 setTeacherNotes(value);
               }}
@@ -1854,10 +1898,7 @@ export const MinimalAssignment: React.FC = () => {
               validating={authoring.validating}
               draftDirty={authoring.draftDirty}
               generationOptionsAvailable={Boolean(generationOptions)}
-              onGenerateAssignment={() => {
-                markAssignmentUserEdit();
-                void authoring.generateAssignment();
-              }}
+              onGenerateAssignment={() => void handleGenerateAssignment()}
               generatingDraft={authoring.generatingDraft}
               generationBlockedByQuota={authoring.generationBlockedByQuota}
               generationQuotaBlockedReason={authoring.generationQuotaBlockedReason}
