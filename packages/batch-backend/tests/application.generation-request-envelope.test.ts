@@ -43,6 +43,17 @@ describe('generation request envelope', () => {
 
     expect(first.sourceSelectionHash).toBe(second.sourceSelectionHash);
     expect(flattenGenerationRequestEnvelope(first)).toBe(`${first.instructions}\n\n${first.input}`);
+    expect(first.settings).toEqual({ reasoningEffort: 'medium', textVerbosity: 'low' });
+  });
+
+  it('uses balanced reasoning and verbosity for assignment drafts', () => {
+    const envelope = createGenerationRequestEnvelope({
+      workload: 'assignment_draft',
+      instructions: 'Create the assignment from grounded learner context.',
+      sources: [{ id: 'lesson:1', label: 'LESSON_CONTEXT', content: 'Practice signposting.' }],
+    });
+
+    expect(envelope.settings).toEqual({ reasoningEffort: 'medium', textVerbosity: 'medium' });
   });
 
   it('preserves an optional strict structured-output schema', () => {

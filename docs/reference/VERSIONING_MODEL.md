@@ -4,7 +4,7 @@
 
 - Audience: maintainers and AI agents.
 - Authority Level: reference.
-- Last Verified Against: 2026-06-10 repo state.
+- Last Verified Against: 2026-07-11 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: monthly or after release workflow changes.
 - Status: `reference`.
@@ -76,6 +76,11 @@ On each merged PR to `main`:
 3. Update root `package.json` version + prepend `CHANGELOG.md` entry.
 4. Create bot commit `chore(release): vX.Y.Z`.
 5. Create and push tag `vX.Y.Z`.
+6. Build and publish production `batch-backend`, `batch-frontend`, and `telegram-ops-bot` images to
+   GHCR with both the 40-character release-commit SHA and `vX.Y.Z` tags.
+
+The release workflow publishes images but does not deploy them. Production deployment remains a
+separate operator action using the immutable release SHA.
 
 Workflow file:
 

@@ -85,21 +85,33 @@ describe('config/env - OpenAI target-model gate', () => {
     vi.resetModules();
   });
 
-  it('keeps target model defaults disabled until an operator explicitly enables them', async () => {
+  it('uses GPT-5.6 family defaults while preserving the disabled compatibility gate', async () => {
     await withEnv({ NODE_ENV: 'test', GEN_OPENAI_TARGET_MODELS_ENABLED: 'false' }, async () => {
       const cfg = await loadConfigFresh();
       expect(cfg.generation.models.openai.targetModelsEnabled).toBe(false);
-      expect(cfg.generation.models.openai.primary).toBe('gpt-5.4-mini');
+      expect(cfg.generation.models.openai.primary).toBe('gpt-5.6-sol');
+      expect(cfg.generation.models.openai.fallback).toBe('gpt-5.6-luna');
+      expect(cfg.generation.models.openai.studentMemoryPrimary).toBe('gpt-5.6-luna');
+      expect(cfg.generation.models.openai.studentMemoryFallback).toBe('gpt-5.6-luna');
+      expect(cfg.generation.models.openai.profileDraftPrimary).toBe('gpt-5.6-luna');
+      expect(cfg.generation.models.openai.profileDraftFallback).toBe('gpt-5.6-luna');
+      expect(cfg.generation.models.openai.profileDraftTertiary).toBe('gpt-5.6-luna');
+      expect(cfg.generation.models.openai.allowed).toEqual(['gpt-5.6-sol', 'gpt-5.6-luna']);
     });
   });
 
-  it('selects the evaluated target ladder only behind the explicit gate', async () => {
+  it('uses the same GPT-5.6 family defaults when the compatibility gate is enabled', async () => {
     await withEnv({ NODE_ENV: 'test', GEN_OPENAI_TARGET_MODELS_ENABLED: 'true' }, async () => {
       const cfg = await loadConfigFresh();
       expect(cfg.generation.models.openai.targetModelsEnabled).toBe(true);
-      expect(cfg.generation.models.openai.primary).toBe('gpt-5.5');
-      expect(cfg.generation.models.openai.studentMemoryPrimary).toBe('gpt-5.4-mini');
-      expect(cfg.generation.models.openai.profileDraftPrimary).toBe('gpt-5.4-mini');
+      expect(cfg.generation.models.openai.primary).toBe('gpt-5.6-sol');
+      expect(cfg.generation.models.openai.fallback).toBe('gpt-5.6-luna');
+      expect(cfg.generation.models.openai.studentMemoryPrimary).toBe('gpt-5.6-luna');
+      expect(cfg.generation.models.openai.studentMemoryFallback).toBe('gpt-5.6-luna');
+      expect(cfg.generation.models.openai.profileDraftPrimary).toBe('gpt-5.6-luna');
+      expect(cfg.generation.models.openai.profileDraftFallback).toBe('gpt-5.6-luna');
+      expect(cfg.generation.models.openai.profileDraftTertiary).toBe('gpt-5.6-luna');
+      expect(cfg.generation.models.openai.allowed).toEqual(['gpt-5.6-sol', 'gpt-5.6-luna']);
     });
   });
 
@@ -472,13 +484,13 @@ describe('config/env - generation provider mapping', () => {
         expect(cfg.generation.strictNoPaid).toBe(true);
         expect(cfg.generation.maxOutputTokensHard).toBe(3200);
         expect(cfg.generation.budgetEmergencyOverride).toBe(false);
-        expect(cfg.generation.models.openai.primary).toBe('gpt-5.4-mini');
-        expect(cfg.generation.models.openai.fallback).toBe('gpt-5.4-nano');
-        expect(cfg.generation.models.openai.studentMemoryPrimary).toBe('gpt-5.4-nano');
-        expect(cfg.generation.models.openai.studentMemoryFallback).toBe('gpt-5.4-mini');
-        expect(cfg.generation.models.openai.profileDraftPrimary).toBe('gpt-5.4');
-        expect(cfg.generation.models.openai.profileDraftFallback).toBe('gpt-5.4-mini');
-        expect(cfg.generation.models.openai.profileDraftTertiary).toBe('gpt-5.4-nano');
+        expect(cfg.generation.models.openai.primary).toBe('gpt-5.6-sol');
+        expect(cfg.generation.models.openai.fallback).toBe('gpt-5.6-luna');
+        expect(cfg.generation.models.openai.studentMemoryPrimary).toBe('gpt-5.6-luna');
+        expect(cfg.generation.models.openai.studentMemoryFallback).toBe('gpt-5.6-luna');
+        expect(cfg.generation.models.openai.profileDraftPrimary).toBe('gpt-5.6-luna');
+        expect(cfg.generation.models.openai.profileDraftFallback).toBe('gpt-5.6-luna');
+        expect(cfg.generation.models.openai.profileDraftTertiary).toBe('gpt-5.6-luna');
         expect(cfg.generation.models.googleAiStudio.primary).toBe('gemini-3-flash-preview');
         expect(cfg.generation.models.googleAiStudio.allowed).toEqual(
           expect.arrayContaining(['gemini-3-flash-preview', 'gemini-3.5-flash']),
