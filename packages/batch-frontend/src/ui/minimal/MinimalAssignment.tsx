@@ -31,7 +31,7 @@ import { AssignmentWorkflow } from '../assignments/AssignmentWorkflow';
 import {
   type AssignmentStepId,
   deriveAssignmentWorkflow,
-  mapSessionStageToStep,
+  resolveInitialAssignmentStep,
 } from '../assignments/assignment-workflow';
 import { CreateAssignmentStep } from '../assignments/steps/CreateAssignmentStep';
 import { LessonSourceStep } from '../assignments/steps/LessonSourceStep';
@@ -71,7 +71,6 @@ import {
   type StartStageMode,
   StartStageSection,
   type WorkflowStage,
-  type WorkflowStageId,
   type WorkflowStageStatus,
 } from './MinimalAssignment.stages';
 import './MinimalAssignment.css';
@@ -293,8 +292,7 @@ export const MinimalAssignment: React.FC = () => {
   const reviewPreviewButtonRef = useRef<HTMLButtonElement | null>(null);
   const advancedSectionRef = useRef<HTMLElement | null>(null);
   const advancedHeadingRef = useRef<HTMLHeadingElement | null>(null);
-  const guidedStageIdsRef = useRef<Set<WorkflowStageId>>(new Set());
-  const hasInitializedGuidedFlowRef = useRef(false);
+  const activeStepHydrationKeyRef = useRef<string | null>(null);
   const assignmentSessionMutationQueueRef = useRef<Promise<AssignmentSession | null>>(
     Promise.resolve(null),
   );
@@ -499,7 +497,6 @@ export const MinimalAssignment: React.FC = () => {
   ]);
 
   const handleStartNewAssignment = useCallback(() => {
-    guidedStageIdsRef.current.clear();
     setShowAllResumeJobs(false);
     resetFlow();
     setStartStageMode('start');
@@ -1403,9 +1400,14 @@ export const MinimalAssignment: React.FC = () => {
     ],
   );
   useEffect(() => {
-    if (!activeAssignmentSession) return;
+    if (!activeAssignmentSession) {
+      activeStepHydrationKeyRef.current = null;
+      return;
+    }
+    if (activeStepHydrationKeyRef.current === activeAssignmentSession.id) return;
+    activeStepHydrationKeyRef.current = activeAssignmentSession.id;
     setActiveStep(
-      mapSessionStageToStep(activeAssignmentSession.currentStage, focusedWorkflowInput),
+      resolveInitialAssignmentStep(activeAssignmentSession.currentStage, focusedWorkflowInput),
     );
   }, [activeAssignmentSession, focusedWorkflowInput]);
 
@@ -1607,62 +1609,6 @@ export const MinimalAssignment: React.FC = () => {
     source.selectedStudentId,
     transcriptReady,
   ]);
-
-  const actionableStageId =
-    workflowStages.find((stage) => stage.status === 'current')?.id ??
-    workflowStages.find((stage) => stage.status === 'available')?.id ??
-    null;
-
-  useEffect(() => {
-    if (!actionableStageId) return;
-    if (!hasInitializedGuidedFlowRef.current) {
-      hasInitializedGuidedFlowRef.current = true;
-      guidedStageIdsRef.current.add(actionableStageId);
-      return;
-    }
-    if (guidedStageIdsRef.current.has(actionableStageId)) {
-      return;
-    }
-
-    guidedStageIdsRef.current.add(actionableStageId);
-
-    const sectionTarget =
-      actionableStageId === 'start'
-        ? startSectionRef.current
-        : actionableStageId === 'source'
-          ? sourceSectionRef.current
-          : actionableStageId === 'context'
-            ? contextSectionRef.current
-            : actionableStageId === 'assignment'
-              ? assignmentSectionRef.current
-              : actionableStageId === 'review'
-                ? reviewSectionRef.current
-                : advancedSectionRef.current;
-
-    const focusTarget =
-      actionableStageId === 'start'
-        ? startHeadingRef.current
-        : actionableStageId === 'source'
-          ? (sourceStudentSelectRef.current ?? sourceHeadingRef.current)
-          : actionableStageId === 'context'
-            ? (contextProfileSelectRef.current ?? contextHeadingRef.current)
-            : actionableStageId === 'assignment'
-              ? (assignmentGenerateDraftButtonRef.current ?? assignmentHeadingRef.current)
-              : actionableStageId === 'review'
-                ? (reviewPreviewButtonRef.current ?? reviewHeadingRef.current)
-                : advancedHeadingRef.current;
-
-    sectionTarget?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    const focusTimer = globalThis.window?.setTimeout(() => {
-      focusTarget?.focus({ preventScroll: true });
-    }, 0);
-
-    return () => {
-      if (focusTimer !== undefined) {
-        globalThis.window?.clearTimeout(focusTimer);
-      }
-    };
-  }, [actionableStageId]);
 
   const startStage = workflowStages[0] ?? workflowStages.at(-1)!;
   const sourceStage = workflowStages[1] ?? startStage;
