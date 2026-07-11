@@ -114,12 +114,6 @@ function resolveConnectedSpeechSpeechText(
   return connected;
 }
 
-function isLongShadowDrill(text: string): boolean {
-  const normalized = normalizeSpeechText(text);
-  const words = normalized.split(/\s+/).filter(Boolean);
-  return words.length >= 3 || normalized.length >= 18;
-}
-
 async function mapWithConcurrency<T, R>(
   values: readonly T[],
   concurrency: number,
@@ -465,18 +459,6 @@ export async function synthesizePronunciationAudio(
           label: 'Word',
           note: word.note,
         });
-
-        if (isLongShadowDrill(normalizedWord)) {
-          tasks.push({
-            id: `shadow-word-${index + 1}-natural`,
-            itemIndex: index,
-            kind: 'sentence_item',
-            engine: 'provider',
-            text: normalizedWord,
-            label: 'Natural',
-            note: word.note,
-          });
-        }
       }
       const clips = await mapWithConcurrency(
         tasks,
