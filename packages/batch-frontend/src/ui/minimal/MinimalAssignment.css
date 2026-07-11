@@ -535,14 +535,7 @@
   gap: var(--space-3);
 }
 
-.minimal-rerun-actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-}
-
-.minimal-rerun-actions .minimal-primary {
+.minimal-rerun-actions .product-button {
   min-width: min(100%, 190px);
 }
 
@@ -695,7 +688,7 @@
 .minimal-rerun-control-group {
   border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
-  background: linear-gradient(180deg, var(--minimal-control-surface), var(--bg-secondary));
+  background: var(--cs-surface-muted);
   padding: var(--space-3);
   display: flex;
   flex-direction: column;

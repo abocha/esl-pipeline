@@ -13,6 +13,7 @@ import {
   type PresetRerunKind,
 } from './MinimalAssignment.logic';
 import { StageSection, type WorkflowStage } from './MinimalAssignment.stages';
+import { ProductButton } from '../system/ProductButton';
 
 type UiTtsProvider = CustomRerunInput['rerunStudyTextProvider'];
 type UiPronunciationChunkTtsProvider = CustomRerunInput['rerunPronunciationChunkProvider'];
@@ -536,37 +537,41 @@ export function AdvancedActionsStage({
         </p>
       ) : (
         <div className="minimal-stage-layout">
-          <div className="minimal-stage-panel">
+          <div className="minimal-stage-panel assignment-advanced-actions">
             <div className="minimal-stage-panel-header">
               <div className="minimal-stage-panel-title">
                 <h3>Republish and rerun</h3>
               </div>
-              <button type="button" className="minimal-secondary" onClick={onRefreshActions}>
+              <ProductButton type="button" variant="quiet" onClick={onRefreshActions}>
                 Refresh actions
-              </button>
+              </ProductButton>
             </div>
-            <section className="minimal-rerun-actions" aria-label="Quick reruns">
+            <section
+              className="minimal-rerun-actions assignment-advanced-actions__quick"
+              aria-label="Quick reruns"
+            >
               {presetRerunActions.map((action) => (
-                <button
+                <ProductButton
                   key={action.kind}
                   type="button"
-                  className="minimal-primary"
+                  variant="secondary"
                   onClick={() => void controller.handlePresetRerun(action.kind)}
                   disabled={!controller.rerunEnabled}
+                  busy={controller.actionBusy === 'rerun'}
                 >
                   {controller.actionBusy === 'rerun' ? 'Queuing rerun...' : action.label}
-                </button>
+                </ProductButton>
               ))}
             </section>
             <div className="minimal-inline">
-              <button
+              <ProductButton
                 type="button"
-                className="minimal-secondary"
+                variant="quiet"
                 onClick={controller.toggleCustomRerun}
                 disabled={!controller.rerunEnabled}
               >
                 {controller.showCustomRerun ? 'Hide custom rerun' : 'Custom rerun'}
-              </button>
+              </ProductButton>
             </div>
             {controller.showCustomRerun ? (
               <section className="minimal-custom-rerun" aria-label="Custom rerun selection">
@@ -934,14 +939,15 @@ export function AdvancedActionsStage({
                   </div>
                 ) : null}
                 <div className="minimal-inline">
-                  <button
+                  <ProductButton
                     type="button"
-                    className="minimal-primary"
+                    variant="secondary"
                     onClick={() => void controller.handleCustomRerun()}
                     disabled={!controller.rerunEnabled || !controller.customRerunHasSelection}
+                    busy={controller.actionBusy === 'rerun'}
                   >
                     {controller.actionBusy === 'rerun' ? 'Queuing rerun...' : 'Queue custom rerun'}
-                  </button>
+                  </ProductButton>
                 </div>
               </section>
             ) : null}
