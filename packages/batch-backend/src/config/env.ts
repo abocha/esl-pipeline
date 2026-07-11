@@ -674,30 +674,30 @@ export function loadConfig(): BatchBackendConfig {
   const generationMaxOutputTokensHard = readInt('GEN_MAX_OUTPUT_TOKENS_HARD', 3200);
   const generationAllowPaidSpend = readBool('GEN_ALLOW_PAID_SPEND', false);
   const generationBudgetEmergencyOverride = generationAllowPaidSpend;
-  // These higher-capability defaults are intentionally inert until an operator has
-  // reviewed a credentialed live-eval report and explicitly enables them.
+  // Retained as an operator-visible compatibility gate while every built-in default
+  // uses the evaluated GPT-5.6 family. Explicit model overrides remain authoritative.
   const generationOpenAiTargetModelsEnabled = readBool('GEN_OPENAI_TARGET_MODELS_ENABLED', false);
 
   const generationOpenAiModelPrimary = readString(
     'GEN_OPENAI_MODEL_PRIMARY',
-    generationOpenAiTargetModelsEnabled ? 'gpt-5.5' : 'gpt-5.4-mini',
+    'gpt-5.6-sol',
   )!;
-  const generationOpenAiModelFallback = readString('GEN_OPENAI_MODEL_FALLBACK', 'gpt-5.4-nano')!;
+  const generationOpenAiModelFallback = readString('GEN_OPENAI_MODEL_FALLBACK', 'gpt-5.6-luna')!;
   const generationOpenAiMemoryModelPrimary = readString(
     'GEN_OPENAI_MODEL_STUDENT_MEMORY_PRIMARY',
-    generationOpenAiTargetModelsEnabled ? 'gpt-5.4-mini' : generationOpenAiModelFallback,
+    generationOpenAiModelFallback,
   )!;
   const generationOpenAiMemoryModelFallback = readString(
     'GEN_OPENAI_MODEL_STUDENT_MEMORY_FALLBACK',
-    generationOpenAiModelPrimary,
+    generationOpenAiModelFallback,
   )!;
   const generationOpenAiProfileDraftModelPrimary = readString(
     'GEN_OPENAI_MODEL_PROFILE_DRAFT_PRIMARY',
-    generationOpenAiTargetModelsEnabled ? 'gpt-5.4-mini' : 'gpt-5.4',
+    generationOpenAiModelFallback,
   )!;
   const generationOpenAiProfileDraftModelFallback = readString(
     'GEN_OPENAI_MODEL_PROFILE_DRAFT_FALLBACK',
-    generationOpenAiModelPrimary,
+    generationOpenAiModelFallback,
   )!;
   const generationOpenAiProfileDraftModelTertiary = readString(
     'GEN_OPENAI_MODEL_PROFILE_DRAFT_TERTIARY',
