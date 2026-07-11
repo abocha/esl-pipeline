@@ -678,10 +678,7 @@ export function loadConfig(): BatchBackendConfig {
   // uses the evaluated GPT-5.6 family. Explicit model overrides remain authoritative.
   const generationOpenAiTargetModelsEnabled = readBool('GEN_OPENAI_TARGET_MODELS_ENABLED', false);
 
-  const generationOpenAiModelPrimary = readString(
-    'GEN_OPENAI_MODEL_PRIMARY',
-    'gpt-5.6-sol',
-  )!;
+  const generationOpenAiModelPrimary = readString('GEN_OPENAI_MODEL_PRIMARY', 'gpt-5.6-sol')!;
   const generationOpenAiModelFallback = readString('GEN_OPENAI_MODEL_FALLBACK', 'gpt-5.6-luna')!;
   const generationOpenAiMemoryModelPrimary = readString(
     'GEN_OPENAI_MODEL_STUDENT_MEMORY_PRIMARY',
