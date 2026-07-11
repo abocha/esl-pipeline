@@ -41,7 +41,7 @@ describe('generation budget guard', () => {
         },
       },
       provider: 'openai',
-      model: 'gpt-5.4-mini',
+      model: 'gpt-5.6-luna',
       prompt: 'memory source',
       now: new Date('2026-06-19T00:00:00.000Z'),
       repository: {

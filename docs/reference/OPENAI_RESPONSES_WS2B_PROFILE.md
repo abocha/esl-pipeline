@@ -5,7 +5,7 @@
 - Audience: founder-maintainer and implementing agents.
 - Read Time: 10 minutes.
 - Authority Level: implementation-driving reference for WS2B OpenAI integration.
-- Last Updated: 2026-06-19.
+- Last Updated: 2026-07-11.
 
 ## Purpose
 
@@ -90,6 +90,13 @@ Generation uses `generation_request_envelope_v1`. Trusted policy is sent through
 instructions, records the selected source manifest and a source-selection hash, and carries the
 workload's reasoning/verbosity policy and optional strict schema. Non-OpenAI providers receive the
 same deterministic flattened representation.
+
+The active OpenAI workload mapping is assignment draft on `gpt-5.6-sol` at medium reasoning and
+medium verbosity; profile revision and student-memory snapshot on `gpt-5.6-luna` at medium
+reasoning and low verbosity; and lesson memory, homework memory, and profile candidate patch on
+`gpt-5.6-luna` at low reasoning and low verbosity. These single-turn structured workflows do not
+enable Pro mode, persisted reasoning, tools, explicit caching, Programmatic Tool Calling, or
+multi-agent execution.
 
 Consequential structured claims must reference a source ID in the request manifest and include a
 short evidence excerpt. Candidate promotion is a closed `apply`/`no_change` decision over selected
