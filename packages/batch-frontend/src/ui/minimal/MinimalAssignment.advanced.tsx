@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { JobOptionsResponse, JobProvenanceResponse, JobStatus } from '../../utils/api';
 import { cancelJob, fetchJobProvenance, getJobStatus, rerunJob } from '../../utils/api';
+import { ProductButton } from '../system/ProductButton';
 import {
   buildCustomRerunPayload,
   buildPresetRerunPayload,
@@ -13,7 +14,6 @@ import {
   type PresetRerunKind,
 } from './MinimalAssignment.logic';
 import { StageSection, type WorkflowStage } from './MinimalAssignment.stages';
-import { ProductButton } from '../system/ProductButton';
 
 type UiTtsProvider = CustomRerunInput['rerunStudyTextProvider'];
 type UiPronunciationChunkTtsProvider = CustomRerunInput['rerunPronunciationChunkProvider'];

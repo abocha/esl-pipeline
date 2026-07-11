@@ -121,7 +121,10 @@ export function registerPromptEditorTests() {
         ).toBe('step'),
       );
 
-      await user.type(screen.getByRole('textbox', { name: /Teacher notes/i }), 'Focus on articles.');
+      await user.type(
+        screen.getByRole('textbox', { name: /Teacher notes/i }),
+        'Focus on articles.',
+      );
       await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
 
       expect(confirmSpy).toHaveBeenCalledTimes(1);
@@ -162,8 +165,7 @@ export function registerPromptEditorTests() {
         .map(([, patch]) => patch);
       expect(
         writesAfterCommit.some(
-          (patch) =>
-            'teacherNotes' in patch && patch.teacherNotes !== 'Focus on articles.',
+          (patch) => 'teacherNotes' in patch && patch.teacherNotes !== 'Focus on articles.',
         ),
       ).toBe(false);
     });
@@ -199,7 +201,10 @@ export function registerPromptEditorTests() {
           screen.getByRole('button', { name: /Teaching context/i }).getAttribute('aria-current'),
         ).toBe('step'),
       );
-      await user.type(screen.getByRole('textbox', { name: /Teacher notes/i }), 'Focus on articles.');
+      await user.type(
+        screen.getByRole('textbox', { name: /Teacher notes/i }),
+        'Focus on articles.',
+      );
       await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
 
       expect(confirmSpy).toHaveBeenCalledTimes(1);
@@ -233,7 +238,10 @@ export function registerPromptEditorTests() {
           screen.getByRole('button', { name: /Teaching context/i }).getAttribute('aria-current'),
         ).toBe('step'),
       );
-      await user.type(screen.getByRole('textbox', { name: /Teacher notes/i }), 'Focus on articles.');
+      await user.type(
+        screen.getByRole('textbox', { name: /Teacher notes/i }),
+        'Focus on articles.',
+      );
       vi.mocked(api.createPromptPackage).mockClear();
       vi.mocked(api.createPromptPackage).mockResolvedValueOnce({
         id: 'pkg-fresh',
