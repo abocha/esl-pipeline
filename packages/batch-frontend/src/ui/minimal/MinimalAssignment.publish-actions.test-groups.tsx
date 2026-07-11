@@ -545,6 +545,12 @@ export function registerJobActionTests() {
       async () => {
         vi.useFakeTimers({ shouldAdvanceTime: true });
         const user = createTimerAwareMinimalUser();
+        let resolveCancel!: (value: Awaited<ReturnType<typeof api.cancelJob>>) => void;
+        vi.mocked(api.cancelJob).mockReturnValueOnce(
+          new Promise((resolve) => {
+            resolveCancel = resolve;
+          }),
+        );
         const publishedAssignment = await renderPublishedAssignment({
           status: {
             state: 'running',
@@ -574,7 +580,25 @@ export function registerJobActionTests() {
         ).toBeTruthy();
         expect(screen.queryByPlaceholderText('reason for cancellation')).toBeNull();
 
-        await user.click(within(reviewSection).getByRole('button', { name: /^Cancel$/i }));
+        const cancelButton = within(reviewSection).getByRole('button', { name: /^Cancel$/i });
+        expect(cancelButton.className).toContain('product-button');
+        expect(cancelButton.className).toContain('product-button--danger');
+        expect(cancelButton.className).not.toContain('minimal-secondary');
+
+        await user.click(cancelButton);
+
+        const busyCancelButton = within(reviewSection).getByRole('button', {
+          name: /^Cancelling\.\.\.$/i,
+        });
+        expect(busyCancelButton.getAttribute('aria-busy')).toBe('true');
+        expect((busyCancelButton as HTMLButtonElement).disabled).toBe(true);
+
+        resolveCancel({
+          success: true,
+          message: 'Job cancelled',
+          actionType: 'cancel',
+          jobId: 'job-1',
+        });
 
         await waitFor(() => {
           expect(api.cancelJob).toHaveBeenCalledWith('job-1');
