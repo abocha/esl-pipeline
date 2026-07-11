@@ -2,6 +2,7 @@ import { fireEvent, within } from '@testing-library/react';
 import { beforeEach, describe, it } from 'vitest';
 
 import {
+  testAct as act,
   testApi as api,
   createMinimalUser,
   createTimerAwareMinimalUser,
@@ -129,6 +130,42 @@ export function registerPromptEditorTests() {
         screen.getByRole('button', { name: /Teaching context/i }).getAttribute('aria-current'),
       ).toBe('step');
       expect(screen.getByDisplayValue('# Draft markdown')).toBeTruthy();
+    });
+
+    it('does not let a pending settings save restore stale teacher notes after commit', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const user = createTimerAwareMinimalUser();
+      await renderPromptReadyAssignment({ user });
+      vi.mocked(api.updateAssignmentSession).mockClear();
+      vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
+      fireEvent.change(screen.getByRole('textbox', { name: /Teacher notes/i }), {
+        target: { value: 'Focus on articles.' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
+      await waitFor(() =>
+        expect(api.updateAssignmentSession).toHaveBeenCalledWith(
+          'session-1',
+          expect.objectContaining({ teacherNotes: 'Focus on articles.' }),
+        ),
+      );
+      const commitCallIndex = vi
+        .mocked(api.updateAssignmentSession)
+        .mock.calls.findIndex(([, patch]) => patch.teacherNotes === 'Focus on articles.');
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1500);
+      });
+
+      const writesAfterCommit = vi
+        .mocked(api.updateAssignmentSession)
+        .mock.calls.slice(commitCallIndex + 1)
+        .map(([, patch]) => patch);
+      expect(
+        writesAfterCommit.some(
+          (patch) =>
+            'teacherNotes' in patch && patch.teacherNotes !== 'Focus on articles.',
+        ),
+      ).toBe(false);
     });
 
     it('uploads a recording and shows recording metadata', async () => {

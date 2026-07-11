@@ -846,7 +846,7 @@ export const MinimalAssignment: React.FC = () => {
     assignmentSessionSettingsTimeoutRef.current = setTimeout(() => {
       assignmentSessionSettingsTimeoutRef.current = null;
       void saveAssignmentSessionProgress({
-        teacherNotes: teacherNotesForPersistence || null,
+        teacherNotes: committedTeacherNotesRef.current || null,
         selectedGenerationProvider,
         selectedGenerationModel: authoring.selectedGenerationModel || null,
         publishTarget: authoring.publishTarget,
@@ -1436,6 +1436,11 @@ export const MinimalAssignment: React.FC = () => {
       )
     ) {
       return false;
+    }
+
+    if (assignmentSessionSettingsTimeoutRef.current) {
+      clearTimeout(assignmentSessionSettingsTimeoutRef.current);
+      assignmentSessionSettingsTimeoutRef.current = null;
     }
 
     const saved = await saveAssignmentSessionProgress({
