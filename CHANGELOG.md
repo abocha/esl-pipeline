@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [9.9.1] - 2026-07-11
+
+### Changed
+
+- Automated release from PR #131: fix(frontend): repair assignment workflow interactions (https://github.com/abocha/esl-pipeline/pull/131)
+
 ## [9.9.0] - 2026-07-11
 
 ### Changed
