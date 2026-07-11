@@ -62,4 +62,29 @@ describe('AssignmentWorkflow navigation', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Start another assignment' }));
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
+
+  it('keeps Review free of footer actions until completion is available', () => {
+    render(
+      <AssignmentWorkflow
+        steps={[
+          { id: 'student', label: 'Student', status: 'complete' },
+          { id: 'source', label: 'Lesson source', status: 'complete' },
+          { id: 'context', label: 'Teaching context', status: 'complete' },
+          { id: 'create', label: 'Create', status: 'complete' },
+          { id: 'review', label: 'Review & share', status: 'current' },
+        ]}
+        activeStep="review"
+        highestAvailableStep="review"
+        saveState="saved"
+        onStepRequest={vi.fn()}
+        onBack={vi.fn()}
+      >
+        Unpublished assignment
+      </AssignmentWorkflow>,
+    );
+
+    expect(screen.getByRole('button', { name: 'Back' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Assignment ready' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Start another assignment' })).toBeNull();
+  });
 });
