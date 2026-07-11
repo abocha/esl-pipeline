@@ -22,12 +22,113 @@ import {
 
 const PROMPT_DRAFT_TEST_TIMEOUT_MS = 15_000;
 
+async function renderResumedDraftSession() {
+  const session = makeAssignmentSession({
+    id: 'session-teacher-notes',
+    studentId: 'student-alex',
+    recordingId: 'rec-1',
+    transcriptId: 'tx-1',
+    promptPackageId: 'pkg-1',
+    draftId: 'draft-1',
+    currentStage: 'assignment',
+  });
+  vi.mocked(api.listAssignmentSessions).mockResolvedValueOnce({
+    sessions: [session],
+    total: 1,
+    limit: 20,
+  });
+  vi.mocked(api.updateAssignmentSession).mockImplementation(async (id, patch) =>
+    makeAssignmentSession({ ...session, id, ...patch }),
+  );
+  globalThis.history.replaceState(null, '', '/?sessionId=session-teacher-notes');
+  const user = createMinimalUser();
+  renderMinimalAssignment();
+  await screen.findByRole('button', { name: /^Generate assignment$/i });
+  return user;
+}
+
 export function registerPromptEditorTests() {
   describe('MinimalAssignment - prompt editor flows', {
     timeout: PROMPT_DRAFT_TEST_TIMEOUT_MS,
   }, () => {
     beforeEach(() => {
       setupMinimalAssignmentTest();
+    });
+
+    it('confirms changed teacher notes only when the resumed draft context is committed', async () => {
+      const confirmSpy = vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
+      const user = await renderResumedDraftSession();
+      await user.click(screen.getByRole('button', { name: /Teaching context/i }));
+      await waitFor(() =>
+        expect(
+          screen.getByRole('button', { name: /Teaching context/i }).getAttribute('aria-current'),
+        ).toBe('step'),
+      );
+
+      const notes = screen.getByRole('textbox', { name: /Teacher notes/i });
+      await user.clear(notes);
+      await user.type(notes, 'Focus on articles.');
+
+      expect(confirmSpy).not.toHaveBeenCalled();
+      await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+
+      expect(confirmSpy).toHaveBeenCalledTimes(1);
+      expect(confirmSpy).toHaveBeenCalledWith(
+        'This will require a new assignment draft. Your lesson source and transcript will stay saved.',
+      );
+      await waitFor(() => {
+        expect(api.updateAssignmentSession).toHaveBeenCalledWith(
+          expect.any(String),
+          expect.objectContaining({
+            teacherNotes: 'Focus on articles.',
+            currentStage: 'assignment',
+          }),
+        );
+      });
+    });
+
+    it('keeps changed teacher notes and Teaching context when invalidation is cancelled', async () => {
+      const confirmSpy = vi.spyOn(globalThis, 'confirm').mockReturnValue(false);
+      const user = await renderResumedDraftSession();
+      await user.click(screen.getByRole('button', { name: /Teaching context/i }));
+      await waitFor(() =>
+        expect(
+          screen.getByRole('button', { name: /Teaching context/i }).getAttribute('aria-current'),
+        ).toBe('step'),
+      );
+
+      const notes = screen.getByRole('textbox', { name: /Teacher notes/i });
+      await user.type(notes, 'Focus on articles.');
+      await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+
+      expect(confirmSpy).toHaveBeenCalledTimes(1);
+      expect(
+        (screen.getByRole('textbox', { name: /Teacher notes/i }) as HTMLTextAreaElement).value,
+      ).toBe('Focus on articles.');
+      expect(screen.getByRole('heading', { name: /Learner context/i })).toBeTruthy();
+      expect(api.updateAssignmentSession).not.toHaveBeenCalled();
+    });
+
+    it('preserves the existing draft when saving changed teacher notes fails', async () => {
+      const confirmSpy = vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
+      const user = await renderResumedDraftSession();
+      vi.mocked(api.updateAssignmentSession).mockRejectedValueOnce(new Error('save failed'));
+      await user.click(screen.getByRole('button', { name: /Teaching context/i }));
+      await waitFor(() =>
+        expect(
+          screen.getByRole('button', { name: /Teaching context/i }).getAttribute('aria-current'),
+        ).toBe('step'),
+      );
+
+      await user.type(screen.getByRole('textbox', { name: /Teacher notes/i }), 'Focus on articles.');
+      await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+
+      expect(confirmSpy).toHaveBeenCalledTimes(1);
+      await waitFor(() => expect(api.updateAssignmentSession).toHaveBeenCalled());
+      expect(
+        screen.getByRole('button', { name: /Teaching context/i }).getAttribute('aria-current'),
+      ).toBe('step');
+      expect(screen.getByDisplayValue('# Draft markdown')).toBeTruthy();
     });
 
     it('uploads a recording and shows recording metadata', async () => {

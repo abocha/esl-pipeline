@@ -274,11 +274,50 @@ describe('MinimalAssignment - staged workflow UI', () => {
     fireEvent.change(screen.getByRole('textbox', { name: /Teacher notes/i }), {
       target: { value: 'Keep the assignment grounded in the learner context.' },
     });
-    await waitFor(() => expect(api.updateAssignmentSession).toHaveBeenCalled());
+    expect(api.updateAssignmentSession).not.toHaveBeenCalled();
     expect(screen.getByRole('heading', { name: /Learner context/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /Teaching context/i }).getAttribute('aria-current')).toBe(
       'step',
     );
+  });
+
+  it('routes an explicit forward progress-step click through teacher-note commit confirmation', async () => {
+    const confirmSpy = vi.spyOn(globalThis, 'confirm').mockReturnValue(false);
+    const user = createMinimalUser();
+    vi.mocked(api.listAssignmentSessions).mockResolvedValueOnce({
+      sessions: [
+        makeAssignmentSession({
+          id: 'session-teacher-notes',
+          studentId: 'student-alex',
+          recordingId: 'rec-1',
+          transcriptId: 'tx-1',
+          promptPackageId: 'pkg-1',
+          draftId: 'draft-1',
+          currentStage: 'assignment',
+        }),
+      ],
+      total: 1,
+      limit: 20,
+    });
+    globalThis.history.replaceState(null, '', '/?sessionId=session-teacher-notes');
+    renderMinimalAssignment();
+    await screen.findByRole('button', { name: /^Generate assignment$/i });
+    await user.click(screen.getByRole('button', { name: /Teaching context/i }));
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: /Teaching context/i }).getAttribute('aria-current'),
+      ).toBe('step'),
+    );
+    await user.type(screen.getByRole('textbox', { name: /Teacher notes/i }), 'Focus on articles.');
+
+    expect(confirmSpy).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: /Create/i }));
+
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('heading', { name: /Learner context/i })).toBeTruthy();
+    expect(
+      (screen.getByRole('textbox', { name: /Teacher notes/i }) as HTMLTextAreaElement).value,
+    ).toBe('Focus on articles.');
   });
 
   it('does not move or scroll the new-assignment workflow after upload completes', async () => {
