@@ -168,6 +168,106 @@ export function registerPromptEditorTests() {
       ).toBe(false);
     });
 
+    it('atomically clears durable prompt and draft ids before invalidated work can resume', async () => {
+      const confirmSpy = vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
+      const session = makeAssignmentSession({
+        id: 'session-prompt-only',
+        studentId: 'student-alex',
+        recordingId: 'rec-1',
+        transcriptId: 'tx-1',
+        promptPackageId: 'pkg-old',
+        draftId: null,
+        currentStage: 'assignment',
+      });
+      let savedSession = session;
+      vi.mocked(api.listAssignmentSessions).mockImplementation(async () => ({
+        sessions: [savedSession],
+        total: 1,
+        limit: 20,
+      }));
+      vi.mocked(api.updateAssignmentSession).mockImplementation(async (id, patch) => {
+        savedSession = makeAssignmentSession({ ...savedSession, id, ...patch });
+        return savedSession;
+      });
+      globalThis.history.replaceState(null, '', '/?sessionId=session-prompt-only');
+      const firstRender = renderMinimalAssignment();
+      const user = createMinimalUser();
+      await screen.findByRole('button', { name: /^Generate assignment$/i });
+      await user.click(screen.getByRole('button', { name: /Teaching context/i }));
+      await waitFor(() =>
+        expect(
+          screen.getByRole('button', { name: /Teaching context/i }).getAttribute('aria-current'),
+        ).toBe('step'),
+      );
+      await user.type(screen.getByRole('textbox', { name: /Teacher notes/i }), 'Focus on articles.');
+      await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+
+      expect(confirmSpy).toHaveBeenCalledTimes(1);
+      await waitFor(() =>
+        expect(api.updateAssignmentSession).toHaveBeenCalledWith(
+          'session-prompt-only',
+          expect.objectContaining({
+            teacherNotes: 'Focus on articles.',
+            promptPackageId: null,
+            draftId: null,
+          }),
+        ),
+      );
+      firstRender.unmount();
+      vi.mocked(api.fetchPromptPackage).mockClear();
+      vi.mocked(api.fetchDraft).mockClear();
+      renderMinimalAssignment();
+      await waitFor(() => expect(api.listAssignmentSessions).toHaveBeenCalledTimes(2));
+      await screen.findByRole('button', { name: /^Generate assignment$/i });
+
+      expect(api.fetchPromptPackage).not.toHaveBeenCalled();
+      expect(api.fetchDraft).not.toHaveBeenCalled();
+    });
+
+    it('creates a fresh prompt with committed notes before generating after invalidation', async () => {
+      const confirmSpy = vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
+      const user = await renderResumedDraftSession();
+      await user.click(screen.getByRole('button', { name: /Teaching context/i }));
+      await waitFor(() =>
+        expect(
+          screen.getByRole('button', { name: /Teaching context/i }).getAttribute('aria-current'),
+        ).toBe('step'),
+      );
+      await user.type(screen.getByRole('textbox', { name: /Teacher notes/i }), 'Focus on articles.');
+      vi.mocked(api.createPromptPackage).mockClear();
+      vi.mocked(api.createPromptPackage).mockResolvedValueOnce({
+        id: 'pkg-fresh',
+        recordingId: 'rec-1',
+        transcriptId: 'tx-1',
+        studentId: null,
+        lessonId: null,
+        profilePath: null,
+        templateVersion: 'v1',
+        notes: 'Focus on articles.',
+        storageUri: 'memory://prompt/pkg-fresh',
+        text: 'Fresh prompt package output',
+        createdAt: now,
+        updatedAt: now,
+      });
+      vi.mocked(api.generateDraft).mockClear();
+
+      await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
+
+      expect(confirmSpy).toHaveBeenCalledTimes(1);
+      await waitFor(() =>
+        expect(api.createPromptPackage).toHaveBeenCalledWith(
+          'rec-1',
+          expect.objectContaining({ notes: 'Focus on articles.' }),
+        ),
+      );
+      expect(api.generateDraft).toHaveBeenCalledWith(
+        expect.objectContaining({ promptPackageId: 'pkg-fresh' }),
+      );
+      expect(api.generateDraft).not.toHaveBeenCalledWith(
+        expect.objectContaining({ promptPackageId: 'pkg-1' }),
+      );
+    });
+
     it('uploads a recording and shows recording metadata', async () => {
       vi.useFakeTimers({ shouldAdvanceTime: true });
       try {

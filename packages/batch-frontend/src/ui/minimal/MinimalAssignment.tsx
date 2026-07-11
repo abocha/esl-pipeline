@@ -83,6 +83,7 @@ import './MinimalAssignment.css';
 const AUDIO_EXTENSIONS = ['.opus'] as const;
 const FOCUSED_STEP_ORDER: AssignmentStepId[] = ['student', 'source', 'context', 'create', 'review'];
 const FALLBACK_TTS_PROVIDERS = ['elevenlabs', 'google', 'inworld'] as const;
+type TeacherNotesCommitResult = 'unchanged' | 'committed' | 'invalidated' | null;
 const FALLBACK_PRONUNCIATION_CHUNK_TTS_PROVIDERS = ['google', 'elevenlabs', 'inworld'] as const;
 const FALLBACK_GOOGLE_TTS_MODELS = ['chirp3_hd', 'studio', 'neural2', 'wavenet'] as const;
 const FALLBACK_INWORLD_TTS_MODELS = [
@@ -1329,6 +1330,14 @@ export const MinimalAssignment: React.FC = () => {
 
   const jobReady = Boolean(jobStatus?.jobId);
   const hasAssignmentContent = authoring.draftText.trim().length > 0;
+  const hasDownstreamAssignmentState = Boolean(
+    authoring.promptReady ||
+    hasAssignmentContent ||
+    authoring.previewReadyForCurrentDraft ||
+    jobStatus?.jobId ||
+    activeAssignmentSession?.promptPackageId ||
+    activeAssignmentSession?.draftId,
+  );
   const hasStartedFlow =
     startStageMode === 'start' ||
     source.selectedStudentId.trim().length > 0 ||
@@ -1425,21 +1434,21 @@ export const MinimalAssignment: React.FC = () => {
   }, [activeAssignmentSession, focusedWorkflowInput]);
 
   const activeStepIndex = FOCUSED_STEP_ORDER.indexOf(activeStep);
-  const commitTeacherNotes = useCallback(async (): Promise<boolean> => {
+  const commitTeacherNotes = useCallback(async (): Promise<TeacherNotesCommitResult> => {
     const normalizedTeacherNotes = teacherNotes.trim();
     const decision = getTeacherNotesCommitDecision({
       currentNotes: normalizedTeacherNotes,
       committedNotes: committedTeacherNotesRef.current,
-      hasDownstreamAssignment: hasAssignmentContent,
+      hasDownstreamAssignment: hasDownstreamAssignmentState,
     });
-    if (decision === 'unchanged') return true;
+    if (decision === 'unchanged') return 'unchanged';
     if (
       decision === 'confirm-and-invalidate' &&
       !globalThis.confirm(
         'This will require a new assignment draft. Your lesson source and transcript will stay saved.',
       )
     ) {
-      return false;
+      return null;
     }
 
     if (assignmentSessionSettingsTimeoutRef.current) {
@@ -1452,19 +1461,25 @@ export const MinimalAssignment: React.FC = () => {
       recordingId: source.recording?.recordingId ?? null,
       transcriptId: source.transcript?.transcriptId ?? null,
       teacherNotes: normalizedTeacherNotes || null,
+      ...(decision === 'confirm-and-invalidate'
+        ? { promptPackageId: null, draftId: null }
+        : {}),
       currentStage: 'assignment',
     });
-    if (!saved) return false;
+    if (!saved) return null;
 
     committedTeacherNotesRef.current = normalizedTeacherNotes;
     if (decision === 'confirm-and-invalidate') {
       invalidateAuthoringGeneration();
       resetAuthoring();
       setJobStatusState(null);
+      assignmentSessionMilestoneRef.current.promptPackageId = '';
+      assignmentSessionMilestoneRef.current.draftId = '';
+      return 'invalidated';
     }
-    return true;
+    return 'committed';
   }, [
-    hasAssignmentContent,
+    hasDownstreamAssignmentState,
     invalidateAuthoringGeneration,
     resetAuthoring,
     saveAssignmentSessionProgress,
@@ -1475,8 +1490,9 @@ export const MinimalAssignment: React.FC = () => {
   ]);
   const handleGenerateAssignment = useCallback(async () => {
     markAssignmentUserEdit();
-    if (!(await commitTeacherNotes())) return;
-    await authoring.generateAssignment();
+    const commitResult = await commitTeacherNotes();
+    if (!commitResult) return;
+    await authoring.generateAssignment({ forceFreshPrompt: commitResult === 'invalidated' });
   }, [authoring, commitTeacherNotes, markAssignmentUserEdit]);
   const handleFocusedStepRequest = useCallback(
     async (requestedStep: AssignmentStepId) => {
@@ -1494,7 +1510,7 @@ export const MinimalAssignment: React.FC = () => {
           getTeacherNotesCommitDecision({
             currentNotes: teacherNotes,
             committedNotes: committedTeacherNotesRef.current,
-            hasDownstreamAssignment: hasAssignmentContent,
+            hasDownstreamAssignment: hasDownstreamAssignmentState,
           }) === 'confirm-and-invalidate';
         if (!(await commitTeacherNotes())) return;
         if (invalidatesDownstreamAssignment) {
@@ -1512,7 +1528,7 @@ export const MinimalAssignment: React.FC = () => {
       activeStepIndex,
       commitTeacherNotes,
       focusedWorkflowSteps,
-      hasAssignmentContent,
+      hasDownstreamAssignmentState,
       teacherNotes,
     ],
   );
