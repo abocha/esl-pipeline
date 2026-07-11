@@ -91,6 +91,8 @@ High-signal env groups for this package:
 - infra: `PG_*`, `REDIS_*`
 - auth/security/upload controls: `JWT_*`, `REFRESH_*`, `ENABLE_*`
 - optional ops control: `BATCH_BACKEND_OPS_CONTROL_*`
+- generation: assignments use `gpt-5.6-sol` at medium reasoning; memory/profile workloads use
+  `gpt-5.6-luna` at low or medium reasoning according to the versioned request envelope
 
 All local, Compose, and production application settings come from the repository-root `.env`.
 Validate it with `pnpm env:validate -- --profile=development`; use the production profile before a

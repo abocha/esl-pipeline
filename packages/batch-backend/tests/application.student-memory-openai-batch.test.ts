@@ -91,7 +91,7 @@ describe('application/student-memory-openai-batch', () => {
 
     const result = await transport.getBatch({
       config: createConfig(true),
-      model: 'gpt-5.4-nano',
+      model: 'gpt-5.6-luna',
       batchId: 'batch_1',
     });
 

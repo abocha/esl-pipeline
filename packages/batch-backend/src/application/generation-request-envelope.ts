@@ -84,7 +84,7 @@ function resolveEnvelopeSettings(
     assignment_draft: { reasoningEffort: 'medium', textVerbosity: 'medium' },
     lesson_memory: { reasoningEffort: 'low', textVerbosity: 'low' },
     homework_memory: { reasoningEffort: 'low', textVerbosity: 'low' },
-    student_memory_snapshot: { reasoningEffort: 'low', textVerbosity: 'low' },
+    student_memory_snapshot: { reasoningEffort: 'medium', textVerbosity: 'low' },
     profile_revision: { reasoningEffort: 'medium', textVerbosity: 'low' },
     profile_candidate_patch: { reasoningEffort: 'low', textVerbosity: 'low' },
   };
