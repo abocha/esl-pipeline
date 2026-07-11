@@ -267,18 +267,18 @@ describe('MinimalAssignment - staged workflow UI', () => {
     await screen.findByRole('button', { name: /^Generate assignment$/i });
     await user.click(screen.getByRole('button', { name: /Teaching context/i }));
     expect(screen.getByRole('heading', { name: /Learner context/i })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /Teaching context/i }).getAttribute('aria-current')).toBe(
-      'step',
-    );
+    expect(
+      screen.getByRole('button', { name: /Teaching context/i }).getAttribute('aria-current'),
+    ).toBe('step');
     await waitFor(() => expect(api.listAssignmentSessions).toHaveBeenCalled());
     fireEvent.change(screen.getByRole('textbox', { name: /Teacher notes/i }), {
       target: { value: 'Keep the assignment grounded in the learner context.' },
     });
     expect(api.updateAssignmentSession).not.toHaveBeenCalled();
     expect(screen.getByRole('heading', { name: /Learner context/i })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /Teaching context/i }).getAttribute('aria-current')).toBe(
-      'step',
-    );
+    expect(
+      screen.getByRole('button', { name: /Teaching context/i }).getAttribute('aria-current'),
+    ).toBe('step');
   });
 
   it('routes an explicit forward progress-step click through teacher-note commit confirmation', async () => {
@@ -337,9 +337,9 @@ describe('MinimalAssignment - staged workflow UI', () => {
 
     expect(scrollIntoView).not.toHaveBeenCalled();
     expect(screen.getByRole('heading', { name: /Add lesson source/i })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /Lesson source/i }).getAttribute('aria-current')).toBe(
-      'step',
-    );
+    expect(
+      screen.getByRole('button', { name: /Lesson source/i }).getAttribute('aria-current'),
+    ).toBe('step');
   });
 
   it('keeps the assignment overview header to title, focus, and compact progress', async () => {
@@ -395,6 +395,34 @@ describe('MinimalAssignment - staged workflow UI', () => {
       expect(screen.queryByText(/Assignments publish as an Assignment Handout/i)).toBeNull();
       expect(screen.queryByText(/Anything you leave unchecked stays as-is/i)).toBeNull();
       expect(screen.queryByText(/Pronunciation chunks default to Google/i)).toBeNull();
+    },
+    INTEGRATION_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'starts a fresh workflow from the published completion action',
+    async () => {
+      const user = createMinimalUser();
+      await renderPublishedAssignment(
+        {
+          draftText: '# Draft markdown',
+          status: {
+            studentId: 'student-alex',
+            htmlUrl: '/assignments/job-1',
+          },
+        },
+        { user },
+      );
+
+      await user.click(screen.getByRole('button', { name: /Review & share/i }));
+      expect(
+        screen.getAllByRole('link', { name: /Open Assignment Handout/i }).length,
+      ).toBeGreaterThan(0);
+      await user.click(screen.getByRole('button', { name: /Start another assignment/i }));
+
+      expect(screen.getByRole('heading', { name: /^Student$/i, level: 1 })).toBeTruthy();
+      expect(screen.getByRole('combobox', { name: /^Student$/i })).toBeTruthy();
+      expect(screen.queryAllByRole('link', { name: /Open Assignment Handout/i })).toHaveLength(0);
     },
     INTEGRATION_TEST_TIMEOUT_MS,
   );

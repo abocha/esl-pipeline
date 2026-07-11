@@ -34,4 +34,32 @@ describe('AssignmentWorkflow navigation', () => {
     expect(onContinue).toHaveBeenCalledTimes(1);
     expect(screen.getByText('Saving…')).toBeTruthy();
   });
+
+  it('shows an explicit completion action without a dead Review continuation', async () => {
+    const onComplete = vi.fn();
+    render(
+      <AssignmentWorkflow
+        steps={[
+          { id: 'student', label: 'Student', status: 'complete' },
+          { id: 'source', label: 'Lesson source', status: 'complete' },
+          { id: 'context', label: 'Teaching context', status: 'complete' },
+          { id: 'create', label: 'Create', status: 'complete' },
+          { id: 'review', label: 'Review & share', status: 'current' },
+        ]}
+        activeStep="review"
+        highestAvailableStep="review"
+        saveState="saved"
+        onStepRequest={vi.fn()}
+        onBack={vi.fn()}
+        onComplete={onComplete}
+        completionLabel="Start another assignment"
+      >
+        Published assignment
+      </AssignmentWorkflow>,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Assignment ready' })).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Start another assignment' }));
+    expect(onComplete).toHaveBeenCalledTimes(1);
+  });
 });

@@ -697,6 +697,7 @@ export const MinimalAssignment: React.FC = () => {
     setOperatorSelectedTemplateId(fallbackTemplateId);
     assignmentSessionSettingsRef.current = '';
     setActiveAssignmentSession(null);
+    setActiveStep('student');
     handleStartNewAssignment();
   }, [
     fallbackTemplateId,
@@ -1104,8 +1105,8 @@ export const MinimalAssignment: React.FC = () => {
   const transcriptReady = source.transcriptReady;
   const firstProfileAssistVisible = Boolean(
     source.selectedStudentId &&
-      transcriptReady &&
-      (context.profilePreviewStatus === 'none' || context.profilePreviewStatus === 'unstructured'),
+    transcriptReady &&
+    (context.profilePreviewStatus === 'none' || context.profilePreviewStatus === 'unstructured'),
   );
   const firstProfileLessonMemoryKey = useMemo(() => {
     const studentId = source.selectedStudentId;
@@ -1128,15 +1129,14 @@ export const MinimalAssignment: React.FC = () => {
   ]);
   const firstProfileLessonMemoryConfirmed = Boolean(
     firstProfileLessonMemoryKey &&
-      firstProfileLessonMemoryConfirmation &&
-      firstProfileLessonMemoryConfirmation.studentId === firstProfileLessonMemoryKey.studentId &&
-      firstProfileLessonMemoryConfirmation.recordingId ===
-        firstProfileLessonMemoryKey.recordingId &&
-      firstProfileLessonMemoryConfirmation.transcriptId ===
-        firstProfileLessonMemoryKey.transcriptId &&
-      firstProfileLessonMemoryConfirmation.transcriptUpdatedAt ===
-        firstProfileLessonMemoryKey.transcriptUpdatedAt &&
-      !source.transcriptDirty,
+    firstProfileLessonMemoryConfirmation &&
+    firstProfileLessonMemoryConfirmation.studentId === firstProfileLessonMemoryKey.studentId &&
+    firstProfileLessonMemoryConfirmation.recordingId === firstProfileLessonMemoryKey.recordingId &&
+    firstProfileLessonMemoryConfirmation.transcriptId ===
+      firstProfileLessonMemoryKey.transcriptId &&
+    firstProfileLessonMemoryConfirmation.transcriptUpdatedAt ===
+      firstProfileLessonMemoryKey.transcriptUpdatedAt &&
+    !source.transcriptDirty,
   );
   const firstProfileLessonMemoryNeedsUpdate = Boolean(
     firstProfileLessonMemoryConfirmation && !firstProfileLessonMemoryConfirmed,
@@ -1507,12 +1507,7 @@ export const MinimalAssignment: React.FC = () => {
     setActiveStep(
       FOCUSED_STEP_ORDER[Math.min(FOCUSED_STEP_ORDER.length - 1, activeStepIndex + 1)] ?? 'review',
     );
-  }, [
-    activeStep,
-    activeStepIndex,
-    authoring,
-    commitTeacherNotes,
-  ]);
+  }, [activeStep, activeStepIndex, authoring, commitTeacherNotes]);
   const continueDisabled =
     activeStep === 'student'
       ? !hasStartedFlow || !source.selectedStudentId
@@ -1520,7 +1515,7 @@ export const MinimalAssignment: React.FC = () => {
         ? !transcriptReady
         : activeStep === 'create'
           ? !hasAssignmentContent
-          : activeStep === 'review';
+          : false;
   const linkedLesson = useMemo(() => {
     if (!linkedLessonId || !scheduleSurface) return null;
     return scheduleSurface.lessons.find((lesson) => lesson.id === linkedLessonId) ?? null;
@@ -1687,9 +1682,19 @@ export const MinimalAssignment: React.FC = () => {
         saveState={activeAssignmentSession ? 'saved' : 'idle'}
         onStepRequest={handleFocusedStepRequest}
         onBack={handleFocusedBack}
-        onContinue={handleFocusedContinue}
-        continueLabel={activeStep === 'review' ? 'Assignment ready' : 'Confirm and continue'}
-        continueDisabled={continueDisabled}
+        {...(activeStep === 'review'
+          ? {}
+          : {
+              onContinue: handleFocusedContinue,
+              continueLabel: 'Confirm and continue',
+              continueDisabled,
+            })}
+        {...(activeStep === 'review' && jobReady
+          ? {
+              onComplete: handleStartNewAssignmentWithSessionReset,
+              completionLabel: 'Start another assignment',
+            }
+          : {})}
         support={
           jobReady ? (
             <AssignmentSupport>
