@@ -53,7 +53,6 @@ function createDefaultCustomRerunInput(
 }
 
 export interface AdvancedActionsController {
-  showAdvancedActions: boolean;
   showCustomRerun: boolean;
   actionBusy: ActionBusyState;
   actionError: string | null;
@@ -69,7 +68,6 @@ export interface AdvancedActionsController {
   customRerunHasSelection: boolean;
   customRerunSummary: string[];
   form: CustomRerunInput;
-  toggleAdvancedActions: () => void;
   toggleCustomRerun: () => void;
   setFormField: <K extends keyof CustomRerunInput>(field: K, value: CustomRerunInput[K]) => void;
   setPronunciationChunkProvider: (provider: UiPronunciationChunkTtsProvider) => void;
@@ -106,7 +104,6 @@ export function useAdvancedActionsController({
   applyJobStatusTransition,
   refreshResumeJobs,
 }: UseAdvancedActionsControllerParams): AdvancedActionsController {
-  const [showAdvancedActions, setShowAdvancedActions] = useState(false);
   const [showCustomRerun, setShowCustomRerun] = useState(false);
   const [actionBusy, setActionBusy] = useState<ActionBusyState>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -209,7 +206,6 @@ export function useAdvancedActionsController({
     setActionBusy(null);
     setActionError(null);
     setActionSuccess(null);
-    setShowAdvancedActions(false);
     setShowCustomRerun(false);
     setRerunPronunciationChunkProviderDirty(false);
     setForm(createDefaultCustomRerunInput(selectedTtsProvider, jobStatus));
@@ -467,7 +463,6 @@ export function useAdvancedActionsController({
   }, [jobStatus?.jobId, loadJobProvenance]);
 
   return {
-    showAdvancedActions,
     showCustomRerun,
     actionBusy,
     actionError,
@@ -483,7 +478,6 @@ export function useAdvancedActionsController({
     customRerunHasSelection,
     customRerunSummary,
     form,
-    toggleAdvancedActions: () => setShowAdvancedActions((current) => !current),
     toggleCustomRerun: () => setShowCustomRerun((current) => !current),
     setFormField,
     setPronunciationChunkProvider,
@@ -534,28 +528,13 @@ export function AdvancedActionsStage({
     ttsModelOptionsByProvider[provider] ?? [];
 
   return (
-    <StageSection
-      stage={stage}
-      sectionRef={sectionRef}
-      headingRef={headingRef}
-      actions={
-        jobReady ? (
-          <button
-            type="button"
-            className="minimal-secondary"
-            onClick={controller.toggleAdvancedActions}
-          >
-            {controller.showAdvancedActions ? 'Hide advanced actions' : 'Show advanced actions'}
-          </button>
-        ) : undefined
-      }
-    >
+    <StageSection stage={stage} sectionRef={sectionRef} headingRef={headingRef}>
       {!jobReady ? (
         <p className="minimal-help">
           Share the assignment once to unlock updates, audio refreshes, cancellation, and support
           details.
         </p>
-      ) : controller.showAdvancedActions ? (
+      ) : (
         <div className="minimal-stage-layout">
           <div className="minimal-stage-panel">
             <div className="minimal-stage-panel-header">
@@ -979,121 +958,122 @@ export function AdvancedActionsStage({
             {controller.actionSuccess ? (
               <p className="minimal-success">{controller.actionSuccess}</p>
             ) : null}
-            <details className="minimal-details">
-              <summary>Support details</summary>
-              <div className="minimal-section-header">
-                <p className="minimal-help">
-                  See the job, template, profile, memory, and audio chain behind this assignment.
-                </p>
-                <button
-                  type="button"
-                  className="minimal-secondary"
-                  onClick={() => void controller.refreshLineage()}
-                  disabled={controller.jobProvenanceLoading}
-                >
-                  {controller.jobProvenanceLoading ? 'Refreshing...' : 'Refresh lineage'}
-                </button>
-              </div>
-              {controller.jobProvenanceError ? (
-                <p className="minimal-error">{controller.jobProvenanceError}</p>
-              ) : null}
-              {controller.jobProvenance ? (
-                <>
-                  <div className="minimal-meta">
-                    <span>Job ID: {jobStatus?.jobId}</span>
-                    <span>State: {jobStatus?.state}</span>
-                  </div>
-                  <div className="minimal-meta">
-                    <span>Source job: {controller.jobProvenance.job.sourceJobId ?? 'none'}</span>
-                    <span>
-                      Prompt package: {controller.jobProvenance.promptPackage?.id ?? 'none'}
-                    </span>
-                    <span>Draft: {controller.jobProvenance.draft?.id ?? 'none'}</span>
-                  </div>
-                  {controller.jobProvenance.tts ? (
-                    <div className="minimal-meta">
-                      <span>
-                        TTS provider: {controller.jobProvenance.tts.provider ?? 'unknown'}
-                      </span>
-                      <span>
-                        Generated chars: {controller.jobProvenance.tts.generatedCharacters ?? 0}{' '}
-                        (cached: {controller.jobProvenance.tts.cachedCharacters ?? 0})
-                      </span>
-                      <span>
-                        Estimated spend:{' '}
-                        {typeof controller.jobProvenance.tts.estimatedSpendUsd === 'number'
-                          ? `$${controller.jobProvenance.tts.estimatedSpendUsd.toFixed(4)}`
-                          : 'n/a'}
-                      </span>
-                    </div>
-                  ) : null}
-                  {(controller.jobProvenance.pronunciationWarnings ?? []).length ? (
-                    <div className="minimal-alert warning" role="status" aria-live="polite">
-                      <strong>Audio notices</strong>
-                      <p className="minimal-help">
-                        This rerun completed with fallback audio resolution details worth checking.
-                      </p>
-                      <ul>
-                        {(controller.jobProvenance.pronunciationWarnings ?? []).map((warning) => (
-                          <li key={warning.code}>{warning.message}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  ) : null}
-                  {controller.jobProvenance.lineage?.profile?.snapshot?.revisionId ||
-                  controller.jobProvenance.lineage?.template?.snapshot?.revisionId ? (
-                    <div className="minimal-meta">
-                      <span>
-                        Profile revision:{' '}
-                        {controller.jobProvenance.lineage?.profile?.snapshot?.revisionId ??
-                          'unknown'}
-                      </span>
-                      <span>
-                        Template revision:{' '}
-                        {controller.jobProvenance.lineage?.template?.snapshot?.revisionId ??
-                          'unknown'}
-                      </span>
-                    </div>
-                  ) : null}
-                  {controller.jobProvenance.lineage?.bindingAtCreation ? (
-                    <div className="minimal-meta">
-                      <span>
-                        Learner profile at creation:{' '}
-                        {controller.jobProvenance.lineage.bindingAtCreation.profileId}
-                      </span>
-                      <span>
-                        Active from:{' '}
-                        {new Date(
-                          controller.jobProvenance.lineage.bindingAtCreation.effectiveFrom,
-                        ).toLocaleString()}
-                      </span>
-                    </div>
-                  ) : null}
-                  {controller.jobProvenance.actions.length > 0 ? (
-                    <div className="minimal-list">
-                      {controller.jobProvenance.actions.slice(0, 6).map((event) => (
-                        <div key={event.id} className="minimal-list-item">
-                          <span>
-                            {event.actionType} • {event.outcome} •{' '}
-                            {new Date(event.requestedAt).toLocaleString()}
-                          </span>
-                          <span className="minimal-muted">{event.message}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="minimal-muted">No action audit events yet.</p>
-                  )}
-                </>
-              ) : (
-                <p className="minimal-muted">Support details will appear once loaded.</p>
-              )}
-            </details>
           </div>
         </div>
-      ) : (
-        <p className="minimal-help">Open advanced actions when you need reruns or diagnostics.</p>
       )}
     </StageSection>
+  );
+}
+
+export interface AssignmentDiagnosticsProps {
+  jobStatus: JobStatus | null;
+  controller: AdvancedActionsController;
+}
+
+export function AssignmentDiagnostics({ jobStatus, controller }: AssignmentDiagnosticsProps) {
+  return (
+    <>
+      <div className="minimal-section-header">
+        <p className="minimal-help">
+          See the job, template, profile, memory, and audio chain behind this assignment.
+        </p>
+        <button
+          type="button"
+          className="minimal-secondary"
+          onClick={() => void controller.refreshLineage()}
+          disabled={controller.jobProvenanceLoading}
+        >
+          {controller.jobProvenanceLoading ? 'Refreshing...' : 'Refresh lineage'}
+        </button>
+      </div>
+      {controller.jobProvenanceError ? (
+        <p className="minimal-error">{controller.jobProvenanceError}</p>
+      ) : null}
+      {controller.jobProvenance ? (
+        <>
+          <div className="minimal-meta">
+            <span>Job ID: {jobStatus?.jobId}</span>
+            <span>State: {jobStatus?.state}</span>
+          </div>
+          <div className="minimal-meta">
+            <span>Source job: {controller.jobProvenance.job.sourceJobId ?? 'none'}</span>
+            <span>Prompt package: {controller.jobProvenance.promptPackage?.id ?? 'none'}</span>
+            <span>Draft: {controller.jobProvenance.draft?.id ?? 'none'}</span>
+          </div>
+          {controller.jobProvenance.tts ? (
+            <div className="minimal-meta">
+              <span>TTS provider: {controller.jobProvenance.tts.provider ?? 'unknown'}</span>
+              <span>
+                Generated chars: {controller.jobProvenance.tts.generatedCharacters ?? 0} (cached:{' '}
+                {controller.jobProvenance.tts.cachedCharacters ?? 0})
+              </span>
+              <span>
+                Estimated spend:{' '}
+                {typeof controller.jobProvenance.tts.estimatedSpendUsd === 'number'
+                  ? `$${controller.jobProvenance.tts.estimatedSpendUsd.toFixed(4)}`
+                  : 'n/a'}
+              </span>
+            </div>
+          ) : null}
+          {(controller.jobProvenance.pronunciationWarnings ?? []).length ? (
+            <div className="minimal-alert warning" role="status" aria-live="polite">
+              <strong>Audio notices</strong>
+              <p className="minimal-help">
+                This rerun completed with fallback audio resolution details worth checking.
+              </p>
+              <ul>
+                {(controller.jobProvenance.pronunciationWarnings ?? []).map((warning) => (
+                  <li key={warning.code}>{warning.message}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {controller.jobProvenance.lineage?.profile?.snapshot?.revisionId ||
+          controller.jobProvenance.lineage?.template?.snapshot?.revisionId ? (
+            <div className="minimal-meta">
+              <span>
+                Profile revision:{' '}
+                {controller.jobProvenance.lineage?.profile?.snapshot?.revisionId ?? 'unknown'}
+              </span>
+              <span>
+                Template revision:{' '}
+                {controller.jobProvenance.lineage?.template?.snapshot?.revisionId ?? 'unknown'}
+              </span>
+            </div>
+          ) : null}
+          {controller.jobProvenance.lineage?.bindingAtCreation ? (
+            <div className="minimal-meta">
+              <span>
+                Learner profile at creation:{' '}
+                {controller.jobProvenance.lineage.bindingAtCreation.profileId}
+              </span>
+              <span>
+                Active from:{' '}
+                {new Date(
+                  controller.jobProvenance.lineage.bindingAtCreation.effectiveFrom,
+                ).toLocaleString()}
+              </span>
+            </div>
+          ) : null}
+          {controller.jobProvenance.actions.length > 0 ? (
+            <div className="minimal-list">
+              {controller.jobProvenance.actions.slice(0, 6).map((event) => (
+                <div key={event.id} className="minimal-list-item">
+                  <span>
+                    {event.actionType} • {event.outcome} •{' '}
+                    {new Date(event.requestedAt).toLocaleString()}
+                  </span>
+                  <span className="minimal-muted">{event.message}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="minimal-muted">No action audit events yet.</p>
+          )}
+        </>
+      ) : (
+        <p className="minimal-muted">Support details will appear once loaded.</p>
+      )}
+    </>
   );
 }
