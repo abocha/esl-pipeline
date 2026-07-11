@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   deriveAssignmentWorkflow,
   getInvalidatedArtifacts,
-  mapSessionStageToStep,
+  getTeacherNotesCommitDecision,
+  resolveInitialAssignmentStep,
 } from './assignment-workflow';
 
 describe('assignment workflow model', () => {
@@ -76,10 +77,42 @@ describe('assignment workflow model', () => {
       previewReady: false,
       published: false,
     };
-    expect(mapSessionStageToStep('source', empty)).toBe('student');
-    expect(mapSessionStageToStep('source', { ...empty, selectedStudent: true })).toBe('source');
-    expect(mapSessionStageToStep('context', empty)).toBe('context');
-    expect(mapSessionStageToStep('assignment', empty)).toBe('create');
-    expect(mapSessionStageToStep('review', empty)).toBe('review');
+    expect(resolveInitialAssignmentStep('source', empty)).toBe('student');
+    expect(resolveInitialAssignmentStep('source', { ...empty, selectedStudent: true })).toBe(
+      'source',
+    );
+    expect(resolveInitialAssignmentStep('context', empty)).toBe('context');
+    expect(resolveInitialAssignmentStep('assignment', empty)).toBe('create');
+    expect(resolveInitialAssignmentStep('review', empty)).toBe('review');
+  });
+
+  it('treats teacher notes with equivalent trimmed content as unchanged', () => {
+    expect(
+      getTeacherNotesCommitDecision({
+        currentNotes: ' Focus on articles. ',
+        committedNotes: 'Focus on articles.',
+        hasDownstreamAssignment: true,
+      }),
+    ).toBe('unchanged');
+  });
+
+  it('commits changed teacher notes when no downstream assignment exists', () => {
+    expect(
+      getTeacherNotesCommitDecision({
+        currentNotes: 'Focus on articles.',
+        committedNotes: '',
+        hasDownstreamAssignment: false,
+      }),
+    ).toBe('commit');
+  });
+
+  it('confirms invalidation before committing changed notes with downstream assignment', () => {
+    expect(
+      getTeacherNotesCommitDecision({
+        currentNotes: 'Focus on articles.',
+        committedNotes: 'Focus on stress.',
+        hasDownstreamAssignment: true,
+      }),
+    ).toBe('confirm-and-invalidate');
   });
 });
