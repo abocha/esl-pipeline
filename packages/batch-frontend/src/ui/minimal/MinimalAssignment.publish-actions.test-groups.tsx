@@ -532,7 +532,7 @@ export function registerJobActionTests() {
         await waitFor(() => {
           expect(api.rerunJob).toHaveBeenCalledWith('job-1', { republishOnly: true });
           expect(screen.getByText('Republish queued for follow-up job')).toBeTruthy();
-          expect(screen.getByRole('button', { name: /Hide advanced actions/i })).toBeTruthy();
+          expect(screen.queryByRole('button', { name: /Hide advanced actions/i })).toBeNull();
           expect(screen.getByRole('button', { name: /Refresh actions/i })).toBeTruthy();
           expect(screen.getAllByText(/Job ID: job-2/i).length).toBeGreaterThan(0);
         });
@@ -609,7 +609,14 @@ export function registerJobActionTests() {
         expect(
           screen.queryByText(/Cancel is only available for queued or running jobs\./i),
         ).toBeNull();
-        expect(within(actionsSection).getByText(/^Support details$/i)).toBeTruthy();
+        const support = screen.getByText(/^Support details$/i).closest('details')!;
+        expect(actionsSection.contains(support)).toBe(false);
+        expect(within(support).queryByRole('region', { name: /Quick reruns/i })).toBeNull();
+        expect(within(support).queryByRole('button', { name: /^Custom rerun$/i })).toBeNull();
+        expect(within(actionsSection).getByRole('region', { name: /Quick reruns/i })).toBeTruthy();
+        expect(
+          within(actionsSection).getByRole('button', { name: /^Custom rerun$/i }),
+        ).toBeTruthy();
       },
       INTEGRATION_TEST_TIMEOUT_MS,
     );

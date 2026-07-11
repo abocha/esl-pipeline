@@ -39,7 +39,11 @@ import { LessonSourceStep } from '../assignments/steps/LessonSourceStep';
 import { ReviewShareStep } from '../assignments/steps/ReviewShareStep';
 import { StudentStep } from '../assignments/steps/StudentStep';
 import { TeachingContextStep } from '../assignments/steps/TeachingContextStep';
-import { AdvancedActionsStage, useAdvancedActionsController } from './MinimalAssignment.advanced';
+import {
+  AdvancedActionsStage,
+  AssignmentDiagnostics,
+  useAdvancedActionsController,
+} from './MinimalAssignment.advanced';
 import { useMinimalAssignmentAuthoringController } from './MinimalAssignment.authoring';
 import { useMinimalAssignmentContextController } from './MinimalAssignment.context';
 import {
@@ -1478,8 +1482,7 @@ export const MinimalAssignment: React.FC = () => {
     async (requestedStep: AssignmentStepId) => {
       const requested = focusedWorkflowSteps.find((step) => step.id === requestedStep);
       const isForwardTeachingContextRequest =
-        activeStep === 'context' &&
-        FOCUSED_STEP_ORDER.indexOf(requestedStep) > activeStepIndex;
+        activeStep === 'context' && FOCUSED_STEP_ORDER.indexOf(requestedStep) > activeStepIndex;
       if (
         requested?.status === 'locked' &&
         FOCUSED_STEP_ORDER.indexOf(requestedStep) > activeStepIndex
@@ -1592,11 +1595,7 @@ export const MinimalAssignment: React.FC = () => {
       : hasAssignmentContent
         ? 'current'
         : 'locked';
-    const advancedStatus: WorkflowStageStatus = jobReady
-      ? advancedActions.showAdvancedActions
-        ? 'current'
-        : 'available'
-      : 'locked';
+    const advancedStatus: WorkflowStageStatus = jobReady ? 'current' : 'locked';
 
     return [
       {
@@ -1677,7 +1676,6 @@ export const MinimalAssignment: React.FC = () => {
     source.recording,
     startStageMode,
     reviewReady,
-    advancedActions.showAdvancedActions,
     source.selectedStudentId,
     transcriptReady,
   ]);
@@ -1717,27 +1715,7 @@ export const MinimalAssignment: React.FC = () => {
         support={
           jobReady ? (
             <AssignmentSupport>
-              <AdvancedActionsStage
-                stage={advancedStage}
-                sectionRef={advancedSectionRef}
-                headingRef={advancedHeadingRef}
-                jobReady={Boolean(jobReady)}
-                jobStatus={jobStatus}
-                controller={advancedActions}
-                onRefreshActions={() => void loadJobOptions()}
-                jobOptionsError={jobOptionsError}
-                ttsProviders={ttsProviders}
-                ttsModelOptionsByProvider={ttsModelOptionsByProvider}
-                elevenlabsStandardModelOptions={elevenlabsStandardModelOptions}
-                pronunciationChunkProviders={FALLBACK_PRONUNCIATION_CHUNK_TTS_PROVIDERS}
-                studyTextStrategies={
-                  jobOptions?.ttsStrategies?.filter(isUiPublishTtsStrategy) ?? [
-                    'auto',
-                    'dialogue',
-                    'tts',
-                  ]
-                }
-              />
+              <AssignmentDiagnostics jobStatus={jobStatus} controller={advancedActions} />
             </AssignmentSupport>
           ) : null
         }
@@ -1988,6 +1966,30 @@ export const MinimalAssignment: React.FC = () => {
             />
           </ReviewShareStep>
         </div>
+
+        {jobReady ? (
+          <AdvancedActionsStage
+            stage={advancedStage}
+            sectionRef={advancedSectionRef}
+            headingRef={advancedHeadingRef}
+            jobReady
+            jobStatus={jobStatus}
+            controller={advancedActions}
+            onRefreshActions={() => void loadJobOptions()}
+            jobOptionsError={jobOptionsError}
+            ttsProviders={ttsProviders}
+            ttsModelOptionsByProvider={ttsModelOptionsByProvider}
+            elevenlabsStandardModelOptions={elevenlabsStandardModelOptions}
+            pronunciationChunkProviders={FALLBACK_PRONUNCIATION_CHUNK_TTS_PROVIDERS}
+            studyTextStrategies={
+              jobOptions?.ttsStrategies?.filter(isUiPublishTtsStrategy) ?? [
+                'auto',
+                'dialogue',
+                'tts',
+              ]
+            }
+          />
+        ) : null}
       </AssignmentWorkflow>
     </div>
   );

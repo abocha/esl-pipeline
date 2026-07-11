@@ -92,7 +92,14 @@ describe('MinimalAssignment - staged workflow UI', () => {
 
       await screen.findAllByText(/Job ID: job-1/i);
       expect(screen.getAllByText(/Support details/i).length).toBeGreaterThan(0);
-      expect(screen.getByRole('button', { name: /Show advanced actions/i })).toBeTruthy();
+      expect(screen.queryByRole('button', { name: /Show advanced actions/i })).toBeNull();
+      const advancedActions = screen
+        .getByRole('heading', { name: /Advanced actions/i })
+        .closest('section')!;
+      expect(within(advancedActions).getByRole('region', { name: /Quick reruns/i })).toBeTruthy();
+      const support = screen.getByText(/^Support details$/i).closest('details')!;
+      expect(within(support).queryByRole('region', { name: /Quick reruns/i })).toBeNull();
+      expect(within(support).queryByRole('button', { name: /^Custom rerun$/i })).toBeNull();
     },
     INTEGRATION_TEST_TIMEOUT_MS,
   );
@@ -654,8 +661,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
     expect(closeSse).not.toHaveBeenCalled();
   });
 
-  it('keeps advanced controls collapsed until the teacher opens them', async () => {
-    const user = createMinimalUser();
+  it('shows advanced controls directly after a shared assignment exists', async () => {
     await renderResumedAssignment(
       {
         status: {
@@ -665,11 +671,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
       { waitFor: 'promptReady' },
     );
 
-    expect(screen.getByRole('button', { name: /Show advanced actions/i })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: /Refresh actions/i })).toBeNull();
-
-    await user.click(screen.getByRole('button', { name: /Show advanced actions/i }));
-
+    expect(screen.queryByRole('button', { name: /Show advanced actions/i })).toBeNull();
     expect(await screen.findByRole('button', { name: /Refresh actions/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /Republish current draft/i })).toBeTruthy();
   });
