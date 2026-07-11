@@ -23,12 +23,14 @@
 ### Task 1: Lock GPT-5.6 Runtime Policy with Failing Tests
 
 **Files:**
+
 - Modify: `packages/batch-backend/tests/config.env.test.ts`
 - Modify: `packages/batch-backend/tests/application.generation-request-envelope.test.ts`
 - Modify: `packages/batch-backend/src/config/env.ts`
 - Modify: `packages/batch-backend/src/application/generation-request-envelope.ts`
 
 **Interfaces:**
+
 - Consumes: `loadConfig()` and `createGenerationRequestEnvelope()`.
 - Produces: two-model OpenAI defaults and the approved `reasoningEffort` mapping.
 
@@ -69,6 +71,7 @@ git commit -m "feat(generation): migrate OpenAI workloads to GPT-5.6"
 ### Task 2: Align Offline Evaluation Fixtures and Prompt Contract
 
 **Files:**
+
 - Modify: `packages/batch-backend/tests/application.generation-evaluator.test.ts`
 - Modify: `packages/batch-backend/src/application/generation-eval-fixtures.ts`
 - Inspect: `docs/prompt-gallery/templates/hw_prompt_definitive.md`
@@ -79,6 +82,7 @@ git commit -m "feat(generation): migrate OpenAI workloads to GPT-5.6"
 - Inspect: `packages/batch-backend/src/application/profile-candidate-promotion.ts`
 
 **Interfaces:**
+
 - Consumes: `GENERATION_EVAL_FIXTURES` and the existing envelope/schema builders.
 - Produces: representative offline fixtures on the same model mapping as runtime.
 
@@ -130,6 +134,7 @@ Include any prompt and its focused test in the same commit only if Step 3 found 
 ### Task 3: Align Active Documentation and Validate the Branch
 
 **Files:**
+
 - Modify: `.env.example`
 - Modify: `packages/batch-backend/README.md`
 - Modify: `docs/reference/GENERATION_PROVIDER_POLICY.md`
@@ -138,6 +143,7 @@ Include any prompt and its focused test in the same commit only if Step 3 found 
 - Modify: generated documentation indexes only through the repository generator.
 
 **Interfaces:**
+
 - Consumes: the runtime policy from Tasks 1-2.
 - Produces: active operator and maintainer guidance matching runtime behavior.
 
@@ -181,10 +187,12 @@ git commit -m "docs(generation): document GPT-5.6 workload policy"
 ### Task 4: One Paid Live Evaluation and PR Publication
 
 **Files:**
+
 - Read: retained live-evaluation report under `tmp/` as printed by the command.
 - Modify: `.github/pull_request_template.md` only as a temporary PR body file if the repository workflow requires filling it in; do not commit unrelated template edits.
 
 **Interfaces:**
+
 - Consumes: a fully passing branch and configured `OPENAI_API_KEY`/live-eval authorization.
 - Produces: one reviewed live report and, only on success, a pushed branch and ready PR with exactly one release label.
 

@@ -10,14 +10,14 @@ contracts.
 
 Active OpenAI workloads use exactly two configured model IDs:
 
-| Workload | Model | Reasoning effort | Text verbosity |
-| --- | --- | --- | --- |
-| Assignment draft | `gpt-5.6-sol` | `medium` | `medium` |
-| Profile revision | `gpt-5.6-luna` | `medium` | `low` |
-| Student-memory snapshot | `gpt-5.6-luna` | `medium` | `low` |
-| Lesson memory | `gpt-5.6-luna` | `low` | `low` |
-| Homework memory | `gpt-5.6-luna` | `low` | `low` |
-| Profile candidate patch | `gpt-5.6-luna` | `low` | `low` |
+| Workload                | Model          | Reasoning effort | Text verbosity |
+| ----------------------- | -------------- | ---------------- | -------------- |
+| Assignment draft        | `gpt-5.6-sol`  | `medium`         | `medium`       |
+| Profile revision        | `gpt-5.6-luna` | `medium`         | `low`          |
+| Student-memory snapshot | `gpt-5.6-luna` | `medium`         | `low`          |
+| Lesson memory           | `gpt-5.6-luna` | `low`            | `low`          |
+| Homework memory         | `gpt-5.6-luna` | `low`            | `low`          |
+| Profile candidate patch | `gpt-5.6-luna` | `low`            | `low`          |
 
 All OpenAI primary, fallback, tertiary, and allowlist defaults collapse to these two models. The
 assignment/default generation role resolves to Sol; every student-memory and profile role resolves
