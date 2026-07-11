@@ -673,7 +673,43 @@ describe('MinimalAssignment - staged workflow UI', () => {
 
     expect(screen.queryByRole('button', { name: /Show advanced actions/i })).toBeNull();
     expect(await screen.findByRole('button', { name: /Refresh actions/i })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /Republish current draft/i })).toBeTruthy();
+    const advancedActions = screen
+      .getByRole('heading', { name: /Advanced actions/i })
+      .closest('section')!;
+    const advancedButtons = within(advancedActions).getAllByRole('button');
+    expect(advancedButtons).not.toHaveLength(0);
+    for (const button of advancedButtons) {
+      expect(button.className).not.toContain('minimal-primary');
+      expect(button.className).not.toContain('minimal-secondary');
+      expect(button.className).toContain('product-button');
+    }
+    expect(
+      within(advancedActions).getByRole('button', { name: /Republish current draft/i }),
+    ).toBeTruthy();
+  });
+
+  it('marks the active advanced operation busy and keeps every rerun disabled', async () => {
+    const user = createMinimalUser();
+    let resolveRerun!: (value: Awaited<ReturnType<typeof api.rerunJob>>) => void;
+    vi.mocked(api.rerunJob).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveRerun = resolve;
+      }),
+    );
+    await renderPublishedAssignment();
+    openAdvancedActions();
+
+    await user.click(screen.getByRole('button', { name: /Republish current draft/i }));
+
+    const busyButtons = screen.getAllByRole('button', { name: /Queuing rerun/i });
+    expect(busyButtons).not.toHaveLength(0);
+    for (const button of busyButtons) {
+      expect(button.getAttribute('aria-busy')).toBe('true');
+      expect((button as HTMLButtonElement).disabled).toBe(true);
+    }
+
+    resolveRerun({ success: true, message: 'Rerun queued', jobId: 'job-1', actionType: 'rerun' });
+    await screen.findByText('Rerun queued');
   });
 
   it('shows support-facing audio notices in advanced support details', async () => {

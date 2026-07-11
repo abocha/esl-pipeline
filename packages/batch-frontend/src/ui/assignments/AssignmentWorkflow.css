@@ -61,7 +61,7 @@
   min-width: 0;
 }
 .assignment-workflow__progress li:not(:last-child)::after {
-  content: "";
+  content: '';
   position: absolute;
   top: 50%;
   right: -1px;
@@ -84,7 +84,7 @@
   text-align: left;
   cursor: pointer;
 }
-.assignment-workflow__progress button[aria-current="step"] {
+.assignment-workflow__progress button[aria-current='step'] {
   border-bottom-color: var(--cs-action);
   background: color-mix(in srgb, var(--cs-selection) 48%, transparent);
   color: var(--cs-action);
@@ -107,7 +107,7 @@
   width: 16px;
   height: 16px;
 }
-[data-status="complete"] .assignment-workflow__step-icon {
+[data-status='complete'] .assignment-workflow__step-icon {
   border-color: var(--cs-success);
   color: var(--cs-success);
 }
@@ -143,7 +143,7 @@
   border-radius: var(--cs-radius-surface);
   background: var(--cs-surface);
 }
-.assignment-workflow__step-mount[data-active="false"] {
+.assignment-workflow__step-mount[data-active='false'] {
   position: fixed;
   left: -100000px;
   top: 0;
@@ -168,6 +168,24 @@
 }
 .assignment-workflow__support {
   margin-top: 1.5rem;
+}
+
+.assignment-advanced-actions {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding: clamp(1rem, 2.5vw, 1.5rem);
+  border: 1px solid var(--cs-border);
+  border-radius: var(--cs-radius-surface);
+  background: var(--cs-surface);
+}
+.assignment-advanced-actions__quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.assignment-advanced-actions :is(input, select) {
+  border-radius: var(--cs-radius-control);
 }
 
 /* Existing controller-owned sections retain behavior while adopting the focused canvas. */
