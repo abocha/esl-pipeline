@@ -5,7 +5,7 @@
 - Audience: founder-maintainer and implementing agents.
 - Read Time: 5 minutes.
 - Authority Level: canonical provider/model/quota policy.
-- Last Verified Against: 2026-06-21 repo state.
+- Last Verified Against: 2026-07-11 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly or after provider policy/availability changes.
 - Status: `reference`.
@@ -25,23 +25,30 @@
 
 ### OpenAI
 
-- Current production-default activation remains unchanged until a credentialed live evaluation report
-  is reviewed. `GEN_OPENAI_TARGET_MODELS_ENABLED` defaults to `false` and is the explicit operator
-  gate; it is not a paywall or user-plan control.
-- Evaluated target ladder (only after that gate is deliberately enabled):
-  - assignment creation: `gpt-5.5`
-  - lesson/homework/snapshot memory and profile drafts: `gpt-5.4-mini`
-  - memory fallback and the closed `apply`/`no_change` candidate-patch decision: `gpt-5.4-nano`
+- Built-in workload policy:
+  - assignment creation: `gpt-5.6-sol` with `medium` reasoning and `medium` text verbosity
+  - student-memory snapshot and profile revision: `gpt-5.6-luna` with `medium` reasoning and `low`
+    text verbosity
+  - lesson memory, homework memory, and the closed `apply`/`no_change` candidate-patch decision:
+    `gpt-5.6-luna` with `low` reasoning and `low` text verbosity
+- `GEN_OPENAI_TARGET_MODELS_ENABLED` remains a compatibility and operator-observability signal. Both
+  flag states now resolve to the GPT-5.6 built-in policy; explicit `GEN_OPENAI_MODEL_*` overrides
+  remain authoritative. The flag is not a paywall or user-plan control.
 - direct draft generation:
-  - primary: `gpt-5.4-mini`
-  - fallback: `gpt-5.4-nano`
+  - primary: `gpt-5.6-sol`
+  - fallback: `gpt-5.6-luna`
 - student-memory extraction:
-  - primary: `gpt-5.4-nano`
-  - fallback: `gpt-5.4-mini`
+  - primary: `gpt-5.6-luna`
+  - fallback: `gpt-5.6-luna`
 - profile revision drafting:
-  - primary: `gpt-5.4`
-  - fallback: `gpt-5.4-mini`
-  - tertiary fallback: `gpt-5.4-nano`
+  - primary: `gpt-5.6-luna`
+  - fallback: `gpt-5.6-luna`
+  - tertiary fallback: `gpt-5.6-luna`
+
+The prompt baseline follows the current
+[GPT-5.6 model guide](https://developers.openai.com/api/docs/guides/latest-model): preserve explicit
+outcomes, constraints, evidence rules, success criteria, and output contracts; change working
+prompts only for a measured failure or concrete contradiction.
 
 ### Google AI Studio
 
