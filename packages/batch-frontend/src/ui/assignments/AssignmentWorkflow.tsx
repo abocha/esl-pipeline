@@ -15,9 +15,11 @@ export interface AssignmentWorkflowProps {
   support?: React.ReactNode;
   onStepRequest: (step: AssignmentStepId) => void;
   onBack: () => void;
-  onContinue: () => void;
-  continueLabel: string;
+  onContinue?: () => void;
+  continueLabel?: string;
   continueDisabled?: boolean;
+  onComplete?: () => void;
+  completionLabel?: string;
   children: React.ReactNode;
 }
 
@@ -47,6 +49,8 @@ export function AssignmentWorkflow({
   onContinue,
   continueLabel,
   continueDisabled = false,
+  onComplete,
+  completionLabel,
   children,
 }: AssignmentWorkflowProps) {
   const active = steps.find((step) => step.id === activeStep) ?? steps[0];
@@ -107,9 +111,13 @@ export function AssignmentWorkflow({
         <ProductButton variant="quiet" icon={<ArrowLeft />} onClick={onBack}>
           Back
         </ProductButton>
-        <ProductButton onClick={onContinue} disabled={continueDisabled}>
-          {continueLabel}
-        </ProductButton>
+        {onComplete && completionLabel ? (
+          <ProductButton onClick={onComplete}>{completionLabel}</ProductButton>
+        ) : onContinue && continueLabel ? (
+          <ProductButton onClick={onContinue} disabled={continueDisabled}>
+            {continueLabel}
+          </ProductButton>
+        ) : null}
       </footer>
 
       {support ? <div className="assignment-workflow__support">{support}</div> : null}
