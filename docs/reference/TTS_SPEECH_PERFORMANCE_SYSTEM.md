@@ -5,7 +5,7 @@
 - Audience: maintainers, operators, and AI agents changing TTS behavior.
 - Read Time: 7 minutes.
 - Authority Level: target runtime contract for the speech-performance rollout.
-- Last Verified Against: 2026-06-02 repo state.
+- Last Verified Against: 2026-07-12 repo state.
 - Owner: founder-maintainer + backend/orchestrator maintainers.
 - Review Cadence: after TTS provider, prompt, or manifest contract changes.
 - Status: `active`.
@@ -203,6 +203,13 @@ audio/pronunciation/<hash>/<assignment title> - Pronunciation.mp3
 Before upload, primary MP3 exports receive ID3 `title` metadata matching the readable basename and
 ID3 `artist` metadata set to `English with Andrei`. Pronunciation item clips remain hash-addressed
 under `audio/pronunciation-item/`; HTML publishing may embed them for interactive practice.
+
+For `shadow_sentence`, the current runtime emits exactly one item-level `Word` clip for each
+authored word drill. It does not derive a duplicate `Natural` clip from the shadow sentence. Natural
+sentence audio is generated only when the parsed pronunciation focus contains a distinct
+`naturalSentence`. Previously published manifests that contain duplicate item clips remain
+renderable for backward compatibility; this rule controls newly generated audio rather than
+rewriting legacy artifacts.
 
 Telegram sharing exposes the study-text recording and includes `Listen 2: Pronunciation` only when
 the assignment has a pronunciation `primaryClip`. Chunk-only pronunciation artifacts must not be
