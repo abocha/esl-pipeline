@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [9.9.0] - 2026-07-11
+
+### Changed
+
+- Automated release from PR #130: feat(generation): migrate OpenAI workloads to GPT-5.6 (https://github.com/abocha/esl-pipeline/pull/130)
+
 ## [9.8.0] - 2026-07-10
 
 ### Changed
