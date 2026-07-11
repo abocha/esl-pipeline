@@ -78,7 +78,7 @@ export const GENERATION_EVAL_FIXTURES: readonly GenerationEvalFixture[] = [
   {
     id: 'assignment-v1',
     workload: 'assignment_draft',
-    model: 'gpt-5.5',
+    model: 'gpt-5.6-sol',
     instructions: GENERATION_EVAL_ASSIGNMENT_TEMPLATE_BASELINE.content,
     templateBaseline: {
       path: GENERATION_EVAL_ASSIGNMENT_TEMPLATE_BASELINE.path,
@@ -141,7 +141,7 @@ export const GENERATION_EVAL_FIXTURES: readonly GenerationEvalFixture[] = [
   {
     id: 'lesson-memory-v1',
     workload: 'lesson_memory',
-    model: 'gpt-5.4-mini',
+    model: 'gpt-5.6-luna',
     instructions: 'Extract only grounded durable lesson memory; omit unsupported claims.',
     sources: [
       {
@@ -167,7 +167,7 @@ export const GENERATION_EVAL_FIXTURES: readonly GenerationEvalFixture[] = [
   {
     id: 'homework-memory-v1',
     workload: 'homework_memory',
-    model: 'gpt-5.4-mini',
+    model: 'gpt-5.6-luna',
     instructions: 'Extract canonical memory from this published assignment only.',
     sources: [
       {
@@ -193,7 +193,7 @@ export const GENERATION_EVAL_FIXTURES: readonly GenerationEvalFixture[] = [
   {
     id: 'snapshot-v1',
     workload: 'student_memory_snapshot',
-    model: 'gpt-5.4-mini',
+    model: 'gpt-5.6-luna',
     instructions: 'Synthesize only grounded durable learner memory across the selected history.',
     sources: [
       {
@@ -225,7 +225,7 @@ export const GENERATION_EVAL_FIXTURES: readonly GenerationEvalFixture[] = [
   {
     id: 'profile-draft-v1',
     workload: 'profile_revision',
-    model: 'gpt-5.4-mini',
+    model: 'gpt-5.6-luna',
     instructions: 'Draft a foundational profile using only the selected facts.',
     sources: [
       {
@@ -260,7 +260,7 @@ export const GENERATION_EVAL_FIXTURES: readonly GenerationEvalFixture[] = [
   {
     id: 'candidate-patch-v1',
     workload: 'profile_candidate_patch',
-    model: 'gpt-5.4-nano',
+    model: 'gpt-5.6-luna',
     instructions: 'Return only apply/no_change for the selected approved candidate IDs.',
     sources: [
       { id: 'base-profile', label: 'BASE_PROFILE', content: '{"teacherNotes":"Preserve."}' },
