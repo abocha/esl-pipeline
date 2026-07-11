@@ -1477,22 +1477,41 @@ export const MinimalAssignment: React.FC = () => {
   const handleFocusedStepRequest = useCallback(
     async (requestedStep: AssignmentStepId) => {
       const requested = focusedWorkflowSteps.find((step) => step.id === requestedStep);
+      const isForwardTeachingContextRequest =
+        activeStep === 'context' &&
+        FOCUSED_STEP_ORDER.indexOf(requestedStep) > activeStepIndex;
       if (
         requested?.status === 'locked' &&
         FOCUSED_STEP_ORDER.indexOf(requestedStep) > activeStepIndex
       ) {
         return;
       }
-      if (
-        activeStep === 'context' &&
-        FOCUSED_STEP_ORDER.indexOf(requestedStep) > activeStepIndex &&
-        !(await commitTeacherNotes())
-      ) {
-        return;
+      if (isForwardTeachingContextRequest) {
+        const invalidatesDownstreamAssignment =
+          getTeacherNotesCommitDecision({
+            currentNotes: teacherNotes,
+            committedNotes: committedTeacherNotesRef.current,
+            hasDownstreamAssignment: hasAssignmentContent,
+          }) === 'confirm-and-invalidate';
+        if (!(await commitTeacherNotes())) return;
+        if (invalidatesDownstreamAssignment) {
+          setActiveStep(
+            FOCUSED_STEP_ORDER[Math.min(FOCUSED_STEP_ORDER.length - 1, activeStepIndex + 1)] ??
+              'create',
+          );
+          return;
+        }
       }
       setActiveStep(requestedStep);
     },
-    [activeStep, activeStepIndex, commitTeacherNotes, focusedWorkflowSteps],
+    [
+      activeStep,
+      activeStepIndex,
+      commitTeacherNotes,
+      focusedWorkflowSteps,
+      hasAssignmentContent,
+      teacherNotes,
+    ],
   );
   const handleFocusedBack = useCallback(() => {
     setActiveStep(FOCUSED_STEP_ORDER[Math.max(0, activeStepIndex - 1)] ?? 'student');

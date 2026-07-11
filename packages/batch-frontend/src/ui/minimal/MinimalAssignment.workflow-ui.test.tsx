@@ -320,6 +320,50 @@ describe('MinimalAssignment - staged workflow UI', () => {
     ).toBe('Focus on articles.');
   });
 
+  it('lands on Create when a confirmed teacher-note commit invalidates the requested Review step', async () => {
+    const confirmSpy = vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
+    const user = createMinimalUser();
+    const session = makeAssignmentSession({
+      id: 'session-teacher-notes-review',
+      studentId: 'student-alex',
+      recordingId: 'rec-1',
+      transcriptId: 'tx-1',
+      promptPackageId: 'pkg-1',
+      draftId: 'draft-1',
+      currentStage: 'review',
+    });
+    vi.mocked(api.listAssignmentSessions).mockResolvedValueOnce({
+      sessions: [session],
+      total: 1,
+      limit: 20,
+    });
+    vi.mocked(api.updateAssignmentSession).mockImplementation(async (id, patch) =>
+      makeAssignmentSession({ ...session, id, ...patch }),
+    );
+    globalThis.history.replaceState(null, '', '/?sessionId=session-teacher-notes-review');
+    renderMinimalAssignment();
+    await screen.findByRole('button', { name: /^Generate assignment$/i });
+    await user.click(screen.getByRole('button', { name: /Teaching context/i }));
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: /Teaching context/i }).getAttribute('aria-current'),
+      ).toBe('step'),
+    );
+    await user.type(screen.getByRole('textbox', { name: /Teacher notes/i }), 'Focus on articles.');
+
+    await user.click(screen.getByRole('button', { name: /Review & share/i }));
+
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /Create/i }).getAttribute('aria-current')).toBe(
+        'step',
+      ),
+    );
+    expect(
+      screen.getByRole('button', { name: /Review & share/i }).getAttribute('aria-current'),
+    ).toBeNull();
+  });
+
   it('does not move or scroll the new-assignment workflow after upload completes', async () => {
     const user = createMinimalUser();
     const scrollIntoView = vi.spyOn(HTMLElement.prototype, 'scrollIntoView');
