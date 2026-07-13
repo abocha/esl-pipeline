@@ -41,6 +41,15 @@ describe('AssignmentWorkflow responsive contract', () => {
     expect(css).toContain('@media (max-width: 900px)');
     expect(css).toContain('@media (max-width: 620px)');
     expect(css).toContain('grid-template-columns: 1fr');
+    expect(css).toContain('min-height: var(--cs-control-primary)');
+  });
+
+  it('does not use off-screen positioning to hide inactive workflow steps', () => {
+    const cssPath = join(process.cwd(), 'src/ui/assignments/AssignmentWorkflow.css');
+    const css = readFileSync(cssPath, 'utf8');
+
+    expect(css).not.toContain(".assignment-workflow__step-mount[data-active='false']");
+    expect(css).not.toContain('left: -100000px');
   });
 
   it('sticks desktop progress to the viewport top after the desktop toolbar is removed', () => {
