@@ -1,6 +1,25 @@
 export const FRONTEND_SANDBOX_MODE = 'mock-auth';
 export const FRONTEND_SANDBOX_ACCESS_TOKEN = 'sandbox-access-token';
 
+export type FrontendSandboxScenario =
+  | 'default'
+  | 'step-one-no-recent'
+  | 'step-one-resume-states'
+  | 'step-one-resume-error'
+  | 'step-one-no-learners'
+  | 'step-one-learner-error'
+  | 'step-one-slow';
+
+const frontendSandboxScenarios = new Set<FrontendSandboxScenario>([
+  'default',
+  'step-one-no-recent',
+  'step-one-resume-states',
+  'step-one-resume-error',
+  'step-one-no-learners',
+  'step-one-learner-error',
+  'step-one-slow',
+]);
+
 export interface FrontendSandboxEnv {
   DEV?: boolean;
   PROD?: boolean;
@@ -17,6 +36,13 @@ export function isFrontendSandboxEnabled(env: FrontendSandboxEnv = currentViteEn
     env.PROD !== true &&
     env.VITE_BATCH_FRONTEND_SANDBOX === FRONTEND_SANDBOX_MODE
   );
+}
+
+export function readFrontendSandboxScenario(search: string): FrontendSandboxScenario {
+  const scenario = new URLSearchParams(search).get('sandboxScenario');
+  return scenario && frontendSandboxScenarios.has(scenario as FrontendSandboxScenario)
+    ? (scenario as FrontendSandboxScenario)
+    : 'default';
 }
 
 export function getFrontendSandboxUser() {

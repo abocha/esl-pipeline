@@ -1,8 +1,12 @@
 import type { InternalAxiosRequestConfig } from 'axios';
 import { AxiosError } from 'axios';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createFrontendSandboxApiAdapter } from './frontend-sandbox-api';
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 function requestConfig(
   method: string,
@@ -392,5 +396,92 @@ describe('frontend sandbox API adapter', () => {
         },
       },
     });
+  });
+
+  it('uses the default Step 1 seeded responses when no scenario is selected', async () => {
+    const adapter = createFrontendSandboxApiAdapter();
+
+    const students = await adapter(requestConfig('get', '/api/config/students'));
+    const jobs = await adapter(requestConfig('get', '/api/user/jobs'));
+    const sessions = await adapter(requestConfig('get', '/api/user/assignment-sessions'));
+
+    expect(students.data.students).toHaveLength(3);
+    expect(jobs.data.jobs).toEqual([expect.objectContaining({ state: 'succeeded' })]);
+    expect(sessions.data.sessions).toEqual([expect.objectContaining({ currentStage: 'context' })]);
+  });
+
+  it('returns empty recent work for the no-recent Step 1 scenario', async () => {
+    const adapter = createFrontendSandboxApiAdapter({ scenario: 'step-one-no-recent' });
+
+    await expect(adapter(requestConfig('get', '/api/user/jobs'))).resolves.toMatchObject({
+      data: { jobs: [], total: 0 },
+    });
+    await expect(adapter(requestConfig('get', '/api/user/assignment-sessions'))).resolves.toMatchObject({
+      data: { sessions: [], total: 0 },
+    });
+  });
+
+  it('returns every Step 1 resume status alongside a resumable session', async () => {
+    const adapter = createFrontendSandboxApiAdapter({ scenario: 'step-one-resume-states' });
+
+    const jobs = await adapter(requestConfig('get', '/api/user/jobs'));
+    const sessions = await adapter(requestConfig('get', '/api/user/assignment-sessions'));
+
+    expect(jobs.data.jobs.map((job: { state: string }) => job.state)).toEqual([
+      'queued',
+      'running',
+      'awaiting_approval',
+      'succeeded',
+      'succeeded',
+      'failed',
+    ]);
+    expect(jobs.data.jobs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ jobId: 'job-sandbox-published', htmlUrl: expect.any(String) }),
+        expect.objectContaining({ jobId: 'job-sandbox-unpublished', htmlUrl: null }),
+      ]),
+    );
+    expect(sessions.data.sessions).toEqual([
+      expect.objectContaining({ id: 'session-sandbox-resume', currentStage: 'context' }),
+    ]);
+  });
+
+  it('returns contextual sandbox collection errors for the error scenarios', async () => {
+    const recentWorkAdapter = createFrontendSandboxApiAdapter({ scenario: 'step-one-resume-error' });
+    const learnerAdapter = createFrontendSandboxApiAdapter({ scenario: 'step-one-learner-error' });
+
+    await expect(recentWorkAdapter(requestConfig('get', '/api/user/jobs'))).rejects.toThrow(
+      'Sandbox recent work is unavailable for this scenario.',
+    );
+    await expect(learnerAdapter(requestConfig('get', '/api/config/students'))).rejects.toThrow(
+      'Sandbox learners are unavailable for this scenario.',
+    );
+  });
+
+  it('returns an empty learner collection for the no-learners Step 1 scenario', async () => {
+    const adapter = createFrontendSandboxApiAdapter({ scenario: 'step-one-no-learners' });
+
+    await expect(adapter(requestConfig('get', '/api/config/students'))).resolves.toMatchObject({
+      data: { students: [] },
+    });
+  });
+
+  it('delays Step 1 collections and assignment opens only for the slow scenario', async () => {
+    vi.useFakeTimers();
+    const adapter = createFrontendSandboxApiAdapter({ scenario: 'step-one-slow' });
+    const request = adapter(requestConfig('get', '/api/user/assignment-sessions'));
+    let settled = false;
+    void request.then(() => {
+      settled = true;
+    });
+
+    await vi.advanceTimersByTimeAsync(1499);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(request).resolves.toMatchObject({ data: { sessions: expect.any(Array) } });
+
+    const assignmentOpen = adapter(requestConfig('get', '/api/assignment-sessions/session-cora'));
+    await vi.advanceTimersByTimeAsync(1500);
+    await expect(assignmentOpen).resolves.toMatchObject({ data: { id: 'session-cora' } });
   });
 });

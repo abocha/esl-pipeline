@@ -1,6 +1,8 @@
 import type { AxiosAdapter, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import { AxiosError } from 'axios';
 
+import type { FrontendSandboxScenario } from './frontend-sandbox';
+
 const now = '2026-07-03T00:00:00.000Z';
 const sandboxFirstProfileStudentId = 'student-cora';
 const sandboxFirstProfileId = 'profiles/cora.md';
@@ -37,6 +39,48 @@ function notFoundFor(config: InternalAxiosRequestConfig): AxiosError {
       config,
     },
   );
+}
+
+function scenarioErrorFor(config: InternalAxiosRequestConfig, message: string): AxiosError {
+  return new AxiosError(message, AxiosError.ERR_BAD_RESPONSE, config);
+}
+
+function isSlowScenarioRequest(
+  scenario: FrontendSandboxScenario,
+  method: string,
+  path: string,
+): boolean {
+  if (scenario !== 'step-one-slow' || method !== 'get') return false;
+  return (
+    path === '/config/students' ||
+    path === '/user/jobs' ||
+    path === '/user/assignment-sessions' ||
+    path.startsWith('/assignment-sessions/') ||
+    path.startsWith('/jobs/')
+  );
+}
+
+function delaySandboxResponse(): Promise<void> {
+  return new Promise((resolve) => {
+    globalThis.setTimeout(resolve, 1500);
+  });
+}
+
+function resumeStateJobs() {
+  return [
+    jobStatus({ jobId: 'job-sandbox-queued', state: 'queued', startedAt: null, finishedAt: null, htmlUrl: null }),
+    jobStatus({ jobId: 'job-sandbox-running', state: 'running', finishedAt: null, htmlUrl: null }),
+    jobStatus({ jobId: 'job-sandbox-awaiting-approval', state: 'awaiting_approval', finishedAt: null, htmlUrl: null }),
+    jobStatus({ jobId: 'job-sandbox-published', state: 'succeeded' }),
+    jobStatus({ jobId: 'job-sandbox-unpublished', state: 'succeeded', htmlUrl: null }),
+    jobStatus({
+      jobId: 'job-sandbox-failed',
+      state: 'failed',
+      htmlUrl: null,
+      finishedAt: now,
+      error: 'Sandbox generation failure for Step 1 review.',
+    }),
+  ];
 }
 
 function normalizePath(rawUrl: string | undefined): string {
@@ -998,7 +1042,10 @@ function jobProvenance() {
   };
 }
 
-export function createFrontendSandboxApiAdapter(): AxiosAdapter {
+export function createFrontendSandboxApiAdapter(options: {
+  scenario?: FrontendSandboxScenario;
+} = {}): AxiosAdapter {
+  const scenario = options.scenario ?? 'default';
   sandboxFirstProfileLessonMemoryConfirmed = false;
   sandboxFirstProfileLessonMemoryHealthPolls = 0;
   let manualTranscriptText = '';
@@ -1008,13 +1055,23 @@ export function createFrontendSandboxApiAdapter(): AxiosAdapter {
     const method = (config.method ?? 'get').toLowerCase();
     const path = normalizePath(config.url);
 
+    if (isSlowScenarioRequest(scenario, method, path)) {
+      await delaySandboxResponse();
+    }
+
     if (method === 'get' && path === '/config/students') {
+      if (scenario === 'step-one-learner-error') {
+        throw scenarioErrorFor(config, 'Sandbox learners are unavailable for this scenario.');
+      }
       return responseFor(config, {
-        students: [
-          { id: 'student-alex', name: 'Alex', profileId: 'profiles/alex.md' },
-          { id: 'student-bella', name: 'Bella', profileId: 'profiles/bella.md' },
-          { id: sandboxFirstProfileStudentId, name: 'Cora Preview', profileId: null },
-        ],
+        students:
+          scenario === 'step-one-no-learners'
+            ? []
+            : [
+                { id: 'student-alex', name: 'Alex', profileId: 'profiles/alex.md' },
+                { id: 'student-bella', name: 'Bella', profileId: 'profiles/bella.md' },
+                { id: sandboxFirstProfileStudentId, name: 'Cora Preview', profileId: null },
+              ],
       });
     }
 
@@ -1182,10 +1239,41 @@ export function createFrontendSandboxApiAdapter(): AxiosAdapter {
     }
 
     if (method === 'get' && path === '/user/jobs') {
+      if (scenario === 'step-one-resume-error') {
+        throw scenarioErrorFor(config, 'Sandbox recent work is unavailable for this scenario.');
+      }
+      if (scenario === 'step-one-no-recent') {
+        return responseFor(config, { jobs: [], total: 0, limit: 20, offset: 0 });
+      }
+      if (scenario === 'step-one-resume-states') {
+        const jobs = resumeStateJobs();
+        return responseFor(config, { jobs, total: jobs.length, limit: 20, offset: 0 });
+      }
       return responseFor(config, { jobs: [jobStatus()], total: 1, limit: 20, offset: 0 });
     }
 
     if (method === 'get' && path === '/user/assignment-sessions') {
+      if (scenario === 'step-one-resume-error') {
+        throw scenarioErrorFor(config, 'Sandbox recent work is unavailable for this scenario.');
+      }
+      if (scenario === 'step-one-no-recent') {
+        return responseFor(config, { sessions: [], total: 0, limit: 20 });
+      }
+      if (scenario === 'step-one-resume-states') {
+        return responseFor(config, {
+          sessions: [
+            assignmentSession({
+              id: 'session-sandbox-resume',
+              studentId: 'student-alex',
+              recordingId: 'recording-sandbox',
+              transcriptId: 'transcript-sandbox',
+              currentStage: 'context',
+            }),
+          ],
+          total: 1,
+          limit: 20,
+        });
+      }
       return responseFor(config, {
         sessions: [
           assignmentSession({
