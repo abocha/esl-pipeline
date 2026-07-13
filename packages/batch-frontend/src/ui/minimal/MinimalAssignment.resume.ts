@@ -20,10 +20,14 @@ import {
 } from '../../utils/api';
 import type { AuthoringHydrationSnapshot } from './MinimalAssignment.authoring';
 import {
+  getJobRecentAssignmentPresentation,
+  getSessionRecentAssignmentPresentation,
+  type RecentAssignmentState,
+} from './MinimalAssignment.entry-state';
+import {
   type MinimalPublishTarget,
   type PublishJobOverridesInput,
 } from './MinimalAssignment.logic';
-import { isActivelyProcessingJobState } from './MinimalAssignment.polling';
 
 type UiTtsProvider = PublishJobOverridesInput['selectedTtsProvider'];
 type UiPublishTtsStrategy = PublishJobOverridesInput['selectedTtsStrategy'];
@@ -145,6 +149,15 @@ export interface HydrationContext {
   mode: HydrationMode;
 }
 
+export interface ResumeOpenSuccess {
+  ok: true;
+  itemId: string;
+  state: RecentAssignmentState;
+  destination: 'student' | 'source' | 'context' | 'create' | 'review';
+}
+
+export type ResumeOpenResult = ResumeOpenSuccess | { ok: false };
+
 interface UseMinimalAssignmentResumeParams {
   applyHydratedSnapshot: (snapshot: HydratedAssignmentSnapshot) => void;
   applyCurrentJobStatus: (job: JobStatus | null) => void;
@@ -162,6 +175,7 @@ interface UseMinimalAssignmentResumeParams {
   currentSelectedStudentId: string;
   currentSelectedProfileId: string;
   currentProfileSelectionMode: 'auto' | 'manual';
+  onInitialHydrationResolved: (result: ResumeOpenSuccess) => void;
 }
 
 export function useMinimalAssignmentResume({
@@ -181,6 +195,7 @@ export function useMinimalAssignmentResume({
   currentSelectedStudentId,
   currentSelectedProfileId,
   currentProfileSelectionMode,
+  onInitialHydrationResolved,
 }: UseMinimalAssignmentResumeParams) {
   const [resumeJobs, setResumeJobs] = useState<JobStatus[]>([]);
   const [assignmentSessions, setAssignmentSessions] = useState<AssignmentSession[]>([]);
@@ -192,6 +207,7 @@ export function useMinimalAssignmentResume({
   const [resumeError, setResumeError] = useState<string | null>(null);
   const resumeInitializedRef = useRef(false);
   const latestAssignmentSessionsRef = useRef<AssignmentSession[]>([]);
+  const initialHydrationResolvedRef = useRef(false);
 
   const applyJobStatusTransition = useCallback(
     (job: JobStatus) => {
@@ -229,10 +245,7 @@ export function useMinimalAssignmentResume({
           ) {
             return current;
           }
-          return (
-            jobs.find((job) => isActivelyProcessingJobState(job.state))?.jobId ??
-            (sessions[0] ? `session:${sessions[0].id}` : (jobs[0]?.jobId ?? ''))
-          );
+          return '';
         });
       }
       setResumeError(null);
@@ -318,8 +331,12 @@ export function useMinimalAssignmentResume({
   );
 
   const hydrateFromJob = useCallback(
-    async (jobId: string, knownJobs?: JobStatus[]) => {
-      if (!jobId) return;
+    async (
+      jobId: string,
+      knownJobs?: JobStatus[],
+      isInitialHydration = false,
+    ): Promise<ResumeOpenResult> => {
+      if (!jobId) return { ok: false };
 
       const hydration = beginHydration('job');
       invalidateDraftGenerationRequests();
@@ -485,17 +502,29 @@ export function useMinimalAssignmentResume({
           snapshot.selectedProfileId = resolveBoundProfileId(resolvedStudentId);
         }
 
-        if (!isCurrentHydration(hydration)) return;
+        if (!isCurrentHydration(hydration)) return { ok: false };
 
         applyHydratedSnapshot(snapshot);
         setSelectedResumeJobId(status.jobId);
         setActiveAssignmentSession(null);
         writeResumeTargetToQuery({ jobId: status.jobId });
+        const result: ResumeOpenSuccess = {
+          ok: true,
+          itemId: status.jobId,
+          state: getJobRecentAssignmentPresentation(status.state, Boolean(status.htmlUrl)).state,
+          destination: 'review',
+        };
+        if (isInitialHydration && !initialHydrationResolvedRef.current) {
+          initialHydrationResolvedRef.current = true;
+          onInitialHydrationResolved(result);
+        }
+        return result;
       } catch (error) {
-        if (!isCurrentHydration(hydration)) return;
+        if (!isCurrentHydration(hydration)) return { ok: false };
         const message =
           error instanceof Error ? error.message : 'Unable to resume the selected assignment.';
         setResumeError(message);
+        return { ok: false };
       } finally {
         if (isCurrentHydration(hydration)) {
           setResumeLoading(false);
@@ -519,12 +548,17 @@ export function useMinimalAssignmentResume({
       presetOptionIds,
       resolveBoundProfileId,
       resumeJobs,
+      onInitialHydrationResolved,
     ],
   );
 
   const hydrateFromSession = useCallback(
-    async (sessionId: string, knownSessions?: AssignmentSession[]) => {
-      if (!sessionId) return;
+    async (
+      sessionId: string,
+      knownSessions?: AssignmentSession[],
+      isInitialHydration = false,
+    ): Promise<ResumeOpenResult> => {
+      if (!sessionId) return { ok: false };
 
       const hydration = beginHydration('session');
       invalidateDraftGenerationRequests();
@@ -626,17 +660,29 @@ export function useMinimalAssignmentResume({
           snapshot.selectedProfileId = resolveBoundProfileId(resolvedStudentId);
         }
 
-        if (!isCurrentHydration(hydration)) return;
+        if (!isCurrentHydration(hydration)) return { ok: false };
 
         applyHydratedSnapshot(snapshot);
         setActiveAssignmentSession(session);
         setSelectedResumeJobId(`session:${session.id}`);
         writeResumeTargetToQuery({ sessionId: session.id });
+        const result: ResumeOpenSuccess = {
+          ok: true,
+          itemId: `session:${session.id}`,
+          state: getSessionRecentAssignmentPresentation(session.currentStage).state,
+          destination: getSessionRecentAssignmentPresentation(session.currentStage).destination,
+        };
+        if (isInitialHydration && !initialHydrationResolvedRef.current) {
+          initialHydrationResolvedRef.current = true;
+          onInitialHydrationResolved(result);
+        }
+        return result;
       } catch (error) {
-        if (!isCurrentHydration(hydration)) return;
+        if (!isCurrentHydration(hydration)) return { ok: false };
         const message =
           error instanceof Error ? error.message : 'Unable to resume the selected assignment.';
         setResumeError(message);
+        return { ok: false };
       } finally {
         if (isCurrentHydration(hydration)) {
           setResumeLoading(false);
@@ -649,18 +695,18 @@ export function useMinimalAssignmentResume({
       buildSnapshotFromSession,
       invalidateDraftGenerationRequests,
       isCurrentHydration,
+      onInitialHydrationResolved,
       resolveBoundProfileId,
     ],
   );
 
-  const handleResumeSelectedJob = useCallback(async () => {
-    if (!selectedResumeJobId) return;
-    if (selectedResumeJobId.startsWith('session:')) {
-      await hydrateFromSession(selectedResumeJobId.slice('session:'.length), assignmentSessions);
-    } else {
-      await hydrateFromJob(selectedResumeJobId, resumeJobs);
-    }
+  const handleResumeSelectedJob = useCallback(async (): Promise<ResumeOpenResult> => {
+    if (!selectedResumeJobId) return { ok: false };
+    const result = selectedResumeJobId.startsWith('session:')
+      ? await hydrateFromSession(selectedResumeJobId.slice('session:'.length), assignmentSessions)
+      : await hydrateFromJob(selectedResumeJobId, resumeJobs);
     await loadResumeJobs();
+    return result;
   }, [
     assignmentSessions,
     hydrateFromJob,
@@ -682,12 +728,12 @@ export function useMinimalAssignmentResume({
       const querySessionId = readSessionIdFromQuery();
       if (querySessionId) {
         setSelectedResumeJobId(`session:${querySessionId}`);
-        await hydrateFromSession(querySessionId, sessions);
+        await hydrateFromSession(querySessionId, sessions, true);
         return;
       }
       if (queryJobId) {
         setSelectedResumeJobId(queryJobId);
-        await hydrateFromJob(queryJobId, jobs);
+        await hydrateFromJob(queryJobId, jobs, true);
         return;
       }
 

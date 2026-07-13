@@ -12,6 +12,7 @@ export interface AssignmentWorkflowProps {
   highestAvailableStep: AssignmentStepId;
   saveState: 'idle' | 'saving' | 'saved' | 'error';
   guidance?: React.ReactNode;
+  postFooter?: React.ReactNode;
   support?: React.ReactNode;
   onStepRequest: (step: AssignmentStepId) => void;
   onBack: () => void;
@@ -43,6 +44,7 @@ export function AssignmentWorkflow({
   activeStep,
   saveState,
   guidance,
+  postFooter,
   support,
   onStepRequest,
   onBack,
@@ -53,20 +55,18 @@ export function AssignmentWorkflow({
   completionLabel,
   children,
 }: AssignmentWorkflowProps) {
-  const active = steps.find((step) => step.id === activeStep) ?? steps[0];
-
   return (
-    <section className="assignment-workflow" aria-labelledby="assignment-workflow-title">
-      <header className="assignment-workflow__header">
-        <div>
-          <p className="assignment-workflow__eyebrow">Assignment builder</p>
-          <h1 id="assignment-workflow-title">{active?.label ?? 'Assignment'}</h1>
-        </div>
-        <span className={`assignment-workflow__save assignment-workflow__save--${saveState}`}>
+    <section className="assignment-workflow" aria-label="Assignment builder">
+      <div className="assignment-workflow__status">
+        <span
+          className={`assignment-workflow__save assignment-workflow__save--${saveState}`}
+          role="status"
+          aria-live="polite"
+        >
           {saveState === 'saved' ? <Check aria-hidden="true" /> : null}
           {saveLabels[saveState]}
         </span>
-      </header>
+      </div>
 
       <nav className="assignment-workflow__progress" aria-label="Assignment progress">
         <ol>
@@ -108,17 +108,23 @@ export function AssignmentWorkflow({
       </div>
 
       <footer className="assignment-workflow__footer">
-        <ProductButton variant="quiet" icon={<ArrowLeft />} onClick={onBack}>
-          Back
-        </ProductButton>
-        {onComplete && completionLabel ? (
-          <ProductButton onClick={onComplete}>{completionLabel}</ProductButton>
-        ) : onContinue && continueLabel ? (
-          <ProductButton onClick={onContinue} disabled={continueDisabled}>
-            {continueLabel}
+        {activeStep !== 'student' ? (
+          <ProductButton variant="quiet" icon={<ArrowLeft />} onClick={onBack}>
+            Back
           </ProductButton>
         ) : null}
+        <div className="assignment-workflow__footer-action">
+          {onComplete && completionLabel ? (
+            <ProductButton onClick={onComplete}>{completionLabel}</ProductButton>
+          ) : onContinue && continueLabel ? (
+            <ProductButton onClick={onContinue} disabled={continueDisabled}>
+              {continueLabel}
+            </ProductButton>
+          ) : null}
+        </div>
       </footer>
+
+      {postFooter ? <div className="assignment-workflow__post-footer">{postFooter}</div> : null}
 
       {support ? <div className="assignment-workflow__support">{support}</div> : null}
     </section>

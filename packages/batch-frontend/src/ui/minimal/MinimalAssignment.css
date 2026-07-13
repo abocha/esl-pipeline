@@ -212,6 +212,12 @@
   line-height: var(--leading-relaxed);
 }
 
+.minimal-stage-header-copy .minimal-stage-eyebrow {
+  color: var(--action-primary);
+  font-size: var(--text-sm);
+  font-weight: 750;
+}
+
 .minimal-stage-header-actions {
   display: flex;
   align-items: center;
@@ -243,7 +249,7 @@
   gap: var(--space-3);
 }
 
-.minimal-stage-panel:first-child {
+.minimal-stage-panel:first-child:not(.assignment-advanced-actions) {
   border-top: 0;
   padding-top: 0;
 }
@@ -326,18 +332,6 @@
   color: var(--text-secondary);
   font-size: var(--text-sm);
   line-height: var(--leading-relaxed);
-}
-
-.minimal-start-summary {
-  border: 1px solid var(--minimal-primary-border);
-  border-radius: var(--radius-xl);
-  background: var(--minimal-primary-tint-soft);
-  padding: var(--space-3) var(--space-4);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  flex-wrap: wrap;
 }
 
 .minimal-details {

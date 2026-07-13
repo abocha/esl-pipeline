@@ -28,6 +28,7 @@ import type {
 import { DropZone } from '../shared/DropZone';
 import { UploadProgress } from '../shared/UploadProgress';
 import { ProductButton } from '../system/ProductButton';
+import type { RecentAssignmentItem } from './MinimalAssignment.entry-state';
 import { getTranscriptUnexpectedCharacterWarnings } from './MinimalAssignment.transcript-warnings';
 
 export type WorkflowStageId = 'start' | 'source' | 'context' | 'assignment' | 'review' | 'advanced';
@@ -41,22 +42,10 @@ export interface WorkflowStage {
   status: WorkflowStageStatus;
 }
 
-export interface ResumeJobListItem {
-  jobId: string;
-  title: string;
-  subtitle: string;
-  statusLabel: string;
-  statusTone: 'success' | 'progress' | 'warning' | 'neutral';
-  timeLabel: string;
-  publishLabel: string;
-  supportLabel: string;
-  selected: boolean;
-}
-
 export interface CurrentAssignmentCard {
   title: string;
   statusLabel: string;
-  statusTone: ResumeJobListItem['statusTone'];
+  statusTone: 'success' | 'progress' | 'warning' | 'neutral';
   meta: string[];
   supportLabel: string;
 }
@@ -69,6 +58,7 @@ interface WorkflowOverviewProps {
 interface StageSectionProps {
   stage: WorkflowStage;
   actions?: React.ReactNode;
+  eyebrow?: string;
   sectionRef?: React.Ref<HTMLElement>;
   headingRef?: React.Ref<HTMLHeadingElement>;
   guidance?: React.ReactNode;
@@ -80,14 +70,15 @@ interface StartStageSectionProps {
   sectionRef?: React.Ref<HTMLElement>;
   headingRef?: React.Ref<HTMLHeadingElement>;
   mode: StartStageMode;
+  selectedStudentName: string | null;
   onStartNewAssignment: () => void;
   onShowResumeChoice: () => void;
   onRefreshRecentWork: () => void;
-  onResumeSelectedAssignment: () => void;
+  onResumeSelectedAssignment: () => Promise<void>;
   resumeLoading: boolean;
   selectedResumeJobId: string;
   onSelectedResumeJobIdChange: (value: string) => void;
-  resumeJobItems: ResumeJobListItem[];
+  resumeJobItems: RecentAssignmentItem[];
   totalResumeJobs: number;
   canToggleResumeJobs: boolean;
   showAllResumeJobs: boolean;
@@ -534,6 +525,7 @@ function StageGuidance({ children }: { children: React.ReactNode }) {
 export function StageSection({
   stage,
   actions,
+  eyebrow,
   sectionRef,
   headingRef,
   guidance,
@@ -548,6 +540,7 @@ export function StageSection({
     <section ref={sectionRef} className={`minimal-section minimal-stage-card is-${stage.status}`}>
       <div className="minimal-stage-header">
         <div className="minimal-stage-header-copy">
+          {eyebrow ? <p className="minimal-stage-eyebrow">{eyebrow}</p> : null}
           <h2 ref={headingRef} tabIndex={-1}>
             {stage.title}
           </h2>
@@ -571,6 +564,7 @@ export function StartStageSection({
   sectionRef,
   headingRef,
   mode,
+  selectedStudentName,
   onStartNewAssignment,
   onShowResumeChoice,
   onRefreshRecentWork,
@@ -591,133 +585,174 @@ export function StartStageSection({
   publishPending,
 }: StartStageSectionProps) {
   const showResumePanel = mode === 'resume';
-  const showStartedSummary = mode === 'start';
+  const [isChangingSetup, setIsChangingSetup] = React.useState(false);
+  const setupResolved = mode === 'start' || (mode === 'resume' && Boolean(currentAssignmentCard));
+  const showSetupChoices = mode === 'idle' || isChangingSetup || !setupResolved;
+  const setupTitle = mode === 'resume' ? 'Resumed assignment' : 'New assignment';
+  const setupDescription =
+    mode === 'start' && selectedStudentName
+      ? `Starting a new assignment for ${selectedStudentName}.`
+      : mode === 'start'
+        ? 'Starting a new assignment.'
+        : 'Continuing saved assignment work.';
+  const displayedStage = showSetupChoices
+    ? stage
+    : { ...stage, title: setupTitle, description: setupDescription };
+
+  React.useEffect(() => {
+    if (resumeError && mode === 'resume') {
+      setIsChangingSetup(true);
+    }
+  }, [mode, resumeError]);
+
+  const handleStartNewAssignment = () => {
+    onStartNewAssignment();
+    setIsChangingSetup(false);
+  };
+
+  const handleShowResumeChoice = () => {
+    setIsChangingSetup(true);
+    onShowResumeChoice();
+  };
+
+  const handleResumeSelectedAssignment = async () => {
+    await onResumeSelectedAssignment();
+    setIsChangingSetup(false);
+  };
 
   return (
-    <StageSection stage={stage} sectionRef={sectionRef} headingRef={headingRef}>
+    <StageSection
+      stage={displayedStage}
+      actions={
+        showSetupChoices ? null : (
+          <button
+            type="button"
+            className="product-button product-button--quiet"
+            onClick={() => setIsChangingSetup(true)}
+          >
+            Change assignment setup
+          </button>
+        )
+      }
+      eyebrow={showSetupChoices ? undefined : 'Assignment setup'}
+      sectionRef={sectionRef}
+      headingRef={headingRef}
+    >
       <div className="minimal-stage-layout">
-        <div className="minimal-stage-panel">
-          <div className="minimal-choice-grid" aria-label="Assignment start options">
-            <button
-              type="button"
-              aria-pressed={showResumePanel}
-              className={`minimal-choice-card${showResumePanel ? ' is-selected' : ''}`}
-              onClick={onShowResumeChoice}
-            >
-              <span className="minimal-choice-eyebrow">Resume</span>
-              <span className="minimal-choice-title">Resume recent work</span>
-            </button>
-            <button
-              type="button"
-              aria-pressed={showStartedSummary}
-              className={`minimal-choice-card${showStartedSummary ? ' is-selected' : ''}`}
-              onClick={onStartNewAssignment}
-            >
-              <span className="minimal-choice-eyebrow">New</span>
-              <span className="minimal-choice-title">Start new assignment</span>
-            </button>
-          </div>
-
-          {showStartedSummary ? (
-            <div className="minimal-start-summary">
-              <div>
-                <strong>New assignment ready.</strong>
-                <p className="minimal-help">
-                  Next up: choose the student and upload the lesson recording in the next section.
-                </p>
-              </div>
+        {showSetupChoices ? (
+          <div className="minimal-stage-panel">
+            <div className="minimal-choice-grid" aria-label="Assignment start options">
+              <button
+                type="button"
+                aria-pressed={showResumePanel}
+                className={`minimal-choice-card${showResumePanel ? ' is-selected' : ''}`}
+                onClick={handleShowResumeChoice}
+              >
+                <span className="minimal-choice-eyebrow">Resume</span>
+                <span className="minimal-choice-title">Resume recent work</span>
+              </button>
+              <button
+                type="button"
+                aria-pressed={mode === 'start'}
+                className={`minimal-choice-card${mode === 'start' ? ' is-selected' : ''}`}
+                onClick={handleStartNewAssignment}
+              >
+                <span className="minimal-choice-eyebrow">New</span>
+                <span className="minimal-choice-title">Start new assignment</span>
+              </button>
             </div>
-          ) : null}
 
-          {showResumePanel ? (
-            <div className="minimal-resume-list-block">
-              <div className="minimal-stage-panel-header">
-                <div className="minimal-stage-panel-title">
-                  <h3>Recent assignments</h3>
-                </div>
-                <div className="minimal-inline">
-                  <button
-                    type="button"
-                    className="minimal-secondary"
-                    onClick={onRefreshRecentWork}
-                    disabled={resumeLoading}
-                  >
-                    {resumeLoading ? 'Refreshing...' : 'Refresh recent work'}
-                  </button>
-                  <button
-                    type="button"
-                    className="minimal-primary minimal-guided-button"
-                    onClick={onResumeSelectedAssignment}
-                    disabled={!selectedResumeJobId || resumeLoading}
-                  >
-                    {resumeLoading ? 'Opening assignment...' : 'Resume selected assignment'}
-                  </button>
-                </div>
-              </div>
-              {resumeJobItems.length > 0 ? (
-                <>
-                  <div className="minimal-list-heading">
-                    <span className="minimal-muted">
-                      {resumeJobItems.length === totalResumeJobs
-                        ? `${totalResumeJobs} ${totalResumeJobs === 1 ? 'assignment' : 'assignments'}`
-                        : `${resumeJobItems.length} of ${totalResumeJobs} assignments`}
-                    </span>
+            {showResumePanel ? (
+              <div className="minimal-resume-list-block">
+                <div className="minimal-stage-panel-header">
+                  <div className="minimal-stage-panel-title">
+                    <h3>Recent assignments</h3>
                   </div>
-                  <div
-                    className="minimal-resume-list"
-                    role="listbox"
-                    aria-label="Recent assignments"
-                    aria-busy={resumeLoading}
-                  >
-                    {resumeJobItems.map((job) => (
-                      <button
-                        key={job.jobId}
-                        type="button"
-                        role="option"
-                        aria-selected={job.selected}
-                        className={`minimal-resume-card minimal-resume-card--${job.statusTone}${
-                          job.selected ? ' minimal-resume-card--selected' : ''
-                        }`}
-                        onClick={() => onSelectedResumeJobIdChange(job.jobId)}
-                      >
-                        <span className="minimal-resume-card-leading" aria-hidden="true" />
-                        <span className="minimal-resume-card-main">
-                          <span className="minimal-resume-card-head">
-                            <span className="minimal-resume-card-title">{job.title}</span>
-                            <span
-                              className={`minimal-status-pill minimal-status-pill--${job.statusTone}`}
-                            >
-                              {job.statusLabel}
-                            </span>
-                          </span>
-                          <span className="minimal-resume-card-subtitle">{job.subtitle}</span>
-                          <span className="minimal-resume-card-meta">
-                            <span>{job.timeLabel}</span>
-                            <span>{job.publishLabel}</span>
-                            <span className="minimal-muted">{job.supportLabel}</span>
-                          </span>
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                  {canToggleResumeJobs ? (
+                  <div className="minimal-inline">
                     <button
                       type="button"
-                      className="minimal-text-action"
-                      onClick={onToggleShowAllResumeJobs}
+                      className="minimal-secondary"
+                      onClick={onRefreshRecentWork}
+                      disabled={resumeLoading}
                     >
-                      {showAllResumeJobs ? 'Show fewer assignments' : 'Show more assignments'}
+                      {resumeLoading ? 'Refreshing...' : 'Refresh recent work'}
                     </button>
-                  ) : null}
-                </>
-              ) : (
-                <p className="minimal-muted">No saved assignments yet.</p>
-              )}
-            </div>
-          ) : null}
+                    <button
+                      type="button"
+                      className="minimal-primary minimal-guided-button"
+                      onClick={() => void handleResumeSelectedAssignment()}
+                      disabled={!selectedResumeJobId || resumeLoading}
+                    >
+                      {resumeLoading ? 'Opening assignment...' : 'Resume selected assignment'}
+                    </button>
+                  </div>
+                </div>
+                {resumeJobItems.length > 0 ? (
+                  <>
+                    <div className="minimal-list-heading">
+                      <span className="minimal-muted">
+                        {resumeJobItems.length === totalResumeJobs
+                          ? `${totalResumeJobs} ${totalResumeJobs === 1 ? 'assignment' : 'assignments'}`
+                          : `${resumeJobItems.length} of ${totalResumeJobs} assignments`}
+                      </span>
+                    </div>
+                    <div
+                      className="minimal-resume-list"
+                      role="listbox"
+                      aria-label="Recent assignments"
+                      aria-busy={resumeLoading}
+                    >
+                      {resumeJobItems.map((job) => (
+                        <button
+                          key={job.id}
+                          type="button"
+                          role="option"
+                          aria-selected={job.selected}
+                          className={`minimal-resume-card minimal-resume-card--${job.statusTone}${
+                            job.selected ? ' minimal-resume-card--selected' : ''
+                          }`}
+                          onClick={() => onSelectedResumeJobIdChange(job.id)}
+                        >
+                          <span className="minimal-resume-card-leading" aria-hidden="true" />
+                          <span className="minimal-resume-card-main">
+                            <span className="minimal-resume-card-head">
+                              <span className="minimal-resume-card-title">{job.learnerName}</span>
+                              <span
+                                className={`minimal-status-pill minimal-status-pill--${job.statusTone}`}
+                              >
+                                {job.statusLabel}
+                              </span>
+                            </span>
+                            <span className="minimal-resume-card-subtitle">
+                              {job.activityLabel}
+                            </span>
+                            <span className="minimal-resume-card-meta">
+                              <span>{job.timeLabel}</span>
+                              <span>{job.outcomeLabel}</span>
+                            </span>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                    {canToggleResumeJobs ? (
+                      <button
+                        type="button"
+                        className="minimal-text-action"
+                        onClick={onToggleShowAllResumeJobs}
+                      >
+                        {showAllResumeJobs ? 'Show fewer assignments' : 'Show more assignments'}
+                      </button>
+                    ) : null}
+                  </>
+                ) : (
+                  <p className="minimal-muted">No saved assignments yet.</p>
+                )}
+              </div>
+            ) : null}
 
-          {resumeError ? <p className="minimal-error">{resumeError}</p> : null}
-        </div>
+            {resumeError ? <p className="minimal-error">{resumeError}</p> : null}
+          </div>
+        ) : null}
 
         {currentJobStatus?.jobId && currentAssignmentCard ? (
           <div className="minimal-pinned-job">

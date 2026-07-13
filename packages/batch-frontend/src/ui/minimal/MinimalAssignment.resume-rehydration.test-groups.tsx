@@ -23,6 +23,28 @@ import {
   testWithin as within,
 } from './MinimalAssignment.test-harness';
 
+async function openResumeRoute(user: ReturnType<typeof createMinimalUser>) {
+  const resumeButton = await screen.findByRole('button', { name: /Resume recent work/i });
+  await waitFor(() => expect((resumeButton as HTMLButtonElement).disabled).toBe(false));
+  await user.click(resumeButton);
+  return screen.findByRole('group', { name: /Recent assignments/i });
+}
+
+async function openNewRoute(user: ReturnType<typeof createMinimalUser>) {
+  const newButton = await screen.findByRole('button', { name: /Start new assignment/i });
+  await waitFor(() => expect((newButton as HTMLButtonElement).disabled).toBe(false));
+  await user.click(newButton);
+  await waitFor(() =>
+    expect(
+      screen.queryByRole('combobox', { name: /Choose learner/i }) ??
+        screen.queryByRole('button', { name: /Change student/i }),
+    ).toBeTruthy(),
+  );
+  const changeStudentButton = screen.queryByRole('button', { name: /Change student/i });
+  if (changeStudentButton) await user.click(changeStudentButton);
+  return screen.findByRole('combobox', { name: /Choose learner/i });
+}
+
 export function registerResumeBasicTests() {
   describe('MinimalAssignment - basic resume and rehydration', {
     timeout: INTEGRATION_TEST_TIMEOUT_MS,
@@ -41,8 +63,9 @@ export function registerResumeBasicTests() {
       expect(api.fetchStudentOptions).toHaveBeenCalledTimes(1);
       expect(api.listProfileContents).not.toHaveBeenCalled();
 
-      expect(screen.getByRole('heading', { name: /Add lesson source/i })).toBeTruthy();
-      expect(screen.getByRole('heading', { name: /Review and share/i })).toBeTruthy();
+      expect(screen.queryByRole('heading', { name: /Add lesson source/i })).toBeNull();
+      expect(screen.queryByRole('heading', { name: /Review and share/i })).toBeNull();
+      expect(screen.getByRole('button', { name: /Start new assignment/i })).toBeTruthy();
       expect(screen.queryByRole('combobox', { name: /Share to/i })).toBeNull();
       expect(screen.queryByText(/Assignments publish as an Assignment Handout/i)).toBeNull();
     });
@@ -157,20 +180,14 @@ export function registerResumeBasicTests() {
       renderMinimalAssignment();
 
       expect(screen.queryByRole('listbox', { name: /Recent assignments/i })).toBeNull();
-      await user.click(screen.getByRole('button', { name: /Resume recent work/i }));
-      const resumeList = await screen.findByRole('listbox', { name: /Recent assignments/i });
-      expect(within(resumeList).getAllByRole('option')).toHaveLength(4);
-      expect(
-        within(resumeList).getByRole('option', { name: /Alex \(Audio refresh\)/i }),
-      ).toBeTruthy();
+      const resumeList = await openResumeRoute(user);
+      expect(within(resumeList).getAllByRole('radio')).toHaveLength(5);
+      expect(within(resumeList).getAllByRole('radio', { name: /Alex/i })).toHaveLength(2);
+      expect(screen.queryByText(/Audio refresh/i)).toBeNull();
       expect(screen.getAllByText(/Needs attention/i).length).toBeGreaterThan(0);
-      expect(screen.getByText(/ID job-reru/i)).toBeTruthy();
+      expect(screen.queryByText(/job-reru/i)).toBeNull();
       expect(screen.queryByText(/gateway timeout/i)).toBeNull();
-
-      await user.click(screen.getByRole('button', { name: /Show more assignments/i }));
-
-      expect(within(resumeList).getAllByRole('option')).toHaveLength(5);
-      expect(screen.getByRole('button', { name: /Show fewer assignments/i })).toBeTruthy();
+      expect(screen.queryByRole('button', { name: /Show more assignments/i })).toBeNull();
     });
 
     it('shows unfinished assignment sessions beside publish jobs', async () => {
@@ -203,12 +220,11 @@ export function registerResumeBasicTests() {
 
       renderMinimalAssignment();
 
-      await user.click(screen.getByRole('button', { name: /Resume recent work/i }));
-      const resumeList = await screen.findByRole('listbox', { name: /Recent assignments/i });
-      expect(within(resumeList).getByRole('option', { name: /Alex/i })).toBeTruthy();
+      const resumeList = await openResumeRoute(user);
+      expect(within(resumeList).getByRole('radio', { name: /Alex/i })).toBeTruthy();
       expect(screen.getByText(/Draft in progress/i)).toBeTruthy();
-      expect(screen.getByText(/Session session-/i)).toBeTruthy();
-      expect(within(resumeList).getByRole('option', { name: /Bella/i })).toBeTruthy();
+      expect(screen.queryByText(/session-draft/i)).toBeNull();
+      expect(within(resumeList).getByRole('radio', { name: /Bella/i })).toBeTruthy();
     });
 
     it('does not auto-rehydrate unfinished sessions on a naked initial load', async () => {
@@ -303,11 +319,15 @@ export function registerResumeBasicTests() {
         updatedAt: now,
       });
 
+      const user = createMinimalUser();
       globalThis.history.replaceState(null, '', '/?sessionId=session-resume');
       renderMinimalAssignment();
 
+      await user.click(screen.getByRole('button', { name: /Lesson source/i }));
       expect(await screen.findByDisplayValue('Session transcript')).toBeTruthy();
+      await user.click(screen.getByRole('button', { name: /Create/i }));
       expect(await screen.findByDisplayValue('# Session draft')).toBeTruthy();
+      await user.click(screen.getByRole('button', { name: /Teaching context/i }));
       expect(((await screen.findByLabelText(/Teacher notes/i)) as HTMLTextAreaElement).value).toBe(
         'Remember the travel vocab.',
       );
@@ -396,7 +416,7 @@ export function registerResumeBasicTests() {
       });
     });
 
-    it('does not let a stale initial hydration overwrite a freshly started assignment', async () => {
+    it('waits for initial session hydration before changing the workflow step', async () => {
       let resolveStaleDraft: (value: ApiTypes.DraftResponse) => void = () => {};
       vi.mocked(api.listAssignmentSessions).mockResolvedValueOnce({
         sessions: [
@@ -456,7 +476,13 @@ export function registerResumeBasicTests() {
       await waitFor(() => {
         expect(api.fetchDraft).toHaveBeenCalledWith('draft-stale');
       });
-      await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
+      expect(
+        (screen.getByRole('button', { name: /Start new assignment/i }) as HTMLButtonElement)
+          .disabled,
+      ).toBe(true);
+      expect(screen.getByRole('button', { name: /Student/i }).getAttribute('aria-current')).toBe(
+        'step',
+      );
 
       await act(async () => {
         resolveStaleDraft({
@@ -472,11 +498,11 @@ export function registerResumeBasicTests() {
         await Promise.resolve();
       });
 
-      expect(screen.queryByDisplayValue('Stale transcript')).toBeNull();
-      expect(screen.queryByDisplayValue('Stale prompt')).toBeNull();
-      expect(screen.queryByDisplayValue('# Stale draft')).toBeNull();
-      expect(screen.getByText(/New assignment ready/i)).toBeTruthy();
-      expect(new URL(globalThis.location.href).searchParams.get('sessionId')).toBeNull();
+      expect(await screen.findByDisplayValue('Stale transcript')).toBeTruthy();
+      expect(
+        screen.getByRole('button', { name: /Review & share/i }).getAttribute('aria-current'),
+      ).toBe('step');
+      expect(new URL(globalThis.location.href).searchParams.get('sessionId')).toBe('session-stale');
     });
 
     it(
@@ -600,10 +626,11 @@ export function registerResumeBasicTests() {
         expect(api.updateDraft).toHaveBeenCalledWith('draft-1', '# Older autosave');
         vi.useRealTimers();
 
-        await user.click(screen.getByRole('button', { name: /Resume recent work/i }));
-        const resumeList = await screen.findByRole('listbox', { name: /Recent assignments/i });
-        await user.click(within(resumeList).getByRole('option', { name: /Bella/i }));
-        await user.click(screen.getByRole('button', { name: /Resume selected assignment/i }));
+        await user.click(screen.getByRole('button', { name: /Student/i }));
+        await user.click(screen.getByRole('button', { name: /Change assignment/i }));
+        const resumeList = await openResumeRoute(user);
+        await user.click(within(resumeList).getByRole('radio', { name: /Bella/i }));
+        await user.click(screen.getByRole('button', { name: /Continue assignment/i }));
 
         const nextDraftTextarea = (await screen.findByDisplayValue(
           '# Next session draft',
@@ -629,40 +656,20 @@ export function registerResumeBasicTests() {
       INTEGRATION_TEST_TIMEOUT_MS,
     );
 
-    it('prefers an active job when refreshing recent work and the old selection disappears', async () => {
-      vi.mocked(api.listUserJobs)
-        .mockResolvedValueOnce({
-          jobs: [
-            makeJobStatus({
-              jobId: 'job-old-finished',
-              state: 'succeeded',
-              startedAt: now,
-              finishedAt: now,
-            }),
-          ],
-          total: 1,
-          limit: 20,
-          offset: 0,
-        })
-        .mockResolvedValueOnce({
-          jobs: [
-            makeJobStatus({
-              jobId: 'job-new-finished',
-              state: 'succeeded',
-              startedAt: now,
-              finishedAt: now,
-            }),
-            makeJobStatus({
-              jobId: 'job-running',
-              state: 'running',
-              startedAt: now,
-              finishedAt: null,
-            }),
-          ],
-          total: 2,
-          limit: 20,
-          offset: 0,
-        });
+    it('requires an explicit job selection before opening Review & share', async () => {
+      vi.mocked(api.listUserJobs).mockResolvedValueOnce({
+        jobs: [
+          makeJobStatus({
+            jobId: 'job-running',
+            state: 'running',
+            startedAt: now,
+            finishedAt: null,
+          }),
+        ],
+        total: 1,
+        limit: 20,
+        offset: 0,
+      });
       vi.mocked(api.getJobStatus).mockResolvedValueOnce(
         makeJobStatus({
           jobId: 'job-running',
@@ -679,20 +686,14 @@ export function registerResumeBasicTests() {
         expect(api.listUserJobs).toHaveBeenCalledTimes(1);
       });
 
-      await user.click(screen.getByRole('button', { name: /Resume recent work/i }));
-      await user.click(screen.getByRole('button', { name: /Refresh recent work/i }));
-
-      await waitFor(() => {
-        expect(api.listUserJobs).toHaveBeenCalledTimes(2);
-      });
+      const resumeList = await openResumeRoute(user);
+      expect(screen.queryByRole('button', { name: /Refresh recent work/i })).toBeNull();
       expect(
-        screen.getByRole('option', {
-          name: /ID job-runn/i,
-          selected: true,
-        }),
-      ).toBeTruthy();
-
-      await user.click(screen.getByRole('button', { name: /Resume selected assignment/i }));
+        (screen.getByRole('button', { name: /Continue assignment/i }) as HTMLButtonElement)
+          .disabled,
+      ).toBe(true);
+      await user.click(within(resumeList).getByRole('radio', { name: /Saved assignment/i }));
+      await user.click(screen.getByRole('button', { name: /Review progress/i }));
 
       await waitFor(() => {
         expect(api.getJobStatus).toHaveBeenCalledWith('job-running');
@@ -822,7 +823,9 @@ export function registerResumeBasicTests() {
       expect(api.fetchJobProvenance).toHaveBeenCalledWith('job-resume');
       expect(screen.queryByRole('listbox', { name: /Recent assignments/i })).toBeNull();
 
+      await user.click(screen.getByRole('button', { name: /Lesson source/i }));
       expect(await screen.findByDisplayValue('Recovered transcript')).toBeTruthy();
+      await user.click(screen.getByRole('button', { name: /Create/i }));
       expect(await screen.findByDisplayValue('# Recovered draft')).toBeTruthy();
       vi.useFakeTimers();
       await act(async () => {
@@ -847,23 +850,21 @@ export function registerResumeBasicTests() {
 
     it('clears stale session query params when starting a fresh assignment', async () => {
       const user = createMinimalUser();
-      globalThis.history.replaceState(null, '', '/?sessionId=session-stale');
-
       renderMinimalAssignment();
-      await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
+      const studentSelect = await openNewRoute(user);
+      globalThis.history.replaceState(null, '', '/?sessionId=session-stale');
+      await user.selectOptions(studentSelect, 'student-alex');
+      await user.click(screen.getByRole('button', { name: /^Continue$/i }));
 
       expect(new URL(globalThis.location.href).searchParams.get('sessionId')).toBeNull();
       globalThis.history.replaceState(null, '', '/');
     });
 
-    it('does not create a resumable session for student selection alone and resets selection on start new', async () => {
+    it('does not create a resumable session for learner selection alone', async () => {
       const user = createMinimalUser();
       renderMinimalAssignment();
 
-      await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
-      const studentSelect = (await screen.findByRole('combobox', {
-        name: /^Student$/i,
-      })) as HTMLSelectElement;
+      const studentSelect = (await openNewRoute(user)) as HTMLSelectElement;
 
       fireEvent.change(studentSelect, { target: { value: 'student-alex' } });
       expect(studentSelect.value).toBe('student-alex');
@@ -872,8 +873,9 @@ export function registerResumeBasicTests() {
       });
       expect(api.updateAssignmentSession).not.toHaveBeenCalled();
 
+      await user.click(screen.getByRole('button', { name: /Change choice/i }));
       await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
-      expect(studentSelect.value).toBe('');
+      expect(screen.getByText(/Selected for this assignment/i)).toBeTruthy();
       expect(api.createAssignmentSession).not.toHaveBeenCalled();
       expect(api.updateAssignmentSession).not.toHaveBeenCalled();
     });
@@ -1132,6 +1134,7 @@ export function registerResumePresetRaceTests() {
         await waitFor(() => {
           expect(api.getJobStatus).toHaveBeenCalledWith('job-race-preset');
         });
+        await user.click(screen.getByRole('button', { name: /Create/i }));
         expect(await screen.findByDisplayValue('# Draft markdown')).toBeTruthy();
         expect(screen.getByRole('button', { name: /^Generate assignment$/i })).toBeTruthy();
 

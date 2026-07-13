@@ -307,27 +307,70 @@ export function makeStudentLesson(
   };
 }
 
-export async function previewCurrentDraft(_user: ReturnType<typeof userEvent.setup>) {
+export async function previewCurrentDraft(user: ReturnType<typeof userEvent.setup>) {
   const reviewStep = screen.queryByRole('button', { name: /Review & share/i });
   if (reviewStep && !(reviewStep as HTMLButtonElement).disabled) {
-    fireEvent.click(reviewStep);
+    await user.click(reviewStep);
+    await screen.findByRole(
+      'heading',
+      { name: /Review and share/i },
+      { timeout: UI_WAIT_TIMEOUT_MS },
+    );
   }
-  fireEvent.click(screen.getByRole('button', { name: /Preview assignment/i }));
+  await user.click(screen.getByRole('button', { name: /Preview assignment/i }));
   await screen.findByTitle('Draft preview', {}, { timeout: UI_WAIT_TIMEOUT_MS });
 }
 
-export async function preparePromptReady(_user: ReturnType<typeof userEvent.setup>) {
-  fireEvent.click(screen.getByRole('button', { name: /Start new assignment/i }));
-  await screen.findByRole('option', { name: 'Alex' }, { timeout: UI_WAIT_TIMEOUT_MS });
-  fireEvent.change(screen.getByRole('combobox', { name: /^Student$/i }), {
-    target: { value: 'student-alex' },
+export async function startNewAssignmentForLearner(
+  user: ReturnType<typeof userEvent.setup>,
+  learnerId = 'student-alex',
+) {
+  const startButton = await screen.findByRole(
+    'button',
+    { name: /Start new assignment/i },
+    { timeout: UI_WAIT_TIMEOUT_MS },
+  );
+  await waitFor(() => expect((startButton as HTMLButtonElement).disabled).toBe(false), {
+    timeout: UI_WAIT_TIMEOUT_MS,
   });
-  fireEvent.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+  await user.click(startButton);
+  const learnerSelect = await screen.findByRole(
+    'combobox',
+    { name: /Choose learner/i },
+    { timeout: UI_WAIT_TIMEOUT_MS },
+  );
+  await user.selectOptions(learnerSelect, learnerId);
+  await waitFor(
+    () =>
+      expect(
+        (screen.getByRole('button', { name: /^Continue$/i }) as HTMLButtonElement).disabled,
+      ).toBe(false),
+    { timeout: UI_WAIT_TIMEOUT_MS },
+  );
+  await user.click(screen.getByRole('button', { name: /^Continue$/i }));
+}
+
+export async function advanceSourceToTeachingContext(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+  await screen.findByRole('heading', { name: /Learner context/i }, { timeout: UI_WAIT_TIMEOUT_MS });
+}
+
+export async function advanceSourceToCreate(user: ReturnType<typeof userEvent.setup>) {
+  await advanceSourceToTeachingContext(user);
+  await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+  await screen.findByRole(
+    'button',
+    { name: /^Generate assignment$/i },
+    { timeout: UI_WAIT_TIMEOUT_MS },
+  );
+}
+
+export async function preparePromptReady(user: ReturnType<typeof userEvent.setup>) {
+  await startNewAssignmentForLearner(user);
   fireEvent.click(screen.getByRole('button', { name: /Drop audio file/i }));
   await screen.findByDisplayValue('Student transcript text', {}, { timeout: UI_WAIT_TIMEOUT_MS });
 
-  fireEvent.click(screen.getByRole('button', { name: /Confirm and continue/i }));
-  fireEvent.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+  await advanceSourceToCreate(user);
 
   fireEvent.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
   await screen.findByDisplayValue(
@@ -390,18 +433,35 @@ function hydrateResumedAssignment(
     });
   }
 
-  globalThis.history.replaceState(null, '', `/?jobId=${status.jobId}`);
   return status;
 }
 
-async function waitForResumedPromptReady(_text = 'Prompt package output') {
+async function openResumedJobAssignment(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(
+    await screen.findByRole(
+      'button',
+      { name: /Resume recent work/i },
+      { timeout: UI_WAIT_TIMEOUT_MS },
+    ),
+  );
+  await user.click((await screen.findAllByRole('radio', {}, { timeout: UI_WAIT_TIMEOUT_MS }))[0]!);
+  await user.click(
+    screen.getByRole('button', {
+      name: /Review progress|Review assignment|Open assignment|Review issue/i,
+    }),
+  );
+}
+
+async function waitForResumedPromptReady(user: ReturnType<typeof userEvent.setup>) {
   const createStep = await screen.findByRole(
     'button',
     { name: /Create/i },
     { timeout: UI_WAIT_TIMEOUT_MS },
   );
-  if (!(createStep as HTMLButtonElement).disabled) {
-    fireEvent.click(createStep);
+  if ((createStep as HTMLButtonElement).disabled) {
+    await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+  } else {
+    await user.click(createStep);
   }
   await screen.findByRole(
     'button',
@@ -421,6 +481,15 @@ async function waitForJobActionsReady(jobId = 'job-1') {
   if (supportDisclosure && !supportDisclosure.open) {
     fireEvent.click(supportSummary.closest('summary') ?? supportSummary);
   }
+  const reviewStep = await screen.findByRole(
+    'button',
+    { name: /Review & share/i },
+    { timeout: UI_WAIT_TIMEOUT_MS },
+  );
+  await waitFor(() => expect((reviewStep as HTMLButtonElement).disabled).toBe(false), {
+    timeout: UI_WAIT_TIMEOUT_MS,
+  });
+  fireEvent.click(reviewStep);
   await screen.findByRole(
     'heading',
     { name: /Advanced actions/i },
@@ -570,9 +639,10 @@ export async function renderResumedAssignment(
   const status = hydrateResumedAssignment(overrides);
   const user = options.user ?? createMinimalUser();
   const result = renderMinimalAssignment();
+  await openResumedJobAssignment(user);
   const readyState = options.waitFor ?? 'promptReady';
   if (readyState === 'promptReady') {
-    await waitForResumedPromptReady(overrides.promptText ?? 'Prompt package output');
+    await waitForResumedPromptReady(user);
   } else if (readyState === 'jobActions') {
     await waitForJobActionsReady(status.jobId);
   }
@@ -593,8 +663,10 @@ export async function renderPublishedAssignment(
   return renderResumedAssignment(
     {
       ...overrides,
+      draftText: overrides.draftText ?? '# Draft markdown',
       status: {
         state: 'succeeded',
+        studentId: 'student-alex',
         ...overrides.status,
       },
     },

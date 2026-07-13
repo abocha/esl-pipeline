@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { FRONTEND_SANDBOX_MODE, isFrontendSandboxEnabled } from './frontend-sandbox';
+import {
+  FRONTEND_SANDBOX_MODE,
+  isFrontendSandboxEnabled,
+  readFrontendSandboxScenario,
+} from './frontend-sandbox';
 
 describe('frontend sandbox mode', () => {
   it('enables mock auth only for the explicit dev sandbox flag', () => {
@@ -32,5 +36,18 @@ describe('frontend sandbox mode', () => {
         VITE_BATCH_FRONTEND_SANDBOX: FRONTEND_SANDBOX_MODE,
       }),
     ).toBe(false);
+  });
+
+  it.each([
+    ['', 'default'],
+    ['?sandboxScenario=step-one-no-recent', 'step-one-no-recent'],
+    ['?sandboxScenario=step-one-resume-states', 'step-one-resume-states'],
+    ['?sandboxScenario=step-one-resume-error', 'step-one-resume-error'],
+    ['?sandboxScenario=step-one-no-learners', 'step-one-no-learners'],
+    ['?sandboxScenario=step-one-learner-error', 'step-one-learner-error'],
+    ['?sandboxScenario=step-one-slow', 'step-one-slow'],
+    ['?sandboxScenario=unknown', 'default'],
+  ] as const)('normalizes %s to the allow-listed %s scenario', (search, scenario) => {
+    expect(readFrontendSandboxScenario(search)).toBe(scenario);
   });
 });

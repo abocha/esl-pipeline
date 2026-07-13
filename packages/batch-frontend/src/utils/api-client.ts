@@ -1,6 +1,6 @@
 import axios, { AxiosError, AxiosInstance, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 
-import { isFrontendSandboxEnabled } from '../dev/frontend-sandbox';
+import { isFrontendSandboxEnabled, readFrontendSandboxScenario } from '../dev/frontend-sandbox';
 import { createFrontendSandboxApiAdapter } from '../dev/frontend-sandbox-api';
 
 type MaybeString = string | undefined | null;
@@ -88,12 +88,19 @@ function isRefreshableAuthRequest(
   );
 }
 
+const frontendSandboxEnabled = isFrontendSandboxEnabled();
+const frontendSandboxScenario = frontendSandboxEnabled
+  ? readFrontendSandboxScenario(globalThis.location?.search ?? '')
+  : 'default';
+
 // Create axios instance with default config
 const apiClient: AxiosInstance = axios.create({
   baseURL: backendBaseUrl || undefined,
   timeout: 240_000, // 240 seconds — matches backend GEN_*_REQUEST_TIMEOUT_MS
   withCredentials: true,
-  adapter: isFrontendSandboxEnabled() ? createFrontendSandboxApiAdapter() : undefined,
+  adapter: frontendSandboxEnabled
+    ? createFrontendSandboxApiAdapter({ scenario: frontendSandboxScenario })
+    : undefined,
   headers: {
     'Content-Type': 'application/json',
   },

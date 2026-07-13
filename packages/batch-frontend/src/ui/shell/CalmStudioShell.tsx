@@ -56,13 +56,6 @@ export function CalmStudioShell({
           <span className="calm-shell__mark calm-shell__mark--compact" aria-hidden="true" />
           <strong>ESL Pipeline</strong>
         </div>
-        <div className="calm-shell__account">
-          {sandboxMode ? (
-            <span className="calm-shell__sandbox" aria-label="Frontend sandbox mode">
-              Mock data
-            </span>
-          ) : null}
-        </div>
       </header>
 
       <aside className="calm-shell__rail" id="workspace-navigation">
@@ -93,6 +86,11 @@ export function CalmStudioShell({
           ))}
         </nav>
         <div className="calm-shell__rail-footer">
+          {sandboxMode ? (
+            <span className="calm-shell__sandbox" aria-label="Frontend sandbox mode">
+              Mock data
+            </span>
+          ) : null}
           <span className="calm-shell__rail-email" translate="no">
             {user.email}
           </span>
