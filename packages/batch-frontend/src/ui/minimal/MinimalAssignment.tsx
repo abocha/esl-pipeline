@@ -1774,6 +1774,7 @@ export const MinimalAssignment: React.FC = () => {
         <div
           className="assignment-workflow__step-mount"
           data-active={activeStep === 'student' ? 'true' : 'false'}
+          hidden={activeStep !== 'student'}
           inert={activeStep === 'student' ? undefined : true}
         >
           <AssignmentEntryStep
@@ -1805,6 +1806,7 @@ export const MinimalAssignment: React.FC = () => {
         <div
           className="assignment-workflow__step-mount"
           data-active={activeStep === 'source' ? 'true' : 'false'}
+          hidden={activeStep !== 'source'}
           inert={activeStep === 'source' ? undefined : true}
         >
           <LessonSourceStep
@@ -1879,6 +1881,7 @@ export const MinimalAssignment: React.FC = () => {
         <div
           className="assignment-workflow__step-mount"
           data-active={activeStep === 'context' ? 'true' : 'false'}
+          hidden={activeStep !== 'context'}
           inert={activeStep === 'context' ? undefined : true}
         >
           <TeachingContextStep>
@@ -1926,6 +1929,7 @@ export const MinimalAssignment: React.FC = () => {
         <div
           className="assignment-workflow__step-mount"
           data-active={activeStep === 'create' ? 'true' : 'false'}
+          hidden={activeStep !== 'create'}
           inert={activeStep === 'create' ? undefined : true}
         >
           <CreateAssignmentStep>
@@ -1968,6 +1972,7 @@ export const MinimalAssignment: React.FC = () => {
         <div
           className="assignment-workflow__step-mount"
           data-active={activeStep === 'review' ? 'true' : 'false'}
+          hidden={activeStep !== 'review'}
           inert={activeStep === 'review' ? undefined : true}
         >
           <ReviewShareStep>

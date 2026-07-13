@@ -32,6 +32,24 @@ describe('MinimalAssignment - staged workflow UI', () => {
     vi.useRealTimers();
   });
 
+  it('keeps inactive workflow steps mounted but removes them from the accessibility tree', () => {
+    renderMinimalAssignment();
+
+    const studentMount = document.querySelector<HTMLElement>(
+      '.assignment-workflow__step-mount[data-active="true"]',
+    );
+    const sourceMount = document.querySelector<HTMLElement>(
+      '.assignment-workflow__step-mount[data-active="false"]',
+    );
+
+    expect(studentMount?.hasAttribute('hidden')).toBe(false);
+    expect(studentMount?.hasAttribute('inert')).toBe(false);
+    expect(sourceMount?.hasAttribute('hidden')).toBe(true);
+    expect(sourceMount?.hasAttribute('inert')).toBe(true);
+    expect(screen.queryByRole('heading', { name: /Add lesson source/i })).toBeNull();
+    expect(screen.getByRole('button', { name: /Start new assignment/i })).toBeTruthy();
+  });
+
   it('keeps Step 1 unselected until New Continue explicitly commits a current learner', async () => {
     const user = createMinimalUser();
     renderMinimalAssignment();
@@ -99,9 +117,11 @@ describe('MinimalAssignment - staged workflow UI', () => {
       await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
       expect(screen.getByRole('heading', { name: /Review and share/i })).toBeTruthy();
 
+      await user.click(screen.getByRole('button', { name: /Step 4Create/i }));
       fireEvent.change(screen.getByRole('textbox', { name: /Draft markdown/i }), {
         target: { value: '# Final lesson assignment' },
       });
+      await user.click(screen.getByRole('button', { name: /Step 5Review & share/i }));
 
       await previewCurrentDraft(user);
       await user.click(screen.getByRole('button', { name: /Share assignment/i }));
@@ -151,6 +171,8 @@ describe('MinimalAssignment - staged workflow UI', () => {
       expect(screen.queryByRole('combobox', { name: /Reading style/i })).toBeNull();
       expect(screen.queryByRole('combobox', { name: /Voice model/i })).toBeNull();
 
+      await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+      await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
       const generateAssignmentButton = screen.getByRole('button', {
         name: /^Generate assignment$/i,
       });
@@ -205,6 +227,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
       expect(api.getStudentMemoryHealth).not.toHaveBeenCalled();
       expect(screen.queryByText(/Building lesson memory/i)).toBeNull();
       expect(screen.getAllByText('Transcript ready').length).toBeGreaterThan(0);
+      await user.click(screen.getByRole('button', { name: /Teaching context/i }));
       const confirmButton = screen.getByRole('button', {
         name: /Use this transcript for Cora's learner context/i,
       });
@@ -226,9 +249,11 @@ describe('MinimalAssignment - staged workflow UI', () => {
         expect(api.getStudentMemoryHealth).toHaveBeenCalledWith('student-cora');
       });
 
+      await user.click(screen.getByRole('button', { name: /Lesson source/i }));
       fireEvent.change(screen.getByDisplayValue('Student transcript text'), {
         target: { value: 'Edited transcript text' },
       });
+      await user.click(screen.getByRole('button', { name: /Teaching context/i }));
       expect(
         (
           screen.getByRole('button', {
@@ -367,6 +392,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
     );
     globalThis.history.replaceState(null, '', '/?sessionId=session-teacher-notes-review');
     renderMinimalAssignment();
+    await user.click(screen.getByRole('button', { name: /Create/i }));
     await screen.findByRole('button', { name: /^Generate assignment$/i });
     await user.click(screen.getByRole('button', { name: /Teaching context/i }));
     await waitFor(() =>
@@ -438,6 +464,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
   it(
     'keeps unlocked resumed stages distilled to task-critical controls',
     async () => {
+      const user = createMinimalUser();
       await renderPublishedAssignment(
         {
           draftText: '# Draft markdown',
@@ -445,13 +472,17 @@ describe('MinimalAssignment - staged workflow UI', () => {
             studentId: 'student-alex',
           },
         },
-        { user: createMinimalUser() },
+        { user },
       );
 
+      await user.click(screen.getByRole('button', { name: /Lesson source/i }));
       expect(screen.getByDisplayValue('Student transcript text')).toBeTruthy();
+      await user.click(screen.getByRole('button', { name: /Create/i }));
       expect(screen.getByDisplayValue('# Draft markdown')).toBeTruthy();
-      expect(screen.getByRole('button', { name: /Refresh actions/i })).toBeTruthy();
+      await user.click(screen.getByRole('button', { name: /Teaching context/i }));
       expect(screen.getByRole('link', { name: /Open Learning page/i })).toBeTruthy();
+      await user.click(screen.getByRole('button', { name: /Review & share/i }));
+      expect(screen.getByRole('button', { name: /Refresh actions/i })).toBeTruthy();
 
       expect(screen.queryByRole('button', { name: /Drop audio file/i })).toBeNull();
       expect(screen.queryByText(/Recording ID:/i)).toBeNull();
@@ -535,14 +566,12 @@ describe('MinimalAssignment - staged workflow UI', () => {
         { user },
       );
 
+      await user.click(screen.getByRole('button', { name: /Student/i }));
       const setupSummary = screen.getByRole('region', { name: /Current assignment/i });
       expect(setupSummary).toBeTruthy();
       expect(screen.getByText('Reopened assignment')).toBeTruthy();
       expect(screen.queryByRole('button', { name: /Resume recent work/i })).toBeNull();
       expect(screen.queryByRole('button', { name: /Start new assignment/i })).toBeNull();
-      expect(
-        screen.getAllByRole('link', { name: /Open Assignment Handout/i }).length,
-      ).toBeGreaterThan(0);
       const setupScope = within(setupSummary as HTMLElement);
       expect(setupScope.queryByRole('button', { name: /Hide details|Show details/i })).toBeNull();
       expect(setupScope.queryByRole('button', { name: /Refresh pronunciation audio/i })).toBeNull();
@@ -559,6 +588,11 @@ describe('MinimalAssignment - staged workflow UI', () => {
       expect(screen.queryByText(/Reopen an existing assignment/i)).toBeNull();
       expect(screen.queryByText(/Begin clean and move straight/i)).toBeNull();
 
+      expect(screen.queryAllByRole('link', { name: /Open Assignment Handout/i })).toHaveLength(0);
+      await user.click(screen.getByRole('button', { name: /Review & share/i }));
+      expect(
+        screen.getAllByRole('link', { name: /Open Assignment Handout/i }).length,
+      ).toBeGreaterThan(0);
       expect(screen.getByRole('heading', { name: /Advanced actions/i })).toBeTruthy();
       expect(screen.getByRole('button', { name: /Refresh actions/i })).toBeTruthy();
       const quickReruns = screen.getByRole('region', { name: /Quick reruns/i });
@@ -600,6 +634,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
       expect(screen.queryByText(/Cancel is only available/i)).toBeNull();
       expect(screen.getAllByText(/^Support details$/i).length).toBeGreaterThan(0);
 
+      await user.click(screen.getByRole('button', { name: /Student/i }));
       await user.click(screen.getByRole('button', { name: /Change assignment/i }));
       await user.click(screen.getByRole('button', { name: /Resume recent work/i }));
 
@@ -627,6 +662,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
         { user: createMinimalUser() },
       );
 
+      await createMinimalUser().click(screen.getByRole('button', { name: /Teaching context/i }));
       const learnerContext = screen
         .getByRole('heading', { name: /Learner context/i })
         .closest('.minimal-stage-panel');

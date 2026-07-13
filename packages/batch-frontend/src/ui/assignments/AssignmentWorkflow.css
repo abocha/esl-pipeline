@@ -130,14 +130,6 @@
   border-radius: var(--cs-radius-surface);
   background: var(--cs-surface);
 }
-.assignment-workflow__step-mount[data-active='false'] {
-  position: fixed;
-  left: -100000px;
-  top: 0;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-}
 .assignment-workflow__guidance {
   display: grid;
   gap: 0.8rem;
