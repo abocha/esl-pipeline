@@ -48,6 +48,27 @@ async function renderResumedDraftSession() {
   return user;
 }
 
+async function startNewAssignmentForLearner(
+  user: ReturnType<typeof createMinimalUser>,
+  studentId = 'student-alex',
+) {
+  const startButton = await screen.findByRole('button', { name: /Start new assignment/i });
+  await waitFor(() => expect((startButton as HTMLButtonElement).disabled).toBe(false));
+  await user.click(startButton);
+  await waitFor(() =>
+    expect(
+      screen.queryByRole('combobox', { name: /Choose learner/i }) ??
+        screen.queryByRole('button', { name: /Change student/i }),
+    ).toBeTruthy(),
+  );
+  const changeStudentButton = screen.queryByRole('button', { name: /Change student/i });
+  if (changeStudentButton) await user.click(changeStudentButton);
+  const studentSelect = await screen.findByRole('combobox', { name: /Choose learner/i });
+  await user.selectOptions(studentSelect, studentId);
+  await user.click(screen.getByRole('button', { name: /^Continue$/i }));
+  return studentSelect;
+}
+
 export function registerPromptEditorTests() {
   describe('MinimalAssignment - prompt editor flows', {
     timeout: PROMPT_DRAFT_TEST_TIMEOUT_MS,
@@ -784,19 +805,19 @@ export function registerPromptStudentSelectionTests() {
       const user = createMinimalUser();
       renderMinimalAssignment();
 
-      expect(screen.getByRole('combobox', { name: /^Student$/i })).toBeTruthy();
-      await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
+      const startButton = await screen.findByRole('button', { name: /Start new assignment/i });
+      await waitFor(() => expect((startButton as HTMLButtonElement).disabled).toBe(false));
+      await user.click(startButton);
 
-      const studentSelect = await screen.findByRole('combobox', { name: /^Student$/i });
+      const studentSelect = await screen.findByRole('combobox', { name: /Choose learner/i });
       expect((studentSelect as HTMLSelectElement).value).toBe('');
       expect(
-        (screen.getByRole('button', { name: /Confirm and continue/i }) as HTMLButtonElement)
-          .disabled,
+        (screen.getByRole('button', { name: /^Continue$/i }) as HTMLButtonElement).disabled,
       ).toBe(true);
       expect(api.uploadRecording).not.toHaveBeenCalled();
     });
 
-    it('labels audio rerun jobs as audio regeneration in recent jobs', async () => {
+    it('shows a resumable job without exposing its support metadata', async () => {
       vi.mocked(api.listUserJobs).mockResolvedValueOnce({
         jobs: [
           {
@@ -835,10 +856,13 @@ export function registerPromptStudentSelectionTests() {
       await waitFor(() => {
         expect(screen.queryByRole('listbox', { name: /Recent assignments/i })).toBeNull();
       });
-      fireEvent.click(screen.getByRole('button', { name: /Resume recent work/i }));
+      const resumeButton = await screen.findByRole('button', { name: /Resume recent work/i });
+      await waitFor(() => expect((resumeButton as HTMLButtonElement).disabled).toBe(false));
+      fireEvent.click(resumeButton);
 
       await waitFor(() => {
-        expect(screen.getByRole('option', { name: /Audio refresh/i })).toBeTruthy();
+        expect(screen.getByRole('radio', { name: /Saved assignment/i })).toBeTruthy();
+        expect(screen.queryByText(/Audio refresh/i)).toBeNull();
       });
     });
 
@@ -846,10 +870,7 @@ export function registerPromptStudentSelectionTests() {
       const user = createMinimalUser();
       renderMinimalAssignment();
 
-      await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
-      const studentSelect = await screen.findByRole('combobox', { name: /^Student$/i });
-      await screen.findByRole('option', { name: 'Alex' });
-      await user.selectOptions(studentSelect, 'student-alex');
+      await startNewAssignmentForLearner(user);
       await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
 
       await waitFor(() => {
@@ -886,11 +907,12 @@ export function registerPromptStudentSelectionTests() {
       const user = createMinimalUser();
       renderMinimalAssignment();
 
-      await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
-      const studentSelect = await screen.findByRole('combobox', { name: /^Student$/i });
-      await screen.findByRole('option', { name: 'Alex' });
-      expect((studentSelect as HTMLSelectElement).value).toBe('student-alex');
-      expect((studentSelect as HTMLSelectElement).disabled).toBe(true);
+      const startButton = await screen.findByRole('button', { name: /Start new assignment/i });
+      await waitFor(() => expect((startButton as HTMLButtonElement).disabled).toBe(false));
+      await user.click(startButton);
+      expect(screen.getByText(/Selected for this assignment/i)).toBeTruthy();
+
+      await user.click(screen.getByRole('button', { name: /^Continue$/i }));
       await screen.findByText(/Lesson context: .*Pitch follow-up.*lesson-followup-1/i);
 
       await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
@@ -950,10 +972,12 @@ export function registerPromptStudentSelectionTests() {
       const user = createMinimalUser();
       renderMinimalAssignment();
 
-      await user.click(screen.getByRole('button', { name: /Resume recent work/i }));
-      const resumeList = await screen.findByRole('listbox', { name: /Recent assignments/i });
-      await user.click(within(resumeList).getByRole('option', { name: /Alex/i }));
-      await user.click(screen.getByRole('button', { name: /Resume selected assignment/i }));
+      const resumeButton = await screen.findByRole('button', { name: /Resume recent work/i });
+      await waitFor(() => expect((resumeButton as HTMLButtonElement).disabled).toBe(false));
+      await user.click(resumeButton);
+      const resumeList = await screen.findByRole('group', { name: /Recent assignments/i });
+      await user.click(within(resumeList).getByRole('radio', { name: /Alex/i }));
+      await user.click(screen.getByRole('button', { name: /Continue assignment/i }));
 
       await waitFor(() => {
         expect(screen.getByText(/Lesson context: .*Resume review.*lesson-resume-1/i)).toBeTruthy();
@@ -1007,12 +1031,7 @@ export function registerPromptStudentSelectionTests() {
       const user = createMinimalUser();
       renderMinimalAssignment();
 
-      await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
-      await screen.findByRole('option', { name: 'Alex' });
-      await user.selectOptions(
-        screen.getByRole('combobox', { name: /^Student$/i }),
-        'student-alex',
-      );
+      await startNewAssignmentForLearner(user);
 
       await screen.findByText(/Recent lessons without homework/i);
       await user.click(screen.getByRole('button', { name: /Client update practice/i }));

@@ -32,6 +32,23 @@ describe('MinimalAssignment - staged workflow UI', () => {
     vi.useRealTimers();
   });
 
+  it('keeps Step 1 unselected until New Continue explicitly commits a current learner', async () => {
+    const user = createMinimalUser();
+    renderMinimalAssignment();
+
+    expect(screen.getByRole('button', { name: 'Resume recent work' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Start new assignment' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Confirm and continue/i })).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Start new assignment' }));
+    await screen.findByRole('option', { name: 'Alex' });
+    await user.selectOptions(screen.getByRole('combobox', { name: /Choose learner/i }), 'student-alex');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+    expect(screen.getByRole('heading', { name: /Add lesson source/i })).toBeTruthy();
+    expect(screen.getByText('Student selected. Recording needed.')).toBeTruthy();
+  });
+
   it('flags Spanish-looking accent characters in transcript text', () => {
     expect(getTranscriptUnexpectedCharacterWarnings('Student: Ajá, I understand.')).toEqual(['á']);
     expect(getTranscriptUnexpectedCharacterWarnings('Teacher: Ага, good.')).toEqual([]);
@@ -43,19 +60,18 @@ describe('MinimalAssignment - staged workflow UI', () => {
       const user = createMinimalUser();
       renderMinimalAssignment();
 
-      expect(screen.getByRole('heading', { name: /^Student$/i, level: 1 })).toBeTruthy();
       expect(screen.getByRole('navigation', { name: /Assignment progress/i })).toBeTruthy();
-      expect(screen.queryByRole('listbox', { name: /Recent assignments/i })).toBeNull();
+      expect(screen.queryByRole('group', { name: /Recent assignments/i })).toBeNull();
       expect(screen.queryByRole('combobox', { name: /Transcript engine/i })).toBeNull();
       expect(screen.queryByText(/STT provider/i)).toBeNull();
 
       await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
       await screen.findByRole('option', { name: 'Alex' });
       await user.selectOptions(
-        screen.getByRole('combobox', { name: /^Student$/i }),
+        screen.getByRole('combobox', { name: /Choose learner/i }),
         'student-alex',
       );
-      await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+      await user.click(screen.getByRole('button', { name: 'Continue' }));
       expect(screen.getByRole('heading', { name: /Add lesson source/i })).toBeTruthy();
       expect(screen.getByRole('combobox', { name: /Transcript engine/i })).toBeTruthy();
       expect(screen.getByText('Next step: upload the lesson recording.')).toBeTruthy();
@@ -113,9 +129,10 @@ describe('MinimalAssignment - staged workflow UI', () => {
       await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
       await screen.findByRole('option', { name: 'Alex' });
       await user.selectOptions(
-        screen.getByRole('combobox', { name: /^Student$/i }),
+        screen.getByRole('combobox', { name: /Choose learner/i }),
         'student-alex',
       );
+      await user.click(screen.getByRole('button', { name: 'Continue' }));
       await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
       await screen.findByDisplayValue('Student transcript text');
 
@@ -178,9 +195,10 @@ describe('MinimalAssignment - staged workflow UI', () => {
       await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
       await screen.findByRole('option', { name: 'Cora' });
       await user.selectOptions(
-        screen.getByRole('combobox', { name: /^Student$/i }),
+        screen.getByRole('combobox', { name: /Choose learner/i }),
         'student-cora',
       );
+      await user.click(screen.getByRole('button', { name: 'Continue' }));
       await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
       await screen.findByDisplayValue('Student transcript text');
 
@@ -378,8 +396,8 @@ describe('MinimalAssignment - staged workflow UI', () => {
 
     await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
     await screen.findByRole('option', { name: 'Alex' });
-    await user.selectOptions(screen.getByRole('combobox', { name: /^Student$/i }), 'student-alex');
-    await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+    await user.selectOptions(screen.getByRole('combobox', { name: /Choose learner/i }), 'student-alex');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
     expect(screen.getByRole('heading', { name: /Add lesson source/i })).toBeTruthy();
     scrollIntoView.mockClear();
 
@@ -406,7 +424,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
 
     const overview = document.querySelector('.assignment-workflow') as HTMLElement;
     expect(overview).toBeTruthy();
-    expect(within(overview).getByText(/^Assignment Builder$/i)).toBeTruthy();
+    expect(overview.getAttribute('aria-label')).toBe('Assignment builder');
     const progress = within(overview).getByRole('navigation', { name: /Assignment progress/i });
     const progressList = within(progress).getByRole('list');
     expect(within(progressList).getByText('Student')).toBeTruthy();
@@ -471,8 +489,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
       ).toBeGreaterThan(0);
       await user.click(screen.getByRole('button', { name: /Start another assignment/i }));
 
-      expect(screen.getByRole('heading', { name: /^Student$/i, level: 1 })).toBeTruthy();
-      expect(screen.getByRole('combobox', { name: /^Student$/i })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Start new assignment' })).toBeTruthy();
       expect(screen.queryAllByRole('link', { name: /Open Assignment Handout/i })).toHaveLength(0);
     },
     INTEGRATION_TEST_TIMEOUT_MS,
@@ -486,18 +503,16 @@ describe('MinimalAssignment - staged workflow UI', () => {
 
       await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
 
-      expect(screen.getByRole('heading', { name: /^New assignment$/i })).toBeTruthy();
-      expect(screen.getByText('Starting a new assignment.')).toBeTruthy();
       expect(screen.queryByRole('button', { name: /Resume recent work/i })).toBeNull();
 
       await screen.findByRole('option', { name: 'Alex' });
       await user.selectOptions(
-        screen.getByRole('combobox', { name: /^Student$/i }),
+        screen.getByRole('combobox', { name: /Choose learner/i }),
         'student-alex',
       );
-      expect(screen.getByText('Starting a new assignment for Alex.')).toBeTruthy();
+      expect(screen.getByRole('heading', { name: 'Alex' })).toBeTruthy();
 
-      await user.click(screen.getByRole('button', { name: /Change assignment setup/i }));
+      await user.click(screen.getByRole('button', { name: /Change choice/i }));
       expect(screen.getByRole('button', { name: /Resume recent work/i })).toBeTruthy();
       expect(screen.getByRole('button', { name: /Start new assignment/i })).toBeTruthy();
     },
@@ -520,11 +535,9 @@ describe('MinimalAssignment - staged workflow UI', () => {
         { user },
       );
 
-      const setupSummary = screen
-        .getByRole('heading', { name: /^New assignment$/i })
-        .closest('section');
+      const setupSummary = screen.getByRole('region', { name: /Current assignment/i });
       expect(setupSummary).toBeTruthy();
-      expect(screen.getByText('Starting a new assignment for Alex.')).toBeTruthy();
+      expect(screen.getByText('Reopened assignment')).toBeTruthy();
       expect(screen.queryByRole('button', { name: /Resume recent work/i })).toBeNull();
       expect(screen.queryByRole('button', { name: /Start new assignment/i })).toBeNull();
       expect(
@@ -587,13 +600,14 @@ describe('MinimalAssignment - staged workflow UI', () => {
       expect(screen.queryByText(/Cancel is only available/i)).toBeNull();
       expect(screen.getAllByText(/^Support details$/i).length).toBeGreaterThan(0);
 
-      await user.click(screen.getByRole('button', { name: /Change assignment setup/i }));
+      await user.click(screen.getByRole('button', { name: /Change assignment/i }));
       await user.click(screen.getByRole('button', { name: /Resume recent work/i }));
 
       expect(screen.getAllByText(/^Recent assignments$/i)).toHaveLength(1);
       expect(screen.queryByRole('button', { name: /Start new instead/i })).toBeNull();
 
-      await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
+      await user.click(screen.getByRole('button', { name: /Change choice/i }));
+      await user.click(await screen.findByRole('button', { name: /Start new assignment/i }));
 
       expect(screen.queryByRole('button', { name: /Switch to resume/i })).toBeNull();
     },
@@ -643,7 +657,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
       expect(api.fetchJobOptions).toHaveBeenCalledTimes(1);
       expect(api.fetchStudentOptions).toHaveBeenCalledTimes(1);
     });
-    expect(screen.getByRole('combobox', { name: /^Student$/i })).toBeTruthy();
+    expect(screen.queryByRole('combobox', { name: /Choose learner/i })).toBeNull();
     expect(screen.queryByText(/Share the assignment once to unlock updates/i)).toBeNull();
     expect(screen.queryByText(/Available after sharing\./i)).toBeNull();
 
@@ -676,7 +690,8 @@ describe('MinimalAssignment - staged workflow UI', () => {
     renderMinimalAssignment();
     await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
     await screen.findByRole('option', { name: 'Alex' });
-    await user.selectOptions(screen.getByRole('combobox', { name: /^Student$/i }), 'student-alex');
+    await user.selectOptions(screen.getByRole('combobox', { name: /Choose learner/i }), 'student-alex');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
     await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
 
     await waitFor(() => {

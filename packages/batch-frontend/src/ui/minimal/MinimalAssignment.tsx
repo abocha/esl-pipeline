@@ -32,12 +32,14 @@ import {
   type AssignmentStepId,
   deriveAssignmentWorkflow,
   getTeacherNotesCommitDecision,
-  resolveInitialAssignmentStep,
 } from '../assignments/assignment-workflow';
 import { CreateAssignmentStep } from '../assignments/steps/CreateAssignmentStep';
+import {
+  AssignmentEntryStep,
+  type AssignmentEntrySummary,
+} from '../assignments/steps/AssignmentEntryStep';
 import { LessonSourceStep } from '../assignments/steps/LessonSourceStep';
 import { ReviewShareStep } from '../assignments/steps/ReviewShareStep';
-import { StudentStep } from '../assignments/steps/StudentStep';
 import { TeachingContextStep } from '../assignments/steps/TeachingContextStep';
 import {
   AdvancedActionsStage,
@@ -59,21 +61,19 @@ import {
   type HydratedAssignmentSnapshot,
   type HydrationContext,
   type HydrationMode,
+  type ResumeOpenSuccess,
   useMinimalAssignmentResume,
 } from './MinimalAssignment.resume';
 import {
-  buildCurrentAssignmentCard,
   buildRecentAssignmentItems,
 } from './MinimalAssignment.resume-presentation';
+import type { AssignmentEntryView } from './MinimalAssignment.entry-state';
 import { useMinimalAssignmentSourceController } from './MinimalAssignment.source';
 import {
   AssignmentStageSection,
   ContextStageSection,
-  type CurrentAssignmentCard,
   ReviewStageSection,
   SourceStageSection,
-  type StartStageMode,
-  StartStageSection,
   type WorkflowStage,
   type WorkflowStageStatus,
 } from './MinimalAssignment.stages';
@@ -254,8 +254,8 @@ export const MinimalAssignment: React.FC = () => {
   const [jobStatus, setJobStatusState] = useState<JobStatus | null>(null);
   const [jobOptions, setJobOptions] = useState<JobOptionsResponse | null>(null);
   const [jobOptionsError, setJobOptionsError] = useState<string | null>(null);
-  const [showAllResumeJobs, setShowAllResumeJobs] = useState(false);
-  const [startStageMode, setStartStageMode] = useState<StartStageMode>('idle');
+  const [entryView, setEntryView] = useState<AssignmentEntryView>('choice');
+  const [entrySummary, setEntrySummary] = useState<AssignmentEntrySummary | null>(null);
   const [activeStep, setActiveStep] = useState<AssignmentStepId>('student');
   const [firstProfileLessonMemoryStatus, setFirstProfileLessonMemoryStatus] = useState<
     'checking' | 'building' | 'ready'
@@ -281,8 +281,6 @@ export const MinimalAssignment: React.FC = () => {
   const [rerunTargetPronunciationMode, setRerunTargetPronunciationMode] =
     useState<PronunciationMode | null>(null);
 
-  const startSectionRef = useRef<HTMLElement | null>(null);
-  const startHeadingRef = useRef<HTMLHeadingElement | null>(null);
   const sourceSectionRef = useRef<HTMLElement | null>(null);
   const sourceHeadingRef = useRef<HTMLHeadingElement | null>(null);
   const sourceStudentSelectRef = useRef<HTMLSelectElement | null>(null);
@@ -297,7 +295,6 @@ export const MinimalAssignment: React.FC = () => {
   const reviewPreviewButtonRef = useRef<HTMLButtonElement | null>(null);
   const advancedSectionRef = useRef<HTMLElement | null>(null);
   const advancedHeadingRef = useRef<HTMLHeadingElement | null>(null);
-  const activeStepHydrationKeyRef = useRef<string | null>(null);
   const assignmentSessionMutationQueueRef = useRef<Promise<AssignmentSession | null>>(
     Promise.resolve(null),
   );
@@ -488,12 +485,14 @@ export const MinimalAssignment: React.FC = () => {
     [],
   );
 
-  const resetFlow = useCallback(() => {
+  const resetFlow = useCallback((nextStudentId?: string) => {
     beginHydration('new');
     committedTeacherNotesRef.current = '';
     invalidateAuthoringGeneration();
     resetAuthoring();
-    resetSourceFlow({ resetStudent: true });
+    resetSourceFlow(
+      nextStudentId === undefined ? { resetStudent: true } : { nextStudentId },
+    );
     resetJobShell();
   }, [
     beginHydration,
@@ -502,12 +501,6 @@ export const MinimalAssignment: React.FC = () => {
     resetJobShell,
     resetSourceFlow,
   ]);
-
-  const handleStartNewAssignment = useCallback(() => {
-    setShowAllResumeJobs(false);
-    resetFlow();
-    setStartStageMode('start');
-  }, [resetFlow]);
 
   const loadPromptOptions = useCallback(async () => {
     try {
@@ -592,6 +585,16 @@ export const MinimalAssignment: React.FC = () => {
     setJobStatusState(job);
   }, []);
 
+  const handleInitialHydrationResolved = useCallback((result: ResumeOpenSuccess) => {
+    setEntrySummary({
+      learnerName: 'Saved learner',
+      state: result.state,
+      origin: 'resume',
+    });
+    setEntryView('summary');
+    setActiveStep(result.destination);
+  }, []);
+
   const resume = useMinimalAssignmentResume({
     applyHydratedSnapshot,
     applyCurrentJobStatus,
@@ -609,6 +612,7 @@ export const MinimalAssignment: React.FC = () => {
     currentSelectedStudentId: source.selectedStudentId,
     currentSelectedProfileId: context.selectedProfileId,
     currentProfileSelectionMode: context.profileSelectionMode,
+    onInitialHydrationResolved: handleInitialHydrationResolved,
   });
   const activeAssignmentSession = resume.activeAssignmentSession;
   const setActiveAssignmentSession = resume.setActiveAssignmentSession;
@@ -683,7 +687,7 @@ export const MinimalAssignment: React.FC = () => {
     ],
   );
 
-  const handleStartNewAssignmentWithSessionReset = useCallback(() => {
+  const resetForNewAssignment = useCallback((nextStudentId?: string) => {
     assignmentSessionMutationQueueRef.current = Promise.resolve(null);
     if (assignmentSessionSettingsTimeoutRef.current) {
       clearTimeout(assignmentSessionSettingsTimeoutRef.current);
@@ -701,14 +705,33 @@ export const MinimalAssignment: React.FC = () => {
     setOperatorSelectedTemplateId(fallbackTemplateId);
     assignmentSessionSettingsRef.current = '';
     setActiveAssignmentSession(null);
-    setActiveStep('student');
-    handleStartNewAssignment();
+    resetFlow(nextStudentId);
   }, [
     fallbackTemplateId,
-    handleStartNewAssignment,
+    resetFlow,
     scheduleFollowupContext.lessonId,
     setActiveAssignmentSession,
   ]);
+
+  const handleStartNewAssignmentWithSessionReset = useCallback(() => {
+    resetForNewAssignment();
+    setEntrySummary(null);
+    setEntryView('choice');
+    setActiveStep('student');
+  }, [resetForNewAssignment]);
+
+  const commitNewAssignment = useCallback(
+    (studentId: string) => {
+      const learner = source.studentOptions.find((student) => student.id === studentId);
+      if (!learner) return;
+      resetForNewAssignment(studentId);
+      clearAssignmentResumeQuery();
+      setEntrySummary({ learnerName: learner.name, state: 'unfinished', origin: 'new' });
+      setEntryView('summary');
+      setActiveStep('source');
+    },
+    [resetForNewAssignment, source.studentOptions],
+  );
 
   useEffect(() => {
     const studentId = source.selectedStudentId.trim();
@@ -897,11 +920,6 @@ export const MinimalAssignment: React.FC = () => {
   });
   const resumeLoadResumeJobs = resume.loadResumeJobs;
   const resumeSetSelectedResumeJobId = resume.setSelectedResumeJobId;
-
-  const handleShowResumeChoice = useCallback(() => {
-    setStartStageMode('resume');
-  }, []);
-
   useEffect(() => {
     return () => {
       if (assignmentSessionSettingsTimeoutRef.current) {
@@ -1338,8 +1356,7 @@ export const MinimalAssignment: React.FC = () => {
     activeAssignmentSession?.draftId,
   );
   const hasStartedFlow =
-    startStageMode === 'start' ||
-    source.selectedStudentId.trim().length > 0 ||
+    entryView === 'summary' ||
     source.recording !== null ||
     transcriptReady ||
     authoring.promptReady ||
@@ -1349,31 +1366,46 @@ export const MinimalAssignment: React.FC = () => {
     () => new Map(source.studentOptions.map((student) => [student.id, student.name])),
     [source.studentOptions],
   );
-  const totalResumeItems = resume.assignmentSessions.length + resume.resumeJobs.length;
-  useEffect(() => {
-    if (totalResumeItems <= 4 && showAllResumeJobs) {
-      setShowAllResumeJobs(false);
-    }
-  }, [showAllResumeJobs, totalResumeItems]);
+  const resolvedEntrySummary = useMemo(() => {
+    if (!entrySummary || entrySummary.learnerName !== 'Saved learner') return entrySummary;
+    const learnerName = studentNameById.get(source.selectedStudentId);
+    return learnerName ? { ...entrySummary, learnerName } : entrySummary;
+  }, [entrySummary, source.selectedStudentId, studentNameById]);
   const resumeJobItems = useMemo(() => {
-    const allItems = buildRecentAssignmentItems(
+    return buildRecentAssignmentItems(
       resume.assignmentSessions,
       resume.resumeJobs,
       resume.selectedResumeJobId,
       studentNameById,
     );
-    return showAllResumeJobs ? allItems : allItems.slice(0, 4);
   }, [
     resume.assignmentSessions,
     resume.resumeJobs,
     resume.selectedResumeJobId,
-    showAllResumeJobs,
     studentNameById,
   ]);
-  const canToggleResumeJobs = totalResumeItems > 4;
-  const currentAssignmentCard = useMemo<CurrentAssignmentCard | null>(() => {
-    return buildCurrentAssignmentCard(jobStatus, studentNameById);
-  }, [jobStatus, studentNameById]);
+  useEffect(() => {
+    if (
+      entryView === 'resume' &&
+      !resume.resumeLoading &&
+      !resume.resumeError &&
+      resumeJobItems.length === 0
+    ) {
+      setEntryView('choice');
+    }
+  }, [entryView, resume.resumeError, resume.resumeLoading, resumeJobItems.length]);
+  const handleOpenRecentAssignment = useCallback(async () => {
+    const selectedItem = resumeJobItems.find((item) => item.id === resume.selectedResumeJobId);
+    const result = await resume.handleResumeSelectedJob();
+    if (!result.ok) return;
+    setEntrySummary({
+      learnerName: selectedItem?.learnerName ?? 'Saved learner',
+      state: result.state,
+      origin: 'resume',
+    });
+    setEntryView('summary');
+    setActiveStep(result.destination);
+  }, [resume, resumeJobItems]);
   const publishUrl = jobStatus?.htmlUrl;
   const publishLabel = 'Open Assignment Handout';
   const publishPending = 'HTML link pending...';
@@ -1420,17 +1452,6 @@ export const MinimalAssignment: React.FC = () => {
       transcriptReady,
     ],
   );
-  useEffect(() => {
-    if (!activeAssignmentSession) {
-      activeStepHydrationKeyRef.current = null;
-      return;
-    }
-    if (activeStepHydrationKeyRef.current === activeAssignmentSession.id) return;
-    activeStepHydrationKeyRef.current = activeAssignmentSession.id;
-    setActiveStep(
-      resolveInitialAssignmentStep(activeAssignmentSession.currentStage, focusedWorkflowInput),
-    );
-  }, [activeAssignmentSession, focusedWorkflowInput]);
 
   const activeStepIndex = FOCUSED_STEP_ORDER.indexOf(activeStep);
   const commitTeacherNotes = useCallback(async (): Promise<TeacherNotesCommitResult> => {
@@ -1575,11 +1596,6 @@ export const MinimalAssignment: React.FC = () => {
         };
       });
   }, [linkedLessonId, scheduleSurface]);
-  useEffect(() => {
-    if (!hasStartedFlow || startStageMode !== 'idle') return;
-    setStartStageMode('start');
-  }, [hasStartedFlow, startStageMode]);
-
   const workflowStages = useMemo<WorkflowStage[]>(() => {
     const downstreamArtifactReady = authoring.promptReady || hasAssignmentContent || jobReady;
     const startStatus: WorkflowStageStatus = hasStartedFlow ? 'complete' : 'current';
@@ -1616,9 +1632,7 @@ export const MinimalAssignment: React.FC = () => {
         title: 'Resume or start',
         description: jobReady
           ? `Working with assignment ${formatShortJobId(jobStatus?.jobId)}.`
-          : startStageMode === 'resume'
-            ? 'Choose a recent assignment to reopen.'
-            : hasStartedFlow
+          : hasStartedFlow
               ? 'Fresh assignment flow is active.'
               : 'Open recent work or begin a new assignment.',
         status: startStatus,
@@ -1687,7 +1701,6 @@ export const MinimalAssignment: React.FC = () => {
     jobStatus?.state,
     hasTeachingContext,
     source.recording,
-    startStageMode,
     reviewReady,
     source.selectedStudentId,
     transcriptReady,
@@ -1712,7 +1725,7 @@ export const MinimalAssignment: React.FC = () => {
         saveState={activeAssignmentSession ? 'saved' : 'idle'}
         onStepRequest={handleFocusedStepRequest}
         onBack={handleFocusedBack}
-        {...(activeStep === 'review'
+        {...(activeStep === 'review' || activeStep === 'student'
           ? {}
           : {
               onContinue: handleFocusedContinue,
@@ -1763,39 +1776,30 @@ export const MinimalAssignment: React.FC = () => {
           data-active={activeStep === 'student' ? 'true' : 'false'}
           inert={activeStep === 'student' ? undefined : true}
         >
-          <StudentStep
-            students={source.studentOptions}
-            selectedStudentId={source.selectedStudentId}
-            selectionLocked={Boolean(linkedLessonId)}
-            error={source.studentOptionsError}
-            onSelect={handleStudentSelectionChange}
-          >
-            <StartStageSection
-              stage={startStage}
-              sectionRef={startSectionRef}
-              headingRef={startHeadingRef}
-              mode={startStageMode}
-              selectedStudentName={source.selectedStudent?.name ?? null}
-              onStartNewAssignment={handleStartNewAssignmentWithSessionReset}
-              onShowResumeChoice={handleShowResumeChoice}
-              onRefreshRecentWork={() => void resume.loadResumeJobs()}
-              onResumeSelectedAssignment={resume.handleResumeSelectedJob}
-              resumeLoading={resume.resumeLoading}
-              selectedResumeJobId={resume.selectedResumeJobId}
-              onSelectedResumeJobIdChange={resume.setSelectedResumeJobId}
-              resumeJobItems={resumeJobItems}
-              totalResumeJobs={totalResumeItems}
-              canToggleResumeJobs={canToggleResumeJobs}
-              showAllResumeJobs={showAllResumeJobs}
-              onToggleShowAllResumeJobs={() => setShowAllResumeJobs((current) => !current)}
-              resumeError={resume.resumeError}
-              currentJobStatus={jobStatus}
-              currentAssignmentCard={currentAssignmentCard}
-              publishUrl={publishUrl}
-              publishLabel={publishLabel}
-              publishPending={publishPending}
-            />
-          </StudentStep>
+          <AssignmentEntryStep
+            view={entryView}
+            recentLoading={resume.resumeLoading}
+            recentError={resume.resumeError}
+            recentItems={resumeJobItems}
+            selectedRecentId={resume.selectedResumeJobId}
+            learners={source.studentOptions}
+            learnerLoading={source.studentOptionsLoading}
+            learnerError={source.studentOptionsError}
+            selectedLearnerId={source.selectedStudentId}
+            opening={resume.resumeLoading && entryView === 'resume'}
+            starting={false}
+            summary={resolvedEntrySummary}
+            onEnterResume={() => setEntryView('resume')}
+            onEnterNew={() => setEntryView('new')}
+            onChangeChoice={() => setEntryView('choice')}
+            onSelectRecent={resume.setSelectedResumeJobId}
+            onRetryRecent={() => void resume.loadResumeJobs()}
+            onOpenRecent={() => void handleOpenRecentAssignment()}
+            onSelectLearner={handleStudentSelectionChange}
+            onRetryLearners={() => void loadStudentOptions()}
+            onStartNew={() => commitNewAssignment(source.selectedStudentId)}
+            onChangeAssignment={() => setEntryView('choice')}
+          />
         </div>
 
         <div
