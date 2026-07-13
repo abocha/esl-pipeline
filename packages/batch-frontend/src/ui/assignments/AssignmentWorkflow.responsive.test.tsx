@@ -43,6 +43,17 @@ describe('AssignmentWorkflow responsive contract', () => {
     expect(css).toContain('grid-template-columns: 1fr');
   });
 
+  it('sticks desktop progress to the viewport top after the desktop toolbar is removed', () => {
+    const css = readFileSync(
+      join(process.cwd(), 'src/ui/assignments/AssignmentWorkflow.css'),
+      'utf8',
+    );
+    const progressRule = css.match(/\.assignment-workflow__progress\s*\{([^}]*)\}/)?.[1];
+
+    expect(progressRule).toContain('position: sticky');
+    expect(progressRule).toContain('top: 0');
+  });
+
   it('defines a calm studio surface and wrapping quick controls for advanced actions', () => {
     const cssPath = join(process.cwd(), 'src/ui/assignments/AssignmentWorkflow.css');
     const css = readFileSync(cssPath, 'utf8');

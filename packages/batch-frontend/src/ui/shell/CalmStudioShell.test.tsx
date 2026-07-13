@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
@@ -29,5 +31,34 @@ describe('CalmStudioShell', () => {
     for (const icon of container.querySelectorAll('nav svg, button svg')) {
       expect(icon.getAttribute('aria-hidden')).toBe('true');
     }
+  });
+
+  it('places the sandbox marker with the account controls in the rail footer', () => {
+    const { container } = render(
+      <MemoryRouter>
+        <CalmStudioShell
+          user={{ id: 'sandbox-1', email: 'sandbox@example.test', role: 'user', isActive: true }}
+          onLogout={vi.fn()}
+          sandboxMode
+        >
+          Assignment workspace
+        </CalmStudioShell>
+      </MemoryRouter>,
+    );
+
+    const marker = screen.getByLabelText('Frontend sandbox mode');
+    expect(marker.closest('.calm-shell__rail-footer')).toBeTruthy();
+    expect(container.querySelector('.calm-shell__topbar .calm-shell__sandbox')).toBeNull();
+  });
+
+  it('reserves the desktop top row while showing the toolbar only on narrow screens', () => {
+    const css = readFileSync(join(process.cwd(), 'src/ui/shell/CalmStudioShell.css'), 'utf8');
+    const desktopTopbar = css.match(/\.calm-shell__topbar\s*\{([^}]*)\}/)?.[1];
+
+    expect(css).toContain('grid-template-rows: 58px minmax(0, 1fr)');
+    expect(desktopTopbar).toContain('display: none');
+    expect(css).toMatch(
+      /@media \(max-width: 720px\)[\s\S]*\.calm-shell__topbar\s*\{[^}]*display:\s*flex/,
+    );
   });
 });
