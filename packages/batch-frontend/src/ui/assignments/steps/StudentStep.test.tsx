@@ -33,6 +33,25 @@ function StudentHarness({
 }
 
 describe('StudentStep', () => {
+  it('replaces learner controls with a stable loading state', () => {
+    render(
+      <StudentStep
+        students={students}
+        selectedStudentId=""
+        selectionLocked={false}
+        loading
+        error={null}
+        onSelect={() => undefined}
+      >
+        <div>Assignment setup</div>
+      </StudentStep>,
+    );
+
+    expect(screen.getByRole('status', { name: 'Loading learners' })).toBeTruthy();
+    expect(screen.queryByRole('combobox', { name: /Choose learner/i })).toBeNull();
+    expect(screen.queryByText('Assignment setup')).toBeNull();
+  });
+
   it('uses concise picker copy without repeating the step name', () => {
     render(<StudentHarness />);
 
