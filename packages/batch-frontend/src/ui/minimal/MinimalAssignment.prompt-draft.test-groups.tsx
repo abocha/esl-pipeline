@@ -69,6 +69,11 @@ async function startNewAssignmentForLearner(
   return studentSelect;
 }
 
+async function advanceSourceToCreate(user: ReturnType<typeof createMinimalUser>) {
+  await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+  await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+}
+
 export function registerPromptEditorTests() {
   describe('MinimalAssignment - prompt editor flows', {
     timeout: PROMPT_DRAFT_TEST_TIMEOUT_MS,
@@ -877,6 +882,7 @@ export function registerPromptStudentSelectionTests() {
         expect(screen.getByDisplayValue('Student transcript text')).toBeTruthy();
       });
 
+      await advanceSourceToCreate(user);
       await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
 
       await waitFor(() => {
@@ -919,6 +925,7 @@ export function registerPromptStudentSelectionTests() {
       await waitFor(() => {
         expect(screen.getByDisplayValue('Student transcript text')).toBeTruthy();
       });
+      await advanceSourceToCreate(user);
       await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
 
       await waitFor(() => {
@@ -987,6 +994,7 @@ export function registerPromptStudentSelectionTests() {
       await waitFor(() => {
         expect(screen.getByDisplayValue('Student transcript text')).toBeTruthy();
       });
+      await advanceSourceToCreate(user);
       await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
 
       await waitFor(() => {
@@ -1041,6 +1049,7 @@ export function registerPromptStudentSelectionTests() {
 
       await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
       await screen.findByDisplayValue('Student transcript text');
+      await advanceSourceToCreate(user);
       await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
 
       await waitFor(() => {
