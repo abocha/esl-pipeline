@@ -1,6 +1,5 @@
-import { ShieldCheck } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 
-import { ProductNotice } from '../../system/ProductNotice';
 import type { StudentStepProps } from '../assignment-step-props';
 
 export function StudentStep({
@@ -8,42 +7,94 @@ export function StudentStep({
   students,
   selectedStudentId,
   selectionLocked = false,
+  loading = false,
   error,
-  onRefresh,
   onSelect,
 }: StudentStepProps) {
+  const [isChangingStudent, setIsChangingStudent] = useState(false);
+  const studentSelectRef = useRef<HTMLSelectElement>(null);
+  const selectedStudent = students.find((student) => student.id === selectedStudentId) ?? null;
+  const showSelector = !selectedStudent || isChangingStudent;
+
+  useEffect(() => {
+    if (isChangingStudent) {
+      studentSelectRef.current?.focus();
+    }
+  }, [isChangingStudent]);
+
+  const handleStudentChange = (studentId: string) => {
+    onSelect(studentId);
+    if (students.some((student) => student.id === studentId)) {
+      setIsChangingStudent(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="assignment-step assignment-step--student">
+        <div className="assignment-student-choice" role="status" aria-label="Loading learners">
+          <div className="assignment-student-choice__copy">
+            <h3>Loading learners</h3>
+            <p>Preparing learner options…</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="assignment-step assignment-step--student">
       {children}
-      <section className="assignment-student-picker" aria-labelledby="assignment-student-heading">
-        <div>
-          <h3 id="assignment-student-heading">Choose the student</h3>
-          <p>The assignment stays linked to this learner when you move between steps.</p>
-        </div>
-        <label>
-          Student
+      {showSelector ? (
+        <section
+          className="assignment-student-choice assignment-student-choice--open"
+          aria-labelledby="assignment-student-heading"
+        >
+          <div className="assignment-student-choice__copy">
+            <h3 id="assignment-student-heading">Choose learner</h3>
+          </div>
           <select
+            ref={studentSelectRef}
+            aria-label="Choose learner"
             value={selectedStudentId}
             disabled={selectionLocked}
-            onChange={(event) => onSelect(event.target.value)}
+            onChange={(event) => handleStudentChange(event.target.value)}
           >
-            <option value="">Select a student</option>
+            <option value="">Select…</option>
             {students.map((student) => (
               <option key={student.id} value={student.id}>
                 {student.name}
               </option>
             ))}
           </select>
-        </label>
-        <button type="button" className="product-button product-button--quiet" onClick={onRefresh}>
-          Refresh students
-        </button>
-        {error ? <p className="assignment-source-pane__error">{error}</p> : null}
-      </section>
-      <ProductNotice tone="info" title="Learner context stays connected" icon={<ShieldCheck />}>
-        The selected student’s approved learning profile and teaching memory are included when the
-        assignment is created. You can review that context before generation.
-      </ProductNotice>
+          {error ? <p className="assignment-source-pane__error">{error}</p> : null}
+        </section>
+      ) : (
+        <section
+          className="assignment-student-choice assignment-choice-summary"
+          aria-labelledby="assignment-student-heading"
+        >
+          <div className="assignment-choice-summary__identity">
+            <span className="assignment-choice-summary__avatar" aria-hidden="true">
+              {selectedStudent.name.trim().charAt(0).toUpperCase()}
+            </span>
+            <div>
+              <h3 id="assignment-student-heading">{selectedStudent.name}</h3>
+              <p>Selected for this assignment</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="product-button product-button--quiet"
+            disabled={selectionLocked}
+            aria-label="Change student"
+            onClick={() => setIsChangingStudent(true)}
+          >
+            Change
+          </button>
+          {error ? <p className="assignment-source-pane__error">{error}</p> : null}
+        </section>
+      )}
     </div>
   );
 }

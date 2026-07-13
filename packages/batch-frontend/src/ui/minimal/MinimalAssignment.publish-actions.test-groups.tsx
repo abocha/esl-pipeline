@@ -18,6 +18,7 @@ import {
   renderPublishedAssignment,
   testScreen as screen,
   setupMinimalAssignmentTest,
+  startNewAssignmentForLearner,
   testVi as vi,
   testWaitFor as waitFor,
   testWithin as within,
@@ -46,12 +47,7 @@ export function registerPublishValidationTests() {
 
       renderMinimalAssignment();
 
-      await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
-      await screen.findByRole('option', { name: 'Alex' });
-      await user.selectOptions(
-        screen.getByRole('combobox', { name: /^Student$/i }),
-        'student-alex',
-      );
+      await startNewAssignmentForLearner(user);
       await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
 
       await screen.findByText('Upload failed at gateway');
@@ -141,26 +137,31 @@ export function registerJobActionTests() {
         const user = createMinimalUser();
         await renderPreviewReadyAssignment();
 
+        await user.click(screen.getByRole('button', { name: /Create/i }));
         const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
         fireEvent.change(draftTextarea, { target: { value: '# Preview gated draft' } });
-
-        const publishButton = screen.getByRole('button', { name: /Share assignment/i });
-        const previewButton = screen.getByRole('button', { name: /Preview assignment/i });
-        expect((publishButton as HTMLButtonElement).disabled).toBe(true);
-        expect(previewButton.className).toContain('minimal-preview-attention');
+        await user.click(screen.getByRole('button', { name: /Review & share/i }));
+        const initialPublishButton = screen.getByRole('button', { name: /Share assignment/i });
+        const initialPreviewButton = screen.getByRole('button', { name: /Preview assignment/i });
+        expect((initialPublishButton as HTMLButtonElement).disabled).toBe(true);
+        expect(initialPreviewButton.className).toContain('minimal-preview-attention');
         expect(screen.queryByText('Preview required before sharing.')).toBeNull();
         expect(api.materializeDraft).not.toHaveBeenCalled();
-
         await previewCurrentDraft(user);
+        const publishButton = screen.getByRole('button', { name: /Share assignment/i });
         expect((publishButton as HTMLButtonElement).disabled).toBe(false);
 
-        fireEvent.change(draftTextarea, {
+        await user.click(screen.getByRole('button', { name: /Create/i }));
+        fireEvent.change(screen.getByRole('textbox', { name: /Draft markdown/i }), {
           target: { value: '# Preview gated draft\nOne more line' },
         });
+        await user.click(screen.getByRole('button', { name: /Review & share/i }));
+        const refreshedPublishButton = screen.getByRole('button', { name: /Share assignment/i });
+        const refreshedPreviewButton = screen.getByRole('button', { name: /Preview assignment/i });
         await waitFor(() => {
-          expect((publishButton as HTMLButtonElement).disabled).toBe(true);
+          expect((refreshedPublishButton as HTMLButtonElement).disabled).toBe(true);
         });
-        expect(previewButton.className).toContain('minimal-preview-attention');
+        expect(refreshedPreviewButton.className).toContain('minimal-preview-attention');
         expect(screen.queryByText('Preview required before sharing.')).toBeNull();
       },
       INTEGRATION_TEST_TIMEOUT_MS,
@@ -305,7 +306,8 @@ export function registerJobActionTests() {
 **Natural sentence practice:** The device is as heavy as the old one.`;
         const user = createMinimalUser();
         await renderPublishedAssignment({ draftText: connectedSpeechDraft });
-        openAdvancedActions();
+        await user.click(screen.getByRole('button', { name: /Create/i }));
+        await screen.findByRole('textbox', { name: /Draft markdown/i });
         await waitFor(() => {
           expect(api.fetchDraft).toHaveBeenCalledWith('draft-1');
         });
@@ -321,6 +323,9 @@ export function registerJobActionTests() {
 1. ship / sheep`,
           },
         });
+
+        await user.click(screen.getByRole('button', { name: /Review & share/i }));
+        openAdvancedActions();
 
         await user.click(screen.getByRole('button', { name: /^Custom rerun$/i }));
         await user.click(screen.getByRole('checkbox', { name: /Pronunciation chunk audio/i }));
@@ -404,12 +409,14 @@ export function registerJobActionTests() {
         const user = createMinimalUser();
         const jobA = makeJobStatus({
           jobId: 'job-a',
+          studentId: 'student-alex',
           state: 'succeeded',
           ttsProvider: 'elevenlabs',
           ttsModel: 'eleven_flash_v2_5',
         });
         const jobB = makeJobStatus({
           jobId: 'job-b',
+          studentId: 'student-bella',
           state: 'succeeded',
           ttsProvider: 'google',
           ttsModel: 'studio',
@@ -442,10 +449,11 @@ export function registerJobActionTests() {
           actions: [],
         } as never);
 
+        await user.click(screen.getByRole('button', { name: /Student/i }));
+        await user.click(screen.getByRole('button', { name: /Change assignment/i }));
         await user.click(screen.getByRole('button', { name: /Resume recent work/i }));
-        const resumeList = await screen.findByRole('listbox', { name: /Recent assignments/i });
-        fireEvent.click(within(resumeList).getByRole('option', { name: /ID job-b/i }));
-        await user.click(screen.getByRole('button', { name: /Resume selected assignment/i }));
+        await user.click(await screen.findByRole('radio', { name: /Bella/i }));
+        await user.click(screen.getByRole('button', { name: /Review assignment/i }));
 
         await waitFor(() => {
           expect(screen.getAllByText(/Job ID: job-b/i).length).toBeGreaterThan(0);

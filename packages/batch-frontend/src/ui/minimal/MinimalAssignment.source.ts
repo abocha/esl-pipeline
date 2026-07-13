@@ -53,6 +53,11 @@ export interface SourceHydrationSnapshot {
   uploadCacheNotice: string | null;
 }
 
+export interface SourceResetOptions {
+  resetStudent?: boolean;
+  nextStudentId?: string;
+}
+
 interface UseMinimalAssignmentSourceControllerParams {
   configuredSttProviders: readonly string[] | null | undefined;
   defaultSttProvider: SttProvider | null;
@@ -69,6 +74,7 @@ export interface SourceController extends SourceHydrationSnapshot {
   manualTranscriptError: string | null;
   retryingTranscript: boolean;
   studentOptions: StudentOption[];
+  studentOptionsLoading: boolean;
   studentOptionsError: string | null;
   sttProviders: readonly SttProvider[];
   selectedStudent: StudentOption | null;
@@ -84,7 +90,7 @@ export interface SourceController extends SourceHydrationSnapshot {
   handleSaveTranscript: () => Promise<void>;
   handleRetryTranscription: () => Promise<void>;
   createManualTranscript: (text: string, displayName?: string) => Promise<void>;
-  resetSourceFlow: (options?: { resetStudent?: boolean }) => void;
+  resetSourceFlow: (options?: SourceResetOptions) => void;
   applyHydratedSnapshot: (snapshot: SourceHydrationSnapshot) => void;
   resolveBoundProfileId: (studentId: string) => string;
   bindStudentProfile: (studentId: string, profileId: string) => void;
@@ -119,6 +125,7 @@ export function useMinimalAssignmentSourceController({
   const [manualTranscriptSaving, setManualTranscriptSaving] = useState(false);
   const [manualTranscriptError, setManualTranscriptError] = useState<string | null>(null);
   const [studentOptions, setStudentOptions] = useState<StudentOption[]>([]);
+  const [studentOptionsLoading, setStudentOptionsLoading] = useState(false);
   const [studentOptionsError, setStudentOptionsError] = useState<string | null>(null);
   const [selectedStudentId, setSelectedStudentId] = useState(initialSelectedStudentId ?? '');
   const [uploadCacheNotice, setUploadCacheNotice] = useState<string | null>(null);
@@ -174,11 +181,13 @@ export function useMinimalAssignmentSourceController({
   }, []);
 
   const resetSourceFlow = useCallback(
-    (options?: { resetStudent?: boolean }) => {
+    (options?: SourceResetOptions) => {
       uploadAbortRef.current?.abort();
       uploadAbortRef.current = null;
       sttProviderUserChangedRef.current = false;
-      if (options?.resetStudent) {
+      if (options?.nextStudentId !== undefined) {
+        setSelectedStudentId(options.nextStudentId);
+      } else if (options?.resetStudent) {
         setSelectedStudentId(initialSelectedStudentId ?? '');
       }
       setRecording(null);
@@ -216,6 +225,7 @@ export function useMinimalAssignmentSourceController({
   }, []);
 
   const loadStudentOptions = useCallback(async () => {
+    setStudentOptionsLoading(true);
     try {
       const response = await fetchStudentOptions();
       const sortedStudents = sortStudentsForPicker(response.students ?? []);
@@ -230,6 +240,8 @@ export function useMinimalAssignmentSourceController({
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to load students.';
       setStudentOptionsError(message);
+    } finally {
+      setStudentOptionsLoading(false);
     }
   }, []);
 
@@ -617,6 +629,7 @@ export function useMinimalAssignmentSourceController({
     manualTranscriptError,
     retryingTranscript,
     studentOptions,
+    studentOptionsLoading,
     studentOptionsError,
     selectedStudentId,
     uploadCacheNotice,

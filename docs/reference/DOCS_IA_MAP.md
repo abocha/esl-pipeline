@@ -5,7 +5,7 @@
 - Audience: AI agents and maintainers.
 - Read Time: 3 minutes.
 - Authority Level: Active routing map.
-- Last Verified Against: 2026-06-12 repo state.
+- Last Verified Against: 2026-07-14 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly.
 - Status: `router`.
