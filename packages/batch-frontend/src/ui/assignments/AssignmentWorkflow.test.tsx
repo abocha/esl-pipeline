@@ -39,6 +39,26 @@ describe('AssignmentWorkflow', () => {
     expect(screen.getByText('Lesson source content')).toBeTruthy();
   });
 
+  it('keeps save status without repeating the active step in a page header', () => {
+    render(
+      <AssignmentWorkflow
+        steps={steps}
+        activeStep="source"
+        highestAvailableStep="source"
+        saveState="saved"
+        onStepRequest={vi.fn()}
+        onBack={vi.fn()}
+      >
+        Lesson source content
+      </AssignmentWorkflow>,
+    );
+
+    expect(screen.getByRole('region', { name: 'Assignment builder' })).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toContain('Saved');
+    expect(screen.queryByText('Assignment builder')).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Lesson source' })).toBeNull();
+  });
+
   it('allows returning to a completed step without discarding work', async () => {
     const onStepRequest = vi.fn();
     render(
