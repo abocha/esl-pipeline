@@ -51,7 +51,8 @@ quiet `Change choice` action returns to the default screen.
 | Default, no recent work            | Default choice with Resume disabled; no empty-state explanation          | `Start new assignment`              |
 | Resume loading                     | Recent-work skeleton and quiet `Change choice`                           | Disabled                            |
 | Resume list                        | Saved assignments and quiet `Change choice`                              | Disabled until selection            |
-| Unfinished selected                | Selected assignment, saved stage, and preservation message               | `Continue assignment`               |
+| Unfinished session selected        | Selected session, saved stage, and preservation message                  | `Continue assignment`               |
+| Processing job selected            | Queued or running assignment job and current progress                    | `Review progress`                   |
 | Ready-to-share selected            | Generated but unpublished assignment                                     | `Review assignment`                 |
 | Published selected                 | Published status, date, and handout availability                         | `Open assignment`                   |
 | Needs-attention selected           | Failed assignment job and contextual issue summary                       | `Review issue`                      |
@@ -104,7 +105,8 @@ Each row presents teacher-relevant identity in this order:
 2. saved workflow stage or last meaningful activity
 3. concrete artifact outcome
 4. last-worked timestamp
-5. concise state: `Unfinished`, `Ready to share`, `Published`, or `Needs attention`
+5. concise state: `Unfinished`, `In progress`, `Ready to share`, `Published`, or
+   `Needs attention`
 
 Do not expose raw job IDs, session IDs, truncated support labels, or provider terminology in the
 primary row content. The current frontend contracts do not guarantee a lesson title. Omit it when
@@ -112,7 +114,9 @@ unavailable rather than displaying a raw lesson ID or adding a backend contract.
 
 ### Status-specific actions
 
-- `Unfinished` opens the saved assignment at its saved workflow step with `Continue assignment`.
+- An `Unfinished` session opens at its persisted workflow step with `Continue assignment`.
+- An `In progress` job opens Review & share with `Review progress`. Job DTOs do not contain a saved
+  workflow stage, so Step 1 must not imply that one can be restored.
 - `Ready to share` opens Review & share with `Review assignment`.
 - `Published` opens Review & share with `Open assignment`; the published handout and Advanced
   actions remain available there.
@@ -121,7 +125,7 @@ unavailable rather than displaying a raw lesson ID or adding a backend contract.
 
 Map the current job states as follows:
 
-- queued or running: `Unfinished`
+- queued or running: `In progress`, opening Review & share
 - awaiting approval: `Ready to share`
 - succeeded with a published handout URL: `Published`
 - succeeded without a published handout URL: `Ready to share`
@@ -164,7 +168,9 @@ During start, retain the selected learner, change the primary label to `Starting
 duplicate submissions and route changes.
 
 `Continue` is the explicit user action that begins the new assignment and advances the workflow.
-No state change automatically selects another workflow step.
+The reset/invalidation boundary must preserve the validated learner selected in this route; it may
+clear prior recording, transcript, authoring, session, and job state, but it must not clear or swap
+the learner before Step 2 renders. No state change automatically selects another workflow step.
 
 ## Existing Assignment Summary
 
@@ -172,7 +178,7 @@ After an assignment has been started or reopened, revisiting Step 1 renders a co
 than either entry route. The summary includes:
 
 - learner
-- assignment state: unfinished, ready to share, or published
+- assignment state: unfinished, in progress, ready to share, published, or needs attention
 - whether the assignment was started new or reopened
 - quiet `Change assignment`
 
@@ -199,9 +205,14 @@ Review & share rather than being duplicated in Step 1.
 - Continue using the existing recent-job collection, learner collection, selected IDs, resume
   callback, new-assignment callback, and workflow navigation callbacks.
 - Do not introduce a backend endpoint, DTO field, database migration, polling loop, or cache contract.
-- Opening a saved assignment is an explicit user navigation action and may move directly to its saved
-  step.
-- Opening ready-to-share or published work moves to Review & share.
+- Opening a saved session is an explicit user navigation action and may move directly to its
+  persisted step.
+- Opening any job-backed item moves to Review & share because the current job contract has no saved
+  workflow stage.
+- Initial `?sessionId=` or `?jobId=` hydration reports one resolved entry result to the parent:
+  sessions supply their persisted destination; jobs supply Review & share. The parent applies this
+  destination and existing-summary origin once. Later collection changes cannot repeat hydration or
+  move the active step.
 - Beginning New moves forward only when the teacher activates `Continue` with a valid learner.
 - Derived readiness may enable controls but never selects a route or workflow step.
 
@@ -216,17 +227,39 @@ Focused frontend tests must prove:
 5. Selecting New removes Resume and all recent-work controls.
 6. `Change choice` returns either route to the unselected default choice.
 7. Resume list starts with no selected assignment and a disabled primary action.
-8. Unfinished, ready-to-share, published, and needs-attention selection produce the correct action
-   label and destination, including every current job state.
+8. Unfinished sessions, processing jobs, ready-to-share jobs, published jobs, and needs-attention
+   jobs produce the correct action label and destination, including every current job state.
 9. Resume rows contain teacher-relevant context and omit raw IDs/session strings.
 10. Routine manual Refresh is absent; error state exposes `Try again`.
 11. Resume open retains selection, announces `Opening…`, and rejects duplicate submission.
 12. New route loading, empty, error, unselected, selected, changing, and starting states match the
     state table.
 13. A stale learner selection cannot enable continuation.
-14. Revisiting Step 1 renders the existing-assignment summary rather than an entry route.
-15. Inactive Step 1 and later-stage content is absent from the accessibility tree.
-16. Desktop and narrow layouts preserve one primary action and keyboard operation.
+14. New continuation preserves the validated learner while clearing prior assignment artifacts.
+15. Initial `?sessionId=` and `?jobId=` hydration each set the correct summary and destination once.
+16. Revisiting Step 1 renders every applicable existing-assignment summary state, including
+    `Needs attention`, rather than an entry route.
+17. Inactive Step 1 and later-stage content is absent from the accessibility tree.
+18. Desktop and narrow layouts preserve one primary action and keyboard operation.
+
+## Sandbox Acceptance Contract
+
+The mock-auth sandbox adds dev-only, query-selectable Step 1 scenarios. These scenarios change only
+the existing frontend adapter's seeded responses; they never affect production APIs, DTOs, or
+persistence. Supported scenarios cover:
+
+- recent work with session and job-backed states
+- no recent work
+- recent-work load failure
+- no learners
+- learner load failure
+- deliberately delayed responses for collection loading and assignment opening feedback
+
+The default sandbox behavior remains unchanged when no scenario query is present. Component and
+integration tests remain the source of truth for the full state matrix; the scenarios exist so the
+maintainer can inspect representative states at desktop and narrow widths before review or CI.
+Transient New `Starting…` feedback remains a controlled component-test state because the current
+New transition is local and does not have a network request that the sandbox can safely delay.
 
 ## Non-Goals
 
@@ -237,6 +270,7 @@ Focused frontend tests must prove:
 - Duplicating published handout or Advanced actions in Step 1.
 - Automatically refreshing on an interval.
 - Changing artifact invalidation or persistence semantics.
+- Adding production fixtures or test-only behavior outside explicit frontend sandbox mode.
 - Running backend, CI, PR, deployment, or production work during sandbox iteration.
 
 ## Completion Criteria
@@ -247,6 +281,10 @@ Focused frontend tests must prove:
 4. Resume and New each expose one route-specific primary action.
 5. `Change choice` returns to the default without selecting the opposite route.
 6. Recent-work rows use teacher-relevant context and status-specific actions.
-7. Published and needs-attention work remain discoverable and open Review & share.
-8. Only active state content is present in the accessibility tree.
-9. No backend or persistence contract changes are introduced.
+7. All job-backed work opens Review & share; only saved sessions claim a persisted workflow step.
+8. New continuation preserves the selected learner across assignment reset.
+9. Published and needs-attention work remain discoverable and open Review & share.
+10. Query-driven initial resume hydration resolves the summary and destination once.
+11. Representative Step 1 states are available through dev-only sandbox scenarios.
+12. Only active state content is present in the accessibility tree.
+13. No backend or persistence contract changes are introduced.
