@@ -55,20 +55,18 @@ export function AssignmentWorkflow({
   completionLabel,
   children,
 }: AssignmentWorkflowProps) {
-  const active = steps.find((step) => step.id === activeStep) ?? steps[0];
-
   return (
-    <section className="assignment-workflow" aria-labelledby="assignment-workflow-title">
-      <header className="assignment-workflow__header">
-        <div>
-          <p className="assignment-workflow__eyebrow">Assignment builder</p>
-          <h1 id="assignment-workflow-title">{active?.label ?? 'Assignment'}</h1>
-        </div>
-        <span className={`assignment-workflow__save assignment-workflow__save--${saveState}`}>
+    <section className="assignment-workflow" aria-label="Assignment builder">
+      <div className="assignment-workflow__status">
+        <span
+          className={`assignment-workflow__save assignment-workflow__save--${saveState}`}
+          role="status"
+          aria-live="polite"
+        >
           {saveState === 'saved' ? <Check aria-hidden="true" /> : null}
           {saveLabels[saveState]}
         </span>
-      </header>
+      </div>
 
       <nav className="assignment-workflow__progress" aria-label="Assignment progress">
         <ol>
