@@ -5,6 +5,32 @@ import { describe, expect, it, vi } from 'vitest';
 import { AssignmentWorkflow } from './AssignmentWorkflow';
 
 describe('AssignmentWorkflow navigation', () => {
+  it('does not offer Back on the first step', () => {
+    render(
+      <AssignmentWorkflow
+        steps={[
+          { id: 'student', label: 'Student', status: 'current' },
+          { id: 'source', label: 'Lesson source', status: 'locked' },
+          { id: 'context', label: 'Teaching context', status: 'locked' },
+          { id: 'create', label: 'Create', status: 'locked' },
+          { id: 'review', label: 'Review & share', status: 'locked' },
+        ]}
+        activeStep="student"
+        highestAvailableStep="student"
+        saveState="idle"
+        onStepRequest={vi.fn()}
+        onBack={vi.fn()}
+        onContinue={vi.fn()}
+        continueLabel="Confirm and continue"
+      >
+        Student content
+      </AssignmentWorkflow>,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Back' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Confirm and continue' })).toBeTruthy();
+  });
+
   it('exposes explicit Back and confirmation actions', async () => {
     const onBack = vi.fn();
     const onContinue = vi.fn();

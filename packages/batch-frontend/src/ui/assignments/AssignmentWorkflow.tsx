@@ -108,16 +108,20 @@ export function AssignmentWorkflow({
       </div>
 
       <footer className="assignment-workflow__footer">
-        <ProductButton variant="quiet" icon={<ArrowLeft />} onClick={onBack}>
-          Back
-        </ProductButton>
-        {onComplete && completionLabel ? (
-          <ProductButton onClick={onComplete}>{completionLabel}</ProductButton>
-        ) : onContinue && continueLabel ? (
-          <ProductButton onClick={onContinue} disabled={continueDisabled}>
-            {continueLabel}
+        {activeStep !== 'student' ? (
+          <ProductButton variant="quiet" icon={<ArrowLeft />} onClick={onBack}>
+            Back
           </ProductButton>
         ) : null}
+        <div className="assignment-workflow__footer-action">
+          {onComplete && completionLabel ? (
+            <ProductButton onClick={onComplete}>{completionLabel}</ProductButton>
+          ) : onContinue && continueLabel ? (
+            <ProductButton onClick={onContinue} disabled={continueDisabled}>
+              {continueLabel}
+            </ProductButton>
+          ) : null}
+        </div>
       </footer>
 
       {postFooter ? <div className="assignment-workflow__post-footer">{postFooter}</div> : null}
