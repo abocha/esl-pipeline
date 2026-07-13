@@ -475,7 +475,7 @@ export function registerResumeBasicTests() {
       expect(screen.queryByDisplayValue('Stale transcript')).toBeNull();
       expect(screen.queryByDisplayValue('Stale prompt')).toBeNull();
       expect(screen.queryByDisplayValue('# Stale draft')).toBeNull();
-      expect(screen.getByText(/New assignment ready/i)).toBeTruthy();
+      expect(screen.getByRole('heading', { name: /^New assignment$/i })).toBeTruthy();
       expect(new URL(globalThis.location.href).searchParams.get('sessionId')).toBeNull();
     });
 
@@ -600,6 +600,7 @@ export function registerResumeBasicTests() {
         expect(api.updateDraft).toHaveBeenCalledWith('draft-1', '# Older autosave');
         vi.useRealTimers();
 
+        await user.click(screen.getByRole('button', { name: /Change assignment setup/i }));
         await user.click(screen.getByRole('button', { name: /Resume recent work/i }));
         const resumeList = await screen.findByRole('listbox', { name: /Recent assignments/i });
         await user.click(within(resumeList).getByRole('option', { name: /Bella/i }));
@@ -872,8 +873,11 @@ export function registerResumeBasicTests() {
       });
       expect(api.updateAssignmentSession).not.toHaveBeenCalled();
 
+      await user.click(screen.getByRole('button', { name: /Change assignment setup/i }));
       await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
-      expect(studentSelect.value).toBe('');
+      expect(
+        (screen.getByRole('combobox', { name: /^Student$/i }) as HTMLSelectElement).value,
+      ).toBe('');
       expect(api.createAssignmentSession).not.toHaveBeenCalled();
       expect(api.updateAssignmentSession).not.toHaveBeenCalled();
     });

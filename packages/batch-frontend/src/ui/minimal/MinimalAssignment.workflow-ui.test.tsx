@@ -479,6 +479,32 @@ describe('MinimalAssignment - staged workflow UI', () => {
   );
 
   it(
+    'collapses resolved Step 1 choices and restores them through explicit Change actions',
+    async () => {
+      const user = createMinimalUser();
+      renderMinimalAssignment();
+
+      await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
+
+      expect(screen.getByRole('heading', { name: /^New assignment$/i })).toBeTruthy();
+      expect(screen.getByText('Starting a new assignment.')).toBeTruthy();
+      expect(screen.queryByRole('button', { name: /Resume recent work/i })).toBeNull();
+
+      await screen.findByRole('option', { name: 'Alex' });
+      await user.selectOptions(
+        screen.getByRole('combobox', { name: /^Student$/i }),
+        'student-alex',
+      );
+      expect(screen.getByText('Starting a new assignment for Alex.')).toBeTruthy();
+
+      await user.click(screen.getByRole('button', { name: /Change assignment setup/i }));
+      expect(screen.getByRole('button', { name: /Resume recent work/i })).toBeTruthy();
+      expect(screen.getByRole('button', { name: /Start new assignment/i })).toBeTruthy();
+    },
+    INTEGRATION_TEST_TIMEOUT_MS,
+  );
+
+  it(
     'distills resume/start and rerun surfaces while keeping support details available',
     async () => {
       const user = createMinimalUser();
@@ -488,26 +514,28 @@ describe('MinimalAssignment - staged workflow UI', () => {
           draftText: '# Draft markdown',
           status: {
             studentId: 'student-alex',
+            htmlUrl: '/assignments/job-1',
           },
         },
         { user },
       );
 
-      expect(screen.getByRole('heading', { name: /Resume or start/i })).toBeTruthy();
-      const resumeStage = screen
-        .getByRole('heading', { name: /Resume or start/i })
+      const setupSummary = screen
+        .getByRole('heading', { name: /^New assignment$/i })
         .closest('section');
-      expect(resumeStage).toBeTruthy();
-      const resumeScope = within(resumeStage as HTMLElement);
-      expect(screen.getByRole('button', { name: /Resume recent work/i })).toBeTruthy();
-      expect(screen.getByRole('button', { name: /Start new assignment/i })).toBeTruthy();
-      expect(resumeScope.queryByRole('button', { name: /Hide details|Show details/i })).toBeNull();
+      expect(setupSummary).toBeTruthy();
+      expect(screen.getByText('Starting a new assignment for Alex.')).toBeTruthy();
+      expect(screen.queryByRole('button', { name: /Resume recent work/i })).toBeNull();
+      expect(screen.queryByRole('button', { name: /Start new assignment/i })).toBeNull();
       expect(
-        resumeScope.queryByRole('button', { name: /Refresh pronunciation audio/i }),
-      ).toBeNull();
-      expect(resumeScope.queryByRole('button', { name: /Republish current draft/i })).toBeNull();
-      expect(resumeScope.queryByRole('button', { name: /Cancel job/i })).toBeNull();
-      expect(resumeScope.queryByText(/Latest shared assignment ready/i)).toBeNull();
+        screen.getAllByRole('link', { name: /Open Assignment Handout/i }).length,
+      ).toBeGreaterThan(0);
+      const setupScope = within(setupSummary as HTMLElement);
+      expect(setupScope.queryByRole('button', { name: /Hide details|Show details/i })).toBeNull();
+      expect(setupScope.queryByRole('button', { name: /Refresh pronunciation audio/i })).toBeNull();
+      expect(setupScope.queryByRole('button', { name: /Republish current draft/i })).toBeNull();
+      expect(setupScope.queryByRole('button', { name: /Cancel job/i })).toBeNull();
+      expect(setupScope.queryByText(/Latest shared assignment ready/i)).toBeNull();
       expect(screen.queryByText(/Move from recording to published lesson/i)).toBeNull();
       expect(screen.queryByText(/Learning profile ready/i)).toBeNull();
       expect(screen.queryByText(/Transcript is ready for review and editing/i)).toBeNull();
@@ -559,6 +587,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
       expect(screen.queryByText(/Cancel is only available/i)).toBeNull();
       expect(screen.getAllByText(/^Support details$/i).length).toBeGreaterThan(0);
 
+      await user.click(screen.getByRole('button', { name: /Change assignment setup/i }));
       await user.click(screen.getByRole('button', { name: /Resume recent work/i }));
 
       expect(screen.getAllByText(/^Recent assignments$/i)).toHaveLength(1);
