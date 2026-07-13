@@ -1776,10 +1776,11 @@ export const MinimalAssignment: React.FC = () => {
               sectionRef={startSectionRef}
               headingRef={startHeadingRef}
               mode={startStageMode}
+              selectedStudentName={source.selectedStudent?.name ?? null}
               onStartNewAssignment={handleStartNewAssignmentWithSessionReset}
               onShowResumeChoice={handleShowResumeChoice}
               onRefreshRecentWork={() => void resume.loadResumeJobs()}
-              onResumeSelectedAssignment={() => void resume.handleResumeSelectedJob()}
+              onResumeSelectedAssignment={resume.handleResumeSelectedJob}
               resumeLoading={resume.resumeLoading}
               selectedResumeJobId={resume.selectedResumeJobId}
               onSelectedResumeJobIdChange={resume.setSelectedResumeJobId}
