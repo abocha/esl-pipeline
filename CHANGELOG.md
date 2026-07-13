@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [9.10.0] - 2026-07-13
+
+### Changed
+
+- Automated release from PR #132: feat(batch-frontend): redesign assignment step one entry state (https://github.com/abocha/esl-pipeline/pull/132)
+
 ## [9.9.1] - 2026-07-11
 
 ### Changed
