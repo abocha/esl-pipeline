@@ -232,7 +232,7 @@
 }
 .assignment-student-choice--open {
   grid-template-columns: minmax(0, 1fr) minmax(240px, 0.8fr);
-  align-items: end;
+  align-items: center;
 }
 .assignment-student-choice h3 {
   margin: 0 0 0.2rem;
@@ -242,12 +242,6 @@
   margin: 0;
   color: var(--cs-ink-muted);
   font-size: var(--cs-text-support);
-}
-.assignment-student-choice label {
-  display: grid;
-  gap: 0.35rem;
-  font-size: var(--cs-text-support);
-  font-weight: 700;
 }
 .assignment-student-choice select {
   min-height: var(--cs-control-primary);
@@ -275,11 +269,6 @@
   background: var(--cs-surface);
   color: var(--cs-action);
   font-weight: 800;
-}
-.assignment-choice-summary__label {
-  margin-bottom: 0.15rem !important;
-  color: var(--cs-action) !important;
-  font-weight: 750;
 }
 .assignment-source-choice {
   margin: 0;

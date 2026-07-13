@@ -37,24 +37,22 @@ export function StudentStep({
           aria-labelledby="assignment-student-heading"
         >
           <div className="assignment-student-choice__copy">
-            <h3 id="assignment-student-heading">Choose the student</h3>
+            <h3 id="assignment-student-heading">Choose learner</h3>
           </div>
-          <label>
-            Student
-            <select
-              ref={studentSelectRef}
-              value={selectedStudentId}
-              disabled={selectionLocked}
-              onChange={(event) => handleStudentChange(event.target.value)}
-            >
-              <option value="">Select a student</option>
-              {students.map((student) => (
-                <option key={student.id} value={student.id}>
-                  {student.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <select
+            ref={studentSelectRef}
+            aria-label="Choose learner"
+            value={selectedStudentId}
+            disabled={selectionLocked}
+            onChange={(event) => handleStudentChange(event.target.value)}
+          >
+            <option value="">Select…</option>
+            {students.map((student) => (
+              <option key={student.id} value={student.id}>
+                {student.name}
+              </option>
+            ))}
+          </select>
           {error ? <p className="assignment-source-pane__error">{error}</p> : null}
         </section>
       ) : (
@@ -67,7 +65,6 @@ export function StudentStep({
               {selectedStudent.name.trim().charAt(0).toUpperCase()}
             </span>
             <div>
-              <p className="assignment-choice-summary__label">Student</p>
               <h3 id="assignment-student-heading">{selectedStudent.name}</h3>
               <p>Selected for this assignment</p>
             </div>
@@ -76,9 +73,10 @@ export function StudentStep({
             type="button"
             className="product-button product-button--quiet"
             disabled={selectionLocked}
+            aria-label="Change student"
             onClick={() => setIsChangingStudent(true)}
           >
-            Change student
+            Change
           </button>
           {error ? <p className="assignment-source-pane__error">{error}</p> : null}
         </section>
