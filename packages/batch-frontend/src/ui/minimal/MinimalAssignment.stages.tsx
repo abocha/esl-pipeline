@@ -29,6 +29,7 @@ import { DropZone } from '../shared/DropZone';
 import { UploadProgress } from '../shared/UploadProgress';
 import { ProductButton } from '../system/ProductButton';
 import { getTranscriptUnexpectedCharacterWarnings } from './MinimalAssignment.transcript-warnings';
+import type { RecentAssignmentItem } from './MinimalAssignment.entry-state';
 
 export type WorkflowStageId = 'start' | 'source' | 'context' | 'assignment' | 'review' | 'advanced';
 export type WorkflowStageStatus = 'current' | 'complete' | 'available' | 'locked';
@@ -41,22 +42,10 @@ export interface WorkflowStage {
   status: WorkflowStageStatus;
 }
 
-export interface ResumeJobListItem {
-  jobId: string;
-  title: string;
-  subtitle: string;
-  statusLabel: string;
-  statusTone: 'success' | 'progress' | 'warning' | 'neutral';
-  timeLabel: string;
-  publishLabel: string;
-  supportLabel: string;
-  selected: boolean;
-}
-
 export interface CurrentAssignmentCard {
   title: string;
   statusLabel: string;
-  statusTone: ResumeJobListItem['statusTone'];
+  statusTone: 'success' | 'progress' | 'warning' | 'neutral';
   meta: string[];
   supportLabel: string;
 }
@@ -89,7 +78,7 @@ interface StartStageSectionProps {
   resumeLoading: boolean;
   selectedResumeJobId: string;
   onSelectedResumeJobIdChange: (value: string) => void;
-  resumeJobItems: ResumeJobListItem[];
+  resumeJobItems: RecentAssignmentItem[];
   totalResumeJobs: number;
   canToggleResumeJobs: boolean;
   showAllResumeJobs: boolean;
@@ -715,30 +704,29 @@ export function StartStageSection({
                     >
                       {resumeJobItems.map((job) => (
                         <button
-                          key={job.jobId}
+                          key={job.id}
                           type="button"
                           role="option"
                           aria-selected={job.selected}
                           className={`minimal-resume-card minimal-resume-card--${job.statusTone}${
                             job.selected ? ' minimal-resume-card--selected' : ''
                           }`}
-                          onClick={() => onSelectedResumeJobIdChange(job.jobId)}
+                          onClick={() => onSelectedResumeJobIdChange(job.id)}
                         >
                           <span className="minimal-resume-card-leading" aria-hidden="true" />
                           <span className="minimal-resume-card-main">
                             <span className="minimal-resume-card-head">
-                              <span className="minimal-resume-card-title">{job.title}</span>
+                              <span className="minimal-resume-card-title">{job.learnerName}</span>
                               <span
                                 className={`minimal-status-pill minimal-status-pill--${job.statusTone}`}
                               >
                                 {job.statusLabel}
                               </span>
                             </span>
-                            <span className="minimal-resume-card-subtitle">{job.subtitle}</span>
+                            <span className="minimal-resume-card-subtitle">{job.activityLabel}</span>
                             <span className="minimal-resume-card-meta">
                               <span>{job.timeLabel}</span>
-                              <span>{job.publishLabel}</span>
-                              <span className="minimal-muted">{job.supportLabel}</span>
+                              <span>{job.outcomeLabel}</span>
                             </span>
                           </span>
                         </button>
