@@ -35,10 +35,10 @@ const STEP_DEFINITIONS: readonly Pick<AssignmentWorkflowStep, 'id' | 'label'>[] 
 
 export function deriveAssignmentWorkflow(input: AssignmentWorkflowInput): AssignmentWorkflowStep[] {
   const completed = [
-    input.selectedStudent,
-    input.transcriptReady,
-    input.promptReady,
-    input.draftReady,
+    input.selectedStudent || input.published,
+    input.transcriptReady || input.published,
+    input.promptReady || input.published,
+    input.draftReady || input.published,
     false,
   ];
   const currentIndex = completed.findIndex((value) => !value);

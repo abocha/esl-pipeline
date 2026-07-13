@@ -163,11 +163,16 @@
   justify-content: space-between;
   gap: 1rem;
   margin-top: 1rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--cs-border);
+}
+.assignment-workflow__post-footer {
+  margin-top: 1rem;
 }
 .assignment-workflow__support {
   margin-top: 1.5rem;
+}
+.assignment-workflow__support .support-details {
+  border-top: 0;
+  padding-top: 0;
 }
 
 .assignment-advanced-actions {

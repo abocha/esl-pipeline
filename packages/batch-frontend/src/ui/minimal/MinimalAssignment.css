@@ -243,7 +243,7 @@
   gap: var(--space-3);
 }
 
-.minimal-stage-panel:first-child {
+.minimal-stage-panel:first-child:not(.assignment-advanced-actions) {
   border-top: 0;
   padding-top: 0;
 }

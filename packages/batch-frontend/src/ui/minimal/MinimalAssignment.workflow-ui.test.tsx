@@ -661,14 +661,16 @@ describe('MinimalAssignment - staged workflow UI', () => {
     expect(closeSse).not.toHaveBeenCalled();
   });
 
-  it('shows advanced controls directly after a shared assignment exists', async () => {
-    await renderResumedAssignment(
+  it('shows advanced controls only on Review and share after a shared assignment exists', async () => {
+    const user = createMinimalUser();
+    await renderPublishedAssignment(
       {
+        draftText: '# Draft markdown',
         status: {
-          state: 'succeeded',
+          studentId: 'student-alex',
         },
       },
-      { waitFor: 'promptReady' },
+      { user },
     );
 
     expect(screen.queryByRole('button', { name: /Show advanced actions/i })).toBeNull();
@@ -686,6 +688,15 @@ describe('MinimalAssignment - staged workflow UI', () => {
     expect(
       within(advancedActions).getByRole('button', { name: /Republish current draft/i }),
     ).toBeTruthy();
+
+    await user.click(screen.getByRole('button', { name: /^Step 1Student$/i }));
+
+    expect(screen.queryByRole('heading', { name: /Advanced actions/i })).toBeNull();
+    expect(screen.getAllByText(/^Support details$/i).length).toBeGreaterThan(0);
+
+    await user.click(screen.getByRole('button', { name: /^Step 5Review & share$/i }));
+
+    expect(screen.getByRole('heading', { name: /Advanced actions/i })).toBeTruthy();
   });
 
   it('marks the active advanced operation busy and keeps every rerun disabled', async () => {

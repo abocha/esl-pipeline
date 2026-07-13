@@ -38,6 +38,20 @@ describe('assignment workflow model', () => {
     ]);
   });
 
+  it('keeps Review and share reachable for a published legacy job with missing artifact links', () => {
+    const steps = deriveAssignmentWorkflow({
+      selectedStudent: false,
+      transcriptReady: false,
+      promptReady: false,
+      draftReady: false,
+      previewReady: false,
+      published: true,
+    });
+
+    expect(steps.find((step) => step.status === 'current')?.id).toBe('review');
+    expect(steps.slice(0, -1).every((step) => step.status === 'complete')).toBe(true);
+  });
+
   it('invalidates only dependent downstream artifacts', () => {
     expect(getInvalidatedArtifacts('student')).toEqual([
       'transcript',

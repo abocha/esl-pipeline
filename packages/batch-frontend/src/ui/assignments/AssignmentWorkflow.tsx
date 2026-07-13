@@ -12,6 +12,7 @@ export interface AssignmentWorkflowProps {
   highestAvailableStep: AssignmentStepId;
   saveState: 'idle' | 'saving' | 'saved' | 'error';
   guidance?: React.ReactNode;
+  postFooter?: React.ReactNode;
   support?: React.ReactNode;
   onStepRequest: (step: AssignmentStepId) => void;
   onBack: () => void;
@@ -43,6 +44,7 @@ export function AssignmentWorkflow({
   activeStep,
   saveState,
   guidance,
+  postFooter,
   support,
   onStepRequest,
   onBack,
@@ -119,6 +121,8 @@ export function AssignmentWorkflow({
           </ProductButton>
         ) : null}
       </footer>
+
+      {postFooter ? <div className="assignment-workflow__post-footer">{postFooter}</div> : null}
 
       {support ? <div className="assignment-workflow__support">{support}</div> : null}
     </section>

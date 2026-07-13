@@ -87,4 +87,42 @@ describe('AssignmentWorkflow navigation', () => {
     expect(screen.queryByRole('button', { name: 'Assignment ready' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Start another assignment' })).toBeNull();
   });
+
+  it('places post-completion operations below the footer and before support details', () => {
+    const { container } = render(
+      <AssignmentWorkflow
+        steps={[
+          { id: 'student', label: 'Student', status: 'complete' },
+          { id: 'source', label: 'Lesson source', status: 'complete' },
+          { id: 'context', label: 'Teaching context', status: 'complete' },
+          { id: 'create', label: 'Create', status: 'complete' },
+          { id: 'review', label: 'Review & share', status: 'current' },
+        ]}
+        activeStep="review"
+        highestAvailableStep="review"
+        saveState="saved"
+        onStepRequest={vi.fn()}
+        onBack={vi.fn()}
+        onComplete={vi.fn()}
+        completionLabel="Start another assignment"
+        postFooter={<section aria-label="Advanced actions">Operations</section>}
+        support={<div>Support details</div>}
+      >
+        Published assignment
+      </AssignmentWorkflow>,
+    );
+
+    const canvas = container.querySelector('.assignment-workflow__canvas')!;
+    const footer = container.querySelector('.assignment-workflow__footer')!;
+    const postFooter = container.querySelector('.assignment-workflow__post-footer')!;
+    const support = container.querySelector('.assignment-workflow__support')!;
+
+    expect(canvas.contains(screen.getByLabelText('Advanced actions'))).toBe(false);
+    expect(footer.compareDocumentPosition(postFooter) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(postFooter.compareDocumentPosition(support) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  });
 });
