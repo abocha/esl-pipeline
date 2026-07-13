@@ -1,5 +1,11 @@
 # Assignment Step One Student Design
 
+> Historical note: the assignment-setup and student-state presentation in this document is
+> superseded by
+> [`2026-07-13-assignment-step-one-entry-state-design.md`](2026-07-13-assignment-step-one-entry-state-design.md).
+> This document remains the record for the completed student-refresh removal, reassurance removal,
+> and compact selected-learner work.
+
 ## Meta
 
 - Date: 2026-07-13
