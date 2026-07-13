@@ -11,7 +11,6 @@ export interface StudentStepProps extends FocusedStepProps {
   selectedStudentId: string;
   selectionLocked?: boolean;
   error: string | null;
-  onRefresh: () => void;
   onSelect: (studentId: string) => void;
 }
 
