@@ -55,8 +55,17 @@ Canonical behavior and current status live in:
     `VITE_BATCH_FRONTEND_SANDBOX=mock-auth pnpm --filter @esl-pipeline/batch-frontend dev -- --host 127.0.0.1 --port 5173`
   - The sandbox is dev-only, marks the UI with `Mock data`, bypasses frontend auth only, and uses
     seeded mock API responses for the assignment builder.
-  - Open `http://localhost:5173/?jobId=job-sandbox` to resume the seeded completed assignment with
-    all primary stages unlocked for copy/layout review.
+  - Sandbox scenarios are allow-listed through `sandboxScenario`; unknown values use the default:
+    - `http://localhost:5173/?sandboxScenario=default`
+    - `http://localhost:5173/?sandboxScenario=step-one-no-recent`
+    - `http://localhost:5173/?sandboxScenario=step-one-resume-states`
+    - `http://localhost:5173/?sandboxScenario=step-one-resume-error`
+    - `http://localhost:5173/?sandboxScenario=step-one-no-learners`
+    - `http://localhost:5173/?sandboxScenario=step-one-learner-error`
+    - `http://localhost:5173/?sandboxScenario=step-one-slow`
+  - Add `jobId` or `sessionId` to any sandbox URL to inspect initial assignment hydration. For
+    example, open `http://localhost:5173/?sandboxScenario=default&jobId=job-sandbox` to resume
+    the seeded completed assignment with all primary stages unlocked for copy/layout review.
 - Student-area pages prefer route-level payloads under `/students/:id/surfaces/*`, with granular student APIs retained as compatibility/fallback paths.
 - The Learning page can read `/students/:id/memory/health` for collapsed operator support details;
   manual full snapshot rebuild remains outside the frontend and CLI-only for v1.1.
