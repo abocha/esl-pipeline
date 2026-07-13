@@ -331,7 +331,11 @@ export function useMinimalAssignmentResume({
   );
 
   const hydrateFromJob = useCallback(
-    async (jobId: string, knownJobs?: JobStatus[], isInitialHydration = false): Promise<ResumeOpenResult> => {
+    async (
+      jobId: string,
+      knownJobs?: JobStatus[],
+      isInitialHydration = false,
+    ): Promise<ResumeOpenResult> => {
       if (!jobId) return { ok: false };
 
       const hydration = beginHydration('job');
@@ -549,7 +553,11 @@ export function useMinimalAssignmentResume({
   );
 
   const hydrateFromSession = useCallback(
-    async (sessionId: string, knownSessions?: AssignmentSession[], isInitialHydration = false): Promise<ResumeOpenResult> => {
+    async (
+      sessionId: string,
+      knownSessions?: AssignmentSession[],
+      isInitialHydration = false,
+    ): Promise<ResumeOpenResult> => {
       if (!sessionId) return { ok: false };
 
       const hydration = beginHydration('session');
@@ -695,10 +703,7 @@ export function useMinimalAssignmentResume({
   const handleResumeSelectedJob = useCallback(async (): Promise<ResumeOpenResult> => {
     if (!selectedResumeJobId) return { ok: false };
     const result = selectedResumeJobId.startsWith('session:')
-      ? await hydrateFromSession(
-          selectedResumeJobId.slice('session:'.length),
-          assignmentSessions,
-        )
+      ? await hydrateFromSession(selectedResumeJobId.slice('session:'.length), assignmentSessions)
       : await hydrateFromJob(selectedResumeJobId, resumeJobs);
     await loadResumeJobs();
     return result;

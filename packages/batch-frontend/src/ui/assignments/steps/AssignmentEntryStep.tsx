@@ -104,7 +104,11 @@ export function AssignmentEntryStep({
           Change choice
         </button>
         {recentLoading ? (
-          <div className="assignment-entry-step__skeleton" role="status" aria-label="Loading recent work">
+          <div
+            className="assignment-entry-step__skeleton"
+            role="status"
+            aria-label="Loading recent work"
+          >
             Loading recent work…
           </div>
         ) : recentError ? (
@@ -196,7 +200,11 @@ export function AssignmentEntryStep({
                 Try again
               </ProductButton>
             ) : (
-              <ProductButton busy={starting} disabled={!selectedLearner || starting} onClick={onStartNew}>
+              <ProductButton
+                busy={starting}
+                disabled={!selectedLearner || starting}
+                onClick={onStartNew}
+              >
                 {starting ? 'Starting…' : 'Continue'}
               </ProductButton>
             )}
@@ -208,13 +216,20 @@ export function AssignmentEntryStep({
 
   if (!summary) return null;
   return (
-    <section className="assignment-entry-step assignment-entry-step__summary" aria-label="Current assignment">
+    <section
+      className="assignment-entry-step assignment-entry-step__summary"
+      aria-label="Current assignment"
+    >
       <div>
         <p>{summary.origin === 'new' ? 'Started new assignment' : 'Reopened assignment'}</p>
         <h3>{summary.learnerName}</h3>
         <span>{formatSummaryState(summary.state)}</span>
       </div>
-      <button type="button" className="product-button product-button--quiet" onClick={onChangeAssignment}>
+      <button
+        type="button"
+        className="product-button product-button--quiet"
+        onClick={onChangeAssignment}
+      >
         Change assignment
       </button>
     </section>

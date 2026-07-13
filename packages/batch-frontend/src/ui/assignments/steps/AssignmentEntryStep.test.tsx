@@ -61,9 +61,7 @@ function EntryHarness({
       opening={opening}
       starting={starting}
       summary={
-        view === 'summary'
-          ? { learnerName: 'Cora', state: summaryState, origin: 'resume' }
-          : null
+        view === 'summary' ? { learnerName: 'Cora', state: summaryState, origin: 'resume' } : null
       }
       onEnterResume={() => setView('resume')}
       onEnterNew={() => setView('new')}
@@ -83,16 +81,24 @@ describe('AssignmentEntryStep', () => {
   it('disables both unselected choices while recent work is loading', () => {
     render(<EntryHarness recentLoading />);
 
-    expect((screen.getByRole('button', { name: 'Resume recent work' }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole('button', { name: 'Start new assignment' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(
+      (screen.getByRole('button', { name: 'Resume recent work' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(
+      (screen.getByRole('button', { name: 'Start new assignment' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
     expect(screen.queryByRole('combobox', { name: /Choose learner/i })).toBeNull();
   });
 
   it('disables Resume without an empty-state explanation when there is no recent work', () => {
     render(<EntryHarness recentItems={[]} />);
 
-    expect((screen.getByRole('button', { name: 'Resume recent work' }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole('button', { name: 'Start new assignment' }) as HTMLButtonElement).disabled).toBe(false);
+    expect(
+      (screen.getByRole('button', { name: 'Resume recent work' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(
+      (screen.getByRole('button', { name: 'Start new assignment' }) as HTMLButtonElement).disabled,
+    ).toBe(false);
     expect(screen.queryByText(/No saved assignments yet/i)).toBeNull();
   });
 
@@ -117,9 +123,13 @@ describe('AssignmentEntryStep', () => {
     const user = userEvent.setup();
     render(<EntryHarness initialView="resume" />);
 
-    expect((screen.getByRole('button', { name: 'Continue assignment' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(
+      (screen.getByRole('button', { name: 'Continue assignment' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
     await user.click(screen.getByRole('radio', { name: /Cora.*Published/i }));
-    expect((screen.getByRole('button', { name: 'Open assignment' }) as HTMLButtonElement).disabled).toBe(false);
+    expect(
+      (screen.getByRole('button', { name: 'Open assignment' }) as HTMLButtonElement).disabled,
+    ).toBe(false);
     expect(screen.getByText(/Opens Cora's published assignment/i)).toBeTruthy();
   });
 
@@ -129,9 +139,14 @@ describe('AssignmentEntryStep', () => {
 
     const continueButton = screen.getByRole('button', { name: 'Continue' });
     expect((continueButton as HTMLButtonElement).disabled).toBe(true);
-    await user.selectOptions(screen.getByRole('combobox', { name: /Choose learner/i }), 'student-cora');
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: /Choose learner/i }),
+      'student-cora',
+    );
     expect(screen.getByRole('heading', { name: 'Cora' })).toBeTruthy();
-    expect((screen.getByRole('button', { name: 'Continue' }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole('button', { name: 'Continue' }) as HTMLButtonElement).disabled).toBe(
+      false,
+    );
     expect(screen.queryByRole('button', { name: 'Resume recent work' })).toBeNull();
   });
 
@@ -151,12 +166,17 @@ describe('AssignmentEntryStep', () => {
     const user = userEvent.setup();
     const { rerender } = render(<EntryHarness initialView="new" />);
 
-    await user.selectOptions(screen.getByRole('combobox', { name: /Choose learner/i }), 'student-cora');
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: /Choose learner/i }),
+      'student-cora',
+    );
     rerender(<EntryHarness initialView="new" starting />);
 
     expect(screen.getByRole('heading', { name: 'Cora' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Starting…' })).toBeTruthy();
-    expect((screen.getByRole('button', { name: 'Change choice' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(
+      (screen.getByRole('button', { name: 'Change choice' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
   });
 
   it.each([

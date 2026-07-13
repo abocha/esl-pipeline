@@ -63,7 +63,9 @@ function buildResumeLearnerName(
   job: JobStatus,
   studentNameById: ReadonlyMap<string, string>,
 ): string {
-  return job.studentId ? (studentNameById.get(job.studentId) ?? 'Saved assignment') : 'Saved assignment';
+  return job.studentId
+    ? (studentNameById.get(job.studentId) ?? 'Saved assignment')
+    : 'Saved assignment';
 }
 
 function buildSessionLearnerName(

@@ -13,17 +13,14 @@ describe('assignment entry state presentation', () => {
     ['succeeded', false, 'ready-to-share', 'Ready to share', 'Review assignment'],
     ['succeeded', true, 'published', 'Published', 'Open assignment'],
     ['failed', false, 'needs-attention', 'Needs attention', 'Review issue'],
-  ] as const)(
-    'maps %s jobs to the teacher-facing resume state',
-    (jobState, isPublished, state, statusLabel, actionLabel) => {
-      expect(getJobRecentAssignmentPresentation(jobState, isPublished)).toMatchObject({
-        state,
-        statusLabel,
-        actionLabel,
-        destination: 'review',
-      });
-    },
-  );
+  ] as const)('maps %s jobs to the teacher-facing resume state', (jobState, isPublished, state, statusLabel, actionLabel) => {
+    expect(getJobRecentAssignmentPresentation(jobState, isPublished)).toMatchObject({
+      state,
+      statusLabel,
+      actionLabel,
+      destination: 'review',
+    });
+  });
 
   it.each([
     ['source', 'Lesson source in progress'],

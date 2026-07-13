@@ -28,8 +28,8 @@ import type {
 import { DropZone } from '../shared/DropZone';
 import { UploadProgress } from '../shared/UploadProgress';
 import { ProductButton } from '../system/ProductButton';
-import { getTranscriptUnexpectedCharacterWarnings } from './MinimalAssignment.transcript-warnings';
 import type { RecentAssignmentItem } from './MinimalAssignment.entry-state';
+import { getTranscriptUnexpectedCharacterWarnings } from './MinimalAssignment.transcript-warnings';
 
 export type WorkflowStageId = 'start' | 'source' | 'context' | 'assignment' | 'review' | 'advanced';
 export type WorkflowStageStatus = 'current' | 'complete' | 'available' | 'locked';
@@ -723,7 +723,9 @@ export function StartStageSection({
                                 {job.statusLabel}
                               </span>
                             </span>
-                            <span className="minimal-resume-card-subtitle">{job.activityLabel}</span>
+                            <span className="minimal-resume-card-subtitle">
+                              {job.activityLabel}
+                            </span>
                             <span className="minimal-resume-card-meta">
                               <span>{job.timeLabel}</span>
                               <span>{job.outcomeLabel}</span>
