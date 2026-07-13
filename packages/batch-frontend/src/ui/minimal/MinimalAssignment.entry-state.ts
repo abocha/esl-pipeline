@@ -1,5 +1,5 @@
-import type { AssignmentStepId } from '../assignments/assignment-workflow';
 import type { AssignmentSessionStage, JobState } from '../../utils/api';
+import type { AssignmentStepId } from '../assignments/assignment-workflow';
 
 export type AssignmentEntryView = 'choice' | 'resume' | 'new' | 'summary';
 

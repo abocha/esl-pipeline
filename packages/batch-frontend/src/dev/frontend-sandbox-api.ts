@@ -68,9 +68,20 @@ function delaySandboxResponse(): Promise<void> {
 
 function resumeStateJobs() {
   return [
-    jobStatus({ jobId: 'job-sandbox-queued', state: 'queued', startedAt: null, finishedAt: null, htmlUrl: null }),
+    jobStatus({
+      jobId: 'job-sandbox-queued',
+      state: 'queued',
+      startedAt: null,
+      finishedAt: null,
+      htmlUrl: null,
+    }),
     jobStatus({ jobId: 'job-sandbox-running', state: 'running', finishedAt: null, htmlUrl: null }),
-    jobStatus({ jobId: 'job-sandbox-awaiting-approval', state: 'awaiting_approval', finishedAt: null, htmlUrl: null }),
+    jobStatus({
+      jobId: 'job-sandbox-awaiting-approval',
+      state: 'awaiting_approval',
+      finishedAt: null,
+      htmlUrl: null,
+    }),
     jobStatus({ jobId: 'job-sandbox-published', state: 'succeeded' }),
     jobStatus({ jobId: 'job-sandbox-unpublished', state: 'succeeded', htmlUrl: null }),
     jobStatus({
@@ -1042,9 +1053,9 @@ function jobProvenance() {
   };
 }
 
-export function createFrontendSandboxApiAdapter(options: {
-  scenario?: FrontendSandboxScenario;
-} = {}): AxiosAdapter {
+export function createFrontendSandboxApiAdapter(
+  options: { scenario?: FrontendSandboxScenario } = {},
+): AxiosAdapter {
   const scenario = options.scenario ?? 'default';
   sandboxFirstProfileLessonMemoryConfirmed = false;
   sandboxFirstProfileLessonMemoryHealthPolls = 0;

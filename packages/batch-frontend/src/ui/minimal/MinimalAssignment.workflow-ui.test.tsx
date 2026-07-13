@@ -60,7 +60,10 @@ describe('MinimalAssignment - staged workflow UI', () => {
 
     await user.click(screen.getByRole('button', { name: 'Start new assignment' }));
     await screen.findByRole('option', { name: 'Alex' });
-    await user.selectOptions(screen.getByRole('combobox', { name: /Choose learner/i }), 'student-alex');
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: /Choose learner/i }),
+      'student-alex',
+    );
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
     expect(screen.getByRole('heading', { name: /Add lesson source/i })).toBeTruthy();
@@ -422,7 +425,10 @@ describe('MinimalAssignment - staged workflow UI', () => {
 
     await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
     await screen.findByRole('option', { name: 'Alex' });
-    await user.selectOptions(screen.getByRole('combobox', { name: /Choose learner/i }), 'student-alex');
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: /Choose learner/i }),
+      'student-alex',
+    );
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     expect(screen.getByRole('heading', { name: /Add lesson source/i })).toBeTruthy();
     scrollIntoView.mockClear();
@@ -726,7 +732,10 @@ describe('MinimalAssignment - staged workflow UI', () => {
     renderMinimalAssignment();
     await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
     await screen.findByRole('option', { name: 'Alex' });
-    await user.selectOptions(screen.getByRole('combobox', { name: /Choose learner/i }), 'student-alex');
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: /Choose learner/i }),
+      'student-alex',
+    );
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
 

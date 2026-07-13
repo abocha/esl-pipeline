@@ -499,9 +499,9 @@ export function registerResumeBasicTests() {
       });
 
       expect(await screen.findByDisplayValue('Stale transcript')).toBeTruthy();
-      expect(screen.getByRole('button', { name: /Review & share/i }).getAttribute('aria-current')).toBe(
-        'step',
-      );
+      expect(
+        screen.getByRole('button', { name: /Review & share/i }).getAttribute('aria-current'),
+      ).toBe('step');
       expect(new URL(globalThis.location.href).searchParams.get('sessionId')).toBe('session-stale');
     });
 
@@ -689,7 +689,8 @@ export function registerResumeBasicTests() {
       const resumeList = await openResumeRoute(user);
       expect(screen.queryByRole('button', { name: /Refresh recent work/i })).toBeNull();
       expect(
-        (screen.getByRole('button', { name: /Continue assignment/i }) as HTMLButtonElement).disabled,
+        (screen.getByRole('button', { name: /Continue assignment/i }) as HTMLButtonElement)
+          .disabled,
       ).toBe(true);
       await user.click(within(resumeList).getByRole('radio', { name: /Saved assignment/i }));
       await user.click(screen.getByRole('button', { name: /Review progress/i }));

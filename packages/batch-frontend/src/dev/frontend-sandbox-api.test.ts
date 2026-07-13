@@ -416,7 +416,9 @@ describe('frontend sandbox API adapter', () => {
     await expect(adapter(requestConfig('get', '/api/user/jobs'))).resolves.toMatchObject({
       data: { jobs: [], total: 0 },
     });
-    await expect(adapter(requestConfig('get', '/api/user/assignment-sessions'))).resolves.toMatchObject({
+    await expect(
+      adapter(requestConfig('get', '/api/user/assignment-sessions')),
+    ).resolves.toMatchObject({
       data: { sessions: [], total: 0 },
     });
   });
@@ -447,7 +449,9 @@ describe('frontend sandbox API adapter', () => {
   });
 
   it('returns contextual sandbox collection errors for the error scenarios', async () => {
-    const recentWorkAdapter = createFrontendSandboxApiAdapter({ scenario: 'step-one-resume-error' });
+    const recentWorkAdapter = createFrontendSandboxApiAdapter({
+      scenario: 'step-one-resume-error',
+    });
     const learnerAdapter = createFrontendSandboxApiAdapter({ scenario: 'step-one-learner-error' });
 
     await expect(recentWorkAdapter(requestConfig('get', '/api/user/jobs'))).rejects.toThrow(

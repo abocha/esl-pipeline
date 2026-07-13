@@ -48,7 +48,7 @@
   min-width: 0;
 }
 .assignment-workflow__progress li:not(:last-child)::after {
-  content: '';
+  content: "";
   position: absolute;
   top: 50%;
   right: -1px;
@@ -71,7 +71,7 @@
   text-align: left;
   cursor: pointer;
 }
-.assignment-workflow__progress button[aria-current='step'] {
+.assignment-workflow__progress button[aria-current="step"] {
   border-bottom-color: var(--cs-action);
   background: color-mix(in srgb, var(--cs-selection) 48%, transparent);
   color: var(--cs-action);
@@ -94,7 +94,7 @@
   width: 16px;
   height: 16px;
 }
-[data-status='complete'] .assignment-workflow__step-icon {
+[data-status="complete"] .assignment-workflow__step-icon {
   border-color: var(--cs-success);
   color: var(--cs-success);
 }

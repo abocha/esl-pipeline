@@ -33,11 +33,11 @@ import {
   deriveAssignmentWorkflow,
   getTeacherNotesCommitDecision,
 } from '../assignments/assignment-workflow';
-import { CreateAssignmentStep } from '../assignments/steps/CreateAssignmentStep';
 import {
   AssignmentEntryStep,
   type AssignmentEntrySummary,
 } from '../assignments/steps/AssignmentEntryStep';
+import { CreateAssignmentStep } from '../assignments/steps/CreateAssignmentStep';
 import { LessonSourceStep } from '../assignments/steps/LessonSourceStep';
 import { ReviewShareStep } from '../assignments/steps/ReviewShareStep';
 import { TeachingContextStep } from '../assignments/steps/TeachingContextStep';
@@ -48,6 +48,7 @@ import {
 } from './MinimalAssignment.advanced';
 import { useMinimalAssignmentAuthoringController } from './MinimalAssignment.authoring';
 import { useMinimalAssignmentContextController } from './MinimalAssignment.context';
+import type { AssignmentEntryView } from './MinimalAssignment.entry-state';
 import {
   getJobPollingDecision,
   getNextFallbackPollingDelay,
@@ -64,10 +65,7 @@ import {
   type ResumeOpenSuccess,
   useMinimalAssignmentResume,
 } from './MinimalAssignment.resume';
-import {
-  buildRecentAssignmentItems,
-} from './MinimalAssignment.resume-presentation';
-import type { AssignmentEntryView } from './MinimalAssignment.entry-state';
+import { buildRecentAssignmentItems } from './MinimalAssignment.resume-presentation';
 import { useMinimalAssignmentSourceController } from './MinimalAssignment.source';
 import {
   AssignmentStageSection,
@@ -485,22 +483,17 @@ export const MinimalAssignment: React.FC = () => {
     [],
   );
 
-  const resetFlow = useCallback((nextStudentId?: string) => {
-    beginHydration('new');
-    committedTeacherNotesRef.current = '';
-    invalidateAuthoringGeneration();
-    resetAuthoring();
-    resetSourceFlow(
-      nextStudentId === undefined ? { resetStudent: true } : { nextStudentId },
-    );
-    resetJobShell();
-  }, [
-    beginHydration,
-    invalidateAuthoringGeneration,
-    resetAuthoring,
-    resetJobShell,
-    resetSourceFlow,
-  ]);
+  const resetFlow = useCallback(
+    (nextStudentId?: string) => {
+      beginHydration('new');
+      committedTeacherNotesRef.current = '';
+      invalidateAuthoringGeneration();
+      resetAuthoring();
+      resetSourceFlow(nextStudentId === undefined ? { resetStudent: true } : { nextStudentId });
+      resetJobShell();
+    },
+    [beginHydration, invalidateAuthoringGeneration, resetAuthoring, resetJobShell, resetSourceFlow],
+  );
 
   const loadPromptOptions = useCallback(async () => {
     try {
@@ -687,31 +680,29 @@ export const MinimalAssignment: React.FC = () => {
     ],
   );
 
-  const resetForNewAssignment = useCallback((nextStudentId?: string) => {
-    assignmentSessionMutationQueueRef.current = Promise.resolve(null);
-    if (assignmentSessionSettingsTimeoutRef.current) {
-      clearTimeout(assignmentSessionSettingsTimeoutRef.current);
-      assignmentSessionSettingsTimeoutRef.current = null;
-    }
-    assignmentSessionMilestoneRef.current = {
-      studentId: '',
-      recordingId: '',
-      transcriptId: '',
-      promptPackageId: '',
-      draftId: '',
-      lessonId: scheduleFollowupContext.lessonId,
-    };
-    setLinkedLessonId(scheduleFollowupContext.lessonId);
-    setOperatorSelectedTemplateId(fallbackTemplateId);
-    assignmentSessionSettingsRef.current = '';
-    setActiveAssignmentSession(null);
-    resetFlow(nextStudentId);
-  }, [
-    fallbackTemplateId,
-    resetFlow,
-    scheduleFollowupContext.lessonId,
-    setActiveAssignmentSession,
-  ]);
+  const resetForNewAssignment = useCallback(
+    (nextStudentId?: string) => {
+      assignmentSessionMutationQueueRef.current = Promise.resolve(null);
+      if (assignmentSessionSettingsTimeoutRef.current) {
+        clearTimeout(assignmentSessionSettingsTimeoutRef.current);
+        assignmentSessionSettingsTimeoutRef.current = null;
+      }
+      assignmentSessionMilestoneRef.current = {
+        studentId: '',
+        recordingId: '',
+        transcriptId: '',
+        promptPackageId: '',
+        draftId: '',
+        lessonId: scheduleFollowupContext.lessonId,
+      };
+      setLinkedLessonId(scheduleFollowupContext.lessonId);
+      setOperatorSelectedTemplateId(fallbackTemplateId);
+      assignmentSessionSettingsRef.current = '';
+      setActiveAssignmentSession(null);
+      resetFlow(nextStudentId);
+    },
+    [fallbackTemplateId, resetFlow, scheduleFollowupContext.lessonId, setActiveAssignmentSession],
+  );
 
   const handleStartNewAssignmentWithSessionReset = useCallback(() => {
     resetForNewAssignment();
@@ -1127,8 +1118,8 @@ export const MinimalAssignment: React.FC = () => {
   const transcriptReady = source.transcriptReady;
   const firstProfileAssistVisible = Boolean(
     source.selectedStudentId &&
-    transcriptReady &&
-    (context.profilePreviewStatus === 'none' || context.profilePreviewStatus === 'unstructured'),
+      transcriptReady &&
+      (context.profilePreviewStatus === 'none' || context.profilePreviewStatus === 'unstructured'),
   );
   const firstProfileLessonMemoryKey = useMemo(() => {
     const studentId = source.selectedStudentId;
@@ -1151,14 +1142,15 @@ export const MinimalAssignment: React.FC = () => {
   ]);
   const firstProfileLessonMemoryConfirmed = Boolean(
     firstProfileLessonMemoryKey &&
-    firstProfileLessonMemoryConfirmation &&
-    firstProfileLessonMemoryConfirmation.studentId === firstProfileLessonMemoryKey.studentId &&
-    firstProfileLessonMemoryConfirmation.recordingId === firstProfileLessonMemoryKey.recordingId &&
-    firstProfileLessonMemoryConfirmation.transcriptId ===
-      firstProfileLessonMemoryKey.transcriptId &&
-    firstProfileLessonMemoryConfirmation.transcriptUpdatedAt ===
-      firstProfileLessonMemoryKey.transcriptUpdatedAt &&
-    !source.transcriptDirty,
+      firstProfileLessonMemoryConfirmation &&
+      firstProfileLessonMemoryConfirmation.studentId === firstProfileLessonMemoryKey.studentId &&
+      firstProfileLessonMemoryConfirmation.recordingId ===
+        firstProfileLessonMemoryKey.recordingId &&
+      firstProfileLessonMemoryConfirmation.transcriptId ===
+        firstProfileLessonMemoryKey.transcriptId &&
+      firstProfileLessonMemoryConfirmation.transcriptUpdatedAt ===
+        firstProfileLessonMemoryKey.transcriptUpdatedAt &&
+      !source.transcriptDirty,
   );
   const firstProfileLessonMemoryNeedsUpdate = Boolean(
     firstProfileLessonMemoryConfirmation && !firstProfileLessonMemoryConfirmed,
@@ -1349,11 +1341,11 @@ export const MinimalAssignment: React.FC = () => {
   const hasAssignmentContent = authoring.draftText.trim().length > 0;
   const hasDownstreamAssignmentState = Boolean(
     authoring.promptReady ||
-    hasAssignmentContent ||
-    authoring.previewReadyForCurrentDraft ||
-    jobStatus?.jobId ||
-    activeAssignmentSession?.promptPackageId ||
-    activeAssignmentSession?.draftId,
+      hasAssignmentContent ||
+      authoring.previewReadyForCurrentDraft ||
+      jobStatus?.jobId ||
+      activeAssignmentSession?.promptPackageId ||
+      activeAssignmentSession?.draftId,
   );
   const hasStartedFlow =
     entryView === 'summary' ||
@@ -1378,12 +1370,7 @@ export const MinimalAssignment: React.FC = () => {
       resume.selectedResumeJobId,
       studentNameById,
     );
-  }, [
-    resume.assignmentSessions,
-    resume.resumeJobs,
-    resume.selectedResumeJobId,
-    studentNameById,
-  ]);
+  }, [resume.assignmentSessions, resume.resumeJobs, resume.selectedResumeJobId, studentNameById]);
   useEffect(() => {
     if (
       entryView === 'resume' &&
@@ -1633,8 +1620,8 @@ export const MinimalAssignment: React.FC = () => {
         description: jobReady
           ? `Working with assignment ${formatShortJobId(jobStatus?.jobId)}.`
           : hasStartedFlow
-              ? 'Fresh assignment flow is active.'
-              : 'Open recent work or begin a new assignment.',
+            ? 'Fresh assignment flow is active.'
+            : 'Open recent work or begin a new assignment.',
         status: startStatus,
       },
       {
