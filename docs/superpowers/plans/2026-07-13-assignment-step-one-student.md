@@ -1,5 +1,10 @@
 # Assignment Step One Student Implementation Plan
 
+> Historical note: Tasks 1 and 2 were implemented. The remaining integrated Step 1 behavior is
+> superseded by the mutually exclusive entry-state design in
+> `docs/superpowers/specs/2026-07-13-assignment-step-one-entry-state-design.md` and its follow-up
+> implementation plan.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development
 > (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use
 > checkbox (`- [ ]`) syntax for tracking.
