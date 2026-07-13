@@ -7,6 +7,7 @@ export function StudentStep({
   students,
   selectedStudentId,
   selectionLocked = false,
+  loading = false,
   error,
   onSelect,
 }: StudentStepProps) {
@@ -27,6 +28,19 @@ export function StudentStep({
       setIsChangingStudent(false);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="assignment-step assignment-step--student">
+        <div className="assignment-student-choice" role="status" aria-label="Loading learners">
+          <div className="assignment-student-choice__copy">
+            <h3>Loading learners</h3>
+            <p>Preparing learner options…</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="assignment-step assignment-step--student">

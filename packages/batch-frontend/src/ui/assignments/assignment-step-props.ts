@@ -3,13 +3,14 @@ import type React from 'react';
 import type { StudentOption } from '../../utils/api';
 
 export interface FocusedStepProps {
-  children: React.ReactNode;
+  children?: React.ReactNode;
 }
 
 export interface StudentStepProps extends FocusedStepProps {
   students: StudentOption[];
   selectedStudentId: string;
   selectionLocked?: boolean;
+  loading?: boolean;
   error: string | null;
   onSelect: (studentId: string) => void;
 }
