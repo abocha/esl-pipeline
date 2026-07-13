@@ -5,7 +5,7 @@
 - Audience: AI agents and maintainers.
 - Read Time: 1 minute.
 - Authority Level: Design router.
-- Last Verified Against: 2026-05-12 repo state.
+- Last Verified Against: 2026-07-13 repo state.
 - Owner: backend/frontend maintainers + automation agents.
 - Review Cadence: monthly or after transcription-flow changes.
 - Status: `router`.
@@ -29,6 +29,12 @@
 
 - Active design spec: transcription pipeline only.
 - Historical frontend vision docs are archived under `docs/archive/frontend/2026-02/`.
+
+## Living Review Records
+
+- [`Assignment main-flow UI review`](reviews/assignment-main-flow-ui-review.docx) - screenshot-driven,
+  non-authoritative review record for the current sandbox polish pass. Accepted decisions must still
+  be implemented and validated in code before they become runtime truth.
 
 ## Do / Don't
 
