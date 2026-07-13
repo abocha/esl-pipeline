@@ -63,8 +63,9 @@ export function registerResumeBasicTests() {
       expect(api.fetchStudentOptions).toHaveBeenCalledTimes(1);
       expect(api.listProfileContents).not.toHaveBeenCalled();
 
-      expect(screen.getByRole('heading', { name: /Add lesson source/i })).toBeTruthy();
-      expect(screen.getByRole('heading', { name: /Review and share/i })).toBeTruthy();
+      expect(screen.queryByRole('heading', { name: /Add lesson source/i })).toBeNull();
+      expect(screen.queryByRole('heading', { name: /Review and share/i })).toBeNull();
+      expect(screen.getByRole('button', { name: /Start new assignment/i })).toBeTruthy();
       expect(screen.queryByRole('combobox', { name: /Share to/i })).toBeNull();
       expect(screen.queryByText(/Assignments publish as an Assignment Handout/i)).toBeNull();
     });
@@ -318,11 +319,15 @@ export function registerResumeBasicTests() {
         updatedAt: now,
       });
 
+      const user = createMinimalUser();
       globalThis.history.replaceState(null, '', '/?sessionId=session-resume');
       renderMinimalAssignment();
 
+      await user.click(screen.getByRole('button', { name: /Lesson source/i }));
       expect(await screen.findByDisplayValue('Session transcript')).toBeTruthy();
+      await user.click(screen.getByRole('button', { name: /Create/i }));
       expect(await screen.findByDisplayValue('# Session draft')).toBeTruthy();
+      await user.click(screen.getByRole('button', { name: /Teaching context/i }));
       expect(((await screen.findByLabelText(/Teacher notes/i)) as HTMLTextAreaElement).value).toBe(
         'Remember the travel vocab.',
       );
@@ -817,7 +822,9 @@ export function registerResumeBasicTests() {
       expect(api.fetchJobProvenance).toHaveBeenCalledWith('job-resume');
       expect(screen.queryByRole('listbox', { name: /Recent assignments/i })).toBeNull();
 
+      await user.click(screen.getByRole('button', { name: /Lesson source/i }));
       expect(await screen.findByDisplayValue('Recovered transcript')).toBeTruthy();
+      await user.click(screen.getByRole('button', { name: /Create/i }));
       expect(await screen.findByDisplayValue('# Recovered draft')).toBeTruthy();
       vi.useFakeTimers();
       await act(async () => {
