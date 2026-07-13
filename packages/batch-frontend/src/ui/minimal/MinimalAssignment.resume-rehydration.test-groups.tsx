@@ -1134,6 +1134,7 @@ export function registerResumePresetRaceTests() {
         await waitFor(() => {
           expect(api.getJobStatus).toHaveBeenCalledWith('job-race-preset');
         });
+        await user.click(screen.getByRole('button', { name: /Create/i }));
         expect(await screen.findByDisplayValue('# Draft markdown')).toBeTruthy();
         expect(screen.getByRole('button', { name: /^Generate assignment$/i })).toBeTruthy();
 

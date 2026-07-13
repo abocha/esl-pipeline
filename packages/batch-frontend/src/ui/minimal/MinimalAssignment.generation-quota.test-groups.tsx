@@ -18,6 +18,7 @@ import {
   renderResumedAssignment,
   testScreen as screen,
   setupMinimalAssignmentTest,
+  startNewAssignmentForLearner,
   UI_WAIT_TIMEOUT_MS,
   testVi as vi,
   testWaitFor as waitFor,
@@ -100,7 +101,9 @@ export function registerGenerationDefaultsTests() {
     it(
       'does not persist edited session notes before an explicit commit',
       async () => {
-        await renderPromptReadyAssignment();
+        const { user } = await renderPromptReadyAssignment();
+        await user.click(screen.getByRole('button', { name: /Teaching context/i }));
+        await screen.findByRole('textbox', { name: /Teacher notes/i });
         vi.mocked(api.createAssignmentSession).mockClear();
         vi.mocked(api.updateAssignmentSession).mockClear();
         vi.useFakeTimers();
@@ -298,6 +301,7 @@ export function registerGenerationThrottleTests() {
         const publishButton = screen.getByRole('button', { name: /Share assignment/i });
         expect((publishButton as HTMLButtonElement).disabled).toBe(false);
 
+        await user.click(screen.getByRole('button', { name: /Create/i }));
         const generateDraftButton = screen.getByRole('button', {
           name: /^Generate assignment$/i,
         });
@@ -314,7 +318,9 @@ export function registerGenerationThrottleTests() {
           });
           expect(screen.getByDisplayValue('# Generated assignment draft')).toBeTruthy();
         });
-        expect((publishButton as HTMLButtonElement).disabled).toBe(true);
+        await user.click(screen.getByRole('button', { name: /Review & share/i }));
+        const refreshedPublishButton = screen.getByRole('button', { name: /Share assignment/i });
+        expect((refreshedPublishButton as HTMLButtonElement).disabled).toBe(true);
         expect(screen.getByRole('button', { name: /Preview assignment/i }).className).toContain(
           'minimal-preview-attention',
         );
@@ -346,7 +352,9 @@ export function registerGenerationThrottleTests() {
           });
         });
 
-        await user.click(screen.getByRole('button', { name: /Start new/i }));
+        await user.click(screen.getByRole('button', { name: /Student/i }));
+        await user.click(screen.getByRole('button', { name: /Change assignment/i }));
+        await startNewAssignmentForLearner(user);
 
         await act(async () => {
           resolveGeneration({
