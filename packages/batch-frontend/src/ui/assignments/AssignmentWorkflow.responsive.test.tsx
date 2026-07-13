@@ -51,4 +51,23 @@ describe('AssignmentWorkflow responsive contract', () => {
     expect(css).toContain('.assignment-advanced-actions :is(input, select) {');
     expect(css).toContain('border-radius: var(--cs-radius-control)');
   });
+
+  it('uses complete card borders instead of workflow divider rules', () => {
+    const workflowCssPath = join(process.cwd(), 'src/ui/assignments/AssignmentWorkflow.css');
+    const workflowCss = readFileSync(workflowCssPath, 'utf8');
+    const footerRule = workflowCss.match(/\.assignment-workflow__footer\s*\{([^}]*)\}/)?.[1];
+
+    expect(footerRule).not.toContain('border-top');
+    expect(workflowCss).toContain('.assignment-workflow__support .support-details {');
+    expect(workflowCss).toMatch(
+      /\.assignment-workflow__support \.support-details\s*\{[^}]*border-top:\s*0/,
+    );
+
+    const minimalCssPath = join(process.cwd(), 'src/ui/minimal/MinimalAssignment.css');
+    const minimalCss = readFileSync(minimalCssPath, 'utf8');
+
+    expect(minimalCss).toContain(
+      '.minimal-stage-panel:first-child:not(.assignment-advanced-actions)',
+    );
+  });
 });

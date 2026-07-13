@@ -421,6 +421,15 @@ async function waitForJobActionsReady(jobId = 'job-1') {
   if (supportDisclosure && !supportDisclosure.open) {
     fireEvent.click(supportSummary.closest('summary') ?? supportSummary);
   }
+  const reviewStep = await screen.findByRole(
+    'button',
+    { name: /Review & share/i },
+    { timeout: UI_WAIT_TIMEOUT_MS },
+  );
+  await waitFor(() => expect((reviewStep as HTMLButtonElement).disabled).toBe(false), {
+    timeout: UI_WAIT_TIMEOUT_MS,
+  });
+  fireEvent.click(reviewStep);
   await screen.findByRole(
     'heading',
     { name: /Advanced actions/i },
@@ -593,8 +602,10 @@ export async function renderPublishedAssignment(
   return renderResumedAssignment(
     {
       ...overrides,
+      draftText: overrides.draftText ?? '# Draft markdown',
       status: {
         state: 'succeeded',
+        studentId: 'student-alex',
         ...overrides.status,
       },
     },

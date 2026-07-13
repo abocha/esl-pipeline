@@ -1727,6 +1727,31 @@ export const MinimalAssignment: React.FC = () => {
               completionLabel: 'Start another assignment',
             }
           : {})}
+        postFooter={
+          jobReady && activeStep === 'review' ? (
+            <AdvancedActionsStage
+              stage={advancedStage}
+              sectionRef={advancedSectionRef}
+              headingRef={advancedHeadingRef}
+              jobReady
+              jobStatus={jobStatus}
+              controller={advancedActions}
+              onRefreshActions={() => void loadJobOptions()}
+              jobOptionsError={jobOptionsError}
+              ttsProviders={ttsProviders}
+              ttsModelOptionsByProvider={ttsModelOptionsByProvider}
+              elevenlabsStandardModelOptions={elevenlabsStandardModelOptions}
+              pronunciationChunkProviders={FALLBACK_PRONUNCIATION_CHUNK_TTS_PROVIDERS}
+              studyTextStrategies={
+                jobOptions?.ttsStrategies?.filter(isUiPublishTtsStrategy) ?? [
+                  'auto',
+                  'dialogue',
+                  'tts',
+                ]
+              }
+            />
+          ) : null
+        }
         support={
           jobReady ? (
             <AssignmentSupport>
@@ -1981,30 +2006,6 @@ export const MinimalAssignment: React.FC = () => {
             />
           </ReviewShareStep>
         </div>
-
-        {jobReady ? (
-          <AdvancedActionsStage
-            stage={advancedStage}
-            sectionRef={advancedSectionRef}
-            headingRef={advancedHeadingRef}
-            jobReady
-            jobStatus={jobStatus}
-            controller={advancedActions}
-            onRefreshActions={() => void loadJobOptions()}
-            jobOptionsError={jobOptionsError}
-            ttsProviders={ttsProviders}
-            ttsModelOptionsByProvider={ttsModelOptionsByProvider}
-            elevenlabsStandardModelOptions={elevenlabsStandardModelOptions}
-            pronunciationChunkProviders={FALLBACK_PRONUNCIATION_CHUNK_TTS_PROVIDERS}
-            studyTextStrategies={
-              jobOptions?.ttsStrategies?.filter(isUiPublishTtsStrategy) ?? [
-                'auto',
-                'dialogue',
-                'tts',
-              ]
-            }
-          />
-        ) : null}
       </AssignmentWorkflow>
     </div>
   );
