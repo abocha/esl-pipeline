@@ -70,7 +70,6 @@ import {
   AssignmentStageSection,
   ContextStageSection,
   type CurrentAssignmentCard,
-  type ResumeJobListItem,
   ReviewStageSection,
   SourceStageSection,
   type StartStageMode,
@@ -1356,7 +1355,7 @@ export const MinimalAssignment: React.FC = () => {
       setShowAllResumeJobs(false);
     }
   }, [showAllResumeJobs, totalResumeItems]);
-  const resumeJobItems = useMemo<ResumeJobListItem[]>(() => {
+  const resumeJobItems = useMemo(() => {
     const allItems = buildRecentAssignmentItems(
       resume.assignmentSessions,
       resume.resumeJobs,
