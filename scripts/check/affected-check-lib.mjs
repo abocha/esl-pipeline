@@ -465,6 +465,50 @@ export function formatPlanSummary(plan) {
   return lines.join('\n');
 }
 
+export function formatCiScopeGithubOutputs(decision) {
+  return ['runtime', 'integration', 'backend_db_worker', 'telegram', 'docs_only']
+    .map((scope) => `${scope}=${decision[scope] === true}`)
+    .join('\n')
+    .concat('\n');
+}
+
+export function formatCiScopeSummary(decision) {
+  const scopes = ['runtime', 'integration', 'backend_db_worker', 'telegram', 'docs_only'];
+  return [
+    '### Hosted CI scope',
+    '',
+    ...scopes.map((scope) => `- ${scope}: ${decision[scope] === true ? 'run' : 'skip'}`),
+    '',
+    `Changed files: ${decision.changedFiles?.length ?? 0}`,
+    ...(decision.changedFiles ?? []).map((file) => `- \`${file}\``),
+    '',
+    'Affected packages:',
+    ...((decision.affectedPackages?.length ?? 0) > 0
+      ? decision.affectedPackages.map((name) => `- \`${name}\``)
+      : ['- (none)']),
+    '',
+    'Reasons:',
+    ...((decision.reasons?.length ?? 0) > 0
+      ? decision.reasons.map((reason) => `- ${reason.code} [${reason.scope}]: ${reason.subject}`)
+      : ['- (none)']),
+  ].join('\n');
+}
+
+export function formatScopePreview({ planText, hostedDecision, uncommittedFiles }) {
+  const count = uncommittedFiles.length;
+  return [
+    '## Local validation scope',
+    '',
+    planText,
+    '',
+    '## Hosted CI preview',
+    '',
+    `Hosted preview excludes ${count} uncommitted ${count === 1 ? 'path' : 'paths'}.`,
+    '',
+    formatCiScopeSummary(hostedDecision),
+  ].join('\n');
+}
+
 function buildTurboPlan({ affectedPackages, dependencyPackages, packageByName, turboConcurrency }) {
   if (affectedPackages.length === 0) return null;
 
