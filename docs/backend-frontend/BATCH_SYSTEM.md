@@ -3,90 +3,78 @@
 ## Meta
 
 - Audience: AI agents and maintainers for batch frontend/backend tasks.
-- Read Time: 6 minutes.
+- Read Time: 4 minutes.
 - Authority Level: Active system map.
-- Last Verified Against: 2026-07-02 repository and production-runtime state.
+- Last Verified Against: 2026-07-14 repository and production-runtime state.
 - Owner: backend/frontend maintainers + automation agents.
 - Review Cadence: monthly or after major batch workflow changes.
 - Status: `active`.
 
 ## Purpose
 
-- Provide active architecture and integration map for the batch system.
-- Point to authoritative status and contract sources.
+Provide the batch architecture and user-flow map. Use package READMEs for implementation detail and
+[`backend-frontend-alignment.md`](backend-frontend-alignment.md) for capability status.
 
 ## Canonical Sources
 
 1. [`docs/reference/agents-ssot.md`](../reference/agents-ssot.md)
-2. [`docs/backend-frontend/backend-frontend-alignment.md`](backend-frontend-alignment.md)
+2. [`packages/batch-backend/README.md`](../../packages/batch-backend/README.md)
 3. [`packages/batch-frontend/README.md`](../../packages/batch-frontend/README.md)
-4. [`packages/batch-backend/README.md`](../../packages/batch-backend/README.md)
-
-## Current State
-
-- Frontend is an authenticated assignment console.
-- Backend exposes extended API routes and queue-backed processing.
-- Prompt templates/profiles are runtime-managed from Postgres revisions (DB-canonical).
-- Canonical student-memory artifacts, incremental/budgeted snapshot refresh, inspection and health
-  routes, and replay tooling are backend-live.
-- Compose-managed production must run the dedicated `student-memory-worker` service; `batch-worker`
-  does not consume lesson-memory, homework-memory, or snapshot jobs.
-- Orchestrator remains the publish execution engine after approval handoff.
+4. [`docs/backend-frontend/backend-frontend-alignment.md`](backend-frontend-alignment.md)
 
 ## Architecture
 
 ```text
 Batch Frontend (React + Vite)
-  -> Batch Backend (Fastify + queue workers + Postgres/Redis)
-  -> Orchestrator (validation/import/speech planning/TTS/upload/manifest)
+  -> Batch Backend (Fastify + Postgres + Redis/BullMQ)
+     -> batch-worker / transcribe-worker / student-memory-worker
+     -> Orchestrator (validate/import/plan/TTS/upload/manifest)
+
+Telegram Ops Bot -> authenticated Batch Backend ops/job APIs
 ```
 
-## Active User Flow
+The backend owns durable sessions, jobs, lineage, queues, and student-memory state. The frontend and
+Telegram bot are operator surfaces; neither owns alternate workflow or pipeline semantics.
 
-1. Authenticate.
-2. Upload recording.
-3. Review/edit transcript.
-4. Generate prompt package.
-5. Save draft markdown.
-6. Materialize draft.
-7. Approve job and publish.
+## Assignment Flow
 
-## Integration Surface (Minimal)
+1. **Student:** start new work or resume a recent assignment, then select/confirm the learner.
+2. **Lesson source:** upload an OPUS recording or paste an existing transcript. Manual transcripts
+   retain explicit `manual_transcript`/`manual` provenance and do not enqueue STT.
+3. **Teaching context:** review learner context and enter assignment-specific guidance.
+4. **Create:** generate and edit the prompt-backed assignment draft.
+5. **Review & share:** preview, approve, publish, and open the handout.
 
-- Auth: `/auth/*`
-- Recordings/transcripts: `/recordings/*`
-- Students: `GET /students/:id/memory`, `GET /students/:id/memory/health`,
-  `GET /students/:id/lesson-memory`, `GET /students/:id/homework-memory`, and
-  `GET /students/:id/memory-snapshots` for authenticated student-memory inspection and operator
-  health details
-- Prompt config/options: `/config/prompts`, `/config/job-options`
-- Prompt package and drafts: `/recordings/:id/prompt-package`, `GET /prompt-packages/:id` for canonical prompt-package lineage and assignment-level memory provenance inspection, `/prompt-packages/:id/draft`, `/drafts/:id/materialize`
-- Approval and status: `/jobs/:jobId/approve`, `/jobs/:jobId`, `/jobs/events`
-- Validation: `/validation/markdown`
+After sharing, rerun and republish controls remain available under Advanced actions. Starting another
+assignment is always an explicit tutor action; asynchronous readiness changes do not navigate steps.
 
-Student-memory replay and backfill are operator workflows, documented in
-[`docs/operations/student-memory-replay-backfill.md`](../operations/student-memory-replay-backfill.md).
-Source-checkout commands use `pnpm`/`tsx`; production commands run compiled `node dist/tools/...`
-inside the backend container. Both enqueue work for `student-memory-worker`. Deployment smoke
-evidence should include
+## Runtime Boundaries
 
-```bash
-docker compose ... ps student-memory-worker
-docker compose ... logs --tail=120 student-memory-worker
-```
+- Prompt templates and profiles are revisioned in Postgres; bootstrap tooling seeds fresh
+  environments.
+- The orchestrator remains the canonical publish engine after backend approval handoff.
+- `batch-worker` handles ordinary pipeline jobs; `transcribe-worker` handles STT;
+  `student-memory-worker` exclusively consumes lesson-memory, homework-memory, and snapshot work.
+- Job and recording events use targeted SSE subscriptions backed by Redis fanout. Wildcard streams
+  are explicit rather than the frontend default.
+- Study-text synthesis passes through provider-neutral voice and speech plans before TTS.
 
-Event fanout behavior (Redis bridge):
+## API and Operations Routes
 
-- Job events publish on targeted channels only: `batch_job_events:<jobId>`.
-- All-jobs listeners consume targeted channels through pattern subscription: `batch_job_events:*`.
+- Auth, recordings, transcripts, sessions, jobs, prompts, drafts, students, and ops routes:
+  [`packages/batch-backend/README.md`](../../packages/batch-backend/README.md)
+- Generated route inventory:
+  [`docs/generated/backend-route-index.md`](../generated/backend-route-index.md)
+- Student-memory replay/backfill:
+  [`docs/operations/student-memory-replay-backfill.md`](../operations/student-memory-replay-backfill.md)
+- Prompt bootstrap: [`docs/operations/prompt-gallery-bootstrap.md`](../operations/prompt-gallery-bootstrap.md)
+- Speech/TTS contract:
+  [`docs/reference/TTS_SPEECH_PERFORMANCE_SYSTEM.md`](../reference/TTS_SPEECH_PERFORMANCE_SYSTEM.md)
+- Deployment and worker verification: [`docs/backend-frontend/DEPLOYMENT.md`](DEPLOYMENT.md)
 
-Study-text TTS uses provider-neutral `voice-plan` and `speech-plan` stages before synthesis.
-`voice-plan` resolves the cast and its per-voice capabilities before the injected structured-output
-speech planner runs. Identity fallback keeps publish flow available when planning is disabled or
-unavailable. See
-[`docs/reference/TTS_SPEECH_PERFORMANCE_SYSTEM.md`](../reference/TTS_SPEECH_PERFORMANCE_SYSTEM.md).
+## Rules
 
-## Related
-
-- [`docs/operations/prompt-gallery-bootstrap.md`](../operations/prompt-gallery-bootstrap.md)
-- [`docs/design/TRANSCRIPTION_PIPELINE_SPEC.md`](../design/TRANSCRIPTION_PIPELINE_SPEC.md)
+- Do not bypass orchestrator or contracts-package boundaries.
+- Do not invent frontend-only durable state or backend-only alternate pipeline semantics.
+- Update this map, the alignment tracker, and touched package README together when the shared flow
+  or service topology changes.

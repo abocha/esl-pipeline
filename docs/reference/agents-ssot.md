@@ -156,6 +156,8 @@ Update together:
 ## Runtime and Verification Baseline
 
 - Node.js 24.11.1+
+- Use the repo-pinned Node version in `.nvmrc` for local development and CI parity; the engine range
+  above remains the compatibility floor.
 - pnpm
 - system ffmpeg where provider flows require it
 

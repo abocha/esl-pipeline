@@ -5,7 +5,7 @@
 - Audience: AI agents, maintainers.
 - Read Time: 3 minutes.
 - Authority Level: Context baseline.
-- Last Verified Against: 2026-07-11 repo state.
+- Last Verified Against: 2026-07-14 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: monthly.
 - Status: `active`.
@@ -25,8 +25,13 @@
 ## Current State
 
 - Monorepo with orchestrator-centric pipeline architecture.
-- Batch system is active for recording -> transcript -> prompt -> draft -> publish workflows.
+- Batch system is active through the five-step assignment builder: Student, Lesson source, Teaching
+  context, Create, and Review & share.
+- Lesson sources may be OPUS recordings or tutor-pasted transcripts; both remain student-owned and
+  converge on the same prompt, draft, approval, and publish pipeline.
 - Prompt runtime in batch flow is DB-canonical with bootstrap tooling.
+- Student-memory extraction, review, health inspection, and replay tooling are backend-owned; the
+  frontend exposes the tutor and support surfaces without inventing durable state.
 - Operations runbooks are actively maintained under `docs/operations`.
 
 ## Component Map
