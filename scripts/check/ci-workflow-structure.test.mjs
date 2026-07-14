@@ -91,12 +91,17 @@ function jobBlock(job) {
 }
 
 function markedScript(marker) {
-  const match = ci.match(
-    new RegExp(`# ${marker}:start\\n(?<script>[\\s\\S]*?)\\n\\s*# ${marker}:end`, 'u'),
-  );
-  assert.ok(match?.groups?.script, `missing ${marker} markers`);
-  return match.groups.script
-    .split('\n')
+  const startToken = `${marker}:start`;
+  const endToken = `${marker}:end`;
+  const start = ci.indexOf(startToken);
+  const end = ci.indexOf(endToken, start + startToken.length);
+  assert.notEqual(start, -1, `missing ${marker} start marker`);
+  assert.notEqual(end, -1, `missing ${marker} end marker`);
+  return ci
+    .slice(start + startToken.length, end)
+    .replace(/^\r?\n/u, '')
+    .replace(/\r?\n\s*$/u, '')
+    .split(/\r?\n/u)
     .map((line) => line.replace(/^\s{10}/u, ''))
     .join('\n');
 }
