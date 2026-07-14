@@ -101,6 +101,10 @@ intentional duplication of the minimum trust-boundary list, not a second general
 It makes the first rollout possible even though `main` does not yet contain the projection API and
 protects against accidental future narrowing of classifier changes.
 
+The bootstrap check parses the committed PR diff directly in the workflow job. It must not call the
+affected-check classifier or import classifier path predicates. This mechanical independence is the
+trust boundary.
+
 ### Pull-Request Workflow
 
 The PR workflow gains a lightweight `change-scope` job. It checks out full history, runs the
@@ -129,7 +133,7 @@ successful check, so the stable job names can remain merge-facing without forcin
 
 ### Aggregate CI Gate
 
-A final `ci-gate` job is the canonical merge-facing result. It uses `if: ${{ !cancelled() }}` and
+A final `ci-gate` job is the canonical merge-facing result. It uses `if: ${{ always() }}` and
 depends on `change-scope`, `static-checks`, `integration-tests`, `backend-db-integration`, and
 `telegram-compose-smoke`. Its evaluator receives every job result plus the scope booleans and fails
 unless:
@@ -158,11 +162,11 @@ Coverage and unit-timing jobs leave the PR workflow and move to one diagnostics 
 - parallel coverage and timing jobs that are unrelated to PR merge eligibility;
 - the existing report generation and artifact paths.
 
-Diagnostics are not merge-facing, but their own workflow must fail honestly. Each producer command
-records its outcome; report generation and artifact upload run with `if: always()`; a final step exits
-non-zero when the producer failed. Neither the job nor producer step uses `continue-on-error`. The
-first implementation does not merge the two diagnostic test executions because their package sets
-and reporter requirements differ.
+Diagnostics are not merge-facing, but their own workflow must fail honestly. Each producer step has
+an `id`. Report generation, artifact upload, and the final status step use `if: always()`. The final
+step fails when `steps.<producer>.outcome != 'success'`. Neither the job nor producer step uses
+`continue-on-error`. The first implementation does not merge the two diagnostic test executions
+because their package sets and reporter requirements differ.
 
 ## Local Validation Policy
 
