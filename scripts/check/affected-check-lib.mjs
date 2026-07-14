@@ -31,6 +31,9 @@ export function parseNameStatusZ(value) {
   for (let index = 0; index < tokens.length; ) {
     const status = tokens[index++];
     if (!status) throw new Error('changed-file record is missing a status');
+    if (!isValidChangedFileStatus(status)) {
+      throw new Error(`invalid changed-file status: ${status}`);
+    }
 
     const pathCount = /^[RC]/u.test(status) ? 2 : 1;
     const paths = tokens.slice(index, index + pathCount);
@@ -842,7 +845,13 @@ function readPackageManifest(dir) {
 }
 
 function normalizePath(file) {
-  return file.trim().replaceAll('\\', '/').replace(/^\.\//u, '');
+  return file.replaceAll('\\', '/').replace(/^\.\//u, '');
+}
+
+function isValidChangedFileStatus(status) {
+  if (/^[ADMTUXB]$/u.test(status)) return true;
+  const scored = /^[RC](\d{1,3})$/u.exec(status);
+  return scored !== null && Number(scored[1]) <= 100;
 }
 
 function isCiDocsPath(file) {
@@ -871,8 +880,8 @@ function isCiBackendDbWorkerPath(file) {
     /^packages\/batch-backend\/(?:migrations\/|schema\.sql$)/u.test(file) ||
     /^packages\/batch-backend\/src\/infrastructure\//u.test(file) ||
     /^packages\/batch-backend\/src\/.*(?:worker|queue|process-(?:queue-)?job)/u.test(file) ||
-    /^packages\/batch-backend\/tests\/support\/.*(?:postgres|redis)/u.test(file) ||
-    /^packages\/batch-backend\/tests\/(?:domain\..*-repository|application\.(?:homework-memory-source|student-timeline|student-schedule-billing|alpha-invites\.registration)|integration\.(?:migrations|query-plan-regression|student-memory-pacing-delay)|transport\.worker-runner\.integration)\.test\.ts$/u.test(
+    /^packages\/batch-backend\/tests\/support\//u.test(file) ||
+    /^packages\/batch-backend\/tests\/(?:domain\.(?:.*-repository|student-memory-openai-batch-import|student-repository\.workspace)|application\.(?:homework-memory-source|student-timeline|student-schedule-billing|alpha-invites\.registration)|integration\.(?:migrations|query-plan-regression|student-memory-pacing-delay)|transport\.worker-runner\.integration)\.test\.ts$/u.test(
       file,
     )
   );
@@ -887,12 +896,7 @@ function isCiTelegramPath(file) {
 }
 
 function isKnownCiNonPackagePath(file) {
-  return (
-    isCiDocsPath(file) ||
-    isCiRuntimePath(file) ||
-    isCiTelegramPath(file) ||
-    file.startsWith('.github/')
-  );
+  return isCiDocsPath(file) || isCiRuntimePath(file) || isCiTelegramPath(file);
 }
 
 function stableCiDecision(decision) {

@@ -77,6 +77,12 @@ const ciScopeCases = [
     [true, true, true, true, false],
   ],
   ['workflow', records('M', '.github/workflows/ci.yml'), [true, true, true, true, false]],
+  ['unknown GitHub metadata', records('M', '.github/CODEOWNERS'), [true, true, true, true, false]],
+  [
+    'local GitHub action',
+    records('M', '.github/actions/example/action.yml'),
+    [true, true, true, true, false],
+  ],
   ['unknown', records('A', 'unexpected-root.file'), [true, true, true, true, false]],
 ];
 
@@ -154,6 +160,49 @@ test('CI scope keeps docs-only exclusive and blocking scopes monotonic', () => {
   }
 });
 
+test('CI scope routes every explicit backend DB and worker file plus shared support', () => {
+  const backendDbWorkerFiles = [
+    'packages/batch-backend/tests/integration.migrations.test.ts',
+    'packages/batch-backend/tests/domain.job-repository.test.ts',
+    'packages/batch-backend/tests/domain.revision-repository.test.ts',
+    'packages/batch-backend/tests/domain.lesson-memory-repository.test.ts',
+    'packages/batch-backend/tests/domain.homework-memory-repository.test.ts',
+    'packages/batch-backend/tests/domain.student-profile-candidate-repository.test.ts',
+    'packages/batch-backend/tests/domain.student-memory-snapshot-repository.test.ts',
+    'packages/batch-backend/tests/domain.student-memory-openai-batch-import.test.ts',
+    'packages/batch-backend/tests/domain.assignment-session-repository.test.ts',
+    'packages/batch-backend/tests/domain.student-repository.workspace.test.ts',
+    'packages/batch-backend/tests/application.homework-memory-source.test.ts',
+    'packages/batch-backend/tests/application.student-timeline.test.ts',
+    'packages/batch-backend/tests/application.student-schedule-billing.test.ts',
+    'packages/batch-backend/tests/application.alpha-invites.registration.test.ts',
+    'packages/batch-backend/tests/integration.query-plan-regression.test.ts',
+    'packages/batch-backend/tests/transport.worker-runner.integration.test.ts',
+    'packages/batch-backend/tests/integration.student-memory-pacing-delay.test.ts',
+    'packages/batch-backend/tests/support/bootstrap-pg-test-env.ts',
+    'packages/batch-backend/tests/support/test-env.ts',
+  ];
+
+  for (const file of backendDbWorkerFiles) {
+    const decision = buildCiScopeDecision({
+      changedFileRecords: records('M', file),
+      workspacePackages: ciWorkspacePackages,
+    });
+    assert.equal(decision.backend_db_worker, true, `${file} must select backend DB/worker CI`);
+  }
+});
+
+test('CI scope preserves significant path whitespace and widens lookalike root files', () => {
+  for (const file of [' AGENTS.md', 'AGENTS.md ']) {
+    const decision = buildCiScopeDecision({
+      changedFileRecords: records('M', file),
+      workspacePackages: ciWorkspacePackages,
+    });
+    assert.deepEqual(decision.changedFiles, [file]);
+    assert.deepEqual(scopeFlags(decision), [true, true, true, true, false]);
+  }
+});
+
 function records(status, ...paths) {
   return [{ status, paths }];
 }
@@ -182,6 +231,16 @@ test('name-status parsing preserves deletions and both rename paths', () => {
     'packages/batch-backend/src/old.ts',
     'packages/batch-frontend/src/new.tsx',
   ]);
+});
+
+test('name-status parsing rejects invalid status grammar', () => {
+  for (const value of [
+    'BOGUS\0docs/guide.md\0',
+    'R\0docs/old.md\0docs/new.md\0',
+    'C101\0docs/old.md\0docs/new.md\0',
+  ]) {
+    assert.throws(() => parseNameStatusZ(value), /invalid changed-file status/u);
+  }
 });
 
 test('changed file scopes separate committed hosted paths from local-only paths', async () => {
