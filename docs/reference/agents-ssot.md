@@ -34,6 +34,9 @@ For deep system maps, prefer the linked docs rather than growing this file again
   - persistence, queuing, auth, and workflow orchestration
 - `@esl-pipeline/batch-frontend`
   - operator UI over `batch-backend`
+- `@esl-pipeline/telegram-ops-bot`
+  - operator control-panel adapter over authenticated `batch-backend` operations
+  - no independent pipeline, persistence, or deployment semantics
 - supporting implementation packages
   - validation/parsing: `md-validator`, `pmd`
   - adapters/providers: `html-publisher`, `tts-*`, `stt-*`, `storage-uploader`
@@ -45,6 +48,7 @@ For deep system maps, prefer the linked docs rather than growing this file again
 - public DTOs / transport payloads -> `@esl-pipeline/contracts`
 - live capability status -> `docs/backend-frontend/backend-frontend-alignment.md`
 - environment policy -> `docs/reference/env.md`
+- generation provider/model policy -> `docs/reference/GENERATION_PROVIDER_POLICY.md`
 - operational procedures -> `docs/operations/*`
 - development/deployment workflow -> `docs/backend-frontend/DEPLOYMENT.md`
 
@@ -138,6 +142,17 @@ Update together:
 - docs governance/playbook docs
 - routers if the doc graph changes
 
+### Agent harness and instruction boundaries
+
+- Root `AGENTS.md` contains durable repo-wide guidance and routes; keep task-specific implementation
+  detail in plans or task docs.
+- Use nested `AGENTS.md` files only for repeated subtree-specific overrides.
+- Reusable procedures belong in skills; deterministic requirements belong in scripts, hooks, or CI.
+- Active plans define the outcome, constraints, and verification for their task. After implementation
+  lands, current code, contracts, package READMEs, and reference/runbook docs outrank the plan.
+- A freshness-date change is valid only after content verification under
+  `docs/reference/DOCS_GOVERNANCE.md`; date-only CI unblocking is forbidden.
+
 ## Runtime and Verification Baseline
 
 - Node.js 24.11.1+
@@ -160,6 +175,7 @@ Required repo checks for behavior changes:
 Docs-heavy changes also require:
 
 - `pnpm docs:generate:indexes`
+- `pnpm format`
 - `pnpm docs:check`
 
 ## Environment and Entrypoints

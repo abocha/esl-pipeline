@@ -37,6 +37,14 @@ If resuming after context loss, start with
 - Treat the developer laptop as the primary development environment, Git/CI as the source of truth,
   and the Lightsail VPS as production runtime only.
 
+## Instruction Scope
+
+- Keep durable repo-wide conventions, commands, constraints, and completion criteria in this file.
+- Put subsystem detail in the nearest package README or task-specific doc; add a nested `AGENTS.md`
+  only when repeated local rules cannot be expressed clearly through those docs.
+- Put one-off goals and acceptance criteria in the task prompt or active plan, not in this router.
+- Put reusable procedures in skills and deterministic enforcement in scripts, hooks, or CI.
+
 ## Common Routes
 
 - Orientation: [`docs/PROJECT_OVERVIEW.md`](docs/PROJECT_OVERVIEW.md)
@@ -71,11 +79,14 @@ If resuming after context loss, start with
 ## Command Baseline
 
 - Install: `pnpm install`
+- Format write/check: `pnpm format:write`, then `pnpm format`
+- Repo hygiene: `pnpm run lint:repo-hygiene`
 - Affected check (agent default): `pnpm --silent run check:fast:agent`
 - Affected check (raw human output): `pnpm check:fast`
 - Broad pre-PR check: `pnpm check:pre-pr`
 - Full check: `pnpm check`
 - Docs check: `pnpm docs:check`
+- Core docs check only: `pnpm docs:check:core`
 - Docs indexes: `pnpm docs:generate:indexes`
 - Docs gardening: `pnpm docs:garden`
 - Batch dev stack: `pnpm dev:batch`
@@ -104,6 +115,13 @@ Production Compose must stay pull-based: app services use SHA-tagged GHCR image 
 environment/state files, while the VPS stores deployment state outside the checkout under
 `/var/lib/esl-pipeline/deploy`. Do not reintroduce production `build:`, `:local`, `pull_policy:
 never`, `up --build`, backend Docker socket mounts, or long-running backend Docker/AWS CLIs.
+
+## Definition of Done
+
+- The requested outcome is implemented without widening scope or silently changing contracts.
+- Relevant tests and validation have fresh evidence, and the final handoff lists commands actually run.
+- Behavior docs, package READMEs, plans, and generated indexes are synchronized where the change
+  affects them; deployment or other external mutations occur only when explicitly requested.
 
 ## Repo Admin
 

@@ -18,6 +18,9 @@
 ## Harness Contract
 
 - `docs:check` is the hard gate.
+- Freshness is an age signal, not proof that a document is accurate. Advancing the
+  `Last Verified Against` date requires reviewing the document against the current repository; a
+  date-only edit does not satisfy this policy even when it clears the mechanical gate.
 - Docs health and stale-candidate outputs are warning/triage artifacts, not policy sources.
 - The rolling issue is the manual review queue for unresolved warnings, heuristic candidates, and repeated drift.
 - Generated artifacts are the source of truth for each run; markdown summaries are renderings of those artifacts.
@@ -44,6 +47,8 @@
 
 - Broken links, missing routes, missing metadata, and freshness violations are hard failures where the scope is enforced.
 - `docs:check` should remain the only gate that blocks merge on those violations.
+- The freshness gate deliberately cannot determine whether a review was substantive. Reviewers and
+  agents must enforce the verification procedure below.
 
 ### Warnings
 
@@ -72,6 +77,37 @@
 - Update core docs when behavior, scope, or contracts change.
 - Update this doc when the harness model changes.
 - Keep the policy concise here; move operational steps to the playbook.
+
+## Verification Procedure
+
+Before advancing `Last Verified Against` on a core document:
+
+1. Compare its commands, package ownership, runtime assumptions, routes, and linked paths with the
+   current repository.
+2. Review relevant changes since the previous verified date, including new packages, workflows,
+   plans, generated surfaces, and contract changes.
+3. Correct or remove stale content, add missing high-signal routes, and keep historical material out
+   of active guidance.
+4. Run the applicable generated-index command, formatting check, and `pnpm docs:check`.
+5. Record the substantive audit in the commit or PR summary. If the content remains correct, state
+   what evidence was checked; never advance the date solely to unblock CI.
+
+## Agent Harness Boundaries
+
+- Keep `AGENTS.md` short, practical, and limited to durable repository guidance: layout, commands,
+  conventions, constraints, review expectations, and definition of done.
+- Use the nearest nested `AGENTS.md` only for genuinely local overrides; closer instructions take
+  precedence and the combined instruction chain has a finite context budget.
+- Keep one-off outcomes and acceptance criteria in the task prompt or active plan.
+- Move repeated procedures into skills and deterministic requirements into scripts, hooks, or CI
+  rather than relying on prose reminders.
+- Treat repository-tracked docs and code as the durable system of record; chat-only decisions are
+  incomplete until encoded in the appropriate source.
+
+This boundary follows OpenAI's current
+[`AGENTS.md` guidance](https://learn.chatgpt.com/docs/agent-configuration/agents-md) and
+[Codex best practices](https://learn.chatgpt.com/guides/best-practices): use layered instructions,
+prefer concise practical guidance, and separate durable conventions from reusable automation.
 
 ## Related
 

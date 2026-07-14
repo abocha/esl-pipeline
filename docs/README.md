@@ -29,6 +29,8 @@
 - Repo orientation: [`docs/PROJECT_OVERVIEW.md`](PROJECT_OVERVIEW.md)
 - Setup/run commands: [`docs/QUICK_START.md`](QUICK_START.md)
 - Backend/frontend status: [`docs/backend-frontend/backend-frontend-alignment.md`](backend-frontend/backend-frontend-alignment.md)
+- Frontend assignment workflow and mock-auth sandbox:
+  [`packages/batch-frontend/README.md`](../packages/batch-frontend/README.md)
 - Batch-backend service boundary: [`docs/backend-frontend/batch-backend-ssot.md`](backend-frontend/batch-backend-ssot.md)
 - Batch-backend migration parity inventory: [`docs/backend-frontend/batch-backend-legacy-schema-inventory.md`](backend-frontend/batch-backend-legacy-schema-inventory.md)
 - Batch system map: [`docs/backend-frontend/BATCH_SYSTEM.md`](backend-frontend/BATCH_SYSTEM.md)
@@ -84,7 +86,6 @@
 - Learning preset architecture and provider policy:
   - [`docs/reference/PRESET_V2_SPEC.md`](reference/PRESET_V2_SPEC.md)
   - [`docs/reference/HOMEWORK_PROMPTING_SYSTEM_GUIDE.md`](reference/HOMEWORK_PROMPTING_SYSTEM_GUIDE.md)
-  - [`docs/reference/gpt-5.4_prompt-guidance.md`](reference/gpt-5.4_prompt-guidance.md)
   - [`docs/reference/HOMEWORK_PEDAGOGY_AND_TEMPLATE_SPEC.md`](reference/HOMEWORK_PEDAGOGY_AND_TEMPLATE_SPEC.md)
   - [`docs/reference/STUDENT_MEMORY_EXTRACTION_CAPABILITY_POLICY.md`](reference/STUDENT_MEMORY_EXTRACTION_CAPABILITY_POLICY.md)
   - [`docs/reference/STUDENT_MEMORY_EXTRACTION_SCHEMA_SPEC.md`](reference/STUDENT_MEMORY_EXTRACTION_SCHEMA_SPEC.md)
@@ -116,6 +117,10 @@
   - [`docs/reference/DOCS_GOVERNANCE.md`](reference/DOCS_GOVERNANCE.md)
   - [`docs/reference/AGENT_LEGIBILITY_MODEL.md`](reference/AGENT_LEGIBILITY_MODEL.md)
   - [`docs/reference/HARNESS_AGENTIC_DOCS_MODEL.md`](reference/HARNESS_AGENTIC_DOCS_MODEL.md)
+- Agent instructions and harness upkeep:
+  - [`AGENTS.md`](../AGENTS.md)
+  - [`docs/reference/agents-ssot.md`](reference/agents-ssot.md)
+  - [`docs/reference/DOCS_GOVERNANCE.md`](reference/DOCS_GOVERNANCE.md)
 - Docs gardening and scorecards:
   - [`docs/reference/DOCS_GARDENING_PLAYBOOK.md`](reference/DOCS_GARDENING_PLAYBOOK.md)
   - [`docs/reference/DOCS_GARDENING_SCORECARD.md`](reference/DOCS_GARDENING_SCORECARD.md)
@@ -128,6 +133,11 @@
 
 - Plans router:
   - [`docs/plans/README.md`](plans/README.md)
+- Approved implementation specs and task plans:
+  - `docs/superpowers/specs/`
+  - `docs/superpowers/plans/`
+  - Treat these as execution context. After implementation lands, code, package READMEs, and
+    reference/runbook docs remain the current-behavior sources of truth.
 - Active/completed planning topics:
   - [`docs/plans/backlog/README.md`](plans/backlog/README.md)
   - [`docs/archive/plans/README.md`](archive/plans/README.md)
@@ -136,6 +146,8 @@
 
 - Prefer active docs over archive docs.
 - Read only the docs needed for the current task.
+- Re-read the exact active plan after context loss; do not use completed implementation plans as
+  substitutes for current behavior docs.
 - If docs conflict, SSOT and code win.
 
 ## Related
