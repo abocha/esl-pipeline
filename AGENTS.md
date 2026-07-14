@@ -4,7 +4,7 @@
 
 - Audience: AI agents and maintainers.
 - Authority Level: router + compact operating contract.
-- Last Verified Against: 2026-07-14 repo state.
+- Last Verified Against: 2026-07-15 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly or after major workflow/tooling changes.
 - Status: `router`.
@@ -36,6 +36,14 @@ If resuming after context loss, start with
 - When implementing from a plan file, re-read that exact plan after context compaction.
 - Treat the developer laptop as the primary development environment, Git/CI as the source of truth,
   and the Lightsail VPS as production runtime only.
+
+## Instruction Scope
+
+- Keep durable repo-wide conventions, commands, constraints, and completion criteria in this file.
+- Put subsystem detail in the nearest package README or task-specific doc; add a nested `AGENTS.md`
+  only when repeated local rules cannot be expressed clearly through those docs.
+- Put one-off goals and acceptance criteria in the task prompt or active plan, not in this router.
+- Put reusable procedures in skills and deterministic enforcement in scripts, hooks, or CI.
 
 ## Common Routes
 
@@ -71,11 +79,14 @@ If resuming after context loss, start with
 ## Command Baseline
 
 - Install: `pnpm install`
+- Format write/check: `pnpm format:write`, then `pnpm format`
+- Repo hygiene: `pnpm run lint:repo-hygiene`
 - Affected check (agent default): `pnpm --silent run check:fast:agent`
 - Affected check (raw human output): `pnpm check:fast`
 - Broad pre-PR check: `pnpm check:pre-pr`
 - Full check: `pnpm check`
 - Docs check: `pnpm docs:check`
+- Core docs check only: `pnpm docs:check:core`
 - Docs indexes: `pnpm docs:generate:indexes`
 - Docs gardening: `pnpm docs:garden`
 - Batch dev stack: `pnpm dev:batch`
@@ -89,10 +100,14 @@ not treat quiet output as a hang. `check:fast` is an affected-package lane: it c
 workspace dependents, applies path-risk rules, and prints why packages or lanes were selected. On
 failure, read the reported artifact before rerunning raw commands. Use raw lanes only when the agent
 lane is missing or when the artifact shows that full stream output is needed for diagnosis.
+`check:fast:dry-run` prints the local working-tree scope and committed hosted CI preview separately.
 
-Run `pnpm check:pre-pr` before broad or cross-cutting PRs, and run `pnpm check` when reproducing CI
-or when DB, migration, worker, integration, or similarly broad behavior changed. For Vitest-heavy
-work, prefer the matching agent lane first:
+After focused tests, choose one normal pre-push gate: use `check:fast:agent` by default; use
+`check:pre-pr` directly when the branch is already broad, cross-cutting, shared-contract, or
+toolchain-level. A `check:fast:agent` fallback to `check:pre-pr` satisfies the broad gate, and a
+successful `pnpm check` subsumes both narrower gates. Clearly docs-only work may use the documented
+docs-specific lanes. Run `pnpm check` directly when reproducing CI or when DB, migration, worker,
+integration, or similarly broad behavior changed. For Vitest-heavy work, prefer the matching agent lane first:
 `pnpm --silent run test:unit:prebuilt:fast:agent`, `pnpm --silent run test:agent:html-publisher`,
 or another existing `:agent` test script.
 
@@ -104,6 +119,13 @@ Production Compose must stay pull-based: app services use SHA-tagged GHCR image 
 environment/state files, while the VPS stores deployment state outside the checkout under
 `/var/lib/esl-pipeline/deploy`. Do not reintroduce production `build:`, `:local`, `pull_policy:
 never`, `up --build`, backend Docker socket mounts, or long-running backend Docker/AWS CLIs.
+
+## Definition of Done
+
+- The requested outcome is implemented without widening scope or silently changing contracts.
+- Relevant tests and validation have fresh evidence, and the final handoff lists commands actually run.
+- Behavior docs, package READMEs, plans, and generated indexes are synchronized where the change
+  affects them; deployment or other external mutations occur only when explicitly requested.
 
 ## Repo Admin
 

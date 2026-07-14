@@ -3,13 +3,14 @@
 ## Meta
 
 - Audience: maintainers and docs-tooling agents.
-- Authority Level: active docs-tooling roadmap.
-- Last Verified Against: 2026-05-17 repo state.
+- Authority Level: archived docs-tooling roadmap.
+- Last Verified Against: 2026-07-14 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: after docs-tooling implementation PRs.
-- Status: `roadmap`.
+- Status: `archived`.
 - Exit Trigger: archive after the remaining docs-tooling phases are implemented or superseded by docs governance.
-- Current Focus: use this README to choose the next docs-tooling enforcement slice; archived phase docs are historical trace.
+- Archive Reason: all listed phases are complete and current policy now lives in docs governance,
+  gardening guidance, scripts, and CI.
 
 ## Summary
 

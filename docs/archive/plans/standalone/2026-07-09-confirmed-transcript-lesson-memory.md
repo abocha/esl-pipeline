@@ -4,12 +4,12 @@
 
 - Audience: founder-maintainer, implementation agents, and future reviewers of the first-lesson
   alpha flow.
-- Status: active.
-- Last Verified Against: 2026-07-09 repo state and hosted bug report.
+- Status: archived.
+- Last Verified Against: 2026-07-14 repo state.
 - Exit Trigger: archive after the confirmed-transcript lesson-memory PR merges, or supersede if the
   first-lesson flow changes before implementation.
-- Current Focus: replace implicit lesson-memory triggering with an explicit tutor confirmation gate,
-  and use lesson memory to generate a useful lesson title.
+- Archive Reason: shipped in the confirmed-transcript lesson-memory implementation and retained as
+  historical design and acceptance trace.
 
 ## Problem
 

@@ -3,8 +3,25 @@
 ## Meta
 
 - Audience: founder/operator, Codex, implementation agents.
-- Status: first private hosted rehearsal recorded; update after each redeploy or rehearsal.
-- Related plan: `docs/plans/slice-1-private-hosted-environment.md`.
+- Last Verified Against: 2026-07-14 production deployment and manual smoke.
+- Status: private hosted baseline passed; keep this record current after material redeploys or rehearsals.
+- Related historical plan: `docs/archive/plans/standalone/slice-1-private-hosted-environment.md`.
+
+## Latest Deployment Evidence
+
+```text
+Date verified: 2026-07-14
+Release: v9.10.0
+Git commit deployed: 2bed0ce492cdbbc1e75307f437b2ac07b220e740
+Deployment result: production VPS deploy completed
+Manual smoke result: main assignment flow passed
+Invite-path result: not re-verified in this smoke; Slice 2 remains open until one clean
+  invite acceptance -> default workspace/settings -> first student -> first assignment run passes
+```
+
+The original June rehearsal below remains as historical infrastructure evidence. The July smoke
+confirms the current main assignment flow, but it does not replace the narrower invite/account
+bootstrap acceptance gate in the active Slice 2 plan.
 
 ## Deployment Snapshot
 
@@ -190,8 +207,8 @@ Hosted logs accessible: yes
 Failed job diagnosis path exists: yes
 Backup exists in S3: yes
 Restore path documented: yes
-One hosted end-to-end assignment publish succeeded: yes in rehearsal; still needs one fresh invited-tutor-path rehearsal after the profile route fix deploys
-Same-origin frontend API calls work: health/version yes; path-like profile revision IDs need the codex/invited-tutor-readiness fix deployed and smoke-tested
+One hosted end-to-end assignment publish succeeded: yes in the rehearsal and the v9.10.0 main-flow smoke
+Same-origin frontend API calls work: yes for the current main-flow smoke; invite/bootstrap coverage remains a separate Slice 2 gate
 Prompt assets bootstrapped: yes after path correction
 Telegram ops bot absent/profile-gated/intentionally enabled: absent/profile-gated
 ```
@@ -199,7 +216,7 @@ Telegram ops bot absent/profile-gated/intentionally enabled: absent/profile-gate
 Final decision:
 
 ```text
-Slice 1 status: pull-based deployment baseline passed on 2026-06-13
-Blocker if any: invited tutor path still depends on deploying the profile-route/nginx proxy fix and proving one clean invite-to-assignment rehearsal
-Next slice allowed: yes for focused invited-tutor readiness only; defer broader polish until the hosted path is boring
+Slice 1 status: complete; pull-based deployment baseline passed and v9.10.0 was deployed successfully
+Blocker if any: none for Slice 1
+Next slice allowed: yes; retain one clean invite-to-assignment rehearsal as Slice 2 evidence
 ```

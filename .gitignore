@@ -33,6 +33,7 @@ skills-lock.json
 .codex
 .artifacts
 .superpowers/
+.impeccable/
 
 # Secrets and env
 .env

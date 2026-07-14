@@ -6,8 +6,10 @@ import { fileURLToPath } from 'node:url';
 
 import {
   buildAffectedCheckPlan,
-  collectChangedFiles,
+  buildCiScopeDecision,
+  collectChangedFileScopes,
   formatPlanSummary,
+  formatScopePreview,
   readWorkspacePackages,
   resolveComparisonBase,
 } from './affected-check-lib.mjs';
@@ -38,12 +40,14 @@ const runArtifacts = buildAgentCheckArtifacts({
 mkdirSync(runArtifacts.runDir, { recursive: true });
 
 let plan;
+let hostedDecision;
+let uncommittedFiles = [];
 try {
   const base = await resolveComparisonBase({
     baseRef,
     runGit,
   });
-  const changedFiles = await collectChangedFiles({
+  const scopes = await collectChangedFileScopes({
     mergeBase: base.mergeBase,
     runGit,
   });
@@ -51,14 +55,30 @@ try {
   plan = buildAffectedCheckPlan({
     baseRef: base.baseRef,
     mergeBase: base.mergeBase,
-    changedFiles,
+    changedFiles: scopes.localFiles,
     workspacePackages,
   });
+  hostedDecision = buildCiScopeDecision({
+    changedFileRecords: scopes.hostedRecords,
+    workspacePackages,
+  });
+  uncommittedFiles = scopes.uncommittedFiles;
 } catch (error) {
+  const reason = error instanceof Error ? error.message : String(error);
   plan = buildBaseFailurePlan({
     baseRef,
-    reason: error instanceof Error ? error.message : String(error),
+    reason,
   });
+  hostedDecision = {
+    runtime: true,
+    integration: true,
+    backend_db_worker: true,
+    telegram: true,
+    docs_only: false,
+    changedFiles: [],
+    affectedPackages: [],
+    reasons: [{ code: 'comparison-base-failure', scope: 'all', subject: reason }],
+  };
 }
 
 const planText = formatPlanSummary(plan);
@@ -70,7 +90,7 @@ writeFileSync(
 );
 
 if (dryRun) {
-  console.log(planText);
+  console.log(formatScopePreview({ planText, hostedDecision, uncommittedFiles }));
   console.log(`Artifacts: ${relativeArtifactPath(runArtifacts.runDir)}`);
   process.exit(plan.fallback ? 1 : 0);
 }

@@ -4,9 +4,10 @@
 
 - Audience: founder/operator, Codex, implementation agents.
 - Status: active.
-- Last Verified Against: 2026-06-09 repo state.
+- Last Verified Against: 2026-07-14 repo state and v9.10.0 deployment evidence.
 - Exit Trigger: archive or update after the Slice 2 implementation PR/hosted verification lands.
-- Current Focus: invite-only tutor signup, transactional default workspace/settings creation, and first-student path.
+- Current Focus: implementation is shipped; capture one clean hosted invite acceptance -> default
+  workspace/settings -> first student -> first assignment smoke before archiving.
 
 ## Goal
 
@@ -16,7 +17,7 @@ This slice starts only after Slice 1 private hosted environment passes or has a 
 
 ## Current Phase
 
-Hosted deployment plus invite-only tutor signup.
+Hosted verification of the already-shipped invite-only tutor entry path.
 
 Slice 2 covers the tutor entry path after the app has a private hosted environment.
 

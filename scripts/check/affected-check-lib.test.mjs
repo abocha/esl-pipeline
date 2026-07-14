@@ -3,8 +3,12 @@ import test from 'node:test';
 
 import {
   buildAffectedCheckPlan,
+  buildCiScopeDecision,
+  collectChangedFileScopes,
   collectChangedFiles,
   expandTransitiveDependents,
+  flattenChangedFileRecords,
+  parseNameStatusZ,
   resolveComparisonBase,
 } from './affected-check-lib.mjs';
 
@@ -19,16 +23,262 @@ const workspacePackages = [
   ]),
 ];
 
-test('changed file collection includes committed, staged, unstaged, and untracked files', async () => {
+const ciWorkspacePackages = [
+  pkg('@esl-pipeline/contracts', 'packages/contracts', []),
+  pkg('@esl-pipeline/shared-infrastructure', 'packages/shared-infrastructure', [
+    '@esl-pipeline/contracts',
+  ]),
+  pkg('@esl-pipeline/batch-backend', 'packages/batch-backend', [
+    '@esl-pipeline/contracts',
+    '@esl-pipeline/shared-infrastructure',
+  ]),
+  pkg('@esl-pipeline/batch-frontend', 'packages/batch-frontend', ['@esl-pipeline/contracts']),
+  pkg('@esl-pipeline/telegram-ops-bot', 'packages/telegram-ops-bot', [
+    '@esl-pipeline/contracts',
+    '@esl-pipeline/shared-infrastructure',
+  ]),
+];
+
+const ciScopeCases = [
+  [
+    'docs only',
+    records('M', 'docs/reference/TESTING_GUIDELINES.md'),
+    [false, false, false, false, true],
+  ],
+  [
+    'frontend',
+    records('M', 'packages/batch-frontend/src/main.tsx'),
+    [true, true, false, false, false],
+  ],
+  [
+    'deleted migration',
+    records('D', 'packages/batch-backend/migrations/0042.sql'),
+    [true, true, true, false, false],
+  ],
+  [
+    'backend repository test',
+    records('M', 'packages/batch-backend/tests/domain.job-repository.test.ts'),
+    [true, true, true, false, false],
+  ],
+  [
+    'worker fixture',
+    records('M', 'packages/batch-backend/tests/transport.worker-runner.integration.test.ts'),
+    [true, true, true, false, false],
+  ],
+  [
+    'telegram',
+    records('M', 'packages/telegram-ops-bot/src/index.ts'),
+    [true, true, false, true, false],
+  ],
+  ['contracts', records('M', 'packages/contracts/src/index.ts'), [true, true, true, true, false]],
+  [
+    'shared infrastructure',
+    records('M', 'packages/shared-infrastructure/src/index.ts'),
+    [true, true, true, true, false],
+  ],
+  ['workflow', records('M', '.github/workflows/ci.yml'), [true, true, true, true, false]],
+  ['unknown GitHub metadata', records('M', '.github/CODEOWNERS'), [true, true, true, true, false]],
+  [
+    'local GitHub action',
+    records('M', '.github/actions/example/action.yml'),
+    [true, true, true, true, false],
+  ],
+  ['unknown', records('A', 'unexpected-root.file'), [true, true, true, true, false]],
+];
+
+for (const [name, changedFileRecords, expected] of ciScopeCases) {
+  test(`CI scope: ${name}`, () => {
+    const decision = buildCiScopeDecision({
+      changedFileRecords,
+      workspacePackages: ciWorkspacePackages,
+    });
+    assert.deepEqual(scopeFlags(decision), expected);
+  });
+}
+
+test('CI scope fails open for empty records', () => {
+  const decision = buildCiScopeDecision({
+    changedFileRecords: [],
+    workspacePackages: ciWorkspacePackages,
+  });
+  assert.deepEqual(scopeFlags(decision), [true, true, true, true, false]);
+  assert.equal(
+    decision.reasons.some((reason) => reason.code === 'empty-diff'),
+    true,
+  );
+});
+
+test('CI scope treats every path of a rename as relevant', () => {
+  const runtimeToDocs = buildCiScopeDecision({
+    changedFileRecords: [
+      { status: 'R100', paths: ['packages/batch-frontend/src/old.tsx', 'docs/new.md'] },
+    ],
+    workspacePackages: ciWorkspacePackages,
+  });
+  const docsToRuntime = buildCiScopeDecision({
+    changedFileRecords: [
+      { status: 'R100', paths: ['docs/old.md', 'packages/batch-frontend/src/new.tsx'] },
+    ],
+    workspacePackages: ciWorkspacePackages,
+  });
+  assert.deepEqual(scopeFlags(runtimeToDocs), [true, true, false, false, false]);
+  assert.deepEqual(scopeFlags(docsToRuntime), [true, true, false, false, false]);
+});
+
+test('CI scope normalizes separators, duplicates, and input order', () => {
+  const left = buildCiScopeDecision({
+    changedFileRecords: [
+      records('M', 'docs\\guide.md')[0],
+      records('M', 'packages\\telegram-ops-bot\\src\\index.ts')[0],
+      records('M', 'docs/guide.md')[0],
+    ],
+    workspacePackages: ciWorkspacePackages,
+  });
+  const right = buildCiScopeDecision({
+    changedFileRecords: [
+      records('M', 'packages/telegram-ops-bot/src/index.ts')[0],
+      records('M', 'docs/guide.md')[0],
+    ],
+    workspacePackages: ciWorkspacePackages,
+  });
+  assert.deepEqual(left, right);
+});
+
+test('CI scope keeps docs-only exclusive and blocking scopes monotonic', () => {
+  const baseRecords = records('M', 'packages/batch-backend/migrations/0042.sql');
+  const base = buildCiScopeDecision({
+    changedFileRecords: baseRecords,
+    workspacePackages: ciWorkspacePackages,
+  });
+  const mixed = buildCiScopeDecision({
+    changedFileRecords: [...baseRecords, ...records('M', 'docs/guide.md')],
+    workspacePackages: ciWorkspacePackages,
+  });
+  assert.equal(mixed.docs_only, false);
+  for (const scope of ['runtime', 'integration', 'backend_db_worker', 'telegram']) {
+    if (base[scope]) assert.equal(mixed[scope], true, `${scope} must remain enabled`);
+  }
+});
+
+test('CI scope routes every explicit backend DB and worker file plus shared support', () => {
+  const backendDbWorkerFiles = [
+    'packages/batch-backend/tests/integration.migrations.test.ts',
+    'packages/batch-backend/tests/domain.job-repository.test.ts',
+    'packages/batch-backend/tests/domain.revision-repository.test.ts',
+    'packages/batch-backend/tests/domain.lesson-memory-repository.test.ts',
+    'packages/batch-backend/tests/domain.homework-memory-repository.test.ts',
+    'packages/batch-backend/tests/domain.student-profile-candidate-repository.test.ts',
+    'packages/batch-backend/tests/domain.student-memory-snapshot-repository.test.ts',
+    'packages/batch-backend/tests/domain.student-memory-openai-batch-import.test.ts',
+    'packages/batch-backend/tests/domain.assignment-session-repository.test.ts',
+    'packages/batch-backend/tests/domain.student-repository.workspace.test.ts',
+    'packages/batch-backend/tests/application.homework-memory-source.test.ts',
+    'packages/batch-backend/tests/application.student-timeline.test.ts',
+    'packages/batch-backend/tests/application.student-schedule-billing.test.ts',
+    'packages/batch-backend/tests/application.alpha-invites.registration.test.ts',
+    'packages/batch-backend/tests/integration.query-plan-regression.test.ts',
+    'packages/batch-backend/tests/transport.worker-runner.integration.test.ts',
+    'packages/batch-backend/tests/integration.student-memory-pacing-delay.test.ts',
+    'packages/batch-backend/tests/support/bootstrap-pg-test-env.ts',
+    'packages/batch-backend/tests/support/test-env.ts',
+  ];
+
+  for (const file of backendDbWorkerFiles) {
+    const decision = buildCiScopeDecision({
+      changedFileRecords: records('M', file),
+      workspacePackages: ciWorkspacePackages,
+    });
+    assert.equal(decision.backend_db_worker, true, `${file} must select backend DB/worker CI`);
+  }
+});
+
+test('CI scope preserves significant path whitespace and widens lookalike root files', () => {
+  for (const file of [' AGENTS.md', 'AGENTS.md ']) {
+    const decision = buildCiScopeDecision({
+      changedFileRecords: records('M', file),
+      workspacePackages: ciWorkspacePackages,
+    });
+    assert.deepEqual(decision.changedFiles, [file]);
+    assert.deepEqual(scopeFlags(decision), [true, true, true, true, false]);
+  }
+});
+
+function records(status, ...paths) {
+  return [{ status, paths }];
+}
+
+function scopeFlags(decision) {
+  return [
+    decision.runtime,
+    decision.integration,
+    decision.backend_db_worker,
+    decision.telegram,
+    decision.docs_only,
+  ];
+}
+
+test('name-status parsing preserves deletions and both rename paths', () => {
+  const records = parseNameStatusZ(
+    'D\0packages/batch-backend/src/old.ts\0R100\0docs/old.md\0packages/batch-frontend/src/new.tsx\0',
+  );
+
+  assert.deepEqual(records, [
+    { status: 'D', paths: ['packages/batch-backend/src/old.ts'] },
+    { status: 'R100', paths: ['docs/old.md', 'packages/batch-frontend/src/new.tsx'] },
+  ]);
+  assert.deepEqual(flattenChangedFileRecords(records), [
+    'docs/old.md',
+    'packages/batch-backend/src/old.ts',
+    'packages/batch-frontend/src/new.tsx',
+  ]);
+});
+
+test('name-status parsing rejects invalid status grammar', () => {
+  for (const value of [
+    'BOGUS\0docs/guide.md\0',
+    'R\0docs/old.md\0docs/new.md\0',
+    'C101\0docs/old.md\0docs/new.md\0',
+  ]) {
+    assert.throws(() => parseNameStatusZ(value), /invalid changed-file status/u);
+  }
+});
+
+test('changed file scopes separate committed hosted paths from local-only paths', async () => {
   const calls = [];
-  const changedFiles = await collectChangedFiles({
+  const scopes = await collectChangedFileScopes({
     mergeBase: 'abc123',
     runGit: async (args) => {
       calls.push(args);
-      if (args.includes('--cached')) return 'packages/contracts/src/dto.ts\n';
-      if (args.includes('--others')) return 'docs/reference/TESTING_GUIDELINES.md\n';
-      if (args.includes('abc123...HEAD')) return 'packages/batch-frontend/src/App.tsx\n';
-      return 'packages/batch-backend/src/application/submit-job.ts\n';
+      if (args.includes('abc123...HEAD')) return 'M\0docs/committed.md\0';
+      if (args.includes('--cached')) return 'A\0packages/contracts/src/staged.ts\0';
+      if (args.includes('--others')) return 'scratch.txt\0';
+      return 'D\0packages/batch-backend/src/deleted.ts\0';
+    },
+  });
+
+  assert.deepEqual(scopes.hostedFiles, ['docs/committed.md']);
+  assert.deepEqual(scopes.localFiles, [
+    'docs/committed.md',
+    'packages/batch-backend/src/deleted.ts',
+    'packages/contracts/src/staged.ts',
+    'scratch.txt',
+  ]);
+  assert.deepEqual(scopes.uncommittedFiles, [
+    'packages/batch-backend/src/deleted.ts',
+    'packages/contracts/src/staged.ts',
+    'scratch.txt',
+  ]);
+  assert.equal(calls.length, 4);
+});
+
+test('changed file compatibility collection returns the complete local scope', async () => {
+  const changedFiles = await collectChangedFiles({
+    mergeBase: 'abc123',
+    runGit: async (args) => {
+      if (args.includes('abc123...HEAD')) return 'M\0packages/batch-frontend/src/App.tsx\0';
+      if (args.includes('--cached')) return 'A\0packages/contracts/src/dto.ts\0';
+      if (args.includes('--others')) return 'docs/reference/TESTING_GUIDELINES.md\0';
+      return 'M\0packages/batch-backend/src/application/submit-job.ts\0';
     },
   });
 
@@ -38,7 +288,6 @@ test('changed file collection includes committed, staged, unstaged, and untracke
     'packages/batch-frontend/src/App.tsx',
     'packages/contracts/src/dto.ts',
   ]);
-  assert.equal(calls.length, 4);
 });
 
 test('dependent expansion walks the full reverse workspace graph', () => {

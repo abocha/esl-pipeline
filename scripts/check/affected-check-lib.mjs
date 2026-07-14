@@ -23,22 +23,163 @@ const broadFallbackFiles = new Set([
   'vitest.config.ts',
 ]);
 
-export async function collectChangedFiles({ mergeBase, runGit }) {
-  const commandSets = [
-    ['diff', '--name-only', '--diff-filter=ACMRTUXB', `${mergeBase}...HEAD`],
-    ['diff', '--name-only', '--diff-filter=ACMRTUXB'],
-    ['diff', '--cached', '--name-only', '--diff-filter=ACMRTUXB'],
-    ['ls-files', '--others', '--exclude-standard'],
-  ];
+export function parseNameStatusZ(value) {
+  const tokens = String(value).split('\0');
+  if (tokens.at(-1) === '') tokens.pop();
 
-  const files = new Set();
-  for (const args of commandSets) {
-    const output = await runGit(args);
-    for (const file of splitLines(output)) {
-      files.add(normalizePath(file));
+  const records = [];
+  for (let index = 0; index < tokens.length; ) {
+    const status = tokens[index++];
+    if (!status) throw new Error('changed-file record is missing a status');
+    if (!isValidChangedFileStatus(status)) {
+      throw new Error(`invalid changed-file status: ${status}`);
+    }
+
+    const pathCount = /^[RC]/u.test(status) ? 2 : 1;
+    const paths = tokens.slice(index, index + pathCount);
+    if (paths.length !== pathCount || paths.some((file) => !file)) {
+      throw new Error(`changed-file record ${status} is missing a path`);
+    }
+    index += pathCount;
+    records.push({ status, paths: paths.map(normalizePath) });
+  }
+  return records;
+}
+
+export function flattenChangedFileRecords(records) {
+  return uniqueSorted(records.flatMap((record) => record.paths).map(normalizePath));
+}
+
+export async function collectChangedFileScopes({ mergeBase, runGit }) {
+  const nameStatusArgs = [
+    '--name-status',
+    '-z',
+    '--find-renames',
+    '--find-copies',
+    '--diff-filter=ACDMRTUXB',
+  ];
+  const hostedRecords = parseNameStatusZ(
+    await runGit(['diff', ...nameStatusArgs, `${mergeBase}...HEAD`]),
+  );
+  const unstagedRecords = parseNameStatusZ(await runGit(['diff', ...nameStatusArgs]));
+  const stagedRecords = parseNameStatusZ(await runGit(['diff', '--cached', ...nameStatusArgs]));
+  const untrackedRecords = String(
+    await runGit(['ls-files', '--others', '--exclude-standard', '-z']),
+  )
+    .split('\0')
+    .filter(Boolean)
+    .map((file) => ({ status: '?', paths: [normalizePath(file)] }));
+
+  const uniqueRecords = (records) => [
+    ...new Map(
+      records.map((record) => [`${record.status}\0${record.paths.join('\0')}`, record]),
+    ).values(),
+  ];
+  const uncommittedRecords = uniqueRecords([
+    ...unstagedRecords,
+    ...stagedRecords,
+    ...untrackedRecords,
+  ]);
+  const localRecords = uniqueRecords([...hostedRecords, ...uncommittedRecords]);
+
+  return {
+    hostedRecords: uniqueRecords(hostedRecords),
+    localRecords,
+    hostedFiles: flattenChangedFileRecords(hostedRecords),
+    localFiles: flattenChangedFileRecords(localRecords),
+    uncommittedFiles: flattenChangedFileRecords(uncommittedRecords),
+  };
+}
+
+export async function collectChangedFiles(options) {
+  return (await collectChangedFileScopes(options)).localFiles;
+}
+
+export function buildCiScopeDecision({ changedFileRecords, workspacePackages }) {
+  const changedFiles = flattenChangedFileRecords(changedFileRecords);
+  const reasons = [];
+  const addReason = (code, scope, subject) => reasons.push({ code, scope, subject });
+  const blockingScopes = ['runtime', 'integration', 'backend_db_worker', 'telegram'];
+  const decision = {
+    runtime: false,
+    integration: false,
+    backend_db_worker: false,
+    telegram: false,
+    docs_only: false,
+    changedFiles,
+    affectedPackages: [],
+    reasons,
+  };
+  const enableAll = (code, subject) => {
+    for (const scope of blockingScopes) decision[scope] = true;
+    addReason(code, 'all', subject);
+  };
+
+  if (changedFiles.length === 0) {
+    enableAll('empty-diff', 'no changed paths were reported');
+    return stableCiDecision(decision);
+  }
+
+  decision.docs_only = changedFiles.every(isCiDocsPath);
+  if (decision.docs_only) {
+    addReason('docs-only', 'docs_only', changedFiles.join(','));
+    return stableCiDecision(decision);
+  }
+
+  const changedPackages = new Set();
+  let conservativeFallback = false;
+  for (const file of changedFiles) {
+    const matchedPackage = findPackageForFile(file, workspacePackages);
+    if (matchedPackage?.name) changedPackages.add(matchedPackage.name);
+
+    if (isCiRootToolchainPath(file)) {
+      enableAll('root-toolchain', file);
+      conservativeFallback = true;
+    } else if (!matchedPackage && !isKnownCiNonPackagePath(file)) {
+      enableAll('unknown-path', file);
+      conservativeFallback = true;
     }
   }
-  return [...files].sort();
+
+  const affectedPackages = expandTransitiveDependents({
+    packageNames: [...changedPackages],
+    workspacePackages,
+  });
+  decision.affectedPackages = affectedPackages;
+
+  if (
+    !conservativeFallback &&
+    (affectedPackages.length > 0 || changedFiles.some(isCiRuntimePath))
+  ) {
+    decision.runtime = true;
+    decision.integration = true;
+    addReason('runtime-change', 'runtime', changedFiles.join(','));
+    addReason('runtime-implies-integration', 'integration', 'runtime');
+  }
+
+  const sharedHighRiskPackages = new Set([
+    '@esl-pipeline/contracts',
+    '@esl-pipeline/shared-infrastructure',
+  ]);
+  if (
+    !conservativeFallback &&
+    ([...changedPackages].some((name) => sharedHighRiskPackages.has(name)) ||
+      changedFiles.some(isCiBackendDbWorkerPath))
+  ) {
+    decision.backend_db_worker = true;
+    addReason('backend-db-worker-change', 'backend_db_worker', changedFiles.join(','));
+  }
+
+  if (
+    !conservativeFallback &&
+    (affectedPackages.includes('@esl-pipeline/telegram-ops-bot') ||
+      changedFiles.some(isCiTelegramPath))
+  ) {
+    decision.telegram = true;
+    addReason('telegram-change', 'telegram', changedFiles.join(','));
+  }
+
+  return stableCiDecision(decision);
 }
 
 export async function resolveComparisonBase({ baseRef = 'origin/main', runGit }) {
@@ -325,6 +466,50 @@ export function formatPlanSummary(plan) {
   }
 
   return lines.join('\n');
+}
+
+export function formatCiScopeGithubOutputs(decision) {
+  return ['runtime', 'integration', 'backend_db_worker', 'telegram', 'docs_only']
+    .map((scope) => `${scope}=${decision[scope] === true}`)
+    .join('\n')
+    .concat('\n');
+}
+
+export function formatCiScopeSummary(decision) {
+  const scopes = ['runtime', 'integration', 'backend_db_worker', 'telegram', 'docs_only'];
+  return [
+    '### Hosted CI scope',
+    '',
+    ...scopes.map((scope) => `- ${scope}: ${decision[scope] === true ? 'run' : 'skip'}`),
+    '',
+    `Changed files: ${decision.changedFiles?.length ?? 0}`,
+    ...(decision.changedFiles ?? []).map((file) => `- \`${file}\``),
+    '',
+    'Affected packages:',
+    ...((decision.affectedPackages?.length ?? 0) > 0
+      ? decision.affectedPackages.map((name) => `- \`${name}\``)
+      : ['- (none)']),
+    '',
+    'Reasons:',
+    ...((decision.reasons?.length ?? 0) > 0
+      ? decision.reasons.map((reason) => `- ${reason.code} [${reason.scope}]: ${reason.subject}`)
+      : ['- (none)']),
+  ].join('\n');
+}
+
+export function formatScopePreview({ planText, hostedDecision, uncommittedFiles }) {
+  const count = uncommittedFiles.length;
+  return [
+    '## Local validation scope',
+    '',
+    planText,
+    '',
+    '## Hosted CI preview',
+    '',
+    `Hosted preview excludes ${count} uncommitted ${count === 1 ? 'path' : 'paths'}.`,
+    '',
+    formatCiScopeSummary(hostedDecision),
+  ].join('\n');
 }
 
 function buildTurboPlan({ affectedPackages, dependencyPackages, packageByName, turboConcurrency }) {
@@ -660,7 +845,75 @@ function readPackageManifest(dir) {
 }
 
 function normalizePath(file) {
-  return file.trim().replaceAll('\\', '/').replace(/^\.\//u, '');
+  return file.replaceAll('\\', '/').replace(/^\.\//u, '');
+}
+
+function isValidChangedFileStatus(status) {
+  if (/^[ADMTUXB]$/u.test(status)) return true;
+  const scored = /^[RC](\d{1,3})$/u.exec(status);
+  return scored !== null && Number(scored[1]) <= 100;
+}
+
+function isCiDocsPath(file) {
+  return (
+    file === 'AGENTS.md' || file.startsWith('docs/') || file === '.github/pull_request_template.md'
+  );
+}
+
+function isCiRootToolchainPath(file) {
+  return (
+    isBroadFallbackFile(file) ||
+    file.startsWith('.github/workflows/') ||
+    /^scripts\/check\/(?:affected-check|run-affected-check|run-ci-scope)/u.test(file)
+  );
+}
+
+function isCiRuntimePath(file) {
+  return (
+    /^(?:Dockerfile|docker-compose(?:\.[^/]+)?\.ya?ml)$/u.test(file) ||
+    /^(?:docker|scripts\/deploy|scripts\/smoke)\//u.test(file)
+  );
+}
+
+function isCiBackendDbWorkerPath(file) {
+  return (
+    /^packages\/batch-backend\/(?:migrations\/|schema\.sql$)/u.test(file) ||
+    /^packages\/batch-backend\/src\/infrastructure\//u.test(file) ||
+    /^packages\/batch-backend\/src\/.*(?:worker|queue|process-(?:queue-)?job)/u.test(file) ||
+    /^packages\/batch-backend\/tests\/support\//u.test(file) ||
+    /^packages\/batch-backend\/tests\/(?:domain\.(?:.*-repository|student-memory-openai-batch-import|student-repository\.workspace)|application\.(?:homework-memory-source|student-timeline|student-schedule-billing|alpha-invites\.registration)|integration\.(?:migrations|query-plan-regression|student-memory-pacing-delay)|transport\.worker-runner\.integration)\.test\.ts$/u.test(
+      file,
+    )
+  );
+}
+
+function isCiTelegramPath(file) {
+  return (
+    file.startsWith('packages/telegram-ops-bot/') ||
+    /^(?:docker-compose(?:\.[^/]+)?\.ya?ml|docker\/|scripts\/deploy\/)/u.test(file) ||
+    /(?:^|\/)(?:telegram[^/]*smoke|smoke[^/]*telegram)(?:\.|\/|-)/u.test(file)
+  );
+}
+
+function isKnownCiNonPackagePath(file) {
+  return isCiDocsPath(file) || isCiRuntimePath(file) || isCiTelegramPath(file);
+}
+
+function stableCiDecision(decision) {
+  decision.affectedPackages = uniqueSorted(decision.affectedPackages);
+  decision.reasons = [
+    ...new Map(
+      decision.reasons.map((reason) => [
+        `${reason.code}\0${reason.scope}\0${reason.subject}`,
+        reason,
+      ]),
+    ).values(),
+  ].sort((left, right) =>
+    `${left.code}\0${left.scope}\0${left.subject}`.localeCompare(
+      `${right.code}\0${right.scope}\0${right.subject}`,
+    ),
+  );
+  return decision;
 }
 
 function splitLines(value) {
