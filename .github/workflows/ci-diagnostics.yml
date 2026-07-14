@@ -1,0 +1,112 @@
+name: CI diagnostics
+
+on:
+  schedule:
+    - cron: '17 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  coverage-report:
+    name: coverage report
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      NODE_OPTIONS: --max_old_space_size=4096
+    steps:
+      - name: Checkout
+        # actions/checkout v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Setup pnpm
+        # pnpm/action-setup v6.0.9
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271
+        with:
+          run_install: false
+
+      - name: Setup Node
+        # actions/setup-node v6
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Run core unit coverage
+        id: producer
+        run: pnpm test:coverage:core
+
+      - name: Generate coverage report
+        if: ${{ always() }}
+        run: pnpm test:coverage:report
+
+      - name: Upload coverage report artifact
+        if: ${{ always() }}
+        # actions/upload-artifact v7.0.0
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        with:
+          name: coverage-report
+          path: tmp/coverage
+          if-no-files-found: warn
+
+      - name: Fail when producer failed
+        if: ${{ always() }}
+        env:
+          PRODUCER_OUTCOME: ${{ steps.producer.outcome }}
+        run: test "$PRODUCER_OUTCOME" = success
+
+  unit-timings:
+    name: unit timings
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      NODE_OPTIONS: --max_old_space_size=4096
+    steps:
+      - name: Checkout
+        # actions/checkout v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Setup pnpm
+        # pnpm/action-setup v6.0.9
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271
+        with:
+          run_install: false
+
+      - name: Setup Node
+        # actions/setup-node v6
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Run unit timings
+        id: producer
+        run: pnpm test:timings:unit
+
+      - name: Generate unit timing report
+        if: ${{ always() }}
+        run: pnpm test:timings:report
+
+      - name: Upload unit timing artifact
+        if: ${{ always() }}
+        # actions/upload-artifact v7.0.0
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        with:
+          name: unit-timings
+          path: tmp/test-timings
+          if-no-files-found: warn
+
+      - name: Fail when producer failed
+        if: ${{ always() }}
+        env:
+          PRODUCER_OUTCOME: ${{ steps.producer.outcome }}
+        run: test "$PRODUCER_OUTCOME" = success

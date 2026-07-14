@@ -82,8 +82,41 @@ test('aggregate gate evaluator accepts only successful selected lanes', () => {
   );
 });
 
+test('diagnostics run weekly or manually and preserve producer failures', () => {
+  const diagnostics = readFileSync(
+    new URL('../../.github/workflows/ci-diagnostics.yml', import.meta.url),
+    'utf8',
+  );
+  assert.match(diagnostics, /^  schedule:/mu);
+  assert.match(diagnostics, /cron: ['"]17 5 \* \* 1['"]/u);
+  assert.match(diagnostics, /^  workflow_dispatch:/mu);
+  assert.doesNotMatch(diagnostics, /continue-on-error:/u);
+
+  for (const [job, producerCommand, reportCommand, artifactPath] of [
+    ['coverage-report', 'pnpm test:coverage:core', 'pnpm test:coverage:report', 'tmp/coverage'],
+    ['unit-timings', 'pnpm test:timings:unit', 'pnpm test:timings:report', 'tmp/test-timings'],
+  ]) {
+    const block = workflowJobBlock(diagnostics, job);
+    assert.match(block, /id: producer/u);
+    assert.ok(block.includes(producerCommand));
+    assert.ok(block.includes(reportCommand));
+    assert.ok(block.includes(`path: ${artifactPath}`));
+    for (const step of ['Generate', 'Upload', 'Fail when producer failed']) {
+      assert.match(
+        block,
+        new RegExp(`- name: ${step}[^\\n]*\\n\\s+if: \\$\\{\\{ always\\(\\) \\}\\}`, 'u'),
+      );
+    }
+    assert.match(block, /PRODUCER_OUTCOME: \$\{\{ steps\.producer\.outcome \}\}/u);
+  }
+});
+
 function jobBlock(job) {
-  const lines = ci.split('\n');
+  return workflowJobBlock(ci, job);
+}
+
+function workflowJobBlock(workflow, job) {
+  const lines = workflow.split('\n');
   const start = lines.findIndex((line) => line === `  ${job}:`);
   assert.notEqual(start, -1, `missing ${job} job`);
   const end = lines.findIndex((line, index) => index > start && /^  [a-z0-9_-]+:$/u.test(line));
