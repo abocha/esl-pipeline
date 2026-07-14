@@ -3,59 +3,58 @@
 ## Meta
 
 - Audience: AI agents and maintainers coordinating backend/frontend delivery.
-- Read Time: 5 minutes.
-- Authority Level: canonical status tracker.
-- Last Verified Against: 2026-07-12 repository and alpha-readiness state.
+- Read Time: 3 minutes.
+- Authority Level: Canonical status tracker.
+- Last Verified Against: 2026-07-14 repository and deployed-alpha state.
 - Owner: backend/frontend maintainers + automation agents.
-- Review Cadence: weekly while active roadmap work continues.
+- Review Cadence: weekly while alpha work continues.
 - Status: `active`.
 
 ## Purpose
 
-- Track the current shared capability boundary.
-- Route active product work to the Alpha Readiness plan instead of retaining a feature-history log.
-
-## Read This When
-
-- you are changing a backend/frontend workflow
-- you need to know whether a capability is live, partial, or still planned
+Record which shared product capabilities are live and where their current boundary is. This is not a
+feature history, route catalog, or backlog.
 
 ## Canonical Sources
 
 1. [`docs/reference/agents-ssot.md`](../reference/agents-ssot.md)
 2. [`docs/backend-frontend/BATCH_SYSTEM.md`](BATCH_SYSTEM.md)
-3. package READMEs for the touched surface
+3. Package README for the touched surface
 
-Provider-specific generation details stay in:
-
-- [`docs/reference/GENERATION_PROVIDER_POLICY.md`](../reference/GENERATION_PROVIDER_POLICY.md)
-- WS2B provider profile docs under `docs/reference/`
+Provider/model detail stays in
+[`docs/reference/GENERATION_PROVIDER_POLICY.md`](../reference/GENERATION_PROVIDER_POLICY.md).
 
 ## Capability Matrix
 
-| Capability                            | Backend | Frontend | Current boundary                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| ------------------------------------- | ------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Core assignment flow                  | Done    | Done     | Calm Studio presents Student → Lesson source → Teaching context → Create → Review & share as focused, state-preserving screens; the tutor owns navigation, so readiness updates do not move the selected step; recording or tutor-pasted transcript → transcript → draft → approve → publish remains the durable pipeline; a published assignment stays complete until the tutor explicitly selects Start another assignment; Advanced actions unlock after sharing for rerun and republish operations, while Support details contains diagnostics and recovery context; pasted transcripts create student-owned `manual_transcript`/`manual` provenance without STT, audio remains OPUS-only in alpha, and cache reuse never transfers learner ownership |
-| Assignment sessions and job lifecycle | Done    | Done     | sessions cover pre-publish work; jobs cover materialized pipeline runs                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| Student workspace and schedule        | Done    | Done     | ongoing tutor-facing copy/interaction distillation belongs to Chunk 12                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| Student memory                        | Done    | Done     | normal refresh is incremental/budgeted; operator health is on Learning + `/students/:id/memory/health`; prompt packages mark unavailable memory lookup separately from absent memory; profile draft refresh shows a deterministic field/current/proposed diff table; manual full rebuild remains CLI-only                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| Generation and safety policy          | Done    | Done     | target-model activation remains an explicit operator decision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| Rerun and audio regeneration          | Done    | Done     | detailed contract lives in the orchestrator and speech-performance references                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| Telegram ops                          | Done    | Partial  | existing operator surface; no new Telegram work before post-alpha review                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Surface                                | Status                        | Current boundary                                                                                                                                                                 |
+| -------------------------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Assignment builder                     | Live                          | Five tutor-owned steps: Student, Lesson source, Teaching context, Create, Review & share. New/resume entry states are mutually exclusive; readiness updates never select a step. |
+| Lesson sources                         | Live                          | OPUS recording and tutor-pasted transcript converge on the same student-owned workflow. Manual transcripts bypass STT and retain explicit provenance.                            |
+| Draft, publish, and post-share actions | Live                          | Sessions own pre-publish work; jobs own materialized runs. Published work stays complete until Start another assignment; rerun/republish actions appear only after sharing.      |
+| Student workspace and schedule         | Live                          | Directory, overview, learning, history, scheduling/billing, lesson completion, and lesson-linked homework entrypoints are available. Product evolution remains roadmap-driven.   |
+| Student memory and profile review      | Live with operator safeguards | Incremental refresh, health inspection, unavailable-vs-absent provenance, deterministic profile diffs, and CLI-only full rebuild are supported.                                  |
+| Generation and safety policy           | Live                          | GPT-5.6 workload defaults are active in code; explicit overrides, provider budgets, eval gates, and disabled-by-default Batch replay remain authoritative controls.              |
+| Audio regeneration                     | Live                          | Family selection and clip reuse follow orchestrator and speech-performance contracts; the frontend exposes capability-gated actions.                                             |
+| Telegram operations                    | Live internal surface         | The separate bot package provides allowlisted status, browsing, share, backup, drill, and approval operations over backend APIs. It is not a batch-frontend feature.             |
 
 ## Current Focus
 
-- Execute the active work in [`docs/plans/2026-06-23-alpha-readiness.md`](../plans/2026-06-23-alpha-readiness.md).
-- Treat reproduced tutor reliability failures as priority work; do not maintain speculative blocker lists here.
+- Use production observations and tutor reports to select work from
+  [`docs/plans/2026-06-23-alpha-readiness.md`](../plans/2026-06-23-alpha-readiness.md).
+- Treat reproduced reliability or workflow failures as priority evidence.
+- Keep speculative roadmap items in their plan; do not add them to this status matrix until a shared
+  capability boundary changes.
 
-## Rules
+## Update Rules
 
-- Update this file when capability status changes.
-- Keep implementation detail in runbooks, SSOT, or plans.
-- Do not duplicate route/env/provider payload details here.
+- Update this file when a capability moves between planned, partial, and live or its ownership
+  boundary changes.
+- Put route/env/payload detail in generated indexes, package READMEs, references, or runbooks.
+- Keep historical implementation narrative in plans or archive docs.
 
 ## Related
 
+- [`packages/batch-frontend/README.md`](../../packages/batch-frontend/README.md)
+- [`packages/batch-backend/README.md`](../../packages/batch-backend/README.md)
+- [`packages/telegram-ops-bot/README.md`](../../packages/telegram-ops-bot/README.md)
 - [`docs/PIPELINE_INTEGRATION_VISION.md`](../PIPELINE_INTEGRATION_VISION.md)
-- [`docs/design/TRANSCRIPTION_PIPELINE_SPEC.md`](../design/TRANSCRIPTION_PIPELINE_SPEC.md)
-- [`docs/archive/pipeline/README.md`](../archive/pipeline/README.md)

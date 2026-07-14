@@ -5,7 +5,7 @@
 - Audience: AI agents, maintainers.
 - Read Time: 4 minutes.
 - Authority Level: Operational quickstart.
-- Last Verified Against: 2026-06-28 repo state.
+- Last Verified Against: 2026-07-14 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly.
 - Status: `active`.
@@ -29,6 +29,8 @@ cp .env.example .env
 pnpm env:validate -- --profile=development
 ```
 
+Use the Node version in [`.nvmrc`](../.nvmrc); `package.json` defines the minimum supported engine.
+
 Local pnpm commands use the repo-local `storeDir: .pnpm-store/v11` setting in
 [`pnpm-workspace.yaml`](../pnpm-workspace.yaml); project `.npmrc` is intentionally absent so npm
 commands do not inherit pnpm-only config.
@@ -40,15 +42,22 @@ bind-mount, and host-vs-Docker dependency notes.
 ## Repo Checks
 
 ```bash
-pnpm check:fast
+pnpm --silent run check:fast:agent
 pnpm docs:check
 ```
+
+Use `pnpm check:fast` when human-readable lane selection is useful, `pnpm check:pre-pr` for broad
+PR validation, and `pnpm check` only for CI reproduction or DB/worker/integration-risk changes.
 
 ## Operational Entry Point (Backend-First)
 
 ```bash
 pnpm dev:batch
 ```
+
+This starts the API, batch worker, student-memory worker, and frontend on the host. For frontend-only
+iteration without a backend, use the mock-auth sandbox documented in
+[`packages/batch-frontend/README.md`](../packages/batch-frontend/README.md).
 
 ## Orchestrator Usage (Library-Only)
 
@@ -73,41 +82,22 @@ BATCH_BACKEND_HOST_PORT=8081 pnpm docker:up
 
 Common cause: another app (for example qBittorrent Web UI) uses `8080`.
 
-Production-style local Compose never builds application images. Validate its shape without images:
+Production-style Compose never builds application images. Validate its shape without pulling them:
 
 ```bash
 pnpm docker:prod:config
 ```
 
-To run it locally, first build or pull the exact SHA-tagged images, export `BATCH_BACKEND_IMAGE`
-and `BATCH_FRONTEND_IMAGE`, then run `pnpm docker:prod`. Use `pnpm docker:prod:down` to stop it.
-For the production image and deployment flow, read
+For image selection, production profiles, deployment, and rollback, read
 [`docs/backend-frontend/DEPLOYMENT.md`](backend-frontend/DEPLOYMENT.md).
 
-## Prompt Gallery Bootstrap (DB-Canonical)
+## Operational Runbooks
 
-After deploying backend code to a fresh environment:
-
-```bash
-pnpm --filter @esl-pipeline/batch-backend run prompt-assets:bootstrap:dry
-pnpm --filter @esl-pipeline/batch-backend run prompt-assets:bootstrap
-```
-
-## Backup/Ops Commands
-
-```bash
-pnpm docker:db:backup
-pnpm docker:db:backup:s3 -- quickstart_checkpoint
-pnpm ops:status
-pnpm ops:alert:check
-```
-
-Full runbooks:
-
-- [`docs/operations/windows-linux-dev.md`](operations/windows-linux-dev.md)
+- Prompt gallery bootstrap: [`docs/operations/prompt-gallery-bootstrap.md`](operations/prompt-gallery-bootstrap.md)
+- Backup and restore: [`docs/operations/postgres-backup-restore.md`](operations/postgres-backup-restore.md)
 - [`docs/operations/postgres-backup-s3.md`](operations/postgres-backup-s3.md)
-- [`docs/operations/postgres-ops-health.md`](operations/postgres-ops-health.md)
-- [`docs/operations/rollup-optional-binary-troubleshooting.md`](operations/rollup-optional-binary-troubleshooting.md)
+- Ops status and alerts: [`docs/operations/postgres-ops-health.md`](operations/postgres-ops-health.md)
+- Cross-platform development: [`docs/operations/windows-linux-dev.md`](operations/windows-linux-dev.md)
 
 ## Related
 

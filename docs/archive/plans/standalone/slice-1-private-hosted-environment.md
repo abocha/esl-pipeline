@@ -3,10 +3,11 @@
 ## Meta
 
 - Audience: founder/operator, Codex, implementation agents.
-- Status: active.
-- Last Verified Against: 2026-06-11 repo state.
+- Status: archived.
+- Last Verified Against: 2026-07-14 production deployment evidence.
 - Exit Trigger: archive or update after the Slice 1 implementation PR/deploy evidence lands.
-- Current Focus: private AWS Lightsail rehearsal with Docker Compose, Caddy HTTPS, AWS S3, health, migrations, backups, transcription workers, and one hosted assignment publish.
+- Archive Reason: the private pull-based hosting baseline is operational and v9.10.0 deployment plus
+  main-flow smoke passed; ongoing operations are routed through deployment runbooks.
 
 ## Goal
 

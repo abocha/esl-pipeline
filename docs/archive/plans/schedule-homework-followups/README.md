@@ -13,13 +13,14 @@
 ## Meta
 
 - Audience: maintainers and AI agents implementing schedule-to-homework workflow slices.
-- Authority Level: active implementation plan.
-- Last Verified Against: 2026-05-19 repo state.
+- Authority Level: archived implementation record.
+- Last Verified Against: 2026-07-14 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: after each implementation PR touching schedule, assignment sessions, reminders, or homework memory.
-- Status: `active`.
+- Status: `archived`.
 - Exit Trigger: archive after the lesson-linked homework follow-up workflow ships and durable behavior is represented in product/reference docs and package READMEs.
-- Current Focus: implementation complete; pending PR review/merge and archive once shipped from active routing.
+- Archive Reason: lesson-linked homework follow-ups shipped and the plan no longer carries active
+  execution work.
 
 ## Source Notes Interpreted
 

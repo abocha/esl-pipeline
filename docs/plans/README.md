@@ -5,7 +5,7 @@
 - Audience: maintainers and AI agents working from plan docs.
 - Read Time: 4 minutes.
 - Authority Level: planning router.
-- Last Verified Against: 2026-07-02 repo state.
+- Last Verified Against: 2026-07-14 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: monthly or after major planning-topology changes.
 - Status: `router`.
@@ -67,30 +67,22 @@
 ### Topic directories
 
 1. `docs/plans/postgres-hardening-offline-migration/README.md`
-2. `docs/plans/harness-agentic-docs-upgrade/README.md`
-3. `docs/plans/orchestrator-library-only-roadmap/README.md`
-4. `docs/plans/stt-multi-provider-refactor/README.md`
-5. `docs/plans/telegram-ops-control-panel-hardening/README.md`
-6. `docs/plans/student-memory-system-upgrade/README.md`
-7. `docs/plans/student-profile-enrichment/README.md`
-8. `docs/plans/student-area-redesign/README.md`
-9. `docs/plans/schedule-homework-followups/README.md`
-10. `docs/plans/backlog/README.md`
+2. `docs/plans/orchestrator-library-only-roadmap/README.md`
+3. `docs/plans/stt-multi-provider-refactor/README.md`
+4. `docs/plans/telegram-ops-control-panel-hardening/README.md`
+5. `docs/plans/student-memory-system-upgrade/README.md`
+6. `docs/plans/student-profile-enrichment/README.md`
+7. `docs/plans/student-area-redesign/README.md`
+8. `docs/plans/backlog/README.md`
 
 ### Standalone active plans
 
-1. `docs/plans/versioning-private-contracts-overhaul.md`
-2. `docs/plans/legacy-retirement/legacy-retirement-backlog.md`
-3. `docs/plans/legacy-retirement/legacy-retirement-inventory.md`
-4. `docs/plans/legacy-retirement/legacy-retirement-execution-playbook.md`
-5. `docs/plans/2026-05-20-cross-workstream-change-intake.md`
-6. `docs/plans/slice-1-private-hosted-environment.md`
-7. `docs/plans/slice-2-invite-workspace-first-student.md`
-8. `docs/plans/2026-06-23-alpha-readiness.md`
-9. `docs/plans/student-memory-system-upgrade/v1-1-bounded-snapshot-refresh.md` - Phases 0-4
-   implemented and in PR-ready validation; archive after merge, with Phase 5 remaining Closed Alpha
-   follow-up polish.
-10. `docs/plans/2026-07-09-confirmed-transcript-lesson-memory.md`
+1. `docs/plans/legacy-retirement/legacy-retirement-backlog.md`
+2. `docs/plans/legacy-retirement/legacy-retirement-inventory.md`
+3. `docs/plans/legacy-retirement/legacy-retirement-execution-playbook.md`
+4. `docs/plans/2026-05-20-cross-workstream-change-intake.md`
+5. `docs/plans/slice-2-invite-workspace-first-student.md`
+6. `docs/plans/2026-06-23-alpha-readiness.md`
 
 ## Historical and Generated Aids
 

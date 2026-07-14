@@ -4,7 +4,7 @@
 
 - Audience: founder/operator and Codex.
 - Status: template/checklist. Do not store real secrets here.
-- Related plan: `docs/plans/slice-1-private-hosted-environment.md`.
+- Related historical plan: `docs/archive/plans/standalone/slice-1-private-hosted-environment.md`.
 
 ## Purpose
 

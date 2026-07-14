@@ -4,7 +4,7 @@
 
 - Audience: maintainers and AI agents implementing or reviewing repo behavior.
 - Authority Level: authoritative contracts and invariants.
-- Last Verified Against: 2026-07-14 repo state.
+- Last Verified Against: 2026-07-15 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: monthly and after contract-level changes.
 - Status: `reference`.
@@ -34,6 +34,9 @@ For deep system maps, prefer the linked docs rather than growing this file again
   - persistence, queuing, auth, and workflow orchestration
 - `@esl-pipeline/batch-frontend`
   - operator UI over `batch-backend`
+- `@esl-pipeline/telegram-ops-bot`
+  - operator control-panel adapter over authenticated `batch-backend` operations
+  - no independent pipeline, persistence, or deployment semantics
 - supporting implementation packages
   - validation/parsing: `md-validator`, `pmd`
   - adapters/providers: `html-publisher`, `tts-*`, `stt-*`, `storage-uploader`
@@ -45,6 +48,7 @@ For deep system maps, prefer the linked docs rather than growing this file again
 - public DTOs / transport payloads -> `@esl-pipeline/contracts`
 - live capability status -> `docs/backend-frontend/backend-frontend-alignment.md`
 - environment policy -> `docs/reference/env.md`
+- generation provider/model policy -> `docs/reference/GENERATION_PROVIDER_POLICY.md`
 - operational procedures -> `docs/operations/*`
 - development/deployment workflow -> `docs/backend-frontend/DEPLOYMENT.md`
 
@@ -138,28 +142,52 @@ Update together:
 - docs governance/playbook docs
 - routers if the doc graph changes
 
+### Agent harness and instruction boundaries
+
+- Root `AGENTS.md` contains durable repo-wide guidance and routes; keep task-specific implementation
+  detail in plans or task docs.
+- Use nested `AGENTS.md` files only for repeated subtree-specific overrides.
+- Reusable procedures belong in skills; deterministic requirements belong in scripts, hooks, or CI.
+- Active plans define the outcome, constraints, and verification for their task. After implementation
+  lands, current code, contracts, package READMEs, and reference/runbook docs outrank the plan.
+- A freshness-date change is valid only after content verification under
+  `docs/reference/DOCS_GOVERNANCE.md`; date-only CI unblocking is forbidden.
+
 ## Runtime and Verification Baseline
 
 - Node.js 24.11.1+
+- Use the repo-pinned Node version in `.nvmrc` for local development and CI parity; the engine range
+  above remains the compatibility floor.
 - pnpm
 - system ffmpeg where provider flows require it
 
 Required repo checks for behavior changes:
 
 - During editing, run the narrowest relevant package, file, or `vitest related --run` lane first.
-- Before handoff, run `pnpm --silent run check:fast:agent` unless the task is docs-only and a more
-  specific docs lane is clearly sufficient.
+- After focused tests, choose one normal pre-push gate. Use
+  `pnpm --silent run check:fast:agent` by default, or use `pnpm check:pre-pr` directly when the
+  branch is already broad, cross-cutting, shared-contract, or toolchain-level. Clearly docs-only
+  work may use the documented docs-specific lanes.
 - `check:fast` is affected-package validation. It must include committed, staged, unstaged, and
   untracked changes; expand to workspace dependents; run cheap global guards; apply explicit
   path-risk rules; and fail conservatively to a broader lane when the affected scope is uncertain.
-- Run `pnpm check:pre-pr` before broad or cross-cutting PRs. This lane is the broad build,
+- `check:fast:dry-run` must show local working-tree scope separately from the committed hosted CI
+  preview. A `check:fast:agent` fallback to `check:pre-pr` satisfies the broad gate.
+- `check:pre-pr` is the direct gate for a branch already known to be broad. It runs the broad build,
   typecheck, lint, and core unit regression sweep.
+- A successful `pnpm check` subsumes both narrower pre-push gates.
 - Run `pnpm check` when reproducing CI locally or when DB, migration, worker, integration, or
   similarly broad behavior changed.
+
+Canonical blocking PR check names are `CI gate`, `static checks (node 24.x)`,
+`integration lane (blocking)`, `backend db + worker integration (blocking)`, and
+`telegram command-loop compose smoke`. `CI gate` is the aggregate result and should become the
+single branch-protection requirement when repository plan capabilities permit.
 
 Docs-heavy changes also require:
 
 - `pnpm docs:generate:indexes`
+- `pnpm format`
 - `pnpm docs:check`
 
 ## Environment and Entrypoints

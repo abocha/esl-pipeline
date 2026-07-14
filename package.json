@@ -121,6 +121,7 @@
     "test:agent:html-publisher": "node scripts/test/run-agent-vitest-lane.mjs --lane html-publisher --script test:unit --filter @esl-pipeline/html-publisher",
     "test:backend:db:worker": "node scripts/test/run-backend-db-worker-check.mjs",
     "test:backend:db:worker:agent": "node scripts/test/run-agent-vitest-lane.mjs --lane backend-db-worker --script test:db:migrations --script test:db:postgres --script test:integration:worker --filter @esl-pipeline/batch-backend --backend-db-env",
+    "test:check-routing": "node --test scripts/check/*.test.mjs",
     "test:coverage:core": "node scripts/test/run-core-coverage.mjs",
     "test:coverage:report": "node scripts/test/generate-coverage-report.mjs",
     "test:env": "node --test scripts/docker/application-env-source.test.mjs scripts/deploy/deploy-prod-images.test.mjs",

@@ -5,7 +5,7 @@
 - Audience: maintainers and AI agents adding or updating tests.
 - Read Time: 6 minutes.
 - Authority Level: active test methodology guide.
-- Last Verified Against: 2026-03-08 repo state.
+- Last Verified Against: 2026-07-15 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly or after test-lane/CI changes.
 - Status: `active`.
@@ -48,6 +48,7 @@ If this guide conflicts with [`docs/reference/agents-ssot.md`](agents-ssot.md), 
   - Falls back conservatively to `check:pre-pr` when the changed scope cannot be classified.
 - Root affected check, agent output: `pnpm check:fast:agent`
 - Root affected dry-run: `pnpm check:fast:dry-run`
+  - Prints local working-tree scope separately from the committed hosted CI preview.
 - Root broad pre-PR check: `pnpm check:pre-pr`
   - Runs repo guards, contract consistency, build, typecheck, lint, and the fast prebuilt core unit
     subset for orchestrator, batch-backend, and batch-frontend.
@@ -76,9 +77,11 @@ Use the narrowest lane that answers the question at hand:
 | Pre-PR             | Broad or cross-cutting changes                                    | `pnpm check:pre-pr`                                               |
 | Full               | Local CI reproduction, DB, migration, worker, or integration risk | `pnpm check`                                                      |
 
-Do not use `check:pre-pr` as a routine editing-loop command. The local default should answer
-"did this change break anything it can reach?" while CI remains the source of truth for broad merge
-safety.
+After focused tests, choose one normal pre-push gate. Use `check:fast:agent` by default; use
+`check:pre-pr` directly when the branch is already broad, cross-cutting, shared-contract, or
+toolchain-level. A `check:fast:agent` fallback to `check:pre-pr` satisfies the broad gate. A
+successful full `check` subsumes both narrower gates. Clearly docs-only work may use the documented
+docs-specific lanes. Do not use `check:pre-pr` as a routine editing-loop command.
 
 ## Script Methodology
 
@@ -175,9 +178,14 @@ For interval- or polling-driven behavior:
 Use this order when updating tests:
 
 1. Run targeted package or related tests first.
-2. Run affected validation before handoff:
-   - `pnpm --silent run check:fast:agent`
-   - Use `pnpm check:fast:dry-run` when you need to inspect routing without executing lanes.
+2. Choose one normal pre-push gate:
+   - Default: `pnpm --silent run check:fast:agent`.
+   - Known broad, cross-cutting, shared-contract, or toolchain branch: `pnpm check:pre-pr` directly.
+   - A fallback from `check:fast:agent` to `check:pre-pr` already satisfies the broad gate.
+   - A successful `pnpm check` subsumes both narrower gates.
+   - Clearly docs-only work may use the documented docs-specific lanes.
+   - Use `pnpm check:fast:dry-run` to inspect local and committed hosted routing separately without
+     executing lanes.
 3. Run lane-level checks when the risk class calls for them:
    - `pnpm test`
    - `pnpm test:unit` when specifically validating package entrypoint normalization
@@ -185,9 +193,8 @@ Use this order when updating tests:
    - `pnpm test:integration`
    - `pnpm test:integration:prebuilt` when the workspace is already built
    - `pnpm test:backend:db:worker` when backend PG/Redis behavior changed
-4. Run `pnpm check:pre-pr` before broad or cross-cutting PRs.
-5. Run `pnpm check` before merge for changes that can affect DB-backed backend or worker behavior.
-6. When touching backend migrations, `packages/batch-backend/schema.sql`, or `packages/contracts/src/contract-versions.ts`, also run:
+4. Run `pnpm check` before merge for changes that can affect DB-backed backend or worker behavior.
+5. When touching backend migrations, `packages/batch-backend/schema.sql`, or `packages/contracts/src/contract-versions.ts`, also run:
    - `pnpm release:verify:contracts`
    - `pnpm --filter @esl-pipeline/batch-backend run db:verify-baseline`
    - regenerate baseline first with `pnpm --filter @esl-pipeline/batch-backend run db:generate-baseline` if verification reports drift
@@ -210,6 +217,9 @@ The wrapper:
 - prints the base, changed files, package expansion, triggered lanes, skipped broad lanes, artifacts,
   and reproduction commands.
 
+Its dry-run output contains two projections: local validation includes committed, staged, unstaged,
+and untracked paths, while the hosted CI preview includes committed branch paths only.
+
 Important path rules:
 
 - `docs/**`, `AGENTS.md`, and `.github/pull_request_template.md` trigger docs and formatting lanes.
@@ -228,12 +238,16 @@ Important path rules:
 
 Deployment/test gating currently uses these blocking names:
 
+- `CI gate`
 - `static checks (node 24.x)`
 - `integration lane (blocking)`
 - `backend db + worker integration (blocking)`
+- `telegram command-loop compose smoke`
 
-The static CI job builds before unit tests and therefore uses `pnpm test:unit:prebuilt` to avoid
-duplicating package-level setup builds from `pnpm test`.
+`CI gate` is the canonical aggregate status and should become the single required branch-protection
+check when repository plan capabilities permit. Selected runtime steps and jobs remain blocking;
+unselected conditional jobs may report skipped. Coverage and timing diagnostics run weekly or by
+manual dispatch outside blocking PR CI.
 
 ## Related
 

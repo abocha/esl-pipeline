@@ -243,7 +243,7 @@ Pass evidence:
 - one hosted end-to-end assignment publish succeeds
 - logs are accessible enough to diagnose a failed job without guesswork
 
-See: `docs/plans/slice-1-private-hosted-environment.md`.
+See the historical plan: `docs/archive/plans/standalone/slice-1-private-hosted-environment.md`.
 
 ### Slice 2: Invite Signup to Workspace to First Student
 

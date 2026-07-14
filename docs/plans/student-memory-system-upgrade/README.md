@@ -4,7 +4,7 @@
 
 - Audience: maintainers and student-memory agents.
 - Authority Level: active staged roadmap.
-- Last Verified Against: 2026-07-06 repo state.
+- Last Verified Against: 2026-07-14 repo state.
 - Owner: founder-maintainer + backend/frontend maintainers.
 - Review Cadence: after student-memory implementation PRs.
 - Status: `roadmap`.
@@ -33,9 +33,9 @@ artifact types; it is unbounded normal snapshot refresh.
 
 Current v1.1 closeout:
 
-1. [`v1-1-bounded-snapshot-refresh.md`](v1-1-bounded-snapshot-refresh.md) - bounded incremental
-   snapshot refresh, token budgets, candidate gating, and operator observability. Phases 0-4 are
-   the current PR scope; Phase 5 remains Closed Alpha follow-up polish after tutor/operator evidence.
+1. [Archived v1.1 bounded-snapshot execution plan](../../archive/plans/student-memory-system-upgrade/v1-1-bounded-snapshot-refresh.md) -
+   Phases 0-4 shipped bounded incremental refresh, token budgets, candidate gating, and operator
+   observability.
 2. [`reliability-review.md`](reliability-review.md) - planning note for lifecycle observability,
    pedagogical usefulness, profile fact fidelity, and profile draft diff follow-ups.
 
@@ -70,6 +70,10 @@ Known Closed Alpha follow-ups:
    rebuild controls out of scope.
 6. Defer structured profile-change classification until the deterministic diff view proves
    insufficient.
+7. Add candidate grouping or filtering only if rejected/stale history remains useful in real
+   support sessions.
+8. Add snapshot diffs or cross-student operator columns only if Gate C evidence shows that the
+   current health summary is insufficient.
 
 ## Locked Decisions
 

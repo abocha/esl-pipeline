@@ -596,7 +596,7 @@ PR:
 
 ## Related Active Plans
 
-- [`docs/plans/schedule-homework-followups/README.md`](schedule-homework-followups/README.md)
+- [Archived schedule homework follow-up plan](../archive/plans/schedule-homework-followups/README.md)
 - [`docs/plans/student-area-redesign/README.md`](student-area-redesign/README.md)
 - [`docs/plans/student-memory-system-upgrade/README.md`](student-memory-system-upgrade/README.md)
 - [`docs/plans/student-profile-enrichment/README.md`](student-profile-enrichment/README.md)
