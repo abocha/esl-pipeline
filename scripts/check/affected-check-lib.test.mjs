@@ -3,8 +3,11 @@ import test from 'node:test';
 
 import {
   buildAffectedCheckPlan,
+  collectChangedFileScopes,
   collectChangedFiles,
   expandTransitiveDependents,
+  flattenChangedFileRecords,
+  parseNameStatusZ,
   resolveComparisonBase,
 } from './affected-check-lib.mjs';
 
@@ -19,16 +22,58 @@ const workspacePackages = [
   ]),
 ];
 
-test('changed file collection includes committed, staged, unstaged, and untracked files', async () => {
+test('name-status parsing preserves deletions and both rename paths', () => {
+  const records = parseNameStatusZ(
+    'D\0packages/batch-backend/src/old.ts\0R100\0docs/old.md\0packages/batch-frontend/src/new.tsx\0',
+  );
+
+  assert.deepEqual(records, [
+    { status: 'D', paths: ['packages/batch-backend/src/old.ts'] },
+    { status: 'R100', paths: ['docs/old.md', 'packages/batch-frontend/src/new.tsx'] },
+  ]);
+  assert.deepEqual(flattenChangedFileRecords(records), [
+    'docs/old.md',
+    'packages/batch-backend/src/old.ts',
+    'packages/batch-frontend/src/new.tsx',
+  ]);
+});
+
+test('changed file scopes separate committed hosted paths from local-only paths', async () => {
   const calls = [];
-  const changedFiles = await collectChangedFiles({
+  const scopes = await collectChangedFileScopes({
     mergeBase: 'abc123',
     runGit: async (args) => {
       calls.push(args);
-      if (args.includes('--cached')) return 'packages/contracts/src/dto.ts\n';
-      if (args.includes('--others')) return 'docs/reference/TESTING_GUIDELINES.md\n';
-      if (args.includes('abc123...HEAD')) return 'packages/batch-frontend/src/App.tsx\n';
-      return 'packages/batch-backend/src/application/submit-job.ts\n';
+      if (args.includes('abc123...HEAD')) return 'M\0docs/committed.md\0';
+      if (args.includes('--cached')) return 'A\0packages/contracts/src/staged.ts\0';
+      if (args.includes('--others')) return 'scratch.txt\0';
+      return 'D\0packages/batch-backend/src/deleted.ts\0';
+    },
+  });
+
+  assert.deepEqual(scopes.hostedFiles, ['docs/committed.md']);
+  assert.deepEqual(scopes.localFiles, [
+    'docs/committed.md',
+    'packages/batch-backend/src/deleted.ts',
+    'packages/contracts/src/staged.ts',
+    'scratch.txt',
+  ]);
+  assert.deepEqual(scopes.uncommittedFiles, [
+    'packages/batch-backend/src/deleted.ts',
+    'packages/contracts/src/staged.ts',
+    'scratch.txt',
+  ]);
+  assert.equal(calls.length, 4);
+});
+
+test('changed file compatibility collection returns the complete local scope', async () => {
+  const changedFiles = await collectChangedFiles({
+    mergeBase: 'abc123',
+    runGit: async (args) => {
+      if (args.includes('abc123...HEAD')) return 'M\0packages/batch-frontend/src/App.tsx\0';
+      if (args.includes('--cached')) return 'A\0packages/contracts/src/dto.ts\0';
+      if (args.includes('--others')) return 'docs/reference/TESTING_GUIDELINES.md\0';
+      return 'M\0packages/batch-backend/src/application/submit-job.ts\0';
     },
   });
 
@@ -38,7 +83,6 @@ test('changed file collection includes committed, staged, unstaged, and untracke
     'packages/batch-frontend/src/App.tsx',
     'packages/contracts/src/dto.ts',
   ]);
-  assert.equal(calls.length, 4);
 });
 
 test('dependent expansion walks the full reverse workspace graph', () => {

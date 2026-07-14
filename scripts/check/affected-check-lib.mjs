@@ -23,22 +23,73 @@ const broadFallbackFiles = new Set([
   'vitest.config.ts',
 ]);
 
-export async function collectChangedFiles({ mergeBase, runGit }) {
-  const commandSets = [
-    ['diff', '--name-only', '--diff-filter=ACMRTUXB', `${mergeBase}...HEAD`],
-    ['diff', '--name-only', '--diff-filter=ACMRTUXB'],
-    ['diff', '--cached', '--name-only', '--diff-filter=ACMRTUXB'],
-    ['ls-files', '--others', '--exclude-standard'],
-  ];
+export function parseNameStatusZ(value) {
+  const tokens = String(value).split('\0');
+  if (tokens.at(-1) === '') tokens.pop();
 
-  const files = new Set();
-  for (const args of commandSets) {
-    const output = await runGit(args);
-    for (const file of splitLines(output)) {
-      files.add(normalizePath(file));
+  const records = [];
+  for (let index = 0; index < tokens.length; ) {
+    const status = tokens[index++];
+    if (!status) throw new Error('changed-file record is missing a status');
+
+    const pathCount = /^[RC]/u.test(status) ? 2 : 1;
+    const paths = tokens.slice(index, index + pathCount);
+    if (paths.length !== pathCount || paths.some((file) => !file)) {
+      throw new Error(`changed-file record ${status} is missing a path`);
     }
+    index += pathCount;
+    records.push({ status, paths: paths.map(normalizePath) });
   }
-  return [...files].sort();
+  return records;
+}
+
+export function flattenChangedFileRecords(records) {
+  return uniqueSorted(records.flatMap((record) => record.paths).map(normalizePath));
+}
+
+export async function collectChangedFileScopes({ mergeBase, runGit }) {
+  const nameStatusArgs = [
+    '--name-status',
+    '-z',
+    '--find-renames',
+    '--find-copies',
+    '--diff-filter=ACDMRTUXB',
+  ];
+  const hostedRecords = parseNameStatusZ(
+    await runGit(['diff', ...nameStatusArgs, `${mergeBase}...HEAD`]),
+  );
+  const unstagedRecords = parseNameStatusZ(await runGit(['diff', ...nameStatusArgs]));
+  const stagedRecords = parseNameStatusZ(await runGit(['diff', '--cached', ...nameStatusArgs]));
+  const untrackedRecords = String(
+    await runGit(['ls-files', '--others', '--exclude-standard', '-z']),
+  )
+    .split('\0')
+    .filter(Boolean)
+    .map((file) => ({ status: '?', paths: [normalizePath(file)] }));
+
+  const uniqueRecords = (records) => [
+    ...new Map(
+      records.map((record) => [`${record.status}\0${record.paths.join('\0')}`, record]),
+    ).values(),
+  ];
+  const uncommittedRecords = uniqueRecords([
+    ...unstagedRecords,
+    ...stagedRecords,
+    ...untrackedRecords,
+  ]);
+  const localRecords = uniqueRecords([...hostedRecords, ...uncommittedRecords]);
+
+  return {
+    hostedRecords: uniqueRecords(hostedRecords),
+    localRecords,
+    hostedFiles: flattenChangedFileRecords(hostedRecords),
+    localFiles: flattenChangedFileRecords(localRecords),
+    uncommittedFiles: flattenChangedFileRecords(uncommittedRecords),
+  };
+}
+
+export async function collectChangedFiles(options) {
+  return (await collectChangedFileScopes(options)).localFiles;
 }
 
 export async function resolveComparisonBase({ baseRef = 'origin/main', runGit }) {
