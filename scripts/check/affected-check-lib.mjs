@@ -92,6 +92,93 @@ export async function collectChangedFiles(options) {
   return (await collectChangedFileScopes(options)).localFiles;
 }
 
+export function buildCiScopeDecision({ changedFileRecords, workspacePackages }) {
+  const changedFiles = flattenChangedFileRecords(changedFileRecords);
+  const reasons = [];
+  const addReason = (code, scope, subject) => reasons.push({ code, scope, subject });
+  const blockingScopes = ['runtime', 'integration', 'backend_db_worker', 'telegram'];
+  const decision = {
+    runtime: false,
+    integration: false,
+    backend_db_worker: false,
+    telegram: false,
+    docs_only: false,
+    changedFiles,
+    affectedPackages: [],
+    reasons,
+  };
+  const enableAll = (code, subject) => {
+    for (const scope of blockingScopes) decision[scope] = true;
+    addReason(code, 'all', subject);
+  };
+
+  if (changedFiles.length === 0) {
+    enableAll('empty-diff', 'no changed paths were reported');
+    return stableCiDecision(decision);
+  }
+
+  decision.docs_only = changedFiles.every(isCiDocsPath);
+  if (decision.docs_only) {
+    addReason('docs-only', 'docs_only', changedFiles.join(','));
+    return stableCiDecision(decision);
+  }
+
+  const changedPackages = new Set();
+  let conservativeFallback = false;
+  for (const file of changedFiles) {
+    const matchedPackage = findPackageForFile(file, workspacePackages);
+    if (matchedPackage?.name) changedPackages.add(matchedPackage.name);
+
+    if (isCiRootToolchainPath(file)) {
+      enableAll('root-toolchain', file);
+      conservativeFallback = true;
+    } else if (!matchedPackage && !isKnownCiNonPackagePath(file)) {
+      enableAll('unknown-path', file);
+      conservativeFallback = true;
+    }
+  }
+
+  const affectedPackages = expandTransitiveDependents({
+    packageNames: [...changedPackages],
+    workspacePackages,
+  });
+  decision.affectedPackages = affectedPackages;
+
+  if (
+    !conservativeFallback &&
+    (affectedPackages.length > 0 || changedFiles.some(isCiRuntimePath))
+  ) {
+    decision.runtime = true;
+    decision.integration = true;
+    addReason('runtime-change', 'runtime', changedFiles.join(','));
+    addReason('runtime-implies-integration', 'integration', 'runtime');
+  }
+
+  const sharedHighRiskPackages = new Set([
+    '@esl-pipeline/contracts',
+    '@esl-pipeline/shared-infrastructure',
+  ]);
+  if (
+    !conservativeFallback &&
+    ([...changedPackages].some((name) => sharedHighRiskPackages.has(name)) ||
+      changedFiles.some(isCiBackendDbWorkerPath))
+  ) {
+    decision.backend_db_worker = true;
+    addReason('backend-db-worker-change', 'backend_db_worker', changedFiles.join(','));
+  }
+
+  if (
+    !conservativeFallback &&
+    (affectedPackages.includes('@esl-pipeline/telegram-ops-bot') ||
+      changedFiles.some(isCiTelegramPath))
+  ) {
+    decision.telegram = true;
+    addReason('telegram-change', 'telegram', changedFiles.join(','));
+  }
+
+  return stableCiDecision(decision);
+}
+
 export async function resolveComparisonBase({ baseRef = 'origin/main', runGit }) {
   let baseSha;
   try {
@@ -712,6 +799,73 @@ function readPackageManifest(dir) {
 
 function normalizePath(file) {
   return file.trim().replaceAll('\\', '/').replace(/^\.\//u, '');
+}
+
+function isCiDocsPath(file) {
+  return (
+    file === 'AGENTS.md' || file.startsWith('docs/') || file === '.github/pull_request_template.md'
+  );
+}
+
+function isCiRootToolchainPath(file) {
+  return (
+    isBroadFallbackFile(file) ||
+    file.startsWith('.github/workflows/') ||
+    /^scripts\/check\/(?:affected-check|run-affected-check|run-ci-scope)/u.test(file)
+  );
+}
+
+function isCiRuntimePath(file) {
+  return (
+    /^(?:Dockerfile|docker-compose(?:\.[^/]+)?\.ya?ml)$/u.test(file) ||
+    /^(?:docker|scripts\/deploy|scripts\/smoke)\//u.test(file)
+  );
+}
+
+function isCiBackendDbWorkerPath(file) {
+  return (
+    /^packages\/batch-backend\/(?:migrations\/|schema\.sql$)/u.test(file) ||
+    /^packages\/batch-backend\/src\/infrastructure\//u.test(file) ||
+    /^packages\/batch-backend\/src\/.*(?:worker|queue|process-(?:queue-)?job)/u.test(file) ||
+    /^packages\/batch-backend\/tests\/support\/.*(?:postgres|redis)/u.test(file) ||
+    /^packages\/batch-backend\/tests\/(?:domain\..*-repository|application\.(?:homework-memory-source|student-timeline|student-schedule-billing|alpha-invites\.registration)|integration\.(?:migrations|query-plan-regression|student-memory-pacing-delay)|transport\.worker-runner\.integration)\.test\.ts$/u.test(
+      file,
+    )
+  );
+}
+
+function isCiTelegramPath(file) {
+  return (
+    file.startsWith('packages/telegram-ops-bot/') ||
+    /^(?:docker-compose(?:\.[^/]+)?\.ya?ml|docker\/|scripts\/deploy\/)/u.test(file) ||
+    /(?:^|\/)(?:telegram[^/]*smoke|smoke[^/]*telegram)(?:\.|\/|-)/u.test(file)
+  );
+}
+
+function isKnownCiNonPackagePath(file) {
+  return (
+    isCiDocsPath(file) ||
+    isCiRuntimePath(file) ||
+    isCiTelegramPath(file) ||
+    file.startsWith('.github/')
+  );
+}
+
+function stableCiDecision(decision) {
+  decision.affectedPackages = uniqueSorted(decision.affectedPackages);
+  decision.reasons = [
+    ...new Map(
+      decision.reasons.map((reason) => [
+        `${reason.code}\0${reason.scope}\0${reason.subject}`,
+        reason,
+      ]),
+    ).values(),
+  ].sort((left, right) =>
+    `${left.code}\0${left.scope}\0${left.subject}`.localeCompare(
+      `${right.code}\0${right.scope}\0${right.subject}`,
+    ),
+  );
+  return decision;
 }
 
 function splitLines(value) {

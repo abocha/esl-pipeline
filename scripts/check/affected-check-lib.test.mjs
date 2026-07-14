@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   buildAffectedCheckPlan,
+  buildCiScopeDecision,
   collectChangedFileScopes,
   collectChangedFiles,
   expandTransitiveDependents,
@@ -21,6 +22,151 @@ const workspacePackages = [
     '@esl-pipeline/tts-provider-google',
   ]),
 ];
+
+const ciWorkspacePackages = [
+  pkg('@esl-pipeline/contracts', 'packages/contracts', []),
+  pkg('@esl-pipeline/shared-infrastructure', 'packages/shared-infrastructure', [
+    '@esl-pipeline/contracts',
+  ]),
+  pkg('@esl-pipeline/batch-backend', 'packages/batch-backend', [
+    '@esl-pipeline/contracts',
+    '@esl-pipeline/shared-infrastructure',
+  ]),
+  pkg('@esl-pipeline/batch-frontend', 'packages/batch-frontend', ['@esl-pipeline/contracts']),
+  pkg('@esl-pipeline/telegram-ops-bot', 'packages/telegram-ops-bot', [
+    '@esl-pipeline/contracts',
+    '@esl-pipeline/shared-infrastructure',
+  ]),
+];
+
+const ciScopeCases = [
+  [
+    'docs only',
+    records('M', 'docs/reference/TESTING_GUIDELINES.md'),
+    [false, false, false, false, true],
+  ],
+  [
+    'frontend',
+    records('M', 'packages/batch-frontend/src/main.tsx'),
+    [true, true, false, false, false],
+  ],
+  [
+    'deleted migration',
+    records('D', 'packages/batch-backend/migrations/0042.sql'),
+    [true, true, true, false, false],
+  ],
+  [
+    'backend repository test',
+    records('M', 'packages/batch-backend/tests/domain.job-repository.test.ts'),
+    [true, true, true, false, false],
+  ],
+  [
+    'worker fixture',
+    records('M', 'packages/batch-backend/tests/transport.worker-runner.integration.test.ts'),
+    [true, true, true, false, false],
+  ],
+  [
+    'telegram',
+    records('M', 'packages/telegram-ops-bot/src/index.ts'),
+    [true, true, false, true, false],
+  ],
+  ['contracts', records('M', 'packages/contracts/src/index.ts'), [true, true, true, true, false]],
+  [
+    'shared infrastructure',
+    records('M', 'packages/shared-infrastructure/src/index.ts'),
+    [true, true, true, true, false],
+  ],
+  ['workflow', records('M', '.github/workflows/ci.yml'), [true, true, true, true, false]],
+  ['unknown', records('A', 'unexpected-root.file'), [true, true, true, true, false]],
+];
+
+for (const [name, changedFileRecords, expected] of ciScopeCases) {
+  test(`CI scope: ${name}`, () => {
+    const decision = buildCiScopeDecision({
+      changedFileRecords,
+      workspacePackages: ciWorkspacePackages,
+    });
+    assert.deepEqual(scopeFlags(decision), expected);
+  });
+}
+
+test('CI scope fails open for empty records', () => {
+  const decision = buildCiScopeDecision({
+    changedFileRecords: [],
+    workspacePackages: ciWorkspacePackages,
+  });
+  assert.deepEqual(scopeFlags(decision), [true, true, true, true, false]);
+  assert.equal(
+    decision.reasons.some((reason) => reason.code === 'empty-diff'),
+    true,
+  );
+});
+
+test('CI scope treats every path of a rename as relevant', () => {
+  const runtimeToDocs = buildCiScopeDecision({
+    changedFileRecords: [
+      { status: 'R100', paths: ['packages/batch-frontend/src/old.tsx', 'docs/new.md'] },
+    ],
+    workspacePackages: ciWorkspacePackages,
+  });
+  const docsToRuntime = buildCiScopeDecision({
+    changedFileRecords: [
+      { status: 'R100', paths: ['docs/old.md', 'packages/batch-frontend/src/new.tsx'] },
+    ],
+    workspacePackages: ciWorkspacePackages,
+  });
+  assert.deepEqual(scopeFlags(runtimeToDocs), [true, true, false, false, false]);
+  assert.deepEqual(scopeFlags(docsToRuntime), [true, true, false, false, false]);
+});
+
+test('CI scope normalizes separators, duplicates, and input order', () => {
+  const left = buildCiScopeDecision({
+    changedFileRecords: [
+      records('M', 'docs\\guide.md')[0],
+      records('M', 'packages\\telegram-ops-bot\\src\\index.ts')[0],
+      records('M', 'docs/guide.md')[0],
+    ],
+    workspacePackages: ciWorkspacePackages,
+  });
+  const right = buildCiScopeDecision({
+    changedFileRecords: [
+      records('M', 'packages/telegram-ops-bot/src/index.ts')[0],
+      records('M', 'docs/guide.md')[0],
+    ],
+    workspacePackages: ciWorkspacePackages,
+  });
+  assert.deepEqual(left, right);
+});
+
+test('CI scope keeps docs-only exclusive and blocking scopes monotonic', () => {
+  const baseRecords = records('M', 'packages/batch-backend/migrations/0042.sql');
+  const base = buildCiScopeDecision({
+    changedFileRecords: baseRecords,
+    workspacePackages: ciWorkspacePackages,
+  });
+  const mixed = buildCiScopeDecision({
+    changedFileRecords: [...baseRecords, ...records('M', 'docs/guide.md')],
+    workspacePackages: ciWorkspacePackages,
+  });
+  assert.equal(mixed.docs_only, false);
+  for (const scope of ['runtime', 'integration', 'backend_db_worker', 'telegram']) {
+    if (base[scope]) assert.equal(mixed[scope], true, `${scope} must remain enabled`);
+  }
+});
+
+function records(status, ...paths) {
+  return [{ status, paths }];
+}
+
+function scopeFlags(decision) {
+  return [
+    decision.runtime,
+    decision.integration,
+    decision.backend_db_worker,
+    decision.telegram,
+    decision.docs_only,
+  ];
+}
 
 test('name-status parsing preserves deletions and both rename paths', () => {
   const records = parseNameStatusZ(
