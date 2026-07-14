@@ -9,6 +9,7 @@ Use routed plans under `docs/plans/` for current work.
 - `harness-agentic-docs-upgrade/` - historical docs-tooling phase plans.
 - `orchestrator-library-only-roadmap/` - historical orchestrator stage plans.
 - `postgres-hardening-offline-migration/` - historical database hardening phase plans and evidence.
+- `schedule-homework-followups/` - shipped lesson-linked homework scheduling implementation plan.
 - `standalone/` - one-off plans that are no longer routed as active execution work.
 - `stt-multi-provider-refactor/` - historical STT provider phase plans.
 - `student-area-redesign/` - historical student-area phase and design-lock plans.

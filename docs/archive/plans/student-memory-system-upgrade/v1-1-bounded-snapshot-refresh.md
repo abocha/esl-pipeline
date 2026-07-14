@@ -20,12 +20,12 @@ batch-backend student-memory queue, existing batch-frontend Learning page.
 ## Meta
 
 - Audience: implementation agents, founder-maintainer, backend/frontend maintainers.
-- Status: `active`.
-- Last Verified Against: 2026-07-02 repo state.
+  - Status: `archived`.
+  - Last Verified Against: 2026-07-14 repo state.
 - Exit Trigger: archive after v1.1 is implemented, validated, and represented in the student-memory
   roadmap plus backend/frontend docs.
-- Current Focus: PR-ready validation for completed Phases 0-4; Phase 5 is Closed Alpha follow-up
-  polish.
+  - Archive Reason: Phases 0-4 shipped; evidence-gated Phase 5 ideas moved to the active
+    student-memory roadmap.
 - Source Design: [`docs/reference/STUDENT_MEMORY_V1_1_DESIGN.md`](../../reference/STUDENT_MEMORY_V1_1_DESIGN.md).
 - Release Anchor: [`docs/reference/PRODUCT_NORTH_STAR_AND_READINESS.md`](../../reference/PRODUCT_NORTH_STAR_AND_READINESS.md).
 

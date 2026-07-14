@@ -3,13 +3,14 @@
 ## Meta
 
 - Audience: maintainers and release/tooling agents.
-- Authority Level: active release-system execution plan.
-- Last Verified Against: 2026-05-17 repo state.
+- Authority Level: archived release-system execution record.
+- Last Verified Against: 2026-07-14 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: after release automation or contract-versioning PRs.
-- Status: `active`.
+- Status: `archived`.
 - Exit Trigger: archive after the private release model and contract-version automation are fully implemented and represented in versioning docs.
-- Current Focus: implement the private release-tag and contract-version automation until it is promoted into versioning docs.
+- Archive Reason: the private release and contract-version model is implemented and represented in
+  the current versioning reference and release automation.
 
 ## Summary
 
