@@ -76,7 +76,7 @@
   letter-spacing: 0.03em;
 }
 .calm-shell__mark--compact::before {
-  content: 'ESL';
+  content: "ESL";
 }
 
 .calm-shell__nav {
