@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [9.10.1] - 2026-07-14
+
+### Changed
+
+- Automated release from PR #133: optimize CI routing and refresh core documentation (https://github.com/abocha/esl-pipeline/pull/133)
+
 ## [9.10.0] - 2026-07-13
 
 ### Changed
