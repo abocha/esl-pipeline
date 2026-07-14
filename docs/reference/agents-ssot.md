@@ -4,7 +4,7 @@
 
 - Audience: maintainers and AI agents implementing or reviewing repo behavior.
 - Authority Level: authoritative contracts and invariants.
-- Last Verified Against: 2026-07-14 repo state.
+- Last Verified Against: 2026-07-15 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: monthly and after contract-level changes.
 - Status: `reference`.
@@ -164,15 +164,25 @@ Update together:
 Required repo checks for behavior changes:
 
 - During editing, run the narrowest relevant package, file, or `vitest related --run` lane first.
-- Before handoff, run `pnpm --silent run check:fast:agent` unless the task is docs-only and a more
-  specific docs lane is clearly sufficient.
+- After focused tests, choose one normal pre-push gate. Use
+  `pnpm --silent run check:fast:agent` by default, or use `pnpm check:pre-pr` directly when the
+  branch is already broad, cross-cutting, shared-contract, or toolchain-level. Clearly docs-only
+  work may use the documented docs-specific lanes.
 - `check:fast` is affected-package validation. It must include committed, staged, unstaged, and
   untracked changes; expand to workspace dependents; run cheap global guards; apply explicit
   path-risk rules; and fail conservatively to a broader lane when the affected scope is uncertain.
-- Run `pnpm check:pre-pr` before broad or cross-cutting PRs. This lane is the broad build,
+- `check:fast:dry-run` must show local working-tree scope separately from the committed hosted CI
+  preview. A `check:fast:agent` fallback to `check:pre-pr` satisfies the broad gate.
+- `check:pre-pr` is the direct gate for a branch already known to be broad. It runs the broad build,
   typecheck, lint, and core unit regression sweep.
+- A successful `pnpm check` subsumes both narrower pre-push gates.
 - Run `pnpm check` when reproducing CI locally or when DB, migration, worker, integration, or
   similarly broad behavior changed.
+
+Canonical blocking PR check names are `CI gate`, `static checks (node 24.x)`,
+`integration lane (blocking)`, `backend db + worker integration (blocking)`, and
+`telegram command-loop compose smoke`. `CI gate` is the aggregate result and should become the
+single branch-protection requirement when repository plan capabilities permit.
 
 Docs-heavy changes also require:
 

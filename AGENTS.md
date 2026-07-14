@@ -4,7 +4,7 @@
 
 - Audience: AI agents and maintainers.
 - Authority Level: router + compact operating contract.
-- Last Verified Against: 2026-07-14 repo state.
+- Last Verified Against: 2026-07-15 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly or after major workflow/tooling changes.
 - Status: `router`.
@@ -100,10 +100,14 @@ not treat quiet output as a hang. `check:fast` is an affected-package lane: it c
 workspace dependents, applies path-risk rules, and prints why packages or lanes were selected. On
 failure, read the reported artifact before rerunning raw commands. Use raw lanes only when the agent
 lane is missing or when the artifact shows that full stream output is needed for diagnosis.
+`check:fast:dry-run` prints the local working-tree scope and committed hosted CI preview separately.
 
-Run `pnpm check:pre-pr` before broad or cross-cutting PRs, and run `pnpm check` when reproducing CI
-or when DB, migration, worker, integration, or similarly broad behavior changed. For Vitest-heavy
-work, prefer the matching agent lane first:
+After focused tests, choose one normal pre-push gate: use `check:fast:agent` by default; use
+`check:pre-pr` directly when the branch is already broad, cross-cutting, shared-contract, or
+toolchain-level. A `check:fast:agent` fallback to `check:pre-pr` satisfies the broad gate, and a
+successful `pnpm check` subsumes both narrower gates. Clearly docs-only work may use the documented
+docs-specific lanes. Run `pnpm check` directly when reproducing CI or when DB, migration, worker,
+integration, or similarly broad behavior changed. For Vitest-heavy work, prefer the matching agent lane first:
 `pnpm --silent run test:unit:prebuilt:fast:agent`, `pnpm --silent run test:agent:html-publisher`,
 or another existing `:agent` test script.
 
