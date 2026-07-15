@@ -2,6 +2,7 @@
 set -Eeuo pipefail
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "${APP_DIR}/scripts/deploy/deploy-prod-images-plan.sh"
 COMPOSE_FILE="${COMPOSE_FILE:-${APP_DIR}/docker-compose.prod.yml}"
 PROJECT_NAME="${PROJECT_NAME:-esl-pipeline-prod}"
 DEPLOY_STATE_DIR="${DEPLOY_STATE_DIR:-/var/lib/esl-pipeline/deploy}"
@@ -34,7 +35,8 @@ Environment:
   DEPLOY_INCLUDE_EDGE     Defaults to true.
   DEPLOY_INCLUDE_OPS_BOT  Defaults to false. Also enabled by COMPOSE_PROFILES=ops-bot.
 
-The script deploys CI-built GHCR images tagged with the supplied Git SHA.
+The script deploys a complete CI-published GHCR release bundle tagged with the supplied Git SHA.
+Unchanged image digests are aliased locally; database and restart work follows the computed plan.
 Application rollback and database restore are separate operations.
 USAGE
 }
@@ -222,7 +224,7 @@ validate_state_file() {
     [[ "$line" == \#* ]] && continue
     key="${line%%=*}"
     case "$key" in
-      BATCH_BACKEND_IMAGE | BATCH_FRONTEND_IMAGE | TELEGRAM_OPS_BOT_IMAGE | BATCH_BACKEND_DIGEST | BATCH_FRONTEND_DIGEST | TELEGRAM_OPS_BOT_DIGEST) ;;
+      BATCH_BACKEND_IMAGE | BATCH_FRONTEND_IMAGE | TELEGRAM_OPS_BOT_IMAGE | BATCH_BACKEND_DIGEST | BATCH_FRONTEND_DIGEST | TELEGRAM_OPS_BOT_DIGEST | CADDY_CONFIG_DIGEST) ;;
       *) die "state file ${file} contains non-image key: ${key}" ;;
     esac
   done <"$file"
@@ -245,12 +247,6 @@ image_ref() {
   printf '%s/%s:%s' "$ESL_IMAGE_PREFIX" "$name" "$SHA"
 }
 
-pull_image() {
-  local image="$1"
-  info "Pulling ${image}"
-  docker pull "$image"
-}
-
 image_digest() {
   local image="$1"
   local digest
@@ -261,6 +257,59 @@ image_digest() {
   printf '%s' "$digest"
 }
 
+remote_image_digest() {
+  local image="$1"
+  local descriptor digest repository
+  descriptor="$(docker buildx imagetools inspect "$image" --format '{{json .Manifest}}' 2>/dev/null || true)"
+  if [[ "$descriptor" =~ \"digest\"[[:space:]]*:[[:space:]]*\"(sha256:[0-9a-f]+)\" ]]; then
+    digest="${BASH_REMATCH[1]}"
+  else
+    return 1
+  fi
+  repository="${image%:*}"
+  printf '%s@%s' "$repository" "$digest"
+}
+
+PREPARED_IMAGE_DIGEST=""
+prepare_image() {
+  local requested_image="$1"
+  local current_image="$2"
+  local current_digest="$3"
+  local requested_digest
+
+  requested_digest="$(remote_image_digest "$requested_image" || true)"
+  if [[ -n "$requested_digest" \
+    && "$requested_digest" == "$current_digest" \
+    && -n "$current_image" ]] \
+    && docker image inspect "$current_image" >/dev/null 2>&1; then
+    if [[ "$current_image" != "$requested_image" ]]; then
+      info "Aliasing unchanged image ${current_image} as ${requested_image}"
+      docker image tag "$current_image" "$requested_image"
+    else
+      info "Requested image is already available locally: ${requested_image}"
+    fi
+    PREPARED_IMAGE_DIGEST="$requested_digest"
+    return 0
+  fi
+
+  info "Pulling ${requested_image}"
+  docker pull "$requested_image"
+  PREPARED_IMAGE_DIGEST="${requested_digest:-$(image_digest "$requested_image")}"
+}
+
+state_value() {
+  local key="$1"
+  if [[ -f "$CURRENT_ENV" ]]; then
+    read_env_file_value "$CURRENT_ENV" "$key" || true
+  fi
+}
+
+caddy_config_digest() {
+  local caddyfile="${APP_DIR}/deploy/caddy/Caddyfile"
+  [[ -f "$caddyfile" ]] || die "Caddyfile not found: ${caddyfile}"
+  printf 'sha256:%s' "$(sha256sum "${APP_DIR}/deploy/caddy/Caddyfile" | awk '{ print $1 }')"
+}
+
 write_pending_env() {
   local backend_image="$1"
   local frontend_image="$2"
@@ -268,6 +317,7 @@ write_pending_env() {
   local backend_digest="$4"
   local frontend_digest="$5"
   local bot_digest="$6"
+  local caddy_digest="$7"
 
   PENDING_ENV="${DEPLOY_STATE_DIR}/pending-${SHA}.env"
   umask 0077
@@ -276,6 +326,7 @@ write_pending_env() {
     printf 'BATCH_FRONTEND_IMAGE=%s\n' "$frontend_image"
     printf 'BATCH_BACKEND_DIGEST=%s\n' "$backend_digest"
     printf 'BATCH_FRONTEND_DIGEST=%s\n' "$frontend_digest"
+    printf 'CADDY_CONFIG_DIGEST=%s\n' "$caddy_digest"
     if ops_bot_enabled; then
       printf 'TELEGRAM_OPS_BOT_IMAGE=%s\n' "$bot_image"
       printf 'TELEGRAM_OPS_BOT_DIGEST=%s\n' "$bot_digest"
@@ -391,7 +442,7 @@ assert_recent_logs_clean() {
 }
 
 recreate_edge_service() {
-  if ! edge_enabled; then
+  if ! edge_enabled || [[ "$EDGE_RESTART_REQUIRED" != "true" ]]; then
     return 0
   fi
 
@@ -425,13 +476,20 @@ run_smoke_checks() {
     assert_caddy_upstream_config
   fi
 
-  run_in_backend node dist/tools/migrate-db.js verify
-  run_in_backend node dist/tools/smoke-s3-storage.js
+  if [[ "$DATABASE_WORK_REQUIRED" == "true" ]]; then
+    run_in_backend node dist/tools/migrate-db.js verify
+    run_in_backend node dist/tools/smoke-s3-storage.js
 
-  assert_service_command batch-worker 'dist/transport/worker-runner.js'
-  assert_service_command transcribe-worker 'dist/transport/transcribe-worker.js'
-  assert_recent_logs_clean batch-worker
-  assert_recent_logs_clean transcribe-worker
+    assert_service_command batch-worker 'dist/transport/worker-runner.js'
+    assert_service_command transcribe-worker 'dist/transport/transcribe-worker.js'
+    assert_recent_logs_clean batch-worker
+    assert_recent_logs_clean transcribe-worker
+  fi
+}
+
+print_deployment_plan() {
+  info "Deployment plan: backend_changed=${BACKEND_CHANGED} frontend_changed=${FRONTEND_CHANGED} bot_changed=${BOT_CHANGED} caddy_changed=${CADDY_CONFIG_CHANGED}"
+  info "Deployment plan: initial=${INITIAL_DEPLOY} database_work=${DATABASE_WORK_REQUIRED} edge_restart=${EDGE_RESTART_REQUIRED} services=${DEPLOYMENT_SERVICES[*]:-none}"
 }
 
 append_deploy_log() {
@@ -492,7 +550,6 @@ main() {
   require_command sha256sum
   require_command find
   require_command flock
-  require_command aws
 
   [[ -f "$COMPOSE_FILE" ]] || die "compose file not found: ${COMPOSE_FILE}"
   [[ -f "${APP_DIR}/.env" ]] || die "missing required env file: ${APP_DIR}/.env"
@@ -514,35 +571,68 @@ main() {
   docker_root="$(docker info --format '{{.DockerRootDir}}')"
   check_disk_free "Docker data filesystem" "$docker_root"
 
-  local backend_image frontend_image bot_image backend_digest frontend_digest bot_digest
+  local backend_image frontend_image bot_image backend_digest frontend_digest bot_digest caddy_digest
+  local current_backend_image current_frontend_image current_bot_image
+  local current_backend_digest current_frontend_digest current_bot_digest current_caddy_digest
   backend_image="$(image_ref batch-backend)"
   frontend_image="$(image_ref batch-frontend)"
   bot_image="$(image_ref telegram-ops-bot)"
 
-  pull_image "$backend_image"
-  pull_image "$frontend_image"
+  current_backend_image="$(state_value BATCH_BACKEND_IMAGE)"
+  current_frontend_image="$(state_value BATCH_FRONTEND_IMAGE)"
+  current_bot_image="$(state_value TELEGRAM_OPS_BOT_IMAGE)"
+  current_backend_digest="$(state_value BATCH_BACKEND_DIGEST)"
+  current_frontend_digest="$(state_value BATCH_FRONTEND_DIGEST)"
+  current_bot_digest="$(state_value TELEGRAM_OPS_BOT_DIGEST)"
+  current_caddy_digest="$(state_value CADDY_CONFIG_DIGEST)"
+
+  prepare_image "$backend_image" "$current_backend_image" "$current_backend_digest"
+  backend_digest="$PREPARED_IMAGE_DIGEST"
+  prepare_image "$frontend_image" "$current_frontend_image" "$current_frontend_digest"
+  frontend_digest="$PREPARED_IMAGE_DIGEST"
   if ops_bot_enabled; then
-    pull_image "$bot_image"
-    bot_digest="$(image_digest "$bot_image")"
+    prepare_image "$bot_image" "$current_bot_image" "$current_bot_digest"
+    bot_digest="$PREPARED_IMAGE_DIGEST"
   else
     bot_digest=""
   fi
 
-  backend_digest="$(image_digest "$backend_image")"
-  frontend_digest="$(image_digest "$frontend_image")"
-  write_pending_env "$backend_image" "$frontend_image" "$bot_image" "$backend_digest" "$frontend_digest" "$bot_digest"
+  caddy_digest="$(caddy_config_digest)"
+  write_pending_env "$backend_image" "$frontend_image" "$bot_image" "$backend_digest" "$frontend_digest" "$bot_digest" "$caddy_digest"
+
+  local include_bot=false include_edge=false
+  ops_bot_enabled && include_bot=true
+  edge_enabled && include_edge=true
+  build_deployment_plan \
+    "$current_backend_digest" "$current_frontend_digest" "$current_bot_digest" "$current_caddy_digest" \
+    "$backend_digest" "$frontend_digest" "$bot_digest" "$caddy_digest" \
+    "$include_bot" "$include_edge"
+  print_deployment_plan
 
   compose_with_env "$PENDING_ENV" config --quiet
-  require_postgres_healthy
-  create_pre_migration_backup
-  run_migrations_once
 
   if [[ -f "$CURRENT_ENV" ]]; then
     copy_state_file "$CURRENT_ENV" "$PREVIOUS_ENV"
   fi
 
-  UPDATED_SERVICES=true
-  compose_with_env "$PENDING_ENV" up -d --no-build
+  if [[ "$DATABASE_WORK_REQUIRED" == "true" ]]; then
+    require_command aws
+    require_postgres_healthy
+    create_pre_migration_backup
+    run_migrations_once
+  fi
+
+  if [[ "${#DEPLOYMENT_SERVICES[@]}" -gt 0 ]]; then
+    UPDATED_SERVICES=true
+    if [[ "$INITIAL_DEPLOY" == "true" ]]; then
+      compose_with_env "$PENDING_ENV" up -d --no-build
+    else
+      compose_with_env "$PENDING_ENV" up -d --no-build --no-deps --force-recreate "${DEPLOYMENT_SERVICES[@]}"
+    fi
+  fi
+  if [[ "$EDGE_RESTART_REQUIRED" == "true" ]]; then
+    UPDATED_SERVICES=true
+  fi
   recreate_edge_service
   run_smoke_checks
 
