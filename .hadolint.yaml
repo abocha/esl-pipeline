@@ -1,2 +1,3 @@
 ignored:
+  # Alpine packages are refreshed through rebuilt base images instead of repository-snapshot pins.
   - DL3018

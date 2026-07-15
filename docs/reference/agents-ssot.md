@@ -104,6 +104,10 @@ For deep system maps, prefer the linked docs rather than growing this file again
 - Prefer CI-built Docker images tagged by Git commit SHA for production deployments. Avoid relying
   only on mutable tags such as `latest`; record the deployed Git SHA or image version in deployment
   evidence.
+- Every PR to `main` must carry exactly one label from `release:none`, `release:patch`,
+  `release:minor`, or `release:major`. `release:none` is valid only when the fail-closed release
+  policy classifies the complete PR file set as maintenance-only; deployable and unknown changes
+  require a versioned release.
 - Production Compose app services must be pull-based. Do not reintroduce production `build:`,
   `:local` app tags, `pull_policy: never`, or `up --build` for backend, frontend, bot, or worker
   services. Keep Docker orchestration and backups host-side rather than mounting `/var/run/docker.sock`
