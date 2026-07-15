@@ -85,7 +85,7 @@ services:
     restart: unless-stopped
 
   caddy-edge:
-    image: caddy:2-alpine
+    image: caddy:2.11-alpine
     depends_on:
       - batch-frontend
     volumes:
@@ -103,7 +103,7 @@ services:
       - edge
 
   postgres:
-    image: postgres:18.4-alpine
+    image: postgres:18.4-alpine3.24
     # Persistent DB (named volume).
     volumes:
       - postgres18_data:/var/lib/postgresql
@@ -147,7 +147,7 @@ services:
       retries: 10
 
   redis:
-    image: redis:8.6.3-alpine
+    image: redis:8.6-alpine3.23
     volumes:
       - redis_data:/data
     ports:

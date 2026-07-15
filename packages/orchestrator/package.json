@@ -32,8 +32,6 @@
     "postbuild": "node ./scripts/postbuild.js",
     "clean": "node -e \"fs.rmSync('dist', {recursive:true, force:true})\"",
     "dev": "vitest --watch",
-    "docker:build": "cd ../.. && docker build -f packages/orchestrator/Dockerfile -t esl-pipeline/orchestrator:local .",
-    "docker:run": "docker run --rm esl-pipeline/orchestrator:local",
     "prepack": "pnpm run build",
     "test": "pnpm run test:unit",
     "test:integration": "vitest run tests/pipeline.integration.test.ts",

@@ -243,6 +243,7 @@ jobs:
 
             docker buildx build \
               "${common_args[@]}" \
+              --pull \
               --cache-from "type=gha,scope=${name}" \
               --cache-to "type=gha,mode=max,scope=${name}" \
               --file "$dockerfile" \
