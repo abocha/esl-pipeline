@@ -22,9 +22,11 @@ jobs:
     timeout-minutes: 10
     outputs:
       should_release: ${{ steps.policy.outputs.should_release }}
+      build_backend: ${{ steps.image_scope.outputs.build_backend }}
+      build_frontend: ${{ steps.image_scope.outputs.build_frontend }}
+      build_bot: ${{ steps.image_scope.outputs.build_bot }}
     steps:
       - name: Collect release policy file records
-        if: contains(github.event.pull_request.labels.*.name, 'release:none')
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
         env:
           RELEASE_CHANGED_FILES: ${{ runner.temp }}/release-changed-files.json
@@ -78,6 +80,17 @@ jobs:
           fi
           echo "should_release=$should_release" >> "$GITHUB_OUTPUT"
 
+      - name: Resolve production image scope
+        id: image_scope
+        shell: bash
+        env:
+          RELEASE_CHANGED_FILES: ${{ runner.temp }}/release-changed-files.json
+        run: |
+          node scripts/release/resolve-production-image-scope.mjs \
+            --changed-files "${RELEASE_CHANGED_FILES}" \
+            --github-output "${GITHUB_OUTPUT}" \
+            --summary "${GITHUB_STEP_SUMMARY}"
+
   release:
     name: release + tag
     needs: release-decision
@@ -87,6 +100,7 @@ jobs:
     outputs:
       release_sha: ${{ steps.release_ref.outputs.sha }}
       release_tag: ${{ steps.release_ref.outputs.tag }}
+      previous_tag: ${{ steps.release_ref.outputs.previous_tag }}
     steps:
       - name: Checkout main
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -165,12 +179,15 @@ jobs:
             echo "Release commit resolved to invalid SHA: ${release_sha}"
             exit 1
           fi
-          echo "sha=${release_sha}" >> "$GITHUB_OUTPUT"
-          echo "tag=v${{ steps.next.outputs.next }}" >> "$GITHUB_OUTPUT"
+          {
+            echo "sha=${release_sha}"
+            echo "tag=v${{ steps.next.outputs.next }}"
+            echo "previous_tag=v${{ steps.next.outputs.current }}"
+          } >> "$GITHUB_OUTPUT"
 
   publish-images:
     name: publish production images
-    needs: release
+    needs: [release-decision, release]
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-24.04
     timeout-minutes: 90
@@ -178,6 +195,7 @@ jobs:
       IMAGE_PREFIX: ghcr.io/${{ github.repository }}
       RELEASE_SHA: ${{ needs.release.outputs.release_sha }}
       RELEASE_TAG: ${{ needs.release.outputs.release_tag }}
+      PREVIOUS_TAG: ${{ needs.release.outputs.previous_tag }}
     steps:
       - name: Checkout release commit
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -213,46 +231,95 @@ jobs:
             exit 1
           fi
 
-      - name: Docker buildx version
-        run: docker buildx version
-
-      - name: Create Docker buildx builder
-        run: docker buildx create --use --name esl-pipeline-builder
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c
 
       - name: Login to GHCR
-        run: echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
 
-      - name: Publish production images
+      - name: Build and publish backend
+        if: needs.release-decision.outputs.build_backend == 'true'
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
+        with:
+          context: .
+          file: packages/batch-backend/Dockerfile
+          platforms: linux/amd64
+          pull: true
+          push: true
+          provenance: false
+          sbom: false
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/batch-backend:${{ env.RELEASE_SHA }}
+            ${{ env.IMAGE_PREFIX }}/batch-backend:${{ env.RELEASE_TAG }}
+          labels: |
+            org.opencontainers.image.revision=${{ env.RELEASE_SHA }}
+            org.opencontainers.image.version=${{ env.RELEASE_TAG }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha,scope=batch-backend
+          cache-to: type=gha,mode=max,scope=batch-backend
+
+      - name: Build and publish frontend
+        if: needs.release-decision.outputs.build_frontend == 'true'
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
+        with:
+          context: .
+          file: packages/batch-frontend/Dockerfile
+          platforms: linux/amd64
+          pull: true
+          push: true
+          provenance: false
+          sbom: false
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/batch-frontend:${{ env.RELEASE_SHA }}
+            ${{ env.IMAGE_PREFIX }}/batch-frontend:${{ env.RELEASE_TAG }}
+          labels: |
+            org.opencontainers.image.revision=${{ env.RELEASE_SHA }}
+            org.opencontainers.image.version=${{ env.RELEASE_TAG }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha,scope=batch-frontend
+          cache-to: type=gha,mode=max,scope=batch-frontend
+
+      - name: Build and publish Telegram bot
+        if: needs.release-decision.outputs.build_bot == 'true'
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
+        with:
+          context: .
+          file: packages/telegram-ops-bot/Dockerfile
+          platforms: linux/amd64
+          pull: true
+          push: true
+          provenance: false
+          sbom: false
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/telegram-ops-bot:${{ env.RELEASE_SHA }}
+            ${{ env.IMAGE_PREFIX }}/telegram-ops-bot:${{ env.RELEASE_TAG }}
+          labels: |
+            org.opencontainers.image.revision=${{ env.RELEASE_SHA }}
+            org.opencontainers.image.version=${{ env.RELEASE_TAG }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha,scope=telegram-ops-bot
+          cache-to: type=gha,mode=max,scope=telegram-ops-bot
+
+      - name: Reuse unchanged production images
+        env:
+          BUILD_BACKEND: ${{ needs.release-decision.outputs.build_backend }}
+          BUILD_FRONTEND: ${{ needs.release-decision.outputs.build_frontend }}
+          BUILD_BOT: ${{ needs.release-decision.outputs.build_bot }}
         run: |
           set -euo pipefail
 
-          common_args=(
-            --platform linux/amd64
-            --provenance=false
-            --sbom=false
-            --label "org.opencontainers.image.revision=${RELEASE_SHA}"
-            --label "org.opencontainers.image.version=${RELEASE_TAG}"
-            --label "org.opencontainers.image.source=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}"
-          )
-
-          build_image() {
+          reuse_image() {
             local name="$1"
-            local dockerfile="$2"
-            local sha_image="${IMAGE_PREFIX}/${name}:${RELEASE_SHA}"
-            local version_image="${IMAGE_PREFIX}/${name}:${RELEASE_TAG}"
-
-            docker buildx build \
-              "${common_args[@]}" \
-              --pull \
-              --cache-from "type=gha,scope=${name}" \
-              --cache-to "type=gha,mode=max,scope=${name}" \
-              --file "$dockerfile" \
-              --tag "$sha_image" \
-              --tag "$version_image" \
-              --push \
-              .
+            docker buildx imagetools create \
+              --tag "${IMAGE_PREFIX}/${name}:${RELEASE_SHA}" \
+              --tag "${IMAGE_PREFIX}/${name}:${RELEASE_TAG}" \
+              "${IMAGE_PREFIX}/${name}:${PREVIOUS_TAG}"
           }
 
-          build_image batch-backend packages/batch-backend/Dockerfile
-          build_image batch-frontend packages/batch-frontend/Dockerfile
-          build_image telegram-ops-bot packages/telegram-ops-bot/Dockerfile
+          [[ "$BUILD_BACKEND" == "true" ]] || reuse_image batch-backend
+          [[ "$BUILD_FRONTEND" == "true" ]] || reuse_image batch-frontend
+          [[ "$BUILD_BOT" == "true" ]] || reuse_image telegram-ops-bot

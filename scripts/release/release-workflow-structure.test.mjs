@@ -46,11 +46,16 @@ test('release label guard validates release:none against complete PR file record
 test('merge workflow revalidates policy before deciding whether to release', () => {
   const decision = jobBlock(release, 'release-decision');
   assertChangedFileCollection(decision);
+  assert.doesNotMatch(decision, /name: Collect release policy file records\n\s+if:/u);
   assert.match(decision, /ref: main/u);
   assert.match(decision, /resolve-release-bump-from-pr\.mjs/u);
   assert.match(decision, /--changed-files "\$\{RELEASE_CHANGED_FILES\}"/u);
   assert.match(decision, /--json/u);
   assert.match(decision, /should_release/u);
+  assert.match(decision, /resolve-production-image-scope\.mjs/u);
+  assert.match(decision, /build_backend/u);
+  assert.match(decision, /build_frontend/u);
+  assert.match(decision, /build_bot/u);
 
   const releaseJob = jobBlock(release, 'release');
   assert.match(releaseJob, /needs: release-decision/u);
@@ -59,7 +64,20 @@ test('merge workflow revalidates policy before deciding whether to release', () 
 
 test('production images remain coupled to a successful release job', () => {
   const images = jobBlock(release, 'publish-images');
-  assert.match(images, /needs: release/u);
+  assert.match(images, /needs: \[release-decision, release\]/u);
   assert.match(images, /RELEASE_SHA: \$\{\{ needs\.release\.outputs\.release_sha \}\}/u);
   assert.match(images, /RELEASE_TAG: \$\{\{ needs\.release\.outputs\.release_tag \}\}/u);
+  assert.match(images, /PREVIOUS_TAG: \$\{\{ needs\.release\.outputs\.previous_tag \}\}/u);
+});
+
+test('production images use pinned Docker actions and preserve a complete release bundle', () => {
+  const images = jobBlock(release, 'publish-images');
+  assert.match(images, /docker\/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c/u);
+  assert.match(images, /docker\/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0/u);
+  assert.match(images, /docker\/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a/u);
+  for (const target of ['batch-backend', 'batch-frontend', 'telegram-ops-bot']) {
+    assert.match(images, new RegExp(`scope=${target}`, 'u'));
+  }
+  assert.match(images, /docker buildx imagetools create/u);
+  assert.match(images, /PREVIOUS_TAG/u);
 });

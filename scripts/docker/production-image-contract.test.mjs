@@ -108,11 +108,13 @@ test('production infrastructure stays on controlled official image lines', () =>
 });
 
 test('release publication pulls refreshed upstream bases', () => {
-  const buildStart = releaseWorkflow.indexOf('docker buildx build');
-  const publishEnd = releaseWorkflow.indexOf(' .', buildStart);
-  assert.notEqual(buildStart, -1);
-  assert.notEqual(publishEnd, -1);
-  assert.match(releaseWorkflow.slice(buildStart, publishEnd), /^\s*--pull \\$/mu);
+  assert.match(
+    releaseWorkflow,
+    /docker\/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a/u,
+  );
+  assert.match(releaseWorkflow, /^\s+pull: true$/mu);
+  assert.match(releaseWorkflow, /cache-from: type=gha,scope=batch-backend/u);
+  assert.match(releaseWorkflow, /cache-to: type=gha,mode=max,scope=batch-backend/u);
 });
 
 test('library-only orchestrator has no standalone image surface', () => {

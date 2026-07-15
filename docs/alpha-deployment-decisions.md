@@ -132,6 +132,9 @@ Development and deployment policy:
   production-only diagnosis, and emergency recovery.
 - Use CI-built images tagged by Git commit SHA for production deployment, and record the exact image
   refs/digests selected by the manual VPS deployment script.
+- Publish every deployable release as a complete three-image bundle. Build only affected images and
+  server-side retag unchanged manifests; on the VPS, compare resolved digests and run backup,
+  migration, and restart work only for the affected runtime dependency set.
 - Do not install a self-hosted CI runner on the production VPS.
 
 Current verification notes from the 2026-06-09 doc/repo pass:

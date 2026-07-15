@@ -231,10 +231,12 @@ BATCH_FRONTEND_IMAGE=ghcr.io/abocha/esl-pipeline/batch-frontend:<40-char-git-sha
 TELEGRAM_OPS_BOT_IMAGE=ghcr.io/abocha/esl-pipeline/telegram-ops-bot:<40-char-git-sha>
 ```
 
-The three GHCR application images are CI-built from Debian 13 slim Node stages for the backend,
-frontend builder, and Telegram bot, plus the controlled rootless nginx frontend runtime. The VPS
-pulls those reviewed SHA tags; it does not run `docker build`, pnpm install/build, or image mutation
-commands. PostgreSQL and Redis keep their existing official Alpine families and persistent volumes.
+The release workflow publishes a complete three-image GHCR bundle for every deployable release.
+Affected images are CI-built from Debian 13 slim Node stages for the backend, frontend builder, and
+Telegram bot, plus the controlled rootless nginx frontend runtime. Unaffected manifests are retagged
+server-side from the previous release. The VPS never runs `docker build` or pnpm install/build; it may
+add the new SHA tag to an already-local image when the resolved digest is unchanged. PostgreSQL and
+Redis keep their existing official Alpine families and persistent volumes.
 
 The manual deploy script writes image refs and digests only under:
 
@@ -244,6 +246,9 @@ The manual deploy script writes image refs and digests only under:
 /var/lib/esl-pipeline/deploy/known-good-images.env
 /var/lib/esl-pipeline/deploy/deployments.log
 ```
+
+The image state files also record `CADDY_CONFIG_DIGEST`. On the first deployment after upgrading an
+older state file, the missing digest intentionally causes one Caddy recreation.
 
 Do not put application secrets in those state files. Keep `.env` in the application
 checkout with restrictive permissions. Authenticate to GHCR on the VPS with a read-only production
@@ -259,6 +264,11 @@ Deploy after CI publishes images:
 cd /opt/esl-pipeline
 bash scripts/deploy/deploy-prod-images.sh <40-char-git-sha>
 ```
+
+The command is unchanged. Read the printed plan before completion: database backup/migration runs
+only when the backend digest changes, and Compose recreates only the affected dependency set. A
+release whose images and Caddy configuration are unchanged performs local SHA aliasing, state
+promotion, and bounded health checks without restarting services.
 
 ## Provider Keys and Cost Guardrails
 
