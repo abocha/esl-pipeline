@@ -79,6 +79,16 @@ test('production deploys use dedicated lockfiles instead of legacy mode', () => 
   }
 });
 
+test('portable deployments remove the build-only pnpm store', () => {
+  for (const name of ['backend', 'bot']) {
+    assert.match(
+      dockerfiles.get(name),
+      /rm -rf \/app\/deployed\/\.pnpm-store/u,
+      `${name}: deployed pnpm store cleanup`,
+    );
+  }
+});
+
 test('backend deployment includes only runtime-owned package files', () => {
   assert.deepEqual(backendPackage.files, ['dist', 'migrations', 'schema.sql']);
 });
