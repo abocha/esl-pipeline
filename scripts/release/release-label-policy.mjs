@@ -132,4 +132,3 @@ export function resolveReleaseSelection(labels, changedFilePayload) {
   }
   return { label, bump: null, releaseRequired: false };
 }
-
