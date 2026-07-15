@@ -33,8 +33,11 @@ If this guide conflicts with [`docs/reference/agents-ssot.md`](agents-ssot.md), 
 - Root workspace unit lane: `pnpm test:unit`
 - Root prebuilt unit lane: `pnpm test:unit:prebuilt`
 - Root fast prebuilt unit subset lane: `pnpm test:unit:prebuilt:fast`
+- Root tooling lane: `pnpm test:tooling`
+  - Runs every root `scripts/**/*.test.mjs` test.
+  - Runs inside `check`, `check:pre-pr`, and the always-run static CI guard.
+- Focused CI-routing tooling lane: `pnpm test:check-routing`
 - Root unit timing lane: `pnpm test:timings:unit`
-- Root legacy timing alias: `pnpm test:timings:frontend`
 - Root integration lane: `pnpm test:integration`
 - Root prebuilt integration lane: `pnpm test:integration:prebuilt`
 - Root backend DB + worker lane: `pnpm test:backend:db:worker`
@@ -50,10 +53,11 @@ If this guide conflicts with [`docs/reference/agents-ssot.md`](agents-ssot.md), 
 - Root affected dry-run: `pnpm check:fast:dry-run`
   - Prints local working-tree scope separately from the committed hosted CI preview.
 - Root broad pre-PR check: `pnpm check:pre-pr`
-  - Runs repo guards, contract consistency, build, typecheck, lint, and the fast prebuilt core unit
-    subset for orchestrator, batch-backend, and batch-frontend.
+  - Runs repo guards, contract consistency, root tooling tests, build, typecheck, lint, and the fast
+    prebuilt core unit subset for orchestrator, batch-backend, and batch-frontend.
 - Root full check: `pnpm check`
-  - Runs `build`, `typecheck`, `lint`, `test:unit:prebuilt`, `test:integration:prebuilt`, and the backend DB + worker lane.
+  - Runs root tooling tests, `build`, `typecheck`, `lint`, `test:unit:prebuilt`,
+    `test:integration:prebuilt`, and the backend DB + worker lane.
 - Root lint lane:
   - `pnpm lint` runs Biome for baseline JS/TS/TSX/JSON linting, then ESLint for specialized React and Vitest checks.
 - Root lane behavior:
@@ -63,7 +67,7 @@ If this guide conflicts with [`docs/reference/agents-ssot.md`](agents-ssot.md), 
   - Packages that need build artifacts should keep `test:unit` self-contained and expose `test:unit:prebuilt` as the same unit suite without the setup build step.
   - `pnpm test:integration` runs `pnpm build` first, then delegates to `pnpm test:integration:prebuilt`.
   - `pnpm test:integration:prebuilt` runs package-level integration scripts in parallel (`--if-present`).
-  - `pnpm test:timings:unit` runs the repo-wide timing lane across the targeted packages, and `pnpm test:timings:frontend` remains as a backwards-compatible alias.
+  - `pnpm test:timings:unit` runs the repo-wide timing lane across the targeted packages.
 
 ## Feedback Ladder
 
