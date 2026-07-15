@@ -7,7 +7,9 @@ const dockerfile = readFileSync(
   'utf8',
 );
 
-const runtimeStage = dockerfile.slice(dockerfile.indexOf('FROM node:24-alpine AS runtime'));
+const runtimeMarker = 'FROM node:24-trixie-slim AS runtime';
+const runtimeStart = dockerfile.indexOf(runtimeMarker);
+const runtimeStage = runtimeStart === -1 ? '' : dockerfile.slice(runtimeStart);
 
 test('backend runtime image creates writable tmp and uploads before dropping privileges', () => {
   const mkdirIndex = dockerfile.indexOf('mkdir -p /app/tmp /app/uploads');

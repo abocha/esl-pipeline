@@ -10,6 +10,8 @@ const dockerfiles = new Map([
   ['frontend', read('packages/batch-frontend/Dockerfile')],
   ['bot', read('packages/telegram-ops-bot/Dockerfile')],
 ]);
+const workspace = read('pnpm-workspace.yaml');
+const backendPackage = JSON.parse(read('packages/batch-backend/package.json'));
 
 test('production application Node stages use Debian 13 slim and committed pnpm', () => {
   for (const [name, dockerfile] of dockerfiles) {
@@ -49,4 +51,21 @@ test('runtime-specific system dependencies remain explicit', () => {
   assert.match(bot, /ca-certificates/u);
   assert.doesNotMatch(backend, /\bapk add\b/u);
   assert.doesNotMatch(bot, /\bapk add\b/u);
+});
+
+test('workspace deployment uses injected packages synchronized after build', () => {
+  assert.match(workspace, /^injectWorkspacePackages: true$/mu);
+  assert.match(workspace, /^syncInjectedDepsAfterScripts:\r?\n  - build$/mu);
+});
+
+test('production deploys use dedicated lockfiles instead of legacy mode', () => {
+  for (const name of ['backend', 'bot']) {
+    const dockerfile = dockerfiles.get(name);
+    assert.match(dockerfile, /deploy --prod \/app\/deployed/u, name);
+    assert.doesNotMatch(dockerfile, /deploy --legacy/u, name);
+  }
+});
+
+test('backend deployment includes only runtime-owned package files', () => {
+  assert.deepEqual(backendPackage.files, ['dist', 'migrations', 'schema.sql']);
 });

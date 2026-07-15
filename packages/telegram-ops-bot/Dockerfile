@@ -27,7 +27,7 @@ RUN find packages -name '*.tsbuildinfo' -delete
 RUN --mount=type=cache,id=pnpm-store,target=/app/.pnpm-store/v11 \
     pnpm --filter @esl-pipeline/telegram-ops-bot... install --offline --frozen-lockfile
 RUN pnpm -r --workspace-concurrency=1 --filter @esl-pipeline/telegram-ops-bot... run build \
-    && pnpm --filter @esl-pipeline/telegram-ops-bot deploy --legacy --prod /app/deployed
+    && pnpm --filter @esl-pipeline/telegram-ops-bot deploy --prod /app/deployed
 
 FROM node:24-trixie-slim AS runtime
 

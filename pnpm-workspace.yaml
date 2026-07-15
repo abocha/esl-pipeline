@@ -2,6 +2,10 @@ packages:
   - packages/*
   - packages/orchestrator/examples/*
 
+injectWorkspacePackages: true
+syncInjectedDepsAfterScripts:
+  - build
+
 storeDir: .pnpm-store/v11
 
 overrides:
