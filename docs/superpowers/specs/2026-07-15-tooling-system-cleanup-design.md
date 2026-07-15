@@ -131,6 +131,9 @@ git ls-files -z -- :(glob)**/Dockerfile*
 The runner normalizes tracked paths, fails if no Dockerfile is found, and launches Docker without a
 shell. The repository is mounted read-only at `/workspace`, the container working directory is
 `/workspace`, and Hadolint receives the committed configuration and every discovered path.
+Discovery itself is shell-free and runs Git from the repository root with the exact pathspec as a
+distinct argument. Before Docker starts, the CLI prints one deterministic summary containing the
+discovered count and normalized paths; successful Hadolint output is otherwise normally silent.
 
 The image is pinned by both readable version and immutable digest:
 
@@ -153,8 +156,9 @@ Hadolint non-zero exits are propagated unchanged. No temporary Dockerfile copies
 
 Focused Node tests cover null-delimited discovery parsing, deterministic path normalization, the
 exact digest pin, read-only mount, configuration argument, complete Dockerfile forwarding, no-shell
-execution, empty discovery, and exit propagation. The implementation accepts injected process
-functions so tests never need Docker or network access.
+execution for both Git and Docker, the exact Git pathspec/cwd/encoding, malformed discovery, empty
+discovery, deterministic summary output, controlled CLI startup errors, and exit propagation. The
+implementation accepts injected process functions so tests never need Docker or network access.
 
 The Docker commands become:
 
@@ -189,8 +193,9 @@ The expected Linux AMD64 archive hash is:
 ```
 
 The workflow structure test asserts the absence of the ShellCheck package install, the presence of
-the availability/version checks, the exact Actionlint version and checksum verification, the
-always-run tooling-test step, and the composite Docker lint command.
+the availability/version checks, and the exact Actionlint download/verification/extraction ordering
+for the same archive. It also locks the always-run tooling-test step and the exact package-script
+composition of the Docker lint command.
 
 ### Diagnostic and Docs-Workflow Hygiene
 
@@ -210,8 +215,9 @@ Docs gardening uploads the two lifecycle reports it already creates:
 
 Its rolling-issue lookup uses `github.paginate(github.rest.issues.listForRepo, ...)` with
 `per_page: 100`, so repositories with more than 100 historical issues do not create duplicate
-gardening issues. Workflow structural tests lock the retention, concurrency, complete artifact set,
-and pagination behavior.
+gardening issues. Workflow structural tests extract the relevant named steps rather than matching
+the workflow globally. They lock retention, concurrency, the complete artifact set, and the exact
+paginated issue assignment consumed by the subsequent lookup.
 
 ### Local Artifact Cleanup
 
