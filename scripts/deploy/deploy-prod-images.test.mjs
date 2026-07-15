@@ -4,8 +4,36 @@ import test from 'node:test';
 
 const deployScript = readFileSync(new URL('./deploy-prod-images.sh', import.meta.url), 'utf8');
 
-test('production deploy force-recreates caddy-edge when edge mode is enabled', () => {
+test('production deploy resolves remote digests and locally aliases unchanged images', () => {
+  assert.match(deployScript, /remote_image_digest\(\)/);
+  assert.match(deployScript, /docker buildx imagetools inspect/);
+  assert.match(deployScript, /docker image tag "\$current_image" "\$requested_image"/);
+  assert.match(deployScript, /prepare_image\(\)/);
+});
+
+test('production deploy persists Caddy configuration state and uses the pure planner', () => {
+  assert.match(deployScript, /deploy-prod-images-plan\.sh/);
+  assert.match(deployScript, /CADDY_CONFIG_DIGEST/);
+  assert.match(deployScript, /sha256sum "\$\{APP_DIR\}\/deploy\/caddy\/Caddyfile"/);
+  assert.match(deployScript, /build_deployment_plan/);
+});
+
+test('production deploy gates database and service work on the computed plan', () => {
+  assert.match(
+    deployScript,
+    /if \[\[ "\$DATABASE_WORK_REQUIRED" == "true" \]\]; then[\s\S]*create_pre_migration_backup[\s\S]*run_migrations_once/,
+  );
+  assert.match(
+    deployScript,
+    /if \[\[ "\$\{#DEPLOYMENT_SERVICES\[@\]\}" -gt 0 \]\]; then[\s\S]*"\$\{DEPLOYMENT_SERVICES\[@\]\}"/,
+  );
+  assert.match(deployScript, /--no-deps --force-recreate "\$\{DEPLOYMENT_SERVICES\[@\]\}"/);
+  assert.match(deployScript, /if \[\[ "\$INITIAL_DEPLOY" == "true" \]\]; then/);
+});
+
+test('production deploy force-recreates caddy-edge only when the plan requires it', () => {
   assert.match(deployScript, /recreate_edge_service\(\)/);
+  assert.match(deployScript, /EDGE_RESTART_REQUIRED/);
   assert.match(
     deployScript,
     /compose_with_env "\$PENDING_ENV" up -d --no-build --force-recreate caddy-edge/,
