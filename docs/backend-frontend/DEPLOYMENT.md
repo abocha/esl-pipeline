@@ -3,9 +3,9 @@
 ## Meta
 
 - Audience: maintainers/operators deploying batch services.
-- Read Time: 6 minutes.
+- Read Time: 7 minutes.
 - Authority Level: Deployment runbook.
-- Last Verified Against: 2026-06-27 repo state.
+- Last Verified Against: 2026-07-15 repo state.
 - Owner: backend/frontend maintainers + automation agents.
 - Review Cadence: monthly or after deployment workflow changes.
 - Status: `runbook`.
@@ -176,6 +176,26 @@ read-only at `/app/secrets`. Keep the real service-account file on the VPS at
 `/opt/esl-pipeline/.secrets/google-service-account.json`; production containers use
 `GOOGLE_APPLICATION_CREDENTIALS=/app/secrets/google-service-account.json`. Do not commit `.secrets`
 or replace it from git during deploys.
+
+### Frontend response delivery
+
+Caddy negotiates `zstd` or gzip for compressible public responses. Frontend nginx owns cache
+semantics: Vite's content-hashed `/assets/*` files use
+`Cache-Control: public, max-age=31536000, immutable`, while `index.html` uses `Cache-Control:
+no-cache` so each release can point browsers at new asset hashes. Missing `/assets/*` paths return
+404 rather than the SPA fallback.
+
+After deployment, copy the current entry JavaScript path from the served `index.html`, then verify
+the bounded response contract:
+
+```bash
+curl -fsSI https://<public-hostname>/index.html | grep -i '^cache-control: no-cache'
+curl -fsSI https://<public-hostname>/assets/<current-entry>.js \
+  | grep -i '^cache-control: public, max-age=31536000, immutable'
+curl -fsS -D - -o /dev/null -H 'Accept-Encoding: gzip' \
+  https://<public-hostname>/assets/<current-entry>.js \
+  | grep -iE '^(content-encoding: gzip|vary: Accept-Encoding)'
+```
 
 After DNS points to the VPS, verify:
 

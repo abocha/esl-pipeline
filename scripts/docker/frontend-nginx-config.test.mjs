@@ -14,3 +14,17 @@ test('frontend nginx strips only /api while preserving encoded slashes for backe
   assert.match(nginxConfig, /set\s+\$backend_request_uri\s+\/\$1;/);
   assert.match(nginxConfig, /proxy_pass\s+http:\/\/batch-backend:8080\$backend_request_uri;/);
 });
+
+test('frontend nginx caches content-hashed assets immutably without SPA fallback', () => {
+  assert.match(
+    nginxConfig,
+    /location \^~ \/assets\/ \{\s+try_files \$uri =404;\s+add_header Cache-Control "public, max-age=31536000, immutable" always;\s+\}/u,
+  );
+});
+
+test('frontend nginx requires SPA entry HTML to revalidate', () => {
+  assert.match(
+    nginxConfig,
+    /location = \/index\.html \{\s+add_header Cache-Control "no-cache" always;\s+\}/u,
+  );
+});
