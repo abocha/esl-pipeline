@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [9.10.5] - 2026-07-15
+
+### Changed
+
+- Automated release from PR #137: feat(deploy): skip unchanged production work (https://github.com/abocha/esl-pipeline/pull/137)
+
 ## [9.10.4] - 2026-07-15
 
 ### Changed
