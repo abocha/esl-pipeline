@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export const HADOLINT_IMAGE =
   'ghcr.io/hadolint/hadolint:v2.14.0@sha256:27086352fd5e1907ea2b934eb1023f217c5ae087992eb59fde121dce9c9ff21e';
@@ -17,13 +17,7 @@ export function parseNullDelimitedPaths(value) {
   }
 
   return [
-    ...new Set(
-      paths.map((entry) =>
-        entry
-          .replaceAll('\\', '/')
-          .replace(/^\.\//u, ''),
-      ),
-    ),
+    ...new Set(paths.map((entry) => entry.replaceAll('\\', '/').replace(/^\.\//u, ''))),
   ].sort();
 }
 
@@ -84,9 +78,7 @@ export function runHadolint({
     throw new Error('No tracked Dockerfiles found');
   }
 
-  log(
-    `[hadolint] linting ${dockerfiles.length} tracked Dockerfiles: ${dockerfiles.join(', ')}`,
-  );
+  log(`[hadolint] linting ${dockerfiles.length} tracked Dockerfiles: ${dockerfiles.join(', ')}`);
   const invocation = buildHadolintInvocation({ repoRoot, dockerfiles });
   const result = spawn(invocation.command, invocation.args, {
     shell: false,

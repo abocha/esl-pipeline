@@ -76,8 +76,5 @@ test('docker lint composes the canonical compose and Dockerfile lanes', () => {
     pkg.scripts['docker:lint:compose:fix'],
     'dclint docker-compose.yml docker-compose.prod.yml --fix',
   );
-  assert.equal(
-    pkg.scripts['docker:lint:dockerfiles'],
-    'node scripts/docker/run-hadolint.mjs',
-  );
+  assert.equal(pkg.scripts['docker:lint:dockerfiles'], 'node scripts/docker/run-hadolint.mjs');
 });
