@@ -6,8 +6,8 @@ import test from 'node:test';
 const ci = readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8');
 
 test('PR CI exposes a classifier and an always-running aggregate gate', () => {
-  assert.match(ci, /^  change-scope:/mu);
-  assert.match(ci, /^  ci-gate:/mu);
+  assert.match(ci, /^ {2}change-scope:/mu);
+  assert.match(ci, /^ {2}ci-gate:/mu);
   assert.match(jobBlock('ci-gate'), /if: \$\{\{ always\(\) \}\}/u);
   assert.doesNotMatch(ci, /if: \$\{\{ needs\.change-scope\.outputs\.[a-z_]+ \}\}/u);
 
@@ -87,9 +87,9 @@ test('diagnostics run weekly or manually and preserve producer failures', () => 
     new URL('../../.github/workflows/ci-diagnostics.yml', import.meta.url),
     'utf8',
   );
-  assert.match(diagnostics, /^  schedule:/mu);
+  assert.match(diagnostics, /^ {2}schedule:/mu);
   assert.match(diagnostics, /cron: ['"]17 5 \* \* 1['"]/u);
-  assert.match(diagnostics, /^  workflow_dispatch:/mu);
+  assert.match(diagnostics, /^ {2}workflow_dispatch:/mu);
   assert.doesNotMatch(diagnostics, /continue-on-error:/u);
 
   for (const [job, producerCommand, reportCommand, artifactPath] of [
@@ -111,15 +111,78 @@ test('diagnostics run weekly or manually and preserve producer failures', () => 
   }
 });
 
+test('static tooling bootstrap verifies bundled shellcheck before extracting verified actionlint', () => {
+  const bootstrap = namedStep(jobBlock('static-checks'), 'Verify repo hygiene tools');
+  assert.doesNotMatch(bootstrap, /apt-get (?:update|install)/u);
+  assert.match(bootstrap, /command -v shellcheck/u);
+  assert.match(bootstrap, /shellcheck --version/u);
+  assert.match(bootstrap, /actionlint_version=1\.7\.11/u);
+  assert.match(
+    bootstrap,
+    /actionlint_sha256=900919a84f2229bac68ca9cd4103ea297abc35e9689ebb842c6e34a3d1b01b0a/u,
+  );
+
+  const dollar = '$';
+  const archiveVariable = `${dollar}{actionlint_archive}`;
+  const checksumVariable = `${dollar}{actionlint_sha256}`;
+  const download = bootstrap.indexOf(`--output "$RUNNER_TEMP/${archiveVariable}"`);
+  const verify = bootstrap.indexOf(
+    `echo "${checksumVariable}  $RUNNER_TEMP/${archiveVariable}" | sha256sum --check`,
+  );
+  const extract = bootstrap.indexOf(
+    `tar -xzf "$RUNNER_TEMP/${archiveVariable}" -C "$RUNNER_TEMP/actionlint-bin"`,
+  );
+  assert.ok(download >= 0 && download < verify && verify < extract);
+});
+
+test('diagnostic workflows use explicit concurrency and bounded artifact retention', () => {
+  const diagnostics = readFileSync(
+    new URL('../../.github/workflows/ci-diagnostics.yml', import.meta.url),
+    'utf8',
+  );
+  assert.match(
+    diagnostics,
+    /^concurrency:\n {2}group: ci-diagnostics-\$\{\{ github\.ref \}\}\n {2}cancel-in-progress: true/mu,
+  );
+  for (const [job, step] of [
+    ['coverage-report', 'Upload coverage report artifact'],
+    ['unit-timings', 'Upload unit timing artifact'],
+  ]) {
+    assert.match(namedStep(workflowJobBlock(diagnostics, job), step), /retention-days: 30/u);
+  }
+
+  for (const [job, step] of [
+    ['static-checks', 'Upload docs health artifact on failure'],
+    ['backend-db-integration', 'Upload backend db + worker artifacts'],
+    ['telegram-compose-smoke', 'Upload Telegram compose smoke artifacts'],
+  ]) {
+    assert.match(namedStep(jobBlock(job), step), /retention-days: 14/u);
+  }
+});
+
 function jobBlock(job) {
   return workflowJobBlock(ci, job);
 }
 
 function workflowJobBlock(workflow, job) {
   const lines = workflow.split('\n');
-  const start = lines.findIndex((line) => line === `  ${job}:`);
+  const start = lines.indexOf(`  ${job}:`);
   assert.notEqual(start, -1, `missing ${job} job`);
-  const end = lines.findIndex((line, index) => index > start && /^  [a-z0-9_-]+:$/u.test(line));
+  const end = lines.findIndex((line, index) => index > start && /^ {2}[a-z0-9_-]+:$/u.test(line));
+  return lines.slice(start, end === -1 ? undefined : end).join('\n');
+}
+
+function namedStep(block, name) {
+  const lines = block.split('\n');
+  const start = lines.findIndex((line) => line.trim() === `- name: ${name}`);
+  assert.notEqual(start, -1, `missing ${name} step`);
+  const indent = lines[start].match(/^\s*/u)[0].length;
+  const end = lines.findIndex(
+    (line, index) =>
+      index > start &&
+      line.match(/^\s*/u)[0].length === indent &&
+      line.trim().startsWith('- name:'),
+  );
   return lines.slice(start, end === -1 ? undefined : end).join('\n');
 }
 

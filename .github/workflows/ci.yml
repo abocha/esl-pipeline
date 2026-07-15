@@ -135,13 +135,21 @@ jobs:
       - name: Tooling tests
         run: pnpm test:tooling
 
-      - name: Install repo hygiene tools
+      - name: Verify repo hygiene tools
+        shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y shellcheck
+          set -euo pipefail
+          command -v shellcheck
+          shellcheck --version
+          actionlint_version=1.7.11
+          actionlint_archive="actionlint_${actionlint_version}_linux_amd64.tar.gz"
+          actionlint_sha256=900919a84f2229bac68ca9cd4103ea297abc35e9689ebb842c6e34a3d1b01b0a
           mkdir -p "$RUNNER_TEMP/actionlint-bin"
-          curl -sSfL https://github.com/rhysd/actionlint/releases/download/v1.7.11/actionlint_1.7.11_linux_amd64.tar.gz \
-            | tar -xzf - -C "$RUNNER_TEMP/actionlint-bin"
+          curl --fail --silent --show-error --location \
+            "https://github.com/rhysd/actionlint/releases/download/v${actionlint_version}/${actionlint_archive}" \
+            --output "$RUNNER_TEMP/${actionlint_archive}"
+          echo "${actionlint_sha256}  $RUNNER_TEMP/${actionlint_archive}" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/${actionlint_archive}" -C "$RUNNER_TEMP/actionlint-bin"
           echo "$RUNNER_TEMP/actionlint-bin" >> "$GITHUB_PATH"
 
       - name: Lint GitHub workflows
@@ -181,6 +189,7 @@ jobs:
             tmp/docs-health-report.json
             tmp/docs-health-report.md
           if-no-files-found: warn
+          retention-days: 14
 
       - name: Fail if docs checks failed
         if: steps.docs_sanity.outcome == 'failure'
@@ -369,6 +378,7 @@ jobs:
           path: ${{ github.workspace }}/.artifacts/backend-db-integration
           include-hidden-files: true
           if-no-files-found: warn
+          retention-days: 14
 
   telegram-compose-smoke:
     name: telegram command-loop compose smoke
@@ -395,6 +405,7 @@ jobs:
           name: telegram-compose-smoke-artifacts
           path: ${{ github.workspace }}/.artifacts/telegram-compose-smoke
           include-hidden-files: true
+          retention-days: 14
           if-no-files-found: warn
 
   ci-gate:
