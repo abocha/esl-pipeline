@@ -18,6 +18,7 @@ function renderProdComposeConfig() {
       'config',
       '--format',
       'json',
+      '--no-env-resolution',
     ],
     {
       cwd: new URL('../..', import.meta.url),
