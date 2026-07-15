@@ -1,40 +1,49 @@
-# syntax=docker/dockerfile:1.6
+# syntax=docker/dockerfile:1.7
 
-FROM node:24-alpine AS build
+FROM node:24-trixie-slim AS build
 
-ENV PNPM_HOME=/root/.local/share/pnpm
-ENV PATH="${PNPM_HOME}:${PATH}" \
-    CI=true
+ENV CI=true
 
-RUN corepack enable && corepack prepare pnpm@10 --activate \
-    && apk add --no-cache \
+# hadolint ignore=DL3008
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
         ca-certificates \
         python3 \
         make \
-        g++
+        g++ \
+    && rm -rf /var/lib/apt/lists/* \
+    && corepack enable
 
 WORKDIR /app
 
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml tsconfig.base.json ./
 COPY .env.example ./.env.example
+
+RUN --mount=type=cache,id=pnpm-store,target=/app/.pnpm-store/v11 \
+    pnpm fetch --frozen-lockfile
+
 COPY packages ./packages
 
-RUN find packages -name '*.tsbuildinfo' -delete \
-    && pnpm --filter @esl-pipeline/batch-backend... install --frozen-lockfile \
-    && pnpm -r --workspace-concurrency=1 --filter @esl-pipeline/batch-backend... run build \
+RUN find packages -name '*.tsbuildinfo' -delete
+RUN --mount=type=cache,id=pnpm-store,target=/app/.pnpm-store/v11 \
+    pnpm --filter @esl-pipeline/batch-backend... install --offline --frozen-lockfile
+RUN pnpm -r --workspace-concurrency=1 --filter @esl-pipeline/batch-backend... run build \
     && pnpm --filter @esl-pipeline/batch-backend deploy --legacy --prod /app/deployed
 
-FROM node:24-alpine AS runtime
+FROM node:24-trixie-slim AS runtime
 
 ENV NODE_ENV=production \
     CI=true \
     PIPELINE_CWD=/app \
     FILESYSTEM_UPLOAD_DIR=/app/uploads
 
-RUN apk add --no-cache \
+# hadolint ignore=DL3008
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
-        ffmpeg
+        ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
