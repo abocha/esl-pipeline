@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [9.10.2] - 2026-07-15
+
+### Changed
+
+- Automated release from PR #134: chore(tooling): simplify repository validation (https://github.com/abocha/esl-pipeline/pull/134)
+
 ## [9.10.1] - 2026-07-14
 
 ### Changed
