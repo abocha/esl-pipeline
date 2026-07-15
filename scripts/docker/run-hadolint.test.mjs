@@ -14,9 +14,9 @@ import {
 test('tracked Dockerfile parsing removes leading dot segments, deduplicates, and sorts paths', () => {
   assert.deepEqual(
     parseNullDelimitedPaths(
-      './packages/orchestrator/Dockerfile\0packages/batch-backend/Dockerfile.dev\0packages/orchestrator/Dockerfile\0',
+      './packages/batch-frontend/Dockerfile\0packages/batch-backend/Dockerfile.dev\0packages/batch-frontend/Dockerfile\0',
     ),
-    ['packages/batch-backend/Dockerfile.dev', 'packages/orchestrator/Dockerfile'],
+    ['packages/batch-backend/Dockerfile.dev', 'packages/batch-frontend/Dockerfile'],
   );
 });
 
@@ -50,7 +50,7 @@ test('invocation uses the pinned image and a read-only repository mount', () => 
   );
   const invocation = buildHadolintInvocation({
     repoRoot: 'D:\\code\\esl-pipeline',
-    dockerfiles: ['packages/orchestrator/Dockerfile'],
+    dockerfiles: ['packages/batch-frontend/Dockerfile'],
   });
 
   assert.equal(invocation.command, 'docker');
@@ -66,7 +66,7 @@ test('invocation uses the pinned image and a read-only repository mount', () => 
     '--config',
     '.hadolint.yaml',
     '--no-color',
-    'packages/orchestrator/Dockerfile',
+    'packages/batch-frontend/Dockerfile',
   ]);
 });
 
@@ -80,7 +80,7 @@ test('runner forwards discovery and Docker invocations without a shell', () => {
       gitCalls.push(args);
       return {
         status: 0,
-        stdout: 'packages/orchestrator/Dockerfile\0packages/batch-backend/Dockerfile.dev\0',
+        stdout: 'packages/batch-frontend/Dockerfile\0packages/batch-backend/Dockerfile.dev\0',
         stderr: '',
       };
     },
@@ -104,10 +104,10 @@ test('runner forwards discovery and Docker invocations without a shell', () => {
   assert.deepEqual(dockerCalls[0][2], { shell: false, stdio: 'inherit' });
   assert.deepEqual(dockerCalls[0][1].slice(-2), [
     'packages/batch-backend/Dockerfile.dev',
-    'packages/orchestrator/Dockerfile',
+    'packages/batch-frontend/Dockerfile',
   ]);
   assert.deepEqual(logs, [
-    '[hadolint] linting 2 tracked Dockerfiles: packages/batch-backend/Dockerfile.dev, packages/orchestrator/Dockerfile',
+    '[hadolint] linting 2 tracked Dockerfiles: packages/batch-backend/Dockerfile.dev, packages/batch-frontend/Dockerfile',
   ]);
 });
 
