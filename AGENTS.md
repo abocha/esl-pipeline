@@ -134,7 +134,8 @@ never`, `up --build`, backend Docker socket mounts, or long-running backend Dock
 - Use short-lived feature branches; avoid direct pushes to `main`.
 - Use Conventional Commit style: `<type>(<scope>): <short imperative summary>`.
 - Every PR to `main` needs exactly one release label from
-  [`docs/reference/VERSIONING_MODEL.md`](docs/reference/VERSIONING_MODEL.md).
+  [`docs/reference/VERSIONING_MODEL.md`](docs/reference/VERSIONING_MODEL.md). Use `release:none`
+  only when the release guard confirms the complete change is maintenance-only.
 - PR validation text must list commands actually run.
 - Full PR workflow lives in [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md) and
   [`docs/operations/pr-style-release-notes.md`](docs/operations/pr-style-release-notes.md).
