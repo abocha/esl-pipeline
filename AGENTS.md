@@ -81,6 +81,8 @@ If resuming after context loss, start with
 - Install: `pnpm install`
 - Format write/check: `pnpm format:write`, then `pnpm format`
 - Repo hygiene: `pnpm run lint:repo-hygiene`
+- Root tooling tests: `pnpm test:tooling`
+- Docker configuration lint: `pnpm docker:lint`
 - Affected check (agent default): `pnpm --silent run check:fast:agent`
 - Affected check (raw human output): `pnpm check:fast`
 - Broad pre-PR check: `pnpm check:pre-pr`

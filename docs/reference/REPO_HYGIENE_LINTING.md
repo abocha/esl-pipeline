@@ -7,6 +7,8 @@ Purpose: record which non-code lint tools are promoted in this repo, which are a
 - Blocking in CI:
   - `actionlint`
   - `ShellCheck`
+  - `dclint`
+  - `Hadolint`
 - Advisory only:
   - `SQLFluff` via `pnpm run lint:sqlfluff`
 - Not promoted:
@@ -17,6 +19,10 @@ Purpose: record which non-code lint tools are promoted in this repo, which are a
 
 - `actionlint`: high-signal for GitHub Actions mistakes; low noise.
 - `ShellCheck`: high-signal for shell scripts already maintained in-repo.
+- `dclint`: validates development and production Compose configuration.
+- `Hadolint`: validates every tracked `Dockerfile*` through the official v2.14.0 image pinned by
+  digest. The repository is mounted read-only, so local use requires Docker but not a native
+  Hadolint installation.
 - `SQLFluff`: useful for SQL debt review, but current migrations/schema produce too much legacy style noise for a blocking gate.
 - `editorconfig-checker`: currently dominated by historical docs/archive indentation churn.
 - `dotenv-linter`: currently dominated by key-order and example-surface drift rather than meaningful correctness issues.
@@ -29,12 +35,19 @@ Purpose: record which non-code lint tools are promoted in this repo, which are a
 - Repo hygiene lane:
   - `pnpm run lint:repo-hygiene`
   - Runs `actionlint` + `ShellCheck`.
+- Docker configuration lane:
+  - `pnpm docker:lint` runs both Compose and Dockerfile linting.
+  - `pnpm docker:lint:compose` checks both Compose files.
+  - `pnpm docker:lint:compose:fix` applies dclint fixes to the Compose files only.
+  - `pnpm docker:lint:dockerfiles` runs containerized Hadolint across tracked Dockerfiles.
 - SQL advisory lane:
   - `pnpm run lint:sqlfluff`
 
 ## CI Behavior
 
-- GitHub Actions installs and runs `actionlint` and `ShellCheck` in the static-checks job.
+- GitHub Actions verifies the runner-provided ShellCheck, downloads checksum-verified Actionlint,
+  and runs both in the static-checks job.
+- Static checks run `pnpm docker:lint`, covering dclint and Hadolint.
 - Biome is already part of CI because the main lint step runs `pnpm lint`.
 - `SQLFluff` is intentionally not part of the blocking CI lane yet.
 
