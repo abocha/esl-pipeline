@@ -211,7 +211,26 @@ test('the complete tooling suite is a local and hosted guard', () => {
   assert.match(pkg.scripts['check:pre-pr'], /pnpm test:tooling/u);
   assert.match(ci, /- name: Tooling tests\n\s+run: pnpm test:tooling/u);
 });
+
+test('docker lint composes the canonical compose and Dockerfile lanes', () => {
+  assert.equal(
+    pkg.scripts['docker:lint'],
+    'pnpm docker:lint:compose && pnpm docker:lint:dockerfiles',
+  );
+  assert.equal(
+    pkg.scripts['docker:lint:compose'],
+    'dclint docker-compose.yml docker-compose.prod.yml --max-warnings 0',
+  );
+  assert.equal(
+    pkg.scripts['docker:lint:compose:fix'],
+    'dclint docker-compose.yml docker-compose.prod.yml --fix',
+  );
+  assert.equal(pkg.scripts['docker:lint:dockerfiles'], 'node scripts/docker/run-hadolint.mjs');
+});
 ```
+
+Add the Docker-lint assertion during Task 3 as the next RED contract; do not weaken its exact script
+strings.
 
 - [ ] **Step 2: Run the focused test and verify RED**
 
@@ -276,9 +295,11 @@ git commit -m "test(tooling): add complete root validation lane"
 
 - `HADOLINT_IMAGE` — exact approved tag+digest string.
 - `parseNullDelimitedPaths(value) -> string[]` — normalized, sorted, unique tracked paths.
+- `buildGitDiscoveryInvocation({ repoRoot }) -> { command, args, options }` — exact shell-free Git
+  discovery contract.
 - `buildHadolintInvocation({ repoRoot, dockerfiles }) -> { command, args }`.
-- `runHadolint({ repoRoot, runGit, spawn }) -> number` — injectable orchestration returning the child
-  exit status or throwing on process startup/discovery errors.
+- `runHadolint({ repoRoot, executeGit, spawn, log }) -> number` — injectable orchestration returning
+  the child exit status or throwing on process startup/discovery errors.
 
 - [ ] **Step 1: Write parser and invocation RED tests**
 
@@ -289,6 +310,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   HADOLINT_IMAGE,
+  buildGitDiscoveryInvocation,
   buildHadolintInvocation,
   parseNullDelimitedPaths,
   runHadolint,
@@ -301,6 +323,18 @@ test('tracked Dockerfile parsing normalizes, deduplicates, and sorts paths', () 
     ),
     ['packages/batch-backend/Dockerfile.dev', 'packages/orchestrator/Dockerfile'],
   );
+});
+
+test('discovery runs Git from the repository root without a shell', () => {
+  assert.deepEqual(buildGitDiscoveryInvocation({ repoRoot: 'D:\\code\\esl-pipeline' }), {
+    command: 'git',
+    args: ['ls-files', '-z', '--', ':(glob)**/Dockerfile*'],
+    options: {
+      cwd: 'D:\\code\\esl-pipeline',
+      encoding: 'utf8',
+      shell: false,
+    },
+  });
 });
 
 test('invocation uses the pinned image and a read-only repository mount', () => {
@@ -326,22 +360,33 @@ test('invocation uses the pinned image and a read-only repository mount', () => 
 
 test('runner fails on empty discovery and propagates lint status', () => {
   assert.throws(
-    () => runHadolint({ repoRoot: '/repo', runGit: () => '', spawn: () => ({ status: 0 }) }),
+    () =>
+      runHadolint({
+        repoRoot: '/repo',
+        executeGit: () => ({ status: 0, stdout: '' }),
+        spawn: () => ({ status: 0 }),
+        log: () => {},
+      }),
     /No tracked Dockerfiles/u,
   );
   assert.equal(
     runHadolint({
       repoRoot: '/repo',
-      runGit: () => 'Dockerfile\0',
+      executeGit: () => ({ status: 0, stdout: 'Dockerfile\0' }),
       spawn: () => ({ status: 7 }),
+      log: () => {},
     }),
     7,
   );
 });
 ```
 
-Also assert that the spawn options are `{ shell: false, stdio: 'inherit' }`, startup errors throw,
-and every discovered path appears after the Hadolint options.
+Also assert that malformed/truncated null-delimited output is rejected, Git receives the exact
+command/arguments/options above, Docker spawn options are `{ shell: false, stdio: 'inherit' }`,
+startup errors throw, every discovered path appears after the Hadolint options, and the injected
+logger receives a deterministic count/path summary before Docker runs. Add a CLI-level child-process
+test proving a startup error produces one controlled message and a non-zero exit without a stack
+trace.
 
 - [ ] **Step 2: Run the focused test and verify RED**
 
@@ -382,7 +427,13 @@ Build this argument shape:
 
 Use `fileURLToPath(import.meta.url)` to guard CLI execution. On CLI execution, set
 `process.exitCode` to the returned status. Throw concise errors for Git/spawn failures, malformed
-discovery, or a null child status.
+discovery, or a null child status. The CLI boundary catches those errors, writes one
+`[hadolint] error: ...` line, and sets exit code 1. Before Docker starts, print one deterministic
+summary:
+
+```text
+[hadolint] linting 6 tracked Dockerfiles: <sorted paths>
+```
 
 - [ ] **Step 4: Replace the Docker lint commands and explain `DL3018`**
 
@@ -445,15 +496,30 @@ Add a test against the static job block:
 
 ```js
 test('static tooling bootstrap verifies bundled shellcheck and actionlint checksum', () => {
-  const staticJob = jobBlock('static-checks');
-  assert.doesNotMatch(staticJob, /apt-get (?:update|install)/u);
-  assert.match(staticJob, /command -v shellcheck/u);
-  assert.match(staticJob, /shellcheck --version/u);
-  assert.match(staticJob, /actionlint_1\.7\.11_linux_amd64\.tar\.gz/u);
-  assert.match(staticJob, /900919a84f2229bac68ca9cd4103ea297abc35e9689ebb842c6e34a3d1b01b0a/u);
-  assert.match(staticJob, /sha256sum --check/u);
+  const bootstrap = namedStep(jobBlock('static-checks'), 'Verify repo hygiene tools');
+  assert.doesNotMatch(bootstrap, /apt-get (?:update|install)/u);
+  assert.match(bootstrap, /command -v shellcheck/u);
+  assert.match(bootstrap, /shellcheck --version/u);
+  assert.match(bootstrap, /actionlint_version=1\.7\.11/u);
+  assert.match(
+    bootstrap,
+    /actionlint_sha256=900919a84f2229bac68ca9cd4103ea297abc35e9689ebb842c6e34a3d1b01b0a/u,
+  );
+
+  const download = bootstrap.indexOf('--output "$RUNNER_TEMP/${actionlint_archive}"');
+  const verify = bootstrap.indexOf(
+    'echo "${actionlint_sha256}  $RUNNER_TEMP/${actionlint_archive}" | sha256sum --check',
+  );
+  const extract = bootstrap.indexOf(
+    'tar -xzf "$RUNNER_TEMP/${actionlint_archive}" -C "$RUNNER_TEMP/actionlint-bin"',
+  );
+  assert.ok(download >= 0 && download < verify && verify < extract);
 });
 ```
+
+Add a `namedStep(job, name)` helper that slices from the exact `- name:` line to the next sibling
+step. This makes the ordering assertion describe one bootstrap step and one archive variable rather
+than unrelated workflow text.
 
 Keep or add the Task 2/3 assertions for `pnpm test:tooling` and `pnpm docker:lint` in the same static
 job.
@@ -555,21 +621,21 @@ Use focused helpers rather than counting arbitrary `retention-days` strings.
 
 - [ ] **Step 2: Add a gardening-workflow RED test**
 
-Create `scripts/docs/docs-gardening-workflow.test.mjs` to read the workflow and assert:
+Create `scripts/docs/docs-gardening-workflow.test.mjs` with a named-step extractor, then assert:
 
 ```js
 test('gardening preserves the complete report set for thirty days', () => {
-  assert.match(workflow, /tmp\/docs-plan-lifecycle\.json/u);
-  assert.match(workflow, /tmp\/docs-plan-lifecycle\.md/u);
-  assert.match(workflow, /retention-days: 30/u);
+  const upload = namedStep(workflow, 'Upload docs gardening artifacts');
+  assert.match(upload, /tmp\/docs-plan-lifecycle\.json/u);
+  assert.match(upload, /tmp\/docs-plan-lifecycle\.md/u);
+  assert.match(upload, /retention-days: 30/u);
 });
 
 test('rolling issue lookup paginates through repository history', () => {
-  assert.match(workflow, /github\.paginate\(github\.rest\.issues\.listForRepo/u);
-  assert.doesNotMatch(
-    workflow,
-    /const \{ data: issues \} = await github\.rest\.issues\.listForRepo/u,
-  );
+  const update = namedStep(workflow, 'Update rolling docs-gardening issue');
+  assert.match(update, /const issues = await github\.paginate\(github\.rest\.issues\.listForRepo/u);
+  assert.match(update, /const existing = issues\.find/u);
+  assert.doesNotMatch(update, /const \{ data: issues \} = await/u);
 });
 ```
 
@@ -694,7 +760,7 @@ new ignore rule or delete untracked local artifacts.
 Run:
 
 ```bash
-rg -n "deps:check|deps:pin|deps:upgrade:safe|docker:backup|docker:dev:build|docs:gardening|test:env|test:timings:frontend|test:topo|pnpm hadolint|docker:lint:fix" AGENTS.md docs --glob '!docs/archive/**' --glob '!docs/superpowers/**'
+rg -n "deps:check|deps:pin|deps:upgrade:safe|docker:backup|pnpm docker:dev([[:space:]]|$)|docker:dev:build|docs:gardening|pnpm smoke([[:space:]]|$)|test:env|test:timings:frontend|test:topo|pnpm hadolint|docker:lint:fix" AGENTS.md docs --glob '!docs/archive/**' --glob '!docs/superpowers/**'
 ```
 
 Expected: no stale active references. Do not edit archives solely to clear historical matches.
@@ -737,10 +803,13 @@ git status --short
 git diff --stat origin/main...HEAD
 git diff --check origin/main...HEAD
 git diff --name-status origin/main...HEAD
+git diff
+git diff --cached
+git ls-files --others --exclude-standard
 ```
 
-Expected: only the files named by this plan; no generated `tmp/**`, local secrets, image layers, or
-unrelated edits.
+Expected: only the files named by this plan across committed, staged, unstaged, and untracked state;
+no generated `tmp/**`, local secrets, image layers, or unrelated edits.
 
 - [ ] **Step 2: Run focused tooling and Docker validation**
 
@@ -798,22 +867,37 @@ Review specifically for:
 
 Fix findings test-first and rerun the affected focused commands.
 
-- [ ] **Step 6: Create the PR without deployment**
+- [ ] **Step 6: Commit final formatting or review corrections and require a clean tree**
 
-Push the implementation branch and open one PR targeting `main` using the repository template and
-exactly one `release:patch` label. Validation text must list only commands actually run. The PR must
-state that this changes repository/CI tooling only and performs no deployment.
+If Steps 3–5 changed any file, stage only in-scope changes and create a focused Conventional Commit.
+Then rerun the focused command affected by the correction plus
+`pnpm --silent run check:fast:agent`. Finally run:
 
-- [ ] **Step 7: Watch blocking CI through completion**
+```bash
+git status --short
+git diff --check origin/main...HEAD
+```
 
-Monitor the PR checks and comments. Confirm that:
+Expected: empty status and no diff-check findings. Do not push a branch with validated but
+uncommitted changes.
+
+- [ ] **Step 7: Prepare the branch for PR submission without deployment**
+
+Prepare a PR summary using the repository template and select exactly one `release:patch` label.
+Validation text must list only commands actually run. Stop with a clean committed branch ready to
+push; do not push, open the PR, merge, or deploy until the user explicitly requests submission.
+
+- [ ] **Step 8: Record hosted verification expectations for submission**
+
+Record that the eventual PR should confirm:
 
 - `Tooling tests` runs in static CI;
 - `Lint Docker configuration` runs both dclint and Hadolint;
 - no ShellCheck apt installation occurs;
 - the aggregate CI gate reflects the blocking lanes.
 
-Fix only failures caused by this branch. Do not deploy or merge unless separately requested.
+These are hosted follow-up expectations, not claims made by local execution. Do not deploy or merge
+unless separately requested.
 
 ## Completion Summary Template
 
