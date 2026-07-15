@@ -126,6 +126,20 @@ Production app images are not built by these commands. For local production-imag
 or pull explicit image refs first, export the image variables above, then run `pnpm docker:prod` or
 `pnpm docker:prod:edge`.
 
+### Production image bases
+
+The backend, frontend builder, and Telegram bot Node stages use `node:24-trixie-slim`. Build and
+runtime stages stay on the same Debian/glibc family so native dependencies are never compiled
+against musl and run against glibc. The frontend runtime remains rootless nginx on the controlled
+Alpine-slim line; Caddy, PostgreSQL, and Redis remain on controlled official Alpine variants. See
+the three production Dockerfiles and [`docker-compose.prod.yml`](../../docker-compose.prod.yml) for
+the current lines.
+
+Release builds use `--pull` and controlled major/minor plus distribution tags so eligible Node,
+Debian, and infrastructure patch/security refreshes arrive through a normal merged release. Do not
+build production images on the Lightsail VPS, introduce a second worker image, or change the
+PostgreSQL base family without a separate data/collation migration design.
+
 ## Production HTTPS Edge Profile
 
 For the Ubuntu 24.04 VPS closed-alpha path, use the optional Caddy edge profile after DNS can point
