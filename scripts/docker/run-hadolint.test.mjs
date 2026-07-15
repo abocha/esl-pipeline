@@ -4,9 +4,9 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import {
-  HADOLINT_IMAGE,
   buildGitDiscoveryInvocation,
   buildHadolintInvocation,
+  HADOLINT_IMAGE,
   parseNullDelimitedPaths,
   runHadolint,
 } from './run-hadolint.mjs';
