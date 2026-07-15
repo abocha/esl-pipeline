@@ -64,12 +64,25 @@ Each PR targeting `main` must have exactly one label:
 1. `release:major`
 2. `release:minor`
 3. `release:patch`
+4. `release:none`
 
 The dedicated `Release Label Guard` workflow fails if none or multiple are present.
 
+`release:none` is reserved for changes that do not alter a deployable release. The guard accepts it
+only when the complete, count-validated PR file set is inside the repository's conservative
+maintenance-only allowlist: GitHub metadata, non-runtime documentation, selected repository test
+and documentation tooling, the Hadolint runner, and explicitly named lint/editor configuration.
+Unknown or mixed paths require a normal release label. `docs/prompt-gallery/**` is runtime content
+copied into the backend image and always requires a normal release.
+
+Choosing `release:patch`, `release:minor`, or `release:major` is always safe even when a change could
+qualify for `release:none`. The policy intentionally prefers an unnecessary release over suppressing
+a potentially deployable one.
+
 ## Release Workflow
 
-On each merged PR to `main`:
+On each merged PR to `main`, a decision job revalidates the final label and changed-file policy.
+For `release:patch`, `release:minor`, or `release:major`, it then:
 
 1. Resolve release bump from PR label.
 2. Compute next version from root `package.json`.
@@ -81,6 +94,10 @@ On each merged PR to `main`:
 
 The release workflow publishes images but does not deploy them. Production deployment remains a
 separate operator action using the immutable release SHA.
+
+For a valid `release:none` merge, the complete release transaction is skipped: no root version or
+changelog update, release commit, tag, or production image is created. Skipping only image
+publication is forbidden because it would create a release SHA without a deployable image bundle.
 
 Workflow file:
 

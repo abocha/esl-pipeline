@@ -1,37 +1,53 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { copyFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 const placeholderSha = '0000000000000000000000000000000000000000';
 const placeholderBackendImage = `ghcr.io/abocha/esl-pipeline/batch-backend:${placeholderSha}`;
 const placeholderFrontendImage = `ghcr.io/abocha/esl-pipeline/batch-frontend:${placeholderSha}`;
+const productionComposeFile = fileURLToPath(
+  new URL('../../docker-compose.prod.yml', import.meta.url),
+);
 
 function renderProdComposeConfig() {
-  const result = spawnSync(
-    'docker',
-    [
-      'compose',
-      '-p',
-      'esl-pipeline-prod',
-      '-f',
-      'docker-compose.prod.yml',
-      'config',
-      '--format',
-      'json',
-    ],
-    {
-      cwd: new URL('../..', import.meta.url),
-      env: {
-        ...process.env,
-        BATCH_BACKEND_IMAGE: placeholderBackendImage,
-        BATCH_FRONTEND_IMAGE: placeholderFrontendImage,
-      },
-      encoding: 'utf8',
-    },
-  );
+  const fixtureDir = mkdtempSync(path.join(tmpdir(), 'esl-pipeline-prod-compose-'));
+  const fixtureComposeFile = path.join(fixtureDir, 'docker-compose.prod.yml');
+  copyFileSync(productionComposeFile, fixtureComposeFile);
+  writeFileSync(path.join(fixtureDir, '.env'), '');
 
-  assert.equal(result.status, 0, result.stderr || result.stdout);
-  return JSON.parse(result.stdout);
+  try {
+    const result = spawnSync(
+      'docker',
+      [
+        'compose',
+        '-p',
+        'esl-pipeline-prod',
+        '-f',
+        fixtureComposeFile,
+        'config',
+        '--format',
+        'json',
+      ],
+      {
+        cwd: fixtureDir,
+        env: {
+          ...process.env,
+          BATCH_BACKEND_IMAGE: placeholderBackendImage,
+          BATCH_FRONTEND_IMAGE: placeholderFrontendImage,
+        },
+        encoding: 'utf8',
+      },
+    );
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    return JSON.parse(result.stdout);
+  } finally {
+    rmSync(fixtureDir, { recursive: true, force: true });
+  }
 }
 
 test('production Compose includes the dedicated student-memory worker service', () => {

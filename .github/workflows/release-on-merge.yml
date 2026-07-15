@@ -15,9 +15,73 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  release-decision:
+    name: resolve release publication
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      should_release: ${{ steps.policy.outputs.should_release }}
+    steps:
+      - name: Collect release policy file records
+        if: contains(github.event.pull_request.labels.*.name, 'release:none')
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
+        env:
+          RELEASE_CHANGED_FILES: ${{ runner.temp }}/release-changed-files.json
+        with:
+          script: |
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              per_page: 100,
+            });
+            const payload = {
+              expectedFileCount: context.payload.pull_request.changed_files,
+              files: files.map(({ filename, previous_filename }) => ({
+                filename,
+                ...(previous_filename ? { previous_filename } : {}),
+              })),
+            };
+            await require('node:fs/promises').writeFile(
+              process.env.RELEASE_CHANGED_FILES,
+              JSON.stringify(payload),
+            );
+
+      - name: Checkout trusted main
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: main
+
+      - name: Setup Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
+        with:
+          node-version-file: .nvmrc
+
+      - name: Resolve release policy
+        id: policy
+        shell: bash
+        env:
+          RELEASE_CHANGED_FILES: ${{ runner.temp }}/release-changed-files.json
+        run: |
+          set -euo pipefail
+          decision="$(node scripts/release/resolve-release-bump-from-pr.mjs \
+            --event "${GITHUB_EVENT_PATH}" \
+            --changed-files "${RELEASE_CHANGED_FILES}" \
+            --json)"
+          should_release="$(node -e \
+            'const value = JSON.parse(process.argv[1]); process.stdout.write(String(value.releaseRequired));' \
+            "$decision")"
+          if [[ "$should_release" != "true" && "$should_release" != "false" ]]; then
+            echo "Invalid release decision: $should_release"
+            exit 1
+          fi
+          echo "should_release=$should_release" >> "$GITHUB_OUTPUT"
+
   release:
     name: release + tag
-    if: github.event.pull_request.merged == true
+    needs: release-decision
+    if: github.event.pull_request.merged == true && needs.release-decision.outputs.should_release == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     outputs:

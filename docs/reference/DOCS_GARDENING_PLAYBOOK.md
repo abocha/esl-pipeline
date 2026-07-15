@@ -5,7 +5,7 @@
 - Audience: maintainers and AI agents curating docs quality.
 - Read Time: 5 minutes.
 - Authority Level: operational playbook.
-- Last Verified Against: 2026-05-12 repo state.
+- Last Verified Against: 2026-07-15 docs-gardening scripts and workflow.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: weekly.
 - Status: `reference`.
@@ -34,6 +34,10 @@
 - `tmp/docs-stale-active.json` / `.md`: heuristic queue for manual review.
 - `tmp/docs-plan-lifecycle.json` / `.md`: hard-gated plan lifecycle, editability, and current-focus report.
 - Rolling issue: triage surface for unresolved warnings and candidates.
+
+The weekly workflow uploads the complete artifact set above for 30 days. Its rolling-issue lookup
+paginates through all repository issues before deciding whether to create, update, reopen, or close
+the single gardening issue.
 
 ## Triage Rules
 

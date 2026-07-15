@@ -55,9 +55,12 @@ jobs:
             tmp/docs-gardening-issue.md
             tmp/docs-health-report.json
             tmp/docs-health-report.md
+            tmp/docs-plan-lifecycle.json
+            tmp/docs-plan-lifecycle.md
             tmp/docs-stale-active.json
             tmp/docs-stale-active.md
           if-no-files-found: warn
+          retention-days: 30
 
       - name: Update rolling docs-gardening issue
         if: always()
@@ -76,13 +79,15 @@ jobs:
             const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
             const body = `${issue.body.trimEnd()}\n\n## Run\n\n- ${runUrl}\n`;
 
-            const { data: issues } = await github.rest.issues.listForRepo({
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
               owner: context.repo.owner,
               repo: context.repo.repo,
               state: 'all',
               per_page: 100,
             });
-            const existing = issues.find((issue) => issue.title === title);
+            const existing = issues.find(
+              (candidate) => !candidate.pull_request && candidate.title === title,
+            );
 
             if (issue.action === 'close') {
               if (!existing) {
