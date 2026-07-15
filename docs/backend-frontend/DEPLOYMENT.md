@@ -47,9 +47,11 @@ resets.
 Use GitHub Actions as the clean validation authority on pull requests: install dependencies from
 scratch, lint, format-check, type-check, run automated tests, and test database migrations. The
 blocking CI lanes are listed below in [CI Expectations](#ci-expectations). After a PR merges, the
-release bot commits the version bump, pushes a `vX.Y.Z` tag, and then publishes custom production
-images to GHCR from that bot-authored release commit. Images are tagged with the release commit SHA
-and the release tag, and deployments use explicit SHA-tagged refs, not mutable tags such as `latest`.
+release bot commits the version bump, pushes a `vX.Y.Z` tag, and then publishes a complete production
+image bundle from that bot-authored release commit. Changed images are built; unchanged image
+manifests are retagged server-side in GHCR. Every bundle still has all three images under the release
+commit SHA and release tag, and deployments use explicit SHA-tagged refs, not mutable tags such as
+`latest`.
 
 Use the AWS Lightsail VPS as production runtime, not as the normal coding machine. SSH is for
 deployment, container/service status, logs, CPU/RAM/disk checks, reviewed migrations, backup/restore
@@ -135,10 +137,11 @@ Alpine-slim line; Caddy, PostgreSQL, and Redis remain on controlled official Alp
 the three production Dockerfiles and [`docker-compose.prod.yml`](../../docker-compose.prod.yml) for
 the current lines.
 
-Release builds use `--pull` and controlled major/minor plus distribution tags so eligible Node,
-Debian, and infrastructure patch/security refreshes arrive through a normal merged release. Do not
-build production images on the Lightsail VPS, introduce a second worker image, or change the
-PostgreSQL base family without a separate data/collation migration design.
+Changed-image release builds use `pull: true`, commit-pinned Docker actions, persistent per-image GHA
+build caches, and controlled major/minor plus distribution tags. Infrastructure-only releases reuse
+the prior image manifests without downloading and re-uploading their layers. Do not build production
+images on the Lightsail VPS, introduce a second worker image, or change the PostgreSQL base family
+without a separate data/collation migration design.
 
 ## Production HTTPS Edge Profile
 
@@ -217,10 +220,11 @@ A reviewed production deployment should broadly follow:
 1. PR CI passes before merge.
 2. After a deployable merge (`release:patch`, `release:minor`, or `release:major`), `Release On
 Merge` revalidates the release decision, creates the release commit and `vX.Y.Z` tag, then
-   publishes the backend, frontend, and Telegram bot images to GHCR with the release commit SHA tag
-   and the `vX.Y.Z` tag. A validated maintenance-only `release:none` merge creates no release or
-   images and therefore has nothing to deploy. `docs/prompt-gallery/**` is backend runtime content
-   and never qualifies for `release:none`.
+   publishes a complete backend, frontend, and Telegram bot bundle to GHCR with the release commit
+   SHA tag and the `vX.Y.Z` tag. It rebuilds only affected images and server-side retags unchanged
+   manifests from the previous version. A validated maintenance-only `release:none` merge creates no
+   release or images and therefore has nothing to deploy. `docs/prompt-gallery/**` is backend runtime
+   content and never qualifies for `release:none`.
 3. SSH to the VPS checkout and run:
 
    ```bash
@@ -233,9 +237,15 @@ Merge` revalidates the release decision, creates the release commit and `vX.Y.Z`
    Explicit shell exports still take precedence for one-off overrides. Do not put these values in
    the generated deploy state files under `/var/lib/esl-pipeline/deploy`.
 
-4. The script pulls the requested images, records image refs and digests under
-   `/var/lib/esl-pipeline/deploy`, checks disk space, verifies Postgres health, creates and verifies a
-   pre-migration backup, runs migrations once, updates services, and runs bounded smoke checks.
+4. The script resolves all requested manifest digests. If a digest is already the current local
+   image, it adds the new SHA tag locally instead of downloading the layers. It records image refs,
+   digests, and the Caddy configuration digest under `/var/lib/esl-pipeline/deploy`, then prints its
+   plan. Backend digest changes trigger Postgres health, a verified pre-migration backup, migrations,
+   backend workers, frontend, and Caddy recreation. Frontend changes recreate frontend and Caddy;
+   bot changes recreate the enabled bot; Caddy configuration changes recreate Caddy. An alias-only
+   release updates state and runs bounded health checks without migration or service restart work.
+   The first deploy after this behavior lands recreates Caddy once because older state has no Caddy
+   digest.
 5. If checks fail after services update, follow the script's application rollback instructions using
    `/var/lib/esl-pipeline/deploy/previous-images.env`.
 
