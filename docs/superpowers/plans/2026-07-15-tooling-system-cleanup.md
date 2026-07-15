@@ -294,7 +294,8 @@ git commit -m "test(tooling): add complete root validation lane"
 **Interfaces:**
 
 - `HADOLINT_IMAGE` — exact approved tag+digest string.
-- `parseNullDelimitedPaths(value) -> string[]` — normalized, sorted, unique tracked paths.
+- `parseNullDelimitedPaths(value) -> string[]` — path-preserving, sorted, unique tracked paths with
+  only an optional leading `./` removed.
 - `buildGitDiscoveryInvocation({ repoRoot }) -> { command, args, options }` — exact shell-free Git
   discovery contract.
 - `buildHadolintInvocation({ repoRoot, dockerfiles }) -> { command, args }`.
@@ -316,7 +317,7 @@ import {
   runHadolint,
 } from './run-hadolint.mjs';
 
-test('tracked Dockerfile parsing normalizes, deduplicates, and sorts paths', () => {
+test('tracked Dockerfile parsing removes leading dot segments, deduplicates, and sorts paths', () => {
   assert.deepEqual(
     parseNullDelimitedPaths(
       'packages\\orchestrator\\Dockerfile\0packages/batch-backend/Dockerfile.dev\0packages/orchestrator/Dockerfile\0',
@@ -626,8 +627,21 @@ Create `scripts/docs/docs-gardening-workflow.test.mjs` with a named-step extract
 ```js
 test('gardening preserves the complete report set for thirty days', () => {
   const upload = namedStep(workflow, 'Upload docs gardening artifacts');
-  assert.match(upload, /tmp\/docs-plan-lifecycle\.json/u);
-  assert.match(upload, /tmp\/docs-plan-lifecycle\.md/u);
+  const artifactPaths = upload
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('tmp/'));
+  assert.deepEqual(artifactPaths, [
+    'tmp/docs-gardening.json',
+    'tmp/docs-gardening-issue.json',
+    'tmp/docs-gardening-issue.md',
+    'tmp/docs-health-report.json',
+    'tmp/docs-health-report.md',
+    'tmp/docs-plan-lifecycle.json',
+    'tmp/docs-plan-lifecycle.md',
+    'tmp/docs-stale-active.json',
+    'tmp/docs-stale-active.md',
+  ]);
   assert.match(upload, /retention-days: 30/u);
 });
 
@@ -635,6 +649,7 @@ test('rolling issue lookup paginates through repository history', () => {
   const update = namedStep(workflow, 'Update rolling docs-gardening issue');
   assert.match(update, /const issues = await github\.paginate\(github\.rest\.issues\.listForRepo/u);
   assert.match(update, /const existing = issues\.find/u);
+  assert.match(update, /!candidate\.pull_request/u);
   assert.doesNotMatch(update, /const \{ data: issues \} = await/u);
 });
 ```
@@ -674,9 +689,11 @@ const issues = await github.paginate(github.rest.issues.listForRepo, {
   state: 'all',
   per_page: 100,
 });
+const existing = issues.find((candidate) => !candidate.pull_request && candidate.title === title);
 ```
 
-Preserve the existing title selection, issue create/update/close behavior, and permissions.
+Preserve the existing issue create/update/close behavior and permissions. Never select a pull
+request returned by the repository-issues endpoint.
 
 - [ ] **Step 6: Run focused and complete tooling tests**
 

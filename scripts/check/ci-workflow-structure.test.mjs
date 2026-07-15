@@ -119,6 +119,14 @@ test('static tooling bootstrap verifies bundled shellcheck before extracting ver
   assert.match(bootstrap, /actionlint_version=1\.7\.11/u);
   assert.match(
     bootstrap,
+    /actionlint_archive="actionlint_\$\{actionlint_version\}_linux_amd64\.tar\.gz"/u,
+  );
+  assert.match(
+    bootstrap,
+    /https:\/\/github\.com\/rhysd\/actionlint\/releases\/download\/v\$\{actionlint_version\}\/\$\{actionlint_archive\}/u,
+  );
+  assert.match(
+    bootstrap,
     /actionlint_sha256=900919a84f2229bac68ca9cd4103ea297abc35e9689ebb842c6e34a3d1b01b0a/u,
   );
 
@@ -133,6 +141,12 @@ test('static tooling bootstrap verifies bundled shellcheck before extracting ver
     `tar -xzf "$RUNNER_TEMP/${archiveVariable}" -C "$RUNNER_TEMP/actionlint-bin"`,
   );
   assert.ok(download >= 0 && download < verify && verify < extract);
+});
+
+test('tooling tests remain an unconditional static guard', () => {
+  const step = namedStep(jobBlock('static-checks'), 'Tooling tests');
+  assert.match(step, /run: pnpm test:tooling/u);
+  assert.doesNotMatch(step, /^\s+if:/mu);
 });
 
 test('diagnostic workflows use explicit concurrency and bounded artifact retention', () => {

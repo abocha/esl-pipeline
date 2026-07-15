@@ -128,12 +128,13 @@ also verify these three integrations.
 git ls-files -z -- :(glob)**/Dockerfile*
 ```
 
-The runner normalizes tracked paths, fails if no Dockerfile is found, and launches Docker without a
-shell. The repository is mounted read-only at `/workspace`, the container working directory is
-`/workspace`, and Hadolint receives the committed configuration and every discovered path.
+The runner preserves Git path bytes except for an optional leading `./`, deduplicates and sorts the
+paths, fails if no Dockerfile is found, and launches Docker without a shell. The repository is
+mounted read-only at `/workspace`, the container working directory is `/workspace`, and Hadolint
+receives the committed configuration and every discovered path.
 Discovery itself is shell-free and runs Git from the repository root with the exact pathspec as a
 distinct argument. Before Docker starts, the CLI prints one deterministic summary containing the
-discovered count and normalized paths; successful Hadolint output is otherwise normally silent.
+discovered count and sorted paths; successful Hadolint output is otherwise normally silent.
 
 The image is pinned by both readable version and immutable digest:
 
@@ -154,8 +155,8 @@ docker run --rm
 `spawnSync` or `spawn` uses an argument array with inherited stdio. Docker startup failures and
 Hadolint non-zero exits are propagated unchanged. No temporary Dockerfile copies are created.
 
-Focused Node tests cover null-delimited discovery parsing, deterministic path normalization, the
-exact digest pin, read-only mount, configuration argument, complete Dockerfile forwarding, no-shell
+Focused Node tests cover null-delimited discovery parsing, path preservation and deterministic
+sorting, the exact digest pin, read-only mount, configuration argument, complete Dockerfile forwarding, no-shell
 execution for both Git and Docker, the exact Git pathspec/cwd/encoding, malformed discovery, empty
 discovery, deterministic summary output, controlled CLI startup errors, and exit propagation. The
 implementation accepts injected process functions so tests never need Docker or network access.
@@ -215,9 +216,11 @@ Docs gardening uploads the two lifecycle reports it already creates:
 
 Its rolling-issue lookup uses `github.paginate(github.rest.issues.listForRepo, ...)` with
 `per_page: 100`, so repositories with more than 100 historical issues do not create duplicate
-gardening issues. Workflow structural tests extract the relevant named steps rather than matching
-the workflow globally. They lock retention, concurrency, the complete artifact set, and the exact
-paginated issue assignment consumed by the subsequent lookup.
+gardening issues. Because this endpoint also returns pull requests, title matching explicitly
+excludes entries with `pull_request` metadata. Workflow structural tests extract the relevant named
+steps rather than matching the workflow globally. They lock retention, concurrency, the exact
+nine-file artifact set, and the paginated issue assignment and pull-request exclusion consumed by
+the subsequent lookup.
 
 ### Local Artifact Cleanup
 

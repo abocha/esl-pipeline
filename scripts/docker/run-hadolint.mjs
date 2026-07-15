@@ -16,9 +16,7 @@ export function parseNullDelimitedPaths(value) {
     throw new Error('Git Dockerfile output contains an empty path');
   }
 
-  return [
-    ...new Set(paths.map((entry) => entry.replaceAll('\\', '/').replace(/^\.\//u, ''))),
-  ].sort();
+  return [...new Set(paths.map((entry) => entry.replace(/^\.\//u, '')))].sort();
 }
 
 export function buildGitDiscoveryInvocation({ repoRoot }) {
