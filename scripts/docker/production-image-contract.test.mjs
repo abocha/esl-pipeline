@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const root = new URL('../../', import.meta.url);
@@ -12,6 +12,19 @@ const dockerfiles = new Map([
 ]);
 const workspace = read('pnpm-workspace.yaml');
 const backendPackage = JSON.parse(read('packages/batch-backend/package.json'));
+const compose = read('docker-compose.prod.yml').replaceAll('\r\n', '\n');
+const releaseWorkflow = read('.github/workflows/release-on-merge.yml');
+const orchestratorPackage = JSON.parse(read('packages/orchestrator/package.json'));
+
+const composeService = (serviceName) => {
+  const heading = `\n  ${serviceName}:\n`;
+  const start = compose.indexOf(heading);
+  assert.notEqual(start, -1, `${serviceName}: service exists`);
+  const bodyStart = start + heading.length;
+  const nextService = /\n  \S[^\n]*:\n/u.exec(compose.slice(bodyStart));
+  const end = nextService ? bodyStart + nextService.index : undefined;
+  return compose.slice(start, end);
+};
 
 test('production application Node stages use Debian 13 slim and committed pnpm', () => {
   for (const [name, dockerfile] of dockerfiles) {
@@ -68,4 +81,25 @@ test('production deploys use dedicated lockfiles instead of legacy mode', () => 
 
 test('backend deployment includes only runtime-owned package files', () => {
   assert.deepEqual(backendPackage.files, ['dist', 'migrations', 'schema.sql']);
+});
+
+test('production infrastructure stays on controlled official image lines', () => {
+  assert.match(dockerfiles.get('frontend'), /FROM nginx:1\.31-alpine3\.23-slim AS runtime/u);
+  assert.match(composeService('caddy-edge'), /^    image: caddy:2\.11-alpine$/mu);
+  assert.match(composeService('postgres'), /^    image: postgres:18\.4-alpine3\.24$/mu);
+  assert.match(composeService('redis'), /^    image: redis:8\.6-alpine3\.23$/mu);
+});
+
+test('release publication pulls refreshed upstream bases', () => {
+  const buildStart = releaseWorkflow.indexOf('docker buildx build');
+  const publishEnd = releaseWorkflow.indexOf(' .', buildStart);
+  assert.notEqual(buildStart, -1);
+  assert.notEqual(publishEnd, -1);
+  assert.match(releaseWorkflow.slice(buildStart, publishEnd), /^\s*--pull \\$/mu);
+});
+
+test('library-only orchestrator has no standalone image surface', () => {
+  assert.equal(existsSync(new URL('packages/orchestrator/Dockerfile', root)), false);
+  assert.equal(orchestratorPackage.scripts['docker:build'], undefined);
+  assert.equal(orchestratorPackage.scripts['docker:run'], undefined);
 });
