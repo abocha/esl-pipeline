@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs';
 import process from 'node:process';
+
 import { resolveReleaseSelection } from './release-label-policy.mjs';
 
 function die(message) {

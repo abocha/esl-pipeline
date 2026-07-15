@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
@@ -89,10 +89,7 @@ test('maintenance-only paths accept release:none', () => {
 
   assert.deepEqual(classifyReleaseImpact(paths), { releaseRequired: false, reasons: [] });
   assert.deepEqual(
-    resolveReleaseSelection(
-      ['release:none'],
-      changed(...paths.map((path) => file(path))),
-    ),
+    resolveReleaseSelection(['release:none'], changed(...paths.map((path) => file(path)))),
     {
       label: 'release:none',
       bump: null,
@@ -156,16 +153,13 @@ test('changed-file payload validates count, cap, records, and both rename paths'
     () => flattenChangedFilePayload({ expectedFileCount: 1, files: [{}] }),
     /filename/u,
   );
-  assert.deepEqual(
-    flattenChangedFilePayload(changed(file('docs/new.md', 'packages/old.ts'))),
-    ['docs/new.md', 'packages/old.ts'],
-  );
+  assert.deepEqual(flattenChangedFilePayload(changed(file('docs/new.md', 'packages/old.ts'))), [
+    'docs/new.md',
+    'packages/old.ts',
+  ]);
   assert.throws(
     () =>
-      resolveReleaseSelection(
-        ['release:none'],
-        changed(file('docs/new.md', 'packages/old.ts')),
-      ),
+      resolveReleaseSelection(['release:none'], changed(file('docs/new.md', 'packages/old.ts'))),
     /packages\/old\.ts/u,
   );
 });

@@ -26,12 +26,12 @@ function jobBlock(workflow, job) {
 }
 
 function assertChangedFileCollection(workflowBlock) {
+  assert.match(workflowBlock, /actions\/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd/u);
+  assert.match(workflowBlock, /github\.paginate\(github\.rest\.pulls\.listFiles/u);
   assert.match(
     workflowBlock,
-    /actions\/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd/u,
+    /expectedFileCount:\s*context\.payload\.pull_request\.changed_files/u,
   );
-  assert.match(workflowBlock, /github\.paginate\(github\.rest\.pulls\.listFiles/u);
-  assert.match(workflowBlock, /expectedFileCount:\s*context\.payload\.pull_request\.changed_files/u);
   assert.match(workflowBlock, /previous_filename/u);
   assert.match(workflowBlock, /RELEASE_CHANGED_FILES/u);
 }
