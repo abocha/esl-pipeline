@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [9.10.4] - 2026-07-15
+
+### Changed
+
+- Automated release from PR #136: perf(frontend): compress and cache production assets (https://github.com/abocha/esl-pipeline/pull/136)
+
 ## [9.10.3] - 2026-07-15
 
 ### Changed
