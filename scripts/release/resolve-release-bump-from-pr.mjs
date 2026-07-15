@@ -1,12 +1,7 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs';
 import process from 'node:process';
-
-const RELEASE_LABEL_TO_BUMP = new Map([
-  ['release:major', 'major'],
-  ['release:minor', 'minor'],
-  ['release:patch', 'patch'],
-]);
+import { resolveReleaseSelection } from './release-label-policy.mjs';
 
 function die(message) {
   console.error(`[resolve-release-bump-from-pr] error: ${message}`);
@@ -14,7 +9,7 @@ function die(message) {
 }
 
 function parseArgs(argv) {
-  const args = { event: '', json: false };
+  const args = { event: '', changedFiles: '', json: false };
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i];
     if (token === '--event') {
@@ -26,23 +21,20 @@ function parseArgs(argv) {
       args.json = true;
       continue;
     }
+    if (token === '--changed-files') {
+      args.changedFiles = argv[i + 1] ?? '';
+      i += 1;
+      continue;
+    }
     if (token === '-h' || token === '--help') {
       console.log(
-        'Usage: node scripts/release/resolve-release-bump-from-pr.mjs --event <github-event.json> [--json]',
+        'Usage: node scripts/release/resolve-release-bump-from-pr.mjs --event <github-event.json> [--changed-files <json>] [--json]',
       );
       process.exit(0);
     }
     die(`Unknown argument: ${token}`);
   }
   return args;
-}
-
-function normalizeLabelName(label) {
-  if (typeof label === 'string') return label.trim();
-  if (label && typeof label === 'object' && typeof label.name === 'string') {
-    return label.name.trim();
-  }
-  return '';
 }
 
 function main() {
@@ -58,36 +50,38 @@ function main() {
     die(`Unable to read event payload: ${error instanceof Error ? error.message : String(error)}`);
   }
 
-  const labels = Array.isArray(event?.pull_request?.labels)
-    ? event.pull_request.labels.map(normalizeLabelName).filter(Boolean)
-    : [];
-
-  const matchedLabels = labels.filter((name) => RELEASE_LABEL_TO_BUMP.has(name));
-
-  if (matchedLabels.length !== 1) {
-    const found = matchedLabels.length === 0 ? 'none' : matchedLabels.join(', ');
-    die(
-      `Expected exactly one release label (${Array.from(RELEASE_LABEL_TO_BUMP.keys()).join(', ')}), found: ${found}`,
-    );
+  const labels = Array.isArray(event?.pull_request?.labels) ? event.pull_request.labels : [];
+  const hasOnlyReleaseNone =
+    labels.filter((label) => label?.name?.startsWith('release:')).length === 1 &&
+    labels.some((label) => label?.name === 'release:none');
+  if (hasOnlyReleaseNone && !args.changedFiles) {
+    die('Missing --changed-files <path> for release:none');
   }
 
-  const releaseLabel = matchedLabels[0];
-  const bump = RELEASE_LABEL_TO_BUMP.get(releaseLabel);
-  if (!bump) {
-    die(`Unsupported release label: ${releaseLabel}`);
+  let changedFilePayload;
+  if (hasOnlyReleaseNone) {
+    try {
+      changedFilePayload = JSON.parse(readFileSync(args.changedFiles, 'utf8'));
+    } catch (error) {
+      die(
+        `Unable to read changed-file payload: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  let selection;
+  try {
+    selection = resolveReleaseSelection(labels, changedFilePayload);
+  } catch (error) {
+    die(error instanceof Error ? error.message : String(error));
   }
 
   if (args.json) {
-    console.log(
-      JSON.stringify({
-        label: releaseLabel,
-        bump,
-      }),
-    );
+    console.log(JSON.stringify(selection));
     return;
   }
 
-  console.log(bump);
+  console.log(selection.bump ?? 'none');
 }
 
 main();
