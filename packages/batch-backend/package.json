@@ -6,7 +6,11 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist", "migrations", "schema.sql"],
+  "files": [
+    "dist",
+    "migrations",
+    "schema.sql"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "clean": "node -e \"fs.rmSync('dist', {recursive:true, force:true})\"",
