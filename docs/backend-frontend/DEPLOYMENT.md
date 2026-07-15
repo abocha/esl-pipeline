@@ -181,9 +181,12 @@ port, Postgres, Redis, and worker ports are not publicly reachable.
 A reviewed production deployment should broadly follow:
 
 1. PR CI passes before merge.
-2. After merge, `Release On Merge` creates the release commit and `vX.Y.Z` tag, then publishes the
-   backend, frontend, and Telegram bot images to GHCR with the release commit SHA tag and the
-   `vX.Y.Z` tag.
+2. After a deployable merge (`release:patch`, `release:minor`, or `release:major`), `Release On
+Merge` revalidates the release decision, creates the release commit and `vX.Y.Z` tag, then
+   publishes the backend, frontend, and Telegram bot images to GHCR with the release commit SHA tag
+   and the `vX.Y.Z` tag. A validated maintenance-only `release:none` merge creates no release or
+   images and therefore has nothing to deploy. `docs/prompt-gallery/**` is backend runtime content
+   and never qualifies for `release:none`.
 3. SSH to the VPS checkout and run:
 
    ```bash
