@@ -231,6 +231,11 @@ BATCH_FRONTEND_IMAGE=ghcr.io/abocha/esl-pipeline/batch-frontend:<40-char-git-sha
 TELEGRAM_OPS_BOT_IMAGE=ghcr.io/abocha/esl-pipeline/telegram-ops-bot:<40-char-git-sha>
 ```
 
+The three GHCR application images are CI-built from Debian 13 slim Node stages for the backend,
+frontend builder, and Telegram bot, plus the controlled rootless nginx frontend runtime. The VPS
+pulls those reviewed SHA tags; it does not run `docker build`, pnpm install/build, or image mutation
+commands. PostgreSQL and Redis keep their existing official Alpine families and persistent volumes.
+
 The manual deploy script writes image refs and digests only under:
 
 ```text
