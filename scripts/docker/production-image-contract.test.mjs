@@ -79,13 +79,20 @@ test('production deploys use dedicated lockfiles instead of legacy mode', () => 
   }
 });
 
-test('portable deployments remove the build-only pnpm store', () => {
+test('portable deployments reuse the cached store without persisting it', () => {
   for (const name of ['backend', 'bot']) {
+    const dockerfile = dockerfiles.get(name);
     assert.match(
-      dockerfiles.get(name),
-      /rm -rf \/app\/deployed\/\.pnpm-store/u,
-      `${name}: deployed pnpm store cleanup`,
+      dockerfile,
+      /RUN --mount=type=cache,id=pnpm-store,target=\/app\/\.pnpm-store\/v11 \\\n    pnpm -r [^\n]+ run build/u,
+      `${name}: deploy store cache mount`,
     );
+    assert.match(
+      dockerfile,
+      /pnpm --store-dir=\/app\/\.pnpm-store\/v11 --offline --filter [^\n]+ deploy --prod \/app\/deployed/u,
+      name,
+    );
+    assert.doesNotMatch(dockerfile, /rm -rf \/app\/deployed\/\.pnpm-store/u, name);
   }
 });
 
