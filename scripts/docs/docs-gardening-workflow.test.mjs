@@ -9,8 +9,23 @@ const workflow = readFileSync(
 
 test('gardening preserves the complete report set for thirty days', () => {
   const upload = namedStep(workflow, 'Upload docs gardening artifacts');
-  assert.match(upload, /tmp\/docs-plan-lifecycle\.json/u);
-  assert.match(upload, /tmp\/docs-plan-lifecycle\.md/u);
+  assert.deepEqual(
+    upload
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.startsWith('tmp/')),
+    [
+      'tmp/docs-gardening.json',
+      'tmp/docs-gardening-issue.json',
+      'tmp/docs-gardening-issue.md',
+      'tmp/docs-health-report.json',
+      'tmp/docs-health-report.md',
+      'tmp/docs-plan-lifecycle.json',
+      'tmp/docs-plan-lifecycle.md',
+      'tmp/docs-stale-active.json',
+      'tmp/docs-stale-active.md',
+    ],
+  );
   assert.match(upload, /retention-days: 30/u);
 });
 
@@ -18,6 +33,7 @@ test('rolling issue lookup paginates through repository history', () => {
   const update = namedStep(workflow, 'Update rolling docs-gardening issue');
   assert.match(update, /const issues = await github\.paginate\(github\.rest\.issues\.listForRepo/u);
   assert.match(update, /const existing = issues\.find/u);
+  assert.match(update, /!candidate\.pull_request/u);
   assert.doesNotMatch(update, /const \{ data: issues \} = await/u);
 });
 

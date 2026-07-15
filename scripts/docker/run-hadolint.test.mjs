@@ -11,13 +11,19 @@ import {
   runHadolint,
 } from './run-hadolint.mjs';
 
-test('tracked Dockerfile parsing normalizes, deduplicates, and sorts paths', () => {
+test('tracked Dockerfile parsing removes leading dot segments, deduplicates, and sorts paths', () => {
   assert.deepEqual(
     parseNullDelimitedPaths(
-      'packages\\orchestrator\\Dockerfile\0packages/batch-backend/Dockerfile.dev\0packages/orchestrator/Dockerfile\0',
+      './packages/orchestrator/Dockerfile\0packages/batch-backend/Dockerfile.dev\0packages/orchestrator/Dockerfile\0',
     ),
     ['packages/batch-backend/Dockerfile.dev', 'packages/orchestrator/Dockerfile'],
   );
+});
+
+test('tracked Dockerfile parsing preserves legal backslashes in Git paths', () => {
+  assert.deepEqual(parseNullDelimitedPaths('packages/odd\\name/Dockerfile\0'), [
+    'packages/odd\\name/Dockerfile',
+  ]);
 });
 
 test('tracked Dockerfile parsing rejects malformed output', () => {

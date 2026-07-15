@@ -85,7 +85,9 @@ jobs:
               state: 'all',
               per_page: 100,
             });
-            const existing = issues.find((issue) => issue.title === title);
+            const existing = issues.find(
+              (candidate) => !candidate.pull_request && candidate.title === title,
+            );
 
             if (issue.action === 'close') {
               if (!existing) {

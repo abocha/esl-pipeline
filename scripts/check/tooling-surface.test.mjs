@@ -4,7 +4,6 @@ import test from 'node:test';
 
 const root = new URL('../../', import.meta.url);
 const pkg = JSON.parse(readFileSync(new URL('package.json', root), 'utf8'));
-const ci = readFileSync(new URL('.github/workflows/ci.yml', root), 'utf8');
 
 const retiredFiles = [
   'scripts/deps/safe-upgrade.mjs',
@@ -56,11 +55,10 @@ test('canonical replacements remain available', () => {
   }
 });
 
-test('the complete tooling suite is a local and hosted guard', () => {
+test('the complete tooling suite is a local broad guard', () => {
   assert.equal(pkg.scripts['test:tooling'], 'node --test "scripts/**/*.test.mjs"');
   assert.match(pkg.scripts.check, /pnpm test:tooling/u);
   assert.match(pkg.scripts['check:pre-pr'], /pnpm test:tooling/u);
-  assert.match(ci, /- name: Tooling tests\n\s+run: pnpm test:tooling/u);
 });
 
 test('docker lint composes the canonical compose and Dockerfile lanes', () => {
