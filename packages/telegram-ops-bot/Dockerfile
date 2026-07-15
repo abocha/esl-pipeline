@@ -1,35 +1,43 @@
-# syntax=docker/dockerfile:1.6
+# syntax=docker/dockerfile:1.7
 
-FROM node:24-alpine AS build
+FROM node:24-trixie-slim AS build
 
-ENV PNPM_HOME=/root/.local/share/pnpm
-ENV PATH="${PNPM_HOME}:${PATH}" \
-    CI=true
+ENV CI=true
 
-RUN corepack enable && corepack prepare pnpm@10 --activate \
-    && apk add --no-cache \
+# hadolint ignore=DL3008
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
         ca-certificates \
         python3 \
         make \
-        g++
+        g++ \
+    && rm -rf /var/lib/apt/lists/* \
+    && corepack enable
 
 WORKDIR /app
 
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml tsconfig.base.json ./
+
+RUN --mount=type=cache,id=pnpm-store,target=/app/.pnpm-store/v11 \
+    pnpm fetch --frozen-lockfile
+
 COPY packages ./packages
 
-RUN find packages -name '*.tsbuildinfo' -delete \
-    && pnpm --filter @esl-pipeline/telegram-ops-bot... install --frozen-lockfile \
-    && pnpm -r --workspace-concurrency=1 --filter @esl-pipeline/telegram-ops-bot... run build \
+RUN find packages -name '*.tsbuildinfo' -delete
+RUN --mount=type=cache,id=pnpm-store,target=/app/.pnpm-store/v11 \
+    pnpm --filter @esl-pipeline/telegram-ops-bot... install --offline --frozen-lockfile
+RUN pnpm -r --workspace-concurrency=1 --filter @esl-pipeline/telegram-ops-bot... run build \
     && pnpm --filter @esl-pipeline/telegram-ops-bot deploy --legacy --prod /app/deployed
 
-FROM node:24-alpine AS runtime
+FROM node:24-trixie-slim AS runtime
 
 ENV NODE_ENV=production \
     CI=true
 
-RUN apk add --no-cache \
-        ca-certificates
+# hadolint ignore=DL3008
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
