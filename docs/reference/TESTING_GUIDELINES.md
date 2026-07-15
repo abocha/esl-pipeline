@@ -238,6 +238,15 @@ Important path rules:
 - root validation config, package manager metadata, Turbo config, and validation-runner files fall
   back to `check:pre-pr`.
 
+For production image changes:
+
+- `node --test scripts/docker/production-image-contract.test.mjs` locks production bases, modern
+  pnpm deployment, Compose image lines, release `--pull`, and orchestrator-image retirement.
+- `pnpm docker:lint` remains the portable all-Dockerfile plus Compose lint lane.
+- Base, packaging, or runtime-asset changes require fresh local `linux/amd64` builds of backend,
+  frontend, and bot plus bounded non-root/runtime-asset smoke before `check:pre-pr`. Image-size
+  output is review evidence, not a fixed test threshold.
+
 ## CI Check Mapping
 
 Deployment/test gating currently uses these blocking names:
