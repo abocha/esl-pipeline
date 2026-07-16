@@ -315,6 +315,7 @@ jobs:
           reuse_image() {
             local name="$1"
             docker buildx imagetools create \
+              --prefer-index=false \
               --tag "${IMAGE_PREFIX}/${name}:${RELEASE_SHA}" \
               --tag "${IMAGE_PREFIX}/${name}:${RELEASE_TAG}" \
               "${IMAGE_PREFIX}/${name}:${PREVIOUS_TAG}"

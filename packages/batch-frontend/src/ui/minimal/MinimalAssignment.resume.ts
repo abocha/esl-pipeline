@@ -205,6 +205,10 @@ export function useMinimalAssignmentResume({
   const [selectedResumeJobId, setSelectedResumeJobId] = useState('');
   const [resumeLoading, setResumeLoading] = useState(false);
   const [resumeError, setResumeError] = useState<string | null>(null);
+  const [resumeJobsTotal, setResumeJobsTotal] = useState(0);
+  const [assignmentSessionsTotal, setAssignmentSessionsTotal] = useState(0);
+  const [resumeLoadingMore, setResumeLoadingMore] = useState(false);
+  const [resumeLoadMoreError, setResumeLoadMoreError] = useState<string | null>(null);
   const resumeInitializedRef = useRef(false);
   const latestAssignmentSessionsRef = useRef<AssignmentSession[]>([]);
   const initialHydrationResolvedRef = useRef(false);
@@ -231,6 +235,8 @@ export function useMinimalAssignmentResume({
       const sessions = sessionsResponse.sessions ?? [];
       setResumeJobs(jobs);
       setAssignmentSessions(sessions);
+      setResumeJobsTotal(jobsResponse.total);
+      setAssignmentSessionsTotal(sessionsResponse.total);
       latestAssignmentSessionsRef.current = sessions;
       if (jobs.length === 0 && sessions.length === 0) {
         setSelectedResumeJobId('');
@@ -249,6 +255,7 @@ export function useMinimalAssignmentResume({
         });
       }
       setResumeError(null);
+      setResumeLoadMoreError(null);
       return jobs;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to load recent jobs.';
@@ -256,6 +263,60 @@ export function useMinimalAssignmentResume({
       return [];
     }
   }, []);
+
+  const loadMoreResumeJobs = useCallback(async (): Promise<void> => {
+    if (resumeLoadingMore) return;
+    const jobsHaveMore = resumeJobs.length < resumeJobsTotal;
+    const sessionsHaveMore = assignmentSessions.length < assignmentSessionsTotal;
+    if (!jobsHaveMore && !sessionsHaveMore) return;
+
+    setResumeLoadingMore(true);
+    setResumeLoadMoreError(null);
+    try {
+      const [jobsResponse, sessionsResponse] = await Promise.all([
+        jobsHaveMore
+          ? listUserJobs({ limit: 20, offset: resumeJobs.length })
+          : Promise.resolve(null),
+        sessionsHaveMore
+          ? listAssignmentSessions(assignmentSessions.length + 20)
+          : Promise.resolve(null),
+      ]);
+      if (jobsResponse) {
+        setResumeJobs((current) => {
+          const knownIds = new Set(current.map((job) => job.jobId));
+          return [
+            ...current,
+            ...(jobsResponse.jobs ?? []).filter((job) => !knownIds.has(job.jobId)),
+          ];
+        });
+        setResumeJobsTotal(jobsResponse.total);
+      }
+      if (sessionsResponse) {
+        setAssignmentSessions((current) => {
+          const knownIds = new Set(current.map((session) => session.id));
+          const next = [
+            ...current,
+            ...(sessionsResponse.sessions ?? []).filter((session) => !knownIds.has(session.id)),
+          ];
+          latestAssignmentSessionsRef.current = next;
+          return next;
+        });
+        setAssignmentSessionsTotal(sessionsResponse.total);
+      }
+    } catch (error) {
+      setResumeLoadMoreError(
+        error instanceof Error ? error.message : 'Unable to load older assignments.',
+      );
+    } finally {
+      setResumeLoadingMore(false);
+    }
+  }, [
+    assignmentSessions.length,
+    assignmentSessionsTotal,
+    resumeJobs.length,
+    resumeJobsTotal,
+    resumeLoadingMore,
+  ]);
 
   const buildSnapshotFromSession = useCallback(
     (session: AssignmentSession): HydratedAssignmentSnapshot => {
@@ -752,7 +813,12 @@ export function useMinimalAssignmentResume({
     setSelectedResumeJobId,
     resumeLoading,
     resumeError,
+    resumeHasMore:
+      resumeJobs.length < resumeJobsTotal || assignmentSessions.length < assignmentSessionsTotal,
+    resumeLoadingMore,
+    resumeLoadMoreError,
     loadResumeJobs,
+    loadMoreResumeJobs,
     handleResumeSelectedJob,
     applyJobStatusTransition,
   };

@@ -3,6 +3,7 @@ import {
   getJobRecentAssignmentPresentation,
   getSessionRecentAssignmentPresentation,
   type RecentAssignmentItem,
+  type RecentAssignmentLineage,
 } from './MinimalAssignment.entry-state';
 import type { CurrentAssignmentCard } from './MinimalAssignment.stages';
 
@@ -25,13 +26,12 @@ function formatResumeTimeLabel(value: string): string {
   if (dayDiff === 1) {
     return `Yesterday at ${timeLabel}`;
   }
-  return timestamp.toLocaleString([], {
+  const dateLabel = timestamp.toLocaleDateString([], {
     day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
+    month: '2-digit',
+    year: '2-digit',
   });
+  return `${dateLabel} · ${timeLabel}`;
 }
 
 function getResumeStatusPresentation(
@@ -77,6 +77,21 @@ function buildSessionLearnerName(
     : 'Unfinished assignment';
 }
 
+const SESSION_RECOVERY_ANCHORS: Record<AssignmentSession['currentStage'], string> = {
+  source: 'Step 2 · Lesson source',
+  context: 'Step 3 · Teaching context',
+  assignment: 'Step 4 · Create',
+  review: 'Step 5 · Review & share',
+};
+
+function getJobRecoveryAnchor(job: JobStatus): string | null {
+  if (job.promptPackageId && job.draftId) return 'Guidance & assignment draft';
+  if (job.draftId) return 'Assignment draft';
+  if (job.promptPackageId) return 'Lesson guidance';
+  if (job.transcriptId || job.recordingId) return 'Lesson source';
+  return null;
+}
+
 export function buildRecentAssignmentItems(
   sessions: readonly AssignmentSession[],
   jobs: readonly JobStatus[],
@@ -86,8 +101,11 @@ export function buildRecentAssignmentItems(
   const sessionItems = sessions.map((session) => ({
     item: {
       id: `session:${session.id}`,
+      kind: 'session' as const,
+      sourceJobId: null,
       learnerName: buildSessionLearnerName(session, studentNameById),
       lessonTitle: undefined,
+      recoveryAnchor: SESSION_RECOVERY_ANCHORS[session.currentStage],
       ...getSessionRecentAssignmentPresentation(session.currentStage),
       timeLabel: formatResumeTimeLabel(session.updatedAt),
       selected: selectedResumeJobId === `session:${session.id}`,
@@ -97,8 +115,11 @@ export function buildRecentAssignmentItems(
   const jobItems = jobs.map((job) => ({
     item: {
       id: job.jobId,
+      kind: 'job' as const,
+      sourceJobId: job.sourceJobId ?? null,
       learnerName: buildResumeLearnerName(job, studentNameById),
       lessonTitle: undefined,
+      recoveryAnchor: getJobRecoveryAnchor(job),
       ...getJobRecentAssignmentPresentation(job.state, Boolean(job.htmlUrl)),
       timeLabel: formatResumeTimeLabel(job.finishedAt ?? job.updatedAt ?? job.createdAt),
       selected: job.jobId === selectedResumeJobId,
@@ -108,6 +129,60 @@ export function buildRecentAssignmentItems(
   return [...sessionItems, ...jobItems]
     .sort((left, right) => right.timestamp - left.timestamp)
     .map(({ item }) => item);
+}
+
+export function buildRecentAssignmentLineages(
+  items: readonly RecentAssignmentItem[],
+): RecentAssignmentLineage[] {
+  const jobsById = new Map(
+    items.filter((item) => item.kind === 'job').map((item) => [item.id, item]),
+  );
+  const groups = new Map<string, RecentAssignmentItem[]>();
+
+  for (const item of items) {
+    let key = item.id;
+    if (item.kind === 'job') {
+      const visited = new Set<string>([item.id]);
+      let cursor = item;
+      while (
+        cursor.sourceJobId &&
+        jobsById.has(cursor.sourceJobId) &&
+        !visited.has(cursor.sourceJobId)
+      ) {
+        key = cursor.sourceJobId;
+        visited.add(cursor.sourceJobId);
+        cursor = jobsById.get(cursor.sourceJobId)!;
+      }
+    }
+
+    const group = groups.get(key);
+    if (group) {
+      group.push(item);
+    } else {
+      groups.set(key, [item]);
+    }
+  }
+
+  return [...groups.values()].flatMap((group) => {
+    const referencedIds = new Set(
+      group.flatMap((item) => (item.sourceJobId ? [item.sourceJobId] : [])),
+    );
+    const latest = group.find((item) => !referencedIds.has(item.id)) ?? group[0];
+    if (!latest) return [];
+
+    const byId = new Map(group.map((item) => [item.id, item]));
+    const olderVersions: RecentAssignmentItem[] = [];
+    const used = new Set([latest.id]);
+    let sourceJobId = latest.sourceJobId;
+    while (sourceJobId && byId.has(sourceJobId) && !used.has(sourceJobId)) {
+      const version = byId.get(sourceJobId)!;
+      olderVersions.push(version);
+      used.add(version.id);
+      sourceJobId = version.sourceJobId;
+    }
+    olderVersions.push(...group.filter((item) => !used.has(item.id)));
+    return [{ id: latest.id, latest, olderVersions }];
+  });
 }
 
 export function buildCurrentAssignmentCard(

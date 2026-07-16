@@ -46,6 +46,10 @@ Canonical behavior and current status live in:
   chooses Start another assignment. Advanced actions appear only after sharing and contain
   post-share rerun and republish operations; technical recovery, provider, quota, provenance, and
   other diagnostics live under Support details rather than workflow steps.
+- Step 1 shows four recent assignment lineages initially. Reruns are collapsed only when an existing
+  `sourceJobId` relationship proves the lineage, while every exact version remains selectable.
+  Older lineages are revealed progressively through the existing job and assignment-session APIs;
+  this is a short recovery/reference surface, not a searchable assignment archive.
 - This visual overhaul currently covers the authenticated shell and assignment workflow. Student,
   Business, and Assignment Templates routes remain operational on their existing content designs.
 - Local UI iteration can use the Vite mock-auth sandbox without a backend:
