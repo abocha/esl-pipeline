@@ -95,6 +95,12 @@ For `release:patch`, `release:minor`, or `release:major`, it then:
 The release workflow publishes images but does not deploy them. Production deployment remains a
 separate operator action using the immutable release SHA.
 
+GHA build-cache export is best-effort because it is only a build acceleration. Image pushes and
+unchanged-image reuse remain fail-closed. If publication fails after the release commit and tag
+exist, do not deploy the incomplete bundle. Use the manual recovery workflow documented in
+[`DEPLOYMENT.md`](../backend-frontend/DEPLOYMENT.md) to restore only the missing unchanged manifests
+and verify the complete three-image bundle.
+
 For a valid `release:none` merge, the complete release transaction is skipped: no root version or
 changelog update, release commit, tag, or production image is created. Skipping only image
 publication is forbidden because it would create a release SHA without a deployable image bundle.
@@ -102,6 +108,8 @@ publication is forbidden because it would create a release SHA without a deploya
 Workflow file:
 
 - [`/.github/workflows/release-on-merge.yml`](../../.github/workflows/release-on-merge.yml)
+- [`/.github/workflows/recover-release-image-bundle.yml`](../../.github/workflows/recover-release-image-bundle.yml)
+  for manual incident recovery only
 
 ## Contract Consistency Guard
 

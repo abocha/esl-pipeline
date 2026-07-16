@@ -4,7 +4,8 @@
 
 - Audience: founder-maintainer and implementation agents.
 - Status: `roadmap`.
-- Last Verified Against: 2026-07-14 repo state, v9.10.0 deployment, and manual main-flow smoke.
+- Last Verified Against: 2026-07-16 repo state and v9.11.0 deployment; 2026-07-14 manual main-flow
+  smoke.
 - Exit Trigger: archive after v1 production readiness or replacement by a later evidence-backed
   launch plan.
 - Current Focus: collect clean invite-path evidence, continue supervised tutor feedback intake, and
@@ -38,7 +39,8 @@ Status: active evidence intake.
 - Record where real tutors hesitate, fail, or require founder help.
 - Preserve exact route, action, visible message, and recovery path.
 - Convert only repeated or launch-blocking evidence into implementation work.
-- Keep the current v9.10.0 main-flow smoke distinct from the still-open invite bootstrap smoke in
+- Keep the latest v9.10.0 manual main-flow smoke distinct from the v9.11.0 automated deployment
+  checks and the still-open invite bootstrap smoke in
   [`slice-2-invite-workspace-first-student.md`](slice-2-invite-workspace-first-student.md).
 
 Exit: the pre-alpha tutor can repeatedly complete invite/login, first-student setup, assignment

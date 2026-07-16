@@ -4,7 +4,8 @@
 
 - Audience: founder/operator, Codex, implementation agents.
 - Status: active.
-- Last Verified Against: 2026-07-14 repo state and v9.10.0 deployment evidence.
+- Last Verified Against: 2026-07-16 repo state and v9.11.0 deployment evidence; 2026-07-14 manual
+  main-flow smoke.
 - Exit Trigger: archive or update after the Slice 2 implementation PR/hosted verification lands.
 - Current Focus: implementation is shipped; capture one clean hosted invite acceptance -> default
   workspace/settings -> first student -> first assignment smoke before archiving.

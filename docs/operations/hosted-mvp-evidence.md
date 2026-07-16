@@ -3,25 +3,55 @@
 ## Meta
 
 - Audience: founder/operator, Codex, implementation agents.
-- Last Verified Against: 2026-07-14 production deployment and manual smoke.
+- Last Verified Against: 2026-07-16 production deployment and automated smoke; 2026-07-14 manual
+  main-flow smoke.
 - Status: private hosted baseline passed; keep this record current after material redeploys or rehearsals.
 - Related historical plan: `docs/archive/plans/standalone/slice-1-private-hosted-environment.md`.
 
 ## Latest Deployment Evidence
 
 ```text
-Date verified: 2026-07-14
-Release: v9.10.0
-Git commit deployed: 2bed0ce492cdbbc1e75307f437b2ac07b220e740
-Deployment result: production VPS deploy completed
-Manual smoke result: main assignment flow passed
-Invite-path result: not re-verified in this smoke; Slice 2 remains open until one clean
+Date verified: 2026-07-16
+Release: v9.11.0
+Git commit deployed: b3b3d203e739e7e9e6636a12d7cb7492713ae16a
+Deployment result: frontend-only production VPS deploy completed; no database work; Caddy refreshed
+Automated smoke result: backend, frontend API, and public edge health checks passed after bounded startup retries
+Manual smoke result: not rerun; latest manual main assignment flow passed on v9.10.0
+Invite-path result: not re-verified in this deployment; Slice 2 remains open until one clean
   invite acceptance -> default workspace/settings -> first student -> first assignment run passes
 ```
 
-The original June rehearsal below remains as historical infrastructure evidence. The July smoke
-confirms the current main assignment flow, but it does not replace the narrower invite/account
-bootstrap acceptance gate in the active Slice 2 plan.
+The original June rehearsal below remains as historical infrastructure evidence. The July 14 manual
+smoke confirms the main assignment flow, while the July 16 deployment adds current release and
+automated health evidence. Neither replaces the narrower invite/account bootstrap acceptance gate in
+the active Slice 2 plan.
+
+## 2026-07-16 Release Publication Incident and Recovery
+
+The [`v9.11.0` release workflow](https://github.com/abocha/esl-pipeline/actions/runs/29495264990)
+failed twice after successfully pushing the frontend image. The GHA Buildx cache exporter returned
+`error writing layer blob: failed to reserve cache`, which stopped the job before unchanged backend
+and Telegram bot manifests were retagged. The release bundle was incomplete, so it was not deployed;
+the running production environment was unaffected.
+
+Recovery and prevention landed in
+[`PR #139`](https://github.com/abocha/esl-pipeline/pull/139) with `release:none`:
+
+- GHA cache export is now best-effort via `ignore-error=true`; image publication and unchanged-image
+  reuse remain fatal.
+- `Recover Release Image Bundle` provides a manual, fail-closed recovery path. It validates the
+  existing release tag/SHA, copies only explicitly selected unchanged images with
+  `--prefer-index=false`, and verifies matching SHA/version-tag digests for all three images.
+- The [recovery run](https://github.com/abocha/esl-pipeline/actions/runs/29497139651) copied backend
+  and Telegram bot manifests from `v9.10.5`, retained the already-published frontend, and verified:
+  - `batch-backend`: `sha256:20b0b3c3fa551c27e195bcab0c9401e5bb106ed756623da8c755b14c310f5e26`
+  - `batch-frontend`: `sha256:725fb7d38858dfbffda1a7ecd9ef237a12a06833d31d7f82687f85c0b3e545e9`
+  - `telegram-ops-bot`: `sha256:ec3af5d9e0205bf7e5397248551a9ebc8b300168baf7c9b9fcbec1e32824e8b3`
+
+The subsequent VPS deploy correctly planned `backend_changed=false`, `frontend_changed=true`,
+`bot_changed=false`, and `database_work=false`. It recreated the frontend and Caddy edge, passed the
+bounded health/smoke checks after two transient connection-reset retries, recorded the successful
+deployment state, and removed superseded custom images.
 
 ## Deployment Snapshot
 
@@ -208,7 +238,7 @@ Failed job diagnosis path exists: yes
 Backup exists in S3: yes
 Restore path documented: yes
 One hosted end-to-end assignment publish succeeded: yes in the rehearsal and the v9.10.0 main-flow smoke
-Same-origin frontend API calls work: yes for the current main-flow smoke; invite/bootstrap coverage remains a separate Slice 2 gate
+Same-origin frontend API calls work: yes in the v9.10.0 manual smoke and v9.11.0 automated deploy checks; invite/bootstrap coverage remains a separate Slice 2 gate
 Prompt assets bootstrapped: yes after path correction
 Telegram ops bot absent/profile-gated/intentionally enabled: absent/profile-gated
 ```
@@ -216,7 +246,7 @@ Telegram ops bot absent/profile-gated/intentionally enabled: absent/profile-gate
 Final decision:
 
 ```text
-Slice 1 status: complete; pull-based deployment baseline passed and v9.10.0 was deployed successfully
+Slice 1 status: complete; pull-based deployment baseline passed and v9.11.0 was deployed successfully
 Blocker if any: none for Slice 1
 Next slice allowed: yes; retain one clean invite-to-assignment rehearsal as Slice 2 evidence
 ```
