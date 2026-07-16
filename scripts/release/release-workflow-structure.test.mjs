@@ -79,5 +79,6 @@ test('production images use pinned Docker actions and preserve a complete releas
     assert.match(images, new RegExp(`scope=${target}`, 'u'));
   }
   assert.match(images, /docker buildx imagetools create/u);
+  assert.match(images, /docker buildx imagetools create\s+\\\s+--prefer-index=false/u);
   assert.match(images, /PREVIOUS_TAG/u);
 });
