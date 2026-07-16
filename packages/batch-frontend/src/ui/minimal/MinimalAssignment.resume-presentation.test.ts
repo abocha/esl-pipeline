@@ -88,6 +88,18 @@ function createPresentedJob(
 }
 
 describe('buildRecentAssignmentItems', () => {
+  it('keeps older timestamps compact enough for the fixed status rail', () => {
+    const [item] = buildRecentAssignmentItems(
+      [],
+      [createJob({ updatedAt: '2026-07-10T10:00:00.000Z' })],
+      '',
+      new Map([['student-cora', 'Cora']]),
+    );
+
+    expect(item?.timeLabel).toMatch(/^\d{2}\D\d{2}\D\d{2} · /);
+    expect(item?.timeLabel.length).toBeLessThanOrEqual(20);
+  });
+
   it('sorts recent work newest first, preserves selection, and keeps raw IDs out of visible labels', () => {
     const job = createJob({
       state: 'succeeded',
