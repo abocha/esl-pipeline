@@ -164,9 +164,26 @@ export function buildRecentAssignmentLineages(
     }
   }
 
-  return [...groups.values()].flatMap(([latest, ...olderVersions]) =>
-    latest ? [{ id: latest.id, latest, olderVersions }] : [],
-  );
+  return [...groups.values()].flatMap((group) => {
+    const referencedIds = new Set(
+      group.flatMap((item) => (item.sourceJobId ? [item.sourceJobId] : [])),
+    );
+    const latest = group.find((item) => !referencedIds.has(item.id)) ?? group[0];
+    if (!latest) return [];
+
+    const byId = new Map(group.map((item) => [item.id, item]));
+    const olderVersions: RecentAssignmentItem[] = [];
+    const used = new Set([latest.id]);
+    let sourceJobId = latest.sourceJobId;
+    while (sourceJobId && byId.has(sourceJobId) && !used.has(sourceJobId)) {
+      const version = byId.get(sourceJobId)!;
+      olderVersions.push(version);
+      used.add(version.id);
+      sourceJobId = version.sourceJobId;
+    }
+    olderVersions.push(...group.filter((item) => !used.has(item.id)));
+    return [{ id: latest.id, latest, olderVersions }];
+  });
 }
 
 export function buildCurrentAssignmentCard(

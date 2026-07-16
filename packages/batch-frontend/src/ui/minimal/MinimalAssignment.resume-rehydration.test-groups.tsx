@@ -181,13 +181,78 @@ export function registerResumeBasicTests() {
 
       expect(screen.queryByRole('listbox', { name: /Recent assignments/i })).toBeNull();
       const resumeList = await openResumeRoute(user);
+      expect(within(resumeList).getAllByRole('radio')).toHaveLength(4);
+      expect(within(resumeList).getAllByRole('radio', { name: /Alex/i })).toHaveLength(1);
+      await user.click(screen.getByRole('button', { name: /2 versions/i }));
       expect(within(resumeList).getAllByRole('radio')).toHaveLength(5);
-      expect(within(resumeList).getAllByRole('radio', { name: /Alex/i })).toHaveLength(2);
+      expect(
+        within(resumeList).getByRole('radio', { name: /Original.*Ready to share/i }),
+      ).toBeTruthy();
       expect(screen.queryByText(/Audio refresh/i)).toBeNull();
       expect(screen.getAllByText(/Needs attention/i).length).toBeGreaterThan(0);
       expect(screen.queryByText(/job-reru/i)).toBeNull();
       expect(screen.queryByText(/gateway timeout/i)).toBeNull();
-      expect(screen.queryByRole('button', { name: /Show more assignments/i })).toBeNull();
+      expect(screen.queryByRole('button', { name: /Show older assignments/i })).toBeNull();
+    });
+
+    it('requests another bounded page only after the first four lineages are revealed', async () => {
+      const user = createMinimalUser();
+      const initialJobs = Array.from({ length: 4 }, (_, index) =>
+        makeJobStatus({
+          jobId: `job-page-${index + 1}`,
+          studentId: index === 0 ? 'student-alex' : 'student-default',
+          state: 'succeeded',
+          finishedAt: new Date(Date.parse(now) - index * 60_000).toISOString(),
+        }),
+      );
+      vi.mocked(api.listUserJobs)
+        .mockResolvedValueOnce({ jobs: initialJobs, total: 6, limit: 20, offset: 0 })
+        .mockResolvedValueOnce({
+          jobs: [
+            makeJobStatus({
+              jobId: 'job-page-5',
+              studentId: 'student-default',
+              state: 'succeeded',
+              finishedAt: new Date(Date.parse(now) - 5 * 60_000).toISOString(),
+            }),
+          ],
+          total: 6,
+          limit: 20,
+          offset: 4,
+        });
+
+      renderMinimalAssignment();
+      const resumeList = await openResumeRoute(user);
+      expect(within(resumeList).getAllByRole('radio')).toHaveLength(4);
+
+      await user.click(screen.getByRole('button', { name: /Show older assignments/i }));
+      await waitFor(() =>
+        expect(api.listUserJobs).toHaveBeenLastCalledWith({ limit: 20, offset: 4 }),
+      );
+      await waitFor(() => expect(within(resumeList).getAllByRole('radio')).toHaveLength(5));
+      expect(screen.getByRole('button', { name: /Load more/i })).toBeTruthy();
+    });
+
+    it('preserves loaded lineages and offers a retry when older loading fails', async () => {
+      const user = createMinimalUser();
+      const initialJobs = Array.from({ length: 4 }, (_, index) =>
+        makeJobStatus({
+          jobId: `job-retry-${index + 1}`,
+          state: 'succeeded',
+          finishedAt: new Date(Date.parse(now) - index * 60_000).toISOString(),
+        }),
+      );
+      vi.mocked(api.listUserJobs)
+        .mockResolvedValueOnce({ jobs: initialJobs, total: 5, limit: 20, offset: 0 })
+        .mockRejectedValueOnce(new Error('Older assignments are temporarily unavailable'));
+
+      renderMinimalAssignment();
+      const resumeList = await openResumeRoute(user);
+      await user.click(screen.getByRole('button', { name: /Show older assignments/i }));
+
+      expect(within(resumeList).getAllByRole('radio')).toHaveLength(4);
+      expect(await screen.findByText('Older assignments are temporarily unavailable')).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
     });
 
     it('shows unfinished assignment sessions beside publish jobs', async () => {
@@ -222,7 +287,7 @@ export function registerResumeBasicTests() {
 
       const resumeList = await openResumeRoute(user);
       expect(within(resumeList).getByRole('radio', { name: /Alex/i })).toBeTruthy();
-      expect(screen.getByText(/Draft in progress/i)).toBeTruthy();
+      expect(screen.getByText(/Step 4 · Create/i)).toBeTruthy();
       expect(screen.queryByText(/session-draft/i)).toBeNull();
       expect(within(resumeList).getByRole('radio', { name: /Bella/i })).toBeTruthy();
     });
