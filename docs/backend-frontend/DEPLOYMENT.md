@@ -138,10 +138,11 @@ the three production Dockerfiles and [`docker-compose.prod.yml`](../../docker-co
 the current lines.
 
 Changed-image release builds use `pull: true`, commit-pinned Docker actions, persistent per-image GHA
-build caches, and controlled major/minor plus distribution tags. Infrastructure-only releases reuse
-the prior image manifests without downloading and re-uploading their layers. Do not build production
-images on the Lightsail VPS, introduce a second worker image, or change the PostgreSQL base family
-without a separate data/collation migration design.
+build caches, and controlled major/minor plus distribution tags. GHA cache export is best-effort
+because it is only a build acceleration; image pushes and unchanged-image reuse remain fatal.
+Infrastructure-only releases reuse the prior image manifests without downloading and re-uploading
+their layers. Do not build production images on the Lightsail VPS, introduce a second worker image,
+or change the PostgreSQL base family without a separate data/collation migration design.
 
 ## Production HTTPS Edge Profile
 
@@ -225,6 +226,23 @@ Merge` revalidates the release decision, creates the release commit and `vX.Y.Z`
    manifests from the previous version. A validated maintenance-only `release:none` merge creates no
    release or images and therefore has nothing to deploy. `docs/prompt-gallery/**` is backend runtime
    content and never qualifies for `release:none`.
+
+   If publication fails after the release commit and tag exist, do not deploy that release. After
+   confirming which images were already published, use the manually dispatched
+   `Recover Release Image Bundle` workflow to copy only the unchanged images from the last complete
+   release. The workflow verifies that the release-SHA and semantic-version refs resolve to the same
+   digest for all three production images before it succeeds. For example:
+
+   ```bash
+   gh workflow run recover-release-image-bundle.yml \
+     -f release_sha=<40-char-release-sha> \
+     -f release_tag=<vX.Y.Z> \
+     -f previous_tag=<previous-vX.Y.Z> \
+     -f reuse_batch_backend=true \
+     -f reuse_batch_frontend=false \
+     -f reuse_telegram_ops_bot=true
+   ```
+
 3. SSH to the VPS checkout and run:
 
    ```bash
@@ -455,4 +473,6 @@ on the Lightsail server.
 
 Workflow source:
 [`/.github/workflows/ci.yml`](../../.github/workflows/ci.yml) and
-[`/.github/workflows/release-on-merge.yml`](../../.github/workflows/release-on-merge.yml)
+[`/.github/workflows/release-on-merge.yml`](../../.github/workflows/release-on-merge.yml). Incident
+recovery source:
+[`/.github/workflows/recover-release-image-bundle.yml`](../../.github/workflows/recover-release-image-bundle.yml).
