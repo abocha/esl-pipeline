@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import type { AssignmentSession, JobStatus } from '../../utils/api';
-import { buildRecentAssignmentItems } from './MinimalAssignment.resume-presentation';
+import type { RecentAssignmentItem } from './MinimalAssignment.entry-state';
+import {
+  buildRecentAssignmentItems,
+  buildRecentAssignmentLineages,
+} from './MinimalAssignment.resume-presentation';
 
 function createJob(overrides: Partial<JobStatus> = {}): JobStatus {
   return {
@@ -59,6 +63,30 @@ function createSession(overrides: Partial<AssignmentSession> = {}): AssignmentSe
   };
 }
 
+function createPresentedJob(
+  overrides: Partial<RecentAssignmentItem> & Pick<RecentAssignmentItem, 'id'>,
+): RecentAssignmentItem {
+  const { id, ...rest } = overrides;
+  return {
+    id,
+    kind: 'job',
+    sourceJobId: null,
+    learnerName: 'Cora',
+    lessonTitle: undefined,
+    recoveryAnchor: 'Guidance & assignment draft',
+    activityLabel: 'Assignment published',
+    outcomeLabel: 'Handout available',
+    timeLabel: 'Today at 10:00 AM',
+    state: 'published',
+    statusLabel: 'Published',
+    statusTone: 'success',
+    actionLabel: 'Open assignment',
+    destination: 'review',
+    selected: false,
+    ...rest,
+  };
+}
+
 describe('buildRecentAssignmentItems', () => {
   it('sorts recent work newest first, preserves selection, and keeps raw IDs out of visible labels', () => {
     const job = createJob({
@@ -103,5 +131,75 @@ describe('buildRecentAssignmentItems', () => {
         ].join(' '),
       ).not.toContain('raw-identifier');
     }
+  });
+
+  it.each([
+    ['source', 'Step 2 · Lesson source'],
+    ['context', 'Step 3 · Teaching context'],
+    ['assignment', 'Step 4 · Create'],
+    ['review', 'Step 5 · Review & share'],
+  ] as const)('maps the %s session stage to its recovery anchor', (currentStage, anchor) => {
+    const [item] = buildRecentAssignmentItems(
+      [createSession({ currentStage })],
+      [],
+      '',
+      new Map([['student-cora', 'Cora']]),
+    );
+
+    expect(item).toMatchObject({ kind: 'session', sourceJobId: null, recoveryAnchor: anchor });
+  });
+
+  it.each([
+    [{ promptPackageId: 'prompt-1', draftId: 'draft-1' }, 'Guidance & assignment draft'],
+    [{ draftId: 'draft-1' }, 'Assignment draft'],
+    [{ promptPackageId: 'prompt-1' }, 'Lesson guidance'],
+    [{ transcriptId: 'transcript-1' }, 'Lesson source'],
+    [{ recordingId: 'recording-1' }, 'Lesson source'],
+    [{}, null],
+  ] as const)('derives a job recovery anchor from existing artifact IDs', (overrides, anchor) => {
+    const [item] = buildRecentAssignmentItems(
+      [],
+      [createJob(overrides)],
+      '',
+      new Map([['student-cora', 'Cora']]),
+    );
+
+    expect(item).toMatchObject({ kind: 'job', sourceJobId: null, recoveryAnchor: anchor });
+  });
+
+  it('collapses a loaded rerun chain into one newest-first lineage', () => {
+    const items = [
+      createPresentedJob({ id: 'job-3', sourceJobId: 'job-2' }),
+      createPresentedJob({ id: 'job-2', sourceJobId: 'job-1' }),
+      createPresentedJob({ id: 'job-1', sourceJobId: null }),
+    ];
+
+    const lineages = buildRecentAssignmentLineages(items);
+
+    expect(lineages).toHaveLength(1);
+    expect(lineages[0]?.latest.id).toBe('job-3');
+    expect(lineages[0]?.olderVersions.map((item) => item.id)).toEqual(['job-2', 'job-1']);
+  });
+
+  it('keeps similar unlinked jobs separate', () => {
+    const lineages = buildRecentAssignmentLineages([
+      createPresentedJob({ id: 'job-2' }),
+      createPresentedJob({ id: 'job-1' }),
+    ]);
+
+    expect(lineages.map((lineage) => lineage.latest.id)).toEqual(['job-2', 'job-1']);
+  });
+
+  it('groups loaded descendants but never invents an original when the source is missing', () => {
+    const lineages = buildRecentAssignmentLineages([
+      createPresentedJob({ id: 'job-3', sourceJobId: 'job-2' }),
+      createPresentedJob({ id: 'job-2', sourceJobId: 'job-missing' }),
+      createPresentedJob({ id: 'job-standalone', sourceJobId: 'another-missing-job' }),
+    ]);
+
+    expect(lineages).toHaveLength(2);
+    expect(lineages[0]?.olderVersions.map((item) => item.id)).toEqual(['job-2']);
+    expect(lineages[0]?.olderVersions[0]?.sourceJobId).toBe('job-missing');
+    expect(lineages[1]?.latest.id).toBe('job-standalone');
   });
 });

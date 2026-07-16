@@ -9,8 +9,11 @@ import { AssignmentEntryStep } from './AssignmentEntryStep';
 const learners = [{ id: 'student-cora', name: 'Cora', profileId: 'profiles/cora.md' }];
 const publishedItem: RecentAssignmentItem = {
   id: 'job-published',
+  kind: 'job',
+  sourceJobId: null,
   learnerName: 'Cora',
   lessonTitle: undefined,
+  recoveryAnchor: 'Guidance & assignment draft',
   activityLabel: 'Assignment published',
   outcomeLabel: 'Handout available',
   timeLabel: 'Yesterday at 2:30 PM',

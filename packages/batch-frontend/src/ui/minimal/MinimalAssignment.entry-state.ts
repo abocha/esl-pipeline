@@ -12,8 +12,11 @@ export type RecentAssignmentState =
 
 export interface RecentAssignmentItem {
   id: string;
+  kind: 'session' | 'job';
+  sourceJobId: string | null;
   learnerName: string;
   lessonTitle?: string;
+  recoveryAnchor: string | null;
   activityLabel: string;
   outcomeLabel: string;
   timeLabel: string;
@@ -30,9 +33,22 @@ export interface RecentAssignmentItem {
   selected: boolean;
 }
 
+export interface RecentAssignmentLineage {
+  id: string;
+  latest: RecentAssignmentItem;
+  olderVersions: RecentAssignmentItem[];
+}
+
 type RecentAssignmentPresentation = Omit<
   RecentAssignmentItem,
-  'id' | 'learnerName' | 'lessonTitle' | 'timeLabel' | 'selected'
+  | 'id'
+  | 'kind'
+  | 'sourceJobId'
+  | 'learnerName'
+  | 'lessonTitle'
+  | 'recoveryAnchor'
+  | 'timeLabel'
+  | 'selected'
 >;
 
 export function getJobRecentAssignmentPresentation(
