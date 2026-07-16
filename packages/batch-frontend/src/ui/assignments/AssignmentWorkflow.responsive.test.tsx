@@ -90,4 +90,21 @@ describe('AssignmentWorkflow responsive contract', () => {
       '.minimal-stage-panel:first-child:not(.assignment-advanced-actions)',
     );
   });
+
+  it('keeps resume status in a fixed rail and stacks rows on narrow screens', () => {
+    const css = readFileSync(
+      join(process.cwd(), 'src/ui/assignments/AssignmentWorkflow.css'),
+      'utf8',
+    );
+    const rowRule = css.match(/\.assignment-entry-step__recent-row\s*\{([^}]*)\}/)?.[1];
+
+    expect(rowRule).toContain(
+      'grid-template-columns: 20px minmax(150px, 0.75fr) minmax(220px, 1.35fr) 156px',
+    );
+    expect(css).toContain('.assignment-entry-step__version-pill:hover');
+    expect(css).toContain('@media (prefers-reduced-motion: reduce)');
+    expect(css).toMatch(
+      /@media \(max-width: 620px\)[\s\S]*\.assignment-entry-step__recent-row[\s\S]*grid-template-columns: auto minmax\(0, 1fr\)/,
+    );
+  });
 });

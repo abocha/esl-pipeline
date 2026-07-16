@@ -3,7 +3,10 @@ import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { RecentAssignmentItem } from '../../minimal/MinimalAssignment.entry-state';
+import type {
+  RecentAssignmentItem,
+  RecentAssignmentLineage,
+} from '../../minimal/MinimalAssignment.entry-state';
 import { AssignmentEntryStep } from './AssignmentEntryStep';
 
 const learners = [{ id: 'student-cora', name: 'Cora', profileId: 'profiles/cora.md' }];
@@ -25,11 +28,37 @@ const publishedItem: RecentAssignmentItem = {
   selected: false,
 };
 
+function makeRecentItem(
+  id: string,
+  learnerName: string,
+  overrides: Partial<RecentAssignmentItem> = {},
+): RecentAssignmentItem {
+  return {
+    ...publishedItem,
+    id,
+    learnerName,
+    ...overrides,
+  };
+}
+
+function makeLineage(
+  latest: RecentAssignmentItem,
+  olderVersions: RecentAssignmentItem[] = [],
+): RecentAssignmentLineage {
+  return { id: latest.id, latest, olderVersions };
+}
+
 function EntryHarness({
   initialView = 'choice',
   recentLoading = false,
   recentItems = [publishedItem],
+  recentLineages,
   recentError = null,
+  recentHasMore = false,
+  recentLoadingMore = false,
+  recentLoadMoreError = null,
+  onLoadMoreRecent = vi.fn(),
+  onOpenRecent = vi.fn(),
   learnerLoading = false,
   learnerError = null,
   opening = false,
@@ -39,7 +68,13 @@ function EntryHarness({
   initialView?: 'choice' | 'resume' | 'new' | 'summary';
   recentLoading?: boolean;
   recentItems?: RecentAssignmentItem[];
+  recentLineages?: RecentAssignmentLineage[];
   recentError?: string | null;
+  recentHasMore?: boolean;
+  recentLoadingMore?: boolean;
+  recentLoadMoreError?: string | null;
+  onLoadMoreRecent?: () => Promise<void> | void;
+  onOpenRecent?: () => void;
   learnerLoading?: boolean;
   learnerError?: string | null;
   opening?: boolean;
@@ -49,13 +84,21 @@ function EntryHarness({
   const [view, setView] = useState(initialView);
   const [selectedRecentId, setSelectedRecentId] = useState('');
   const [selectedLearnerId, setSelectedLearnerId] = useState('');
+  const lineages = recentLineages ?? recentItems.map((item) => makeLineage(item));
+  const lineageProps = {
+    recentLineages: lineages,
+    recentHasMore,
+    recentLoadingMore,
+    recentLoadMoreError,
+    onLoadMoreRecent,
+  };
 
   return (
     <AssignmentEntryStep
+      {...lineageProps}
       view={view}
       recentLoading={recentLoading}
       recentError={recentError}
-      recentItems={recentItems}
       selectedRecentId={selectedRecentId}
       learners={learners}
       learnerLoading={learnerLoading}
@@ -71,7 +114,7 @@ function EntryHarness({
       onChangeChoice={() => setView('choice')}
       onSelectRecent={setSelectedRecentId}
       onRetryRecent={vi.fn()}
-      onOpenRecent={vi.fn()}
+      onOpenRecent={onOpenRecent}
       onSelectLearner={setSelectedLearnerId}
       onRetryLearners={vi.fn()}
       onStartNew={vi.fn()}
@@ -133,7 +176,117 @@ describe('AssignmentEntryStep', () => {
     expect(
       (screen.getByRole('button', { name: 'Open assignment' }) as HTMLButtonElement).disabled,
     ).toBe(false);
-    expect(screen.getByText(/Opens Cora's published assignment/i)).toBeTruthy();
+    expect(screen.queryByText(/Existing work is preserved/i)).toBeNull();
+  });
+
+  it('shows four recent lineages first and reveals eight more without replacing them', async () => {
+    const user = userEvent.setup();
+    const lineages = Array.from({ length: 12 }, (_, index) =>
+      makeLineage(makeRecentItem(`job-${index + 1}`, `Learner ${index + 1}`)),
+    );
+    render(
+      <EntryHarness
+        initialView="resume"
+        recentItems={lineages.map((lineage) => lineage.latest)}
+        recentLineages={lineages}
+      />,
+    );
+
+    expect(screen.getAllByRole('radio')).toHaveLength(4);
+    await user.click(screen.getByRole('button', { name: 'Show older assignments' }));
+    expect(screen.getAllByRole('radio')).toHaveLength(12);
+  });
+
+  it('expands a rerun lineage without repeating learner or recovery text', async () => {
+    const user = userEvent.setup();
+    const latest = makeRecentItem('job-3', 'Yulia G', {
+      sourceJobId: 'job-2',
+      recoveryAnchor: 'Guidance & assignment draft',
+      state: 'needs-attention',
+      statusLabel: 'Needs attention',
+      statusTone: 'warning',
+      actionLabel: 'Review issue',
+    });
+    const previous = makeRecentItem('job-2', 'Yulia G', { sourceJobId: 'job-1' });
+    const original = makeRecentItem('job-1', 'Yulia G', { sourceJobId: null });
+    render(
+      <EntryHarness
+        initialView="resume"
+        recentItems={[latest, previous, original]}
+        recentLineages={[makeLineage(latest, [previous, original])]}
+      />,
+    );
+
+    const disclosure = screen.getByRole('button', { name: /3 versions/i });
+    expect(disclosure.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.getAllByText('Yulia G')).toHaveLength(1);
+
+    await user.click(disclosure);
+    expect(disclosure.getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByRole('radio', { name: /Previous rerun.*Published/i })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: /Original.*Published/i })).toBeTruthy();
+    expect(screen.getAllByText('Yulia G')).toHaveLength(1);
+    expect(screen.getAllByText('Guidance & assignment draft')).toHaveLength(1);
+  });
+
+  it('loads another collection page only after local lineages are exhausted', async () => {
+    const user = userEvent.setup();
+    const onLoadMoreRecent = vi.fn().mockResolvedValue(undefined);
+    const lineages = Array.from({ length: 4 }, (_, index) =>
+      makeLineage(makeRecentItem(`job-${index + 1}`, `Learner ${index + 1}`)),
+    );
+    render(
+      <EntryHarness
+        initialView="resume"
+        recentItems={lineages.map((lineage) => lineage.latest)}
+        recentLineages={lineages}
+        recentHasMore
+        onLoadMoreRecent={onLoadMoreRecent}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Show older assignments' }));
+    expect(onLoadMoreRecent).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: 'Load more' })).toBeTruthy();
+  });
+
+  it('selects and opens an exact older version with its own action', async () => {
+    const user = userEvent.setup();
+    const onOpenRecent = vi.fn();
+    const latest = makeRecentItem('job-rerun', 'Yulia G', { sourceJobId: 'job-original' });
+    const original = makeRecentItem('job-original', 'Yulia G', {
+      sourceJobId: null,
+      state: 'needs-attention',
+      statusLabel: 'Needs attention',
+      statusTone: 'warning',
+      actionLabel: 'Review issue',
+    });
+    render(
+      <EntryHarness
+        initialView="resume"
+        recentLineages={[makeLineage(latest, [original])]}
+        onOpenRecent={onOpenRecent}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '2 versions' }));
+    await user.click(screen.getByRole('radio', { name: /Original.*Needs attention/i }));
+    await user.click(screen.getByRole('button', { name: 'Review issue' }));
+    expect(onOpenRecent).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps loaded rows visible beside a local load-more retry', () => {
+    render(
+      <EntryHarness
+        initialView="resume"
+        recentLineages={[makeLineage(publishedItem)]}
+        recentLoadMoreError="Unable to load older assignments."
+      />,
+    );
+
+    expect(screen.getByRole('radio', { name: /Cora.*Published/i })).toBeTruthy();
+    expect(screen.getByRole('alert').textContent).toContain('Unable to load older assignments.');
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
   });
 
   it('keeps learner selection and one primary action inside New', async () => {

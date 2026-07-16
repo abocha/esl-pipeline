@@ -1,7 +1,11 @@
+import { AlertCircle, Check, ChevronDown, ChevronUp, FileCheck2, RefreshCw } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+
 import type { StudentOption } from '../../../utils/api';
 import type {
   AssignmentEntryView,
   RecentAssignmentItem,
+  RecentAssignmentLineage,
   RecentAssignmentState,
 } from '../../minimal/MinimalAssignment.entry-state';
 import { ProductButton } from '../../system/ProductButton';
@@ -17,7 +21,10 @@ interface AssignmentEntryStepProps {
   view: AssignmentEntryView;
   recentLoading: boolean;
   recentError: string | null;
-  recentItems: RecentAssignmentItem[];
+  recentLineages: RecentAssignmentLineage[];
+  recentHasMore: boolean;
+  recentLoadingMore: boolean;
+  recentLoadMoreError: string | null;
   selectedRecentId: string;
   learners: StudentOption[];
   learnerLoading: boolean;
@@ -31,11 +38,46 @@ interface AssignmentEntryStepProps {
   onChangeChoice: () => void;
   onSelectRecent: (id: string) => void;
   onRetryRecent: () => void;
+  onLoadMoreRecent: () => Promise<void> | void;
   onOpenRecent: () => void;
   onSelectLearner: (id: string) => void;
   onRetryLearners: () => void;
   onStartNew: () => void;
   onChangeAssignment: () => void;
+}
+
+const INITIAL_LINEAGE_COUNT = 4;
+const LINEAGE_REVEAL_COUNT = 8;
+
+function RecentStateIcon({ item }: { item: RecentAssignmentItem }) {
+  const iconProps = { size: 16, strokeWidth: 2 };
+  if (item.state === 'published') return <Check {...iconProps} aria-hidden="true" />;
+  if (item.state === 'ready-to-share') return <FileCheck2 {...iconProps} aria-hidden="true" />;
+  if (item.state === 'in-progress') return <RefreshCw {...iconProps} aria-hidden="true" />;
+  if (item.state === 'needs-attention') return <AlertCircle {...iconProps} aria-hidden="true" />;
+  return (
+    <span aria-hidden="true">
+      {item.destination
+        .replace('source', '2')
+        .replace('context', '3')
+        .replace('create', '4')
+        .replace('review', '5')}
+    </span>
+  );
+}
+
+function RecentState({ item }: { item: RecentAssignmentItem }) {
+  return (
+    <span className="assignment-entry-step__recent-state">
+      <span className="assignment-entry-step__recent-state-icon">
+        <RecentStateIcon item={item} />
+      </span>
+      <span>
+        <strong>{item.statusLabel}</strong>
+        <span>{item.timeLabel}</span>
+      </span>
+    </span>
+  );
 }
 
 function formatSummaryState(state: RecentAssignmentState): string {
@@ -49,7 +91,10 @@ export function AssignmentEntryStep({
   view,
   recentLoading,
   recentError,
-  recentItems,
+  recentLineages,
+  recentHasMore,
+  recentLoadingMore,
+  recentLoadMoreError,
   selectedRecentId,
   learners,
   learnerLoading,
@@ -63,15 +108,48 @@ export function AssignmentEntryStep({
   onChangeChoice,
   onSelectRecent,
   onRetryRecent,
+  onLoadMoreRecent,
   onOpenRecent,
   onSelectLearner,
   onRetryLearners,
   onStartNew,
   onChangeAssignment,
 }: AssignmentEntryStepProps) {
+  const [visibleLineageCount, setVisibleLineageCount] = useState(INITIAL_LINEAGE_COUNT);
+  const [expandedLineageIds, setExpandedLineageIds] = useState<Set<string>>(() => new Set());
+  const recentItems = useMemo(
+    () => recentLineages.flatMap((lineage) => [lineage.latest, ...lineage.olderVersions]),
+    [recentLineages],
+  );
   const selectedRecent = recentItems.find((item) => item.id === selectedRecentId) ?? null;
   const selectedLearner = learners.find((learner) => learner.id === selectedLearnerId) ?? null;
   const routeChangeDisabled = opening || starting;
+
+  useEffect(() => {
+    if (view !== 'resume') {
+      setVisibleLineageCount(INITIAL_LINEAGE_COUNT);
+      setExpandedLineageIds(new Set());
+    }
+  }, [view]);
+
+  useEffect(() => {
+    const selectedLineage = recentLineages.find((lineage) =>
+      lineage.olderVersions.some((item) => item.id === selectedRecentId),
+    );
+    if (!selectedLineage) return;
+    setExpandedLineageIds((current) => {
+      if (current.has(selectedLineage.id)) return current;
+      const next = new Set(current);
+      next.add(selectedLineage.id);
+      return next;
+    });
+  }, [recentLineages, selectedRecentId]);
+
+  const revealMoreLineages = async () => {
+    const nextCount = visibleLineageCount + LINEAGE_REVEAL_COUNT;
+    setVisibleLineageCount(nextCount);
+    if (nextCount > recentLineages.length && recentHasMore) await onLoadMoreRecent();
+  };
 
   if (view === 'choice') {
     return (
@@ -120,32 +198,140 @@ export function AssignmentEntryStep({
           </div>
         ) : (
           <>
-            <fieldset className="assignment-entry-step__recent-list">
+            <fieldset className="assignment-entry-step__recent-list" aria-busy={recentLoadingMore}>
               <legend>Recent assignments</legend>
-              {recentItems.map((item) => (
-                <label key={item.id} className="assignment-entry-step__recent-row">
-                  <input
-                    type="radio"
-                    name="recent-assignment"
-                    checked={item.id === selectedRecentId}
-                    disabled={opening}
-                    onChange={() => onSelectRecent(item.id)}
-                  />
-                  <span>
-                    <strong>{item.learnerName}</strong>
-                    <span>{item.activityLabel}</span>
-                    <span>{item.outcomeLabel}</span>
-                    <span>{item.statusLabel}</span>
-                    <span>{item.timeLabel}</span>
-                  </span>
-                </label>
-              ))}
+              {recentLineages.slice(0, visibleLineageCount).map((lineage) => {
+                const { latest, olderVersions } = lineage;
+                const expanded = expandedLineageIds.has(lineage.id);
+                const versionCount = olderVersions.length + 1;
+                const historyId = `assignment-lineage-${lineage.id}`;
+                return (
+                  <div key={lineage.id} className="assignment-entry-step__recent-lineage">
+                    <div
+                      className={`assignment-entry-step__recent-row assignment-entry-step__recent-row--${latest.statusTone}${latest.id === selectedRecentId ? ' is-selected' : ''}`}
+                    >
+                      <input
+                        id={`recent-assignment-${latest.id}`}
+                        type="radio"
+                        name="recent-assignment"
+                        aria-label={`${latest.learnerName}, ${latest.recoveryAnchor ?? latest.activityLabel}, ${latest.statusLabel}, ${latest.timeLabel}`}
+                        checked={latest.id === selectedRecentId}
+                        disabled={opening}
+                        onChange={() => onSelectRecent(latest.id)}
+                      />
+                      <label
+                        htmlFor={`recent-assignment-${latest.id}`}
+                        className="assignment-entry-step__recent-learner"
+                      >
+                        {latest.learnerName}
+                      </label>
+                      <div className="assignment-entry-step__recent-anchor">
+                        <label htmlFor={`recent-assignment-${latest.id}`}>
+                          {latest.recoveryAnchor ?? latest.activityLabel}
+                        </label>
+                        {versionCount > 1 ? (
+                          <span className="assignment-entry-step__version-disclosure">
+                            <span>Latest rerun ·</span>
+                            <button
+                              type="button"
+                              className="assignment-entry-step__version-pill"
+                              aria-label={`${versionCount} versions`}
+                              aria-expanded={expanded}
+                              aria-controls={historyId}
+                              onClick={() =>
+                                setExpandedLineageIds((current) => {
+                                  const next = new Set(current);
+                                  if (expanded) next.delete(lineage.id);
+                                  else next.add(lineage.id);
+                                  return next;
+                                })
+                              }
+                            >
+                              {versionCount} versions
+                              {expanded ? (
+                                <ChevronUp size={15} aria-hidden="true" />
+                              ) : (
+                                <ChevronDown size={15} aria-hidden="true" />
+                              )}
+                            </button>
+                          </span>
+                        ) : latest.sourceJobId ? (
+                          <span className="assignment-entry-step__version-note">Rerun</span>
+                        ) : null}
+                      </div>
+                      <label
+                        htmlFor={`recent-assignment-${latest.id}`}
+                        className="assignment-entry-step__recent-state-cell"
+                      >
+                        <RecentState item={latest} />
+                      </label>
+                    </div>
+                    {expanded ? (
+                      <div
+                        id={historyId}
+                        className="assignment-entry-step__version-list"
+                        role="group"
+                        aria-label={`Versions for ${latest.learnerName}`}
+                      >
+                        {olderVersions.map((version) => {
+                          const versionLabel = version.sourceJobId ? 'Previous rerun' : 'Original';
+                          return (
+                            <div
+                              key={version.id}
+                              className={`assignment-entry-step__version-row assignment-entry-step__recent-row--${version.statusTone}`}
+                            >
+                              <input
+                                id={`recent-assignment-${version.id}`}
+                                type="radio"
+                                name="recent-assignment"
+                                aria-label={`${versionLabel}, ${version.statusLabel}, ${version.timeLabel}`}
+                                checked={version.id === selectedRecentId}
+                                disabled={opening}
+                                onChange={() => onSelectRecent(version.id)}
+                              />
+                              <label htmlFor={`recent-assignment-${version.id}`}>
+                                {versionLabel}
+                              </label>
+                              <label
+                                htmlFor={`recent-assignment-${version.id}`}
+                                className="assignment-entry-step__recent-state-cell"
+                              >
+                                <RecentState item={version} />
+                              </label>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
             </fieldset>
-            {selectedRecent ? (
-              <p className="assignment-entry-step__consequence">
-                Opens {selectedRecent.learnerName}'s {selectedRecent.statusLabel.toLowerCase()}{' '}
-                assignment. Existing work is preserved.
-              </p>
+            {visibleLineageCount < recentLineages.length || recentHasMore ? (
+              <button
+                type="button"
+                className="product-button product-button--quiet assignment-entry-step__show-older"
+                disabled={recentLoadingMore}
+                onClick={() => void revealMoreLineages()}
+              >
+                {recentLoadingMore
+                  ? 'Loading…'
+                  : visibleLineageCount <= INITIAL_LINEAGE_COUNT
+                    ? 'Show older assignments'
+                    : 'Load more'}
+              </button>
+            ) : null}
+            {recentLoadMoreError ? (
+              <div className="assignment-entry-step__load-more-error" role="alert">
+                <span>{recentLoadMoreError}</span>
+                <button
+                  type="button"
+                  className="product-button product-button--quiet"
+                  onClick={() => void onLoadMoreRecent()}
+                >
+                  Try again
+                </button>
+              </div>
             ) : null}
             <ProductButton
               busy={opening}

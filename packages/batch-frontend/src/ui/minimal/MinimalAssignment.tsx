@@ -65,7 +65,10 @@ import {
   type ResumeOpenSuccess,
   useMinimalAssignmentResume,
 } from './MinimalAssignment.resume';
-import { buildRecentAssignmentItems } from './MinimalAssignment.resume-presentation';
+import {
+  buildRecentAssignmentItems,
+  buildRecentAssignmentLineages,
+} from './MinimalAssignment.resume-presentation';
 import { useMinimalAssignmentSourceController } from './MinimalAssignment.source';
 import {
   AssignmentStageSection,
@@ -1371,6 +1374,10 @@ export const MinimalAssignment: React.FC = () => {
       studentNameById,
     );
   }, [resume.assignmentSessions, resume.resumeJobs, resume.selectedResumeJobId, studentNameById]);
+  const resumeLineages = useMemo(
+    () => buildRecentAssignmentLineages(resumeJobItems),
+    [resumeJobItems],
+  );
   useEffect(() => {
     if (
       entryView === 'resume' &&
@@ -1768,7 +1775,10 @@ export const MinimalAssignment: React.FC = () => {
             view={entryView}
             recentLoading={resume.resumeLoading}
             recentError={resume.resumeError}
-            recentItems={resumeJobItems}
+            recentLineages={resumeLineages}
+            recentHasMore={resume.resumeHasMore}
+            recentLoadingMore={resume.resumeLoadingMore}
+            recentLoadMoreError={resume.resumeLoadMoreError}
             selectedRecentId={resume.selectedResumeJobId}
             learners={source.studentOptions}
             learnerLoading={source.studentOptionsLoading}
@@ -1782,6 +1792,7 @@ export const MinimalAssignment: React.FC = () => {
             onChangeChoice={() => setEntryView('choice')}
             onSelectRecent={resume.setSelectedResumeJobId}
             onRetryRecent={() => void resume.loadResumeJobs()}
+            onLoadMoreRecent={resume.loadMoreResumeJobs}
             onOpenRecent={() => void handleOpenRecentAssignment()}
             onSelectLearner={handleStudentSelectionChange}
             onRetryLearners={() => void loadStudentOptions()}
