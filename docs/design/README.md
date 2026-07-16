@@ -5,7 +5,7 @@
 - Audience: AI agents and maintainers.
 - Read Time: 1 minute.
 - Authority Level: Design router.
-- Last Verified Against: 2026-07-13 repo state.
+- Last Verified Against: 2026-07-16 repo state.
 - Owner: backend/frontend maintainers + automation agents.
 - Review Cadence: monthly or after transcription-flow changes.
 - Status: `router`.
@@ -17,17 +17,21 @@
 
 ## When To Read
 
+- Before designing or substantially revising any product UI.
 - Before tasks involving transcription pipeline design assumptions.
 
 ## Canonical Sources
 
-1. [`docs/design/TRANSCRIPTION_PIPELINE_SPEC.md`](TRANSCRIPTION_PIPELINE_SPEC.md)
-2. [`docs/backend-frontend/backend-frontend-alignment.md`](../backend-frontend/backend-frontend-alignment.md)
-3. [`docs/reference/agents-ssot.md`](../reference/agents-ssot.md)
+1. [`PRODUCT.md`](../../PRODUCT.md)
+2. [`Product UI preferences`](PRODUCT_UI_PREFERENCES.md)
+3. [`docs/design/TRANSCRIPTION_PIPELINE_SPEC.md`](TRANSCRIPTION_PIPELINE_SPEC.md)
+4. [`docs/backend-frontend/backend-frontend-alignment.md`](../backend-frontend/backend-frontend-alignment.md)
+5. [`docs/reference/agents-ssot.md`](../reference/agents-ssot.md)
 
 ## Current State
 
-- Active design spec: transcription pipeline only.
+- Active cross-screen product UI guidance: [`Product UI preferences`](PRODUCT_UI_PREFERENCES.md).
+- Active domain design spec: transcription pipeline.
 - Historical frontend vision docs are archived under `docs/archive/frontend/2026-02/`.
 
 ## Living Review Records

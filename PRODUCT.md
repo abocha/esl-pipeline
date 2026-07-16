@@ -35,6 +35,11 @@ buttons attached.
 - Use quiet confidence: informative hierarchy, restrained emphasis, and clear feedback.
 - Prefer practical teaching-workflow language over platform jargon.
 
+Detailed, cross-screen UI guidance lives in
+[`docs/design/PRODUCT_UI_PREFERENCES.md`](docs/design/PRODUCT_UI_PREFERENCES.md). Read it before
+designing or substantially revising a product view; it distinguishes durable preferences from
+patterns that were specific to one screen.
+
 ## Accessibility & Inclusion
 
 Aim for WCAG AA for product surfaces. Preserve keyboard access, visible focus states, readable
