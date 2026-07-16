@@ -238,6 +238,10 @@ server-side from the previous release. The VPS never runs `docker build` or pnpm
 add the new SHA tag to an already-local image when the resolved digest is unchanged. PostgreSQL and
 Redis keep their existing official Alpine families and persistent volumes.
 
+If image publication fails after a release tag exists, do not deploy that release until all three
+SHA/version image refs are verified. Follow the fail-closed `Recover Release Image Bundle` procedure
+in [`DEPLOYMENT.md`](../backend-frontend/DEPLOYMENT.md); do not repair tags ad hoc on the VPS.
+
 The manual deploy script writes image refs and digests only under:
 
 ```text
