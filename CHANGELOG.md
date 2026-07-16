@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [9.11.0] - 2026-07-16
+
+### Changed
+
+- Automated release from PR #138: feat: refine assignment resume history and release reuse (https://github.com/abocha/esl-pipeline/pull/138)
+
 ## [9.10.5] - 2026-07-15
 
 ### Changed
