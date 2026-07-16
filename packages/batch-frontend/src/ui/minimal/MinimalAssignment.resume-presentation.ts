@@ -26,13 +26,12 @@ function formatResumeTimeLabel(value: string): string {
   if (dayDiff === 1) {
     return `Yesterday at ${timeLabel}`;
   }
-  return timestamp.toLocaleString([], {
+  const dateLabel = timestamp.toLocaleDateString([], {
     day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
+    month: '2-digit',
+    year: '2-digit',
   });
+  return `${dateLabel} · ${timeLabel}`;
 }
 
 function getResumeStatusPresentation(
