@@ -1,0 +1,133 @@
+name: Recover Release Image Bundle
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Existing 40-character release commit SHA
+        required: true
+        type: string
+      release_tag:
+        description: Existing release tag to repair (vX.Y.Z)
+        required: true
+        type: string
+      previous_tag:
+        description: Complete prior release tag used for unchanged images
+        required: true
+        type: string
+      reuse_batch_backend:
+        description: Copy batch-backend from the previous release
+        required: true
+        default: false
+        type: boolean
+      reuse_batch_frontend:
+        description: Copy batch-frontend from the previous release
+        required: true
+        default: false
+        type: boolean
+      reuse_telegram_ops_bot:
+        description: Copy telegram-ops-bot from the previous release
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: recover-release-image-bundle-${{ inputs.release_tag }}
+  cancel-in-progress: false
+
+jobs:
+  recover-images:
+    name: recover and verify release images
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      IMAGE_PREFIX: ghcr.io/${{ github.repository }}
+      RELEASE_SHA: ${{ inputs.release_sha }}
+      RELEASE_TAG: ${{ inputs.release_tag }}
+      PREVIOUS_TAG: ${{ inputs.previous_tag }}
+      REUSE_BATCH_BACKEND: ${{ inputs.reuse_batch_backend }}
+      REUSE_BATCH_FRONTEND: ${{ inputs.reuse_batch_frontend }}
+      REUSE_TELEGRAM_OPS_BOT: ${{ inputs.reuse_telegram_ops_bot }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Validate recovery request
+        run: |
+          set -euo pipefail
+
+          if [[ ! "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Release commit is not a 40-character SHA: ${RELEASE_SHA}"
+            exit 1
+          fi
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release tag is not a vX.Y.Z tag: ${RELEASE_TAG}"
+            exit 1
+          fi
+          if [[ ! "$PREVIOUS_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Previous tag is not a vX.Y.Z tag: ${PREVIOUS_TAG}"
+            exit 1
+          fi
+          if [[ "$RELEASE_TAG" == "$PREVIOUS_TAG" ]]; then
+            echo "Release tag and previous tag must differ"
+            exit 1
+          fi
+          if [[ "$(git rev-list -n 1 "$RELEASE_TAG")" != "$RELEASE_SHA" ]]; then
+            echo "Release tag ${RELEASE_TAG} does not resolve to ${RELEASE_SHA}"
+            exit 1
+          fi
+          if [[ "$REUSE_BATCH_BACKEND" != "true" && "$REUSE_BATCH_FRONTEND" != "true" && "$REUSE_TELEGRAM_OPS_BOT" != "true" ]]; then
+            echo "Select at least one image to reuse"
+            exit 1
+          fi
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c
+
+      - name: Login to GHCR
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Recover and verify release bundle
+        run: |
+          set -euo pipefail
+
+          reuse_image() {
+            local name="$1"
+            docker buildx imagetools create \
+              --prefer-index=false \
+              --tag "${IMAGE_PREFIX}/${name}:${RELEASE_SHA}" \
+              --tag "${IMAGE_PREFIX}/${name}:${RELEASE_TAG}" \
+              "${IMAGE_PREFIX}/${name}:${PREVIOUS_TAG}"
+          }
+
+          verify_image() {
+            local name="$1"
+            local sha_digest
+            local tag_digest
+            sha_digest="$(docker buildx imagetools inspect "${IMAGE_PREFIX}/${name}:${RELEASE_SHA}" | awk '$1 == "Digest:" { print $2; exit }')"
+            tag_digest="$(docker buildx imagetools inspect "${IMAGE_PREFIX}/${name}:${RELEASE_TAG}" | awk '$1 == "Digest:" { print $2; exit }')"
+            if [[ -z "$sha_digest" || "$sha_digest" != "$tag_digest" ]]; then
+              echo "Release refs for ${name} do not resolve to the same digest"
+              exit 1
+            fi
+            echo "Verified ${name} at ${sha_digest}"
+          }
+
+          [[ "$REUSE_BATCH_BACKEND" == "true" ]] && reuse_image batch-backend
+          [[ "$REUSE_BATCH_FRONTEND" == "true" ]] && reuse_image batch-frontend
+          [[ "$REUSE_TELEGRAM_OPS_BOT" == "true" ]] && reuse_image telegram-ops-bot
+
+          verify_image batch-backend
+          verify_image batch-frontend
+          verify_image telegram-ops-bot
