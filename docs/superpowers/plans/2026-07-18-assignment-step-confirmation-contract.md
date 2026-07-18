@@ -211,7 +211,7 @@ after Task 1 implementation and validation are complete.
 - Modify: `packages/batch-backend/tests/integration.migrations.test.ts`
 - Modify: `packages/batch-backend/tests/domain.assignment-session-repository.test.ts`
 
-- [ ] **Step 1: Write failing contract-version and migration tests**
+- [x] **Step 1: Write failing contract-version and migration tests**
 
 Add exact assertions for API `4.0.0`, DB `0.23.0`, and migration head
 `0044_assignment_step_confirmation_contract`. Seed active and archived pre-cutover sessions, an
@@ -233,7 +233,7 @@ expect((await findTranscript(historicalTranscriptId)).working_version).toBeNull(
 expect(await readHomeworkMarkdown(homeworkMemoryEntryId)).toBe(historicalMarkdown);
 ```
 
-- [ ] **Step 2: Run the focused tests and verify the expected failure**
+- [x] **Step 2: Run the focused tests and verify the expected failure**
 
 Run:
 
@@ -243,7 +243,7 @@ pnpm --filter @esl-pipeline/batch-backend exec vitest run tests/contracts.assign
 
 Expected: version assertions report the current `3.1.0`/`0.22.0`/`0043` values and migration fixtures fail because the new columns do not exist.
 
-- [ ] **Step 3: Add the exact contract types**
+- [x] **Step 3: Add the exact contract types**
 
 Add the approved discriminated contracts to `packages/contracts/src/index.ts`:
 
@@ -337,7 +337,7 @@ non-null `confirmedStep`, `confirmed`, selected-profile recovery fields, and nul
 `ConfirmAssignmentSessionShareRequest`, `ConfirmAssignmentSessionShareResponse { session; job }`,
 and conflict responses containing the latest session or working artifact.
 
-- [ ] **Step 4: Add the migration and version bump**
+- [x] **Step 4: Add the migration and version bump**
 
 Create the migration with:
 
@@ -362,7 +362,7 @@ Do not add an empty-session default. Student confirmation is the sole insert pat
 
 Add check constraints for `revision > 0`, working versions greater than zero when present, paired working-version/hash nullability, confirmed-step values, and 64-character lowercase SHA-256 hashes. Make `share_job_id` a unique job foreign key; the Share request UUID is the job ID, so no separate Share request column is stored.
 
-- [ ] **Step 5: Run migration and contract tests**
+- [x] **Step 5: Run migration and contract tests**
 
 Run:
 
@@ -374,7 +374,7 @@ Expected: all focused tests pass, including total session/editor-artifact cutove
 completed outputs and homework-memory markdown reads, the hash-keyed lesson-memory constraint, and
 new active indexes that exclude confirmed Share.
 
-- [ ] **Step 6: Commit the contract boundary**
+- [x] **Step 6: Commit the contract boundary**
 
 ```bash
 git add packages/contracts/src/index.ts packages/contracts/src/contract-versions.ts packages/batch-backend/tests/contracts.assignment-confirmation-version.test.ts packages/batch-backend/tests/contracts.db-contract-version.test.ts packages/batch-backend/migrations/0044_assignment_step_confirmation_contract.sql packages/batch-backend/tests/integration.migrations.test.ts packages/batch-backend/tests/domain.assignment-session-repository.test.ts
