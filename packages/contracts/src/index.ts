@@ -199,7 +199,7 @@ export interface AssignmentConfirmedSnapshot {
 export interface AssignmentSessionDto {
   id: string;
   userId: string;
-  studentId: string | null;
+  studentId: string;
   lessonId: string | null;
   recordingId: string | null;
   transcriptId: string | null;
