@@ -299,6 +299,7 @@ export const MinimalAssignment: React.FC = () => {
   const assignmentSessionMutationQueueRef = useRef<Promise<AssignmentSession | null>>(
     Promise.resolve(null),
   );
+  const activeAssignmentSessionIdRef = useRef<string | null>(null);
   const assignmentSessionSettingsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const assignmentSessionMilestoneRef = useRef({
     studentId: '',
@@ -423,14 +424,13 @@ export const MinimalAssignment: React.FC = () => {
     setTranscriptText,
   } = source;
   const { applyHydratedSnapshot: applyContextHydration } = context;
-  const activeAssignmentProfileId = context.profilePreview ? context.selectedProfileId : '';
+  const getActiveAssignmentSessionId = useCallback(() => activeAssignmentSessionIdRef.current, []);
 
   const authoring = useMinimalAssignmentAuthoringController({
     recordingId: source.recording?.recordingId ?? null,
-    lessonId: linkedLessonId || null,
+    getAssignmentSessionId: getActiveAssignmentSessionId,
     transcriptStatus: source.transcriptStatus,
     teacherNotes,
-    selectedProfileId: activeAssignmentProfileId,
     selectedTemplateId,
     currentJobId: jobStatus?.jobId ?? null,
     learningPresetCatalogEnabled,
@@ -612,6 +612,7 @@ export const MinimalAssignment: React.FC = () => {
   });
   const activeAssignmentSession = resume.activeAssignmentSession;
   const setActiveAssignmentSession = resume.setActiveAssignmentSession;
+  activeAssignmentSessionIdRef.current = activeAssignmentSession?.id ?? null;
 
   const assignmentSessionWritesAllowed = useCallback(() => {
     return (

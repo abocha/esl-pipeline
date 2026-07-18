@@ -860,8 +860,11 @@ git commit -m "feat(memory): bind lessons to confirmed source"
 - Modify: `packages/batch-backend/src/transport/extended-routes/recordings-routes.ts`
 - Modify: `packages/batch-backend/tests/application.prompt-package.resolution.test.ts`
 - Modify: `packages/batch-backend/tests/application.prompt-package.lineage-drift.test.ts`
+- Modify: `packages/batch-backend/tests/application.prompt-package.test-harness.ts`
 - Modify: `packages/batch-backend/tests/transport.http-server.integration.recordings-prompt-packages.test.ts`
 - Modify: `packages/batch-frontend/src/utils/api.ts`
+- Modify: `packages/batch-frontend/src/ui/minimal/MinimalAssignment.authoring.ts`
+- Modify: `packages/batch-frontend/src/ui/minimal/MinimalAssignment.tsx`
 
 - [ ] **Step 1: Write failing exact-confirmed-input tests**
 
@@ -920,12 +923,14 @@ pnpm --filter @esl-pipeline/batch-backend typecheck
 pnpm --filter @esl-pipeline/batch-frontend typecheck
 ```
 
-Expected: exact confirmed-input tests and both package typechecks pass.
+Expected: exact confirmed-input tests and backend typecheck pass. Until Tasks 7-8 realign the
+frontend workflow, frontend typecheck may report only the already-deferred removed `currentStage`,
+`archivedAt`, and old assignment request-type references; Task 5 must add no new frontend errors.
 
 - [ ] **Step 6: Commit confirmed generation inputs**
 
 ```bash
-git add packages/batch-backend/src/application/create-prompt-package.ts packages/batch-backend/src/transport/extended-routes/recordings-routes.ts packages/batch-backend/tests/application.prompt-package.resolution.test.ts packages/batch-backend/tests/application.prompt-package.lineage-drift.test.ts packages/batch-backend/tests/transport.http-server.integration.recordings-prompt-packages.test.ts packages/batch-frontend/src/utils/api.ts
+git add packages/batch-backend/src/application/create-prompt-package.ts packages/batch-backend/src/transport/extended-routes/recordings-routes.ts packages/batch-backend/tests/application.prompt-package.resolution.test.ts packages/batch-backend/tests/application.prompt-package.lineage-drift.test.ts packages/batch-backend/tests/application.prompt-package.test-harness.ts packages/batch-backend/tests/transport.http-server.integration.recordings-prompt-packages.test.ts packages/batch-frontend/src/utils/api.ts packages/batch-frontend/src/ui/minimal/MinimalAssignment.authoring.ts packages/batch-frontend/src/ui/minimal/MinimalAssignment.tsx
 git commit -m "fix(generation): pin confirmed assignment inputs"
 ```
 

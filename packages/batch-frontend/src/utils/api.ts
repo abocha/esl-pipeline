@@ -3258,16 +3258,10 @@ export async function updateRecordingTranscript(
 export async function createPromptPackage(
   recordingId: string,
   params: {
-    notes?: string;
-    profileId?: string;
+    assignmentSessionId: string;
     templateId?: string;
-    profilePath?: string;
-    lessonId?: string | null;
-    bindingEffectiveAt?: string;
   },
 ): Promise<PromptPackageResponse> {
-  // Backend precedence:
-  // profileId > profilePath > student-linked profileId > configured default profile.
   try {
     const response = await apiClient.post(
       buildApiProxyPath(`/recordings/${encodeURIComponent(recordingId)}/prompt-package`),
