@@ -82,7 +82,10 @@ function createJob(): JobRecord {
   };
 }
 
-function createHarness(stopAfter?: string) {
+function createHarness(
+  stopAfter?: string,
+  options: { corruptOnMaterialize?: boolean; failAfterEnqueue?: boolean } = {},
+) {
   const session = createSession();
   let job = createJob();
   let interrupted = false;
@@ -104,12 +107,18 @@ function createHarness(stopAfter?: string) {
     }
     return { ...session } as never;
   });
-  const materialize = vi.fn(async () => ({
-    draftId: 'draft-1',
-    jobId: job.id,
-    mdPath: null,
-    mdStorageUri: 'local://confirmed/draft.md',
-  }));
+  const materialize = vi.fn(async () => {
+    if (options.corruptOnMaterialize) {
+      job = { ...job, state: 'queued', draftId: 'wrong-draft' };
+      return null;
+    }
+    return {
+      draftId: 'draft-1',
+      jobId: job.id,
+      mdPath: null,
+      mdStorageUri: 'local://confirmed/draft.md',
+    };
+  });
   const approve = vi.fn(async () => {
     if (job.state !== 'awaiting_approval') return null;
     job = { ...job, state: 'queued' };
@@ -117,6 +126,7 @@ function createHarness(stopAfter?: string) {
   });
   const reconcile = vi.fn(async ({ jobId }: { jobId: string }) => {
     enqueuedJobIds.add(jobId);
+    if (options.failAfterEnqueue) job = { ...job, state: 'failed' };
   });
   const checkpoint = vi.fn(async (point: string) => {
     if (!interrupted && point === stopAfter) {
@@ -127,11 +137,18 @@ function createHarness(stopAfter?: string) {
   const overrides = {
     sessions: {
       getByIdForUser: async () => ({ ...session }) as never,
+      getShareJob: async () => {
+        if (job.draftId !== 'draft-1') {
+          throw Object.assign(new Error('linked Share job integrity invalid'), {
+            code: 'ASSIGNMENT_SHARE_JOB_INTEGRITY_INVALID',
+          });
+        }
+        return { ...job } as never;
+      },
       reserveShare,
       completeShare,
     },
     jobs: {
-      getById: async () => ({ ...job }) as never,
       approve,
       resetFailedShare: vi.fn(async () => {
         job = { ...job, state: 'queued' };
@@ -162,6 +179,7 @@ function createHarness(stopAfter?: string) {
     createdJobIds,
     enqueuedJobIds,
     materialize,
+    completeShare,
     setFailed: () => {
       job = { ...job, state: 'failed' };
       session.shareJobId = job.id;
@@ -188,6 +206,13 @@ describe('application/share-assignment-session', () => {
         jobId: request.requestId,
         sourceStorageUri: 'local://confirmed/draft.md',
         expectedContentHash: 'b'.repeat(64),
+        assignmentShare: { sessionId: 'session-1', userId: 'user-1' },
+      });
+      expect(harness.completeShare).toHaveBeenCalledWith({
+        sessionId: 'session-1',
+        userId: 'user-1',
+        jobId: request.requestId,
+        enqueueSatisfied: true,
       });
     },
   );
@@ -205,5 +230,26 @@ describe('application/share-assignment-session', () => {
     });
     expect([...harness.enqueuedJobIds]).toEqual([request.requestId]);
     expect(result.job.jobId).toBe(request.requestId);
+  });
+
+  it('fails closed before enqueue when a reserved job loses confirmed lineage', async () => {
+    const harness = createHarness(undefined, { corruptOnMaterialize: true });
+
+    await expect(harness.firstAttempt()).rejects.toMatchObject({
+      code: 'ASSIGNMENT_SHARE_JOB_INTEGRITY_INVALID',
+    });
+    expect([...harness.enqueuedJobIds]).toEqual([]);
+  });
+
+  it('completes Share from successful enqueue evidence when the worker fails immediately', async () => {
+    const harness = createHarness(undefined, { failAfterEnqueue: true });
+
+    const result = await harness.firstAttempt();
+
+    expect(result.session.confirmedStep).toBe('share');
+    expect(result.job).toMatchObject({ jobId: request.requestId, state: 'failed' });
+    expect(harness.completeShare).toHaveBeenCalledWith(
+      expect.objectContaining({ enqueueSatisfied: true }),
+    );
   });
 });

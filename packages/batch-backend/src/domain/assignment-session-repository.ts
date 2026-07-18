@@ -469,10 +469,15 @@ async function confirmLockedCreate(
     resolved_profile_id: string | null;
     resolved_profile_revision_id: string | null;
     resolved_profile_hash: string | null;
+    resolved_profile_revision_content_hash: string | null;
   }>(
-    `SELECT id, recording_id, transcript_id, student_id, lesson_id, notes,
-            resolved_profile_id, resolved_profile_revision_id, resolved_profile_hash
-     FROM prompt_packages WHERE id = $1`,
+    `SELECT pp.id, pp.recording_id, pp.transcript_id, pp.student_id, pp.lesson_id, pp.notes,
+            pp.resolved_profile_id, pp.resolved_profile_revision_id, pp.resolved_profile_hash,
+            pr.content_hash AS resolved_profile_revision_content_hash
+     FROM prompt_packages pp
+     LEFT JOIN profile_revisions pr
+       ON pr.id = pp.resolved_profile_revision_id AND pr.profile_id = pp.resolved_profile_id
+     WHERE pp.id = $1`,
     [request.promptPackageId],
   );
   const packageRow = prompt.rows[0];
@@ -487,7 +492,9 @@ async function confirmLockedCreate(
     packageRow.notes !== context.teacherNotes ||
     packageRow.resolved_profile_id !== context.profileId ||
     packageRow.resolved_profile_revision_id !== context.profileRevisionId ||
-    packageRow.resolved_profile_hash !== context.profileRevisionHash
+    (context.profileId === null
+      ? packageRow.resolved_profile_hash !== null
+      : packageRow.resolved_profile_revision_content_hash !== context.profileRevisionHash)
   ) {
     throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_LINEAGE_INVALID');
   }
@@ -824,6 +831,23 @@ export async function reserveAssignmentShare(
       ) {
         throw new AssignmentSessionShareError('ASSIGNMENT_SHARE_DIRTY_RECOVERY');
       }
+      const transcript = await getTranscriptByIdForUpdate(client, source.transcriptId);
+      const draft = await getDraftByIdForUpdate(client, create.draftId);
+      if (
+        !transcript ||
+        transcript.recordingId !== source.recordingId ||
+        transcript.workingVersion !== source.transcriptWorkingVersion ||
+        transcript.storageUri !== source.transcriptStorageUri ||
+        transcript.contentHash !== source.transcriptHash ||
+        !draft ||
+        draft.promptPackageId !== create.promptPackageId ||
+        draft.studentId !== current.studentId ||
+        draft.workingVersion !== create.draftWorkingVersion ||
+        draft.storageUri !== create.draftStorageUri ||
+        draft.contentHash !== create.draftHash
+      ) {
+        throw new AssignmentSessionShareError('ASSIGNMENT_SHARE_DIRTY_RECOVERY');
+      }
 
       const job = await insertApprovalJob(
         {
@@ -862,6 +886,7 @@ export async function completeAssignmentShare(params: {
   sessionId: string;
   userId: string;
   jobId: string;
+  enqueueSatisfied: boolean;
 }): Promise<AssignmentSessionRecord> {
   return withPgClient(async (client) => {
     const updated = await client.query<AssignmentSessionRow>(
@@ -870,17 +895,51 @@ export async function completeAssignmentShare(params: {
        WHERE s.id = $1 AND s.user_id = $2 AND s.share_job_id = $3
          AND s.confirmed_step <> 'share'
          AND EXISTS (
-           SELECT 1 FROM jobs j WHERE j.id = $3 AND j.state IN ('queued', 'running', 'succeeded')
+           SELECT 1 FROM jobs j
+           WHERE j.id = $3
+             AND (j.state IN ('queued', 'running', 'succeeded') OR ($4 AND j.state = 'failed'))
+             AND j.user_id = s.user_id
+             AND j.student_id = s.student_id
+             AND to_jsonb(j.recording_id) = s.confirmed_snapshot #> '{source,recordingId}'
+             AND to_jsonb(j.transcript_id) = s.confirmed_snapshot #> '{source,transcriptId}'
+             AND to_jsonb(j.prompt_package_id) = s.confirmed_snapshot #> '{create,promptPackageId}'
+             AND to_jsonb(j.draft_id) = s.confirmed_snapshot #> '{create,draftId}'
+             AND COALESCE(to_jsonb(j.lesson_id), 'null'::jsonb) = s.confirmed_snapshot #> '{source,lessonId}'
+             AND j.md_storage_uri = s.confirmed_snapshot #>> '{create,draftStorageUri}'
+             AND j.source_job_id IS NULL
          )
        RETURNING ${RETURNING_COLUMNS}`,
-      [params.sessionId, params.userId, params.jobId],
+      [params.sessionId, params.userId, params.jobId, params.enqueueSatisfied],
     );
     if (updated.rows[0]) return mapRow(updated.rows[0]);
     const currentRow = await findOwnedById(client, params.sessionId, params.userId);
     if (!currentRow) throw new AssignmentSessionRepositoryError('ASSIGNMENT_SESSION_NOT_FOUND');
     const current = mapRow(currentRow);
-    if (current.confirmedStep === 'share' && current.shareJobId === params.jobId) return current;
+    if (current.confirmedStep === 'share' && current.shareJobId === params.jobId) {
+      const job = await getJobById(params.jobId, { client });
+      if (job && shareJobMatchesSession(job, current)) return current;
+    }
     throw new AssignmentSessionShareError('ASSIGNMENT_SHARE_JOB_INTEGRITY_INVALID');
+  });
+}
+
+export async function getAssignmentShareJob(params: {
+  sessionId: string;
+  userId: string;
+  jobId: string;
+}): Promise<JobRecord> {
+  return withPgClient(async (client) => {
+    const currentRow = await findOwnedById(client, params.sessionId, params.userId);
+    if (!currentRow) throw new AssignmentSessionRepositoryError('ASSIGNMENT_SESSION_NOT_FOUND');
+    const session = mapRow(currentRow);
+    if (session.shareJobId !== params.jobId) {
+      throw new AssignmentSessionShareError('ASSIGNMENT_SHARE_JOB_INTEGRITY_INVALID');
+    }
+    const job = await getJobById(params.jobId, { client });
+    if (!job || !shareJobMatchesSession(job, session)) {
+      throw new AssignmentSessionShareError('ASSIGNMENT_SHARE_JOB_INTEGRITY_INVALID');
+    }
+    return job;
   });
 }
 

@@ -164,7 +164,7 @@ interface PromptArtifactResolution {
     content: string;
     hash: string;
     revision: ProfileRevisionRecord;
-  };
+  } | null;
   template: {
     content: string;
     hash: string;
@@ -274,7 +274,9 @@ export async function createPromptPackage(
   if (recording?.studentId) {
     const studentProfile = await students.getById(recording.studentId, { config });
     canonicalStudentName = studentProfile?.student ?? null;
-    studentProfileId = confirmedInputs?.context.profileId ?? studentProfile?.profileId ?? null;
+    studentProfileId = confirmedInputs
+      ? confirmedInputs.context.profileId
+      : (studentProfile?.profileId ?? null);
     if (!confirmedInputs && !studentProfileId) {
       const binding = await bindings
         .resolveAt(recording.studentId, bindingLookupAt)
@@ -290,9 +292,10 @@ export async function createPromptPackage(
   }
 
   const fallbackProfileId =
-    confirmedInputs?.context.profileId ??
-    params.profileId ??
-    (params.profilePath ? undefined : (implicitStudentProfileId ?? undefined));
+    confirmedInputs !== null
+      ? (confirmedInputs.context.profileId ?? undefined)
+      : (params.profileId ??
+        (params.profilePath ? undefined : (implicitStudentProfileId ?? undefined)));
 
   const selection = await promptOptions.resolveSelection(
     {
@@ -319,6 +322,7 @@ export async function createPromptPackage(
       profileRevisions,
       templateRevisions,
       confirmedProfileRevision: confirmedInputs?.profileRevision ?? null,
+      omitProfile: confirmedInputs !== null && confirmedInputs.context.profileId === null,
     }),
     readStorage.getText(transcript.storageUri),
   ]);
@@ -338,7 +342,7 @@ export async function createPromptPackage(
   });
   const payload = stitchPromptPayload({
     template: artifacts.template.content,
-    profile: artifacts.profile.content,
+    profile: artifacts.profile?.content ?? '',
     studentMemorySnapshot: memoryContext.studentMemorySnapshotBlock,
     recentLessonMemory: memoryContext.recentLessonMemoryBlock,
     recentHomeworkMemory: memoryContext.recentHomeworkMemoryBlock,
@@ -349,7 +353,7 @@ export async function createPromptPackage(
   });
   const requestEnvelope = stitchPromptEnvelope({
     template: artifacts.template.content,
-    profile: artifacts.profile.content,
+    profile: artifacts.profile?.content ?? '',
     studentMemorySnapshot: memoryContext.studentMemorySnapshotBlock,
     recentLessonMemory: memoryContext.recentLessonMemoryBlock,
     recentHomeworkMemory: memoryContext.recentHomeworkMemoryBlock,
@@ -376,13 +380,13 @@ export async function createPromptPackage(
     selectedLessonMemoryIds: memoryContext.selectedLessonMemoryIds,
     selectedHomeworkMemoryIds: memoryContext.selectedHomeworkMemoryIds,
     retrievalPolicyVersion: memoryContext.retrievalPolicyVersion,
-    profilePath: selection.profilePath,
-    resolvedProfileId: selection.profileId,
-    resolvedProfileHash: artifacts.profile.hash,
-    resolvedProfileRevisionId: artifacts.profile.revision.id,
-    resolvedProfileUpdatedAt: artifacts.profile.revision.createdAt,
-    resolvedProfileVersionLabel: artifacts.profile.revision.versionLabel,
-    resolvedProfileStatus: artifacts.profile.revision.status,
+    profilePath: artifacts.profile ? selection.profilePath : null,
+    resolvedProfileId: artifacts.profile ? selection.profileId : null,
+    resolvedProfileHash: artifacts.profile?.hash ?? null,
+    resolvedProfileRevisionId: artifacts.profile?.revision.id ?? null,
+    resolvedProfileUpdatedAt: artifacts.profile?.revision.createdAt ?? null,
+    resolvedProfileVersionLabel: artifacts.profile?.revision.versionLabel ?? null,
+    resolvedProfileStatus: artifacts.profile?.revision.status ?? null,
     resolvedTemplateId: selection.templateId,
     resolvedTemplateHash: artifacts.template.hash,
     resolvedTemplateRevisionId: artifacts.template.revision.id,
@@ -584,20 +588,26 @@ async function resolvePromptArtifactsForWrite(params: {
   profileRevisions: CreatePromptPackageDependencies['profileRevisions'];
   templateRevisions: CreatePromptPackageDependencies['templateRevisions'];
   confirmedProfileRevision: ProfileRevisionRecord | null;
+  omitProfile: boolean;
 }): Promise<PromptArtifactResolution> {
-  const { selection, profileRevisions, templateRevisions, confirmedProfileRevision } = params;
+  const { selection, profileRevisions, templateRevisions, confirmedProfileRevision, omitProfile } =
+    params;
 
   const [activeProfileRevision, activeTemplateRevision] = await Promise.all([
-    confirmedProfileRevision
-      ? Promise.resolve(confirmedProfileRevision)
-      : profileRevisions.getActive(selection.profileId).catch(() => null),
+    omitProfile
+      ? Promise.resolve(null)
+      : confirmedProfileRevision
+        ? Promise.resolve(confirmedProfileRevision)
+        : profileRevisions.getActive(selection.profileId).catch(() => null),
     templateRevisions.getActive(selection.templateId).catch(() => null),
   ]);
 
-  const profileResolution = await resolveProfileArtifact({
-    selection,
-    activeProfileRevision,
-  });
+  const profileResolution = omitProfile
+    ? null
+    : await resolveProfileArtifact({
+        selection,
+        activeProfileRevision,
+      });
   const templateResolution = await resolveTemplateArtifact({
     selection,
     activeTemplateRevision,
