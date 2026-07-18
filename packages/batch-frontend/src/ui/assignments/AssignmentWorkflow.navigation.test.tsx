@@ -12,7 +12,7 @@ describe('AssignmentWorkflow navigation', () => {
           { id: 'student', label: 'Student', status: 'current' },
           { id: 'source', label: 'Lesson source', status: 'locked' },
           { id: 'context', label: 'Teaching context', status: 'locked' },
-          { id: 'create', label: 'Create', status: 'locked' },
+          { id: 'assignment', label: 'Create', status: 'locked' },
           { id: 'review', label: 'Review & share', status: 'locked' },
         ]}
         activeStep="student"
@@ -40,7 +40,7 @@ describe('AssignmentWorkflow navigation', () => {
           { id: 'student', label: 'Student', status: 'complete' },
           { id: 'source', label: 'Lesson source', status: 'current' },
           { id: 'context', label: 'Teaching context', status: 'locked' },
-          { id: 'create', label: 'Create', status: 'locked' },
+          { id: 'assignment', label: 'Create', status: 'locked' },
           { id: 'review', label: 'Review & share', status: 'locked' },
         ]}
         activeStep="source"
@@ -69,7 +69,7 @@ describe('AssignmentWorkflow navigation', () => {
           { id: 'student', label: 'Student', status: 'complete' },
           { id: 'source', label: 'Lesson source', status: 'complete' },
           { id: 'context', label: 'Teaching context', status: 'complete' },
-          { id: 'create', label: 'Create', status: 'complete' },
+          { id: 'assignment', label: 'Create', status: 'complete' },
           { id: 'review', label: 'Review & share', status: 'current' },
         ]}
         activeStep="review"
@@ -96,7 +96,7 @@ describe('AssignmentWorkflow navigation', () => {
           { id: 'student', label: 'Student', status: 'complete' },
           { id: 'source', label: 'Lesson source', status: 'complete' },
           { id: 'context', label: 'Teaching context', status: 'complete' },
-          { id: 'create', label: 'Create', status: 'complete' },
+          { id: 'assignment', label: 'Create', status: 'complete' },
           { id: 'review', label: 'Review & share', status: 'current' },
         ]}
         activeStep="review"
@@ -121,7 +121,7 @@ describe('AssignmentWorkflow navigation', () => {
           { id: 'student', label: 'Student', status: 'complete' },
           { id: 'source', label: 'Lesson source', status: 'complete' },
           { id: 'context', label: 'Teaching context', status: 'complete' },
-          { id: 'create', label: 'Create', status: 'complete' },
+          { id: 'assignment', label: 'Create', status: 'complete' },
           { id: 'review', label: 'Review & share', status: 'current' },
         ]}
         activeStep="review"

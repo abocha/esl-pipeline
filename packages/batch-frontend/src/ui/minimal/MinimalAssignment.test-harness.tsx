@@ -17,10 +17,16 @@ import { MinimalAssignment } from './MinimalAssignment';
 
 vi.mock('../../utils/api', () => ({
   activateProfileRevision: vi.fn(),
+  AssignmentSessionConflictApiError: class AssignmentSessionConflictApiError extends Error {
+    constructor(public readonly latestSession: api.AssignmentSession) {
+      super('Newer saved assignment work was found. Review it before confirming again.');
+      this.name = 'AssignmentSessionConflictApiError';
+    }
+  },
   approveJob: vi.fn(),
-  archiveAssignmentSession: vi.fn(),
   cancelJob: vi.fn(),
-  createAssignmentSession: vi.fn(),
+  confirmAssignmentSessionStep: vi.fn(),
+  confirmStudentAssignmentSession: vi.fn(),
   createDraft: vi.fn(),
   createManualTranscriptSource: vi.fn(),
   createPromptPackage: vi.fn(),
@@ -60,6 +66,7 @@ vi.mock('../../utils/api', () => ({
     }
   },
   getProfileContent: vi.fn(),
+  getProfileRevision: vi.fn(),
   getJobStatus: vi.fn(),
   getRecording: vi.fn(),
   getStudentMemoryHealth: vi.fn(),
@@ -70,8 +77,8 @@ vi.mock('../../utils/api', () => ({
   listProfileRevisions: vi.fn(),
   materializeDraft: vi.fn(),
   populateFirstProfileFromLesson: vi.fn(),
-  requestLessonMemoryFromTranscript: vi.fn(),
   restoreProfileRevision: vi.fn(),
+  shareAssignmentSession: vi.fn(),
   retryRecordingTranscription: vi.fn(),
   rerunJob: vi.fn(),
   renderHtmlPreview: vi
@@ -79,7 +86,7 @@ vi.mock('../../utils/api', () => ({
     .mockResolvedValue({ html: '<html><body><h1>Preview</h1></body></html>' }),
   subscribeToJobEvents: vi.fn().mockReturnValue({ close: vi.fn() }),
   upsertProfileContent: vi.fn(),
-  updateAssignmentSession: vi.fn(),
+  updateAssignmentSessionRecovery: vi.fn(),
   updateDraft: vi.fn(),
   updateRecordingTranscript: vi.fn(),
   uploadRecording: vi.fn(),
@@ -155,18 +162,61 @@ export function makeJobStatus(overrides: Partial<api.JobStatus> = {}): api.JobSt
 }
 
 export function makeAssignmentSession(
-  overrides: Partial<api.AssignmentSession> = {},
+  overrides: Omit<Partial<api.AssignmentSession>, 'studentId'> & {
+    studentId?: string | null;
+  } = {},
 ): api.AssignmentSession {
+  const { studentId: requestedStudentId, ...sessionOverrides } = overrides;
+  const studentId = requestedStudentId ?? 'student-1';
+  const confirmedStep = sessionOverrides.confirmedStep ?? 'student';
+  const recordingId = sessionOverrides.recordingId ?? null;
+  const transcriptId = sessionOverrides.transcriptId ?? null;
+  const promptPackageId = sessionOverrides.promptPackageId ?? null;
+  const draftId = sessionOverrides.draftId ?? null;
   return {
     id: 'session-1',
     userId: 'user-1',
-    studentId: null,
+    studentId,
     lessonId: null,
     recordingId: null,
     transcriptId: null,
     promptPackageId: null,
     draftId: null,
-    currentStage: 'source',
+    revision: 1,
+    confirmedStep,
+    confirmed: {
+      student: { studentId },
+      source:
+        confirmedStep !== 'student' && recordingId && transcriptId
+          ? {
+              lessonId: sessionOverrides.lessonId ?? null,
+              recordingId,
+              transcriptId,
+              transcriptWorkingVersion: 1,
+              transcriptStorageUri: 'memory://transcripts/confirmed',
+              transcriptHash: 'a'.repeat(64),
+            }
+          : null,
+      context:
+        confirmedStep === 'context' || confirmedStep === 'create' || confirmedStep === 'share'
+          ? {
+              teacherNotes: sessionOverrides.teacherNotes ?? null,
+              profileId: sessionOverrides.selectedProfileId ?? null,
+              profileRevisionId: sessionOverrides.selectedProfileRevisionId ?? null,
+              profileRevisionHash: sessionOverrides.selectedProfileRevisionHash ?? null,
+            }
+          : null,
+      create:
+        (confirmedStep === 'create' || confirmedStep === 'share') && promptPackageId && draftId
+          ? {
+              promptPackageId,
+              draftId,
+              draftWorkingVersion: 1,
+              draftStorageUri: 'memory://drafts/confirmed',
+              draftHash: 'b'.repeat(64),
+            }
+          : null,
+    },
     publishTarget: 'html',
     selectedTtsProvider: 'elevenlabs',
     selectedTtsStrategy: 'auto',
@@ -175,10 +225,13 @@ export function makeAssignmentSession(
     selectedGenerationProvider: null,
     selectedGenerationModel: null,
     teacherNotes: null,
+    selectedProfileId: null,
+    selectedProfileRevisionId: null,
+    selectedProfileRevisionHash: null,
+    shareJobId: null,
     createdAt: now,
     updatedAt: now,
-    archivedAt: null,
-    ...overrides,
+    ...sessionOverrides,
   };
 }
 
@@ -214,6 +267,8 @@ export function makeTranscript(
     model: 'mock-model',
     language: 'en',
     mode: 'timeline',
+    workingVersion: 1,
+    contentHash: 'a'.repeat(64),
     createdAt: now,
     updatedAt: now,
     ...overrides,
@@ -309,8 +364,12 @@ export function makeStudentLesson(
 
 export async function previewCurrentDraft(user: ReturnType<typeof userEvent.setup>) {
   const reviewStep = screen.queryByRole('button', { name: /Review & share/i });
-  if (reviewStep && !(reviewStep as HTMLButtonElement).disabled) {
-    await user.click(reviewStep);
+  if (reviewStep) {
+    if ((reviewStep as HTMLButtonElement).disabled) {
+      await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+    } else {
+      await user.click(reviewStep);
+    }
     await screen.findByRole(
       'heading',
       { name: /Review and share/i },
@@ -386,6 +445,7 @@ function hydrateResumedAssignment(
     jobs?: api.JobStatus[];
     promptText?: string;
     draftText?: string;
+    historicalOutput?: boolean;
   } = {},
 ) {
   const status = makeJobStatus({
@@ -397,6 +457,24 @@ function hydrateResumedAssignment(
     ...overrides.status,
   });
   const jobs = overrides.jobs ?? [status];
+
+  if (!overrides.historicalOutput) {
+    const session = makeAssignmentSession({
+      id: 'session-resumed',
+      studentId: status.studentId ?? 'student-alex',
+      recordingId: status.recordingId ?? 'rec-1',
+      transcriptId: status.transcriptId ?? 'tx-1',
+      promptPackageId: status.promptPackageId ?? 'pkg-1',
+      draftId: overrides.draftText ? (status.draftId ?? 'draft-1') : null,
+      confirmedStep: overrides.draftText ? 'create' : 'context',
+    });
+    vi.mocked(api.listAssignmentSessions).mockResolvedValue({
+      sessions: [session],
+      total: 1,
+      limit: 20,
+    });
+    vi.mocked(api.fetchAssignmentSession).mockResolvedValue(session);
+  }
 
   vi.mocked(api.listUserJobs).mockResolvedValue({
     jobs,
@@ -428,6 +506,8 @@ function hydrateResumedAssignment(
       storageUri: 'memory://drafts/draft-1',
       createdBy: 'user-1',
       text: overrides.draftText,
+      workingVersion: 1,
+      contentHash: 'b'.repeat(64),
       createdAt: now,
       updatedAt: now,
     });
@@ -447,7 +527,7 @@ async function openResumedJobAssignment(user: ReturnType<typeof userEvent.setup>
   await user.click((await screen.findAllByRole('radio', {}, { timeout: UI_WAIT_TIMEOUT_MS }))[0]!);
   await user.click(
     screen.getByRole('button', {
-      name: /Review progress|Review assignment|Open assignment|Review issue/i,
+      name: /Review progress|Review assignment|Open assignment|Review issue|Continue assignment/i,
     }),
   );
 }
@@ -664,6 +744,7 @@ export async function renderPublishedAssignment(
     {
       ...overrides,
       draftText: overrides.draftText ?? '# Draft markdown',
+      historicalOutput: true,
       status: {
         state: 'succeeded',
         studentId: 'student-alex',
@@ -683,6 +764,7 @@ export function setupMinimalAssignmentTest() {
     configurable: true,
     value: scrollIntoViewMock,
   });
+  let currentSession = makeAssignmentSession();
 
   vi.mocked(api.fetchPromptOptions).mockResolvedValue({
     templates: [{ id: 'tpl-default', label: 'Default Template' }],
@@ -780,7 +862,14 @@ export function setupMinimalAssignmentTest() {
     total: 0,
     limit: 20,
   });
-  vi.mocked(api.createAssignmentSession).mockResolvedValue(makeAssignmentSession());
+  vi.mocked(api.confirmStudentAssignmentSession).mockImplementation(async (request) => {
+    currentSession = makeAssignmentSession({
+      studentId: request.studentId,
+      lessonId: request.lessonId ?? null,
+      confirmedStep: 'student',
+    });
+    return currentSession;
+  });
   vi.mocked(api.createManualTranscriptSource).mockResolvedValue(
     makeRecording({
       recordingId: 'rec-manual',
@@ -791,11 +880,91 @@ export function setupMinimalAssignmentTest() {
       displayName: 'Pasted lesson transcript',
     }),
   );
-  vi.mocked(api.updateAssignmentSession).mockResolvedValue(makeAssignmentSession());
-  vi.mocked(api.fetchAssignmentSession).mockResolvedValue(makeAssignmentSession());
-  vi.mocked(api.archiveAssignmentSession).mockResolvedValue(
-    makeAssignmentSession({ archivedAt: now }),
-  );
+  vi.mocked(api.updateAssignmentSessionRecovery).mockImplementation(async (_id, request) => {
+    currentSession = makeAssignmentSession({
+      ...currentSession,
+      ...request.patch,
+      revision: request.expectedRevision + 1,
+    });
+    return currentSession;
+  });
+  vi.mocked(api.confirmAssignmentSessionStep).mockImplementation(async (_id, request) => {
+    const base = currentSession;
+    if (request.step === 'source') {
+      currentSession = makeAssignmentSession({
+        ...base,
+        revision: request.expectedRevision + 1,
+        lessonId: request.lessonId,
+        recordingId: request.recordingId,
+        transcriptId: request.transcriptId,
+        confirmedStep: 'source',
+        confirmed: {
+          ...base.confirmed,
+          source: {
+            lessonId: request.lessonId,
+            recordingId: request.recordingId,
+            transcriptId: request.transcriptId,
+            transcriptWorkingVersion: request.transcriptWorkingVersion,
+            transcriptStorageUri: 'memory://transcripts/confirmed',
+            transcriptHash: 'a'.repeat(64),
+          },
+        },
+      });
+      return { session: currentSession, invalidated: [] };
+    }
+    if (request.step === 'context') {
+      currentSession = makeAssignmentSession({
+        ...base,
+        revision: request.expectedRevision + 1,
+        confirmedStep: 'context',
+        teacherNotes: request.teacherNotes,
+        selectedProfileId: request.profileId,
+        selectedProfileRevisionId: request.profileRevisionId,
+        selectedProfileRevisionHash: request.profileRevisionHash,
+        confirmed: {
+          ...base.confirmed,
+          context: {
+            teacherNotes: request.teacherNotes,
+            profileId: request.profileId,
+            profileRevisionId: request.profileRevisionId,
+            profileRevisionHash: request.profileRevisionHash,
+          },
+        },
+      });
+      return { session: currentSession, invalidated: [] };
+    }
+    currentSession = makeAssignmentSession({
+      ...base,
+      revision: request.expectedRevision + 1,
+      promptPackageId: request.promptPackageId,
+      draftId: request.draftId,
+      confirmedStep: 'create',
+      confirmed: {
+        ...base.confirmed,
+        create: {
+          promptPackageId: request.promptPackageId,
+          draftId: request.draftId,
+          draftWorkingVersion: request.draftWorkingVersion,
+          draftStorageUri: 'memory://drafts/confirmed',
+          draftHash: 'b'.repeat(64),
+        },
+      },
+    });
+    return { session: currentSession, invalidated: [] };
+  });
+  vi.mocked(api.shareAssignmentSession).mockImplementation(async (_id, request) => {
+    currentSession = makeAssignmentSession({
+      ...currentSession,
+      confirmedStep: 'share',
+      shareJobId: request.requestId,
+      revision: request.expectedRevision + 2,
+    });
+    return {
+      session: currentSession,
+      job: makeJobStatus({ jobId: request.requestId, state: 'queued' }),
+    };
+  });
+  vi.mocked(api.fetchAssignmentSession).mockImplementation(async () => currentSession);
   vi.mocked(api.listProfileContents).mockResolvedValue({
     profiles: [
       { id: 'profiles/alex.md', label: 'Alex Profile' },
@@ -820,6 +989,16 @@ export function setupMinimalAssignmentTest() {
     },
     currentRevisionId: 'revision-1',
     updatedAt: now,
+  });
+  vi.mocked(api.getProfileRevision).mockResolvedValue({
+    id: 'revision-1',
+    profileId: 'profiles/alex.md',
+    contentHash: 'a'.repeat(64),
+    source: 'create',
+    createdAt: now,
+    createdBy: null,
+    restoredFromRevisionId: null,
+    content: 'PROFILE CONTENT',
   });
   vi.mocked(api.listProfileRevisions).mockResolvedValue({
     items: [
@@ -907,11 +1086,6 @@ export function setupMinimalAssignmentTest() {
         teacherNotes: 'Keep examples grounded in real workplace situations.',
       },
     },
-  });
-  vi.mocked(api.requestLessonMemoryFromTranscript).mockResolvedValue({
-    outcome: 'created',
-    lessonMemoryEntryId: 'lesson-memory-1',
-    lessonTitle: null,
   });
   vi.mocked(api.activateProfileRevision).mockResolvedValue({
     id: 'revision-draft-1',
@@ -1002,6 +1176,8 @@ export function setupMinimalAssignmentTest() {
     storageUri: 'memory://drafts/draft-1',
     createdBy: 'user-1',
     text,
+    workingVersion: 1,
+    contentHash: 'a'.repeat(64),
     createdAt: now,
     updatedAt: now,
   }));
@@ -1013,6 +1189,8 @@ export function setupMinimalAssignmentTest() {
     storageUri: 'memory://drafts/draft-1',
     createdBy: 'user-1',
     text: '# Draft markdown',
+    workingVersion: 1,
+    contentHash: 'a'.repeat(64),
     createdAt: now,
     updatedAt: now,
   });
@@ -1025,6 +1203,8 @@ export function setupMinimalAssignmentTest() {
     storageUri: 'memory://drafts/draft-1',
     createdBy: 'user-1',
     text,
+    workingVersion: 2,
+    contentHash: 'b'.repeat(64),
     createdAt: now,
     updatedAt: now,
   }));

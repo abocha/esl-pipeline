@@ -218,7 +218,8 @@ describe('frontend sandbox API adapter', () => {
       studentId: 'student-cora',
       recordingId: 'recording-cora',
       transcriptId: 'transcript-cora',
-      currentStage: 'context',
+      confirmedStep: 'source',
+      revision: 2,
     });
     expect(recording.data).toMatchObject({
       recordingId: 'recording-cora',
@@ -407,7 +408,9 @@ describe('frontend sandbox API adapter', () => {
 
     expect(students.data.students).toHaveLength(3);
     expect(jobs.data.jobs).toEqual([expect.objectContaining({ state: 'succeeded' })]);
-    expect(sessions.data.sessions).toEqual([expect.objectContaining({ currentStage: 'context' })]);
+    expect(sessions.data.sessions).toEqual([
+      expect.objectContaining({ confirmedStep: 'source', revision: 2 }),
+    ]);
   });
 
   it('returns empty recent work for the no-recent Step 1 scenario', async () => {
@@ -444,8 +447,59 @@ describe('frontend sandbox API adapter', () => {
       ]),
     );
     expect(sessions.data.sessions).toEqual([
-      expect.objectContaining({ id: 'session-sandbox-resume', currentStage: 'context' }),
+      expect.objectContaining({ id: 'session-sandbox-resume', confirmedStep: 'source' }),
     ]);
+  });
+
+  it('mirrors revisioned assignment recovery, confirmation, and Share routes', async () => {
+    const adapter = createFrontendSandboxApiAdapter();
+
+    const created = await adapter(
+      requestConfig('post', '/api/assignment-sessions/confirm-student', {
+        requestId: 'request-1',
+        studentId: 'student-alex',
+      }),
+    );
+    const recovered = await adapter(
+      requestConfig('patch', '/api/assignment-sessions/session-sandbox/recovery', {
+        expectedRevision: 2,
+        patch: { teacherNotes: 'Recovered automatically' },
+      }),
+    );
+    const confirmed = await adapter(
+      requestConfig('post', '/api/assignment-sessions/session-sandbox/confirm', {
+        step: 'context',
+        expectedRevision: 2,
+        teacherNotes: 'Recovered automatically',
+        profileId: null,
+        profileRevisionId: null,
+        profileRevisionHash: null,
+      }),
+    );
+    const shared = await adapter(
+      requestConfig('post', '/api/assignment-sessions/session-sandbox/share', {
+        expectedRevision: 3,
+        requestId: 'job-sandbox',
+      }),
+    );
+
+    expect(created.data).toMatchObject({ confirmedStep: 'student', revision: 1 });
+    expect(recovered.data).toMatchObject({
+      confirmedStep: 'source',
+      revision: 3,
+      teacherNotes: 'Recovered automatically',
+    });
+    expect(confirmed.data).toMatchObject({
+      session: {
+        confirmedStep: 'context',
+        confirmed: { context: { teacherNotes: 'Recovered automatically' } },
+      },
+      invalidated: [],
+    });
+    expect(shared.data).toMatchObject({
+      session: { confirmedStep: 'share', shareJobId: 'job-sandbox' },
+      job: { jobId: 'job-sandbox' },
+    });
   });
 
   it('returns contextual sandbox collection errors for the error scenarios', async () => {

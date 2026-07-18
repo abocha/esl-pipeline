@@ -1,4 +1,5 @@
 import type { AssignmentSession, JobStatus } from '../../utils/api';
+import { deriveResumeDestination } from './MinimalAssignment.confirmation';
 import {
   getJobRecentAssignmentPresentation,
   getSessionRecentAssignmentPresentation,
@@ -77,12 +78,13 @@ function buildSessionLearnerName(
     : 'Unfinished assignment';
 }
 
-const SESSION_RECOVERY_ANCHORS: Record<AssignmentSession['currentStage'], string> = {
+const SESSION_RECOVERY_ANCHORS = {
+  student: 'Step 1 · Student',
   source: 'Step 2 · Lesson source',
   context: 'Step 3 · Teaching context',
   assignment: 'Step 4 · Create',
   review: 'Step 5 · Review & share',
-};
+} as const;
 
 function getJobRecoveryAnchor(job: JobStatus): string | null {
   if (job.promptPackageId && job.draftId) return 'Guidance & assignment draft';
@@ -98,20 +100,26 @@ export function buildRecentAssignmentItems(
   selectedResumeJobId: string,
   studentNameById: ReadonlyMap<string, string>,
 ): RecentAssignmentItem[] {
-  const sessionItems = sessions.map((session) => ({
-    item: {
-      id: `session:${session.id}`,
-      kind: 'session' as const,
-      sourceJobId: null,
-      learnerName: buildSessionLearnerName(session, studentNameById),
-      lessonTitle: undefined,
-      recoveryAnchor: SESSION_RECOVERY_ANCHORS[session.currentStage],
-      ...getSessionRecentAssignmentPresentation(session.currentStage),
-      timeLabel: formatResumeTimeLabel(session.updatedAt),
-      selected: selectedResumeJobId === `session:${session.id}`,
-    },
-    timestamp: Date.parse(session.updatedAt),
-  }));
+  const sessionItems = sessions.map((session) => {
+    const destination = deriveResumeDestination(session);
+    if (typeof destination !== 'string') {
+      throw new Error('Completed Share sessions must be presented through their linked job');
+    }
+    return {
+      item: {
+        id: `session:${session.id}`,
+        kind: 'session' as const,
+        sourceJobId: null,
+        learnerName: buildSessionLearnerName(session, studentNameById),
+        lessonTitle: undefined,
+        recoveryAnchor: SESSION_RECOVERY_ANCHORS[destination],
+        ...getSessionRecentAssignmentPresentation(session),
+        timeLabel: formatResumeTimeLabel(session.updatedAt),
+        selected: selectedResumeJobId === `session:${session.id}`,
+      },
+      timestamp: Date.parse(session.updatedAt),
+    };
+  });
   const jobItems = jobs.map((job) => ({
     item: {
       id: job.jobId,

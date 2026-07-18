@@ -9,10 +9,12 @@ import {
   testExpect as expect,
   INTEGRATION_TEST_TIMEOUT_MS,
   makeAssignmentSession,
+  makeJobStatus,
   makeRecording,
   openAdvancedActions,
   previewCurrentDraft,
   renderMinimalAssignment,
+  renderPreviewReadyAssignment,
   renderPublishedAssignment,
   renderResumedAssignment,
   testScreen as screen,
@@ -75,6 +77,127 @@ describe('MinimalAssignment - staged workflow UI', () => {
     expect(getTranscriptUnexpectedCharacterWarnings('Teacher: Ага, good.')).toEqual([]);
   });
 
+  it('rebases one non-overlapping recovery conflict without losing local notes', async () => {
+    const { user } = await renderResumedAssignment({}, { waitFor: 'none' });
+    await user.click(screen.getByRole('button', { name: /Teaching context/i }));
+
+    const latest = makeAssignmentSession({
+      id: 'session-resumed',
+      studentId: 'student-alex',
+      recordingId: 'rec-1',
+      transcriptId: 'tx-1',
+      confirmedStep: 'context',
+      selectedTtsModel: 'remote-model',
+      revision: 2,
+    });
+    const saved = makeAssignmentSession({
+      ...latest,
+      teacherNotes: 'Keep the tutor note.',
+      revision: 3,
+    });
+    vi.mocked(api.updateAssignmentSessionRecovery)
+      .mockRejectedValueOnce(new api.AssignmentSessionConflictApiError(latest))
+      .mockResolvedValueOnce(saved);
+
+    vi.useFakeTimers();
+    fireEvent.change(screen.getByRole('textbox', { name: /Teacher notes/i }), {
+      target: { value: 'Keep the tutor note.' },
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    vi.useRealTimers();
+
+    expect(api.updateAssignmentSessionRecovery).toHaveBeenNthCalledWith(
+      1,
+      'session-resumed',
+      expect.objectContaining({ expectedRevision: 1 }),
+    );
+    expect(api.updateAssignmentSessionRecovery).toHaveBeenNthCalledWith(
+      2,
+      'session-resumed',
+      expect.objectContaining({
+        expectedRevision: 2,
+        patch: expect.objectContaining({ teacherNotes: 'Keep the tutor note.' }),
+      }),
+    );
+    expect(
+      (screen.getByRole('textbox', { name: /Teacher notes/i }) as HTMLTextAreaElement).value,
+    ).toBe('Keep the tutor note.');
+  });
+
+  it('recognizes a successful confirmation after its response is lost', async () => {
+    const { user } = await renderResumedAssignment({}, { waitFor: 'none' });
+    await user.click(screen.getByRole('button', { name: /Teaching context/i }));
+    vi.mocked(api.confirmAssignmentSessionStep).mockRejectedValueOnce(new Error('response lost'));
+    vi.mocked(api.fetchAssignmentSession).mockImplementationOnce(async () => {
+      const request = vi.mocked(api.confirmAssignmentSessionStep).mock.calls.at(-1)?.[1];
+      if (!request || request.step !== 'context') {
+        throw new Error('Expected the Context confirmation request before reconciliation.');
+      }
+      return makeAssignmentSession({
+        id: 'session-resumed',
+        studentId: 'student-alex',
+        recordingId: 'rec-1',
+        transcriptId: 'tx-1',
+        confirmedStep: 'context',
+        teacherNotes: request.teacherNotes,
+        selectedProfileId: request.profileId,
+        selectedProfileRevisionId: request.profileRevisionId,
+        selectedProfileRevisionHash: request.profileRevisionHash,
+        revision: request.expectedRevision + 1,
+      });
+    });
+
+    await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /Create/i }).getAttribute('aria-current')).toBe(
+        'step',
+      ),
+    );
+    expect(screen.getByText('All changes saved')).toBeTruthy();
+  });
+
+  it('guards browser exit when a confirmation response cannot be reconciled', async () => {
+    const { user } = await renderResumedAssignment({}, { waitFor: 'none' });
+    await user.click(screen.getByRole('button', { name: /Teaching context/i }));
+    vi.mocked(api.confirmAssignmentSessionStep).mockRejectedValueOnce(new Error('response lost'));
+    vi.mocked(api.fetchAssignmentSession).mockRejectedValueOnce(new Error('offline'));
+
+    await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+    await screen.findByText('Checking whether the change completed');
+
+    const event = new Event('beforeunload', { cancelable: true });
+    globalThis.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it('recovers completed Share from the linked session and job after response loss', async () => {
+    const { user } = await renderPreviewReadyAssignment();
+    const completed = makeAssignmentSession({
+      id: 'session-resumed',
+      studentId: 'student-alex',
+      recordingId: 'rec-1',
+      transcriptId: 'tx-1',
+      promptPackageId: 'pkg-1',
+      draftId: 'draft-1',
+      confirmedStep: 'share',
+      shareJobId: 'job-share',
+      revision: 4,
+    });
+    const linkedJob = makeJobStatus({ jobId: 'job-share', state: 'queued' });
+    vi.mocked(api.shareAssignmentSession).mockRejectedValueOnce(new Error('response lost'));
+    vi.mocked(api.fetchAssignmentSession).mockResolvedValueOnce(completed);
+    vi.mocked(api.getJobStatus).mockResolvedValueOnce(linkedJob);
+
+    await user.click(screen.getByRole('button', { name: /Share assignment/i }));
+
+    await waitFor(() => expect(api.getJobStatus).toHaveBeenCalledWith('job-share'));
+    expect(screen.getAllByText(/Job ID: job-share/i).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: /Share assignment/i })).toBeNull();
+  });
+
   it(
     'guides a new assignment through staged teacher-facing workflow copy',
     async () => {
@@ -129,7 +252,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
       await previewCurrentDraft(user);
       await user.click(screen.getByRole('button', { name: /Share assignment/i }));
 
-      await screen.findAllByText(/Job ID: job-1/i);
+      await screen.findAllByText(/Job ID:/i);
       expect(screen.getAllByText(/Support details/i).length).toBeGreaterThan(0);
       expect(screen.queryByRole('button', { name: /Show advanced actions/i })).toBeNull();
       const advancedActions = screen
@@ -203,7 +326,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
   );
 
   it(
-    'confirms a ready transcript before building first-profile lesson memory',
+    'confirms Source and starts first-profile lesson memory without a separate tutor action',
     async () => {
       const user = createMinimalUser();
       vi.mocked(api.fetchStudentOptions).mockResolvedValue({
@@ -227,46 +350,18 @@ describe('MinimalAssignment - staged workflow UI', () => {
       await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
       await screen.findByDisplayValue('Student transcript text');
 
-      expect(api.getStudentMemoryHealth).not.toHaveBeenCalled();
-      expect(screen.queryByText(/Building lesson memory/i)).toBeNull();
-      expect(screen.getAllByText('Transcript ready').length).toBeGreaterThan(0);
-      await user.click(screen.getByRole('button', { name: /Teaching context/i }));
-      const confirmButton = screen.getByRole('button', {
-        name: /Use this transcript for Cora's learner context/i,
-      });
-      expect(
-        screen.getByText('Nothing is added to learner memory until you confirm.'),
-      ).toBeTruthy();
-
-      await user.click(confirmButton);
-
-      await waitFor(() => {
-        expect(api.requestLessonMemoryFromTranscript).toHaveBeenCalledWith('student-cora', {
-          recordingId: 'rec-1',
-          transcriptId: 'tx-1',
-          lessonId: null,
-        });
-      });
+      expect(screen.queryByRole('button', { name: /Use this transcript/i })).toBeNull();
+      await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+      await waitFor(() =>
+        expect(api.confirmAssignmentSessionStep).toHaveBeenCalledWith(
+          'session-1',
+          expect.objectContaining({ step: 'source', transcriptId: 'tx-1' }),
+        ),
+      );
       expect(await screen.findByText(/Building lesson memory/i)).toBeTruthy();
       await waitFor(() => {
         expect(api.getStudentMemoryHealth).toHaveBeenCalledWith('student-cora');
       });
-
-      await user.click(screen.getByRole('button', { name: /Lesson source/i }));
-      fireEvent.change(screen.getByDisplayValue('Student transcript text'), {
-        target: { value: 'Edited transcript text' },
-      });
-      await user.click(screen.getByRole('button', { name: /Teaching context/i }));
-      expect(
-        (
-          screen.getByRole('button', {
-            name: /Update learner context from edited transcript/i,
-          }) as HTMLButtonElement
-        ).disabled,
-      ).toBe(true);
-      expect(
-        screen.getByText(/Save transcript edits before updating learner context/i),
-      ).toBeTruthy();
     },
     INTEGRATION_TEST_TIMEOUT_MS,
   );
@@ -276,7 +371,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
       {
         draftText: '# Draft markdown',
       },
-      { waitFor: 'promptReady' },
+      { waitFor: 'none' },
     );
 
     const progress = screen.getByRole('navigation', { name: /Assignment progress/i });
@@ -296,21 +391,21 @@ describe('MinimalAssignment - staged workflow UI', () => {
           recordingId: 'rec-1',
           transcriptId: 'tx-1',
           promptPackageId: 'pkg-1',
-          currentStage: 'assignment',
+          confirmedStep: 'context',
         }),
       ],
       total: 1,
       limit: 20,
     });
-    vi.mocked(api.updateAssignmentSession).mockImplementation(async (id, patch) =>
+    vi.mocked(api.fetchAssignmentSession).mockResolvedValue(
       makeAssignmentSession({
-        id,
+        id: 'session-teacher-notes',
         studentId: 'student-alex',
         recordingId: 'rec-1',
         transcriptId: 'tx-1',
         promptPackageId: 'pkg-1',
-        currentStage: 'assignment',
-        ...patch,
+        draftId: 'draft-1',
+        confirmedStep: 'context',
       }),
     );
     globalThis.history.replaceState(null, '', '/?sessionId=session-resume');
@@ -327,31 +422,30 @@ describe('MinimalAssignment - staged workflow UI', () => {
     fireEvent.change(screen.getByRole('textbox', { name: /Teacher notes/i }), {
       target: { value: 'Keep the assignment grounded in the learner context.' },
     });
-    expect(api.updateAssignmentSession).not.toHaveBeenCalled();
+    expect(api.updateAssignmentSessionRecovery).not.toHaveBeenCalled();
     expect(screen.getByRole('heading', { name: /Learner context/i })).toBeTruthy();
     expect(
       screen.getByRole('button', { name: /Teaching context/i }).getAttribute('aria-current'),
     ).toBe('step');
   });
 
-  it('routes an explicit forward progress-step click through teacher-note commit confirmation', async () => {
-    const confirmSpy = vi.spyOn(globalThis, 'confirm').mockReturnValue(false);
+  it('does not confirm dirty teacher notes when a locked forward step is clicked', async () => {
     const user = createMinimalUser();
+    const session = makeAssignmentSession({
+      id: 'session-teacher-notes',
+      studentId: 'student-alex',
+      recordingId: 'rec-1',
+      transcriptId: 'tx-1',
+      promptPackageId: 'pkg-1',
+      draftId: 'draft-1',
+      confirmedStep: 'context',
+    });
     vi.mocked(api.listAssignmentSessions).mockResolvedValueOnce({
-      sessions: [
-        makeAssignmentSession({
-          id: 'session-teacher-notes',
-          studentId: 'student-alex',
-          recordingId: 'rec-1',
-          transcriptId: 'tx-1',
-          promptPackageId: 'pkg-1',
-          draftId: 'draft-1',
-          currentStage: 'assignment',
-        }),
-      ],
+      sessions: [session],
       total: 1,
       limit: 20,
     });
+    vi.mocked(api.fetchAssignmentSession).mockResolvedValue(session);
     globalThis.history.replaceState(null, '', '/?sessionId=session-teacher-notes');
     renderMinimalAssignment();
     await screen.findByRole('button', { name: /^Generate assignment$/i });
@@ -363,18 +457,19 @@ describe('MinimalAssignment - staged workflow UI', () => {
     );
     await user.type(screen.getByRole('textbox', { name: /Teacher notes/i }), 'Focus on articles.');
 
-    expect(confirmSpy).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: /Create/i }));
 
-    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    expect(api.confirmAssignmentSessionStep).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ step: 'context' }),
+    );
     expect(screen.getByRole('heading', { name: /Learner context/i })).toBeTruthy();
     expect(
       (screen.getByRole('textbox', { name: /Teacher notes/i }) as HTMLTextAreaElement).value,
     ).toBe('Focus on articles.');
   });
 
-  it('lands on Create when a confirmed teacher-note commit invalidates the requested Review step', async () => {
-    const confirmSpy = vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
+  it('keeps dirty teacher notes on Context until its primary confirmation action succeeds', async () => {
     const user = createMinimalUser();
     const session = makeAssignmentSession({
       id: 'session-teacher-notes-review',
@@ -383,16 +478,14 @@ describe('MinimalAssignment - staged workflow UI', () => {
       transcriptId: 'tx-1',
       promptPackageId: 'pkg-1',
       draftId: 'draft-1',
-      currentStage: 'review',
+      confirmedStep: 'create',
     });
     vi.mocked(api.listAssignmentSessions).mockResolvedValueOnce({
       sessions: [session],
       total: 1,
       limit: 20,
     });
-    vi.mocked(api.updateAssignmentSession).mockImplementation(async (id, patch) =>
-      makeAssignmentSession({ ...session, id, ...patch }),
-    );
+    vi.mocked(api.fetchAssignmentSession).mockResolvedValue(session);
     globalThis.history.replaceState(null, '', '/?sessionId=session-teacher-notes-review');
     renderMinimalAssignment();
     await user.click(screen.getByRole('button', { name: /Create/i }));
@@ -407,15 +500,13 @@ describe('MinimalAssignment - staged workflow UI', () => {
 
     await user.click(screen.getByRole('button', { name: /Review & share/i }));
 
-    expect(confirmSpy).toHaveBeenCalledTimes(1);
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: /Create/i }).getAttribute('aria-current')).toBe(
-        'step',
-      ),
+    expect(api.confirmAssignmentSessionStep).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ step: 'context' }),
     );
     expect(
-      screen.getByRole('button', { name: /Review & share/i }).getAttribute('aria-current'),
-    ).toBeNull();
+      screen.getByRole('button', { name: /Teaching context/i }).getAttribute('aria-current'),
+    ).toBe('step');
   });
 
   it('does not move or scroll the new-assignment workflow after upload completes', async () => {
@@ -468,7 +559,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
   });
 
   it(
-    'keeps unlocked resumed stages distilled to task-critical controls',
+    'keeps a historical completed job readable without reopening legacy editor steps',
     async () => {
       const user = createMinimalUser();
       await renderPublishedAssignment(
@@ -481,14 +572,16 @@ describe('MinimalAssignment - staged workflow UI', () => {
         { user },
       );
 
-      await user.click(screen.getByRole('button', { name: /Lesson source/i }));
-      expect(screen.getByDisplayValue('Student transcript text')).toBeTruthy();
-      await user.click(screen.getByRole('button', { name: /Create/i }));
-      expect(screen.getByDisplayValue('# Draft markdown')).toBeTruthy();
-      await user.click(screen.getByRole('button', { name: /Teaching context/i }));
-      expect(screen.getByRole('link', { name: /Open Learning page/i })).toBeTruthy();
-      await user.click(screen.getByRole('button', { name: /Review & share/i }));
-      expect(screen.getByRole('button', { name: /Refresh actions/i })).toBeTruthy();
+      expect(screen.getByRole('heading', { name: /Review and share/i })).toBeTruthy();
+      expect(screen.getByRole('heading', { name: /Advanced actions/i })).toBeTruthy();
+      expect(screen.queryByRole('button', { name: /Refresh actions/i })).toBeNull();
+      expect(screen.getByRole('button', { name: /Lesson source/i }).hasAttribute('disabled')).toBe(
+        true,
+      );
+      expect(screen.getByRole('button', { name: /Create/i }).hasAttribute('disabled')).toBe(true);
+      expect(
+        screen.getByRole('button', { name: /Teaching context/i }).hasAttribute('disabled'),
+      ).toBe(true);
 
       expect(screen.queryByRole('button', { name: /Drop audio file/i })).toBeNull();
       expect(screen.queryByText(/Recording ID:/i)).toBeNull();
@@ -572,18 +665,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
         { user },
       );
 
-      await user.click(screen.getByRole('button', { name: /Student/i }));
-      const setupSummary = screen.getByRole('region', { name: /Current assignment/i });
-      expect(setupSummary).toBeTruthy();
-      expect(screen.getByText('Reopened assignment')).toBeTruthy();
-      expect(screen.queryByRole('button', { name: /Resume recent work/i })).toBeNull();
-      expect(screen.queryByRole('button', { name: /Start new assignment/i })).toBeNull();
-      const setupScope = within(setupSummary as HTMLElement);
-      expect(setupScope.queryByRole('button', { name: /Hide details|Show details/i })).toBeNull();
-      expect(setupScope.queryByRole('button', { name: /Refresh pronunciation audio/i })).toBeNull();
-      expect(setupScope.queryByRole('button', { name: /Republish current draft/i })).toBeNull();
-      expect(setupScope.queryByRole('button', { name: /Cancel job/i })).toBeNull();
-      expect(setupScope.queryByText(/Latest shared assignment ready/i)).toBeNull();
+      expect(screen.getByRole('heading', { name: /Review and share/i })).toBeTruthy();
       expect(screen.queryByText(/Move from recording to published lesson/i)).toBeNull();
       expect(screen.queryByText(/Learning profile ready/i)).toBeNull();
       expect(screen.queryByText(/Transcript is ready for review and editing/i)).toBeNull();
@@ -594,13 +676,11 @@ describe('MinimalAssignment - staged workflow UI', () => {
       expect(screen.queryByText(/Reopen an existing assignment/i)).toBeNull();
       expect(screen.queryByText(/Begin clean and move straight/i)).toBeNull();
 
-      expect(screen.queryAllByRole('link', { name: /Open Assignment Handout/i })).toHaveLength(0);
-      await user.click(screen.getByRole('button', { name: /Review & share/i }));
       expect(
         screen.getAllByRole('link', { name: /Open Assignment Handout/i }).length,
       ).toBeGreaterThan(0);
       expect(screen.getByRole('heading', { name: /Advanced actions/i })).toBeTruthy();
-      expect(screen.getByRole('button', { name: /Refresh actions/i })).toBeTruthy();
+      expect(screen.queryByRole('button', { name: /Refresh actions/i })).toBeNull();
       const quickReruns = screen.getByRole('region', { name: /Quick reruns/i });
       expect(quickReruns).toBeTruthy();
       expect(quickReruns.className).not.toContain('minimal-rerun-quick');
@@ -640,23 +720,14 @@ describe('MinimalAssignment - staged workflow UI', () => {
       expect(screen.queryByText(/Cancel is only available/i)).toBeNull();
       expect(screen.getAllByText(/^Support details$/i).length).toBeGreaterThan(0);
 
-      await user.click(screen.getByRole('button', { name: /Student/i }));
-      await user.click(screen.getByRole('button', { name: /Change assignment/i }));
-      await user.click(screen.getByRole('button', { name: /Resume recent work/i }));
-
-      expect(screen.getAllByText(/^Recent assignments$/i)).toHaveLength(1);
-      expect(screen.queryByRole('button', { name: /Start new instead/i })).toBeNull();
-
-      await user.click(screen.getByRole('button', { name: /Change choice/i }));
-      await user.click(await screen.findByRole('button', { name: /Start new assignment/i }));
-
-      expect(screen.queryByRole('button', { name: /Switch to resume/i })).toBeNull();
+      await user.click(screen.getByRole('button', { name: /Start another assignment/i }));
+      expect(screen.getByRole('button', { name: /Start new assignment/i })).toBeTruthy();
     },
     INTEGRATION_TEST_TIMEOUT_MS,
   );
 
   it(
-    'presents learner context as structured text without nested cards',
+    'does not expose legacy learner-context editing from a historical completed job',
     async () => {
       await renderPublishedAssignment(
         {
@@ -668,24 +739,11 @@ describe('MinimalAssignment - staged workflow UI', () => {
         { user: createMinimalUser() },
       );
 
-      await createMinimalUser().click(screen.getByRole('button', { name: /Teaching context/i }));
-      const learnerContext = screen
-        .getByRole('heading', { name: /Learner context/i })
-        .closest('.minimal-stage-panel');
-      expect(learnerContext).toBeTruthy();
-      const learnerScope = within(learnerContext as HTMLElement);
-
-      expect(learnerContext?.querySelector('.minimal-profile-card')).toBeNull();
-      expect(learnerContext?.querySelector('.minimal-profile-meta-grid')).toBeNull();
-      expect(learnerContext?.querySelector('.minimal-profile-scan-group')).toBeNull();
-      expect(learnerScope.getAllByText(/^Student Learning page$/i).length).toBeGreaterThan(0);
-      expect(learnerScope.getByText(/^Selected$/i)).toBeTruthy();
-      expect(learnerScope.getByText(/^Goals$/i)).toBeTruthy();
-      expect(learnerScope.getByText(/^Communication contexts$/i)).toBeTruthy();
-      expect(learnerScope.getByText(/^Strengths$/i)).toBeTruthy();
-      expect(learnerScope.getByText(/^Challenges$/i)).toBeTruthy();
-      expect(learnerScope.getByText(/Lead project updates clearly/i)).toBeTruthy();
-      expect(learnerScope.getByRole('link', { name: /Open Learning page/i })).toBeTruthy();
+      expect(screen.getByRole('heading', { name: /Review and share/i })).toBeTruthy();
+      expect(
+        screen.getByRole('button', { name: /Teaching context/i }).hasAttribute('disabled'),
+      ).toBe(true);
+      expect(screen.queryByRole('heading', { name: /Learner context/i })).toBeNull();
     },
     INTEGRATION_TEST_TIMEOUT_MS,
   );
@@ -763,7 +821,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
     );
 
     expect(screen.queryByRole('button', { name: /Show advanced actions/i })).toBeNull();
-    expect(await screen.findByRole('button', { name: /Refresh actions/i })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Refresh actions/i })).toBeNull();
     const advancedActions = screen
       .getByRole('heading', { name: /Advanced actions/i })
       .closest('section')!;
@@ -780,12 +838,8 @@ describe('MinimalAssignment - staged workflow UI', () => {
 
     await user.click(screen.getByRole('button', { name: /^Step 1Student$/i }));
 
-    expect(screen.queryByRole('heading', { name: /Advanced actions/i })).toBeNull();
-    expect(screen.getAllByText(/^Support details$/i).length).toBeGreaterThan(0);
-
-    await user.click(screen.getByRole('button', { name: /^Step 5Review & share$/i }));
-
     expect(screen.getByRole('heading', { name: /Advanced actions/i })).toBeTruthy();
+    expect(screen.getAllByText(/^Support details$/i).length).toBeGreaterThan(0);
   });
 
   it('marks the active advanced operation busy and keeps every rerun disabled', async () => {

@@ -861,7 +861,7 @@ export function useMinimalAssignmentAuthoringController({
       }
       const persistenceVersion = authoringPersistenceVersionRef.current;
       const response = state.draft?.id
-        ? await updateDraft(state.draft.id, normalizedText)
+        ? await updateDraft(state.draft.id, normalizedText, state.draft.workingVersion)
         : await createDraft(state.promptPackage.id, normalizedText);
       if (authoringPersistenceVersionRef.current !== persistenceVersion) {
         return null;
@@ -875,7 +875,12 @@ export function useMinimalAssignmentAuthoringController({
       onDraftPronunciationModeDetected(detectPronunciationModeFromDraft(response.text ?? text));
       return response;
     },
-    [onDraftPronunciationModeDetected, state.draft?.id, state.promptPackage?.id],
+    [
+      onDraftPronunciationModeDetected,
+      state.draft?.id,
+      state.draft?.workingVersion,
+      state.promptPackage?.id,
+    ],
   );
 
   const saveDraft = useCallback(async (): Promise<DraftResponse | null> => {
