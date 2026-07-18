@@ -71,6 +71,7 @@ interface JobRow {
 
 // insertJob.declaration()
 export interface InsertJobParams {
+  id?: string;
   md?: string | null;
   mdStorageUri?: string | null;
   studentId?: string | null;
@@ -180,15 +181,22 @@ export async function insertJob(params: InsertJobParams): Promise<JobRecord> {
   return insertJobWithState(params, 'queued');
 }
 
-export async function insertApprovalJob(params: InsertJobParams): Promise<JobRecord> {
-  return insertJobWithState(params, 'awaiting_approval');
+export async function insertApprovalJob(
+  params: InsertJobParams,
+  options?: { client?: PoolClient },
+): Promise<JobRecord> {
+  return insertJobWithState(params, 'awaiting_approval', options);
 }
 
-async function insertJobWithState(params: InsertJobParams, state: JobState): Promise<JobRecord> {
-  const id = randomUUID();
+async function insertJobWithState(
+  params: InsertJobParams,
+  state: JobState,
+  options?: { client?: PoolClient },
+): Promise<JobRecord> {
+  const id = params.id ?? randomUUID();
   const now = new Date();
 
-  const row = await withPgClient(async (client: PoolClient) => {
+  const insert = async (client: PoolClient) => {
     const result = await client.query(
       String.raw`
       INSERT INTO jobs (
@@ -296,7 +304,8 @@ async function insertJobWithState(params: InsertJobParams, state: JobState): Pro
       ],
     );
     return result.rows[0];
-  });
+  };
+  const row = options?.client ? await insert(options.client) : await withPgClient(insert);
 
   logger.info('Job inserted', { jobId: id, state });
 
@@ -304,8 +313,11 @@ async function insertJobWithState(params: InsertJobParams, state: JobState): Pro
 }
 
 // getJobById.declaration()
-export async function getJobById(id: string): Promise<JobRecord | null> {
-  const row = await withPgClient(async (client: PoolClient) => {
+export async function getJobById(
+  id: string,
+  options?: { client?: PoolClient; forUpdate?: boolean },
+): Promise<JobRecord | null> {
+  const load = async (client: PoolClient) => {
     const result = await client.query(
       String.raw`
       SELECT
@@ -346,12 +358,75 @@ export async function getJobById(id: string): Promise<JobRecord | null> {
         j.user_id
       FROM jobs j
       WHERE j.id = $1
+      ${options?.forUpdate ? 'FOR UPDATE' : ''}
       `,
       [id],
     );
     return result.rows[0];
-  });
+  };
+  const row = options?.client ? await load(options.client) : await withPgClient(load);
 
+  return row ? mapRowToJob(row) : null;
+}
+
+export async function resetFailedAssignmentShareJob(params: {
+  sessionId: string;
+  userId: string;
+  jobId: string;
+}): Promise<JobRecord | null> {
+  const row = await withPgClient(async (client: PoolClient) => {
+    const result = await client.query(
+      String.raw`
+      UPDATE jobs j
+      SET state = 'queued', error = NULL, started_at = NULL, finished_at = NULL,
+          manifest_path = NULL, html_url = NULL, updated_at = NOW()
+      FROM assignment_sessions s
+      WHERE j.id = $3
+        AND j.state = 'failed'
+        AND s.id = $1
+        AND s.user_id = $2
+        AND s.share_job_id = j.id
+      RETURNING
+        j.id,
+        j.student_id,
+        (SELECT student FROM students WHERE id = j.student_id) AS student_name,
+        j.state,
+        j.md,
+        j.md_storage_uri,
+        j.recording_id,
+        j.transcript_id,
+        j.prompt_package_id,
+        j.draft_id,
+        j.lesson_id,
+        j.preset,
+        j.learning_preset_id,
+        j.learning_preset_version,
+        j.prompt_snapshot_version,
+        j.prompt_alias,
+        j.with_tts,
+        j.upload,
+        j.voice_id,
+        j.voice_accent,
+        j.force_tts,
+        j.publish_target,
+        j.mode,
+        j.tts_provider,
+        j.tts_model,
+        j.html_url,
+        j.auto_publish,
+        j.created_at,
+        j.updated_at,
+        j.started_at,
+        j.finished_at,
+        j.error,
+        j.manifest_path,
+        j.source_job_id,
+        j.user_id
+      `,
+      [params.sessionId, params.userId, params.jobId],
+    );
+    return result.rows[0];
+  });
   return row ? mapRowToJob(row) : null;
 }
 

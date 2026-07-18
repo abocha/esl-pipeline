@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
@@ -17,6 +18,8 @@ export interface MaterializeDraftParams {
   draftId: string;
   jobId?: string;
   jobOverrides?: JobConfigOverrides;
+  sourceStorageUri?: string;
+  expectedContentHash?: string;
 }
 
 export interface MaterializeDraftResponse {
@@ -82,11 +85,12 @@ export async function materializeDraft(
   if (resolvedJobId && jobs.getById) {
     const targetJob = await jobs.getById(resolvedJobId);
     if (!targetJob || targetJob.state !== 'awaiting_approval') {
-      resolvedJobId = '';
+      return null;
     }
   }
 
-  const storage = overrides?.storage ?? createTranscriptionStorageForUri(draft.storageUri);
+  const sourceStorageUri = params.sourceStorageUri ?? draft.storageUri;
+  const storage = overrides?.storage ?? createTranscriptionStorageForUri(sourceStorageUri);
 
   if (!resolvedJobId) {
     const approvalJob = await createApprovalJob({
@@ -97,7 +101,13 @@ export async function materializeDraft(
     resolvedJobId = approvalJob.id;
   }
 
-  const text = await storage.getText(draft.storageUri);
+  const text = await storage.getText(sourceStorageUri);
+  if (
+    params.expectedContentHash &&
+    createHash('sha256').update(text, 'utf8').digest('hex') !== params.expectedContentHash
+  ) {
+    throw new Error('Confirmed draft content hash mismatch');
+  }
   const context = {
     studentId: promptPackage.studentId ?? null,
     promptPackageId: promptPackage.id,
@@ -112,36 +122,20 @@ export async function materializeDraft(
     await fs.writeFile(mdPath, materializedText, 'utf8');
   }
 
-  let updated = await jobs.updateDraftLink({
+  const updated = await jobs.updateDraftLink({
     id: resolvedJobId,
     expectedState: 'awaiting_approval',
     md: mdPath,
-    mdStorageUri: draft.storageUri,
+    mdStorageUri: sourceStorageUri,
     draftId: draft.id,
   });
-
-  if (!updated && params.jobId) {
-    const approvalJob = await createApprovalJob({
-      draft,
-      promptPackage,
-      jobOverrides: params.jobOverrides,
-    });
-    resolvedJobId = approvalJob.id;
-    updated = await jobs.updateDraftLink({
-      id: resolvedJobId,
-      expectedState: 'awaiting_approval',
-      md: mdPath,
-      mdStorageUri: draft.storageUri,
-      draftId: draft.id,
-    });
-  }
 
   if (!updated) return null;
 
   if (params.jobOverrides?.autoPublish) {
     const approved = await approvals.approveForPipeline(resolvedJobId, {
       md: mdPath ?? undefined,
-      mdStorageUri: draft.storageUri,
+      mdStorageUri: sourceStorageUri,
     });
     if (!approved) return null;
   }
@@ -150,7 +144,7 @@ export async function materializeDraft(
     draftId: draft.id,
     jobId: resolvedJobId,
     mdPath,
-    mdStorageUri: draft.storageUri,
+    mdStorageUri: sourceStorageUri,
   };
 }
 

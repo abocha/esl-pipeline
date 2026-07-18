@@ -19,6 +19,7 @@ import {
   publishTtsStrategySchema,
 } from '../../application/publish-study-text-overrides.js';
 import { getReadinessMetricsWithDefaults } from '../../application/readiness-metrics.js';
+import { shareAssignmentSession } from '../../application/share-assignment-session.js';
 import { SubmitJobRequest, submitJob, ValidationError } from '../../application/submit-job.js';
 import type { BatchBackendConfig } from '../../config/env.js';
 import {
@@ -852,6 +853,12 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
       })
       .strict(),
   ]);
+  const shareAssignmentSchema = z
+    .object({
+      expectedRevision: z.number().int().positive(),
+      requestId: z.string().uuid(),
+    })
+    .strict();
 
   app.get('/user/assignment-sessions', { preHandler: authenticate }, async (request, reply) => {
     const authenticatedUser = getAuthenticatedUser(request);
@@ -1063,6 +1070,58 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
         }
         logger.error(error instanceof Error ? error : String(error), {
           event: 'confirm_assignment_session_step_failed',
+          userId: authenticatedUser.id,
+        });
+        return reply.code(500).send({ error: 'internal_error' });
+      }
+    },
+  );
+
+  app.post(
+    '/assignment-sessions/:id/share',
+    { preHandler: authenticate },
+    async (request, reply) => {
+      const authenticatedUser = getAuthenticatedUser(request);
+      if (!authenticatedUser) {
+        return reply.code(401).send({ error: 'unauthorized', message: 'Authentication required' });
+      }
+      try {
+        const params = z.object({ id: z.string().uuid() }).parse(request.params ?? {});
+        const body = shareAssignmentSchema.parse(request.body ?? {});
+        const result = await shareAssignmentSession({
+          userId: authenticatedUser.id,
+          sessionId: params.id,
+          request: body,
+        });
+        return reply.code(200).send(result);
+      } catch (error: unknown) {
+        const code = getErrorCode(error);
+        if (code === 'ASSIGNMENT_SESSION_REVISION_CONFLICT') {
+          return reply.code(409).send({
+            code: 'assignment_session_revision_conflict',
+            session: getConflictSession(error),
+          });
+        }
+        if (code === 'ASSIGNMENT_SESSION_NOT_FOUND') {
+          return reply.code(404).send({ error: 'not_found' });
+        }
+        if (
+          code === 'ASSIGNMENT_SHARE_PREREQUISITE_MISSING' ||
+          code === 'ASSIGNMENT_SHARE_DIRTY_RECOVERY' ||
+          code === 'ASSIGNMENT_SHARE_REQUEST_CONFLICT' ||
+          code === 'ASSIGNMENT_SHARE_JOB_INTEGRITY_INVALID'
+        ) {
+          return reply.code(409).send({ code: code.toLowerCase() });
+        }
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid request',
+            details: error.issues,
+          });
+        }
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'share_assignment_session_failed',
           userId: authenticatedUser.id,
         });
         return reply.code(500).send({ error: 'internal_error' });

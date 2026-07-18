@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -160,13 +161,23 @@ describe('application/draft', () => {
       updatedAt: new Date(),
     });
 
+    const confirmedText = 'CONFIRMED DRAFT TEXT';
+    const confirmedUri = 'local://drafts/draft-1/content/confirmed.md';
     const response = await materializeDraft(
-      { draftId: draft.id, jobId: 'job-1' },
+      {
+        draftId: draft.id,
+        jobId: 'job-1',
+        sourceStorageUri: confirmedUri,
+        expectedContentHash: createHash('sha256').update(confirmedText).digest('hex'),
+      },
       {
         uploadDir,
         localExport: true,
         storage: createStorageStub({
-          getText: async () => 'DRAFT TEXT',
+          getText: async (uri) => {
+            expect(uri).toBe(confirmedUri);
+            return confirmedText;
+          },
         }),
         drafts: {
           getById: async () => draft,
@@ -175,6 +186,13 @@ describe('application/draft', () => {
           getById: async () => promptPackage,
         },
         jobs: {
+          getById: vi.fn().mockResolvedValue({
+            id: 'job-1',
+            state: 'awaiting_approval',
+            md: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }),
           updateDraftLink,
         },
       },
@@ -184,18 +202,18 @@ describe('application/draft', () => {
       draftId: 'draft-1',
       jobId: 'job-1',
       mdPath: path.resolve(uploadDir, 'drafts', 'draft-1.md'),
-      mdStorageUri: 'local://drafts/draft-1.md',
+      mdStorageUri: confirmedUri,
     });
 
     const stored = await fs.readFile(path.resolve(uploadDir, 'drafts', 'draft-1.md'), 'utf8');
     expect(stored).toContain('x_esl_student_id: student-1');
     expect(stored).toContain('x_esl_prompt_package_id: prompt-1');
-    expect(stored).toContain('DRAFT TEXT');
+    expect(stored).toContain(confirmedText);
     expect(updateDraftLink).toHaveBeenCalledWith({
       id: 'job-1',
       expectedState: 'awaiting_approval',
       md: path.resolve(uploadDir, 'drafts', 'draft-1.md'),
-      mdStorageUri: 'local://drafts/draft-1.md',
+      mdStorageUri: confirmedUri,
       draftId: 'draft-1',
     });
   });
@@ -351,7 +369,7 @@ describe('application/draft', () => {
     });
   });
 
-  it('materializes a draft into a new approval job when provided job is not awaiting approval', async () => {
+  it('does not substitute a new approval job when the provided job is not awaiting approval', async () => {
     const uploadDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-drafts-'));
     const draft: DraftRecord = {
       id: 'draft-3',
@@ -421,21 +439,10 @@ describe('application/draft', () => {
       },
     );
 
-    expect(response).toEqual({
-      draftId: 'draft-3',
-      jobId: 'job-new',
-      mdPath: path.resolve(uploadDir, 'drafts', 'draft-3.md'),
-      mdStorageUri: 'local://drafts/draft-3.md',
-    });
+    expect(response).toBeNull();
     expect(getById).toHaveBeenCalledWith('job-finished');
-    expect(createApprovalJob).toHaveBeenCalledWith({ draft, promptPackage });
-    expect(updateDraftLink).toHaveBeenCalledWith({
-      id: 'job-new',
-      expectedState: 'awaiting_approval',
-      md: path.resolve(uploadDir, 'drafts', 'draft-3.md'),
-      mdStorageUri: 'local://drafts/draft-3.md',
-      draftId: 'draft-3',
-    });
+    expect(createApprovalJob).not.toHaveBeenCalled();
+    expect(updateDraftLink).not.toHaveBeenCalled();
   });
 
   it('returns null when draft is missing during materialization', async () => {

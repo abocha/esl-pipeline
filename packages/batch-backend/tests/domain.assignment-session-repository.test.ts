@@ -101,9 +101,8 @@ describe('domain/assignment-session-repository persistence contract', () => {
     const studentId = randomUUID();
     const requestId = randomUUID();
     await insertUserAndStudent(userId, studentId);
-    const { confirmStudentAssignmentSession, updateAssignmentSessionRecovery } = await import(
-      '../src/domain/assignment-session-repository.js'
-    );
+    const { confirmStudentAssignmentSession, updateAssignmentSessionRecovery } =
+      await import('../src/domain/assignment-session-repository.js');
 
     const created = await confirmStudentAssignmentSession({
       userId,
@@ -164,9 +163,8 @@ describe('domain/assignment-session-repository persistence contract', () => {
     const requestId = randomUUID();
     await insertUserAndStudent(userId, firstStudentId);
     await insertUserAndStudent(userId, secondStudentId);
-    const { confirmStudentAssignmentSession } = await import(
-      '../src/domain/assignment-session-repository.js'
-    );
+    const { confirmStudentAssignmentSession } =
+      await import('../src/domain/assignment-session-repository.js');
 
     await confirmStudentAssignmentSession({
       userId,
@@ -183,6 +181,134 @@ describe('domain/assignment-session-repository persistence contract', () => {
         lessonId: null,
       }),
     ).rejects.toMatchObject({ code: 'ASSIGNMENT_SESSION_REQUEST_CONFLICT' });
+  });
+
+  it('atomically reserves one Share job from clean confirmed lineage and replays by stable id', async () => {
+    const userId = randomUUID();
+    const studentId = randomUUID();
+    const recordingId = randomUUID();
+    const transcriptId = randomUUID();
+    const promptPackageId = randomUUID();
+    const draftId = randomUUID();
+    const sessionId = randomUUID();
+    const requestId = randomUUID();
+    const draftUri = `local://drafts/${draftId}/content/confirmed.md`;
+    await insertUserAndStudent(userId, studentId);
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      await client.query(
+        `INSERT INTO recordings (id, source, student_id, storage_uri, bytes, status)
+         VALUES ($1, 'upload', $2, 'local://recordings/a.opus', 1, 'transcribed')`,
+        [recordingId, studentId],
+      );
+      await client.query(
+        `INSERT INTO transcripts
+           (id, recording_id, storage_uri, working_version, content_hash, stt_provider,
+            mode, model, language, fallback_used)
+         VALUES ($1, $2, 'local://transcripts/a.txt', 1, $3, 'deepgram',
+                 'timeline', 'nova-3', 'multi', false)`,
+        [transcriptId, recordingId, 'a'.repeat(64)],
+      );
+      await client.query(
+        `INSERT INTO prompt_packages
+           (id, recording_id, transcript_id, student_id, template_version, storage_uri)
+         VALUES ($1, $2, $3, $4, 'template-v1', 'local://prompts/a.txt')`,
+        [promptPackageId, recordingId, transcriptId, studentId],
+      );
+      await client.query(
+        `INSERT INTO drafts
+           (id, prompt_package_id, student_id, storage_uri, working_version, content_hash, created_by)
+         VALUES ($1, $2, $3, $4, 1, $5, $6)`,
+        [draftId, promptPackageId, studentId, draftUri, 'b'.repeat(64), userId],
+      );
+      await client.query(
+        `INSERT INTO assignment_sessions
+           (id, user_id, student_id, recording_id, transcript_id, prompt_package_id, draft_id,
+            revision, confirmed_step, confirmed_snapshot, teacher_notes)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 4, 'create', $8::jsonb, 'dirty')`,
+        [
+          sessionId,
+          userId,
+          studentId,
+          recordingId,
+          transcriptId,
+          promptPackageId,
+          draftId,
+          JSON.stringify({
+            student: { studentId },
+            source: {
+              lessonId: null,
+              recordingId,
+              transcriptId,
+              transcriptWorkingVersion: 1,
+              transcriptStorageUri: 'local://transcripts/a.txt',
+              transcriptHash: 'a'.repeat(64),
+            },
+            context: {
+              teacherNotes: null,
+              profileId: null,
+              profileRevisionId: null,
+              profileRevisionHash: null,
+            },
+            create: {
+              promptPackageId,
+              draftId,
+              draftWorkingVersion: 1,
+              draftStorageUri: draftUri,
+              draftHash: 'b'.repeat(64),
+            },
+          }),
+        ],
+      );
+    });
+    const { reserveAssignmentShare } =
+      await import('../src/domain/assignment-session-repository.js');
+
+    await expect(
+      reserveAssignmentShare({
+        sessionId,
+        userId,
+        expectedRevision: 4,
+        requestId,
+        jobConfig: { publishTarget: 'html', upload: 'auto' },
+      }),
+    ).rejects.toMatchObject({ code: 'ASSIGNMENT_SHARE_DIRTY_RECOVERY' });
+
+    await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+      client.query('UPDATE assignment_sessions SET teacher_notes = NULL WHERE id = $1', [
+        sessionId,
+      ]),
+    );
+    const [first, second] = await Promise.all([
+      reserveAssignmentShare({
+        sessionId,
+        userId,
+        expectedRevision: 4,
+        requestId,
+        jobConfig: { publishTarget: 'html', upload: 'auto' },
+      }),
+      reserveAssignmentShare({
+        sessionId,
+        userId,
+        expectedRevision: 4,
+        requestId,
+        jobConfig: { publishTarget: 'html', upload: 'auto' },
+      }),
+    ]);
+    const reserved = first.created ? first : second;
+    const replay = first.created ? second : first;
+
+    expect(reserved).toMatchObject({
+      created: true,
+      session: { shareJobId: requestId, revision: 5, confirmedStep: 'create' },
+      job: { id: requestId, mdStorageUri: draftUri, state: 'awaiting_approval' },
+    });
+    expect(replay).toMatchObject({ created: false, job: { id: requestId } });
+    const jobs = await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+      client.query<{ count: string }>('SELECT COUNT(*)::text AS count FROM jobs WHERE id = $1', [
+        requestId,
+      ]),
+    );
+    expect(jobs.rows[0]?.count).toBe('1');
   });
 
   it('keeps completed Share readable but out of resume, counts, and active-recording reuse', async () => {
@@ -268,9 +394,8 @@ describe('domain/assignment-session-repository persistence contract', () => {
         ],
       );
     });
-    const { getAssignmentSessionByIdForUser } = await import(
-      '../src/domain/assignment-session-repository.js'
-    );
+    const { getAssignmentSessionByIdForUser } =
+      await import('../src/domain/assignment-session-repository.js');
 
     await expect(getAssignmentSessionByIdForUser(sessionId, userId)).rejects.toMatchObject({
       name: 'ZodError',
