@@ -83,11 +83,13 @@ inconsistencies, missing tests, or unjustified scope.
 
 The primary agent owns disposition: verify each finding against the live code and contracts, reject
 invalid findings with evidence, fix valid findings inline, and rerun the smallest sufficient focused
-checks plus any gate-level check affected by the fix. If a fix materially changes the behavior or
-contract that was reviewed, request a follow-up from another fresh `@sol_reviewer` instance before
-closing the gate. Record the reviewer verdict, finding dispositions, fixes, and fresh validation in
-the execution handoff. Do not defer valid findings to a later gate merely because the current task's
-tests pass.
+checks plus any gate-level check affected by the fix. A follow-up is optional rather than automatic:
+request it only when the fixes
+materially change the reviewed behavior or leave a correctness question that needs reviewer
+confirmation. When needed, send the follow-up to the **same reviewer instance that opened that
+gate**, so it can verify its findings against the fixes with full context. Record the reviewer
+verdict, finding dispositions, fixes, and fresh validation in the execution handoff. Do not defer
+valid findings to a later gate merely because the current task's tests pass.
 
 No reviewer is spawned while preparing or approving this cadence. The first reviewer is created only
 after Task 1 implementation and validation are complete.
