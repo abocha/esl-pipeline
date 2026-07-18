@@ -1,50 +1,54 @@
 import type {
   AssignmentSessionDto,
   AssignmentSessionListResponse,
-  CreateAssignmentSessionRequest,
-  UpdateAssignmentSessionRequest,
+  ConfirmStudentAssignmentSessionRequest,
+  UpdateAssignmentSessionRecoveryRequest,
 } from '@esl-pipeline/contracts';
 
 import type { AssignmentSessionRecord } from '../domain/assignment-session-model.js';
 import {
-  archiveAssignmentSession,
+  confirmStudentAssignmentSession,
   countAssignmentSessionsForUser,
-  createOrReuseAssignmentSession,
   getAssignmentSessionByIdForUser,
   listAssignmentSessionsForUser,
-  updateAssignmentSession,
+  updateAssignmentSessionRecovery,
 } from '../domain/assignment-session-repository.js';
 import { withPgClient } from '../infrastructure/db.js';
 import { completeElapsedScheduledLessonForHomework } from './student-schedule-billing.js';
 
-export async function createAssignmentSessionForUser(
+export async function confirmStudentAssignmentSessionForUser(
   userId: string,
-  request: CreateAssignmentSessionRequest,
+  request: ConfirmStudentAssignmentSessionRequest,
 ): Promise<AssignmentSessionDto> {
-  await validateLessonStudentPair(request);
-  const session = await createOrReuseAssignmentSession({
+  const lessonId = request.lessonId ?? null;
+  await validateLessonStudentPair(lessonId, request.studentId);
+  const session = await confirmStudentAssignmentSession({
     userId,
-    ...request,
+    requestId: request.requestId,
+    studentId: request.studentId,
+    lessonId,
   });
   await completeLinkedElapsedLessonForHomework(userId, session);
   return toAssignmentSessionDto(session);
 }
 
-export async function updateAssignmentSessionForUser(
+export async function updateAssignmentSessionRecoveryForUser(
   userId: string,
   sessionId: string,
-  request: UpdateAssignmentSessionRequest,
-): Promise<AssignmentSessionDto | null> {
-  await validateLessonStudentPair(request, { userId, sessionId });
-  const session = await updateAssignmentSession({
+  request: UpdateAssignmentSessionRecoveryRequest,
+): Promise<AssignmentSessionDto> {
+  if (request.patch.lessonId !== undefined) {
+    const existing = await getAssignmentSessionByIdForUser(sessionId, userId);
+    if (existing) await validateLessonStudentPair(request.patch.lessonId, existing.studentId);
+  }
+  const session = await updateAssignmentSessionRecovery({
     id: sessionId,
     userId,
-    ...request,
+    expectedRevision: request.expectedRevision,
+    patch: request.patch,
   });
-  if (session) {
-    await completeLinkedElapsedLessonForHomework(userId, session);
-  }
-  return session ? toAssignmentSessionDto(session) : null;
+  await completeLinkedElapsedLessonForHomework(userId, session);
+  return toAssignmentSessionDto(session);
 }
 
 export async function getAssignmentSessionForUser(
@@ -64,19 +68,7 @@ export async function listAssignmentSessionsForUserDto(
     listAssignmentSessionsForUser(userId, boundedLimit),
     countAssignmentSessionsForUser(userId),
   ]);
-  return {
-    sessions: sessions.map(toAssignmentSessionDto),
-    total,
-    limit: boundedLimit,
-  };
-}
-
-export async function archiveAssignmentSessionForUser(
-  userId: string,
-  sessionId: string,
-): Promise<AssignmentSessionDto | null> {
-  const session = await archiveAssignmentSession(sessionId, userId);
-  return session ? toAssignmentSessionDto(session) : null;
+  return { sessions: sessions.map(toAssignmentSessionDto), total, limit: boundedLimit };
 }
 
 export function toAssignmentSessionDto(session: AssignmentSessionRecord): AssignmentSessionDto {
@@ -89,7 +81,9 @@ export function toAssignmentSessionDto(session: AssignmentSessionRecord): Assign
     transcriptId: session.transcriptId,
     promptPackageId: session.promptPackageId,
     draftId: session.draftId,
-    currentStage: session.currentStage,
+    revision: session.revision,
+    confirmedStep: session.confirmedStep,
+    confirmed: session.confirmed,
     publishTarget: session.publishTarget,
     selectedTtsProvider: session.selectedTtsProvider,
     selectedTtsStrategy: session.selectedTtsStrategy,
@@ -98,9 +92,12 @@ export function toAssignmentSessionDto(session: AssignmentSessionRecord): Assign
     selectedGenerationProvider: session.selectedGenerationProvider,
     selectedGenerationModel: session.selectedGenerationModel,
     teacherNotes: session.teacherNotes,
+    selectedProfileId: session.selectedProfileId,
+    selectedProfileRevisionId: session.selectedProfileRevisionId,
+    selectedProfileRevisionHash: session.selectedProfileRevisionHash,
+    shareJobId: session.shareJobId,
     createdAt: session.createdAt.toISOString(),
     updatedAt: session.updatedAt.toISOString(),
-    archivedAt: session.archivedAt?.toISOString() ?? null,
   };
 }
 
@@ -108,30 +105,15 @@ async function completeLinkedElapsedLessonForHomework(
   userId: string,
   session: AssignmentSessionRecord,
 ): Promise<void> {
-  if (!session.studentId || !session.lessonId) return;
+  if (!session.lessonId) return;
   await completeElapsedScheduledLessonForHomework(session.studentId, session.lessonId, userId);
 }
 
 async function validateLessonStudentPair(
-  request: Pick<CreateAssignmentSessionRequest, 'lessonId' | 'studentId'>,
-  existingSession?: { userId: string; sessionId: string },
+  lessonId: string | null,
+  studentId: string,
 ): Promise<void> {
-  if (request.lessonId === undefined && request.studentId === undefined) return;
-
-  const session = existingSession
-    ? await getAssignmentSessionByIdForUser(existingSession.sessionId, existingSession.userId)
-    : null;
-  if (existingSession && !session) return;
-
-  const lessonId = request.lessonId !== undefined ? request.lessonId : session?.lessonId;
-  const studentId = request.studentId !== undefined ? request.studentId : session?.studentId;
-
   if (!lessonId) return;
-
-  if (!studentId) {
-    throw new Error('Assignment session lesson requires a selected student');
-  }
-
   const belongsToStudent = await withPgClient(async (client) => {
     const result = await client.query(
       'SELECT 1 FROM student_lessons WHERE id = $1 AND student_id = $2',
@@ -139,7 +121,6 @@ async function validateLessonStudentPair(
     );
     return (result.rowCount ?? 0) > 0;
   });
-
   if (!belongsToStudent) {
     throw new Error('Assignment session lesson must belong to the selected student');
   }

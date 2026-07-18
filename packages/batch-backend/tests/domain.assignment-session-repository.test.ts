@@ -17,7 +17,8 @@ async function resetTables() {
 async function insertUserAndStudent(userId: string, studentId: string) {
   await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
     await client.query(
-      `INSERT INTO users (id, email, password_hash, role) VALUES ($1, $2, 'hash', 'user')`,
+      `INSERT INTO users (id, email, password_hash, role)
+       VALUES ($1, $2, 'hash', 'user') ON CONFLICT (id) DO NOTHING`,
       [userId, `${userId}@example.test`],
     );
     await client.query(`INSERT INTO students (id, student) VALUES ($1, 'Alpha Tester')`, [
@@ -92,6 +93,187 @@ describe('domain/assignment-session-repository persistence contract', () => {
         context: null,
         create: null,
       },
+    });
+  });
+
+  it('idempotently confirms Student and CAS-updates recovery without stage or archive state', async () => {
+    const userId = randomUUID();
+    const studentId = randomUUID();
+    const requestId = randomUUID();
+    await insertUserAndStudent(userId, studentId);
+    const { confirmStudentAssignmentSession, updateAssignmentSessionRecovery } = await import(
+      '../src/domain/assignment-session-repository.js'
+    );
+
+    const created = await confirmStudentAssignmentSession({
+      userId,
+      requestId,
+      studentId,
+      lessonId: null,
+    });
+    const replayed = await confirmStudentAssignmentSession({
+      userId,
+      requestId,
+      studentId,
+      lessonId: null,
+    });
+
+    expect(replayed.id).toBe(created.id);
+    expect(created).toMatchObject({
+      revision: 1,
+      confirmedStep: 'student',
+      confirmed: { student: { studentId }, source: null, context: null, create: null },
+    });
+    expect(created).not.toHaveProperty('currentStage');
+    expect(created).not.toHaveProperty('archivedAt');
+
+    const updated = await updateAssignmentSessionRecovery({
+      id: created.id,
+      userId,
+      expectedRevision: 1,
+      patch: { teacherNotes: 'Recovered automatically' },
+    });
+    expect(updated).toMatchObject({ revision: 2, teacherNotes: 'Recovered automatically' });
+
+    await expect(
+      updateAssignmentSessionRecovery({
+        id: created.id,
+        userId,
+        expectedRevision: 1,
+        patch: { teacherNotes: 'Stale tab' },
+      }),
+    ).rejects.toMatchObject({
+      code: 'ASSIGNMENT_SESSION_REVISION_CONFLICT',
+      session: expect.objectContaining({ revision: 2, teacherNotes: 'Recovered automatically' }),
+    });
+
+    await expect(
+      updateAssignmentSessionRecovery({
+        id: created.id,
+        userId,
+        expectedRevision: 2,
+        patch: { confirmedStep: 'share' } as never,
+      }),
+    ).rejects.toThrow('Assignment recovery field is not allowed');
+  });
+
+  it('rejects Student request-id reuse with different recovery identity', async () => {
+    const userId = randomUUID();
+    const firstStudentId = randomUUID();
+    const secondStudentId = randomUUID();
+    const requestId = randomUUID();
+    await insertUserAndStudent(userId, firstStudentId);
+    await insertUserAndStudent(userId, secondStudentId);
+    const { confirmStudentAssignmentSession } = await import(
+      '../src/domain/assignment-session-repository.js'
+    );
+
+    await confirmStudentAssignmentSession({
+      userId,
+      requestId,
+      studentId: firstStudentId,
+      lessonId: null,
+    });
+
+    await expect(
+      confirmStudentAssignmentSession({
+        userId,
+        requestId,
+        studentId: secondStudentId,
+        lessonId: null,
+      }),
+    ).rejects.toMatchObject({ code: 'ASSIGNMENT_SESSION_REQUEST_CONFLICT' });
+  });
+
+  it('keeps completed Share readable but out of resume, counts, and active-recording reuse', async () => {
+    const userId = randomUUID();
+    const studentId = randomUUID();
+    const recordingId = randomUUID();
+    const shareJobId = randomUUID();
+    await insertUserAndStudent(userId, studentId);
+    const repository = await import('../src/domain/assignment-session-repository.js');
+
+    const completed = await repository.confirmStudentAssignmentSession({
+      userId,
+      requestId: randomUUID(),
+      studentId,
+      lessonId: null,
+    });
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      await client.query(
+        `INSERT INTO recordings (id, source, student_id, storage_uri, bytes, status)
+         VALUES ($1, 'upload', $2, $3, 12, 'ingested')`,
+        [recordingId, studentId, `s3://recordings/${recordingId}.mp3`],
+      );
+      await client.query(
+        `INSERT INTO jobs (id, state, student_id, user_id) VALUES ($1, 'succeeded', $2, $3)`,
+        [shareJobId, studentId, userId],
+      );
+      await client.query(
+        `UPDATE assignment_sessions
+         SET recording_id = $2, confirmed_step = 'share', share_job_id = $3, revision = revision + 1
+         WHERE id = $1`,
+        [completed.id, recordingId, shareJobId],
+      );
+    });
+
+    await expect(repository.listAssignmentSessionsForUser(userId, 20)).resolves.toEqual([]);
+    await expect(repository.countAssignmentSessionsForUser(userId)).resolves.toBe(0);
+    await expect(
+      repository.getAssignmentSessionByIdForUser(completed.id, userId),
+    ).resolves.toMatchObject({
+      id: completed.id,
+      confirmedStep: 'share',
+    });
+
+    const next = await repository.confirmStudentAssignmentSession({
+      userId,
+      requestId: randomUUID(),
+      studentId,
+      lessonId: null,
+    });
+    await expect(
+      repository.updateAssignmentSessionRecovery({
+        id: next.id,
+        userId,
+        expectedRevision: 1,
+        patch: { recordingId },
+      }),
+    ).resolves.toMatchObject({ id: next.id, recordingId });
+    await expect(
+      repository.getActiveAssignmentSessionByRecording(userId, recordingId),
+    ).resolves.toMatchObject({ id: next.id });
+  });
+
+  it('fails closed when confirmed snapshot JSON is structurally malformed', async () => {
+    const userId = randomUUID();
+    const studentId = randomUUID();
+    const sessionId = randomUUID();
+    await insertUserAndStudent(userId, studentId);
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      await client.query(
+        `INSERT INTO assignment_sessions (
+           id, user_id, student_id, revision, confirmed_step, confirmed_snapshot
+         ) VALUES ($1, $2, $3, 1, 'source', $4::jsonb)`,
+        [
+          sessionId,
+          userId,
+          studentId,
+          JSON.stringify({
+            student: { studentId },
+            source: {},
+            context: null,
+            create: null,
+          }),
+        ],
+      );
+    });
+    const { getAssignmentSessionByIdForUser } = await import(
+      '../src/domain/assignment-session-repository.js'
+    );
+
+    await expect(getAssignmentSessionByIdForUser(sessionId, userId)).rejects.toMatchObject({
+      name: 'ZodError',
     });
   });
 

@@ -1,0 +1,147 @@
+import { describeHttpServerIntegrationSuite } from './transport.http-server.integration.harness.js';
+
+describeHttpServerIntegrationSuite(
+  'transport/http-server - integration (in-process) [assignment-sessions]',
+  ({ app, assignmentSessionsModule, expect, it, vi }) => {
+    const session = {
+      id: '11111111-1111-4111-8111-111111111111',
+      userId: 'test-user-id',
+      studentId: '22222222-2222-4222-8222-222222222222',
+      lessonId: null,
+      recordingId: null,
+      transcriptId: null,
+      promptPackageId: null,
+      draftId: null,
+      revision: 1,
+      confirmedStep: 'student' as const,
+      confirmed: {
+        student: { studentId: '22222222-2222-4222-8222-222222222222' },
+        source: null,
+        context: null,
+        create: null,
+      },
+      publishTarget: null,
+      selectedTtsProvider: null,
+      selectedTtsStrategy: null,
+      selectedTtsModel: null,
+      selectedPreset: null,
+      selectedGenerationProvider: null,
+      selectedGenerationModel: null,
+      teacherNotes: null,
+      selectedProfileId: null,
+      selectedProfileRevisionId: null,
+      selectedProfileRevisionHash: null,
+      shareJobId: null,
+      createdAt: '2026-07-19T00:00:00.000Z',
+      updatedAt: '2026-07-19T00:00:00.000Z',
+    };
+
+    it('confirms Student and updates recovery through revisioned routes', async () => {
+      const confirmStudent = vi
+        .spyOn(assignmentSessionsModule, 'confirmStudentAssignmentSessionForUser')
+        .mockResolvedValue(session);
+      const updateRecovery = vi
+        .spyOn(assignmentSessionsModule, 'updateAssignmentSessionRecoveryForUser')
+        .mockResolvedValue({ ...session, revision: 2, teacherNotes: 'Recovered automatically' });
+
+      const created = await app.inject({
+        method: 'POST',
+        url: '/assignment-sessions/confirm-student',
+        payload: {
+          requestId: '33333333-3333-4333-8333-333333333333',
+          studentId: session.studentId,
+          lessonId: null,
+        },
+      });
+      const recovered = await app.inject({
+        method: 'PATCH',
+        url: `/assignment-sessions/${session.id}/recovery`,
+        payload: { expectedRevision: 1, patch: { teacherNotes: 'Recovered automatically' } },
+      });
+
+      expect(created.statusCode).toBe(200);
+      expect(created.json()).toEqual(session);
+      expect(recovered.statusCode).toBe(200);
+      expect(recovered.json()).toMatchObject({ revision: 2 });
+      expect(confirmStudent).toHaveBeenCalledWith('test-user-id', {
+        requestId: '33333333-3333-4333-8333-333333333333',
+        studentId: session.studentId,
+        lessonId: null,
+      });
+      expect(updateRecovery).toHaveBeenCalledWith('test-user-id', session.id, {
+        expectedRevision: 1,
+        patch: { teacherNotes: 'Recovered automatically' },
+      });
+    });
+
+    it('returns the latest session on recovery revision conflict', async () => {
+      vi.spyOn(
+        assignmentSessionsModule,
+        'updateAssignmentSessionRecoveryForUser',
+      ).mockRejectedValue({
+        code: 'ASSIGNMENT_SESSION_REVISION_CONFLICT',
+        session: { ...session, revision: 3 },
+      });
+
+      const response = await app.inject({
+        method: 'PATCH',
+        url: `/assignment-sessions/${session.id}/recovery`,
+        payload: { expectedRevision: 1, patch: { teacherNotes: 'Stale' } },
+      });
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json()).toEqual({
+        code: 'assignment_session_revision_conflict',
+        session: { ...session, revision: 3 },
+      });
+    });
+
+    it('returns conflict when a Student request ID is reused with different input', async () => {
+      vi.spyOn(
+        assignmentSessionsModule,
+        'confirmStudentAssignmentSessionForUser',
+      ).mockRejectedValue({ code: 'ASSIGNMENT_SESSION_REQUEST_CONFLICT', session });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/assignment-sessions/confirm-student',
+        payload: {
+          requestId: '33333333-3333-4333-8333-333333333333',
+          studentId: '44444444-4444-4444-8444-444444444444',
+          lessonId: null,
+        },
+      });
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json()).toEqual({
+        code: 'assignment_session_request_conflict',
+        session,
+      });
+    });
+
+    it('rejects confirmed and Share fields in recovery payloads', async () => {
+      const response = await app.inject({
+        method: 'PATCH',
+        url: `/assignment-sessions/${session.id}/recovery`,
+        payload: {
+          expectedRevision: 1,
+          patch: { confirmedStep: 'share', confirmed: session.confirmed, shareJobId: session.id },
+        },
+      });
+
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('removes revisionless create, patch, and archive routes', async () => {
+      const [create, patch, archive] = await Promise.all([
+        app.inject({ method: 'POST', url: '/assignment-sessions', payload: {} }),
+        app.inject({ method: 'PATCH', url: `/assignment-sessions/${session.id}`, payload: {} }),
+        app.inject({ method: 'POST', url: `/assignment-sessions/${session.id}/archive` }),
+      ]);
+
+      expect(create.statusCode).toBe(404);
+      expect(patch.statusCode).toBe(404);
+      expect(archive.statusCode).toBe(404);
+    });
+  },
+);

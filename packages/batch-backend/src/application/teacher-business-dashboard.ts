@@ -18,6 +18,7 @@ import type {
   UpdateBusinessSettingsRequest,
 } from '@esl-pipeline/contracts';
 
+import { ACTIVE_ASSIGNMENT_SESSION_SQL } from '../domain/assignment-session-repository.js';
 import { withPgClient } from '../infrastructure/db.js';
 import { materializeWorkspaceLessonRecurrencesWithClient } from './student-schedule-billing.js';
 
@@ -129,7 +130,7 @@ const BUSINESS_LESSON_HOMEWORK_SELECT = `
     WHEN lesson_homework_memory.id IS NOT NULL THEN 'memory_ready'
     WHEN lesson_published_job.id IS NOT NULL THEN 'published'
     WHEN lesson_active_job.id IS NOT NULL THEN 'publishing'
-    WHEN lesson_draft.id IS NOT NULL THEN 'draft_in_progress'
+    WHEN lesson_assignment_session.draft_id IS NOT NULL THEN 'draft_in_progress'
     WHEN lesson_assignment_session.id IS NOT NULL THEN 'session_in_progress'
     ELSE 'not_started'
   END AS homework_status,
@@ -138,14 +139,12 @@ const BUSINESS_LESSON_HOMEWORK_SELECT = `
     lesson_homework_memory.prompt_package_id,
     lesson_published_job.prompt_package_id,
     lesson_active_job.prompt_package_id,
-    lesson_draft.prompt_package_id,
     lesson_assignment_session.prompt_package_id
   ) AS homework_prompt_package_id,
   COALESCE(
     lesson_homework_memory.draft_id,
     lesson_published_job.draft_id,
     lesson_active_job.draft_id,
-    lesson_draft.id,
     lesson_assignment_session.draft_id
   ) AS homework_draft_id,
   COALESCE(lesson_published_job.id, lesson_active_job.id) AS homework_job_id,
@@ -155,7 +154,6 @@ const BUSINESS_LESSON_HOMEWORK_SELECT = `
     lesson_homework_memory.generated_at,
     lesson_published_job.updated_at,
     lesson_active_job.updated_at,
-    lesson_draft.updated_at,
     lesson_assignment_session.updated_at
   ) AS homework_updated_at
 `;
@@ -165,17 +163,10 @@ const BUSINESS_LESSON_HOMEWORK_JOINS = `
     SELECT id, prompt_package_id, draft_id, updated_at
     FROM assignment_sessions
     WHERE lesson_id = student_lessons.id
-      AND archived_at IS NULL
+      AND ${ACTIVE_ASSIGNMENT_SESSION_SQL}
     ORDER BY updated_at DESC, id DESC
     LIMIT 1
   ) lesson_assignment_session ON TRUE
-  LEFT JOIN LATERAL (
-    SELECT id, prompt_package_id, updated_at
-    FROM drafts
-    WHERE lesson_id = student_lessons.id
-    ORDER BY updated_at DESC, id DESC
-    LIMIT 1
-  ) lesson_draft ON TRUE
   LEFT JOIN LATERAL (
     SELECT id, prompt_package_id, draft_id, html_url,
            COALESCE(finished_at, updated_at, created_at) AS updated_at
