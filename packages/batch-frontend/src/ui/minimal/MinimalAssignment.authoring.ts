@@ -506,10 +506,9 @@ function mapGenerationError(error: unknown): string {
 
 interface UseMinimalAssignmentAuthoringControllerParams {
   recordingId: string | null;
-  lessonId?: string | null;
+  getAssignmentSessionId: () => string | null;
   transcriptStatus: TranscriptUiStatus;
   teacherNotes: string;
-  selectedProfileId: string;
   selectedTemplateId: string;
   currentJobId: string | null;
   learningPresetCatalogEnabled: boolean;
@@ -582,10 +581,9 @@ export interface AuthoringController extends AuthoringState {
 
 export function useMinimalAssignmentAuthoringController({
   recordingId,
-  lessonId,
+  getAssignmentSessionId,
   transcriptStatus,
   teacherNotes,
-  selectedProfileId,
   selectedTemplateId,
   currentJobId,
   learningPresetCatalogEnabled,
@@ -937,16 +935,22 @@ export function useMinimalAssignmentAuthoringController({
       });
       return null;
     }
+    const assignmentSessionId = getAssignmentSessionId();
+    if (!assignmentSessionId) {
+      dispatch({
+        type: 'prompt_generate_failed',
+        payload: { error: 'Confirm the assignment context before generating.' },
+      });
+      return null;
+    }
 
     invalidatePendingGeneration();
     dispatch({ type: 'prompt_generate_started' });
     try {
       const normalizedTeacherNotes = teacherNotes.trim();
       const response = await createPromptPackage(recordingId, {
-        ...(normalizedTeacherNotes ? { notes: normalizedTeacherNotes } : {}),
+        assignmentSessionId,
         templateId: selectedTemplateId,
-        profileId: selectedProfileId || undefined,
-        ...(lessonId ? { lessonId } : {}),
       });
       onTeacherNotesResolved(response.notes ?? normalizedTeacherNotes);
       dispatch({
@@ -964,10 +968,9 @@ export function useMinimalAssignmentAuthoringController({
     }
   }, [
     invalidatePendingGeneration,
-    lessonId,
+    getAssignmentSessionId,
     onTeacherNotesResolved,
     recordingId,
-    selectedProfileId,
     selectedTemplateId,
     teacherNotes,
     transcriptStatus,

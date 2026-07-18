@@ -6,7 +6,10 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
 import { createDraft } from '../../application/create-draft.js';
-import { createPromptPackage } from '../../application/create-prompt-package.js';
+import {
+  createPromptPackage,
+  PromptPackageAssignmentError,
+} from '../../application/create-prompt-package.js';
 import { getDraft } from '../../application/get-draft.js';
 import { getPromptPackage, getPromptPackageLineage } from '../../application/get-prompt-package.js';
 import { getRecording } from '../../application/get-recording.js';
@@ -793,27 +796,28 @@ export function registerRecordingRoutes(
       const { recordingId } = request.params as { recordingId: string };
       const routePath = resolveRoutePath(request, 'POST /recordings/:recordingId/prompt-package');
 
-      const schema = z.object({
-        notes: z.string().optional(),
-        profilePath: z.string().min(1).optional(),
-        profileId: z.string().min(1).optional(),
-        templateId: z.string().min(1).optional(),
-        lessonId: z.string().uuid().nullable().optional(),
-        bindingEffectiveAt: z.string().datetime({ offset: true }).optional(),
-      });
+      const schema = z
+        .object({
+          assignmentSessionId: z.string().uuid(),
+          templateId: z.string().min(1).optional(),
+        })
+        .strict();
+      const authenticatedUser = getAuthenticatedUser(request);
+      if (!authenticatedUser) {
+        return reply.code(401).send({
+          error: 'unauthorized',
+          message: 'Authentication required',
+          code: 'not_authenticated',
+        });
+      }
 
       try {
         const body = schema.parse(request.body ?? {});
         const promptPackage = await createPromptPackage({
           recordingId,
-          notes: body.notes,
-          profilePath: body.profilePath,
-          profileId: body.profileId,
+          assignmentSessionId: body.assignmentSessionId,
+          userId: authenticatedUser.id,
           templateId: body.templateId,
-          lessonId: body.lessonId ?? null,
-          bindingEffectiveAt: body.bindingEffectiveAt
-            ? new Date(body.bindingEffectiveAt)
-            : undefined,
         });
 
         if (!promptPackage) {
@@ -847,6 +851,18 @@ export function registerRecordingRoutes(
             message: error.message,
             code: error.code,
           });
+        }
+        if (error instanceof PromptPackageAssignmentError) {
+          return reply
+            .code(error.code === 'PROMPT_PACKAGE_ASSIGNMENT_SESSION_NOT_FOUND' ? 404 : 409)
+            .send({
+              error:
+                error.code === 'PROMPT_PACKAGE_ASSIGNMENT_SESSION_NOT_FOUND'
+                  ? 'not_found'
+                  : 'conflict',
+              message: error.message,
+              code: error.code,
+            });
         }
 
         logger.error(error instanceof Error ? error : String(error), {

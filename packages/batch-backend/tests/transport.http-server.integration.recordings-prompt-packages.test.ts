@@ -13,7 +13,6 @@ describeHttpServerIntegrationSuite(
     getRecordingTranscriptModule,
     it,
     listRecordingsModule,
-    ProfilePathError,
     recordingRepositoryModule,
     retryRecordingModule,
     transcriptRepositoryModule,
@@ -895,7 +894,10 @@ describeHttpServerIntegrationSuite(
       const response = await app.inject({
         method: 'POST',
         url: '/recordings/recording-1/prompt-package',
-        payload: { notes: 'Some notes', profilePath: '/profiles/p1.md' },
+        payload: {
+          assignmentSessionId: '11111111-1111-4111-8111-111111111111',
+          templateId: '/templates/t1.md',
+        },
       });
 
       expect(response.statusCode).toBe(200);
@@ -928,8 +930,9 @@ describeHttpServerIntegrationSuite(
       expect(createPromptPackage).toHaveBeenCalledWith(
         expect.objectContaining({
           recordingId: 'recording-1',
-          notes: 'Some notes',
-          profilePath: '/profiles/p1.md',
+          assignmentSessionId: '11111111-1111-4111-8111-111111111111',
+          userId: 'test-user-id',
+          templateId: '/templates/t1.md',
         }),
       );
     });
@@ -942,35 +945,33 @@ describeHttpServerIntegrationSuite(
       const response = await app.inject({
         method: 'POST',
         url: '/recordings/missing/prompt-package',
-        payload: { notes: 'Some notes' },
+        payload: { assignmentSessionId: '11111111-1111-4111-8111-111111111111' },
       });
 
       expect(response.statusCode).toBe(404);
       expect(response.json()).toEqual({ error: 'not_found' });
     });
 
-    it('POST /recordings/:id/prompt-package rejects profilePath outside repo', async () => {
+    it('POST /recordings/:id/prompt-package rejects client-supplied confirmed inputs', async () => {
       const createPromptPackage = vi.spyOn(createPromptPackageModule, 'createPromptPackage');
       createPromptPackage.mockClear();
-      createPromptPackage.mockRejectedValue(
-        new ProfilePathError(
-          'profilePath must resolve within the configured profile root',
-          'profile_path_outside_root',
-        ),
-      );
 
       const response = await app.inject({
         method: 'POST',
         url: '/recordings/recording-1/prompt-package',
-        payload: { profilePath: '/etc/passwd' },
+        payload: {
+          assignmentSessionId: '11111111-1111-4111-8111-111111111111',
+          notes: 'client override',
+          profileId: 'profile.md',
+        },
       });
 
       expect(response.statusCode).toBe(400);
-      expect(response.json()).toEqual({
+      expect(response.json()).toMatchObject({
         error: 'validation_failed',
-        message: 'profilePath must resolve within the configured profile root',
-        code: 'profile_path_outside_root',
+        message: 'Invalid request body',
       });
+      expect(createPromptPackage).not.toHaveBeenCalled();
     });
 
     it('GET /prompt-packages/:id returns prompt package payload', async () => {
