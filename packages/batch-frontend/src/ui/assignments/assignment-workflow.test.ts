@@ -1,32 +1,52 @@
 import { describe, expect, it } from 'vitest';
 
+import type { AssignmentSession } from '../../utils/api';
 import {
   deriveAssignmentWorkflow,
   getInvalidatedArtifacts,
   getTeacherNotesCommitDecision,
-  resolveInitialAssignmentStep,
 } from './assignment-workflow';
+
+function session(overrides: Partial<AssignmentSession> = {}): AssignmentSession {
+  return {
+    id: 'session-1',
+    userId: 'user-1',
+    studentId: 'student-1',
+    lessonId: null,
+    recordingId: null,
+    transcriptId: null,
+    promptPackageId: null,
+    draftId: null,
+    revision: 1,
+    confirmedStep: 'student',
+    confirmed: { student: { studentId: 'student-1' }, source: null, context: null, create: null },
+    publishTarget: null,
+    selectedTtsProvider: null,
+    selectedTtsStrategy: null,
+    selectedTtsModel: null,
+    selectedPreset: null,
+    selectedGenerationProvider: null,
+    selectedGenerationModel: null,
+    teacherNotes: null,
+    selectedProfileId: null,
+    selectedProfileRevisionId: null,
+    selectedProfileRevisionHash: null,
+    shareJobId: null,
+    createdAt: '2026-07-19T00:00:00.000Z',
+    updatedAt: '2026-07-19T00:00:00.000Z',
+    ...overrides,
+  };
+}
 
 describe('assignment workflow model', () => {
   it.each([
-    [{}, 'student'],
-    [{ selectedStudent: true }, 'source'],
-    [{ selectedStudent: true, transcriptReady: true }, 'context'],
-    [{ selectedStudent: true, transcriptReady: true, promptReady: true }, 'create'],
-    [
-      { selectedStudent: true, transcriptReady: true, promptReady: true, draftReady: true },
-      'review',
-    ],
-  ] as const)('derives the current step from %o', (partial, expectedCurrent) => {
-    const steps = deriveAssignmentWorkflow({
-      selectedStudent: false,
-      transcriptReady: false,
-      promptReady: false,
-      draftReady: false,
-      previewReady: false,
-      published: false,
-      ...partial,
-    });
+    [null, 'student'],
+    [session(), 'source'],
+    [session({ confirmedStep: 'source' }), 'context'],
+    [session({ confirmedStep: 'context' }), 'assignment'],
+    [session({ confirmedStep: 'create' }), 'review'],
+  ] as const)('derives the current step from confirmed progress', (value, expectedCurrent) => {
+    const steps = deriveAssignmentWorkflow(value);
 
     expect(steps.find((step) => step.status === 'current')?.id).toBe(expectedCurrent);
     expect(steps.map((step) => step.label)).toEqual([
@@ -38,18 +58,66 @@ describe('assignment workflow model', () => {
     ]);
   });
 
-  it('keeps Review and share reachable for a published legacy job with missing artifact links', () => {
-    const steps = deriveAssignmentWorkflow({
-      selectedStudent: false,
-      transcriptReady: false,
-      promptReady: false,
-      draftReady: false,
-      previewReady: false,
-      published: true,
+  it('does not mark a ready but unconfirmed draft complete', () => {
+    const unconfirmedDraft = session({
+      confirmedStep: 'context',
+      promptPackageId: 'prompt-1',
+      draftId: 'draft-1',
     });
 
-    expect(steps.find((step) => step.status === 'current')?.id).toBe('review');
-    expect(steps.slice(0, -1).every((step) => step.status === 'complete')).toBe(true);
+    expect(
+      deriveAssignmentWorkflow(unconfirmedDraft).find((step) => step.id === 'assignment')?.status,
+    ).toBe('current');
+    expect(
+      deriveAssignmentWorkflow(unconfirmedDraft).find((step) => step.id === 'review')?.status,
+    ).toBe('locked');
+  });
+
+  it('returns to the earliest dirty confirmed boundary', () => {
+    const confirmed = session({
+      confirmedStep: 'create',
+      lessonId: 'lesson-b',
+      recordingId: 'recording-a',
+      transcriptId: 'transcript-a',
+      teacherNotes: 'saved notes',
+      promptPackageId: 'prompt-a',
+      draftId: 'draft-a',
+      confirmed: {
+        student: { studentId: 'student-1' },
+        source: {
+          lessonId: 'lesson-a',
+          recordingId: 'recording-a',
+          transcriptId: 'transcript-a',
+          transcriptWorkingVersion: 1,
+          transcriptStorageUri: 'local://transcript-a',
+          transcriptHash: 'a'.repeat(64),
+        },
+        context: {
+          teacherNotes: 'saved notes',
+          profileId: null,
+          profileRevisionId: null,
+          profileRevisionHash: null,
+        },
+        create: {
+          promptPackageId: 'prompt-a',
+          draftId: 'draft-a',
+          draftWorkingVersion: 1,
+          draftStorageUri: 'local://draft-a',
+          draftHash: 'b'.repeat(64),
+        },
+      },
+    });
+
+    expect(deriveAssignmentWorkflow(confirmed).find((step) => step.status === 'current')?.id).toBe(
+      'source',
+    );
+  });
+
+  it('marks a confirmed Share session complete without an editable current step', () => {
+    const steps = deriveAssignmentWorkflow(
+      session({ confirmedStep: 'share', shareJobId: 'job-1' }),
+    );
+    expect(steps.every((step) => step.status === 'complete')).toBe(true);
   });
 
   it('invalidates only dependent downstream artifacts', () => {
@@ -82,25 +150,7 @@ describe('assignment workflow model', () => {
     expect(getInvalidatedArtifacts('draft')).toEqual(['preview', 'publishedJob']);
   });
 
-  it('maps durable session stages into focused UI steps', () => {
-    const empty = {
-      selectedStudent: false,
-      transcriptReady: false,
-      promptReady: false,
-      draftReady: false,
-      previewReady: false,
-      published: false,
-    };
-    expect(resolveInitialAssignmentStep('source', empty)).toBe('student');
-    expect(resolveInitialAssignmentStep('source', { ...empty, selectedStudent: true })).toBe(
-      'source',
-    );
-    expect(resolveInitialAssignmentStep('context', empty)).toBe('context');
-    expect(resolveInitialAssignmentStep('assignment', empty)).toBe('create');
-    expect(resolveInitialAssignmentStep('review', empty)).toBe('review');
-  });
-
-  it('treats teacher notes with equivalent trimmed content as unchanged', () => {
+  it('classifies teacher-note commits without changing the existing invalidation prompt', () => {
     expect(
       getTeacherNotesCommitDecision({
         currentNotes: ' Focus on articles. ',
@@ -108,9 +158,6 @@ describe('assignment workflow model', () => {
         hasDownstreamAssignment: true,
       }),
     ).toBe('unchanged');
-  });
-
-  it('commits changed teacher notes when no downstream assignment exists', () => {
     expect(
       getTeacherNotesCommitDecision({
         currentNotes: 'Focus on articles.',
@@ -118,13 +165,10 @@ describe('assignment workflow model', () => {
         hasDownstreamAssignment: false,
       }),
     ).toBe('commit');
-  });
-
-  it('confirms invalidation before committing changed notes with downstream assignment', () => {
     expect(
       getTeacherNotesCommitDecision({
         currentNotes: 'Focus on articles.',
-        committedNotes: 'Focus on stress.',
+        committedNotes: '',
         hasDownstreamAssignment: true,
       }),
     ).toBe('confirm-and-invalidate');

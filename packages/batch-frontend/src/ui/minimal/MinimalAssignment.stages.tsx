@@ -7,12 +7,9 @@ import {
   GraduationCap,
   MessageSquareText,
   NotebookText,
-  RefreshCw,
-  ShieldCheck,
   Star,
   Target,
   TrendingUp,
-  UserRound,
 } from 'lucide-react';
 import React from 'react';
 import { Link, useInRouterContext } from 'react-router-dom';
@@ -51,7 +48,7 @@ export interface CurrentAssignmentCard {
 }
 
 interface WorkflowOverviewProps {
-  currentStageTitle: string;
+  currentStepTitle: string;
   stages: WorkflowStage[];
 }
 
@@ -73,7 +70,6 @@ interface StartStageSectionProps {
   selectedStudentName: string | null;
   onStartNewAssignment: () => void;
   onShowResumeChoice: () => void;
-  onRefreshRecentWork: () => void;
   onResumeSelectedAssignment: () => Promise<void>;
   resumeLoading: boolean;
   selectedResumeJobId: string;
@@ -96,7 +92,6 @@ interface SourceStageSectionProps {
   sectionRef?: React.Ref<HTMLElement>;
   headingRef?: React.Ref<HTMLHeadingElement>;
   studentSelectRef?: React.Ref<HTMLSelectElement>;
-  onRefreshStudents: () => void;
   studentOptions: StudentOption[];
   studentOptionsError: string | null;
   selectedStudentId: string;
@@ -125,14 +120,12 @@ interface SourceStageSectionProps {
   transcriptStatus: 'idle' | 'loading' | 'processing' | 'ready' | 'failed';
   transcriptError: string | null;
   transcriptReady: boolean;
-  onRefreshTranscript: () => void;
   retryingTranscript: boolean;
   onRetryTranscript: () => void;
   transcriptText: string;
   onTranscriptTextChange: (value: string) => void;
   transcriptDirty: boolean;
   transcriptSaving: boolean;
-  onSaveTranscript: () => void;
   hideStudentSelection?: boolean;
 }
 
@@ -164,21 +157,17 @@ interface ContextStageSectionProps {
 
 interface FirstProfileAssistProps {
   visible: boolean;
-  confirmationState: 'unconfirmed' | 'edited' | 'confirmed';
-  confirmDisabled: boolean;
+  sourceConfirmed: boolean;
   lessonMemoryStatus: 'checking' | 'building' | 'ready';
   draftProfileId: string | null;
   draftRevisionId: string | null;
   draftPreview: FirstProfileDraftPreview | null;
-  busy: 'confirming' | 'drafting' | 'approving' | null;
+  busy: 'drafting' | 'approving' | null;
   approved: boolean;
   error: string | null;
-  onConfirm: () => void;
-  onChangeStudent: () => void;
-  onReplaceAudio: () => void;
   onPopulate: () => void;
   onApprove: () => void;
-  onRefresh: () => void;
+  onRetry: () => void;
 }
 
 interface FirstProfileDraftPreview {
@@ -433,11 +422,8 @@ interface AssignmentStageSectionProps {
   generateDraftButtonRef?: React.Ref<HTMLButtonElement>;
   transcriptReady: boolean;
   promptLoading: boolean;
-  promptReady: boolean;
   promptOptionsReady: boolean;
-  onReloadPromptOptions: () => void;
   promptError: string | null;
-  onSaveDraft: () => void;
   validating: boolean;
   draftDirty: boolean;
   generationOptionsAvailable: boolean;
@@ -460,6 +446,7 @@ interface ReviewStageSectionProps {
   headingRef?: React.Ref<HTMLHeadingElement>;
   previewButtonRef?: React.Ref<HTMLButtonElement>;
   onPublish: () => void;
+  shareAvailable: boolean;
   onCancelJob: () => void;
   canPublishWithPreview: boolean;
   cancelEnabled: boolean;
@@ -487,14 +474,14 @@ function formatWorkflowStageStatusLabel(status: WorkflowStageStatus): string {
   return 'Locked';
 }
 
-export function WorkflowOverview({ currentStageTitle, stages }: WorkflowOverviewProps) {
+export function WorkflowOverview({ currentStepTitle, stages }: WorkflowOverviewProps) {
   return (
     <section className="minimal-overview" aria-labelledby="assignment-builder-title">
       <div className="minimal-overview-header">
         <div className="minimal-overview-copy">
           <h1 id="assignment-builder-title">Build and share a lesson assignment</h1>
         </div>
-        <div className="minimal-stage-state is-current">Current focus: {currentStageTitle}</div>
+        <div className="minimal-stage-state is-current">Current focus: {currentStepTitle}</div>
       </div>
 
       <ol className="minimal-stage-list" aria-label="Assignment progress">
@@ -567,7 +554,6 @@ export function StartStageSection({
   selectedStudentName,
   onStartNewAssignment,
   onShowResumeChoice,
-  onRefreshRecentWork,
   onResumeSelectedAssignment,
   resumeLoading,
   selectedResumeJobId,
@@ -669,14 +655,6 @@ export function StartStageSection({
                     <h3>Recent assignments</h3>
                   </div>
                   <div className="minimal-inline">
-                    <button
-                      type="button"
-                      className="minimal-secondary"
-                      onClick={onRefreshRecentWork}
-                      disabled={resumeLoading}
-                    >
-                      {resumeLoading ? 'Refreshing...' : 'Refresh recent work'}
-                    </button>
                     <button
                       type="button"
                       className="minimal-primary minimal-guided-button"
@@ -793,7 +771,6 @@ export function SourceStageSection({
   sectionRef,
   headingRef,
   studentSelectRef,
-  onRefreshStudents,
   studentOptions,
   studentOptionsError,
   selectedStudentId,
@@ -822,14 +799,12 @@ export function SourceStageSection({
   transcriptStatus,
   transcriptError,
   transcriptReady,
-  onRefreshTranscript,
   retryingTranscript,
   onRetryTranscript,
   transcriptText,
   onTranscriptTextChange,
   transcriptDirty,
   transcriptSaving,
-  onSaveTranscript,
   hideStudentSelection = false,
 }: SourceStageSectionProps) {
   const sourceGuidance =
@@ -862,11 +837,6 @@ export function SourceStageSection({
             <div className="minimal-stage-panel-title">
               <h3>Recording</h3>
             </div>
-            {!recording && !hideStudentSelection ? (
-              <button type="button" className="minimal-secondary" onClick={onRefreshStudents}>
-                Refresh students
-              </button>
-            ) : null}
           </div>
           {!hideStudentSelection ? (
             <label className="minimal-select">
@@ -982,14 +952,6 @@ export function SourceStageSection({
             <div className="minimal-stage-panel-title">
               <h3>Transcript</h3>
             </div>
-            <button
-              type="button"
-              className="minimal-secondary"
-              onClick={onRefreshTranscript}
-              disabled={!recording?.recordingId || transcriptStatus === 'loading'}
-            >
-              Refresh transcript
-            </button>
           </div>
           {recording ? (
             transcriptStatus === 'processing' || transcriptStatus === 'idle' ? (
@@ -1031,16 +993,14 @@ export function SourceStageSection({
                 onChange={(event) => onTranscriptTextChange(event.target.value)}
                 rows={10}
               />
-              <div className="minimal-inline">
-                <button
-                  type="button"
-                  className="minimal-primary"
-                  onClick={onSaveTranscript}
-                  disabled={!transcriptDirty || transcriptSaving}
-                >
-                  {transcriptSaving ? 'Saving...' : 'Save transcript edits'}
-                </button>
-                {transcriptDirty ? <span className="minimal-muted">Unsaved edits</span> : null}
+              <div className="minimal-inline" role="status" aria-live="polite">
+                <span className="minimal-muted">
+                  {transcriptSaving
+                    ? 'Saving transcript changes…'
+                    : transcriptDirty
+                      ? 'Transcript changes waiting to save'
+                      : 'Transcript changes saved'}
+                </span>
               </div>
               {transcriptError ? <p className="minimal-error">{transcriptError}</p> : null}
             </div>
@@ -1154,8 +1114,8 @@ export function ContextStageSection({
                     <p>
                       {firstProfileAssist.approved
                         ? 'The approved profile is selected for this assignment.'
-                        : firstProfileAssist.confirmationState !== 'confirmed'
-                          ? 'Confirm the transcript-student pairing before adding this lesson to learner memory.'
+                        : !firstProfileAssist.sourceConfirmed
+                          ? 'Confirm Lesson source to start learner memory automatically.'
                           : firstProfileAssist.lessonMemoryStatus === 'ready'
                             ? 'Lesson memory is ready. Create the first structured profile before generating the assignment.'
                             : 'Building learner memory from the confirmed transcript.'}
@@ -1168,8 +1128,8 @@ export function ContextStageSection({
                   >
                     {firstProfileAssist.approved
                       ? 'Approved'
-                      : firstProfileAssist.confirmationState !== 'confirmed'
-                        ? 'Transcript ready'
+                      : !firstProfileAssist.sourceConfirmed
+                        ? 'Source not confirmed'
                         : firstProfileAssist.lessonMemoryStatus === 'ready'
                           ? 'Memory ready'
                           : 'Building memory'}
@@ -1179,118 +1139,60 @@ export function ContextStageSection({
               {firstProfileAssist.approved ? (
                 <p className="minimal-success">Profile approved and ready for this assignment.</p>
               ) : firstProfileAssist.draftRevisionId ? (
-                <>
-                  {firstProfileAssist.draftPreview ? (
-                    <ProfileDossier
-                      title="First profile draft"
-                      description="Review what will be saved before approving."
-                      statusLabel="Draft ready"
-                      studentName={studentName}
-                      studentDetail="No prior profile"
-                      sections={buildDraftProfileDossierSections(firstProfileAssist.draftPreview)}
-                      provenance={[
-                        { icon: Database, label: 'Built from first lesson memory' },
-                        { icon: CheckCircle2, label: 'Transcript ready' },
-                      ]}
-                      actions={
-                        <>
-                          <button
-                            type="button"
-                            className="minimal-primary"
-                            onClick={firstProfileAssist.onApprove}
-                            disabled={firstProfileAssist.busy === 'approving'}
-                          >
-                            {firstProfileAssist.busy === 'approving'
-                              ? 'Approving...'
-                              : 'Approve profile draft'}
-                          </button>
-                          {renderLearningPageLink('Edit in Learning page', undefined, {
-                            profileId: firstProfileAssist.draftProfileId,
-                            draftRevisionId: firstProfileAssist.draftRevisionId,
-                          })}
-                        </>
-                      }
-                    />
-                  ) : (
-                    <p className="minimal-muted">
-                      The draft was created, but no structured preview was returned.
-                    </p>
-                  )}
-                </>
-              ) : firstProfileAssist.confirmationState !== 'confirmed' ? (
-                <div className="minimal-memory-confirmation-gate">
-                  <div className="minimal-memory-confirmation-status">
-                    <CheckCircle2 aria-hidden="true" size={18} />
-                    <span>Transcript ready</span>
-                  </div>
+                firstProfileAssist.draftPreview ? (
+                  <ProfileDossier
+                    title="First profile draft"
+                    description="Review what will be saved before approving."
+                    statusLabel="Draft ready"
+                    studentName={studentName}
+                    studentDetail="No prior profile"
+                    sections={buildDraftProfileDossierSections(firstProfileAssist.draftPreview)}
+                    provenance={[
+                      { icon: Database, label: 'Built from first lesson memory' },
+                      { icon: CheckCircle2, label: 'Transcript ready' },
+                    ]}
+                    actions={
+                      <>
+                        <button
+                          type="button"
+                          className="minimal-primary"
+                          onClick={firstProfileAssist.onApprove}
+                          disabled={firstProfileAssist.busy === 'approving'}
+                        >
+                          {firstProfileAssist.busy === 'approving'
+                            ? 'Approving...'
+                            : 'Approve profile draft'}
+                        </button>
+                        {renderLearningPageLink('Edit in Learning page', undefined, {
+                          profileId: firstProfileAssist.draftProfileId,
+                          draftRevisionId: firstProfileAssist.draftRevisionId,
+                        })}
+                      </>
+                    }
+                  />
+                ) : (
+                  <p className="minimal-muted">
+                    The draft was created, but no structured preview was returned.
+                  </p>
+                )
+              ) : !firstProfileAssist.sourceConfirmed ? (
+                <p className="minimal-muted">
+                  Return to Lesson source and confirm it before creating the first profile.
+                </p>
+              ) : firstProfileAssist.lessonMemoryStatus === 'ready' ? (
+                <div className="minimal-inline minimal-first-profile-actions">
                   <button
                     type="button"
-                    className="minimal-primary minimal-memory-confirm-button"
-                    onClick={firstProfileAssist.onConfirm}
-                    disabled={
-                      firstProfileAssist.busy === 'confirming' || firstProfileAssist.confirmDisabled
-                    }
+                    className="minimal-primary"
+                    onClick={firstProfileAssist.onPopulate}
+                    disabled={firstProfileAssist.busy === 'drafting'}
                   >
-                    <CheckCircle2 aria-hidden="true" size={18} />
-                    <span>
-                      {firstProfileAssist.busy === 'confirming'
-                        ? 'Confirming...'
-                        : firstProfileAssist.confirmationState === 'edited'
-                          ? 'Update learner context from edited transcript'
-                          : `Use this transcript for ${studentName ?? 'this student'}'s learner context`}
-                    </span>
+                    {firstProfileAssist.busy === 'drafting'
+                      ? 'Populating...'
+                      : 'Populate first profile from lesson'}
                   </button>
-                  <div className="minimal-memory-confirmation-actions">
-                    <button
-                      type="button"
-                      className="minimal-secondary"
-                      onClick={firstProfileAssist.onChangeStudent}
-                    >
-                      <UserRound aria-hidden="true" size={17} />
-                      <span>Change student</span>
-                    </button>
-                    <button
-                      type="button"
-                      className="minimal-secondary"
-                      onClick={firstProfileAssist.onReplaceAudio}
-                    >
-                      <RefreshCw aria-hidden="true" size={17} />
-                      <span>Replace audio</span>
-                    </button>
-                  </div>
-                  <p className="minimal-memory-confirmation-note">
-                    <ShieldCheck aria-hidden="true" size={17} />
-                    <span>Nothing is added to learner memory until you confirm.</span>
-                  </p>
-                  {firstProfileAssist.confirmDisabled ? (
-                    <p className="minimal-muted">
-                      Save transcript edits before updating learner context.
-                    </p>
-                  ) : null}
+                  {renderLearningPageLink('Open Learning page')}
                 </div>
-              ) : firstProfileAssist.lessonMemoryStatus === 'ready' ? (
-                <>
-                  <div className="minimal-inline minimal-first-profile-actions">
-                    <button
-                      type="button"
-                      className="minimal-primary"
-                      onClick={firstProfileAssist.onPopulate}
-                      disabled={firstProfileAssist.busy === 'drafting'}
-                    >
-                      {firstProfileAssist.busy === 'drafting'
-                        ? 'Populating...'
-                        : 'Populate first profile from lesson'}
-                    </button>
-                    <button
-                      type="button"
-                      className="minimal-secondary"
-                      onClick={firstProfileAssist.onRefresh}
-                    >
-                      Refresh
-                    </button>
-                    {renderLearningPageLink('Open Learning page')}
-                  </div>
-                </>
               ) : (
                 <>
                   <div className="minimal-memory-progress" role="status">
@@ -1303,19 +1205,21 @@ export function ContextStageSection({
                     </span>
                   </div>
                   <div className="minimal-inline minimal-first-profile-actions">
-                    <button
-                      type="button"
-                      className="minimal-secondary"
-                      onClick={firstProfileAssist.onRefresh}
-                    >
-                      Check now
-                    </button>
                     {renderLearningPageLink('Open Learning page')}
                   </div>
                 </>
               )}
               {firstProfileAssist.error ? (
-                <p className="minimal-error">{firstProfileAssist.error}</p>
+                <div className="minimal-block">
+                  <p className="minimal-error">{firstProfileAssist.error}</p>
+                  <button
+                    type="button"
+                    className="minimal-secondary"
+                    onClick={firstProfileAssist.onRetry}
+                  >
+                    Retry status check
+                  </button>
+                </div>
               ) : null}
             </div>
           ) : null}
@@ -1356,11 +1260,8 @@ export function AssignmentStageSection({
   generateDraftButtonRef,
   transcriptReady,
   promptLoading,
-  promptReady,
   promptOptionsReady,
-  onReloadPromptOptions,
   promptError,
-  onSaveDraft,
   validating,
   draftDirty,
   generationOptionsAvailable,
@@ -1417,25 +1318,18 @@ export function AssignmentStageSection({
               >
                 {assignmentBusy ? 'Generating assignment...' : 'Generate assignment'}
               </button>
-              {promptOptionsReady ? null : (
-                <button type="button" className="minimal-secondary" onClick={onReloadPromptOptions}>
-                  Reload settings
-                </button>
-              )}
-              <button
-                type="button"
-                className="minimal-secondary"
-                onClick={onSaveDraft}
-                disabled={!promptReady || validating || !draftText.trim()}
-              >
-                {validating ? 'Checking...' : 'Save draft'}
-              </button>
-              {draftDirty ? <span className="minimal-muted">Unsaved changes</span> : null}
+              <span className="minimal-muted" role="status" aria-live="polite">
+                {validating
+                  ? 'Checking draft…'
+                  : draftDirty
+                    ? 'Draft changes waiting to save'
+                    : 'Draft changes saved'}
+              </span>
             </div>
           </div>
           {!generationOptionsAvailable ? (
             <p className="minimal-muted">
-              Assignment setup is still loading. Reload settings if this does not clear.
+              Assignment setup is still loading. It will refresh automatically.
             </p>
           ) : null}
           {generationBlockedByQuota ? (
@@ -1487,6 +1381,7 @@ export function ReviewStageSection({
   headingRef,
   previewButtonRef,
   onPublish,
+  shareAvailable,
   onCancelJob,
   canPublishWithPreview,
   cancelEnabled,
@@ -1507,7 +1402,7 @@ export function ReviewStageSection({
   publishPending,
 }: ReviewStageSectionProps) {
   const reviewGuidance =
-    stage.status === 'current'
+    stage.status === 'current' && shareAvailable
       ? previewReadyForCurrentDraft
         ? 'Next step: share the assignment when you are happy with the preview.'
         : 'Next step: preview the current draft, then share the assignment.'
@@ -1521,18 +1416,20 @@ export function ReviewStageSection({
       guidance={reviewGuidance}
       actions={
         <>
-          <button
-            type="button"
-            className={`minimal-primary${
-              stage.status === 'current' && previewReadyForCurrentDraft
-                ? ' minimal-guided-button'
-                : ''
-            }`}
-            onClick={onPublish}
-            disabled={!canPublishWithPreview}
-          >
-            {publishing ? 'Sharing...' : 'Share assignment'}
-          </button>
+          {shareAvailable ? (
+            <button
+              type="button"
+              className={`minimal-primary${
+                stage.status === 'current' && previewReadyForCurrentDraft
+                  ? ' minimal-guided-button'
+                  : ''
+              }`}
+              onClick={onPublish}
+              disabled={!canPublishWithPreview}
+            >
+              {publishing ? 'Sharing...' : 'Share assignment'}
+            </button>
+          ) : null}
           <ProductButton
             type="button"
             variant="danger"

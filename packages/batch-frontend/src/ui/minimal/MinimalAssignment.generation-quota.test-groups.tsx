@@ -104,8 +104,8 @@ export function registerGenerationDefaultsTests() {
         const { user } = await renderPromptReadyAssignment();
         await user.click(screen.getByRole('button', { name: /Teaching context/i }));
         await screen.findByRole('textbox', { name: /Teacher notes/i });
-        vi.mocked(api.createAssignmentSession).mockClear();
-        vi.mocked(api.updateAssignmentSession).mockClear();
+        vi.mocked(api.confirmStudentAssignmentSession).mockClear();
+        vi.mocked(api.updateAssignmentSessionRecovery).mockClear();
         vi.useFakeTimers();
 
         fireEvent.change(screen.getByRole('textbox', { name: /Teacher notes/i }), {
@@ -117,7 +117,7 @@ export function registerGenerationDefaultsTests() {
           await Promise.resolve();
         });
 
-        expect(api.updateAssignmentSession).not.toHaveBeenCalled();
+        expect(api.updateAssignmentSessionRecovery).not.toHaveBeenCalled();
       },
       INTEGRATION_TEST_TIMEOUT_MS,
     );
@@ -144,6 +144,8 @@ export function registerGenerationThrottleTests() {
           storageUri: 'memory://drafts/draft-1',
           createdBy: 'user-1',
           text: '# First autosave',
+          workingVersion: 1,
+          contentHash: 'a'.repeat(64),
           createdAt: now,
           updatedAt: now,
         };

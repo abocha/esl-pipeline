@@ -34,15 +34,21 @@ async function renderResumedDraftSession() {
     transcriptId: 'tx-1',
     promptPackageId: 'pkg-1',
     draftId: 'draft-1',
-    currentStage: 'assignment',
+    confirmedStep: 'context',
   });
   vi.mocked(api.listAssignmentSessions).mockResolvedValueOnce({
     sessions: [session],
     total: 1,
     limit: 20,
   });
-  vi.mocked(api.updateAssignmentSession).mockImplementation(async (id, patch) =>
-    makeAssignmentSession({ ...session, id, ...patch }),
+  vi.mocked(api.fetchAssignmentSession).mockResolvedValue(session);
+  vi.mocked(api.updateAssignmentSessionRecovery).mockImplementation(async (id, request) =>
+    makeAssignmentSession({
+      ...session,
+      id,
+      ...request.patch,
+      revision: request.expectedRevision + 1,
+    }),
   );
   globalThis.history.replaceState(null, '', '/?sessionId=session-teacher-notes');
   const user = createMinimalUser();
@@ -60,7 +66,6 @@ export function registerPromptEditorTests() {
     });
 
     it('confirms changed teacher notes only when the resumed draft context is committed', async () => {
-      const confirmSpy = vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
       const user = await renderResumedDraftSession();
       await user.click(screen.getByRole('button', { name: /Teaching context/i }));
       await waitFor(() =>
@@ -73,27 +78,28 @@ export function registerPromptEditorTests() {
       await user.clear(notes);
       await user.type(notes, 'Focus on articles.');
 
-      expect(confirmSpy).not.toHaveBeenCalled();
       await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
 
-      expect(confirmSpy).toHaveBeenCalledTimes(1);
-      expect(confirmSpy).toHaveBeenCalledWith(
-        'This will require a new assignment draft. Your lesson source and transcript will stay saved.',
-      );
       await waitFor(() => {
-        expect(api.updateAssignmentSession).toHaveBeenCalledWith(
+        expect(api.updateAssignmentSessionRecovery).toHaveBeenCalledWith(
           expect.any(String),
           expect.objectContaining({
-            teacherNotes: 'Focus on articles.',
-            currentStage: 'assignment',
+            expectedRevision: expect.any(Number),
+            patch: expect.objectContaining({ teacherNotes: 'Focus on articles.' }),
           }),
+        );
+        expect(api.confirmAssignmentSessionStep).toHaveBeenCalledWith(
+          expect.any(String),
+          expect.objectContaining({ step: 'context', teacherNotes: 'Focus on articles.' }),
         );
       });
     });
 
-    it('keeps changed teacher notes and Teaching context when invalidation is cancelled', async () => {
-      const confirmSpy = vi.spyOn(globalThis, 'confirm').mockReturnValue(false);
+    it('keeps changed teacher notes and Teaching context when confirmation fails', async () => {
       const user = await renderResumedDraftSession();
+      vi.mocked(api.confirmAssignmentSessionStep).mockRejectedValueOnce(
+        new Error('confirmation failed'),
+      );
       await user.click(screen.getByRole('button', { name: /Teaching context/i }));
       await waitFor(() =>
         expect(
@@ -105,18 +111,18 @@ export function registerPromptEditorTests() {
       await user.type(notes, 'Focus on articles.');
       await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
 
-      expect(confirmSpy).toHaveBeenCalledTimes(1);
       expect(
         (screen.getByRole('textbox', { name: /Teacher notes/i }) as HTMLTextAreaElement).value,
       ).toBe('Focus on articles.');
       expect(screen.getByRole('heading', { name: /Learner context/i })).toBeTruthy();
-      expect(api.updateAssignmentSession).not.toHaveBeenCalled();
+      expect(api.confirmAssignmentSessionStep).toHaveBeenCalled();
     });
 
     it('preserves the existing draft when saving changed teacher notes fails', async () => {
-      const confirmSpy = vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
       const user = await renderResumedDraftSession();
-      vi.mocked(api.updateAssignmentSession).mockRejectedValueOnce(new Error('save failed'));
+      vi.mocked(api.updateAssignmentSessionRecovery).mockRejectedValueOnce(
+        new Error('save failed'),
+      );
       await user.click(screen.getByRole('button', { name: /Teaching context/i }));
       await waitFor(() =>
         expect(
@@ -130,8 +136,7 @@ export function registerPromptEditorTests() {
       );
       await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
 
-      expect(confirmSpy).toHaveBeenCalledTimes(1);
-      await waitFor(() => expect(api.updateAssignmentSession).toHaveBeenCalled());
+      await waitFor(() => expect(api.updateAssignmentSessionRecovery).toHaveBeenCalled());
       expect(
         screen.getByRole('button', { name: /Teaching context/i }).getAttribute('aria-current'),
       ).toBe('step');
@@ -144,30 +149,32 @@ export function registerPromptEditorTests() {
       await renderPromptReadyAssignment({ user });
       await user.click(screen.getByRole('button', { name: /Teaching context/i }));
       await screen.findByRole('textbox', { name: /Teacher notes/i });
-      vi.mocked(api.updateAssignmentSession).mockClear();
+      vi.mocked(api.updateAssignmentSessionRecovery).mockClear();
       vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
       fireEvent.change(screen.getByRole('textbox', { name: /Teacher notes/i }), {
         target: { value: 'Focus on articles.' },
       });
       await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
       await waitFor(() =>
-        expect(api.updateAssignmentSession).toHaveBeenCalledWith(
+        expect(api.updateAssignmentSessionRecovery).toHaveBeenCalledWith(
           'session-1',
-          expect.objectContaining({ teacherNotes: 'Focus on articles.' }),
+          expect.objectContaining({
+            patch: expect.objectContaining({ teacherNotes: 'Focus on articles.' }),
+          }),
         ),
       );
       const commitCallIndex = vi
-        .mocked(api.updateAssignmentSession)
-        .mock.calls.findIndex(([, patch]) => patch.teacherNotes === 'Focus on articles.');
+        .mocked(api.updateAssignmentSessionRecovery)
+        .mock.calls.findIndex(([, request]) => request.patch.teacherNotes === 'Focus on articles.');
 
       await act(async () => {
         await vi.advanceTimersByTimeAsync(1500);
       });
 
       const writesAfterCommit = vi
-        .mocked(api.updateAssignmentSession)
+        .mocked(api.updateAssignmentSessionRecovery)
         .mock.calls.slice(commitCallIndex + 1)
-        .map(([, patch]) => patch);
+        .map(([, request]) => request.patch);
       expect(
         writesAfterCommit.some(
           (patch) => 'teacherNotes' in patch && patch.teacherNotes !== 'Focus on articles.',
@@ -176,7 +183,6 @@ export function registerPromptEditorTests() {
     });
 
     it('atomically clears durable prompt and draft ids before invalidated work can resume', async () => {
-      const confirmSpy = vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
       const session = makeAssignmentSession({
         id: 'session-prompt-only',
         studentId: 'student-alex',
@@ -184,7 +190,7 @@ export function registerPromptEditorTests() {
         transcriptId: 'tx-1',
         promptPackageId: 'pkg-old',
         draftId: null,
-        currentStage: 'assignment',
+        confirmedStep: 'context',
       });
       let savedSession = session;
       vi.mocked(api.listAssignmentSessions).mockImplementation(async () => ({
@@ -192,14 +198,40 @@ export function registerPromptEditorTests() {
         total: 1,
         limit: 20,
       }));
-      vi.mocked(api.updateAssignmentSession).mockImplementation(async (id, patch) => {
-        savedSession = makeAssignmentSession({ ...savedSession, id, ...patch });
+      vi.mocked(api.fetchAssignmentSession).mockImplementation(async () => savedSession);
+      vi.mocked(api.updateAssignmentSessionRecovery).mockImplementation(async (id, request) => {
+        savedSession = makeAssignmentSession({
+          ...savedSession,
+          id,
+          ...request.patch,
+          revision: request.expectedRevision + 1,
+        });
         return savedSession;
+      });
+      vi.mocked(api.confirmAssignmentSessionStep).mockImplementationOnce(async (_id, request) => {
+        savedSession = makeAssignmentSession({
+          ...savedSession,
+          promptPackageId: null,
+          draftId: null,
+          revision: request.expectedRevision + 1,
+          confirmedStep: 'context',
+          confirmed: {
+            ...savedSession.confirmed,
+            context: {
+              teacherNotes: request.step === 'context' ? request.teacherNotes : null,
+              profileId: request.step === 'context' ? request.profileId : null,
+              profileRevisionId: request.step === 'context' ? request.profileRevisionId : null,
+              profileRevisionHash: request.step === 'context' ? request.profileRevisionHash : null,
+            },
+            create: null,
+          },
+        });
+        return { session: savedSession, invalidated: ['prompt', 'draft', 'preview'] };
       });
       globalThis.history.replaceState(null, '', '/?sessionId=session-prompt-only');
       const firstRender = renderMinimalAssignment();
       const user = createMinimalUser();
-      await screen.findByRole('button', { name: /^Generate assignment$/i });
+      await screen.findByRole('button', { name: /Teaching context/i });
       await user.click(screen.getByRole('button', { name: /Teaching context/i }));
       await waitFor(() =>
         expect(
@@ -212,14 +244,12 @@ export function registerPromptEditorTests() {
       );
       await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
 
-      expect(confirmSpy).toHaveBeenCalledTimes(1);
       await waitFor(() =>
-        expect(api.updateAssignmentSession).toHaveBeenCalledWith(
+        expect(api.confirmAssignmentSessionStep).toHaveBeenCalledWith(
           'session-prompt-only',
           expect.objectContaining({
             teacherNotes: 'Focus on articles.',
-            promptPackageId: null,
-            draftId: null,
+            step: 'context',
           }),
         ),
       );
@@ -235,7 +265,6 @@ export function registerPromptEditorTests() {
     });
 
     it('creates a fresh prompt with committed notes before generating after invalidation', async () => {
-      const confirmSpy = vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
       const user = await renderResumedDraftSession();
       await user.click(screen.getByRole('button', { name: /Teaching context/i }));
       await waitFor(() =>
@@ -268,11 +297,13 @@ export function registerPromptEditorTests() {
       await screen.findByRole('button', { name: /^Generate assignment$/i });
       await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
 
-      expect(confirmSpy).toHaveBeenCalledTimes(1);
       await waitFor(() =>
         expect(api.createPromptPackage).toHaveBeenCalledWith(
           'rec-1',
-          expect.objectContaining({ notes: 'Focus on articles.' }),
+          expect.objectContaining({
+            assignmentSessionId: expect.any(String),
+            templateId: 'tpl-default',
+          }),
         ),
       );
       expect(api.generateDraft).toHaveBeenCalledWith(
@@ -402,11 +433,7 @@ export function registerPromptEditorTests() {
       await advanceSourceToTeachingContext(user);
 
       await screen.findByText(/No structured Learning page context is available yet\./i);
-      expect(
-        screen.getByRole('button', {
-          name: /Use this transcript for Alex's learner context/i,
-        }),
-      ).toBeTruthy();
+      expect(screen.queryByRole('button', { name: /Use this transcript/i })).toBeNull();
       expect(screen.queryByText(/^Learner context ready$/i)).toBeNull();
       expect(
         screen.queryByRole('button', { name: /Populate first profile from lesson/i }),
@@ -433,20 +460,20 @@ export function registerPromptEditorTests() {
 
       await screen.findByText(/Learning page context has not been structured yet/i);
       expect(screen.queryByText(/^not_found$/i)).toBeNull();
-      expect(
-        screen.getByRole('button', {
-          name: /Use this transcript for Alex's learner context/i,
-        }),
-      ).toBeTruthy();
+      expect(screen.queryByRole('button', { name: /Use this transcript/i })).toBeNull();
 
       await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
       await screen.findByRole('button', { name: /^Generate assignment$/i });
       await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
 
       await waitFor(() => {
-        expect(api.createPromptPackage).toHaveBeenCalledWith('rec-1', {
-          templateId: 'tpl-default',
-        });
+        expect(api.createPromptPackage).toHaveBeenCalledWith(
+          'rec-1',
+          expect.objectContaining({
+            assignmentSessionId: expect.any(String),
+            templateId: 'tpl-default',
+          }),
+        );
       });
     });
 
@@ -515,18 +542,7 @@ export function registerPromptEditorTests() {
       await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
       await screen.findByDisplayValue('Student transcript text');
       await advanceSourceToTeachingContext(user);
-      await user.click(
-        screen.getByRole('button', {
-          name: /Use this transcript for Alex's learner context/i,
-        }),
-      );
-      await waitFor(() => {
-        expect(api.requestLessonMemoryFromTranscript).toHaveBeenCalledWith('student-alex', {
-          recordingId: 'rec-1',
-          transcriptId: 'tx-1',
-          lessonId: null,
-        });
-      });
+      expect(screen.queryByRole('button', { name: /Use this transcript/i })).toBeNull();
 
       const populateButton = await screen.findByRole('button', {
         name: /Populate first profile from lesson/i,
@@ -574,10 +590,13 @@ export function registerPromptEditorTests() {
       await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
 
       await waitFor(() => {
-        expect(api.createPromptPackage).toHaveBeenCalledWith('rec-1', {
-          templateId: 'tpl-default',
-          profileId: 'profiles/alex.md',
-        });
+        expect(api.createPromptPackage).toHaveBeenCalledWith(
+          'rec-1',
+          expect.objectContaining({
+            assignmentSessionId: expect.any(String),
+            templateId: 'tpl-default',
+          }),
+        );
       });
     });
 
@@ -645,11 +664,7 @@ export function registerPromptEditorTests() {
       ).toBeTruthy();
       expect(screen.queryByText(/^not_found$/i)).toBeNull();
 
-      await user.click(
-        screen.getByRole('button', {
-          name: /Use this transcript for Alex's learner context/i,
-        }),
-      );
+      expect(screen.queryByRole('button', { name: /Use this transcript/i })).toBeNull();
       const populateButton = await screen.findByRole('button', {
         name: /Populate first profile from lesson/i,
       });
@@ -671,10 +686,13 @@ export function registerPromptEditorTests() {
       await renderPromptReadyAssignment();
 
       await waitFor(() => {
-        expect(api.createPromptPackage).toHaveBeenCalledWith('rec-1', {
-          templateId: 'tpl-default',
-          profileId: 'profiles/alex.md',
-        });
+        expect(api.createPromptPackage).toHaveBeenCalledWith(
+          'rec-1',
+          expect.objectContaining({
+            assignmentSessionId: expect.any(String),
+            templateId: 'tpl-default',
+          }),
+        );
       });
       expect(screen.getByRole('button', { name: /^Generate assignment$/i })).toBeTruthy();
       expect(screen.getByRole('textbox', { name: /Draft markdown/i })).toBeTruthy();
@@ -705,10 +723,13 @@ export function registerPromptEditorTests() {
       await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
 
       await waitFor(() => {
-        expect(api.createPromptPackage).toHaveBeenCalledWith('rec-1', {
-          templateId: 'tpl-default',
-          profileId: 'profiles/alex.md',
-        });
+        expect(api.createPromptPackage).toHaveBeenCalledWith(
+          'rec-1',
+          expect.objectContaining({
+            assignmentSessionId: expect.any(String),
+            templateId: 'tpl-default',
+          }),
+        );
       });
     });
 
@@ -730,11 +751,13 @@ export function registerPromptEditorTests() {
       await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
 
       await waitFor(() => {
-        expect(api.createPromptPackage).toHaveBeenCalledWith('rec-1', {
-          notes: 'Focus on article usage and stress patterns.',
-          templateId: 'tpl-default',
-          profileId: 'profiles/alex.md',
-        });
+        expect(api.createPromptPackage).toHaveBeenCalledWith(
+          'rec-1',
+          expect.objectContaining({
+            assignmentSessionId: expect.any(String),
+            templateId: 'tpl-default',
+          }),
+        );
       });
     });
   });
@@ -828,10 +851,13 @@ export function registerPromptStudentSelectionTests() {
       await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
 
       await waitFor(() => {
-        expect(api.createPromptPackage).toHaveBeenCalledWith('rec-1', {
-          templateId: 'tpl-default',
-          profileId: 'profiles/alex.md',
-        });
+        expect(api.createPromptPackage).toHaveBeenCalledWith(
+          'rec-1',
+          expect.objectContaining({
+            assignmentSessionId: expect.any(String),
+            templateId: 'tpl-default',
+          }),
+        );
       });
     });
 
@@ -871,18 +897,19 @@ export function registerPromptStudentSelectionTests() {
       await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
 
       await waitFor(() => {
-        expect(api.createAssignmentSession).toHaveBeenCalledWith(
+        expect(api.confirmStudentAssignmentSession).toHaveBeenCalledWith(
           expect.objectContaining({
             studentId: 'student-alex',
-            recordingId: 'rec-1',
             lessonId: 'lesson-followup-1',
           }),
         );
-        expect(api.createPromptPackage).toHaveBeenCalledWith('rec-1', {
-          templateId: 'tpl-default',
-          profileId: 'profiles/alex.md',
-          lessonId: 'lesson-followup-1',
-        });
+        expect(api.createPromptPackage).toHaveBeenCalledWith(
+          'rec-1',
+          expect.objectContaining({
+            assignmentSessionId: expect.any(String),
+            templateId: 'tpl-default',
+          }),
+        );
       });
     });
 
@@ -904,7 +931,7 @@ export function registerPromptStudentSelectionTests() {
             id: 'session-linked',
             studentId: 'student-alex',
             lessonId: 'lesson-resume-1',
-            currentStage: 'source',
+            confirmedStep: 'student',
           }),
         ],
         total: 1,
@@ -915,7 +942,7 @@ export function registerPromptStudentSelectionTests() {
           id: 'session-linked',
           studentId: 'student-alex',
           lessonId: 'lesson-resume-1',
-          currentStage: 'source',
+          confirmedStep: 'student',
         }),
       );
       const user = createMinimalUser();
@@ -940,18 +967,22 @@ export function registerPromptStudentSelectionTests() {
       await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
 
       await waitFor(() => {
-        expect(api.updateAssignmentSession).toHaveBeenCalledWith(
+        expect(api.updateAssignmentSessionRecovery).toHaveBeenCalledWith(
           'session-linked',
           expect.objectContaining({
-            recordingId: 'rec-1',
-            lessonId: 'lesson-resume-1',
+            patch: expect.objectContaining({
+              recordingId: 'rec-1',
+              lessonId: 'lesson-resume-1',
+            }),
           }),
         );
-        expect(api.createPromptPackage).toHaveBeenCalledWith('rec-1', {
-          templateId: 'tpl-default',
-          profileId: 'profiles/alex.md',
-          lessonId: 'lesson-resume-1',
-        });
+        expect(api.createPromptPackage).toHaveBeenCalledWith(
+          'rec-1',
+          expect.objectContaining({
+            assignmentSessionId: expect.any(String),
+            templateId: 'tpl-default',
+          }),
+        );
       });
     });
 
@@ -995,17 +1026,19 @@ export function registerPromptStudentSelectionTests() {
       await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
 
       await waitFor(() => {
-        expect(api.createAssignmentSession).toHaveBeenCalledWith(
+        expect(api.updateAssignmentSessionRecovery).toHaveBeenCalledWith(
+          expect.any(String),
           expect.objectContaining({
-            studentId: 'student-alex',
-            lessonId: 'lesson-recent-no-homework',
+            patch: expect.objectContaining({ lessonId: 'lesson-recent-no-homework' }),
           }),
         );
-        expect(api.createPromptPackage).toHaveBeenCalledWith('rec-1', {
-          templateId: 'tpl-default',
-          profileId: 'profiles/alex.md',
-          lessonId: 'lesson-recent-no-homework',
-        });
+        expect(api.createPromptPackage).toHaveBeenCalledWith(
+          'rec-1',
+          expect.objectContaining({
+            assignmentSessionId: expect.any(String),
+            templateId: 'tpl-default',
+          }),
+        );
       });
       expect(screen.queryByText(/Already assigned/i)).toBeNull();
     });

@@ -9,7 +9,7 @@ const steps: AssignmentWorkflowStep[] = [
   { id: 'student', label: 'Student', status: 'complete' },
   { id: 'source', label: 'Lesson source', status: 'current' },
   { id: 'context', label: 'Teaching context', status: 'locked' },
-  { id: 'create', label: 'Create', status: 'locked' },
+  { id: 'assignment', label: 'Create', status: 'locked' },
   { id: 'review', label: 'Review & share', status: 'locked' },
 ];
 

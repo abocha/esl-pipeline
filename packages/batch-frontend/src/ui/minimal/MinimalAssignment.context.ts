@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import type { FoundationalProfile, ProfileContentResponse } from '../../utils/api';
-import { getProfileContent } from '../../utils/api';
+import { getProfileContent, getProfileRevision } from '../../utils/api';
 
 export interface ContextHydrationSnapshot {
   selectedProfileId: string;
@@ -19,6 +19,8 @@ export interface ContextController extends ContextHydrationSnapshot {
   profilePreviewStatus: ProfilePreviewStatus;
   profileRevisionError: string | null;
   profilePreview: LearnerProfilePreview | null;
+  selectedProfileRevisionId: string | null;
+  selectedProfileRevisionHash: string | null;
   applyHydratedSnapshot: (snapshot: ContextHydrationSnapshot) => void;
   selectProfileId: (profileId: string) => void;
 }
@@ -95,6 +97,10 @@ export function useMinimalAssignmentContextController({
   const [profilePreviewStatus, setProfilePreviewStatus] = useState<ProfilePreviewStatus>('none');
   const [profileRevisionError, setProfileRevisionError] = useState<string | null>(null);
   const [profilePreview, setProfilePreview] = useState<LearnerProfilePreview | null>(null);
+  const [selectedProfileRevisionId, setSelectedProfileRevisionId] = useState<string | null>(null);
+  const [selectedProfileRevisionHash, setSelectedProfileRevisionHash] = useState<string | null>(
+    null,
+  );
   const [profileReloadToken, setProfileReloadToken] = useState(0);
 
   const applyHydratedSnapshot = useCallback((snapshot: ContextHydrationSnapshot) => {
@@ -128,6 +134,8 @@ export function useMinimalAssignmentContextController({
         if (!active) return;
         setProfilePreviewStatus('none');
         setProfilePreview(null);
+        setSelectedProfileRevisionId(null);
+        setSelectedProfileRevisionHash(null);
         setProfileRevisionError(null);
         return;
       }
@@ -135,9 +143,14 @@ export function useMinimalAssignmentContextController({
       try {
         setProfilePreviewStatus('loading');
         const profile = await getProfileContent(selectedProfileId);
+        const revision = profile.currentRevisionId
+          ? await getProfileRevision(selectedProfileId, profile.currentRevisionId)
+          : null;
         if (!active) return;
         const preview = buildProfilePreview(selectedProfileId, profile);
         setProfilePreview(preview);
+        setSelectedProfileRevisionId(revision?.id ?? null);
+        setSelectedProfileRevisionHash(revision?.contentHash ?? null);
         setProfilePreviewStatus(preview ? 'ready' : 'unstructured');
         setProfileRevisionError(null);
       } catch (error) {
@@ -145,12 +158,16 @@ export function useMinimalAssignmentContextController({
         if (isUnstructuredProfileError(error)) {
           setProfilePreviewStatus('unstructured');
           setProfilePreview(null);
+          setSelectedProfileRevisionId(null);
+          setSelectedProfileRevisionHash(null);
           setProfileRevisionError(null);
           return;
         }
         const message = error instanceof Error ? error.message : 'Unable to load selected profile.';
         setProfilePreviewStatus('error');
         setProfilePreview(null);
+        setSelectedProfileRevisionId(null);
+        setSelectedProfileRevisionHash(null);
         setProfileRevisionError(message);
       }
     };
@@ -168,6 +185,8 @@ export function useMinimalAssignmentContextController({
     profilePreviewStatus,
     profileRevisionError,
     profilePreview,
+    selectedProfileRevisionId,
+    selectedProfileRevisionHash,
     applyHydratedSnapshot,
     selectProfileId,
   };

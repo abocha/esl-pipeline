@@ -87,7 +87,7 @@ export interface SourceController extends SourceHydrationSnapshot {
   handleFiles: (files: File[]) => void;
   handleCancelUpload: () => void;
   loadTranscript: () => Promise<void>;
-  handleSaveTranscript: () => Promise<void>;
+  handleSaveTranscript: () => Promise<RecordingTranscriptResponse | null>;
   handleRetryTranscription: () => Promise<void>;
   createManualTranscript: (text: string, displayName?: string) => Promise<void>;
   resetSourceFlow: (options?: SourceResetOptions) => void;
@@ -131,6 +131,12 @@ export function useMinimalAssignmentSourceController({
   const [uploadCacheNotice, setUploadCacheNotice] = useState<string | null>(null);
   const latestRecordingRef = useRef<RecordingListItem | null>(null);
   const latestTranscriptIdRef = useRef<string | null>(null);
+  const latestTranscriptRef = useRef<RecordingTranscriptResponse | null>(null);
+  const transcriptTextRef = useRef('');
+  const transcriptSaveQueueRef = useRef<Promise<RecordingTranscriptResponse | null>>(
+    Promise.resolve(null),
+  );
+  const pendingTranscriptTextRef = useRef<string | null>(null);
 
   useEffect(() => {
     latestRecordingRef.current = recording;
@@ -138,7 +144,12 @@ export function useMinimalAssignmentSourceController({
 
   useEffect(() => {
     latestTranscriptIdRef.current = transcript?.transcriptId ?? null;
-  }, [transcript?.transcriptId]);
+    latestTranscriptRef.current = transcript;
+  }, [transcript]);
+
+  useEffect(() => {
+    transcriptTextRef.current = transcriptText;
+  }, [transcriptText]);
 
   const sttProviders = useMemo<SttProvider[]>(() => {
     const providers = (configuredSttProviders ?? [])
@@ -505,25 +516,61 @@ export function useMinimalAssignmentSourceController({
     }
   }, [transcriptText]);
 
-  const handleSaveTranscript = useCallback(async () => {
-    if (!recording?.recordingId) return;
-    setTranscriptSaving(true);
-    setTranscriptError(null);
-    try {
-      const response = await updateRecordingTranscript(
-        recording.recordingId,
-        transcriptText.trim(),
-      );
-      setTranscript(response);
-      setTranscriptText(response.text ?? transcriptText.trim());
-      setTranscriptStatus('ready');
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to save transcript.';
-      setTranscriptError(message);
-    } finally {
-      setTranscriptSaving(false);
-    }
-  }, [recording?.recordingId, transcriptText]);
+  const handleSaveTranscript =
+    useCallback(async (): Promise<RecordingTranscriptResponse | null> => {
+      if (!recording?.recordingId) return null;
+      const normalizedText = transcriptText.trim();
+      if (pendingTranscriptTextRef.current === normalizedText) {
+        return transcriptSaveQueueRef.current;
+      }
+      if (!latestTranscriptRef.current?.workingVersion) {
+        setTranscriptError('Reload the transcript before saving this edit.');
+        return null;
+      }
+      setTranscriptSaving(true);
+      setTranscriptError(null);
+      pendingTranscriptTextRef.current = normalizedText;
+      const run = transcriptSaveQueueRef.current
+        .catch(() => null)
+        .then(async () => {
+          const current = latestTranscriptRef.current;
+          if (!current?.workingVersion)
+            throw new Error('Reload the transcript before saving this edit.');
+          const response = await updateRecordingTranscript(
+            recording.recordingId,
+            normalizedText,
+            current.workingVersion,
+          );
+          latestTranscriptRef.current = response;
+          setTranscript(response);
+          if (transcriptTextRef.current.trim() === normalizedText) {
+            setTranscriptText(response.text ?? normalizedText);
+          }
+          setTranscriptStatus('ready');
+          return response;
+        });
+      transcriptSaveQueueRef.current = run;
+      try {
+        return await run;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unable to save transcript.';
+        setTranscriptError(message);
+        return null;
+      } finally {
+        if (pendingTranscriptTextRef.current === normalizedText) {
+          pendingTranscriptTextRef.current = null;
+        }
+        setTranscriptSaving(false);
+      }
+    }, [recording?.recordingId, transcriptText]);
+
+  useEffect(() => {
+    if (!transcriptDirty || !recording?.recordingId || !transcript?.workingVersion) return;
+    const timeout = setTimeout(() => {
+      void handleSaveTranscript();
+    }, 1500);
+    return () => clearTimeout(timeout);
+  }, [handleSaveTranscript, recording?.recordingId, transcript?.workingVersion, transcriptDirty]);
 
   const handleRetryTranscription = useCallback(async () => {
     if (!recording?.recordingId) return;
