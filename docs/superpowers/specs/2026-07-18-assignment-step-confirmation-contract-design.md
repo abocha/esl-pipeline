@@ -31,6 +31,10 @@ Automatic recovery writes remain durable and useful, but they do not silently ma
 invalidate downstream work, or advance the confirmed workflow boundary. Each explicit confirmation
 records one server-authoritative snapshot. Navigation occurs only after that confirmation succeeds.
 
+This is a closed-alpha hard cutover. Pre-cutover assignment sessions are discarded rather than
+migrated; testers restart unfinished work under the new contract. Completed jobs and handouts remain
+available as outputs, but old editor state creates no compatibility obligation.
+
 ## Problem Statement
 
 The current behavior contains six contract failures:
@@ -98,9 +102,9 @@ and route every step confirmation through one backend application boundary. Reco
 confirmations both use expected revisions. The confirmation operation owns confirmed-state changes,
 workflow advancement, and downstream invalidation.
 
-This adds a migration and contract surface, but directly satisfies the issue without replacing the
-assignment architecture. It preserves current repositories, artifacts, and job orchestration while
-making their ownership explicit.
+This adds a schema and contract surface, but directly satisfies the issue without replacing the
+assignment architecture. It reuses the repository domains and job orchestration while starting
+session and editable-artifact history cleanly at cutover.
 
 ### Immutable workflow event ledger
 
@@ -140,7 +144,7 @@ bounded scope.
 
 ## Durable Session Model
 
-### Backward-compatible DTO additions
+### Replacement DTO contract
 
 `AssignmentSessionDto` gains:
 
@@ -185,7 +189,7 @@ export interface AssignmentConfirmedSnapshot {
 }
 
 export interface AssignmentSessionDto {
-  // Existing fields remain available as the latest durable working/recovery state.
+  // Top-level fields are the latest durable working/recovery state.
   revision: number;
   transcriptContentRevisionId: string | null;
   draftContentRevisionId: string | null;
@@ -197,14 +201,13 @@ export interface AssignmentSessionDto {
 }
 ```
 
-The existing top-level student, recording, transcript, prompt-package, draft, settings, and note
+The top-level student, recording, transcript, prompt-package, draft, settings, and note
 fields remain the latest durable working snapshot. The nested `confirmed` object records the exact
 dependencies accepted at each semantic boundary. This avoids duplicating complete artifact content
 inside the session while allowing resume to compare working artifact hashes with confirmed hashes.
 
-`currentStage` remains in the public DTO for compatibility, but its meaning becomes strict: it is
-the resume destination derived from the latest successful confirmation. Recovery writes cannot set
-it.
+`currentStage` is the resume destination derived from the latest successful confirmation. Recovery
+writes cannot set it.
 
 | Confirmed operation | `confirmedStep` | Resulting `currentStage`                              |
 | ------------------- | --------------- | ----------------------------------------------------- |
@@ -250,30 +253,36 @@ The revision increments on every successful recovery mutation, confirmation, sha
 archive. Incrementing recovery writes matters because cross-tab recovery changes can otherwise be
 silently overwritten by a confirmation based on an older working snapshot.
 
-### Existing-session migration
+### Closed-alpha cutover
 
-Existing active sessions remain resumable, but legacy transcript and draft rows have storage URIs
-without durable content hashes or immutable revision IDs. SQL migration therefore cannot honestly
-manufacture confirmed Source or Create snapshots. Migration preserves every existing recording,
-transcript, prompt, draft, option, and note field as working recovery data; confirms only Student
-when the referenced learner is valid and owned; and sets `currentStage` to `source`. A session with
-no valid owned learner remains unconfirmed and is omitted from the normal resumable list until its
-ownership is repaired.
+The deployment is a hard workflow cutover, not a compatibility migration. Migration deletes every
+pre-cutover assignment-session row, including unfinished and archived sessions. None of their
+working state, stage, confirmation, or artifact lineage is imported into the new aggregate. Tutors
+restart unfinished work by creating a new assignment.
 
-The next normal transcript or draft automatic write creates its first immutable content revision.
-The tutor then uses the ordinary semantic Continue action to confirm Source and each later boundary;
-there is no migration-only Save or Refresh action. This conservative regression is preferable to
-inventing hashes, profile choices, or lineage acceptance that the legacy schema never recorded.
-Migration tests cover complete legacy rows, every cross-owner/cross-lineage reference, preservation
-of recovery fields, and the Student-only confirmed boundary. Archived sessions and historical jobs
-remain untouched.
+Completed jobs, generated handouts, published URLs, and their referenced storage artifacts remain
+readable as historical outputs. Pre-cutover transcripts, prompt packages, and drafts are not
+converted into revisioned editor inputs and cannot be attached to or edited through a new assignment
+session. Nullable artifact-head columns exist only so rows referenced by historical jobs can remain
+readable; all new transcript and draft creation paths must create an initial immutable content
+revision and non-null head in the same operation.
+
+Recording-cache reuse accepts only revisioned source transcripts and creates a new immutable
+transcript revision for the cloned recording. A cache hit backed by a pre-cutover null-head
+transcript is ignored rather than upgraded.
+
+There is no legacy-session hydration, legacy artifact initialization, compatibility endpoint, data
+repair UI, or migration-only Save/Refresh behavior. Old clients are unsupported after the coordinated
+frontend/backend deployment. Cutover tests prove that sessions are removed, completed outputs remain,
+and historical artifacts are not promoted; creation tests prove every new editable artifact starts
+revisioned.
 
 ## Transport and Application Contract
 
 ### Step 1 creation
 
-Student confirmation uses a new `POST /assignment-sessions/confirm-student` route so the existing
-general create contract remains backward-compatible during rollout:
+Student confirmation uses `POST /assignment-sessions/confirm-student`. The old general session-create
+contract is removed in the same coordinated release:
 
 ```ts
 export interface ConfirmStudentAssignmentSessionRequest {
@@ -324,8 +333,8 @@ export interface UpdateAssignmentSessionRecoveryRequest {
 
 Recovery mutation cannot update `currentStage`, `confirmedStep`, `confirmed`, or a share job link.
 It uses a new `PATCH /assignment-sessions/:id/recovery` route. The existing revisionless generic
-PATCH route is removed after the assignment frontend migrates in the same release. Retaining it
-would allow delayed clients to bypass revision checks and mutate canonical stage or artifact IDs.
+PATCH route is removed in the coordinated frontend/backend release. Retaining it would allow delayed
+clients to bypass revision checks and mutate canonical stage or artifact IDs.
 This is an intentional breaking contract change and therefore requires a major release.
 
 ### Step confirmation
@@ -593,8 +602,8 @@ newly confirmed boundary. This regression is part of the same conditional databa
 session can never claim a later confirmed step after its required snapshot was cleared.
 
 Learner identity is immutable within an assignment session. Choosing a different learner creates a
-new session and preserves the old session as resumable history; there is no existing-session Student
-mutation or Student invalidation operation.
+new session and preserves the prior new-contract session as resumable history; there is no in-place
+Student mutation or Student invalidation operation.
 
 ## Concurrency and Conflict Recovery
 
@@ -669,21 +678,18 @@ for operator diagnosis.
 This scope does not authorize a general frontend state-management replacement or unrelated
 `MinimalAssignment` decomposition.
 
-## Compatibility and Release Boundary
+## Hard Cutover and Release Boundary
 
-- Response DTO additions are backward-compatible for readers that ignore new fields.
-- `currentStage` remains present and retains its resume-routing role.
-- Revisionless assignment-session PATCH is replaced by revision-aware recovery and confirmation
-  operations after the frontend cutover. Transcript and draft update requests also gain mandatory
-  expected content revisions.
-- The migration preserves every active session's working recovery fields and confirms only a valid
-  owned Student boundary; later confirmation requires new immutable artifact revisions.
-- Historical jobs and published artifacts are not rewritten.
+- The frontend and backend deploy together. Old assignment clients and old session payloads are not
+  supported after cutover.
+- Every pre-cutover assignment session is deleted. There is no legacy resume path.
+- Revisionless assignment create/PATCH, transcript update, and draft update contracts are removed.
+- New session, transcript, and draft creation starts directly in the revisioned contract.
+- Pre-cutover editor artifacts are historical/read-only and cannot enter a new assignment lineage.
+- Completed jobs, published artifacts, and shared URLs are not rewritten or revoked.
 - The change requires the repository's contract-version and DB-baseline verification commands.
-- The expected release classification is `release:major`: revisionless session, transcript, and
-  draft mutations are intentionally removed because retaining them would bypass the new integrity
-  contract. The implementation plan must include the contract-version bump and coordinated
-  frontend/backend cutover in the same release.
+- The release classification is `release:major`: incompatible payloads and mutations are intentionally
+  removed because retaining them would weaken the new integrity contract.
 
 ## Test Contract
 
@@ -735,8 +741,10 @@ continue to follow the visible UI route and primary action rather than calling i
 - Share retry after reservation, materialization, approval, enqueue, link, response loss, and archive
   resumes one durable attempt and never creates a second job.
 - Queued-but-not-enqueued recovery re-enqueues the stable reserved job ID safely.
-- Migration fixtures validate ownership and lineage, including mismatched-but-existing IDs, and fall
-  back conservatively.
+- Cutover migration fixtures prove all old sessions are removed while completed jobs, handouts, and
+  referenced historical artifacts remain readable.
+- New transcript and draft creation fixtures always return a non-null initial content revision; old
+  unrevisioned artifacts are rejected as new-session inputs.
 
 ### Focused journey suite
 
@@ -790,7 +798,8 @@ state. Cross-cutting validation runs after the integrated branch is complete.
 - Event sourcing or a general audit-log platform.
 - Changing the five visible assignment steps or Step 1 entry presentation.
 - Adding manual Save or Refresh responsibilities to compensate for unreliable automation.
-- Deleting historical prompt packages, drafts, jobs, HTML, or audio.
+- Deleting completed jobs, published handouts, shared HTML, or their required storage artifacts.
+- Making pre-cutover transcripts, prompt packages, or drafts resumable/editable in the new workflow.
 - Automatically revoking shared URLs.
 - Redesigning Student, Business, Templates, authentication, or unrelated Calm Studio surfaces.
 - Changing generation, STT, TTS, storage-provider, or manifest semantics.
