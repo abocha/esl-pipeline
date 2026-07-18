@@ -1,6 +1,21 @@
 import { CalendarDays, ChartNoAxesCombined, FileText, LogOut, Menu, Users, X } from 'lucide-react';
-import React, { type MouseEvent, useCallback, useMemo, useRef, useState } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import React, {
+  type MouseEvent,
+  type RefObject,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import {
+  NavLink,
+  Outlet,
+  UNSAFE_DataRouterContext,
+  useBlocker,
+  useNavigate,
+} from 'react-router-dom';
 
 import type { User } from '../../context/AuthContext';
 import {
@@ -25,6 +40,34 @@ const workspaceLinks = [
   { to: '/prompts', label: 'Assignment Templates', icon: FileText },
 ] as const;
 
+function AssignmentRouterNavigationBlocker({
+  guardRef,
+}: {
+  guardRef: RefObject<NavigationGuard | null>;
+}) {
+  const blocker = useBlocker(() => guardRef.current !== null);
+
+  useEffect(() => {
+    if (blocker.state !== 'blocked') return;
+    const guard = guardRef.current;
+    if (!guard) {
+      blocker.proceed();
+      return;
+    }
+    let active = true;
+    void guard().then((allowed) => {
+      if (!active) return;
+      if (allowed) blocker.proceed();
+      else blocker.reset();
+    });
+    return () => {
+      active = false;
+    };
+  }, [blocker, guardRef]);
+
+  return null;
+}
+
 export function CalmStudioShell({
   user,
   onLogout,
@@ -33,6 +76,7 @@ export function CalmStudioShell({
 }: CalmStudioShellProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const navigate = useNavigate();
+  const dataRouterContext = useContext(UNSAFE_DataRouterContext);
   const navigationGuardRef = useRef<NavigationGuard | null>(null);
   const registerNavigationGuard = useCallback<NavigationGuardRegistration>((guard) => {
     navigationGuardRef.current = guard;
@@ -55,6 +99,7 @@ export function CalmStudioShell({
       ) {
         return;
       }
+      if (dataRouterContext) return;
       const guard = navigationGuardRef.current;
       if (!guard) return;
       event.preventDefault();
@@ -62,11 +107,25 @@ export function CalmStudioShell({
         if (allowed) navigate(to);
       });
     },
-    [navigate],
+    [dataRouterContext, navigate],
   );
+
+  const handleLogout = useCallback(() => {
+    const guard = navigationGuardRef.current;
+    if (!guard) {
+      onLogout();
+      return;
+    }
+    void guard().then((allowed) => {
+      if (allowed) onLogout();
+    });
+  }, [onLogout]);
 
   return (
     <AssignmentNavigationGuardContext.Provider value={navigationGuardContextValue}>
+      {dataRouterContext ? (
+        <AssignmentRouterNavigationBlocker guardRef={navigationGuardRef} />
+      ) : null}
       <div className={`calm-shell${menuOpen ? ' calm-shell--menu-open' : ''}`}>
         <a
           className="calm-shell__skip"
@@ -132,7 +191,7 @@ export function CalmStudioShell({
             <span className="calm-shell__rail-email" translate="no">
               {user.email}
             </span>
-            <button type="button" className="calm-shell__logout" onClick={onLogout}>
+            <button type="button" className="calm-shell__logout" onClick={handleLogout}>
               <LogOut aria-hidden="true" />
               <span>Logout</span>
             </button>

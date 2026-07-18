@@ -3383,9 +3383,8 @@ export async function confirmStudentAssignmentSession(
   request: ConfirmStudentAssignmentSessionRequest,
 ): Promise<AssignmentSession> {
   try {
-    const response = await apiClient.post(
-      buildApiProxyPath('/assignment-sessions/confirm-student'),
-      request,
+    const response = await runRecoveryRequest(() =>
+      apiClient.post(buildApiProxyPath('/assignment-sessions/confirm-student'), request),
     );
     return response.data;
   } catch (error: unknown) {
@@ -3440,9 +3439,11 @@ export async function confirmAssignmentSessionStep(
   request: ConfirmAssignmentSessionStepRequest,
 ): Promise<ConfirmAssignmentSessionStepResponse> {
   try {
-    const response = await apiClient.post(
-      buildApiProxyPath(`/assignment-sessions/${encodeURIComponent(sessionId)}/confirm`),
-      request,
+    const response = await runRecoveryRequest(() =>
+      apiClient.post(
+        buildApiProxyPath(`/assignment-sessions/${encodeURIComponent(sessionId)}/confirm`),
+        request,
+      ),
     );
     return response.data;
   } catch (error: unknown) {
@@ -3461,9 +3462,11 @@ export async function shareAssignmentSession(
   request: ConfirmAssignmentSessionShareRequest,
 ): Promise<ConfirmAssignmentSessionShareResponse> {
   try {
-    const response = await apiClient.post(
-      buildApiProxyPath(`/assignment-sessions/${encodeURIComponent(sessionId)}/share`),
-      request,
+    const response = await runRecoveryRequest(() =>
+      apiClient.post(
+        buildApiProxyPath(`/assignment-sessions/${encodeURIComponent(sessionId)}/share`),
+        request,
+      ),
     );
     return response.data;
   } catch (error: unknown) {

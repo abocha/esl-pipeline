@@ -536,6 +536,7 @@ export interface AuthoringController extends AuthoringState {
   generationModelsForProvider: GenerationModelOption[];
   promptReady: boolean;
   draftDirty: boolean;
+  draftRecoveryConflict: boolean;
   draftPreviewGate: ReturnType<typeof getDraftPreviewGate>;
   previewReadyForCurrentDraft: boolean;
   canPublishWithPreview: boolean;
@@ -945,13 +946,33 @@ export function useMinimalAssignmentAuthoringController({
 
   const refreshDraftPreservingLocal = useCallback(async () => {
     if (!state.draft?.id) return;
-    const preserveCurrentText = draftTextRef.current.trim() !== (state.draft.text ?? '').trim();
+    const localText = draftTextRef.current.trim();
+    const durableText = (state.draft.text ?? '').trim();
+    const preserveCurrentText = localText !== durableText;
     try {
       const latest = await fetchDraft(state.draft.id);
+      const remoteText = (latest.text ?? '').trim();
+      const remoteChanged =
+        latest.workingVersion !== state.draft.workingVersion ||
+        latest.contentHash !== state.draft.contentHash;
+      const overlapsRemote = preserveCurrentText && remoteChanged && localText !== remoteText;
+      if (overlapsRemote) {
+        draftConflictTextRef.current = localText;
+      } else {
+        draftConflictTextRef.current = null;
+      }
       dispatch({
         type: 'draft_save_succeeded',
         payload: { draft: latest, preserveCurrentText },
       });
+      if (overlapsRemote) {
+        dispatch({
+          type: 'draft_save_failed',
+          payload: {
+            error: 'Newer saved draft work was found. Review your text before retrying.',
+          },
+        });
+      }
     } catch (error) {
       dispatch({
         type: 'draft_save_failed',
@@ -960,7 +981,9 @@ export function useMinimalAssignmentAuthoringController({
         },
       });
     }
-  }, [state.draft?.id, state.draft?.text]);
+  }, [state.draft?.contentHash, state.draft?.id, state.draft?.text, state.draft?.workingVersion]);
+
+  const draftRecoveryConflict = draftConflictTextRef.current === state.draftText.trim();
 
   const generatePrompt = useCallback(async (): Promise<PromptPackageResponse | null> => {
     if (!recordingId) {
@@ -1343,6 +1366,7 @@ export function useMinimalAssignmentAuthoringController({
   }, [
     draftAutosaveRescheduleToken,
     draftDirty,
+    draftRecoveryConflict,
     persistDraftText,
     state.draftText,
     state.promptPackage?.id,
@@ -1567,6 +1591,7 @@ export function useMinimalAssignmentAuthoringController({
     generationModelsForProvider,
     promptReady,
     draftDirty,
+    draftRecoveryConflict,
     draftPreviewGate,
     previewReadyForCurrentDraft,
     canPublishWithPreview,

@@ -11,9 +11,11 @@ import {
   makeAssignmentSession,
   makeJobStatus,
   makeRecording,
+  makeTranscript,
   openAdvancedActions,
   previewCurrentDraft,
   renderMinimalAssignment,
+  renderMinimalAssignmentWithNavigationGuard,
   renderPreviewReadyAssignment,
   renderPublishedAssignment,
   renderResumedAssignment,
@@ -426,6 +428,60 @@ describe('MinimalAssignment - staged workflow UI', () => {
     expect(screen.getAllByText(/Job ID: job-share/i).length).toBeGreaterThan(0);
   });
 
+  it('resumes an already reserved Share with its stable job ID after remount', async () => {
+    const reserved = makeAssignmentSession({
+      id: 'session-reserved',
+      studentId: 'student-alex',
+      recordingId: 'rec-1',
+      transcriptId: 'tx-1',
+      promptPackageId: 'pkg-1',
+      draftId: 'draft-1',
+      confirmedStep: 'create',
+      shareJobId: 'job-share',
+      revision: 4,
+    });
+    const completed = makeAssignmentSession({ ...reserved, confirmedStep: 'share', revision: 5 });
+    vi.mocked(api.fetchAssignmentSession).mockResolvedValue(reserved);
+    vi.mocked(api.fetchDraft).mockResolvedValue({
+      id: 'draft-1',
+      promptPackageId: 'pkg-1',
+      studentId: 'student-alex',
+      lessonId: null,
+      storageUri: 'memory://drafts/confirmed',
+      createdBy: 'user-1',
+      text: '# Draft markdown',
+      workingVersion: 1,
+      contentHash: 'b'.repeat(64),
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    });
+    globalThis.history.replaceState(null, '', '/?sessionId=session-reserved');
+
+    vi.mocked(api.shareAssignmentSession).mockRejectedValue(new Error('offline'));
+    const firstMount = renderMinimalAssignment();
+    await waitFor(() => expect(api.shareAssignmentSession).toHaveBeenCalled());
+    firstMount.unmount();
+    const callsBeforeRemount = vi.mocked(api.shareAssignmentSession).mock.calls.length;
+
+    vi.mocked(api.shareAssignmentSession)
+      .mockReset()
+      .mockResolvedValue({
+        session: completed,
+        job: makeJobStatus({ jobId: 'job-share', state: 'queued' }),
+      });
+    renderMinimalAssignment();
+
+    await waitFor(() => expect(api.shareAssignmentSession).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(api.shareAssignmentSession).mock.calls[0]?.[1]).toMatchObject({
+      requestId: 'job-share',
+    });
+    expect(callsBeforeRemount).toBeGreaterThan(0);
+    expect(api.updateAssignmentSessionRecovery).not.toHaveBeenCalledWith(
+      'session-reserved',
+      expect.anything(),
+    );
+  });
+
   it('retries linked-job loading after a completed Share response is lost', async () => {
     const { user } = await renderPreviewReadyAssignment();
     const completed = makeAssignmentSession({
@@ -499,6 +555,81 @@ describe('MinimalAssignment - staged workflow UI', () => {
     await waitFor(() => expect(api.fetchDraft).toHaveBeenCalledTimes(draftCalls + 1));
     await waitFor(() => expect(api.getProfileContent).toHaveBeenCalledTimes(profileCalls + 1));
     expect((notes as HTMLTextAreaElement).value).toBe('Unsaved local focus note');
+  });
+
+  it('does not overwrite overlapping cross-tab Context work after focus refresh', async () => {
+    const { user } = await renderPreviewReadyAssignment();
+    await user.click(screen.getByRole('button', { name: /Teaching context/i }));
+    fireEvent.change(screen.getByRole('textbox', { name: /Teacher notes/i }), {
+      target: { value: 'Local unsaved note' },
+    });
+    const recoveryCalls = vi.mocked(api.updateAssignmentSessionRecovery).mock.calls.length;
+    vi.mocked(api.fetchAssignmentSession).mockResolvedValueOnce(
+      makeAssignmentSession({
+        id: 'session-1',
+        studentId: 'student-alex',
+        recordingId: 'rec-1',
+        transcriptId: 'tx-1',
+        promptPackageId: 'pkg-1',
+        draftId: 'draft-1',
+        confirmedStep: 'create',
+        teacherNotes: 'Remote saved note',
+        revision: 20,
+      }),
+    );
+
+    vi.useFakeTimers();
+    await act(async () => {
+      globalThis.dispatchEvent(new Event('focus'));
+      await vi.advanceTimersByTimeAsync(2_000);
+    });
+    vi.useRealTimers();
+
+    expect(
+      (screen.getByRole('textbox', { name: /Teacher notes/i }) as HTMLTextAreaElement).value,
+    ).toBe('Local unsaved note');
+    expect(api.updateAssignmentSessionRecovery).toHaveBeenCalledTimes(recoveryCalls);
+  });
+
+  it('blocks navigation flush after an artifact conflict without issuing a second PUT', async () => {
+    let navigationGuard: (() => Promise<boolean>) | null = null;
+    const user = createMinimalUser();
+    renderMinimalAssignmentWithNavigationGuard((guard) => {
+      navigationGuard = guard;
+    });
+    await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
+    await user.selectOptions(
+      await screen.findByRole('combobox', { name: /Choose learner/i }),
+      'student-alex',
+    );
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    fireEvent.click(screen.getByRole('button', { name: /Drop audio file/i }));
+    const transcript = await screen.findByRole('textbox', { name: /Transcript text/i });
+    vi.mocked(api.updateRecordingTranscript).mockRejectedValueOnce(
+      new api.ArtifactWorkingConflictApiError({
+        workingVersion: 2,
+        contentHash: 'c'.repeat(64),
+      }),
+    );
+    vi.mocked(api.fetchRecordingTranscript).mockResolvedValueOnce(
+      makeTranscript({
+        text: 'Remote winning transcript',
+        workingVersion: 2,
+        contentHash: 'c'.repeat(64),
+      }),
+    );
+
+    vi.useFakeTimers();
+    fireEvent.change(transcript, { target: { value: 'Local conflicting transcript' } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_500);
+    });
+    expect(api.updateRecordingTranscript).toHaveBeenCalledTimes(1);
+    expect(navigationGuard).not.toBeNull();
+    const guard = navigationGuard as unknown as () => Promise<boolean>;
+    await expect(guard()).resolves.toBe(false);
+    expect(api.updateRecordingTranscript).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
   });
 
   it(
