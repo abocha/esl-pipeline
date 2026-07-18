@@ -663,6 +663,10 @@ git commit -m "feat(backend): revision assignment session recovery"
 - Modify: `packages/batch-backend/src/domain/student-memory-snapshot-repository.ts`
 - Modify: `packages/batch-backend/src/application/request-lesson-memory-generation.ts`
 - Modify: `packages/batch-backend/src/application/process-lesson-memory-job.ts`
+- Modify: `packages/batch-backend/src/infrastructure/student-memory-queue.ts`
+- Modify: `packages/batch-backend/src/application/student-memory-openai-batch-candidates.ts`
+- Modify: `packages/batch-backend/src/domain/student-memory-openai-batch-import.ts`
+- Modify: `packages/batch-backend/src/application/student-memory-openai-batch-importer.ts`
 - Delete: `packages/batch-backend/src/application/request-confirmed-lesson-memory.ts`
 - Modify: `packages/batch-backend/src/application/student-memory-package.ts`
 - Modify: `packages/batch-backend/src/application/create-prompt-package.ts`
@@ -672,6 +676,10 @@ git commit -m "feat(backend): revision assignment session recovery"
 - Create: `packages/batch-backend/tests/application.assignment-step-confirmation.test.ts`
 - Modify: `packages/batch-backend/tests/application.request-lesson-memory-generation.test.ts`
 - Modify: `packages/batch-backend/tests/application.process-lesson-memory-job.test.ts`
+- Modify: `packages/batch-backend/tests/infrastructure.student-memory-queue.test.ts`
+- Modify: `packages/batch-backend/tests/application.student-memory-openai-batch.test.ts`
+- Modify: `packages/batch-backend/tests/domain.student-memory-openai-batch-import.test.ts`
+- Modify: `packages/batch-backend/tests/domain.student-memory-snapshot-repository.test.ts`
 - Delete: `packages/batch-backend/tests/application.request-confirmed-lesson-memory.test.ts`
 - Modify: `packages/batch-backend/tests/application.student-memory-package.test.ts`
 - Modify: `packages/batch-backend/tests/domain.lesson-memory-repository.test.ts`
@@ -698,7 +706,10 @@ Add the confirmed-memory matrix:
 7. confirm from two tabs and prove artifact working-version plus session CAS reject the stale tab.
 
 Also prove a late A worker cannot publish A after B is authoritative, and loaded content is rejected
-if its SHA-256 does not match the confirmed payload hash.
+if its SHA-256 does not match the confirmed payload hash. Cover cross-transcript authority
+replacement, same-hash lesson relinking without invalidation, Context/Create rejection after Source
+autosave, active profile binding to the selected student, stale snapshot finalization, missing and
+terminal-failed stable queue jobs, and immutable-source read failure on the final worker attempt.
 
 ```ts
 expect(sourceResult.session.confirmedStep).toBe('source');
@@ -735,8 +746,9 @@ Expected: new test file fails to import the missing application service.
 5. copy the locked row's server-owned working version, content-addressed URI, and hash into the
    confirmed Source/Create snapshot;
 6. calculate the confirmed snapshot and exact invalidation list;
-7. for Source, ensure the `(transcript_id, transcript_hash)` lesson-memory intent and supersede any
-   previous current lesson memory/student snapshot only when the confirmed hash changes;
+7. for Source, ensure the `(transcript_id, transcript_hash)` lesson-memory intent and supersede the
+   exact previous authority across transcript changes; preserve memory/snapshots when only lesson
+   linkage changes with the same authority key;
 8. commit the confirmed snapshot, working references, `confirmedStep`, and session `revision + 1` in
    one transaction.
 
@@ -777,6 +789,8 @@ Queue with stable ID `lesson-memory:<transcriptId>:<sourceHash>` and payload the
 The pending row is the durable enqueue intent created in the Source-confirmation transaction; enqueue
 runs after commit. A failed/ambiguous enqueue is reconciled automatically from that row on mutation
 completion, session load, or focus return. Do not add a general outbox or a manual refresh action.
+Queue reconciliation adds a missing stable job, leaves queued/running/completed jobs unchanged, and
+retries a retained terminal failed job in place with BullMQ attempt counters reset.
 Remove `promptPackageId` and the old prompt/draft trigger variants from the assignment-flow request
 and payload; Source confirmation occurs before those artifacts and lesson memory must not resolve
 their mutable notes later.
@@ -790,6 +804,10 @@ The worker must:
 4. conditionally publish ready only if that same hash remains authoritative;
 5. request student-memory snapshot refresh automatically after ready publication.
 
+Student-memory snapshot finalization must transactionally lock and revalidate every referenced
+lesson-memory entry as still ready, student-owned, and confirmed-source-backed. This prevents a
+worker that loaded A before B confirmation from publishing a stale bootstrap snapshot afterward.
+
 On a changed confirmed hash, supersede old ready/pending lesson entries and ready/pending student
 snapshots in the Source confirmation transaction. For ready snapshots, use the existing
 `lesson_memory_entry_ids` array to invalidate exactly snapshots containing a superseded entry; stop
@@ -798,6 +816,11 @@ replacement succeeds, assembly reports refreshing/unavailable and never falls ba
 prompt-package/draft fallback triggers and the standalone
 `POST /students/:id/lesson-memory/requests` assignment-flow route/control. Reconfirming the same hash
 performs no semantic mutation but may reconcile a missing stable queue entry.
+
+Disable the OpenAI Batch `lesson_memory` candidate and import path at the alpha cutover because it
+resolves mutable transcript pointers. Keep the other Batch workloads, and make snapshot Batch import
+select only confirmed-source-backed ready lesson entries. Do not add compatibility handling for old
+lesson-memory Batch items.
 
 - [ ] **Step 6: Add `POST /assignment-sessions/:id/confirm`**
 
@@ -810,7 +833,13 @@ request; both come only from the locked server artifact row.
 Run:
 
 ```bash
-pnpm --filter @esl-pipeline/batch-backend exec vitest run tests/application.assignment-step-confirmation.test.ts tests/application.request-lesson-memory-generation.test.ts tests/application.process-lesson-memory-job.test.ts tests/application.student-memory-package.test.ts tests/domain.lesson-memory-repository.test.ts tests/domain.assignment-session-repository.test.ts tests/transport.http-server.integration.assignment-sessions.test.ts tests/transport.http-server.integration.students-memory.test.ts
+pnpm --filter @esl-pipeline/batch-backend exec vitest run tests/application.request-lesson-memory-generation.test.ts tests/application.process-lesson-memory-job.test.ts tests/application.student-memory-package.test.ts tests/application.student-memory-openai-batch.test.ts tests/infrastructure.student-memory-queue.test.ts tests/domain.student-memory-openai-batch-import.test.ts --maxWorkers=1 --no-file-parallelism
+pnpm --filter @esl-pipeline/batch-backend exec vitest run tests/application.assignment-step-confirmation.test.ts --maxWorkers=1
+pnpm --filter @esl-pipeline/batch-backend exec vitest run tests/domain.lesson-memory-repository.test.ts --maxWorkers=1
+pnpm --filter @esl-pipeline/batch-backend exec vitest run tests/domain.student-memory-snapshot-repository.test.ts --maxWorkers=1
+pnpm --filter @esl-pipeline/batch-backend exec vitest run tests/domain.assignment-session-repository.test.ts --maxWorkers=1
+pnpm --filter @esl-pipeline/batch-backend exec vitest run tests/transport.http-server.integration.assignment-sessions.test.ts --maxWorkers=1
+pnpm --filter @esl-pipeline/batch-backend exec vitest run tests/transport.http-server.integration.students-memory.test.ts --maxWorkers=1
 pnpm --filter @esl-pipeline/batch-backend typecheck
 ```
 
@@ -819,7 +848,7 @@ Expected: confirmation matrix, repository atomicity tests, transport tests, and 
 - [ ] **Step 8: Commit semantic confirmation and confirmed lesson memory**
 
 ```bash
-git add packages/batch-backend/src/application/confirm-assignment-session-step.ts packages/batch-backend/src/domain/assignment-session-repository.ts packages/batch-backend/src/domain/lesson-memory-model.ts packages/batch-backend/src/domain/lesson-memory-repository.ts packages/batch-backend/src/domain/student-memory-snapshot-repository.ts packages/batch-backend/src/application/request-lesson-memory-generation.ts packages/batch-backend/src/application/process-lesson-memory-job.ts packages/batch-backend/src/application/request-confirmed-lesson-memory.ts packages/batch-backend/src/application/student-memory-package.ts packages/batch-backend/src/application/create-prompt-package.ts packages/batch-backend/src/application/generate-draft.ts packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts packages/batch-backend/src/transport/extended-routes/students-routes.ts packages/batch-backend/tests/application.assignment-step-confirmation.test.ts packages/batch-backend/tests/application.request-lesson-memory-generation.test.ts packages/batch-backend/tests/application.process-lesson-memory-job.test.ts packages/batch-backend/tests/application.request-confirmed-lesson-memory.test.ts packages/batch-backend/tests/application.student-memory-package.test.ts packages/batch-backend/tests/domain.lesson-memory-repository.test.ts packages/batch-backend/tests/domain.assignment-session-repository.test.ts packages/batch-backend/tests/transport.http-server.integration.assignment-sessions.test.ts packages/batch-backend/tests/transport.http-server.integration.students-memory.test.ts
+git add packages/batch-backend/src/application/confirm-assignment-session-step.ts packages/batch-backend/src/domain/assignment-session-repository.ts packages/batch-backend/src/domain/lesson-memory-model.ts packages/batch-backend/src/domain/lesson-memory-repository.ts packages/batch-backend/src/domain/student-memory-snapshot-repository.ts packages/batch-backend/src/application/request-lesson-memory-generation.ts packages/batch-backend/src/application/process-lesson-memory-job.ts packages/batch-backend/src/infrastructure/student-memory-queue.ts packages/batch-backend/src/application/student-memory-openai-batch-candidates.ts packages/batch-backend/src/domain/student-memory-openai-batch-import.ts packages/batch-backend/src/application/student-memory-openai-batch-importer.ts packages/batch-backend/src/application/request-confirmed-lesson-memory.ts packages/batch-backend/src/application/student-memory-package.ts packages/batch-backend/src/application/create-prompt-package.ts packages/batch-backend/src/application/generate-draft.ts packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts packages/batch-backend/src/transport/extended-routes/students-routes.ts packages/batch-backend/tests/application.assignment-step-confirmation.test.ts packages/batch-backend/tests/application.request-lesson-memory-generation.test.ts packages/batch-backend/tests/application.process-lesson-memory-job.test.ts packages/batch-backend/tests/infrastructure.student-memory-queue.test.ts packages/batch-backend/tests/application.student-memory-openai-batch.test.ts packages/batch-backend/tests/domain.student-memory-snapshot-repository.test.ts packages/batch-backend/tests/domain.student-memory-openai-batch-import.test.ts packages/batch-backend/tests/application.request-confirmed-lesson-memory.test.ts packages/batch-backend/tests/application.student-memory-package.test.ts packages/batch-backend/tests/domain.lesson-memory-repository.test.ts packages/batch-backend/tests/domain.assignment-session-repository.test.ts packages/batch-backend/tests/transport.http-server.integration.assignment-sessions.test.ts packages/batch-backend/tests/transport.http-server.integration.students-memory.test.ts
 git commit -m "feat(memory): bind lessons to confirmed source"
 ```
 

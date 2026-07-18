@@ -95,6 +95,15 @@ export class StudentMemorySnapshotParentChangedError extends Error {
   }
 }
 
+export class StudentMemorySnapshotSourcesChangedError extends Error {
+  constructor(readonly unavailableLessonMemoryEntryIds: string[]) {
+    super(
+      `Lesson-memory sources changed before student-memory snapshot finalize: ${unavailableLessonMemoryEntryIds.join(', ')}`,
+    );
+    this.name = 'StudentMemorySnapshotSourcesChangedError';
+  }
+}
+
 export interface EnsurePendingStudentMemorySnapshotParams {
   id?: string;
   studentId: string;
@@ -382,6 +391,22 @@ export async function insertCanonicalReadyStudentMemorySnapshot(
     if (!options?.client) await client.query('BEGIN');
     try {
       await client.query('SELECT id FROM students WHERE id = $1 FOR UPDATE', [params.studentId]);
+
+      const requestedLessonIds = [...new Set(params.lessonMemoryEntryIds ?? [])];
+      if (requestedLessonIds.length > 0) {
+        const readyLessonResult = await client.query<{ id: string }>(
+          `SELECT id FROM lesson_memory_entries
+           WHERE student_id = $1 AND id = ANY($2::uuid[])
+             AND status = 'ready' AND source_content_hash IS NOT NULL
+           FOR SHARE`,
+          [params.studentId, requestedLessonIds],
+        );
+        const readyLessonIds = new Set(readyLessonResult.rows.map((row) => row.id));
+        const unavailableLessonIds = requestedLessonIds.filter((id) => !readyLessonIds.has(id));
+        if (unavailableLessonIds.length > 0) {
+          throw new StudentMemorySnapshotSourcesChangedError(unavailableLessonIds);
+        }
+      }
 
       if (params.expectedLatestReadySnapshotId !== undefined) {
         const latestResult = await client.query<{ id: string }>(

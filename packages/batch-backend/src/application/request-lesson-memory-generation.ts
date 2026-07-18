@@ -32,7 +32,7 @@ export interface RequestLessonMemoryGenerationDependencies {
     supersedeForOnlineWork: typeof supersedeStudentMemoryOpenAiBatchClaimsForOnlineWork;
   };
   queue: {
-    enqueue: ReturnType<typeof createStudentMemoryQueue>['enqueue'];
+    reconcile: ReturnType<typeof createStudentMemoryQueue>['reconcile'];
   };
   now: () => Date;
 }
@@ -52,7 +52,7 @@ export async function enqueueConfirmedLessonMemoryIntent(
     workload: 'lesson_memory',
     canonicalScopeKey: payload.transcriptId,
   });
-  await queue.enqueue(payload, {
+  await queue.reconcile(payload, {
     jobId: `lesson-memory:${payload.transcriptId}:${payload.sourceContentHash}`,
   });
 }

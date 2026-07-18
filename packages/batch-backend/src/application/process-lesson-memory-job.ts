@@ -90,10 +90,9 @@ export async function processLessonMemoryJob(args: {
     return;
   }
 
-  const storage = storageFactory(args.payload.sourceStorageUri);
-  const transcriptText = await storage.getText(args.payload.sourceStorageUri);
-
   try {
+    const storage = storageFactory(args.payload.sourceStorageUri);
+    const transcriptText = await storage.getText(args.payload.sourceStorageUri);
     const actualHash = createHash('sha256').update(transcriptText, 'utf8').digest('hex');
     if (actualHash !== args.payload.sourceContentHash) {
       throw new Error('Confirmed lesson-memory source hash mismatch');
