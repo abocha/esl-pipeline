@@ -162,7 +162,39 @@ export interface JobConfigOverrides {
   autoPublish?: boolean;
 }
 
-export type AssignmentSessionStage = 'source' | 'context' | 'assignment' | 'review';
+export type AssignmentConfirmedStep = 'student' | 'source' | 'context' | 'create' | 'share';
+
+export type AssignmentInvalidatedArtifact = 'transcript' | 'prompt' | 'draft' | 'preview';
+
+export interface ArtifactWorkingContentDto {
+  workingVersion: number;
+  contentHash: string;
+}
+
+export interface AssignmentConfirmedSnapshot {
+  student: { studentId: string };
+  source: {
+    lessonId: string | null;
+    recordingId: string;
+    transcriptId: string;
+    transcriptWorkingVersion: number;
+    transcriptStorageUri: string;
+    transcriptHash: string;
+  } | null;
+  context: {
+    teacherNotes: string | null;
+    profileId: string | null;
+    profileRevisionId: string | null;
+    profileRevisionHash: string | null;
+  } | null;
+  create: {
+    promptPackageId: string;
+    draftId: string;
+    draftWorkingVersion: number;
+    draftStorageUri: string;
+    draftHash: string;
+  } | null;
+}
 
 export interface AssignmentSessionDto {
   id: string;
@@ -173,7 +205,9 @@ export interface AssignmentSessionDto {
   transcriptId: string | null;
   promptPackageId: string | null;
   draftId: string | null;
-  currentStage: AssignmentSessionStage;
+  revision: number;
+  confirmedStep: AssignmentConfirmedStep;
+  confirmed: AssignmentConfirmedSnapshot;
   publishTarget: PublishTarget | null;
   selectedTtsProvider: TtsProviderId | null;
   selectedTtsStrategy: TtsStrategy | null;
@@ -182,9 +216,12 @@ export interface AssignmentSessionDto {
   selectedGenerationProvider: GenerationProvider | null;
   selectedGenerationModel: string | null;
   teacherNotes: string | null;
+  selectedProfileId: string | null;
+  selectedProfileRevisionId: string | null;
+  selectedProfileRevisionHash: string | null;
+  shareJobId: string | null;
   createdAt: string;
   updatedAt: string;
-  archivedAt: string | null;
 }
 
 export interface AssignmentSessionListResponse {
@@ -193,25 +230,83 @@ export interface AssignmentSessionListResponse {
   limit: number;
 }
 
-export interface CreateAssignmentSessionRequest {
-  studentId?: string | null;
+export interface ConfirmStudentAssignmentSessionRequest {
+  requestId: string;
+  studentId: string;
   lessonId?: string | null;
-  recordingId?: string | null;
-  transcriptId?: string | null;
-  promptPackageId?: string | null;
-  draftId?: string | null;
-  currentStage?: AssignmentSessionStage;
-  publishTarget?: PublishTarget | null;
-  selectedTtsProvider?: TtsProviderId | null;
-  selectedTtsStrategy?: TtsStrategy | null;
-  selectedTtsModel?: string | null;
-  selectedPreset?: string | null;
-  selectedGenerationProvider?: GenerationProvider | null;
-  selectedGenerationModel?: string | null;
-  teacherNotes?: string | null;
 }
 
-export type UpdateAssignmentSessionRequest = Partial<CreateAssignmentSessionRequest>;
+export interface UpdateAssignmentSessionRecoveryRequest {
+  expectedRevision: number;
+  patch: Partial<{
+    lessonId: string | null;
+    recordingId: string | null;
+    transcriptId: string | null;
+    promptPackageId: string | null;
+    draftId: string | null;
+    publishTarget: PublishTarget | null;
+    selectedTtsProvider: TtsProviderId | null;
+    selectedTtsStrategy: TtsStrategy | null;
+    selectedTtsModel: string | null;
+    selectedPreset: string | null;
+    selectedGenerationProvider: GenerationProvider | null;
+    selectedGenerationModel: string | null;
+    teacherNotes: string | null;
+    selectedProfileId: string | null;
+    selectedProfileRevisionId: string | null;
+    selectedProfileRevisionHash: string | null;
+  }>;
+}
+
+export type ConfirmAssignmentSessionStepRequest =
+  | {
+      step: 'source';
+      expectedRevision: number;
+      lessonId: string | null;
+      recordingId: string;
+      transcriptId: string;
+      transcriptWorkingVersion: number;
+    }
+  | {
+      step: 'context';
+      expectedRevision: number;
+      teacherNotes: string | null;
+      profileId: string | null;
+      profileRevisionId: string | null;
+      profileRevisionHash: string | null;
+    }
+  | {
+      step: 'create';
+      expectedRevision: number;
+      promptPackageId: string;
+      draftId: string;
+      draftWorkingVersion: number;
+    };
+
+export interface ConfirmAssignmentSessionStepResponse {
+  session: AssignmentSessionDto;
+  invalidated: AssignmentInvalidatedArtifact[];
+}
+
+export interface ConfirmAssignmentSessionShareRequest {
+  expectedRevision: number;
+  requestId: string;
+}
+
+export interface ConfirmAssignmentSessionShareResponse {
+  session: AssignmentSessionDto;
+  job: JobStatusDto;
+}
+
+export interface AssignmentSessionConflictResponse {
+  code: 'assignment_session_revision_conflict';
+  session: AssignmentSessionDto;
+}
+
+export interface ArtifactWorkingConflictResponse {
+  code: 'artifact_working_conflict';
+  artifact: ArtifactWorkingContentDto;
+}
 
 export type RecentAssignmentItem =
   | { kind: 'session'; session: AssignmentSessionDto }
