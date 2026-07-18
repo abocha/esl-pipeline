@@ -124,7 +124,8 @@ bounded scope.
 - **Confirmed snapshot:** the server-authoritative values downstream steps may consume.
 - **Confirmed step:** the latest step whose primary confirmation completed successfully.
 - **Dirty:** working state differs from the confirmed snapshot for the visible step.
-- **Current stage:** the resume destination immediately after the latest confirmed step.
+- **Resume destination:** the visible step derived from confirmed progress plus the earliest dirty
+  durable recovery state.
 - **Invalidation:** removal of confirmed downstream dependencies from the active lineage.
 - **Superseded handout:** a previously shared immutable artifact that no longer represents the
   active working lineage.
@@ -144,6 +145,10 @@ bounded scope.
 10. Background effects may persist recovery state but may not advance `confirmedStep`.
 11. A published URL is never revoked merely because the active lineage changes.
 12. Routine Save and Refresh controls are absent from the primary workflow.
+13. `confirmedStep = 'share'` is the only completed-session predicate; every earlier value is active.
+14. Lesson memory may consume only the exact URI/hash tuple captured by Source confirmation.
+15. A transcript autosave never changes current lesson memory until that working content is
+    explicitly confirmed.
 
 ## Durable Session Model
 
@@ -236,8 +241,17 @@ is safe because confirmation updates it atomically with `confirmed_snapshot` and
 session can link exactly one job and no job can satisfy two Share operations. The client's Share
 request UUID becomes this job ID; a separate persisted request ID would duplicate the same identity.
 
-Transcripts and drafts gain `working_version integer` and `content_hash text`. Every automatic save
-supplies the expected working version. The backend computes the content hash, writes a
+Every active-session index and lookup uses `confirmed_step <> 'share'`. This includes the partial
+unique index on `(user_id, recording_id)`, the user/lesson recent indexes, create-or-reuse lookup,
+resumable counts, and dashboard joins. Lifecycle-neutral reads by session ID remain available to the
+Share service and published-output presentation, but recovery and confirmation commands reject a
+completed session. A completed session therefore remains immutable provenance without blocking a
+new assignment for the same recording.
+
+Transcripts and drafts gain `working_version integer` and `content_hash text`. Retained pre-cutover
+transcripts may remain null and are not editable session inputs; the cutover empties `drafts`, so
+every post-cutover draft has non-null working identity from creation. Every automatic save supplies
+the expected working version. The backend computes the content hash, writes a
 content-addressed recovery object, and conditionally swaps the artifact's `storage_uri`, hash, and
 `working_version`. A stale compare-and-swap leaves at most an unreferenced recovery object and cannot
 overwrite the winning pointer.
@@ -254,6 +268,13 @@ collector. Objects referenced by confirmed snapshots or completed jobs are retai
 confirmation provenance and cross-tab safety without a second database identity for the same
 content object.
 
+`lesson_memory_entries` gains `source_storage_uri` and `source_content_hash`. The URI is the same
+content-addressed object captured in the confirmed Source snapshot; the server hash is a lowercase
+SHA-256. `(transcript_id, source_content_hash)` is the idempotency key for lesson-memory generation,
+and the BullMQ job ID is derived from that pair. Existing `generated_at >= transcripts.updated_at`
+freshness checks are removed: mutable transcript `updated_at` is neither confirmation nor memory
+provenance. Currentness is expressed by the entry status selected during Source confirmation.
+
 `confirmed_snapshot` is an internal structured representation validated at the contracts and
 application boundaries. It is not an untyped extension point; only the fields in
 `AssignmentConfirmedSnapshot` are accepted. Student confirmation is the sole session-creation path,
@@ -265,17 +286,26 @@ and do not increment the session merely because text changed.
 
 ### Closed-alpha cutover
 
-The deployment is a hard workflow cutover, not a compatibility migration. Migration deletes every
-pre-cutover assignment-session row, including unfinished and archived sessions. None of their
-working state, stage, confirmation, or artifact lineage is imported into the new aggregate. Tutors
-restart unfinished work by creating a new assignment.
+The deployment is a hard workflow cutover, not a compatibility migration. With API and workers
+stopped, the migration performs this database order:
 
-Completed jobs, generated handouts, published URLs, and their referenced storage artifacts remain
-readable as historical outputs. Pre-cutover transcripts, prompt packages, and drafts are not
-converted into revisioned editor inputs and cannot be attached to or edited through a new assignment
-session. Nullable working-version/hash columns exist only so rows referenced by historical jobs can
-remain readable; all new transcript and draft creation paths must create content-addressed working
-content with `working_version = 1` in the same operation.
+1. delete every row from `assignment_sessions`;
+2. delete every pre-cutover row from `drafts`;
+3. delete every pre-cutover row from `prompt_packages`;
+4. install the replacement session contract and active-session indexes.
+
+Deleting drafts and prompt packages intentionally removes independently inferred unfinished work.
+Their nullable foreign keys on `homework_memory_entries` become null through existing `ON DELETE SET
+NULL` constraints. The `jobs` table has no foreign keys to those editor rows, so completed jobs,
+their `html_url`, their `md_storage_uri`, rerun lineage, and handout read paths remain intact. The
+migration performs no storage-object deletion: markdown referenced by a completed job or homework
+memory remains readable through the job's content-addressed `md_storage_uri`.
+
+None of the removed session, prompt-package, or draft state is imported into the new aggregate or
+fabricated as confirmed truth. Pre-cutover transcripts are not converted into new editor inputs and
+cannot be attached to a new assignment. Nullable working-version/hash columns exist only so
+historical transcript rows can remain readable; all new transcript and draft creation paths must
+create content-addressed working content with `working_version = 1` in the same operation.
 
 Recording-cache reuse accepts only source transcripts with a non-null working version/hash and
 creates a new content-addressed working object for the cloned recording. A pre-cutover null-version
@@ -283,9 +313,11 @@ cache hit is ignored rather than upgraded.
 
 There is no legacy-session hydration, legacy artifact initialization, compatibility endpoint, data
 repair UI, or migration-only Save/Refresh behavior. Old clients are unsupported after the coordinated
-frontend/backend deployment. Cutover tests prove that sessions are removed, completed outputs remain,
-and historical artifacts are not adopted into new sessions; creation tests prove every new editable
-artifact starts with a CAS-protected working version.
+frontend/backend deployment. Lesson/business-dashboard presentation no longer joins bare draft rows
+to infer `draft_in_progress`; it derives `draft_in_progress` only from an active new-contract session
+whose draft reference is non-null. Cutover tests prove that sessions and transient editor rows are
+removed, completed outputs and homework-memory markdown reads remain, and new sessions begin with
+clean confirmation state.
 
 ## Transport and Application Contract
 
@@ -403,6 +435,43 @@ the requested confirmed snapshot is already present, the client treats the confi
 successful without submitting another mutation. A different snapshot is handled as a revision
 conflict.
 
+### Confirmed Source to lesson-memory contract
+
+Source confirmation is also the sole assignment-workflow trigger for lesson-memory generation. In
+the same database transaction that captures the Source tuple, the backend ensures one durable
+lesson-memory intent keyed by `(transcript_id, transcript_hash)`. The intent stores the exact
+`transcriptStorageUri` and `transcriptHash`; after commit, the application enqueues BullMQ job
+`lesson-memory:<transcript-id>:<transcript-hash>`. Enqueue failure or an ambiguous response leaves a
+durable pending intent that the backend reconciles automatically on mutation completion, session
+load, or focus refresh. The tutor is never asked to Save or Refresh memory.
+
+The asynchronous payload carries `sourceStorageUri` and `sourceContentHash`. The worker reads that
+URI directly, verifies the loaded bytes against the server hash, and never resolves
+`transcripts.storageUri` or a prompt package for mutable notes. Prompt-package creation and draft
+generation no longer opportunistically request lesson memory, and the separate first-profile
+"confirm transcript for memory" action is removed; neither path may reinterpret unconfirmed working
+content as authoritative.
+
+Confirmation behavior is deterministic:
+
+- confirming A creates or returns the A intent and queues A;
+- autosaving B while A remains confirmed does not change, supersede, or regenerate A memory;
+- reconfirming the same A hash is an idempotent no-op: it does not increment the session revision,
+  regress `confirmedStep`, or invalidate downstream state; automatic reconciliation may only restore
+  its missing stable queue entry;
+- confirming B with a different hash atomically supersedes ready/pending A memory, makes B the only
+  current intent, and queues B from B's exact URI;
+- every confirmed hash change regenerates memory; no semantic-difference classifier is introduced;
+- a late A worker may remain historical, but a conditional publish check prevents it from becoming
+  current after B is authoritative.
+
+When B becomes authoritative, ready and pending student-memory snapshots that could expose A are
+also marked superseded/ineligible in the confirmation transaction. While B is pending or failed,
+student-memory assembly reports the layer as refreshing/unavailable rather than using A. When B
+succeeds, it becomes the ready lesson entry, automatically requests a student-memory snapshot
+refresh, and replaces A in future snapshots. Historical A entries and snapshots may remain
+immutable evidence but current queries return only the authoritative hash.
+
 ### Share confirmation
 
 Review & share uses a new backend orchestration route,
@@ -424,20 +493,35 @@ While Share is pending, other session mutations fail with `SHARE_IN_PROGRESS` in
 final confirmed inputs.
 
 The backend verifies that Source, Context, and Create recovery match their confirmed snapshots, then
-inspects the reserved job. An `awaiting_approval` job is materialized idempotently from its
-`mdStorageUri` after verifying it equals the immutable URI in the confirmed Create snapshot, never
-from the draft's mutable working pointer, and approved.
-A `queued` job is enqueued or re-enqueued using the same BullMQ job ID.
-`running`, `succeeded`, or `failed` proves the queue previously accepted the stable job. A missing or
-wrong-lineage linked job is an integrity error, not permission to create another. Existing job state
-therefore supplies the retry state; there is no parallel five-state Share ledger.
+inspects the reserved job and the BullMQ entry with the same ID:
 
-After enqueue succeeds—or the job is already running/terminal—the backend sets
+- `awaiting_approval` is materialized idempotently from its confirmed `mdStorageUri`, approved to
+  `queued`, and enqueued;
+- `queued` with a missing queue entry is enqueued; a waiting/delayed/active queue entry is returned
+  unchanged;
+- `running` is returned unchanged;
+- `succeeded` returns the completed result without enqueue;
+- terminal `failed` is reset by one focused `failed -> queued` repository CAS, preserving the job
+  ID and lineage, then retried in place with BullMQ
+  `job.retry('failed', { resetAttemptsMade: true, resetAttemptsStarted: true })`; if the failed queue
+  entry has already been removed, it is added again with the same ID and payload;
+- a retained completed queue entry with contradictory database state is reconciled/fails closed,
+  never treated as permission to create another database job.
+
+Concurrent retries re-read after a lost CAS or BullMQ expected-state race and converge on the same
+job. The existing automatic BullMQ attempts run before this explicit terminal retry path. This
+focused reset is the only additional job transition; it does not create a rerun child or a Share
+attempt ledger. Intentional rerun remains unchanged: it creates a new child job with
+`source_job_id`, whereas Share retry retains the original job identity.
+
+After enqueue succeeds—or the job is already running/succeeded—the backend sets
 `confirmedStep: 'share'` and returns the session plus job. That is the terminal assignment event.
 The session remains as provenance, is excluded from resumable-session lists, and is surfaced through
 its linked job. There is no automatic archive, `archivePending`, archive endpoint, cleanup retry, or
 post-Share session mutation. A lost response is recovered by repeating the same request or loading
-the session/job; neither path can create a second job.
+the session/job; neither path can create a second job. Repeating Share for an already completed
+session may reconcile or explicitly retry its linked failed job, but it never changes
+`confirmedStep`, the session revision, or upstream snapshots again.
 
 ## Per-Step Product Contract
 
@@ -460,24 +544,26 @@ adds durable behavior to New `Continue`; it does not redesign Step 1 presentatio
 
 ### Step 2: Lesson source
 
-| Concern        | Contract                                                                                            |
-| -------------- | --------------------------------------------------------------------------------------------------- |
-| Editable state | Uploaded/pasted source and transcript editor buffer                                                 |
-| Dirty state    | Working lesson, source identity, working version, or transcript hash differs from confirmed Source  |
-| Primary action | `Confirm and continue`                                                                              |
-| Automatic work | Upload/paste persists immediately; transcript edits autosave; confirmation flushes any pending edit |
-| Confirmation   | Lesson/source accepted while the backend captures the transcript URI/hash/version tuple             |
-| Completion     | Confirmed Source snapshot exists for the active lineage                                             |
-| Resume         | Load latest recovery transcript; mark dirty if its hash differs from confirmed hash                 |
-| Failure        | Stay on Lesson source with editor contents intact; retry safe saves automatically                   |
-| Invalidation   | A changed confirmed lesson or source clears Context and Create                                      |
+| Concern        | Contract                                                                                                                               |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Editable state | Uploaded/pasted source and transcript editor buffer                                                                                    |
+| Dirty state    | Working lesson, source identity, working version, or transcript hash differs from confirmed Source                                     |
+| Primary action | `Confirm and continue`                                                                                                                 |
+| Automatic work | Upload/paste persists immediately; transcript edits autosave; confirmation flushes edits and queues memory from the confirmed URI/hash |
+| Confirmation   | Lesson/source accepted while the backend captures the transcript URI/hash/version tuple                                                |
+| Completion     | Confirmed Source snapshot exists for the active lineage                                                                                |
+| Resume         | Load latest recovery transcript; mark dirty if its hash differs from confirmed hash                                                    |
+| Failure        | Stay on Lesson source with editor contents intact; retry safe saves automatically                                                      |
+| Invalidation   | A changed confirmed lesson or source clears Context and Create                                                                         |
 
 The normal UI no longer exposes `Save existing transcript`, `Save transcript edits`, or Refresh.
 Those operations become automatic. Error recovery exposes one contextual Retry only after automatic
 attempts fail.
 
-Prompt-package generation reads `confirmed.source.transcriptStorageUri`; it never re-reads the
-transcript artifact's mutable working pointer.
+Prompt-package generation and lesson-memory generation read
+`confirmed.source.transcriptStorageUri`; neither re-reads the transcript artifact's mutable working
+pointer. Autosaving a newer transcript leaves current memory unchanged; confirming its new hash
+automatically makes old memory unavailable and starts replacement generation.
 
 ### Step 3: Teaching context
 
@@ -526,7 +612,7 @@ inline and prevent confirmation until the draft can be durably saved.
 | Dirty state    | Publish configuration is not durably recovered or no longer matches the confirmed Create snapshot                        |
 | Primary action | `Share assignment`                                                                                                       |
 | Automatic work | Flush settings; reserve one stable job ID; materialize, approve/enqueue, link, and begin asynchronous job-status updates |
-| Confirmation   | `confirmedStep` becomes Share only after the stable approved job is enqueued or already running/terminal                 |
+| Confirmation   | `confirmedStep` becomes Share only after the stable approved job is enqueued or already running/succeeded                |
 | Completion     | Confirmed Share is terminal; processing continues through the linked job                                                 |
 | Resume         | Open the linked job, not the completed session editor                                                                    |
 | Failure        | Preserve the stable job and request identity, inspect job state, and resume without creating a duplicate                 |
@@ -610,8 +696,9 @@ The backend confirmation service owns this dependency table:
 
 Preview is derived frontend state and clears whenever its confirmed input hash changes. Working
 recovery data that belongs to an invalidated downstream lineage is removed from the active session
-only after the tutor accepts the destructive confirmation. Historical prompt packages, drafts,
-jobs, HTML, and audio remain in their owning stores for traceability and existing-link continuity.
+only after the tutor accepts the destructive confirmation. Post-cutover prompt packages and drafts
+invalidated within a new-contract session, plus jobs, HTML, and audio, remain in their owning stores
+for traceability and existing-link continuity.
 
 The confirmation response lists invalidated artifact categories so the frontend can clear matching
 local state without reimplementing dependency decisions. The existing pure dependency helper may
@@ -619,6 +706,11 @@ remain as a presentation/test adapter, but backend results are authoritative.
 
 Invalidating a later confirmed snapshot also regresses `confirmedStep` to the newly confirmed
 boundary in the same conditional database update. Resume routing derives from that result.
+
+Source hash changes also invalidate the current lesson-memory projection. The Source confirmation
+transaction creates the new hash-keyed pending intent, supersedes earlier ready/pending entries for
+that transcript, and makes student-memory snapshots that could expose the earlier hash ineligible.
+Unconfirmed autosaves perform none of those actions.
 
 Learner identity is immutable within an assignment session. Choosing a different learner creates a
 new session and preserves the prior new-contract session as resumable history; there is no in-place
@@ -636,7 +728,9 @@ WHERE id = $1
 
 No matching row distinguishes not-found and revision-conflict outcomes at the application boundary.
 A successful update increments the revision and returns the new session. A session with
-`confirmedStep: 'share'` rejects every further recovery or confirmation mutation as completed.
+`confirmedStep: 'share'` rejects every further recovery or step-confirmation mutation as completed.
+The Share endpoint may still read and reconcile the one linked job, including an explicit terminal
+failure retry, without mutating session state.
 
 On conflict:
 
@@ -681,6 +775,9 @@ for operator diagnosis.
   orchestration.
 - A focused step-confirmation service owns Source, Context, and Create prerequisites, confirmed
   content capture, invalidation, idempotency, and conflict classification.
+- The existing lesson-memory repository/worker own one transcript-hash-keyed intent, exact confirmed
+  URI reads, conditional current publication, and automatic student-memory refresh. Prompt/draft
+  creation no longer triggers lesson memory.
 - A focused Share service owns stable-job reservation, job-state retry/re-enqueue, and terminal Share
   completion. The existing job row remains the sole durable attempt record.
 - The existing transcript and draft repositories own working-version CAS and transactional reads of
@@ -707,12 +804,17 @@ This scope does not authorize a general frontend state-management replacement or
 - The frontend and backend deploy together. Old assignment clients and old session payloads are not
   supported after cutover.
 - Every pre-cutover assignment session is deleted. There is no legacy resume path.
+- Every pre-cutover draft and prompt package is deleted after sessions, so bare editor artifacts
+  cannot survive as `draft_in_progress` or resumable work. Existing nullable homework-memory links
+  detach through their current foreign-key actions.
 - Revisionless assignment create/PATCH, transcript update, and draft update contracts are removed.
 - New sessions start revisioned; new transcripts and drafts start with CAS-protected,
   content-addressed working content. Confirmation captures the immutable URI/hash/version tuple in
   the session snapshot.
-- Pre-cutover editor artifacts are historical/read-only and cannot enter a new assignment lineage.
-- Completed jobs, published artifacts, and shared URLs are not rewritten or revoked.
+- Pre-cutover drafts and prompt packages are deleted; retained transcript rows are inert and cannot
+  enter a new assignment lineage.
+- Completed jobs, published artifacts, shared URLs, rerun lineage, and job `md_storage_uri` values are
+  not rewritten or revoked. No storage purge runs during cutover.
 - The change requires the repository's contract-version and DB-baseline verification commands.
 - The release classification is `release:major`: incompatible payloads and mutations are intentionally
   removed because retaining them would weaken the new integrity contract.
@@ -764,6 +866,13 @@ continue to follow the visible UI route and primary action rather than calling i
 - Delayed confirmation rejects an artifact working version changed by another tab.
 - A newer transcript or draft autosave leaves every confirmed URI readable and every captured
   URI/hash/version tuple unchanged.
+- Confirm A queues a job carrying A's immutable URI/hash, and the worker reads A directly.
+- Confirm A then autosave B leaves A current and the already queued worker still reads A.
+- Reconfirming A's hash creates neither a second memory entry nor a second queue job.
+- Confirming changed B supersedes A as current, queues B's exact URI/hash, and rejects a late A
+  completion from becoming current.
+- While B generation is pending or failed, A and any student-memory snapshot derived from A are not
+  exposed as current; after B succeeds, automatic snapshot refresh uses B in future snapshots.
 - Non-overlapping recovery retry cannot overwrite newer confirmed state.
 - Duplicate idempotent confirmation returns the already-confirmed result.
 - Share linking accepts only a job derived from the confirmed draft.
@@ -772,12 +881,17 @@ continue to follow the visible UI route and primary action rather than calling i
 - Confirming a different profile revision invalidates confirmed Create state.
 - Share retry after reservation, job creation/materialization, approval, enqueue, or response loss
   resumes from the stable session/job pair and never creates a second job.
-- A queued job is safely re-enqueued with its stable BullMQ job ID; running/terminal job states do
-  not enqueue again.
-- Confirmed Share is excluded from resumable sessions, resolves to its linked job, and has no archive
-  cleanup state.
-- Cutover migration fixtures prove all old sessions are removed while completed jobs, handouts, and
-  referenced historical artifacts remain readable.
+- Queued/running/succeeded jobs are not duplicated; a missing queued entry is added with the stable
+  ID, while a terminal failed entry is reset and retried in place under that same identity.
+- Concurrent Share calls create one database job, and `confirmedStep` advances to Share exactly once
+  under session CAS. Share retry never creates a `source_job_id` child; intentional rerun still does.
+- Confirmed Share is excluded from resumable sessions and `session_in_progress`, does not block a
+  new session for the same recording, resolves to its linked job, and has no archive cleanup state.
+- Sessions before Share remain resumable. Creating another assignment never mutates or reuses the
+  completed session.
+- Cutover migration fixtures prove old sessions, drafts, and prompt packages are removed; bare legacy
+  drafts cannot produce `draft_in_progress`; new sessions start clean; completed jobs/handouts remain;
+  and homework-memory markdown still reads the completed job's `md_storage_uri`.
 - New transcript and draft creation fixtures always return working version `1` plus a server hash;
   old null-version artifacts are rejected as new-session inputs.
 
@@ -817,11 +931,11 @@ was treated as sufficient confirmation.
 
 The detailed implementation plan will preserve these reviewer gates:
 
-1. Contract types, migration, revision-aware repository operations, and backend confirmation tests.
-2. Frontend confirmation controller plus Student and Lesson source behavior.
-3. Teaching context and Create alignment, including automatic transcript/draft persistence and
-   removal of routine Save controls.
-4. Stable Share job linking, completed-session presentation, and full resume/conflict coverage.
+1. Contract types, exact cutover migration, lifecycle predicates, and working-content CAS.
+2. Revision-aware session confirmation plus confirmed-hash lesson-memory generation and refresh.
+3. Confirmed-input prompt/Create behavior and the frontend confirmation controller.
+4. Stable Share job linking, terminal-failure retry, completed-session presentation, and full
+   resume/conflict coverage.
 5. Documentation synchronization, broad validation, and plan lifecycle closeout.
 
 Each slice must begin with a focused failing test and end with an independently reviewable passing
@@ -831,11 +945,14 @@ state. Cross-cutting validation runs after the integrated branch is complete.
 
 - Replacing React state management or rewriting the assignment frontend.
 - Event sourcing or a general audit-log platform.
+- Semantic-difference classification for transcript changes; every new confirmed hash regenerates
+  lesson memory.
 - Transcript/draft content-revision tables, including confirmation-only rows, or permanent revision
   history for autosaves.
 - A new recovery-object garbage collector; unreachable content-addressed blobs are acceptable during
   closed alpha and can be cleaned by a later storage-maintenance task.
 - Assignment-session archival or cleanup state after confirmed Share.
+- A Share-attempt ledger or redesign of intentional rerun lineage.
 - Changing the five visible assignment steps or Step 1 entry presentation.
 - Adding manual Save or Refresh responsibilities to compensate for unreliable automation.
 - Deleting completed jobs, published handouts, shared HTML, or their required storage artifacts.
@@ -862,9 +979,17 @@ state. Cross-cutting validation runs after the integrated branch is complete.
     confirmed by the tutor without separate content-revision rows.
 12. `currentStage` and session archival are absent; resume/completion derive from confirmed and
     recovery/job state.
-13. Share succeeds only after the stable approved job is enqueued or already running/terminal, then
-    remains completed without cleanup machinery.
-14. Navigation guards only unrecovered or ambiguous work, and stable data refreshes only on load,
+13. Lesson memory is keyed by transcript plus confirmed source hash, reads the confirmed immutable
+    URI in the worker, hides superseded memory while replacement is pending, and refreshes downstream
+    student memory automatically.
+14. `confirmedStep = 'share'` is the canonical completed predicate for every repository, dashboard,
+    resume, uniqueness, and create-or-reuse consumer.
+15. Share succeeds only after the stable approved job is enqueued or already running/succeeded;
+    terminal failure retry resets and re-enqueues that same job identity without cleanup machinery or
+    a rerun child.
+16. Navigation guards only unrecovered or ambiguous work, and stable data refreshes only on load,
     focus, or mutation completion.
-15. Existing stale-write, hydration, assignment-entry, and publish-order protections remain intact.
-16. Focused and broad validation required by the repository contracts passes before PR readiness.
+17. Cutover removes sessions, drafts, and prompt packages while preserving completed jobs, published
+    handouts, homework-memory reads, and referenced storage objects.
+18. Existing stale-write, hydration, assignment-entry, and publish-order protections remain intact.
+19. Focused and broad validation required by the repository contracts passes before PR readiness.
