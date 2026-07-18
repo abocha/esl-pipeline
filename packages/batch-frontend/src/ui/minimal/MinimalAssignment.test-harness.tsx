@@ -13,6 +13,10 @@ import userEvent from '@testing-library/user-event';
 import { expect, vi } from 'vitest';
 
 import * as api from '../../utils/api';
+import {
+  AssignmentNavigationGuardContext,
+  type NavigationGuard,
+} from '../shell/assignment-navigation-guard';
 import { MinimalAssignment } from './MinimalAssignment';
 
 vi.mock('../../utils/api', () => ({
@@ -637,6 +641,16 @@ export function createTimerAwareMinimalUser(): ReturnType<typeof userEvent.setup
 
 export function renderMinimalAssignment(): RenderResult {
   return render(<MinimalAssignment />);
+}
+
+export function renderMinimalAssignmentWithNavigationGuard(
+  register: (guard: NavigationGuard | null) => void,
+): RenderResult {
+  return render(
+    <AssignmentNavigationGuardContext.Provider value={register}>
+      <MinimalAssignment />
+    </AssignmentNavigationGuardContext.Provider>,
+  );
 }
 
 export async function renderPromptReadyAssignment(

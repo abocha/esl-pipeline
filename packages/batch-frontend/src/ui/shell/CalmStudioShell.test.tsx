@@ -1,7 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, useLocation } from 'react-router-dom';
+import {
+  createMemoryRouter,
+  MemoryRouter,
+  Outlet,
+  RouterProvider,
+  useLocation,
+} from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 
 import { useAssignmentNavigationGuard } from './assignment-navigation-guard';
@@ -97,5 +103,54 @@ describe('CalmStudioShell', () => {
     expect(css).toMatch(
       /@media \(max-width: 720px\)[\s\S]*\.calm-shell__topbar\s*\{[^}]*display:\s*flex/,
     );
+  });
+
+  it('blocks router history navigation while assignment recovery is unsafe', async () => {
+    const router = createMemoryRouter(
+      [
+        {
+          path: '/',
+          element: (
+            <CalmStudioShell
+              user={{ id: 'teacher-1', email: 'teacher@example.com', role: 'user', isActive: true }}
+              onLogout={vi.fn()}
+            >
+              <GuardedAssignment allow={false} />
+              <Outlet />
+            </CalmStudioShell>
+          ),
+          children: [
+            { index: true, element: <span>Assignments route</span> },
+            { path: 'students', element: <span>Students route</span> },
+          ],
+        },
+      ],
+      { initialEntries: ['/students', '/'], initialIndex: 1 },
+    );
+    render(<RouterProvider router={router} />);
+
+    await router.navigate(-1);
+    await Promise.resolve();
+
+    expect(router.state.location.pathname).toBe('/');
+  });
+
+  it('guards logout with the assignment durability decision', async () => {
+    const onLogout = vi.fn();
+    render(
+      <MemoryRouter>
+        <CalmStudioShell
+          user={{ id: 'teacher-1', email: 'teacher@example.com', role: 'user', isActive: true }}
+          onLogout={onLogout}
+        >
+          <GuardedAssignment allow={false} />
+        </CalmStudioShell>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Logout/i }));
+    await Promise.resolve();
+
+    expect(onLogout).not.toHaveBeenCalled();
   });
 });

@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   ArtifactWorkingConflictApiError,
+  confirmAssignmentSessionStep,
+  confirmStudentAssignmentSession,
+  shareAssignmentSession,
   updateAssignmentSessionRecovery,
   updateDraft,
   updateRecordingTranscript,
@@ -14,6 +17,7 @@ vi.mock('./api-client', () => ({
   default: {
     get: vi.fn(),
     patch: vi.fn(),
+    post: vi.fn(),
     put: vi.fn(),
   },
   buildApiProxyPath: vi.fn((path: string) => `/api${path}`),
@@ -45,6 +49,7 @@ describe('assignment recovery API', () => {
   beforeEach(() => {
     vi.useRealTimers();
     vi.clearAllMocks();
+    vi.mocked(apiClient.post).mockReset();
   });
 
   it('preserves the typed transcript working conflict', async () => {
@@ -88,6 +93,75 @@ describe('assignment recovery API', () => {
       updateAssignmentSessionRecovery('session-1', { expectedRevision: 1, patch: {} }),
     ).rejects.toMatchObject({ name: 'AssignmentSessionConflictApiError' });
     expect(apiClient.patch).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    [
+      'Student',
+      () => confirmStudentAssignmentSession({ requestId: 'request-1', studentId: 'student-1' }),
+    ],
+    [
+      'step confirmation',
+      () =>
+        confirmAssignmentSessionStep('session-1', {
+          step: 'context',
+          expectedRevision: 2,
+          teacherNotes: 'notes',
+          profileId: null,
+          profileRevisionId: null,
+          profileRevisionHash: null,
+        }),
+    ],
+    [
+      'Share',
+      () =>
+        shareAssignmentSession('session-1', {
+          expectedRevision: 3,
+          requestId: 'job-1',
+        }),
+    ],
+  ] as const)('retries transient %s mutation failures with the same request', async (_label, run) => {
+    vi.useFakeTimers();
+    vi.mocked(apiClient.post)
+      .mockRejectedValueOnce(makeAxiosError(503))
+      .mockRejectedValueOnce(makeAxiosError(429))
+      .mockResolvedValueOnce({ data: { id: 'result' } } as never);
+
+    const resultPromise = run();
+    await vi.runAllTimersAsync();
+    await expect(resultPromise).resolves.toBeTruthy();
+    expect(apiClient.post).toHaveBeenCalledTimes(3);
+    expect(vi.mocked(apiClient.post).mock.calls[0]).toEqual(
+      vi.mocked(apiClient.post).mock.calls[2],
+    );
+  });
+
+  it('stops semantic mutation retry after three total attempts', async () => {
+    vi.useFakeTimers();
+    vi.mocked(apiClient.post).mockRejectedValue(makeAxiosError(503));
+
+    const resultPromise = confirmStudentAssignmentSession({
+      requestId: 'request-1',
+      studentId: 'student-1',
+    });
+    const rejection = resultPromise.catch((error: unknown) => error);
+    await vi.runAllTimersAsync();
+    expect(await rejection).toBeInstanceOf(Error);
+    expect(apiClient.post).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not retry a semantic session conflict', async () => {
+    vi.mocked(apiClient.post).mockRejectedValueOnce(
+      makeAxiosError(409, {
+        code: 'assignment_session_revision_conflict',
+        session: { id: 'session-1', revision: 4 },
+      }),
+    );
+
+    await expect(
+      shareAssignmentSession('session-1', { expectedRevision: 3, requestId: 'job-1' }),
+    ).rejects.toMatchObject({ name: 'AssignmentSessionConflictApiError' });
+    expect(apiClient.post).toHaveBeenCalledTimes(1);
   });
 
   it('exports a concrete artifact conflict error class for UI reconciliation', () => {

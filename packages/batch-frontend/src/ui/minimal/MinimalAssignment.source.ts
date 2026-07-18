@@ -80,6 +80,7 @@ export interface SourceController extends SourceHydrationSnapshot {
   sttProviders: readonly SttProvider[];
   selectedStudent: StudentOption | null;
   transcriptDirty: boolean;
+  transcriptRecoveryConflict: boolean;
   transcriptReady: boolean;
   setTranscriptText: (value: string) => void;
   loadStudentOptions: () => Promise<void>;
@@ -358,19 +359,36 @@ export function useMinimalAssignmentSourceController({
 
   const refreshTranscriptPreservingLocal = useCallback(async () => {
     if (!recording?.recordingId) return;
+    const durable = latestTranscriptRef.current;
     const localText = transcriptTextRef.current.trim();
-    const durableText = latestTranscriptRef.current?.text?.trim() ?? '';
+    const durableText = durable?.text?.trim() ?? '';
     const preserveLocalText = localText !== durableText;
     try {
       const response = await fetchRecordingTranscript(recording.recordingId);
+      const remoteText = response.text?.trim() ?? '';
+      const remoteChanged =
+        durable !== null &&
+        (response.workingVersion !== durable.workingVersion ||
+          response.contentHash !== durable.contentHash);
       latestTranscriptRef.current = response;
       setTranscript(response);
-      if (!preserveLocalText) setTranscriptText(response.text ?? '');
+      if (preserveLocalText && remoteChanged && localText !== remoteText) {
+        transcriptConflictTextRef.current = localText;
+        setTranscriptError(
+          'Newer saved transcript work was found. Review your text before retrying.',
+        );
+      } else {
+        transcriptConflictTextRef.current = null;
+        if (!preserveLocalText) setTranscriptText(response.text ?? '');
+        setTranscriptError(null);
+      }
       setTranscriptStatus('ready');
     } catch (error) {
       setTranscriptError(error instanceof Error ? error.message : 'Unable to refresh transcript.');
     }
   }, [recording?.recordingId]);
+
+  const transcriptRecoveryConflict = transcriptConflictTextRef.current === transcriptText.trim();
 
   useEffect(() => {
     if (!recording?.recordingId) return;
@@ -606,6 +624,7 @@ export function useMinimalAssignmentSourceController({
     recording?.recordingId,
     transcript?.workingVersion,
     transcriptDirty,
+    transcriptRecoveryConflict,
     transcriptText,
   ]);
 
@@ -720,6 +739,7 @@ export function useMinimalAssignmentSourceController({
     sttProviders,
     selectedStudent,
     transcriptDirty,
+    transcriptRecoveryConflict,
     transcriptReady,
     setTranscriptText,
     loadStudentOptions,

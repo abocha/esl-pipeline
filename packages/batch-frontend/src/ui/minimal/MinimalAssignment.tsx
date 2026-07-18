@@ -341,8 +341,11 @@ export const MinimalAssignment: React.FC = () => {
     requestId: string;
   } | null>(null);
   const shareRequestRef = useRef<string | null>(null);
+  const shareReconciliationInFlightRef = useRef(false);
+  const autoResumedShareSessionRef = useRef<string | null>(null);
   const assignmentSessionSettingsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const assignmentContextRecoveryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const assignmentContextConflictKeyRef = useRef<string | null>(null);
   const assignmentSessionMilestoneRef = useRef({
     studentId: '',
     recordingId: '',
@@ -809,6 +812,9 @@ export const MinimalAssignment: React.FC = () => {
     (nextStudentId?: string) => {
       studentConfirmationRequestRef.current = null;
       shareRequestRef.current = null;
+      shareReconciliationInFlightRef.current = false;
+      autoResumedShareSessionRef.current = null;
+      assignmentContextConflictKeyRef.current = null;
       assignmentSessionMutationQueueRef.current = Promise.resolve(null);
       if (assignmentSessionSettingsTimeoutRef.current) {
         clearTimeout(assignmentSessionSettingsTimeoutRef.current);
@@ -907,6 +913,8 @@ export const MinimalAssignment: React.FC = () => {
       selectedProfileRevisionId: context.selectedProfileRevisionId,
       selectedProfileRevisionHash: context.selectedProfileRevisionHash,
     };
+    const recoveryKey = JSON.stringify(recovery);
+    if (assignmentContextConflictKeyRef.current === recoveryKey) return;
     if (
       session.teacherNotes === recovery.teacherNotes &&
       session.selectedProfileId === recovery.selectedProfileId &&
@@ -929,7 +937,11 @@ export const MinimalAssignment: React.FC = () => {
       ) {
         return;
       }
-      void saveAssignmentSessionProgress(recovery);
+      void saveAssignmentSessionProgress(recovery).then((saved) => {
+        if (saved && assignmentContextConflictKeyRef.current === recoveryKey) {
+          assignmentContextConflictKeyRef.current = null;
+        }
+      });
     }, 1500);
     return () => {
       if (assignmentContextRecoveryTimeoutRef.current) {
@@ -1690,10 +1702,13 @@ export const MinimalAssignment: React.FC = () => {
   const handleShareAssignment = useCallback(async () => {
     const session = activeAssignmentSessionRef.current;
     if (!session || session.confirmedStep !== 'create') return;
+    if (shareReconciliationInFlightRef.current) return;
+    shareReconciliationInFlightRef.current = true;
     setSharingAssignment(true);
     setAssignmentShareError(null);
     setAssignmentSaveState('saving');
-    const requestId = shareRequestRef.current ?? globalThis.crypto.randomUUID();
+    const requestId =
+      session.shareJobId ?? shareRequestRef.current ?? globalThis.crypto.randomUUID();
     shareRequestRef.current = requestId;
     const presentSharedJob = async (job: JobStatus) => {
       activeAssignmentSessionRef.current = null;
@@ -1704,13 +1719,15 @@ export const MinimalAssignment: React.FC = () => {
       await resume.loadResumeJobs();
     };
     try {
-      const recovered = await saveAssignmentSessionProgress({
-        publishTarget: authoring.publishTarget,
-        selectedTtsProvider: authoring.selectedTtsProvider,
-        selectedTtsStrategy: authoring.selectedTtsStrategy,
-        selectedTtsModel: authoring.selectedTtsModel || null,
-        selectedPreset: authoring.selectedPreset || null,
-      });
+      const recovered = session.shareJobId
+        ? session
+        : await saveAssignmentSessionProgress({
+            publishTarget: authoring.publishTarget,
+            selectedTtsProvider: authoring.selectedTtsProvider,
+            selectedTtsStrategy: authoring.selectedTtsStrategy,
+            selectedTtsModel: authoring.selectedTtsModel || null,
+            selectedPreset: authoring.selectedPreset || null,
+          });
       if (!recovered) return;
       const response = await shareAssignmentSession(recovered.id, {
         expectedRevision: recovered.revision,
@@ -1757,9 +1774,28 @@ export const MinimalAssignment: React.FC = () => {
         setAssignmentSaveState('ambiguous');
       }
     } finally {
+      shareReconciliationInFlightRef.current = false;
       setSharingAssignment(false);
     }
   }, [authoring, resume, saveAssignmentSessionProgress, setActiveAssignmentSession]);
+
+  useEffect(() => {
+    if (
+      activeAssignmentSession?.confirmedStep !== 'create' ||
+      !activeAssignmentSession.shareJobId ||
+      autoResumedShareSessionRef.current === activeAssignmentSession.id
+    ) {
+      return;
+    }
+    autoResumedShareSessionRef.current = activeAssignmentSession.id;
+    shareRequestRef.current = activeAssignmentSession.shareJobId;
+    void handleShareAssignment();
+  }, [
+    activeAssignmentSession?.confirmedStep,
+    activeAssignmentSession?.id,
+    activeAssignmentSession?.shareJobId,
+    handleShareAssignment,
+  ]);
   const continueDisabled =
     activeStep === 'student'
       ? !hasStartedFlow || !source.selectedStudentId
@@ -1770,7 +1806,11 @@ export const MinimalAssignment: React.FC = () => {
           : false;
   const guardAssignmentExit = shouldGuardAssignmentExit({
     recovery:
-      source.transcriptDirty || authoring.draftDirty || assignmentSaveState === 'saving'
+      source.transcriptDirty ||
+      authoring.draftDirty ||
+      source.transcriptRecoveryConflict ||
+      authoring.draftRecoveryConflict ||
+      assignmentSaveState === 'saving'
         ? 'pending'
         : assignmentSaveState === 'error'
           ? 'failed'
@@ -1780,6 +1820,8 @@ export const MinimalAssignment: React.FC = () => {
   const sourceTranscriptDirty = source.transcriptDirty;
   const saveTranscript = source.handleSaveTranscript;
   const draftDirty = authoring.draftDirty;
+  const transcriptRecoveryConflict = source.transcriptRecoveryConflict;
+  const draftRecoveryConflict = authoring.draftRecoveryConflict;
   const saveDraft = authoring.saveDraft;
   const refreshTranscriptPreservingLocal = source.refreshTranscriptPreservingLocal;
   const refreshDraftPreservingLocal = authoring.refreshDraftPreservingLocal;
@@ -1800,6 +1842,7 @@ export const MinimalAssignment: React.FC = () => {
     if (isUnsafeAssignmentSaveState(assignmentSaveStateRef.current)) {
       return false;
     }
+    if (transcriptRecoveryConflict || draftRecoveryConflict) return false;
     if (sourceTranscriptDirty && !(await saveTranscript())) return false;
     if (draftDirty && !(await saveDraft())) return false;
     const sessionQueueSettled = await assignmentSessionMutationQueueRef.current.then(
@@ -1808,7 +1851,14 @@ export const MinimalAssignment: React.FC = () => {
     );
     if (!sessionQueueSettled) return false;
     return !isUnsafeAssignmentSaveState(assignmentSaveStateRef.current);
-  }, [draftDirty, saveDraft, saveTranscript, sourceTranscriptDirty]);
+  }, [
+    draftDirty,
+    draftRecoveryConflict,
+    saveDraft,
+    saveTranscript,
+    sourceTranscriptDirty,
+    transcriptRecoveryConflict,
+  ]);
   useAssignmentNavigationGuard(flushAssignmentRecoveryForNavigation);
 
   useEffect(() => {
@@ -1827,8 +1877,39 @@ export const MinimalAssignment: React.FC = () => {
               setJobStatusState(linkedJob);
               applyJobStatusTransition(linkedJob);
             } else {
+              const localContextKey = JSON.stringify({
+                teacherNotes: teacherNotes.trim() || null,
+                selectedProfileId: context.selectedProfileId || null,
+                selectedProfileRevisionId: context.selectedProfileRevisionId,
+                selectedProfileRevisionHash: context.selectedProfileRevisionHash,
+              });
+              const durableContextKey = JSON.stringify({
+                teacherNotes: current.teacherNotes,
+                selectedProfileId: current.selectedProfileId,
+                selectedProfileRevisionId: current.selectedProfileRevisionId,
+                selectedProfileRevisionHash: current.selectedProfileRevisionHash,
+              });
+              const remoteContextKey = JSON.stringify({
+                teacherNotes: latest.teacherNotes,
+                selectedProfileId: latest.selectedProfileId,
+                selectedProfileRevisionId: latest.selectedProfileRevisionId,
+                selectedProfileRevisionHash: latest.selectedProfileRevisionHash,
+              });
+              if (
+                localContextKey !== durableContextKey &&
+                remoteContextKey !== durableContextKey &&
+                localContextKey !== remoteContextKey
+              ) {
+                assignmentContextConflictKeyRef.current = localContextKey;
+                setAssignmentSaveState('conflict');
+              }
               activeAssignmentSessionRef.current = latest;
               setActiveAssignmentSession(latest);
+              if (latest.confirmedStep === 'create' && latest.shareJobId) {
+                shareRequestRef.current = latest.shareJobId;
+                autoResumedShareSessionRef.current = latest.id;
+                void handleShareAssignment();
+              }
             }
           } catch {
             // Preserve the visible aggregate and let the next mutation surface a conflict.
@@ -1842,12 +1923,17 @@ export const MinimalAssignment: React.FC = () => {
     return () => globalThis.removeEventListener('focus', handleFocus);
   }, [
     applyJobStatusTransition,
+    handleShareAssignment,
     loadStudentOptions,
     refreshDraftPreservingLocal,
     refreshSelectedProfile,
     refreshTranscriptPreservingLocal,
     resumeLoadResumeJobs,
     setActiveAssignmentSession,
+    context.selectedProfileId,
+    context.selectedProfileRevisionHash,
+    context.selectedProfileRevisionId,
+    teacherNotes,
   ]);
   const linkedLesson = useMemo(() => {
     if (!linkedLessonId || !scheduleSurface) return null;
