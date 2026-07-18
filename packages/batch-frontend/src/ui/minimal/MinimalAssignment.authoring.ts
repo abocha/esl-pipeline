@@ -10,9 +10,11 @@ import type {
   PromptPackageResponse,
 } from '../../utils/api';
 import {
+  ArtifactWorkingConflictApiError,
   approveJob,
   createDraft,
   createPromptPackage,
+  fetchDraft,
   GenerationDraftApiError,
   generateDraft,
   getJobStatus,
@@ -568,6 +570,7 @@ export interface AuthoringController extends AuthoringState {
   generateDraft: () => Promise<GenerateDraftResponse | null>;
   runValidation: () => Promise<MarkdownValidationResponse>;
   saveDraft: () => Promise<DraftResponse | null>;
+  refreshDraftPreservingLocal: () => Promise<void>;
   previewDraft: () => Promise<void>;
   publishAssignment: (params: {
     onPublishedJob: (job: JobStatus) => void;
@@ -610,6 +613,7 @@ export function useMinimalAssignmentAuthoringController({
   const draftAutosaveLastSavedAtRef = useRef(0);
   const draftAutosaveInFlightRef = useRef(false);
   const draftAutosavePendingRef = useRef(false);
+  const draftConflictTextRef = useRef<string | null>(null);
   const [draftAutosaveRescheduleToken, requestDraftAutosaveReschedule] = useReducer(
     (value: number) => value + 1,
     0,
@@ -860,12 +864,32 @@ export function useMinimalAssignmentAuthoringController({
         return null;
       }
       const persistenceVersion = authoringPersistenceVersionRef.current;
-      const response = state.draft?.id
-        ? await updateDraft(state.draft.id, normalizedText, state.draft.workingVersion)
-        : await createDraft(state.promptPackage.id, normalizedText);
+      let response: DraftResponse;
+      try {
+        response = state.draft?.id
+          ? await updateDraft(state.draft.id, normalizedText, state.draft.workingVersion)
+          : await createDraft(state.promptPackage.id, normalizedText);
+      } catch (error) {
+        if (error instanceof ArtifactWorkingConflictApiError && state.draft?.id) {
+          try {
+            const latest = await fetchDraft(state.draft.id);
+            if (authoringPersistenceVersionRef.current === persistenceVersion) {
+              draftConflictTextRef.current = normalizedText;
+              dispatch({
+                type: 'draft_save_succeeded',
+                payload: { draft: latest, preserveCurrentText: true },
+              });
+            }
+          } catch {
+            // Preserve the local buffer and original conflict if refresh also fails.
+          }
+        }
+        throw error;
+      }
       if (authoringPersistenceVersionRef.current !== persistenceVersion) {
         return null;
       }
+      draftConflictTextRef.current = null;
       const preserveCurrentText =
         options.preserveCurrentText || draftTextRef.current.trim() !== normalizedText;
       dispatch({
@@ -918,6 +942,25 @@ export function useMinimalAssignmentAuthoringController({
       return null;
     }
   }, [persistDraftText, runValidation, state.draftText, state.promptPackage]);
+
+  const refreshDraftPreservingLocal = useCallback(async () => {
+    if (!state.draft?.id) return;
+    const preserveCurrentText = draftTextRef.current.trim() !== (state.draft.text ?? '').trim();
+    try {
+      const latest = await fetchDraft(state.draft.id);
+      dispatch({
+        type: 'draft_save_succeeded',
+        payload: { draft: latest, preserveCurrentText },
+      });
+    } catch (error) {
+      dispatch({
+        type: 'draft_save_failed',
+        payload: {
+          error: error instanceof Error ? error.message : 'Unable to refresh saved draft.',
+        },
+      });
+    }
+  }, [state.draft?.id, state.draft?.text]);
 
   const generatePrompt = useCallback(async (): Promise<PromptPackageResponse | null> => {
     if (!recordingId) {
@@ -1249,6 +1292,7 @@ export function useMinimalAssignmentAuthoringController({
       }
       return;
     }
+    if (draftConflictTextRef.current === state.draftText.trim()) return;
 
     const elapsedMs = Date.now() - draftAutosaveLastSavedAtRef.current;
     const delayMs = Math.max(
@@ -1555,6 +1599,7 @@ export function useMinimalAssignmentAuthoringController({
     generateDraft: generateDraftHandler,
     runValidation,
     saveDraft,
+    refreshDraftPreservingLocal,
     previewDraft,
     publishAssignment,
     applyHydrationSnapshot,

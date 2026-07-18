@@ -126,6 +126,203 @@ describe('MinimalAssignment - staged workflow UI', () => {
     ).toBe('Keep the tutor note.');
   });
 
+  it('adopts the winning transcript CAS base without discarding the losing local text', async () => {
+    const { user } = await renderResumedAssignment({}, { waitFor: 'none' });
+    await user.click(screen.getByRole('button', { name: /Lesson source/i }));
+    const editor = screen.getByRole('textbox', { name: /Transcript text/i });
+    const latest = {
+      ...makeRecording({ recordingId: 'rec-1' }),
+      ...{
+        recordingId: 'rec-1',
+        transcriptId: 'tx-1',
+        text: 'Remote winning transcript',
+        summaryJson: null,
+        sttProvider: 'deepgram' as const,
+        model: 'nova-3',
+        language: 'en',
+        mode: 'timeline' as const,
+        workingVersion: 2,
+        contentHash: 'f'.repeat(64),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    };
+    vi.mocked(api.updateRecordingTranscript).mockRejectedValueOnce(
+      new api.ArtifactWorkingConflictApiError({
+        workingVersion: 2,
+        contentHash: latest.contentHash,
+      }),
+    );
+    vi.mocked(api.fetchRecordingTranscript).mockResolvedValueOnce(latest);
+
+    vi.useFakeTimers();
+    fireEvent.change(editor, { target: { value: 'My local transcript' } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    vi.useRealTimers();
+
+    await waitFor(() => expect(api.fetchRecordingTranscript).toHaveBeenCalledWith('rec-1'));
+    expect((editor as HTMLTextAreaElement).value).toBe('My local transcript');
+    expect(screen.getByText(/Newer saved artifact content was found/i)).toBeTruthy();
+  });
+
+  it('adopts the winning draft CAS base without discarding the losing local text', async () => {
+    const { user } = await renderPreviewReadyAssignment();
+    await user.click(screen.getByRole('button', { name: /Create/i }));
+    const editor = screen.getByRole('textbox', { name: /Draft markdown/i });
+    const latest = {
+      id: 'draft-1',
+      promptPackageId: 'pkg-1',
+      studentId: 'student-alex',
+      storageUri: 'memory://drafts/draft-1/remote',
+      createdBy: 'user-1',
+      text: '# Remote winning draft',
+      workingVersion: 2,
+      contentHash: 'e'.repeat(64),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    vi.mocked(api.updateDraft).mockRejectedValueOnce(
+      new api.ArtifactWorkingConflictApiError({
+        workingVersion: 2,
+        contentHash: latest.contentHash,
+      }),
+    );
+    vi.mocked(api.fetchDraft).mockResolvedValueOnce(latest);
+
+    fireEvent.change(editor, { target: { value: '# My local draft' } });
+    await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+
+    await waitFor(() => expect(api.fetchDraft).toHaveBeenCalledWith('draft-1'));
+    expect((editor as HTMLTextAreaElement).value).toBe('# My local draft');
+    expect(screen.getByText(/Newer saved artifact content was found/i)).toBeTruthy();
+  });
+
+  it('sends one Context recovery PATCH for one edit across repeated debounce windows', async () => {
+    const { user } = await renderResumedAssignment({}, { waitFor: 'none' });
+    await user.click(screen.getByRole('button', { name: /Teaching context/i }));
+    vi.mocked(api.updateAssignmentSessionRecovery).mockClear();
+
+    vi.useFakeTimers();
+    fireEvent.change(screen.getByRole('textbox', { name: /Teacher notes/i }), {
+      target: { value: 'One local Context edit.' },
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_500);
+    });
+    expect(api.updateAssignmentSessionRecovery).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4_500);
+    });
+
+    expect(api.updateAssignmentSessionRecovery).toHaveBeenCalledTimes(1);
+  });
+
+  it('reuses the Student confirmation request ID after a lost-response retry', async () => {
+    const user = createMinimalUser();
+    vi.mocked(api.confirmStudentAssignmentSession)
+      .mockRejectedValueOnce(new Error('response lost'))
+      .mockImplementationOnce(async (request) =>
+        makeAssignmentSession({
+          studentId: request.studentId,
+          lessonId: request.lessonId ?? null,
+          confirmedStep: 'student',
+        }),
+      );
+    renderMinimalAssignment();
+
+    await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
+    await screen.findByRole('option', { name: 'Alex' });
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: /Choose learner/i }),
+      'student-alex',
+    );
+    await user.click(screen.getByRole('button', { name: /^Continue$/i }));
+    await screen.findByText('Saving needs attention');
+
+    const firstRequestId = vi.mocked(api.confirmStudentAssignmentSession).mock.calls[0]?.[0]
+      .requestId;
+    await user.click(screen.getByRole('button', { name: /^Continue$/i }));
+    await waitFor(() => expect(api.confirmStudentAssignmentSession).toHaveBeenCalledTimes(2));
+    const retriedRequestId = vi.mocked(api.confirmStudentAssignmentSession).mock.calls[1]?.[0]
+      .requestId;
+
+    expect(retriedRequestId).toBe(firstRequestId);
+  });
+
+  it('keeps exit safety pending until the final queued session mutation settles', async () => {
+    type Session = ReturnType<typeof makeAssignmentSession>;
+    let resolveFirst: (session: Session) => void = () => {};
+    let resolveSecond: (session: Session) => void = () => {};
+    const firstResponse = new Promise<Session>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const secondResponse = new Promise<Session>((resolve) => {
+      resolveSecond = resolve;
+    });
+    vi.mocked(api.updateAssignmentSessionRecovery)
+      .mockImplementationOnce(() => firstResponse)
+      .mockImplementationOnce(() => secondResponse);
+
+    const { user } = await renderResumedAssignment({}, { waitFor: 'none' });
+    await user.click(screen.getByRole('button', { name: /Teaching context/i }));
+    vi.useFakeTimers();
+
+    const notes = screen.getByRole('textbox', { name: /Teacher notes/i });
+    fireEvent.change(notes, { target: { value: 'First queued edit.' } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_500);
+    });
+    expect(api.updateAssignmentSessionRecovery).toHaveBeenCalledTimes(1);
+
+    fireEvent.change(notes, { target: { value: 'Second queued edit.' } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_500);
+    });
+    expect(api.updateAssignmentSessionRecovery).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+
+    const beforeFirstSettles = new Event('beforeunload', { cancelable: true });
+    globalThis.dispatchEvent(beforeFirstSettles);
+    expect(beforeFirstSettles.defaultPrevented).toBe(true);
+
+    await act(async () => {
+      resolveFirst(
+        makeAssignmentSession({
+          id: 'session-resumed',
+          studentId: 'student-alex',
+          teacherNotes: 'First queued edit.',
+          revision: 2,
+        }),
+      );
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(api.updateAssignmentSessionRecovery).toHaveBeenCalledTimes(2));
+
+    const whileSecondPending = new Event('beforeunload', { cancelable: true });
+    globalThis.dispatchEvent(whileSecondPending);
+
+    await act(async () => {
+      resolveSecond(
+        makeAssignmentSession({
+          id: 'session-resumed',
+          studentId: 'student-alex',
+          teacherNotes: 'Second queued edit.',
+          revision: 3,
+        }),
+      );
+      await Promise.resolve();
+    });
+    await screen.findByText('All changes saved');
+    const afterSecondSettles = new Event('beforeunload', { cancelable: true });
+    globalThis.dispatchEvent(afterSecondSettles);
+
+    expect(whileSecondPending.defaultPrevented).toBe(true);
+    expect(afterSecondSettles.defaultPrevented).toBe(false);
+  });
+
   it('recognizes a successful confirmation after its response is lost', async () => {
     const { user } = await renderResumedAssignment({}, { waitFor: 'none' });
     await user.click(screen.getByRole('button', { name: /Teaching context/i }));
@@ -196,6 +393,112 @@ describe('MinimalAssignment - staged workflow UI', () => {
     await waitFor(() => expect(api.getJobStatus).toHaveBeenCalledWith('job-share'));
     expect(screen.getAllByText(/Job ID: job-share/i).length).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: /Share assignment/i })).toBeNull();
+    await user.click(screen.getByRole('button', { name: /Lesson source/i }));
+    expect(screen.queryByRole('textbox', { name: /Transcript text/i })).toBeNull();
+  });
+
+  it('resumes a reserved Share with the same stable request after response loss', async () => {
+    const { user } = await renderPreviewReadyAssignment();
+    const reserved = makeAssignmentSession({
+      id: 'session-resumed',
+      studentId: 'student-alex',
+      recordingId: 'rec-1',
+      transcriptId: 'tx-1',
+      promptPackageId: 'pkg-1',
+      draftId: 'draft-1',
+      confirmedStep: 'create',
+      shareJobId: 'job-share',
+      revision: 4,
+    });
+    const completed = makeAssignmentSession({ ...reserved, confirmedStep: 'share', revision: 5 });
+    const linkedJob = makeJobStatus({ jobId: 'job-share', state: 'queued' });
+    vi.mocked(api.shareAssignmentSession)
+      .mockRejectedValueOnce(new Error('response lost'))
+      .mockResolvedValueOnce({ session: completed, job: linkedJob });
+    vi.mocked(api.fetchAssignmentSession).mockResolvedValueOnce(reserved);
+
+    await user.click(screen.getByRole('button', { name: /Share assignment/i }));
+
+    await waitFor(() => expect(api.shareAssignmentSession).toHaveBeenCalledTimes(2));
+    const firstRequest = vi.mocked(api.shareAssignmentSession).mock.calls[0]?.[1];
+    const secondRequest = vi.mocked(api.shareAssignmentSession).mock.calls[1]?.[1];
+    expect(secondRequest?.requestId).toBe(firstRequest?.requestId);
+    expect(screen.getAllByText(/Job ID: job-share/i).length).toBeGreaterThan(0);
+  });
+
+  it('retries linked-job loading after a completed Share response is lost', async () => {
+    const { user } = await renderPreviewReadyAssignment();
+    const completed = makeAssignmentSession({
+      id: 'session-resumed',
+      studentId: 'student-alex',
+      recordingId: 'rec-1',
+      transcriptId: 'tx-1',
+      promptPackageId: 'pkg-1',
+      draftId: 'draft-1',
+      confirmedStep: 'share',
+      shareJobId: 'job-share',
+      revision: 4,
+    });
+    const linkedJob = makeJobStatus({ jobId: 'job-share', state: 'queued' });
+    vi.mocked(api.shareAssignmentSession).mockRejectedValueOnce(new Error('response lost'));
+    vi.mocked(api.fetchAssignmentSession).mockResolvedValueOnce(completed);
+    vi.mocked(api.getJobStatus)
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce(linkedJob);
+
+    await user.click(screen.getByRole('button', { name: /Share assignment/i }));
+
+    await waitFor(() => expect(api.getJobStatus).toHaveBeenCalledTimes(3));
+    expect(screen.getAllByText(/Job ID: job-share/i).length).toBeGreaterThan(0);
+  });
+
+  it('routes a direct completed-session URL to its linked historical job', async () => {
+    const completed = makeAssignmentSession({
+      id: 'session-completed',
+      studentId: 'student-alex',
+      recordingId: 'rec-1',
+      transcriptId: 'tx-1',
+      promptPackageId: 'pkg-1',
+      draftId: 'draft-1',
+      confirmedStep: 'share',
+      shareJobId: 'job-share',
+      revision: 4,
+    });
+    vi.mocked(api.fetchAssignmentSession).mockResolvedValueOnce(completed);
+    vi.mocked(api.getJobStatus).mockResolvedValueOnce(
+      makeJobStatus({ jobId: 'job-share', state: 'succeeded' }),
+    );
+    globalThis.history.replaceState(null, '', '/?sessionId=session-completed');
+
+    renderMinimalAssignment();
+
+    await waitFor(() => expect(api.getJobStatus).toHaveBeenCalledWith('job-share'));
+    expect(screen.getAllByText(/Job ID: job-share/i).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('textbox', { name: /Transcript text/i })).toBeNull();
+  });
+
+  it('refreshes the active aggregate once on focus without overwriting local notes', async () => {
+    const { user } = await renderPreviewReadyAssignment();
+    await user.click(screen.getByRole('button', { name: /Teaching context/i }));
+    const notes = screen.getByRole('textbox', { name: /Teacher notes/i });
+    fireEvent.change(notes, { target: { value: 'Unsaved local focus note' } });
+    const sessionCalls = vi.mocked(api.fetchAssignmentSession).mock.calls.length;
+    const transcriptCalls = vi.mocked(api.fetchRecordingTranscript).mock.calls.length;
+    const draftCalls = vi.mocked(api.fetchDraft).mock.calls.length;
+    const profileCalls = vi.mocked(api.getProfileContent).mock.calls.length;
+
+    await act(async () => {
+      globalThis.dispatchEvent(new Event('focus'));
+    });
+
+    await waitFor(() => expect(api.fetchAssignmentSession).toHaveBeenCalledTimes(sessionCalls + 1));
+    await waitFor(() =>
+      expect(api.fetchRecordingTranscript).toHaveBeenCalledTimes(transcriptCalls + 1),
+    );
+    await waitFor(() => expect(api.fetchDraft).toHaveBeenCalledTimes(draftCalls + 1));
+    await waitFor(() => expect(api.getProfileContent).toHaveBeenCalledTimes(profileCalls + 1));
+    expect((notes as HTMLTextAreaElement).value).toBe('Unsaved local focus note');
   });
 
   it(
