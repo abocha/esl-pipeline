@@ -44,6 +44,7 @@ import { CreateAssignmentStep } from '../assignments/steps/CreateAssignmentStep'
 import { LessonSourceStep } from '../assignments/steps/LessonSourceStep';
 import { ReviewShareStep } from '../assignments/steps/ReviewShareStep';
 import { TeachingContextStep } from '../assignments/steps/TeachingContextStep';
+import { useAssignmentNavigationGuard } from '../shell/assignment-navigation-guard';
 import {
   AdvancedActionsStage,
   AssignmentDiagnostics,
@@ -88,6 +89,23 @@ import {
 import './MinimalAssignment.css';
 
 class AssignmentMutationAmbiguousError extends Error {}
+
+function isUnsafeAssignmentSaveState(state: string): boolean {
+  return state === 'ambiguous' || state === 'error' || state === 'conflict';
+}
+
+async function getJobStatusWithRecoveryRetry(jobId: string): Promise<JobStatus> {
+  const delays = [250, 1_000] as const;
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await getJobStatus(jobId);
+    } catch (error) {
+      const delay = delays[attempt];
+      if (delay === undefined) throw error;
+      await new Promise<void>((resolve) => globalThis.setTimeout(resolve, delay));
+    }
+  }
+}
 
 const AUDIO_EXTENSIONS = ['.opus'] as const;
 const FOCUSED_STEP_ORDER: AssignmentStepId[] = [
@@ -276,6 +294,8 @@ export const MinimalAssignment: React.FC = () => {
   const [assignmentSaveState, setAssignmentSaveState] = useState<
     'idle' | 'saving' | 'saved' | 'error' | 'conflict' | 'ambiguous'
   >('idle');
+  const assignmentSaveStateRef = useRef(assignmentSaveState);
+  assignmentSaveStateRef.current = assignmentSaveState;
   const [startingAssignment, setStartingAssignment] = useState(false);
   const [sharingAssignment, setSharingAssignment] = useState(false);
   const [assignmentShareError, setAssignmentShareError] = useState<string | null>(null);
@@ -313,9 +333,13 @@ export const MinimalAssignment: React.FC = () => {
   const assignmentSessionMutationQueueRef = useRef<Promise<AssignmentSession | null>>(
     Promise.resolve(null),
   );
+  const assignmentSessionMutationSequenceRef = useRef(0);
   const activeAssignmentSessionIdRef = useRef<string | null>(null);
   const activeAssignmentSessionRef = useRef<AssignmentSession | null>(null);
-  const studentConfirmationRequestRef = useRef<string | null>(null);
+  const studentConfirmationRequestRef = useRef<{
+    studentId: string;
+    requestId: string;
+  } | null>(null);
   const shareRequestRef = useRef<string | null>(null);
   const assignmentSessionSettingsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const assignmentContextRecoveryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -648,6 +672,8 @@ export const MinimalAssignment: React.FC = () => {
         return activeAssignmentSession;
       }
 
+      const mutationSequence = assignmentSessionMutationSequenceRef.current + 1;
+      assignmentSessionMutationSequenceRef.current = mutationSequence;
       setAssignmentSaveState('saving');
       const run = assignmentSessionMutationQueueRef.current
         .catch(() => null)
@@ -685,13 +711,17 @@ export const MinimalAssignment: React.FC = () => {
       assignmentSessionMutationQueueRef.current = run;
       try {
         const saved = await run;
-        if (saved) setAssignmentSaveState('saved');
+        if (saved && assignmentSessionMutationSequenceRef.current === mutationSequence) {
+          setAssignmentSaveState('saved');
+        }
         return saved;
       } catch (error) {
         console.warn('Unable to save assignment session progress', error);
-        setAssignmentSaveState(
-          error instanceof AssignmentSessionConflictApiError ? 'conflict' : 'error',
-        );
+        if (assignmentSessionMutationSequenceRef.current === mutationSequence) {
+          setAssignmentSaveState(
+            error instanceof AssignmentSessionConflictApiError ? 'conflict' : 'error',
+          );
+        }
         return null;
       }
     },
@@ -702,6 +732,8 @@ export const MinimalAssignment: React.FC = () => {
     async (
       buildRequest: (session: AssignmentSession) => ConfirmAssignmentSessionStepRequest,
     ): Promise<AssignmentSession | null> => {
+      const mutationSequence = assignmentSessionMutationSequenceRef.current + 1;
+      assignmentSessionMutationSequenceRef.current = mutationSequence;
       setAssignmentSaveState('saving');
       const run = assignmentSessionMutationQueueRef.current
         .catch(() => null)
@@ -739,17 +771,21 @@ export const MinimalAssignment: React.FC = () => {
       assignmentSessionMutationQueueRef.current = run;
       try {
         const confirmed = await run;
-        if (confirmed) setAssignmentSaveState('saved');
+        if (confirmed && assignmentSessionMutationSequenceRef.current === mutationSequence) {
+          setAssignmentSaveState('saved');
+        }
         return confirmed;
       } catch (error) {
         console.warn('Unable to confirm assignment step', error);
-        setAssignmentSaveState(
-          error instanceof AssignmentSessionConflictApiError
-            ? 'conflict'
-            : error instanceof AssignmentMutationAmbiguousError
-              ? 'ambiguous'
-              : 'error',
-        );
+        if (assignmentSessionMutationSequenceRef.current === mutationSequence) {
+          setAssignmentSaveState(
+            error instanceof AssignmentSessionConflictApiError
+              ? 'conflict'
+              : error instanceof AssignmentMutationAmbiguousError
+                ? 'ambiguous'
+                : 'error',
+          );
+        }
         return null;
       }
     },
@@ -766,11 +802,7 @@ export const MinimalAssignment: React.FC = () => {
         lessonId,
       });
     },
-    [
-      assignmentSessionWritesAllowed,
-      markAssignmentUserEdit,
-      saveAssignmentSessionProgress,
-    ],
+    [assignmentSessionWritesAllowed, markAssignmentUserEdit, saveAssignmentSessionProgress],
   );
 
   const resetForNewAssignment = useCallback(
@@ -810,9 +842,13 @@ export const MinimalAssignment: React.FC = () => {
     async (studentId: string) => {
       const learner = source.studentOptions.find((student) => student.id === studentId);
       if (!learner) return;
+      const previousAttempt = studentConfirmationRequestRef.current;
+      const requestId =
+        previousAttempt?.studentId === studentId
+          ? previousAttempt.requestId
+          : globalThis.crypto.randomUUID();
       resetForNewAssignment(studentId);
-      const requestId = studentConfirmationRequestRef.current ?? globalThis.crypto.randomUUID();
-      studentConfirmationRequestRef.current = requestId;
+      studentConfirmationRequestRef.current = { studentId, requestId };
       setStartingAssignment(true);
       setAssignmentSaveState('saving');
       try {
@@ -865,17 +901,35 @@ export const MinimalAssignment: React.FC = () => {
   useEffect(() => {
     const session = activeAssignmentSessionRef.current;
     if (!session || session.confirmedStep === 'share' || !assignmentSessionWritesAllowed()) return;
+    const recovery = {
+      teacherNotes: teacherNotes.trim() || null,
+      selectedProfileId: context.selectedProfileId || null,
+      selectedProfileRevisionId: context.selectedProfileRevisionId,
+      selectedProfileRevisionHash: context.selectedProfileRevisionHash,
+    };
+    if (
+      session.teacherNotes === recovery.teacherNotes &&
+      session.selectedProfileId === recovery.selectedProfileId &&
+      session.selectedProfileRevisionId === recovery.selectedProfileRevisionId &&
+      session.selectedProfileRevisionHash === recovery.selectedProfileRevisionHash
+    ) {
+      return;
+    }
     if (assignmentContextRecoveryTimeoutRef.current) {
       clearTimeout(assignmentContextRecoveryTimeoutRef.current);
     }
     assignmentContextRecoveryTimeoutRef.current = setTimeout(() => {
       assignmentContextRecoveryTimeoutRef.current = null;
-      void saveAssignmentSessionProgress({
-        teacherNotes: teacherNotes.trim() || null,
-        selectedProfileId: context.selectedProfileId || null,
-        selectedProfileRevisionId: context.selectedProfileRevisionId,
-        selectedProfileRevisionHash: context.selectedProfileRevisionHash,
-      });
+      const latest = activeAssignmentSessionRef.current;
+      if (
+        latest?.teacherNotes === recovery.teacherNotes &&
+        latest.selectedProfileId === recovery.selectedProfileId &&
+        latest.selectedProfileRevisionId === recovery.selectedProfileRevisionId &&
+        latest.selectedProfileRevisionHash === recovery.selectedProfileRevisionHash
+      ) {
+        return;
+      }
+      void saveAssignmentSessionProgress(recovery);
     }, 1500);
     return () => {
       if (assignmentContextRecoveryTimeoutRef.current) {
@@ -1641,6 +1695,14 @@ export const MinimalAssignment: React.FC = () => {
     setAssignmentSaveState('saving');
     const requestId = shareRequestRef.current ?? globalThis.crypto.randomUUID();
     shareRequestRef.current = requestId;
+    const presentSharedJob = async (job: JobStatus) => {
+      activeAssignmentSessionRef.current = null;
+      setActiveAssignmentSession(null);
+      setJobStatusState(job);
+      resume.applyJobStatusTransition(job);
+      setAssignmentSaveState('saved');
+      await resume.loadResumeJobs();
+    };
     try {
       const recovered = await saveAssignmentSessionProgress({
         publishTarget: authoring.publishTarget,
@@ -1654,12 +1716,7 @@ export const MinimalAssignment: React.FC = () => {
         expectedRevision: recovered.revision,
         requestId,
       });
-      activeAssignmentSessionRef.current = response.session;
-      setActiveAssignmentSession(response.session);
-      setJobStatusState(response.job);
-      resume.applyJobStatusTransition(response.job);
-      setAssignmentSaveState('saved');
-      await resume.loadResumeJobs();
+      await presentSharedJob(response.job);
     } catch (error) {
       const latest =
         error instanceof AssignmentSessionConflictApiError
@@ -1669,13 +1726,19 @@ export const MinimalAssignment: React.FC = () => {
         activeAssignmentSessionRef.current = latest;
         setActiveAssignmentSession(latest);
       }
-      if (latest?.confirmedStep === 'share' && latest.shareJobId) {
-        const linkedJob = await getJobStatus(latest.shareJobId);
-        setJobStatusState(linkedJob);
-        resume.applyJobStatusTransition(linkedJob);
-        setAssignmentSaveState('saved');
-        await resume.loadResumeJobs();
-      } else {
+      try {
+        if (latest?.confirmedStep === 'share' && latest.shareJobId) {
+          await presentSharedJob(await getJobStatusWithRecoveryRetry(latest.shareJobId));
+          return;
+        }
+        if (latest?.shareJobId) {
+          const resumed = await shareAssignmentSession(latest.id, {
+            expectedRevision: latest.revision,
+            requestId,
+          });
+          await presentSharedJob(resumed.job);
+          return;
+        }
         const message = error instanceof Error ? error.message : 'Unable to share this assignment.';
         setAssignmentShareError(message);
         setAssignmentSaveState(
@@ -1685,6 +1748,13 @@ export const MinimalAssignment: React.FC = () => {
               ? 'error'
               : 'ambiguous',
         );
+      } catch (reconciliationError) {
+        const message =
+          reconciliationError instanceof Error
+            ? reconciliationError.message
+            : 'Unable to confirm whether sharing completed.';
+        setAssignmentShareError(message);
+        setAssignmentSaveState('ambiguous');
       }
     } finally {
       setSharingAssignment(false);
@@ -1707,6 +1777,14 @@ export const MinimalAssignment: React.FC = () => {
           : 'saved',
     mutation: assignmentSaveState === 'ambiguous' ? 'ambiguous' : 'settled',
   });
+  const sourceTranscriptDirty = source.transcriptDirty;
+  const saveTranscript = source.handleSaveTranscript;
+  const draftDirty = authoring.draftDirty;
+  const saveDraft = authoring.saveDraft;
+  const refreshTranscriptPreservingLocal = source.refreshTranscriptPreservingLocal;
+  const refreshDraftPreservingLocal = authoring.refreshDraftPreservingLocal;
+  const refreshSelectedProfile = context.refreshSelectedProfile;
+  const applyJobStatusTransition = resume.applyJobStatusTransition;
 
   useEffect(() => {
     if (!guardAssignmentExit) return;
@@ -1718,14 +1796,59 @@ export const MinimalAssignment: React.FC = () => {
     return () => globalThis.removeEventListener('beforeunload', handleBeforeUnload);
   }, [guardAssignmentExit]);
 
+  const flushAssignmentRecoveryForNavigation = useCallback(async (): Promise<boolean> => {
+    if (isUnsafeAssignmentSaveState(assignmentSaveStateRef.current)) {
+      return false;
+    }
+    if (sourceTranscriptDirty && !(await saveTranscript())) return false;
+    if (draftDirty && !(await saveDraft())) return false;
+    const sessionQueueSettled = await assignmentSessionMutationQueueRef.current.then(
+      () => true,
+      () => false,
+    );
+    if (!sessionQueueSettled) return false;
+    return !isUnsafeAssignmentSaveState(assignmentSaveStateRef.current);
+  }, [draftDirty, saveDraft, saveTranscript, sourceTranscriptDirty]);
+  useAssignmentNavigationGuard(flushAssignmentRecoveryForNavigation);
+
   useEffect(() => {
     const handleFocus = () => {
       void resumeLoadResumeJobs();
       void loadStudentOptions();
+      void (async () => {
+        const current = activeAssignmentSessionRef.current;
+        if (current) {
+          try {
+            const latest = await fetchAssignmentSession(current.id);
+            if (latest.confirmedStep === 'share' && latest.shareJobId) {
+              const linkedJob = await getJobStatusWithRecoveryRetry(latest.shareJobId);
+              activeAssignmentSessionRef.current = null;
+              setActiveAssignmentSession(null);
+              setJobStatusState(linkedJob);
+              applyJobStatusTransition(linkedJob);
+            } else {
+              activeAssignmentSessionRef.current = latest;
+              setActiveAssignmentSession(latest);
+            }
+          } catch {
+            // Preserve the visible aggregate and let the next mutation surface a conflict.
+          }
+        }
+        await Promise.all([refreshTranscriptPreservingLocal(), refreshDraftPreservingLocal()]);
+        refreshSelectedProfile();
+      })();
     };
     globalThis.addEventListener('focus', handleFocus);
     return () => globalThis.removeEventListener('focus', handleFocus);
-  }, [loadStudentOptions, resumeLoadResumeJobs]);
+  }, [
+    applyJobStatusTransition,
+    loadStudentOptions,
+    refreshDraftPreservingLocal,
+    refreshSelectedProfile,
+    refreshTranscriptPreservingLocal,
+    resumeLoadResumeJobs,
+    setActiveAssignmentSession,
+  ]);
   const linkedLesson = useMemo(() => {
     if (!linkedLessonId || !scheduleSurface) return null;
     return scheduleSurface.lessons.find((lesson) => lesson.id === linkedLessonId) ?? null;
@@ -1956,7 +2079,7 @@ export const MinimalAssignment: React.FC = () => {
             onSelectLearner={handleStudentSelectionChange}
             onRetryLearners={() => void loadStudentOptions()}
             onStartNew={() => void commitNewAssignment(source.selectedStudentId)}
-            onChangeAssignment={() => setEntryView('choice')}
+            onChangeAssignment={handleStartNewAssignmentWithSessionReset}
           />
         </div>
 

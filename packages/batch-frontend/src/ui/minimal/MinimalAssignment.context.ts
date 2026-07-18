@@ -23,6 +23,7 @@ export interface ContextController extends ContextHydrationSnapshot {
   selectedProfileRevisionHash: string | null;
   applyHydratedSnapshot: (snapshot: ContextHydrationSnapshot) => void;
   selectProfileId: (profileId: string) => void;
+  refreshSelectedProfile: () => void;
 }
 
 export interface LearnerProfilePreview {
@@ -102,6 +103,9 @@ export function useMinimalAssignmentContextController({
     null,
   );
   const [profileReloadToken, setProfileReloadToken] = useState(0);
+  const refreshSelectedProfile = useCallback(() => {
+    setProfileReloadToken((token) => token + 1);
+  }, []);
 
   const applyHydratedSnapshot = useCallback((snapshot: ContextHydrationSnapshot) => {
     setSelectedProfileId(snapshot.selectedProfileId);
@@ -187,6 +191,7 @@ export function useMinimalAssignmentContextController({
     profilePreview,
     selectedProfileRevisionId,
     selectedProfileRevisionHash,
+    refreshSelectedProfile,
     applyHydratedSnapshot,
     selectProfileId,
   };

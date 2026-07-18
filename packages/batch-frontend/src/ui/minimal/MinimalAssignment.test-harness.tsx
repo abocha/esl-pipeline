@@ -23,6 +23,12 @@ vi.mock('../../utils/api', () => ({
       this.name = 'AssignmentSessionConflictApiError';
     }
   },
+  ArtifactWorkingConflictApiError: class ArtifactWorkingConflictApiError extends Error {
+    constructor(public readonly latestArtifact: { workingVersion: number; contentHash: string }) {
+      super('Newer saved artifact content was found. Review it before confirming again.');
+      this.name = 'ArtifactWorkingConflictApiError';
+    }
+  },
   approveJob: vi.fn(),
   cancelJob: vi.fn(),
   confirmAssignmentSessionStep: vi.fn(),

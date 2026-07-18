@@ -35,6 +35,7 @@ import type {
   BusinessScheduleSurfaceResponse,
   BusinessSettingsDto,
   BusinessStatsSurfaceResponse,
+  ArtifactWorkingContentDto as ContractArtifactWorkingContentDto,
   AssignmentSessionDto as ContractAssignmentSessionDto,
   AssignmentSessionListResponse as ContractAssignmentSessionListResponse,
   ConfirmAssignmentSessionShareRequest as ContractConfirmAssignmentSessionShareRequest,
@@ -128,6 +129,13 @@ export class AssignmentSessionConflictApiError extends Error {
   constructor(public readonly latestSession: AssignmentSession) {
     super('Newer saved assignment work was found. Review it before confirming again.');
     this.name = 'AssignmentSessionConflictApiError';
+  }
+}
+
+export class ArtifactWorkingConflictApiError extends Error {
+  constructor(public readonly latestArtifact: ContractArtifactWorkingContentDto) {
+    super('Newer saved artifact content was found. Review it before confirming again.');
+    this.name = 'ArtifactWorkingConflictApiError';
   }
 }
 export type GenerateDraftResponse = ContractGenerateDraftResponse;
@@ -1644,6 +1652,44 @@ export interface JobEventsOptions {
 
 const toAxiosError = (error: unknown): AxiosError | null => (isAxiosError(error) ? error : null);
 
+const RECOVERY_RETRY_DELAYS_MS = [250, 1_000] as const;
+
+function getRetryAfterMs(error: AxiosError): number | null {
+  const value = error.response?.headers?.['retry-after'];
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
+
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return Math.min(seconds * 1_000, 5_000);
+  }
+
+  const dateMs = Date.parse(String(value));
+  if (!Number.isFinite(dateMs)) return null;
+  return Math.min(Math.max(dateMs - Date.now(), 0), 5_000);
+}
+
+function isTransientRecoveryError(error: unknown): error is AxiosError {
+  const axiosError = toAxiosError(error);
+  if (!axiosError) return false;
+  const status = axiosError.response?.status;
+  return status === undefined || status === 429 || (status >= 500 && status < 600);
+}
+
+async function runRecoveryRequest<T>(request: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await request();
+    } catch (error: unknown) {
+      const fallbackDelay = RECOVERY_RETRY_DELAYS_MS[attempt];
+      if (fallbackDelay === undefined || !isTransientRecoveryError(error)) throw error;
+      const retryAfter = getRetryAfterMs(error);
+      await new Promise<void>((resolve) => {
+        window.setTimeout(resolve, retryAfter ?? fallbackDelay);
+      });
+    }
+  }
+}
+
 function getAssignmentSessionConflict(error: AxiosError | null): AssignmentSession | null {
   if (error?.response?.status !== 409) return null;
   const data = error.response.data as
@@ -1652,6 +1698,16 @@ function getAssignmentSessionConflict(error: AxiosError | null): AssignmentSessi
   return data?.code === 'assignment_session_revision_conflict' && data.session
     ? data.session
     : null;
+}
+
+function getArtifactWorkingConflict(
+  error: AxiosError | null,
+): ContractArtifactWorkingContentDto | null {
+  if (error?.response?.status !== 409) return null;
+  const data = error.response.data as
+    | { code?: unknown; artifact?: ContractArtifactWorkingContentDto }
+    | undefined;
+  return data?.code === 'artifact_working_conflict' && data.artifact ? data.artifact : null;
 }
 
 const formatUnknownError = (error: unknown): string => {
@@ -3238,13 +3294,17 @@ export async function updateRecordingTranscript(
   expectedWorkingVersion: number,
 ): Promise<RecordingTranscriptResponse> {
   try {
-    const response = await apiClient.put(
-      buildApiProxyPath(`/recordings/${encodeURIComponent(recordingId)}/transcript`),
-      { text, expectedWorkingVersion },
+    const response = await runRecoveryRequest(() =>
+      apiClient.put(
+        buildApiProxyPath(`/recordings/${encodeURIComponent(recordingId)}/transcript`),
+        { text, expectedWorkingVersion },
+      ),
     );
     return response.data;
   } catch (error: unknown) {
     const axiosError = toAxiosError(error);
+    const conflict = getArtifactWorkingConflict(axiosError);
+    if (conflict) throw new ArtifactWorkingConflictApiError(conflict);
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to update transcripts.');
     }
@@ -3357,9 +3417,11 @@ export async function updateAssignmentSessionRecovery(
   request: UpdateAssignmentSessionRecoveryRequest,
 ): Promise<AssignmentSession> {
   try {
-    const response = await apiClient.patch(
-      buildApiProxyPath(`/assignment-sessions/${encodeURIComponent(sessionId)}/recovery`),
-      request,
+    const response = await runRecoveryRequest(() =>
+      apiClient.patch(
+        buildApiProxyPath(`/assignment-sessions/${encodeURIComponent(sessionId)}/recovery`),
+        request,
+      ),
     );
     return response.data;
   } catch (error: unknown) {
@@ -3632,13 +3694,17 @@ export async function updateDraft(
   expectedWorkingVersion: number,
 ): Promise<DraftResponse> {
   try {
-    const response = await apiClient.put(buildApiProxyPath(`/drafts/${encodeURIComponent(id)}`), {
-      text,
-      expectedWorkingVersion,
-    });
+    const response = await runRecoveryRequest(() =>
+      apiClient.put(buildApiProxyPath(`/drafts/${encodeURIComponent(id)}`), {
+        text,
+        expectedWorkingVersion,
+      }),
+    );
     return response.data;
   } catch (error: unknown) {
     const axiosError = toAxiosError(error);
+    const conflict = getArtifactWorkingConflict(axiosError);
+    if (conflict) throw new ArtifactWorkingConflictApiError(conflict);
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to update drafts.');
     }

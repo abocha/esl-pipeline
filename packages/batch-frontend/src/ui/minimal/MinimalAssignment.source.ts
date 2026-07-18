@@ -9,6 +9,7 @@ import type {
   StudentOption,
 } from '../../utils/api';
 import {
+  ArtifactWorkingConflictApiError,
   createManualTranscriptSource,
   fetchRecordingTranscript,
   fetchStudentOptions,
@@ -87,6 +88,7 @@ export interface SourceController extends SourceHydrationSnapshot {
   handleFiles: (files: File[]) => void;
   handleCancelUpload: () => void;
   loadTranscript: () => Promise<void>;
+  refreshTranscriptPreservingLocal: () => Promise<void>;
   handleSaveTranscript: () => Promise<RecordingTranscriptResponse | null>;
   handleRetryTranscription: () => Promise<void>;
   createManualTranscript: (text: string, displayName?: string) => Promise<void>;
@@ -137,6 +139,7 @@ export function useMinimalAssignmentSourceController({
     Promise.resolve(null),
   );
   const pendingTranscriptTextRef = useRef<string | null>(null);
+  const transcriptConflictTextRef = useRef<string | null>(null);
 
   useEffect(() => {
     latestRecordingRef.current = recording;
@@ -353,6 +356,22 @@ export function useMinimalAssignmentSourceController({
     await loadTranscriptForRecording(recording.recordingId, recordingStatus);
   }, [loadTranscriptForRecording, recording?.recordingId, recordingStatus]);
 
+  const refreshTranscriptPreservingLocal = useCallback(async () => {
+    if (!recording?.recordingId) return;
+    const localText = transcriptTextRef.current.trim();
+    const durableText = latestTranscriptRef.current?.text?.trim() ?? '';
+    const preserveLocalText = localText !== durableText;
+    try {
+      const response = await fetchRecordingTranscript(recording.recordingId);
+      latestTranscriptRef.current = response;
+      setTranscript(response);
+      if (!preserveLocalText) setTranscriptText(response.text ?? '');
+      setTranscriptStatus('ready');
+    } catch (error) {
+      setTranscriptError(error instanceof Error ? error.message : 'Unable to refresh transcript.');
+    }
+  }, [recording?.recordingId]);
+
   useEffect(() => {
     if (!recording?.recordingId) return;
     const recordingId = recording.recordingId;
@@ -542,6 +561,7 @@ export function useMinimalAssignmentSourceController({
             current.workingVersion,
           );
           latestTranscriptRef.current = response;
+          transcriptConflictTextRef.current = null;
           setTranscript(response);
           if (transcriptTextRef.current.trim() === normalizedText) {
             setTranscriptText(response.text ?? normalizedText);
@@ -553,6 +573,16 @@ export function useMinimalAssignmentSourceController({
       try {
         return await run;
       } catch (error) {
+        if (error instanceof ArtifactWorkingConflictApiError) {
+          try {
+            const latest = await fetchRecordingTranscript(recording.recordingId);
+            latestTranscriptRef.current = latest;
+            setTranscript(latest);
+            transcriptConflictTextRef.current = normalizedText;
+          } catch {
+            // Keep the conflict result and local buffer; a later retry can refresh again.
+          }
+        }
         const message = error instanceof Error ? error.message : 'Unable to save transcript.';
         setTranscriptError(message);
         return null;
@@ -566,11 +596,18 @@ export function useMinimalAssignmentSourceController({
 
   useEffect(() => {
     if (!transcriptDirty || !recording?.recordingId || !transcript?.workingVersion) return;
+    if (transcriptConflictTextRef.current === transcriptText.trim()) return;
     const timeout = setTimeout(() => {
       void handleSaveTranscript();
     }, 1500);
     return () => clearTimeout(timeout);
-  }, [handleSaveTranscript, recording?.recordingId, transcript?.workingVersion, transcriptDirty]);
+  }, [
+    handleSaveTranscript,
+    recording?.recordingId,
+    transcript?.workingVersion,
+    transcriptDirty,
+    transcriptText,
+  ]);
 
   const handleRetryTranscription = useCallback(async () => {
     if (!recording?.recordingId) return;
@@ -691,6 +728,7 @@ export function useMinimalAssignmentSourceController({
     handleFiles,
     handleCancelUpload,
     loadTranscript,
+    refreshTranscriptPreservingLocal,
     handleSaveTranscript,
     handleRetryTranscription,
     createManualTranscript,

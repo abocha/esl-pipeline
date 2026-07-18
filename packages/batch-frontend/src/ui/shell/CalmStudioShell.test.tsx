@@ -1,10 +1,17 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 
+import { useAssignmentNavigationGuard } from './assignment-navigation-guard';
 import { CalmStudioShell } from './CalmStudioShell';
+
+function GuardedAssignment({ allow }: { allow: boolean }) {
+  useAssignmentNavigationGuard(async () => allow);
+  const location = useLocation();
+  return <span data-testid="route">{location.pathname}</span>;
+}
 
 describe('CalmStudioShell', () => {
   it('renders the ESL mark and workspace navigation', () => {
@@ -49,6 +56,36 @@ describe('CalmStudioShell', () => {
     const marker = screen.getByLabelText('Frontend sandbox mode');
     expect(marker.closest('.calm-shell__rail-footer')).toBeTruthy();
     expect(container.querySelector('.calm-shell__topbar .calm-shell__sandbox')).toBeNull();
+  });
+
+  it('consults the assignment durability guard before workspace SPA navigation', async () => {
+    const { rerender } = render(
+      <MemoryRouter initialEntries={['/']}>
+        <CalmStudioShell
+          user={{ id: 'teacher-1', email: 'teacher@example.com', role: 'user', isActive: true }}
+          onLogout={vi.fn()}
+        >
+          <GuardedAssignment allow={false} />
+        </CalmStudioShell>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole('link', { name: /Students/i }));
+    await Promise.resolve();
+    expect(screen.getByTestId('route').textContent).toBe('/');
+
+    rerender(
+      <MemoryRouter initialEntries={['/']}>
+        <CalmStudioShell
+          user={{ id: 'teacher-1', email: 'teacher@example.com', role: 'user', isActive: true }}
+          onLogout={vi.fn()}
+        >
+          <GuardedAssignment allow />
+        </CalmStudioShell>
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByRole('link', { name: /Students/i }));
+    await waitFor(() => expect(screen.getByTestId('route').textContent).toBe('/students'));
   });
 
   it('reserves the desktop top row while showing the toolbar only on narrow screens', () => {
