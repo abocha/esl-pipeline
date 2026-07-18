@@ -3,7 +3,7 @@
 ## Meta
 
 - Date: 2026-07-18
-- Status: approved direction, awaiting written-spec review
+- Status: approved
 - Scope: durable confirmation, recovery persistence, invalidation, resume, and failure semantics for
   the five-step assignment workflow
 - Issue: [#141](https://github.com/abocha/esl-pipeline/issues/141)
@@ -252,22 +252,21 @@ silently overwritten by a confirmation based on an older working snapshot.
 
 ### Existing-session migration
 
-Existing active sessions remain resumable. Migration derives the minimum confirmed boundary from
-their current stage only after validating the complete ownership and lineage chain:
+Existing active sessions remain resumable, but legacy transcript and draft rows have storage URIs
+without durable content hashes or immutable revision IDs. SQL migration therefore cannot honestly
+manufacture confirmed Source or Create snapshots. Migration preserves every existing recording,
+transcript, prompt, draft, option, and note field as working recovery data; confirms only Student
+when the referenced learner is valid and owned; and sets `currentStage` to `source`. A session with
+no valid owned learner remains unconfirmed and is omitted from the normal resumable list until its
+ownership is repaired.
 
-- `source`: confirm Student when `student_id` exists; preserve recording fields as working recovery
-  data.
-- `context`: confirm Student and Lesson source when the recording belongs to the student and the
-  transcript belongs to that recording.
-- `assignment`: confirm Student, Lesson source, and Teaching context; preserve prompt/draft fields as
-  working recovery data only when the selected profile belongs to the student.
-- `review`: confirm through Create only when the prompt package belongs to the same student/source
-  lineage and the draft belongs to that prompt package.
-
-If a legacy row has missing or mismatched ownership—even when every referenced ID exists—migration
-chooses the highest lower valid boundary instead of manufacturing confirmation. Migration tests
-include cross-student recording, cross-recording transcript, cross-profile context, cross-prompt
-draft, and complete valid fixtures. Archived sessions and historical jobs remain untouched.
+The next normal transcript or draft automatic write creates its first immutable content revision.
+The tutor then uses the ordinary semantic Continue action to confirm Source and each later boundary;
+there is no migration-only Save or Refresh action. This conservative regression is preferable to
+inventing hashes, profile choices, or lineage acceptance that the legacy schema never recorded.
+Migration tests cover complete legacy rows, every cross-owner/cross-lineage reference, preservation
+of recovery fields, and the Student-only confirmed boundary. Archived sessions and historical jobs
+remain untouched.
 
 ## Transport and Application Contract
 
@@ -677,7 +676,8 @@ This scope does not authorize a general frontend state-management replacement or
 - Revisionless assignment-session PATCH is replaced by revision-aware recovery and confirmation
   operations after the frontend cutover. Transcript and draft update requests also gain mandatory
   expected content revisions.
-- The migration preserves every active session at the highest dependency-complete legacy boundary.
+- The migration preserves every active session's working recovery fields and confirms only a valid
+  owned Student boundary; later confirmation requires new immutable artifact revisions.
 - Historical jobs and published artifacts are not rewritten.
 - The change requires the repository's contract-version and DB-baseline verification commands.
 - The expected release classification is `release:major`: revisionless session, transcript, and
