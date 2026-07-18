@@ -318,12 +318,11 @@ CREATE TABLE public.alpha_invites (
 CREATE TABLE public.assignment_sessions (
     id uuid NOT NULL,
     user_id uuid NOT NULL,
-    student_id uuid,
+    student_id uuid NOT NULL,
     recording_id uuid,
     transcript_id uuid,
     prompt_package_id uuid,
     draft_id uuid,
-    current_stage text DEFAULT 'source'::text NOT NULL,
     publish_target text,
     selected_tts_provider text,
     selected_tts_strategy text,
@@ -334,11 +333,22 @@ CREATE TABLE public.assignment_sessions (
     teacher_notes text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    archived_at timestamp with time zone,
     lesson_id uuid,
+    revision integer DEFAULT 1 NOT NULL,
+    confirmed_step text NOT NULL,
+    confirmed_snapshot jsonb NOT NULL,
+    creation_request_id text,
+    selected_profile_id text,
+    selected_profile_revision_id uuid,
+    selected_profile_revision_hash text,
+    share_job_id uuid,
+    CONSTRAINT assignment_sessions_confirmed_snapshot_check CHECK (((jsonb_typeof(confirmed_snapshot) = 'object'::text) AND (confirmed_snapshot ?& ARRAY['student'::text, 'source'::text, 'context'::text, 'create'::text]) AND (jsonb_typeof((confirmed_snapshot -> 'student'::text)) = 'object'::text) AND (NULLIF((confirmed_snapshot #>> '{student,studentId}'::text[]), ''::text) IS NOT NULL) AND (((confirmed_snapshot #>> '{student,studentId}'::text[]))::uuid = student_id) AND (((confirmed_snapshot -> 'source'::text) = 'null'::jsonb) OR (jsonb_typeof((confirmed_snapshot -> 'source'::text)) = 'object'::text)) AND (((confirmed_snapshot -> 'context'::text) = 'null'::jsonb) OR (jsonb_typeof((confirmed_snapshot -> 'context'::text)) = 'object'::text)) AND (((confirmed_snapshot -> 'create'::text) = 'null'::jsonb) OR (jsonb_typeof((confirmed_snapshot -> 'create'::text)) = 'object'::text)))),
+    CONSTRAINT assignment_sessions_confirmed_step_check CHECK ((confirmed_step = ANY (ARRAY['student'::text, 'source'::text, 'context'::text, 'create'::text, 'share'::text]))),
+    CONSTRAINT assignment_sessions_creation_request_id_check CHECK (((creation_request_id IS NULL) OR (btrim(creation_request_id) <> ''::text))),
     CONSTRAINT assignment_sessions_generation_provider_check CHECK (((selected_generation_provider IS NULL) OR (selected_generation_provider = ANY (ARRAY['openai'::text, 'google_ai_studio'::text, 'openrouter'::text])))),
     CONSTRAINT assignment_sessions_publish_target_check CHECK (((publish_target IS NULL) OR (publish_target = 'html'::text))),
-    CONSTRAINT assignment_sessions_stage_check CHECK ((current_stage = ANY (ARRAY['source'::text, 'context'::text, 'assignment'::text, 'review'::text]))),
+    CONSTRAINT assignment_sessions_revision_check CHECK ((revision > 0)),
+    CONSTRAINT assignment_sessions_selected_profile_revision_hash_check CHECK (((selected_profile_revision_hash IS NULL) OR (selected_profile_revision_hash ~ '^[0-9a-f]{64}$'::text))),
     CONSTRAINT assignment_sessions_tts_provider_check CHECK (((selected_tts_provider IS NULL) OR (selected_tts_provider = ANY (ARRAY['elevenlabs'::text, 'google'::text, 'inworld'::text])))),
     CONSTRAINT assignment_sessions_tts_strategy_check CHECK (((selected_tts_strategy IS NULL) OR (selected_tts_strategy = ANY (ARRAY['auto'::text, 'dialogue'::text, 'tts'::text]))))
 );
@@ -351,7 +361,11 @@ CREATE TABLE public.drafts (
     created_by uuid,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    lesson_id uuid
+    lesson_id uuid,
+    working_version integer NOT NULL,
+    content_hash text NOT NULL,
+    CONSTRAINT drafts_content_hash_check CHECK ((content_hash ~ '^[0-9a-f]{64}$'::text)),
+    CONSTRAINT drafts_working_version_check CHECK ((working_version > 0))
 );
 
 CREATE TABLE public.generation_budget_counters (
@@ -497,6 +511,9 @@ CREATE TABLE public.lesson_memory_entries (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     lesson_title text,
+    source_storage_uri text,
+    source_content_hash text,
+    CONSTRAINT lesson_memory_entries_confirmed_source_pair_check CHECK ((((source_storage_uri IS NULL) AND (source_content_hash IS NULL)) OR ((NULLIF(btrim(source_storage_uri), ''::text) IS NOT NULL) AND (source_content_hash ~ '^[0-9a-f]{64}$'::text)))),
     CONSTRAINT lesson_memory_entries_source_kind_check CHECK ((source_kind = 'lesson_transcript'::text)),
     CONSTRAINT lesson_memory_entries_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'ready'::text, 'failed'::text, 'superseded'::text])))
 );
@@ -972,8 +989,11 @@ CREATE TABLE public.transcripts (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     stt_provider text DEFAULT 'deepgram'::text NOT NULL,
+    working_version integer,
+    content_hash text,
     CONSTRAINT transcripts_mode_check CHECK ((mode = ANY (ARRAY['timeline'::text, 'stack'::text]))),
-    CONSTRAINT transcripts_stt_provider_check CHECK ((stt_provider = ANY (ARRAY['deepgram'::text, 'elevenlabs'::text, 'google'::text, 'manual'::text])))
+    CONSTRAINT transcripts_stt_provider_check CHECK ((stt_provider = ANY (ARRAY['deepgram'::text, 'elevenlabs'::text, 'google'::text, 'manual'::text]))),
+    CONSTRAINT transcripts_working_content_pair_check CHECK ((((working_version IS NULL) AND (content_hash IS NULL)) OR ((working_version > 0) AND (content_hash ~ '^[0-9a-f]{64}$'::text))))
 );
 
 CREATE TABLE public.uploaded_files (
@@ -1066,6 +1086,9 @@ ALTER TABLE ONLY public.alpha_invites
 
 ALTER TABLE ONLY public.assignment_sessions
     ADD CONSTRAINT assignment_sessions_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.assignment_sessions
+    ADD CONSTRAINT assignment_sessions_share_job_id_key UNIQUE (share_job_id);
 
 ALTER TABLE ONLY public.drafts
     ADD CONSTRAINT drafts_pkey PRIMARY KEY (id);
@@ -1194,11 +1217,13 @@ CREATE UNIQUE INDEX idx_alpha_invites_pending_email_normalized ON public.alpha_i
 
 CREATE INDEX idx_alpha_invites_status_expires_at ON public.alpha_invites USING btree (status, expires_at);
 
-CREATE INDEX idx_assignment_sessions_lesson_updated ON public.assignment_sessions USING btree (lesson_id, updated_at DESC, id DESC) WHERE ((lesson_id IS NOT NULL) AND (archived_at IS NULL));
+CREATE INDEX idx_assignment_sessions_lesson_updated ON public.assignment_sessions USING btree (lesson_id, updated_at DESC, id DESC) WHERE ((confirmed_step <> 'share'::text) AND (lesson_id IS NOT NULL));
 
-CREATE UNIQUE INDEX idx_assignment_sessions_user_active_recording ON public.assignment_sessions USING btree (user_id, recording_id) WHERE ((archived_at IS NULL) AND (recording_id IS NOT NULL));
+CREATE UNIQUE INDEX idx_assignment_sessions_user_active_recording ON public.assignment_sessions USING btree (user_id, recording_id) WHERE ((confirmed_step <> 'share'::text) AND (recording_id IS NOT NULL));
 
-CREATE INDEX idx_assignment_sessions_user_active_updated ON public.assignment_sessions USING btree (user_id, updated_at DESC, id DESC) WHERE (archived_at IS NULL);
+CREATE INDEX idx_assignment_sessions_user_active_updated ON public.assignment_sessions USING btree (user_id, updated_at DESC, id DESC) WHERE (confirmed_step <> 'share'::text);
+
+CREATE UNIQUE INDEX idx_assignment_sessions_user_creation_request ON public.assignment_sessions USING btree (user_id, creation_request_id) WHERE (creation_request_id IS NOT NULL);
 
 CREATE INDEX idx_assignment_sessions_user_updated ON public.assignment_sessions USING btree (user_id, updated_at DESC, id DESC);
 
@@ -1273,6 +1298,8 @@ CREATE INDEX idx_lesson_memory_entries_student_ready_generated_at ON public.less
 CREATE INDEX idx_lesson_memory_entries_transcript_generated_at ON public.lesson_memory_entries USING btree (transcript_id, generated_at DESC, id DESC);
 
 CREATE INDEX idx_lesson_memory_entries_transcript_ready_lookup ON public.lesson_memory_entries USING btree (transcript_id, generated_at DESC, id DESC) WHERE (status = 'ready'::text);
+
+CREATE UNIQUE INDEX idx_lesson_memory_entries_transcript_source_hash ON public.lesson_memory_entries USING btree (transcript_id, source_content_hash) WHERE (source_content_hash IS NOT NULL);
 
 CREATE INDEX idx_ops_actions_operation_id_lookup ON public.ops_actions USING btree (operation_id);
 
@@ -1481,6 +1508,12 @@ ALTER TABLE ONLY public.assignment_sessions
 
 ALTER TABLE ONLY public.assignment_sessions
     ADD CONSTRAINT assignment_sessions_recording_id_fkey FOREIGN KEY (recording_id) REFERENCES public.recordings(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.assignment_sessions
+    ADD CONSTRAINT assignment_sessions_selected_profile_revision_id_fkey FOREIGN KEY (selected_profile_revision_id) REFERENCES public.profile_revisions(id) ON DELETE SET NULL;
+
+ALTER TABLE ONLY public.assignment_sessions
+    ADD CONSTRAINT assignment_sessions_share_job_id_fkey FOREIGN KEY (share_job_id) REFERENCES public.jobs(id);
 
 ALTER TABLE ONLY public.assignment_sessions
     ADD CONSTRAINT assignment_sessions_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id) ON DELETE SET NULL;
@@ -1878,5 +1911,6 @@ VALUES
   ('0040_student_memory_openai_batch_replay', '8fe7b93f90e56b0181527c022babd4d0436ac314c89522c84b341a0c638e4116', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0041_profile_revision_refresh_source', '997ca6ddcb3a771a409b8546189d2e7cbf3b0a7e641800deb770413555f25256', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0042_lesson_memory_titles', '11e9eddcb127fcb2386f4f0a10e2240e23746136b5b1380ea09e10a82642b6a8', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0043_manual_transcript_source', '716fee229f067d8daee6eaf423bfc1797080045036afc58aa1e579e9a2631016', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0043_manual_transcript_source', '716fee229f067d8daee6eaf423bfc1797080045036afc58aa1e579e9a2631016', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0044_assignment_step_confirmation_contract', '90a1d3fd5df432587c1b78dd90e65bc21c91bf950dea11e4e92cec85d7f9c15c', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;
