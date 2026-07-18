@@ -2,7 +2,15 @@ import { describeHttpServerIntegrationSuite } from './transport.http-server.inte
 
 describeHttpServerIntegrationSuite(
   'transport/http-server - integration (in-process) [assignment-sessions]',
-  ({ app, assignmentSessionsModule, confirmAssignmentSessionStepModule, expect, it, vi }) => {
+  ({
+    app,
+    assignmentSessionsModule,
+    confirmAssignmentSessionStepModule,
+    shareAssignmentSessionModule,
+    expect,
+    it,
+    vi,
+  }) => {
     const session = {
       id: '11111111-1111-4111-8111-111111111111',
       userId: 'test-user-id',
@@ -176,6 +184,48 @@ describeHttpServerIntegrationSuite(
       });
 
       expect(response.statusCode).toBe(400);
+    });
+
+    it('shares through one stable job-backed terminal operation', async () => {
+      const request = {
+        expectedRevision: 1,
+        requestId: '55555555-5555-4555-8555-555555555555',
+      };
+      const completedSession = { ...session, revision: 3, confirmedStep: 'share' as const };
+      const share = vi
+        .spyOn(shareAssignmentSessionModule, 'shareAssignmentSession')
+        .mockResolvedValue({
+          session: completedSession,
+          job: {
+            jobId: request.requestId,
+            state: 'queued',
+            progress: 0,
+            createdAt: session.createdAt,
+            updatedAt: session.updatedAt,
+            error: null,
+            sourceJobId: null,
+            manifestUri: null,
+            manifest: null,
+            provenance: null,
+          },
+        });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/assignment-sessions/${session.id}/share`,
+        payload: request,
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({
+        session: { id: session.id, confirmedStep: 'share' },
+        job: { jobId: request.requestId, state: 'queued' },
+      });
+      expect(share).toHaveBeenCalledWith({
+        userId: 'test-user-id',
+        sessionId: session.id,
+        request,
+      });
     });
 
     it('removes revisionless create, patch, and archive routes', async () => {

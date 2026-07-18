@@ -20,6 +20,8 @@ import {
   type AssignmentSessionRecord,
 } from './assignment-session-model.js';
 import { getDraftByIdForUpdate } from './draft-repository.js';
+import type { JobRecord } from './job-model.js';
+import { getJobById, type InsertJobParams, insertApprovalJob } from './job-repository.js';
 import { getTranscriptByIdForUpdate } from './transcript-repository.js';
 
 export const ACTIVE_ASSIGNMENT_SESSION_SQL = `confirmed_step <> 'share'`;
@@ -112,6 +114,28 @@ export interface ConfirmAssignmentSessionStepPersistenceResult {
   lessonMemoryIntent: ConfirmedLessonMemoryIntent | null;
 }
 
+export type AssignmentShareJobConfig = Omit<
+  InsertJobParams,
+  | 'id'
+  | 'recordingId'
+  | 'transcriptId'
+  | 'promptPackageId'
+  | 'draftId'
+  | 'studentId'
+  | 'lessonId'
+  | 'userId'
+  | 'md'
+  | 'mdStorageUri'
+>;
+
+export interface ReserveAssignmentShareParams {
+  sessionId: string;
+  userId: string;
+  expectedRevision: number;
+  requestId: string;
+  jobConfig: AssignmentShareJobConfig;
+}
+
 const RETURNING_COLUMNS = `
   id, user_id, student_id, lesson_id, recording_id, transcript_id,
   prompt_package_id, draft_id, revision, confirmed_step, confirmed_snapshot,
@@ -180,6 +204,19 @@ export class AssignmentSessionConfirmationError extends Error {
   ) {
     super(code);
     this.name = 'AssignmentSessionConfirmationError';
+  }
+}
+
+export class AssignmentSessionShareError extends Error {
+  constructor(
+    readonly code:
+      | 'ASSIGNMENT_SHARE_PREREQUISITE_MISSING'
+      | 'ASSIGNMENT_SHARE_DIRTY_RECOVERY'
+      | 'ASSIGNMENT_SHARE_REQUEST_CONFLICT'
+      | 'ASSIGNMENT_SHARE_JOB_INTEGRITY_INVALID',
+  ) {
+    super(code);
+    this.name = 'AssignmentSessionShareError';
   }
 }
 
@@ -737,6 +774,133 @@ export async function updateAssignmentSessionRecovery(
     }
     throw new AssignmentSessionRevisionConflictError(session);
   });
+}
+
+export async function reserveAssignmentShare(
+  params: ReserveAssignmentShareParams,
+): Promise<{ session: AssignmentSessionRecord; job: JobRecord; created: boolean }> {
+  return withPgClient(async (client) => {
+    await client.query('BEGIN');
+    try {
+      const locked = await client.query<AssignmentSessionRow>(
+        `SELECT ${RETURNING_COLUMNS} FROM assignment_sessions
+         WHERE id = $1 AND user_id = $2 FOR UPDATE`,
+        [params.sessionId, params.userId],
+      );
+      if (!locked.rows[0]) {
+        throw new AssignmentSessionRepositoryError('ASSIGNMENT_SESSION_NOT_FOUND');
+      }
+      const current = mapRow(locked.rows[0]);
+      if (current.shareJobId) {
+        if (current.shareJobId !== params.requestId) {
+          throw new AssignmentSessionShareError('ASSIGNMENT_SHARE_REQUEST_CONFLICT');
+        }
+        const replayJob = await getJobById(current.shareJobId, { client, forUpdate: true });
+        if (!replayJob || !shareJobMatchesSession(replayJob, current)) {
+          throw new AssignmentSessionShareError('ASSIGNMENT_SHARE_JOB_INTEGRITY_INVALID');
+        }
+        await client.query('COMMIT');
+        return { session: current, job: replayJob, created: false };
+      }
+      if (current.revision !== params.expectedRevision) {
+        throw new AssignmentSessionRevisionConflictError(current);
+      }
+      const source = current.confirmed.source;
+      const context = current.confirmed.context;
+      const create = current.confirmed.create;
+      if (!source || !context || !create || current.confirmedStep !== 'create') {
+        throw new AssignmentSessionShareError('ASSIGNMENT_SHARE_PREREQUISITE_MISSING');
+      }
+      if (
+        current.lessonId !== source.lessonId ||
+        current.recordingId !== source.recordingId ||
+        current.transcriptId !== source.transcriptId ||
+        current.teacherNotes !== context.teacherNotes ||
+        current.selectedProfileId !== context.profileId ||
+        current.selectedProfileRevisionId !== context.profileRevisionId ||
+        current.selectedProfileRevisionHash !== context.profileRevisionHash ||
+        current.promptPackageId !== create.promptPackageId ||
+        current.draftId !== create.draftId
+      ) {
+        throw new AssignmentSessionShareError('ASSIGNMENT_SHARE_DIRTY_RECOVERY');
+      }
+
+      const job = await insertApprovalJob(
+        {
+          ...params.jobConfig,
+          id: params.requestId,
+          recordingId: source.recordingId,
+          transcriptId: source.transcriptId,
+          promptPackageId: create.promptPackageId,
+          draftId: create.draftId,
+          studentId: current.studentId,
+          lessonId: source.lessonId,
+          userId: current.userId,
+          md: null,
+          mdStorageUri: create.draftStorageUri,
+        },
+        { client },
+      );
+      const updated = await client.query<AssignmentSessionRow>(
+        `UPDATE assignment_sessions
+         SET share_job_id = $3, revision = revision + 1, updated_at = NOW()
+         WHERE id = $1 AND revision = $2 AND share_job_id IS NULL
+         RETURNING ${RETURNING_COLUMNS}`,
+        [current.id, current.revision, job.id],
+      );
+      if (!updated.rows[0]) throw new AssignmentSessionRevisionConflictError(current);
+      await client.query('COMMIT');
+      return { session: mapRow(updated.rows[0]), job, created: true };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
+  });
+}
+
+export async function completeAssignmentShare(params: {
+  sessionId: string;
+  userId: string;
+  jobId: string;
+}): Promise<AssignmentSessionRecord> {
+  return withPgClient(async (client) => {
+    const updated = await client.query<AssignmentSessionRow>(
+      `UPDATE assignment_sessions s
+       SET confirmed_step = 'share', revision = revision + 1, updated_at = NOW()
+       WHERE s.id = $1 AND s.user_id = $2 AND s.share_job_id = $3
+         AND s.confirmed_step <> 'share'
+         AND EXISTS (
+           SELECT 1 FROM jobs j WHERE j.id = $3 AND j.state IN ('queued', 'running', 'succeeded')
+         )
+       RETURNING ${RETURNING_COLUMNS}`,
+      [params.sessionId, params.userId, params.jobId],
+    );
+    if (updated.rows[0]) return mapRow(updated.rows[0]);
+    const currentRow = await findOwnedById(client, params.sessionId, params.userId);
+    if (!currentRow) throw new AssignmentSessionRepositoryError('ASSIGNMENT_SESSION_NOT_FOUND');
+    const current = mapRow(currentRow);
+    if (current.confirmedStep === 'share' && current.shareJobId === params.jobId) return current;
+    throw new AssignmentSessionShareError('ASSIGNMENT_SHARE_JOB_INTEGRITY_INVALID');
+  });
+}
+
+function shareJobMatchesSession(job: JobRecord, session: AssignmentSessionRecord): boolean {
+  const source = session.confirmed.source;
+  const create = session.confirmed.create;
+  return Boolean(
+    source &&
+    create &&
+    job.id === session.shareJobId &&
+    job.userId === session.userId &&
+    job.studentId === session.studentId &&
+    job.recordingId === source.recordingId &&
+    job.transcriptId === source.transcriptId &&
+    job.promptPackageId === create.promptPackageId &&
+    job.draftId === create.draftId &&
+    job.lessonId === source.lessonId &&
+    job.mdStorageUri === create.draftStorageUri &&
+    job.sourceJobId === null,
+  );
 }
 
 export async function getAssignmentSessionByIdForUser(

@@ -5,7 +5,7 @@ import { loadConfig } from '../config/env.js';
 import type { DraftRecord } from '../domain/draft-model.js';
 import { publishJobEvent } from '../domain/job-events.js';
 import type { JobRecord } from '../domain/job-model.js';
-import { insertApprovalJob } from '../domain/job-repository.js';
+import { type InsertJobParams, insertApprovalJob } from '../domain/job-repository.js';
 import type { PromptPackageRecord } from '../domain/prompt-package-model.js';
 import { getDefaultSettings } from '../domain/settings-model.js';
 import { createDefaultSettings, getSettingsByUserId } from '../domain/settings-repository.js';
@@ -35,20 +35,32 @@ export interface CreateApprovalJobDependencies {
   publishEvent: typeof publishJobEvent;
 }
 
-export async function createApprovalJobFromDraft(
-  params: CreateApprovalJobParams,
-  overrides?: Partial<CreateApprovalJobDependencies>,
-): Promise<JobRecord> {
-  const jobs = overrides?.jobs ?? { insertApprovalJob };
+export type ResolvedApprovalJobConfig = Omit<
+  InsertJobParams,
+  | 'id'
+  | 'recordingId'
+  | 'transcriptId'
+  | 'promptPackageId'
+  | 'draftId'
+  | 'studentId'
+  | 'lessonId'
+  | 'userId'
+  | 'md'
+  | 'mdStorageUri'
+>;
+
+export async function resolveApprovalJobConfig(
+  params: { userId?: string | null; jobOverrides?: JobConfigOverrides },
+  overrides?: Pick<Partial<CreateApprovalJobDependencies>, 'settings' | 'config'>,
+): Promise<ResolvedApprovalJobConfig> {
   const settings = overrides?.settings ?? {
     getByUserId: getSettingsByUserId,
     createDefault: createDefaultSettings,
   };
   const config = overrides?.config ?? loadConfig();
-  const publishEvent = overrides?.publishEvent ?? publishJobEvent;
   const defaults = getDefaultSettings();
 
-  const userId = params.draft.createdBy ?? undefined;
+  const userId = params.userId ?? undefined;
   let preset = defaults.defaultPreset;
   let voiceAccent = defaults.defaultVoiceAccent;
   let ttsStrategy = defaults.defaultTtsStrategy;
@@ -56,9 +68,7 @@ export async function createApprovalJobFromDraft(
 
   if (userId) {
     let resolved = await settings.getByUserId(userId);
-    if (!resolved) {
-      resolved = await settings.createDefault(userId);
-    }
+    if (!resolved) resolved = await settings.createDefault(userId);
     preset = resolved.defaultPreset || preset;
     voiceAccent = resolved.defaultVoiceAccent || voiceAccent;
     ttsStrategy = resolved.defaultTtsStrategy || ttsStrategy;
@@ -83,22 +93,13 @@ export async function createApprovalJobFromDraft(
     (jobOverrides.ttsProvider === 'google' || jobOverrides.ttsProvider === 'inworld'
       ? true
       : hasTtsKey);
-  const selectedPreset = preset;
   const learningPresetId =
-    normalizeLearningPresetId({
-      learningPresetId: jobOverrides.learningPresetId,
-    }) ?? DEFAULT_LEARNING_PRESET_ID;
+    normalizeLearningPresetId({ learningPresetId: jobOverrides.learningPresetId }) ??
+    DEFAULT_LEARNING_PRESET_ID;
   const provenance = buildLearningPresetProvenance(learningPresetId);
 
-  const job = await jobs.insertApprovalJob({
-    recordingId: params.promptPackage.recordingId,
-    transcriptId: params.promptPackage.transcriptId,
-    promptPackageId: params.promptPackage.id,
-    draftId: params.draft.id,
-    studentId: params.draft.studentId ?? params.promptPackage.studentId ?? null,
-    lessonId: params.draft.lessonId ?? params.promptPackage.lessonId ?? null,
-    userId: params.draft.createdBy ?? undefined,
-    preset: selectedPreset,
+  return {
+    preset,
     learningPresetId: provenance.learningPresetId,
     learningPresetVersion: provenance.learningPresetVersion,
     promptSnapshotVersion: provenance.promptSnapshotVersion,
@@ -113,6 +114,29 @@ export async function createApprovalJobFromDraft(
     publishTarget: jobOverrides.publishTarget ?? 'html',
     upload: jobOverrides.upload ?? 'auto',
     autoPublish: jobOverrides.autoPublish,
+  };
+}
+
+export async function createApprovalJobFromDraft(
+  params: CreateApprovalJobParams,
+  overrides?: Partial<CreateApprovalJobDependencies>,
+): Promise<JobRecord> {
+  const jobs = overrides?.jobs ?? { insertApprovalJob };
+  const publishEvent = overrides?.publishEvent ?? publishJobEvent;
+  const jobConfig = await resolveApprovalJobConfig(
+    { userId: params.draft.createdBy, jobOverrides: params.jobOverrides },
+    overrides,
+  );
+
+  const job = await jobs.insertApprovalJob({
+    recordingId: params.promptPackage.recordingId,
+    transcriptId: params.promptPackage.transcriptId,
+    promptPackageId: params.promptPackage.id,
+    draftId: params.draft.id,
+    studentId: params.draft.studentId ?? params.promptPackage.studentId ?? null,
+    lessonId: params.draft.lessonId ?? params.promptPackage.lessonId ?? null,
+    userId: params.draft.createdBy ?? undefined,
+    ...jobConfig,
   });
 
   publishEvent({ type: 'job_created', job });

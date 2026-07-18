@@ -30,6 +30,7 @@ import * as profileDraftRefreshModule from '../src/application/profile-draft-ref
 import { ProfilePathError } from '../src/application/profile-path.js';
 import * as readinessMetricsModule from '../src/application/readiness-metrics.js';
 import * as retryRecordingModule from '../src/application/retry-recording-transcription.js';
+import * as shareAssignmentSessionModule from '../src/application/share-assignment-session.js';
 import * as studentMemoryInspectionModule from '../src/application/student-memory-inspection.js';
 import * as studentBindingsModule from '../src/application/student-profile-bindings.js';
 import * as studentProfileCandidatesModule from '../src/application/student-profile-candidates.js';
@@ -1263,6 +1264,7 @@ export function describeHttpServerIntegrationSuite(
       DB_MIGRATION_HEAD,
       assignmentSessionsModule,
       confirmAssignmentSessionStepModule,
+      shareAssignmentSessionModule,
       authMiddlewareModule,
       rateLimitMocks,
       approveJobModule,

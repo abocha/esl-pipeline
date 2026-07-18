@@ -47,6 +47,16 @@ export interface QueueJobPayload {
 
 export type CancelQueuedJobResult = 'removed' | 'not_found' | 'active';
 
+export class QueueJobStateConflictError extends Error {
+  constructor(
+    public readonly jobId: string,
+    public readonly queueState: string,
+  ) {
+    super(`Queue job ${jobId} is ${queueState} while the database job still requires enqueue`);
+    this.name = 'QueueJobStateConflictError';
+  }
+}
+
 // Internal helper to avoid multiple QueueEvents/Queue per call.
 // For now we construct lazily per process; acceptable for single service+worker.
 let queueSingleton: Queue<QueueJobPayload> | null = null;
@@ -102,6 +112,38 @@ export function createJobQueue() {
         removeOnFail: 1000,
       };
       await queue.add('assignment', payload, opts);
+    },
+    async reconcile(payload: QueueJobPayload) {
+      const options: JobsOptions = {
+        jobId: payload.jobId,
+        attempts: 5,
+        backoff: { type: 'exponential', delay: 1000 },
+        removeOnComplete: 1000,
+        removeOnFail: 1000,
+      };
+      const existing = await queue.getJob(payload.jobId);
+      if (!existing) {
+        await queue.add('assignment', payload, options);
+        return;
+      }
+      const state = await existing.getState();
+      if (state === 'completed') {
+        throw new QueueJobStateConflictError(payload.jobId, state);
+      }
+      if (state !== 'failed') return;
+      try {
+        await existing.retry('failed', {
+          resetAttemptsMade: true,
+          resetAttemptsStarted: true,
+        });
+      } catch (error) {
+        const current = await queue.getJob(payload.jobId);
+        if (!current) {
+          await queue.add('assignment', payload, options);
+          return;
+        }
+        if ((await current.getState()) === 'failed') throw error;
+      }
     },
     async cancelQueuedJob(jobId: string): Promise<CancelQueuedJobResult> {
       const job = await queue.getJob(jobId);
