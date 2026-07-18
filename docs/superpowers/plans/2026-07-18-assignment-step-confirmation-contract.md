@@ -4,7 +4,7 @@
 
 **Goal:** Make every assignment step advance only after its semantic decision is durably confirmed, while automatically preserving recoverable edits, preventing stale-tab overwrites, and making Share retry-safe without asking tutors to manage Save or Refresh actions.
 
-**Architecture:** Hard-cut every pre-existing assignment session, then replace the workflow with a revisioned aggregate containing separate working/recovery and confirmed snapshots. Every new transcript and draft begins with an immutable content revision and compare-and-swap head; historical editor artifacts remain read-only outputs only. Expose revision-aware recovery and confirmation commands, orchestrate Share through a durable attempt ledger, and derive frontend navigation from server-confirmed state.
+**Architecture:** Hard-cut every pre-existing assignment session, then replace the workflow with a revisioned aggregate containing separate working/recovery and confirmed snapshots. Resume is derived from confirmed state plus earliest dirty recovery; no stage or archive state is persisted. Transcript/draft autosaves use content-addressed recovery blobs and working-version CAS, while immutable revision rows are created only at confirmation. Share reserves one stable job in the existing jobs table and relies on that job's state for idempotent retry.
 
 **Tech Stack:** TypeScript 6, Node.js 24, pnpm workspaces, Fastify, PostgreSQL, BullMQ, React 19, Vite, Vitest, Testing Library, Zod, existing filesystem/S3 transcription storage adapters.
 
@@ -15,18 +15,30 @@
   provide no legacy resume, repair, hydration, or payload compatibility.
 - Preserve completed jobs, handouts, published URLs, and their required artifacts as read-only
   history; pre-cutover editor artifacts cannot enter a new assignment lineage.
-- Every newly created transcript and draft receives its first immutable content revision and
-  non-null head immediately. Never initialize a historical artifact on first edit.
+- Every new transcript and draft starts with working version `1`, a server hash, and a
+  content-addressed recovery object. Never initialize a historical artifact on first edit.
 - Tutor actions own semantic confirmation; automatic persistence owns recovery, retry, and freshness.
 - Do not add routine `Save`, `Refresh`, or `Reload` controls. Expose `Retry` only after bounded automatic retry fails.
 - Navigation alone must not confirm, invalidate, or advance durable workflow state.
 - Preserve local input across revision conflicts and show the newest server state before asking the tutor to reconcile.
 - Treat `AssignmentSessionDto.confirmed` as a validated public contract, not an open JSON extension point.
-- Every session recovery write, confirmation, Share link, and archive uses compare-and-swap revision semantics.
-- Transcript and draft content revisions are immutable. Never overwrite a storage object reachable through a revision record.
-- The server computes content hashes and validates artifact ownership and lineage; clients only echo server-issued revision IDs.
+- Every session recovery write, confirmation, Share reservation, and Share completion uses
+  compare-and-swap revision semantics.
+- Do not persist `currentStage` or session archival. Derive resume/completion from `confirmedStep`,
+  durable dirty recovery, and the linked job.
+- Transcript/draft autosaves CAS a working version; only confirmed snapshots create immutable
+  revision rows. Never overwrite a content-addressed object.
+- Do not build recovery-object garbage collection in this issue; unreachable content-addressed
+  blobs are acceptable closed-alpha residue.
+- The server computes content hashes and validates artifact ownership and lineage; clients echo only
+  server-issued working versions, while confirmation responses supply immutable revision IDs.
 - Existing shared handouts remain immutable history. Invalidation only clears the active session lineage.
-- Share success means one approved/enqueued job is durably linked to the session. Archival is idempotent cleanup after success.
+- Share success means one stable approved job is durably linked and enqueued or already
+  running/terminal. Confirmed Share is completed; there is no archival cleanup.
+- Guard route/browser navigation only for unrecovered local changes or ambiguous mutation outcome,
+  never merely because durable recovery is unconfirmed.
+- Refresh stable data only on load, focus return, or directly related mutation completion;
+  poll only genuinely asynchronous recording/job states.
 - Remove the old assignment-session create/PATCH routes and revisionless transcript/draft update contracts in the same major release.
 - Keep code, `packages/batch-backend/README.md`, `packages/batch-frontend/README.md`, and backend/frontend alignment docs synchronized.
 - Use the existing `:agent` validation lanes where available and inspect their log artifacts before widening a failed run.
@@ -44,40 +56,41 @@
 
 ### Database and backend domain
 
-- Create: `packages/batch-backend/migrations/0044_assignment_step_confirmation_contract.sql` - session revision/snapshot columns, immutable artifact revisions, CAS heads, and Share-attempt ledger.
+- Create: `packages/batch-backend/migrations/0044_assignment_step_confirmation_contract.sql` - hard cutover, derived-stage removal, session confirmation/Share linkage, artifact working CAS, and confirmed revisions.
 - Modify: `packages/batch-backend/schema.sql` - regenerated schema baseline.
 - Modify: `packages/batch-backend/src/domain/assignment-session-model.ts` - working/confirmed aggregate model.
-- Modify: `packages/batch-backend/src/domain/assignment-session-repository.ts` - revision-aware transactional mutations and archive.
-- Create: `packages/batch-backend/src/domain/artifact-content-revision-model.ts` - shared immutable revision record types.
-- Create: `packages/batch-backend/src/domain/artifact-content-revision-repository.ts` - transcript/draft revision insert, lookup, and head CAS.
-- Create: `packages/batch-backend/src/domain/assignment-share-attempt-model.ts` - Share state machine types.
-- Create: `packages/batch-backend/src/domain/assignment-share-attempt-repository.ts` - reservation and monotonic state transitions.
-- Modify: `packages/batch-backend/src/infrastructure/transcription-storage.ts` - revision-specific transcript/draft storage keys.
+- Modify: `packages/batch-backend/src/domain/assignment-session-repository.ts` - revision-aware recovery, confirmation, and stable Share linkage.
+- Create: `packages/batch-backend/src/domain/artifact-content-model.ts` - working-version and immutable confirmed-revision types.
+- Create: `packages/batch-backend/src/domain/artifact-content-repository.ts` - working CAS plus confirmation-time revision promotion.
+- Modify: `packages/batch-backend/src/infrastructure/transcription-storage.ts` - content-addressed transcript/draft recovery keys.
 
 ### Backend application and transport
 
 - Modify: `packages/batch-backend/src/application/assignment-sessions.ts` - student confirmation and recovery commands.
 - Create: `packages/batch-backend/src/application/confirm-assignment-session-step.ts` - Source, Context, and Create validation/invalidation.
-- Create: `packages/batch-backend/src/application/share-assignment-session.ts` - resumable Share orchestration and cleanup.
-- Modify: `packages/batch-backend/src/application/update-recording-transcript.ts` - immutable transcript revision CAS.
-- Modify: `packages/batch-backend/src/application/update-draft.ts` - immutable draft revision CAS.
+- Create: `packages/batch-backend/src/application/share-assignment-session.ts` - stable job-backed Share orchestration and terminal completion.
+- Modify: `packages/batch-backend/src/application/update-recording-transcript.ts` - transcript working-version CAS.
+- Modify: `packages/batch-backend/src/application/update-draft.ts` - draft working-version CAS.
 - Modify: `packages/batch-backend/src/application/process-transcribe-job.ts` - initial transcript revision.
 - Modify: `packages/batch-backend/src/application/ingest-manual-transcript-source.ts` - initial manual transcript revision.
 - Modify: `packages/batch-backend/src/application/create-draft.ts` - initial draft revision.
 - Modify: `packages/batch-backend/src/application/create-prompt-package.ts` - exact profile revision input.
+- Modify: `packages/batch-backend/src/application/create-approval-job.ts` - stable job ID and transactional reservation support.
 - Modify: `packages/batch-backend/src/application/approve-job.ts` - retry-aware enqueue of the stable reserved job.
-- Modify: `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` - student, recovery, confirm, Share, and revision-aware archive routes.
+- Modify: `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` - student, recovery, confirm, and terminal Share routes.
 - Modify: `packages/batch-backend/src/transport/extended-routes/recordings-routes.ts` - revision-aware transcript, draft, and prompt-package requests.
 
 ### Frontend API and workflow
 
-- Modify: `packages/batch-frontend/src/utils/api.ts` - new session commands and content revision request/response shapes.
+- Modify: `packages/batch-frontend/src/utils/api.ts` - new session commands and artifact working-CAS request/response shapes.
 - Create: `packages/batch-frontend/src/ui/minimal/MinimalAssignment.confirmation.ts` - pure confirmation, dirty-state, resume, and conflict decisions.
 - Create: `packages/batch-frontend/src/ui/minimal/MinimalAssignment.confirmation.test.ts` - exhaustive pure contract tests.
 - Modify: `packages/batch-frontend/src/ui/minimal/MinimalAssignment.tsx` - session revision coordinator, confirmation actions, route guard, and global save state.
 - Modify: `packages/batch-frontend/src/ui/minimal/MinimalAssignment.source.ts` - automatic Source recovery and confirmation flush.
 - Modify: `packages/batch-frontend/src/ui/minimal/MinimalAssignment.authoring.ts` - Context/Create recovery and confirmation flush, Share orchestration.
-- Modify: `packages/batch-frontend/src/ui/minimal/MinimalAssignment.resume.ts` - earliest-dirty hydration and Share cleanup recovery.
+- Modify: `packages/batch-frontend/src/ui/minimal/MinimalAssignment.resume.ts` - earliest-dirty hydration and completed-Share job routing.
+- Modify: `packages/batch-frontend/src/ui/minimal/MinimalAssignment.resume-presentation.ts` - derived resume/completed presentation.
+- Modify: `packages/batch-frontend/src/ui/minimal/MinimalAssignment.entry-state.ts` - derived session presentation without persisted stage.
 - Modify: `packages/batch-frontend/src/ui/assignments/assignment-workflow.ts` - confirmed-step status derivation.
 - Modify: `packages/batch-frontend/src/ui/assignments/AssignmentWorkflow.tsx` - saving/confirmed/conflict presentation without manual Save/Refresh.
 - Modify: `packages/batch-frontend/src/dev/frontend-sandbox-api.ts` - sandbox parity for revisioned APIs.
@@ -85,8 +98,7 @@
 ### Tests and documentation
 
 - Modify: `packages/batch-backend/tests/domain.assignment-session-repository.test.ts`.
-- Create: `packages/batch-backend/tests/domain.artifact-content-revision-repository.test.ts`.
-- Create: `packages/batch-backend/tests/domain.assignment-share-attempt-repository.test.ts`.
+- Create: `packages/batch-backend/tests/domain.artifact-content-repository.test.ts`.
 - Modify: `packages/batch-backend/tests/application.recording-transcript.test.ts`.
 - Modify: `packages/batch-backend/tests/application.draft.test.ts`.
 - Modify: `packages/batch-backend/tests/application.process-transcribe-job.test.ts`.
@@ -99,6 +111,8 @@
 - Modify: `packages/batch-frontend/src/ui/minimal/MinimalAssignment.test-harness.tsx`.
 - Modify: `packages/batch-frontend/src/ui/minimal/MinimalAssignment.workflow-ui.test.tsx`.
 - Modify: `packages/batch-frontend/src/ui/minimal/MinimalAssignment.resume-rehydration.test-groups.tsx`.
+- Modify: `packages/batch-frontend/src/ui/minimal/MinimalAssignment.resume-presentation.test.ts`.
+- Modify: `packages/batch-frontend/src/ui/minimal/MinimalAssignment.entry-state.test.ts`.
 - Modify: `packages/batch-frontend/src/ui/minimal/MinimalAssignment.prompt-draft.test-groups.tsx`.
 - Modify: `packages/batch-frontend/src/ui/minimal/MinimalAssignment.publish-actions.test-groups.tsx`.
 - Modify: `packages/batch-frontend/src/ui/assignments/AssignmentWorkflow.navigation.test.tsx`.
@@ -133,8 +147,8 @@ expect(DB_MIGRATION_HEAD).toBe('0044_assignment_step_confirmation_contract');
 
 expect(await countRows('assignment_sessions')).toBe(0);
 expect(await findJob(completedJobId)).toMatchObject({ html_url: publishedUrl });
-expect((await findTranscript(historicalTranscriptId)).head_revision_id).toBeNull();
-expect((await findDraft(historicalDraftId)).head_revision_id).toBeNull();
+expect((await findTranscript(historicalTranscriptId)).working_version).toBeNull();
+expect((await findDraft(historicalDraftId)).working_version).toBeNull();
 expect(await countRows('transcript_content_revisions')).toBe(0);
 expect(await countRows('draft_content_revisions')).toBe(0);
 ```
@@ -156,12 +170,12 @@ Add the approved discriminated contracts to `packages/contracts/src/index.ts`:
 ```ts
 export type AssignmentConfirmedStep = 'student' | 'source' | 'context' | 'create' | 'share';
 
-export type AssignmentInvalidatedArtifact =
-  | 'transcript'
-  | 'prompt'
-  | 'draft'
-  | 'preview'
-  | 'publishedJob';
+export type AssignmentInvalidatedArtifact = 'transcript' | 'prompt' | 'draft' | 'preview';
+
+export interface ArtifactWorkingContentDto {
+  workingVersion: number;
+  contentHash: string;
+}
 
 export interface ArtifactContentRevisionDto {
   id: string;
@@ -172,11 +186,12 @@ export interface ArtifactContentRevisionDto {
 }
 
 export interface AssignmentConfirmedSnapshot {
-  student: { studentId: string } | null;
+  student: { studentId: string };
   source: {
     lessonId: string | null;
     recordingId: string;
     transcriptId: string;
+    transcriptWorkingVersion: number;
     transcriptRevisionId: string;
     transcriptHash: string;
   } | null;
@@ -189,10 +204,10 @@ export interface AssignmentConfirmedSnapshot {
   create: {
     promptPackageId: string;
     draftId: string;
+    draftWorkingVersion: number;
     draftRevisionId: string;
     draftHash: string;
   } | null;
-  share: { jobId: string; approvedAt: string; requestId: string } | null;
 }
 
 export interface UpdateAssignmentSessionRecoveryRequest {
@@ -201,10 +216,8 @@ export interface UpdateAssignmentSessionRecoveryRequest {
     lessonId: string | null;
     recordingId: string | null;
     transcriptId: string | null;
-    transcriptContentRevisionId: string | null;
     promptPackageId: string | null;
     draftId: string | null;
-    draftContentRevisionId: string | null;
     publishTarget: PublishTarget | null;
     selectedTtsProvider: TtsProviderId | null;
     selectedTtsStrategy: TtsStrategy | null;
@@ -226,7 +239,7 @@ export type ConfirmAssignmentSessionStepRequest =
       lessonId: string | null;
       recordingId: string;
       transcriptId: string;
-      transcriptRevisionId: string;
+      transcriptWorkingVersion: number;
     }
   | {
       step: 'context';
@@ -241,32 +254,34 @@ export type ConfirmAssignmentSessionStepRequest =
       expectedRevision: number;
       promptPackageId: string;
       draftId: string;
-      draftRevisionId: string;
+      draftWorkingVersion: number;
     };
 ```
 
-Extend `AssignmentSessionDto` with the approved revision and confirmed fields. Define `ConfirmStudentAssignmentSessionRequest`, `ConfirmAssignmentSessionStepResponse`, `ConfirmAssignmentSessionShareRequest`, and a `RevisionConflictResponse` containing the latest session.
+Remove the persisted `AssignmentSessionStage` contract. Replace the old session DTO with `revision`,
+non-null `confirmedStep`, `confirmed`, selected-profile recovery fields, and nullable
+`shareJobId`; do not include `currentStage` or `archivedAt`. Define
+`ConfirmStudentAssignmentSessionRequest`, `ConfirmAssignmentSessionStepResponse`,
+`ConfirmAssignmentSessionShareRequest`, `ConfirmAssignmentSessionShareResponse { session; job }`,
+and conflict responses containing the latest session or working artifact.
 
 - [ ] **Step 4: Add the migration and version bump**
 
 Create the migration with:
 
 - delete all rows from `assignment_sessions` before enabling the replacement contract;
-- session `revision`, `confirmed_step`, validated `confirmed_snapshot`, `creation_request_id`, artifact head references, and selected profile revision fields;
-- `transcript_content_revisions` and `draft_content_revisions` with immutable UUID primary keys, artifact foreign keys, unique revision-specific storage URIs, SHA-256 hashes, and timestamps;
-- nullable `head_revision_id` foreign keys on `transcripts` and `drafts`;
-- `assignment_session_share_attempts` with unique `(session_id, request_id)`, one stable `job_id`, and a checked state enum;
+- drop `assignment_sessions.current_stage` and `assignment_sessions.archived_at` plus their stage/active indexes;
+- session `revision`, non-null `confirmed_step`, validated `confirmed_snapshot`, `creation_request_id`, selected profile revision fields, and `share_job_id`;
+- nullable `working_version` and `content_hash` on historical transcript/draft rows, required by application invariants for every new editable row;
+- `transcript_content_revisions` and `draft_content_revisions` with immutable UUID primary keys, parent artifact ID, source working version, content-addressed storage URI, SHA-256 hash, and timestamp, plus uniqueness on `(artifact_id, source_working_version)`;
+- foreign key and uniqueness constraints for the session's one stable `share_job_id`, with no Share-attempt table;
 - a partial unique index on `(user_id, creation_request_id)` where the request ID is non-null;
-- nullable artifact head columns solely for historical rows referenced by completed jobs; the
-  application contract requires non-null heads for every new editable artifact.
+- nullable working-version/hash columns solely for historical rows referenced by completed jobs.
 
-Use this canonical empty snapshot for every newly created session:
+Do not add an empty-session default. Student confirmation is the sole insert path and writes
+`confirmed_step = 'student'` plus the non-null Student snapshot in that insert.
 
-```sql
-'{"student":null,"source":null,"context":null,"create":null,"share":null}'::jsonb
-```
-
-Add check constraints for `revision > 0`, confirmed-step values, 64-character lowercase SHA-256 hashes, and monotonic Share states represented by the exact strings `reserved`, `materialized`, `approved`, `enqueued`, and `linked`.
+Add check constraints for `revision > 0`, working versions greater than zero when present, paired working-version/hash nullability, confirmed-step values, and 64-character lowercase SHA-256 hashes. Make `share_job_id` a unique job foreign key; the Share request UUID is the job ID, so no separate Share request column is stored.
 
 - [ ] **Step 5: Run migration and contract tests**
 
@@ -285,12 +300,12 @@ git add packages/contracts/src/index.ts packages/contracts/src/contract-versions
 git commit -m "feat(contracts): add assignment confirmation revisions"
 ```
 
-## Task 2: Make transcript and draft content immutable and compare-and-swap safe
+## Task 2: Add CAS working content and confirmation-only immutable revisions
 
 **Files:**
 
-- Create: `packages/batch-backend/src/domain/artifact-content-revision-model.ts`
-- Create: `packages/batch-backend/src/domain/artifact-content-revision-repository.ts`
+- Create: `packages/batch-backend/src/domain/artifact-content-model.ts`
+- Create: `packages/batch-backend/src/domain/artifact-content-repository.ts`
 - Modify: `packages/batch-backend/src/domain/transcript-model.ts`
 - Modify: `packages/batch-backend/src/domain/draft-model.ts`
 - Modify: `packages/batch-backend/src/infrastructure/transcription-storage.ts`
@@ -300,7 +315,7 @@ git commit -m "feat(contracts): add assignment confirmation revisions"
 - Modify: `packages/batch-backend/src/application/update-recording-transcript.ts`
 - Modify: `packages/batch-backend/src/application/update-draft.ts`
 - Modify: `packages/batch-backend/src/transport/extended-routes/recordings-routes.ts`
-- Create: `packages/batch-backend/tests/domain.artifact-content-revision-repository.test.ts`
+- Create: `packages/batch-backend/tests/domain.artifact-content-repository.test.ts`
 - Modify: `packages/batch-backend/tests/infrastructure.transcription-storage.test.ts`
 - Modify: `packages/batch-backend/tests/application.recording-transcript.test.ts`
 - Modify: `packages/batch-backend/tests/application.draft.test.ts`
@@ -308,37 +323,41 @@ git commit -m "feat(contracts): add assignment confirmation revisions"
 - Modify: `packages/batch-backend/tests/application.ingest-manual-transcript-source.test.ts`
 - Modify: `packages/batch-backend/tests/transport.http-server.integration.recordings-prompt-packages.test.ts`
 
-- [ ] **Step 1: Write failing immutable-storage and CAS tests**
+- [ ] **Step 1: Write failing working-CAS and confirmation-promotion tests**
 
 Cover these cases for both transcript and draft content:
 
-1. generated and manually ingested transcripts create an initial revision and head atomically;
-2. draft creation creates an initial revision and head atomically;
-3. next write uses a different storage URI and advances the head;
-4. stale expected head returns a typed conflict and preserves the winning head;
-5. both old and new revision text remain readable;
-6. the response contains the server-computed SHA-256 hash;
-7. updating a historical artifact with a null head is rejected instead of initializing it.
-8. cached-recording reuse bypasses an unrevisioned historical transcript and never clones its null
-   head into a new artifact.
+1. generated/manual transcripts and created drafts start at working version `1` with a server hash;
+2. autosave writes a content-addressed object and advances only the mutable working pointer/version;
+3. stale expected working version returns a typed conflict and preserves the winning pointer;
+4. no immutable revision row is created by repeated autosaves;
+5. confirmation promotion creates one immutable revision for the locked working version;
+6. later autosaves leave the confirmed revision readable and unchanged;
+7. updating a historical null-version artifact is rejected instead of initialized;
+8. cached-recording reuse bypasses a null-version historical transcript.
 
 ```ts
 const draft = await createDraft({ promptPackageId, text: 'first', userId });
-const first = draft.contentRevision;
+expect(draft.workingVersion).toBe(1);
 const second = await updateDraft({
   id: draft.id,
   text: 'second',
-  expectedRevisionId: first.id,
+  expectedWorkingVersion: 1,
 });
 
 await expect(
-  updateDraft({ id: draft.id, text: 'stale', expectedRevisionId: first.id }),
-).rejects.toMatchObject({ code: 'ARTIFACT_REVISION_CONFLICT' });
+  updateDraft({ id: draft.id, text: 'stale', expectedWorkingVersion: 1 }),
+).rejects.toMatchObject({ code: 'ARTIFACT_WORKING_CONFLICT', latest: second });
 await expect(
-  updateDraft({ id: historicalDraft.id, text: 'legacy edit', expectedRevisionId: null }),
+  updateDraft({ id: historicalDraft.id, text: 'legacy edit', expectedWorkingVersion: 0 }),
 ).rejects.toMatchObject({ code: 'HISTORICAL_ARTIFACT_NOT_EDITABLE' });
-expect(await storage.getText(first.storageUri)).toBe('first');
-expect(await storage.getText(second.contentRevision.storageUri)).toBe('second');
+expect(await countDraftContentRevisions(draft.id)).toBe(0);
+const confirmed = await promoteDraftWorkingContent({
+  draftId: draft.id,
+  expectedWorkingVersion: second.workingVersion,
+});
+expect(confirmed.contentHash).toBe(second.contentHash);
+expect(await countDraftContentRevisions(draft.id)).toBe(1);
 ```
 
 - [ ] **Step 2: Run the focused tests and verify failure**
@@ -346,82 +365,108 @@ expect(await storage.getText(second.contentRevision.storageUri)).toBe('second');
 Run:
 
 ```bash
-pnpm --filter @esl-pipeline/batch-backend exec vitest run tests/domain.artifact-content-revision-repository.test.ts tests/infrastructure.transcription-storage.test.ts tests/application.recording-transcript.test.ts tests/application.draft.test.ts tests/application.process-transcribe-job.test.ts tests/application.ingest-manual-transcript-source.test.ts tests/transport.http-server.integration.recordings-prompt-packages.test.ts
+pnpm --filter @esl-pipeline/batch-backend exec vitest run tests/domain.artifact-content-repository.test.ts tests/infrastructure.transcription-storage.test.ts tests/application.recording-transcript.test.ts tests/application.draft.test.ts tests/application.process-transcribe-job.test.ts tests/application.ingest-manual-transcript-source.test.ts tests/transport.http-server.integration.recordings-prompt-packages.test.ts
 ```
 
-Expected: tests fail because creation paths return unrevisioned artifacts, storage uses stable artifact IDs, and historical null-head artifacts are still editable.
+Expected: tests fail because artifacts expose no working version/hash, storage overwrites stable keys, and autosaves cannot be promoted separately from ordinary updates.
 
-- [ ] **Step 3: Add revision-specific storage methods**
+- [ ] **Step 3: Make recovery objects content-addressed**
 
-Change transcript and draft write options to identify both artifact and revision:
+Keep artifact-specific write inputs but require a hash in every result:
 
 ```ts
 export interface PutTranscriptOptions {
   transcriptId: string;
-  revisionId: string;
   text: string;
 }
 
 export interface PutDraftOptions {
   draftId: string;
-  revisionId: string;
   text: string;
+}
+
+export interface StorageWriteResult {
+  uri: string;
+  bytes: number;
+  sha256: string;
 }
 ```
 
-Filesystem and S3 keys must be `transcripts/<transcriptId>/<revisionId>.txt` and `drafts/<draftId>/<revisionId>.md`. Compute and return SHA-256 for text writes in both adapters.
+Compute SHA-256 before writing. Filesystem and S3 keys are
+`transcripts/<transcriptId>/content/<sha256>.txt` and
+`drafts/<draftId>/content/<sha256>.md`. Writing the same content is idempotent; no save overwrites a
+different object.
 
-- [ ] **Step 4: Implement one transactional content-revision repository boundary**
+- [ ] **Step 4: Implement working CAS and confirmation promotion**
 
-Expose focused functions rather than allowing callers to update head columns directly:
+Expose focused functions rather than allowing callers to update storage pointers directly:
 
 ```ts
-export interface CreateArtifactContentRevisionParams {
+export interface UpdateWorkingContentParams {
   artifactId: string;
-  revisionId: string;
-  expectedRevisionId: string | null;
+  expectedWorkingVersion: number;
   storageUri: string;
   contentHash: string;
 }
 
-export async function commitTranscriptContentRevision(
-  params: CreateArtifactContentRevisionParams,
+export async function updateTranscriptWorkingContent(
+  params: UpdateWorkingContentParams,
+): Promise<ArtifactWorkingContentRecord>;
+
+export async function updateDraftWorkingContent(
+  params: UpdateWorkingContentParams,
+): Promise<ArtifactWorkingContentRecord>;
+
+export async function promoteTranscriptWorkingContent(
+  client: PoolClient,
+  params: { transcriptId: string; expectedWorkingVersion: number },
 ): Promise<ArtifactContentRevisionRecord>;
 
-export async function commitDraftContentRevision(
-  params: CreateArtifactContentRevisionParams,
+export async function promoteDraftWorkingContent(
+  client: PoolClient,
+  params: { draftId: string; expectedWorkingVersion: number },
 ): Promise<ArtifactContentRevisionRecord>;
 ```
 
-Within one database transaction, lock the parent artifact, compare its current head with `expectedRevisionId`, insert the immutable revision, and conditionally swap the head. Throw `ArtifactRevisionConflictError` with the current head when comparison fails. Do not delete an already-written storage object on conflict; it is unreachable and safe for later garbage collection.
+Working updates condition on `working_version = expectedWorkingVersion`, increment once, and return
+the winning working DTO. A null working version throws `HistoricalArtifactNotEditableError`; a stale
+version throws `ArtifactWorkingConflictError` with the latest DTO. Promotion locks the artifact row,
+verifies the expected working version, and inserts one immutable revision referencing the existing
+content-addressed URI/hash. Repeated promotion of the same artifact working version returns the
+existing immutable row. It does not change the working pointer.
 
 - [ ] **Step 5: Update application and transport contracts**
 
-Generated transcription, manual transcript ingestion, and draft creation must write revision-specific storage, insert the parent plus initial immutable revision, and set the head as one application operation. If database persistence fails after storage succeeds, the object is unreachable and eligible for cleanup.
+Generated transcription, manual transcript ingestion, and draft creation write content-addressed
+storage and insert the parent with `working_version = 1` plus the server hash. They do not insert a
+confirmed revision. If database persistence fails after storage succeeds, the object is unreachable
+and remains harmless closed-alpha residue; this issue adds no cleanup service.
 
-Cached-recording reuse may clone only a transcript with a non-null immutable head. The clone gets a
-new transcript ID, revision ID, and revision-specific storage object; it must not share the source
-transcript's mutable identity. A cache hit containing an unrevisioned historical transcript is
-ignored and follows the ordinary transcription path.
+Cached-recording reuse accepts only a transcript with a non-null working version/hash. The clone gets
+a new transcript ID and content-addressed working object at version `1`; a null-version cache hit is
+ignored and follows ordinary transcription.
 
-`PUT /recordings/:recordingId/transcript` and `PUT /drafts/:id` require a non-null `expectedRevisionId`. Each update service creates a revision UUID, writes the immutable object, commits the CAS, and returns `contentRevision`. A null current head produces `HISTORICAL_ARTIFACT_NOT_EDITABLE`; it never creates a first revision. Remove revisionless update acceptance and return HTTP 409 with the current head revision on conflict.
+`PUT /recordings/:recordingId/transcript` and `PUT /drafts/:id` require
+`expectedWorkingVersion: number`. Each writes the content-addressed object, CAS-swaps the working
+pointer, and returns `{ workingVersion, contentHash }`. Remove revisionless update acceptance and
+return HTTP 409 with the latest working DTO on conflict.
 
 - [ ] **Step 6: Run the focused tests and typecheck**
 
 Run:
 
 ```bash
-pnpm --filter @esl-pipeline/batch-backend exec vitest run tests/domain.artifact-content-revision-repository.test.ts tests/infrastructure.transcription-storage.test.ts tests/application.recording-transcript.test.ts tests/application.draft.test.ts tests/application.process-transcribe-job.test.ts tests/application.ingest-manual-transcript-source.test.ts tests/transport.http-server.integration.recordings-prompt-packages.test.ts
+pnpm --filter @esl-pipeline/batch-backend exec vitest run tests/domain.artifact-content-repository.test.ts tests/infrastructure.transcription-storage.test.ts tests/application.recording-transcript.test.ts tests/application.draft.test.ts tests/application.process-transcribe-job.test.ts tests/application.ingest-manual-transcript-source.test.ts tests/transport.http-server.integration.recordings-prompt-packages.test.ts
 pnpm --filter @esl-pipeline/batch-backend typecheck
 ```
 
 Expected: all focused tests and backend typecheck pass.
 
-- [ ] **Step 7: Commit immutable artifact revisions**
+- [ ] **Step 7: Commit working CAS and confirmed revision promotion**
 
 ```bash
-git add packages/batch-backend/src/domain/artifact-content-revision-model.ts packages/batch-backend/src/domain/artifact-content-revision-repository.ts packages/batch-backend/src/domain/transcript-model.ts packages/batch-backend/src/domain/draft-model.ts packages/batch-backend/src/infrastructure/transcription-storage.ts packages/batch-backend/src/application/process-transcribe-job.ts packages/batch-backend/src/application/ingest-manual-transcript-source.ts packages/batch-backend/src/application/create-draft.ts packages/batch-backend/src/application/update-recording-transcript.ts packages/batch-backend/src/application/update-draft.ts packages/batch-backend/src/transport/extended-routes/recordings-routes.ts packages/batch-backend/tests/domain.artifact-content-revision-repository.test.ts packages/batch-backend/tests/infrastructure.transcription-storage.test.ts packages/batch-backend/tests/application.recording-transcript.test.ts packages/batch-backend/tests/application.draft.test.ts packages/batch-backend/tests/application.process-transcribe-job.test.ts packages/batch-backend/tests/application.ingest-manual-transcript-source.test.ts packages/batch-backend/tests/transport.http-server.integration.recordings-prompt-packages.test.ts
-git commit -m "feat(backend): persist immutable artifact revisions"
+git add packages/batch-backend/src/domain/artifact-content-model.ts packages/batch-backend/src/domain/artifact-content-repository.ts packages/batch-backend/src/domain/transcript-model.ts packages/batch-backend/src/domain/draft-model.ts packages/batch-backend/src/infrastructure/transcription-storage.ts packages/batch-backend/src/application/process-transcribe-job.ts packages/batch-backend/src/application/ingest-manual-transcript-source.ts packages/batch-backend/src/application/create-draft.ts packages/batch-backend/src/application/update-recording-transcript.ts packages/batch-backend/src/application/update-draft.ts packages/batch-backend/src/transport/extended-routes/recordings-routes.ts packages/batch-backend/tests/domain.artifact-content-repository.test.ts packages/batch-backend/tests/infrastructure.transcription-storage.test.ts packages/batch-backend/tests/application.recording-transcript.test.ts packages/batch-backend/tests/application.draft.test.ts packages/batch-backend/tests/application.process-transcribe-job.test.ts packages/batch-backend/tests/application.ingest-manual-transcript-source.test.ts packages/batch-backend/tests/transport.http-server.integration.recordings-prompt-packages.test.ts
+git commit -m "feat(backend): add artifact working CAS"
 ```
 
 ## Task 3: Implement the revisioned assignment-session aggregate
@@ -436,7 +481,7 @@ git commit -m "feat(backend): persist immutable artifact revisions"
 - Modify: `packages/batch-backend/tests/application.student-schedule-billing.test.ts`
 - Create: `packages/batch-backend/tests/transport.http-server.integration.assignment-sessions.test.ts`
 
-- [ ] **Step 1: Write failing student-idempotency, recovery-CAS, and archive-CAS tests**
+- [ ] **Step 1: Write failing student-idempotency and recovery-CAS tests**
 
 ```ts
 const created = await confirmStudentAssignmentSession({
@@ -464,7 +509,7 @@ await expect(
 ).rejects.toMatchObject({ code: 'ASSIGNMENT_SESSION_REVISION_CONFLICT' });
 ```
 
-Also assert recovery cannot accept canonical fields such as `currentStage`, `confirmedStep`, or `confirmed`, and archive increments the expected revision exactly once.
+Also assert the DTO/database mapper contains neither `currentStage` nor `archivedAt`, and recovery cannot accept `confirmedStep`, `confirmed`, or Share linkage fields.
 
 - [ ] **Step 2: Run focused tests and verify failure**
 
@@ -478,7 +523,7 @@ Expected: tests fail because the repository accepts revisionless patches and the
 
 - [ ] **Step 3: Extend the session model and mapper**
 
-Add `revision`, content revision heads, selected profile identity, `confirmedStep`, `confirmed`, and `creationRequestId` to the domain record. Parse `confirmed_snapshot` through a Zod schema at the repository boundary so malformed database JSON fails closed.
+Add `revision`, selected profile recovery identity, `confirmedStep`, `confirmed`, `creationRequestId`, and `shareJobId` to the domain record. Remove stage/archive fields. Parse `confirmed_snapshot` through a Zod schema at the repository boundary so malformed database JSON fails closed.
 
 - [ ] **Step 4: Replace generic patching with explicit CAS repository commands**
 
@@ -488,28 +533,28 @@ Expose:
 export async function updateAssignmentSessionRecovery(
   params: UpdateAssignmentSessionRecoveryParams,
 ): Promise<AssignmentSessionRecord>;
-
-export async function archiveAssignmentSession(params: {
-  id: string;
-  userId: string;
-  expectedRevision: number;
-}): Promise<AssignmentSessionRecord>;
 ```
 
-Both updates must include:
+The update must include:
 
 ```sql
 WHERE id = $1
   AND user_id = $2
-  AND archived_at IS NULL
   AND revision = $3
+  AND confirmed_step IS DISTINCT FROM 'share'
+  AND share_job_id IS NULL
 ```
 
-and atomically set `revision = revision + 1`. When no row is returned, load by ownership including archived rows and distinguish not found, archived, and revision conflict.
+and atomically set `revision = revision + 1`. When no row is returned, distinguish not found,
+completed Share, Share in progress, and revision conflict.
 
 - [ ] **Step 5: Add idempotent Student confirmation and new routes**
 
-Implement `POST /assignment-sessions/confirm-student`, `PATCH /assignment-sessions/:id/recovery`, and revision-aware archive. Remove both `POST /assignment-sessions` and `PATCH /assignment-sessions/:id`; integration tests assert the old routes are unavailable. Repeated `(userId, requestId)` with identical Student and lesson recovery data returns the existing session; different data returns 409.
+Implement `POST /assignment-sessions/confirm-student` and
+`PATCH /assignment-sessions/:id/recovery`. Remove `POST /assignment-sessions`,
+`PATCH /assignment-sessions/:id`, and `POST /assignment-sessions/:id/archive`; integration tests
+assert all old routes are unavailable. Repeated `(userId, requestId)` with identical Student and
+lesson recovery data returns the existing session; different data returns 409.
 
 - [ ] **Step 6: Run tests and backend typecheck**
 
@@ -542,12 +587,15 @@ git commit -m "feat(backend): revision assignment session recovery"
 
 - [ ] **Step 1: Write the failing confirmation matrix**
 
-For each step, cover success, missing prerequisite, wrong owner, broken lineage, stale session revision, stale artifact head, idempotent lost-response replay, and exact downstream invalidation. Include the invariant that confirmation and recovery cannot race to a last-writer-wins result.
+For each step, cover success, missing prerequisite, wrong owner, broken lineage, stale session
+revision, stale artifact working version, idempotent lost-response replay, immutable promotion, and
+exact downstream invalidation. Include the invariant that confirmation and recovery cannot race to a
+last-writer-wins result.
 
 ```ts
-expect(sourceResult.session.currentStage).toBe('context');
+expect(sourceResult.session.confirmedStep).toBe('source');
 expect(sourceResult.session.confirmed.source?.transcriptHash).toBe(transcriptRevision.contentHash);
-expect(sourceResult.invalidated).toEqual(['prompt', 'draft', 'preview', 'publishedJob']);
+expect(sourceResult.invalidated).toEqual(['prompt', 'draft', 'preview']);
 
 await expect(confirmAssignmentSessionStep(staleRequest)).rejects.toMatchObject({
   code: 'ASSIGNMENT_SESSION_REVISION_CONFLICT',
@@ -571,10 +619,11 @@ Expected: new test file fails to import the missing application service.
 1. load the owned active session at `expectedRevision`;
 2. validate the immediately preceding confirmed boundary;
 3. validate artifact ownership and complete lineage;
-4. require the supplied transcript/draft revision to equal the artifact's current head;
-5. load the server-computed content hash;
+4. lock the transcript/draft and require its current working version to equal the request;
+5. promote that working URI/hash into one immutable confirmed revision;
 6. calculate the confirmed snapshot and exact invalidation list;
-7. commit confirmed snapshot, working references, `confirmedStep`, `currentStage`, and `revision + 1` in one transaction.
+7. commit the revision record, confirmed snapshot, working references, `confirmedStep`, and session
+   `revision + 1` in one transaction.
 
 Use exhaustive switching:
 
@@ -595,13 +644,14 @@ switch (request.step) {
 
 Use these rules in the repository transaction:
 
-| Changed confirmed input     | Clear confirmed snapshots | Resulting stage |
-| --------------------------- | ------------------------- | --------------- |
-| lesson/recording/transcript | context, create, share    | context         |
-| notes/profile revision      | create, share             | assignment      |
-| prompt/draft revision       | share                     | review          |
+| Changed confirmed input      | Clear dependent active state |
+| ---------------------------- | ---------------------------- |
+| lesson/recording/transcript  | context, create              |
+| notes/profile revision       | create                       |
+| prompt/draft working version | derived preview              |
 
-Clear active working references only when they derive from an invalidated lineage. Never archive/delete historical jobs or immutable artifact revisions.
+Clear active working references only when they derive from an invalidated lineage. Never delete
+historical jobs or immutable confirmed revisions.
 
 - [ ] **Step 5: Add `POST /assignment-sessions/:id/confirm`**
 
@@ -692,105 +742,123 @@ git add packages/batch-backend/src/application/create-prompt-package.ts packages
 git commit -m "fix(generation): pin confirmed profile revision"
 ```
 
-## Task 6: Make Share a durable resumable state machine
+## Task 6: Make Share one stable job-backed terminal operation
 
 **Files:**
 
-- Create: `packages/batch-backend/src/domain/assignment-share-attempt-model.ts`
-- Create: `packages/batch-backend/src/domain/assignment-share-attempt-repository.ts`
 - Create: `packages/batch-backend/src/application/share-assignment-session.ts`
+- Modify: `packages/batch-backend/src/application/create-approval-job.ts`
 - Modify: `packages/batch-backend/src/application/materialize-draft.ts`
 - Modify: `packages/batch-backend/src/application/approve-job.ts`
 - Modify: `packages/batch-backend/src/domain/assignment-session-repository.ts`
 - Modify: `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts`
-- Create: `packages/batch-backend/tests/domain.assignment-share-attempt-repository.test.ts`
 - Create: `packages/batch-backend/tests/application.assignment-share.test.ts`
 - Modify: `packages/batch-backend/tests/transport.http-server.integration.assignment-sessions.test.ts`
 
 - [ ] **Step 1: Write failing interruption and idempotency tests**
 
-Use injectable orchestration boundaries to stop after each durable phase: reservation, materialization, approval, enqueue, session link, response loss, and archive failure. Resume with the same request ID and assert exactly one job, one materialization, one approval transition, one stable BullMQ job ID, and one session link.
+Use injectable orchestration boundaries to interrupt after atomic job reservation, materialization,
+approval-before-enqueue, enqueue-before-confirmation, and confirmation-before-response. Resume with
+the same request ID and assert one database job, one stable BullMQ ID, and one terminal session link.
 
 ```ts
-for (const stopAfter of ['reserved', 'materialized', 'approved', 'enqueued', 'linked'] as const) {
+for (const stopAfter of [
+  'reservation',
+  'materialization',
+  'approval',
+  'enqueue',
+  'confirmation',
+] as const) {
   const harness = createShareHarness({ stopAfter });
   await expect(harness.firstAttempt()).rejects.toThrow('simulated interruption');
   const recovered = await harness.retrySameRequest();
-  expect(recovered.session.confirmed.share?.jobId).toBe(harness.reservedJobId);
+  expect(recovered.session.confirmedStep).toBe('share');
+  expect(recovered.session.shareJobId).toBe(harness.reservedJobId);
   expect(harness.createdJobIds).toEqual([harness.reservedJobId]);
   expect(harness.enqueuedJobIds).toEqual([harness.reservedJobId]);
 }
 ```
 
-Also assert Share rejects if any Source, Context, or Create recovery field differs from its confirmed snapshot.
+Also assert Share rejects if any Source, Context, or Create recovery field differs from its confirmed
+snapshot. Change the draft's working pointer after Create confirmation and assert Share still
+materializes the immutable URI/hash from `confirmed.create.draftRevisionId`.
 
 - [ ] **Step 2: Run focused tests and verify failure**
 
 Run:
 
 ```bash
-pnpm --filter @esl-pipeline/batch-backend exec vitest run tests/domain.assignment-share-attempt-repository.test.ts tests/application.assignment-share.test.ts tests/transport.http-server.integration.assignment-sessions.test.ts
+pnpm --filter @esl-pipeline/batch-backend exec vitest run tests/application.assignment-share.test.ts tests/transport.http-server.integration.assignment-sessions.test.ts
 ```
 
-Expected: missing modules fail to import and current materialization/approval creates side effects without an attempt ledger.
+Expected: the missing orchestration service fails to import and the current frontend-composed flow
+can create another approval job after a lost response.
 
-- [ ] **Step 3: Implement monotonic attempt persistence**
+- [ ] **Step 3: Prepare job inputs, then reserve the stable job and session link atomically**
 
-Use the explicit rank ordering below and reject regressions:
+Split approval-job creation into a side-effect-free parameter builder and an insert operation.
+Resolve settings/configuration before opening the transaction. Extend job insertion to accept a
+caller-supplied ID and the transaction's database client; publish the existing `job_created` event
+only after commit. Add one repository transaction:
 
 ```ts
-export const SHARE_ATTEMPT_STATES = [
-  'reserved',
-  'materialized',
-  'approved',
-  'enqueued',
-  'linked',
-] as const;
-
-export type AssignmentShareAttemptState = (typeof SHARE_ATTEMPT_STATES)[number];
-
-export function canAdvanceShareAttempt(
-  current: AssignmentShareAttemptState,
-  next: AssignmentShareAttemptState,
-): boolean {
-  return SHARE_ATTEMPT_STATES.indexOf(next) >= SHARE_ATTEMPT_STATES.indexOf(current);
-}
+export async function reserveAssignmentShare(params: {
+  sessionId: string;
+  userId: string;
+  expectedRevision: number;
+  requestId: string;
+  jobInsert: InsertJobParams;
+}): Promise<{ session: AssignmentSessionRecord; job: JobRecord }>;
 ```
 
-Reservation commits `(sessionId, requestId, stableJobId)` before any job or queue side effect. Lookup must include archived sessions and enforce user ownership.
+The transaction locks the session, verifies clean confirmed inputs, creates one
+`awaiting_approval` job with `id = requestId`, derives its draft/prompt lineage from the confirmed
+Create snapshot, stores that ID as `share_job_id`, and increments the session revision. Repeating the
+same request returns the existing linked job even with the old expected revision. A different
+request conflicts; a missing/wrong-lineage linked job fails integrity checks. While `share_job_id`
+is set and `confirmedStep !== 'share'`, other session mutations return `SHARE_IN_PROGRESS`.
 
 - [ ] **Step 4: Implement resumable Share orchestration**
 
-`shareAssignmentSession` loads or creates the attempt and resumes from its persisted state:
+`shareAssignmentSession` inspects the existing job state:
 
-1. `reserved`: materialize the confirmed draft into the reserved job ID;
-2. `materialized`: approve that job;
-3. `approved`: enqueue with BullMQ `jobId` equal to the reserved job ID;
-4. `enqueued`: transactionally link the job in `confirmed.share`, increment session revision, and mark linked;
-5. `linked`: return the linked result without repeating side effects;
-6. after success, call revision-aware idempotent archive as cleanup.
+1. `awaiting_approval`: load the immutable confirmed draft revision, materialize that exact URI/hash
+   idempotently, approve to `queued`, then enqueue;
+2. `queued`: enqueue/re-enqueue with BullMQ `jobId` equal to the database job ID;
+3. `running`, `succeeded`, or `failed`: do not enqueue again;
+4. after successful enqueue or an already running/terminal state, conditionally set
+   `confirmedStep = 'share'` and increment the session revision;
+5. `confirmedStep = 'share'`: return the linked session/job without mutation.
 
-Make `approveJob` retry-aware: a job already in the queued database state may be enqueued again with the same BullMQ job ID, but must not be cloned or re-approved.
+Refactor `approveJobForPipeline` so a retry can enqueue an already-queued job with the same BullMQ ID
+without re-approving or cloning it. Remove `materializeDraft`'s current fallback that creates a new
+approval job when a caller-supplied job is absent or no longer `awaiting_approval`; the Share service
+must treat that condition as an integrity/state check and never substitute a new job. Refactor its
+input so the Share path reads the confirmed revision's content-addressed URI rather than
+`draft.storageUri`.
 
 - [ ] **Step 5: Add the Share route and typed responses**
 
-Add `POST /assignment-sessions/:id/share`. A completed attempt returns the linked job even if the session has since been archived. A cleanup failure returns Share success plus `archivePending: true`, not an error that invites a duplicate Share.
+Add `POST /assignment-sessions/:id/share`. Its response is `{ session, job }`; it never includes
+`archivePending`. Exclude `confirmedStep = 'share'` sessions from resumable-session lists and route a
+direct fetch of completed Share to the linked job.
 
 - [ ] **Step 6: Run focused tests and typecheck**
 
 Run:
 
 ```bash
-pnpm --filter @esl-pipeline/batch-backend exec vitest run tests/domain.assignment-share-attempt-repository.test.ts tests/application.assignment-share.test.ts tests/transport.http-server.integration.assignment-sessions.test.ts
+pnpm --filter @esl-pipeline/batch-backend exec vitest run tests/application.assignment-share.test.ts tests/transport.http-server.integration.assignment-sessions.test.ts
 pnpm --filter @esl-pipeline/batch-backend typecheck
 ```
 
-Expected: every interruption point resumes to one linked job and all dirty-upstream Share requests fail closed.
+Expected: every interruption point resumes to one linked job, confirmed Share is terminal, and all
+dirty-upstream Share requests fail closed.
 
 - [ ] **Step 7: Commit crash-safe Share**
 
 ```bash
-git add packages/batch-backend/src/domain/assignment-share-attempt-model.ts packages/batch-backend/src/domain/assignment-share-attempt-repository.ts packages/batch-backend/src/application/share-assignment-session.ts packages/batch-backend/src/application/materialize-draft.ts packages/batch-backend/src/application/approve-job.ts packages/batch-backend/src/domain/assignment-session-repository.ts packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts packages/batch-backend/tests/domain.assignment-share-attempt-repository.test.ts packages/batch-backend/tests/application.assignment-share.test.ts packages/batch-backend/tests/transport.http-server.integration.assignment-sessions.test.ts
+git add packages/batch-backend/src/application/share-assignment-session.ts packages/batch-backend/src/application/create-approval-job.ts packages/batch-backend/src/application/materialize-draft.ts packages/batch-backend/src/application/approve-job.ts packages/batch-backend/src/domain/assignment-session-repository.ts packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts packages/batch-backend/tests/application.assignment-share.test.ts packages/batch-backend/tests/transport.http-server.integration.assignment-sessions.test.ts
 git commit -m "feat(backend): make assignment share retry safe"
 ```
 
@@ -803,12 +871,18 @@ git commit -m "feat(backend): make assignment share retry safe"
 - Create: `packages/batch-frontend/src/ui/minimal/MinimalAssignment.confirmation.test.ts`
 - Modify: `packages/batch-frontend/src/ui/assignments/assignment-workflow.ts`
 - Modify: `packages/batch-frontend/src/ui/assignments/assignment-workflow.test.ts`
+- Modify: `packages/batch-frontend/src/ui/minimal/MinimalAssignment.resume-presentation.ts`
+- Modify: `packages/batch-frontend/src/ui/minimal/MinimalAssignment.resume-presentation.test.ts`
+- Modify: `packages/batch-frontend/src/ui/minimal/MinimalAssignment.entry-state.ts`
+- Modify: `packages/batch-frontend/src/ui/minimal/MinimalAssignment.entry-state.test.ts`
 - Modify: `packages/batch-frontend/src/dev/frontend-sandbox-api.ts`
 - Modify: `packages/batch-frontend/src/dev/frontend-sandbox-api.test.ts`
 
 - [ ] **Step 1: Write failing pure workflow tests**
 
-Cover confirmed completion, dirty recovery, earliest dirty step, permissible forward navigation, Share blocking, invalidation, and conflict reconciliation. Readiness booleans must not mark a step complete.
+Cover confirmed completion, dirty recovery, earliest-dirty/base resume derivation, completed-Share job
+routing, permissible forward navigation, Share blocking, exit safety, refresh triggers, invalidation,
+and conflict reconciliation. Readiness booleans must not mark a step complete.
 
 ```ts
 expect(deriveAssignmentWorkflow(sessionWithReadyUnconfirmedDraft).create.status).toBe('current');
@@ -818,6 +892,10 @@ expect(canShareAssignment(sessionWithDirtyContext)).toEqual({
   allowed: false,
   reason: 'Confirm Teaching context before sharing.',
 });
+expect(deriveResumeDestination(cleanConfirmedContext)).toBe('assignment');
+expect(deriveResumeDestination(confirmedShare)).toEqual({ jobId: confirmedShare.shareJobId });
+expect(shouldGuardAssignmentExit({ recovery: 'saved', mutation: 'settled' })).toBe(false);
+expect(shouldGuardAssignmentExit({ recovery: 'pending', mutation: 'settled' })).toBe(true);
 ```
 
 - [ ] **Step 2: Run pure tests and verify failure**
@@ -825,7 +903,7 @@ expect(canShareAssignment(sessionWithDirtyContext)).toEqual({
 Run:
 
 ```bash
-pnpm --filter @esl-pipeline/batch-frontend exec vitest run src/ui/minimal/MinimalAssignment.confirmation.test.ts src/ui/assignments/assignment-workflow.test.ts src/dev/frontend-sandbox-api.test.ts
+pnpm --filter @esl-pipeline/batch-frontend exec vitest run src/ui/minimal/MinimalAssignment.confirmation.test.ts src/ui/assignments/assignment-workflow.test.ts src/ui/minimal/MinimalAssignment.resume-presentation.test.ts src/ui/minimal/MinimalAssignment.entry-state.test.ts src/dev/frontend-sandbox-api.test.ts
 ```
 
 Expected: missing confirmation helper and old readiness-derived status tests fail.
@@ -855,7 +933,9 @@ export async function shareAssignmentSession(
 ): Promise<ConfirmAssignmentSessionShareResponse>;
 ```
 
-Update transcript/draft functions to require `expectedRevisionId`. Delete the obsolete `createAssignmentSession` and `updateAssignmentSession` client exports, then match sandbox behavior to production semantics.
+Update transcript/draft functions to require `expectedWorkingVersion` and return working version/hash.
+Delete obsolete session create/update/archive client exports, then match sandbox behavior to
+production semantics without `currentStage`, `archivedAt`, or `archivePending`.
 
 - [ ] **Step 4: Implement pure state derivation**
 
@@ -863,8 +943,11 @@ Update transcript/draft functions to require `expectedRevisionId`. Delete the ob
 
 - content-normalized equality for notes and nullable IDs;
 - per-step dirty comparison between working fields and `confirmed` snapshots;
-- earliest dirty resume selection in Student → Source → Context → Create order;
+- earliest dirty resume selection in Source → Context → Create order;
+- base resume mapping from `confirmedStep` and completed Share to its linked job;
 - forward-navigation and Share guards;
+- exit safety from recovery durability and mutation ambiguity, independent of confirmation dirtiness;
+- refresh decisions limited to load, focus return, mutation completion, and async polling;
 - idempotent lost-response comparison;
 - conflict resolution decisions that distinguish safe server adoption from local reconciliation.
 
@@ -877,18 +960,31 @@ export type ConfirmationSaveState =
   | { kind: 'saved'; step: AssignmentConfirmedStep }
   | { kind: 'error'; step: AssignmentConfirmedStep; message: string }
   | { kind: 'conflict'; step: AssignmentConfirmedStep; message: string };
+
+export type AssignmentPersistenceSafety = {
+  recovery: 'saved' | 'pending' | 'failed';
+  mutation: 'settled' | 'ambiguous';
+};
 ```
+
+Stepper prerequisites and exit protection are separate decisions: an unconfirmed boundary can keep
+a later workflow step unavailable, but it cannot trigger a route/browser exit warning after recovery
+is durable.
 
 - [ ] **Step 5: Derive visible workflow status only from confirmed snapshots**
 
-Keep the existing visible stages but map completion from `confirmedStep`; use dirty state to select the current step. A later confirmed snapshot never allows forward navigation past an earlier dirty recovery step.
+Keep the existing visible stages but map completion from `confirmedStep`; use earliest dirty recovery
+to select current/resume. Delete all `currentStage` presentation maps. A confirmed Share session is
+completed and resolves to its linked job, not Review. Define the frontend-only
+`AssignmentWorkflowStep = 'student' | 'source' | 'context' | 'assignment' | 'review'` for visible
+navigation; it is never serialized.
 
 - [ ] **Step 6: Run pure tests and frontend typecheck**
 
 Run:
 
 ```bash
-pnpm --filter @esl-pipeline/batch-frontend exec vitest run src/ui/minimal/MinimalAssignment.confirmation.test.ts src/ui/assignments/assignment-workflow.test.ts src/dev/frontend-sandbox-api.test.ts
+pnpm --filter @esl-pipeline/batch-frontend exec vitest run src/ui/minimal/MinimalAssignment.confirmation.test.ts src/ui/assignments/assignment-workflow.test.ts src/ui/minimal/MinimalAssignment.resume-presentation.test.ts src/ui/minimal/MinimalAssignment.entry-state.test.ts src/dev/frontend-sandbox-api.test.ts
 pnpm --filter @esl-pipeline/batch-frontend typecheck
 ```
 
@@ -897,7 +993,7 @@ Expected: state derivation, API parity, and typecheck pass.
 - [ ] **Step 7: Commit the frontend contract layer**
 
 ```bash
-git add packages/batch-frontend/src/utils/api.ts packages/batch-frontend/src/ui/minimal/MinimalAssignment.confirmation.ts packages/batch-frontend/src/ui/minimal/MinimalAssignment.confirmation.test.ts packages/batch-frontend/src/ui/assignments/assignment-workflow.ts packages/batch-frontend/src/ui/assignments/assignment-workflow.test.ts packages/batch-frontend/src/dev/frontend-sandbox-api.ts packages/batch-frontend/src/dev/frontend-sandbox-api.test.ts
+git add packages/batch-frontend/src/utils/api.ts packages/batch-frontend/src/ui/minimal/MinimalAssignment.confirmation.ts packages/batch-frontend/src/ui/minimal/MinimalAssignment.confirmation.test.ts packages/batch-frontend/src/ui/assignments/assignment-workflow.ts packages/batch-frontend/src/ui/assignments/assignment-workflow.test.ts packages/batch-frontend/src/ui/minimal/MinimalAssignment.resume-presentation.ts packages/batch-frontend/src/ui/minimal/MinimalAssignment.resume-presentation.test.ts packages/batch-frontend/src/ui/minimal/MinimalAssignment.entry-state.ts packages/batch-frontend/src/ui/minimal/MinimalAssignment.entry-state.test.ts packages/batch-frontend/src/dev/frontend-sandbox-api.ts packages/batch-frontend/src/dev/frontend-sandbox-api.test.ts
 git commit -m "feat(frontend): derive confirmed assignment workflow"
 ```
 
@@ -917,7 +1013,7 @@ git commit -m "feat(frontend): derive confirmed assignment workflow"
 Cover:
 
 - Student Continue creates one idempotent session and enters Source;
-- Source Continue first flushes transcript, then confirms its returned revision;
+- Source Continue first flushes transcript, then confirms its returned working version;
 - Context Continue first flushes notes/profile recovery, then confirms;
 - Back only navigates and preserves working state;
 - clicking a later step cannot bypass a dirty unconfirmed boundary;
@@ -948,13 +1044,24 @@ Expected: old generic session mutation calls and navigation-only Source advancem
 
 In `MinimalAssignment.tsx`, keep the latest returned session in a ref as well as state so queued automatic recovery always reads the newest revision. Serialize session mutations; coalesce superseded recovery patches but never coalesce semantic confirmations. On 409, fetch the latest session, run the pure reconciliation decision, and retain local buffers when they differ.
 
+Retain the existing hydration suppression boundary: hydrated values are already durable and do not
+schedule recovery until `markAssignmentUserEdit()` records a real tutor change. Keep the manual
+transcript wrapper on that boundary so resumed pasted-transcript edits cannot bypass persistence or
+exit-safety tracking.
+
 - [ ] **Step 4: Implement Student and Source confirmation**
 
-Student Continue creates one UUID per attempt and reuses it until success or explicit learner change. Source automatic recovery persists lesson/source identities. Source Continue awaits any pending transcript autosave, uses the returned transcript revision ID, then calls `confirmAssignmentSessionStep`. Only the successful response changes the visible confirmed boundary.
+Student Continue creates one UUID per attempt and reuses it until success or explicit learner change.
+Source automatic recovery persists lesson/source identities. Source Continue awaits any pending
+transcript autosave, uses the returned working version, then calls
+`confirmAssignmentSessionStep`. Only the successful response changes the visible confirmed boundary;
+the backend creates the immutable transcript revision at confirmation.
 
 - [ ] **Step 5: Implement Context recovery and confirmation**
 
-Debounce notes/profile recovery at the existing autosave cadence. Context Continue flushes the latest recovery patch and confirms the exact profile ID/revision/hash. Selecting a different profile revision marks Context dirty but does not immediately invalidate Create or Share.
+Debounce notes/profile recovery at the existing autosave cadence. Context Continue flushes the
+latest recovery patch and confirms the exact profile ID/revision/hash. Selecting a different profile
+revision marks Context dirty but does not invalidate Create until confirmation.
 
 - [ ] **Step 6: Remove manual persistence responsibility and present honest status**
 
@@ -978,13 +1085,15 @@ git add packages/batch-frontend/src/ui/minimal/MinimalAssignment.tsx packages/ba
 git commit -m "feat(frontend): confirm assignment inputs automatically"
 ```
 
-## Task 9: Wire Create, resume, navigation protection, and Share recovery
+## Task 9: Wire Create, derived resume, safe navigation, and terminal Share
 
 **Files:**
 
 - Modify: `packages/batch-frontend/src/ui/minimal/MinimalAssignment.tsx`
 - Modify: `packages/batch-frontend/src/ui/minimal/MinimalAssignment.authoring.ts`
 - Modify: `packages/batch-frontend/src/ui/minimal/MinimalAssignment.resume.ts`
+- Modify: `packages/batch-frontend/src/ui/minimal/MinimalAssignment.polling.ts`
+- Modify: `packages/batch-frontend/src/ui/minimal/MinimalAssignment.polling.test.ts`
 - Modify: `packages/batch-frontend/src/ui/assignments/AssignmentWorkflow.tsx`
 - Modify: `packages/batch-frontend/src/ui/minimal/MinimalAssignment.test-harness.tsx`
 - Modify: `packages/batch-frontend/src/ui/minimal/MinimalAssignment.prompt-draft.test-groups.tsx`
@@ -996,13 +1105,17 @@ git commit -m "feat(frontend): confirm assignment inputs automatically"
 Cover:
 
 - generation uses the confirmed profile revision;
-- draft autosave returns an immutable revision and Create Continue confirms it;
+- draft autosave returns a working version and Create Continue creates the immutable revision;
 - manual Save draft is absent;
 - Share rejects dirty upstream recovery and uses one request ID across retries;
-- response loss and archive failure still show completed Share and never duplicate a job;
-- refresh at every boundary hydrates the confirmed destination;
+- response loss still shows completed Share, links the stable job, and never duplicates it;
+- clean refresh derives destination from `confirmedStep`, never `currentStage`;
 - refresh with dirty Source/Context/Create opens the earliest dirty step;
-- route exit with dirty recovery invokes the assignment-specific navigation guard;
+- confirmed Share opens the linked job and is absent from unfinished sessions;
+- route exit with pending/failed recovery or ambiguous mutation invokes the guard;
+- durable-but-unconfirmed recovery does not invoke the guard;
+- stable data refreshes on load, focus return, and mutation completion but has no interval;
+- only processing recordings/jobs continue polling and stop at terminal state;
 - browser refresh does not require a manual refresh action after reload.
 
 ```ts
@@ -1021,42 +1134,61 @@ expect(screen.queryByText('Unfinished assignment')).not.toBeInTheDocument();
 Run:
 
 ```bash
-pnpm --filter @esl-pipeline/batch-frontend exec vitest run src/ui/minimal/MinimalAssignment.prompt-draft.test-groups.tsx src/ui/minimal/MinimalAssignment.publish-actions.test-groups.tsx src/ui/minimal/MinimalAssignment.resume-rehydration.test-groups.tsx
+pnpm --filter @esl-pipeline/batch-frontend exec vitest run src/ui/minimal/MinimalAssignment.prompt-draft.test-groups.tsx src/ui/minimal/MinimalAssignment.publish-actions.test-groups.tsx src/ui/minimal/MinimalAssignment.resume-rehydration.test-groups.tsx src/ui/minimal/MinimalAssignment.polling.test.ts
 ```
 
-Expected: draft save ignores artifact revision identity, Share bypasses the session ledger, and resume chooses the later stage instead of earliest dirty state.
+Expected: draft save lacks working-version CAS, Share is frontend-composed with archival, and resume
+depends on persisted stage instead of confirmed/dirty state.
 
 - [ ] **Step 3: Confirm Create from the durable draft revision**
 
-Generation consumes confirmed Student/Source/Context only. Draft autosave always carries the latest expected head revision. Create Continue flushes autosave, then confirms the exact prompt package, draft, and returned draft revision. Remove manual Save draft responsibility.
+Generation consumes confirmed Student/Source/Context only. Draft autosave carries the latest expected
+working version. Create Continue flushes autosave, then confirms the exact prompt package, draft, and
+returned working version; the backend creates the immutable revision. Remove manual Save draft
+responsibility.
 
 - [ ] **Step 4: Implement confirmed-input Preview and Share**
 
-Preview reads `session.confirmed.create`, not a newer recovery draft. Share creates one UUID per logical attempt, calls the new Share route, and reuses the ID for automatic/manual retries. Treat `archivePending` as success and schedule background archive cleanup. A confirmed Share session is completed even before cleanup.
+Preview reads `session.confirmed.create`, not newer recovery. Share creates one UUID per logical
+attempt, calls the new Share route, and reuses it for retries. The returned linked job is the completed
+destination. Delete every archive call, archive-pending state, and cleanup effect.
 
 - [ ] **Step 5: Rehydrate the earliest dirty boundary**
 
-After fetching a session, load working artifact revisions and compare them with confirmed hashes/revision IDs. Select Source before Context before Create when multiple boundaries are dirty. Never silently replace a local dirty buffer during conflict recovery.
+After fetching a session, load working artifact versions/hashes and compare them with confirmed
+snapshots. Select Source before Context before Create when multiple boundaries are dirty; otherwise
+derive the destination from `confirmedStep`. A completed Share routes to `session.shareJobId`. Never
+silently replace a local dirty buffer during conflict recovery.
 
 - [ ] **Step 6: Add assignment-specific route protection**
 
-Protect internal route changes and `beforeunload` only while unsent or unconfirmed local changes exist. The message explains that changes are being preserved automatically and asks whether to leave before confirmation; it does not ask the user to save.
+For SPA navigation, flush a pending unambiguous save before leaving. Protect internal route changes
+and `beforeunload` only while local content is not durably recovered, recovery retry is exhausted, or
+a mutation response is ambiguous. Do not guard merely because recovered content differs from
+confirmed truth.
 
-- [ ] **Step 7: Run focused journeys and frontend typecheck**
+- [ ] **Step 7: Restrict automatic refresh triggers**
+
+Load stable assignment collections on entry, refresh once per window-focus return, and update/refresh
+directly affected state after mutation completion. Keep SSE/fallback polling only for
+queued/transcribing recordings and queued/running jobs; stop polling at terminal state. Do not add
+stable-data intervals or reconnect refresh loops.
+
+- [ ] **Step 8: Run focused journeys and frontend typecheck**
 
 Run:
 
 ```bash
-pnpm --filter @esl-pipeline/batch-frontend exec vitest run src/ui/minimal/MinimalAssignment.prompt-draft.test-groups.tsx src/ui/minimal/MinimalAssignment.publish-actions.test-groups.tsx src/ui/minimal/MinimalAssignment.resume-rehydration.test-groups.tsx
+pnpm --filter @esl-pipeline/batch-frontend exec vitest run src/ui/minimal/MinimalAssignment.prompt-draft.test-groups.tsx src/ui/minimal/MinimalAssignment.publish-actions.test-groups.tsx src/ui/minimal/MinimalAssignment.resume-rehydration.test-groups.tsx src/ui/minimal/MinimalAssignment.polling.test.ts
 pnpm --filter @esl-pipeline/batch-frontend typecheck
 ```
 
 Expected: Create, Share interruption recovery, earliest-dirty resume, navigation guard, and typecheck pass.
 
-- [ ] **Step 8: Commit Create, Share, and resume behavior**
+- [ ] **Step 9: Commit Create, Share, and resume behavior**
 
 ```bash
-git add packages/batch-frontend/src/ui/minimal/MinimalAssignment.tsx packages/batch-frontend/src/ui/minimal/MinimalAssignment.authoring.ts packages/batch-frontend/src/ui/minimal/MinimalAssignment.resume.ts packages/batch-frontend/src/ui/assignments/AssignmentWorkflow.tsx packages/batch-frontend/src/ui/minimal/MinimalAssignment.test-harness.tsx packages/batch-frontend/src/ui/minimal/MinimalAssignment.prompt-draft.test-groups.tsx packages/batch-frontend/src/ui/minimal/MinimalAssignment.publish-actions.test-groups.tsx packages/batch-frontend/src/ui/minimal/MinimalAssignment.resume-rehydration.test-groups.tsx
+git add packages/batch-frontend/src/ui/minimal/MinimalAssignment.tsx packages/batch-frontend/src/ui/minimal/MinimalAssignment.authoring.ts packages/batch-frontend/src/ui/minimal/MinimalAssignment.resume.ts packages/batch-frontend/src/ui/minimal/MinimalAssignment.polling.ts packages/batch-frontend/src/ui/minimal/MinimalAssignment.polling.test.ts packages/batch-frontend/src/ui/assignments/AssignmentWorkflow.tsx packages/batch-frontend/src/ui/minimal/MinimalAssignment.test-harness.tsx packages/batch-frontend/src/ui/minimal/MinimalAssignment.prompt-draft.test-groups.tsx packages/batch-frontend/src/ui/minimal/MinimalAssignment.publish-actions.test-groups.tsx packages/batch-frontend/src/ui/minimal/MinimalAssignment.resume-rehydration.test-groups.tsx
 git commit -m "feat(frontend): complete confirmed assignment journey"
 ```
 
@@ -1073,7 +1205,11 @@ git commit -m "feat(frontend): complete confirmed assignment journey"
 
 - [ ] **Step 1: Add one focused five-step regression journey**
 
-Place the journey in the existing frontend workflow test grouping and cover fresh Student → Source → Context → Create → Share, refresh at each boundary, dirty recovery at each editable boundary, cross-tab conflicts, lost responses, and Share interruption recovery. Use mocked network boundaries only where necessary to simulate response loss; keep pure state rules in the dedicated helper tests.
+Place the journey in the existing frontend workflow test grouping and cover fresh Student → Source →
+Context → Create → Share; derived resume at each boundary; durable dirty recovery; cross-tab
+conflicts; safe exit with recovered-unconfirmed work; guarded exit with pending/ambiguous work; bounded
+refresh triggers; and Share response loss. Use mocked network boundaries only where necessary to
+simulate ambiguity; keep pure state rules in dedicated helper tests.
 
 - [ ] **Step 2: Run all affected backend and frontend suites**
 
@@ -1095,12 +1231,14 @@ Document:
 - recovery versus confirmation ownership;
 - hard deletion of pre-cutover sessions and absence of legacy resume/edit compatibility;
 - preservation of completed jobs, handouts, published URLs, and their required read-only artifacts;
-- mandatory initial revisions for every new transcript and draft;
-- exact session/artifact revision contracts and 409 handling;
+- mandatory initial working version/hash for every new transcript and draft;
+- working-version CAS, confirmation-only immutable revisions, and 409 handling;
 - removal of routine Save/Refresh responsibility;
-- earliest-dirty resume and forward-navigation blocking;
+- absence of persisted stage/archive state and derived resume/completion;
+- earliest-dirty resume, forward-navigation blocking, and durability-based exit guards;
+- load/focus/mutation refresh triggers plus async-only polling;
 - immutable historical handouts and explicit republish;
-- Share attempt states and archive cleanup semantics;
+- one stable job-backed Share reservation and terminal confirmed Share;
 - API `4.0.0`, DB `0.23.0`, and release-major classification.
 
 - [ ] **Step 4: Regenerate and verify the schema baseline**
@@ -1150,9 +1288,12 @@ git diff --check
 git diff --stat origin/main...HEAD
 git status --short
 rg -n "T[B]D|T[O]DO|manual save|manual refresh|PATCH /assignment-sessions/:id" docs packages/batch-backend packages/batch-frontend
+rg -n "currentStage|current_stage|archiveAssignmentSession|archivePending|assignment_session_share_attempts|SHARE_ATTEMPT_STATES" packages/contracts/src packages/batch-backend/src packages/batch-frontend/src
 ```
 
-Expected: no whitespace errors, no accidental placeholders, no remaining revisionless session PATCH usage, and no routine manual Save/Refresh requirement. Inspect every placeholder-marker result and retain only unrelated established repository notes.
+Expected: no whitespace errors or placeholders; no revisionless session PATCH; no persisted stage,
+session archive, or Share-attempt ledger on the assignment surface; and no routine manual
+Save/Refresh requirement. Inspect matches and retain only unrelated established repository notes.
 
 - [ ] **Step 8: Commit documentation and validation artifacts**
 
@@ -1170,17 +1311,21 @@ If `docs/generated/plans-index.md` is unchanged, omit it from `git add` rather t
 - [ ] All five visible steps advance only after their approved durable confirmation event.
 - [ ] Every pre-cutover assignment session is removed and no legacy resume/hydration branch exists.
 - [ ] Completed jobs, handouts, and published URLs remain readable after cutover.
-- [ ] Pre-cutover editor artifacts cannot enter a new assignment; every new transcript/draft starts with a non-null immutable revision head.
-- [ ] Automatic recovery never changes confirmed truth or canonical stage.
-- [ ] Transcript and draft updates use immutable revision-specific objects and CAS heads.
+- [ ] Pre-cutover editor artifacts cannot enter a new assignment; every new transcript/draft starts at working version `1` with a server hash.
+- [ ] Automatic recovery never changes confirmed truth.
+- [ ] No `currentStage` or session archive state exists; resume and completion are derived.
+- [ ] Transcript/draft autosaves use content-addressed working CAS without permanent revision rows.
+- [ ] Source/Create confirmation creates and retains the exact immutable content revision consumed downstream.
 - [ ] Prompt generation uses the exact confirmed profile revision.
 - [ ] Cross-tab conflicts preserve local input and cannot silently overwrite newer state.
 - [ ] Back is non-destructive; forward navigation cannot bypass dirty unconfirmed work.
-- [ ] Refresh/resume opens the earliest dirty boundary and requires no manual Refresh action.
+- [ ] Resume opens the earliest dirty boundary, then derives from `confirmedStep`; confirmed Share opens its linked job.
+- [ ] Exit guards appear only for unrecovered or ambiguous work, not durable unconfirmed recovery.
+- [ ] Stable refresh occurs only on load, focus return, or mutation completion; only async work polls.
 - [ ] No routine Save action remains where the system can infer and persist the desired state.
 - [ ] Historical shared handouts remain accessible after active-lineage invalidation.
-- [ ] Share interruption at every durable phase resumes to exactly one linked job.
-- [ ] Archive failure never converts a completed Share into a duplicate unfinished session.
+- [ ] Share interruption resumes from one stable job and existing job state without a parallel attempt ledger.
+- [ ] Confirmed Share is terminal and excluded from unfinished sessions without archive cleanup.
 - [ ] API and DB contract versions, migration head, baseline schema, READMEs, and alignment docs agree.
 - [ ] Focused suites, package tests/typechecks, contract verification, baseline verification, docs checks, and broad repository gates have fresh recorded evidence.
 
