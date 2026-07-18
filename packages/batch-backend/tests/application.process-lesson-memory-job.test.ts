@@ -64,6 +64,51 @@ describe('application/process-lesson-memory-job', () => {
     });
   });
 
+  it('marks immutable source read failures on the final attempt', async () => {
+    const markFailed = vi.fn().mockResolvedValue(null);
+
+    await expect(
+      processLessonMemoryJob({
+        config: createTestConfig(),
+        payload: {
+          kind: 'lesson-memory-generate',
+          transcriptId: 'transcript-1',
+          recordingId: 'recording-1',
+          studentId: 'student-1',
+          sourceStorageUri: 'local://confirmed/a.txt',
+          sourceContentHash: 'a'.repeat(64),
+          pendingEntryId: 'pending-1',
+          provider: 'openai',
+          model: 'gpt-5.2',
+        },
+        attemptsMade: 4,
+        maxAttempts: 5,
+        overrides: {
+          storageFactory: vi.fn().mockReturnValue({
+            getText: vi.fn().mockRejectedValue(new Error('confirmed source unavailable')),
+          }),
+          generator: vi.fn(),
+          lessonMemory: {
+            getById: vi.fn().mockResolvedValue({
+              id: 'pending-1',
+              status: 'pending',
+              sourceStorageUri: 'local://confirmed/a.txt',
+              sourceContentHash: 'a'.repeat(64),
+            }),
+            markFailed,
+            supersedePendingForTranscript: vi.fn(),
+          },
+          snapshots: { requestRefresh: vi.fn() },
+        } as never,
+      }),
+    ).rejects.toThrow('confirmed source unavailable');
+
+    expect(markFailed).toHaveBeenCalledWith({
+      id: 'pending-1',
+      errorMessage: 'confirmed source unavailable',
+    });
+  });
+
   it('publishes the same confirmed pending intent and refreshes student memory', async () => {
     const generator = vi.fn().mockResolvedValue({
       entry: {

@@ -13,6 +13,16 @@ export interface EnqueueStudentMemoryOptions {
   attempts?: number;
 }
 
+function buildStudentMemoryJobOptions(options: EnqueueStudentMemoryOptions): JobsOptions {
+  return {
+    attempts: options.attempts ?? 5,
+    backoff: { type: 'exponential', delay: 1000 },
+    removeOnComplete: 1000,
+    removeOnFail: 1000,
+    ...(options.jobId ? { jobId: sanitizeStudentMemoryJobId(options.jobId) } : {}),
+  };
+}
+
 function sanitizeStudentMemoryJobId(jobId: string): string {
   return jobId.replaceAll(':', '__');
 }
@@ -56,14 +66,35 @@ export function createStudentMemoryQueue() {
     queue: queueSingleton!,
     queueEvents: queueEventsSingleton!,
     async enqueue(payload: StudentMemoryQueuePayload, options: EnqueueStudentMemoryOptions = {}) {
-      const opts: JobsOptions = {
-        attempts: options.attempts ?? 5,
-        backoff: { type: 'exponential', delay: 1000 },
-        removeOnComplete: 1000,
-        removeOnFail: 1000,
-        ...(options.jobId ? { jobId: sanitizeStudentMemoryJobId(options.jobId) } : {}),
-      };
-      await queueSingleton!.add(payload.kind, payload, opts);
+      await queueSingleton!.add(payload.kind, payload, buildStudentMemoryJobOptions(options));
+    },
+    async reconcile(payload: StudentMemoryQueuePayload, options: EnqueueStudentMemoryOptions) {
+      if (!options.jobId) {
+        throw new Error('Student-memory queue reconciliation requires a stable job id');
+      }
+      const jobId = sanitizeStudentMemoryJobId(options.jobId);
+      const existing = await queueSingleton!.getJob(jobId);
+      if (!existing) {
+        await queueSingleton!.add(payload.kind, payload, buildStudentMemoryJobOptions(options));
+        return;
+      }
+      if ((await existing.getState()) === 'failed') {
+        try {
+          await existing.retry('failed', {
+            resetAttemptsMade: true,
+            resetAttemptsStarted: true,
+          });
+        } catch (error) {
+          const reconciled = await queueSingleton!.getJob(jobId);
+          if (!reconciled) {
+            await queueSingleton!.add(payload.kind, payload, buildStudentMemoryJobOptions(options));
+            return;
+          }
+          if ((await reconciled.getState()) === 'failed') {
+            throw error;
+          }
+        }
+      }
     },
   };
 }

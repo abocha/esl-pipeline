@@ -26,12 +26,16 @@ export async function confirmAssignmentSessionStep(args: {
   request: ConfirmAssignmentSessionStepRequest;
   overrides?: Partial<ConfirmAssignmentSessionStepDependencies>;
 }): Promise<ConfirmAssignmentSessionStepResponse> {
-  const candidate = resolveGenerationCandidates({
-    config: args.config.generation,
-    workload: 'student_memory_extraction',
-  })[0];
-  if (!candidate)
+  const candidate =
+    args.request.step === 'source'
+      ? resolveGenerationCandidates({
+          config: args.config.generation,
+          workload: 'student_memory_extraction',
+        })[0]
+      : undefined;
+  if (args.request.step === 'source' && !candidate) {
     throw new Error('No generation candidate is available for lesson-memory extraction');
+  }
   const confirmation = args.overrides?.confirmation ?? {
     confirm: confirmAssignmentSessionStepPersistence,
   };
@@ -44,12 +48,14 @@ export async function confirmAssignmentSessionStep(args: {
     id: args.sessionId,
     userId: args.userId,
     request: args.request,
-    lessonMemory: {
-      schemaVersion: LESSON_MEMORY_SCHEMA_VERSION,
-      provider: candidate.provider,
-      model: candidate.model,
-      requestedAt: now(),
-    },
+    lessonMemory: candidate
+      ? {
+          schemaVersion: LESSON_MEMORY_SCHEMA_VERSION,
+          provider: candidate.provider,
+          model: candidate.model,
+          requestedAt: now(),
+        }
+      : undefined,
   });
   if (result.lessonMemoryIntent) {
     await lessonMemory.enqueueConfirmedIntent({

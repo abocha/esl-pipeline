@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { enqueueMock, ensurePendingMock, supersedeClaimsMock } = vi.hoisted(() => ({
-  enqueueMock: vi.fn(),
+const { reconcileMock, ensurePendingMock, supersedeClaimsMock } = vi.hoisted(() => ({
+  reconcileMock: vi.fn(),
   ensurePendingMock: vi.fn(),
   supersedeClaimsMock: vi.fn(),
 }));
 
 vi.mock('../src/infrastructure/student-memory-queue.js', () => ({
-  createStudentMemoryQueue: vi.fn(() => ({ enqueue: enqueueMock })),
+  createStudentMemoryQueue: vi.fn(() => ({ reconcile: reconcileMock })),
 }));
 
 vi.mock('../src/domain/lesson-memory-repository.js', () => ({
@@ -53,7 +53,7 @@ describe('application/request-lesson-memory-generation', () => {
       canonicalScopeKey: 'transcript-1',
     });
     expect(ensurePendingMock).toHaveBeenCalled();
-    expect(enqueueMock).toHaveBeenCalled();
+    expect(reconcileMock).toHaveBeenCalled();
   });
 
   it('records teacher-confirmed transcript requests and carries the linked lesson into the queue', async () => {
@@ -78,7 +78,7 @@ describe('application/request-lesson-memory-generation', () => {
         }),
       }),
     );
-    expect(enqueueMock).toHaveBeenCalledWith(
+    expect(reconcileMock).toHaveBeenCalledWith(
       expect.objectContaining({
         lessonId: 'lesson-1',
         sourceStorageUri: 's3://transcripts/content/a.txt',

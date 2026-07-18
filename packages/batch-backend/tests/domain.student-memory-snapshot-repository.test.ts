@@ -8,6 +8,7 @@ import {
   insertCanonicalReadyStudentMemorySnapshot,
   listStudentMemorySnapshots,
   StudentMemorySnapshotParentChangedError,
+  StudentMemorySnapshotSourcesChangedError,
 } from '../src/domain/student-memory-snapshot-repository.js';
 import { closePgPool, withPgClient } from '../src/infrastructure/db.js';
 import { requirePgTestEnv } from './support/test-env.js';
@@ -24,6 +25,9 @@ async function truncateStudentMemorySnapshotTables() {
     await client.query(
       `TRUNCATE TABLE
         student_memory_snapshots,
+        lesson_memory_entries,
+        transcripts,
+        recordings,
         students
       RESTART IDENTITY CASCADE`,
     );
@@ -206,5 +210,54 @@ describeIfPg('domain/student-memory-snapshot-repository', () => {
     await expect(getLatestReadyStudentMemorySnapshotByStudentId(studentId)).resolves.toMatchObject({
       id: authoritative.id,
     });
+  });
+
+  it('rejects a stale bootstrap result after its confirmed lesson source is superseded', async () => {
+    const studentId = await insertStudent();
+    const recordingId = randomUUID();
+    const transcriptId = randomUUID();
+    const lessonMemoryId = randomUUID();
+    await withPgClient(async (client) => {
+      await client.query(
+        `INSERT INTO recordings
+           (id, source, student_id, source_path, storage_uri, bytes, status, created_at, updated_at)
+         VALUES ($1, 'upload', $2, 'lesson.wav', 'local://recordings/lesson.wav', 100,
+                 'ingested', NOW(), NOW())`,
+        [recordingId, studentId],
+      );
+      await client.query(
+        `INSERT INTO transcripts
+           (id, recording_id, storage_uri, mode, model, language, stt_provider,
+            fallback_used, created_at, updated_at)
+         VALUES ($1, $2, 'local://transcripts/a.txt', 'timeline', 'nova-3', 'multi',
+                 'deepgram', FALSE, NOW(), NOW())`,
+        [transcriptId, recordingId],
+      );
+      await client.query(
+        `INSERT INTO lesson_memory_entries
+           (id, student_id, transcript_id, recording_id, schema_version, generated_at,
+            provider, model, status, source_kind, source_storage_uri, source_content_hash)
+         VALUES ($1, $2, $3, $4, 'lesson-memory.v1', NOW(), 'openai', 'gpt-5.2',
+                 'superseded', 'lesson_transcript', 'local://confirmed/a.txt', $5)`,
+        [lessonMemoryId, studentId, transcriptId, recordingId, 'a'.repeat(64)],
+      );
+    });
+
+    await expect(
+      insertCanonicalReadyStudentMemorySnapshot({
+        studentId,
+        schemaVersion: 'student-memory-snapshot.v1',
+        provider: 'openai',
+        model: 'gpt-5.2',
+        lessonMemoryEntryIds: [lessonMemoryId],
+        homeworkMemoryEntryIds: [],
+        expectedLatestReadySnapshotId: null,
+      }),
+    ).rejects.toMatchObject({
+      name: 'StudentMemorySnapshotSourcesChangedError',
+      unavailableLessonMemoryEntryIds: [lessonMemoryId],
+    } satisfies Partial<StudentMemorySnapshotSourcesChangedError>);
+
+    await expect(getLatestReadyStudentMemorySnapshotByStudentId(studentId)).resolves.toBeNull();
   });
 });

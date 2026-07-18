@@ -425,6 +425,12 @@ working version is still current. It then copies the row's server-owned working 
 and hash into the confirmed snapshot. A delayed tab therefore cannot confirm content it did not see,
 and a later working-pointer update cannot change what was confirmed.
 
+Context and Create confirmation also revalidate that the confirmed Source tuple still matches the
+current transcript working row; unconfirmed upstream autosaves therefore keep the tutor at Source.
+Context accepts a profile revision only when its profile is actively bound to the session's selected
+student. Create additionally requires the current recovered notes/profile tuple to equal confirmed
+Context before accepting prompt/draft lineage.
+
 The confirmation endpoint never edits transcript or draft content. The frontend first flushes that
 content through its existing artifact API, receives the durable working version/hash, then submits
 the confirmation. If artifact persistence succeeds but confirmation fails, the CAS-protected working
@@ -445,12 +451,24 @@ lesson-memory intent keyed by `(transcript_id, transcript_hash)`. The intent sto
 durable pending intent that the backend reconciles automatically on mutation completion, session
 load, or focus refresh. The tutor is never asked to Save or Refresh memory.
 
+Reconciliation is queue-state aware. A missing stable job is added, queued/running/completed jobs
+are left unchanged, and a retained terminal failed BullMQ job is retried under the same stable ID
+with its attempt counters reset. Storage construction, immutable-URI reads, and hash verification
+are all inside the worker's terminal-failure handling so the durable intent cannot remain silently
+pending after retry exhaustion.
+
 The asynchronous payload carries `sourceStorageUri` and `sourceContentHash`. The worker reads that
 URI directly, verifies the loaded bytes against the server hash, and never resolves
 `transcripts.storageUri` or a prompt package for mutable notes. Prompt-package creation and draft
 generation no longer opportunistically request lesson memory, and the separate first-profile
 "confirm transcript for memory" action is removed; neither path may reinterpret unconfirmed working
 content as authoritative.
+
+The pre-cutover OpenAI Batch lesson-memory candidate/import path is disabled. It was keyed to the
+mutable transcript pointer and has no independent confirmed-source consumer. Homework-memory and
+student-memory-snapshot Batch workloads remain, but snapshot import considers only ready lesson
+entries with confirmed source hashes. Reintroducing lesson-memory Batch generation would require a
+new confirmed-intent input contract; it may not fall back to `transcripts.storageUri`.
 
 Confirmation behavior is deterministic:
 
@@ -459,8 +477,11 @@ Confirmation behavior is deterministic:
 - reconfirming the same A hash is an idempotent no-op: it does not increment the session revision,
   regress `confirmedStep`, or invalidate downstream state; automatic reconciliation may only restore
   its missing stable queue entry;
-- confirming B with a different hash atomically supersedes ready/pending A memory, makes B the only
-  current intent, and queues B from B's exact URI;
+- confirming a different `(transcript_id, transcript_hash)` authority atomically supersedes the
+  exact previous ready/pending memory even when the transcript identity changes, makes the new
+  authority the only current intent, and queues it from its exact URI;
+- changing only lesson linkage while retaining the same transcript/hash authority does not
+  supersede memory or student-memory snapshots;
 - every confirmed hash change regenerates memory; no semantic-difference classifier is introduced;
 - a late A worker may remain historical, but a conditional publish check prevents it from becoming
   current after B is authoritative.
@@ -471,6 +492,11 @@ student-memory assembly reports the layer as refreshing/unavailable rather than 
 succeeds, it becomes the ready lesson entry, automatically requests a student-memory snapshot
 refresh, and replaces A in future snapshots. Historical A entries and snapshots may remain
 immutable evidence but current queries return only the authoritative hash.
+
+Snapshot publication revalidates and locks every referenced lesson-memory entry in its final
+transaction. Each entry must still be ready, belong to the student, and carry confirmed-source
+provenance. This closes the bootstrap race where an A-based worker loaded its inputs before B
+confirmation and otherwise could publish A after B became authoritative.
 
 ### Share confirmation
 
@@ -707,10 +733,11 @@ remain as a presentation/test adapter, but backend results are authoritative.
 Invalidating a later confirmed snapshot also regresses `confirmedStep` to the newly confirmed
 boundary in the same conditional database update. Resume routing derives from that result.
 
-Source hash changes also invalidate the current lesson-memory projection. The Source confirmation
-transaction creates the new hash-keyed pending intent, supersedes earlier ready/pending entries for
-that transcript, and makes student-memory snapshots that could expose the earlier hash ineligible.
-Unconfirmed autosaves perform none of those actions.
+Source authority changes also invalidate the current lesson-memory projection. The Source
+confirmation transaction creates the new transcript/hash-keyed pending intent, supersedes the exact
+previous ready/pending authority across transcript changes, and makes student-memory snapshots that
+could expose it ineligible. Lesson-link-only changes with the same authority key preserve the
+projection. Unconfirmed autosaves perform none of those actions.
 
 Learner identity is immutable within an assignment session. Choosing a different learner creates a
 new session and preserves the prior new-contract session as resumable history; there is no in-place
