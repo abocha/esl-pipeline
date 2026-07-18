@@ -2,10 +2,12 @@ import './support/bootstrap-pg-test-env.js';
 
 import { createHash, randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { Pool } from 'pg';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
+import { resolveHomeworkMemorySourceFromSucceededJob } from '../src/application/homework-memory-source.js';
 import { closePgPool } from '../src/infrastructure/db.js';
 import { verifyMigrations } from '../src/infrastructure/migration-verify.js';
 import { getMigrationStatus, runMigrations } from '../src/infrastructure/migrations.js';
@@ -309,6 +311,8 @@ describe('integration/migrations', () => {
         transcript: randomUUID(),
         promptPackage: randomUUID(),
         draft: randomUUID(),
+        unfinishedPromptPackage: randomUUID(),
+        unfinishedDraft: randomUUID(),
         activeSession: randomUUID(),
         archivedSession: randomUUID(),
         rootJob: randomUUID(),
@@ -316,90 +320,118 @@ describe('integration/migrations', () => {
         homeworkMemory: randomUUID(),
       };
       const publishedUrl = 'https://example.test/handouts/completed';
-      const markdownUri = 's3://historical-handouts/completed.md';
+      const markdownUri = 'local://historical-handouts/completed.md';
+      const historicalMarkdown =
+        '---\ntitle: Homework\n---\n### A. Notice the Grammar\nReview articles.\n\n### F. Your Mission\nGive travel advice.\n';
+      const storageDir = await fs.mkdtemp(path.join(os.tmpdir(), 'assignment-cutover-storage-'));
+      const previousStorageDir = process.env.FILESYSTEM_UPLOAD_DIR;
+      process.env.FILESYSTEM_UPLOAD_DIR = storageDir;
+      await fs.mkdir(path.join(storageDir, 'historical-handouts'), { recursive: true });
+      await fs.writeFile(
+        path.join(storageDir, 'historical-handouts', 'completed.md'),
+        historicalMarkdown,
+        'utf8',
+      );
 
-      await withAdminClient(async (pool) => {
-        await applyMigrationsThrough(pool, '0043_manual_transcript_source');
-        await pool.query(
-          `INSERT INTO users (id, email, password_hash, role) VALUES ($1, $2, 'hash', 'user')`,
-          [ids.user, `${ids.user}@example.test`],
-        );
-        await pool.query(`INSERT INTO students (id, student) VALUES ($1, 'Alpha Tester')`, [
-          ids.student,
-        ]);
-        await pool.query(
-          `
+      try {
+        await withAdminClient(async (pool) => {
+          await applyMigrationsThrough(pool, '0043_manual_transcript_source');
+          await pool.query(
+            `INSERT INTO users (id, email, password_hash, role) VALUES ($1, $2, 'hash', 'user')`,
+            [ids.user, `${ids.user}@example.test`],
+          );
+          await pool.query(`INSERT INTO students (id, student) VALUES ($1, 'Alpha Tester')`, [
+            ids.student,
+          ]);
+          await pool.query(
+            `
           INSERT INTO recordings (id, source, student_id, storage_uri, bytes, status)
           VALUES ($1, 'upload', $2, 's3://recordings/lesson.mp3', 12, 'ingested')
           `,
-          [ids.recording, ids.student],
-        );
-        await pool.query(
-          `
+            [ids.recording, ids.student],
+          );
+          await pool.query(
+            `
           INSERT INTO transcripts (id, recording_id, storage_uri, stt_provider)
           VALUES ($1, $2, 's3://transcripts/historical.json', 'deepgram')
           `,
-          [ids.transcript, ids.recording],
-        );
-        await pool.query(
-          `
+            [ids.transcript, ids.recording],
+          );
+          await pool.query(
+            `
           INSERT INTO prompt_packages (
             id, recording_id, transcript_id, student_id, template_version, storage_uri
           )
           VALUES ($1, $2, $3, $4, 'v4.4', 's3://prompts/unfinished.txt')
           `,
-          [ids.promptPackage, ids.recording, ids.transcript, ids.student],
-        );
-        await pool.query(
-          `
+            [ids.promptPackage, ids.recording, ids.transcript, ids.student],
+          );
+          await pool.query(
+            `
           INSERT INTO drafts (id, prompt_package_id, student_id, storage_uri, created_by)
           VALUES ($1, $2, $3, 's3://drafts/unfinished.md', $4)
           `,
-          [ids.draft, ids.promptPackage, ids.student, ids.user],
-        );
-        await pool.query(
-          `
+            [ids.draft, ids.promptPackage, ids.student, ids.user],
+          );
+          await pool.query(
+            `
+          INSERT INTO prompt_packages (
+            id, recording_id, transcript_id, student_id, template_version, storage_uri
+          )
+          VALUES ($1, $2, $3, $4, 'v4.4', 's3://prompts/unreferenced.txt')
+          `,
+            [ids.unfinishedPromptPackage, ids.recording, ids.transcript, ids.student],
+          );
+          await pool.query(
+            `
+          INSERT INTO drafts (id, prompt_package_id, student_id, storage_uri, created_by)
+          VALUES ($1, $2, $3, 's3://drafts/unreferenced.md', $4)
+          `,
+            [ids.unfinishedDraft, ids.unfinishedPromptPackage, ids.student, ids.user],
+          );
+          await pool.query(
+            `
           INSERT INTO jobs (
             id, state, md_storage_uri, recording_id, transcript_id, prompt_package_id, draft_id,
             student_id, user_id, publish_target, html_url, finished_at
           )
           VALUES ($1, 'succeeded', $2, $3, $4, $5, $6, $7, $8, 'html', $9, NOW())
           `,
-          [
-            ids.rootJob,
-            markdownUri,
-            ids.recording,
-            ids.transcript,
-            ids.promptPackage,
-            ids.draft,
-            ids.student,
-            ids.user,
-            publishedUrl,
-          ],
-        );
-        await pool.query(
-          `
+            [
+              ids.rootJob,
+              markdownUri,
+              ids.recording,
+              ids.transcript,
+              ids.promptPackage,
+              ids.draft,
+              ids.student,
+              ids.user,
+              publishedUrl,
+            ],
+          );
+          await pool.query(
+            `
           INSERT INTO jobs (
             id, state, md_storage_uri, recording_id, transcript_id, prompt_package_id, draft_id,
             student_id, user_id, source_job_id, publish_target, html_url, finished_at
           )
           VALUES ($1, 'succeeded', $2, $3, $4, $5, $6, $7, $8, $9, 'html', $10, NOW())
           `,
-          [
-            ids.rerunJob,
-            markdownUri,
-            ids.recording,
-            ids.transcript,
-            ids.promptPackage,
-            ids.draft,
-            ids.student,
-            ids.user,
-            ids.rootJob,
-            publishedUrl,
-          ],
-        );
-        await pool.query(
-          `
+            [
+              ids.rerunJob,
+              markdownUri,
+              ids.recording,
+              ids.transcript,
+              ids.promptPackage,
+              ids.draft,
+              ids.student,
+              ids.user,
+              ids.rootJob,
+              publishedUrl,
+            ],
+          );
+          await pool.query(
+            `
           INSERT INTO homework_memory_entries (
             id, student_id, job_id, assignment_lineage_key, schema_version, generated_at,
             provider, model, status, published_at, prompt_package_id, draft_id, recording_id,
@@ -407,19 +439,19 @@ describe('integration/migrations', () => {
           )
           VALUES ($1, $2, $3, $4, '1', NOW(), 'openai', 'gpt-5.6', 'ready', NOW(), $5, $6, $7, $8)
           `,
-          [
-            ids.homeworkMemory,
-            ids.student,
-            ids.rerunJob,
-            ids.rootJob,
-            ids.promptPackage,
-            ids.draft,
-            ids.recording,
-            ids.transcript,
-          ],
-        );
-        await pool.query(
-          `
+            [
+              ids.homeworkMemory,
+              ids.student,
+              ids.rerunJob,
+              ids.rootJob,
+              ids.promptPackage,
+              ids.draft,
+              ids.recording,
+              ids.transcript,
+            ],
+          );
+          await pool.query(
+            `
           INSERT INTO assignment_sessions (
             id, user_id, student_id, recording_id, transcript_id, prompt_package_id, draft_id,
             current_stage, archived_at
@@ -428,69 +460,90 @@ describe('integration/migrations', () => {
             ($1, $3, $4, $5, $6, $7, $8, 'review', NULL),
             ($2, $3, $4, NULL, NULL, NULL, NULL, 'source', NOW())
           `,
-          [
-            ids.activeSession,
-            ids.archivedSession,
-            ids.user,
-            ids.student,
-            ids.recording,
-            ids.transcript,
-            ids.promptPackage,
-            ids.draft,
-          ],
-        );
-
-        const cutoverSql = await fs.readFile(
-          path.join(migrationsPath, '0044_assignment_step_confirmation_contract.sql'),
-          'utf8',
-        );
-        await pool.query(cutoverSql);
-
-        for (const table of ['assignment_sessions', 'drafts', 'prompt_packages']) {
-          const count = await pool.query<{ count: string }>(
-            `SELECT COUNT(*)::text AS count FROM ${table}`,
+            [
+              ids.activeSession,
+              ids.archivedSession,
+              ids.user,
+              ids.student,
+              ids.recording,
+              ids.transcript,
+              ids.promptPackage,
+              ids.draft,
+            ],
           );
-          expect(count.rows[0]?.count).toBe('0');
-        }
 
-        const completed = await pool.query<{
-          html_url: string;
-          md_storage_uri: string;
-          source_job_id: string;
-        }>(`SELECT html_url, md_storage_uri, source_job_id FROM jobs WHERE id = $1`, [
-          ids.rerunJob,
-        ]);
-        expect(completed.rows[0]).toEqual({
-          html_url: publishedUrl,
-          md_storage_uri: markdownUri,
-          source_job_id: ids.rootJob,
-        });
+          const cutoverSql = await fs.readFile(
+            path.join(migrationsPath, '0044_assignment_step_confirmation_contract.sql'),
+            'utf8',
+          );
+          await pool.query(cutoverSql);
+          await pool.query(
+            `
+            INSERT INTO schema_migrations (id, checksum, execution_ms, tool_version)
+            VALUES ('0044_assignment_step_confirmation_contract', $1, 0, 'integration-cutover-fixture')
+            `,
+            [createHash('sha256').update(cutoverSql).digest('hex')],
+          );
 
-        const memory = await pool.query<{
-          prompt_package_id: string | null;
-          draft_id: string | null;
-          md_storage_uri: string;
-        }>(
-          `
+          for (const table of ['assignment_sessions', 'drafts', 'prompt_packages']) {
+            const count = await pool.query<{ count: string }>(
+              `SELECT COUNT(*)::text AS count FROM ${table}`,
+            );
+            expect(count.rows[0]?.count).toBe('0');
+          }
+
+          const completed = await pool.query<{
+            html_url: string;
+            md_storage_uri: string;
+            source_job_id: string;
+          }>(`SELECT html_url, md_storage_uri, source_job_id FROM jobs WHERE id = $1`, [
+            ids.rerunJob,
+          ]);
+          expect(completed.rows[0]).toEqual({
+            html_url: publishedUrl,
+            md_storage_uri: markdownUri,
+            source_job_id: ids.rootJob,
+          });
+
+          const memory = await pool.query<{
+            prompt_package_id: string | null;
+            draft_id: string | null;
+            md_storage_uri: string;
+          }>(
+            `
           SELECT h.prompt_package_id, h.draft_id, j.md_storage_uri
           FROM homework_memory_entries h
           JOIN jobs j ON j.id = h.job_id
           WHERE h.id = $1
           `,
-          [ids.homeworkMemory],
-        );
-        expect(memory.rows[0]).toEqual({
-          prompt_package_id: null,
-          draft_id: null,
-          md_storage_uri: markdownUri,
+            [ids.homeworkMemory],
+          );
+          expect(memory.rows[0]).toEqual({
+            prompt_package_id: null,
+            draft_id: null,
+            md_storage_uri: markdownUri,
+          });
+
+          const transcript = await pool.query<{
+            working_version: number | null;
+            content_hash: string | null;
+          }>(`SELECT working_version, content_hash FROM transcripts WHERE id = $1`, [
+            ids.transcript,
+          ]);
+          expect(transcript.rows[0]).toEqual({ working_version: null, content_hash: null });
         });
 
-        const transcript = await pool.query<{
-          working_version: number | null;
-          content_hash: string | null;
-        }>(`SELECT working_version, content_hash FROM transcripts WHERE id = $1`, [ids.transcript]);
-        expect(transcript.rows[0]).toEqual({ working_version: null, content_hash: null });
-      });
+        const source = await resolveHomeworkMemorySourceFromSucceededJob(ids.rerunJob);
+        expect(source.publishedMarkdown).toBe(historicalMarkdown);
+        expect(source.assignmentLineageKey).toBe(ids.rootJob);
+      } finally {
+        if (previousStorageDir === undefined) {
+          delete process.env.FILESYSTEM_UPLOAD_DIR;
+        } else {
+          process.env.FILESYSTEM_UPLOAD_DIR = previousStorageDir;
+        }
+        await fs.rm(storageDir, { recursive: true, force: true });
+      }
     },
     testTimeout,
   );

@@ -342,6 +342,7 @@ CREATE TABLE public.assignment_sessions (
     selected_profile_revision_id uuid,
     selected_profile_revision_hash text,
     share_job_id uuid,
+    CONSTRAINT assignment_sessions_completed_share_job_check CHECK (((confirmed_step <> 'share'::text) OR (share_job_id IS NOT NULL))),
     CONSTRAINT assignment_sessions_confirmed_snapshot_check CHECK (((jsonb_typeof(confirmed_snapshot) = 'object'::text) AND (confirmed_snapshot ?& ARRAY['student'::text, 'source'::text, 'context'::text, 'create'::text]) AND (jsonb_typeof((confirmed_snapshot -> 'student'::text)) = 'object'::text) AND (NULLIF((confirmed_snapshot #>> '{student,studentId}'::text[]), ''::text) IS NOT NULL) AND (((confirmed_snapshot #>> '{student,studentId}'::text[]))::uuid = student_id) AND (((confirmed_snapshot -> 'source'::text) = 'null'::jsonb) OR (jsonb_typeof((confirmed_snapshot -> 'source'::text)) = 'object'::text)) AND (((confirmed_snapshot -> 'context'::text) = 'null'::jsonb) OR (jsonb_typeof((confirmed_snapshot -> 'context'::text)) = 'object'::text)) AND (((confirmed_snapshot -> 'create'::text) = 'null'::jsonb) OR (jsonb_typeof((confirmed_snapshot -> 'create'::text)) = 'object'::text)))),
     CONSTRAINT assignment_sessions_confirmed_step_check CHECK ((confirmed_step = ANY (ARRAY['student'::text, 'source'::text, 'context'::text, 'create'::text, 'share'::text]))),
     CONSTRAINT assignment_sessions_creation_request_id_check CHECK (((creation_request_id IS NULL) OR (btrim(creation_request_id) <> ''::text))),
@@ -513,7 +514,7 @@ CREATE TABLE public.lesson_memory_entries (
     lesson_title text,
     source_storage_uri text,
     source_content_hash text,
-    CONSTRAINT lesson_memory_entries_confirmed_source_pair_check CHECK ((((source_storage_uri IS NULL) AND (source_content_hash IS NULL)) OR ((NULLIF(btrim(source_storage_uri), ''::text) IS NOT NULL) AND (source_content_hash ~ '^[0-9a-f]{64}$'::text)))),
+    CONSTRAINT lesson_memory_entries_confirmed_source_pair_check CHECK ((((source_storage_uri IS NULL) AND (source_content_hash IS NULL)) OR ((source_storage_uri IS NOT NULL) AND (source_content_hash IS NOT NULL) AND (NULLIF(btrim(source_storage_uri), ''::text) IS NOT NULL) AND (source_content_hash ~ '^[0-9a-f]{64}$'::text)))),
     CONSTRAINT lesson_memory_entries_source_kind_check CHECK ((source_kind = 'lesson_transcript'::text)),
     CONSTRAINT lesson_memory_entries_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'ready'::text, 'failed'::text, 'superseded'::text])))
 );
@@ -993,7 +994,7 @@ CREATE TABLE public.transcripts (
     content_hash text,
     CONSTRAINT transcripts_mode_check CHECK ((mode = ANY (ARRAY['timeline'::text, 'stack'::text]))),
     CONSTRAINT transcripts_stt_provider_check CHECK ((stt_provider = ANY (ARRAY['deepgram'::text, 'elevenlabs'::text, 'google'::text, 'manual'::text]))),
-    CONSTRAINT transcripts_working_content_pair_check CHECK ((((working_version IS NULL) AND (content_hash IS NULL)) OR ((working_version > 0) AND (content_hash ~ '^[0-9a-f]{64}$'::text))))
+    CONSTRAINT transcripts_working_content_pair_check CHECK ((((working_version IS NULL) AND (content_hash IS NULL)) OR ((working_version IS NOT NULL) AND (content_hash IS NOT NULL) AND (working_version > 0) AND (content_hash ~ '^[0-9a-f]{64}$'::text))))
 );
 
 CREATE TABLE public.uploaded_files (
@@ -1912,5 +1913,5 @@ VALUES
   ('0041_profile_revision_refresh_source', '997ca6ddcb3a771a409b8546189d2e7cbf3b0a7e641800deb770413555f25256', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0042_lesson_memory_titles', '11e9eddcb127fcb2386f4f0a10e2240e23746136b5b1380ea09e10a82642b6a8', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0043_manual_transcript_source', '716fee229f067d8daee6eaf423bfc1797080045036afc58aa1e579e9a2631016', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0044_assignment_step_confirmation_contract', '90a1d3fd5df432587c1b78dd90e65bc21c91bf950dea11e4e92cec85d7f9c15c', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0044_assignment_step_confirmation_contract', 'e55b274f9c142beae6d3f0791dcdecaed994c9f46e852ba180ca26f59eb348b1', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;

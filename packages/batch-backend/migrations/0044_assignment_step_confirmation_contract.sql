@@ -25,6 +25,8 @@ ALTER TABLE assignment_sessions
   ADD CONSTRAINT assignment_sessions_revision_check CHECK (revision > 0),
   ADD CONSTRAINT assignment_sessions_confirmed_step_check
     CHECK (confirmed_step IN ('student', 'source', 'context', 'create', 'share')),
+  ADD CONSTRAINT assignment_sessions_completed_share_job_check
+    CHECK (confirmed_step <> 'share' OR share_job_id IS NOT NULL),
   ADD CONSTRAINT assignment_sessions_confirmed_snapshot_check CHECK (
     jsonb_typeof(confirmed_snapshot) = 'object'
     AND confirmed_snapshot ?& ARRAY['student', 'source', 'context', 'create']
@@ -78,7 +80,9 @@ ALTER TABLE transcripts
   ADD CONSTRAINT transcripts_working_content_pair_check CHECK (
     (working_version IS NULL AND content_hash IS NULL)
     OR (
-      working_version > 0
+      working_version IS NOT NULL
+      AND content_hash IS NOT NULL
+      AND working_version > 0
       AND content_hash ~ '^[0-9a-f]{64}$'
     )
   );
@@ -95,7 +99,9 @@ ALTER TABLE lesson_memory_entries
   ADD CONSTRAINT lesson_memory_entries_confirmed_source_pair_check CHECK (
     (source_storage_uri IS NULL AND source_content_hash IS NULL)
     OR (
-      NULLIF(btrim(source_storage_uri), '') IS NOT NULL
+      source_storage_uri IS NOT NULL
+      AND source_content_hash IS NOT NULL
+      AND NULLIF(btrim(source_storage_uri), '') IS NOT NULL
       AND source_content_hash ~ '^[0-9a-f]{64}$'
     )
   );

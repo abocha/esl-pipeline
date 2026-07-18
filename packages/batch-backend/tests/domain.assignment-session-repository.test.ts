@@ -100,6 +100,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
     const studentId = randomUUID();
     const recordingId = randomUUID();
     const firstSessionId = randomUUID();
+    const shareJobId = randomUUID();
     await insertUserAndStudent(userId, studentId);
     await insertStudentConfirmedSession({
       id: firstSessionId,
@@ -119,8 +120,16 @@ describe('domain/assignment-session-repository persistence contract', () => {
 
     await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
       await client.query(
-        `UPDATE assignment_sessions SET confirmed_step = 'share', revision = revision + 1 WHERE id = $1`,
-        [firstSessionId],
+        `INSERT INTO jobs (id, state, student_id, user_id) VALUES ($1, 'succeeded', $2, $3)`,
+        [shareJobId, studentId, userId],
+      );
+      await client.query(
+        `
+        UPDATE assignment_sessions
+        SET confirmed_step = 'share', share_job_id = $2, revision = revision + 1
+        WHERE id = $1
+        `,
+        [firstSessionId, shareJobId],
       );
     });
 
@@ -132,6 +141,22 @@ describe('domain/assignment-session-repository persistence contract', () => {
         recordingId,
       }),
     ).resolves.toBeDefined();
+  });
+
+  it('rejects completed Share without the stable linked job', async () => {
+    const userId = randomUUID();
+    const studentId = randomUUID();
+    const sessionId = randomUUID();
+    await insertUserAndStudent(userId, studentId);
+    await insertStudentConfirmedSession({ id: sessionId, userId, studentId });
+
+    await expect(
+      withPgClientSessionContext({ rlsBypass: true }, async (client) =>
+        client.query(`UPDATE assignment_sessions SET confirmed_step = 'share' WHERE id = $1`, [
+          sessionId,
+        ]),
+      ),
+    ).rejects.toMatchObject({ code: '23514' });
   });
 
   it('rejects invalid revisions, steps, and malformed confirmed snapshots', async () => {
@@ -223,6 +248,65 @@ describe('domain/assignment-session-repository persistence contract', () => {
 
       await insertMemory();
       await expect(insertMemory()).rejects.toMatchObject({ code: '23505' });
+    });
+  });
+
+  it('rejects partial working and confirmed-source provenance pairs', async () => {
+    const userId = randomUUID();
+    const studentId = randomUUID();
+    const recordingId = randomUUID();
+    const transcriptId = randomUUID();
+    await insertUserAndStudent(userId, studentId);
+
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      const expectCheckViolation = async (query: () => Promise<unknown>) => {
+        await client.query('SAVEPOINT expected_check_violation');
+        await expect(query()).rejects.toMatchObject({ code: '23514' });
+        await client.query('ROLLBACK TO SAVEPOINT expected_check_violation');
+        await client.query('RELEASE SAVEPOINT expected_check_violation');
+      };
+
+      await client.query(
+        `
+        INSERT INTO recordings (id, source, student_id, storage_uri, bytes, status)
+        VALUES ($1, 'upload', $2, 's3://recordings/provenance.mp3', 12, 'ingested')
+        `,
+        [recordingId, studentId],
+      );
+      await client.query(
+        `
+        INSERT INTO transcripts (id, recording_id, storage_uri, stt_provider)
+        VALUES ($1, $2, 's3://transcripts/provenance.json', 'deepgram')
+        `,
+        [transcriptId, recordingId],
+      );
+
+      await expectCheckViolation(() =>
+        client.query(`UPDATE transcripts SET working_version = 1 WHERE id = $1`, [transcriptId]),
+      );
+      await expectCheckViolation(() =>
+        client.query(`UPDATE transcripts SET content_hash = $2 WHERE id = $1`, [
+          transcriptId,
+          'b'.repeat(64),
+        ]),
+      );
+
+      const insertMemory = (sourceStorageUri: string | null, sourceContentHash: string | null) =>
+        client.query(
+          `
+          INSERT INTO lesson_memory_entries (
+            id, student_id, transcript_id, recording_id, schema_version, generated_at,
+            provider, model, status, source_storage_uri, source_content_hash
+          )
+          VALUES ($1, $2, $3, $4, '1', NOW(), 'openai', 'gpt-5.6', 'pending', $5, $6)
+          `,
+          [randomUUID(), studentId, transcriptId, recordingId, sourceStorageUri, sourceContentHash],
+        );
+
+      await expectCheckViolation(() =>
+        insertMemory('s3://confirmed-transcripts/partial.json', null),
+      );
+      await expectCheckViolation(() => insertMemory(null, 'c'.repeat(64)));
     });
   });
 });
