@@ -35,7 +35,11 @@ describe('application/prompt-package', () => {
         expect(text).toContain('**Current Level:** B2');
         expect(text).toContain('- Lead product demos with more confidence.');
         expect(text).not.toContain('LEGACY PROFILE');
-        return { uri: `local://prompt-packages/${promptPackageId}.txt`, bytes: text.length };
+        return {
+          uri: `local://prompt-packages/${promptPackageId}.txt`,
+          bytes: text.length,
+          sha256: 'hash',
+        };
       },
     });
 
@@ -117,7 +121,11 @@ describe('application/prompt-package', () => {
         expect(text).toContain('DB PROFILE');
         expect(text).not.toContain('FS TEMPLATE');
         expect(text).not.toContain('FS PROFILE');
-        return { uri: `local://prompt-packages/${promptPackageId}.txt`, bytes: text.length };
+        return {
+          uri: `local://prompt-packages/${promptPackageId}.txt`,
+          bytes: text.length,
+          sha256: 'hash',
+        };
       },
     });
 
@@ -336,7 +344,11 @@ describe('application/prompt-package', () => {
     const storage = createStorageStub({
       getText: async () => 'TRANSCRIPT BODY',
       putPromptPackage: async ({ promptPackageId, text }) => {
-        return { uri: `local://prompt-packages/${promptPackageId}.txt`, bytes: text.length };
+        return {
+          uri: `local://prompt-packages/${promptPackageId}.txt`,
+          bytes: text.length,
+          sha256: 'hash',
+        };
       },
     });
 
@@ -521,7 +533,11 @@ describe('application/prompt-package', () => {
       getText: async () => 'Teacher: Let us practice travel situations today.',
       putPromptPackage: async ({ promptPackageId, text }) => {
         expect(text).toContain('[CANONICAL_STUDENT_NAME]\nStudent One');
-        return { uri: `local://prompt-packages/${promptPackageId}.txt`, bytes: text.length };
+        return {
+          uri: `local://prompt-packages/${promptPackageId}.txt`,
+          bytes: text.length,
+          sha256: 'hash',
+        };
       },
     });
 

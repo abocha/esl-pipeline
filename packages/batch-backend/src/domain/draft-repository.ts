@@ -3,6 +3,7 @@ import { PoolClient } from 'pg';
 
 import { withPgClient } from '../infrastructure/db.js';
 import { logger } from '../infrastructure/logger.js';
+import { ArtifactWorkingConflictError } from './artifact-working-conflict.js';
 import type { DraftRecord } from './draft-model.js';
 
 interface DraftRow {
@@ -11,6 +12,8 @@ interface DraftRow {
   student_id: string | null;
   lesson_id: string | null;
   storage_uri: string;
+  working_version: number | null;
+  content_hash: string | null;
   created_by: string | null;
   created_at: Date;
   updated_at: Date;
@@ -22,6 +25,8 @@ export interface InsertDraftParams {
   studentId?: string | null;
   lessonId?: string | null;
   storageUri: string;
+  workingVersion: number;
+  contentHash: string;
   createdBy?: string | null;
 }
 
@@ -38,17 +43,21 @@ export async function insertDraft(params: InsertDraftParams): Promise<DraftRecor
         student_id,
         lesson_id,
         storage_uri,
+        working_version,
+        content_hash,
         created_by,
         created_at,
         updated_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING
         id,
         prompt_package_id,
         student_id,
         lesson_id,
         storage_uri,
+        working_version,
+        content_hash,
         created_by,
         created_at,
         updated_at
@@ -59,6 +68,8 @@ export async function insertDraft(params: InsertDraftParams): Promise<DraftRecor
         params.studentId ?? null,
         params.lessonId ?? null,
         params.storageUri,
+        params.workingVersion,
+        params.contentHash,
         params.createdBy ?? null,
         now,
         now,
@@ -75,7 +86,8 @@ export async function getDraftById(id: string): Promise<DraftRecord | null> {
   const row = await withPgClient(async (client: PoolClient) => {
     const result = await client.query(
       `
-      SELECT id, prompt_package_id, student_id, lesson_id, storage_uri, created_by, created_at, updated_at
+      SELECT id, prompt_package_id, student_id, lesson_id, storage_uri,
+             working_version, content_hash, created_by, created_at, updated_at
       FROM drafts
       WHERE id = $1
       `,
@@ -94,6 +106,8 @@ function mapRowToDraft(row: DraftRow): DraftRecord {
     studentId: row.student_id ?? null,
     lessonId: row.lesson_id ?? null,
     storageUri: row.storage_uri,
+    workingVersion: row.working_version,
+    contentHash: row.content_hash,
     createdBy: row.created_by ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -102,10 +116,12 @@ function mapRowToDraft(row: DraftRow): DraftRecord {
 
 export interface UpdateDraftParams {
   id: string;
-  storageUri?: string;
+  expectedWorkingVersion: number;
+  storageUri: string;
+  contentHash: string;
 }
 
-export async function updateDraft(params: UpdateDraftParams): Promise<DraftRecord | null> {
+export async function updateDraftWorkingContent(params: UpdateDraftParams): Promise<DraftRecord> {
   const now = new Date();
 
   const row = await withPgClient(async (client: PoolClient) => {
@@ -113,25 +129,50 @@ export async function updateDraft(params: UpdateDraftParams): Promise<DraftRecor
       `
       UPDATE drafts
       SET
-        storage_uri = COALESCE($2, storage_uri),
-        updated_at = $3
-      WHERE id = $1
+        storage_uri = $3,
+        content_hash = $4,
+        working_version = working_version + 1,
+        updated_at = $5
+      WHERE id = $1 AND working_version = $2
       RETURNING
         id,
         prompt_package_id,
         student_id,
         lesson_id,
         storage_uri,
+        working_version,
+        content_hash,
         created_by,
         created_at,
         updated_at
       `,
-      [params.id, params.storageUri, now],
+      [params.id, params.expectedWorkingVersion, params.storageUri, params.contentHash, now],
     );
     return result.rows[0];
   });
 
-  if (!row) return null;
+  if (!row) {
+    const latest = await getDraftById(params.id);
+    if (!latest) throw new Error(`Draft not found: ${params.id}`);
+    throw new ArtifactWorkingConflictError(latest);
+  }
   logger.info('Draft updated', { draftId: params.id });
   return mapRowToDraft(row);
+}
+
+export async function getDraftByIdForUpdate(
+  client: PoolClient,
+  id: string,
+): Promise<DraftRecord | null> {
+  const result = await client.query(
+    `
+    SELECT id, prompt_package_id, student_id, lesson_id, storage_uri,
+           working_version, content_hash, created_by, created_at, updated_at
+    FROM drafts
+    WHERE id = $1
+    FOR UPDATE
+    `,
+    [id],
+  );
+  return result.rows[0] ? mapRowToDraft(result.rows[0]) : null;
 }

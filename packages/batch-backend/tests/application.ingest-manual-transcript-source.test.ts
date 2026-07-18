@@ -42,6 +42,8 @@ describe('application/ingest-manual-transcript-source', () => {
         id: params.transcriptId,
         recordingId: params.recordingId,
         storageUri: params.storageUri,
+        workingVersion: params.workingVersion,
+        contentHash: params.contentHash,
         rawResponseUri: null,
         mode: 'timeline' as const,
         model: 'manual-entry',
@@ -77,6 +79,8 @@ describe('application/ingest-manual-transcript-source', () => {
       displayName: 'Lesson on travel',
       storageUri: 'local://transcripts/transcript-id.txt',
       bytes: Buffer.byteLength('Tutor supplied transcript', 'utf8'),
+      workingVersion: 1,
+      contentHash: 'transcript-sha',
     });
     expect(result.recording.source).toBe('manual_transcript');
     expect(result.transcript).toMatchObject({
@@ -85,6 +89,8 @@ describe('application/ingest-manual-transcript-source', () => {
       language: 'und',
       fallbackUsed: false,
       summaryJson: { provider: 'manual', origin: 'tutor_paste' },
+      workingVersion: 1,
+      contentHash: 'transcript-sha',
     });
   });
 

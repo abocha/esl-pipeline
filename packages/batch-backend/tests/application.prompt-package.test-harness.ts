@@ -15,6 +15,8 @@ export function createTranscriptRecord(): TranscriptRecord {
     id: 'transcript-1',
     recordingId: 'recording-1',
     storageUri: 'local://transcripts/transcript-1.txt',
+    workingVersion: 1,
+    contentHash: 'transcript-hash',
     rawResponseUri: null,
     mode: 'timeline',
     model: 'nova-3',
@@ -31,11 +33,23 @@ export function createStorageStub(
   overrides: Partial<TranscriptionStorage> = {},
 ): TranscriptionStorage {
   return {
-    putAudio: async () => ({ uri: 'local://recordings/recording.opus', bytes: 1 }),
-    putTranscript: async () => ({ uri: 'local://transcripts/transcript-1.txt', bytes: 1 }),
-    putRawResponse: async () => ({ uri: 'local://transcripts/transcript-1.json', bytes: 1 }),
-    putPromptPackage: async () => ({ uri: 'local://prompt-packages/prompt-1.txt', bytes: 1 }),
-    putDraft: async () => ({ uri: 'local://drafts/draft-1.md', bytes: 1 }),
+    putAudio: async () => ({ uri: 'local://recordings/recording.opus', bytes: 1, sha256: 'hash' }),
+    putTranscript: async () => ({
+      uri: 'local://transcripts/transcript-1.txt',
+      bytes: 1,
+      sha256: 'hash',
+    }),
+    putRawResponse: async () => ({
+      uri: 'local://transcripts/transcript-1.json',
+      bytes: 1,
+      sha256: 'hash',
+    }),
+    putPromptPackage: async () => ({
+      uri: 'local://prompt-packages/prompt-1.txt',
+      bytes: 1,
+      sha256: 'hash',
+    }),
+    putDraft: async () => ({ uri: 'local://drafts/draft-1.md', bytes: 1, sha256: 'hash' }),
     getText: async () => '',
     getStream: async () => Readable.from(['']),
     delete: async () => {},

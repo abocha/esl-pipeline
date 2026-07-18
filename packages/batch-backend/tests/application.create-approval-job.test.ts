@@ -13,6 +13,8 @@ function buildDraft(): DraftRecord {
     promptPackageId: 'prompt-1',
     studentId: 'student-1',
     storageUri: 'local://drafts/draft-1.md',
+    workingVersion: 1,
+    contentHash: 'draft-hash',
     createdBy: 'user-1',
     createdAt: new Date('2024-01-01T00:00:00Z'),
     updatedAt: new Date('2024-01-01T00:00:00Z'),

@@ -17,6 +17,8 @@ describeHttpServerIntegrationSuite(
     recordingRepositoryModule,
     retryRecordingModule,
     transcriptRepositoryModule,
+    transcriptionStorageModule,
+    updateDraftModule,
     updateRecordingTranscriptModule,
     vi,
   }) => {
@@ -50,6 +52,8 @@ describeHttpServerIntegrationSuite(
           id: 'transcript-cached',
           recordingId: 'recording-cached',
           storageUri: 'memory://transcripts/transcript-cached.txt',
+          workingVersion: 1,
+          contentHash: 'cached-hash',
           rawResponseUri: null,
           mode: 'timeline',
           model: 'nova-3',
@@ -104,6 +108,18 @@ describeHttpServerIntegrationSuite(
       );
       const insertRecording = vi.spyOn(recordingRepositoryModule, 'insertRecording');
       const insertTranscript = vi.spyOn(transcriptRepositoryModule, 'insertTranscript');
+      const createReadStorage = vi
+        .spyOn(transcriptionStorageModule, 'createTranscriptionStorageForUri')
+        .mockReturnValue({
+          getText: vi.fn().mockResolvedValue('cached transcript text'),
+        } as never);
+      const putClonedTranscript = vi
+        .spyOn(transcriptionStorageModule.FilesystemTranscriptionStorage.prototype, 'putTranscript')
+        .mockResolvedValue({
+          uri: 'local://transcripts/transcript-bella/content/new.txt',
+          bytes: 22,
+          sha256: 'new-hash',
+        });
 
       listRecordingsBySha256.mockResolvedValueOnce([
         {
@@ -127,6 +143,8 @@ describeHttpServerIntegrationSuite(
           id: 'transcript-anna',
           recordingId: 'recording-anna',
           storageUri: 'memory://transcripts/transcript-anna.txt',
+          workingVersion: 1,
+          contentHash: 'anna-hash',
           rawResponseUri: 'memory://transcripts/transcript-anna.raw.json',
           mode: 'timeline',
           model: 'nova-3',
@@ -156,7 +174,9 @@ describeHttpServerIntegrationSuite(
       insertTranscript.mockResolvedValueOnce({
         id: 'transcript-bella',
         recordingId: 'recording-bella',
-        storageUri: 'memory://transcripts/transcript-anna.txt',
+        storageUri: 'local://transcripts/transcript-bella/content/new.txt',
+        workingVersion: 1,
+        contentHash: 'new-hash',
         rawResponseUri: 'memory://transcripts/transcript-anna.raw.json',
         mode: 'timeline',
         model: 'nova-3',
@@ -187,6 +207,8 @@ describeHttpServerIntegrationSuite(
         },
         payload,
       });
+      createReadStorage.mockRestore();
+      putClonedTranscript.mockRestore();
 
       expect(response.statusCode).toBe(200);
       expect(response.json()).toMatchObject({
@@ -206,9 +228,11 @@ describeHttpServerIntegrationSuite(
       const insertedTranscript = insertTranscript.mock.calls[0]?.[0];
       expect(insertedTranscript).toEqual(
         expect.objectContaining({
-          storageUri: 'memory://transcripts/transcript-anna.txt',
+          workingVersion: 1,
+          contentHash: expect.any(String),
         }),
       );
+      expect(insertedTranscript?.storageUri).not.toBe('memory://transcripts/transcript-anna.txt');
       expect(insertedTranscript?.recordingId).not.toBe('recording-anna');
     });
 
@@ -257,6 +281,8 @@ describeHttpServerIntegrationSuite(
           id: 'transcript-elevenlabs',
           recordingId: 'recording-elevenlabs',
           storageUri: 'memory://transcripts/transcript-elevenlabs.txt',
+          workingVersion: 1,
+          contentHash: 'elevenlabs-hash',
           rawResponseUri: null,
           mode: 'timeline',
           model: 'scribe_v2',
@@ -271,6 +297,8 @@ describeHttpServerIntegrationSuite(
           id: 'transcript-deepgram',
           recordingId: 'recording-deepgram',
           storageUri: 'memory://transcripts/transcript-deepgram.txt',
+          workingVersion: 1,
+          contentHash: 'deepgram-hash',
           rawResponseUri: null,
           mode: 'timeline',
           model: 'nova-3',
@@ -361,6 +389,8 @@ describeHttpServerIntegrationSuite(
           id: 'transcript-deepgram',
           recordingId: 'recording-deepgram',
           storageUri: 'memory://transcripts/transcript-deepgram.txt',
+          workingVersion: 1,
+          contentHash: 'deepgram-hash',
           rawResponseUri: null,
           mode: 'timeline',
           model: 'nova-3',
@@ -375,6 +405,8 @@ describeHttpServerIntegrationSuite(
           id: 'transcript-elevenlabs',
           recordingId: 'recording-elevenlabs',
           storageUri: 'memory://transcripts/transcript-elevenlabs.txt',
+          workingVersion: 1,
+          contentHash: 'elevenlabs-hash',
           rawResponseUri: null,
           mode: 'timeline',
           model: 'scribe_v2',
@@ -673,7 +705,10 @@ describeHttpServerIntegrationSuite(
         recordingId: 'recording-1',
         transcriptId: 'transcript-1',
         text: 'Hello transcript',
+        workingVersion: 1,
+        contentHash: 'transcript-hash',
         summaryJson: { channels: 2 },
+        sttProvider: 'deepgram',
         model: 'nova-3',
         language: 'en',
         mode: 'timeline',
@@ -691,7 +726,10 @@ describeHttpServerIntegrationSuite(
         recordingId: 'recording-1',
         transcriptId: 'transcript-1',
         text: 'Hello transcript',
+        workingVersion: 1,
+        contentHash: 'transcript-hash',
         summaryJson: { channels: 2 },
+        sttProvider: 'deepgram',
         model: 'nova-3',
         language: 'en',
         mode: 'timeline',
@@ -728,7 +766,10 @@ describeHttpServerIntegrationSuite(
         recordingId: 'recording-1',
         transcriptId: 'transcript-1',
         text: 'Updated text',
+        workingVersion: 2,
+        contentHash: 'updated-hash',
         summaryJson: null,
+        sttProvider: 'deepgram',
         model: 'nova-3',
         language: 'en',
         mode: 'timeline',
@@ -739,7 +780,7 @@ describeHttpServerIntegrationSuite(
       const response = await app.inject({
         method: 'PUT',
         url: '/recordings/recording-1/transcript',
-        payload: { text: 'Updated text' },
+        payload: { text: 'Updated text', expectedWorkingVersion: 1 },
       });
 
       expect(response.statusCode).toBe(200);
@@ -747,7 +788,10 @@ describeHttpServerIntegrationSuite(
         recordingId: 'recording-1',
         transcriptId: 'transcript-1',
         text: 'Updated text',
+        workingVersion: 2,
+        contentHash: 'updated-hash',
         summaryJson: null,
+        sttProvider: 'deepgram',
         model: 'nova-3',
         language: 'en',
         mode: 'timeline',
@@ -757,7 +801,47 @@ describeHttpServerIntegrationSuite(
       expect(updateRecordingTranscript).toHaveBeenCalledWith({
         recordingId: 'recording-1',
         text: 'Updated text',
+        expectedWorkingVersion: 1,
       });
+    });
+
+    it('PUT /recordings/:id/transcript returns the winning tuple on a stale write', async () => {
+      const updateRecordingTranscript = vi.spyOn(
+        updateRecordingTranscriptModule,
+        'updateRecordingTranscript',
+      );
+      updateRecordingTranscript.mockRejectedValue({
+        code: 'ARTIFACT_WORKING_CONFLICT',
+        latest: { workingVersion: 3, contentHash: 'winner-hash' },
+      });
+
+      const response = await app.inject({
+        method: 'PUT',
+        url: '/recordings/recording-1/transcript',
+        payload: { text: 'Stale text', expectedWorkingVersion: 1 },
+      });
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json()).toEqual({
+        code: 'artifact_working_conflict',
+        artifact: { workingVersion: 3, contentHash: 'winner-hash' },
+      });
+    });
+
+    it('rejects revisionless transcript and draft autosaves', async () => {
+      const transcriptResponse = await app.inject({
+        method: 'PUT',
+        url: '/recordings/recording-1/transcript',
+        payload: { text: 'Revisionless transcript' },
+      });
+      const draftResponse = await app.inject({
+        method: 'PUT',
+        url: '/drafts/draft-1',
+        payload: { text: 'Revisionless draft' },
+      });
+
+      expect(transcriptResponse.statusCode).toBe(400);
+      expect(draftResponse.statusCode).toBe(400);
     });
 
     it('PUT /recordings/:id/transcript returns 404 when missing', async () => {
@@ -771,7 +855,7 @@ describeHttpServerIntegrationSuite(
       const response = await app.inject({
         method: 'PUT',
         url: '/recordings/missing/transcript',
-        payload: { text: 'Updated text' },
+        payload: { text: 'Updated text', expectedWorkingVersion: 1 },
       });
 
       expect(response.statusCode).toBe(404);
@@ -1067,7 +1151,10 @@ describeHttpServerIntegrationSuite(
         id: 'draft-1',
         promptPackageId: 'prompt-1',
         studentId: 'student-1',
+        lessonId: null,
         storageUri: 'local://drafts/draft-1.md',
+        workingVersion: 1,
+        contentHash: 'draft-hash',
         createdBy: 'test-user-id',
         text: 'DRAFT TEXT',
         createdAt: '2024-01-01T00:00:00.000Z',
@@ -1085,7 +1172,10 @@ describeHttpServerIntegrationSuite(
         id: 'draft-1',
         promptPackageId: 'prompt-1',
         studentId: 'student-1',
+        lessonId: null,
         storageUri: 'local://drafts/draft-1.md',
+        workingVersion: 1,
+        contentHash: 'draft-hash',
         createdBy: 'test-user-id',
         text: 'DRAFT TEXT',
         createdAt: '2024-01-01T00:00:00.000Z',
@@ -1111,6 +1201,26 @@ describeHttpServerIntegrationSuite(
 
       expect(response.statusCode).toBe(404);
       expect(response.json()).toEqual({ error: 'not_found' });
+    });
+
+    it('PUT /drafts/:id returns the winning tuple on a stale write', async () => {
+      const updateDraft = vi.spyOn(updateDraftModule, 'updateDraft');
+      updateDraft.mockRejectedValue({
+        code: 'ARTIFACT_WORKING_CONFLICT',
+        latest: { workingVersion: 4, contentHash: 'draft-winner-hash' },
+      });
+
+      const response = await app.inject({
+        method: 'PUT',
+        url: '/drafts/draft-1',
+        payload: { text: 'Stale draft', expectedWorkingVersion: 1 },
+      });
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json()).toEqual({
+        code: 'artifact_working_conflict',
+        artifact: { workingVersion: 4, contentHash: 'draft-winner-hash' },
+      });
     });
   },
 );

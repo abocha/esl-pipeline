@@ -60,6 +60,8 @@ describe('application/process-transcribe-job', () => {
               id: params.id ?? 'transcript-1',
               recordingId: params.recordingId,
               storageUri: params.storageUri,
+              workingVersion: params.workingVersion,
+              contentHash: params.contentHash,
               rawResponseUri: params.rawResponseUri ?? null,
               mode: params.mode,
               model: params.model,
@@ -83,6 +85,7 @@ describe('application/process-transcribe-job', () => {
     expect(result?.mode).toBe('timeline');
     expect(result?.fallbackUsed).toBe(false);
     expect(result?.sttProvider).toBe('deepgram');
+    expect(result).toMatchObject({ workingVersion: 1, contentHash: expect.any(String) });
     expect((result?.summaryJson as { provider?: unknown } | null)?.provider).toBe('deepgram');
     expect(updates).toEqual(['transcribing', 'transcribed']);
     expect(sttTranscribe).toHaveBeenCalledWith(
@@ -155,6 +158,8 @@ describe('application/process-transcribe-job', () => {
               id: params.id ?? 'transcript-fallback',
               recordingId: params.recordingId,
               storageUri: params.storageUri,
+              workingVersion: params.workingVersion,
+              contentHash: params.contentHash,
               rawResponseUri: params.rawResponseUri ?? null,
               mode: params.mode,
               model: params.model,
@@ -264,7 +269,7 @@ describe('application/process-transcribe-job', () => {
       ...createStorageStub(),
       async putTranscript({ text }) {
         storedTexts.push(text);
-        return { uri: 'local://transcripts/transcript.txt', bytes: text.length };
+        return { uri: 'local://transcripts/transcript.txt', bytes: text.length, sha256: 'hash' };
       },
     };
 
@@ -303,6 +308,8 @@ describe('application/process-transcribe-job', () => {
               id: params.id ?? 'transcript-3',
               recordingId: params.recordingId,
               storageUri: params.storageUri,
+              workingVersion: params.workingVersion,
+              contentHash: params.contentHash,
               rawResponseUri: params.rawResponseUri ?? null,
               mode: params.mode,
               model: params.model,
@@ -566,16 +573,16 @@ function createStorageStub(): TranscriptionStorage {
       return { uri: 'local://recordings/recording.opus', bytes: 10, sha256: 'hash' };
     },
     async putTranscript() {
-      return { uri: 'local://transcripts/transcript.txt', bytes: 10 };
+      return { uri: 'local://transcripts/transcript.txt', bytes: 10, sha256: 'transcript-hash' };
     },
     async putRawResponse() {
-      return { uri: 'local://transcripts/transcript.json', bytes: 10 };
+      return { uri: 'local://transcripts/transcript.json', bytes: 10, sha256: 'raw-hash' };
     },
     async putPromptPackage() {
-      return { uri: 'local://prompt-packages/prompt.txt', bytes: 10 };
+      return { uri: 'local://prompt-packages/prompt.txt', bytes: 10, sha256: 'prompt-hash' };
     },
     async putDraft() {
-      return { uri: 'local://drafts/draft.md', bytes: 10 };
+      return { uri: 'local://drafts/draft.md', bytes: 10, sha256: 'draft-hash' };
     },
     async getText() {
       return 'text';
