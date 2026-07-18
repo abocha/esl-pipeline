@@ -260,7 +260,7 @@ describe('domain/assignment-session-repository persistence contract', () => {
         ],
       );
     });
-    const { reserveAssignmentShare } =
+    const { completeAssignmentShare, reserveAssignmentShare } =
       await import('../src/domain/assignment-session-repository.js');
 
     await expect(
@@ -277,6 +277,52 @@ describe('domain/assignment-session-repository persistence contract', () => {
       client.query('UPDATE assignment_sessions SET teacher_notes = NULL WHERE id = $1', [
         sessionId,
       ]),
+    );
+    await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+      client.query(
+        `UPDATE transcripts SET storage_uri = 'local://transcripts/b.txt', working_version = 2,
+         content_hash = $2 WHERE id = $1`,
+        [transcriptId, 'c'.repeat(64)],
+      ),
+    );
+    await expect(
+      reserveAssignmentShare({
+        sessionId,
+        userId,
+        expectedRevision: 4,
+        requestId,
+        jobConfig: { publishTarget: 'html', upload: 'auto' },
+      }),
+    ).rejects.toMatchObject({ code: 'ASSIGNMENT_SHARE_DIRTY_RECOVERY' });
+    await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+      client.query(
+        `UPDATE transcripts SET storage_uri = 'local://transcripts/a.txt', working_version = 1,
+         content_hash = $2 WHERE id = $1`,
+        [transcriptId, 'a'.repeat(64)],
+      ),
+    );
+    await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+      client.query(
+        `UPDATE drafts SET storage_uri = 'local://drafts/working-b.md', working_version = 2,
+         content_hash = $2 WHERE id = $1`,
+        [draftId, 'd'.repeat(64)],
+      ),
+    );
+    await expect(
+      reserveAssignmentShare({
+        sessionId,
+        userId,
+        expectedRevision: 4,
+        requestId,
+        jobConfig: { publishTarget: 'html', upload: 'auto' },
+      }),
+    ).rejects.toMatchObject({ code: 'ASSIGNMENT_SHARE_DIRTY_RECOVERY' });
+    await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+      client.query(
+        `UPDATE drafts SET storage_uri = $2, working_version = 1,
+         content_hash = $3 WHERE id = $1`,
+        [draftId, draftUri, 'b'.repeat(64)],
+      ),
     );
     const [first, second] = await Promise.all([
       reserveAssignmentShare({
@@ -303,6 +349,65 @@ describe('domain/assignment-session-repository persistence contract', () => {
       job: { id: requestId, mdStorageUri: draftUri, state: 'awaiting_approval' },
     });
     expect(replay).toMatchObject({ created: false, job: { id: requestId } });
+    const {
+      approveAssignmentShareJob,
+      approveJob,
+      updateAssignmentShareJobDraftLink,
+      updateJobDraftLink,
+    } = await import('../src/domain/job-repository.js');
+    await expect(
+      updateJobDraftLink({
+        id: requestId,
+        expectedState: 'awaiting_approval',
+        draftId,
+        mdStorageUri: 'local://drafts/operator-replacement.md',
+      }),
+    ).resolves.toBeNull();
+    await expect(
+      approveJob({
+        id: requestId,
+        expectedState: 'awaiting_approval',
+        mdStorageUri: draftUri,
+      }),
+    ).resolves.toBeNull();
+    await expect(
+      updateAssignmentShareJobDraftLink({
+        id: requestId,
+        sessionId,
+        userId,
+        expectedState: 'awaiting_approval',
+        draftId,
+        mdStorageUri: draftUri,
+      }),
+    ).resolves.toMatchObject({ id: requestId, draftId, mdStorageUri: draftUri });
+    await expect(
+      approveAssignmentShareJob({
+        id: requestId,
+        sessionId,
+        userId,
+        expectedState: 'awaiting_approval',
+        mdStorageUri: draftUri,
+      }),
+    ).resolves.toMatchObject({ id: requestId, state: 'queued' });
+    await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+      client.query(`UPDATE jobs SET state = 'failed' WHERE id = $1`, [requestId]),
+    );
+    await expect(
+      completeAssignmentShare({
+        sessionId,
+        userId,
+        jobId: requestId,
+        enqueueSatisfied: false,
+      }),
+    ).rejects.toMatchObject({ code: 'ASSIGNMENT_SHARE_JOB_INTEGRITY_INVALID' });
+    await expect(
+      completeAssignmentShare({
+        sessionId,
+        userId,
+        jobId: requestId,
+        enqueueSatisfied: true,
+      }),
+    ).resolves.toMatchObject({ confirmedStep: 'share', revision: 6 });
     const jobs = await withPgClientSessionContext({ rlsBypass: true }, (client) =>
       client.query<{ count: string }>('SELECT COUNT(*)::text AS count FROM jobs WHERE id = $1', [
         requestId,

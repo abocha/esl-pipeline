@@ -386,6 +386,7 @@ export async function resetFailedAssignmentShareJob(params: {
         AND s.id = $1
         AND s.user_id = $2
         AND s.share_job_id = j.id
+        AND ${assignmentShareJobIntegritySql('j', 's')}
       RETURNING
         j.id,
         j.student_id,
@@ -821,6 +822,18 @@ export async function updateJobStateAndResult(args: {
   return mapRowToJob(row);
 }
 
+function assignmentShareJobIntegritySql(jobAlias: string, sessionAlias: string): string {
+  return `${jobAlias}.user_id = ${sessionAlias}.user_id
+    AND ${jobAlias}.student_id = ${sessionAlias}.student_id
+    AND to_jsonb(${jobAlias}.recording_id) = ${sessionAlias}.confirmed_snapshot #> '{source,recordingId}'
+    AND to_jsonb(${jobAlias}.transcript_id) = ${sessionAlias}.confirmed_snapshot #> '{source,transcriptId}'
+    AND to_jsonb(${jobAlias}.prompt_package_id) = ${sessionAlias}.confirmed_snapshot #> '{create,promptPackageId}'
+    AND to_jsonb(${jobAlias}.draft_id) = ${sessionAlias}.confirmed_snapshot #> '{create,draftId}'
+    AND COALESCE(to_jsonb(${jobAlias}.lesson_id), 'null'::jsonb) = ${sessionAlias}.confirmed_snapshot #> '{source,lessonId}'
+    AND ${jobAlias}.md_storage_uri = ${sessionAlias}.confirmed_snapshot #>> '{create,draftStorageUri}'
+    AND ${jobAlias}.source_job_id IS NULL`;
+}
+
 export async function updateJobDraftLink(args: {
   id: string;
   expectedState: JobState;
@@ -828,7 +841,58 @@ export async function updateJobDraftLink(args: {
   mdStorageUri?: string | null;
   draftId: string;
 }): Promise<JobRecord | null> {
+  return updateJobDraftLinkGuarded(args, null);
+}
+
+export async function updateAssignmentShareJobDraftLink(args: {
+  id: string;
+  sessionId: string;
+  userId: string;
+  expectedState: 'awaiting_approval';
+  md?: string | null;
+  mdStorageUri: string;
+  draftId: string;
+}): Promise<JobRecord | null> {
+  return updateJobDraftLinkGuarded(args, {
+    sessionId: args.sessionId,
+    userId: args.userId,
+  });
+}
+
+async function updateJobDraftLinkGuarded(
+  args: {
+    id: string;
+    expectedState: JobState;
+    md?: string | null;
+    mdStorageUri?: string | null;
+    draftId: string;
+  },
+  assignmentShare: { sessionId: string; userId: string } | null,
+): Promise<JobRecord | null> {
   const { id, expectedState, md = null, mdStorageUri = null, draftId } = args;
+  const assignmentGuard = assignmentShare
+    ? `AND EXISTS (
+         SELECT 1 FROM assignment_sessions s
+         WHERE s.id = $6 AND s.user_id = $7 AND s.share_job_id = jobs.id
+           AND s.confirmed_step = 'create'
+           AND s.confirmed_snapshot #>> '{create,draftId}' = $3::text
+           AND s.confirmed_snapshot #>> '{create,draftStorageUri}' = $2
+           AND ${assignmentShareJobIntegritySql('jobs', 's')}
+       )`
+    : `AND NOT EXISTS (
+         SELECT 1 FROM assignment_sessions s WHERE s.share_job_id = jobs.id
+       )`;
+  const values = assignmentShare
+    ? [
+        md,
+        mdStorageUri,
+        draftId,
+        id,
+        expectedState,
+        assignmentShare.sessionId,
+        assignmentShare.userId,
+      ]
+    : [md, mdStorageUri, draftId, id, expectedState];
 
   const row = await withPgClient(async (client: PoolClient) => {
     const result = await client.query(
@@ -837,10 +901,11 @@ export async function updateJobDraftLink(args: {
       SET
         md = COALESCE($1, md),
         md_storage_uri = COALESCE($2, md_storage_uri),
-        draft_id = $3,
+        draft_id = $3::uuid,
         updated_at = now()
       WHERE id = $4
         AND state = $5
+        ${assignmentGuard}
       RETURNING
         id,
         student_id,
@@ -878,7 +943,7 @@ export async function updateJobDraftLink(args: {
         source_job_id,
         user_id
       `,
-      [md, mdStorageUri, draftId, id, expectedState],
+      values,
     );
     return result.rows[0];
   });
@@ -1046,9 +1111,46 @@ export async function approveJob(args: {
   md?: string | null;
   mdStorageUri?: string | null;
 }): Promise<JobRecord | null> {
+  return approveJobGuarded(args, null);
+}
+
+export async function approveAssignmentShareJob(args: {
+  id: string;
+  sessionId: string;
+  userId: string;
+  expectedState: 'awaiting_approval';
+  md?: string | null;
+  mdStorageUri: string;
+}): Promise<JobRecord | null> {
+  return approveJobGuarded(args, { sessionId: args.sessionId, userId: args.userId });
+}
+
+async function approveJobGuarded(
+  args: {
+    id: string;
+    expectedState: JobState;
+    md?: string | null;
+    mdStorageUri?: string | null;
+  },
+  assignmentShare: { sessionId: string; userId: string } | null,
+): Promise<JobRecord | null> {
   const { id, expectedState, md = null, mdStorageUri = null } = args;
 
   assertTransition(expectedState, 'queued');
+  const assignmentGuard = assignmentShare
+    ? `AND EXISTS (
+         SELECT 1 FROM assignment_sessions s
+         WHERE s.id = $5 AND s.user_id = $6 AND s.share_job_id = jobs.id
+           AND s.confirmed_step = 'create'
+           AND s.confirmed_snapshot #>> '{create,draftStorageUri}' = $2
+           AND ${assignmentShareJobIntegritySql('jobs', 's')}
+       )`
+    : `AND NOT EXISTS (
+         SELECT 1 FROM assignment_sessions s WHERE s.share_job_id = jobs.id
+       )`;
+  const values = assignmentShare
+    ? [md, mdStorageUri, id, expectedState, assignmentShare.sessionId, assignmentShare.userId]
+    : [md, mdStorageUri, id, expectedState];
 
   const row = await withPgClient(async (client: PoolClient) => {
     const result = await client.query(
@@ -1067,6 +1169,7 @@ export async function approveJob(args: {
       WHERE id = $3
         AND state = $4
         AND (COALESCE($1, md) IS NOT NULL OR COALESCE($2, md_storage_uri) IS NOT NULL)
+        ${assignmentGuard}
       RETURNING
         id,
         student_id,
@@ -1104,7 +1207,7 @@ export async function approveJob(args: {
         source_job_id,
         user_id
       `,
-      [md, mdStorageUri, id, expectedState],
+      values,
     );
     return result.rows[0];
   });

@@ -8,11 +8,15 @@ import {
   AssignmentSessionRepositoryError,
   AssignmentSessionShareError,
   completeAssignmentShare,
+  getAssignmentShareJob,
   getAssignmentSessionByIdForUser,
   reserveAssignmentShare,
 } from '../domain/assignment-session-repository.js';
 import { publishJobEvent } from '../domain/job-events.js';
-import { approveJob, getJobById, resetFailedAssignmentShareJob } from '../domain/job-repository.js';
+import {
+  approveAssignmentShareJob,
+  resetFailedAssignmentShareJob,
+} from '../domain/job-repository.js';
 import { createJobQueue } from '../infrastructure/queue-bullmq.js';
 import { toAssignmentSessionDto } from './assignment-sessions.js';
 import { resolveApprovalJobConfig } from './create-approval-job.js';
@@ -24,12 +28,12 @@ type ShareCheckpoint = 'reservation' | 'materialization' | 'approval' | 'enqueue
 export interface ShareAssignmentSessionDependencies {
   sessions: {
     getByIdForUser: typeof getAssignmentSessionByIdForUser;
+    getShareJob: typeof getAssignmentShareJob;
     reserveShare: typeof reserveAssignmentShare;
     completeShare: typeof completeAssignmentShare;
   };
   jobs: {
-    getById: typeof getJobById;
-    approve: typeof approveJob;
+    approve: typeof approveAssignmentShareJob;
     resetFailedShare: typeof resetFailedAssignmentShareJob;
   };
   queue: { reconcile: ReturnType<typeof createJobQueue>['reconcile'] };
@@ -47,12 +51,12 @@ export async function shareAssignmentSession(args: {
 }): Promise<ConfirmAssignmentSessionShareResponse> {
   const sessions = args.overrides?.sessions ?? {
     getByIdForUser: getAssignmentSessionByIdForUser,
+    getShareJob: getAssignmentShareJob,
     reserveShare: reserveAssignmentShare,
     completeShare: completeAssignmentShare,
   };
   const jobs = args.overrides?.jobs ?? {
-    getById: getJobById,
-    approve: approveJob,
+    approve: approveAssignmentShareJob,
     resetFailedShare: resetFailedAssignmentShareJob,
   };
   const queue = args.overrides?.queue ?? createJobQueue();
@@ -87,13 +91,24 @@ export async function shareAssignmentSession(args: {
       jobId: job.id,
       sourceStorageUri: create.draftStorageUri,
       expectedContentHash: create.draftHash,
+      assignmentShare: { sessionId: args.sessionId, userId: args.userId },
     });
     if (!materialized) {
-      const current = await jobs.getById(job.id);
+      const current = await sessions.getShareJob({
+        sessionId: args.sessionId,
+        userId: args.userId,
+        jobId: job.id,
+      });
       if (!current || current.state === 'awaiting_approval') {
         throw new AssignmentSessionShareError('ASSIGNMENT_SHARE_JOB_INTEGRITY_INVALID');
       }
       job = current;
+    } else {
+      job = await sessions.getShareJob({
+        sessionId: args.sessionId,
+        userId: args.userId,
+        jobId: job.id,
+      });
     }
     await checkpoint('materialization');
   }
@@ -101,6 +116,8 @@ export async function shareAssignmentSession(args: {
   if (job.state === 'awaiting_approval') {
     const approved = await jobs.approve({
       id: job.id,
+      sessionId: args.sessionId,
+      userId: args.userId,
       expectedState: 'awaiting_approval',
       mdStorageUri: create.draftStorageUri,
     });
@@ -108,7 +125,11 @@ export async function shareAssignmentSession(args: {
       job = approved;
       publishEvent({ type: 'job_state_changed', job });
     } else {
-      const current = await jobs.getById(job.id);
+      const current = await sessions.getShareJob({
+        sessionId: args.sessionId,
+        userId: args.userId,
+        jobId: job.id,
+      });
       if (!current) {
         throw new AssignmentSessionShareError('ASSIGNMENT_SHARE_JOB_INTEGRITY_INVALID');
       }
@@ -123,17 +144,38 @@ export async function shareAssignmentSession(args: {
       userId: args.userId,
       jobId: job.id,
     });
-    job = reset ?? (await jobs.getById(job.id)) ?? job;
+    job =
+      reset ??
+      (await sessions.getShareJob({
+        sessionId: args.sessionId,
+        userId: args.userId,
+        jobId: job.id,
+      }));
   }
 
+  job = await sessions.getShareJob({
+    sessionId: args.sessionId,
+    userId: args.userId,
+    jobId: job.id,
+  });
+  let enqueueSatisfied = false;
   if (job.state === 'queued') {
     await queue.reconcile({ jobId: job.id });
+    enqueueSatisfied = true;
     await checkpoint('enqueue');
-  } else if (job.state !== 'running' && job.state !== 'succeeded') {
+  } else if (job.state === 'running' || job.state === 'succeeded') {
+    enqueueSatisfied = true;
+  } else {
     throw new AssignmentSessionShareError('ASSIGNMENT_SHARE_JOB_INTEGRITY_INVALID');
   }
 
   const session = await sessions.completeShare({
+    sessionId: args.sessionId,
+    userId: args.userId,
+    jobId: job.id,
+    enqueueSatisfied,
+  });
+  job = await sessions.getShareJob({
     sessionId: args.sessionId,
     userId: args.userId,
     jobId: job.id,

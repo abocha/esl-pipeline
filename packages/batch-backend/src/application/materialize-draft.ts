@@ -6,7 +6,11 @@ import type { JobConfigOverrides } from '@esl-pipeline/contracts';
 import { readBool } from '@esl-pipeline/shared-infrastructure';
 
 import { getDraftById } from '../domain/draft-repository.js';
-import { getJobById, updateJobDraftLink } from '../domain/job-repository.js';
+import {
+  getJobById,
+  updateAssignmentShareJobDraftLink,
+  updateJobDraftLink,
+} from '../domain/job-repository.js';
 import { getPromptPackageById } from '../domain/prompt-package-repository.js';
 import { createStorageConfigService } from '../infrastructure/storage-config.js';
 import type { TranscriptionStorage } from '../infrastructure/transcription-storage.js';
@@ -20,6 +24,7 @@ export interface MaterializeDraftParams {
   jobOverrides?: JobConfigOverrides;
   sourceStorageUri?: string;
   expectedContentHash?: string;
+  assignmentShare?: { sessionId: string; userId: string };
 }
 
 export interface MaterializeDraftResponse {
@@ -41,6 +46,7 @@ export interface MaterializeDraftDependencies {
   jobs: {
     getById?: typeof getJobById;
     updateDraftLink: typeof updateJobDraftLink;
+    updateAssignmentShareDraftLink?: typeof updateAssignmentShareJobDraftLink;
   };
   approvals: {
     approveForPipeline: typeof approveJobForPipeline;
@@ -65,6 +71,7 @@ export async function materializeDraft(
   const jobs = overrides?.jobs ?? {
     getById: getJobById,
     updateDraftLink: updateJobDraftLink,
+    updateAssignmentShareDraftLink: updateAssignmentShareJobDraftLink,
   };
   const approvals = overrides?.approvals ?? {
     approveForPipeline: approveJobForPipeline,
@@ -122,13 +129,23 @@ export async function materializeDraft(
     await fs.writeFile(mdPath, materializedText, 'utf8');
   }
 
-  const updated = await jobs.updateDraftLink({
-    id: resolvedJobId,
-    expectedState: 'awaiting_approval',
-    md: mdPath,
-    mdStorageUri: sourceStorageUri,
-    draftId: draft.id,
-  });
+  const updated = params.assignmentShare
+    ? await (jobs.updateAssignmentShareDraftLink ?? updateAssignmentShareJobDraftLink)({
+        id: resolvedJobId,
+        sessionId: params.assignmentShare.sessionId,
+        userId: params.assignmentShare.userId,
+        expectedState: 'awaiting_approval',
+        md: mdPath,
+        mdStorageUri: sourceStorageUri,
+        draftId: draft.id,
+      })
+    : await jobs.updateDraftLink({
+        id: resolvedJobId,
+        expectedState: 'awaiting_approval',
+        md: mdPath,
+        mdStorageUri: sourceStorageUri,
+        draftId: draft.id,
+      });
 
   if (!updated) return null;
 

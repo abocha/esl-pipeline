@@ -613,6 +613,28 @@ describe('application/confirm-assignment-session-step transactional persistence'
         },
       }),
     ).rejects.toMatchObject({ code: 'ASSIGNMENT_STEP_LINEAGE_INVALID' });
+    const confirmedProfileId = `profiles/${randomUUID()}.md`;
+    const confirmedProfileRevisionId = randomUUID();
+    const confirmedProfileRawHash = 'e'.repeat(64);
+    const renderedProfileHash = 'f'.repeat(64);
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      await client.query(`INSERT INTO profiles (id, label) VALUES ($1, 'Confirmed profile')`, [
+        confirmedProfileId,
+      ]);
+      await client.query(
+        `INSERT INTO profile_revisions
+           (id, profile_id, content, content_hash, source, status, version_number,
+            version_label, activated_at, created_at)
+         VALUES ($1, $2, 'raw structured source', $3, 'create', 'active', 1, 'v1', NOW(), NOW())`,
+        [confirmedProfileRevisionId, confirmedProfileId, confirmedProfileRawHash],
+      );
+      await client.query(
+        `INSERT INTO student_profile_bindings
+           (id, student_id, profile_id, effective_from, reason, changed_by)
+         VALUES ($1, $2, $3, NOW(), 'student_update', $4)`,
+        [randomUUID(), studentId, confirmedProfileId, userId],
+      );
+    });
     const context = await confirmAssignmentSessionStepPersistence({
       id: session.id,
       userId,
@@ -620,9 +642,9 @@ describe('application/confirm-assignment-session-step transactional persistence'
         step: 'context',
         expectedRevision: refreshedSource.session.revision,
         teacherNotes: null,
-        profileId: null,
-        profileRevisionId: null,
-        profileRevisionHash: null,
+        profileId: confirmedProfileId,
+        profileRevisionId: confirmedProfileRevisionId,
+        profileRevisionHash: confirmedProfileRawHash,
       },
       lessonMemory: memory,
     });
@@ -633,6 +655,9 @@ describe('application/confirm-assignment-session-step transactional persistence'
       lessonId: null,
       templateVersion: 'template-v1',
       notes: null,
+      resolvedProfileId: confirmedProfileId,
+      resolvedProfileRevisionId: confirmedProfileRevisionId,
+      resolvedProfileHash: renderedProfileHash,
       storageUri: 's3://prompts/prompt.json',
     });
     const draft = await insertDraft({
