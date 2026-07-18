@@ -5,6 +5,7 @@ import type {
   UpdateAssignmentSessionRecoveryRequest,
 } from '@esl-pipeline/contracts';
 
+import type { BatchBackendConfig } from '../config/env.js';
 import type { AssignmentSessionRecord } from '../domain/assignment-session-model.js';
 import {
   confirmStudentAssignmentSession,
@@ -14,6 +15,8 @@ import {
   updateAssignmentSessionRecovery,
 } from '../domain/assignment-session-repository.js';
 import { withPgClient } from '../infrastructure/db.js';
+import { logger } from '../infrastructure/logger.js';
+import { requestLessonMemoryGeneration } from './request-lesson-memory-generation.js';
 import { completeElapsedScheduledLessonForHomework } from './student-schedule-billing.js';
 
 export async function confirmStudentAssignmentSessionForUser(
@@ -54,8 +57,10 @@ export async function updateAssignmentSessionRecoveryForUser(
 export async function getAssignmentSessionForUser(
   userId: string,
   sessionId: string,
+  config?: BatchBackendConfig,
 ): Promise<AssignmentSessionDto | null> {
   const session = await getAssignmentSessionByIdForUser(sessionId, userId);
+  if (session && config) await reconcileConfirmedSourceMemory(session, config);
   return session ? toAssignmentSessionDto(session) : null;
 }
 
@@ -123,5 +128,35 @@ async function validateLessonStudentPair(
   });
   if (!belongsToStudent) {
     throw new Error('Assignment session lesson must belong to the selected student');
+  }
+}
+
+async function reconcileConfirmedSourceMemory(
+  session: AssignmentSessionRecord,
+  config: BatchBackendConfig,
+): Promise<void> {
+  const source = session.confirmed.source;
+  if (!source) return;
+  try {
+    await requestLessonMemoryGeneration({
+      config,
+      params: {
+        studentId: session.studentId,
+        transcriptId: source.transcriptId,
+        recordingId: source.recordingId,
+        lessonId: source.lessonId,
+        sourceStorageUri: source.transcriptStorageUri,
+        sourceContentHash: source.transcriptHash,
+        trigger: 'replay',
+      },
+    });
+  } catch (error) {
+    logger.warn('Confirmed lesson-memory intent reconciliation failed during session load', {
+      event: 'confirmed_lesson_memory_reconcile_failed',
+      assignmentSessionId: session.id,
+      transcriptId: source.transcriptId,
+      sourceContentHash: source.transcriptHash,
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 }

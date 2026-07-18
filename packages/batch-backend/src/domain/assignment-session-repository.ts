@@ -4,6 +4,8 @@ import type { PoolClient } from 'pg';
 import type {
   AssignmentConfirmedSnapshot,
   AssignmentConfirmedStep,
+  AssignmentInvalidatedArtifact,
+  ConfirmAssignmentSessionStepRequest,
   GenerationProvider,
   PublishTarget,
   TtsProviderId,
@@ -12,10 +14,13 @@ import type {
 
 import { withPgClient } from '../infrastructure/db.js';
 import { logger } from '../infrastructure/logger.js';
+import { ArtifactWorkingConflictError } from './artifact-working-conflict.js';
 import {
   AssignmentConfirmedSnapshotSchema,
   type AssignmentSessionRecord,
 } from './assignment-session-model.js';
+import { getDraftByIdForUpdate } from './draft-repository.js';
+import { getTranscriptByIdForUpdate } from './transcript-repository.js';
 
 export const ACTIVE_ASSIGNMENT_SESSION_SQL = `confirmed_step <> 'share'`;
 
@@ -81,6 +86,32 @@ export interface UpdateAssignmentSessionRecoveryParams {
   patch: AssignmentSessionRecoveryPatch;
 }
 
+export interface ConfirmAssignmentSessionStepPersistenceParams {
+  id: string;
+  userId: string;
+  request: ConfirmAssignmentSessionStepRequest;
+  lessonMemory: { schemaVersion: string; provider: string; model: string; requestedAt: Date };
+}
+
+export interface ConfirmedLessonMemoryIntent {
+  outcome: 'created' | 'pending_exists';
+  entryId: string;
+  studentId: string;
+  transcriptId: string;
+  recordingId: string;
+  lessonId: string | null;
+  sourceStorageUri: string;
+  sourceContentHash: string;
+  provider: string;
+  model: string;
+}
+
+export interface ConfirmAssignmentSessionStepPersistenceResult {
+  session: AssignmentSessionRecord;
+  invalidated: AssignmentInvalidatedArtifact[];
+  lessonMemoryIntent: ConfirmedLessonMemoryIntent | null;
+}
+
 const RETURNING_COLUMNS = `
   id, user_id, student_id, lesson_id, recording_id, transcript_id,
   prompt_package_id, draft_id, revision, confirmed_step, confirmed_snapshot,
@@ -138,6 +169,415 @@ export class AssignmentSessionRequestConflictError extends Error {
     super('Student confirmation request ID was already used with different input.');
     this.name = 'AssignmentSessionRequestConflictError';
   }
+}
+
+export class AssignmentSessionConfirmationError extends Error {
+  constructor(
+    readonly code:
+      | 'ASSIGNMENT_STEP_PREREQUISITE_MISSING'
+      | 'ASSIGNMENT_STEP_LINEAGE_INVALID'
+      | 'ASSIGNMENT_STEP_ARTIFACT_NOT_FOUND',
+  ) {
+    super(code);
+    this.name = 'AssignmentSessionConfirmationError';
+  }
+}
+
+export async function confirmAssignmentSessionStepPersistence(
+  params: ConfirmAssignmentSessionStepPersistenceParams,
+): Promise<ConfirmAssignmentSessionStepPersistenceResult> {
+  return withPgClient(async (client) => {
+    await client.query('BEGIN');
+    try {
+      const locked = await client.query<AssignmentSessionRow>(
+        `SELECT ${RETURNING_COLUMNS} FROM assignment_sessions
+         WHERE id = $1 AND user_id = $2 FOR UPDATE`,
+        [params.id, params.userId],
+      );
+      const row = locked.rows[0];
+      if (!row) throw new AssignmentSessionRepositoryError('ASSIGNMENT_SESSION_NOT_FOUND');
+      const current = mapRow(row);
+      if (current.confirmedStep === 'share') {
+        throw new AssignmentSessionRepositoryError('ASSIGNMENT_SESSION_COMPLETED');
+      }
+      if (current.shareJobId) {
+        throw new AssignmentSessionRepositoryError('ASSIGNMENT_SESSION_SHARE_IN_PROGRESS');
+      }
+
+      const result = await confirmLockedStep(client, current, params);
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
+  });
+}
+
+async function confirmLockedStep(
+  client: PoolClient,
+  current: AssignmentSessionRecord,
+  params: ConfirmAssignmentSessionStepPersistenceParams,
+): Promise<ConfirmAssignmentSessionStepPersistenceResult> {
+  switch (params.request.step) {
+    case 'source':
+      return confirmLockedSource(client, current, params);
+    case 'context':
+      return confirmLockedContext(client, current, params);
+    case 'create':
+      return confirmLockedCreate(client, current, params);
+    default:
+      return assertNever(params.request);
+  }
+}
+
+async function confirmLockedSource(
+  client: PoolClient,
+  current: AssignmentSessionRecord,
+  params: ConfirmAssignmentSessionStepPersistenceParams,
+): Promise<ConfirmAssignmentSessionStepPersistenceResult> {
+  const request = params.request as Extract<
+    ConfirmAssignmentSessionStepRequest,
+    { step: 'source' }
+  >;
+  const transcript = await getTranscriptByIdForUpdate(client, request.transcriptId);
+  if (!transcript)
+    throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_ARTIFACT_NOT_FOUND');
+  if (
+    transcript.recordingId !== request.recordingId ||
+    transcript.workingVersion === null ||
+    transcript.contentHash === null
+  ) {
+    throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_LINEAGE_INVALID');
+  }
+  if (transcript.workingVersion !== request.transcriptWorkingVersion) {
+    throw new ArtifactWorkingConflictError(transcript);
+  }
+  const recording = await client.query<{ student_id: string | null }>(
+    'SELECT student_id FROM recordings WHERE id = $1',
+    [request.recordingId],
+  );
+  if (!recording.rows[0] || recording.rows[0].student_id !== current.studentId) {
+    throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_LINEAGE_INVALID');
+  }
+  if (request.lessonId) {
+    const lesson = await client.query(
+      'SELECT 1 FROM student_lessons WHERE id = $1 AND student_id = $2',
+      [request.lessonId, current.studentId],
+    );
+    if (!lesson.rows[0]) {
+      throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_LINEAGE_INVALID');
+    }
+  }
+
+  const source = {
+    lessonId: request.lessonId,
+    recordingId: request.recordingId,
+    transcriptId: transcript.id,
+    transcriptWorkingVersion: transcript.workingVersion,
+    transcriptStorageUri: transcript.storageUri,
+    transcriptHash: transcript.contentHash,
+  };
+  const identical = JSON.stringify(current.confirmed.source) === JSON.stringify(source);
+  if (identical) {
+    const intent = await reconcileConfirmedLessonMemoryIntent(
+      client,
+      current,
+      source,
+      params,
+      false,
+    );
+    return { session: current, invalidated: [], lessonMemoryIntent: intent };
+  }
+  assertExpectedRevision(current, request.expectedRevision);
+
+  const confirmed: AssignmentConfirmedSnapshot = {
+    student: current.confirmed.student,
+    source,
+    context: null,
+    create: null,
+  };
+  const updated = await updateConfirmedSession(client, current, {
+    confirmedStep: 'source',
+    confirmed,
+    columns: {
+      lesson_id: request.lessonId,
+      recording_id: request.recordingId,
+      transcript_id: request.transcriptId,
+      prompt_package_id: null,
+      draft_id: null,
+    },
+  });
+  const intent = await reconcileConfirmedLessonMemoryIntent(client, updated, source, params, true);
+  return {
+    session: updated,
+    invalidated: ['prompt', 'draft', 'preview'],
+    lessonMemoryIntent: intent,
+  };
+}
+
+async function confirmLockedContext(
+  client: PoolClient,
+  current: AssignmentSessionRecord,
+  params: ConfirmAssignmentSessionStepPersistenceParams,
+): Promise<ConfirmAssignmentSessionStepPersistenceResult> {
+  const request = params.request as Extract<
+    ConfirmAssignmentSessionStepRequest,
+    { step: 'context' }
+  >;
+  if (!current.confirmed.source) {
+    throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_PREREQUISITE_MISSING');
+  }
+  const profileValues = [request.profileId, request.profileRevisionId, request.profileRevisionHash];
+  if (
+    profileValues.some((value) => value !== null) &&
+    profileValues.some((value) => value === null)
+  ) {
+    throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_LINEAGE_INVALID');
+  }
+  if (request.profileId && request.profileRevisionId && request.profileRevisionHash) {
+    const profile = await client.query(
+      `SELECT 1 FROM profile_revisions
+       WHERE profile_id = $1 AND id = $2 AND content_hash = $3`,
+      [request.profileId, request.profileRevisionId, request.profileRevisionHash],
+    );
+    if (!profile.rows[0]) {
+      throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_LINEAGE_INVALID');
+    }
+  }
+  const context = {
+    teacherNotes: request.teacherNotes,
+    profileId: request.profileId,
+    profileRevisionId: request.profileRevisionId,
+    profileRevisionHash: request.profileRevisionHash,
+  };
+  if (JSON.stringify(current.confirmed.context) === JSON.stringify(context)) {
+    return { session: current, invalidated: [], lessonMemoryIntent: null };
+  }
+  assertExpectedRevision(current, request.expectedRevision);
+  const confirmed = { ...current.confirmed, context, create: null };
+  const updated = await updateConfirmedSession(client, current, {
+    confirmedStep: 'context',
+    confirmed,
+    columns: {
+      teacher_notes: request.teacherNotes,
+      selected_profile_id: request.profileId,
+      selected_profile_revision_id: request.profileRevisionId,
+      selected_profile_revision_hash: request.profileRevisionHash,
+      prompt_package_id: null,
+      draft_id: null,
+    },
+  });
+  return {
+    session: updated,
+    invalidated: ['prompt', 'draft', 'preview'],
+    lessonMemoryIntent: null,
+  };
+}
+
+async function confirmLockedCreate(
+  client: PoolClient,
+  current: AssignmentSessionRecord,
+  params: ConfirmAssignmentSessionStepPersistenceParams,
+): Promise<ConfirmAssignmentSessionStepPersistenceResult> {
+  const request = params.request as Extract<
+    ConfirmAssignmentSessionStepRequest,
+    { step: 'create' }
+  >;
+  const source = current.confirmed.source;
+  if (!source || !current.confirmed.context) {
+    throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_PREREQUISITE_MISSING');
+  }
+  const draft = await getDraftByIdForUpdate(client, request.draftId);
+  if (!draft) throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_ARTIFACT_NOT_FOUND');
+  if (draft.workingVersion === null || draft.contentHash === null) {
+    throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_LINEAGE_INVALID');
+  }
+  if (draft.workingVersion !== request.draftWorkingVersion) {
+    throw new ArtifactWorkingConflictError(draft);
+  }
+  const prompt = await client.query<{
+    id: string;
+    recording_id: string;
+    transcript_id: string;
+    student_id: string | null;
+    lesson_id: string | null;
+    notes: string | null;
+    resolved_profile_id: string | null;
+    resolved_profile_revision_id: string | null;
+    resolved_profile_hash: string | null;
+  }>(
+    `SELECT id, recording_id, transcript_id, student_id, lesson_id, notes,
+            resolved_profile_id, resolved_profile_revision_id, resolved_profile_hash
+     FROM prompt_packages WHERE id = $1`,
+    [request.promptPackageId],
+  );
+  const packageRow = prompt.rows[0];
+  const context = current.confirmed.context;
+  if (
+    !packageRow ||
+    draft.promptPackageId !== packageRow.id ||
+    draft.studentId !== current.studentId ||
+    packageRow.student_id !== current.studentId ||
+    packageRow.recording_id !== source.recordingId ||
+    packageRow.transcript_id !== source.transcriptId ||
+    packageRow.lesson_id !== source.lessonId ||
+    packageRow.notes !== context.teacherNotes ||
+    packageRow.resolved_profile_id !== context.profileId ||
+    packageRow.resolved_profile_revision_id !== context.profileRevisionId ||
+    packageRow.resolved_profile_hash !== context.profileRevisionHash
+  ) {
+    throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_LINEAGE_INVALID');
+  }
+  const create = {
+    promptPackageId: request.promptPackageId,
+    draftId: request.draftId,
+    draftWorkingVersion: draft.workingVersion,
+    draftStorageUri: draft.storageUri,
+    draftHash: draft.contentHash,
+  };
+  if (JSON.stringify(current.confirmed.create) === JSON.stringify(create)) {
+    return { session: current, invalidated: [], lessonMemoryIntent: null };
+  }
+  assertExpectedRevision(current, request.expectedRevision);
+  const updated = await updateConfirmedSession(client, current, {
+    confirmedStep: 'create',
+    confirmed: { ...current.confirmed, create },
+    columns: { prompt_package_id: request.promptPackageId, draft_id: request.draftId },
+  });
+  return { session: updated, invalidated: ['preview'], lessonMemoryIntent: null };
+}
+
+async function updateConfirmedSession(
+  client: PoolClient,
+  current: AssignmentSessionRecord,
+  values: {
+    confirmedStep: AssignmentConfirmedStep;
+    confirmed: AssignmentConfirmedSnapshot;
+    columns: Record<string, unknown>;
+  },
+): Promise<AssignmentSessionRecord> {
+  const assignments = ['confirmed_step = $3', 'confirmed_snapshot = $4::jsonb'];
+  const params: unknown[] = [
+    current.id,
+    current.revision,
+    values.confirmedStep,
+    JSON.stringify(values.confirmed),
+  ];
+  for (const [column, value] of Object.entries(values.columns)) {
+    params.push(value);
+    assignments.push(`${column} = $${params.length}`);
+  }
+  const updated = await client.query<AssignmentSessionRow>(
+    `UPDATE assignment_sessions SET ${assignments.join(', ')}, revision = revision + 1, updated_at = NOW()
+     WHERE id = $1 AND revision = $2 AND ${ACTIVE_ASSIGNMENT_SESSION_SQL}
+     RETURNING ${RETURNING_COLUMNS}`,
+    params,
+  );
+  if (!updated.rows[0]) throw new AssignmentSessionRevisionConflictError(current);
+  return mapRow(updated.rows[0]);
+}
+
+async function reconcileConfirmedLessonMemoryIntent(
+  client: PoolClient,
+  session: AssignmentSessionRecord,
+  source: NonNullable<AssignmentConfirmedSnapshot['source']>,
+  params: ConfirmAssignmentSessionStepPersistenceParams,
+  authoritativeHashChanged: boolean,
+): Promise<ConfirmedLessonMemoryIntent | null> {
+  const exact = await client.query<{ id: string; status: string }>(
+    `SELECT id, status FROM lesson_memory_entries
+     WHERE transcript_id = $1 AND source_content_hash = $2 FOR UPDATE`,
+    [source.transcriptId, source.transcriptHash],
+  );
+  const entryId = exact.rows[0]?.id ?? randomUUID();
+  let outcome: ConfirmedLessonMemoryIntent['outcome'] = 'pending_exists';
+  if (!exact.rows[0]) {
+    outcome = 'created';
+    await client.query(
+      `INSERT INTO lesson_memory_entries (
+         id, student_id, transcript_id, recording_id, schema_version, generated_at,
+         provider, model, status, source_kind, source_storage_uri, source_content_hash,
+         generation_notes
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', 'lesson_transcript', $9, $10, $11::jsonb)`,
+      [
+        entryId,
+        session.studentId,
+        source.transcriptId,
+        source.recordingId,
+        params.lessonMemory.schemaVersion,
+        params.lessonMemory.requestedAt,
+        params.lessonMemory.provider,
+        params.lessonMemory.model,
+        source.transcriptStorageUri,
+        source.transcriptHash,
+        JSON.stringify({ trigger: 'teacher-confirmed-transcript', lessonId: source.lessonId }),
+      ],
+    );
+  } else if (exact.rows[0].status === 'failed') {
+    outcome = 'created';
+    await client.query(
+      `UPDATE lesson_memory_entries SET status = 'pending', superseded_by_id = NULL,
+       superseded_at = NULL, generated_at = $2, updated_at = NOW() WHERE id = $1`,
+      [entryId, params.lessonMemory.requestedAt],
+    );
+  } else if (exact.rows[0].status === 'ready') {
+    return null;
+  } else if (exact.rows[0].status === 'superseded') {
+    outcome = 'created';
+    await client.query(
+      `UPDATE lesson_memory_entries SET status = 'pending', superseded_by_id = NULL,
+       superseded_at = NULL, generated_at = $2, updated_at = NOW() WHERE id = $1`,
+      [entryId, params.lessonMemory.requestedAt],
+    );
+  }
+
+  if (authoritativeHashChanged) {
+    const old = await client.query<{ id: string }>(
+      `UPDATE lesson_memory_entries SET status = 'superseded', superseded_by_id = $1,
+       superseded_at = $2, updated_at = NOW()
+       WHERE transcript_id = $3 AND id <> $1 AND status IN ('pending', 'ready')
+       RETURNING id`,
+      [entryId, params.lessonMemory.requestedAt, source.transcriptId],
+    );
+    const oldIds = old.rows.map((row) => row.id);
+    if (oldIds.length > 0) {
+      await client.query(
+        `UPDATE student_memory_snapshots SET status = 'superseded', superseded_by_id = NULL,
+         superseded_at = $2, updated_at = NOW()
+         WHERE student_id = $1 AND status = 'ready'
+           AND lesson_memory_entry_ids && $3::uuid[]`,
+        [session.studentId, params.lessonMemory.requestedAt, oldIds],
+      );
+    }
+    await client.query(
+      `UPDATE student_memory_snapshots SET status = 'superseded', superseded_by_id = NULL,
+       superseded_at = $2, updated_at = NOW()
+       WHERE student_id = $1 AND status = 'pending'`,
+      [session.studentId, params.lessonMemory.requestedAt],
+    );
+  }
+  return {
+    outcome,
+    entryId,
+    studentId: session.studentId,
+    transcriptId: source.transcriptId,
+    recordingId: source.recordingId,
+    lessonId: source.lessonId,
+    sourceStorageUri: source.transcriptStorageUri,
+    sourceContentHash: source.transcriptHash,
+    provider: params.lessonMemory.provider,
+    model: params.lessonMemory.model,
+  };
+}
+
+function assertExpectedRevision(current: AssignmentSessionRecord, expectedRevision: number): void {
+  if (current.revision !== expectedRevision)
+    throw new AssignmentSessionRevisionConflictError(current);
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unsupported assignment confirmation step: ${JSON.stringify(value)}`);
 }
 
 export async function confirmStudentAssignmentSession(

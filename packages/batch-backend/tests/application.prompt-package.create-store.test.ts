@@ -178,9 +178,6 @@ describe('application/prompt-package', () => {
           templateRevisions: createTemplateRevisionRepositoryStub(),
           bindings: createBindingResolverStub(),
           promptOptions: createPromptOptionsStub(),
-          lessonMemory: {
-            requestGeneration: async () => null,
-          },
         },
       );
 
@@ -284,9 +281,6 @@ describe('application/prompt-package', () => {
           templateRevisions: createTemplateRevisionRepositoryStub(),
           bindings: createBindingResolverStub(),
           promptOptions: createPromptOptionsStub(),
-          lessonMemory: {
-            requestGeneration: async () => null,
-          },
         },
       );
     } finally {

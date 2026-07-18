@@ -2,7 +2,7 @@ import { describeHttpServerIntegrationSuite } from './transport.http-server.inte
 
 describeHttpServerIntegrationSuite(
   'transport/http-server - integration (in-process) [assignment-sessions]',
-  ({ app, assignmentSessionsModule, expect, it, vi }) => {
+  ({ app, assignmentSessionsModule, confirmAssignmentSessionStepModule, expect, it, vi }) => {
     const session = {
       id: '11111111-1111-4111-8111-111111111111',
       userId: 'test-user-id',
@@ -93,6 +93,52 @@ describeHttpServerIntegrationSuite(
       expect(response.json()).toEqual({
         code: 'assignment_session_revision_conflict',
         session: { ...session, revision: 3 },
+      });
+    });
+
+    it('confirms a discriminated step and returns artifact CAS conflicts', async () => {
+      const confirm = vi
+        .spyOn(confirmAssignmentSessionStepModule, 'confirmAssignmentSessionStep')
+        .mockResolvedValue({
+          session: { ...session, revision: 2, confirmedStep: 'source' },
+          invalidated: ['prompt', 'draft', 'preview'],
+        });
+      const payload = {
+        step: 'source',
+        expectedRevision: 1,
+        lessonId: null,
+        recordingId: '33333333-3333-4333-8333-333333333333',
+        transcriptId: '44444444-4444-4444-8444-444444444444',
+        transcriptWorkingVersion: 1,
+      };
+      const response = await app.inject({
+        method: 'POST',
+        url: `/assignment-sessions/${session.id}/confirm`,
+        payload,
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ invalidated: ['prompt', 'draft', 'preview'] });
+      expect(confirm).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'test-user-id',
+          sessionId: session.id,
+          request: payload,
+        }),
+      );
+
+      confirm.mockRejectedValueOnce({
+        code: 'ARTIFACT_WORKING_CONFLICT',
+        latest: { workingVersion: 2, contentHash: 'a'.repeat(64) },
+      });
+      const conflict = await app.inject({
+        method: 'POST',
+        url: `/assignment-sessions/${session.id}/confirm`,
+        payload,
+      });
+      expect(conflict.statusCode).toBe(409);
+      expect(conflict.json()).toEqual({
+        code: 'artifact_working_conflict',
+        artifact: { workingVersion: 2, contentHash: 'a'.repeat(64) },
       });
     });
 

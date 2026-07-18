@@ -8,6 +8,7 @@ import { validateMarkdown } from '@esl-pipeline/md-validator';
 
 import * as approveJobModule from '../src/application/approve-job.js';
 import * as assignmentSessionsModule from '../src/application/assignment-sessions.js';
+import * as confirmAssignmentSessionStepModule from '../src/application/confirm-assignment-session-step.js';
 import * as createDraftModule from '../src/application/create-draft.js';
 import * as createPromptPackageModule from '../src/application/create-prompt-package.js';
 import * as generateDraftModule from '../src/application/generate-draft.js';
@@ -1261,6 +1262,7 @@ export function describeHttpServerIntegrationSuite(
       CONTRACT_VERSIONS,
       DB_MIGRATION_HEAD,
       assignmentSessionsModule,
+      confirmAssignmentSessionStepModule,
       authMiddlewareModule,
       rateLimitMocks,
       approveJobModule,

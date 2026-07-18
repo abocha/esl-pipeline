@@ -2,7 +2,10 @@ import type { GenerationProvider } from '@esl-pipeline/contracts';
 
 import type { BatchBackendConfig } from '../config/env.js';
 import type { LessonMemoryRecord } from '../domain/lesson-memory-model.js';
-import { insertCanonicalReadyLessonMemoryEntry } from '../domain/lesson-memory-repository.js';
+import {
+  insertCanonicalReadyLessonMemoryEntry,
+  publishConfirmedLessonMemoryEntry,
+} from '../domain/lesson-memory-repository.js';
 import type { ProviderStructuredExecutionResult } from './generation-providers.js';
 import type { GenerationRequestEnvelopeV1 } from './generation-request-envelope.js';
 import {
@@ -21,6 +24,9 @@ export interface GenerateLessonMemoryEntryRequest {
   prompt: string;
   envelope?: GenerationRequestEnvelopeV1;
   maxOutputTokens?: number;
+  pendingEntryId?: string;
+  sourceStorageUri?: string;
+  sourceContentHash?: string;
 }
 
 export interface GenerateLessonMemoryEntryResult {
@@ -32,7 +38,8 @@ export interface GenerateLessonMemoryEntryResult {
 export interface GenerateLessonMemoryEntryDependencies {
   extractor: typeof extractLessonMemoryContent;
   repository: {
-    insertCanonicalReady: typeof insertCanonicalReadyLessonMemoryEntry;
+    insertCanonicalReady?: typeof insertCanonicalReadyLessonMemoryEntry;
+    publishConfirmed?: typeof publishConfirmedLessonMemoryEntry;
   };
   now: () => Date;
 }
@@ -43,8 +50,11 @@ export async function generateLessonMemoryEntry(args: {
   overrides?: Partial<GenerateLessonMemoryEntryDependencies>;
 }): Promise<GenerateLessonMemoryEntryResult> {
   const extractor = args.overrides?.extractor ?? extractLessonMemoryContent;
-  const repository = args.overrides?.repository ?? {
-    insertCanonicalReady: insertCanonicalReadyLessonMemoryEntry,
+  const repository = {
+    insertCanonicalReady:
+      args.overrides?.repository?.insertCanonicalReady ?? insertCanonicalReadyLessonMemoryEntry,
+    publishConfirmed:
+      args.overrides?.repository?.publishConfirmed ?? publishConfirmedLessonMemoryEntry,
   };
   const now = args.overrides?.now ?? (() => new Date());
 
@@ -60,7 +70,7 @@ export async function generateLessonMemoryEntry(args: {
   });
 
   const generatedAt = now();
-  const entry = await repository.insertCanonicalReady({
+  const entryParams = {
     studentId: args.request.studentId,
     transcriptId: args.request.transcriptId,
     recordingId: args.request.recordingId,
@@ -83,7 +93,19 @@ export async function generateLessonMemoryEntry(args: {
     studentFacts: extraction.content.studentFacts,
     progressSignals: extraction.content.progressSignals,
     followUpRecommendations: extraction.content.followUpRecommendations,
-  });
+  };
+  const entry =
+    args.request.pendingEntryId && args.request.sourceStorageUri && args.request.sourceContentHash
+      ? await repository.publishConfirmed({
+          ...entryParams,
+          id: args.request.pendingEntryId,
+          sourceStorageUri: args.request.sourceStorageUri,
+          sourceContentHash: args.request.sourceContentHash,
+        })
+      : await repository.insertCanonicalReady(entryParams);
+  if (!entry) {
+    throw new Error('Confirmed lesson-memory source is no longer authoritative');
+  }
 
   return {
     entry,

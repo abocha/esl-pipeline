@@ -10,18 +10,16 @@ import { logger } from '../infrastructure/logger.js';
 import { createStudentMemoryQueue } from '../infrastructure/student-memory-queue.js';
 import { LESSON_MEMORY_SCHEMA_VERSION } from './generate-lesson-memory-entry.js';
 import { resolveGenerationCandidates } from './generation-policy.js';
+import type { ProcessLessonMemoryJobPayload } from './process-lesson-memory-job.js';
 
 export interface RequestLessonMemoryGenerationParams {
   studentId: string | null;
   transcriptId: string;
   recordingId: string;
+  sourceStorageUri: string;
+  sourceContentHash: string;
   lessonId?: string | null;
-  promptPackageId?: string | null;
-  trigger:
-    | 'prompt-package-created'
-    | 'draft-generation-fallback'
-    | 'teacher-confirmed-transcript'
-    | 'replay';
+  trigger: 'teacher-confirmed-transcript' | 'replay';
   providerOverride?: GenerationProvider | null;
   modelOverride?: string | null;
 }
@@ -37,6 +35,26 @@ export interface RequestLessonMemoryGenerationDependencies {
     enqueue: ReturnType<typeof createStudentMemoryQueue>['enqueue'];
   };
   now: () => Date;
+}
+
+export async function enqueueConfirmedLessonMemoryIntent(
+  payload: ProcessLessonMemoryJobPayload,
+  overrides?: {
+    batchClaims?: RequestLessonMemoryGenerationDependencies['batchClaims'];
+    queue?: RequestLessonMemoryGenerationDependencies['queue'];
+  },
+): Promise<void> {
+  const batchClaims = overrides?.batchClaims ?? {
+    supersedeForOnlineWork: supersedeStudentMemoryOpenAiBatchClaimsForOnlineWork,
+  };
+  const queue = overrides?.queue ?? createStudentMemoryQueue();
+  await batchClaims.supersedeForOnlineWork({
+    workload: 'lesson_memory',
+    canonicalScopeKey: payload.transcriptId,
+  });
+  await queue.enqueue(payload, {
+    jobId: `lesson-memory:${payload.transcriptId}:${payload.sourceContentHash}`,
+  });
 }
 
 export async function requestLessonMemoryGeneration(args: {
@@ -72,11 +90,6 @@ export async function requestLessonMemoryGeneration(args: {
     throw new Error('No generation candidate is available for lesson-memory extraction');
   }
 
-  await batchClaims.supersedeForOnlineWork({
-    workload: 'lesson_memory',
-    canonicalScopeKey: args.params.transcriptId,
-  });
-
   const requestedAt = now();
   const pending = await lessonMemory.ensurePending({
     studentId: args.params.studentId,
@@ -88,37 +101,40 @@ export async function requestLessonMemoryGeneration(args: {
     model: candidate.model,
     generationNotes: {
       trigger: args.params.trigger,
-      promptPackageId: args.params.promptPackageId ?? null,
       lessonId: args.params.lessonId ?? null,
       requestedAt: requestedAt.toISOString(),
     },
+    sourceStorageUri: args.params.sourceStorageUri,
+    sourceContentHash: args.params.sourceContentHash,
   });
 
   if (pending.outcome === 'ready_exists') {
     return pending;
   }
 
-  await queue.enqueue(
+  await enqueueConfirmedLessonMemoryIntent(
     {
       kind: 'lesson-memory-generate',
       transcriptId: args.params.transcriptId,
       recordingId: args.params.recordingId,
       studentId: args.params.studentId,
       lessonId: args.params.lessonId ?? null,
-      promptPackageId: args.params.promptPackageId ?? null,
+      sourceStorageUri: args.params.sourceStorageUri,
+      sourceContentHash: args.params.sourceContentHash,
       pendingEntryId: pending.entry.id,
       provider: candidate.provider,
       model: candidate.model,
     },
     {
-      jobId: `lesson-memory:${args.params.transcriptId}`,
+      batchClaims,
+      queue,
     },
   );
 
   logger.info('Lesson-memory generation requested', {
     event: 'lesson_memory_generation_requested',
     transcriptId: args.params.transcriptId,
-    promptPackageId: args.params.promptPackageId ?? null,
+    sourceContentHash: args.params.sourceContentHash,
     pendingEntryId: pending.entry.id,
     trigger: args.params.trigger,
     outcome: pending.outcome,

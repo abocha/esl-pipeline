@@ -29,6 +29,8 @@ interface LessonMemoryRow {
   model: string;
   status: string;
   source_kind: string;
+  source_storage_uri?: string | null;
+  source_content_hash?: string | null;
   generation_notes: LessonMemoryGenerationNotes | null;
   lesson_title: string | null;
   lesson_summary: string | null;
@@ -63,6 +65,8 @@ export interface InsertLessonMemoryParams {
   model: string;
   status: LessonMemoryEntryStatus;
   generationNotes?: LessonMemoryGenerationNotes | null;
+  sourceStorageUri?: string | null;
+  sourceContentHash?: string | null;
   lessonTitle?: string | null;
   lessonSummary?: string | null;
   topicsDiscussed?: TopicNote[];
@@ -93,7 +97,10 @@ export interface ListRecentReadyLessonMemoryOptions {
 
 export type InsertCanonicalReadyLessonMemoryParams = Omit<InsertLessonMemoryParams, 'status'>;
 
-export type EnsurePendingLessonMemoryEntryParams = Omit<InsertLessonMemoryParams, 'status'>;
+export type EnsurePendingLessonMemoryEntryParams = Omit<InsertLessonMemoryParams, 'status'> & {
+  sourceStorageUri: string;
+  sourceContentHash: string;
+};
 
 export interface EnsurePendingLessonMemoryEntryResult {
   outcome: 'created' | 'pending_exists' | 'ready_exists';
@@ -354,9 +361,7 @@ export async function ensurePendingLessonMemoryEntry(
       if (!transcript) {
         throw new Error(`Transcript not found for lesson-memory request: ${params.transcriptId}`);
       }
-      const transcriptUpdatedAt = transcript.updated_at;
-
-      const readyResult = await client.query<LessonMemoryRow>(
+      const existingResult = await client.query<LessonMemoryRow>(
         `
         SELECT
           id,
@@ -369,6 +374,8 @@ export async function ensurePendingLessonMemoryEntry(
           model,
           status,
           source_kind,
+          source_storage_uri,
+          source_content_hash,
           generation_notes,
           lesson_title,
           lesson_summary,
@@ -387,71 +394,41 @@ export async function ensurePendingLessonMemoryEntry(
           updated_at
         FROM lesson_memory_entries
         WHERE transcript_id = $1
-          AND student_id = $2
-          AND recording_id = $3
-          AND status = 'ready'
-        ORDER BY generated_at DESC, created_at DESC, id DESC
+          AND source_content_hash = $2
         LIMIT 1
         `,
-        [params.transcriptId, params.studentId, params.recordingId],
+        [params.transcriptId, params.sourceContentHash],
       );
-
-      const latestReady = readyResult.rows[0];
-      if (latestReady && latestReady.generated_at >= transcriptUpdatedAt) {
+      const existing = existingResult.rows[0];
+      if (existing && (existing.status === 'ready' || existing.status === 'pending')) {
         await client.query('COMMIT');
         return {
-          outcome: 'ready_exists',
-          entry: mapRowToLessonMemory(latestReady),
+          outcome: existing.status === 'ready' ? 'ready_exists' : 'pending_exists',
+          entry: mapRowToLessonMemory(existing),
         };
       }
 
-      const pendingResult = await client.query<LessonMemoryRow>(
-        `
-        SELECT
-          id,
-          student_id,
-          transcript_id,
-          recording_id,
-          schema_version,
-          generated_at,
-          provider,
-          model,
-          status,
-          source_kind,
-          generation_notes,
-          lesson_title,
-          lesson_summary,
-          topics_discussed,
-          mistake_patterns,
-          grammar_reviewed,
-          grammar_watchlist,
-          vocabulary_focus,
-          pronunciation_focus,
-          student_facts,
-          progress_signals,
-          follow_up_recommendations,
-          superseded_by_id,
-          superseded_at,
-          created_at,
-          updated_at
-        FROM lesson_memory_entries
-        WHERE transcript_id = $1
-          AND student_id = $2
-          AND recording_id = $3
-          AND status = 'pending'
-        ORDER BY generated_at DESC, created_at DESC, id DESC
-        LIMIT 1
-        `,
-        [params.transcriptId, params.studentId, params.recordingId],
-      );
-
-      const latestPending = pendingResult.rows[0];
-      if (latestPending && latestPending.generated_at >= transcriptUpdatedAt) {
+      if (existing?.status === 'failed') {
+        const reset = await client.query<LessonMemoryRow>(
+          `UPDATE lesson_memory_entries
+           SET status = 'pending', generation_notes = $2::jsonb, generated_at = $3,
+               provider = $4, model = $5, source_storage_uri = $6,
+               superseded_by_id = NULL, superseded_at = NULL, updated_at = NOW()
+           WHERE id = $1
+           RETURNING *`,
+          [
+            existing.id,
+            JSON.stringify(params.generationNotes ?? null),
+            generatedAt,
+            params.provider,
+            params.model,
+            params.sourceStorageUri,
+          ],
+        );
         await client.query('COMMIT');
-        return {
-          outcome: 'pending_exists',
-          entry: mapRowToLessonMemory(latestPending),
-        };
+        const resetRow = reset.rows[0];
+        if (!resetRow) throw new Error('Failed to reset confirmed lesson-memory intent');
+        return { outcome: 'created', entry: mapRowToLessonMemory(resetRow) };
       }
 
       const insertResult = await client.query<LessonMemoryRow>(
@@ -467,6 +444,8 @@ export async function ensurePendingLessonMemoryEntry(
           model,
           status,
           source_kind,
+          source_storage_uri,
+          source_content_hash,
           generation_notes,
           lesson_title,
           lesson_summary,
@@ -482,7 +461,7 @@ export async function ensurePendingLessonMemoryEntry(
         )
         VALUES (
           $1, $2, $3, $4, $5, $6, $7, $8, 'pending', 'lesson_transcript', $9, $10,
-          $11, $12, $13, $14, $15, $16, $17, $18, $19, $20
+          $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22
         )
         RETURNING
           id,
@@ -495,6 +474,8 @@ export async function ensurePendingLessonMemoryEntry(
           model,
           status,
           source_kind,
+          source_storage_uri,
+          source_content_hash,
           generation_notes,
           lesson_title,
           lesson_summary,
@@ -521,6 +502,8 @@ export async function ensurePendingLessonMemoryEntry(
           generatedAt,
           params.provider,
           params.model,
+          params.sourceStorageUri,
+          params.sourceContentHash,
           params.generationNotes ?? null,
           params.lessonTitle ?? null,
           params.lessonSummary ?? null,
@@ -552,18 +535,11 @@ export async function ensurePendingLessonMemoryEntry(
         WHERE transcript_id = $3
           AND student_id = $5
           AND recording_id = $6
-          AND status = 'pending'
+          AND status IN ('pending', 'ready')
           AND id <> $1
           AND generated_at < $4
         `,
-        [
-          id,
-          generatedAt,
-          params.transcriptId,
-          transcriptUpdatedAt,
-          params.studentId,
-          params.recordingId,
-        ],
+        [id, generatedAt, params.transcriptId, generatedAt, params.studentId, params.recordingId],
       );
 
       await client.query('COMMIT');
@@ -598,6 +574,8 @@ export async function getLessonMemoryEntryById(id: string): Promise<LessonMemory
         model,
         status,
         source_kind,
+        source_storage_uri,
+        source_content_hash,
         generation_notes,
         lesson_title,
         lesson_summary,
@@ -625,6 +603,61 @@ export async function getLessonMemoryEntryById(id: string): Promise<LessonMemory
   return row ? mapRowToLessonMemory(row) : null;
 }
 
+export async function publishConfirmedLessonMemoryEntry(
+  params: InsertCanonicalReadyLessonMemoryParams & {
+    id: string;
+    sourceStorageUri: string;
+    sourceContentHash: string;
+  },
+): Promise<LessonMemoryRecord | null> {
+  const generatedAt = params.generatedAt ?? new Date();
+  const row = await withPgClient(async (client: PoolClient) => {
+    const result = await client.query<LessonMemoryRow>(
+      `
+      UPDATE lesson_memory_entries
+      SET schema_version = $4, generated_at = $5, provider = $6, model = $7,
+          status = 'ready', generation_notes = $8::jsonb, lesson_title = $9,
+          lesson_summary = $10, topics_discussed = $11::jsonb,
+          mistake_patterns = $12::jsonb, grammar_reviewed = $13::jsonb,
+          grammar_watchlist = $14::jsonb, vocabulary_focus = $15::jsonb,
+          pronunciation_focus = $16::jsonb, student_facts = $17::jsonb,
+          progress_signals = $18::jsonb, follow_up_recommendations = $19::jsonb,
+          updated_at = NOW()
+      WHERE id = $1
+        AND transcript_id = $2
+        AND source_content_hash = $3
+        AND source_storage_uri = $20
+        AND status = 'pending'
+      RETURNING *
+      `,
+      [
+        params.id,
+        params.transcriptId,
+        params.sourceContentHash,
+        params.schemaVersion,
+        generatedAt,
+        params.provider,
+        params.model,
+        JSON.stringify(params.generationNotes ?? null),
+        params.lessonTitle ?? null,
+        params.lessonSummary ?? null,
+        JSON.stringify(params.topicsDiscussed ?? []),
+        JSON.stringify(params.mistakePatterns ?? []),
+        JSON.stringify(params.grammarReviewed ?? []),
+        JSON.stringify(params.grammarWatchlist ?? []),
+        JSON.stringify(params.vocabularyFocus ?? []),
+        JSON.stringify(params.pronunciationFocus ?? []),
+        JSON.stringify(params.studentFacts ?? []),
+        JSON.stringify(params.progressSignals ?? []),
+        JSON.stringify(params.followUpRecommendations ?? []),
+        params.sourceStorageUri,
+      ],
+    );
+    return result.rows[0] ?? null;
+  });
+  return row ? mapRowToLessonMemory(row) : null;
+}
+
 export async function getLatestReadyLessonMemoryByTranscriptId(
   transcriptId: string,
 ): Promise<LessonMemoryRecord | null> {
@@ -642,6 +675,8 @@ export async function getLatestReadyLessonMemoryByTranscriptId(
         lesson_memory_entries.model,
         lesson_memory_entries.status,
         lesson_memory_entries.source_kind,
+        lesson_memory_entries.source_storage_uri,
+        lesson_memory_entries.source_content_hash,
         lesson_memory_entries.generation_notes,
         lesson_memory_entries.lesson_title,
         lesson_memory_entries.lesson_summary,
@@ -659,10 +694,9 @@ export async function getLatestReadyLessonMemoryByTranscriptId(
         lesson_memory_entries.created_at,
         lesson_memory_entries.updated_at
       FROM lesson_memory_entries
-      INNER JOIN transcripts t ON t.id = lesson_memory_entries.transcript_id
       WHERE lesson_memory_entries.transcript_id = $1
         AND lesson_memory_entries.status = 'ready'
-        AND lesson_memory_entries.generated_at >= t.updated_at
+        AND lesson_memory_entries.source_content_hash IS NOT NULL
       ORDER BY lesson_memory_entries.generated_at DESC, lesson_memory_entries.created_at DESC, lesson_memory_entries.id DESC
       LIMIT 1
       `,
@@ -691,6 +725,8 @@ export async function getLatestPendingLessonMemoryByTranscriptId(
         model,
         status,
         source_kind,
+        source_storage_uri,
+        source_content_hash,
         generation_notes,
         lesson_title,
         lesson_summary,
@@ -727,8 +763,6 @@ export async function listLessonMemoryEntries(
   const { studentId, transcriptId, recordingId, statuses, limit, offset, order = 'desc' } = options;
   const values: (string | string[] | number)[] = [];
   const clauses: string[] = [];
-  const requiresCanonicalReadyFilter =
-    Array.isArray(statuses) && statuses.length === 1 && statuses[0] === 'ready';
 
   if (studentId) {
     values.push(studentId);
@@ -748,6 +782,9 @@ export async function listLessonMemoryEntries(
   if (statuses && statuses.length > 0) {
     values.push(statuses);
     clauses.push(`status = ANY($${values.length}::text[])`);
+    if (statuses.length === 1 && statuses[0] === 'ready') {
+      clauses.push('source_content_hash IS NOT NULL');
+    }
   }
 
   values.push(limit);
@@ -757,12 +794,6 @@ export async function listLessonMemoryEntries(
 
   const whereClause = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
   const orderDirection = order === 'asc' ? 'ASC' : 'DESC';
-  const fromClause = requiresCanonicalReadyFilter
-    ? 'FROM lesson_memory_entries INNER JOIN transcripts t ON t.id = lesson_memory_entries.transcript_id'
-    : 'FROM lesson_memory_entries';
-  const freshnessClause = requiresCanonicalReadyFilter
-    ? `${whereClause ? ' AND' : 'WHERE'} lesson_memory_entries.generated_at >= t.updated_at`
-    : '';
 
   const rows = await withPgClient(async (client: PoolClient) => {
     const result = await client.query(
@@ -778,6 +809,8 @@ export async function listLessonMemoryEntries(
         lesson_memory_entries.model,
         lesson_memory_entries.status,
         lesson_memory_entries.source_kind,
+        lesson_memory_entries.source_storage_uri,
+        lesson_memory_entries.source_content_hash,
         lesson_memory_entries.generation_notes,
         lesson_memory_entries.lesson_title,
         lesson_memory_entries.lesson_summary,
@@ -794,9 +827,8 @@ export async function listLessonMemoryEntries(
         lesson_memory_entries.superseded_at,
         lesson_memory_entries.created_at,
         lesson_memory_entries.updated_at
-      ${fromClause}
+      FROM lesson_memory_entries
       ${whereClause}
-      ${freshnessClause}
       ORDER BY lesson_memory_entries.generated_at ${orderDirection}, lesson_memory_entries.created_at ${orderDirection}, lesson_memory_entries.id ${orderDirection}
       LIMIT $${limitParam}
       OFFSET $${offsetParam}
@@ -841,6 +873,8 @@ export async function listRecentReadyLessonMemoryByStudentId(
         lesson_memory_entries.model,
         lesson_memory_entries.status,
         lesson_memory_entries.source_kind,
+        lesson_memory_entries.source_storage_uri,
+        lesson_memory_entries.source_content_hash,
         lesson_memory_entries.generation_notes,
         lesson_memory_entries.lesson_title,
         lesson_memory_entries.lesson_summary,
@@ -858,9 +892,8 @@ export async function listRecentReadyLessonMemoryByStudentId(
         lesson_memory_entries.created_at,
         lesson_memory_entries.updated_at
       FROM lesson_memory_entries
-      INNER JOIN transcripts t ON t.id = lesson_memory_entries.transcript_id
       WHERE ${clauses.join(' AND ')}
-        AND lesson_memory_entries.generated_at >= t.updated_at
+        AND lesson_memory_entries.source_content_hash IS NOT NULL
       ORDER BY lesson_memory_entries.generated_at DESC, lesson_memory_entries.created_at DESC, lesson_memory_entries.id DESC
       LIMIT $${limitParam}
       `,
@@ -1073,6 +1106,8 @@ function mapRowToLessonMemory(row: LessonMemoryRow): LessonMemoryRecord {
     model: row.model,
     status: LessonMemoryEntryStatusSchema.parse(row.status),
     sourceKind: LessonMemorySourceKindSchema.parse(row.source_kind),
+    sourceStorageUri: row.source_storage_uri ?? null,
+    sourceContentHash: row.source_content_hash ?? null,
     generationNotes: row.generation_notes ?? null,
     lessonTitle: row.lesson_title ?? null,
     lessonSummary: row.lesson_summary ?? null,

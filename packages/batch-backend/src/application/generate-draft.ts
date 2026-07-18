@@ -37,7 +37,6 @@ import {
   isGenerationRequestEnvelope,
 } from './generation-request-envelope.js';
 import { getPromptPackage } from './get-prompt-package.js';
-import { requestLessonMemoryGeneration } from './request-lesson-memory-generation.js';
 
 type ProviderExecutor = (args: {
   config: BatchBackendConfig['generation'];
@@ -104,9 +103,6 @@ export interface GenerateDraftDependencies {
   promptPackages: {
     getById: typeof getPromptPackage;
   };
-  lessonMemory: {
-    requestGeneration: typeof requestLessonMemoryGeneration;
-  };
   executors: Partial<Record<GenerationProvider, ProviderExecutor>>;
   budget: GenerationBudgetGuardDependencies;
   validator: typeof validateMarkdown;
@@ -121,9 +117,6 @@ export async function generateDraft(
   const config = overrides?.config ?? loadConfig();
   const promptPackages = overrides?.promptPackages ?? {
     getById: getPromptPackage,
-  };
-  const lessonMemory = overrides?.lessonMemory ?? {
-    requestGeneration: requestLessonMemoryGeneration,
   };
   const executors = {
     ...DEFAULT_EXECUTORS,
@@ -141,36 +134,6 @@ export async function generateDraft(
   const promptPackage = await promptPackages.getById(request.promptPackageId);
   if (!promptPackage) {
     return null;
-  }
-
-  if (
-    promptPackage.studentId &&
-    typeof promptPackage.transcriptId === 'string' &&
-    promptPackage.transcriptId.length > 0 &&
-    typeof promptPackage.recordingId === 'string' &&
-    promptPackage.recordingId.length > 0 &&
-    (config as { generation?: unknown }).generation
-  ) {
-    void lessonMemory
-      .requestGeneration({
-        config,
-        params: {
-          studentId: promptPackage.studentId,
-          transcriptId: promptPackage.transcriptId,
-          recordingId: promptPackage.recordingId,
-          lessonId: promptPackage.lessonId ?? null,
-          promptPackageId: promptPackage.id,
-          trigger: 'draft-generation-fallback',
-        },
-      })
-      .catch((error) => {
-        logger.warn('Lesson-memory fallback enqueue failed during draft generation; continuing', {
-          event: 'lesson_memory_enqueue_failed_draft_fallback',
-          promptPackageId: promptPackage.id,
-          transcriptId: promptPackage.transcriptId,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      });
   }
 
   const candidates = resolveGenerationCandidates({

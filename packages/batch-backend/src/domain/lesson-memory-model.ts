@@ -88,6 +88,8 @@ export interface LessonMemoryRecord {
   model: string;
   status: LessonMemoryEntryStatus;
   sourceKind: LessonMemorySourceKind;
+  sourceStorageUri?: string | null;
+  sourceContentHash?: string | null;
   generationNotes?: LessonMemoryGenerationNotes | null;
   lessonTitle?: string | null;
   lessonSummary?: string | null;

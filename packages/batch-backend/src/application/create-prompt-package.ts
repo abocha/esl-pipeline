@@ -17,7 +17,6 @@ import {
 } from '../domain/template-revision-repository.js';
 import { getTranscriptByRecordingId } from '../domain/transcript-repository.js';
 import { withPgClient } from '../infrastructure/db.js';
-import { logger } from '../infrastructure/logger.js';
 import type { TranscriptionStorage } from '../infrastructure/transcription-storage.js';
 import {
   createTranscriptionStorage,
@@ -29,7 +28,6 @@ import {
 } from './foundational-profile.js';
 import { stitchPromptEnvelope, stitchPromptPayload } from './prompt-assembly.js';
 import { PromptOptionError, resolvePromptSelection } from './prompt-options.js';
-import { requestLessonMemoryGeneration } from './request-lesson-memory-generation.js';
 import { buildStudentMemoryPackageContext } from './student-memory-package.js';
 import { resolveStudentProfileBindingAt } from './student-profile-bindings.js';
 import { getStudentProfileById } from './student-profiles-store.js';
@@ -136,9 +134,6 @@ export interface CreatePromptPackageDependencies {
     activate: typeof activateTemplateRevision;
     getActive: typeof getActiveTemplateRevision;
   };
-  lessonMemory: {
-    requestGeneration: typeof requestLessonMemoryGeneration;
-  };
 }
 
 interface PromptArtifactResolution {
@@ -187,9 +182,6 @@ export async function createPromptPackage(
   const templateRevisions = overrides?.templateRevisions ?? {
     activate: activateTemplateRevision,
     getActive: getActiveTemplateRevision,
-  };
-  const lessonMemory = overrides?.lessonMemory ?? {
-    requestGeneration: requestLessonMemoryGeneration,
   };
 
   const transcript = await transcripts.getByRecordingId(params.recordingId);
@@ -309,29 +301,6 @@ export async function createPromptPackage(
   });
 
   const response = toPromptPackageResponse(promptPackage, payload);
-
-  if (recording?.studentId && (config as { generation?: unknown }).generation) {
-    void lessonMemory
-      .requestGeneration({
-        config,
-        params: {
-          studentId: recording.studentId,
-          transcriptId: transcript.id,
-          recordingId: transcript.recordingId,
-          lessonId: promptPackage.lessonId ?? params.lessonId ?? null,
-          promptPackageId: promptPackage.id,
-          trigger: 'prompt-package-created',
-        },
-      })
-      .catch((error) => {
-        logger.warn('Lesson-memory enqueue failed after prompt-package creation; continuing', {
-          event: 'lesson_memory_enqueue_failed_non_blocking',
-          promptPackageId: promptPackage.id,
-          transcriptId: transcript.id,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      });
-  }
 
   return response;
 }

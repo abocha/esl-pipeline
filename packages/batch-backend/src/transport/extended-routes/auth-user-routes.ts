@@ -10,6 +10,7 @@ import {
   listAssignmentSessionsForUserDto,
   updateAssignmentSessionRecoveryForUser,
 } from '../../application/assignment-sessions.js';
+import { confirmAssignmentSessionStep } from '../../application/confirm-assignment-session-step.js';
 import { getJobSummaryWithDefaults } from '../../application/job-summary.js';
 import { listJobsWithDefaults } from '../../application/list-jobs.js';
 import {
@@ -817,6 +818,41 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
     })
     .strict();
 
+  const confirmAssignmentStepSchema = z.discriminatedUnion('step', [
+    z
+      .object({
+        step: z.literal('source'),
+        expectedRevision: z.number().int().positive(),
+        lessonId: z.string().uuid().nullable(),
+        recordingId: z.string().uuid(),
+        transcriptId: z.string().uuid(),
+        transcriptWorkingVersion: z.number().int().positive(),
+      })
+      .strict(),
+    z
+      .object({
+        step: z.literal('context'),
+        expectedRevision: z.number().int().positive(),
+        teacherNotes: z.string().max(20_000).nullable(),
+        profileId: z.string().nullable(),
+        profileRevisionId: z.string().uuid().nullable(),
+        profileRevisionHash: z
+          .string()
+          .regex(/^[0-9a-f]{64}$/)
+          .nullable(),
+      })
+      .strict(),
+    z
+      .object({
+        step: z.literal('create'),
+        expectedRevision: z.number().int().positive(),
+        promptPackageId: z.string().uuid(),
+        draftId: z.string().uuid(),
+        draftWorkingVersion: z.number().int().positive(),
+      })
+      .strict(),
+  ]);
+
   app.get('/user/assignment-sessions', { preHandler: authenticate }, async (request, reply) => {
     const authenticatedUser = getAuthenticatedUser(request);
     if (!authenticatedUser) {
@@ -934,7 +970,7 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
 
     try {
       const params = paramsSchema.parse(request.params ?? {});
-      const session = await getAssignmentSessionForUser(authenticatedUser.id, params.id);
+      const session = await getAssignmentSessionForUser(authenticatedUser.id, params.id, config);
       if (!session) {
         return reply.code(404).send({ error: 'not_found' });
       }
@@ -967,6 +1003,72 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
       });
     }
   });
+
+  app.post(
+    '/assignment-sessions/:id/confirm',
+    { preHandler: authenticate },
+    async (request, reply) => {
+      const authenticatedUser = getAuthenticatedUser(request);
+      if (!authenticatedUser) {
+        return reply.code(401).send({ error: 'unauthorized', message: 'Authentication required' });
+      }
+      try {
+        const params = z.object({ id: z.string().uuid() }).parse(request.params ?? {});
+        const body = confirmAssignmentStepSchema.parse(request.body ?? {});
+        const result = await confirmAssignmentSessionStep({
+          config,
+          userId: authenticatedUser.id,
+          sessionId: params.id,
+          request: body,
+        });
+        return reply.code(200).send(result);
+      } catch (error: unknown) {
+        const code = getErrorCode(error);
+        if (code === 'ASSIGNMENT_SESSION_REVISION_CONFLICT') {
+          return reply.code(409).send({
+            code: 'assignment_session_revision_conflict',
+            session: getConflictSession(error),
+          });
+        }
+        if (isArtifactWorkingConflict(error)) {
+          return reply.code(409).send({
+            code: 'artifact_working_conflict',
+            artifact: {
+              workingVersion: error.latest.workingVersion,
+              contentHash: error.latest.contentHash,
+            },
+          });
+        }
+        if (code === 'ASSIGNMENT_SESSION_NOT_FOUND')
+          return reply.code(404).send({ error: 'not_found' });
+        if (
+          code === 'ASSIGNMENT_SESSION_COMPLETED' ||
+          code === 'ASSIGNMENT_SESSION_SHARE_IN_PROGRESS'
+        ) {
+          return reply.code(409).send({ code: code.toLowerCase() });
+        }
+        if (
+          code === 'ASSIGNMENT_STEP_PREREQUISITE_MISSING' ||
+          code === 'ASSIGNMENT_STEP_LINEAGE_INVALID' ||
+          code === 'ASSIGNMENT_STEP_ARTIFACT_NOT_FOUND'
+        ) {
+          return reply.code(400).send({ code: code.toLowerCase() });
+        }
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid request',
+            details: error.issues,
+          });
+        }
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'confirm_assignment_session_step_failed',
+          userId: authenticatedUser.id,
+        });
+        return reply.code(500).send({ error: 'internal_error' });
+      }
+    },
+  );
 
   app.patch(
     '/assignment-sessions/:id/recovery',
@@ -1318,6 +1420,24 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
       });
     }
   });
+}
+
+function isArtifactWorkingConflict(error: unknown): error is {
+  code: 'ARTIFACT_WORKING_CONFLICT';
+  latest: { workingVersion: number; contentHash: string };
+} {
+  if (!error || typeof error !== 'object' || !('code' in error) || !('latest' in error))
+    return false;
+  const latest = error.latest;
+  return (
+    error.code === 'ARTIFACT_WORKING_CONFLICT' &&
+    !!latest &&
+    typeof latest === 'object' &&
+    'workingVersion' in latest &&
+    typeof latest.workingVersion === 'number' &&
+    'contentHash' in latest &&
+    typeof latest.contentHash === 'string'
+  );
 }
 
 function normalizeJobStateFilter(state?: string | string[] | null): JobState[] | null {

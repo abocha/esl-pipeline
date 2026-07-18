@@ -85,6 +85,8 @@ describe('infrastructure/student-memory-queue', () => {
         transcriptId: 'transcript-1',
         recordingId: 'recording-1',
         studentId: 'student-1',
+        sourceStorageUri: 'local://confirmed/a.txt',
+        sourceContentHash: 'a'.repeat(64),
         pendingEntryId: 'pending-1',
         provider: 'openai',
         model: 'gpt-5.2',
