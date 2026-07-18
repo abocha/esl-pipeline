@@ -219,6 +219,23 @@ export async function resolvePromptSelection(
   };
 }
 
+export async function resolvePromptTemplateSelection(
+  params: { templateId?: string | null },
+  overrides?: Partial<PromptOptionsDependencies>,
+): Promise<{ templateId: string }> {
+  const dependencies = getDependencies(overrides);
+  const { templates, defaultTemplateId } = await loadTemplateOptionList(dependencies);
+  const templateId = params.templateId ?? defaultTemplateId;
+  if (!templateId) {
+    throw new PromptOptionError('templateId is required', 'template_id_missing');
+  }
+  const template = templates.find((option) => option.id === templateId);
+  if (!template) {
+    throw new PromptOptionError('templateId is not allowlisted', 'template_id_not_allowed');
+  }
+  return { templateId: template.id };
+}
+
 async function loadPromptOptionLists(
   dependencies: PromptOptionsDependencies,
 ): Promise<PromptOptionLists> {
@@ -315,11 +332,27 @@ async function loadTemplateOptionList(dependencies: PromptOptionsDependencies): 
   templateRoot: string;
   defaultTemplateId: string | null;
 }> {
-  const lists = await loadPromptOptionLists(dependencies);
+  const templateRoot = resolveConfiguredPromptRoot(
+    dependencies.config.prompt.templatePath,
+    'template',
+  );
+  const templateRecords = await listAllTemplateRecords(dependencies);
+  const activeTemplateIds = await dependencies.templateRevisions.listIdsWithActiveRevision(
+    templateRecords.map((template) => template.id),
+  );
+  const templates = toActivePromptOptions(templateRecords, activeTemplateIds);
+  const configuredDefaultTemplateId = resolveDefaultId(
+    dependencies.config.prompt.templatePath,
+    templates,
+    'template',
+  );
+  const databaseDefaultTemplateId = templateRecords.find(
+    (template) => template.isDefault && templates.some((option) => option.id === template.id),
+  )?.id;
   return {
-    templates: lists.templates,
-    templateRoot: lists.templateRoot,
-    defaultTemplateId: lists.defaults.templateId,
+    templates,
+    templateRoot,
+    defaultTemplateId: databaseDefaultTemplateId ?? configuredDefaultTemplateId,
   };
 }
 
