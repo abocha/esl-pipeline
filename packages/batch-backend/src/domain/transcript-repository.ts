@@ -5,6 +5,7 @@ import type { TranscriptProviderId } from '@esl-pipeline/contracts';
 
 import { withPgClient } from '../infrastructure/db.js';
 import { logger } from '../infrastructure/logger.js';
+import { ArtifactWorkingConflictError } from './artifact-working-conflict.js';
 import {
   type TranscriptMode,
   TranscriptModeSchema,
@@ -15,6 +16,8 @@ interface TranscriptRow {
   id: string;
   recording_id: string;
   storage_uri: string;
+  working_version: number | null;
+  content_hash: string | null;
   raw_response_uri: string | null;
   mode: string;
   model: string;
@@ -30,6 +33,8 @@ export interface InsertTranscriptParams {
   id?: string;
   recordingId: string;
   storageUri: string;
+  workingVersion: number;
+  contentHash: string;
   rawResponseUri?: string | null;
   mode: TranscriptMode;
   model: string;
@@ -45,7 +50,8 @@ export async function getTranscriptByRecordingId(
   const row = await withPgClient(async (client: PoolClient) => {
     const result = await client.query(
       `
-      SELECT id, recording_id, storage_uri, raw_response_uri, mode, model, language,
+      SELECT id, recording_id, storage_uri, working_version, content_hash,
+             raw_response_uri, mode, model, language,
              stt_provider, fallback_used, summary_json, created_at, updated_at
       FROM transcripts
       WHERE recording_id = $1
@@ -71,10 +77,13 @@ export async function listLatestTranscriptsByRecordingIds(
     const result = await client.query(
       `
       SELECT DISTINCT ON (recording_id)
-             id, recording_id, storage_uri, raw_response_uri, mode, model, language,
+             id, recording_id, storage_uri, working_version, content_hash,
+             raw_response_uri, mode, model, language,
              stt_provider, fallback_used, summary_json, created_at, updated_at
       FROM transcripts
       WHERE recording_id = ANY($1::uuid[])
+        AND working_version IS NOT NULL
+        AND content_hash IS NOT NULL
       ORDER BY recording_id, created_at DESC, id DESC
       `,
       [recordingIds],
@@ -99,6 +108,8 @@ export async function insertTranscript(
         id,
         recording_id,
         storage_uri,
+        working_version,
+        content_hash,
         raw_response_uri,
         mode,
         model,
@@ -109,11 +120,13 @@ export async function insertTranscript(
         created_at,
         updated_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       RETURNING
         id,
         recording_id,
         storage_uri,
+        working_version,
+        content_hash,
         raw_response_uri,
         mode,
         model,
@@ -128,6 +141,8 @@ export async function insertTranscript(
         id,
         params.recordingId,
         params.storageUri,
+        params.workingVersion,
+        params.contentHash,
         params.rawResponseUri ?? null,
         params.mode,
         params.model,
@@ -148,22 +163,28 @@ export async function insertTranscript(
   return mapRowToTranscript(row);
 }
 
-export async function updateTranscriptStorage(params: {
+export async function updateTranscriptWorkingContent(params: {
   id: string;
-  storageUri?: string | null;
-}): Promise<TranscriptRecord | null> {
+  expectedWorkingVersion: number;
+  storageUri: string;
+  contentHash: string;
+}): Promise<TranscriptRecord> {
   const row = await withPgClient(async (client: PoolClient) => {
     const result = await client.query(
       `
       UPDATE transcripts
       SET
-        storage_uri = COALESCE($2, storage_uri),
+        storage_uri = $3,
+        content_hash = $4,
+        working_version = working_version + 1,
         updated_at = now()
-      WHERE id = $1
+      WHERE id = $1 AND working_version = $2
       RETURNING
         id,
         recording_id,
         storage_uri,
+        working_version,
+        content_hash,
         raw_response_uri,
         mode,
         model,
@@ -174,18 +195,51 @@ export async function updateTranscriptStorage(params: {
         created_at,
         updated_at
       `,
-      [params.id, params.storageUri ?? null],
+      [params.id, params.expectedWorkingVersion, params.storageUri, params.contentHash],
     );
     return result.rows[0];
   });
 
   if (!row) {
-    logger.warn('Transcript update skipped; record missing', { transcriptId: params.id });
-    return null;
+    const latest = await getTranscriptById(params.id);
+    if (!latest) {
+      throw new Error(`Transcript not found: ${params.id}`);
+    }
+    throw new ArtifactWorkingConflictError(latest);
   }
 
   logger.info('Transcript updated', { transcriptId: params.id });
   return mapRowToTranscript(row);
+}
+
+export async function getTranscriptById(id: string): Promise<TranscriptRecord | null> {
+  return withPgClient((client) => getTranscriptByIdWithClient(client, id, false));
+}
+
+export async function getTranscriptByIdForUpdate(
+  client: PoolClient,
+  id: string,
+): Promise<TranscriptRecord | null> {
+  return getTranscriptByIdWithClient(client, id, true);
+}
+
+async function getTranscriptByIdWithClient(
+  client: PoolClient,
+  id: string,
+  forUpdate: boolean,
+): Promise<TranscriptRecord | null> {
+  const result = await client.query(
+    `
+    SELECT id, recording_id, storage_uri, working_version, content_hash,
+           raw_response_uri, mode, model, language, stt_provider, fallback_used,
+           summary_json, created_at, updated_at
+    FROM transcripts
+    WHERE id = $1
+    ${forUpdate ? 'FOR UPDATE' : ''}
+    `,
+    [id],
+  );
+  return result.rows[0] ? mapRowToTranscript(result.rows[0]) : null;
 }
 
 function mapRowToTranscript(row: TranscriptRow): TranscriptRecord {
@@ -194,6 +248,8 @@ function mapRowToTranscript(row: TranscriptRow): TranscriptRecord {
     id: row.id,
     recordingId: row.recording_id,
     storageUri: row.storage_uri,
+    workingVersion: row.working_version,
+    contentHash: row.content_hash,
     rawResponseUri: row.raw_response_uri ?? null,
     mode,
     model: row.model,

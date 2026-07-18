@@ -14,7 +14,7 @@ const S3_URI_PREFIX = 's3://';
 export interface StorageWriteResult {
   uri: string;
   bytes: number;
-  sha256?: string;
+  sha256: string;
 }
 
 export interface PutAudioOptions {
@@ -83,7 +83,13 @@ export class FilesystemTranscriptionStorage implements TranscriptionStorage {
   }
 
   async putTranscript(options: PutTranscriptOptions): Promise<StorageWriteResult> {
-    const relativePath = path.posix.join('transcripts', `${options.transcriptId}.txt`);
+    const sha256 = hashText(options.text);
+    const relativePath = path.posix.join(
+      'transcripts',
+      options.transcriptId,
+      'content',
+      `${sha256}.txt`,
+    );
     return this.writeText(relativePath, options.text);
   }
 
@@ -99,7 +105,8 @@ export class FilesystemTranscriptionStorage implements TranscriptionStorage {
   }
 
   async putDraft(options: PutDraftOptions): Promise<StorageWriteResult> {
-    const relativePath = path.posix.join('drafts', `${options.draftId}.md`);
+    const sha256 = hashText(options.text);
+    const relativePath = path.posix.join('drafts', options.draftId, 'content', `${sha256}.md`);
     return this.writeText(relativePath, options.text);
   }
 
@@ -132,6 +139,7 @@ export class FilesystemTranscriptionStorage implements TranscriptionStorage {
     return {
       uri: toLocalUri(relativePath),
       bytes: Buffer.byteLength(text, 'utf8'),
+      sha256: hashText(text),
     };
   }
 
@@ -187,7 +195,13 @@ export class S3TranscriptionStorage implements TranscriptionStorage {
   }
 
   async putTranscript(options: PutTranscriptOptions): Promise<StorageWriteResult> {
-    const relativePath = path.posix.join('transcripts', `${options.transcriptId}.txt`);
+    const sha256 = hashText(options.text);
+    const relativePath = path.posix.join(
+      'transcripts',
+      options.transcriptId,
+      'content',
+      `${sha256}.txt`,
+    );
     return this.writeText(relativePath, options.text, 'text/plain');
   }
 
@@ -203,7 +217,8 @@ export class S3TranscriptionStorage implements TranscriptionStorage {
   }
 
   async putDraft(options: PutDraftOptions): Promise<StorageWriteResult> {
-    const relativePath = path.posix.join('drafts', `${options.draftId}.md`);
+    const sha256 = hashText(options.text);
+    const relativePath = path.posix.join('drafts', options.draftId, 'content', `${sha256}.md`);
     return this.writeText(relativePath, options.text, 'text/markdown');
   }
 
@@ -236,6 +251,7 @@ export class S3TranscriptionStorage implements TranscriptionStorage {
     return {
       uri: toS3Uri(this.bucket, targetKey),
       bytes: buffer.length,
+      sha256: hashText(text),
     };
   }
 
@@ -337,6 +353,10 @@ function resolveAudioMimeType(extension: string): string {
 function normalizePrefix(prefix?: string): string {
   if (!prefix) return '';
   return prefix.replace(/^\/+/, '').replace(/\/+$/, '');
+}
+
+function hashText(text: string): string {
+  return createHash('sha256').update(text, 'utf8').digest('hex');
 }
 
 function toLocalUri(relativePath: string): string {

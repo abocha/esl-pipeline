@@ -39,6 +39,8 @@ describe('application/recording-transcript', () => {
       recordingId: transcript.recordingId,
       transcriptId: transcript.id,
       text: 'Hello transcript',
+      workingVersion: 1,
+      contentHash: 'a'.repeat(64),
       summaryJson: transcript.summaryJson,
       sttProvider: transcript.sttProvider,
       model: transcript.model,
@@ -49,10 +51,12 @@ describe('application/recording-transcript', () => {
     });
   });
 
-  it('updates transcript storage and timestamp', async () => {
+  it('CAS-updates transcript working content and returns the new version and hash', async () => {
     const transcript = createTranscriptRecord();
     const updated = {
       ...transcript,
+      workingVersion: 2,
+      contentHash: 'b'.repeat(64),
       updatedAt: new Date('2024-01-01T01:00:00Z'),
     };
     const transcripts = {
@@ -63,11 +67,12 @@ describe('application/recording-transcript', () => {
       putTranscript: vi.fn().mockResolvedValue({
         uri: transcript.storageUri,
         bytes: 12,
+        sha256: 'b'.repeat(64),
       }),
     });
 
     const result = await updateRecordingTranscript(
-      { recordingId: transcript.recordingId, text: 'Updated text' },
+      { recordingId: transcript.recordingId, text: 'Updated text', expectedWorkingVersion: 1 },
       { storage, transcripts },
     );
 
@@ -77,12 +82,16 @@ describe('application/recording-transcript', () => {
     });
     expect(transcripts.update).toHaveBeenCalledWith({
       id: transcript.id,
+      expectedWorkingVersion: 1,
       storageUri: transcript.storageUri,
+      contentHash: 'b'.repeat(64),
     });
     expect(result).toEqual({
       recordingId: updated.recordingId,
       transcriptId: updated.id,
       text: 'Updated text',
+      workingVersion: 2,
+      contentHash: 'b'.repeat(64),
       summaryJson: updated.summaryJson,
       sttProvider: updated.sttProvider,
       model: updated.model,
@@ -99,6 +108,8 @@ function createTranscriptRecord(): TranscriptRecord {
     id: 'transcript-1',
     recordingId: 'recording-1',
     storageUri: 'local://transcripts/transcript-1.txt',
+    workingVersion: 1,
+    contentHash: 'a'.repeat(64),
     rawResponseUri: null,
     mode: 'timeline',
     model: 'nova-3',

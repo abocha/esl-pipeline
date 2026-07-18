@@ -105,7 +105,11 @@ describe('application/prompt-package', () => {
         );
         expect(text.indexOf('[UNRESOLVED_ISSUES]') < text.indexOf('[TEACHER_NOTES]')).toBe(true);
         expect(text.indexOf('[TEACHER_NOTES]') < text.indexOf('[LATEST_TRANSCRIPT]')).toBe(true);
-        return { uri: `local://prompt-packages/${promptPackageId}.txt`, bytes: text.length };
+        return {
+          uri: `local://prompt-packages/${promptPackageId}.txt`,
+          bytes: text.length,
+          sha256: 'hash',
+        };
       },
     });
 
@@ -249,7 +253,11 @@ describe('application/prompt-package', () => {
           expect(text).not.toContain('# CAPABILITY SNAPSHOT');
           expect(text).not.toContain('<provider-backed values>');
           expect(text.indexOf('Header')).toBeLessThan(text.indexOf('[FOUNDATIONAL_PROFILE]'));
-          return { uri: `local://prompt-packages/${promptPackageId}.txt`, bytes: text.length };
+          return {
+            uri: `local://prompt-packages/${promptPackageId}.txt`,
+            bytes: text.length,
+            sha256: 'hash',
+          };
         },
       });
 

@@ -8,6 +8,8 @@ export interface TranscriptRecord {
   id: string;
   recordingId: string;
   storageUri: string;
+  workingVersion: number | null;
+  contentHash: string | null;
   rawResponseUri?: string | null;
   mode: TranscriptMode;
   model: string;

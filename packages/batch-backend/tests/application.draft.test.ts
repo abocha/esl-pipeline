@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createDraft } from '../src/application/create-draft.js';
 import { materializeDraft } from '../src/application/materialize-draft.js';
+import { updateDraft } from '../src/application/update-draft.js';
 import type { DraftRecord } from '../src/domain/draft-model.js';
 import type { PromptPackageRecord } from '../src/domain/prompt-package-model.js';
 import type { TranscriptionStorage } from '../src/infrastructure/transcription-storage.js';
@@ -28,7 +29,7 @@ describe('application/draft', () => {
     const storage = createStorageStub({
       putDraft: async ({ draftId, text }) => {
         expect(text).toBe('DRAFT TEXT');
-        return { uri: `local://drafts/${draftId}.md`, bytes: text.length };
+        return { uri: `local://drafts/${draftId}.md`, bytes: text.length, sha256: 'a'.repeat(64) };
       },
     });
 
@@ -49,6 +50,8 @@ describe('application/draft', () => {
             promptPackageId: params.promptPackageId,
             studentId: params.studentId ?? null,
             storageUri: params.storageUri,
+            workingVersion: params.workingVersion,
+            contentHash: params.contentHash,
             createdBy: params.createdBy ?? null,
             createdAt: new Date('2024-01-01T00:10:00Z'),
             updatedAt: new Date('2024-01-01T00:10:00Z'),
@@ -63,6 +66,40 @@ describe('application/draft', () => {
     expect(draft?.createdBy).toBe('user-1');
     expect(draft?.storageUri).toContain('local://drafts/');
     expect(draft?.text).toBe('DRAFT TEXT');
+    expect(draft).toMatchObject({ workingVersion: 1, contentHash: 'a'.repeat(64) });
+  });
+
+  it('CAS-updates draft working content', async () => {
+    const original = createDraftRecord();
+    const winner = {
+      ...original,
+      storageUri: 'local://drafts/draft-1/content/b.md',
+      workingVersion: 2,
+      contentHash: 'b'.repeat(64),
+    };
+    const update = vi.fn().mockResolvedValue(winner);
+
+    const result = await updateDraft(
+      { id: original.id, text: 'second', expectedWorkingVersion: 1 },
+      {
+        storage: createStorageStub({
+          putDraft: vi.fn().mockResolvedValue({
+            uri: winner.storageUri,
+            bytes: 6,
+            sha256: winner.contentHash,
+          }),
+        }),
+        drafts: { getById: vi.fn().mockResolvedValue(original), update },
+      },
+    );
+
+    expect(update).toHaveBeenCalledWith({
+      id: original.id,
+      expectedWorkingVersion: 1,
+      storageUri: winner.storageUri,
+      contentHash: winner.contentHash,
+    });
+    expect(result).toMatchObject({ workingVersion: 2, contentHash: winner.contentHash });
   });
 
   it('returns null when prompt package is missing', async () => {
@@ -96,6 +133,8 @@ describe('application/draft', () => {
       promptPackageId: 'prompt-1',
       studentId: 'student-1',
       storageUri: 'local://drafts/draft-1.md',
+      workingVersion: 1,
+      contentHash: 'draft-hash',
       createdBy: 'user-1',
       createdAt: new Date('2024-01-01T00:00:00Z'),
       updatedAt: new Date('2024-01-01T00:00:00Z'),
@@ -168,6 +207,8 @@ describe('application/draft', () => {
       promptPackageId: 'prompt-2',
       studentId: 'student-2',
       storageUri: 'local://drafts/draft-2.md',
+      workingVersion: 1,
+      contentHash: 'draft-hash',
       createdBy: 'user-2',
       createdAt: new Date('2024-01-01T00:00:00Z'),
       updatedAt: new Date('2024-01-01T00:00:00Z'),
@@ -244,6 +285,8 @@ describe('application/draft', () => {
       promptPackageId: 'prompt-2b',
       studentId: 'student-2',
       storageUri: 'local://drafts/draft-2b.md',
+      workingVersion: 1,
+      contentHash: 'draft-hash',
       createdBy: 'user-2',
       createdAt: new Date('2024-01-01T00:00:00Z'),
       updatedAt: new Date('2024-01-01T00:00:00Z'),
@@ -315,6 +358,8 @@ describe('application/draft', () => {
       promptPackageId: 'prompt-3',
       studentId: 'student-3',
       storageUri: 'local://drafts/draft-3.md',
+      workingVersion: 1,
+      contentHash: 'draft-hash',
       createdBy: 'user-3',
       createdAt: new Date('2024-01-01T00:00:00Z'),
       updatedAt: new Date('2024-01-01T00:00:00Z'),
@@ -460,14 +505,41 @@ describe('application/draft', () => {
 
 function createStorageStub(overrides: Partial<TranscriptionStorage> = {}): TranscriptionStorage {
   return {
-    putAudio: async () => ({ uri: 'local://recordings/recording.opus', bytes: 1 }),
-    putTranscript: async () => ({ uri: 'local://transcripts/transcript.txt', bytes: 1 }),
-    putRawResponse: async () => ({ uri: 'local://transcripts/transcript.json', bytes: 1 }),
-    putPromptPackage: async () => ({ uri: 'local://prompt-packages/prompt.txt', bytes: 1 }),
-    putDraft: async () => ({ uri: 'local://drafts/draft.md', bytes: 1 }),
+    putAudio: async () => ({ uri: 'local://recordings/recording.opus', bytes: 1, sha256: '0' }),
+    putTranscript: async () => ({
+      uri: 'local://transcripts/transcript.txt',
+      bytes: 1,
+      sha256: '0',
+    }),
+    putRawResponse: async () => ({
+      uri: 'local://transcripts/transcript.json',
+      bytes: 1,
+      sha256: '0',
+    }),
+    putPromptPackage: async () => ({
+      uri: 'local://prompt-packages/prompt.txt',
+      bytes: 1,
+      sha256: '0',
+    }),
+    putDraft: async () => ({ uri: 'local://drafts/draft.md', bytes: 1, sha256: '0' }),
     getText: async () => '',
     getStream: async () => Readable.from(['']),
     delete: async () => {},
     ...overrides,
+  };
+}
+
+function createDraftRecord(): DraftRecord {
+  return {
+    id: 'draft-1',
+    promptPackageId: 'prompt-1',
+    studentId: 'student-1',
+    lessonId: null,
+    storageUri: 'local://drafts/draft-1/content/a.md',
+    workingVersion: 1,
+    contentHash: 'a'.repeat(64),
+    createdBy: 'user-1',
+    createdAt: new Date('2024-01-01T00:00:00Z'),
+    updatedAt: new Date('2024-01-01T00:00:00Z'),
   };
 }

@@ -39,6 +39,7 @@ import * as studentTimelineModule from '../src/application/student-timeline.js';
 import * as submitJobModule from '../src/application/submit-job.js';
 import * as teacherBusinessDashboardModule from '../src/application/teacher-business-dashboard.js';
 import * as templateContentModule from '../src/application/template-content.js';
+import * as updateDraftModule from '../src/application/update-draft.js';
 import * as updateRecordingTranscriptModule from '../src/application/update-recording-transcript.js';
 import { getVersionMeta } from '../src/application/version-meta.js';
 import { publishJobEvent } from '../src/domain/job-events.js';
@@ -1287,6 +1288,7 @@ export function describeHttpServerIntegrationSuite(
       studentTimelineModule,
       submitJobModule,
       templateContentModule,
+      updateDraftModule,
       updateRecordingTranscriptModule,
       publishJobEvent,
       publishRecordingEvent,

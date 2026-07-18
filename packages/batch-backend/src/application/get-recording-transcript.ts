@@ -9,6 +9,8 @@ export interface RecordingTranscriptResponse {
   recordingId: string;
   transcriptId: string;
   text: string;
+  workingVersion: number | null;
+  contentHash: string | null;
   summaryJson: Record<string, unknown> | null;
   sttProvider: TranscriptProviderId;
   model: string;
@@ -51,6 +53,8 @@ export function buildRecordingTranscriptResponse(
     recordingId: transcript.recordingId,
     transcriptId: transcript.id,
     text,
+    workingVersion: transcript.workingVersion,
+    contentHash: transcript.contentHash,
     summaryJson: transcript.summaryJson ?? null,
     sttProvider: transcript.sttProvider,
     model: transcript.model,
