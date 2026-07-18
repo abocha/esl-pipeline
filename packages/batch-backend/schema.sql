@@ -1913,5 +1913,5 @@ VALUES
   ('0041_profile_revision_refresh_source', '997ca6ddcb3a771a409b8546189d2e7cbf3b0a7e641800deb770413555f25256', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0042_lesson_memory_titles', '11e9eddcb127fcb2386f4f0a10e2240e23746136b5b1380ea09e10a82642b6a8', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0043_manual_transcript_source', '716fee229f067d8daee6eaf423bfc1797080045036afc58aa1e579e9a2631016', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0044_assignment_step_confirmation_contract', 'e55b274f9c142beae6d3f0791dcdecaed994c9f46e852ba180ca26f59eb348b1', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0044_assignment_step_confirmation_contract', 'cdcca1a947c96eddacd8d1bb61dca29b2f06e6366c719401c4b0a8e529483987', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;

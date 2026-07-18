@@ -22,10 +22,6 @@ import {
   refreshProfileDraftFromApprovedCandidates,
 } from '../../application/profile-draft-refresh.js';
 import {
-  ConfirmedLessonMemoryRequestError,
-  requestConfirmedLessonMemory,
-} from '../../application/request-confirmed-lesson-memory.js';
-import {
   getStudentMemoryHealth,
   getStudentMemoryOverview,
   listStudentHomeworkMemory,
@@ -1616,74 +1612,6 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
             error: 'validation_failed',
             message: 'Invalid request parameters',
             details: error.issues,
-          });
-        }
-
-        logger.error(error instanceof Error ? error : String(error), {
-          event: 'http_request',
-          route: routePath,
-          statusCode: 500,
-          error: 'internal_error',
-        });
-
-        return errorResponse(reply, 'internal_error');
-      }
-    },
-  );
-
-  app.post(
-    '/students/:id/lesson-memory/requests',
-    {
-      preHandler: [authenticate],
-    },
-    async (request, reply) => {
-      const routePath = resolveRoutePath(request, 'POST /students/:id/lesson-memory/requests');
-      const paramsSchema = z.object({
-        id: z.string().min(1),
-      });
-      const bodySchema = z.object({
-        recordingId: z.string().min(1),
-        transcriptId: z.string().min(1),
-        lessonId: z.string().min(1).nullable().optional(),
-      });
-
-      try {
-        const params = paramsSchema.parse(request.params ?? {});
-        const body = bodySchema.parse(request.body ?? {});
-        const result = await requestConfirmedLessonMemory({
-          config: context.config,
-          params: {
-            studentId: params.id,
-            recordingId: body.recordingId,
-            transcriptId: body.transcriptId,
-            lessonId: body.lessonId ?? null,
-          },
-        });
-
-        logger.info('HTTP request handled', {
-          event: 'http_request',
-          route: routePath,
-          statusCode: 200,
-          studentId: params.id,
-          recordingId: body.recordingId,
-          transcriptId: body.transcriptId,
-        });
-
-        return reply.send(result);
-      } catch (error: unknown) {
-        if (error instanceof z.ZodError) {
-          return reply.code(400).send({
-            error: 'validation_failed',
-            message: 'Invalid request parameters',
-            details: error.issues,
-          });
-        }
-
-        if (error instanceof ConfirmedLessonMemoryRequestError) {
-          return reply.code(error.status).send({
-            error: error.code,
-            message: error.message,
-            code: error.code,
           });
         }
 

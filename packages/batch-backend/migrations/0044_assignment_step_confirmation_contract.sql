@@ -106,6 +106,11 @@ ALTER TABLE lesson_memory_entries
     )
   );
 
+-- Pre-cutover memory has no confirmed immutable source and remains historical only.
+UPDATE lesson_memory_entries
+SET status = 'superseded', superseded_at = COALESCE(superseded_at, NOW()), updated_at = NOW()
+WHERE source_content_hash IS NULL AND status IN ('pending', 'ready');
+
 CREATE UNIQUE INDEX idx_lesson_memory_entries_transcript_source_hash
   ON lesson_memory_entries (transcript_id, source_content_hash)
   WHERE source_content_hash IS NOT NULL;

@@ -42,6 +42,8 @@ describe('application/request-lesson-memory-generation', () => {
         studentId: 'student-1',
         transcriptId: 'transcript-1',
         recordingId: 'recording-1',
+        sourceStorageUri: 's3://transcripts/content/a.txt',
+        sourceContentHash: 'a'.repeat(64),
         trigger: 'replay',
       },
     });
@@ -62,6 +64,8 @@ describe('application/request-lesson-memory-generation', () => {
         transcriptId: 'transcript-1',
         recordingId: 'recording-1',
         lessonId: 'lesson-1',
+        sourceStorageUri: 's3://transcripts/content/a.txt',
+        sourceContentHash: 'a'.repeat(64),
         trigger: 'teacher-confirmed-transcript',
       },
     });
@@ -77,8 +81,10 @@ describe('application/request-lesson-memory-generation', () => {
     expect(enqueueMock).toHaveBeenCalledWith(
       expect.objectContaining({
         lessonId: 'lesson-1',
+        sourceStorageUri: 's3://transcripts/content/a.txt',
+        sourceContentHash: 'a'.repeat(64),
       }),
-      { jobId: 'lesson-memory:transcript-1' },
+      { jobId: `lesson-memory:transcript-1:${'a'.repeat(64)}` },
     );
   });
 });
