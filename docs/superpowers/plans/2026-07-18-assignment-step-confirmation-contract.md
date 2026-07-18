@@ -61,6 +61,39 @@
 
 ---
 
+## Locked External Review Cadence
+
+Implementation proceeds inline, but the following review gates are blocking. Do not begin work past
+a gate until its review is complete, every valid finding is fixed inline by the primary agent, and
+the affected validation has been rerun successfully.
+
+| Gate | Trigger       | Required review scope                                                                                                                                          |
+| ---- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | After Task 1  | Public contracts, migration safety, cutover deletion order, schema constraints, and release versions                                                           |
+| 2    | After Task 4  | Tasks 2-4 together: artifact CAS, session CAS, confirmation atomicity, lesson-memory authority, supersession, and cross-tab races                              |
+| 3    | After Task 6  | Tasks 5-6 together: confirmed downstream inputs, stable Share identity, BullMQ reconciliation, terminal retry, and rerun separation                            |
+| 4    | After Task 9  | Tasks 7-9 together: frontend confirmation state, automatic recovery, derived resume, navigation protection, refresh limits, and completed-session presentation |
+| 5    | After Task 10 | Complete branch diff against the approved specification and plan, including docs, migration baseline, contract versions, and all validation evidence           |
+
+Every gate uses a **new instance** of `@sol_reviewer`; never reuse a reviewer instance from an
+earlier gate. Request the `gpt-5.6-sol` model with high reasoning when the runtime supports that
+override. Give the reviewer the approved specification, this plan, the gate's exact diff/commits, and
+the test/check evidence. The reviewer is read-only and reports concrete correctness gaps,
+inconsistencies, missing tests, or unjustified scope.
+
+The primary agent owns disposition: verify each finding against the live code and contracts, reject
+invalid findings with evidence, fix valid findings inline, and rerun the smallest sufficient focused
+checks plus any gate-level check affected by the fix. If a fix materially changes the behavior or
+contract that was reviewed, request a follow-up from another fresh `@sol_reviewer` instance before
+closing the gate. Record the reviewer verdict, finding dispositions, fixes, and fresh validation in
+the execution handoff. Do not defer valid findings to a later gate merely because the current task's
+tests pass.
+
+No reviewer is spawned while preparing or approving this cadence. The first reviewer is created only
+after Task 1 implementation and validation are complete.
+
+---
+
 ## Planned File Structure
 
 ### Public contracts and versioning
