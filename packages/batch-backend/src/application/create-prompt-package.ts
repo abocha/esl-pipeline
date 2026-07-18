@@ -30,7 +30,11 @@ import {
   renderFoundationalProfileContent,
 } from './foundational-profile.js';
 import { stitchPromptEnvelope, stitchPromptPayload } from './prompt-assembly.js';
-import { PromptOptionError, resolvePromptSelection } from './prompt-options.js';
+import {
+  PromptOptionError,
+  resolvePromptSelection,
+  resolvePromptTemplateSelection,
+} from './prompt-options.js';
 import { buildStudentMemoryPackageContext } from './student-memory-package.js';
 import { resolveStudentProfileBindingAt } from './student-profile-bindings.js';
 import { getStudentProfileById } from './student-profiles-store.js';
@@ -127,6 +131,7 @@ export interface CreatePromptPackageDependencies {
   };
   promptOptions: {
     resolveSelection: typeof resolvePromptSelection;
+    resolveTemplateSelection?: typeof resolvePromptTemplateSelection;
   };
   promptPackages: {
     insert: typeof insertPromptPackage;
@@ -194,6 +199,7 @@ export async function createPromptPackage(
   };
   const promptOptions = overrides?.promptOptions ?? {
     resolveSelection: resolvePromptSelection,
+    resolveTemplateSelection: resolvePromptTemplateSelection,
   };
   const promptPackages = overrides?.promptPackages ?? {
     insert: insertPromptPackage,
@@ -297,14 +303,24 @@ export async function createPromptPackage(
       : (params.profileId ??
         (params.profilePath ? undefined : (implicitStudentProfileId ?? undefined)));
 
-  const selection = await promptOptions.resolveSelection(
-    {
-      templateId: params.templateId,
-      profileId: fallbackProfileId,
-      profilePath: params.profilePath,
-    },
-    { config },
-  );
+  const omitProfile = confirmedInputs !== null && confirmedInputs.context.profileId === null;
+  const selection = omitProfile
+    ? {
+        ...(await (promptOptions.resolveTemplateSelection ?? resolvePromptTemplateSelection)(
+          { templateId: params.templateId },
+          { config },
+        )),
+        profileId: '',
+        profilePath: '',
+      }
+    : await promptOptions.resolveSelection(
+        {
+          templateId: params.templateId,
+          profileId: fallbackProfileId,
+          profilePath: params.profilePath,
+        },
+        { config },
+      );
   if (
     confirmedInputs?.context.profileId &&
     selection.profileId !== confirmedInputs.context.profileId
@@ -322,7 +338,7 @@ export async function createPromptPackage(
       profileRevisions,
       templateRevisions,
       confirmedProfileRevision: confirmedInputs?.profileRevision ?? null,
-      omitProfile: confirmedInputs !== null && confirmedInputs.context.profileId === null,
+      omitProfile,
     }),
     readStorage.getText(transcript.storageUri),
   ]);

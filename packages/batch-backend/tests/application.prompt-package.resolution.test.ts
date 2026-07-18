@@ -5,6 +5,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { createPromptPackage } from '../src/application/create-prompt-package.js';
+import { resolvePromptTemplateSelection } from '../src/application/prompt-options.js';
 import type { PromptPackageRecord } from '../src/domain/prompt-package-model.js';
 import type { InsertPromptPackageParams } from '../src/domain/prompt-package-repository.js';
 import type { RecordingRecord } from '../src/domain/recording-model.js';
@@ -189,6 +190,7 @@ describe('application/prompt-package', () => {
   });
 
   it('keeps an explicitly confirmed null profile deterministic', async () => {
+    const config = createConfig('template.md', 'missing-default-profile.md');
     const session = createConfirmedAssignmentSession({
       teacherNotes: null,
       selectedProfileId: null,
@@ -225,7 +227,7 @@ describe('application/prompt-package', () => {
         templateId: 'template.md',
       },
       {
-        config: createConfig('template.md', 'default-profile.md'),
+        config,
         storage: createStorageStub({
           getText: async () => 'CONFIRMED TRANSCRIPT A',
         }),
@@ -266,7 +268,46 @@ describe('application/prompt-package', () => {
         }),
         templateRevisions: createTemplateRevisionRepositoryStub(),
         bindings: createBindingResolverStub(),
-        promptOptions: createPromptOptionsStub(),
+        promptOptions: {
+          resolveSelection: createPromptOptionsStub().resolveSelection,
+          resolveTemplateSelection: (params) =>
+            resolvePromptTemplateSelection(params, {
+              config,
+              templateRevisions: {
+                listIdsWithActiveRevision: async () => new Set(['template.md']),
+              },
+              templates: {
+                list: async () => ({
+                  items: [
+                    {
+                      id: 'template.md',
+                      label: 'Template',
+                      activeRevisionId: 'template-revision-active',
+                      isDefault: true,
+                      createdAt: new Date('2026-07-18T00:00:00Z'),
+                      updatedAt: new Date('2026-07-18T00:00:00Z'),
+                    },
+                  ],
+                  total: 1,
+                  limit: 500,
+                  offset: 0,
+                  order: 'asc',
+                }),
+                getById: async () => null,
+              },
+              profileRevisions: {
+                listIdsWithActiveRevision: async () => {
+                  throw new Error('template-only resolution must not inspect profile revisions');
+                },
+              },
+              profiles: {
+                list: async () => {
+                  throw new Error('template-only resolution must not inspect profiles');
+                },
+                getById: async () => null,
+              },
+            }),
+        },
         promptPackages: {
           insert: async (params) => {
             inserted.push(params);
