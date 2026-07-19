@@ -7,9 +7,9 @@ import {
 } from '../../contracts/src/contract-versions.js';
 
 describe('manual transcript contract versions', () => {
-  it('tracks the backward-compatible API and DB expansion', () => {
-    expect(API_CONTRACT_VERSION).toBe('3.1.0');
-    expect(DB_CONTRACT_VERSION).toBe('0.22.0');
-    expect(DB_MIGRATION_HEAD).toBe('0043_manual_transcript_source');
+  it('tracks the current hard-cutover assignment contract', () => {
+    expect(API_CONTRACT_VERSION).toBe('4.0.0');
+    expect(DB_CONTRACT_VERSION).toBe('0.23.0');
+    expect(DB_MIGRATION_HEAD).toBe('0044_assignment_step_confirmation_contract');
   });
 });

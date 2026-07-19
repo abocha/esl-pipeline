@@ -404,7 +404,7 @@ git commit -m "feat(contracts): add assignment confirmation contract"
 - Modify: `packages/batch-backend/tests/application.ingest-manual-transcript-source.test.ts`
 - Modify: `packages/batch-backend/tests/transport.http-server.integration.recordings-prompt-packages.test.ts`
 
-- [ ] **Step 1: Write failing content-addressing and working-CAS tests**
+- [x] **Step 1: Write failing content-addressing and working-CAS tests**
 
 Cover these cases for both transcript and draft content:
 
@@ -432,7 +432,7 @@ expect(await storage.getText(firstUri)).toBe('first');
 expect(await storage.getText(second.storageUri)).toBe('second');
 ```
 
-- [ ] **Step 2: Run the focused tests and verify failure**
+- [x] **Step 2: Run the focused tests and verify failure**
 
 Run:
 
@@ -443,7 +443,7 @@ pnpm --filter @esl-pipeline/batch-backend exec vitest run tests/domain.transcrip
 Expected: tests fail because artifacts expose no working version/hash, storage overwrites stable keys,
 and repository updates do not compare the expected working version.
 
-- [ ] **Step 3: Make recovery objects content-addressed**
+- [x] **Step 3: Make recovery objects content-addressed**
 
 Keep artifact-specific write inputs but require a hash in every result:
 
@@ -470,7 +470,7 @@ Compute SHA-256 before writing. Filesystem and S3 keys are
 `drafts/<draftId>/content/<sha256>.md`. Writing the same content is idempotent; no save overwrites a
 different object.
 
-- [ ] **Step 4: Implement artifact-specific working CAS**
+- [x] **Step 4: Implement artifact-specific working CAS**
 
 Add `workingVersion` and `contentHash` to `TranscriptRecord` and `DraftRecord`. Replace unconditional
 storage-pointer updates with artifact-specific conditional functions:
@@ -497,7 +497,7 @@ latest DTO. Add client-aware `FOR UPDATE`
 lookups for transcript/draft confirmation; they return the locked artifact row and create no
 secondary content record.
 
-- [ ] **Step 5: Update application and transport contracts**
+- [x] **Step 5: Update application and transport contracts**
 
 Generated transcription, manual transcript ingestion, and draft creation write content-addressed
 storage and insert the parent with `working_version = 1` plus the server hash. If database
@@ -512,7 +512,7 @@ invariant. The clone gets a new transcript ID and content-addressed working obje
 pointer, and returns `{ workingVersion, contentHash }`. Remove revisionless update acceptance and
 return HTTP 409 with the latest working DTO on conflict.
 
-- [ ] **Step 6: Run the focused tests and typecheck**
+- [x] **Step 6: Run the focused tests and typecheck**
 
 Run:
 
@@ -523,7 +523,7 @@ pnpm --filter @esl-pipeline/batch-backend typecheck
 
 Expected: all focused tests and backend typecheck pass.
 
-- [ ] **Step 7: Commit content-addressed working CAS**
+- [x] **Step 7: Commit content-addressed working CAS**
 
 ```bash
 git add packages/batch-backend/src/domain/transcript-model.ts packages/batch-backend/src/domain/transcript-repository.ts packages/batch-backend/src/domain/draft-model.ts packages/batch-backend/src/domain/draft-repository.ts packages/batch-backend/src/infrastructure/transcription-storage.ts packages/batch-backend/src/application/process-transcribe-job.ts packages/batch-backend/src/application/ingest-manual-transcript-source.ts packages/batch-backend/src/application/create-draft.ts packages/batch-backend/src/application/update-recording-transcript.ts packages/batch-backend/src/application/update-draft.ts packages/batch-backend/src/transport/extended-routes/recordings-routes.ts packages/batch-backend/tests/domain.transcript-repository.test.ts packages/batch-backend/tests/infrastructure.transcription-storage.test.ts packages/batch-backend/tests/application.recording-transcript.test.ts packages/batch-backend/tests/application.draft.test.ts packages/batch-backend/tests/application.process-transcribe-job.test.ts packages/batch-backend/tests/application.ingest-manual-transcript-source.test.ts packages/batch-backend/tests/transport.http-server.integration.recordings-prompt-packages.test.ts
@@ -545,7 +545,7 @@ git commit -m "feat(backend): add artifact working CAS"
 - Modify: `packages/batch-backend/tests/transport.http-server.integration.business.test.ts`
 - Create: `packages/batch-backend/tests/transport.http-server.integration.assignment-sessions.test.ts`
 
-- [ ] **Step 1: Write failing student-idempotency and recovery-CAS tests**
+- [x] **Step 1: Write failing student-idempotency and recovery-CAS tests**
 
 ```ts
 const created = await confirmStudentAssignmentSession({
@@ -579,7 +579,7 @@ sessions for one recording. Prove only the pre-Share row is resumable/in progres
 does not block a new session, and create-or-reuse never mutates or returns the completed row. Seed a
 bare draft and prove it cannot independently produce `draft_in_progress`.
 
-- [ ] **Step 2: Run focused tests and verify failure**
+- [x] **Step 2: Run focused tests and verify failure**
 
 Run:
 
@@ -589,7 +589,7 @@ pnpm --filter @esl-pipeline/batch-backend exec vitest run tests/domain.assignmen
 
 Expected: tests fail because the repository accepts revisionless patches and the routes do not exist.
 
-- [ ] **Step 3: Extend the session model and mapper**
+- [x] **Step 3: Extend the session model and mapper**
 
 Add `revision`, selected profile recovery identity, `confirmedStep`, `confirmed`, `creationRequestId`, and `shareJobId` to the domain record. Remove stage/archive fields. Parse `confirmed_snapshot` through a Zod schema at the repository boundary so malformed database JSON fails closed.
 
@@ -598,7 +598,7 @@ it in active-by-recording lookup, create-or-reuse, resumable list/count, lesson 
 recovery/confirmation update. Keep a separate lifecycle-neutral owned-by-ID read for completed
 provenance and Share job reconciliation.
 
-- [ ] **Step 4: Replace generic patching with explicit CAS repository commands**
+- [x] **Step 4: Replace generic patching with explicit CAS repository commands**
 
 Expose:
 
@@ -626,7 +626,7 @@ latest-draft lateral join: `draft_in_progress` means an active session exists wi
 `draft_id`; otherwise an active row is `session_in_progress`. Completed Share falls through to its
 published/processing job presentation, and no bare draft can look partially alive.
 
-- [ ] **Step 5: Add idempotent Student confirmation and new routes**
+- [x] **Step 5: Add idempotent Student confirmation and new routes**
 
 Implement `POST /assignment-sessions/confirm-student` and
 `PATCH /assignment-sessions/:id/recovery`. Remove `POST /assignment-sessions`,
@@ -634,7 +634,7 @@ Implement `POST /assignment-sessions/confirm-student` and
 assert all old routes are unavailable. Repeated `(userId, requestId)` with identical Student and
 lesson recovery data returns the existing session; different data returns 409.
 
-- [ ] **Step 6: Run tests and backend typecheck**
+- [x] **Step 6: Run tests and backend typecheck**
 
 Run:
 
@@ -645,7 +645,7 @@ pnpm --filter @esl-pipeline/batch-backend typecheck
 
 Expected: focused tests pass and no caller references the removed generic patch function.
 
-- [ ] **Step 7: Commit the revisioned session aggregate**
+- [x] **Step 7: Commit the revisioned session aggregate**
 
 ```bash
 git add packages/batch-backend/src/domain/assignment-session-model.ts packages/batch-backend/src/domain/assignment-session-repository.ts packages/batch-backend/src/application/assignment-sessions.ts packages/batch-backend/src/application/student-schedule-billing.ts packages/batch-backend/src/application/teacher-business-dashboard.ts packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts packages/batch-backend/tests/domain.assignment-session-repository.test.ts packages/batch-backend/tests/application.student-schedule-billing.test.ts packages/batch-backend/tests/transport.http-server.integration.business.test.ts packages/batch-backend/tests/transport.http-server.integration.assignment-sessions.test.ts
@@ -687,7 +687,7 @@ git commit -m "feat(backend): revision assignment session recovery"
 - Modify: `packages/batch-backend/tests/transport.http-server.integration.assignment-sessions.test.ts`
 - Modify: `packages/batch-backend/tests/transport.http-server.integration.students-memory.test.ts`
 
-- [ ] **Step 1: Write the failing confirmation matrix**
+- [x] **Step 1: Write the failing confirmation matrix**
 
 For each step, cover success, missing prerequisite, wrong owner, broken lineage, stale session
 revision, stale artifact working version, idempotent lost-response replay, exact URI/hash/version
@@ -725,7 +725,7 @@ await expect(confirmAssignmentSessionStep(staleRequest)).rejects.toMatchObject({
 });
 ```
 
-- [ ] **Step 2: Run tests and verify failure**
+- [x] **Step 2: Run tests and verify failure**
 
 Run:
 
@@ -735,7 +735,7 @@ pnpm --filter @esl-pipeline/batch-backend exec vitest run tests/application.assi
 
 Expected: new test file fails to import the missing application service.
 
-- [ ] **Step 3: Implement explicit validation by discriminator**
+- [x] **Step 3: Implement explicit validation by discriminator**
 
 `confirmAssignmentSessionStep` must:
 
@@ -767,7 +767,7 @@ switch (request.step) {
 }
 ```
 
-- [ ] **Step 4: Make invalidation exact and regression-safe**
+- [x] **Step 4: Make invalidation exact and regression-safe**
 
 Use these rules in the repository transaction:
 
@@ -780,7 +780,7 @@ Use these rules in the repository transaction:
 Clear active working references only when they derive from an invalidated lineage. Never delete
 historical jobs, completed handouts, or content-addressed objects referenced by confirmed snapshots.
 
-- [ ] **Step 5: Make confirmed Source the only lesson-memory authority**
+- [x] **Step 5: Make confirmed Source the only lesson-memory authority**
 
 Change `ensurePendingLessonMemoryEntry` to use the unique transcript/hash key and persist
 `sourceStorageUri` plus `sourceContentHash`. Remove freshness comparisons against mutable transcript
@@ -822,13 +822,13 @@ resolves mutable transcript pointers. Keep the other Batch workloads, and make s
 select only confirmed-source-backed ready lesson entries. Do not add compatibility handling for old
 lesson-memory Batch items.
 
-- [ ] **Step 6: Add `POST /assignment-sessions/:id/confirm`**
+- [x] **Step 6: Add `POST /assignment-sessions/:id/confirm`**
 
 Validate the discriminated body, map typed domain failures to 400/403/404/409, and return
 `ConfirmAssignmentSessionStepResponse`. Do not accept content hashes or storage URIs from the
 request; both come only from the locked server artifact row.
 
-- [ ] **Step 7: Run focused backend verification**
+- [x] **Step 7: Run focused backend verification**
 
 Run:
 
@@ -845,7 +845,7 @@ pnpm --filter @esl-pipeline/batch-backend typecheck
 
 Expected: confirmation matrix, repository atomicity tests, transport tests, and typecheck pass.
 
-- [ ] **Step 8: Commit semantic confirmation and confirmed lesson memory**
+- [x] **Step 8: Commit semantic confirmation and confirmed lesson memory**
 
 ```bash
 git add packages/batch-backend/src/application/confirm-assignment-session-step.ts packages/batch-backend/src/domain/assignment-session-repository.ts packages/batch-backend/src/domain/lesson-memory-model.ts packages/batch-backend/src/domain/lesson-memory-repository.ts packages/batch-backend/src/domain/student-memory-snapshot-repository.ts packages/batch-backend/src/application/request-lesson-memory-generation.ts packages/batch-backend/src/application/process-lesson-memory-job.ts packages/batch-backend/src/infrastructure/student-memory-queue.ts packages/batch-backend/src/application/student-memory-openai-batch-candidates.ts packages/batch-backend/src/domain/student-memory-openai-batch-import.ts packages/batch-backend/src/application/student-memory-openai-batch-importer.ts packages/batch-backend/src/application/request-confirmed-lesson-memory.ts packages/batch-backend/src/application/student-memory-package.ts packages/batch-backend/src/application/create-prompt-package.ts packages/batch-backend/src/application/generate-draft.ts packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts packages/batch-backend/src/transport/extended-routes/students-routes.ts packages/batch-backend/tests/application.assignment-step-confirmation.test.ts packages/batch-backend/tests/application.request-lesson-memory-generation.test.ts packages/batch-backend/tests/application.process-lesson-memory-job.test.ts packages/batch-backend/tests/infrastructure.student-memory-queue.test.ts packages/batch-backend/tests/application.student-memory-openai-batch.test.ts packages/batch-backend/tests/domain.student-memory-snapshot-repository.test.ts packages/batch-backend/tests/domain.student-memory-openai-batch-import.test.ts packages/batch-backend/tests/application.request-confirmed-lesson-memory.test.ts packages/batch-backend/tests/application.student-memory-package.test.ts packages/batch-backend/tests/domain.lesson-memory-repository.test.ts packages/batch-backend/tests/domain.assignment-session-repository.test.ts packages/batch-backend/tests/transport.http-server.integration.assignment-sessions.test.ts packages/batch-backend/tests/transport.http-server.integration.students-memory.test.ts
@@ -866,7 +866,7 @@ git commit -m "feat(memory): bind lessons to confirmed source"
 - Modify: `packages/batch-frontend/src/ui/minimal/MinimalAssignment.authoring.ts`
 - Modify: `packages/batch-frontend/src/ui/minimal/MinimalAssignment.tsx`
 
-- [ ] **Step 1: Write failing exact-confirmed-input tests**
+- [x] **Step 1: Write failing exact-confirmed-input tests**
 
 Confirm transcript content and the first of two profile revisions. Then autosave newer transcript
 content and activate the second profile revision before generation. Assert the prompt uses the
@@ -887,7 +887,7 @@ expect(result.text).toContain(confirmedRevision.marker);
 expect(result.text).not.toContain(newActiveRevision.marker);
 ```
 
-- [ ] **Step 2: Run focused tests and verify failure**
+- [x] **Step 2: Run focused tests and verify failure**
 
 Run:
 
@@ -898,7 +898,7 @@ pnpm --filter @esl-pipeline/batch-backend exec vitest run tests/application.prom
 Expected: generation reads the transcript artifact's current storage pointer and resolves the newly
 active profile revision instead of using the session's confirmed Source/Context tuple.
 
-- [ ] **Step 3: Resolve exact inputs from the owned session**
+- [x] **Step 3: Resolve exact inputs from the owned session**
 
 Require `assignmentSessionId` for authenticated assignment generation. Load the owned session and
 require confirmed Student, Source, and Context snapshots. Read transcript text from
@@ -907,13 +907,13 @@ nullable profile pair from confirmed Context, validate its learner lineage, and 
 `resolvedProfileRevisionId` in the prompt-package record. The client cannot submit a replacement
 storage URI, hash, transcript ID, profile ID, or profile revision for this operation.
 
-- [ ] **Step 4: Update the frontend API request type**
+- [x] **Step 4: Update the frontend API request type**
 
 Make `createPromptPackage` require `assignmentSessionId` and remove assignment-flow request fields
 that duplicate confirmed Student/Source/Context identity. Keep any separate non-assignment operator
 surface outside this contract unchanged.
 
-- [ ] **Step 5: Run focused tests and typechecks**
+- [x] **Step 5: Run focused tests and typechecks**
 
 Run:
 
@@ -927,7 +927,7 @@ Expected: exact confirmed-input tests and backend typecheck pass. Until Tasks 7-
 frontend workflow, frontend typecheck may report only the already-deferred removed `currentStage`,
 `archivedAt`, and old assignment request-type references; Task 5 must add no new frontend errors.
 
-- [ ] **Step 6: Commit confirmed generation inputs**
+- [x] **Step 6: Commit confirmed generation inputs**
 
 ```bash
 git add packages/batch-backend/src/application/create-prompt-package.ts packages/batch-backend/src/transport/extended-routes/recordings-routes.ts packages/batch-backend/tests/application.prompt-package.resolution.test.ts packages/batch-backend/tests/application.prompt-package.lineage-drift.test.ts packages/batch-backend/tests/application.prompt-package.test-harness.ts packages/batch-backend/tests/transport.http-server.integration.recordings-prompt-packages.test.ts packages/batch-frontend/src/utils/api.ts packages/batch-frontend/src/ui/minimal/MinimalAssignment.authoring.ts packages/batch-frontend/src/ui/minimal/MinimalAssignment.tsx
@@ -950,7 +950,7 @@ git commit -m "fix(generation): pin confirmed assignment inputs"
 - Modify: `packages/batch-backend/tests/infrastructure.queue-bullmq.test.ts`
 - Modify: `packages/batch-backend/tests/transport.http-server.integration.assignment-sessions.test.ts`
 
-- [ ] **Step 1: Write failing interruption and idempotency tests**
+- [x] **Step 1: Write failing interruption and idempotency tests**
 
 Use injectable orchestration boundaries to interrupt after atomic job reservation, materialization,
 approval-before-enqueue, enqueue-before-confirmation, and confirmation-before-response. Resume with
@@ -993,7 +993,7 @@ Add queue/database reconciliation cases:
 - session CAS advances `confirmedStep` to Share exactly once; terminal retry never advances or
   revisions the session again.
 
-- [ ] **Step 2: Run focused tests and verify failure**
+- [x] **Step 2: Run focused tests and verify failure**
 
 Run:
 
@@ -1004,7 +1004,7 @@ pnpm --filter @esl-pipeline/batch-backend exec vitest run tests/application.assi
 Expected: the missing orchestration service fails to import and the current frontend-composed flow
 can create another approval job after a lost response.
 
-- [ ] **Step 3: Prepare job inputs, then reserve the stable job and session link atomically**
+- [x] **Step 3: Prepare job inputs, then reserve the stable job and session link atomically**
 
 Split approval-job creation into a side-effect-free parameter builder and an insert operation.
 Resolve settings/configuration before opening the transaction. Extend job insertion to accept a
@@ -1043,7 +1043,7 @@ job even with the old expected revision. A different request conflicts; a missin
 linked job fails integrity checks. While `share_job_id` is set and `confirmedStep !== 'share'`, other
 session mutations return `SHARE_IN_PROGRESS`.
 
-- [ ] **Step 4: Implement resumable Share orchestration**
+- [x] **Step 4: Implement resumable Share orchestration**
 
 `shareAssignmentSession` inspects the existing job state:
 
@@ -1077,13 +1077,13 @@ Do not widen the generic job state machine to make all failed jobs mutable. Add 
 remove-and-clone so the configured automatic-attempt budget is available again. Existing automatic
 queue attempts remain the first retry layer.
 
-- [ ] **Step 5: Add the Share route and typed responses**
+- [x] **Step 5: Add the Share route and typed responses**
 
 Add `POST /assignment-sessions/:id/share`. Its response is `{ session, job }`; it never includes
 `archivePending`. Exclude `confirmedStep = 'share'` sessions from resumable-session lists and route a
 direct fetch of completed Share to the linked job.
 
-- [ ] **Step 6: Run focused tests and typecheck**
+- [x] **Step 6: Run focused tests and typecheck**
 
 Run:
 
@@ -1095,7 +1095,7 @@ pnpm --filter @esl-pipeline/batch-backend typecheck
 Expected: every interruption point resumes to one linked job, confirmed Share is terminal, and all
 dirty-upstream Share requests fail closed.
 
-- [ ] **Step 7: Commit crash-safe Share**
+- [x] **Step 7: Commit crash-safe Share**
 
 ```bash
 git add packages/batch-backend/src/application/share-assignment-session.ts packages/batch-backend/src/application/create-approval-job.ts packages/batch-backend/src/application/materialize-draft.ts packages/batch-backend/src/application/approve-job.ts packages/batch-backend/src/domain/assignment-session-repository.ts packages/batch-backend/src/domain/job-repository.ts packages/batch-backend/src/infrastructure/queue-bullmq.ts packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts packages/batch-backend/tests/application.assignment-share.test.ts packages/batch-backend/tests/infrastructure.queue-bullmq.test.ts packages/batch-backend/tests/transport.http-server.integration.assignment-sessions.test.ts
@@ -1118,7 +1118,7 @@ git commit -m "feat(backend): make assignment share retry safe"
 - Modify: `packages/batch-frontend/src/dev/frontend-sandbox-api.ts`
 - Modify: `packages/batch-frontend/src/dev/frontend-sandbox-api.test.ts`
 
-- [ ] **Step 1: Write failing pure workflow tests**
+- [x] **Step 1: Write failing pure workflow tests**
 
 Cover confirmed completion, dirty recovery, earliest-dirty/base resume derivation, completed-Share job
 routing, permissible forward navigation, Share blocking, exit safety, refresh triggers, invalidation,
@@ -1138,7 +1138,7 @@ expect(shouldGuardAssignmentExit({ recovery: 'saved', mutation: 'settled' })).to
 expect(shouldGuardAssignmentExit({ recovery: 'pending', mutation: 'settled' })).toBe(true);
 ```
 
-- [ ] **Step 2: Run pure tests and verify failure**
+- [x] **Step 2: Run pure tests and verify failure**
 
 Run:
 
@@ -1148,7 +1148,7 @@ pnpm --filter @esl-pipeline/batch-frontend exec vitest run src/ui/minimal/Minima
 
 Expected: missing confirmation helper and old readiness-derived status tests fail.
 
-- [ ] **Step 3: Add explicit API client functions**
+- [x] **Step 3: Add explicit API client functions**
 
 Export:
 
@@ -1178,7 +1178,7 @@ Delete obsolete session create/update/archive exports and the standalone
 `requestConfirmedLessonMemory` assignment-flow export, then match sandbox behavior to production
 semantics without `currentStage`, `archivedAt`, or `archivePending`.
 
-- [ ] **Step 4: Implement pure state derivation**
+- [x] **Step 4: Implement pure state derivation**
 
 `MinimalAssignment.confirmation.ts` owns:
 
@@ -1212,7 +1212,7 @@ Stepper prerequisites and exit protection are separate decisions: an unconfirmed
 a later workflow step unavailable, but it cannot trigger a route/browser exit warning after recovery
 is durable.
 
-- [ ] **Step 5: Derive visible workflow status only from confirmed snapshots**
+- [x] **Step 5: Derive visible workflow status only from confirmed snapshots**
 
 Keep the existing visible stages but map completion from `confirmedStep`; use earliest dirty recovery
 to select current/resume. Delete all `currentStage` presentation maps. A confirmed Share session is
@@ -1220,7 +1220,7 @@ completed and resolves to its linked job, not Review. Define the frontend-only
 `AssignmentWorkflowStep = 'student' | 'source' | 'context' | 'assignment' | 'review'` for visible
 navigation; it is never serialized.
 
-- [ ] **Step 6: Run pure tests and frontend typecheck**
+- [x] **Step 6: Run pure tests and frontend typecheck**
 
 Run:
 
@@ -1231,7 +1231,7 @@ pnpm --filter @esl-pipeline/batch-frontend typecheck
 
 Expected: state derivation, API parity, and typecheck pass.
 
-- [ ] **Step 7: Commit the frontend contract layer**
+- [x] **Step 7: Commit the frontend contract layer**
 
 ```bash
 git add packages/batch-frontend/src/utils/api.ts packages/batch-frontend/src/ui/minimal/MinimalAssignment.confirmation.ts packages/batch-frontend/src/ui/minimal/MinimalAssignment.confirmation.test.ts packages/batch-frontend/src/ui/assignments/assignment-workflow.ts packages/batch-frontend/src/ui/assignments/assignment-workflow.test.ts packages/batch-frontend/src/ui/minimal/MinimalAssignment.resume-presentation.ts packages/batch-frontend/src/ui/minimal/MinimalAssignment.resume-presentation.test.ts packages/batch-frontend/src/ui/minimal/MinimalAssignment.entry-state.ts packages/batch-frontend/src/ui/minimal/MinimalAssignment.entry-state.test.ts packages/batch-frontend/src/dev/frontend-sandbox-api.ts packages/batch-frontend/src/dev/frontend-sandbox-api.test.ts
@@ -1251,7 +1251,7 @@ git commit -m "feat(frontend): derive confirmed assignment workflow"
 - Modify: `packages/batch-frontend/src/ui/minimal/MinimalAssignment.workflow-ui.test.tsx`
 - Modify: `packages/batch-frontend/src/ui/assignments/AssignmentWorkflow.navigation.test.tsx`
 
-- [ ] **Step 1: Write failing Step 1-3 journey tests**
+- [x] **Step 1: Write failing Step 1-3 journey tests**
 
 Cover:
 
@@ -1274,7 +1274,7 @@ expect(screen.queryByRole('button', { name: /^Save/ })).not.toBeInTheDocument();
 expect(screen.queryByRole('button', { name: /^Refresh/ })).not.toBeInTheDocument();
 ```
 
-- [ ] **Step 2: Run focused tests and verify failure**
+- [x] **Step 2: Run focused tests and verify failure**
 
 Run:
 
@@ -1284,7 +1284,7 @@ pnpm --filter @esl-pipeline/batch-frontend exec vitest run src/ui/minimal/Minima
 
 Expected: old generic session mutation calls and navigation-only Source advancement violate the new assertions.
 
-- [ ] **Step 3: Add one serialized session revision coordinator**
+- [x] **Step 3: Add one serialized session revision coordinator**
 
 In `MinimalAssignment.tsx`, keep the latest returned session in a ref as well as state so queued automatic recovery always reads the newest revision. Serialize session mutations; coalesce superseded recovery patches but never coalesce semantic confirmations. On 409, fetch the latest session, run the pure reconciliation decision, and retain local buffers when they differ.
 
@@ -1293,7 +1293,7 @@ schedule recovery until `markAssignmentUserEdit()` records a real tutor change. 
 transcript wrapper on that boundary so resumed pasted-transcript edits cannot bypass persistence or
 exit-safety tracking.
 
-- [ ] **Step 4: Implement Student and Source confirmation**
+- [x] **Step 4: Implement Student and Source confirmation**
 
 Student Continue creates one UUID per attempt and reuses it until success or explicit learner change.
 Source automatic recovery persists lesson/source identities. Source Continue awaits any pending
@@ -1303,17 +1303,17 @@ the backend captures the locked transcript's immutable URI/hash/version tuple at
 automatically starts/reconciles lesson memory for that hash. Remove the first-profile standalone
 memory-confirm button/API call; memory readiness remains automatic asynchronous status.
 
-- [ ] **Step 5: Implement Context recovery and confirmation**
+- [x] **Step 5: Implement Context recovery and confirmation**
 
 Debounce notes/profile recovery at the existing autosave cadence. Context Continue flushes the
 latest recovery patch and confirms the exact profile ID/revision/hash. Selecting a different profile
 revision marks Context dirty but does not invalidate Create until confirmation.
 
-- [ ] **Step 6: Remove manual persistence responsibility and present honest status**
+- [x] **Step 6: Remove manual persistence responsibility and present honest status**
 
 Remove Source Save/Refresh affordances. `AssignmentWorkflow` renders `Saving…`, `All changes saved`, `Confirmation failed`, or conflict text from the coordinator. It must never infer `saved` merely because an active session exists.
 
-- [ ] **Step 7: Run focused tests and frontend typecheck**
+- [x] **Step 7: Run focused tests and frontend typecheck**
 
 Run:
 
@@ -1324,7 +1324,7 @@ pnpm --filter @esl-pipeline/batch-frontend typecheck
 
 Expected: Step 1-3 journeys, retry/conflict cases, and typecheck pass.
 
-- [ ] **Step 8: Commit Student, Source, and Context behavior**
+- [x] **Step 8: Commit Student, Source, and Context behavior**
 
 ```bash
 git add packages/batch-frontend/src/ui/minimal/MinimalAssignment.tsx packages/batch-frontend/src/ui/minimal/MinimalAssignment.source.ts packages/batch-frontend/src/ui/minimal/MinimalAssignment.stages.tsx packages/batch-frontend/src/utils/api.student-memory.test.ts packages/batch-frontend/src/ui/assignments/AssignmentWorkflow.tsx packages/batch-frontend/src/ui/minimal/MinimalAssignment.test-harness.tsx packages/batch-frontend/src/ui/minimal/MinimalAssignment.workflow-ui.test.tsx packages/batch-frontend/src/ui/assignments/AssignmentWorkflow.navigation.test.tsx
@@ -1346,7 +1346,7 @@ git commit -m "feat(frontend): confirm assignment inputs automatically"
 - Modify: `packages/batch-frontend/src/ui/minimal/MinimalAssignment.publish-actions.test-groups.tsx`
 - Modify: `packages/batch-frontend/src/ui/minimal/MinimalAssignment.resume-rehydration.test-groups.tsx`
 
-- [ ] **Step 1: Write failing Create/Share/resume tests**
+- [x] **Step 1: Write failing Create/Share/resume tests**
 
 Cover:
 
@@ -1375,7 +1375,7 @@ expect(await screen.findByText('Assignment shared')).toBeVisible();
 expect(screen.queryByText('Unfinished assignment')).not.toBeInTheDocument();
 ```
 
-- [ ] **Step 2: Run focused tests and verify failure**
+- [x] **Step 2: Run focused tests and verify failure**
 
 Run:
 
@@ -1386,41 +1386,41 @@ pnpm --filter @esl-pipeline/batch-frontend exec vitest run src/ui/minimal/Minima
 Expected: draft save lacks working-version CAS, Share is frontend-composed with archival, and resume
 depends on persisted stage instead of confirmed/dirty state.
 
-- [ ] **Step 3: Confirm Create from the durable draft revision**
+- [x] **Step 3: Confirm Create from the durable draft revision**
 
 Generation consumes confirmed Student/Source/Context only. Draft autosave carries the latest expected
 working version. Create Continue flushes autosave, then confirms the exact prompt package, draft, and
 returned working version; the backend copies the locked draft's content-addressed URI, server hash,
 and working version into the confirmed Create snapshot. Remove manual Save draft responsibility.
 
-- [ ] **Step 4: Implement confirmed-input Preview and Share**
+- [x] **Step 4: Implement confirmed-input Preview and Share**
 
 Preview reads `session.confirmed.create`, not newer recovery. Share creates one UUID per logical
 attempt, calls the new Share route, and reuses it for retries. The returned linked job is the completed
 destination. Delete every archive call, archive-pending state, and cleanup effect.
 
-- [ ] **Step 5: Rehydrate the earliest dirty boundary**
+- [x] **Step 5: Rehydrate the earliest dirty boundary**
 
 After fetching a session, load working artifact versions/hashes and compare them with confirmed
 snapshots. Select Source before Context before Create when multiple boundaries are dirty; otherwise
 derive the destination from `confirmedStep`. A completed Share routes to `session.shareJobId`. Never
 silently replace a local dirty buffer during conflict recovery.
 
-- [ ] **Step 6: Add assignment-specific route protection**
+- [x] **Step 6: Add assignment-specific route protection**
 
 For SPA navigation, flush a pending unambiguous save before leaving. Protect internal route changes
 and `beforeunload` only while local content is not durably recovered, recovery retry is exhausted, or
 a mutation response is ambiguous. Do not guard merely because recovered content differs from
 confirmed truth.
 
-- [ ] **Step 7: Restrict automatic refresh triggers**
+- [x] **Step 7: Restrict automatic refresh triggers**
 
 Load stable assignment collections on entry, refresh once per window-focus return, and update/refresh
 directly affected state after mutation completion. Keep SSE/fallback polling only for
 queued/transcribing recordings and queued/running jobs; stop polling at terminal state. Do not add
 stable-data intervals or reconnect refresh loops.
 
-- [ ] **Step 8: Run focused journeys and frontend typecheck**
+- [x] **Step 8: Run focused journeys and frontend typecheck**
 
 Run:
 
@@ -1431,7 +1431,7 @@ pnpm --filter @esl-pipeline/batch-frontend typecheck
 
 Expected: Create, Share interruption recovery, earliest-dirty resume, navigation guard, and typecheck pass.
 
-- [ ] **Step 9: Commit Create, Share, and resume behavior**
+- [x] **Step 9: Commit Create, Share, and resume behavior**
 
 ```bash
 git add packages/batch-frontend/src/ui/minimal/MinimalAssignment.tsx packages/batch-frontend/src/ui/minimal/MinimalAssignment.authoring.ts packages/batch-frontend/src/ui/minimal/MinimalAssignment.resume.ts packages/batch-frontend/src/ui/minimal/MinimalAssignment.polling.ts packages/batch-frontend/src/ui/minimal/MinimalAssignment.polling.test.ts packages/batch-frontend/src/ui/assignments/AssignmentWorkflow.tsx packages/batch-frontend/src/ui/minimal/MinimalAssignment.test-harness.tsx packages/batch-frontend/src/ui/minimal/MinimalAssignment.prompt-draft.test-groups.tsx packages/batch-frontend/src/ui/minimal/MinimalAssignment.publish-actions.test-groups.tsx packages/batch-frontend/src/ui/minimal/MinimalAssignment.resume-rehydration.test-groups.tsx
@@ -1449,7 +1449,7 @@ git commit -m "feat(frontend): complete confirmed assignment journey"
 - Modify: `docs/generated/plans-index.md` if generated by the repository command
 - Modify: `docs/superpowers/plans/2026-07-18-assignment-step-confirmation-contract.md` - check completed steps during execution
 
-- [ ] **Step 1: Add one focused five-step regression journey**
+- [x] **Step 1: Add one focused five-step regression journey**
 
 Place the journey in the existing frontend workflow test grouping and cover fresh Student → Source →
 Context → Create → Share; derived resume at each boundary; durable dirty recovery; cross-tab
@@ -1457,7 +1457,7 @@ conflicts; safe exit with recovered-unconfirmed work; guarded exit with pending/
 refresh triggers; and Share response loss. Use mocked network boundaries only where necessary to
 simulate ambiguity; keep pure state rules in dedicated helper tests.
 
-- [ ] **Step 2: Run all affected backend and frontend suites**
+- [x] **Step 2: Run all affected backend and frontend suites**
 
 Run:
 
@@ -1470,7 +1470,7 @@ pnpm --filter @esl-pipeline/batch-frontend typecheck
 
 Expected: all package unit tests and typechecks pass.
 
-- [ ] **Step 3: Update behavior documentation**
+- [x] **Step 3: Update behavior documentation**
 
 Document:
 
@@ -1496,7 +1496,7 @@ Document:
   distinction, and terminal confirmed Share;
 - API `4.0.0`, DB `0.23.0`, and release-major classification.
 
-- [ ] **Step 4: Regenerate and verify the schema baseline**
+- [x] **Step 4: Regenerate and verify the schema baseline**
 
 Run:
 
@@ -1508,7 +1508,7 @@ pnpm release:verify:contracts
 
 Expected: generated `schema.sql` matches migration head `0044_assignment_step_confirmation_contract`, the baseline verifier passes, and contract release verification accepts the API major/DB minor bump.
 
-- [ ] **Step 5: Generate indexes, format, and validate docs**
+- [x] **Step 5: Generate indexes, format, and validate docs**
 
 Run:
 
@@ -1522,19 +1522,24 @@ pnpm docs:check
 
 Expected: generated indexes are current, formatting and repository hygiene pass, and docs links/headings are valid. If `pnpm format` still reports the two pre-existing audio-ingest plan/spec files, verify this branch did not modify them and record that baseline issue separately rather than widening this PR.
 
-- [ ] **Step 6: Run the broad behavioral gates**
+- [x] **Step 6: Run the broad behavioral gates**
 
 Because this change crosses public contracts, migrations, storage, queue orchestration, backend, and frontend, run the broad lane rather than stopping at affected-package tests:
 
 ```bash
 pnpm --silent run check:fast:agent
 pnpm check:pre-pr
-pnpm check
+pnpm --silent run test:unit:prebuilt:fast:agent
 ```
 
-Expected: all gates pass. If an agent lane fails, inspect the reported `tmp/check-logs/...` artifact before rerunning a raw command. Treat an unrelated local PostgreSQL `ECONNREFUSED 127.0.0.1:5432` as an environment blocker only after confirming the edited unit/contract lanes are green.
+Expected: the repository's friendly pre-PR/agent gates pass. Do not add a redundant raw
+`pnpm check` run: the pre-PR lane is the full readiness gate for this branch, while the agent unit
+lane supplies concise package-level evidence without the raw all-workspace stream. If an agent lane
+fails, inspect the reported `tmp/check-logs/...` artifact before rerunning a focused command. Treat
+an unrelated local PostgreSQL `ECONNREFUSED 127.0.0.1:5432` as an environment blocker only after
+confirming the edited unit/contract lanes are green.
 
-- [ ] **Step 7: Review the final diff against the approved design**
+- [x] **Step 7: Review the final diff against the approved design**
 
 Run:
 
@@ -1554,7 +1559,7 @@ surface; no old active-session/archive predicate; no mutable transcript lookup o
 lesson-memory trigger after confirmation; and no routine manual Save/Refresh requirement. Inspect
 matches and retain only unrelated established repository notes.
 
-- [ ] **Step 8: Commit documentation and validation artifacts**
+- [x] **Step 8: Commit documentation and validation artifacts**
 
 ```bash
 git add packages/batch-backend/README.md packages/batch-frontend/README.md docs/backend-frontend/backend-frontend-alignment.md packages/batch-backend/schema.sql docs/generated/plans-index.md docs/superpowers/plans/2026-07-18-assignment-step-confirmation-contract.md
@@ -1567,35 +1572,35 @@ If `docs/generated/plans-index.md` is unchanged, omit it from `git add` rather t
 
 ## Completion Checklist
 
-- [ ] All five visible steps advance only after their approved durable confirmation event.
-- [ ] Every pre-cutover assignment session, draft, and prompt package is removed in dependency order
+- [x] All five visible steps advance only after their approved durable confirmation event.
+- [x] Every pre-cutover assignment session, draft, and prompt package is removed in dependency order
       and no legacy resume/hydration branch exists.
-- [ ] Completed jobs, handouts, and published URLs remain readable after cutover.
-- [ ] Pre-cutover editor artifacts cannot enter a new assignment; every new transcript/draft starts at working version `1` with a server hash.
-- [ ] Automatic recovery never changes confirmed truth.
-- [ ] No `currentStage` or session archive state exists; resume and completion are derived.
-- [ ] `confirmedStep` remains the uniform atomically maintained workflow/query scalar.
-- [ ] Transcript/draft autosaves use content-addressed working CAS without content-revision tables.
-- [ ] Source/Create confirmation stores the exact immutable URI/hash/version tuple consumed downstream.
-- [ ] Prompt generation uses the exact confirmed transcript URI and profile revision.
-- [ ] Lesson memory uses the exact confirmed transcript URI/hash, ignores unconfirmed autosaves,
+- [x] Completed jobs, handouts, and published URLs remain readable after cutover.
+- [x] Pre-cutover editor artifacts cannot enter a new assignment; every new transcript/draft starts at working version `1` with a server hash.
+- [x] Automatic recovery never changes confirmed truth.
+- [x] No `currentStage` or session archive state exists; resume and completion are derived.
+- [x] `confirmedStep` remains the uniform atomically maintained workflow/query scalar.
+- [x] Transcript/draft autosaves use content-addressed working CAS without content-revision tables.
+- [x] Source/Create confirmation stores the exact immutable URI/hash/version tuple consumed downstream.
+- [x] Prompt generation uses the exact confirmed transcript URI and profile revision.
+- [x] Lesson memory uses the exact confirmed transcript URI/hash, ignores unconfirmed autosaves,
       regenerates on every changed confirmed hash, hides A while B refreshes, and automatically
       refreshes future student-memory snapshots from B.
-- [ ] Cross-tab conflicts preserve local input and cannot silently overwrite newer state.
-- [ ] Back is non-destructive; forward navigation cannot bypass dirty unconfirmed work.
-- [ ] Resume opens the earliest dirty boundary, then derives from `confirmedStep`; confirmed Share opens its linked job.
-- [ ] Exit guards appear only for unrecovered or ambiguous work, not durable unconfirmed recovery.
-- [ ] Stable refresh occurs only on load, focus return, or mutation completion; only async work polls.
-- [ ] No routine Save action remains where the system can infer and persist the desired state.
-- [ ] Historical shared handouts remain accessible after active-lineage invalidation.
-- [ ] Share interruption resumes from one stable job and existing job state without a parallel attempt ledger.
-- [ ] `confirmedStep = 'share'` is the only completed predicate; completed sessions are absent from
+- [x] Cross-tab conflicts preserve local input and cannot silently overwrite newer state.
+- [x] Back is non-destructive; forward navigation cannot bypass dirty unconfirmed work.
+- [x] Resume opens the earliest dirty boundary, then derives from `confirmedStep`; confirmed Share opens its linked job.
+- [x] Exit guards appear only for unrecovered or ambiguous work, not durable unconfirmed recovery.
+- [x] Stable refresh occurs only on load, focus return, or mutation completion; only async work polls.
+- [x] No routine Save action remains where the system can infer and persist the desired state.
+- [x] Historical shared handouts remain accessible after active-lineage invalidation.
+- [x] Share interruption resumes from one stable job and existing job state without a parallel attempt ledger.
+- [x] `confirmedStep = 'share'` is the only completed predicate; completed sessions are absent from
       resumable/in-progress results, do not block same-recording creation, and remain immutable.
-- [ ] A terminal failed Share job resets/retries under the same database/BullMQ identity without a
+- [x] A terminal failed Share job resets/retries under the same database/BullMQ identity without a
       rerun child; intentional reruns still create child lineage.
-- [ ] Confirmed Share is terminal and excluded from unfinished sessions without archive cleanup.
-- [ ] API and DB contract versions, migration head, baseline schema, READMEs, and alignment docs agree.
-- [ ] Focused suites, package tests/typechecks, contract verification, baseline verification, docs checks, and broad repository gates have fresh recorded evidence.
+- [x] Confirmed Share is terminal and excluded from unfinished sessions without archive cleanup.
+- [x] API and DB contract versions, migration head, baseline schema, READMEs, and alignment docs agree.
+- [x] Focused suites, package tests/typechecks, contract verification, baseline verification, docs checks, and broad repository gates have fresh recorded evidence.
 
 ## Inline Execution Handoff
 

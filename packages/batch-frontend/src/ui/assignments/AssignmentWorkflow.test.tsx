@@ -54,7 +54,7 @@ describe('AssignmentWorkflow', () => {
     );
 
     expect(screen.getByRole('region', { name: 'Assignment builder' })).toBeTruthy();
-    expect(screen.getByRole('status').textContent).toContain('Saved');
+    expect(screen.getByRole('status').textContent).toContain('All changes saved');
     expect(screen.queryByText('Assignment builder')).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Lesson source' })).toBeNull();
   });
