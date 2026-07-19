@@ -95,6 +95,30 @@ describe('assignment recovery API', () => {
     expect(apiClient.patch).toHaveBeenCalledTimes(1);
   });
 
+  it('preserves a typed artifact conflict from step confirmation', async () => {
+    vi.mocked(apiClient.post).mockRejectedValueOnce(
+      makeAxiosError(409, {
+        code: 'artifact_working_conflict',
+        artifact: { workingVersion: 5, contentHash: 'c'.repeat(64) },
+      }),
+    );
+
+    await expect(
+      confirmAssignmentSessionStep('session-1', {
+        step: 'source',
+        expectedRevision: 2,
+        lessonId: null,
+        recordingId: 'recording-1',
+        transcriptId: 'transcript-1',
+        transcriptWorkingVersion: 4,
+      }),
+    ).rejects.toMatchObject({
+      name: 'ArtifactWorkingConflictApiError',
+      latestArtifact: { workingVersion: 5, contentHash: 'c'.repeat(64) },
+    });
+    expect(apiClient.post).toHaveBeenCalledTimes(1);
+  });
+
   it.each([
     [
       'Student',

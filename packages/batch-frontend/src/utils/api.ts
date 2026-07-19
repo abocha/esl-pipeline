@@ -3450,6 +3450,8 @@ export async function confirmAssignmentSessionStep(
     const axiosError = toAxiosError(error);
     const conflict = getAssignmentSessionConflict(axiosError);
     if (conflict) throw new AssignmentSessionConflictApiError(conflict);
+    const artifactConflict = getArtifactWorkingConflict(axiosError);
+    if (artifactConflict) throw new ArtifactWorkingConflictApiError(artifactConflict);
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to confirm assignment progress.');
     }

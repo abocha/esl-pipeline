@@ -6,6 +6,8 @@ import { getProfileContent, getProfileRevision } from '../../utils/api';
 export interface ContextHydrationSnapshot {
   selectedProfileId: string;
   profileSelectionMode: 'auto' | 'manual';
+  selectedProfileRevisionId?: string | null;
+  selectedProfileRevisionHash?: string | null;
 }
 
 export type ProfilePreviewStatus = 'none' | 'loading' | 'ready' | 'unstructured' | 'error';
@@ -110,6 +112,12 @@ export function useMinimalAssignmentContextController({
   const applyHydratedSnapshot = useCallback((snapshot: ContextHydrationSnapshot) => {
     setSelectedProfileId(snapshot.selectedProfileId);
     setProfileSelectionMode(snapshot.profileSelectionMode);
+    if ('selectedProfileRevisionId' in snapshot) {
+      setSelectedProfileRevisionId(snapshot.selectedProfileRevisionId ?? null);
+    }
+    if ('selectedProfileRevisionHash' in snapshot) {
+      setSelectedProfileRevisionHash(snapshot.selectedProfileRevisionHash ?? null);
+    }
   }, []);
 
   const selectProfileId = useCallback((profileId: string) => {

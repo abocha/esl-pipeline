@@ -202,6 +202,31 @@ describe('MinimalAssignment - staged workflow UI', () => {
     expect(screen.getByText(/Newer saved artifact content was found/i)).toBeTruthy();
   });
 
+  it('reconciles a transcript CAS conflict raised during Source confirmation', async () => {
+    const { user } = await renderResumedAssignment({}, { waitFor: 'none' });
+    await user.click(screen.getByRole('button', { name: /Lesson source/i }));
+    const editor = screen.getByRole('textbox', { name: /Transcript text/i });
+    const latest = makeTranscript({
+      text: 'Remote transcript confirmed by another tab',
+      workingVersion: 2,
+      contentHash: 'd'.repeat(64),
+    });
+    vi.mocked(api.confirmAssignmentSessionStep).mockRejectedValueOnce(
+      new api.ArtifactWorkingConflictApiError({
+        workingVersion: latest.workingVersion,
+        contentHash: latest.contentHash,
+      }),
+    );
+    vi.mocked(api.fetchRecordingTranscript).mockResolvedValueOnce(latest);
+
+    await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+
+    await waitFor(() => expect(api.fetchRecordingTranscript).toHaveBeenCalledWith('rec-1'));
+    expect((editor as HTMLTextAreaElement).value).toBe(latest.text);
+    expect(screen.getByText(/Newer saved work found/i)).toBeTruthy();
+    expect(api.confirmAssignmentSessionStep).toHaveBeenCalledTimes(1);
+  });
+
   it('sends one Context recovery PATCH for one edit across repeated debounce windows', async () => {
     const { user } = await renderResumedAssignment({}, { waitFor: 'none' });
     await user.click(screen.getByRole('button', { name: /Teaching context/i }));
@@ -590,6 +615,59 @@ describe('MinimalAssignment - staged workflow UI', () => {
       (screen.getByRole('textbox', { name: /Teacher notes/i }) as HTMLTextAreaElement).value,
     ).toBe('Local unsaved note');
     expect(api.updateAssignmentSessionRecovery).toHaveBeenCalledTimes(recoveryCalls);
+  });
+
+  it('adopts clean cross-tab Context recovery on focus before the next confirmation', async () => {
+    const { user } = await renderPreviewReadyAssignment();
+    await user.click(screen.getByRole('button', { name: /Teaching context/i }));
+    const notes = screen.getByRole('textbox', { name: /Teacher notes/i });
+    const priorValue = (notes as HTMLTextAreaElement).value;
+    const durable = makeAssignmentSession({
+      id: 'session-resumed',
+      studentId: 'student-alex',
+      recordingId: 'rec-1',
+      transcriptId: 'tx-1',
+      promptPackageId: 'pkg-1',
+      draftId: 'draft-1',
+      confirmedStep: 'create',
+      teacherNotes: priorValue || null,
+      selectedProfileId: 'profiles/alex.md',
+      selectedProfileRevisionId: 'revision-1',
+      selectedProfileRevisionHash: 'a'.repeat(64),
+      revision: 19,
+    });
+    vi.mocked(api.fetchAssignmentSession).mockResolvedValueOnce(durable);
+    const baselineFetchCalls = vi.mocked(api.fetchAssignmentSession).mock.calls.length;
+    await act(async () => {
+      globalThis.dispatchEvent(new Event('focus'));
+    });
+    await waitFor(() =>
+      expect(api.fetchAssignmentSession).toHaveBeenCalledTimes(baselineFetchCalls + 1),
+    );
+    const latest = makeAssignmentSession({
+      ...durable,
+      teacherNotes: 'Remote saved note',
+      revision: durable.revision + 1,
+    });
+    expect(priorValue).not.toBe(latest.teacherNotes);
+    vi.mocked(api.fetchAssignmentSession).mockResolvedValueOnce(latest);
+
+    await act(async () => {
+      globalThis.dispatchEvent(new Event('focus'));
+    });
+
+    await waitFor(() => expect((notes as HTMLTextAreaElement).value).toBe('Remote saved note'));
+    await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+    await waitFor(() =>
+      expect(api.confirmAssignmentSessionStep).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          step: 'context',
+          expectedRevision: latest.revision + 1,
+          teacherNotes: 'Remote saved note',
+        }),
+      ),
+    );
   });
 
   it('blocks navigation flush after an artifact conflict without issuing a second PUT', async () => {
