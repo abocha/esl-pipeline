@@ -948,17 +948,17 @@ function shareJobMatchesSession(job: JobRecord, session: AssignmentSessionRecord
   const create = session.confirmed.create;
   return Boolean(
     source &&
-    create &&
-    job.id === session.shareJobId &&
-    job.userId === session.userId &&
-    job.studentId === session.studentId &&
-    job.recordingId === source.recordingId &&
-    job.transcriptId === source.transcriptId &&
-    job.promptPackageId === create.promptPackageId &&
-    job.draftId === create.draftId &&
-    job.lessonId === source.lessonId &&
-    job.mdStorageUri === create.draftStorageUri &&
-    job.sourceJobId === null,
+      create &&
+      job.id === session.shareJobId &&
+      job.userId === session.userId &&
+      job.studentId === session.studentId &&
+      job.recordingId === source.recordingId &&
+      job.transcriptId === source.transcriptId &&
+      job.promptPackageId === create.promptPackageId &&
+      job.draftId === create.draftId &&
+      job.lessonId === source.lessonId &&
+      job.mdStorageUri === create.draftStorageUri &&
+      job.sourceJobId === null,
   );
 }
 

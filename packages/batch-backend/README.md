@@ -4,7 +4,7 @@
 
 - Audience: maintainers and implementing agents.
 - Authority Level: package entrypoint and operational usage guide.
-- Last Verified Against: 2026-07-02 repo state.
+- Last Verified Against: 2026-07-19 repo state.
 - Owner: batch-backend maintainers + automation agents.
 - Review Cadence: monthly or after major API/worker changes.
 - Status: `active`.
@@ -75,6 +75,37 @@ Useful indexes:
 - Schema changes belong in versioned migrations; runtime legacy patching is emergency-only.
 - Fresh database bootstrap uses the generated `schema.sql` baseline; existing databases upgrade through versioned migrations.
 - Extended API and ops-control surfaces are additive and must be explicitly enabled.
+
+## Assignment Confirmation Contract
+
+The assignment builder separates automatic recovery from tutor-owned confirmation:
+
+- Student confirmation is the only session-creation path. Every session has a monotonic revision,
+  a validated confirmed snapshot, and a `confirmedStep`; recovery writes cannot alter confirmed
+  truth.
+- Session recovery and Source/Context/Create confirmation use session-revision compare-and-swap.
+  Transcript and draft autosaves use independent working-version compare-and-swap, server hashes,
+  and content-addressed storage. Source/Create confirmation copy the exact immutable URI, hash, and
+  working version into the session snapshot; there are no transcript/draft revision tables.
+- Source confirmation is the only assignment-flow lesson-memory trigger. Its durable intent and
+  BullMQ identity are keyed by transcript plus confirmed hash, and the worker reads the confirmed
+  URI from its payload rather than the transcript's mutable working pointer. Changed confirmed
+  content temporarily makes memory unavailable until its automatic replacement succeeds.
+- Prompt generation reads confirmed Source and Context inputs. Preview and Share read confirmed
+  Create content, so newer autosaved recovery cannot silently enter downstream output.
+- Share reserves one existing job row with a stable database/BullMQ ID. Retry and ambiguous-response
+  reconciliation reuse that identity; terminal failure resets/re-enqueues it in place, while an
+  intentional rerun remains a new `source_job_id` child.
+- `confirmedStep = 'share'` is the sole completed predicate. Completed sessions remain immutable
+  provenance for their historical jobs/handouts, are not resumable or in progress, and do not block
+  a new assignment for the same recording. There is no assignment archival or archive-retry state.
+
+Migration `0044_assignment_step_confirmation_contract` is an intentional closed-alpha cutover. With
+the API and workers stopped, it deletes pre-cutover assignment sessions, drafts, and prompt packages
+in that order. It fabricates no confirmed snapshots and adds no legacy resume/edit path. Completed
+jobs, published handouts and URLs, rerun lineage, homework-memory reads through completed-job
+`md_storage_uri`, and referenced storage objects remain historical outputs. API `4.0.0` and DB
+`0.23.0` intentionally reject the removed revisionless assignment and artifact mutation contracts.
 
 ## Environment and Docs
 

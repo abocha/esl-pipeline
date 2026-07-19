@@ -101,8 +101,9 @@ describe('domain/assignment-session-repository persistence contract', () => {
     const studentId = randomUUID();
     const requestId = randomUUID();
     await insertUserAndStudent(userId, studentId);
-    const { confirmStudentAssignmentSession, updateAssignmentSessionRecovery } =
-      await import('../src/domain/assignment-session-repository.js');
+    const { confirmStudentAssignmentSession, updateAssignmentSessionRecovery } = await import(
+      '../src/domain/assignment-session-repository.js'
+    );
 
     const created = await confirmStudentAssignmentSession({
       userId,
@@ -163,8 +164,9 @@ describe('domain/assignment-session-repository persistence contract', () => {
     const requestId = randomUUID();
     await insertUserAndStudent(userId, firstStudentId);
     await insertUserAndStudent(userId, secondStudentId);
-    const { confirmStudentAssignmentSession } =
-      await import('../src/domain/assignment-session-repository.js');
+    const { confirmStudentAssignmentSession } = await import(
+      '../src/domain/assignment-session-repository.js'
+    );
 
     await confirmStudentAssignmentSession({
       userId,
@@ -260,8 +262,9 @@ describe('domain/assignment-session-repository persistence contract', () => {
         ],
       );
     });
-    const { completeAssignmentShare, reserveAssignmentShare } =
-      await import('../src/domain/assignment-session-repository.js');
+    const { completeAssignmentShare, reserveAssignmentShare } = await import(
+      '../src/domain/assignment-session-repository.js'
+    );
 
     await expect(
       reserveAssignmentShare({
@@ -499,8 +502,9 @@ describe('domain/assignment-session-repository persistence contract', () => {
         ],
       );
     });
-    const { getAssignmentSessionByIdForUser } =
-      await import('../src/domain/assignment-session-repository.js');
+    const { getAssignmentSessionByIdForUser } = await import(
+      '../src/domain/assignment-session-repository.js'
+    );
 
     await expect(getAssignmentSessionByIdForUser(sessionId, userId)).rejects.toMatchObject({
       name: 'ZodError',
