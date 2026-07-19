@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.0.0] - 2026-07-19
+
+### Changed
+
+- Automated release from PR #147: feat(assignment): add durable step confirmation workflow (https://github.com/abocha/esl-pipeline/pull/147)
+
 ## [9.11.0] - 2026-07-16
 
 ### Changed
