@@ -644,6 +644,24 @@ describe('MinimalAssignment - staged workflow UI', () => {
     await waitFor(() =>
       expect(api.fetchAssignmentSession).toHaveBeenCalledTimes(baselineFetchCalls + 1),
     );
+    await waitFor(() =>
+      expect(api.getProfileRevision).toHaveBeenLastCalledWith('profiles/alex.md', 'revision-1'),
+    );
+    let resolveProfileContent!: (value: Awaited<ReturnType<typeof api.getProfileContent>>) => void;
+    const pendingProfileContent = new Promise<Awaited<ReturnType<typeof api.getProfileContent>>>(
+      (resolve) => {
+        resolveProfileContent = resolve;
+      },
+    );
+    const profileContentCalls = vi.mocked(api.getProfileContent).mock.calls.length;
+    vi.mocked(api.getProfileContent).mockReturnValueOnce(pendingProfileContent);
+    vi.mocked(api.fetchAssignmentSession).mockResolvedValueOnce(durable);
+    await act(async () => {
+      globalThis.dispatchEvent(new Event('focus'));
+    });
+    await waitFor(() =>
+      expect(api.getProfileContent).toHaveBeenCalledTimes(profileContentCalls + 1),
+    );
     const latest = makeAssignmentSession({
       ...durable,
       teacherNotes: 'Remote saved note',
@@ -674,6 +692,16 @@ describe('MinimalAssignment - staged workflow UI', () => {
     });
 
     await waitFor(() => expect((notes as HTMLTextAreaElement).value).toBe('Remote saved note'));
+    resolveProfileContent({
+      id: 'profiles/alex.md',
+      label: 'Alex Profile',
+      content: 'NEWER PROFILE CONTENT',
+      currentRevisionId: 'revision-2',
+      updatedAt: '2026-07-19T00:02:00.000Z',
+    });
+    await waitFor(() =>
+      expect(api.getProfileRevision).toHaveBeenLastCalledWith('profiles/alex.md', 'revision-2'),
+    );
     await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
     await waitFor(() =>
       expect(api.confirmAssignmentSessionStep).toHaveBeenCalledWith(

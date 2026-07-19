@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { FoundationalProfile, ProfileContentResponse } from '../../utils/api';
 import { getProfileContent, getProfileRevision } from '../../utils/api';
@@ -104,14 +104,19 @@ export function useMinimalAssignmentContextController({
   const [selectedProfileRevisionHash, setSelectedProfileRevisionHash] = useState<string | null>(
     null,
   );
+  const profileLineagePinnedRef = useRef(false);
   const [profileReloadToken, setProfileReloadToken] = useState(0);
   const refreshSelectedProfile = useCallback(() => {
+    profileLineagePinnedRef.current = false;
     setProfileReloadToken((token) => token + 1);
   }, []);
 
   const applyHydratedSnapshot = useCallback((snapshot: ContextHydrationSnapshot) => {
     setSelectedProfileId(snapshot.selectedProfileId);
     setProfileSelectionMode(snapshot.profileSelectionMode);
+    if ('selectedProfileRevisionId' in snapshot || 'selectedProfileRevisionHash' in snapshot) {
+      profileLineagePinnedRef.current = true;
+    }
     if ('selectedProfileRevisionId' in snapshot) {
       setSelectedProfileRevisionId(snapshot.selectedProfileRevisionId ?? null);
     }
@@ -121,6 +126,7 @@ export function useMinimalAssignmentContextController({
   }, []);
 
   const selectProfileId = useCallback((profileId: string) => {
+    profileLineagePinnedRef.current = false;
     setSelectedProfileId(profileId);
     setProfileSelectionMode('auto');
     setProfileReloadToken((current) => current + 1);
@@ -161,8 +167,10 @@ export function useMinimalAssignmentContextController({
         if (!active) return;
         const preview = buildProfilePreview(selectedProfileId, profile);
         setProfilePreview(preview);
-        setSelectedProfileRevisionId(revision?.id ?? null);
-        setSelectedProfileRevisionHash(revision?.contentHash ?? null);
+        if (!profileLineagePinnedRef.current) {
+          setSelectedProfileRevisionId(revision?.id ?? null);
+          setSelectedProfileRevisionHash(revision?.contentHash ?? null);
+        }
         setProfilePreviewStatus(preview ? 'ready' : 'unstructured');
         setProfileRevisionError(null);
       } catch (error) {
@@ -170,16 +178,20 @@ export function useMinimalAssignmentContextController({
         if (isUnstructuredProfileError(error)) {
           setProfilePreviewStatus('unstructured');
           setProfilePreview(null);
-          setSelectedProfileRevisionId(null);
-          setSelectedProfileRevisionHash(null);
+          if (!profileLineagePinnedRef.current) {
+            setSelectedProfileRevisionId(null);
+            setSelectedProfileRevisionHash(null);
+          }
           setProfileRevisionError(null);
           return;
         }
         const message = error instanceof Error ? error.message : 'Unable to load selected profile.';
         setProfilePreviewStatus('error');
         setProfilePreview(null);
-        setSelectedProfileRevisionId(null);
-        setSelectedProfileRevisionHash(null);
+        if (!profileLineagePinnedRef.current) {
+          setSelectedProfileRevisionId(null);
+          setSelectedProfileRevisionHash(null);
+        }
         setProfileRevisionError(message);
       }
     };
