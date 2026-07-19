@@ -141,7 +141,7 @@ async function importSnapshotItem(args: {
       const [lessonRows, homeworkRows] = await Promise.all([
         client.query<{ id: string }>(
           `SELECT id FROM lesson_memory_entries
-           WHERE student_id = $1 AND status = 'ready'
+           WHERE student_id = $1 AND status = 'ready' AND source_content_hash IS NOT NULL
            ORDER BY generated_at ASC, created_at ASC, id ASC`,
           [args.item.studentId],
         ),

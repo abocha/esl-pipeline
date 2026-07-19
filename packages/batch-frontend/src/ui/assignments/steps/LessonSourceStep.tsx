@@ -72,12 +72,12 @@ export function LessonSourceStep({
             This becomes the durable lesson source. No audio transcription is started.
           </p>
           {manualError ? (
-            <ProductNotice tone="error" title="Transcript not saved">
+            <ProductNotice tone="error" title="Transcript not ready">
               {manualError}
             </ProductNotice>
           ) : null}
           {transcriptReady ? (
-            <ProductNotice tone="success" title="Existing transcript saved">
+            <ProductNotice tone="success" title="Existing transcript ready">
               You can continue to teaching context or return here to review it.
             </ProductNotice>
           ) : null}
@@ -87,7 +87,7 @@ export function LessonSourceStep({
             icon={manualError ? <RotateCcw /> : <FileText />}
             onClick={() => void onCreateManualTranscript(text, 'Pasted lesson transcript')}
           >
-            {manualError ? 'Retry saving transcript' : 'Save existing transcript'}
+            {manualError ? 'Retry transcript' : 'Use transcript'}
           </ProductButton>
           {!studentSelected ? (
             <p className="assignment-source-pane__error">Select a student first.</p>

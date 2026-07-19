@@ -25,7 +25,7 @@ describe('LessonSourceStep', () => {
       screen.getByRole('textbox', { name: /Existing lesson transcript/i }),
       'Existing lesson transcript',
     );
-    await userEvent.click(screen.getByRole('button', { name: /Save existing transcript/i }));
+    await userEvent.click(screen.getByRole('button', { name: /Use transcript/i }));
     expect(onCreateManualTranscript).toHaveBeenCalledWith(
       'Existing lesson transcript',
       'Pasted lesson transcript',

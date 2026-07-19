@@ -1,12 +1,7 @@
-import type { PoolClient } from 'pg';
-
 import { listHomeworkMemoryEntries } from '../domain/homework-memory-repository.js';
 import { listLessonMemoryEntries } from '../domain/lesson-memory-repository.js';
-import { withPgClient } from '../infrastructure/db.js';
-import { createTranscriptionStorageForUri } from '../infrastructure/transcription-storage.js';
 import { buildHomeworkMemoryEnvelope } from './homework-memory-prompt.js';
 import { resolveHomeworkMemorySourceFromSucceededJob } from './homework-memory-source.js';
-import { buildLessonMemoryEnvelope } from './lesson-memory-prompt.js';
 import type { StudentMemoryOpenAiBatchPlanItem } from './student-memory-openai-batch-operations.js';
 import {
   buildStudentMemoryOpenAiBatchItem,
@@ -14,51 +9,13 @@ import {
 } from './student-memory-openai-batch-planner.js';
 import { buildStudentMemorySnapshotEnvelope } from './student-memory-snapshot-prompt.js';
 
-interface LessonBatchSourceRow {
-  transcript_id: string;
-  recording_id: string;
-  student_id: string;
-  storage_uri: string;
-  updated_at: Date;
-}
-
-export async function buildLessonMemoryBatchCandidates(args: {
+export async function buildLessonMemoryBatchCandidates(_args: {
   transcriptIds: string[];
   model: string;
 }): Promise<StudentMemoryOpenAiBatchPlanItem[]> {
-  const candidates: StudentMemoryOpenAiBatchPlanItem[] = [];
-  for (const transcriptId of uniqueSortedIds(args.transcriptIds)) {
-    const source = await loadLessonSource(transcriptId);
-    if (!source) {
-      throw new Error(`Lesson-memory Batch transcript not found: ${transcriptId}`);
-    }
-    const storage = createTranscriptionStorageForUri(source.storage_uri);
-    const transcriptText = await storage.getText(source.storage_uri);
-    const envelope = buildLessonMemoryEnvelope({
-      transcriptId: source.transcript_id,
-      transcriptText,
-    });
-    const planned = buildStudentMemoryOpenAiBatchItem({
-      workload: 'lesson_memory',
-      model: args.model,
-      canonicalScopeKey: source.transcript_id,
-      sourceVersionHash: sha256(
-        JSON.stringify({
-          transcriptUpdatedAt: source.updated_at.toISOString(),
-          sourceSelectionHash: envelope.sourceSelectionHash,
-        }),
-      ),
-      envelope,
-      sourceRefs: {
-        transcriptId: source.transcript_id,
-        recordingId: source.recording_id,
-        transcriptUpdatedAt: source.updated_at.toISOString(),
-        sourceSelectionHash: envelope.sourceSelectionHash,
-      },
-    });
-    candidates.push({ ...planned, studentId: source.student_id });
-  }
-  return candidates;
+  throw new Error(
+    'Lesson-memory OpenAI Batch planning is disabled; confirm Source to queue exact immutable content',
+  );
 }
 
 export async function buildHomeworkMemoryBatchCandidates(args: {
@@ -147,26 +104,6 @@ export async function buildStudentMemorySnapshotBatchCandidates(args: {
     candidates.push({ ...planned, studentId });
   }
   return candidates;
-}
-
-async function loadLessonSource(transcriptId: string): Promise<LessonBatchSourceRow | null> {
-  return withPgClient(async (client: PoolClient) => {
-    const result = await client.query<LessonBatchSourceRow>(
-      `
-        SELECT
-          t.id AS transcript_id,
-          t.recording_id,
-          r.student_id,
-          t.storage_uri,
-          t.updated_at
-        FROM transcripts t
-        INNER JOIN recordings r ON r.id = t.recording_id
-        WHERE t.id = $1
-      `,
-      [transcriptId],
-    );
-    return result.rows[0] ?? null;
-  });
 }
 
 async function listAllReadyLessonMemory(studentId: string) {

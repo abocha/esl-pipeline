@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { enqueueMock, ensurePendingMock, supersedeClaimsMock } = vi.hoisted(() => ({
-  enqueueMock: vi.fn(),
+const { reconcileMock, ensurePendingMock, supersedeClaimsMock } = vi.hoisted(() => ({
+  reconcileMock: vi.fn(),
   ensurePendingMock: vi.fn(),
   supersedeClaimsMock: vi.fn(),
 }));
 
 vi.mock('../src/infrastructure/student-memory-queue.js', () => ({
-  createStudentMemoryQueue: vi.fn(() => ({ enqueue: enqueueMock })),
+  createStudentMemoryQueue: vi.fn(() => ({ reconcile: reconcileMock })),
 }));
 
 vi.mock('../src/domain/lesson-memory-repository.js', () => ({
@@ -42,6 +42,8 @@ describe('application/request-lesson-memory-generation', () => {
         studentId: 'student-1',
         transcriptId: 'transcript-1',
         recordingId: 'recording-1',
+        sourceStorageUri: 's3://transcripts/content/a.txt',
+        sourceContentHash: 'a'.repeat(64),
         trigger: 'replay',
       },
     });
@@ -51,7 +53,7 @@ describe('application/request-lesson-memory-generation', () => {
       canonicalScopeKey: 'transcript-1',
     });
     expect(ensurePendingMock).toHaveBeenCalled();
-    expect(enqueueMock).toHaveBeenCalled();
+    expect(reconcileMock).toHaveBeenCalled();
   });
 
   it('records teacher-confirmed transcript requests and carries the linked lesson into the queue', async () => {
@@ -62,6 +64,8 @@ describe('application/request-lesson-memory-generation', () => {
         transcriptId: 'transcript-1',
         recordingId: 'recording-1',
         lessonId: 'lesson-1',
+        sourceStorageUri: 's3://transcripts/content/a.txt',
+        sourceContentHash: 'a'.repeat(64),
         trigger: 'teacher-confirmed-transcript',
       },
     });
@@ -74,11 +78,13 @@ describe('application/request-lesson-memory-generation', () => {
         }),
       }),
     );
-    expect(enqueueMock).toHaveBeenCalledWith(
+    expect(reconcileMock).toHaveBeenCalledWith(
       expect.objectContaining({
         lessonId: 'lesson-1',
+        sourceStorageUri: 's3://transcripts/content/a.txt',
+        sourceContentHash: 'a'.repeat(64),
       }),
-      { jobId: 'lesson-memory:transcript-1' },
+      { jobId: `lesson-memory:transcript-1:${'a'.repeat(64)}` },
     );
   });
 });

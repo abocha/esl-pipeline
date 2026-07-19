@@ -10,7 +10,7 @@ export interface AssignmentWorkflowProps {
   steps: readonly AssignmentWorkflowStep[];
   activeStep: AssignmentStepId;
   highestAvailableStep: AssignmentStepId;
-  saveState: 'idle' | 'saving' | 'saved' | 'error';
+  saveState: 'idle' | 'saving' | 'saved' | 'error' | 'conflict' | 'ambiguous';
   guidance?: React.ReactNode;
   postFooter?: React.ReactNode;
   support?: React.ReactNode;
@@ -28,15 +28,17 @@ const stepIcons = {
   student: UserRound,
   source: AudioLines,
   context: BookOpen,
-  create: Sparkles,
+  assignment: Sparkles,
   review: Send,
 } as const;
 
 const saveLabels = {
   idle: 'Changes save as you work',
   saving: 'Saving…',
-  saved: 'Saved',
-  error: 'Save needs attention',
+  saved: 'All changes saved',
+  error: 'Saving needs attention',
+  conflict: 'Newer saved work found',
+  ambiguous: 'Checking whether the change completed',
 } as const;
 
 export function AssignmentWorkflow({

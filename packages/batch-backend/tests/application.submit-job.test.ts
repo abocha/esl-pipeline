@@ -72,6 +72,7 @@ describe('application/submit-job', () => {
       queue: {} as any,
       queueEvents: {} as any,
       enqueue,
+      reconcile: vi.fn(),
       cancelQueuedJob: vi.fn(),
     });
 
@@ -136,6 +137,7 @@ describe('application/submit-job', () => {
       queue: {} as any,
       queueEvents: {} as any,
       enqueue,
+      reconcile: vi.fn(),
       cancelQueuedJob: vi.fn(),
     });
 
@@ -195,6 +197,7 @@ describe('application/submit-job', () => {
       queue: {} as any,
       queueEvents: {} as any,
       enqueue,
+      reconcile: vi.fn(),
       cancelQueuedJob: vi.fn(),
     });
 
@@ -231,6 +234,7 @@ describe('application/submit-job', () => {
       queue: {} as any,
       queueEvents: {} as any,
       enqueue,
+      reconcile: vi.fn(),
       cancelQueuedJob: vi.fn(),
     });
 
@@ -249,6 +253,7 @@ describe('application/submit-job', () => {
       queue: {} as any,
       queueEvents: {} as any,
       enqueue,
+      reconcile: vi.fn(),
       cancelQueuedJob: vi.fn(),
     });
 
@@ -296,6 +301,7 @@ describe('application/submit-job', () => {
       queue: {} as any,
       queueEvents: {} as any,
       enqueue: vi.fn().mockResolvedValue(void 0),
+      reconcile: vi.fn(),
       cancelQueuedJob: vi.fn(),
     });
 
@@ -321,6 +327,7 @@ describe('application/submit-job', () => {
       queue: {} as any,
       queueEvents: {} as any,
       enqueue,
+      reconcile: vi.fn(),
       cancelQueuedJob: vi.fn(),
     });
 

@@ -18,6 +18,8 @@ export interface DraftResponse {
   studentId: string | null;
   lessonId: string | null;
   storageUri: string;
+  workingVersion: number | null;
+  contentHash: string | null;
   createdBy: string | null;
   text: string;
   createdAt: string;
@@ -63,6 +65,8 @@ export async function createDraft(
     studentId: promptPackage.studentId ?? null,
     lessonId: promptPackage.lessonId ?? null,
     storageUri: stored.uri,
+    workingVersion: 1,
+    contentHash: stored.sha256,
     createdBy: params.createdBy ?? null,
   });
 
@@ -76,6 +80,8 @@ export function toDraftResponse(draft: DraftRecord, text: string): DraftResponse
     studentId: draft.studentId ?? null,
     lessonId: draft.lessonId ?? null,
     storageUri: draft.storageUri,
+    workingVersion: draft.workingVersion,
+    contentHash: draft.contentHash,
     createdBy: draft.createdBy ?? null,
     text,
     createdAt: draft.createdAt.toISOString(),

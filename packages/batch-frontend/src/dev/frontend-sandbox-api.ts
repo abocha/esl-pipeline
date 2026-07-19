@@ -134,16 +134,35 @@ function readStudentIdParam(config: InternalAxiosRequestConfig): string | null {
 }
 
 function assignmentSession(overrides: Record<string, unknown> = {}) {
+  const studentId = typeof overrides.studentId === 'string' ? overrides.studentId : 'student-alex';
+  const recordingId =
+    typeof overrides.recordingId === 'string' ? overrides.recordingId : 'recording-sandbox';
+  const transcriptId =
+    typeof overrides.transcriptId === 'string' ? overrides.transcriptId : 'transcript-sandbox';
   return {
     id: 'session-sandbox',
     userId: 'sandbox-tutor',
-    studentId: null,
+    studentId,
     lessonId: null,
-    recordingId: null,
-    transcriptId: null,
+    recordingId,
+    transcriptId,
     promptPackageId: null,
     draftId: null,
-    currentStage: 'source',
+    revision: 2,
+    confirmedStep: 'source',
+    confirmed: {
+      student: { studentId },
+      source: {
+        lessonId: null,
+        recordingId,
+        transcriptId,
+        transcriptWorkingVersion: 1,
+        transcriptStorageUri: `memory://sandbox/${transcriptId}/content/${'a'.repeat(64)}.txt`,
+        transcriptHash: 'a'.repeat(64),
+      },
+      context: null,
+      create: null,
+    },
     publishTarget: 'html',
     selectedTtsProvider: 'inworld',
     selectedTtsStrategy: 'auto',
@@ -152,9 +171,12 @@ function assignmentSession(overrides: Record<string, unknown> = {}) {
     selectedGenerationProvider: 'openai',
     selectedGenerationModel: 'gpt-5.2',
     teacherNotes: null,
+    selectedProfileId: null,
+    selectedProfileRevisionId: null,
+    selectedProfileRevisionHash: null,
+    shareJobId: null,
     createdAt: now,
     updatedAt: now,
-    archivedAt: null,
     ...overrides,
   };
 }
@@ -937,6 +959,8 @@ const draft = {
     '## Mission',
     'Write a short project update and one polite follow-up question.',
   ].join('\n'),
+  workingVersion: 1,
+  contentHash: 'b'.repeat(64),
   createdAt: now,
   updatedAt: now,
 };
@@ -980,6 +1004,8 @@ const firstProfileDraft = {
     '## Mission',
     'Write a short client update and one clarification question.',
   ].join('\n'),
+  workingVersion: 1,
+  contentHash: 'c'.repeat(64),
   createdAt: now,
   updatedAt: now,
 };
@@ -1278,7 +1304,6 @@ export function createFrontendSandboxApiAdapter(
               studentId: 'student-alex',
               recordingId: 'recording-sandbox',
               transcriptId: 'transcript-sandbox',
-              currentStage: 'context',
             }),
           ],
           total: 1,
@@ -1292,7 +1317,6 @@ export function createFrontendSandboxApiAdapter(
             studentId: sandboxFirstProfileStudentId,
             recordingId: sandboxFirstProfileRecordingId,
             transcriptId: sandboxFirstProfileTranscriptId,
-            currentStage: 'context',
           }),
         ],
         total: 1,
@@ -1300,8 +1324,26 @@ export function createFrontendSandboxApiAdapter(
       });
     }
 
-    if (method === 'post' && path === '/assignment-sessions') {
-      return responseFor(config, assignmentSession());
+    if (method === 'post' && path === '/assignment-sessions/confirm-student') {
+      const body = readRequestBody(config.data);
+      const studentId = typeof body.studentId === 'string' ? body.studentId : 'student-alex';
+      return responseFor(
+        config,
+        assignmentSession({
+          studentId,
+          lessonId: typeof body.lessonId === 'string' ? body.lessonId : null,
+          recordingId: null,
+          transcriptId: null,
+          revision: 1,
+          confirmedStep: 'student',
+          confirmed: {
+            student: { studentId },
+            source: null,
+            context: null,
+            create: null,
+          },
+        }),
+      );
     }
 
     if (method === 'get' && path === '/assignment-sessions/session-cora') {
@@ -1312,16 +1354,21 @@ export function createFrontendSandboxApiAdapter(
           studentId: sandboxFirstProfileStudentId,
           recordingId: sandboxFirstProfileRecordingId,
           transcriptId: sandboxFirstProfileTranscriptId,
-          currentStage: 'context',
         }),
       );
     }
 
-    if (method === 'patch' && path === '/assignment-sessions/session-sandbox') {
-      return responseFor(config, assignmentSession({ updatedAt: now }));
+    if (method === 'patch' && path === '/assignment-sessions/session-sandbox/recovery') {
+      const body = readRequestBody(config.data);
+      const patch =
+        body.patch && typeof body.patch === 'object' ? (body.patch as Record<string, unknown>) : {};
+      return responseFor(config, assignmentSession({ ...patch, revision: 3, updatedAt: now }));
     }
 
-    if (method === 'patch' && path === '/assignment-sessions/session-cora') {
+    if (method === 'patch' && path === '/assignment-sessions/session-cora/recovery') {
+      const body = readRequestBody(config.data);
+      const patch =
+        body.patch && typeof body.patch === 'object' ? (body.patch as Record<string, unknown>) : {};
       return responseFor(
         config,
         assignmentSession({
@@ -1329,10 +1376,63 @@ export function createFrontendSandboxApiAdapter(
           studentId: sandboxFirstProfileStudentId,
           recordingId: sandboxFirstProfileRecordingId,
           transcriptId: sandboxFirstProfileTranscriptId,
-          currentStage: 'context',
+          ...patch,
+          revision: 3,
           updatedAt: now,
         }),
       );
+    }
+
+    if (
+      method === 'post' &&
+      (path === '/assignment-sessions/session-sandbox/confirm' ||
+        path === '/assignment-sessions/session-cora/confirm')
+    ) {
+      const body = readRequestBody(config.data);
+      const step = body.step;
+      const base = assignmentSession({
+        id: path.includes('session-cora') ? 'session-cora' : 'session-sandbox',
+      });
+      return responseFor(config, {
+        session: assignmentSession({
+          ...base,
+          revision: 3,
+          confirmedStep: step,
+          confirmed:
+            step === 'context'
+              ? {
+                  ...base.confirmed,
+                  context: {
+                    teacherNotes: typeof body.teacherNotes === 'string' ? body.teacherNotes : null,
+                    profileId: typeof body.profileId === 'string' ? body.profileId : null,
+                    profileRevisionId:
+                      typeof body.profileRevisionId === 'string' ? body.profileRevisionId : null,
+                    profileRevisionHash:
+                      typeof body.profileRevisionHash === 'string'
+                        ? body.profileRevisionHash
+                        : null,
+                  },
+                }
+              : base.confirmed,
+        }),
+        invalidated: [],
+      });
+    }
+
+    if (
+      method === 'post' &&
+      (path === '/assignment-sessions/session-sandbox/share' ||
+        path === '/assignment-sessions/session-cora/share')
+    ) {
+      return responseFor(config, {
+        session: assignmentSession({
+          id: path.includes('session-cora') ? 'session-cora' : 'session-sandbox',
+          revision: 4,
+          confirmedStep: 'share',
+          shareJobId: 'job-sandbox',
+        }),
+        job: jobStatus(),
+      });
     }
 
     if (method === 'post' && path === '/recordings/upload') {
@@ -1424,6 +1524,8 @@ export function createFrontendSandboxApiAdapter(
         model: 'manual-entry',
         language: 'und',
         mode: 'timeline',
+        workingVersion: 1,
+        contentHash: 'd'.repeat(64),
         createdAt: now,
         updatedAt: now,
       });
@@ -1473,6 +1575,8 @@ export function createFrontendSandboxApiAdapter(
         model: 'nova-3',
         language: 'en',
         mode: 'timeline',
+        workingVersion: 1,
+        contentHash: 'e'.repeat(64),
         createdAt: now,
         updatedAt: now,
       });
@@ -1488,6 +1592,8 @@ export function createFrontendSandboxApiAdapter(
         model: 'nova-3',
         language: 'en',
         mode: 'timeline',
+        workingVersion: 1,
+        contentHash: 'a'.repeat(64),
         createdAt: now,
         updatedAt: now,
       });
@@ -1721,6 +1827,33 @@ export function createFrontendSandboxApiAdapter(
       return responseFor(config, draft);
     }
 
+    if (method === 'put' && path === '/recordings/recording-sandbox/transcript') {
+      return responseFor(config, {
+        recordingId: 'recording-sandbox',
+        transcriptId: 'transcript-sandbox',
+        text: readRequestText(config.data, ''),
+        summaryJson: null,
+        sttProvider: 'deepgram',
+        model: 'nova-3',
+        language: 'en',
+        mode: 'timeline',
+        workingVersion: 2,
+        contentHash: 'f'.repeat(64),
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    if (method === 'put' && path === '/drafts/draft-sandbox') {
+      return responseFor(config, {
+        ...draft,
+        text: readRequestText(config.data, draft.text),
+        workingVersion: 2,
+        contentHash: 'f'.repeat(64),
+        updatedAt: now,
+      });
+    }
+
     if (method === 'post' && path === '/validation/markdown') {
       return responseFor(config, { ok: true, errors: [], warnings: [] });
     }
@@ -1734,6 +1867,8 @@ export function createFrontendSandboxApiAdapter(
         storageUri: 'memory://sandbox/draft-sandbox',
         createdBy: 'sandbox-tutor',
         text: readRequestText(config.data, '# Alex - Workplace Update Practice'),
+        workingVersion: 1,
+        contentHash: 'b'.repeat(64),
         createdAt: now,
         updatedAt: now,
       });

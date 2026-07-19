@@ -37,6 +37,8 @@ function createTranscript(overrides: Partial<TranscriptRecord> = {}): Transcript
     id: 'transcript-1',
     recordingId: 'recording-1',
     storageUri: 'local://transcripts/transcript-1.txt',
+    workingVersion: 1,
+    contentHash: 'transcript-hash',
     rawResponseUri: null,
     mode: 'timeline',
     model: 'nova-3',

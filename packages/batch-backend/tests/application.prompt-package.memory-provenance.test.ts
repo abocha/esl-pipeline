@@ -21,6 +21,7 @@ describe('application/prompt-package memory provenance', () => {
       putPromptPackage: async ({ promptPackageId }) => ({
         uri: `local://prompt-packages/${promptPackageId}.txt`,
         bytes: 1,
+        sha256: 'hash',
       }),
     });
 
@@ -93,9 +94,6 @@ describe('application/prompt-package memory provenance', () => {
         templateRevisions: createTemplateRevisionRepositoryStub(),
         bindings: createBindingResolverStub(),
         promptOptions: createPromptOptionsStub(),
-        lessonMemory: {
-          requestGeneration: async () => null,
-        },
       },
     );
 

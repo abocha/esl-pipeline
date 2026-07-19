@@ -1,5 +1,6 @@
-import type { AssignmentSessionStage, JobState } from '../../utils/api';
+import type { AssignmentSession, JobState } from '../../utils/api';
 import type { AssignmentStepId } from '../assignments/assignment-workflow';
+import { deriveResumeDestination } from './MinimalAssignment.confirmation';
 
 export type AssignmentEntryView = 'choice' | 'resume' | 'new' | 'summary';
 
@@ -100,16 +101,22 @@ export function getJobRecentAssignmentPresentation(
 }
 
 export function getSessionRecentAssignmentPresentation(
-  stage: AssignmentSessionStage,
+  session: AssignmentSession,
 ): RecentAssignmentPresentation {
+  const destination = deriveResumeDestination(session);
+  if (typeof destination !== 'string') {
+    throw new Error('Completed Share sessions must be presented through their linked job');
+  }
   const activityLabel =
-    stage === 'source'
+    destination === 'source'
       ? 'Lesson source in progress'
-      : stage === 'context'
+      : destination === 'context'
         ? 'Learner context in progress'
-        : stage === 'assignment'
+        : destination === 'assignment'
           ? 'Draft in progress'
-          : 'Ready to preview or share';
+          : destination === 'review'
+            ? 'Ready to preview or share'
+            : 'Learner selection in progress';
   return {
     state: 'unfinished',
     activityLabel,
@@ -117,6 +124,6 @@ export function getSessionRecentAssignmentPresentation(
     statusLabel: 'Unfinished',
     statusTone: 'progress',
     actionLabel: 'Continue assignment',
-    destination: stage === 'assignment' ? 'create' : stage,
+    destination,
   };
 }

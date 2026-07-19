@@ -18,7 +18,6 @@ import {
   renderResumedAssignment,
   testScreen as screen,
   setupMinimalAssignmentTest,
-  startNewAssignmentForLearner,
   UI_WAIT_TIMEOUT_MS,
   testVi as vi,
   testWaitFor as waitFor,
@@ -92,20 +91,25 @@ export function registerGenerationDefaultsTests() {
         expect(await screen.findByDisplayValue('# Generated assignment draft')).toBeTruthy();
         expect(screen.getByText(/Assignment draft ready\. Saved automatically\./i)).toBeTruthy();
         await waitFor(() => {
-          expect(api.updateDraft).toHaveBeenCalledWith('draft-1', '# Generated assignment draft');
+          expect(api.updateDraft).toHaveBeenCalledWith(
+            'draft-1',
+            '# Generated assignment draft',
+            1,
+          );
         });
       },
       INTEGRATION_TEST_TIMEOUT_MS,
     );
 
     it(
-      'does not persist edited session notes before an explicit commit',
+      'recovers edited session notes without confirming them',
       async () => {
         const { user } = await renderPromptReadyAssignment();
         await user.click(screen.getByRole('button', { name: /Teaching context/i }));
         await screen.findByRole('textbox', { name: /Teacher notes/i });
-        vi.mocked(api.createAssignmentSession).mockClear();
-        vi.mocked(api.updateAssignmentSession).mockClear();
+        vi.mocked(api.confirmStudentAssignmentSession).mockClear();
+        vi.mocked(api.updateAssignmentSessionRecovery).mockClear();
+        vi.mocked(api.confirmAssignmentSessionStep).mockClear();
         vi.useFakeTimers();
 
         fireEvent.change(screen.getByRole('textbox', { name: /Teacher notes/i }), {
@@ -117,7 +121,13 @@ export function registerGenerationDefaultsTests() {
           await Promise.resolve();
         });
 
-        expect(api.updateAssignmentSession).not.toHaveBeenCalled();
+        expect(api.updateAssignmentSessionRecovery).toHaveBeenCalledWith(
+          'session-1',
+          expect.objectContaining({
+            patch: expect.objectContaining({ teacherNotes: 'Use more travel vocabulary.' }),
+          }),
+        );
+        expect(api.confirmAssignmentSessionStep).not.toHaveBeenCalled();
       },
       INTEGRATION_TEST_TIMEOUT_MS,
     );
@@ -144,12 +154,15 @@ export function registerGenerationThrottleTests() {
           storageUri: 'memory://drafts/draft-1',
           createdBy: 'user-1',
           text: '# First autosave',
+          workingVersion: 2,
+          contentHash: 'a'.repeat(64),
           createdAt: now,
           updatedAt: now,
         };
         const finalSavedDraft = {
           ...firstSavedDraft,
           text: '# Final autosave',
+          workingVersion: 3,
         };
         let resolveFirstSave: (value: typeof firstSavedDraft) => void = () => {};
         vi.mocked(api.updateDraft)
@@ -171,7 +184,7 @@ export function registerGenerationThrottleTests() {
         await act(async () => {
           await vi.advanceTimersByTimeAsync(5000);
         });
-        expect(api.updateDraft).toHaveBeenCalledWith('draft-1', '# First autosave');
+        expect(api.updateDraft).toHaveBeenCalledWith('draft-1', '# First autosave', 1);
 
         fireEvent.change(draftTextarea, { target: { value: '# Final autosave' } });
         await act(async () => {
@@ -188,7 +201,7 @@ export function registerGenerationThrottleTests() {
         await act(async () => {
           await vi.advanceTimersByTimeAsync(5000);
         });
-        expect(api.updateDraft).toHaveBeenCalledWith('draft-1', '# Final autosave');
+        expect(api.updateDraft).toHaveBeenCalledWith('draft-1', '# Final autosave', 2);
         expect(draftTextarea.value).toBe('# Final autosave');
       },
       INTEGRATION_TEST_TIMEOUT_MS,
@@ -296,6 +309,8 @@ export function registerGenerationThrottleTests() {
 
         const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
         fireEvent.change(draftTextarea, { target: { value: '# Existing draft' } });
+        await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+        await screen.findByRole('heading', { name: /Review and share/i });
         await previewCurrentDraft(user);
 
         const publishButton = screen.getByRole('button', { name: /Share assignment/i });
@@ -318,7 +333,14 @@ export function registerGenerationThrottleTests() {
           });
           expect(screen.getByDisplayValue('# Generated assignment draft')).toBeTruthy();
         });
-        await user.click(screen.getByRole('button', { name: /Review & share/i }));
+        await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+        await waitFor(() =>
+          expect(api.confirmAssignmentSessionStep).toHaveBeenCalledWith(
+            'session-1',
+            expect.objectContaining({ step: 'create' }),
+          ),
+        );
+        await screen.findByRole('heading', { name: /Review and share/i });
         const refreshedPublishButton = screen.getByRole('button', { name: /Share assignment/i });
         expect((refreshedPublishButton as HTMLButtonElement).disabled).toBe(true);
         expect(screen.getByRole('button', { name: /Preview assignment/i }).className).toContain(
@@ -354,7 +376,6 @@ export function registerGenerationThrottleTests() {
 
         await user.click(screen.getByRole('button', { name: /Student/i }));
         await user.click(screen.getByRole('button', { name: /Change assignment/i }));
-        await startNewAssignmentForLearner(user);
 
         await act(async () => {
           resolveGeneration({

@@ -6,6 +6,7 @@ import {
   createStudentMemoryOpenAiBatchTransport,
   StudentMemoryOpenAiBatchAccessError,
 } from '../src/application/student-memory-openai-batch.js';
+import { buildLessonMemoryBatchCandidates } from '../src/application/student-memory-openai-batch-candidates.js';
 import type { BatchBackendConfig } from '../src/config/env.js';
 import { loadConfig } from '../src/config/env.js';
 
@@ -29,6 +30,14 @@ function createConfig(enabled = false): BatchBackendConfig {
 }
 
 describe('application/student-memory-openai-batch', () => {
+  it('rejects lesson-memory Batch planning before reading mutable transcript state', async () => {
+    await expect(
+      buildLessonMemoryBatchCandidates({ transcriptIds: ['transcript-1'], model: 'gpt-5.4-nano' }),
+    ).rejects.toThrow(
+      'Lesson-memory OpenAI Batch planning is disabled; confirm Source to queue exact immutable content',
+    );
+  });
+
   it('blocks every remote Batch action while disabled', () => {
     expect(() =>
       assertStudentMemoryOpenAiBatchAccess({

@@ -121,6 +121,7 @@ describe('infrastructure/queue-bullmq', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    getMockStorage().queueGetJob.mockResolvedValue(null);
 
     // Stable test-local config values.
     getMockStorage().loadConfig.mockReturnValue({
@@ -180,6 +181,62 @@ describe('infrastructure/queue-bullmq', () => {
     createJobQueue();
     expect(mocks.Queue).toHaveBeenCalledTimes(1);
     expect(mocks.QueueEvents).toHaveBeenCalledTimes(1);
+  });
+
+  it('reconciles missing, retained failed, and existing stable jobs without cloning identity', async () => {
+    const { reconcile } = createJobQueue();
+    const mocks = getMockStorage();
+
+    await reconcile({ jobId: 'job-missing' });
+    expect(mocks.queueAdd).toHaveBeenCalledWith(
+      'assignment',
+      { jobId: 'job-missing' },
+      expect.objectContaining({ jobId: 'job-missing', attempts: 5 }),
+    );
+
+    const retry = vi.fn();
+    mocks.queueAdd.mockClear();
+    mocks.queueGetJob.mockResolvedValue({
+      getState: vi.fn().mockResolvedValue('failed'),
+      retry,
+    });
+    await reconcile({ jobId: 'job-failed' });
+    expect(retry).toHaveBeenCalledWith('failed', {
+      resetAttemptsMade: true,
+      resetAttemptsStarted: true,
+    });
+    expect(mocks.queueAdd).not.toHaveBeenCalled();
+
+    mocks.queueGetJob.mockResolvedValue({
+      getState: vi.fn().mockResolvedValue('active'),
+      retry: vi.fn(),
+    });
+    await reconcile({ jobId: 'job-active' });
+    expect(mocks.queueAdd).not.toHaveBeenCalled();
+
+    mocks.queueGetJob.mockResolvedValue({
+      getState: vi.fn().mockResolvedValue('completed'),
+      retry: vi.fn(),
+    });
+    await expect(reconcile({ jobId: 'job-contradictory' })).rejects.toMatchObject({
+      name: 'QueueJobStateConflictError',
+      jobId: 'job-contradictory',
+      queueState: 'completed',
+    });
+
+    mocks.queueAdd.mockClear();
+    mocks.queueGetJob
+      .mockResolvedValueOnce({
+        getState: vi.fn().mockResolvedValue('failed'),
+        retry: vi.fn().mockRejectedValue(new Error('job was removed concurrently')),
+      })
+      .mockResolvedValueOnce(null);
+    await reconcile({ jobId: 'job-failed-removed' });
+    expect(mocks.queueAdd).toHaveBeenCalledWith(
+      'assignment',
+      { jobId: 'job-failed-removed' },
+      expect.objectContaining({ jobId: 'job-failed-removed' }),
+    );
   });
 
   it('createJobWorker constructs Worker with expected queue name and concurrency', () => {

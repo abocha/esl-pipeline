@@ -4,8 +4,8 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  createAssignmentSessionForUser,
-  updateAssignmentSessionForUser,
+  confirmStudentAssignmentSessionForUser,
+  updateAssignmentSessionRecoveryForUser,
 } from '../src/application/assignment-sessions.js';
 import {
   addStudentPackage,
@@ -551,34 +551,140 @@ describeIfPg('application/student-schedule-billing', () => {
     });
 
     await expect(
-      createAssignmentSessionForUser(userId, {
+      confirmStudentAssignmentSessionForUser(userId, {
+        requestId: randomUUID(),
         studentId,
         lessonId: mismatchedLessonId,
-        currentStage: 'source',
       }),
     ).rejects.toThrow('Assignment session lesson must belong to the selected student');
 
-    const session = await createAssignmentSessionForUser(userId, {
+    const session = await confirmStudentAssignmentSessionForUser(userId, {
+      requestId: randomUUID(),
       studentId,
       lessonId: matchingLessonId,
-      currentStage: 'source',
     });
 
     await expect(
-      updateAssignmentSessionForUser(userId, session.id, {
-        studentId: otherStudentId,
+      updateAssignmentSessionRecoveryForUser(userId, session.id, {
+        expectedRevision: session.revision,
+        patch: { lessonId: mismatchedLessonId },
       }),
     ).rejects.toThrow('Assignment session lesson must belong to the selected student');
 
     await expect(
-      updateAssignmentSessionForUser(userId, session.id, {
-        lessonId: matchingLessonId,
+      updateAssignmentSessionRecoveryForUser(userId, session.id, {
+        expectedRevision: session.revision,
+        patch: { lessonId: matchingLessonId },
       }),
     ).resolves.toMatchObject({
       id: session.id,
       studentId,
       lessonId: matchingLessonId,
     });
+  });
+
+  it('derives draft progress only from an active assignment session', async () => {
+    const { studentId, userId } = await seedStudent();
+    const lessonId = await insertBusinessLesson({
+      studentId,
+      startsAt: '2030-05-18T10:00:00.000Z',
+    });
+    const recordingId = randomUUID();
+    const transcriptId = randomUUID();
+    const promptPackageId = randomUUID();
+    const draftId = randomUUID();
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      await client.query(
+        `INSERT INTO recordings (id, source, student_id, storage_uri, bytes, status)
+         VALUES ($1, 'upload', $2, $3, 12, 'transcribed')`,
+        [recordingId, studentId, `s3://recordings/${recordingId}.mp3`],
+      );
+      await client.query(
+        `INSERT INTO transcripts (
+           id, recording_id, storage_uri, stt_provider, working_version, content_hash
+         ) VALUES ($1, $2, $3, 'deepgram', 1, $4)`,
+        [transcriptId, recordingId, `s3://transcripts/${transcriptId}.txt`, 'a'.repeat(64)],
+      );
+      await client.query(
+        `INSERT INTO prompt_packages (
+           id, recording_id, transcript_id, student_id, lesson_id, template_version, storage_uri
+         ) VALUES ($1, $2, $3, $4, $5, 'v1', $6)`,
+        [
+          promptPackageId,
+          recordingId,
+          transcriptId,
+          studentId,
+          lessonId,
+          `s3://prompt-packages/${promptPackageId}.txt`,
+        ],
+      );
+      await client.query(
+        `INSERT INTO drafts (
+           id, prompt_package_id, student_id, lesson_id, storage_uri, created_by,
+           working_version, content_hash
+         ) VALUES ($1, $2, $3, $4, $5, $6, 1, $7)`,
+        [
+          draftId,
+          promptPackageId,
+          studentId,
+          lessonId,
+          `s3://drafts/${draftId}.md`,
+          userId,
+          'b'.repeat(64),
+        ],
+      );
+    });
+
+    let surface = await getStudentScheduleBillingSurface(studentId);
+    expect(surface?.lessons.find((lesson) => lesson.id === lessonId)?.homework.status).toBe(
+      'not_started',
+    );
+    let business = await getBusinessScheduleSurface({ from: '2030-05-18', to: '2030-05-18' });
+    expect(business.lessons.find((lesson) => lesson.id === lessonId)?.homework.status).toBe(
+      'not_started',
+    );
+
+    const session = await confirmStudentAssignmentSessionForUser(userId, {
+      requestId: randomUUID(),
+      studentId,
+      lessonId,
+    });
+    surface = await getStudentScheduleBillingSurface(studentId);
+    expect(surface?.lessons.find((lesson) => lesson.id === lessonId)?.homework.status).toBe(
+      'session_in_progress',
+    );
+
+    await updateAssignmentSessionRecoveryForUser(userId, session.id, {
+      expectedRevision: session.revision,
+      patch: { draftId, promptPackageId, recordingId, transcriptId },
+    });
+    surface = await getStudentScheduleBillingSurface(studentId);
+    expect(surface?.lessons.find((lesson) => lesson.id === lessonId)?.homework.status).toBe(
+      'draft_in_progress',
+    );
+
+    const shareJobId = randomUUID();
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      await client.query(
+        `INSERT INTO jobs (id, state, student_id, lesson_id, user_id)
+         VALUES ($1, 'queued', $2, $3, $4)`,
+        [shareJobId, studentId, lessonId, userId],
+      );
+      await client.query(
+        `UPDATE assignment_sessions
+         SET confirmed_step = 'share', share_job_id = $2, revision = revision + 1
+         WHERE id = $1`,
+        [session.id, shareJobId],
+      );
+    });
+    surface = await getStudentScheduleBillingSurface(studentId);
+    expect(surface?.lessons.find((lesson) => lesson.id === lessonId)?.homework.status).toBe(
+      'publishing',
+    );
+    business = await getBusinessScheduleSurface({ from: '2030-05-18', to: '2030-05-18' });
+    expect(business.lessons.find((lesson) => lesson.id === lessonId)?.homework.status).toBe(
+      'publishing',
+    );
   });
 
   it('applies generated lesson titles only to automatic placeholders', async () => {
@@ -658,10 +764,10 @@ describeIfPg('application/student-schedule-billing', () => {
       consumesCredit: false,
     });
 
-    await createAssignmentSessionForUser(userId, {
+    await confirmStudentAssignmentSessionForUser(userId, {
+      requestId: randomUUID(),
       studentId,
       lessonId,
-      currentStage: 'source',
     });
 
     const surface = await getStudentScheduleBillingSurface(studentId);

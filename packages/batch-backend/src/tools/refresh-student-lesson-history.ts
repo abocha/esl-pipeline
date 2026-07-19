@@ -17,6 +17,8 @@ interface ReplayTargetRow {
   has_ready: boolean;
   has_pending: boolean;
   has_failed: boolean;
+  source_storage_uri: string;
+  source_content_hash: string;
 }
 
 type SelectionMode = 'missing' | 'failed' | 'all';
@@ -177,6 +179,8 @@ async function listReplayTargets(args: {
         t.recording_id,
         r.student_id,
         t.created_at,
+        confirmed_source.source_storage_uri,
+        confirmed_source.source_content_hash,
         EXISTS (
           SELECT 1
           FROM lesson_memory_entries lme
@@ -197,6 +201,15 @@ async function listReplayTargets(args: {
         ) AS has_failed
       FROM transcripts t
       INNER JOIN recordings r ON r.id = t.recording_id
+      INNER JOIN LATERAL (
+        SELECT
+          assignment_sessions.confirmed_snapshot->'source'->>'transcriptStorageUri' AS source_storage_uri,
+          assignment_sessions.confirmed_snapshot->'source'->>'transcriptHash' AS source_content_hash
+        FROM assignment_sessions
+        WHERE assignment_sessions.confirmed_snapshot->'source'->>'transcriptId' = t.id::text
+        ORDER BY assignment_sessions.updated_at DESC, assignment_sessions.id DESC
+        LIMIT 1
+      ) confirmed_source ON TRUE
       WHERE ${whereClauses.join(' AND ')}
       ORDER BY t.created_at DESC, t.id DESC
       LIMIT $${limitParam}
@@ -268,6 +281,8 @@ async function run(): Promise<void> {
         studentId: target.student_id,
         transcriptId: target.transcript_id,
         recordingId: target.recording_id,
+        sourceStorageUri: target.source_storage_uri,
+        sourceContentHash: target.source_content_hash,
         trigger: 'replay',
         providerOverride: provider,
         modelOverride: model,

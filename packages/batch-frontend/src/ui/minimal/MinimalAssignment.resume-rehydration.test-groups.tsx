@@ -14,7 +14,6 @@ import {
   makeRecording,
   makeTranscript,
   now,
-  previewCurrentDraft,
   renderMinimalAssignment,
   testScreen as screen,
   setupMinimalAssignmentTest,
@@ -262,7 +261,7 @@ export function registerResumeBasicTests() {
           makeAssignmentSession({
             id: 'session-draft',
             studentId: 'student-alex',
-            currentStage: 'assignment',
+            confirmedStep: 'context',
             updatedAt: '2026-05-13T10:10:00.000Z',
           }),
         ],
@@ -302,7 +301,7 @@ export function registerResumeBasicTests() {
             transcriptId: 'tx-session',
             promptPackageId: 'pkg-session',
             draftId: 'draft-session',
-            currentStage: 'review',
+            confirmedStep: 'create',
             updatedAt: '2026-05-13T10:10:00.000Z',
           }),
         ],
@@ -318,8 +317,8 @@ export function registerResumeBasicTests() {
       expect(api.fetchAssignmentSession).not.toHaveBeenCalled();
       expect(api.getRecording).not.toHaveBeenCalled();
       expect(api.fetchDraft).not.toHaveBeenCalled();
-      expect(api.createAssignmentSession).not.toHaveBeenCalled();
-      expect(api.updateAssignmentSession).not.toHaveBeenCalled();
+      expect(api.confirmStudentAssignmentSession).not.toHaveBeenCalled();
+      expect(api.updateAssignmentSessionRecovery).not.toHaveBeenCalled();
       expect(screen.queryByRole('listbox', { name: /Recent assignments/i })).toBeNull();
       expect(new URL(globalThis.location.href).searchParams.get('sessionId')).toBeNull();
     });
@@ -334,7 +333,7 @@ export function registerResumeBasicTests() {
             transcriptId: 'tx-session',
             promptPackageId: 'pkg-session',
             draftId: 'draft-session',
-            currentStage: 'review',
+            confirmedStep: 'create',
             teacherNotes: 'Remember the travel vocab.',
             selectedGenerationProvider: 'openai',
             selectedGenerationModel: 'gpt-5.2',
@@ -380,6 +379,8 @@ export function registerResumeBasicTests() {
         storageUri: 'memory://drafts/draft-session',
         createdBy: 'user-1',
         text: '# Session draft',
+        workingVersion: 1,
+        contentHash: 'a'.repeat(64),
         createdAt: now,
         updatedAt: now,
       });
@@ -401,8 +402,8 @@ export function registerResumeBasicTests() {
       await act(async () => {
         await vi.advanceTimersByTimeAsync(1500);
       });
-      expect(api.createAssignmentSession).not.toHaveBeenCalled();
-      expect(api.updateAssignmentSession).not.toHaveBeenCalled();
+      expect(api.confirmStudentAssignmentSession).not.toHaveBeenCalled();
+      expect(api.updateAssignmentSessionRecovery).not.toHaveBeenCalled();
       vi.useRealTimers();
 
       vi.useFakeTimers();
@@ -413,7 +414,14 @@ export function registerResumeBasicTests() {
       await act(async () => {
         await vi.advanceTimersByTimeAsync(1500);
       });
-      expect(api.updateAssignmentSession).not.toHaveBeenCalled();
+      expect(api.updateAssignmentSessionRecovery).toHaveBeenCalledWith(
+        'session-resume',
+        expect.objectContaining({
+          patch: expect.objectContaining({
+            teacherNotes: 'Remember the travel vocab. Add pronunciation contrast.',
+          }),
+        }),
+      );
       vi.useRealTimers();
       expect(api.getJobStatus).not.toHaveBeenCalled();
     });
@@ -425,7 +433,7 @@ export function registerResumeBasicTests() {
           makeAssignmentSession({
             id: 'session-resume',
             studentId: 'student-alex',
-            currentStage: 'source',
+            confirmedStep: 'student',
           }),
         ],
         total: 1,
@@ -439,7 +447,7 @@ export function registerResumeBasicTests() {
           sttProvider: 'manual',
         }),
       );
-      vi.mocked(api.updateAssignmentSession).mockImplementation(async (id, patch) =>
+      vi.mocked(api.updateAssignmentSessionRecovery).mockImplementation(async (id, patch) =>
         makeAssignmentSession({
           id,
           studentId: 'student-alex',
@@ -456,7 +464,7 @@ export function registerResumeBasicTests() {
         screen.getByRole('textbox', { name: /Existing lesson transcript/i }),
         'Tutor supplied transcript',
       );
-      await user.click(screen.getByRole('button', { name: /Save existing transcript/i }));
+      await user.click(screen.getByRole('button', { name: /Use transcript/i }));
 
       await waitFor(() => {
         expect(api.createManualTranscriptSource).toHaveBeenCalledWith({
@@ -466,16 +474,16 @@ export function registerResumeBasicTests() {
         });
       });
       await waitFor(() => {
-        expect(api.updateAssignmentSession).toHaveBeenCalledWith(
+        expect(api.updateAssignmentSessionRecovery).toHaveBeenCalledWith(
           'session-resume',
           expect.objectContaining({
-            recordingId: 'rec-manual',
+            patch: expect.objectContaining({ recordingId: 'rec-manual' }),
           }),
         );
-        expect(api.updateAssignmentSession).toHaveBeenCalledWith(
+        expect(api.updateAssignmentSessionRecovery).toHaveBeenCalledWith(
           'session-resume',
           expect.objectContaining({
-            transcriptId: 'tx-manual',
+            patch: expect.objectContaining({ transcriptId: 'tx-manual' }),
           }),
         );
       });
@@ -492,7 +500,7 @@ export function registerResumeBasicTests() {
             transcriptId: 'tx-stale',
             promptPackageId: 'pkg-stale',
             draftId: 'draft-stale',
-            currentStage: 'review',
+            confirmedStep: 'create',
           }),
         ],
         total: 1,
@@ -534,7 +542,7 @@ export function registerResumeBasicTests() {
           }),
       );
 
-      const user = createMinimalUser();
+      const _user = createMinimalUser();
       globalThis.history.replaceState(null, '', '/?sessionId=session-stale');
       renderMinimalAssignment();
 
@@ -557,6 +565,8 @@ export function registerResumeBasicTests() {
           storageUri: 'memory://drafts/draft-stale',
           createdBy: 'user-1',
           text: '# Stale draft',
+          workingVersion: 1,
+          contentHash: 'b'.repeat(64),
           createdAt: now,
           updatedAt: now,
         });
@@ -583,7 +593,7 @@ export function registerResumeBasicTests() {
               transcriptId: 'tx-next',
               promptPackageId: 'pkg-next',
               draftId: 'draft-next',
-              currentStage: 'review',
+              confirmedStep: 'create',
             }),
           ],
           total: 1,
@@ -598,6 +608,8 @@ export function registerResumeBasicTests() {
               storageUri: 'memory://drafts/draft-next',
               createdBy: 'user-1',
               text: '# Next session draft',
+              workingVersion: 1,
+              contentHash: 'c'.repeat(64),
               createdAt: now,
               updatedAt: now,
             };
@@ -609,6 +621,8 @@ export function registerResumeBasicTests() {
             storageUri: 'memory://drafts/draft-1',
             createdBy: 'user-1',
             text: '# Original draft',
+            workingVersion: 1,
+            contentHash: 'd'.repeat(64),
             createdAt: now,
             updatedAt: now,
           };
@@ -648,9 +662,20 @@ export function registerResumeBasicTests() {
           createdAt: now,
           updatedAt: now,
         }));
+        vi.mocked(api.fetchAssignmentSession).mockResolvedValueOnce(
+          makeAssignmentSession({
+            id: 'session-original',
+            studentId: 'student-alex',
+            recordingId: 'rec-1',
+            transcriptId: 'tx-1',
+            promptPackageId: 'pkg-1',
+            draftId: 'draft-1',
+            confirmedStep: 'create',
+          }),
+        );
 
         const user = createMinimalUser();
-        globalThis.history.replaceState(null, '', '/?jobId=job-original');
+        globalThis.history.replaceState(null, '', '/?sessionId=session-original');
         vi.mocked(api.listUserJobs).mockResolvedValue({
           jobs: [
             makeJobStatus({
@@ -688,7 +713,7 @@ export function registerResumeBasicTests() {
         await act(async () => {
           await vi.advanceTimersByTimeAsync(5000);
         });
-        expect(api.updateDraft).toHaveBeenCalledWith('draft-1', '# Older autosave');
+        expect(api.updateDraft).toHaveBeenCalledWith('draft-1', '# Older autosave', 1);
         vi.useRealTimers();
 
         await user.click(screen.getByRole('button', { name: /Student/i }));
@@ -709,6 +734,8 @@ export function registerResumeBasicTests() {
             storageUri: 'memory://drafts/draft-1',
             createdBy: 'user-1',
             text: '# Older autosave',
+            workingVersion: 2,
+            contentHash: 'e'.repeat(64),
             createdAt: now,
             updatedAt: now,
           });
@@ -765,8 +792,8 @@ export function registerResumeBasicTests() {
       });
     });
 
-    it('rehydrates workflow state from server job context in query params', async () => {
-      const user = createMinimalUser();
+    it('opens server job context as immutable historical output', async () => {
+      const _user = createMinimalUser();
       let resolveProfileOptions: (value: { profiles: { id: string; label: string }[] }) => void =
         () => {};
       vi.mocked(api.listProfileContents).mockImplementationOnce(
@@ -872,6 +899,8 @@ export function registerResumeBasicTests() {
         storageUri: 'memory://drafts/draft-resume',
         createdBy: 'user-1',
         text: '# Recovered draft',
+        workingVersion: 1,
+        contentHash: 'f'.repeat(64),
         createdAt: now,
         updatedAt: now,
       });
@@ -888,27 +917,18 @@ export function registerResumeBasicTests() {
       expect(api.fetchJobProvenance).toHaveBeenCalledWith('job-resume');
       expect(screen.queryByRole('listbox', { name: /Recent assignments/i })).toBeNull();
 
-      await user.click(screen.getByRole('button', { name: /Lesson source/i }));
-      expect(await screen.findByDisplayValue('Recovered transcript')).toBeTruthy();
-      await user.click(screen.getByRole('button', { name: /Create/i }));
-      expect(await screen.findByDisplayValue('# Recovered draft')).toBeTruthy();
-      vi.useFakeTimers();
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(1500);
-      });
-      expect(api.createAssignmentSession).not.toHaveBeenCalled();
-      vi.useRealTimers();
+      expect(
+        (screen.getByRole('button', { name: /Lesson source/i }) as HTMLButtonElement).disabled,
+      ).toBe(true);
+      expect((screen.getByRole('button', { name: /Create/i }) as HTMLButtonElement).disabled).toBe(
+        true,
+      );
+      expect(api.confirmStudentAssignmentSession).not.toHaveBeenCalled();
       expect(screen.queryByRole('combobox', { name: /Learning preset/i })).toBeNull();
       resolveProfileOptions({ profiles: [{ id: 'profile-default.md', label: 'Default Profile' }] });
       expect(screen.getAllByText(/fetch failed/i).length).toBeGreaterThan(0);
-      await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
-      await waitFor(() => {
-        expect(api.generateDraft).toHaveBeenCalledWith({
-          promptPackageId: 'pkg-resume',
-          provider: 'openai',
-          model: 'gpt-5.2',
-        });
-      });
+      expect(screen.queryByRole('button', { name: /^Generate assignment$/i })).toBeNull();
+      expect(api.generateDraft).not.toHaveBeenCalled();
 
       globalThis.history.replaceState(null, '', '/');
     });
@@ -934,15 +954,15 @@ export function registerResumeBasicTests() {
       fireEvent.change(studentSelect, { target: { value: 'student-alex' } });
       expect(studentSelect.value).toBe('student-alex');
       await waitFor(() => {
-        expect(api.createAssignmentSession).not.toHaveBeenCalled();
+        expect(api.confirmStudentAssignmentSession).not.toHaveBeenCalled();
       });
-      expect(api.updateAssignmentSession).not.toHaveBeenCalled();
+      expect(api.updateAssignmentSessionRecovery).not.toHaveBeenCalled();
 
       await user.click(screen.getByRole('button', { name: /Change choice/i }));
       await user.click(screen.getByRole('button', { name: /Start new assignment/i }));
       expect(screen.getByText(/Selected for this assignment/i)).toBeTruthy();
-      expect(api.createAssignmentSession).not.toHaveBeenCalled();
-      expect(api.updateAssignmentSession).not.toHaveBeenCalled();
+      expect(api.confirmStudentAssignmentSession).not.toHaveBeenCalled();
+      expect(api.updateAssignmentSessionRecovery).not.toHaveBeenCalled();
     });
   });
 }
@@ -1028,8 +1048,7 @@ export function registerResumePresetRaceTests() {
       expect(screen.queryByRole('combobox', { name: /Learning preset/i })).toBeNull();
     });
 
-    it('clears resumed stale preset when preset catalog is empty and omits preset on publish', async () => {
-      const user = createMinimalUser();
+    it('keeps completed output immutable when its preset catalog is empty', async () => {
       vi.mocked(api.fetchJobOptions).mockResolvedValueOnce({
         presets: [],
         cefrLevels: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'],
@@ -1109,22 +1128,13 @@ export function registerResumePresetRaceTests() {
       });
 
       expect(screen.queryByRole('combobox', { name: /Learning preset/i })).toBeNull();
-
-      await previewCurrentDraft(user);
-      await user.click(screen.getByRole('button', { name: /Share assignment/i }));
-
-      await waitFor(() => {
-        expect(api.materializeDraft).toHaveBeenCalled();
-      });
-      const publishCall = vi.mocked(api.materializeDraft).mock.calls.at(-1)?.[1];
-      expect(publishCall?.jobOverrides?.publishTarget).toBe('html');
-      expect(publishCall?.jobOverrides).not.toHaveProperty('preset');
+      expect(screen.queryByRole('button', { name: /Share assignment/i })).toBeNull();
+      expect(api.materializeDraft).not.toHaveBeenCalled();
     });
 
     it(
-      'omits stale preset when resumed before options load, then restores valid preset after options resolve',
+      'keeps completed output immutable while preset options load',
       async () => {
-        const user = createMinimalUser();
         let resolveJobOptions: (value: ApiTypes.JobOptionsResponse) => void = () => {};
         vi.mocked(api.fetchJobOptions).mockImplementationOnce(
           () =>
@@ -1199,19 +1209,11 @@ export function registerResumePresetRaceTests() {
         await waitFor(() => {
           expect(api.getJobStatus).toHaveBeenCalledWith('job-race-preset');
         });
-        await user.click(screen.getByRole('button', { name: /Create/i }));
-        expect(await screen.findByDisplayValue('# Draft markdown')).toBeTruthy();
-        expect(screen.getByRole('button', { name: /^Generate assignment$/i })).toBeTruthy();
-
-        await previewCurrentDraft(user);
-        await user.click(screen.getByRole('button', { name: /Share assignment/i }));
-
-        await waitFor(() => {
-          expect(api.materializeDraft).toHaveBeenCalledTimes(1);
-        });
-        const firstPublishCall = vi.mocked(api.materializeDraft).mock.calls[0]?.[1];
-        expect(firstPublishCall?.jobOverrides?.publishTarget).toBe('html');
-        expect(firstPublishCall?.jobOverrides).not.toHaveProperty('preset');
+        expect(
+          (screen.getByRole('button', { name: /Create/i }) as HTMLButtonElement).disabled,
+        ).toBe(true);
+        expect(screen.queryByRole('button', { name: /Share assignment/i })).toBeNull();
+        expect(api.materializeDraft).not.toHaveBeenCalled();
 
         resolveJobOptions({
           presets: ['b2-default'],
@@ -1226,26 +1228,13 @@ export function registerResumePresetRaceTests() {
         await waitFor(() => {
           expect(api.fetchJobOptions).toHaveBeenCalled();
         });
-
-        await previewCurrentDraft(user);
-        await user.click(screen.getByRole('button', { name: /Share assignment/i }));
-        await waitFor(() => {
-          expect(api.materializeDraft).toHaveBeenCalledTimes(2);
-        });
-        const secondPublishCall = vi.mocked(api.materializeDraft).mock.calls[1]?.[1];
-        expect(secondPublishCall?.jobOverrides).toEqual({
-          publishTarget: 'html',
-          withTts: true,
-          ttsProvider: 'inworld',
-          ttsStrategy: 'auto',
-          ttsModel: 'inworld-tts-2',
-        });
+        expect(screen.queryByRole('button', { name: /Share assignment/i })).toBeNull();
+        expect(api.materializeDraft).not.toHaveBeenCalled();
       },
       INTEGRATION_TEST_TIMEOUT_MS,
     );
 
-    it('re-normalizes resumed legacy preset against loaded learning preset catalog before publish', async () => {
-      const user = createMinimalUser();
+    it('does not reopen completed output after learning preset normalization', async () => {
       let resolveJobStatus: (value: ApiTypes.JobStatus) => void = () => {};
 
       vi.mocked(api.fetchJobOptions).mockResolvedValueOnce({
@@ -1336,23 +1325,8 @@ export function registerResumePresetRaceTests() {
         expect(api.getJobStatus).toHaveBeenCalledWith('job-learning-race');
       });
       expect(screen.queryByRole('combobox', { name: /Learning preset/i })).toBeNull();
-
-      await previewCurrentDraft(user);
-      await user.click(screen.getByRole('button', { name: /Share assignment/i }));
-
-      await waitFor(() => {
-        expect(api.materializeDraft).toHaveBeenCalled();
-      });
-      const publishCall = vi.mocked(api.materializeDraft).mock.calls.at(-1)?.[1];
-      expect(publishCall?.jobOverrides).toEqual({
-        publishTarget: 'html',
-        learningPresetId: 'general-english',
-        withTts: true,
-        ttsProvider: 'inworld',
-        ttsStrategy: 'auto',
-        ttsModel: 'inworld-tts-2',
-      });
-      expect(publishCall?.jobOverrides).not.toHaveProperty('preset');
+      expect(screen.queryByRole('button', { name: /Share assignment/i })).toBeNull();
+      expect(api.materializeDraft).not.toHaveBeenCalled();
     });
   });
 }
