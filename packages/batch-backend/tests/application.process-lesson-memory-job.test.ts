@@ -28,6 +28,8 @@ describe('application/process-lesson-memory-job', () => {
           transcriptId: 'transcript-1',
           recordingId: 'recording-1',
           studentId: 'student-1',
+          sourceStorageUri: 'local://confirmed/a.txt',
+          sourceContentHash: '559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd',
           pendingEntryId: 'pending-1',
           provider: 'openai',
           model: 'gpt-5.2',
@@ -35,24 +37,16 @@ describe('application/process-lesson-memory-job', () => {
         attemptsMade: 4,
         maxAttempts: 5,
         overrides: {
-          transcripts: {
-            getByRecordingId: vi.fn().mockResolvedValue({
-              id: 'transcript-1',
-              recordingId: 'recording-1',
-              storageUri: 'local://transcript',
-            }),
-          },
-          promptPackages: {
-            getById: vi.fn().mockResolvedValue(null),
-          },
           storageFactory: vi.fn().mockReturnValue({
-            getText: vi.fn().mockResolvedValue('TRANSCRIPT'),
+            getText: vi.fn().mockResolvedValue('A'),
           }),
           generator: vi.fn().mockRejectedValue(new Error('provider failed')),
           lessonMemory: {
             getById: vi.fn().mockResolvedValue({
               id: 'pending-1',
               status: 'pending',
+              sourceStorageUri: 'local://confirmed/a.txt',
+              sourceContentHash: '559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd',
             }),
             markFailed,
             supersedePendingForTranscript: vi.fn(),
@@ -70,9 +64,61 @@ describe('application/process-lesson-memory-job', () => {
     });
   });
 
-  it('supersedes pending lesson-memory entries after a successful ready write', async () => {
-    const supersedePendingForTranscript = vi.fn().mockResolvedValue([]);
+  it('marks immutable source read failures on the final attempt', async () => {
+    const markFailed = vi.fn().mockResolvedValue(null);
+
+    await expect(
+      processLessonMemoryJob({
+        config: createTestConfig(),
+        payload: {
+          kind: 'lesson-memory-generate',
+          transcriptId: 'transcript-1',
+          recordingId: 'recording-1',
+          studentId: 'student-1',
+          sourceStorageUri: 'local://confirmed/a.txt',
+          sourceContentHash: 'a'.repeat(64),
+          pendingEntryId: 'pending-1',
+          provider: 'openai',
+          model: 'gpt-5.2',
+        },
+        attemptsMade: 4,
+        maxAttempts: 5,
+        overrides: {
+          storageFactory: vi.fn().mockReturnValue({
+            getText: vi.fn().mockRejectedValue(new Error('confirmed source unavailable')),
+          }),
+          generator: vi.fn(),
+          lessonMemory: {
+            getById: vi.fn().mockResolvedValue({
+              id: 'pending-1',
+              status: 'pending',
+              sourceStorageUri: 'local://confirmed/a.txt',
+              sourceContentHash: 'a'.repeat(64),
+            }),
+            markFailed,
+            supersedePendingForTranscript: vi.fn(),
+          },
+          snapshots: { requestRefresh: vi.fn() },
+        } as never,
+      }),
+    ).rejects.toThrow('confirmed source unavailable');
+
+    expect(markFailed).toHaveBeenCalledWith({
+      id: 'pending-1',
+      errorMessage: 'confirmed source unavailable',
+    });
+  });
+
+  it('publishes the same confirmed pending intent and refreshes student memory', async () => {
+    const generator = vi.fn().mockResolvedValue({
+      entry: {
+        id: 'pending-1',
+        lessonTitle: 'Travel Plans Review',
+        generatedAt: new Date('2026-03-20T00:00:00.000Z'),
+      },
+    });
     const applyGeneratedTitleIfPlaceholder = vi.fn().mockResolvedValue(true);
+    const requestRefresh = vi.fn().mockResolvedValue(undefined);
 
     await processLessonMemoryJob({
       config: createTestConfig(),
@@ -81,46 +127,30 @@ describe('application/process-lesson-memory-job', () => {
         transcriptId: 'transcript-1',
         recordingId: 'recording-1',
         studentId: 'student-1',
-        promptPackageId: 'prompt-1',
         lessonId: 'lesson-1',
+        sourceStorageUri: 'local://confirmed/a.txt',
+        sourceContentHash: '559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd',
         pendingEntryId: 'pending-1',
         provider: 'openai',
         model: 'gpt-5.2',
       },
       overrides: {
-        transcripts: {
-          getByRecordingId: vi.fn().mockResolvedValue({
-            id: 'transcript-1',
-            recordingId: 'recording-1',
-            storageUri: 'local://transcript',
-          }),
-        },
-        promptPackages: {
-          getById: vi.fn().mockResolvedValue({
-            id: 'prompt-1',
-            notes: 'Teacher notes',
-          }),
-        },
         storageFactory: vi.fn().mockReturnValue({
-          getText: vi.fn().mockResolvedValue('TRANSCRIPT'),
+          getText: vi.fn().mockResolvedValue('A'),
         }),
-        generator: vi.fn().mockResolvedValue({
-          entry: {
-            id: 'ready-1',
-            lessonTitle: 'Travel Plans Review',
-            generatedAt: new Date('2026-03-20T00:00:00.000Z'),
-          },
-        }),
+        generator,
         lessonMemory: {
           getById: vi.fn().mockResolvedValue({
             id: 'pending-1',
             status: 'pending',
+            sourceStorageUri: 'local://confirmed/a.txt',
+            sourceContentHash: '559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd',
           }),
           markFailed: vi.fn(),
-          supersedePendingForTranscript,
+          supersedePendingForTranscript: vi.fn(),
         },
         snapshots: {
-          requestRefresh: vi.fn(),
+          requestRefresh,
         },
         lessons: {
           applyGeneratedTitleIfPlaceholder,
@@ -128,15 +158,26 @@ describe('application/process-lesson-memory-job', () => {
       },
     });
 
-    expect(supersedePendingForTranscript).toHaveBeenCalledWith({
-      transcriptId: 'transcript-1',
-      supersededById: 'ready-1',
-      supersededAt: new Date('2026-03-20T00:00:00.000Z'),
-    });
+    expect(generator).toHaveBeenCalledWith(
+      expect.objectContaining({
+        request: expect.objectContaining({
+          pendingEntryId: 'pending-1',
+          sourceStorageUri: 'local://confirmed/a.txt',
+        }),
+      }),
+    );
     expect(applyGeneratedTitleIfPlaceholder).toHaveBeenCalledWith({
       studentId: 'student-1',
       lessonId: 'lesson-1',
       title: 'Travel Plans Review',
+    });
+    expect(requestRefresh).toHaveBeenCalledWith({
+      config: expect.any(Object),
+      params: {
+        studentId: 'student-1',
+        trigger: 'lesson-memory-ready',
+        sourceEntryId: 'pending-1',
+      },
     });
   });
 
@@ -159,6 +200,8 @@ describe('application/process-lesson-memory-job', () => {
           transcriptId: 'transcript-1',
           recordingId: 'recording-1',
           studentId: 'student-1',
+          sourceStorageUri: 'local://confirmed/a.txt',
+          sourceContentHash: '559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd',
           pendingEntryId: 'pending-1',
           provider: 'openai',
           model: 'gpt-5.4-mini',
@@ -166,18 +209,15 @@ describe('application/process-lesson-memory-job', () => {
         attemptsMade: 4,
         maxAttempts: 5,
         overrides: {
-          transcripts: {
-            getByRecordingId: vi.fn().mockResolvedValue({
-              id: 'transcript-1',
-              recordingId: 'recording-1',
-              storageUri: 'local://transcript',
-            }),
-          },
-          promptPackages: { getById: vi.fn().mockResolvedValue(null) },
-          storageFactory: vi.fn().mockReturnValue({ getText: vi.fn().mockResolvedValue('TEXT') }),
+          storageFactory: vi.fn().mockReturnValue({ getText: vi.fn().mockResolvedValue('A') }),
           generator: vi.fn(),
           lessonMemory: {
-            getById: vi.fn().mockResolvedValue({ id: 'pending-1', status: 'pending' }),
+            getById: vi.fn().mockResolvedValue({
+              id: 'pending-1',
+              status: 'pending',
+              sourceStorageUri: 'local://confirmed/a.txt',
+              sourceContentHash: '559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd',
+            }),
             markFailed,
             supersedePendingForTranscript: vi.fn(),
           },
@@ -195,5 +235,46 @@ describe('application/process-lesson-memory-job', () => {
       }),
     );
     expect(markFailed).not.toHaveBeenCalled();
+  });
+
+  it('reads only the confirmed URI and rejects content whose hash does not match', async () => {
+    const getText = vi.fn().mockResolvedValue('B');
+    const generator = vi.fn();
+    const markFailed = vi.fn().mockResolvedValue(null);
+
+    await expect(
+      processLessonMemoryJob({
+        config: createTestConfig(),
+        payload: {
+          kind: 'lesson-memory-generate',
+          transcriptId: 'transcript-1',
+          recordingId: 'recording-1',
+          studentId: 'student-1',
+          sourceStorageUri: 'local://confirmed/a.txt',
+          sourceContentHash: '559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd',
+          pendingEntryId: 'pending-1',
+          provider: 'openai',
+          model: 'gpt-5.2',
+        },
+        overrides: {
+          storageFactory: vi.fn().mockReturnValue({ getText }),
+          generator,
+          lessonMemory: {
+            getById: vi.fn().mockResolvedValue({
+              id: 'pending-1',
+              status: 'pending',
+              sourceStorageUri: 'local://confirmed/a.txt',
+              sourceContentHash: '559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd',
+            }),
+            markFailed,
+            supersedePendingForTranscript: vi.fn(),
+          },
+          snapshots: { requestRefresh: vi.fn() },
+        } as never,
+      }),
+    ).rejects.toThrow('hash');
+
+    expect(getText).toHaveBeenCalledWith('local://confirmed/a.txt');
+    expect(generator).not.toHaveBeenCalled();
   });
 });

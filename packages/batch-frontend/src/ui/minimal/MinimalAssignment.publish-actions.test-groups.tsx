@@ -53,7 +53,7 @@ export function registerPublishValidationTests() {
       await screen.findByText('Upload failed at gateway');
     });
 
-    it('prevents draft save when markdown validation fails', async () => {
+    it('prevents Create confirmation when automatic draft validation fails', async () => {
       const user = createMinimalUser();
       vi.mocked(api.validateMarkdown).mockResolvedValueOnce({
         ok: false,
@@ -70,7 +70,7 @@ export function registerPublishValidationTests() {
       }
       fireEvent.change(draftTextarea, { target: { value: '# Broken draft' } });
 
-      await user.click(screen.getByRole('button', { name: /Save draft/i }));
+      await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
 
       await screen.findByText('Fix validation errors before saving.');
       expect(api.createDraft).not.toHaveBeenCalled();
@@ -95,27 +95,17 @@ export function registerPublishValidationTests() {
       expect(validationCall?.[0]).toBe('# Final draft');
       expect(validationCall?.[1]).toBe(true);
       expect(validationCall?.[2]).toBeUndefined();
-      expect(api.materializeDraft).toHaveBeenCalledWith(
-        'draft-1',
-        expect.objectContaining({
-          jobOverrides: {
-            publishTarget: 'html',
-            withTts: true,
-            ttsProvider: 'inworld',
-            ttsStrategy: 'auto',
-            ttsModel: 'inworld-tts-2',
-          },
-        }),
-      );
-      expect(api.approveJob).toHaveBeenCalledWith('job-1', {
-        md: '/tmp/assignment.md',
-        mdStorageUri: 's3://esl/drafts/draft-1.md',
-      });
       await waitFor(() => {
-        expect(api.archiveAssignmentSession).toHaveBeenCalledWith('session-1');
+        expect(api.shareAssignmentSession).toHaveBeenCalledWith(
+          'session-1',
+          expect.objectContaining({
+            expectedRevision: expect.any(Number),
+            requestId: expect.any(String),
+          }),
+        );
       });
 
-      await screen.findAllByText(/Job ID: job-1/i);
+      await screen.findAllByText(/Job ID:/i);
       expect(screen.getAllByText(/Ready/i).length).toBeGreaterThan(0);
     }, 30_000);
   });
@@ -141,6 +131,9 @@ export function registerJobActionTests() {
         const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
         fireEvent.change(draftTextarea, { target: { value: '# Preview gated draft' } });
         await user.click(screen.getByRole('button', { name: /Review & share/i }));
+        expect(screen.getByRole('heading', { name: /Create assignment/i })).toBeTruthy();
+        await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+        await screen.findByRole('heading', { name: /Review and share/i });
         const initialPublishButton = screen.getByRole('button', { name: /Share assignment/i });
         const initialPreviewButton = screen.getByRole('button', { name: /Preview assignment/i });
         expect((initialPublishButton as HTMLButtonElement).disabled).toBe(true);
@@ -156,6 +149,9 @@ export function registerJobActionTests() {
           target: { value: '# Preview gated draft\nOne more line' },
         });
         await user.click(screen.getByRole('button', { name: /Review & share/i }));
+        expect(screen.getByRole('heading', { name: /Create assignment/i })).toBeTruthy();
+        await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+        await screen.findByRole('heading', { name: /Review and share/i });
         const refreshedPublishButton = screen.getByRole('button', { name: /Share assignment/i });
         const refreshedPreviewButton = screen.getByRole('button', { name: /Preview assignment/i });
         await waitFor(() => {
@@ -297,56 +293,10 @@ export function registerJobActionTests() {
     );
 
     it(
-      'defaults pronunciation chunk provider from the saved rerun target draft, not the edited textarea',
-      async () => {
-        const connectedSpeechDraft = `# Draft markdown
-
-**Mode:** connected_speech
-1. "as heavy as" -> as-heavy-as
-**Natural sentence practice:** The device is as heavy as the old one.`;
-        const user = createMinimalUser();
-        await renderPublishedAssignment({ draftText: connectedSpeechDraft });
-        await user.click(screen.getByRole('button', { name: /Create/i }));
-        await screen.findByRole('textbox', { name: /Draft markdown/i });
-        await waitFor(() => {
-          expect(api.fetchDraft).toHaveBeenCalledWith('draft-1');
-        });
-        expect(
-          (screen.getByRole('textbox', { name: /Draft markdown/i }) as HTMLTextAreaElement).value,
-        ).toBe(connectedSpeechDraft);
-
-        fireEvent.change(screen.getByRole('textbox', { name: /Draft markdown/i }), {
-          target: {
-            value: `# Draft markdown
-
-**Mode:** minimal_pair
-1. ship / sheep`,
-          },
-        });
-
-        await user.click(screen.getByRole('button', { name: /Review & share/i }));
-        openAdvancedActions();
-
-        await user.click(screen.getByRole('button', { name: /^Custom rerun$/i }));
-        await user.click(screen.getByRole('checkbox', { name: /Pronunciation chunk audio/i }));
-        const chunkSettings = getCustomRerunSettingsGroup(/^Pronunciation chunk settings$/i);
-
-        expect(
-          (
-            within(chunkSettings).getByRole('combobox', {
-              name: /^Provider$/i,
-            }) as HTMLSelectElement
-          ).value,
-        ).toBe('google');
-      },
-      INTEGRATION_TEST_TIMEOUT_MS,
-    );
-
-    it(
       'defaults pronunciation chunk provider from the persisted job pronunciation mode when no draft is linked',
       async () => {
         const user = createMinimalUser();
-        await renderPublishedAssignment({
+        const _rendered = await renderPublishedAssignment({
           status: {
             draftId: null,
             pronunciationMode: 'connected_speech',
@@ -422,7 +372,7 @@ export function registerJobActionTests() {
           ttsModel: 'studio',
         });
 
-        await renderPublishedAssignment({
+        const rendered = await renderPublishedAssignment({
           status: jobA,
           jobs: [jobA, jobB],
         });
@@ -449,11 +399,9 @@ export function registerJobActionTests() {
           actions: [],
         } as never);
 
-        await user.click(screen.getByRole('button', { name: /Student/i }));
-        await user.click(screen.getByRole('button', { name: /Change assignment/i }));
-        await user.click(screen.getByRole('button', { name: /Resume recent work/i }));
-        await user.click(await screen.findByRole('radio', { name: /Bella/i }));
-        await user.click(screen.getByRole('button', { name: /Review assignment/i }));
+        rendered.unmount();
+        globalThis.history.replaceState(null, '', '/?jobId=job-b');
+        renderMinimalAssignment();
 
         await waitFor(() => {
           expect(screen.getAllByText(/Job ID: job-b/i).length).toBeGreaterThan(0);
@@ -541,7 +489,7 @@ export function registerJobActionTests() {
           expect(api.rerunJob).toHaveBeenCalledWith('job-1', { republishOnly: true });
           expect(screen.getByText('Republish queued for follow-up job')).toBeTruthy();
           expect(screen.queryByRole('button', { name: /Hide advanced actions/i })).toBeNull();
-          expect(screen.getByRole('button', { name: /Refresh actions/i })).toBeTruthy();
+          expect(screen.queryByRole('button', { name: /Refresh actions/i })).toBeNull();
           expect(screen.getAllByText(/Job ID: job-2/i).length).toBeGreaterThan(0);
         });
       },
@@ -549,7 +497,7 @@ export function registerJobActionTests() {
     );
 
     it(
-      'puts cancel beside share and submits cancellation without a reason field while a job is running',
+      'offers cancellation without reopening Share while a historical job is running',
       async () => {
         vi.useFakeTimers({ shouldAdvanceTime: true });
         const user = createTimerAwareMinimalUser();
@@ -584,8 +532,8 @@ export function registerJobActionTests() {
           throw new Error('Expected review section to be rendered');
         }
         expect(
-          within(reviewSection).getByRole('button', { name: /Share assignment/i }),
-        ).toBeTruthy();
+          within(reviewSection).queryByRole('button', { name: /Share assignment/i }),
+        ).toBeNull();
         expect(screen.queryByPlaceholderText('reason for cancellation')).toBeNull();
 
         const cancelButton = within(reviewSection).getByRole('button', { name: /^Cancel$/i });

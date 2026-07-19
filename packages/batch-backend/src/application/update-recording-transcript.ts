@@ -1,6 +1,6 @@
 import {
   getTranscriptByRecordingId,
-  updateTranscriptStorage,
+  updateTranscriptWorkingContent,
 } from '../domain/transcript-repository.js';
 import type { TranscriptionStorage } from '../infrastructure/transcription-storage.js';
 import { createTranscriptionStorage } from '../infrastructure/transcription-storage.js';
@@ -12,13 +12,14 @@ import {
 export interface UpdateRecordingTranscriptParams {
   recordingId: string;
   text: string;
+  expectedWorkingVersion: number;
 }
 
 export interface UpdateRecordingTranscriptDependencies {
   storage: TranscriptionStorage;
   transcripts: {
     getByRecordingId: typeof getTranscriptByRecordingId;
-    update: typeof updateTranscriptStorage;
+    update: typeof updateTranscriptWorkingContent;
   };
 }
 
@@ -31,7 +32,7 @@ export async function updateRecordingTranscript(
   const storage = overrides?.storage ?? createTranscriptionStorage();
   const transcripts = overrides?.transcripts ?? {
     getByRecordingId: getTranscriptByRecordingId,
-    update: updateTranscriptStorage,
+    update: updateTranscriptWorkingContent,
   };
 
   const transcript = await transcripts.getByRecordingId(params.recordingId);
@@ -44,7 +45,9 @@ export async function updateRecordingTranscript(
 
   const updated = await transcripts.update({
     id: transcript.id,
+    expectedWorkingVersion: params.expectedWorkingVersion,
     storageUri: stored.uri,
+    contentHash: stored.sha256,
   });
 
   if (!updated) return null;

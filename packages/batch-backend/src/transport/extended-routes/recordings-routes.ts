@@ -6,7 +6,10 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
 import { createDraft } from '../../application/create-draft.js';
-import { createPromptPackage } from '../../application/create-prompt-package.js';
+import {
+  createPromptPackage,
+  PromptPackageAssignmentError,
+} from '../../application/create-prompt-package.js';
 import { getDraft } from '../../application/get-draft.js';
 import { getPromptPackage, getPromptPackageLineage } from '../../application/get-prompt-package.js';
 import { getRecording } from '../../application/get-recording.js';
@@ -53,7 +56,10 @@ import {
 import { FileSanitizationError } from '../../infrastructure/file-sanitization-service.js';
 import { FileValidationError } from '../../infrastructure/file-validation-service.js';
 import { logger } from '../../infrastructure/logger.js';
-import { createTranscriptionStorageForUri } from '../../infrastructure/transcription-storage.js';
+import {
+  createTranscriptionStorageForUri,
+  type TranscriptionStorage,
+} from '../../infrastructure/transcription-storage.js';
 import { getAuthenticatedUser } from '../auth-middleware.js';
 import { errorResponse, resolveRoutePath } from '../route-helpers.js';
 import type { ExtendedRoutesContext } from './context.js';
@@ -237,6 +243,7 @@ export function registerRecordingRoutes(
                     studentId,
                     sourcePath,
                     sha256: fileSha256,
+                    storage: transcriptionStorage,
                   })
                 : {
                     recording: cachedRecording,
@@ -714,6 +721,7 @@ export function registerRecordingRoutes(
 
       const schema = z.object({
         text: z.string(),
+        expectedWorkingVersion: z.number().int().positive(),
       });
 
       try {
@@ -721,6 +729,7 @@ export function registerRecordingRoutes(
         const updated = await updateRecordingTranscript({
           recordingId,
           text: body.text,
+          expectedWorkingVersion: body.expectedWorkingVersion,
         });
 
         if (!updated) {
@@ -741,6 +750,15 @@ export function registerRecordingRoutes(
 
         return reply.send(updated);
       } catch (error: unknown) {
+        if (isArtifactWorkingConflict(error)) {
+          return reply.code(409).send({
+            code: 'artifact_working_conflict',
+            artifact: {
+              workingVersion: error.latest.workingVersion,
+              contentHash: error.latest.contentHash,
+            },
+          });
+        }
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -778,27 +796,28 @@ export function registerRecordingRoutes(
       const { recordingId } = request.params as { recordingId: string };
       const routePath = resolveRoutePath(request, 'POST /recordings/:recordingId/prompt-package');
 
-      const schema = z.object({
-        notes: z.string().optional(),
-        profilePath: z.string().min(1).optional(),
-        profileId: z.string().min(1).optional(),
-        templateId: z.string().min(1).optional(),
-        lessonId: z.string().uuid().nullable().optional(),
-        bindingEffectiveAt: z.string().datetime({ offset: true }).optional(),
-      });
+      const schema = z
+        .object({
+          assignmentSessionId: z.string().uuid(),
+          templateId: z.string().min(1).optional(),
+        })
+        .strict();
+      const authenticatedUser = getAuthenticatedUser(request);
+      if (!authenticatedUser) {
+        return reply.code(401).send({
+          error: 'unauthorized',
+          message: 'Authentication required',
+          code: 'not_authenticated',
+        });
+      }
 
       try {
         const body = schema.parse(request.body ?? {});
         const promptPackage = await createPromptPackage({
           recordingId,
-          notes: body.notes,
-          profilePath: body.profilePath,
-          profileId: body.profileId,
+          assignmentSessionId: body.assignmentSessionId,
+          userId: authenticatedUser.id,
           templateId: body.templateId,
-          lessonId: body.lessonId ?? null,
-          bindingEffectiveAt: body.bindingEffectiveAt
-            ? new Date(body.bindingEffectiveAt)
-            : undefined,
         });
 
         if (!promptPackage) {
@@ -832,6 +851,18 @@ export function registerRecordingRoutes(
             message: error.message,
             code: error.code,
           });
+        }
+        if (error instanceof PromptPackageAssignmentError) {
+          return reply
+            .code(error.code === 'PROMPT_PACKAGE_ASSIGNMENT_SESSION_NOT_FOUND' ? 404 : 409)
+            .send({
+              error:
+                error.code === 'PROMPT_PACKAGE_ASSIGNMENT_SESSION_NOT_FOUND'
+                  ? 'not_found'
+                  : 'conflict',
+              message: error.message,
+              code: error.code,
+            });
         }
 
         logger.error(error instanceof Error ? error : String(error), {
@@ -1330,6 +1361,7 @@ export function registerRecordingRoutes(
       });
       const bodySchema = z.object({
         text: z.string(),
+        expectedWorkingVersion: z.number().int().positive(),
       });
 
       try {
@@ -1339,6 +1371,7 @@ export function registerRecordingRoutes(
         const updated = await updateDraft({
           id: params.id,
           text: body.text,
+          expectedWorkingVersion: body.expectedWorkingVersion,
         });
 
         if (!updated) {
@@ -1354,6 +1387,15 @@ export function registerRecordingRoutes(
 
         return reply.send(updated);
       } catch (error: unknown) {
+        if (isArtifactWorkingConflict(error)) {
+          return reply.code(409).send({
+            code: 'artifact_working_conflict',
+            artifact: {
+              workingVersion: error.latest.workingVersion,
+              contentHash: error.latest.contentHash,
+            },
+          });
+        }
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -1381,6 +1423,7 @@ async function cloneCachedRecordingForStudent(params: {
   studentId: string;
   sourcePath: string;
   sha256: string;
+  storage: TranscriptionStorage;
 }) {
   const recordingId = randomUUID();
   const recording = await insertRecording({
@@ -1396,9 +1439,16 @@ async function cloneCachedRecordingForStudent(params: {
     status: 'transcribed',
     error: null,
   });
+  const transcriptId = randomUUID();
+  const readStorage = createTranscriptionStorageForUri(params.cachedTranscript.storageUri);
+  const cachedText = await readStorage.getText(params.cachedTranscript.storageUri);
+  const storedTranscript = await params.storage.putTranscript({ transcriptId, text: cachedText });
   const transcript = await insertTranscript({
+    id: transcriptId,
     recordingId,
-    storageUri: params.cachedTranscript.storageUri,
+    storageUri: storedTranscript.uri,
+    workingVersion: 1,
+    contentHash: storedTranscript.sha256,
     rawResponseUri: params.cachedTranscript.rawResponseUri,
     mode: params.cachedTranscript.mode,
     model: params.cachedTranscript.model,
@@ -1409,6 +1459,25 @@ async function cloneCachedRecordingForStudent(params: {
   });
 
   return { recording, transcript };
+}
+
+function isArtifactWorkingConflict(error: unknown): error is {
+  code: 'ARTIFACT_WORKING_CONFLICT';
+  latest: { workingVersion: number; contentHash: string };
+} {
+  if (!error || typeof error !== 'object' || !('code' in error) || !('latest' in error)) {
+    return false;
+  }
+  const latest = error.latest;
+  return (
+    error.code === 'ARTIFACT_WORKING_CONFLICT' &&
+    !!latest &&
+    typeof latest === 'object' &&
+    'workingVersion' in latest &&
+    typeof latest.workingVersion === 'number' &&
+    'contentHash' in latest &&
+    typeof latest.contentHash === 'string'
+  );
 }
 
 function normalizeStatusFilter(status?: string | string[] | null): string[] | null {

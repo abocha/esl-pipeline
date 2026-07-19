@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import type { GenerationProvider } from '@esl-pipeline/contracts';
 
 import type { BatchBackendConfig } from '../config/env.js';
@@ -6,8 +8,6 @@ import {
   markLessonMemoryEntryFailed,
   supersedePendingLessonMemoryEntriesForTranscript,
 } from '../domain/lesson-memory-repository.js';
-import { getPromptPackageById } from '../domain/prompt-package-repository.js';
-import { getTranscriptByRecordingId } from '../domain/transcript-repository.js';
 import { logger } from '../infrastructure/logger.js';
 import {
   createTranscriptionStorageForUri,
@@ -31,20 +31,15 @@ export interface ProcessLessonMemoryJobPayload {
   transcriptId: string;
   recordingId: string;
   studentId: string;
+  sourceStorageUri: string;
+  sourceContentHash: string;
   lessonId?: string | null;
-  promptPackageId?: string | null;
   pendingEntryId: string;
   provider: GenerationProvider;
   model: string;
 }
 
 export interface ProcessLessonMemoryJobDependencies {
-  transcripts: {
-    getByRecordingId: typeof getTranscriptByRecordingId;
-  };
-  promptPackages: {
-    getById: typeof getPromptPackageById;
-  };
   storageFactory: (uri: string) => TranscriptionStorage;
   generator: typeof generateLessonMemoryEntry;
   lessonMemory: {
@@ -68,12 +63,6 @@ export async function processLessonMemoryJob(args: {
   maxAttempts?: number;
   overrides?: Partial<ProcessLessonMemoryJobDependencies & GenerateLessonMemoryEntryDependencies>;
 }): Promise<void> {
-  const transcripts = args.overrides?.transcripts ?? {
-    getByRecordingId: getTranscriptByRecordingId,
-  };
-  const promptPackages = args.overrides?.promptPackages ?? {
-    getById: getPromptPackageById,
-  };
   const storageFactory = args.overrides?.storageFactory ?? createTranscriptionStorageForUri;
   const generator = args.overrides?.generator ?? generateLessonMemoryEntry;
   const lessonMemory = args.overrides?.lessonMemory ?? {
@@ -94,33 +83,28 @@ export async function processLessonMemoryJob(args: {
     return;
   }
 
-  const transcript = await transcripts.getByRecordingId(args.payload.recordingId);
-  if (!transcript || transcript.id !== args.payload.transcriptId) {
-    await markFailureIfFinalAttempt({
-      payload: args.payload,
-      attemptsMade: args.attemptsMade,
-      maxAttempts: args.maxAttempts,
-      lessonMemory,
-      error: new Error('Lesson-memory transcript could not be resolved from recording lineage'),
-    });
+  if (
+    pendingEntry.sourceStorageUri !== args.payload.sourceStorageUri ||
+    pendingEntry.sourceContentHash !== args.payload.sourceContentHash
+  ) {
     return;
   }
 
-  const storage = storageFactory(transcript.storageUri);
-  const transcriptText = await storage.getText(transcript.storageUri);
-  const promptPackage = args.payload.promptPackageId
-    ? await promptPackages.getById(args.payload.promptPackageId)
-    : null;
-
   try {
+    const storage = storageFactory(args.payload.sourceStorageUri);
+    const transcriptText = await storage.getText(args.payload.sourceStorageUri);
+    const actualHash = createHash('sha256').update(transcriptText, 'utf8').digest('hex');
+    if (actualHash !== args.payload.sourceContentHash) {
+      throw new Error('Confirmed lesson-memory source hash mismatch');
+    }
     const prompt = buildLessonMemoryPrompt({
       transcriptText,
-      teacherNotes: promptPackage?.notes ?? null,
+      teacherNotes: null,
     });
     const envelope = buildLessonMemoryEnvelope({
       transcriptId: args.payload.transcriptId,
       transcriptText,
-      teacherNotes: promptPackage?.notes ?? null,
+      teacherNotes: null,
     });
 
     const result = await pacer.run({
@@ -137,6 +121,9 @@ export async function processLessonMemoryJob(args: {
             recordingId: args.payload.recordingId,
             provider: args.payload.provider,
             model: args.payload.model,
+            pendingEntryId: args.payload.pendingEntryId,
+            sourceStorageUri: args.payload.sourceStorageUri,
+            sourceContentHash: args.payload.sourceContentHash,
             prompt,
             envelope,
           },
@@ -144,11 +131,6 @@ export async function processLessonMemoryJob(args: {
         }),
     });
 
-    await lessonMemory.supersedePendingForTranscript({
-      transcriptId: args.payload.transcriptId,
-      supersededById: result.entry.id,
-      supersededAt: result.entry.generatedAt,
-    });
     if (args.payload.lessonId && result.entry.lessonTitle) {
       try {
         await lessons.applyGeneratedTitleIfPlaceholder({

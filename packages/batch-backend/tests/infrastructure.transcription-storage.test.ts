@@ -36,15 +36,37 @@ describe('infrastructure/transcription-storage', () => {
 
     const result = await storage.putTranscript({ transcriptId: 't-1', text: 'Hello world' });
 
-    expect(result.uri).toBe('local://transcripts/t-1.txt');
+    const expectedHash = createHash('sha256').update('Hello world').digest('hex');
+    expect(result.uri).toBe(`local://transcripts/t-1/content/${expectedHash}.txt`);
     expect(result.bytes).toBe(Buffer.byteLength('Hello world', 'utf8'));
+    expect(result.sha256).toBe(expectedHash);
 
-    const expectedPath = path.join(tempDir, 'transcripts', 't-1.txt');
+    const expectedPath = path.join(tempDir, 'transcripts', 't-1', 'content', `${expectedHash}.txt`);
     const fileContents = await fs.readFile(expectedPath, 'utf8');
     expect(fileContents).toBe('Hello world');
 
     const readBack = await storage.getText(result.uri);
     expect(readBack).toBe('Hello world');
+  });
+
+  it('keeps earlier transcript and draft content-addressed objects immutable', async () => {
+    tempDir = await createTempDir();
+    const storage = new FilesystemTranscriptionStorage(tempDir);
+
+    const firstTranscript = await storage.putTranscript({ transcriptId: 't-cas', text: 'first' });
+    const secondTranscript = await storage.putTranscript({ transcriptId: 't-cas', text: 'second' });
+    const firstDraft = await storage.putDraft({ draftId: 'd-cas', text: 'draft one' });
+    const secondDraft = await storage.putDraft({ draftId: 'd-cas', text: 'draft two' });
+
+    expect(secondTranscript.uri).not.toBe(firstTranscript.uri);
+    expect(secondDraft.uri).not.toBe(firstDraft.uri);
+    await expect(storage.getText(firstTranscript.uri)).resolves.toBe('first');
+    await expect(storage.getText(secondTranscript.uri)).resolves.toBe('second');
+    await expect(storage.getText(firstDraft.uri)).resolves.toBe('draft one');
+    await expect(storage.getText(secondDraft.uri)).resolves.toBe('draft two');
+
+    const repeatedDraft = await storage.putDraft({ draftId: 'd-cas', text: 'draft two' });
+    expect(repeatedDraft).toEqual(secondDraft);
   });
 
   it('stores optional raw response JSON payloads', async () => {
@@ -101,14 +123,17 @@ describe('infrastructure/transcription-storage', () => {
       },
     });
 
-    const storage = createTranscriptionStorageForUri('local://transcripts/t-local.txt', {
-      storageConfig,
-    });
+    const storage = createTranscriptionStorageForUri(
+      'local://transcripts/t-local/content/hash.txt',
+      {
+        storageConfig,
+      },
+    );
 
     expect(storage).toBeInstanceOf(FilesystemTranscriptionStorage);
 
     const stored = await storage.putTranscript({ transcriptId: 't-local', text: 'Hello' });
-    expect(stored.uri).toBe('local://transcripts/t-local.txt');
+    expect(stored.uri).toMatch(/^local:\/\/transcripts\/t-local\/content\/[0-9a-f]{64}\.txt$/);
   });
 
   it('selects s3 storage for s3 URIs', () => {

@@ -34,6 +34,8 @@ export interface PersistManualTranscriptSourceParams {
   displayName: string;
   storageUri: string;
   bytes: number;
+  workingVersion: number;
+  contentHash: string;
 }
 
 export interface ManualTranscriptSourceDependencies {
@@ -82,6 +84,8 @@ export async function ingestManualTranscriptSource(
       displayName: input.displayName?.trim() || DEFAULT_DISPLAY_NAME,
       storageUri: stored.uri,
       bytes: Buffer.byteLength(text, 'utf8'),
+      workingVersion: 1,
+      contentHash: stored.sha256,
     });
   } catch (error) {
     await storage.delete(stored.uri).catch(() => undefined);
@@ -112,6 +116,8 @@ export async function persistManualTranscriptSourceWithDefaults(
           id: params.transcriptId,
           recordingId: params.recordingId,
           storageUri: params.storageUri,
+          workingVersion: params.workingVersion,
+          contentHash: params.contentHash,
           rawResponseUri: null,
           mode: 'timeline',
           model: MANUAL_TRANSCRIPT_MODEL,

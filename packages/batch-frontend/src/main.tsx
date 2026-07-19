@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { Toaster } from 'react-hot-toast';
-import { BrowserRouter } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
@@ -9,13 +9,13 @@ import './index.css';
 
 import { App } from './ui/App';
 
+const router = createBrowserRouter([{ path: '*', element: <App /> }]);
+
 ReactDOM.createRoot(document.querySelector('#root') as HTMLElement).render(
   <React.StrictMode>
     <ThemeProvider>
       <AuthProvider>
-        <BrowserRouter>
-          <App />
-        </BrowserRouter>
+        <RouterProvider router={router} />
         <Toaster
           position="bottom-right"
           toastOptions={{

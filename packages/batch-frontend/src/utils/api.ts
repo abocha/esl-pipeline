@@ -35,10 +35,14 @@ import type {
   BusinessScheduleSurfaceResponse,
   BusinessSettingsDto,
   BusinessStatsSurfaceResponse,
+  ArtifactWorkingContentDto as ContractArtifactWorkingContentDto,
   AssignmentSessionDto as ContractAssignmentSessionDto,
   AssignmentSessionListResponse as ContractAssignmentSessionListResponse,
-  AssignmentSessionStage as ContractAssignmentSessionStage,
-  CreateAssignmentSessionRequest as ContractCreateAssignmentSessionRequest,
+  ConfirmAssignmentSessionShareRequest as ContractConfirmAssignmentSessionShareRequest,
+  ConfirmAssignmentSessionShareResponse as ContractConfirmAssignmentSessionShareResponse,
+  ConfirmAssignmentSessionStepRequest as ContractConfirmAssignmentSessionStepRequest,
+  ConfirmAssignmentSessionStepResponse as ContractConfirmAssignmentSessionStepResponse,
+  ConfirmStudentAssignmentSessionRequest as ContractConfirmStudentAssignmentSessionRequest,
   ElevenLabsTtsModelId as ContractElevenLabsTtsModelId,
   GenerateDraftRequest as ContractGenerateDraftRequest,
   GenerateDraftResponse as ContractGenerateDraftResponse,
@@ -64,7 +68,7 @@ import type {
   TtsModelId as ContractTtsModelId,
   TtsProviderId as ContractTtsProviderId,
   TtsStrategy as ContractTtsStrategy,
-  UpdateAssignmentSessionRequest as ContractUpdateAssignmentSessionRequest,
+  UpdateAssignmentSessionRecoveryRequest as ContractUpdateAssignmentSessionRecoveryRequest,
   VoiceOption as ContractVoiceOption,
   CreateStudentLessonRequest,
   GenerationErrorCategory,
@@ -104,11 +108,14 @@ export type JobListResponse = ContractJobListResponse;
 export type JobSummaryResponse = ContractJobSummaryResponse;
 export type StudentSummaryResponse = ContractStudentSummaryResponse;
 export type JobConfigOverrides = ContractJobConfigOverrides;
-export type AssignmentSessionStage = ContractAssignmentSessionStage;
 export type AssignmentSession = ContractAssignmentSessionDto;
 export type AssignmentSessionListResponse = ContractAssignmentSessionListResponse;
-export type CreateAssignmentSessionRequest = ContractCreateAssignmentSessionRequest;
-export type UpdateAssignmentSessionRequest = ContractUpdateAssignmentSessionRequest;
+export type ConfirmStudentAssignmentSessionRequest = ContractConfirmStudentAssignmentSessionRequest;
+export type UpdateAssignmentSessionRecoveryRequest = ContractUpdateAssignmentSessionRecoveryRequest;
+export type ConfirmAssignmentSessionStepRequest = ContractConfirmAssignmentSessionStepRequest;
+export type ConfirmAssignmentSessionStepResponse = ContractConfirmAssignmentSessionStepResponse;
+export type ConfirmAssignmentSessionShareRequest = ContractConfirmAssignmentSessionShareRequest;
+export type ConfirmAssignmentSessionShareResponse = ContractConfirmAssignmentSessionShareResponse;
 export type TtsProviderId = ContractTtsProviderId;
 export type TtsModelId = ContractTtsModelId;
 export type GoogleTtsModel = ContractGoogleTtsModel;
@@ -117,6 +124,20 @@ export type ElevenLabsTtsModelId = ContractElevenLabsTtsModelId;
 export type PronunciationChunkTtsProviderId = ContractPronunciationChunkTtsProviderId;
 export type MarkdownValidationResponse = ContractMarkdownValidationResponse;
 export type GenerateDraftRequest = ContractGenerateDraftRequest;
+
+export class AssignmentSessionConflictApiError extends Error {
+  constructor(public readonly latestSession: AssignmentSession) {
+    super('Newer saved assignment work was found. Review it before confirming again.');
+    this.name = 'AssignmentSessionConflictApiError';
+  }
+}
+
+export class ArtifactWorkingConflictApiError extends Error {
+  constructor(public readonly latestArtifact: ContractArtifactWorkingContentDto) {
+    super('Newer saved artifact content was found. Review it before confirming again.');
+    this.name = 'ArtifactWorkingConflictApiError';
+  }
+}
 export type GenerateDraftResponse = ContractGenerateDraftResponse;
 export type GenerationDraftErrorCode = GenerationErrorCategory;
 export type GenerationProvider = ContractGenerationProvider;
@@ -137,6 +158,8 @@ export interface RecordingTranscriptResponse {
   model: string;
   language: string;
   mode: 'timeline' | 'stack';
+  workingVersion: number;
+  contentHash: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -723,18 +746,6 @@ export interface StudentLessonMemoryListResponse {
   statuses: LessonMemoryEntryStatus[] | null;
 }
 
-export interface RequestLessonMemoryFromTranscriptPayload {
-  recordingId: string;
-  transcriptId: string;
-  lessonId?: string | null;
-}
-
-export interface RequestLessonMemoryFromTranscriptResponse {
-  outcome: 'created' | 'pending_exists' | 'ready_exists';
-  lessonMemoryEntryId: string;
-  lessonTitle?: string | null;
-}
-
 export interface StudentHomeworkMemoryListResponse {
   studentId: string;
   items: HomeworkMemoryRecord[];
@@ -1216,6 +1227,8 @@ export interface DraftResponse {
   storageUri: string;
   createdBy: string | null;
   text: string;
+  workingVersion: number;
+  contentHash: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -1638,6 +1651,64 @@ export interface JobEventsOptions {
 }
 
 const toAxiosError = (error: unknown): AxiosError | null => (isAxiosError(error) ? error : null);
+
+const RECOVERY_RETRY_DELAYS_MS = [250, 1_000] as const;
+
+function getRetryAfterMs(error: AxiosError): number | null {
+  const value = error.response?.headers?.['retry-after'];
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
+
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return Math.min(seconds * 1_000, 5_000);
+  }
+
+  const dateMs = Date.parse(String(value));
+  if (!Number.isFinite(dateMs)) return null;
+  return Math.min(Math.max(dateMs - Date.now(), 0), 5_000);
+}
+
+function isTransientRecoveryError(error: unknown): error is AxiosError {
+  const axiosError = toAxiosError(error);
+  if (!axiosError) return false;
+  const status = axiosError.response?.status;
+  return status === undefined || status === 429 || (status >= 500 && status < 600);
+}
+
+async function runRecoveryRequest<T>(request: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await request();
+    } catch (error: unknown) {
+      const fallbackDelay = RECOVERY_RETRY_DELAYS_MS[attempt];
+      if (fallbackDelay === undefined || !isTransientRecoveryError(error)) throw error;
+      const retryAfter = getRetryAfterMs(error);
+      await new Promise<void>((resolve) => {
+        window.setTimeout(resolve, retryAfter ?? fallbackDelay);
+      });
+    }
+  }
+}
+
+function getAssignmentSessionConflict(error: AxiosError | null): AssignmentSession | null {
+  if (error?.response?.status !== 409) return null;
+  const data = error.response.data as
+    | { code?: unknown; session?: ContractAssignmentSessionDto }
+    | undefined;
+  return data?.code === 'assignment_session_revision_conflict' && data.session
+    ? data.session
+    : null;
+}
+
+function getArtifactWorkingConflict(
+  error: AxiosError | null,
+): ContractArtifactWorkingContentDto | null {
+  if (error?.response?.status !== 409) return null;
+  const data = error.response.data as
+    | { code?: unknown; artifact?: ContractArtifactWorkingContentDto }
+    | undefined;
+  return data?.code === 'artifact_working_conflict' && data.artifact ? data.artifact : null;
+}
 
 const formatUnknownError = (error: unknown): string => {
   if (error instanceof Error) return error.message;
@@ -3035,25 +3106,6 @@ export async function populateFirstProfileFromLesson(
   }
 }
 
-export async function requestLessonMemoryFromTranscript(
-  studentId: string,
-  payload: RequestLessonMemoryFromTranscriptPayload,
-): Promise<RequestLessonMemoryFromTranscriptResponse> {
-  try {
-    const response = await apiClient.post(
-      buildApiProxyPath(`/students/${encodeURIComponent(studentId)}/lesson-memory/requests`),
-      payload,
-    );
-    return response.data;
-  } catch (error: unknown) {
-    const axiosError = toAxiosError(error);
-    if (axiosError && isAuthError(axiosError)) {
-      throw new Error('Authentication required. Please login to confirm lesson memory.');
-    }
-    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
-  }
-}
-
 export async function initializeStudentProfileDraft(
   studentId: string,
 ): Promise<InitializeStudentProfileDraftResponse> {
@@ -3239,15 +3291,20 @@ export async function fetchRecordingTranscript(
 export async function updateRecordingTranscript(
   recordingId: string,
   text: string,
+  expectedWorkingVersion: number,
 ): Promise<RecordingTranscriptResponse> {
   try {
-    const response = await apiClient.put(
-      buildApiProxyPath(`/recordings/${encodeURIComponent(recordingId)}/transcript`),
-      { text },
+    const response = await runRecoveryRequest(() =>
+      apiClient.put(
+        buildApiProxyPath(`/recordings/${encodeURIComponent(recordingId)}/transcript`),
+        { text, expectedWorkingVersion },
+      ),
     );
     return response.data;
   } catch (error: unknown) {
     const axiosError = toAxiosError(error);
+    const conflict = getArtifactWorkingConflict(axiosError);
+    if (conflict) throw new ArtifactWorkingConflictApiError(conflict);
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to update transcripts.');
     }
@@ -3258,16 +3315,10 @@ export async function updateRecordingTranscript(
 export async function createPromptPackage(
   recordingId: string,
   params: {
-    notes?: string;
-    profileId?: string;
+    assignmentSessionId: string;
     templateId?: string;
-    profilePath?: string;
-    lessonId?: string | null;
-    bindingEffectiveAt?: string;
   },
 ): Promise<PromptPackageResponse> {
-  // Backend precedence:
-  // profileId > profilePath > student-linked profileId > configured default profile.
   try {
     const response = await apiClient.post(
       buildApiProxyPath(`/recordings/${encodeURIComponent(recordingId)}/prompt-package`),
@@ -3328,11 +3379,13 @@ export async function listAssignmentSessions(limit = 20): Promise<AssignmentSess
   }
 }
 
-export async function createAssignmentSession(
-  request: CreateAssignmentSessionRequest,
+export async function confirmStudentAssignmentSession(
+  request: ConfirmStudentAssignmentSessionRequest,
 ): Promise<AssignmentSession> {
   try {
-    const response = await apiClient.post(buildApiProxyPath('/assignment-sessions'), request);
+    const response = await runRecoveryRequest(() =>
+      apiClient.post(buildApiProxyPath('/assignment-sessions/confirm-student'), request),
+    );
     return response.data;
   } catch (error: unknown) {
     const axiosError = toAxiosError(error);
@@ -3358,18 +3411,22 @@ export async function fetchAssignmentSession(sessionId: string): Promise<Assignm
   }
 }
 
-export async function updateAssignmentSession(
+export async function updateAssignmentSessionRecovery(
   sessionId: string,
-  request: UpdateAssignmentSessionRequest,
+  request: UpdateAssignmentSessionRecoveryRequest,
 ): Promise<AssignmentSession> {
   try {
-    const response = await apiClient.patch(
-      buildApiProxyPath(`/assignment-sessions/${encodeURIComponent(sessionId)}`),
-      request,
+    const response = await runRecoveryRequest(() =>
+      apiClient.patch(
+        buildApiProxyPath(`/assignment-sessions/${encodeURIComponent(sessionId)}/recovery`),
+        request,
+      ),
     );
     return response.data;
   } catch (error: unknown) {
     const axiosError = toAxiosError(error);
+    const conflict = getAssignmentSessionConflict(axiosError);
+    if (conflict) throw new AssignmentSessionConflictApiError(conflict);
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to update assignment progress.');
     }
@@ -3377,16 +3434,49 @@ export async function updateAssignmentSession(
   }
 }
 
-export async function archiveAssignmentSession(sessionId: string): Promise<AssignmentSession> {
+export async function confirmAssignmentSessionStep(
+  sessionId: string,
+  request: ConfirmAssignmentSessionStepRequest,
+): Promise<ConfirmAssignmentSessionStepResponse> {
   try {
-    const response = await apiClient.post(
-      buildApiProxyPath(`/assignment-sessions/${encodeURIComponent(sessionId)}/archive`),
+    const response = await runRecoveryRequest(() =>
+      apiClient.post(
+        buildApiProxyPath(`/assignment-sessions/${encodeURIComponent(sessionId)}/confirm`),
+        request,
+      ),
     );
     return response.data;
   } catch (error: unknown) {
     const axiosError = toAxiosError(error);
+    const conflict = getAssignmentSessionConflict(axiosError);
+    if (conflict) throw new AssignmentSessionConflictApiError(conflict);
+    const artifactConflict = getArtifactWorkingConflict(axiosError);
+    if (artifactConflict) throw new ArtifactWorkingConflictApiError(artifactConflict);
     if (axiosError && isAuthError(axiosError)) {
-      throw new Error('Authentication required. Please login to archive assignment progress.');
+      throw new Error('Authentication required. Please login to confirm assignment progress.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function shareAssignmentSession(
+  sessionId: string,
+  request: ConfirmAssignmentSessionShareRequest,
+): Promise<ConfirmAssignmentSessionShareResponse> {
+  try {
+    const response = await runRecoveryRequest(() =>
+      apiClient.post(
+        buildApiProxyPath(`/assignment-sessions/${encodeURIComponent(sessionId)}/share`),
+        request,
+      ),
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    const conflict = getAssignmentSessionConflict(axiosError);
+    if (conflict) throw new AssignmentSessionConflictApiError(conflict);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to share this assignment.');
     }
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }
@@ -3603,14 +3693,23 @@ function reportUploadProgress(
   onProgress(progress, event.loaded, event.total ?? undefined);
 }
 
-export async function updateDraft(id: string, text: string): Promise<DraftResponse> {
+export async function updateDraft(
+  id: string,
+  text: string,
+  expectedWorkingVersion: number,
+): Promise<DraftResponse> {
   try {
-    const response = await apiClient.put(buildApiProxyPath(`/drafts/${encodeURIComponent(id)}`), {
-      text,
-    });
+    const response = await runRecoveryRequest(() =>
+      apiClient.put(buildApiProxyPath(`/drafts/${encodeURIComponent(id)}`), {
+        text,
+        expectedWorkingVersion,
+      }),
+    );
     return response.data;
   } catch (error: unknown) {
     const axiosError = toAxiosError(error);
+    const conflict = getArtifactWorkingConflict(axiosError);
+    if (conflict) throw new ArtifactWorkingConflictApiError(conflict);
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to update drafts.');
     }

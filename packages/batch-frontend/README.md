@@ -4,7 +4,7 @@
 
 - Audience: maintainers and implementing agents.
 - Authority Level: package entrypoint and operational usage guide.
-- Last Verified Against: 2026-07-12 repo state.
+- Last Verified Against: 2026-07-19 repo state.
 - Owner: batch-frontend maintainers + automation agents.
 - Review Cadence: monthly or after major UI/workflow changes.
 - Status: `active`.
@@ -79,6 +79,32 @@ Canonical behavior and current status live in:
   model-generated change classification remains intentionally deferred.
 - Lesson follow-up reminders use in-app actions first; Telegram/email delivery remains outside the frontend surface for this slice.
 - Job-event SSE subscriptions should target known `jobId` and `recordingId` values; wildcard all-job streams are explicit.
+
+## Assignment Recovery and Confirmation
+
+- Each primary CTA confirms one semantic boundary. Artifact readiness and navigation never mark a
+  step complete. Back is non-destructive; forward navigation cannot bypass an earlier dirty
+  boundary.
+- Transcript, notes/profile context, draft text, and publishing settings recover automatically.
+  Confirmation flushes the latest safe pending write before advancing. Routine Save, Refresh, and
+  Reload controls are absent; bounded transient retries run automatically and contextual Retry is
+  reserved for exhausted or ambiguous outcomes.
+- Resume loads the newest durable working values, opens the earliest dirty Source, Context, or
+  Create boundary, then falls back to the destination derived from `confirmedStep`. A confirmed
+  Share opens its linked historical job rather than the editor.
+- Cross-tab session and artifact conflicts retain the tutor's local buffer, adopt the newest server
+  revision only as a compare-and-swap base, and suppress automatic overwrite until the tutor
+  explicitly reconciles the visible value.
+- Browser unload, router links, Back/Forward, and Logout are guarded only while local work is not
+  durably recovered or a mutation outcome is ambiguous. Durable-but-unconfirmed recovery does not
+  produce a data-loss warning. Pending debounced recovery is flushed and fully drained before SPA
+  navigation proceeds, including edits made while an earlier recovery request is in flight.
+- Stable assignment/session, learner, and profile data refresh on entry, focus return, or directly
+  related mutation completion. Only genuinely asynchronous recording and job states poll, and they
+  stop at terminal state.
+- Share uses one stable request/job ID across automatic retry, remount, focus reconciliation, and
+  lost responses. Once Share is confirmed, the session is immutable workflow history; changing the
+  lesson starts a new assignment and never revokes the existing handout.
 
 Use these for deeper detail:
 

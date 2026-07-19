@@ -15,6 +15,8 @@ export function createTranscriptRecord(): TranscriptRecord {
     id: 'transcript-1',
     recordingId: 'recording-1',
     storageUri: 'local://transcripts/transcript-1.txt',
+    workingVersion: 1,
+    contentHash: 'transcript-hash',
     rawResponseUri: null,
     mode: 'timeline',
     model: 'nova-3',
@@ -31,11 +33,23 @@ export function createStorageStub(
   overrides: Partial<TranscriptionStorage> = {},
 ): TranscriptionStorage {
   return {
-    putAudio: async () => ({ uri: 'local://recordings/recording.opus', bytes: 1 }),
-    putTranscript: async () => ({ uri: 'local://transcripts/transcript-1.txt', bytes: 1 }),
-    putRawResponse: async () => ({ uri: 'local://transcripts/transcript-1.json', bytes: 1 }),
-    putPromptPackage: async () => ({ uri: 'local://prompt-packages/prompt-1.txt', bytes: 1 }),
-    putDraft: async () => ({ uri: 'local://drafts/draft-1.md', bytes: 1 }),
+    putAudio: async () => ({ uri: 'local://recordings/recording.opus', bytes: 1, sha256: 'hash' }),
+    putTranscript: async () => ({
+      uri: 'local://transcripts/transcript-1.txt',
+      bytes: 1,
+      sha256: 'hash',
+    }),
+    putRawResponse: async () => ({
+      uri: 'local://transcripts/transcript-1.json',
+      bytes: 1,
+      sha256: 'hash',
+    }),
+    putPromptPackage: async () => ({
+      uri: 'local://prompt-packages/prompt-1.txt',
+      bytes: 1,
+      sha256: 'hash',
+    }),
+    putDraft: async () => ({ uri: 'local://drafts/draft-1.md', bytes: 1, sha256: 'hash' }),
     getText: async () => '',
     getStream: async () => Readable.from(['']),
     delete: async () => {},
@@ -68,9 +82,36 @@ export function createPromptPackageRepositoryStub() {
   };
 }
 
+function createDefaultProfileRevision(profileId: string): ProfileRevisionRecord {
+  const contentByProfileId: Record<string, string> = {
+    'profile.md': 'PROFILE CONTENT\n',
+    'profiles/student-a.md': 'STUDENT PROFILE CONTENT\n',
+    'profiles/explicit.md': 'EXPLICIT PROFILE CONTENT\n',
+    'profiles/bound.md': 'BOUND PROFILE CONTENT\n',
+    'default-profile.md': 'DEFAULT PROFILE\n',
+  };
+  const content = contentByProfileId[profileId] ?? 'PROFILE CONTENT\n';
+  return {
+    id: `active-${profileId}`,
+    profileId,
+    content,
+    contentHash: createHash('sha256').update(content, 'utf8').digest('hex'),
+    source: 'update',
+    status: 'active',
+    versionNumber: 1,
+    versionLabel: 'v1',
+    activatedAt: new Date('2024-01-01T00:00:00Z'),
+    deprecatedAt: null,
+    createdAt: new Date('2024-01-01T00:00:00Z'),
+    createdBy: null,
+    restoredFromRevisionId: null,
+  };
+}
+
 export function createProfileRevisionRepositoryStub(
   overrides: {
     getActive?: (profileId: string) => Promise<ProfileRevisionRecord | null>;
+    getById?: (profileId: string, revisionId: string) => Promise<ProfileRevisionRecord | null>;
     getLatestByHash?: (
       profileId: string,
       contentHash: string,
@@ -79,31 +120,11 @@ export function createProfileRevisionRepositoryStub(
 ) {
   return {
     getActive:
-      overrides.getActive ??
-      (async (profileId: string) => {
-        const contentByProfileId: Record<string, string> = {
-          'profile.md': 'PROFILE CONTENT\n',
-          'profiles/student-a.md': 'STUDENT PROFILE CONTENT\n',
-          'profiles/explicit.md': 'EXPLICIT PROFILE CONTENT\n',
-          'profiles/bound.md': 'BOUND PROFILE CONTENT\n',
-          'default-profile.md': 'DEFAULT PROFILE\n',
-        };
-        const content = contentByProfileId[profileId] ?? 'PROFILE CONTENT\n';
-        return {
-          id: `active-${profileId}`,
-          profileId,
-          content,
-          contentHash: createHash('sha256').update(content, 'utf8').digest('hex'),
-          source: 'update',
-          status: 'active',
-          versionNumber: 1,
-          versionLabel: 'v1',
-          activatedAt: new Date('2024-01-01T00:00:00Z'),
-          deprecatedAt: null,
-          createdAt: new Date('2024-01-01T00:00:00Z'),
-          createdBy: null,
-          restoredFromRevisionId: null,
-        } satisfies ProfileRevisionRecord;
+      overrides.getActive ?? (async (profileId: string) => createDefaultProfileRevision(profileId)),
+    getById:
+      overrides.getById ??
+      (async (profileId: string, revisionId: string) => {
+        return { ...createDefaultProfileRevision(profileId), id: revisionId };
       }),
     getLatestByHash: overrides.getLatestByHash ?? (async () => null),
     activate: async (

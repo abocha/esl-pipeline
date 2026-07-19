@@ -184,6 +184,8 @@ export async function processTranscribeJob(
       id: transcriptId,
       recordingId: recording.id,
       storageUri: transcriptStored.uri,
+      workingVersion: 1,
+      contentHash: transcriptStored.sha256,
       rawResponseUri,
       mode,
       model: transcription.model,

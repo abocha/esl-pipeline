@@ -42,7 +42,7 @@ describeIfPg('domain/lesson-memory-repository', () => {
     await truncateLessonMemoryTables();
   });
 
-  it('creates a new pending lesson-memory row when the transcript was edited after the latest ready row', async () => {
+  it('uses confirmed source hash state instead of mutable transcript timestamps', async () => {
     const studentId = randomUUID();
     const recordingId = randomUUID();
     const transcriptId = randomUUID();
@@ -106,6 +106,8 @@ describeIfPg('domain/lesson-memory-repository', () => {
       provider: 'openai',
       model: 'gpt-5.2',
       generationNotes: null,
+      sourceStorageUri: 'local://transcripts/lesson-a.txt',
+      sourceContentHash: 'a'.repeat(64),
     });
 
     const latestReady = await getLatestReadyLessonMemoryByTranscriptId(transcriptId);
@@ -129,7 +131,7 @@ describeIfPg('domain/lesson-memory-repository', () => {
     expect(latestReady).toBeNull();
     expect(recentReady).toHaveLength(0);
     expect(canonicalReadyEntries).toHaveLength(0);
-    expect(entries.some((entry) => entry.status === 'ready')).toBe(true);
+    expect(entries.some((entry) => entry.status === 'superseded')).toBe(true);
     expect(entries.some((entry) => entry.status === 'pending')).toBe(true);
   });
 
@@ -188,6 +190,8 @@ describeIfPg('domain/lesson-memory-repository', () => {
       provider: 'openai',
       model: 'gpt-5.2',
       generationNotes: null,
+      sourceStorageUri: 'local://transcripts/lesson-b.txt',
+      sourceContentHash: 'b'.repeat(64),
     });
 
     expect(result.outcome).toBe('created');

@@ -5,6 +5,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { createPromptPackage } from '../src/application/create-prompt-package.js';
+import { resolvePromptTemplateSelection } from '../src/application/prompt-options.js';
 import type { PromptPackageRecord } from '../src/domain/prompt-package-model.js';
 import type { InsertPromptPackageParams } from '../src/domain/prompt-package-repository.js';
 import type { RecordingRecord } from '../src/domain/recording-model.js';
@@ -19,7 +20,364 @@ import {
   createTranscriptRecord,
 } from './application.prompt-package.test-harness.js';
 
+function createConfirmedAssignmentSession(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'session-1',
+    userId: 'user-1',
+    studentId: 'student-1',
+    lessonId: '11111111-1111-4111-8111-111111111111',
+    recordingId: 'recording-1',
+    transcriptId: 'transcript-1',
+    promptPackageId: null,
+    draftId: null,
+    revision: 3,
+    confirmedStep: 'context',
+    confirmed: {
+      student: { studentId: 'student-1' },
+      source: {
+        lessonId: '11111111-1111-4111-8111-111111111111',
+        recordingId: 'recording-1',
+        transcriptId: 'transcript-1',
+        transcriptWorkingVersion: 1,
+        transcriptStorageUri: 'local://confirmed/transcript-a.txt',
+        transcriptHash: createHash('sha256').update('CONFIRMED TRANSCRIPT A', 'utf8').digest('hex'),
+      },
+      context: {
+        teacherNotes: 'CONFIRMED NOTES A',
+        profileId: 'profile.md',
+        profileRevisionId: 'profile-revision-a',
+        profileRevisionHash: createHash('sha256')
+          .update('CONFIRMED PROFILE A', 'utf8')
+          .digest('hex'),
+      },
+      create: null,
+    },
+    creationRequestId: null,
+    publishTarget: null,
+    selectedTtsProvider: null,
+    selectedTtsStrategy: null,
+    selectedTtsModel: null,
+    selectedPreset: null,
+    selectedGenerationProvider: null,
+    selectedGenerationModel: null,
+    teacherNotes: 'NEWER RECOVERY NOTES B',
+    selectedProfileId: 'profile.md',
+    selectedProfileRevisionId: 'profile-revision-b',
+    selectedProfileRevisionHash: 'newer-profile-hash',
+    shareJobId: null,
+    createdAt: new Date('2026-07-19T00:00:00Z'),
+    updatedAt: new Date('2026-07-19T00:01:00Z'),
+    ...overrides,
+  } as never;
+}
+
 describe('application/prompt-package', () => {
+  it('uses exact confirmed transcript and profile inputs after mutable state advances', async () => {
+    const confirmedProfileContent = 'CONFIRMED PROFILE A';
+    const confirmedProfileHash = createHash('sha256')
+      .update(confirmedProfileContent, 'utf8')
+      .digest('hex');
+    const activeProfileContent = 'NEW ACTIVE PROFILE B';
+    const activeProfileHash = createHash('sha256')
+      .update(activeProfileContent, 'utf8')
+      .digest('hex');
+    const profileRevisions = createProfileRevisionRepositoryStub({
+      getById: async () => ({
+        id: 'profile-revision-a',
+        profileId: 'profile.md',
+        content: confirmedProfileContent,
+        contentHash: confirmedProfileHash,
+        source: 'create',
+        status: 'deprecated',
+        versionNumber: 1,
+        versionLabel: 'v1',
+        activatedAt: new Date('2026-07-18T00:00:00Z'),
+        deprecatedAt: new Date('2026-07-19T00:00:00Z'),
+        createdAt: new Date('2026-07-18T00:00:00Z'),
+        createdBy: null,
+        restoredFromRevisionId: null,
+        structuredContent: {
+          schemaVersion: 'foundational_profile_v1',
+          overallLevel: 'B2',
+          primaryGoals: ['CONFIRMED STRUCTURED GOAL A'],
+          communicationContexts: [],
+          interestsAndUsefulThemes: [],
+          stableStrengths: [],
+          persistentChallenges: [],
+          studyPreferences: [],
+          durableConstraints: [],
+          teacherNotes: null,
+        },
+      }),
+      getActive: async () => ({
+        id: 'profile-revision-b',
+        profileId: 'profile.md',
+        content: activeProfileContent,
+        contentHash: activeProfileHash,
+        source: 'update',
+        status: 'active',
+        versionNumber: 2,
+        versionLabel: 'v2',
+        activatedAt: new Date('2026-07-19T00:00:00Z'),
+        deprecatedAt: null,
+        createdAt: new Date('2026-07-19T00:00:00Z'),
+        createdBy: null,
+        restoredFromRevisionId: null,
+      }),
+    });
+
+    const result = await createPromptPackage(
+      {
+        recordingId: 'recording-1',
+        assignmentSessionId: 'session-1',
+        userId: 'user-1',
+        templateId: 'template.md',
+      },
+      {
+        config: createConfig('template.md', 'profile.md'),
+        storage: createStorageStub({
+          getText: async (uri) =>
+            uri === 'local://confirmed/transcript-a.txt'
+              ? 'CONFIRMED TRANSCRIPT A'
+              : 'NEW WORKING TRANSCRIPT B',
+        }),
+        sessions: { getByIdForUser: async () => createConfirmedAssignmentSession() },
+        transcripts: {
+          getByRecordingId: async () => {
+            throw new Error('mutable transcript lookup must not run');
+          },
+        },
+        recordings: {
+          getById: async () => ({
+            id: 'recording-1',
+            source: 'upload',
+            studentId: 'student-1',
+            sourcePath: null,
+            storageUri: 'local://recordings/a.opus',
+            sha256: null,
+            bytes: 1,
+            durationSec: null,
+            channels: null,
+            status: 'transcribed',
+            error: null,
+            createdAt: new Date('2026-07-18T00:00:00Z'),
+            updatedAt: new Date('2026-07-18T00:00:00Z'),
+          }),
+        },
+        students: {
+          getById: async () => ({
+            id: 'student-1',
+            student: 'Student One',
+            profileId: 'profile.md',
+          }),
+        },
+        profileRevisions,
+        templateRevisions: createTemplateRevisionRepositoryStub(),
+        bindings: createBindingResolverStub(),
+        promptOptions: createPromptOptionsStub(),
+        promptPackages: createPromptPackageRepositoryStub(),
+      },
+    );
+
+    expect(result?.text).toContain('CONFIRMED TRANSCRIPT A');
+    expect(result?.text).not.toContain('NEW WORKING TRANSCRIPT B');
+    expect(result?.text).toContain('CONFIRMED STRUCTURED GOAL A');
+    expect(result?.text).not.toContain('NEW ACTIVE PROFILE B');
+    expect(result?.text).toContain('CONFIRMED NOTES A');
+    expect(result?.text).not.toContain('NEWER RECOVERY NOTES B');
+    expect(result?.profileSnapshot?.resolvedProfileRevisionId).toBe('profile-revision-a');
+    expect(result?.profileSnapshot?.resolvedProfileHash).not.toBe(confirmedProfileHash);
+  });
+
+  it('keeps an explicitly confirmed null profile deterministic', async () => {
+    const config = createConfig('template.md', 'missing-default-profile.md');
+    const session = createConfirmedAssignmentSession({
+      teacherNotes: null,
+      selectedProfileId: null,
+      selectedProfileRevisionId: null,
+      selectedProfileRevisionHash: null,
+      confirmed: {
+        student: { studentId: 'student-1' },
+        source: {
+          lessonId: '11111111-1111-4111-8111-111111111111',
+          recordingId: 'recording-1',
+          transcriptId: 'transcript-1',
+          transcriptWorkingVersion: 1,
+          transcriptStorageUri: 'local://confirmed/transcript-a.txt',
+          transcriptHash: createHash('sha256')
+            .update('CONFIRMED TRANSCRIPT A', 'utf8')
+            .digest('hex'),
+        },
+        context: {
+          teacherNotes: null,
+          profileId: null,
+          profileRevisionId: null,
+          profileRevisionHash: null,
+        },
+        create: null,
+      },
+    });
+    const inserted: InsertPromptPackageParams[] = [];
+
+    const result = await createPromptPackage(
+      {
+        recordingId: 'recording-1',
+        assignmentSessionId: 'session-1',
+        userId: 'user-1',
+        templateId: 'template.md',
+      },
+      {
+        config,
+        storage: createStorageStub({
+          getText: async () => 'CONFIRMED TRANSCRIPT A',
+        }),
+        sessions: { getByIdForUser: async () => session },
+        transcripts: {
+          getByRecordingId: async () => {
+            throw new Error('mutable transcript lookup must not run');
+          },
+        },
+        recordings: {
+          getById: async () => ({
+            id: 'recording-1',
+            source: 'upload',
+            studentId: 'student-1',
+            sourcePath: null,
+            storageUri: 'local://recordings/a.opus',
+            sha256: null,
+            bytes: 1,
+            durationSec: null,
+            channels: null,
+            status: 'transcribed',
+            error: null,
+            createdAt: new Date('2026-07-18T00:00:00Z'),
+            updatedAt: new Date('2026-07-18T00:00:00Z'),
+          }),
+        },
+        students: {
+          getById: async () => ({
+            id: 'student-1',
+            student: 'Student One',
+            profileId: 'mutable-active-profile.md',
+          }),
+        },
+        profileRevisions: createProfileRevisionRepositoryStub({
+          getActive: async () => {
+            throw new Error('confirmed null Context must not resolve an active profile');
+          },
+        }),
+        templateRevisions: createTemplateRevisionRepositoryStub(),
+        bindings: createBindingResolverStub(),
+        promptOptions: {
+          resolveSelection: createPromptOptionsStub().resolveSelection,
+          resolveTemplateSelection: (params) =>
+            resolvePromptTemplateSelection(params, {
+              config,
+              templateRevisions: {
+                listIdsWithActiveRevision: async () => new Set(['template.md']),
+              },
+              templates: {
+                list: async () => ({
+                  items: [
+                    {
+                      id: 'template.md',
+                      label: 'Template',
+                      activeRevisionId: 'template-revision-active',
+                      isDefault: true,
+                      createdAt: new Date('2026-07-18T00:00:00Z'),
+                      updatedAt: new Date('2026-07-18T00:00:00Z'),
+                    },
+                  ],
+                  total: 1,
+                  limit: 500,
+                  offset: 0,
+                  order: 'asc',
+                }),
+                getById: async () => null,
+              },
+              profileRevisions: {
+                listIdsWithActiveRevision: async () => {
+                  throw new Error('template-only resolution must not inspect profile revisions');
+                },
+              },
+              profiles: {
+                list: async () => {
+                  throw new Error('template-only resolution must not inspect profiles');
+                },
+                getById: async () => null,
+              },
+            }),
+        },
+        promptPackages: {
+          insert: async (params) => {
+            inserted.push(params);
+            return {
+              ...(await createPromptPackageRepositoryStub().insert(params)),
+              resolvedProfileId: params.resolvedProfileId ?? null,
+              resolvedProfileHash: params.resolvedProfileHash ?? null,
+              resolvedProfileRevisionId: params.resolvedProfileRevisionId ?? null,
+            };
+          },
+        },
+      },
+    );
+
+    expect(result?.text).toContain('[FOUNDATIONAL_PROFILE]\nNot available.');
+    expect(result?.profileSnapshot).toBeUndefined();
+    expect(inserted[0]).toMatchObject({
+      profilePath: null,
+      resolvedProfileId: null,
+      resolvedProfileHash: null,
+      resolvedProfileRevisionId: null,
+    });
+  });
+
+  it('rejects an unowned assignment session', async () => {
+    await expect(
+      createPromptPackage(
+        {
+          recordingId: 'recording-1',
+          assignmentSessionId: 'session-1',
+          userId: 'other-user',
+        },
+        { sessions: { getByIdForUser: async () => null } },
+      ),
+    ).rejects.toMatchObject({ code: 'PROMPT_PACKAGE_ASSIGNMENT_SESSION_NOT_FOUND' });
+  });
+
+  it('rejects missing confirmed prerequisites and broken confirmed lineage', async () => {
+    await expect(
+      createPromptPackage(
+        { recordingId: 'recording-1', assignmentSessionId: 'session-1', userId: 'user-1' },
+        {
+          sessions: {
+            getByIdForUser: async () =>
+              createConfirmedAssignmentSession({
+                confirmed: {
+                  student: { studentId: 'student-1' },
+                  source: null,
+                  context: null,
+                  create: null,
+                },
+              }),
+          },
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'PROMPT_PACKAGE_CONFIRMED_PREREQUISITE_MISSING' });
+
+    await expect(
+      createPromptPackage(
+        { recordingId: 'recording-1', assignmentSessionId: 'session-1', userId: 'user-1' },
+        {
+          sessions: {
+            getByIdForUser: async () =>
+              createConfirmedAssignmentSession({ recordingId: 'different-recording' }),
+          },
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'PROMPT_PACKAGE_CONFIRMED_LINEAGE_INVALID' });
+  });
+
   it('renders the foundational profile block from structured content when the active revision has canonical JSON', async () => {
     const allowedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-prompt-structured-'));
     const templatePath = path.join(allowedDir, 'template.md');
@@ -35,7 +393,11 @@ describe('application/prompt-package', () => {
         expect(text).toContain('**Current Level:** B2');
         expect(text).toContain('- Lead product demos with more confidence.');
         expect(text).not.toContain('LEGACY PROFILE');
-        return { uri: `local://prompt-packages/${promptPackageId}.txt`, bytes: text.length };
+        return {
+          uri: `local://prompt-packages/${promptPackageId}.txt`,
+          bytes: text.length,
+          sha256: 'hash',
+        };
       },
     });
 
@@ -117,7 +479,11 @@ describe('application/prompt-package', () => {
         expect(text).toContain('DB PROFILE');
         expect(text).not.toContain('FS TEMPLATE');
         expect(text).not.toContain('FS PROFILE');
-        return { uri: `local://prompt-packages/${promptPackageId}.txt`, bytes: text.length };
+        return {
+          uri: `local://prompt-packages/${promptPackageId}.txt`,
+          bytes: text.length,
+          sha256: 'hash',
+        };
       },
     });
 
@@ -336,7 +702,11 @@ describe('application/prompt-package', () => {
     const storage = createStorageStub({
       getText: async () => 'TRANSCRIPT BODY',
       putPromptPackage: async ({ promptPackageId, text }) => {
-        return { uri: `local://prompt-packages/${promptPackageId}.txt`, bytes: text.length };
+        return {
+          uri: `local://prompt-packages/${promptPackageId}.txt`,
+          bytes: text.length,
+          sha256: 'hash',
+        };
       },
     });
 
@@ -521,7 +891,11 @@ describe('application/prompt-package', () => {
       getText: async () => 'Teacher: Let us practice travel situations today.',
       putPromptPackage: async ({ promptPackageId, text }) => {
         expect(text).toContain('[CANONICAL_STUDENT_NAME]\nStudent One');
-        return { uri: `local://prompt-packages/${promptPackageId}.txt`, bytes: text.length };
+        return {
+          uri: `local://prompt-packages/${promptPackageId}.txt`,
+          bytes: text.length,
+          sha256: 'hash',
+        };
       },
     });
 

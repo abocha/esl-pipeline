@@ -498,7 +498,6 @@ interface AdvancedActionsStageProps {
   sectionRef?: Ref<HTMLElement>;
   headingRef?: Ref<HTMLHeadingElement>;
   jobReady: boolean;
-  jobStatus: JobStatus | null;
   controller: AdvancedActionsController;
   onRefreshActions: () => void;
   jobOptionsError: string | null;
@@ -514,7 +513,6 @@ export function AdvancedActionsStage({
   sectionRef,
   headingRef,
   jobReady,
-  jobStatus,
   controller,
   onRefreshActions,
   jobOptionsError,
@@ -542,9 +540,11 @@ export function AdvancedActionsStage({
               <div className="minimal-stage-panel-title">
                 <h3>Republish and rerun</h3>
               </div>
-              <ProductButton type="button" variant="quiet" onClick={onRefreshActions}>
-                Refresh actions
-              </ProductButton>
+              {jobOptionsError ? (
+                <ProductButton type="button" variant="quiet" onClick={onRefreshActions}>
+                  Retry actions
+                </ProductButton>
+              ) : null}
             </div>
             <section
               className="minimal-rerun-actions assignment-advanced-actions__quick"
@@ -880,61 +880,59 @@ export function AdvancedActionsStage({
                           ))}
                         </select>
                       </label>
-                      <>
-                        <label className="minimal-field minimal-rerun-field">
-                          <span>Model</span>
-                          <select
-                            value={controller.form.rerunPronunciationChunkModel}
-                            onChange={(event) =>
-                              controller.setFormField(
-                                'rerunPronunciationChunkModel',
-                                event.target.value,
+                      <label className="minimal-field minimal-rerun-field">
+                        <span>Model</span>
+                        <select
+                          value={controller.form.rerunPronunciationChunkModel}
+                          onChange={(event) =>
+                            controller.setFormField(
+                              'rerunPronunciationChunkModel',
+                              event.target.value,
+                            )
+                          }
+                        >
+                          {(controller.form.rerunPronunciationChunkProvider === 'google'
+                            ? modelOptionsForProvider(
+                                controller.form.rerunPronunciationChunkProvider,
                               )
-                            }
-                          >
-                            {(controller.form.rerunPronunciationChunkProvider === 'google'
+                            : controller.form.rerunPronunciationChunkProvider === 'inworld'
                               ? modelOptionsForProvider(
                                   controller.form.rerunPronunciationChunkProvider,
                                 )
-                              : controller.form.rerunPronunciationChunkProvider === 'inworld'
-                                ? modelOptionsForProvider(
-                                    controller.form.rerunPronunciationChunkProvider,
-                                  )
-                                : elevenlabsStandardModelOptions
-                            ).map((model) => (
-                              <option key={model} value={model}>
-                                {model}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label className="minimal-field minimal-rerun-field">
-                          <span>Voice ID</span>
-                          <input
-                            value={controller.form.rerunPronunciationChunkVoiceId}
-                            onChange={(event) =>
-                              controller.setFormField(
-                                'rerunPronunciationChunkVoiceId',
-                                event.target.value,
-                              )
-                            }
-                            placeholder="voice id override"
-                          />
-                        </label>
-                        <label className="minimal-field minimal-rerun-field">
-                          <span>Accent</span>
-                          <input
-                            value={controller.form.rerunPronunciationChunkVoiceAccent}
-                            onChange={(event) =>
-                              controller.setFormField(
-                                'rerunPronunciationChunkVoiceAccent',
-                                event.target.value,
-                              )
-                            }
-                            placeholder="accent override"
-                          />
-                        </label>
-                      </>
+                              : elevenlabsStandardModelOptions
+                          ).map((model) => (
+                            <option key={model} value={model}>
+                              {model}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="minimal-field minimal-rerun-field">
+                        <span>Voice ID</span>
+                        <input
+                          value={controller.form.rerunPronunciationChunkVoiceId}
+                          onChange={(event) =>
+                            controller.setFormField(
+                              'rerunPronunciationChunkVoiceId',
+                              event.target.value,
+                            )
+                          }
+                          placeholder="voice id override"
+                        />
+                      </label>
+                      <label className="minimal-field minimal-rerun-field">
+                        <span>Accent</span>
+                        <input
+                          value={controller.form.rerunPronunciationChunkVoiceAccent}
+                          onChange={(event) =>
+                            controller.setFormField(
+                              'rerunPronunciationChunkVoiceAccent',
+                              event.target.value,
+                            )
+                          }
+                          placeholder="accent override"
+                        />
+                      </label>
                     </div>
                   </div>
                 ) : null}

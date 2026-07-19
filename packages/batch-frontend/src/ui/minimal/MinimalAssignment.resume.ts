@@ -19,6 +19,7 @@ import {
   listUserJobs,
 } from '../../utils/api';
 import type { AuthoringHydrationSnapshot } from './MinimalAssignment.authoring';
+import { deriveResumeDestination } from './MinimalAssignment.confirmation';
 import {
   getJobRecentAssignmentPresentation,
   getSessionRecentAssignmentPresentation,
@@ -153,7 +154,7 @@ export interface ResumeOpenSuccess {
   ok: true;
   itemId: string;
   state: RecentAssignmentState;
-  destination: 'student' | 'source' | 'context' | 'create' | 'review';
+  destination: 'student' | 'source' | 'context' | 'assignment' | 'review';
 }
 
 export type ResumeOpenResult = ResumeOpenSuccess | { ok: false };
@@ -629,6 +630,10 @@ export function useMinimalAssignmentResume({
       try {
         const cachedSession = knownSessions?.find((session) => session.id === sessionId);
         const session = cachedSession ?? (await fetchAssignmentSession(sessionId));
+        if (session.confirmedStep === 'share') {
+          if (!session.shareJobId) throw new Error('Shared assignment is missing its linked job.');
+          return hydrateFromJob(session.shareJobId, undefined, isInitialHydration);
+        }
         const snapshot = buildSnapshotFromSession(session);
         let resolvedStudentId = session.studentId ?? null;
 
@@ -727,11 +732,28 @@ export function useMinimalAssignmentResume({
         setActiveAssignmentSession(session);
         setSelectedResumeJobId(`session:${session.id}`);
         writeResumeTargetToQuery({ sessionId: session.id });
+        const destination = deriveResumeDestination(session, {
+          transcript: snapshot.transcript
+            ? {
+                workingVersion: snapshot.transcript.workingVersion,
+                contentHash: snapshot.transcript.contentHash,
+              }
+            : null,
+          draft: snapshot.authoring.draft
+            ? {
+                workingVersion: snapshot.authoring.draft.workingVersion,
+                contentHash: snapshot.authoring.draft.contentHash,
+              }
+            : null,
+        });
+        if (typeof destination !== 'string') {
+          throw new Error('Active assignment unexpectedly resolved to a completed job.');
+        }
         const result: ResumeOpenSuccess = {
           ok: true,
           itemId: `session:${session.id}`,
-          state: getSessionRecentAssignmentPresentation(session.currentStage).state,
-          destination: getSessionRecentAssignmentPresentation(session.currentStage).destination,
+          state: getSessionRecentAssignmentPresentation(session).state,
+          destination,
         };
         if (isInitialHydration && !initialHydrationResolvedRef.current) {
           initialHydrationResolvedRef.current = true;
@@ -754,6 +776,7 @@ export function useMinimalAssignmentResume({
       applyHydratedSnapshot,
       beginHydration,
       buildSnapshotFromSession,
+      hydrateFromJob,
       invalidateDraftGenerationRequests,
       isCurrentHydration,
       onInitialHydrationResolved,

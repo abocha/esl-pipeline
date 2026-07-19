@@ -95,8 +95,10 @@ describeIfPg('application/homework-memory-source', () => {
       );
       await client.query(
         `
-        INSERT INTO drafts (id, prompt_package_id, storage_uri, created_at, updated_at)
-        VALUES ($1, $2, 'local://drafts/draft.md', NOW(), NOW())
+        INSERT INTO drafts (
+          id, prompt_package_id, storage_uri, working_version, content_hash, created_at, updated_at
+        )
+        VALUES ($1, $2, 'local://drafts/draft.md', 1, repeat('a', 64), NOW(), NOW())
         `,
         [draftId, promptPackageId],
       );

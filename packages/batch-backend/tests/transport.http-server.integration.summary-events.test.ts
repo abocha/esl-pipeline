@@ -35,16 +35,24 @@ describeHttpServerIntegrationSuite(
     const sessionId = '11111111-1111-4111-8111-111111111111';
     const recordingId = '22222222-2222-4222-8222-222222222222';
 
-    it('assignment session routes use the authenticated user and validate ownership through application calls', async () => {
+    it('assignment session reads use the authenticated user and application ownership boundary', async () => {
       const session = {
         id: sessionId,
         userId: 'test-user-id',
-        studentId: null,
+        studentId: '33333333-3333-4333-8333-333333333333',
+        lessonId: null,
         recordingId,
         transcriptId: null,
         promptPackageId: null,
         draftId: null,
-        currentStage: 'source' as const,
+        revision: 1,
+        confirmedStep: 'student' as const,
+        confirmed: {
+          student: { studentId: '33333333-3333-4333-8333-333333333333' },
+          source: null,
+          context: null,
+          create: null,
+        },
         publishTarget: 'html' as const,
         selectedTtsProvider: 'google' as const,
         selectedTtsStrategy: 'tts' as const,
@@ -53,39 +61,17 @@ describeHttpServerIntegrationSuite(
         selectedGenerationProvider: 'openrouter' as const,
         selectedGenerationModel: 'model-1',
         teacherNotes: 'Practice past tense.',
+        selectedProfileId: null,
+        selectedProfileRevisionId: null,
+        selectedProfileRevisionHash: null,
+        shareJobId: null,
         createdAt: '2024-01-01T00:00:00.000Z',
         updatedAt: '2024-01-01T00:10:00.000Z',
-        archivedAt: null,
       };
-      const createSession = vi.spyOn(assignmentSessionsModule, 'createAssignmentSessionForUser');
-      const updateSession = vi.spyOn(assignmentSessionsModule, 'updateAssignmentSessionForUser');
       const getSession = vi.spyOn(assignmentSessionsModule, 'getAssignmentSessionForUser');
       const listSessions = vi.spyOn(assignmentSessionsModule, 'listAssignmentSessionsForUserDto');
-      const archiveSession = vi.spyOn(assignmentSessionsModule, 'archiveAssignmentSessionForUser');
-      createSession.mockResolvedValue(session);
-      updateSession.mockResolvedValue({ ...session, currentStage: 'assignment' });
       getSession.mockResolvedValue(session);
       listSessions.mockResolvedValue({ sessions: [session], total: 1, limit: 20 });
-      archiveSession.mockResolvedValue({
-        ...session,
-        archivedAt: '2024-01-01T00:20:00.000Z',
-      });
-
-      const created = await app.inject({
-        method: 'POST',
-        url: '/assignment-sessions',
-        payload: {
-          recordingId,
-          currentStage: 'source',
-          selectedPreset: 'general-english',
-        },
-      });
-      expect(created.statusCode).toBe(200);
-      expect(createSession).toHaveBeenCalledWith('test-user-id', {
-        recordingId,
-        currentStage: 'source',
-        selectedPreset: 'general-english',
-      });
 
       const listed = await app.inject({
         method: 'GET',
@@ -100,25 +86,7 @@ describeHttpServerIntegrationSuite(
         url: `/assignment-sessions/${sessionId}`,
       });
       expect(loaded.statusCode).toBe(200);
-      expect(getSession).toHaveBeenCalledWith('test-user-id', sessionId);
-
-      const patched = await app.inject({
-        method: 'PATCH',
-        url: `/assignment-sessions/${sessionId}`,
-        payload: { currentStage: 'assignment', teacherNotes: 'Review modal verbs.' },
-      });
-      expect(patched.statusCode).toBe(200);
-      expect(updateSession).toHaveBeenCalledWith('test-user-id', sessionId, {
-        currentStage: 'assignment',
-        teacherNotes: 'Review modal verbs.',
-      });
-
-      const archived = await app.inject({
-        method: 'POST',
-        url: `/assignment-sessions/${sessionId}/archive`,
-      });
-      expect(archived.statusCode).toBe(200);
-      expect(archiveSession).toHaveBeenCalledWith('test-user-id', sessionId);
+      expect(getSession).toHaveBeenCalledWith('test-user-id', sessionId, expect.any(Object));
     });
 
     it('GET /assignment-sessions/:id returns 404 when the owned session is missing', async () => {
@@ -132,7 +100,7 @@ describeHttpServerIntegrationSuite(
 
       expect(response.statusCode).toBe(404);
       expect(response.json()).toEqual({ error: 'not_found' });
-      expect(getSession).toHaveBeenCalledWith('test-user-id', sessionId);
+      expect(getSession).toHaveBeenCalledWith('test-user-id', sessionId, expect.any(Object));
     });
 
     it('GET /user/assignment-sessions requires authentication before application access', async () => {

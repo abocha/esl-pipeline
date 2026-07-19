@@ -25,6 +25,7 @@ describe('application/job-actions/cancel-job', () => {
       queue: {} as never,
       queueEvents: {} as never,
       enqueue: vi.fn(),
+      reconcile: vi.fn(),
       cancelQueuedJob: cancelQueuedJobSpy,
     });
   });

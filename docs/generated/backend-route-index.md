@@ -16,10 +16,11 @@
 | GET | `/admin/jobs/summary` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
 | GET | `/admin/stats` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
 | GET | `/admin/users` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
-| POST | `/assignment-sessions` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
 | GET | `/assignment-sessions/:id` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
-| PATCH | `/assignment-sessions/:id` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
-| POST | `/assignment-sessions/:id/archive` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
+| POST | `/assignment-sessions/:id/confirm` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
+| PATCH | `/assignment-sessions/:id/recovery` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
+| POST | `/assignment-sessions/:id/share` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
+| POST | `/assignment-sessions/confirm-student` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
 | POST | `/auth/login` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
 | POST | `/auth/logout` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
 | GET | `/auth/me` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
@@ -87,7 +88,6 @@
 | POST | `/students/:id/credits/adjustments` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | GET | `/students/:id/homework-memory` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | GET | `/students/:id/lesson-memory` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
-| POST | `/students/:id/lesson-memory/requests` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | POST | `/students/:id/lessons` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | PATCH | `/students/:id/lessons/:lessonId` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | GET | `/students/:id/memory` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |

@@ -43,11 +43,25 @@ function createSession(overrides: Partial<AssignmentSession> = {}): AssignmentSe
     userId: 'user-1',
     studentId: 'student-cora',
     lessonId: null,
-    recordingId: null,
-    transcriptId: null,
+    recordingId: 'recording-confirmed',
+    transcriptId: 'transcript-confirmed',
     promptPackageId: null,
     draftId: null,
-    currentStage: 'context',
+    revision: 2,
+    confirmedStep: 'source',
+    confirmed: {
+      student: { studentId: 'student-cora' },
+      source: {
+        lessonId: null,
+        recordingId: 'recording-confirmed',
+        transcriptId: 'transcript-confirmed',
+        transcriptWorkingVersion: 1,
+        transcriptStorageUri: 'local://transcript-confirmed',
+        transcriptHash: 'a'.repeat(64),
+      },
+      context: null,
+      create: null,
+    },
     publishTarget: null,
     selectedTtsProvider: null,
     selectedTtsStrategy: null,
@@ -56,11 +70,62 @@ function createSession(overrides: Partial<AssignmentSession> = {}): AssignmentSe
     selectedGenerationProvider: null,
     selectedGenerationModel: null,
     teacherNotes: null,
+    selectedProfileId: null,
+    selectedProfileRevisionId: null,
+    selectedProfileRevisionHash: null,
+    shareJobId: null,
     createdAt: '2026-07-11T10:00:00.000Z',
     updatedAt: '2026-07-11T10:00:00.000Z',
-    archivedAt: null,
     ...overrides,
   };
+}
+
+function createSessionAt(destination: 'source' | 'context' | 'assignment' | 'review') {
+  const base = createSession();
+  if (destination === 'source') {
+    return createSession({
+      confirmedStep: 'student',
+      confirmed: { ...base.confirmed, source: null },
+    });
+  }
+  if (destination === 'context') {
+    return createSession({
+      recordingId: 'recording-confirmed',
+      transcriptId: 'transcript-confirmed',
+    });
+  }
+  const context = {
+    teacherNotes: null,
+    profileId: null,
+    profileRevisionId: null,
+    profileRevisionHash: null,
+  };
+  if (destination === 'assignment') {
+    return createSession({
+      recordingId: 'recording-confirmed',
+      transcriptId: 'transcript-confirmed',
+      confirmedStep: 'context',
+      confirmed: { ...base.confirmed, context },
+    });
+  }
+  return createSession({
+    recordingId: 'recording-confirmed',
+    transcriptId: 'transcript-confirmed',
+    promptPackageId: 'prompt-confirmed',
+    draftId: 'draft-confirmed',
+    confirmedStep: 'create',
+    confirmed: {
+      ...base.confirmed,
+      context,
+      create: {
+        promptPackageId: 'prompt-confirmed',
+        draftId: 'draft-confirmed',
+        draftWorkingVersion: 1,
+        draftStorageUri: 'local://draft-confirmed',
+        draftHash: 'b'.repeat(64),
+      },
+    },
+  });
 }
 
 function createPresentedJob(
@@ -150,9 +215,9 @@ describe('buildRecentAssignmentItems', () => {
     ['context', 'Step 3 · Teaching context'],
     ['assignment', 'Step 4 · Create'],
     ['review', 'Step 5 · Review & share'],
-  ] as const)('maps the %s session stage to its recovery anchor', (currentStage, anchor) => {
+  ] as const)('derives the %s recovery anchor from confirmed state', (destination, anchor) => {
     const [item] = buildRecentAssignmentItems(
-      [createSession({ currentStage })],
+      [createSessionAt(destination)],
       [],
       '',
       new Map([['student-cora', 'Cora']]),

@@ -2,10 +2,13 @@ import { createHash, randomUUID } from 'node:crypto';
 
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
+import type { AssignmentSessionRecord } from '../domain/assignment-session-model.js';
+import { getAssignmentSessionByIdForUser } from '../domain/assignment-session-repository.js';
 import type { ProfileRevisionRecord } from '../domain/profile-revision-model.js';
 import {
   activateProfileRevision,
   getActiveProfileRevision,
+  getProfileRevisionById,
 } from '../domain/profile-revision-repository.js';
 import type { PromptPackageRecord } from '../domain/prompt-package-model.js';
 import { insertPromptPackage } from '../domain/prompt-package-repository.js';
@@ -17,7 +20,6 @@ import {
 } from '../domain/template-revision-repository.js';
 import { getTranscriptByRecordingId } from '../domain/transcript-repository.js';
 import { withPgClient } from '../infrastructure/db.js';
-import { logger } from '../infrastructure/logger.js';
 import type { TranscriptionStorage } from '../infrastructure/transcription-storage.js';
 import {
   createTranscriptionStorage,
@@ -28,8 +30,11 @@ import {
   renderFoundationalProfileContent,
 } from './foundational-profile.js';
 import { stitchPromptEnvelope, stitchPromptPayload } from './prompt-assembly.js';
-import { PromptOptionError, resolvePromptSelection } from './prompt-options.js';
-import { requestLessonMemoryGeneration } from './request-lesson-memory-generation.js';
+import {
+  PromptOptionError,
+  resolvePromptSelection,
+  resolvePromptTemplateSelection,
+} from './prompt-options.js';
 import { buildStudentMemoryPackageContext } from './student-memory-package.js';
 import { resolveStudentProfileBindingAt } from './student-profile-bindings.js';
 import { getStudentProfileById } from './student-profiles-store.js';
@@ -38,6 +43,8 @@ const LEGACY_PROFILE_MARKER = 'INSERT PROFILE HERE';
 
 export interface CreatePromptPackageParams {
   recordingId: string;
+  assignmentSessionId?: string;
+  userId?: string;
   notes?: string | null;
   profilePath?: string | null;
   profileId?: string | null;
@@ -124,6 +131,7 @@ export interface CreatePromptPackageDependencies {
   };
   promptOptions: {
     resolveSelection: typeof resolvePromptSelection;
+    resolveTemplateSelection?: typeof resolvePromptTemplateSelection;
   };
   promptPackages: {
     insert: typeof insertPromptPackage;
@@ -131,14 +139,29 @@ export interface CreatePromptPackageDependencies {
   profileRevisions: {
     activate: typeof activateProfileRevision;
     getActive: typeof getActiveProfileRevision;
+    getById: typeof getProfileRevisionById;
+  };
+  sessions: {
+    getByIdForUser: typeof getAssignmentSessionByIdForUser;
   };
   templateRevisions: {
     activate: typeof activateTemplateRevision;
     getActive: typeof getActiveTemplateRevision;
   };
-  lessonMemory: {
-    requestGeneration: typeof requestLessonMemoryGeneration;
-  };
+}
+
+export class PromptPackageAssignmentError extends Error {
+  constructor(
+    readonly code:
+      | 'PROMPT_PACKAGE_ASSIGNMENT_SESSION_NOT_FOUND'
+      | 'PROMPT_PACKAGE_CONFIRMED_PREREQUISITE_MISSING'
+      | 'PROMPT_PACKAGE_CONFIRMED_LINEAGE_INVALID'
+      | 'PROMPT_PACKAGE_CONFIRMED_SOURCE_HASH_MISMATCH',
+    message: string,
+  ) {
+    super(message);
+    this.name = 'PromptPackageAssignmentError';
+  }
 }
 
 interface PromptArtifactResolution {
@@ -146,7 +169,7 @@ interface PromptArtifactResolution {
     content: string;
     hash: string;
     revision: ProfileRevisionRecord;
-  };
+  } | null;
   template: {
     content: string;
     hash: string;
@@ -176,6 +199,7 @@ export async function createPromptPackage(
   };
   const promptOptions = overrides?.promptOptions ?? {
     resolveSelection: resolvePromptSelection,
+    resolveTemplateSelection: resolvePromptTemplateSelection,
   };
   const promptPackages = overrides?.promptPackages ?? {
     insert: insertPromptPackage,
@@ -183,20 +207,68 @@ export async function createPromptPackage(
   const profileRevisions = overrides?.profileRevisions ?? {
     activate: activateProfileRevision,
     getActive: getActiveProfileRevision,
+    getById: getProfileRevisionById,
+  };
+  const sessions = overrides?.sessions ?? {
+    getByIdForUser: getAssignmentSessionByIdForUser,
   };
   const templateRevisions = overrides?.templateRevisions ?? {
     activate: activateTemplateRevision,
     getActive: getActiveTemplateRevision,
   };
-  const lessonMemory = overrides?.lessonMemory ?? {
-    requestGeneration: requestLessonMemoryGeneration,
-  };
 
-  const transcript = await transcripts.getByRecordingId(params.recordingId);
+  if (Boolean(params.assignmentSessionId) !== Boolean(params.userId)) {
+    throw new PromptPackageAssignmentError(
+      'PROMPT_PACKAGE_CONFIRMED_PREREQUISITE_MISSING',
+      'Assignment prompt generation requires both assignmentSessionId and authenticated userId',
+    );
+  }
+  const assignmentSession =
+    params.assignmentSessionId && params.userId
+      ? await sessions.getByIdForUser(params.assignmentSessionId, params.userId)
+      : null;
+  if (params.assignmentSessionId && !assignmentSession) {
+    throw new PromptPackageAssignmentError(
+      'PROMPT_PACKAGE_ASSIGNMENT_SESSION_NOT_FOUND',
+      'Assignment session was not found',
+    );
+  }
+  if (
+    assignmentSession &&
+    (params.notes !== undefined ||
+      params.profileId !== undefined ||
+      params.profilePath !== undefined ||
+      params.lessonId !== undefined ||
+      params.bindingEffectiveAt !== undefined)
+  ) {
+    throw new PromptPackageAssignmentError(
+      'PROMPT_PACKAGE_CONFIRMED_LINEAGE_INVALID',
+      'Assignment prompt inputs must come from confirmed session state',
+    );
+  }
+
+  const confirmedInputs = assignmentSession
+    ? await resolveConfirmedAssignmentInputs({
+        session: assignmentSession,
+        routeRecordingId: params.recordingId,
+        recordings,
+        profileRevisions,
+      })
+    : null;
+  const transcript = confirmedInputs
+    ? {
+        id: confirmedInputs.source.transcriptId,
+        recordingId: confirmedInputs.source.recordingId,
+        storageUri: confirmedInputs.source.transcriptStorageUri,
+      }
+    : await transcripts.getByRecordingId(params.recordingId);
   if (!transcript) return null;
-  const recording = await recordings.getById(transcript.recordingId);
-  if (params.lessonId && recording?.studentId) {
-    await validateLessonStudentPair(params.lessonId, recording.studentId);
+  const recording =
+    confirmedInputs?.recording ?? (await recordings.getById(transcript.recordingId));
+  const lessonId = confirmedInputs?.source.lessonId ?? params.lessonId ?? null;
+  const notes = confirmedInputs?.context.teacherNotes ?? params.notes ?? null;
+  if (!confirmedInputs && lessonId && recording?.studentId) {
+    await validateLessonStudentPair(lessonId, recording.studentId);
   }
   const bindingLookupAt =
     params.bindingEffectiveAt && !Number.isNaN(params.bindingEffectiveAt.getTime())
@@ -208,8 +280,10 @@ export async function createPromptPackage(
   if (recording?.studentId) {
     const studentProfile = await students.getById(recording.studentId, { config });
     canonicalStudentName = studentProfile?.student ?? null;
-    studentProfileId = studentProfile?.profileId ?? null;
-    if (!studentProfileId) {
+    studentProfileId = confirmedInputs
+      ? confirmedInputs.context.profileId
+      : (studentProfile?.profileId ?? null);
+    if (!confirmedInputs && !studentProfileId) {
       const binding = await bindings
         .resolveAt(recording.studentId, bindingLookupAt)
         .catch(() => null);
@@ -218,22 +292,44 @@ export async function createPromptPackage(
   }
 
   let implicitStudentProfileId = studentProfileId;
-  if (!params.profileId && !params.profilePath && implicitStudentProfileId) {
+  if (!confirmedInputs && !params.profileId && !params.profilePath && implicitStudentProfileId) {
     const activeStudentProfileRevision = await profileRevisions.getActive(implicitStudentProfileId);
     implicitStudentProfileId = activeStudentProfileRevision ? implicitStudentProfileId : null;
   }
 
   const fallbackProfileId =
-    params.profileId ?? (params.profilePath ? undefined : (implicitStudentProfileId ?? undefined));
+    confirmedInputs !== null
+      ? (confirmedInputs.context.profileId ?? undefined)
+      : (params.profileId ??
+        (params.profilePath ? undefined : (implicitStudentProfileId ?? undefined)));
 
-  const selection = await promptOptions.resolveSelection(
-    {
-      templateId: params.templateId,
-      profileId: fallbackProfileId,
-      profilePath: params.profilePath,
-    },
-    { config },
-  );
+  const omitProfile = confirmedInputs !== null && confirmedInputs.context.profileId === null;
+  const selection = omitProfile
+    ? {
+        ...(await (promptOptions.resolveTemplateSelection ?? resolvePromptTemplateSelection)(
+          { templateId: params.templateId },
+          { config },
+        )),
+        profileId: '',
+        profilePath: '',
+      }
+    : await promptOptions.resolveSelection(
+        {
+          templateId: params.templateId,
+          profileId: fallbackProfileId,
+          profilePath: params.profilePath,
+        },
+        { config },
+      );
+  if (
+    confirmedInputs?.context.profileId &&
+    selection.profileId !== confirmedInputs.context.profileId
+  ) {
+    throw new PromptPackageAssignmentError(
+      'PROMPT_PACKAGE_CONFIRMED_LINEAGE_INVALID',
+      'Resolved prompt profile differs from confirmed Context',
+    );
+  }
 
   const readStorage = overrides?.storage ?? createTranscriptionStorageForUri(transcript.storageUri);
   const [artifacts, transcriptText] = await Promise.all([
@@ -241,9 +337,20 @@ export async function createPromptPackage(
       selection,
       profileRevisions,
       templateRevisions,
+      confirmedProfileRevision: confirmedInputs?.profileRevision ?? null,
+      omitProfile,
     }),
     readStorage.getText(transcript.storageUri),
   ]);
+  if (confirmedInputs) {
+    const actualTranscriptHash = createHash('sha256').update(transcriptText, 'utf8').digest('hex');
+    if (actualTranscriptHash !== confirmedInputs.source.transcriptHash) {
+      throw new PromptPackageAssignmentError(
+        'PROMPT_PACKAGE_CONFIRMED_SOURCE_HASH_MISMATCH',
+        'Confirmed transcript content no longer matches its server hash',
+      );
+    }
+  }
   const memoryContext = await buildStudentMemoryPackageContext({
     studentId: recording?.studentId ?? null,
     currentTranscriptId: transcript.id,
@@ -251,25 +358,25 @@ export async function createPromptPackage(
   });
   const payload = stitchPromptPayload({
     template: artifacts.template.content,
-    profile: artifacts.profile.content,
+    profile: artifacts.profile?.content ?? '',
     studentMemorySnapshot: memoryContext.studentMemorySnapshotBlock,
     recentLessonMemory: memoryContext.recentLessonMemoryBlock,
     recentHomeworkMemory: memoryContext.recentHomeworkMemoryBlock,
     unresolvedIssues: memoryContext.unresolvedIssuesBlock,
     transcript: transcriptText,
     canonicalStudentName,
-    notes: params.notes,
+    notes,
   });
   const requestEnvelope = stitchPromptEnvelope({
     template: artifacts.template.content,
-    profile: artifacts.profile.content,
+    profile: artifacts.profile?.content ?? '',
     studentMemorySnapshot: memoryContext.studentMemorySnapshotBlock,
     recentLessonMemory: memoryContext.recentLessonMemoryBlock,
     recentHomeworkMemory: memoryContext.recentHomeworkMemoryBlock,
     unresolvedIssues: memoryContext.unresolvedIssuesBlock,
     transcript: transcriptText,
     canonicalStudentName,
-    notes: params.notes,
+    notes,
   });
 
   const promptPackageId = randomUUID();
@@ -283,19 +390,19 @@ export async function createPromptPackage(
     recordingId: transcript.recordingId,
     transcriptId: transcript.id,
     studentId: recording?.studentId ?? null,
-    lessonId: params.lessonId ?? null,
+    lessonId,
     studentMemorySnapshotId: memoryContext.studentMemorySnapshotId,
     studentMemorySnapshotHash: memoryContext.studentMemorySnapshotHash,
     selectedLessonMemoryIds: memoryContext.selectedLessonMemoryIds,
     selectedHomeworkMemoryIds: memoryContext.selectedHomeworkMemoryIds,
     retrievalPolicyVersion: memoryContext.retrievalPolicyVersion,
-    profilePath: selection.profilePath,
-    resolvedProfileId: selection.profileId,
-    resolvedProfileHash: artifacts.profile.hash,
-    resolvedProfileRevisionId: artifacts.profile.revision.id,
-    resolvedProfileUpdatedAt: artifacts.profile.revision.createdAt,
-    resolvedProfileVersionLabel: artifacts.profile.revision.versionLabel,
-    resolvedProfileStatus: artifacts.profile.revision.status,
+    profilePath: artifacts.profile ? selection.profilePath : null,
+    resolvedProfileId: artifacts.profile ? selection.profileId : null,
+    resolvedProfileHash: artifacts.profile?.hash ?? null,
+    resolvedProfileRevisionId: artifacts.profile?.revision.id ?? null,
+    resolvedProfileUpdatedAt: artifacts.profile?.revision.createdAt ?? null,
+    resolvedProfileVersionLabel: artifacts.profile?.revision.versionLabel ?? null,
+    resolvedProfileStatus: artifacts.profile?.revision.status ?? null,
     resolvedTemplateId: selection.templateId,
     resolvedTemplateHash: artifacts.template.hash,
     resolvedTemplateRevisionId: artifacts.template.revision.id,
@@ -303,37 +410,78 @@ export async function createPromptPackage(
     resolvedTemplateVersionLabel: artifacts.template.revision.versionLabel,
     resolvedTemplateStatus: artifacts.template.revision.status,
     templateVersion: selection.templateId,
-    notes: params.notes ?? null,
+    notes,
     storageUri: stored.uri,
     requestEnvelope,
   });
 
   const response = toPromptPackageResponse(promptPackage, payload);
 
-  if (recording?.studentId && (config as { generation?: unknown }).generation) {
-    void lessonMemory
-      .requestGeneration({
-        config,
-        params: {
-          studentId: recording.studentId,
-          transcriptId: transcript.id,
-          recordingId: transcript.recordingId,
-          lessonId: promptPackage.lessonId ?? params.lessonId ?? null,
-          promptPackageId: promptPackage.id,
-          trigger: 'prompt-package-created',
-        },
-      })
-      .catch((error) => {
-        logger.warn('Lesson-memory enqueue failed after prompt-package creation; continuing', {
-          event: 'lesson_memory_enqueue_failed_non_blocking',
-          promptPackageId: promptPackage.id,
-          transcriptId: transcript.id,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      });
+  return response;
+}
+
+async function resolveConfirmedAssignmentInputs(params: {
+  session: AssignmentSessionRecord;
+  routeRecordingId: string;
+  recordings: CreatePromptPackageDependencies['recordings'];
+  profileRevisions: CreatePromptPackageDependencies['profileRevisions'];
+}) {
+  const { session } = params;
+  const source = session.confirmed.source;
+  const context = session.confirmed.context;
+  if (!source || !context) {
+    throw new PromptPackageAssignmentError(
+      'PROMPT_PACKAGE_CONFIRMED_PREREQUISITE_MISSING',
+      'Confirmed Source and Context are required before prompt generation',
+    );
+  }
+  if (
+    session.confirmed.student.studentId !== session.studentId ||
+    source.recordingId !== params.routeRecordingId ||
+    session.recordingId !== source.recordingId ||
+    session.transcriptId !== source.transcriptId
+  ) {
+    throw new PromptPackageAssignmentError(
+      'PROMPT_PACKAGE_CONFIRMED_LINEAGE_INVALID',
+      'Confirmed Source does not match the assignment session lineage',
+    );
+  }
+  const recording = await params.recordings.getById(source.recordingId);
+  if (!recording || recording.studentId !== session.studentId) {
+    throw new PromptPackageAssignmentError(
+      'PROMPT_PACKAGE_CONFIRMED_LINEAGE_INVALID',
+      'Confirmed recording does not belong to the assignment student',
+    );
   }
 
-  return response;
+  const profileValues = [context.profileId, context.profileRevisionId, context.profileRevisionHash];
+  if (
+    profileValues.some((value) => value !== null) &&
+    profileValues.some((value) => value === null)
+  ) {
+    throw new PromptPackageAssignmentError(
+      'PROMPT_PACKAGE_CONFIRMED_LINEAGE_INVALID',
+      'Confirmed Context has incomplete profile provenance',
+    );
+  }
+  let profileRevision: ProfileRevisionRecord | null = null;
+  if (context.profileId && context.profileRevisionId && context.profileRevisionHash) {
+    profileRevision = await params.profileRevisions.getById(
+      context.profileId,
+      context.profileRevisionId,
+    );
+    if (
+      !profileRevision ||
+      profileRevision.profileId !== context.profileId ||
+      profileRevision.contentHash !== context.profileRevisionHash
+    ) {
+      throw new PromptPackageAssignmentError(
+        'PROMPT_PACKAGE_CONFIRMED_LINEAGE_INVALID',
+        'Confirmed profile revision no longer matches Context provenance',
+      );
+    }
+  }
+  return { source, context, recording, profileRevision };
 }
 
 async function validateLessonStudentPair(lessonId: string, studentId: string): Promise<void> {
@@ -455,18 +603,27 @@ async function resolvePromptArtifactsForWrite(params: {
   };
   profileRevisions: CreatePromptPackageDependencies['profileRevisions'];
   templateRevisions: CreatePromptPackageDependencies['templateRevisions'];
+  confirmedProfileRevision: ProfileRevisionRecord | null;
+  omitProfile: boolean;
 }): Promise<PromptArtifactResolution> {
-  const { selection, profileRevisions, templateRevisions } = params;
+  const { selection, profileRevisions, templateRevisions, confirmedProfileRevision, omitProfile } =
+    params;
 
   const [activeProfileRevision, activeTemplateRevision] = await Promise.all([
-    profileRevisions.getActive(selection.profileId).catch(() => null),
+    omitProfile
+      ? Promise.resolve(null)
+      : confirmedProfileRevision
+        ? Promise.resolve(confirmedProfileRevision)
+        : profileRevisions.getActive(selection.profileId).catch(() => null),
     templateRevisions.getActive(selection.templateId).catch(() => null),
   ]);
 
-  const profileResolution = await resolveProfileArtifact({
-    selection,
-    activeProfileRevision,
-  });
+  const profileResolution = omitProfile
+    ? null
+    : await resolveProfileArtifact({
+        selection,
+        activeProfileRevision,
+      });
   const templateResolution = await resolveTemplateArtifact({
     selection,
     activeTemplateRevision,

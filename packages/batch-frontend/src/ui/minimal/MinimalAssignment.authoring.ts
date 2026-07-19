@@ -10,9 +10,11 @@ import type {
   PromptPackageResponse,
 } from '../../utils/api';
 import {
+  ArtifactWorkingConflictApiError,
   approveJob,
   createDraft,
   createPromptPackage,
+  fetchDraft,
   GenerationDraftApiError,
   generateDraft,
   getJobStatus,
@@ -506,10 +508,9 @@ function mapGenerationError(error: unknown): string {
 
 interface UseMinimalAssignmentAuthoringControllerParams {
   recordingId: string | null;
-  lessonId?: string | null;
+  getAssignmentSessionId: () => string | null;
   transcriptStatus: TranscriptUiStatus;
   teacherNotes: string;
-  selectedProfileId: string;
   selectedTemplateId: string;
   currentJobId: string | null;
   learningPresetCatalogEnabled: boolean;
@@ -535,6 +536,7 @@ export interface AuthoringController extends AuthoringState {
   generationModelsForProvider: GenerationModelOption[];
   promptReady: boolean;
   draftDirty: boolean;
+  draftRecoveryConflict: boolean;
   draftPreviewGate: ReturnType<typeof getDraftPreviewGate>;
   previewReadyForCurrentDraft: boolean;
   canPublishWithPreview: boolean;
@@ -569,6 +571,7 @@ export interface AuthoringController extends AuthoringState {
   generateDraft: () => Promise<GenerateDraftResponse | null>;
   runValidation: () => Promise<MarkdownValidationResponse>;
   saveDraft: () => Promise<DraftResponse | null>;
+  refreshDraftPreservingLocal: () => Promise<void>;
   previewDraft: () => Promise<void>;
   publishAssignment: (params: {
     onPublishedJob: (job: JobStatus) => void;
@@ -582,10 +585,9 @@ export interface AuthoringController extends AuthoringState {
 
 export function useMinimalAssignmentAuthoringController({
   recordingId,
-  lessonId,
+  getAssignmentSessionId,
   transcriptStatus,
   teacherNotes,
-  selectedProfileId,
   selectedTemplateId,
   currentJobId,
   learningPresetCatalogEnabled,
@@ -612,6 +614,7 @@ export function useMinimalAssignmentAuthoringController({
   const draftAutosaveLastSavedAtRef = useRef(0);
   const draftAutosaveInFlightRef = useRef(false);
   const draftAutosavePendingRef = useRef(false);
+  const draftConflictTextRef = useRef<string | null>(null);
   const [draftAutosaveRescheduleToken, requestDraftAutosaveReschedule] = useReducer(
     (value: number) => value + 1,
     0,
@@ -862,12 +865,32 @@ export function useMinimalAssignmentAuthoringController({
         return null;
       }
       const persistenceVersion = authoringPersistenceVersionRef.current;
-      const response = state.draft?.id
-        ? await updateDraft(state.draft.id, normalizedText)
-        : await createDraft(state.promptPackage.id, normalizedText);
+      let response: DraftResponse;
+      try {
+        response = state.draft?.id
+          ? await updateDraft(state.draft.id, normalizedText, state.draft.workingVersion)
+          : await createDraft(state.promptPackage.id, normalizedText);
+      } catch (error) {
+        if (error instanceof ArtifactWorkingConflictApiError && state.draft?.id) {
+          try {
+            const latest = await fetchDraft(state.draft.id);
+            if (authoringPersistenceVersionRef.current === persistenceVersion) {
+              draftConflictTextRef.current = normalizedText;
+              dispatch({
+                type: 'draft_save_succeeded',
+                payload: { draft: latest, preserveCurrentText: true },
+              });
+            }
+          } catch {
+            // Preserve the local buffer and original conflict if refresh also fails.
+          }
+        }
+        throw error;
+      }
       if (authoringPersistenceVersionRef.current !== persistenceVersion) {
         return null;
       }
+      draftConflictTextRef.current = null;
       const preserveCurrentText =
         options.preserveCurrentText || draftTextRef.current.trim() !== normalizedText;
       dispatch({
@@ -877,7 +900,12 @@ export function useMinimalAssignmentAuthoringController({
       onDraftPronunciationModeDetected(detectPronunciationModeFromDraft(response.text ?? text));
       return response;
     },
-    [onDraftPronunciationModeDetected, state.draft?.id, state.promptPackage?.id],
+    [
+      onDraftPronunciationModeDetected,
+      state.draft?.id,
+      state.draft?.workingVersion,
+      state.promptPackage?.id,
+    ],
   );
 
   const saveDraft = useCallback(async (): Promise<DraftResponse | null> => {
@@ -916,6 +944,47 @@ export function useMinimalAssignmentAuthoringController({
     }
   }, [persistDraftText, runValidation, state.draftText, state.promptPackage]);
 
+  const refreshDraftPreservingLocal = useCallback(async () => {
+    if (!state.draft?.id) return;
+    const localText = draftTextRef.current.trim();
+    const durableText = (state.draft.text ?? '').trim();
+    const preserveCurrentText = localText !== durableText;
+    try {
+      const latest = await fetchDraft(state.draft.id);
+      const remoteText = (latest.text ?? '').trim();
+      const remoteChanged =
+        latest.workingVersion !== state.draft.workingVersion ||
+        latest.contentHash !== state.draft.contentHash;
+      const overlapsRemote = preserveCurrentText && remoteChanged && localText !== remoteText;
+      if (overlapsRemote) {
+        draftConflictTextRef.current = localText;
+      } else {
+        draftConflictTextRef.current = null;
+      }
+      dispatch({
+        type: 'draft_save_succeeded',
+        payload: { draft: latest, preserveCurrentText },
+      });
+      if (overlapsRemote) {
+        dispatch({
+          type: 'draft_save_failed',
+          payload: {
+            error: 'Newer saved draft work was found. Review your text before retrying.',
+          },
+        });
+      }
+    } catch (error) {
+      dispatch({
+        type: 'draft_save_failed',
+        payload: {
+          error: error instanceof Error ? error.message : 'Unable to refresh saved draft.',
+        },
+      });
+    }
+  }, [state.draft?.contentHash, state.draft?.id, state.draft?.text, state.draft?.workingVersion]);
+
+  const draftRecoveryConflict = draftConflictTextRef.current === state.draftText.trim();
+
   const generatePrompt = useCallback(async (): Promise<PromptPackageResponse | null> => {
     if (!recordingId) {
       dispatch({ type: 'prompt_generate_failed', payload: { error: 'Upload a recording first.' } });
@@ -937,16 +1006,22 @@ export function useMinimalAssignmentAuthoringController({
       });
       return null;
     }
+    const assignmentSessionId = getAssignmentSessionId();
+    if (!assignmentSessionId) {
+      dispatch({
+        type: 'prompt_generate_failed',
+        payload: { error: 'Confirm the assignment context before generating.' },
+      });
+      return null;
+    }
 
     invalidatePendingGeneration();
     dispatch({ type: 'prompt_generate_started' });
     try {
       const normalizedTeacherNotes = teacherNotes.trim();
       const response = await createPromptPackage(recordingId, {
-        ...(normalizedTeacherNotes ? { notes: normalizedTeacherNotes } : {}),
+        assignmentSessionId,
         templateId: selectedTemplateId,
-        profileId: selectedProfileId || undefined,
-        ...(lessonId ? { lessonId } : {}),
       });
       onTeacherNotesResolved(response.notes ?? normalizedTeacherNotes);
       dispatch({
@@ -964,10 +1039,9 @@ export function useMinimalAssignmentAuthoringController({
     }
   }, [
     invalidatePendingGeneration,
-    lessonId,
+    getAssignmentSessionId,
     onTeacherNotesResolved,
     recordingId,
-    selectedProfileId,
     selectedTemplateId,
     teacherNotes,
     transcriptStatus,
@@ -1241,6 +1315,7 @@ export function useMinimalAssignmentAuthoringController({
       }
       return;
     }
+    if (draftConflictTextRef.current === state.draftText.trim()) return;
 
     const elapsedMs = Date.now() - draftAutosaveLastSavedAtRef.current;
     const delayMs = Math.max(
@@ -1291,6 +1366,7 @@ export function useMinimalAssignmentAuthoringController({
   }, [
     draftAutosaveRescheduleToken,
     draftDirty,
+    draftRecoveryConflict,
     persistDraftText,
     state.draftText,
     state.promptPackage?.id,
@@ -1515,6 +1591,7 @@ export function useMinimalAssignmentAuthoringController({
     generationModelsForProvider,
     promptReady,
     draftDirty,
+    draftRecoveryConflict,
     draftPreviewGate,
     previewReadyForCurrentDraft,
     canPublishWithPreview,
@@ -1547,6 +1624,7 @@ export function useMinimalAssignmentAuthoringController({
     generateDraft: generateDraftHandler,
     runValidation,
     saveDraft,
+    refreshDraftPreservingLocal,
     previewDraft,
     publishAssignment,
     applyHydrationSnapshot,

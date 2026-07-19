@@ -8,6 +8,7 @@ import { validateMarkdown } from '@esl-pipeline/md-validator';
 
 import * as approveJobModule from '../src/application/approve-job.js';
 import * as assignmentSessionsModule from '../src/application/assignment-sessions.js';
+import * as confirmAssignmentSessionStepModule from '../src/application/confirm-assignment-session-step.js';
 import * as createDraftModule from '../src/application/create-draft.js';
 import * as createPromptPackageModule from '../src/application/create-prompt-package.js';
 import * as generateDraftModule from '../src/application/generate-draft.js';
@@ -29,6 +30,7 @@ import * as profileDraftRefreshModule from '../src/application/profile-draft-ref
 import { ProfilePathError } from '../src/application/profile-path.js';
 import * as readinessMetricsModule from '../src/application/readiness-metrics.js';
 import * as retryRecordingModule from '../src/application/retry-recording-transcription.js';
+import * as shareAssignmentSessionModule from '../src/application/share-assignment-session.js';
 import * as studentMemoryInspectionModule from '../src/application/student-memory-inspection.js';
 import * as studentBindingsModule from '../src/application/student-profile-bindings.js';
 import * as studentProfileCandidatesModule from '../src/application/student-profile-candidates.js';
@@ -39,6 +41,7 @@ import * as studentTimelineModule from '../src/application/student-timeline.js';
 import * as submitJobModule from '../src/application/submit-job.js';
 import * as teacherBusinessDashboardModule from '../src/application/teacher-business-dashboard.js';
 import * as templateContentModule from '../src/application/template-content.js';
+import * as updateDraftModule from '../src/application/update-draft.js';
 import * as updateRecordingTranscriptModule from '../src/application/update-recording-transcript.js';
 import { getVersionMeta } from '../src/application/version-meta.js';
 import { publishJobEvent } from '../src/domain/job-events.js';
@@ -1260,6 +1263,8 @@ export function describeHttpServerIntegrationSuite(
       CONTRACT_VERSIONS,
       DB_MIGRATION_HEAD,
       assignmentSessionsModule,
+      confirmAssignmentSessionStepModule,
+      shareAssignmentSessionModule,
       authMiddlewareModule,
       rateLimitMocks,
       approveJobModule,
@@ -1287,6 +1292,7 @@ export function describeHttpServerIntegrationSuite(
       studentTimelineModule,
       submitJobModule,
       templateContentModule,
+      updateDraftModule,
       updateRecordingTranscriptModule,
       publishJobEvent,
       publishRecordingEvent,
