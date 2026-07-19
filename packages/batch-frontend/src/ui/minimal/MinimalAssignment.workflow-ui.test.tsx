@@ -651,6 +651,23 @@ describe('MinimalAssignment - staged workflow UI', () => {
     });
     expect(priorValue).not.toBe(latest.teacherNotes);
     vi.mocked(api.fetchAssignmentSession).mockResolvedValueOnce(latest);
+    vi.mocked(api.getProfileContent).mockResolvedValue({
+      id: 'profiles/alex.md',
+      label: 'Alex Profile',
+      content: 'NEWER PROFILE CONTENT',
+      currentRevisionId: 'revision-2',
+      updatedAt: '2026-07-19T00:02:00.000Z',
+    });
+    vi.mocked(api.getProfileRevision).mockResolvedValue({
+      id: 'revision-2',
+      profileId: 'profiles/alex.md',
+      contentHash: 'b'.repeat(64),
+      source: 'update',
+      createdAt: '2026-07-19T00:02:00.000Z',
+      createdBy: null,
+      restoredFromRevisionId: null,
+      content: 'NEWER PROFILE CONTENT',
+    });
 
     await act(async () => {
       globalThis.dispatchEvent(new Event('focus'));
@@ -665,6 +682,8 @@ describe('MinimalAssignment - staged workflow UI', () => {
           step: 'context',
           expectedRevision: latest.revision + 1,
           teacherNotes: 'Remote saved note',
+          profileRevisionId: 'revision-1',
+          profileRevisionHash: 'a'.repeat(64),
         }),
       ),
     );

@@ -1975,6 +1975,7 @@ export const MinimalAssignment: React.FC = () => {
       void resumeLoadResumeJobs();
       void loadStudentOptions();
       void (async () => {
+        let preserveContextLineage = false;
         const current = activeAssignmentSessionRef.current;
         if (current) {
           try {
@@ -2006,6 +2007,7 @@ export const MinimalAssignment: React.FC = () => {
               });
               const localContextIsClean = localContextKey === durableContextKey;
               const remoteContextChanged = remoteContextKey !== durableContextKey;
+              preserveContextLineage = remoteContextChanged;
               if (localContextIsClean && remoteContextChanged) {
                 assignmentContextConflictKeyRef.current = null;
                 setTeacherNotes(latest.teacherNotes ?? '');
@@ -2037,7 +2039,9 @@ export const MinimalAssignment: React.FC = () => {
           }
         }
         await Promise.all([refreshTranscriptPreservingLocal(), refreshDraftPreservingLocal()]);
-        refreshSelectedProfile();
+        if (!preserveContextLineage) {
+          refreshSelectedProfile();
+        }
       })();
     };
     globalThis.addEventListener('focus', handleFocus);
