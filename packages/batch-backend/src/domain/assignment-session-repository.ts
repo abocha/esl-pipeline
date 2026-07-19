@@ -607,18 +607,23 @@ async function reconcileConfirmedLessonMemoryIntent(
     );
   }
 
-  if (authorityChanged && previousSource) {
+  if (authorityChanged) {
     const old = await client.query<{ id: string }>(
       `UPDATE lesson_memory_entries SET status = 'superseded', superseded_by_id = $1,
        superseded_at = $2, updated_at = NOW()
-       WHERE transcript_id = $3 AND source_content_hash = $4
-         AND id <> $1 AND status IN ('pending', 'ready')
+       WHERE id <> $1 AND student_id = $3 AND status IN ('pending', 'ready')
+         AND (
+           ($4::uuid IS NOT NULL AND transcript_id = $4 AND source_content_hash = $5)
+           OR ($4::uuid IS NULL AND transcript_id = $6)
+         )
        RETURNING id`,
       [
         entryId,
         lessonMemory.requestedAt,
-        previousSource.transcriptId,
-        previousSource.transcriptHash,
+        session.studentId,
+        previousSource?.transcriptId ?? null,
+        previousSource?.transcriptHash ?? null,
+        source.transcriptId,
       ],
     );
     const oldIds = old.rows.map((row) => row.id);

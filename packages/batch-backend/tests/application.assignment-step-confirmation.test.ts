@@ -182,6 +182,138 @@ describe('application/confirm-assignment-session-step', () => {
 });
 
 describe('application/confirm-assignment-session-step transactional persistence', () => {
+  it('supersedes prior ready memory when a new session confirms changed content for the same transcript', async () => {
+    const userId = randomUUID();
+    const studentId = randomUUID();
+    const recordingId = randomUUID();
+    const transcriptId = randomUUID();
+    const sourceAHash = 'a'.repeat(64);
+    const sourceBHash = 'b'.repeat(64);
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      await client.query(
+        'TRUNCATE TABLE assignment_sessions, lesson_memory_entries, student_memory_snapshots, transcripts, recordings, students, users RESTART IDENTITY CASCADE',
+      );
+      await client.query(
+        `INSERT INTO users (id, email, password_hash, role) VALUES ($1, $2, 'hash', 'user')`,
+        [userId, `${userId}@example.test`],
+      );
+      await client.query(`INSERT INTO students (id, student) VALUES ($1, 'Alpha')`, [studentId]);
+      await client.query(
+        `INSERT INTO recordings (id, source, student_id, storage_uri, bytes, status)
+         VALUES ($1, 'upload', $2, 's3://recordings/a.mp3', 1, 'transcribed')`,
+        [recordingId, studentId],
+      );
+      await client.query(
+        `INSERT INTO transcripts (
+           id, recording_id, storage_uri, working_version, content_hash, stt_provider,
+           mode, model, language, fallback_used
+         ) VALUES ($1, $2, 's3://transcripts/content/a.txt', 1, $3, 'deepgram',
+                   'timeline', 'nova-3', 'multi', false)`,
+        [transcriptId, recordingId, sourceAHash],
+      );
+    });
+    const memory = {
+      schemaVersion: 'lesson-memory.v1',
+      provider: 'openai',
+      model: 'gpt-5.2',
+      requestedAt: new Date('2026-07-19T00:00:00Z'),
+    };
+    const firstSession = await confirmStudentAssignmentSession({
+      userId,
+      requestId: randomUUID(),
+      studentId,
+      lessonId: null,
+    });
+    const confirmedA = await confirmAssignmentSessionStepPersistence({
+      id: firstSession.id,
+      userId,
+      request: {
+        step: 'source',
+        expectedRevision: firstSession.revision,
+        lessonId: null,
+        recordingId,
+        transcriptId,
+        transcriptWorkingVersion: 1,
+      },
+      lessonMemory: memory,
+    });
+    await publishConfirmedLessonMemoryEntry({
+      id: confirmedA.lessonMemoryIntent!.entryId,
+      studentId,
+      transcriptId,
+      recordingId,
+      schemaVersion: 'lesson-memory.v1',
+      provider: 'openai',
+      model: 'gpt-5.2',
+      sourceStorageUri: 's3://transcripts/content/a.txt',
+      sourceContentHash: sourceAHash,
+    });
+    const snapshotId = randomUUID();
+    const completedJobId = randomUUID();
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      await client.query(
+        `INSERT INTO student_memory_snapshots (
+           id, student_id, schema_version, generated_at, provider, model, status,
+           lesson_memory_entry_ids
+         ) VALUES ($1, $2, 'student-memory.v1', NOW(), 'openai', 'gpt-5.2', 'ready', $3::uuid[])`,
+        [snapshotId, studentId, [confirmedA.lessonMemoryIntent!.entryId]],
+      );
+      await client.query(
+        `INSERT INTO jobs (id, state, student_id, user_id) VALUES ($1, 'succeeded', $2, $3)`,
+        [completedJobId, studentId, userId],
+      );
+      await client.query(
+        `UPDATE assignment_sessions
+         SET confirmed_step = 'share', share_job_id = $2, revision = revision + 1
+         WHERE id = $1`,
+        [firstSession.id, completedJobId],
+      );
+    });
+    await updateTranscriptWorkingContent({
+      id: transcriptId,
+      expectedWorkingVersion: 1,
+      storageUri: 's3://transcripts/content/b.txt',
+      contentHash: sourceBHash,
+    });
+    const secondSession = await confirmStudentAssignmentSession({
+      userId,
+      requestId: randomUUID(),
+      studentId,
+      lessonId: null,
+    });
+    const confirmedB = await confirmAssignmentSessionStepPersistence({
+      id: secondSession.id,
+      userId,
+      request: {
+        step: 'source',
+        expectedRevision: secondSession.revision,
+        lessonId: null,
+        recordingId,
+        transcriptId,
+        transcriptWorkingVersion: 2,
+      },
+      lessonMemory: { ...memory, requestedAt: new Date('2026-07-19T00:01:00Z') },
+    });
+
+    const authority = await withPgClientSessionContext({ rlsBypass: true }, async (client) => ({
+      memories: await client.query<{ source_content_hash: string; status: string }>(
+        `SELECT source_content_hash, status FROM lesson_memory_entries
+         WHERE transcript_id = $1 ORDER BY source_content_hash`,
+        [transcriptId],
+      ),
+      snapshot: await client.query<{ status: string }>(
+        'SELECT status FROM student_memory_snapshots WHERE id = $1',
+        [snapshotId],
+      ),
+    }));
+    expect(authority.memories.rows).toEqual([
+      { source_content_hash: sourceAHash, status: 'superseded' },
+      { source_content_hash: sourceBHash, status: 'pending' },
+    ]);
+    expect(authority.snapshot.rows[0]?.status).toBe('superseded');
+    expect(confirmedB.lessonMemoryIntent).toMatchObject({ outcome: 'created' });
+  });
+
   it('captures exact Source provenance, replays idempotently, and supersedes A when B is confirmed', async () => {
     const userId = randomUUID();
     const studentId = randomUUID();

@@ -14,6 +14,7 @@ import type {
   UpdateAssignmentSessionRecoveryRequest,
 } from '../../utils/api';
 import {
+  ArtifactWorkingConflictApiError,
   AssignmentSessionConflictApiError,
   activateProfileRevision,
   confirmAssignmentSessionStep,
@@ -508,6 +509,8 @@ export const MinimalAssignment: React.FC = () => {
     applyHydrationSnapshot: applyAuthoringHydration,
     setPublishError: setAuthoringPublishError,
   } = authoring;
+  const refreshTranscriptPreservingLocal = source.refreshTranscriptPreservingLocal;
+  const refreshDraftPreservingLocal = authoring.refreshDraftPreservingLocal;
 
   const markAssignmentUserEdit = useCallback(() => {
     assignmentSessionUserEditedRef.current = true;
@@ -831,6 +834,14 @@ export const MinimalAssignment: React.FC = () => {
           try {
             response = await confirmAssignmentSessionStep(current.id, request);
           } catch (error) {
+            if (error instanceof ArtifactWorkingConflictApiError) {
+              if (request.step === 'source') {
+                await refreshTranscriptPreservingLocal();
+              } else if (request.step === 'create') {
+                await refreshDraftPreservingLocal();
+              }
+              throw error;
+            }
             const serverSession =
               error instanceof AssignmentSessionConflictApiError
                 ? error.latestSession
@@ -867,15 +878,23 @@ export const MinimalAssignment: React.FC = () => {
           setAssignmentSaveState(
             error instanceof AssignmentSessionConflictApiError
               ? 'conflict'
-              : error instanceof AssignmentMutationAmbiguousError
-                ? 'ambiguous'
-                : 'error',
+              : error instanceof ArtifactWorkingConflictApiError
+                ? 'conflict'
+                : error instanceof AssignmentMutationAmbiguousError
+                  ? 'ambiguous'
+                  : 'error',
           );
         }
         return null;
       }
     },
-    [invalidateAuthoringGeneration, resetAuthoring, setActiveAssignmentSession],
+    [
+      invalidateAuthoringGeneration,
+      refreshDraftPreservingLocal,
+      refreshTranscriptPreservingLocal,
+      resetAuthoring,
+      setActiveAssignmentSession,
+    ],
   );
 
   const handleLinkedLessonSelection = useCallback(
@@ -1913,8 +1932,6 @@ export const MinimalAssignment: React.FC = () => {
   const transcriptRecoveryConflict = source.transcriptRecoveryConflict;
   const draftRecoveryConflict = authoring.draftRecoveryConflict;
   const saveDraft = authoring.saveDraft;
-  const refreshTranscriptPreservingLocal = source.refreshTranscriptPreservingLocal;
-  const refreshDraftPreservingLocal = authoring.refreshDraftPreservingLocal;
   const refreshSelectedProfile = context.refreshSelectedProfile;
   const applyJobStatusTransition = resume.applyJobStatusTransition;
 
@@ -1987,9 +2004,21 @@ export const MinimalAssignment: React.FC = () => {
                 selectedProfileRevisionId: latest.selectedProfileRevisionId,
                 selectedProfileRevisionHash: latest.selectedProfileRevisionHash,
               });
-              if (
-                localContextKey !== durableContextKey &&
-                remoteContextKey !== durableContextKey &&
+              const localContextIsClean = localContextKey === durableContextKey;
+              const remoteContextChanged = remoteContextKey !== durableContextKey;
+              if (localContextIsClean && remoteContextChanged) {
+                assignmentContextConflictKeyRef.current = null;
+                setTeacherNotes(latest.teacherNotes ?? '');
+                applyContextHydration({
+                  selectedProfileId: latest.selectedProfileId ?? '',
+                  profileSelectionMode: context.profileSelectionMode,
+                  selectedProfileRevisionId: latest.selectedProfileRevisionId,
+                  selectedProfileRevisionHash: latest.selectedProfileRevisionHash,
+                });
+                setAssignmentSaveState('saved');
+              } else if (
+                !localContextIsClean &&
+                remoteContextChanged &&
                 localContextKey !== remoteContextKey
               ) {
                 assignmentContextConflictKeyRef.current = localContextKey;
@@ -2014,6 +2043,7 @@ export const MinimalAssignment: React.FC = () => {
     globalThis.addEventListener('focus', handleFocus);
     return () => globalThis.removeEventListener('focus', handleFocus);
   }, [
+    applyContextHydration,
     applyJobStatusTransition,
     handleShareAssignment,
     loadStudentOptions,
@@ -2022,6 +2052,7 @@ export const MinimalAssignment: React.FC = () => {
     refreshTranscriptPreservingLocal,
     resumeLoadResumeJobs,
     setActiveAssignmentSession,
+    context.profileSelectionMode,
     context.selectedProfileId,
     context.selectedProfileRevisionHash,
     context.selectedProfileRevisionId,
