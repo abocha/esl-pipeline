@@ -13,6 +13,7 @@ import {
   makeRecording,
   makeTranscript,
   openAdvancedActions,
+  preparePromptReady,
   previewCurrentDraft,
   renderMinimalAssignment,
   renderMinimalAssignmentWithNavigationGuard,
@@ -630,6 +631,34 @@ describe('MinimalAssignment - staged workflow UI', () => {
     await expect(guard()).resolves.toBe(false);
     expect(api.updateRecordingTranscript).toHaveBeenCalledTimes(1);
     vi.useRealTimers();
+  });
+
+  it('flushes a pending Context debounce before allowing navigation', async () => {
+    let navigationGuard: (() => Promise<boolean>) | null = null;
+    const user = createMinimalUser();
+    renderMinimalAssignmentWithNavigationGuard((guard) => {
+      navigationGuard = guard;
+    });
+    await preparePromptReady(user);
+    await user.click(screen.getByRole('button', { name: /Teaching context/i }));
+    const recoveryCalls = vi.mocked(api.updateAssignmentSessionRecovery).mock.calls.length;
+    fireEvent.change(screen.getByRole('textbox', { name: /Teacher notes/i }), {
+      target: { value: 'Flush this note before leaving' },
+    });
+    const beforeUnload = new Event('beforeunload', { cancelable: true });
+    globalThis.dispatchEvent(beforeUnload);
+    expect(beforeUnload.defaultPrevented).toBe(true);
+
+    const guard = navigationGuard as unknown as () => Promise<boolean>;
+    await expect(guard()).resolves.toBe(true);
+
+    expect(api.updateAssignmentSessionRecovery).toHaveBeenCalledTimes(recoveryCalls + 1);
+    expect(api.updateAssignmentSessionRecovery).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        patch: expect.objectContaining({ teacherNotes: 'Flush this note before leaving' }),
+      }),
+    );
   });
 
   it(

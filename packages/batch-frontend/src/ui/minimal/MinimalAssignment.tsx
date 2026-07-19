@@ -294,6 +294,8 @@ export const MinimalAssignment: React.FC = () => {
   const [assignmentSaveState, setAssignmentSaveState] = useState<
     'idle' | 'saving' | 'saved' | 'error' | 'conflict' | 'ambiguous'
   >('idle');
+  const [assignmentDebouncedRecoveryPending, setAssignmentDebouncedRecoveryPending] =
+    useState(false);
   const assignmentSaveStateRef = useRef(assignmentSaveState);
   assignmentSaveStateRef.current = assignmentSaveState;
   const [startingAssignment, setStartingAssignment] = useState(false);
@@ -346,6 +348,13 @@ export const MinimalAssignment: React.FC = () => {
   const assignmentSessionSettingsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const assignmentContextRecoveryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const assignmentContextConflictKeyRef = useRef<string | null>(null);
+  const pendingContextRecoveryRef = useRef<{
+    key: string;
+    patch: UpdateAssignmentSessionRecoveryRequest['patch'];
+  } | null>(null);
+  const pendingSettingsRecoveryRef = useRef<UpdateAssignmentSessionRecoveryRequest['patch'] | null>(
+    null,
+  );
   const assignmentSessionMilestoneRef = useRef({
     studentId: '',
     recordingId: '',
@@ -731,6 +740,43 @@ export const MinimalAssignment: React.FC = () => {
     [activeAssignmentSession, jobStatus?.jobId, setActiveAssignmentSession],
   );
 
+  const refreshDebouncedRecoveryPendingState = useCallback(() => {
+    setAssignmentDebouncedRecoveryPending(
+      pendingContextRecoveryRef.current !== null || pendingSettingsRecoveryRef.current !== null,
+    );
+  }, []);
+
+  const flushPendingSessionRecovery = useCallback(async (): Promise<boolean> => {
+    if (assignmentContextRecoveryTimeoutRef.current) {
+      clearTimeout(assignmentContextRecoveryTimeoutRef.current);
+      assignmentContextRecoveryTimeoutRef.current = null;
+    }
+    if (assignmentSessionSettingsTimeoutRef.current) {
+      clearTimeout(assignmentSessionSettingsTimeoutRef.current);
+      assignmentSessionSettingsTimeoutRef.current = null;
+    }
+    const contextPending = pendingContextRecoveryRef.current;
+    const settingsPending = pendingSettingsRecoveryRef.current;
+    if (!contextPending && !settingsPending) {
+      setAssignmentDebouncedRecoveryPending(false);
+      return true;
+    }
+    pendingContextRecoveryRef.current = null;
+    pendingSettingsRecoveryRef.current = null;
+    const saved = await saveAssignmentSessionProgress({
+      ...(settingsPending ?? {}),
+      ...(contextPending?.patch ?? {}),
+    });
+    setAssignmentDebouncedRecoveryPending(false);
+    if (saved && contextPending && assignmentContextConflictKeyRef.current === contextPending.key) {
+      assignmentContextConflictKeyRef.current = null;
+      pendingContextRecoveryRef.current = null;
+      pendingSettingsRecoveryRef.current = null;
+      setAssignmentDebouncedRecoveryPending(false);
+    }
+    return saved !== null;
+  }, [saveAssignmentSessionProgress]);
+
   const confirmAssignmentStep = useCallback(
     async (
       buildRequest: (session: AssignmentSession) => ConfirmAssignmentSessionStepRequest,
@@ -914,34 +960,28 @@ export const MinimalAssignment: React.FC = () => {
       selectedProfileRevisionHash: context.selectedProfileRevisionHash,
     };
     const recoveryKey = JSON.stringify(recovery);
-    if (assignmentContextConflictKeyRef.current === recoveryKey) return;
+    if (assignmentContextConflictKeyRef.current === recoveryKey) {
+      pendingContextRecoveryRef.current = null;
+      refreshDebouncedRecoveryPendingState();
+      return;
+    }
     if (
       session.teacherNotes === recovery.teacherNotes &&
       session.selectedProfileId === recovery.selectedProfileId &&
       session.selectedProfileRevisionId === recovery.selectedProfileRevisionId &&
       session.selectedProfileRevisionHash === recovery.selectedProfileRevisionHash
     ) {
+      pendingContextRecoveryRef.current = null;
+      refreshDebouncedRecoveryPendingState();
       return;
     }
     if (assignmentContextRecoveryTimeoutRef.current) {
       clearTimeout(assignmentContextRecoveryTimeoutRef.current);
     }
+    pendingContextRecoveryRef.current = { key: recoveryKey, patch: recovery };
+    refreshDebouncedRecoveryPendingState();
     assignmentContextRecoveryTimeoutRef.current = setTimeout(() => {
-      assignmentContextRecoveryTimeoutRef.current = null;
-      const latest = activeAssignmentSessionRef.current;
-      if (
-        latest?.teacherNotes === recovery.teacherNotes &&
-        latest.selectedProfileId === recovery.selectedProfileId &&
-        latest.selectedProfileRevisionId === recovery.selectedProfileRevisionId &&
-        latest.selectedProfileRevisionHash === recovery.selectedProfileRevisionHash
-      ) {
-        return;
-      }
-      void saveAssignmentSessionProgress(recovery).then((saved) => {
-        if (saved && assignmentContextConflictKeyRef.current === recoveryKey) {
-          assignmentContextConflictKeyRef.current = null;
-        }
-      });
+      void flushPendingSessionRecovery();
     }, 1500);
     return () => {
       if (assignmentContextRecoveryTimeoutRef.current) {
@@ -954,7 +994,8 @@ export const MinimalAssignment: React.FC = () => {
     context.selectedProfileId,
     context.selectedProfileRevisionHash,
     context.selectedProfileRevisionId,
-    saveAssignmentSessionProgress,
+    flushPendingSessionRecovery,
+    refreshDebouncedRecoveryPendingState,
     teacherNotes,
   ]);
 
@@ -1036,6 +1077,8 @@ export const MinimalAssignment: React.FC = () => {
 
   useEffect(() => {
     if (!authoring.promptPackage?.id && !authoring.draft?.id) {
+      pendingSettingsRecoveryRef.current = null;
+      refreshDebouncedRecoveryPendingState();
       return;
     }
 
@@ -1058,27 +1101,32 @@ export const MinimalAssignment: React.FC = () => {
       selectedPreset: authoring.selectedPreset || null,
     });
     if (assignmentSessionSettingsRef.current === settingsKey) {
+      pendingSettingsRecoveryRef.current = null;
+      refreshDebouncedRecoveryPendingState();
       return;
     }
     assignmentSessionSettingsRef.current = settingsKey;
     if (!assignmentSessionWritesAllowed()) {
+      pendingSettingsRecoveryRef.current = null;
+      refreshDebouncedRecoveryPendingState();
       return;
     }
     if (assignmentSessionSettingsTimeoutRef.current) {
       clearTimeout(assignmentSessionSettingsTimeoutRef.current);
     }
+    pendingSettingsRecoveryRef.current = {
+      teacherNotes: committedTeacherNotesRef.current || null,
+      selectedGenerationProvider,
+      selectedGenerationModel: authoring.selectedGenerationModel || null,
+      publishTarget: authoring.publishTarget,
+      selectedTtsProvider: authoring.selectedTtsProvider,
+      selectedTtsStrategy: authoring.selectedTtsStrategy,
+      selectedTtsModel: authoring.selectedTtsModel || null,
+      selectedPreset: authoring.selectedPreset || null,
+    };
+    refreshDebouncedRecoveryPendingState();
     assignmentSessionSettingsTimeoutRef.current = setTimeout(() => {
-      assignmentSessionSettingsTimeoutRef.current = null;
-      void saveAssignmentSessionProgress({
-        teacherNotes: committedTeacherNotesRef.current || null,
-        selectedGenerationProvider,
-        selectedGenerationModel: authoring.selectedGenerationModel || null,
-        publishTarget: authoring.publishTarget,
-        selectedTtsProvider: authoring.selectedTtsProvider,
-        selectedTtsStrategy: authoring.selectedTtsStrategy,
-        selectedTtsModel: authoring.selectedTtsModel || null,
-        selectedPreset: authoring.selectedPreset || null,
-      });
+      void flushPendingSessionRecovery();
     }, 1500);
 
     return () => {
@@ -1097,7 +1145,8 @@ export const MinimalAssignment: React.FC = () => {
     authoring.selectedTtsModel,
     authoring.selectedTtsProvider,
     authoring.selectedTtsStrategy,
-    saveAssignmentSessionProgress,
+    flushPendingSessionRecovery,
+    refreshDebouncedRecoveryPendingState,
     teacherNotes,
     assignmentSessionWritesAllowed,
   ]);
@@ -1810,6 +1859,7 @@ export const MinimalAssignment: React.FC = () => {
       authoring.draftDirty ||
       source.transcriptRecoveryConflict ||
       authoring.draftRecoveryConflict ||
+      assignmentDebouncedRecoveryPending ||
       assignmentSaveState === 'saving'
         ? 'pending'
         : assignmentSaveState === 'error'
@@ -1843,6 +1893,7 @@ export const MinimalAssignment: React.FC = () => {
       return false;
     }
     if (transcriptRecoveryConflict || draftRecoveryConflict) return false;
+    if (!(await flushPendingSessionRecovery())) return false;
     if (sourceTranscriptDirty && !(await saveTranscript())) return false;
     if (draftDirty && !(await saveDraft())) return false;
     const sessionQueueSettled = await assignmentSessionMutationQueueRef.current.then(
@@ -1854,6 +1905,7 @@ export const MinimalAssignment: React.FC = () => {
   }, [
     draftDirty,
     draftRecoveryConflict,
+    flushPendingSessionRecovery,
     saveDraft,
     saveTranscript,
     sourceTranscriptDirty,
