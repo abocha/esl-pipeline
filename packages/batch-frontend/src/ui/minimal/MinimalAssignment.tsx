@@ -355,6 +355,7 @@ export const MinimalAssignment: React.FC = () => {
   const pendingSettingsRecoveryRef = useRef<UpdateAssignmentSessionRecoveryRequest['patch'] | null>(
     null,
   );
+  const pendingSessionRecoveryDrainRef = useRef<Promise<boolean> | null>(null);
   const assignmentSessionMilestoneRef = useRef({
     studentId: '',
     recordingId: '',
@@ -533,6 +534,7 @@ export const MinimalAssignment: React.FC = () => {
     }
     pendingContextRecoveryRef.current = null;
     pendingSettingsRecoveryRef.current = null;
+    pendingSessionRecoveryDrainRef.current = null;
     setAssignmentDebouncedRecoveryPending(false);
   }, []);
 
@@ -699,11 +701,13 @@ export const MinimalAssignment: React.FC = () => {
       }
 
       const mutationSequence = assignmentSessionMutationSequenceRef.current + 1;
+      const mutationHydrationId = hydrationIdRef.current;
       assignmentSessionMutationSequenceRef.current = mutationSequence;
       setAssignmentSaveState('saving');
       const run = assignmentSessionMutationQueueRef.current
         .catch(() => null)
         .then(async (latest) => {
+          if (hydrationIdRef.current !== mutationHydrationId) return null;
           const current = latest ?? activeAssignmentSessionRef.current;
           if (!current && jobStatus?.jobId) {
             return null;
@@ -716,6 +720,7 @@ export const MinimalAssignment: React.FC = () => {
               patch: cleaned,
             });
           } catch (error) {
+            if (hydrationIdRef.current !== mutationHydrationId) return null;
             if (!(error instanceof AssignmentSessionConflictApiError)) throw error;
             const latest = error.latestSession;
             activeAssignmentSessionRef.current = latest;
@@ -730,6 +735,7 @@ export const MinimalAssignment: React.FC = () => {
               patch: cleaned,
             });
           }
+          if (hydrationIdRef.current !== mutationHydrationId) return null;
           activeAssignmentSessionRef.current = saved;
           setActiveAssignmentSession(saved);
           return saved;
@@ -760,8 +766,10 @@ export const MinimalAssignment: React.FC = () => {
     );
   }, []);
 
-  const flushPendingSessionRecovery = useCallback(async (): Promise<boolean> => {
+  const drainPendingSessionRecovery = useCallback(async (): Promise<boolean> => {
+    const drainHydrationId = hydrationIdRef.current;
     for (;;) {
+      if (hydrationIdRef.current !== drainHydrationId) return false;
       if (assignmentContextRecoveryTimeoutRef.current) {
         clearTimeout(assignmentContextRecoveryTimeoutRef.current);
         assignmentContextRecoveryTimeoutRef.current = null;
@@ -783,6 +791,7 @@ export const MinimalAssignment: React.FC = () => {
         ...(settingsPending ?? {}),
         ...(contextPending?.patch ?? {}),
       });
+      if (hydrationIdRef.current !== drainHydrationId) return false;
       if (!saved) {
         refreshDebouncedRecoveryPendingState();
         return false;
@@ -792,6 +801,18 @@ export const MinimalAssignment: React.FC = () => {
       }
     }
   }, [refreshDebouncedRecoveryPendingState, saveAssignmentSessionProgress]);
+
+  const flushPendingSessionRecovery = useCallback((): Promise<boolean> => {
+    const existing = pendingSessionRecoveryDrainRef.current;
+    if (existing) return existing;
+    const drain = drainPendingSessionRecovery().finally(() => {
+      if (pendingSessionRecoveryDrainRef.current === drain) {
+        pendingSessionRecoveryDrainRef.current = null;
+      }
+    });
+    pendingSessionRecoveryDrainRef.current = drain;
+    return drain;
+  }, [drainPendingSessionRecovery]);
 
   const confirmAssignmentStep = useCallback(
     async (

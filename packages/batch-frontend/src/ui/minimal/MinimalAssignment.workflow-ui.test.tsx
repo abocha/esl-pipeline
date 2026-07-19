@@ -688,6 +688,70 @@ describe('MinimalAssignment - staged workflow UI', () => {
     expect(api.updateAssignmentSessionRecovery).toHaveBeenCalledTimes(recoveryCalls);
   });
 
+  it('ignores an old session recovery response after another assignment starts', async () => {
+    const user = createMinimalUser();
+    renderMinimalAssignment();
+    await preparePromptReady(user);
+    await user.click(screen.getByRole('button', { name: /Teaching context/i }));
+    let resolveOldRecovery: ((session: ReturnType<typeof makeAssignmentSession>) => void) | null =
+      null;
+    vi.mocked(api.updateAssignmentSessionRecovery).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveOldRecovery = resolve;
+        }),
+    );
+    vi.useFakeTimers();
+    fireEvent.change(screen.getByRole('textbox', { name: /Teacher notes/i }), {
+      target: { value: 'Delayed old-session note' },
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_000);
+    });
+    expect(resolveOldRecovery).not.toBeNull();
+    vi.useRealTimers();
+
+    vi.mocked(api.confirmStudentAssignmentSession).mockResolvedValueOnce(
+      makeAssignmentSession({
+        id: 'session-new',
+        studentId: 'student-bella',
+        confirmedStep: 'student',
+      }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Step 1Student/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Change assignment/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Start new assignment/i }));
+    fireEvent.change(await screen.findByRole('combobox', { name: /Choose learner/i }), {
+      target: { value: 'student-bella' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await screen.findByRole('heading', { name: /Add lesson source/i });
+
+    const resolveOld = resolveOldRecovery as unknown as (
+      session: ReturnType<typeof makeAssignmentSession>,
+    ) => void;
+    resolveOld(
+      makeAssignmentSession({
+        id: 'session-1',
+        studentId: 'student-alex',
+        confirmedStep: 'context',
+        teacherNotes: 'Delayed old-session note',
+        revision: 99,
+      }),
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Drop audio file/i }));
+    await waitFor(() =>
+      expect(api.updateAssignmentSessionRecovery).toHaveBeenCalledWith(
+        'session-new',
+        expect.anything(),
+      ),
+    );
+  });
+
   it('drains a newer Context edit made while navigation recovery is in flight', async () => {
     let navigationGuard: (() => Promise<boolean>) | null = null;
     const user = createMinimalUser();
@@ -719,15 +783,17 @@ describe('MinimalAssignment - staged workflow UI', () => {
           revision: request.expectedRevision + 1,
         }),
       );
+    vi.useFakeTimers();
     fireEvent.change(screen.getByRole('textbox', { name: /Teacher notes/i }), {
       target: { value: 'First note being flushed' },
     });
 
     const guard = navigationGuard as unknown as () => Promise<boolean>;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_000);
+    });
+    expect(api.updateAssignmentSessionRecovery).toHaveBeenCalledTimes(recoveryCalls + 1);
     const navigation = guard();
-    await waitFor(() =>
-      expect(api.updateAssignmentSessionRecovery).toHaveBeenCalledTimes(recoveryCalls + 1),
-    );
     fireEvent.change(screen.getByRole('textbox', { name: /Teacher notes/i }), {
       target: { value: 'Newer note typed during the first PATCH' },
     });
@@ -749,6 +815,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
     );
 
     await expect(navigation).resolves.toBe(true);
+    vi.useRealTimers();
     expect(api.updateAssignmentSessionRecovery).toHaveBeenCalledTimes(recoveryCalls + 2);
     expect(api.updateAssignmentSessionRecovery).toHaveBeenLastCalledWith(
       'session-1',
