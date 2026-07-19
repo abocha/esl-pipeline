@@ -661,6 +661,105 @@ describe('MinimalAssignment - staged workflow UI', () => {
     );
   });
 
+  it('cancels pending Context recovery when starting another assignment', async () => {
+    const user = createMinimalUser();
+    renderMinimalAssignment();
+    await preparePromptReady(user);
+    await user.click(screen.getByRole('button', { name: /Teaching context/i }));
+    const recoveryCalls = vi.mocked(api.updateAssignmentSessionRecovery).mock.calls.length;
+    fireEvent.change(screen.getByRole('textbox', { name: /Teacher notes/i }), {
+      target: { value: 'Notes from the assignment being abandoned' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Step 1Student/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Change assignment/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Start new assignment/i }));
+    fireEvent.change(await screen.findByRole('combobox', { name: /Choose learner/i }), {
+      target: { value: 'student-bella' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+    vi.useFakeTimers();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_000);
+    });
+    vi.useRealTimers();
+
+    expect(api.updateAssignmentSessionRecovery).toHaveBeenCalledTimes(recoveryCalls);
+  });
+
+  it('drains a newer Context edit made while navigation recovery is in flight', async () => {
+    let navigationGuard: (() => Promise<boolean>) | null = null;
+    const user = createMinimalUser();
+    renderMinimalAssignmentWithNavigationGuard((guard) => {
+      navigationGuard = guard;
+    });
+    await preparePromptReady(user);
+    await user.click(screen.getByRole('button', { name: /Teaching context/i }));
+    const recoveryCalls = vi.mocked(api.updateAssignmentSessionRecovery).mock.calls.length;
+    let resolveFirstRecovery: ((session: ReturnType<typeof makeAssignmentSession>) => void) | null =
+      null;
+    vi.mocked(api.updateAssignmentSessionRecovery)
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFirstRecovery = resolve;
+          }),
+      )
+      .mockImplementationOnce(async (_sessionId, request) =>
+        makeAssignmentSession({
+          id: 'session-1',
+          studentId: 'student-alex',
+          recordingId: 'rec-1',
+          transcriptId: 'tx-1',
+          promptPackageId: 'pkg-1',
+          draftId: 'draft-1',
+          confirmedStep: 'create',
+          teacherNotes: request.patch.teacherNotes ?? null,
+          revision: request.expectedRevision + 1,
+        }),
+      );
+    fireEvent.change(screen.getByRole('textbox', { name: /Teacher notes/i }), {
+      target: { value: 'First note being flushed' },
+    });
+
+    const guard = navigationGuard as unknown as () => Promise<boolean>;
+    const navigation = guard();
+    await waitFor(() =>
+      expect(api.updateAssignmentSessionRecovery).toHaveBeenCalledTimes(recoveryCalls + 1),
+    );
+    fireEvent.change(screen.getByRole('textbox', { name: /Teacher notes/i }), {
+      target: { value: 'Newer note typed during the first PATCH' },
+    });
+    const resolveFirst = resolveFirstRecovery as unknown as (
+      session: ReturnType<typeof makeAssignmentSession>,
+    ) => void;
+    resolveFirst(
+      makeAssignmentSession({
+        id: 'session-1',
+        studentId: 'student-alex',
+        recordingId: 'rec-1',
+        transcriptId: 'tx-1',
+        promptPackageId: 'pkg-1',
+        draftId: 'draft-1',
+        confirmedStep: 'create',
+        teacherNotes: 'First note being flushed',
+        revision: 50,
+      }),
+    );
+
+    await expect(navigation).resolves.toBe(true);
+    expect(api.updateAssignmentSessionRecovery).toHaveBeenCalledTimes(recoveryCalls + 2);
+    expect(api.updateAssignmentSessionRecovery).toHaveBeenLastCalledWith(
+      'session-1',
+      expect.objectContaining({
+        patch: expect.objectContaining({
+          teacherNotes: 'Newer note typed during the first PATCH',
+        }),
+      }),
+    );
+  });
+
   it(
     'guides a new assignment through staged teacher-facing workflow copy',
     async () => {

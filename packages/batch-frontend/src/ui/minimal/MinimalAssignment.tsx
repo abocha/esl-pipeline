@@ -522,16 +522,30 @@ export const MinimalAssignment: React.FC = () => {
     [createManualTranscript, markAssignmentUserEdit],
   );
 
-  const beginHydration = useCallback((mode: HydrationMode): HydrationContext => {
-    hydrationIdRef.current += 1;
-    assignmentSessionUserEditedRef.current = false;
-    assignmentSessionPersistenceSuppressedRef.current = mode !== 'new';
+  const resetPendingSessionRecovery = useCallback(() => {
+    if (assignmentContextRecoveryTimeoutRef.current) {
+      clearTimeout(assignmentContextRecoveryTimeoutRef.current);
+      assignmentContextRecoveryTimeoutRef.current = null;
+    }
     if (assignmentSessionSettingsTimeoutRef.current) {
       clearTimeout(assignmentSessionSettingsTimeoutRef.current);
       assignmentSessionSettingsTimeoutRef.current = null;
     }
-    return { id: hydrationIdRef.current, mode };
+    pendingContextRecoveryRef.current = null;
+    pendingSettingsRecoveryRef.current = null;
+    setAssignmentDebouncedRecoveryPending(false);
   }, []);
+
+  const beginHydration = useCallback(
+    (mode: HydrationMode): HydrationContext => {
+      hydrationIdRef.current += 1;
+      assignmentSessionUserEditedRef.current = false;
+      assignmentSessionPersistenceSuppressedRef.current = mode !== 'new';
+      resetPendingSessionRecovery();
+      return { id: hydrationIdRef.current, mode };
+    },
+    [resetPendingSessionRecovery],
+  );
 
   const isCurrentHydration = useCallback(
     (context: HydrationContext) => hydrationIdRef.current === context.id,
@@ -747,35 +761,37 @@ export const MinimalAssignment: React.FC = () => {
   }, []);
 
   const flushPendingSessionRecovery = useCallback(async (): Promise<boolean> => {
-    if (assignmentContextRecoveryTimeoutRef.current) {
-      clearTimeout(assignmentContextRecoveryTimeoutRef.current);
-      assignmentContextRecoveryTimeoutRef.current = null;
-    }
-    if (assignmentSessionSettingsTimeoutRef.current) {
-      clearTimeout(assignmentSessionSettingsTimeoutRef.current);
-      assignmentSessionSettingsTimeoutRef.current = null;
-    }
-    const contextPending = pendingContextRecoveryRef.current;
-    const settingsPending = pendingSettingsRecoveryRef.current;
-    if (!contextPending && !settingsPending) {
-      setAssignmentDebouncedRecoveryPending(false);
-      return true;
-    }
-    pendingContextRecoveryRef.current = null;
-    pendingSettingsRecoveryRef.current = null;
-    const saved = await saveAssignmentSessionProgress({
-      ...(settingsPending ?? {}),
-      ...(contextPending?.patch ?? {}),
-    });
-    setAssignmentDebouncedRecoveryPending(false);
-    if (saved && contextPending && assignmentContextConflictKeyRef.current === contextPending.key) {
-      assignmentContextConflictKeyRef.current = null;
+    for (;;) {
+      if (assignmentContextRecoveryTimeoutRef.current) {
+        clearTimeout(assignmentContextRecoveryTimeoutRef.current);
+        assignmentContextRecoveryTimeoutRef.current = null;
+      }
+      if (assignmentSessionSettingsTimeoutRef.current) {
+        clearTimeout(assignmentSessionSettingsTimeoutRef.current);
+        assignmentSessionSettingsTimeoutRef.current = null;
+      }
+      const contextPending = pendingContextRecoveryRef.current;
+      const settingsPending = pendingSettingsRecoveryRef.current;
+      if (!contextPending && !settingsPending) {
+        setAssignmentDebouncedRecoveryPending(false);
+        return true;
+      }
       pendingContextRecoveryRef.current = null;
       pendingSettingsRecoveryRef.current = null;
-      setAssignmentDebouncedRecoveryPending(false);
+      refreshDebouncedRecoveryPendingState();
+      const saved = await saveAssignmentSessionProgress({
+        ...(settingsPending ?? {}),
+        ...(contextPending?.patch ?? {}),
+      });
+      if (!saved) {
+        refreshDebouncedRecoveryPendingState();
+        return false;
+      }
+      if (contextPending && assignmentContextConflictKeyRef.current === contextPending.key) {
+        assignmentContextConflictKeyRef.current = null;
+      }
     }
-    return saved !== null;
-  }, [saveAssignmentSessionProgress]);
+  }, [refreshDebouncedRecoveryPendingState, saveAssignmentSessionProgress]);
 
   const confirmAssignmentStep = useCallback(
     async (
@@ -862,10 +878,7 @@ export const MinimalAssignment: React.FC = () => {
       autoResumedShareSessionRef.current = null;
       assignmentContextConflictKeyRef.current = null;
       assignmentSessionMutationQueueRef.current = Promise.resolve(null);
-      if (assignmentSessionSettingsTimeoutRef.current) {
-        clearTimeout(assignmentSessionSettingsTimeoutRef.current);
-        assignmentSessionSettingsTimeoutRef.current = null;
-      }
+      resetPendingSessionRecovery();
       assignmentSessionMilestoneRef.current = {
         studentId: '',
         recordingId: '',
@@ -880,7 +893,13 @@ export const MinimalAssignment: React.FC = () => {
       setActiveAssignmentSession(null);
       resetFlow(nextStudentId);
     },
-    [fallbackTemplateId, resetFlow, scheduleFollowupContext.lessonId, setActiveAssignmentSession],
+    [
+      fallbackTemplateId,
+      resetFlow,
+      resetPendingSessionRecovery,
+      scheduleFollowupContext.lessonId,
+      setActiveAssignmentSession,
+    ],
   );
 
   const handleStartNewAssignmentWithSessionReset = useCallback(() => {
