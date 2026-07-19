@@ -86,7 +86,7 @@ describeHttpServerIntegrationSuite(
         url: `/assignment-sessions/${sessionId}`,
       });
       expect(loaded.statusCode).toBe(200);
-      expect(getSession).toHaveBeenCalledWith('test-user-id', sessionId);
+      expect(getSession).toHaveBeenCalledWith('test-user-id', sessionId, expect.any(Object));
     });
 
     it('GET /assignment-sessions/:id returns 404 when the owned session is missing', async () => {
@@ -100,7 +100,7 @@ describeHttpServerIntegrationSuite(
 
       expect(response.statusCode).toBe(404);
       expect(response.json()).toEqual({ error: 'not_found' });
-      expect(getSession).toHaveBeenCalledWith('test-user-id', sessionId);
+      expect(getSession).toHaveBeenCalledWith('test-user-id', sessionId, expect.any(Object));
     });
 
     it('GET /user/assignment-sessions requires authentication before application access', async () => {

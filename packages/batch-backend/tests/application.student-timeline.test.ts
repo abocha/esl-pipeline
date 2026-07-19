@@ -97,8 +97,11 @@ describe('student-timeline', () => {
       );
       await client.query(
         `
-        INSERT INTO drafts (id, prompt_package_id, student_id, storage_uri, created_at, updated_at)
-        VALUES ($1, $2, $3, 's3://bucket/draft.txt', $4, $4)
+        INSERT INTO drafts (
+          id, prompt_package_id, student_id, storage_uri, working_version, content_hash,
+          created_at, updated_at
+        )
+        VALUES ($1, $2, $3, 's3://bucket/draft.txt', 1, repeat('a', 64), $4, $4)
         `,
         [draftId, promptPackageId, studentId, times.draft],
       );
