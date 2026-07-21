@@ -13,6 +13,7 @@ import {
   makeRecording,
   makeScheduleBillingSurface,
   makeStudentLesson,
+  makeTranscript,
   now,
   openRecordingSettings,
   renderMinimalAssignment,
@@ -598,6 +599,95 @@ export function registerPromptEditorTests() {
           }),
         );
       });
+    });
+
+    it('ignores a first-profile draft response from audio that was replaced before activation', async () => {
+      const user = createMinimalUser();
+      vi.mocked(api.fetchStudentOptions).mockResolvedValueOnce({
+        students: [{ id: 'student-alex', name: 'Alex', profileId: null }],
+      });
+      vi.mocked(api.getStudentMemoryHealth).mockResolvedValue({
+        studentId: 'student-alex',
+        latestSnapshot: null,
+        memoryCounts: {
+          lesson: {
+            ready: { count: 1, capped: false, limit: 20 },
+            pending: { count: 0, capped: false, limit: 20 },
+            failed: { count: 0, capped: false, limit: 20 },
+          },
+          homework: {
+            ready: { count: 0, capped: false, limit: 20 },
+            pending: { count: 0, capped: false, limit: 20 },
+            failed: { count: 0, capped: false, limit: 20 },
+          },
+        },
+        latestFailedReason: null,
+        profileCandidateCounts: { pending: 0, approved: 0, rejected: 0, deferred: 0 },
+      });
+      const staleResponse = await api.populateFirstProfileFromLesson('student-alex');
+      vi.mocked(api.populateFirstProfileFromLesson).mockClear();
+      let resolvePopulation!: (value: typeof staleResponse) => void;
+      vi.mocked(api.populateFirstProfileFromLesson).mockImplementationOnce(
+        () => new Promise((resolve) => (resolvePopulation = resolve)),
+      );
+      const recordingA = makeRecording({
+        recordingId: 'rec-a',
+        studentId: 'student-alex',
+        status: 'transcribed',
+        transcriptId: 'tx-a',
+        displayName: 'wrong-lesson.mp3',
+      });
+      const recordingB = makeRecording({
+        recordingId: 'rec-b',
+        studentId: 'student-alex',
+        status: 'transcribed',
+        transcriptId: 'tx-b',
+        displayName: 'correct-lesson.mp3',
+      });
+      vi.mocked(api.uploadRecording)
+        .mockResolvedValueOnce(recordingA)
+        .mockResolvedValueOnce(recordingB);
+      vi.mocked(api.getRecording).mockImplementation(async (recordingId) =>
+        recordingId === 'rec-b' ? recordingB : recordingA,
+      );
+      vi.mocked(api.fetchRecordingTranscript).mockImplementation(async (recordingId) =>
+        makeTranscript(
+          recordingId === 'rec-b'
+            ? {
+                recordingId: 'rec-b',
+                transcriptId: 'tx-b',
+                text: 'Correct lesson transcript',
+                contentHash: 'b'.repeat(64),
+              }
+            : { recordingId: 'rec-a', transcriptId: 'tx-a' },
+        ),
+      );
+
+      renderMinimalAssignment();
+      await startNewAssignmentForLearner(user);
+      await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+      await screen.findByDisplayValue('Student transcript text');
+      await advanceSourceToTeachingContext(user);
+      await user.click(
+        await screen.findByRole('button', { name: /Populate first profile from lesson/i }),
+      );
+      await waitFor(() => expect(api.populateFirstProfileFromLesson).toHaveBeenCalledTimes(1));
+
+      await user.click(screen.getByRole('button', { name: /Lesson source/i }));
+      await user.click(screen.getByRole('button', { name: /Replace audio/i }));
+      await user.click(screen.getByRole('button', { name: /Drop replacement audio/i }));
+      await screen.findByDisplayValue('Correct lesson transcript');
+      await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+      await screen.findByRole('heading', { name: /Learner context/i });
+
+      await act(async () => resolvePopulation(staleResponse));
+
+      await waitFor(() =>
+        expect(screen.queryByRole('button', { name: /Approve profile draft/i })).toBeNull(),
+      );
+      expect(
+        screen.getByRole('button', { name: /Populate first profile from lesson/i }),
+      ).toBeTruthy();
     });
 
     it('reloads an already-selected draft-only profile after approving the first draft', async () => {

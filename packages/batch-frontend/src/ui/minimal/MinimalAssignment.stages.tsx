@@ -108,9 +108,13 @@ interface SourceStageSectionProps {
   formatSttProviderLabel: (provider: SttProvider) => string;
   audioExtensions: readonly string[];
   uploading: boolean;
+  replacingAudio: boolean;
+  canReplaceAudio: boolean;
   selectedFileName: string | null;
   uploadProgress: number;
   onFiles: (files: File[]) => void;
+  onBeginAudioReplacement: () => void;
+  onCancelAudioReplacement: () => void;
   onCancelUpload: () => void;
   uploadError: string | null;
   uploadCacheNotice: string | null;
@@ -787,9 +791,13 @@ export function SourceStageSection({
   formatSttProviderLabel,
   audioExtensions,
   uploading,
+  replacingAudio,
+  canReplaceAudio,
   selectedFileName,
   uploadProgress,
   onFiles,
+  onBeginAudioReplacement,
+  onCancelAudioReplacement,
   onCancelUpload,
   uploadError,
   uploadCacheNotice,
@@ -889,26 +897,28 @@ export function SourceStageSection({
             <p className="minimal-error">{studentOptionsError}</p>
           ) : null}
           {!recording ? (
-            <>
-              <details className="minimal-details">
-                <summary>Recording settings</summary>
-                <label className="minimal-select">
-                  Transcript engine
-                  <select
-                    value={selectedSttProvider}
-                    onChange={(event) =>
-                      onSelectedSttProviderChange(event.target.value as SttProvider)
-                    }
-                    disabled={sttProviders.length === 0}
-                  >
-                    {sttProviders.map((provider) => (
-                      <option key={provider} value={provider}>
-                        {formatSttProviderLabel(provider)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </details>
+            <details className="minimal-details">
+              <summary>Recording settings</summary>
+              <label className="minimal-select">
+                Transcript engine
+                <select
+                  value={selectedSttProvider}
+                  onChange={(event) =>
+                    onSelectedSttProviderChange(event.target.value as SttProvider)
+                  }
+                  disabled={sttProviders.length === 0}
+                >
+                  {sttProviders.map((provider) => (
+                    <option key={provider} value={provider}>
+                      {formatSttProviderLabel(provider)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </details>
+          ) : null}
+          {!recording || replacingAudio ? (
+            <div className="minimal-block">
               <div
                 className={
                   stage.status === 'current' && selectedStudentId
@@ -917,7 +927,13 @@ export function SourceStageSection({
                 }
               >
                 <DropZone
-                  title={uploading ? 'Uploading...' : 'Drop audio file'}
+                  title={
+                    uploading
+                      ? 'Uploading...'
+                      : replacingAudio
+                        ? 'Drop replacement audio'
+                        : 'Drop audio file'
+                  }
                   hint="Single file upload"
                   accept={{ 'audio/*': [...audioExtensions] }}
                   multiple={false}
@@ -925,7 +941,17 @@ export function SourceStageSection({
                   onFiles={onFiles}
                 />
               </div>
-            </>
+              {replacingAudio ? (
+                <button
+                  type="button"
+                  className="minimal-secondary"
+                  onClick={onCancelAudioReplacement}
+                  disabled={uploading}
+                >
+                  Cancel replacement
+                </button>
+              ) : null}
+            </div>
           ) : null}
           {uploading ? (
             <UploadProgress
@@ -937,11 +963,22 @@ export function SourceStageSection({
           {uploadError ? <p className="minimal-error">{uploadError}</p> : null}
           {uploadCacheNotice ? <p className="minimal-success">{uploadCacheNotice}</p> : null}
           {recording ? (
-            <div className="minimal-meta">
-              <span>Recording: {recording.displayName || recording.recordingId}</span>
-              <span>Status: {recordingStatus ?? 'unknown'}</span>
-              <span>Transcript engine: {formatSttProviderLabel(selectedSttProvider)}</span>
-              {selectedStudent ? <span>Student: {selectedStudent.name}</span> : null}
+            <div className="minimal-block">
+              <div className="minimal-meta">
+                <span>Recording: {recording.displayName || recording.recordingId}</span>
+                <span>Status: {recordingStatus ?? 'unknown'}</span>
+                <span>Transcript engine: {formatSttProviderLabel(selectedSttProvider)}</span>
+                {selectedStudent ? <span>Student: {selectedStudent.name}</span> : null}
+              </div>
+              {canReplaceAudio && !replacingAudio ? (
+                <button
+                  type="button"
+                  className="minimal-secondary"
+                  onClick={onBeginAudioReplacement}
+                >
+                  Replace audio
+                </button>
+              ) : null}
             </div>
           ) : null}
           {recordingError ? <p className="minimal-error">{recordingError}</p> : null}

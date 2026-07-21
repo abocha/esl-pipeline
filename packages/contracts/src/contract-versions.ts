@@ -9,7 +9,7 @@ export interface ContractVersionRegistry {
   db: string;
 }
 
-export const API_CONTRACT_VERSION = '4.0.0';
+export const API_CONTRACT_VERSION = '4.1.0';
 export const MANIFEST_CONTRACT_VERSION = '3.0.0';
 export const PROMPT_SCHEMA_VERSION = '2.0.0';
 export const VALIDATOR_CONTRACT_VERSION = '2.0.0';

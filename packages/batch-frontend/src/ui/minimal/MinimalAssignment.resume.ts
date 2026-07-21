@@ -397,6 +397,7 @@ export function useMinimalAssignmentResume({
       jobId: string,
       knownJobs?: JobStatus[],
       isInitialHydration = false,
+      knownCompletedSession?: AssignmentSession,
     ): Promise<ResumeOpenResult> => {
       if (!jobId) return { ok: false };
 
@@ -407,6 +408,14 @@ export function useMinimalAssignmentResume({
 
       try {
         const status = await getJobStatus(jobId);
+        const completedSession =
+          knownCompletedSession ??
+          (status.assignmentSessionId
+            ? await fetchAssignmentSession(status.assignmentSessionId)
+            : null);
+        if (completedSession && completedSession.confirmedStep !== 'share') {
+          throw new Error('Historical assignment link did not resolve to a completed session.');
+        }
         const candidateJobs = knownJobs ?? resumeJobs;
         let resolvedStudentId =
           candidateJobs.find((job) => job.jobId === status.jobId)?.studentId ??
@@ -443,12 +452,14 @@ export function useMinimalAssignmentResume({
           transcriptText: '',
           transcriptStatus: 'idle',
           transcriptError: null,
-          teacherNotes: '',
+          teacherNotes: completedSession?.teacherNotes ?? '',
           rerunTargetPronunciationMode: status.pronunciationMode ?? null,
           selectedStudentId: currentSelectedStudentId,
-          lessonId: status.lessonId ?? null,
-          selectedProfileId: currentSelectedProfileId,
-          profileSelectionMode: currentProfileSelectionMode,
+          lessonId: status.lessonId ?? completedSession?.lessonId ?? null,
+          selectedProfileId: completedSession?.selectedProfileId ?? currentSelectedProfileId,
+          profileSelectionMode: completedSession?.selectedProfileId
+            ? 'manual'
+            : currentProfileSelectionMode,
           uploadError: null,
           uploadCacheNotice: null,
           authoring: {
@@ -568,7 +579,7 @@ export function useMinimalAssignmentResume({
 
         applyHydratedSnapshot(snapshot);
         setSelectedResumeJobId(status.jobId);
-        setActiveAssignmentSession(null);
+        setActiveAssignmentSession(completedSession);
         writeResumeTargetToQuery({ jobId: status.jobId });
         const result: ResumeOpenSuccess = {
           ok: true,
@@ -632,7 +643,7 @@ export function useMinimalAssignmentResume({
         const session = cachedSession ?? (await fetchAssignmentSession(sessionId));
         if (session.confirmedStep === 'share') {
           if (!session.shareJobId) throw new Error('Shared assignment is missing its linked job.');
-          return hydrateFromJob(session.shareJobId, undefined, isInitialHydration);
+          return hydrateFromJob(session.shareJobId, undefined, isInitialHydration, session);
         }
         const snapshot = buildSnapshotFromSession(session);
         let resolvedStudentId = session.studentId ?? null;
