@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.1.0] - 2026-07-21
+
+### Changed
+
+- Automated release from PR #148: feat(assignments): preserve history and replace lesson audio (https://github.com/abocha/esl-pipeline/pull/148)
+
 ## [10.0.0] - 2026-07-19
 
 ### Changed
