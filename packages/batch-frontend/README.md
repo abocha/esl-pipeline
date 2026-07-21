@@ -39,6 +39,9 @@ Canonical behavior and current status live in:
   transcripts are persisted through `POST /recordings/transcript-source`, retain explicit
   `manual_transcript`/`manual` provenance, and never enqueue speech-to-text work. OPUS is the only
   audio format promised during the current alpha.
+- An uploaded recording can be replaced in place while its assignment remains unfinished. The
+  replacement retains the assignment session and scheduled lesson link; confirming the new Source
+  supersedes the old lesson-memory lineage before later assignment generation can continue.
 - The authenticated Calm Studio shell uses a persistent workspace rail and a focused five-step
   assignment flow: Student, Lesson source, Teaching context, Create, and Review & share. Back and
   completed-step navigation are user-owned and keep the current assignment state instead of
