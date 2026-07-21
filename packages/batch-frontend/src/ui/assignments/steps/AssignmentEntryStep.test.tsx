@@ -124,6 +124,30 @@ function EntryHarness({
 }
 
 describe('AssignmentEntryStep', () => {
+  it.each([
+    ['student', '1'],
+    ['assignment', '4'],
+  ] as const)('renders the unfinished %s destination as a compact step number', (destination, stepNumber) => {
+    const { container } = render(
+      <EntryHarness
+        initialView="resume"
+        recentItems={[
+          makeRecentItem(`session-${destination}`, 'Cora', {
+            kind: 'session',
+            state: 'unfinished',
+            statusLabel: 'Unfinished',
+            statusTone: 'progress',
+            destination,
+          }),
+        ]}
+      />,
+    );
+
+    expect(container.querySelector('.assignment-entry-step__recent-state-icon')?.textContent).toBe(
+      stepNumber,
+    );
+  });
+
   it('disables both unselected choices while recent work is loading', () => {
     render(<EntryHarness recentLoading />);
 

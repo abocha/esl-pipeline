@@ -98,7 +98,9 @@ The assignment builder separates automatic recovery from tutor-owned confirmatio
   intentional rerun remains a new `source_job_id` child.
 - `confirmedStep = 'share'` is the sole completed predicate. Completed sessions remain immutable
   provenance for their historical jobs/handouts, are not resumable or in progress, and do not block
-  a new assignment for the same recording. There is no assignment archival or archive-retry state.
+  a new assignment for the same recording. Job status DTOs expose the optional retained
+  `assignmentSessionId` through rerun ancestry so post-cutover history can reopen confirmed inputs;
+  pre-cutover jobs return no link. There is no assignment archival or archive-retry state.
 
 Migration `0044_assignment_step_confirmation_contract` is an intentional closed-alpha cutover. With
 the API and workers stopped, it deletes pre-cutover assignment sessions, drafts, and prompt packages

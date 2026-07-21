@@ -1222,6 +1222,7 @@ export const MinimalAssignment: React.FC = () => {
     refreshResumeJobs: resume.loadResumeJobs,
   });
   const resumeLoadResumeJobs = resume.loadResumeJobs;
+  const resumeSelectedResumeJobId = resume.selectedResumeJobId;
   const resumeSetSelectedResumeJobId = resume.setSelectedResumeJobId;
   useEffect(() => {
     return () => {
@@ -1981,9 +1982,12 @@ export const MinimalAssignment: React.FC = () => {
           try {
             const latest = await fetchAssignmentSession(current.id);
             if (latest.confirmedStep === 'share' && latest.shareJobId) {
-              const linkedJob = await getJobStatusWithRecoveryRetry(latest.shareJobId);
-              activeAssignmentSessionRef.current = null;
-              setActiveAssignmentSession(null);
+              const historicalJobId = resumeSelectedResumeJobId.startsWith('session:')
+                ? latest.shareJobId
+                : resumeSelectedResumeJobId || latest.shareJobId;
+              const linkedJob = await getJobStatusWithRecoveryRetry(historicalJobId);
+              activeAssignmentSessionRef.current = latest;
+              setActiveAssignmentSession(latest);
               setJobStatusState(linkedJob);
               applyJobStatusTransition(linkedJob);
             } else {
@@ -2055,6 +2059,7 @@ export const MinimalAssignment: React.FC = () => {
     refreshSelectedProfile,
     refreshTranscriptPreservingLocal,
     resumeLoadResumeJobs,
+    resumeSelectedResumeJobId,
     setActiveAssignmentSession,
     context.profileSelectionMode,
     context.selectedProfileId,

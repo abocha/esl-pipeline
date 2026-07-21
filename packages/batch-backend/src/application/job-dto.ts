@@ -10,6 +10,7 @@ export function jobRecordToDto(job: JobRecord): JobStatusDto {
   const providerError = parseVoiceProviderError(job.error);
   return {
     jobId: job.id,
+    ...(job.assignmentSessionId ? { assignmentSessionId: job.assignmentSessionId } : {}),
     ...(job.studentId ? { studentId: job.studentId } : {}),
     ...(job.studentName ? { studentName: job.studentName } : {}),
     md: job.md,
