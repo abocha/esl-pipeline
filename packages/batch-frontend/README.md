@@ -90,8 +90,10 @@ Canonical behavior and current status live in:
   Reload controls are absent; bounded transient retries run automatically and contextual Retry is
   reserved for exhausted or ambiguous outcomes.
 - Resume loads the newest durable working values, opens the earliest dirty Source, Context, or
-  Create boundary, then falls back to the destination derived from `confirmedStep`. A confirmed
-  Share opens its linked historical job rather than the editor.
+  Create boundary, then falls back to the destination derived from `confirmedStep`. Completed
+  post-cutover jobs use their retained assignment-session link to reopen every confirmed step for
+  reference without permitting session mutations. Pre-cutover jobs have no retained session link
+  and remain limited to their historical output and post-share actions.
 - Cross-tab session and artifact conflicts retain the tutor's local buffer, adopt the newest server
   revision only as a compare-and-swap base, and suppress automatic overwrite until the tutor
   explicitly reconciles the visible value.

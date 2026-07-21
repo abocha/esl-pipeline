@@ -55,15 +55,14 @@ function RecentStateIcon({ item }: { item: RecentAssignmentItem }) {
   if (item.state === 'ready-to-share') return <FileCheck2 {...iconProps} aria-hidden="true" />;
   if (item.state === 'in-progress') return <RefreshCw {...iconProps} aria-hidden="true" />;
   if (item.state === 'needs-attention') return <AlertCircle {...iconProps} aria-hidden="true" />;
-  return (
-    <span aria-hidden="true">
-      {item.destination
-        .replace('source', '2')
-        .replace('context', '3')
-        .replace('create', '4')
-        .replace('review', '5')}
-    </span>
-  );
+  const stepNumber = {
+    student: '1',
+    source: '2',
+    context: '3',
+    assignment: '4',
+    review: '5',
+  } satisfies Record<RecentAssignmentItem['destination'], string>;
+  return <span aria-hidden="true">{stepNumber[item.destination]}</span>;
 }
 
 function RecentState({ item }: { item: RecentAssignmentItem }) {

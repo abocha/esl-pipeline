@@ -165,6 +165,61 @@ describe('domain/job-repository', () => {
       expect(loaded).toBeNull();
     });
 
+    it('resolves the retained completed assignment session through rerun lineage', async () => {
+      const userId = randomUUID();
+      const studentId = randomUUID();
+      const rootJobId = randomUUID();
+      const rerunJobId = randomUUID();
+      const sessionId = randomUUID();
+      await ensureUsers([userId]);
+      await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+        await client.query(
+          `INSERT INTO students (id, student, created_at, updated_at)
+           VALUES ($1, 'Retained learner', NOW(), NOW())`,
+          [studentId],
+        );
+        await client.query(
+          `INSERT INTO jobs (id, user_id, student_id, state, md, created_at, updated_at)
+           VALUES ($1, $3, $4, 'succeeded', 'fixtures/root.md', NOW(), NOW()),
+                  ($2, $3, $4, 'succeeded', 'fixtures/rerun.md', NOW(), NOW())`,
+          [rootJobId, rerunJobId, userId, studentId],
+        );
+        await client.query('UPDATE jobs SET source_job_id = $1 WHERE id = $2', [
+          rootJobId,
+          rerunJobId,
+        ]);
+        await client.query(
+          `INSERT INTO assignment_sessions (
+             id, user_id, student_id, confirmed_step, confirmed_snapshot, share_job_id
+           ) VALUES ($1, $2, $3, 'share', $4::jsonb, $5)`,
+          [
+            sessionId,
+            userId,
+            studentId,
+            JSON.stringify({
+              student: { studentId },
+              source: null,
+              context: null,
+              create: null,
+            }),
+            rootJobId,
+          ],
+        );
+      });
+
+      expect((await getJobById(rerunJobId))?.assignmentSessionId).toBe(sessionId);
+      expect(
+        (
+          await listJobs({
+            userId,
+            limit: 20,
+            offset: 0,
+            order: 'desc',
+          })
+        ).find((job) => job.id === rerunJobId)?.assignmentSessionId,
+      ).toBe(sessionId);
+    });
+
     it('does not infer student from related rows when jobs.student_id is null', async () => {
       const studentId = randomUUID();
       const recordingId = randomUUID();

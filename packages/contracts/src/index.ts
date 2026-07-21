@@ -314,6 +314,7 @@ export type RecentAssignmentItem =
 
 export interface JobStatusDto {
   jobId: string;
+  assignmentSessionId?: string | null;
   studentId?: string | null;
   studentName?: string | null;
   lessonId?: string | null;

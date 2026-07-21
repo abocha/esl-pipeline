@@ -28,6 +28,7 @@ import {
  */
 interface JobRow {
   id: string;
+  assignment_session_id?: string | null;
   student_id?: string | null;
   student_name?: string | null;
   state: string;
@@ -68,6 +69,23 @@ interface JobRow {
   manifest_path: string | null;
   source_job_id?: string | null;
 }
+
+const ASSIGNMENT_SESSION_LINEAGE_SELECT = String.raw`
+  (
+    WITH RECURSIVE job_lineage AS (
+      SELECT j.id, j.source_job_id
+      UNION
+      SELECT parent.id, parent.source_job_id
+      FROM jobs parent
+      JOIN job_lineage child ON parent.id = child.source_job_id
+    )
+    SELECT session.id
+    FROM job_lineage lineage
+    JOIN assignment_sessions session ON session.share_job_id = lineage.id
+    WHERE session.confirmed_step = 'share'
+    LIMIT 1
+  ) AS assignment_session_id
+`;
 
 // insertJob.declaration()
 export interface InsertJobParams {
@@ -322,6 +340,7 @@ export async function getJobById(
       String.raw`
       SELECT
         j.id,
+        ${ASSIGNMENT_SESSION_LINEAGE_SELECT},
         j.student_id,
         (SELECT s.student FROM students s WHERE s.id = j.student_id) AS student_name,
         j.state,
@@ -447,6 +466,7 @@ export async function listJobs(options: JobListOptions): Promise<JobRecord[]> {
       `
       SELECT
         j.id,
+        ${ASSIGNMENT_SESSION_LINEAGE_SELECT},
         j.student_id,
         (SELECT s.student FROM students s WHERE s.id = j.student_id) AS student_name,
         j.state,
@@ -1252,6 +1272,7 @@ export async function getStudentJobSummaries(
 function mapRowToJob(row: JobRow): JobRecord {
   return {
     id: row.id,
+    assignmentSessionId: row.assignment_session_id ?? null,
     studentId: row.student_id ?? null,
     studentName: row.student_name ?? null,
     state: row.state as JobState,

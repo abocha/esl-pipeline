@@ -1353,6 +1353,56 @@ describe('MinimalAssignment - staged workflow UI', () => {
   );
 
   it(
+    'reopens every retained step for a completed post-cutover assignment',
+    async () => {
+      const user = createMinimalUser();
+      const completed = makeAssignmentSession({
+        id: 'session-completed',
+        studentId: 'student-alex',
+        recordingId: 'rec-1',
+        transcriptId: 'tx-1',
+        promptPackageId: 'pkg-1',
+        draftId: 'draft-1',
+        confirmedStep: 'share',
+        shareJobId: 'job-root',
+      });
+      vi.mocked(api.fetchAssignmentSession).mockResolvedValue(completed);
+      await renderPublishedAssignment(
+        {
+          draftText: '# Retained assignment markdown',
+          status: {
+            jobId: 'job-rerun',
+            studentId: 'student-alex',
+            assignmentSessionId: completed.id,
+            sourceJobId: 'job-root',
+          },
+        },
+        { user },
+      );
+
+      const sourceStep = screen.getByRole('button', { name: /Lesson source/i });
+      const contextStep = screen.getByRole('button', { name: /Teaching context/i });
+      const createStep = screen.getByRole('button', { name: /Create/i });
+      expect((sourceStep as HTMLButtonElement).disabled).toBe(false);
+      expect((contextStep as HTMLButtonElement).disabled).toBe(false);
+      expect((createStep as HTMLButtonElement).disabled).toBe(false);
+
+      await user.click(sourceStep);
+      expect(screen.getByRole('textbox', { name: /Transcript text/i })).toBeTruthy();
+      await user.click(createStep);
+      expect(screen.getByRole('textbox', { name: /Draft markdown/i })).toBeTruthy();
+
+      vi.mocked(api.getJobStatus).mockClear();
+      await act(async () => {
+        globalThis.dispatchEvent(new Event('focus'));
+      });
+      await waitFor(() => expect(api.getJobStatus).toHaveBeenCalledWith('job-rerun'));
+      expect(api.getJobStatus).not.toHaveBeenCalledWith('job-root');
+    },
+    INTEGRATION_TEST_TIMEOUT_MS,
+  );
+
+  it(
     'starts a fresh workflow from the published completion action',
     async () => {
       const user = createMinimalUser();
