@@ -926,7 +926,7 @@ export function setupMinimalAssignmentTest() {
             transcriptId: request.transcriptId,
             transcriptWorkingVersion: request.transcriptWorkingVersion,
             transcriptStorageUri: 'memory://transcripts/confirmed',
-            transcriptHash: 'a'.repeat(64),
+            transcriptHash: request.transcriptId === 'tx-b' ? 'b'.repeat(64) : 'a'.repeat(64),
           },
         },
       });

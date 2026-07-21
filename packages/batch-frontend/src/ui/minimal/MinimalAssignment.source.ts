@@ -68,6 +68,7 @@ interface UseMinimalAssignmentSourceControllerParams {
 
 export interface SourceController extends SourceHydrationSnapshot {
   uploading: boolean;
+  replacingAudio: boolean;
   uploadProgress: number;
   selectedSttProvider: SttProvider;
   transcriptSaving: boolean;
@@ -87,6 +88,8 @@ export interface SourceController extends SourceHydrationSnapshot {
   handleStudentSelectionChange: (nextStudentId: string) => void;
   handleSelectedSttProviderChange: (provider: SttProvider) => void;
   handleFiles: (files: File[]) => void;
+  beginAudioReplacement: () => void;
+  cancelAudioReplacement: () => void;
   handleCancelUpload: () => void;
   loadTranscript: () => Promise<void>;
   refreshTranscriptPreservingLocal: () => Promise<void>;
@@ -113,6 +116,7 @@ export function useMinimalAssignmentSourceController({
   const [recordingStatus, setRecordingStatus] = useState<RecordingStatus | null>(null);
   const [recordingError, setRecordingError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [replacingAudio, setReplacingAudio] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
@@ -220,12 +224,14 @@ export function useMinimalAssignmentSourceController({
       setUploadError(null);
       setUploadProgress(0);
       setUploading(false);
+      setReplacingAudio(false);
       setUploadCacheNotice(null);
     },
     [initialSelectedStudentId],
   );
 
   const applyHydratedSnapshot = useCallback((snapshot: SourceHydrationSnapshot) => {
+    setReplacingAudio(false);
     setRecording(snapshot.recording);
     setRecordingStatus(snapshot.recordingStatus);
     setRecordingError(snapshot.recordingError);
@@ -269,6 +275,18 @@ export function useMinimalAssignmentSourceController({
     setSelectedSttProvider(provider);
   }, []);
 
+  const beginAudioReplacement = useCallback(() => {
+    if (!latestRecordingRef.current || latestRecordingRef.current.source !== 'upload') return;
+    setUploadError(null);
+    setReplacingAudio(true);
+  }, []);
+
+  const cancelAudioReplacement = useCallback(() => {
+    if (uploadAbortRef.current) return;
+    setUploadError(null);
+    setReplacingAudio(false);
+  }, []);
+
   const handleUpload = useCallback(
     async (file: File) => {
       if (uploading) return;
@@ -276,8 +294,13 @@ export function useMinimalAssignmentSourceController({
         setUploadError('Select a student before uploading a recording.');
         return;
       }
-      onBeforeUploadReset();
-      resetSourceFlow();
+      const replacingCurrentAudio =
+        replacingAudio && latestRecordingRef.current?.source === 'upload';
+      const previousFileName = selectedFileName;
+      if (!replacingCurrentAudio) {
+        onBeforeUploadReset();
+        resetSourceFlow();
+      }
       setSelectedFileName(file.name);
       setUploading(true);
       setUploadError(null);
@@ -292,6 +315,19 @@ export function useMinimalAssignmentSourceController({
           signal: controller.signal,
           onProgress: (progress) => setUploadProgress(progress),
         });
+        if (replacingCurrentAudio) {
+          latestTranscriptIdRef.current = null;
+          latestTranscriptRef.current = null;
+          transcriptTextRef.current = '';
+          pendingTranscriptTextRef.current = null;
+          transcriptConflictTextRef.current = null;
+          setTranscript(null);
+          setTranscriptText('');
+          setTranscriptStatus('idle');
+          setTranscriptError(null);
+          setTranscriptSaving(false);
+          setRetryingTranscript(false);
+        }
         setRecording(response);
         setRecordingStatus(response.status);
         setRecordingError(response.error ?? null);
@@ -299,7 +335,9 @@ export function useMinimalAssignmentSourceController({
         setUploadCacheNotice(
           response.cacheHit ? 'Reused an existing transcript for this exact audio file.' : null,
         );
+        setReplacingAudio(false);
       } catch (error) {
+        if (replacingCurrentAudio) setSelectedFileName(previousFileName);
         if (controller.signal.aborted) {
           setUploadError('Upload canceled.');
         } else {
@@ -311,7 +349,15 @@ export function useMinimalAssignmentSourceController({
         uploadAbortRef.current = null;
       }
     },
-    [onBeforeUploadReset, resetSourceFlow, selectedStudentId, selectedSttProvider, uploading],
+    [
+      onBeforeUploadReset,
+      replacingAudio,
+      resetSourceFlow,
+      selectedFileName,
+      selectedStudentId,
+      selectedSttProvider,
+      uploading,
+    ],
   );
 
   const handleFiles = useCallback(
@@ -719,6 +765,7 @@ export function useMinimalAssignmentSourceController({
     recordingStatus,
     recordingError,
     uploading,
+    replacingAudio,
     uploadProgress,
     uploadError,
     selectedFileName,
@@ -746,6 +793,8 @@ export function useMinimalAssignmentSourceController({
     handleStudentSelectionChange,
     handleSelectedSttProviderChange,
     handleFiles,
+    beginAudioReplacement,
+    cancelAudioReplacement,
     handleCancelUpload,
     loadTranscript,
     refreshTranscriptPreservingLocal,
