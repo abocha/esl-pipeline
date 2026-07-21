@@ -168,6 +168,28 @@ function isGenerationProvider(value: string | null | undefined): value is Genera
   return value === 'openai' || value === 'google_ai_studio' || value === 'openrouter';
 }
 
+function buildFirstProfileSourceAuthorityKey(
+  session: AssignmentSession | null,
+  recordingId: string | null | undefined,
+  transcriptId: string | null | undefined,
+): string | null {
+  const confirmedSource = session?.confirmed.source;
+  if (
+    !confirmedSource ||
+    confirmedSource.recordingId !== recordingId ||
+    confirmedSource.transcriptId !== transcriptId
+  ) {
+    return null;
+  }
+
+  return JSON.stringify({
+    sessionId: session.id,
+    recordingId: confirmedSource.recordingId,
+    transcriptId: confirmedSource.transcriptId,
+    transcriptHash: confirmedSource.transcriptHash,
+  });
+}
+
 function buildAssignmentSessionSettingsKey(settings: {
   teacherNotes: string | null;
   selectedGenerationProvider: GenerationProvider | null;
@@ -310,6 +332,7 @@ export const MinimalAssignment: React.FC = () => {
     profileId: string;
     draftRevisionId: string;
     structuredContent: FoundationalProfile | null;
+    sourceAuthorityKey: string;
   } | null>(null);
   const [firstProfileAssistBusy, setFirstProfileAssistBusy] = useState<
     'drafting' | 'approving' | null
@@ -370,6 +393,7 @@ export const MinimalAssignment: React.FC = () => {
   const assignmentSessionPersistenceSuppressedRef = useRef(false);
   const assignmentSessionUserEditedRef = useRef(false);
   const committedTeacherNotesRef = useRef('');
+  const firstProfileSourceAuthorityKeyRef = useRef<string | null>(null);
 
   const generationOptions = jobOptions?.generation ?? null;
   const ttsProviders = useMemo<UiTtsProvider[]>(() => {
@@ -1222,6 +1246,7 @@ export const MinimalAssignment: React.FC = () => {
     refreshResumeJobs: resume.loadResumeJobs,
   });
   const resumeLoadResumeJobs = resume.loadResumeJobs;
+  const resumeSelectedResumeJobId = resume.selectedResumeJobId;
   const resumeSetSelectedResumeJobId = resume.setSelectedResumeJobId;
   useEffect(() => {
     return () => {
@@ -1428,9 +1453,20 @@ export const MinimalAssignment: React.FC = () => {
   }, [jobStatus, resumeSetSelectedResumeJobId, setAuthoringPublishError]);
 
   const transcriptReady = source.transcriptReady;
+  const firstProfileSourceAuthorityKey =
+    source.replacingAudio || source.uploading
+      ? null
+      : buildFirstProfileSourceAuthorityKey(
+          activeAssignmentSession,
+          source.recording?.recordingId,
+          source.transcript?.transcriptId,
+        );
+  firstProfileSourceAuthorityKeyRef.current = firstProfileSourceAuthorityKey;
   const firstProfileAssistVisible = Boolean(
     source.selectedStudentId &&
       transcriptReady &&
+      !source.replacingAudio &&
+      !source.uploading &&
       (context.profilePreviewStatus === 'none' || context.profilePreviewStatus === 'unstructured'),
   );
   const firstProfileLessonMemoryConfirmed = Boolean(
@@ -1533,20 +1569,24 @@ export const MinimalAssignment: React.FC = () => {
   }, [source.selectedStudentId, source.recording?.recordingId]);
 
   const handlePopulateFirstProfile = useCallback(async () => {
-    if (!source.selectedStudentId) return;
+    const sourceAuthorityKey = firstProfileSourceAuthorityKeyRef.current;
+    if (!source.selectedStudentId || !sourceAuthorityKey) return;
     markAssignmentUserEdit();
     setFirstProfileAssistBusy('drafting');
     setFirstProfileAssistError(null);
     try {
       const response = await populateFirstProfileFromLesson(source.selectedStudentId);
+      if (firstProfileSourceAuthorityKeyRef.current !== sourceAuthorityKey) return;
       setFirstProfileDraft({
         profileId: response.profileId,
         draftRevisionId: response.draftRevisionId,
         structuredContent: response.draftRevision.structuredContent ?? null,
+        sourceAuthorityKey,
       });
       setFirstProfileLessonMemoryReadyCount(response.lessonMemoryIds.length);
       setFirstProfileLessonMemoryStatus('ready');
     } catch (error) {
+      if (firstProfileSourceAuthorityKeyRef.current !== sourceAuthorityKey) return;
       const message =
         error instanceof Error ? error.message : 'Unable to populate the first profile draft.';
       setFirstProfileAssistError(message);
@@ -1557,6 +1597,10 @@ export const MinimalAssignment: React.FC = () => {
 
   const handleApproveFirstProfileDraft = useCallback(async () => {
     if (!firstProfileDraft) return;
+    if (firstProfileDraft.sourceAuthorityKey !== firstProfileSourceAuthorityKeyRef.current) {
+      setFirstProfileDraft(null);
+      return;
+    }
     markAssignmentUserEdit();
     setFirstProfileAssistBusy('approving');
     setFirstProfileAssistError(null);
@@ -1981,9 +2025,12 @@ export const MinimalAssignment: React.FC = () => {
           try {
             const latest = await fetchAssignmentSession(current.id);
             if (latest.confirmedStep === 'share' && latest.shareJobId) {
-              const linkedJob = await getJobStatusWithRecoveryRetry(latest.shareJobId);
-              activeAssignmentSessionRef.current = null;
-              setActiveAssignmentSession(null);
+              const historicalJobId = resumeSelectedResumeJobId.startsWith('session:')
+                ? latest.shareJobId
+                : resumeSelectedResumeJobId || latest.shareJobId;
+              const linkedJob = await getJobStatusWithRecoveryRetry(historicalJobId);
+              activeAssignmentSessionRef.current = latest;
+              setActiveAssignmentSession(latest);
               setJobStatusState(linkedJob);
               applyJobStatusTransition(linkedJob);
             } else {
@@ -2055,6 +2102,7 @@ export const MinimalAssignment: React.FC = () => {
     refreshSelectedProfile,
     refreshTranscriptPreservingLocal,
     resumeLoadResumeJobs,
+    resumeSelectedResumeJobId,
     setActiveAssignmentSession,
     context.profileSelectionMode,
     context.selectedProfileId,
@@ -2337,12 +2385,22 @@ export const MinimalAssignment: React.FC = () => {
               formatSttProviderLabel={formatSttProviderLabel}
               audioExtensions={AUDIO_EXTENSIONS}
               uploading={source.uploading}
+              replacingAudio={source.replacingAudio}
+              canReplaceAudio={Boolean(
+                source.recording?.source === 'upload' &&
+                  activeAssignmentSession &&
+                  activeAssignmentSession.confirmedStep !== 'share' &&
+                  !activeAssignmentSession.shareJobId &&
+                  assignmentSessionWritesAllowed(),
+              )}
               selectedFileName={source.selectedFileName}
               uploadProgress={source.uploadProgress}
               onFiles={(files) => {
                 markAssignmentUserEdit();
                 handleFiles(files);
               }}
+              onBeginAudioReplacement={source.beginAudioReplacement}
+              onCancelAudioReplacement={source.cancelAudioReplacement}
               onCancelUpload={handleCancelUpload}
               uploadError={source.uploadError}
               uploadCacheNotice={source.uploadCacheNotice}

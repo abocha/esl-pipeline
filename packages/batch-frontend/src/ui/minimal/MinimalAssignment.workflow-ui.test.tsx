@@ -11,6 +11,8 @@ import {
   makeAssignmentSession,
   makeJobStatus,
   makeRecording,
+  makeScheduleBillingSurface,
+  makeStudentLesson,
   makeTranscript,
   openAdvancedActions,
   preparePromptReady,
@@ -22,6 +24,7 @@ import {
   renderResumedAssignment,
   testScreen as screen,
   setupMinimalAssignmentTest,
+  startNewAssignmentForLearner,
   testVi as vi,
   testWaitFor as waitFor,
   testWithin as within,
@@ -1120,6 +1123,134 @@ describe('MinimalAssignment - staged workflow UI', () => {
     INTEGRATION_TEST_TIMEOUT_MS,
   );
 
+  it(
+    'replaces uploaded audio in the same assignment session and scheduled lesson',
+    async () => {
+      const user = createMinimalUser();
+      vi.mocked(api.getStudentScheduleBillingSurface).mockResolvedValue(
+        makeScheduleBillingSurface({
+          lessons: [
+            makeStudentLesson({
+              id: 'lesson-linked',
+              startsAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+              title: 'Linked lesson',
+            }),
+          ],
+        }),
+      );
+      const recordingA = makeRecording({
+        recordingId: 'rec-a',
+        studentId: 'student-alex',
+        status: 'transcribed',
+        transcriptId: 'tx-a',
+        displayName: 'wrong-lesson.mp3',
+      });
+      const recordingB = makeRecording({
+        recordingId: 'rec-b',
+        studentId: 'student-alex',
+        status: 'transcribed',
+        transcriptId: 'tx-b',
+        displayName: 'correct-lesson.mp3',
+      });
+      vi.mocked(api.uploadRecording)
+        .mockResolvedValueOnce(recordingA)
+        .mockResolvedValueOnce(recordingB);
+      vi.mocked(api.getRecording).mockImplementation(async (recordingId) =>
+        recordingId === 'rec-b' ? recordingB : recordingA,
+      );
+      vi.mocked(api.fetchRecordingTranscript).mockImplementation(async (recordingId) =>
+        makeTranscript(
+          recordingId === 'rec-b'
+            ? {
+                recordingId: 'rec-b',
+                transcriptId: 'tx-b',
+                text: 'Correct lesson transcript',
+                contentHash: 'b'.repeat(64),
+              }
+            : {
+                recordingId: 'rec-a',
+                transcriptId: 'tx-a',
+                text: 'Wrong lesson transcript',
+              },
+        ),
+      );
+
+      renderMinimalAssignment();
+      await startNewAssignmentForLearner(user);
+      await user.click(await screen.findByRole('button', { name: /Linked lesson/i }));
+      await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+      await screen.findByDisplayValue('Wrong lesson transcript');
+      await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+      await screen.findByRole('heading', { name: /Learner context/i });
+      await user.type(
+        screen.getByRole('textbox', { name: /Teacher notes/i }),
+        'Keep this teaching note.',
+      );
+      await user.click(screen.getByRole('button', { name: /Lesson source/i }));
+
+      await user.click(screen.getByRole('button', { name: /Replace audio/i }));
+      expect(screen.getByText(/Recording: wrong-lesson\.mp3/i)).toBeTruthy();
+      await user.click(screen.getByRole('button', { name: /Drop replacement audio/i }));
+
+      await screen.findByDisplayValue('Correct lesson transcript');
+      expect(screen.getByText(/Recording: correct-lesson\.mp3/i)).toBeTruthy();
+      await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+
+      await waitFor(() =>
+        expect(api.confirmAssignmentSessionStep).toHaveBeenLastCalledWith(
+          'session-1',
+          expect.objectContaining({
+            step: 'source',
+            lessonId: 'lesson-linked',
+            recordingId: 'rec-b',
+            transcriptId: 'tx-b',
+          }),
+        ),
+      );
+      expect(
+        (screen.getByRole('textbox', { name: /Teacher notes/i }) as HTMLTextAreaElement).value,
+      ).toBe('Keep this teaching note.');
+    },
+    INTEGRATION_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'keeps the current source when replacement upload fails',
+    async () => {
+      const user = createMinimalUser();
+      const recordingA = makeRecording({
+        recordingId: 'rec-a',
+        studentId: 'student-alex',
+        status: 'transcribed',
+        transcriptId: 'tx-a',
+        displayName: 'current-lesson.mp3',
+      });
+      vi.mocked(api.uploadRecording)
+        .mockResolvedValueOnce(recordingA)
+        .mockRejectedValueOnce(new Error('Replacement upload failed'));
+      vi.mocked(api.getRecording).mockResolvedValue(recordingA);
+      vi.mocked(api.fetchRecordingTranscript).mockResolvedValue(
+        makeTranscript({
+          recordingId: 'rec-a',
+          transcriptId: 'tx-a',
+          text: 'Current lesson transcript',
+        }),
+      );
+
+      renderMinimalAssignment();
+      await startNewAssignmentForLearner(user);
+      await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+      await screen.findByDisplayValue('Current lesson transcript');
+      await user.click(screen.getByRole('button', { name: /Replace audio/i }));
+      await user.click(screen.getByRole('button', { name: /Drop replacement audio/i }));
+
+      expect(await screen.findByText('Replacement upload failed')).toBeTruthy();
+      expect(screen.getByText(/Recording: current-lesson\.mp3/i)).toBeTruthy();
+      expect(screen.getByDisplayValue('Current lesson transcript')).toBeTruthy();
+    },
+    INTEGRATION_TEST_TIMEOUT_MS,
+  );
+
   it('lands resumed work in a later stage with progress markers', async () => {
     await renderResumedAssignment(
       {
@@ -1348,6 +1479,57 @@ describe('MinimalAssignment - staged workflow UI', () => {
       expect(screen.queryByText(/Assignments publish as an Assignment Handout/i)).toBeNull();
       expect(screen.queryByText(/Anything you leave unchecked stays as-is/i)).toBeNull();
       expect(screen.queryByText(/Pronunciation chunks default to Google/i)).toBeNull();
+    },
+    INTEGRATION_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'reopens every retained step for a completed post-cutover assignment',
+    async () => {
+      const user = createMinimalUser();
+      const completed = makeAssignmentSession({
+        id: 'session-completed',
+        studentId: 'student-alex',
+        recordingId: 'rec-1',
+        transcriptId: 'tx-1',
+        promptPackageId: 'pkg-1',
+        draftId: 'draft-1',
+        confirmedStep: 'share',
+        shareJobId: 'job-root',
+      });
+      vi.mocked(api.fetchAssignmentSession).mockResolvedValue(completed);
+      await renderPublishedAssignment(
+        {
+          draftText: '# Retained assignment markdown',
+          status: {
+            jobId: 'job-rerun',
+            studentId: 'student-alex',
+            assignmentSessionId: completed.id,
+            sourceJobId: 'job-root',
+          },
+        },
+        { user },
+      );
+
+      const sourceStep = screen.getByRole('button', { name: /Lesson source/i });
+      const contextStep = screen.getByRole('button', { name: /Teaching context/i });
+      const createStep = screen.getByRole('button', { name: /Create/i });
+      expect((sourceStep as HTMLButtonElement).disabled).toBe(false);
+      expect((contextStep as HTMLButtonElement).disabled).toBe(false);
+      expect((createStep as HTMLButtonElement).disabled).toBe(false);
+
+      await user.click(sourceStep);
+      expect(screen.getByRole('textbox', { name: /Transcript text/i })).toBeTruthy();
+      expect(screen.queryByRole('button', { name: /Replace audio/i })).toBeNull();
+      await user.click(createStep);
+      expect(screen.getByRole('textbox', { name: /Draft markdown/i })).toBeTruthy();
+
+      vi.mocked(api.getJobStatus).mockClear();
+      await act(async () => {
+        globalThis.dispatchEvent(new Event('focus'));
+      });
+      await waitFor(() => expect(api.getJobStatus).toHaveBeenCalledWith('job-rerun'));
+      expect(api.getJobStatus).not.toHaveBeenCalledWith('job-root');
     },
     INTEGRATION_TEST_TIMEOUT_MS,
   );
