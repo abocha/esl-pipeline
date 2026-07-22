@@ -3,8 +3,8 @@
 ## Meta
 
 - Audience: founder/operator, Codex, implementation agents.
-- Last Verified Against: 2026-07-16 production deployment and automated smoke; 2026-07-14 manual
-  main-flow smoke.
+- Last Verified Against: 2026-07-23 first-profile assignment incident; 2026-07-16 production
+  deployment and automated smoke; 2026-07-14 manual main-flow smoke.
 - Status: private hosted baseline passed; keep this record current after material redeploys or rehearsals.
 - Related historical plan: `docs/archive/plans/standalone/slice-1-private-hosted-environment.md`.
 
@@ -25,6 +25,49 @@ The original June rehearsal below remains as historical infrastructure evidence.
 smoke confirms the main assignment flow, while the July 16 deployment adds current release and
 automated health evidence. Neither replaces the narrower invite/account bootstrap acceptance gate in
 the active Slice 2 plan.
+
+## 2026-07-23 First-Profile Assignment Incident
+
+An alpha tutor's assignment stalled at Teaching context and later returned HTTP 400 when confirming
+Create. The assignment, prompt package, draft, confirmed source, confirmed Context snapshot, and
+active profile revision remained valid. The failure was fail-closed: no assignment was published
+against mismatched lineage.
+
+Observed sequence:
+
+1. the tutor had already populated and approved a structured learner profile;
+2. returning focus exposed a brief alternate Teaching context state;
+3. after the first containment release, a hard refresh incorrectly displayed `Populate first
+profile from lesson`;
+4. the tutor followed that instruction, creating and activating a second profile revision while the
+   previous revision was preserved as deprecated history;
+5. Teaching context then confirmed and assignment generation succeeded; and
+6. Create confirmation rejected the session because mutable recovery profile fields were null while
+   the durable confirmed Context snapshot contained a complete profile id/revision/hash triple.
+
+Production inspection established that the student-profile binding and structured active revision
+had existed when the refreshed UI claimed no profile was available. The refreshed client hydrated
+profile selection from the asynchronously loaded student-options list instead of the assignment
+session. Before that list resolved, the client represented the learner as having no profile and the
+pre-v10 first-profile helper treated that loading gap as a real empty-profile state. Clicking the
+helper also re-enabled recovery persistence while the client still held incomplete profile state.
+
+Containment was split deliberately:
+
+- v10.2.1 stopped partial profile lineage from being saved or confirmed, adopted the activated
+  revision immediately, and surfaced confirmation errors beside the primary action;
+- v10.2.2 made Create recovery atomically restore the durable confirmed Context snapshot before
+  confirmation; and
+- the follow-up safety patch documented with this incident makes assignment-session lineage
+  authoritative during refresh and keeps first-profile actions unavailable while profile authority
+  is unresolved.
+
+The incident exposed a larger product mismatch: the first-profile helper predated the v10 assignment
+session and confirmation model and exposed profile drafting/activation mechanics inside the teaching
+flow. The approved long-term replacement is documented in
+[`First-profile onboarding`](../design/FIRST_PROFILE_ONBOARDING.md). Initial evidence enrichment will
+be automatic, bound to the exact confirmed lesson, editable through the Student Learning page, and
+free of assignment-level profile workflow choices.
 
 ## 2026-07-16 Release Publication Incident and Recovery
 
