@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.2.1] - 2026-07-22
+
+### Changed
+
+- Automated release from PR #150: fix(frontend): repair Step 3 profile lineage (https://github.com/abocha/esl-pipeline/pull/150)
+
 ## [10.2.0] - 2026-07-22
 
 ### Changed
