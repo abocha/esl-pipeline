@@ -117,6 +117,9 @@ export function registerPromptEditorTests() {
       ).toBe('Focus on articles.');
       expect(screen.getByRole('heading', { name: /Learner context/i })).toBeTruthy();
       expect(api.confirmAssignmentSessionStep).toHaveBeenCalled();
+      expect((await screen.findByRole('alert')).textContent).toContain(
+        'Could not confirm this step: confirmation failed',
+      );
     });
 
     it('preserves the existing draft when saving changed teacher notes fails', async () => {
@@ -573,8 +576,27 @@ export function registerPromptEditorTests() {
         '/students/student-alex/learning?profileId=profiles%2Falex.md&draftRevisionId=revision-draft-1',
       );
 
+      const activatedRevision = await api.activateProfileRevision(
+        'profiles/alex.md',
+        'revision-draft-1',
+      );
+      vi.mocked(api.activateProfileRevision).mockClear();
+      let resolveActivation!: (revision: typeof activatedRevision) => void;
+      vi.mocked(api.activateProfileRevision).mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveActivation = resolve;
+          }),
+      );
       const approveButton = await screen.findByRole('button', { name: /Approve profile draft/i });
-      await user.click(approveButton);
+      fireEvent.click(approveButton);
+      const continueButton = screen.getByRole('button', { name: /Confirm and continue/i });
+      expect((continueButton as HTMLButtonElement).disabled).toBe(true);
+
+      await act(async () => {
+        resolveActivation(activatedRevision);
+        await Promise.resolve();
+      });
 
       await waitFor(() => {
         expect(api.activateProfileRevision).toHaveBeenCalledWith(
@@ -582,12 +604,19 @@ export function registerPromptEditorTests() {
           'revision-draft-1',
         );
       });
-      expect((await screen.findAllByText(/^Student Learning page$/i)).length).toBeGreaterThan(0);
-      expect(screen.getByText(/^Selected$/i)).toBeTruthy();
-      expect(await screen.findByText(/Lead project updates clearly\./i)).toBeTruthy();
+      await waitFor(() => expect((continueButton as HTMLButtonElement).disabled).toBe(false));
 
-      await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+      await user.click(continueButton);
       await screen.findByRole('button', { name: /^Generate assignment$/i });
+      expect(api.confirmAssignmentSessionStep).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          step: 'context',
+          profileId: 'profiles/alex.md',
+          profileRevisionId: 'revision-draft-1',
+          profileRevisionHash: 'hash-draft-1',
+        }),
+      );
       await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
 
       await waitFor(() => {

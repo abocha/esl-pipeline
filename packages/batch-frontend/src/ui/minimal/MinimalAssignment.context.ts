@@ -23,8 +23,12 @@ export interface ContextController extends ContextHydrationSnapshot {
   profilePreview: LearnerProfilePreview | null;
   selectedProfileRevisionId: string | null;
   selectedProfileRevisionHash: string | null;
+  profileLineageReady: boolean;
   applyHydratedSnapshot: (snapshot: ContextHydrationSnapshot) => void;
-  selectProfileId: (profileId: string) => void;
+  selectProfileId: (
+    profileId: string,
+    revision?: { id: string; contentHash: string } | null,
+  ) => void;
   refreshSelectedProfile: () => void;
 }
 
@@ -104,6 +108,7 @@ export function useMinimalAssignmentContextController({
   const [selectedProfileRevisionHash, setSelectedProfileRevisionHash] = useState<string | null>(
     null,
   );
+  const selectedProfileIdRef = useRef('');
   const profileLineagePinnedRef = useRef(false);
   const [profileReloadToken, setProfileReloadToken] = useState(0);
   const refreshSelectedProfile = useCallback(() => {
@@ -112,36 +117,63 @@ export function useMinimalAssignmentContextController({
   }, []);
 
   const applyHydratedSnapshot = useCallback((snapshot: ContextHydrationSnapshot) => {
+    const profileChanged = selectedProfileIdRef.current !== snapshot.selectedProfileId;
+    selectedProfileIdRef.current = snapshot.selectedProfileId;
     setSelectedProfileId(snapshot.selectedProfileId);
     setProfileSelectionMode(snapshot.profileSelectionMode);
-    if ('selectedProfileRevisionId' in snapshot || 'selectedProfileRevisionHash' in snapshot) {
-      profileLineagePinnedRef.current = true;
-    }
-    if ('selectedProfileRevisionId' in snapshot) {
-      setSelectedProfileRevisionId(snapshot.selectedProfileRevisionId ?? null);
-    }
-    if ('selectedProfileRevisionHash' in snapshot) {
-      setSelectedProfileRevisionHash(snapshot.selectedProfileRevisionHash ?? null);
+    const hasCompleteLineage = Boolean(
+      snapshot.selectedProfileId &&
+        snapshot.selectedProfileRevisionId &&
+        snapshot.selectedProfileRevisionHash,
+    );
+    profileLineagePinnedRef.current = hasCompleteLineage;
+    setSelectedProfileRevisionId(
+      hasCompleteLineage ? (snapshot.selectedProfileRevisionId ?? null) : null,
+    );
+    setSelectedProfileRevisionHash(
+      hasCompleteLineage ? (snapshot.selectedProfileRevisionHash ?? null) : null,
+    );
+    if (snapshot.selectedProfileId && !hasCompleteLineage && !profileChanged) {
+      setProfilePreviewStatus('loading');
+      setProfileReloadToken((current) => current + 1);
     }
   }, []);
 
-  const selectProfileId = useCallback((profileId: string) => {
-    profileLineagePinnedRef.current = false;
-    setSelectedProfileId(profileId);
-    setProfileSelectionMode('auto');
-    setProfileReloadToken((current) => current + 1);
-  }, []);
+  const selectProfileId = useCallback(
+    (profileId: string, revision?: { id: string; contentHash: string } | null) => {
+      const hasCompleteLineage = Boolean(profileId && revision?.id && revision.contentHash);
+      profileLineagePinnedRef.current = hasCompleteLineage;
+      selectedProfileIdRef.current = profileId;
+      setSelectedProfileId(profileId);
+      setSelectedProfileRevisionId(hasCompleteLineage ? (revision?.id ?? null) : null);
+      setSelectedProfileRevisionHash(hasCompleteLineage ? (revision?.contentHash ?? null) : null);
+      setProfileSelectionMode('auto');
+      setProfileReloadToken((current) => current + 1);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (profileSelectionMode !== 'auto') {
       return;
     }
     if (!selectedStudentId) {
+      profileLineagePinnedRef.current = false;
+      selectedProfileIdRef.current = '';
       setSelectedProfileId('');
+      setSelectedProfileRevisionId(null);
+      setSelectedProfileRevisionHash(null);
       return;
     }
     const boundProfileId = resolveBoundProfileId(selectedStudentId);
-    setSelectedProfileId((current) => (current === boundProfileId ? current : boundProfileId));
+    if (selectedProfileIdRef.current !== boundProfileId) {
+      profileLineagePinnedRef.current = false;
+      selectedProfileIdRef.current = boundProfileId;
+      setSelectedProfileRevisionId(null);
+      setSelectedProfileRevisionHash(null);
+      setProfilePreviewStatus(boundProfileId ? 'loading' : 'none');
+    }
+    setSelectedProfileId(boundProfileId);
   }, [profileSelectionMode, resolveBoundProfileId, selectedStudentId]);
 
   useEffect(() => {
@@ -203,6 +235,11 @@ export function useMinimalAssignmentContextController({
     };
   }, [profileReloadToken, selectedProfileId]);
 
+  const profileLineageReady =
+    !selectedProfileId ||
+    profilePreviewStatus === 'unstructured' ||
+    Boolean(selectedProfileRevisionId && selectedProfileRevisionHash);
+
   return {
     selectedProfileId,
     profileSelectionMode,
@@ -211,6 +248,7 @@ export function useMinimalAssignmentContextController({
     profilePreview,
     selectedProfileRevisionId,
     selectedProfileRevisionHash,
+    profileLineageReady,
     refreshSelectedProfile,
     applyHydratedSnapshot,
     selectProfileId,
