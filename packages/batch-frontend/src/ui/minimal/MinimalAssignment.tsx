@@ -1848,7 +1848,16 @@ export const MinimalAssignment: React.FC = () => {
       const promptPackageId = authoring.promptPackage?.id;
       const draft = authoring.draftDirty ? await authoring.saveDraft() : authoring.draft;
       if (!promptPackageId || !draft?.id || !draft.workingVersion) return;
+      const confirmedContext = activeAssignmentSessionRef.current?.confirmed.context;
       const recovered = await saveAssignmentSessionProgress({
+        ...(confirmedContext
+          ? {
+              teacherNotes: confirmedContext.teacherNotes,
+              selectedProfileId: confirmedContext.profileId,
+              selectedProfileRevisionId: confirmedContext.profileRevisionId,
+              selectedProfileRevisionHash: confirmedContext.profileRevisionHash,
+            }
+          : {}),
         promptPackageId,
         draftId: draft.id,
         publishTarget: authoring.publishTarget,
