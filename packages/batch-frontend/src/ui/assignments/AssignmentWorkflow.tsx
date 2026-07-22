@@ -19,6 +19,7 @@ export interface AssignmentWorkflowProps {
   onContinue?: () => void;
   continueLabel?: string;
   continueDisabled?: boolean;
+  continueFeedback?: React.ReactNode;
   onComplete?: () => void;
   completionLabel?: string;
   children: React.ReactNode;
@@ -53,6 +54,7 @@ export function AssignmentWorkflow({
   onContinue,
   continueLabel,
   continueDisabled = false,
+  continueFeedback,
   onComplete,
   completionLabel,
   children,
@@ -116,6 +118,9 @@ export function AssignmentWorkflow({
           </ProductButton>
         ) : null}
         <div className="assignment-workflow__footer-action">
+          {continueFeedback ? (
+            <div className="assignment-workflow__footer-feedback">{continueFeedback}</div>
+          ) : null}
           {onComplete && completionLabel ? (
             <ProductButton onClick={onComplete}>{completionLabel}</ProductButton>
           ) : onContinue && continueLabel ? (
