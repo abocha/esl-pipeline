@@ -426,6 +426,118 @@ export function registerResumeBasicTests() {
       expect(api.getJobStatus).not.toHaveBeenCalled();
     });
 
+    it('repairs partial profile lineage before saving or confirming a resumed Context step', async () => {
+      const user = createMinimalUser();
+      const partialSession = makeAssignmentSession({
+        id: 'session-partial-profile',
+        studentId: 'student-alex',
+        recordingId: 'rec-session',
+        transcriptId: 'tx-session',
+        confirmedStep: 'source',
+        selectedProfileId: 'profiles/alex.md',
+        selectedProfileRevisionId: null,
+        selectedProfileRevisionHash: null,
+      });
+      vi.mocked(api.listAssignmentSessions).mockResolvedValueOnce({
+        sessions: [partialSession],
+        total: 1,
+        limit: 20,
+      });
+      vi.mocked(api.fetchAssignmentSession).mockResolvedValue(partialSession);
+      vi.mocked(api.getRecording).mockResolvedValue(
+        makeRecording({
+          recordingId: 'rec-session',
+          status: 'transcribed',
+          transcriptId: 'tx-session',
+          studentId: 'student-alex',
+        }),
+      );
+      vi.mocked(api.fetchRecordingTranscript).mockResolvedValue(
+        makeTranscript({
+          recordingId: 'rec-session',
+          transcriptId: 'tx-session',
+          text: 'Session transcript',
+        }),
+      );
+      let activeProfileRevision: ApiTypes.ProfileRevisionDetailResponse | null = null;
+      const pendingProfileRevisionResolvers: ((
+        revision: ApiTypes.ProfileRevisionDetailResponse,
+      ) => void)[] = [];
+      vi.mocked(api.getProfileRevision).mockImplementation(() =>
+        activeProfileRevision
+          ? Promise.resolve(activeProfileRevision)
+          : new Promise((resolve) => {
+              pendingProfileRevisionResolvers.push(resolve);
+            }),
+      );
+
+      globalThis.history.replaceState(null, '', '/?sessionId=session-partial-profile');
+      renderMinimalAssignment();
+
+      await screen.findByRole('heading', { name: /Add teaching context/i });
+      const continueButton = screen.getByRole('button', { name: /Confirm and continue/i });
+      await waitFor(() => expect(api.getProfileRevision).toHaveBeenCalled());
+      await waitFor(() => expect((continueButton as HTMLButtonElement).disabled).toBe(true));
+      vi.mocked(api.updateAssignmentSessionRecovery).mockClear();
+
+      vi.useFakeTimers();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2_000);
+      });
+      expect(api.updateAssignmentSessionRecovery).not.toHaveBeenCalled();
+      vi.useRealTimers();
+
+      vi.useFakeTimers();
+      await act(async () => {
+        activeProfileRevision = {
+          id: 'revision-active',
+          profileId: 'profiles/alex.md',
+          contentHash: 'b'.repeat(64),
+          source: 'create',
+          createdAt: now,
+          createdBy: null,
+          restoredFromRevisionId: null,
+          content: 'PROFILE CONTENT',
+        };
+        for (const resolve of pendingProfileRevisionResolvers) {
+          resolve(activeProfileRevision);
+        }
+        await Promise.resolve();
+      });
+      expect((continueButton as HTMLButtonElement).disabled).toBe(false);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2_000);
+      });
+      expect(api.updateAssignmentSessionRecovery).toHaveBeenCalledWith(
+        'session-partial-profile',
+        expect.objectContaining({
+          patch: expect.objectContaining({
+            selectedProfileId: 'profiles/alex.md',
+            selectedProfileRevisionId: 'revision-active',
+            selectedProfileRevisionHash: 'b'.repeat(64),
+          }),
+        }),
+      );
+      vi.useRealTimers();
+
+      for (const [, request] of vi.mocked(api.updateAssignmentSessionRecovery).mock.calls) {
+        if (request.patch.selectedProfileId) {
+          expect(request.patch.selectedProfileRevisionId).toBeTruthy();
+          expect(request.patch.selectedProfileRevisionHash).toBeTruthy();
+        }
+      }
+      await user.click(continueButton);
+      expect(api.confirmAssignmentSessionStep).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          step: 'context',
+          profileId: 'profiles/alex.md',
+          profileRevisionId: 'revision-active',
+          profileRevisionHash: 'b'.repeat(64),
+        }),
+      );
+    });
+
     it('persists a pasted transcript as a user edit after session hydration', async () => {
       const user = createMinimalUser();
       vi.mocked(api.listAssignmentSessions).mockResolvedValueOnce({
