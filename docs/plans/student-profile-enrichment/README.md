@@ -45,15 +45,20 @@ This creates two product problems:
 2. the authoritative profile becomes expensive to maintain manually, especially after the first few
    lessons
 
-At the same time, direct auto-mutation of the foundational profile is not acceptable because it
-would blur the line between curated truth and inferred memory.
+At the same time, ongoing direct auto-mutation of an established profile is not acceptable because
+it would blur the line between curated truth and inferred memory. The one-time onboarding
+enrichment defined below is the bounded exception: it starts from an empty or tutor-seeded profile,
+uses the exact confirmed lesson, and remains visible and correctable by the tutor.
 
 ## Locked Decisions
 
 1. The foundational profile remains the highest-authority student document.
-2. Transcript- or memory-derived facts must not auto-promote directly into the foundational profile.
-3. Generated profile enrichment is allowed only as a proposed change set that requires teacher
-   review.
+2. The one-time initial enrichment of an empty or tutor-seeded profile is automatic after an exact
+   confirmed lesson becomes eligible, as defined by
+   [`First-profile onboarding`](../../design/FIRST_PROFILE_ONBOARDING.md).
+3. After that initial enrichment, transcript- or memory-derived facts must not auto-promote directly
+   into the foundational profile. Ongoing generated enrichment remains a proposed change set that
+   requires teacher review.
 4. Approved profile enrichment must create a normal profile revision, preserving lineage and
    restore/activate semantics.
 5. Rejected or ignored candidate facts remain in generated memory only; they do not mutate the
@@ -69,13 +74,15 @@ would blur the line between curated truth and inferred memory.
 10. Rejected facts may be re-proposed only when the evidence set materially changed.
 11. Starter profile level may be unknown at creation time; CEFR level is optional in version 1.
 12. The system should use LLMs for bounded synthesis and drafting where structured profile quality
-    and rendered readability matter, but not as the final authority for what becomes profile truth.
+    and rendered readability matter. Outside the one-time onboarding enrichment, the model is not
+    the final authority for what becomes profile truth.
 
 ## Goals
 
 1. Make student onboarding lighter by collecting a minimal teacher-authored starter profile.
 2. Let the system propose additional stable profile facts after lessons accumulate.
-3. Keep all foundational profile changes teacher-approved and revisioned.
+3. Keep the one-time onboarding enrichment tutor-visible and correctable, and keep later
+   foundational profile changes teacher-approved and revisioned.
 4. Preserve clear explainability between:
    - human-authored profile truth
    - generated but unapproved candidate facts
@@ -85,7 +92,8 @@ would blur the line between curated truth and inferred memory.
 
 ## Out of Scope
 
-1. Automatic profile mutation without teacher approval.
+1. Automatic ongoing profile mutation after the one-time onboarding enrichment without teacher
+   approval.
 2. Free-form agentic profile editing.
 3. Replacing lesson/homework/snapshot memory with profile synthesis.
 4. Shipping a separate admin app for profile review.
@@ -117,6 +125,11 @@ would blur the line between curated truth and inferred memory.
 This means the repo already has the raw material for enrichment, but not the promotion workflow.
 
 ## Product Shape
+
+The assignment-flow onboarding exception is governed by
+[`First-profile onboarding`](../../design/FIRST_PROFILE_ONBOARDING.md). The sections below continue
+to govern starter profile capture and ongoing profile maintenance; they must not reintroduce profile
+revision controls into the primary assignment flow.
 
 ### 1. Starter Profile at Student Creation
 
@@ -258,7 +271,7 @@ Use LLMs for:
 2. synthesizing candidate fact proposals from canonical memory
 3. drafting coherent structured profile revisions from teacher-selected approved facts
 
-Do not use LLMs as the final authority for:
+After the one-time onboarding enrichment, do not use LLMs as the final authority for:
 
 1. deciding which facts become profile truth without teacher review
 2. silently promoting inferred facts into the foundational profile
@@ -269,7 +282,7 @@ Version-1 balance:
 1. deterministic or rule-based selection and eligibility
 2. constrained LLM-assisted drafting where structured fidelity matters and readable rendered output
    still matters
-3. teacher approval at the final authority boundary
+3. teacher approval at the final authority boundary for ongoing enrichment
 
 ## Drift-Control Rules
 
@@ -378,8 +391,10 @@ This plan should optimize for backend correctness and product learning, not fron
 
 1. A teacher can create a student with a minimal starter profile.
 2. After lessons accumulate, the system can propose durable profile facts with evidence.
-3. No generated fact changes the foundational profile until a teacher approves it.
-4. Promotion produces a normal profile revision with lineage preserved after teacher approval.
+3. After the one-time onboarding enrichment, no generated fact changes the foundational profile
+   until a teacher approves it.
+4. Ongoing promotion produces a normal profile revision with lineage preserved after teacher
+   approval.
 5. Prompt packages remain reproducible: they still point to the exact profile revision and memory
    state used at generation time.
 6. Rejected facts never appear in the foundational profile unless later re-proposed and approved.

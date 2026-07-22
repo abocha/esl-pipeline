@@ -492,6 +492,7 @@ export const MinimalAssignment: React.FC = () => {
   const context = useMinimalAssignmentContextController({
     selectedStudentId: source.selectedStudentId,
     resolveBoundProfileId: source.resolveBoundProfileId,
+    boundProfileResolutionReady: source.studentOptionsResolved,
   });
   const durableProfileLineage = useMemo(
     () => ({
@@ -677,8 +678,12 @@ export const MinimalAssignment: React.FC = () => {
       committedTeacherNotesRef.current = snapshot.teacherNotes.trim();
       setRerunTargetPronunciationMode(snapshot.rerunTargetPronunciationMode);
       applyContextHydration({
+        selectedStudentId: snapshot.selectedStudentId,
         selectedProfileId: snapshot.selectedProfileId,
         profileSelectionMode: snapshot.profileSelectionMode,
+        selectedProfileRevisionId: snapshot.selectedProfileRevisionId,
+        selectedProfileRevisionHash: snapshot.selectedProfileRevisionHash,
+        profileAuthorityResolved: snapshot.profileAuthorityResolved,
       });
       applyAuthoringHydration(snapshot.authoring);
     },
@@ -1493,6 +1498,7 @@ export const MinimalAssignment: React.FC = () => {
   firstProfileSourceAuthorityKeyRef.current = firstProfileSourceAuthorityKey;
   const firstProfileAssistVisible = Boolean(
     source.selectedStudentId &&
+      context.profileAuthorityResolved &&
       transcriptReady &&
       !source.replacingAudio &&
       !source.uploading &&
@@ -2103,10 +2109,12 @@ export const MinimalAssignment: React.FC = () => {
                 assignmentContextConflictKeyRef.current = null;
                 setTeacherNotes(latest.teacherNotes ?? '');
                 applyContextHydration({
+                  selectedStudentId: source.selectedStudentId,
                   selectedProfileId: latest.selectedProfileId ?? '',
                   profileSelectionMode: context.profileSelectionMode,
                   selectedProfileRevisionId: latest.selectedProfileRevisionId,
                   selectedProfileRevisionHash: latest.selectedProfileRevisionHash,
+                  profileAuthorityResolved: true,
                 });
                 setAssignmentSaveState('saved');
               } else if (
@@ -2148,6 +2156,7 @@ export const MinimalAssignment: React.FC = () => {
     resumeLoadResumeJobs,
     resumeSelectedResumeJobId,
     setActiveAssignmentSession,
+    source.selectedStudentId,
     context.profileSelectionMode,
     context.selectedProfileId,
     context.selectedProfileRevisionHash,

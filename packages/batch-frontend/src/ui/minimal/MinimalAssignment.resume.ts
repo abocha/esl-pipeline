@@ -137,10 +137,68 @@ export interface HydratedAssignmentSnapshot {
   selectedStudentId: string;
   lessonId: string | null;
   selectedProfileId: string;
+  selectedProfileRevisionId?: string | null;
+  selectedProfileRevisionHash?: string | null;
+  profileAuthorityResolved?: boolean;
   profileSelectionMode: 'auto' | 'manual';
   uploadError: string | null;
   uploadCacheNotice: string | null;
   authoring: AuthoringHydrationSnapshot;
+}
+
+function resolveSessionProfileLineage(session: AssignmentSession): {
+  selectedProfileId: string;
+  selectedProfileRevisionId: string | null;
+  selectedProfileRevisionHash: string | null;
+  profileAuthorityResolved: boolean;
+} {
+  const currentIsComplete = Boolean(
+    session.selectedProfileId &&
+      session.selectedProfileRevisionId &&
+      session.selectedProfileRevisionHash,
+  );
+  if (currentIsComplete) {
+    return {
+      selectedProfileId: session.selectedProfileId ?? '',
+      selectedProfileRevisionId: session.selectedProfileRevisionId,
+      selectedProfileRevisionHash: session.selectedProfileRevisionHash,
+      profileAuthorityResolved: true,
+    };
+  }
+
+  const confirmed = session.confirmed.context;
+  const confirmedIsComplete = Boolean(
+    confirmed?.profileId && confirmed.profileRevisionId && confirmed.profileRevisionHash,
+  );
+  if (confirmedIsComplete) {
+    return {
+      selectedProfileId: confirmed?.profileId ?? '',
+      selectedProfileRevisionId: confirmed?.profileRevisionId ?? null,
+      selectedProfileRevisionHash: confirmed?.profileRevisionHash ?? null,
+      profileAuthorityResolved: true,
+    };
+  }
+
+  if (confirmed) {
+    return {
+      selectedProfileId: confirmed.profileId ?? '',
+      selectedProfileRevisionId: confirmed.profileRevisionId,
+      selectedProfileRevisionHash: confirmed.profileRevisionHash,
+      profileAuthorityResolved: true,
+    };
+  }
+
+  const hasRecoveryProfileState = Boolean(
+    session.selectedProfileId ||
+      session.selectedProfileRevisionId ||
+      session.selectedProfileRevisionHash,
+  );
+  return {
+    selectedProfileId: session.selectedProfileId ?? '',
+    selectedProfileRevisionId: session.selectedProfileRevisionId,
+    selectedProfileRevisionHash: session.selectedProfileRevisionHash,
+    profileAuthorityResolved: hasRecoveryProfileState,
+  };
 }
 
 export type HydrationMode = 'session' | 'job' | 'new';
@@ -321,6 +379,7 @@ export function useMinimalAssignmentResume({
 
   const buildSnapshotFromSession = useCallback(
     (session: AssignmentSession): HydratedAssignmentSnapshot => {
+      const sessionProfileLineage = resolveSessionProfileLineage(session);
       const selectedTtsProvider = isUiTtsProvider(session.selectedTtsProvider)
         ? session.selectedTtsProvider
         : currentSelectedTtsProvider;
@@ -348,9 +407,12 @@ export function useMinimalAssignmentResume({
         rerunTargetPronunciationMode: null,
         selectedStudentId: session.studentId ?? currentSelectedStudentId,
         lessonId: session.lessonId ?? null,
-        selectedProfileId: session.studentId
-          ? resolveBoundProfileId(session.studentId)
-          : currentSelectedProfileId,
+        selectedProfileId:
+          sessionProfileLineage.selectedProfileId ||
+          (session.studentId ? resolveBoundProfileId(session.studentId) : currentSelectedProfileId),
+        selectedProfileRevisionId: sessionProfileLineage.selectedProfileRevisionId,
+        selectedProfileRevisionHash: sessionProfileLineage.selectedProfileRevisionHash,
+        profileAuthorityResolved: sessionProfileLineage.profileAuthorityResolved,
         profileSelectionMode: session.studentId ? 'auto' : currentProfileSelectionMode,
         uploadError: null,
         uploadCacheNotice: null,
@@ -441,6 +503,9 @@ export function useMinimalAssignmentResume({
               currentSelectedPreset,
             )
           : currentSelectedPreset;
+        const completedSessionProfileLineage = completedSession
+          ? resolveSessionProfileLineage(completedSession)
+          : null;
 
         const snapshot: HydratedAssignmentSnapshot = {
           jobStatus: status,
@@ -456,7 +521,14 @@ export function useMinimalAssignmentResume({
           rerunTargetPronunciationMode: status.pronunciationMode ?? null,
           selectedStudentId: currentSelectedStudentId,
           lessonId: status.lessonId ?? completedSession?.lessonId ?? null,
-          selectedProfileId: completedSession?.selectedProfileId ?? currentSelectedProfileId,
+          selectedProfileId:
+            completedSessionProfileLineage?.selectedProfileId ?? currentSelectedProfileId,
+          selectedProfileRevisionId:
+            completedSessionProfileLineage?.selectedProfileRevisionId ?? null,
+          selectedProfileRevisionHash:
+            completedSessionProfileLineage?.selectedProfileRevisionHash ?? null,
+          profileAuthorityResolved:
+            completedSessionProfileLineage?.profileAuthorityResolved ?? false,
           profileSelectionMode: completedSession?.selectedProfileId
             ? 'manual'
             : currentProfileSelectionMode,
@@ -572,7 +644,9 @@ export function useMinimalAssignmentResume({
         if (resolvedStudentId) {
           snapshot.profileSelectionMode = 'auto';
           snapshot.selectedStudentId = resolvedStudentId;
-          snapshot.selectedProfileId = resolveBoundProfileId(resolvedStudentId);
+          if (!snapshot.profileAuthorityResolved) {
+            snapshot.selectedProfileId = resolveBoundProfileId(resolvedStudentId);
+          }
         }
 
         if (!isCurrentHydration(hydration)) return { ok: false };
@@ -734,7 +808,9 @@ export function useMinimalAssignmentResume({
         if (resolvedStudentId) {
           snapshot.profileSelectionMode = 'auto';
           snapshot.selectedStudentId = resolvedStudentId;
-          snapshot.selectedProfileId = resolveBoundProfileId(resolvedStudentId);
+          if (!snapshot.profileAuthorityResolved) {
+            snapshot.selectedProfileId = resolveBoundProfileId(resolvedStudentId);
+          }
         }
 
         if (!isCurrentHydration(hydration)) return { ok: false };

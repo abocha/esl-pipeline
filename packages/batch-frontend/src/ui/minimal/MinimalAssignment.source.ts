@@ -77,6 +77,7 @@ export interface SourceController extends SourceHydrationSnapshot {
   retryingTranscript: boolean;
   studentOptions: StudentOption[];
   studentOptionsLoading: boolean;
+  studentOptionsResolved: boolean;
   studentOptionsError: string | null;
   sttProviders: readonly SttProvider[];
   selectedStudent: StudentOption | null;
@@ -133,6 +134,7 @@ export function useMinimalAssignmentSourceController({
   const [manualTranscriptError, setManualTranscriptError] = useState<string | null>(null);
   const [studentOptions, setStudentOptions] = useState<StudentOption[]>([]);
   const [studentOptionsLoading, setStudentOptionsLoading] = useState(false);
+  const [studentOptionsResolved, setStudentOptionsResolved] = useState(false);
   const [studentOptionsError, setStudentOptionsError] = useState<string | null>(null);
   const [selectedStudentId, setSelectedStudentId] = useState(initialSelectedStudentId ?? '');
   const [uploadCacheNotice, setUploadCacheNotice] = useState<string | null>(null);
@@ -257,6 +259,7 @@ export function useMinimalAssignmentSourceController({
         }
         return '';
       });
+      setStudentOptionsResolved(true);
       setStudentOptionsError(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to load students.';
@@ -780,6 +783,7 @@ export function useMinimalAssignmentSourceController({
     retryingTranscript,
     studentOptions,
     studentOptionsLoading,
+    studentOptionsResolved,
     studentOptionsError,
     selectedStudentId,
     uploadCacheNotice,

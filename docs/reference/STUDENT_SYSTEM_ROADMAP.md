@@ -106,9 +106,12 @@
 - status: planned
 - target outcome:
   - starter teacher-authored profile at student creation
+  - automatic one-time evidence enrichment for an empty or tutor-seeded profile during the first
+    eligible confirmed lesson, with optional correction on the Student Learning page
   - generated candidate durable profile facts from canonical student memory
   - teacher review before promotion into foundational profile revisions
 - active plan:
+  - [`docs/design/FIRST_PROFILE_ONBOARDING.md`](../design/FIRST_PROFILE_ONBOARDING.md)
   - [`docs/plans/student-profile-enrichment/README.md`](../plans/student-profile-enrichment/README.md)
   - [`docs/plans/student-area-redesign/phase-2-learning-page-and-structured-profile.md`](../plans/student-area-redesign/phase-2-learning-page-and-structured-profile.md)
   - [`docs/plans/student-area-redesign/phase-3-profile-generation-migration-and-prompt-packaging.md`](../plans/student-area-redesign/phase-3-profile-generation-migration-and-prompt-packaging.md)
