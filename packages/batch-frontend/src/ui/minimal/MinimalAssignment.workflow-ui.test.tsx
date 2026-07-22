@@ -205,6 +205,79 @@ describe('MinimalAssignment - staged workflow UI', () => {
     expect(screen.getByText(/Newer saved artifact content was found/i)).toBeTruthy();
   });
 
+  it('repairs confirmed Context lineage before confirming a recovered Create step', async () => {
+    const confirmedContext = {
+      teacherNotes: 'Practice project updates.',
+      profileId: 'profiles/alex.md',
+      profileRevisionId: 'revision-1',
+      profileRevisionHash: 'a'.repeat(64),
+    };
+    const baseSession = makeAssignmentSession({
+      id: 'session-create-context-drift',
+      studentId: 'student-alex',
+      recordingId: 'rec-1',
+      transcriptId: 'tx-1',
+      promptPackageId: 'pkg-1',
+      draftId: 'draft-1',
+      confirmedStep: 'context',
+      teacherNotes: confirmedContext.teacherNotes,
+      selectedProfileId: confirmedContext.profileId,
+      selectedProfileRevisionId: confirmedContext.profileRevisionId,
+      selectedProfileRevisionHash: confirmedContext.profileRevisionHash,
+    });
+    const session = {
+      ...baseSession,
+      confirmed: { ...baseSession.confirmed, context: confirmedContext },
+    };
+    vi.mocked(api.listAssignmentSessions).mockResolvedValueOnce({
+      sessions: [session],
+      total: 1,
+      limit: 20,
+    });
+    vi.mocked(api.fetchAssignmentSession).mockResolvedValue(session);
+    vi.mocked(api.fetchPromptPackage).mockResolvedValueOnce({
+      id: 'pkg-1',
+      recordingId: 'rec-1',
+      transcriptId: 'tx-1',
+      studentId: 'student-alex',
+      lessonId: null,
+      profilePath: 'profiles/alex.md',
+      templateVersion: 'v1',
+      notes: confirmedContext.teacherNotes,
+      storageUri: 'memory://prompt/pkg-1',
+      text: 'Prompt package output',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    globalThis.history.replaceState(null, '', '/?sessionId=session-create-context-drift');
+    const user = createMinimalUser();
+    renderMinimalAssignment();
+
+    await screen.findByDisplayValue('# Draft markdown');
+    vi.mocked(api.updateAssignmentSessionRecovery).mockClear();
+    await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+
+    await waitFor(() =>
+      expect(api.updateAssignmentSessionRecovery).toHaveBeenCalledWith(
+        'session-create-context-drift',
+        expect.objectContaining({
+          patch: expect.objectContaining({
+            teacherNotes: confirmedContext.teacherNotes,
+            selectedProfileId: confirmedContext.profileId,
+            selectedProfileRevisionId: confirmedContext.profileRevisionId,
+            selectedProfileRevisionHash: confirmedContext.profileRevisionHash,
+            promptPackageId: 'pkg-1',
+            draftId: 'draft-1',
+          }),
+        }),
+      ),
+    );
+    expect(api.confirmAssignmentSessionStep).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ step: 'create', promptPackageId: 'pkg-1', draftId: 'draft-1' }),
+    );
+  });
+
   it('reconciles a transcript CAS conflict raised during Source confirmation', async () => {
     const { user } = await renderResumedAssignment({}, { waitFor: 'none' });
     await user.click(screen.getByRole('button', { name: /Lesson source/i }));
