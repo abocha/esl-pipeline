@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.2.3] - 2026-07-22
+
+### Changed
+
+- Automated release from PR #152: fix(frontend): guard first-profile hydration (https://github.com/abocha/esl-pipeline/pull/152)
+
 ## [10.2.2] - 2026-07-22
 
 ### Changed
