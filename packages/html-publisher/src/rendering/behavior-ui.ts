@@ -83,20 +83,68 @@ export function buildUiBehaviorScript(features: ResolvedFeatures): string {
     });
   }
 
-  // Force animation replay on details toggle
+  // Keep native details content rendered until the closing transition completes.
   document.querySelectorAll('details').forEach((details) => {
+    const summary = details.querySelector(':scope > summary');
+    const content = details.querySelector(':scope > .content');
+    if (!(summary instanceof HTMLElement) || !(content instanceof HTMLElement)) {
+      return;
+    }
+
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+    let expanded = details.open;
+    let cancelPendingClose = null;
+
+    const openDetails = () => {
+      expanded = true;
+      cancelPendingClose?.();
+      cancelPendingClose = null;
+      details.open = true;
+      details.classList.remove('is-open');
+      if (!reduceMotion) {
+        content.getBoundingClientRect();
+      }
+      details.classList.add('is-open');
+    };
+
+    const closeDetails = () => {
+      expanded = false;
+      details.classList.remove('is-open');
+      if (reduceMotion) {
+        details.open = false;
+        return;
+      }
+
+      const finishClose = () => {
+        if (!expanded) {
+          details.open = false;
+        }
+        cancelPendingClose?.();
+        cancelPendingClose = null;
+      };
+      const handleTransitionEnd = (event) => {
+        if (event.target === content && event.propertyName === 'grid-template-rows') {
+          finishClose();
+        }
+      };
+      const closeTimeout = window.setTimeout(finishClose, 360);
+      content.addEventListener('transitionend', handleTransitionEnd);
+      cancelPendingClose = () => {
+        window.clearTimeout(closeTimeout);
+        content.removeEventListener('transitionend', handleTransitionEnd);
+      };
+    };
+
     if (details.open) {
       details.classList.add('is-open');
     }
-    details.addEventListener('toggle', () => {
-      if (details.open) {
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            details.classList.add('is-open');
-          });
-        });
+
+    summary.addEventListener('click', (event) => {
+      event.preventDefault();
+      if (expanded) {
+        closeDetails();
       } else {
-        details.classList.remove('is-open');
+        openDetails();
       }
     });
   });
