@@ -692,8 +692,8 @@ describeHttpServerIntegrationSuite(
         expect(createDefaultSpy).not.toHaveBeenCalled();
 
         const payload = response.json() as { html: string };
-        expect(payload.html).toContain('--theme-h2: #d8e5f2;');
-        expect(payload.html).toContain('--theme-h3: #e7dbe9;');
+        expect(payload.html).toContain('--theme-h2: #dce7f2;');
+        expect(payload.html).toContain('--theme-h3: #eef2f6;');
       } finally {
         getSettingsSpy.mockRestore();
         createDefaultSpy.mockRestore();
