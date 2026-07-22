@@ -278,7 +278,7 @@ function wrapTableOfContents(html: string): string {
   return html.replaceAll(
     /<(nav|div)\s+class="table-of-contents"[\s\S]*?<\/\1>/gi,
     (tocHtml) =>
-      `<details class="toc-shell"><summary>Contents</summary><div class="content"><div class="content-inner">${tocHtml}</div></div></details>`,
+      `<details class="toc-shell"><summary>Jump to section</summary><div class="content"><div class="content-inner">${tocHtml}</div></div></details>`,
   );
 }
 
