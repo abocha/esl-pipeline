@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.2.2] - 2026-07-22
+
+### Changed
+
+- Automated release from PR #151: fix(frontend): repair Create context recovery (https://github.com/abocha/esl-pipeline/pull/151)
+
 ## [10.2.1] - 2026-07-22
 
 ### Changed
