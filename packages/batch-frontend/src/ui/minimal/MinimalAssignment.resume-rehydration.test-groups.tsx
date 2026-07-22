@@ -538,6 +538,106 @@ export function registerResumeBasicTests() {
       );
     });
 
+    it('keeps confirmed profile lineage authoritative while student options load', async () => {
+      const confirmedProfile = {
+        profileId: 'profiles/alex.md',
+        profileRevisionId: 'revision-confirmed',
+        profileRevisionHash: 'c'.repeat(64),
+      };
+      const resumedSession = makeAssignmentSession({
+        id: 'session-confirmed-profile-refresh',
+        studentId: 'student-alex',
+        recordingId: 'rec-session',
+        transcriptId: 'tx-session',
+        confirmedStep: 'context',
+        teacherNotes: 'Keep the examples practical.',
+        selectedProfileId: null,
+        selectedProfileRevisionId: null,
+        selectedProfileRevisionHash: null,
+      });
+      resumedSession.confirmed.context = {
+        teacherNotes: 'Keep the examples practical.',
+        ...confirmedProfile,
+      };
+      vi.mocked(api.listAssignmentSessions).mockResolvedValueOnce({
+        sessions: [resumedSession],
+        total: 1,
+        limit: 20,
+      });
+      vi.mocked(api.fetchAssignmentSession).mockResolvedValue(resumedSession);
+      vi.mocked(api.fetchStudentOptions).mockImplementation(() => new Promise(() => {}));
+      vi.mocked(api.getRecording).mockResolvedValue(
+        makeRecording({
+          recordingId: 'rec-session',
+          status: 'transcribed',
+          transcriptId: 'tx-session',
+          studentId: 'student-alex',
+        }),
+      );
+      vi.mocked(api.fetchRecordingTranscript).mockResolvedValue(
+        makeTranscript({
+          recordingId: 'rec-session',
+          transcriptId: 'tx-session',
+          text: 'Session transcript',
+        }),
+      );
+      vi.mocked(api.getProfileContent).mockResolvedValueOnce({
+        id: confirmedProfile.profileId,
+        label: 'Alex Profile',
+        content: 'PROFILE CONTENT',
+        structuredContent: {
+          schemaVersion: 'foundational_profile_v1',
+          overallLevel: 'B1',
+          primaryGoals: ['Lead project updates clearly.'],
+          communicationContexts: ['Weekly team syncs.'],
+          interestsAndUsefulThemes: [],
+          stableStrengths: [],
+          persistentChallenges: [],
+          studyPreferences: [],
+          durableConstraints: [],
+          teacherNotes: null,
+        },
+        currentRevisionId: confirmedProfile.profileRevisionId,
+        updatedAt: now,
+      });
+
+      globalThis.history.replaceState(null, '', '/?sessionId=session-confirmed-profile-refresh');
+      renderMinimalAssignment();
+
+      await screen.findByRole('heading', { name: /Add teaching context/i });
+      await waitFor(() =>
+        expect(api.getProfileContent).toHaveBeenCalledWith(confirmedProfile.profileId),
+      );
+      expect(
+        screen.queryByRole('button', { name: /Populate first profile from lesson/i }),
+      ).toBeNull();
+      expect(screen.queryByText(/^First profile setup$/i)).toBeNull();
+      expect(
+        (screen.getByRole('button', { name: /Confirm and continue/i }) as HTMLButtonElement)
+          .disabled,
+      ).toBe(false);
+
+      vi.mocked(api.updateAssignmentSessionRecovery).mockClear();
+      vi.useFakeTimers();
+      fireEvent.change(screen.getByRole('textbox', { name: /Teacher notes/i }), {
+        target: { value: 'Keep the examples practical and add a pronunciation contrast.' },
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_500);
+      });
+      expect(api.updateAssignmentSessionRecovery).toHaveBeenCalledWith(
+        'session-confirmed-profile-refresh',
+        expect.objectContaining({
+          patch: expect.objectContaining({
+            selectedProfileId: confirmedProfile.profileId,
+            selectedProfileRevisionId: confirmedProfile.profileRevisionId,
+            selectedProfileRevisionHash: confirmedProfile.profileRevisionHash,
+          }),
+        }),
+      );
+      vi.useRealTimers();
+    });
+
     it('persists a pasted transcript as a user edit after session hydration', async () => {
       const user = createMinimalUser();
       vi.mocked(api.listAssignmentSessions).mockResolvedValueOnce({
