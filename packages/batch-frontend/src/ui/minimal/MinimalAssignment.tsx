@@ -319,6 +319,9 @@ export const MinimalAssignment: React.FC = () => {
   >('idle');
   const [assignmentDebouncedRecoveryPending, setAssignmentDebouncedRecoveryPending] =
     useState(false);
+  const [assignmentConfirmationError, setAssignmentConfirmationError] = useState<string | null>(
+    null,
+  );
   const assignmentSaveStateRef = useRef(assignmentSaveState);
   assignmentSaveStateRef.current = assignmentSaveState;
   const [startingAssignment, setStartingAssignment] = useState(false);
@@ -490,6 +493,21 @@ export const MinimalAssignment: React.FC = () => {
     selectedStudentId: source.selectedStudentId,
     resolveBoundProfileId: source.resolveBoundProfileId,
   });
+  const durableProfileLineage = useMemo(
+    () => ({
+      selectedProfileId:
+        context.selectedProfileRevisionId && context.selectedProfileRevisionHash
+          ? context.selectedProfileId || null
+          : null,
+      selectedProfileRevisionId: context.selectedProfileRevisionId,
+      selectedProfileRevisionHash: context.selectedProfileRevisionHash,
+    }),
+    [
+      context.selectedProfileId,
+      context.selectedProfileRevisionHash,
+      context.selectedProfileRevisionId,
+    ],
+  );
   const {
     resetSourceFlow,
     applyHydratedSnapshot: applySourceHydration,
@@ -847,6 +865,7 @@ export const MinimalAssignment: React.FC = () => {
     ): Promise<AssignmentSession | null> => {
       const mutationSequence = assignmentSessionMutationSequenceRef.current + 1;
       assignmentSessionMutationSequenceRef.current = mutationSequence;
+      setAssignmentConfirmationError(null);
       setAssignmentSaveState('saving');
       const run = assignmentSessionMutationQueueRef.current
         .catch(() => null)
@@ -893,12 +912,15 @@ export const MinimalAssignment: React.FC = () => {
       try {
         const confirmed = await run;
         if (confirmed && assignmentSessionMutationSequenceRef.current === mutationSequence) {
+          setAssignmentConfirmationError(null);
           setAssignmentSaveState('saved');
         }
         return confirmed;
       } catch (error) {
         console.warn('Unable to confirm assignment step', error);
         if (assignmentSessionMutationSequenceRef.current === mutationSequence) {
+          const message = error instanceof Error ? error.message : 'Please try again.';
+          setAssignmentConfirmationError(`Could not confirm this step: ${message}`);
           setAssignmentSaveState(
             error instanceof AssignmentSessionConflictApiError
               ? 'conflict'
@@ -943,6 +965,7 @@ export const MinimalAssignment: React.FC = () => {
       assignmentContextConflictKeyRef.current = null;
       assignmentSessionMutationQueueRef.current = Promise.resolve(null);
       resetPendingSessionRecovery();
+      setAssignmentConfirmationError(null);
       assignmentSessionMilestoneRef.current = {
         studentId: '',
         recordingId: '',
@@ -1035,12 +1058,17 @@ export const MinimalAssignment: React.FC = () => {
 
   useEffect(() => {
     const session = activeAssignmentSessionRef.current;
-    if (!session || session.confirmedStep === 'share' || !assignmentSessionWritesAllowed()) return;
-    const recovery = {
+    if (!session || session.confirmedStep === 'share') return;
+    const repairingPartialProfileLineage = Boolean(
+      session.selectedProfileId &&
+        (!session.selectedProfileRevisionId || !session.selectedProfileRevisionHash) &&
+        context.profileLineageReady &&
+        durableProfileLineage.selectedProfileId === session.selectedProfileId,
+    );
+    if (!assignmentSessionWritesAllowed() && !repairingPartialProfileLineage) return;
+    const recovery: UpdateAssignmentSessionRecoveryRequest['patch'] = {
       teacherNotes: teacherNotes.trim() || null,
-      selectedProfileId: context.selectedProfileId || null,
-      selectedProfileRevisionId: context.selectedProfileRevisionId,
-      selectedProfileRevisionHash: context.selectedProfileRevisionHash,
+      ...(context.profileLineageReady ? durableProfileLineage : {}),
     };
     const recoveryKey = JSON.stringify(recovery);
     if (assignmentContextConflictKeyRef.current === recoveryKey) {
@@ -1049,10 +1077,9 @@ export const MinimalAssignment: React.FC = () => {
       return;
     }
     if (
-      session.teacherNotes === recovery.teacherNotes &&
-      session.selectedProfileId === recovery.selectedProfileId &&
-      session.selectedProfileRevisionId === recovery.selectedProfileRevisionId &&
-      session.selectedProfileRevisionHash === recovery.selectedProfileRevisionHash
+      Object.entries(recovery).every(
+        ([key, value]) => session[key as keyof AssignmentSession] === value,
+      )
     ) {
       pendingContextRecoveryRef.current = null;
       refreshDebouncedRecoveryPendingState();
@@ -1074,9 +1101,11 @@ export const MinimalAssignment: React.FC = () => {
     };
   }, [
     assignmentSessionWritesAllowed,
+    context.profileLineageReady,
     context.selectedProfileId,
     context.selectedProfileRevisionHash,
     context.selectedProfileRevisionId,
+    durableProfileLineage,
     flushPendingSessionRecovery,
     refreshDebouncedRecoveryPendingState,
     teacherNotes,
@@ -1605,9 +1634,15 @@ export const MinimalAssignment: React.FC = () => {
     setFirstProfileAssistBusy('approving');
     setFirstProfileAssistError(null);
     try {
-      await activateProfileRevision(firstProfileDraft.profileId, firstProfileDraft.draftRevisionId);
+      const activatedRevision = await activateProfileRevision(
+        firstProfileDraft.profileId,
+        firstProfileDraft.draftRevisionId,
+      );
       source.bindStudentProfile(source.selectedStudentId, firstProfileDraft.profileId);
-      context.selectProfileId(firstProfileDraft.profileId);
+      context.selectProfileId(firstProfileDraft.profileId, {
+        id: activatedRevision.id,
+        contentHash: activatedRevision.contentHash,
+      });
       setFirstProfileAssistApproved(true);
       setFirstProfileDraft(null);
     } catch (error) {
@@ -1701,6 +1736,7 @@ export const MinimalAssignment: React.FC = () => {
   }, [activeAssignmentSession, authoring.draft, jobReady, source.transcript]);
   const activeStepIndex = FOCUSED_STEP_ORDER.indexOf(activeStep);
   const commitTeacherNotes = useCallback(async (): Promise<TeacherNotesCommitResult> => {
+    if (!context.profileLineageReady) return null;
     const normalizedTeacherNotes = teacherNotes.trim();
     if (assignmentContextRecoveryTimeoutRef.current) {
       clearTimeout(assignmentContextRecoveryTimeoutRef.current);
@@ -1709,9 +1745,7 @@ export const MinimalAssignment: React.FC = () => {
 
     const saved = await saveAssignmentSessionProgress({
       teacherNotes: normalizedTeacherNotes || null,
-      selectedProfileId: context.selectedProfileId || null,
-      selectedProfileRevisionId: context.selectedProfileRevisionId,
-      selectedProfileRevisionHash: context.selectedProfileRevisionHash,
+      ...durableProfileLineage,
     });
     if (!saved) return null;
 
@@ -1720,18 +1754,17 @@ export const MinimalAssignment: React.FC = () => {
       step: 'context',
       expectedRevision: session.revision,
       teacherNotes: normalizedTeacherNotes || null,
-      profileId: context.selectedProfileId || null,
-      profileRevisionId: context.selectedProfileRevisionId,
-      profileRevisionHash: context.selectedProfileRevisionHash,
+      profileId: durableProfileLineage.selectedProfileId,
+      profileRevisionId: durableProfileLineage.selectedProfileRevisionId,
+      profileRevisionHash: durableProfileLineage.selectedProfileRevisionHash,
     }));
     if (!confirmed) return null;
     committedTeacherNotesRef.current = normalizedTeacherNotes;
     return hadDownstream ? 'invalidated' : 'committed';
   }, [
     confirmAssignmentStep,
-    context.selectedProfileId,
-    context.selectedProfileRevisionHash,
-    context.selectedProfileRevisionId,
+    context.profileLineageReady,
+    durableProfileLineage,
     saveAssignmentSessionProgress,
     teacherNotes,
   ]);
@@ -1953,9 +1986,11 @@ export const MinimalAssignment: React.FC = () => {
       ? !hasStartedFlow || !source.selectedStudentId
       : activeStep === 'source'
         ? !transcriptReady
-        : activeStep === 'assignment'
-          ? !hasAssignmentContent
-          : false;
+        : activeStep === 'context'
+          ? !context.profileLineageReady || firstProfileAssistBusy === 'approving'
+          : activeStep === 'assignment'
+            ? !hasAssignmentContent
+            : false;
   const guardAssignmentExit = shouldGuardAssignmentExit({
     recovery:
       source.transcriptDirty ||
@@ -2269,6 +2304,13 @@ export const MinimalAssignment: React.FC = () => {
               onContinue: handleFocusedContinue,
               continueLabel: 'Confirm and continue',
               continueDisabled,
+              continueFeedback:
+                activeStep === 'context' &&
+                (!context.profileLineageReady || firstProfileAssistBusy === 'approving') ? (
+                  <span role="status">Preparing learner context…</span>
+                ) : assignmentConfirmationError ? (
+                  <span role="alert">{assignmentConfirmationError}</span>
+                ) : null,
             })}
         {...(activeStep === 'review' && jobReady
           ? {
