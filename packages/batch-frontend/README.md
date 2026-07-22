@@ -97,6 +97,9 @@ Canonical behavior and current status live in:
   post-cutover jobs use their retained assignment-session link to reopen every confirmed step for
   reference without permitting session mutations. Pre-cutover jobs have no retained session link
   and remain limited to their historical output and post-share actions.
+- During resume, complete assignment-session profile lineage outranks the asynchronous learner list.
+  Empty profile state is not ready until learner-profile discovery succeeds, so first-profile
+  assistance stays hidden and recovery cannot persist null lineage during that loading interval.
 - Cross-tab session and artifact conflicts retain the tutor's local buffer, adopt the newest server
   revision only as a compare-and-swap base, and suppress automatic overwrite until the tutor
   explicitly reconciles the visible value.

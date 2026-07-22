@@ -31,6 +31,8 @@
 ## Current State
 
 - Active cross-screen product UI guidance: [`Product UI preferences`](PRODUCT_UI_PREFERENCES.md).
+- Approved first-profile onboarding behavior:
+  [`First-profile onboarding`](FIRST_PROFILE_ONBOARDING.md).
 - Active domain design spec: transcription pipeline.
 - Historical frontend vision docs are archived under `docs/archive/frontend/2026-02/`.
 
