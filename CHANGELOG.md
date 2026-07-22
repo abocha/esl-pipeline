@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.2.0] - 2026-07-22
+
+### Changed
+
+- Automated release from PR #149: Refine generated handout visual design (https://github.com/abocha/esl-pipeline/pull/149)
+
 ## [10.1.0] - 2026-07-21
 
 ### Changed
