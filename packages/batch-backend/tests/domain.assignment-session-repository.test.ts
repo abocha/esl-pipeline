@@ -157,6 +157,46 @@ describe('domain/assignment-session-repository persistence contract', () => {
     ).rejects.toThrow('Assignment recovery field is not allowed');
   });
 
+  it('returns the canonical unfinished assignment when source recovery collides', async () => {
+    const userId = randomUUID();
+    const studentId = randomUUID();
+    const recordingId = randomUUID();
+    const transcriptId = randomUUID();
+    const canonicalSessionId = randomUUID();
+    const newerSessionId = randomUUID();
+    await insertUserAndStudent(userId, studentId);
+    await insertStudentConfirmedSession({
+      id: canonicalSessionId,
+      userId,
+      studentId,
+      recordingId,
+    });
+    await insertStudentConfirmedSession({ id: newerSessionId, userId, studentId });
+    await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+      client.query(
+        `INSERT INTO transcripts
+           (id, recording_id, storage_uri, working_version, content_hash, stt_provider)
+         VALUES ($1, $2, 'local://transcripts/canonical.txt', 1, $3, 'deepgram')`,
+        [transcriptId, recordingId, 'a'.repeat(64)],
+      ),
+    );
+    const { updateAssignmentSessionRecovery } = await import(
+      '../src/domain/assignment-session-repository.js'
+    );
+
+    await expect(
+      updateAssignmentSessionRecovery({
+        id: newerSessionId,
+        userId,
+        expectedRevision: 1,
+        patch: { recordingId, transcriptId },
+      }),
+    ).rejects.toMatchObject({
+      code: 'ASSIGNMENT_SOURCE_ALREADY_OWNED',
+      session: expect.objectContaining({ id: canonicalSessionId, recordingId }),
+    });
+  });
+
   it('rejects Student request-id reuse with different recovery identity', async () => {
     const userId = randomUUID();
     const firstStudentId = randomUUID();
