@@ -86,6 +86,10 @@ The enrichment source is the exact confirmed assignment source, including transc
 content hash, and the canonical ready lesson-memory evidence derived from it. Older ready lesson
 memory cannot satisfy readiness for the current assignment.
 
+The assignment and source must first satisfy the lifetime-canonical identity rules in
+[`Canonical assignment state`](CANONICAL_ASSIGNMENT_STATE.md). Re-selecting the same source resumes
+that assignment; it cannot create a competing enrichment or assignment session.
+
 The operation survives refresh, focus changes, navigation, retries, and ambiguous responses without
 creating duplicate drafts or repeating model work. Internal profile revision creation and activation
 remain atomic, revisioned, and recoverable, but invisible in the primary tutor workflow.
@@ -139,6 +143,7 @@ authority, and keeps internal lineage mechanics out of the teaching workflow.
 
 - [`PRODUCT.md`](../../PRODUCT.md)
 - [`Product UI preferences`](PRODUCT_UI_PREFERENCES.md)
+- [`Canonical assignment state`](CANONICAL_ASSIGNMENT_STATE.md)
 - [`Student System Roadmap`](../reference/STUDENT_SYSTEM_ROADMAP.md)
 - [`Student Profile Enrichment and Verification`](../plans/student-profile-enrichment/README.md)
 - [`Hosted MVP Evidence`](../operations/hosted-mvp-evidence.md)
