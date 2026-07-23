@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.2.4] - 2026-07-23
+
+### Changed
+
+- Automated release from PR #153: fix(assignment): reconcile canonical recovery lineage (https://github.com/abocha/esl-pipeline/pull/153)
+
 ## [10.2.3] - 2026-07-22
 
 ### Changed
