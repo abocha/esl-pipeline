@@ -426,6 +426,110 @@ export function registerResumeBasicTests() {
       expect(api.getJobStatus).not.toHaveBeenCalled();
     });
 
+    it('follows the backend canonical session when a partial duplicate is resumed', async () => {
+      const duplicateSession = makeAssignmentSession({
+        id: 'session-duplicate',
+        studentId: 'student-alex',
+        transcriptId: 'tx-session',
+        confirmedStep: 'student',
+      });
+      const canonicalSession = makeAssignmentSession({
+        id: 'session-canonical',
+        studentId: 'student-alex',
+        recordingId: 'rec-session',
+        transcriptId: 'tx-session',
+        confirmedStep: 'source',
+      });
+      vi.mocked(api.listAssignmentSessions).mockResolvedValueOnce({
+        sessions: [duplicateSession],
+        total: 1,
+        limit: 20,
+      });
+      vi.mocked(api.fetchAssignmentSession).mockResolvedValueOnce(canonicalSession);
+      vi.mocked(api.getRecording).mockResolvedValue(
+        makeRecording({
+          recordingId: 'rec-session',
+          transcriptId: 'tx-session',
+          studentId: 'student-alex',
+          status: 'transcribed',
+        }),
+      );
+      vi.mocked(api.fetchRecordingTranscript).mockResolvedValue(
+        makeTranscript({
+          recordingId: 'rec-session',
+          transcriptId: 'tx-session',
+          text: 'Canonical transcript',
+        }),
+      );
+
+      globalThis.history.replaceState(null, '', '/?sessionId=session-duplicate');
+      renderMinimalAssignment();
+
+      await waitFor(() =>
+        expect(new URL(globalThis.location.href).searchParams.get('sessionId')).toBe(
+          'session-canonical',
+        ),
+      );
+      expect(api.fetchAssignmentSession).toHaveBeenCalledWith('session-duplicate');
+      expect(await screen.findByRole('heading', { name: /Add teaching context/i })).toBeTruthy();
+    });
+
+    it('replaces a resumed draft whose prompt lineage is stale before Create confirmation', async () => {
+      const mismatchedSession = makeAssignmentSession({
+        id: 'session-mismatched-draft',
+        studentId: 'student-alex',
+        recordingId: 'rec-session',
+        transcriptId: 'tx-session',
+        promptPackageId: 'pkg-current',
+        draftId: 'draft-stale',
+        confirmedStep: 'context',
+      });
+      vi.mocked(api.listAssignmentSessions).mockResolvedValueOnce({
+        sessions: [mismatchedSession],
+        total: 1,
+        limit: 20,
+      });
+      vi.mocked(api.fetchPromptPackage).mockResolvedValueOnce({
+        id: 'pkg-current',
+        recordingId: 'rec-session',
+        transcriptId: 'tx-session',
+        studentId: 'student-alex',
+        profilePath: null,
+        templateVersion: 'v1',
+        notes: null,
+        storageUri: 'memory://prompt/pkg-current',
+        text: 'Current prompt',
+        createdAt: now,
+        updatedAt: now,
+      });
+      vi.mocked(api.fetchDraft).mockResolvedValueOnce({
+        id: 'draft-stale',
+        promptPackageId: 'pkg-old',
+        studentId: 'student-alex',
+        storageUri: 'memory://drafts/draft-stale',
+        createdBy: 'user-1',
+        text: '# Stale draft',
+        workingVersion: 1,
+        contentHash: 'a'.repeat(64),
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      globalThis.history.replaceState(null, '', '/?sessionId=session-mismatched-draft');
+      const user = createMinimalUser();
+      renderMinimalAssignment();
+
+      await screen.findByDisplayValue('# Stale draft');
+      vi.mocked(api.createDraft).mockClear();
+      vi.mocked(api.updateDraft).mockClear();
+      await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+
+      await waitFor(() =>
+        expect(api.createDraft).toHaveBeenCalledWith('pkg-current', '# Stale draft'),
+      );
+      expect(api.updateDraft).not.toHaveBeenCalled();
+    });
+
     it('repairs partial profile lineage before saving or confirming a resumed Context step', async () => {
       const user = createMinimalUser();
       const partialSession = makeAssignmentSession({

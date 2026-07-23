@@ -380,16 +380,16 @@ Promotional credits are excluded from steady-state production comparisons.
 
 ## Delivery Slices and Gates
 
-| Slice | Deliverable | Gate to continue |
-| --- | --- | --- |
-| 0 | Consent-safe corpus and baseline manifests | Representative source material exists outside Git |
-| 1 | Reproducible media probe/normalization harness | Common sample formats normalize deterministically |
-| 2 | Provider benchmark harness including Inworld evaluation path | Same immutable inputs produce comparable quality/cost records |
-| 3 | Topology contract and preparation router behind internal tooling | Current OBS path remains unchanged and all routes preserve provenance |
-| 4 | Offline AEC feasibility experiment | Echo reduction improves STT without unacceptable tutor-speech loss |
-| 5 | Universal alpha upload for proven formats/routes | Alpha tutors can use normal platform files with bounded errors |
-| 6 | Production provider decision | Deepgram/Inworld decision recorded from real ESL evidence |
-| 7 | Capture automation decision | Build platform import/helper only if residual tutor friction justifies it |
+| Slice | Deliverable                                                      | Gate to continue                                                          |
+| ----- | ---------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| 0     | Consent-safe corpus and baseline manifests                       | Representative source material exists outside Git                         |
+| 1     | Reproducible media probe/normalization harness                   | Common sample formats normalize deterministically                         |
+| 2     | Provider benchmark harness including Inworld evaluation path     | Same immutable inputs produce comparable quality/cost records             |
+| 3     | Topology contract and preparation router behind internal tooling | Current OBS path remains unchanged and all routes preserve provenance     |
+| 4     | Offline AEC feasibility experiment                               | Echo reduction improves STT without unacceptable tutor-speech loss        |
+| 5     | Universal alpha upload for proven formats/routes                 | Alpha tutors can use normal platform files with bounded errors            |
+| 6     | Production provider decision                                     | Deepgram/Inworld decision recorded from real ESL evidence                 |
+| 7     | Capture automation decision                                      | Build platform import/helper only if residual tutor friction justifies it |
 
 Each slice can stop the program. A failed AEC gate does not block universal mixed-file ingestion. An Inworld loss does not block media normalization. A platform changing access conditions does not invalidate the source-agnostic architecture.
 
