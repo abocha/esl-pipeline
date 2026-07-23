@@ -296,6 +296,8 @@ export function registerPromptEditorTests() {
         updatedAt: now,
       });
       vi.mocked(api.generateDraft).mockClear();
+      vi.mocked(api.createDraft).mockClear();
+      vi.mocked(api.updateDraft).mockClear();
 
       await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
       await screen.findByRole('button', { name: /^Generate assignment$/i });
@@ -315,6 +317,54 @@ export function registerPromptEditorTests() {
       );
       expect(api.generateDraft).not.toHaveBeenCalledWith(
         expect.objectContaining({ promptPackageId: 'pkg-1' }),
+      );
+      expect(api.createDraft).toHaveBeenCalledWith('pkg-fresh', '# Generated assignment draft');
+      expect(api.updateDraft).not.toHaveBeenCalled();
+      expect(api.updateAssignmentSessionRecovery).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          patch: expect.objectContaining({ promptPackageId: 'pkg-fresh', draftId: 'draft-1' }),
+        }),
+      );
+    });
+
+    it('keeps the Create operation locked to one state while generation is running', async () => {
+      let resolveGeneration:
+        | ((value: Awaited<ReturnType<typeof api.generateDraft>>) => void)
+        | null = null;
+      vi.mocked(api.generateDraft).mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveGeneration = resolve;
+          }),
+      );
+      const user = await renderResumedDraftSession();
+
+      await user.click(screen.getByRole('button', { name: /^Generate assignment$/i }));
+      await screen.findByRole('button', { name: /Generating assignment/i });
+
+      expect(
+        (screen.getByRole('textbox', { name: /Draft markdown/i }) as HTMLTextAreaElement).disabled,
+      ).toBe(true);
+      await user.click(screen.getByRole('button', { name: /Teaching context/i }));
+      expect(screen.getByRole('button', { name: /Create/i }).getAttribute('aria-current')).toBe(
+        'step',
+      );
+
+      const completeGeneration = resolveGeneration as unknown as (
+        value: Awaited<ReturnType<typeof api.generateDraft>>,
+      ) => void;
+      completeGeneration({
+        text: '# Fresh generated assignment',
+        provider: 'openai',
+        model: 'gpt-5.2',
+        quota: { source: 'hybrid', lastUpdatedAt: now },
+      });
+      await waitFor(() =>
+        expect(
+          (screen.getByRole('textbox', { name: /Draft markdown/i }) as HTMLTextAreaElement)
+            .disabled,
+        ).toBe(false),
       );
     });
 

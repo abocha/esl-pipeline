@@ -27,6 +27,12 @@ vi.mock('../../utils/api', () => ({
       this.name = 'AssignmentSessionConflictApiError';
     }
   },
+  AssignmentSourceOwnershipApiError: class AssignmentSourceOwnershipApiError extends Error {
+    constructor(public readonly canonicalSession: api.AssignmentSession) {
+      super('This lesson already has an assignment. Reopening the saved assignment.');
+      this.name = 'AssignmentSourceOwnershipApiError';
+    }
+  },
   ArtifactWorkingConflictApiError: class ArtifactWorkingConflictApiError extends Error {
     constructor(public readonly latestArtifact: { workingVersion: number; contentHash: string }) {
       super('Newer saved artifact content was found. Review it before confirming again.');

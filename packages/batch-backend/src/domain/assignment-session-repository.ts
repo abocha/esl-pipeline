@@ -195,6 +195,15 @@ export class AssignmentSourceOwnershipConflictError extends Error {
   }
 }
 
+export class AssignmentRecoveryLineageError extends Error {
+  readonly code = 'ASSIGNMENT_RECOVERY_LINEAGE_INVALID';
+
+  constructor() {
+    super('Assignment recovery cannot combine a prompt with a draft from another prompt.');
+    this.name = 'AssignmentRecoveryLineageError';
+  }
+}
+
 export class AssignmentSessionRequestConflictError extends Error {
   readonly code = 'ASSIGNMENT_SESSION_REQUEST_CONFLICT';
 
@@ -761,6 +770,15 @@ export async function updateAssignmentSessionRecovery(
   }
 
   return withPgClient(async (client) => {
+    if (params.patch.promptPackageId !== undefined || params.patch.draftId !== undefined) {
+      const currentRow = await findOwnedById(client, params.id, params.userId);
+      if (currentRow) {
+        const current = mapRow(currentRow);
+        if (current.revision === params.expectedRevision) {
+          await assertRecoveryPromptDraftLineage(client, current, params.patch);
+        }
+      }
+    }
     const assignments: string[] = [];
     const values: unknown[] = [params.id, params.userId, params.expectedRevision];
     for (const [field, value] of entries) {
@@ -789,11 +807,7 @@ export async function updateAssignmentSessionRecovery(
         isNamedUniqueViolation(error, 'idx_assignment_sessions_user_active_recording') &&
         params.patch.recordingId
       ) {
-        const owner = await findActiveByRecording(
-          client,
-          params.userId,
-          params.patch.recordingId,
-        );
+        const owner = await findActiveByRecording(client, params.userId, params.patch.recordingId);
         if (owner && owner.id !== params.id) {
           throw new AssignmentSourceOwnershipConflictError(mapRow(owner));
         }
@@ -813,6 +827,27 @@ export async function updateAssignmentSessionRecovery(
     }
     throw new AssignmentSessionRevisionConflictError(session);
   });
+}
+
+async function assertRecoveryPromptDraftLineage(
+  client: PoolClient,
+  current: AssignmentSessionRecord,
+  patch: AssignmentSessionRecoveryPatch,
+): Promise<void> {
+  const promptPackageId =
+    patch.promptPackageId === undefined ? current.promptPackageId : patch.promptPackageId;
+  const draftId = patch.draftId === undefined ? current.draftId : patch.draftId;
+  if (!draftId) return;
+  if (!promptPackageId) throw new AssignmentRecoveryLineageError();
+
+  const draft = await getDraftByIdForUpdate(client, draftId);
+  if (
+    !draft ||
+    draft.promptPackageId !== promptPackageId ||
+    draft.studentId !== current.studentId
+  ) {
+    throw new AssignmentRecoveryLineageError();
+  }
 }
 
 export async function reserveAssignmentShare(
@@ -1127,9 +1162,7 @@ function mapRow(row: AssignmentSessionRow): AssignmentSessionRecord {
   };
 }
 
-function isUniqueViolation(
-  error: unknown,
-): error is { code: '23505'; constraint?: unknown } {
+function isUniqueViolation(error: unknown): error is { code: '23505'; constraint?: unknown } {
   return !!error && typeof error === 'object' && 'code' in error && error.code === '23505';
 }
 

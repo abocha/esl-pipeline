@@ -31,16 +31,16 @@
 
 This document is the master execution plan. The program crosses research tooling, backend media processing, provider evaluation, data contracts, and frontend UX. To keep reviews bounded, each slice produces working evidence or software and then opens a child implementation plan before the next slice begins.
 
-| Slice | Primary owner | Review unit | Expected outcome |
-| --- | --- | --- | --- |
-| 0. Evidence pack | Maintainer + agent | Docs/tooling PR | Frozen consent-safe corpus manifest and baseline |
-| 1. Probe and normalize | Agent | Package PR | Deterministic inspection and normalized WAV artifacts |
-| 2. Benchmark providers | Agent + maintainer scoring | Tooling/provider PR | Comparable Deepgram/Inworld quality, latency, and cost evidence |
-| 3. Topology contracts | Agent | Contracts/backend PR | Explicit provenance and internal preparation router |
-| 4. AEC feasibility | Agent experiment + maintainer listening review | Research PR | Evidence whether speakers can replace headphones |
-| 5. Universal alpha upload | Agent + alpha tutors | Backend/frontend PR | Natural platform recordings accepted for proven paths |
-| 6. Provider decision | Maintainer | Decision docs + bounded adapter/cutover PR | Deepgram/Inworld production recommendation |
-| 7. Capture automation decision | Maintainer + alpha tutors | Design/plan PR | Evidence-backed decision on platform imports or desktop helper |
+| Slice                          | Primary owner                                  | Review unit                                | Expected outcome                                                |
+| ------------------------------ | ---------------------------------------------- | ------------------------------------------ | --------------------------------------------------------------- |
+| 0. Evidence pack               | Maintainer + agent                             | Docs/tooling PR                            | Frozen consent-safe corpus manifest and baseline                |
+| 1. Probe and normalize         | Agent                                          | Package PR                                 | Deterministic inspection and normalized WAV artifacts           |
+| 2. Benchmark providers         | Agent + maintainer scoring                     | Tooling/provider PR                        | Comparable Deepgram/Inworld quality, latency, and cost evidence |
+| 3. Topology contracts          | Agent                                          | Contracts/backend PR                       | Explicit provenance and internal preparation router             |
+| 4. AEC feasibility             | Agent experiment + maintainer listening review | Research PR                                | Evidence whether speakers can replace headphones                |
+| 5. Universal alpha upload      | Agent + alpha tutors                           | Backend/frontend PR                        | Natural platform recordings accepted for proven paths           |
+| 6. Provider decision           | Maintainer                                     | Decision docs + bounded adapter/cutover PR | Deepgram/Inworld production recommendation                      |
+| 7. Capture automation decision | Maintainer + alpha tutors                      | Design/plan PR                             | Evidence-backed decision on platform imports or desktop helper  |
 
 ## Required Source Material
 
@@ -136,17 +136,17 @@ Agents must not decide these without maintainer review:
 
 ## Blockers and Pre-Decisions
 
-| Blocker | Consequence | Resolution gate |
-| --- | --- | --- |
-| No consent-safe representative corpus | Generic benchmarks cannot establish ESL usefulness | Slice 0 cannot close |
-| Inworld request/response and billing contract may change | Premature production adapter may encode stale assumptions | Capture dated official contract before Slice 2 implementation |
-| FFmpeg/ffprobe runtime availability may differ locally and in containers | Normalization can work locally but fail in production | Slice 1 adds explicit capability checks and container tests |
-| Long recordings may exceed current upload size/time limits | Universal formats may appear supported but fail on real lessons | Slice 1 records realistic bytes/duration; Slice 5 sets tested limits |
-| AEC native/tooling choice is unresolved | Packaging may dominate the experiment | Slice 4 starts as an offline harness and compares bounded candidates |
-| Speaker identity is absent in ordinary mixed recordings | Transcript labels may be unstable | UI remains explicit about unknown speakers; tutor confirmation required where needed |
-| Platform access in Russia changes | Platform-specific product logic can decay rapidly | Platform recognition remains advisory; common media is the durable contract |
-| Storage and retention policy is not yet public-beta ready | Raw and derived audio may accumulate indefinitely | Slice 5 requires explicit retention/operator policy |
-| Provider quality may vary by topology | One global winner may not exist | Slice 2 reports per-topology outcomes; routing remains explicit |
+| Blocker                                                                  | Consequence                                                     | Resolution gate                                                                      |
+| ------------------------------------------------------------------------ | --------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| No consent-safe representative corpus                                    | Generic benchmarks cannot establish ESL usefulness              | Slice 0 cannot close                                                                 |
+| Inworld request/response and billing contract may change                 | Premature production adapter may encode stale assumptions       | Capture dated official contract before Slice 2 implementation                        |
+| FFmpeg/ffprobe runtime availability may differ locally and in containers | Normalization can work locally but fail in production           | Slice 1 adds explicit capability checks and container tests                          |
+| Long recordings may exceed current upload size/time limits               | Universal formats may appear supported but fail on real lessons | Slice 1 records realistic bytes/duration; Slice 5 sets tested limits                 |
+| AEC native/tooling choice is unresolved                                  | Packaging may dominate the experiment                           | Slice 4 starts as an offline harness and compares bounded candidates                 |
+| Speaker identity is absent in ordinary mixed recordings                  | Transcript labels may be unstable                               | UI remains explicit about unknown speakers; tutor confirmation required where needed |
+| Platform access in Russia changes                                        | Platform-specific product logic can decay rapidly               | Platform recognition remains advisory; common media is the durable contract          |
+| Storage and retention policy is not yet public-beta ready                | Raw and derived audio may accumulate indefinitely               | Slice 5 requires explicit retention/operator policy                                  |
+| Provider quality may vary by topology                                    | One global winner may not exist                                 | Slice 2 reports per-topology outcomes; routing remains explicit                      |
 
 ## Planned File Structure
 
@@ -217,6 +217,7 @@ Agents must not decide these without maintainer review:
 ### Task 1: Freeze the source and decision contracts
 
 **Files:**
+
 - Create: `docs/superpowers/specs/2026-07-18-audio-ingest-expansion-design.md`
 - Create: `docs/superpowers/plans/2026-07-18-audio-ingest-expansion.md`
 - Reference: `docs/design/TRANSCRIPTION_PIPELINE_SPEC.md`
@@ -224,6 +225,7 @@ Agents must not decide these without maintainer review:
 - Reference: issue `#145`
 
 **Interfaces:**
+
 - Produces: approved source-agnostic ingest architecture.
 - Produces: slice gates, human checkpoints, and repository file boundaries.
 - Consumes: existing explicit-provider and canonical-transcript invariants.
@@ -270,6 +272,7 @@ Agents must not decide these without maintainer review:
 ### Task 2: Build the private corpus manifest and synthetic regression pack
 
 **Files:**
+
 - Create: `scripts/audio-benchmark/README.md`
 - Create: `scripts/audio-benchmark/schema.ts`
 - Create: `scripts/audio-benchmark/manifest.ts`
@@ -280,6 +283,7 @@ Agents must not decide these without maintainer review:
 - Modify: `package.json`
 
 **Interfaces:**
+
 - Produces:
 
   ```ts
@@ -405,6 +409,7 @@ Agents must not decide these without maintainer review:
 ### Task 3: Create deterministic media probing
 
 **Files:**
+
 - Create: `packages/media-ingest-core/package.json`
 - Create: `packages/media-ingest-core/tsconfig.json`
 - Create: `packages/media-ingest-core/src/types.ts`
@@ -415,15 +420,20 @@ Agents must not decide these without maintainer review:
 - Create: `packages/media-ingest-core/tests/probe.test.ts`
 
 **Interfaces:**
+
 - Produces: `MediaProbe`, `MediaStreamProbe`, and `probeMedia(input): Promise<MediaProbe>`.
 - Produces:
 
   ```ts
   export interface MediaProcessRunner {
-    run(command: string, args: readonly string[], options?: {
-      signal?: AbortSignal;
-      timeoutMs?: number;
-    }): Promise<{ stdout: string; stderr: string }>;
+    run(
+      command: string,
+      args: readonly string[],
+      options?: {
+        signal?: AbortSignal;
+        timeoutMs?: number;
+      },
+    ): Promise<{ stdout: string; stderr: string }>;
   }
   ```
 
@@ -510,6 +520,7 @@ Agents must not decide these without maintainer review:
 ### Task 4: Add normalization with immutable outputs
 
 **Files:**
+
 - Modify: `packages/media-ingest-core/src/types.ts`
 - Create: `packages/media-ingest-core/src/normalize.ts`
 - Modify: `packages/media-ingest-core/src/index.ts`
@@ -518,6 +529,7 @@ Agents must not decide these without maintainer review:
 - Modify: `scripts/audio-benchmark/run.ts`
 
 **Interfaces:**
+
 - Produces:
 
   ```ts
@@ -622,6 +634,7 @@ Agents must not decide these without maintainer review:
 ### Task 5: Capture the Inworld benchmark contract and add provider-neutral runs
 
 **Files:**
+
 - Create: `docs/research/audio-ingest/2026-<evaluation-date>-provider-contracts.md`
 - Create: `scripts/audio-benchmark/providers/types.ts`
 - Create: `scripts/audio-benchmark/providers/deepgram.ts`
@@ -632,6 +645,7 @@ Agents must not decide these without maintainer review:
 - Modify: `package.json`
 
 **Interfaces:**
+
 - Produces:
 
   ```ts
@@ -722,6 +736,7 @@ Agents must not decide these without maintainer review:
 ### Task 6: Add scoring, cost normalization, and downstream usefulness reports
 
 **Files:**
+
 - Create: `scripts/audio-benchmark/reference.ts`
 - Create: `scripts/audio-benchmark/score.ts`
 - Create: `scripts/audio-benchmark/report.ts`
@@ -731,6 +746,7 @@ Agents must not decide these without maintainer review:
 - Create: `docs/research/audio-ingest/benchmark-rubric.md`
 
 **Interfaces:**
+
 - Produces machine-computed edit metrics and human-entered pedagogical scores.
 - Produces an anonymized report containing:
 
@@ -813,6 +829,7 @@ Agents must not decide these without maintainer review:
 ### Task 7: Define topology classification and preparation provenance
 
 **Files:**
+
 - Modify: `packages/contracts/src/index.ts`
 - Create: `packages/batch-backend/src/application/media-ingest/topology.ts`
 - Create: `packages/batch-backend/src/application/media-ingest/prepare.ts`
@@ -821,6 +838,7 @@ Agents must not decide these without maintainer review:
 - Create: a child migration plan after Slice 1 establishes required persisted fields.
 
 **Interfaces:**
+
 - Produces the `AudioInputTopology`, `TopologyDecision`, `NormalizedMediaArtifact`, and `PreparedSttInput` contracts from the design document.
 - Consumes: `MediaProbe` and normalized results from `@esl-pipeline/media-ingest-core`.
 
@@ -887,6 +905,7 @@ Agents must not decide these without maintainer review:
 ### Task 8: Run the offline AEC feasibility gate
 
 **Files:**
+
 - Create: `scripts/audio-benchmark/aec/types.ts`
 - Create: `scripts/audio-benchmark/aec/align.ts`
 - Create: `scripts/audio-benchmark/aec/run-candidate.ts`
@@ -896,6 +915,7 @@ Agents must not decide these without maintainer review:
 - Create: `docs/research/audio-ingest/aec-evaluation.md`
 
 **Interfaces:**
+
 - Produces:
 
   ```ts
@@ -977,6 +997,7 @@ Agents must not decide these without maintainer review:
 **Prerequisite:** Tasks 2–7 pass; Task 8 is optional unless mic-plus-reference is included.
 
 **Files:**
+
 - Modify: `packages/batch-backend/src/transport/extended-routes/recordings-routes.ts`
 - Modify/create: media-ingest persistence and preparation modules from the Slice 3 child plan
 - Modify: `packages/batch-backend/src/application/process-transcribe-job.ts`
@@ -988,6 +1009,7 @@ Agents must not decide these without maintainer review:
 - Modify: active package/reference/operations documentation
 
 **Interfaces:**
+
 - Produces an upload request that explicitly declares source mode:
 
   ```ts
@@ -1064,6 +1086,7 @@ Agents must not decide these without maintainer review:
 ### Task 10: Record the provider and capture-product decisions
 
 **Files:**
+
 - Update: issue `#145`
 - Create: `docs/research/audio-ingest/provider-decision.md`
 - Create: `docs/research/audio-ingest/capture-automation-decision.md`
@@ -1071,6 +1094,7 @@ Agents must not decide these without maintainer review:
 - Create a separate design and implementation plan for any selected capture helper or platform import.
 
 **Interfaces:**
+
 - Consumes: benchmark report, alpha trials, provider invoices/usage, AEC gate, and tutor friction evidence.
 - Produces one provider recommendation and one capture-product recommendation.
 
