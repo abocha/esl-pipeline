@@ -104,6 +104,42 @@ describeHttpServerIntegrationSuite(
       });
     });
 
+    it('returns the canonical assignment when recovery selects an owned source', async () => {
+      const canonicalSession = {
+        ...session,
+        id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        recordingId: '33333333-3333-4333-8333-333333333333',
+        transcriptId: '44444444-4444-4444-8444-444444444444',
+        revision: 4,
+        confirmedStep: 'source' as const,
+      };
+      vi.spyOn(
+        assignmentSessionsModule,
+        'updateAssignmentSessionRecoveryForUser',
+      ).mockRejectedValue({
+        code: 'ASSIGNMENT_SOURCE_ALREADY_OWNED',
+        session: canonicalSession,
+      });
+
+      const response = await app.inject({
+        method: 'PATCH',
+        url: `/assignment-sessions/${session.id}/recovery`,
+        payload: {
+          expectedRevision: 1,
+          patch: {
+            recordingId: canonicalSession.recordingId,
+            transcriptId: canonicalSession.transcriptId,
+          },
+        },
+      });
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json()).toEqual({
+        code: 'assignment_source_already_owned',
+        session: canonicalSession,
+      });
+    });
+
     it('confirms a discriminated step and returns artifact CAS conflicts', async () => {
       const confirm = vi
         .spyOn(confirmAssignmentSessionStepModule, 'confirmAssignmentSessionStep')

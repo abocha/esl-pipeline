@@ -186,6 +186,15 @@ export class AssignmentSessionRevisionConflictError extends Error {
   }
 }
 
+export class AssignmentSourceOwnershipConflictError extends Error {
+  readonly code = 'ASSIGNMENT_SOURCE_ALREADY_OWNED';
+
+  constructor(readonly session: AssignmentSessionRecord) {
+    super('This lesson source already belongs to another assignment.');
+    this.name = 'AssignmentSourceOwnershipConflictError';
+  }
+}
+
 export class AssignmentSessionRequestConflictError extends Error {
   readonly code = 'ASSIGNMENT_SESSION_REQUEST_CONFLICT';
 
@@ -760,19 +769,37 @@ export async function updateAssignmentSessionRecovery(
     }
     assignments.push('revision = revision + 1', 'updated_at = NOW()');
 
-    const result = await client.query(
-      `
-      UPDATE assignment_sessions
-      SET ${assignments.join(', ')}
-      WHERE id = $1
-        AND user_id = $2
-        AND revision = $3
-        AND ${ACTIVE_ASSIGNMENT_SESSION_SQL}
-        AND share_job_id IS NULL
-      RETURNING ${RETURNING_COLUMNS}
-      `,
-      values,
-    );
+    let result;
+    try {
+      result = await client.query(
+        `
+        UPDATE assignment_sessions
+        SET ${assignments.join(', ')}
+        WHERE id = $1
+          AND user_id = $2
+          AND revision = $3
+          AND ${ACTIVE_ASSIGNMENT_SESSION_SQL}
+          AND share_job_id IS NULL
+        RETURNING ${RETURNING_COLUMNS}
+        `,
+        values,
+      );
+    } catch (error) {
+      if (
+        isNamedUniqueViolation(error, 'idx_assignment_sessions_user_active_recording') &&
+        params.patch.recordingId
+      ) {
+        const owner = await findActiveByRecording(
+          client,
+          params.userId,
+          params.patch.recordingId,
+        );
+        if (owner && owner.id !== params.id) {
+          throw new AssignmentSourceOwnershipConflictError(mapRow(owner));
+        }
+      }
+      throw error;
+    }
     if (result.rows[0]) return mapRow(result.rows[0]);
 
     const current = await findOwnedById(client, params.id, params.userId);
@@ -979,20 +1006,26 @@ export async function getActiveAssignmentSessionByRecording(
   userId: string,
   recordingId: string,
 ): Promise<AssignmentSessionRecord | null> {
-  const row = await withPgClient(async (client) => {
-    const result = await client.query(
-      `
-      SELECT ${RETURNING_COLUMNS}
-      FROM assignment_sessions
-      WHERE user_id = $1 AND recording_id = $2 AND ${ACTIVE_ASSIGNMENT_SESSION_SQL}
-      ORDER BY updated_at DESC, id DESC
-      LIMIT 1
-      `,
-      [userId, recordingId],
-    );
-    return result.rows[0] ?? null;
-  });
+  const row = await withPgClient((client) => findActiveByRecording(client, userId, recordingId));
   return row ? mapRow(row) : null;
+}
+
+async function findActiveByRecording(
+  client: PoolClient,
+  userId: string,
+  recordingId: string,
+): Promise<AssignmentSessionRow | null> {
+  const result = await client.query(
+    `
+    SELECT ${RETURNING_COLUMNS}
+    FROM assignment_sessions
+    WHERE user_id = $1 AND recording_id = $2 AND ${ACTIVE_ASSIGNMENT_SESSION_SQL}
+    ORDER BY updated_at DESC, id DESC
+    LIMIT 1
+    `,
+    [userId, recordingId],
+  );
+  return result.rows[0] ?? null;
 }
 
 export async function listAssignmentSessionsForUser(
@@ -1094,6 +1127,17 @@ function mapRow(row: AssignmentSessionRow): AssignmentSessionRecord {
   };
 }
 
-function isUniqueViolation(error: unknown): boolean {
+function isUniqueViolation(
+  error: unknown,
+): error is { code: '23505'; constraint?: unknown } {
   return !!error && typeof error === 'object' && 'code' in error && error.code === '23505';
+}
+
+function isNamedUniqueViolation(error: unknown, constraint: string): boolean {
+  return (
+    isUniqueViolation(error) &&
+    'constraint' in error &&
+    typeof error.constraint === 'string' &&
+    error.constraint === constraint
+  );
 }
