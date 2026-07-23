@@ -1170,6 +1170,15 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
             session: getConflictSession(error),
           });
         }
+        if (errorCode === 'ASSIGNMENT_SOURCE_ALREADY_OWNED') {
+          return reply.code(409).send({
+            code: 'assignment_source_already_owned',
+            session: getConflictSession(error),
+          });
+        }
+        if (errorCode === 'ASSIGNMENT_RECOVERY_LINEAGE_INVALID') {
+          return reply.code(409).send({ code: 'assignment_recovery_lineage_invalid' });
+        }
         if (errorCode === 'ASSIGNMENT_SESSION_NOT_FOUND') {
           return reply.code(404).send({ error: 'not_found' });
         }

@@ -10,10 +10,12 @@ import type { AssignmentSessionRecord } from '../domain/assignment-session-model
 import {
   confirmStudentAssignmentSession,
   countAssignmentSessionsForUser,
+  getActiveAssignmentSessionByRecording,
   getAssignmentSessionByIdForUser,
   listAssignmentSessionsForUser,
   updateAssignmentSessionRecovery,
 } from '../domain/assignment-session-repository.js';
+import { getTranscriptById } from '../domain/transcript-repository.js';
 import { withPgClient } from '../infrastructure/db.js';
 import { logger } from '../infrastructure/logger.js';
 import { requestLessonMemoryGeneration } from './request-lesson-memory-generation.js';
@@ -59,7 +61,8 @@ export async function getAssignmentSessionForUser(
   sessionId: string,
   config?: BatchBackendConfig,
 ): Promise<AssignmentSessionDto | null> {
-  const session = await getAssignmentSessionByIdForUser(sessionId, userId);
+  const requested = await getAssignmentSessionByIdForUser(sessionId, userId);
+  const session = requested ? await resolveCanonicalSourceSession(userId, requested) : null;
   if (session && config) await reconcileConfirmedSourceMemory(session, config);
   return session ? toAssignmentSessionDto(session) : null;
 }
@@ -129,6 +132,36 @@ async function validateLessonStudentPair(
   if (!belongsToStudent) {
     throw new Error('Assignment session lesson must belong to the selected student');
   }
+}
+
+async function resolveCanonicalSourceSession(
+  userId: string,
+  session: AssignmentSessionRecord,
+): Promise<AssignmentSessionRecord> {
+  const transcriptId = session.transcriptId;
+  const canResolvePartialSource =
+    session.confirmedStep === 'student' &&
+    session.recordingId === null &&
+    transcriptId !== null &&
+    session.promptPackageId === null &&
+    session.draftId === null &&
+    session.shareJobId === null;
+  if (!canResolvePartialSource) return session;
+
+  const transcript = await getTranscriptById(transcriptId);
+  if (!transcript) return session;
+  const canonical = await getActiveAssignmentSessionByRecording(userId, transcript.recordingId);
+  if (!canonical || canonical.id === session.id || canonical.studentId !== session.studentId) {
+    return session;
+  }
+  logger.info('Assignment source alias resolved to canonical session', {
+    event: 'assignment_source_alias_resolved',
+    requestedAssignmentSessionId: session.id,
+    canonicalAssignmentSessionId: canonical.id,
+    recordingId: transcript.recordingId,
+    userId,
+  });
+  return canonical;
 }
 
 async function reconcileConfirmedSourceMemory(

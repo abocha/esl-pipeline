@@ -132,6 +132,63 @@ describe('MinimalAssignment - staged workflow UI', () => {
     ).toBe('Keep the tutor note.');
   });
 
+  it('reopens the canonical assignment when a recovery write finds existing lesson ownership', async () => {
+    const { user } = await renderResumedAssignment({}, { waitFor: 'none' });
+    await user.click(screen.getByRole('button', { name: /Teaching context/i }));
+    const canonicalSession = makeAssignmentSession({
+      id: 'session-canonical',
+      studentId: 'student-alex',
+      recordingId: 'rec-1',
+      transcriptId: 'tx-1',
+      promptPackageId: 'pkg-1',
+      confirmedStep: 'context',
+      teacherNotes: 'Canonical saved notes.',
+      revision: 4,
+    });
+    vi.mocked(api.updateAssignmentSessionRecovery).mockRejectedValueOnce(
+      new api.AssignmentSourceOwnershipApiError(canonicalSession),
+    );
+    vi.mocked(api.fetchAssignmentSession).mockResolvedValueOnce(canonicalSession);
+
+    vi.useFakeTimers();
+    fireEvent.change(screen.getByRole('textbox', { name: /Teacher notes/i }), {
+      target: { value: 'A local edit made from the duplicate shell.' },
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_500);
+    });
+    vi.useRealTimers();
+
+    await waitFor(() =>
+      expect(new URL(globalThis.location.href).searchParams.get('sessionId')).toBe(
+        'session-canonical',
+      ),
+    );
+    expect(screen.getByText(/lesson already has an assignment/i)).toBeTruthy();
+  });
+
+  it('shows a recovery failure beside the focused Continue action', async () => {
+    const { user } = await renderResumedAssignment({}, { waitFor: 'none' });
+    await user.click(screen.getByRole('button', { name: /Teaching context/i }));
+    vi.mocked(api.updateAssignmentSessionRecovery).mockRejectedValueOnce(
+      new Error('recovery unavailable'),
+    );
+
+    vi.useFakeTimers();
+    fireEvent.change(screen.getByRole('textbox', { name: /Teacher notes/i }), {
+      target: { value: 'Keep this edit visible.' },
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_500);
+    });
+    vi.useRealTimers();
+
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'Could not save this step: recovery unavailable',
+    );
+    expect(screen.getByRole('button', { name: /Confirm and continue/i })).toBeTruthy();
+  });
+
   it('adopts the winning transcript CAS base without discarding the losing local text', async () => {
     const { user } = await renderResumedAssignment({}, { waitFor: 'none' });
     await user.click(screen.getByRole('button', { name: /Lesson source/i }));

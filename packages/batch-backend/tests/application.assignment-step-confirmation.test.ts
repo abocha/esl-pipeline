@@ -801,12 +801,38 @@ describe('application/confirm-assignment-session-step transactional persistence'
       contentHash: 'b'.repeat(64),
       createdBy: userId,
     });
+    const recoveredLineage = await updateAssignmentSessionRecovery({
+      id: session.id,
+      userId,
+      expectedRevision: context.session.revision,
+      patch: { promptPackageId: prompt.id, draftId: draft.id },
+    });
+    const replacementPrompt = await insertPromptPackage({
+      recordingId,
+      transcriptId,
+      studentId,
+      lessonId: null,
+      templateVersion: 'template-v2',
+      notes: null,
+      resolvedProfileId: confirmedProfileId,
+      resolvedProfileRevisionId: confirmedProfileRevisionId,
+      resolvedProfileHash: renderedProfileHash,
+      storageUri: 's3://prompts/replacement.json',
+    });
+    await expect(
+      updateAssignmentSessionRecovery({
+        id: session.id,
+        userId,
+        expectedRevision: recoveredLineage.revision,
+        patch: { promptPackageId: replacementPrompt.id },
+      }),
+    ).rejects.toMatchObject({ code: 'ASSIGNMENT_RECOVERY_LINEAGE_INVALID' });
     const created = await confirmAssignmentSessionStepPersistence({
       id: session.id,
       userId,
       request: {
         step: 'create',
-        expectedRevision: context.session.revision,
+        expectedRevision: recoveredLineage.revision,
         promptPackageId: prompt.id,
         draftId: draft.id,
         draftWorkingVersion: 1,

@@ -4,7 +4,7 @@
 
 - Audience: maintainers and implementing agents.
 - Authority Level: package entrypoint and operational usage guide.
-- Last Verified Against: 2026-07-19 repo state.
+- Last Verified Against: 2026-07-23 repo state.
 - Owner: batch-frontend maintainers + automation agents.
 - Review Cadence: monthly or after major UI/workflow changes.
 - Status: `active`.
@@ -97,6 +97,13 @@ Canonical behavior and current status live in:
   post-cutover jobs use their retained assignment-session link to reopen every confirmed step for
   reference without permitting session mutations. Pre-cutover jobs have no retained session link
   and remain limited to their historical output and post-share actions.
+- Opening an assignment session always re-fetches backend authority rather than hydrating from the
+  resume-list copy. If recovery discovers that the lesson belongs to another active assignment,
+  the UI reopens that canonical assignment automatically, rewrites the resume target, and explains
+  the handoff beside the primary action. Other recovery failures are shown in the same place.
+- Prompt and draft recovery is lineage-safe: a generated draft is created against the exact prompt
+  returned by that generation operation, prompt/draft IDs recover as a compatible pair, and Create
+  navigation plus draft editing stays locked while prompt or draft generation is in flight.
 - During resume, complete assignment-session profile lineage outranks the asynchronous learner list.
   Empty profile state is not ready until learner-profile discovery succeeds, so first-profile
   assistance stays hidden and recovery cannot persist null lineage during that loading interval.
@@ -117,6 +124,7 @@ Canonical behavior and current status live in:
 Use these for deeper detail:
 
 - [`packages/batch-backend/README.md`](../batch-backend/README.md)
+- [`docs/design/CANONICAL_ASSIGNMENT_STATE.md`](../../docs/design/CANONICAL_ASSIGNMENT_STATE.md)
 - [`docs/reference/env.md`](../../docs/reference/env.md)
 
 ## Validation

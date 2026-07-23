@@ -95,6 +95,27 @@ describe('assignment recovery API', () => {
     expect(apiClient.patch).toHaveBeenCalledTimes(1);
   });
 
+  it('preserves the canonical assignment when lesson ownership conflicts', async () => {
+    const canonicalSession = { id: 'session-canonical', revision: 7 };
+    vi.mocked(apiClient.patch).mockRejectedValueOnce(
+      makeAxiosError(409, {
+        code: 'assignment_source_already_owned',
+        session: canonicalSession,
+      }),
+    );
+
+    await expect(
+      updateAssignmentSessionRecovery('session-duplicate', {
+        expectedRevision: 1,
+        patch: { recordingId: 'recording-1', transcriptId: 'transcript-1' },
+      }),
+    ).rejects.toMatchObject({
+      name: 'AssignmentSourceOwnershipApiError',
+      canonicalSession,
+    });
+    expect(apiClient.patch).toHaveBeenCalledTimes(1);
+  });
+
   it('preserves a typed artifact conflict from step confirmation', async () => {
     vi.mocked(apiClient.post).mockRejectedValueOnce(
       makeAxiosError(409, {

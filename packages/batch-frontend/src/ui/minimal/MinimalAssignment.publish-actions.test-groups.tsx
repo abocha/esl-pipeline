@@ -89,7 +89,7 @@ export function registerPublishValidationTests() {
       await user.click(screen.getByRole('button', { name: /Share assignment/i }));
 
       await waitFor(() => {
-        expect(api.createDraft).toHaveBeenCalledWith('pkg-1', '# Final draft');
+        expect(api.updateDraft).toHaveBeenCalledWith('draft-1', '# Final draft', 1);
       });
       const validationCall = vi.mocked(api.validateMarkdown).mock.calls.at(-1);
       expect(validationCall?.[0]).toBe('# Final draft');

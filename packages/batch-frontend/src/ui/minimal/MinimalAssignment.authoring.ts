@@ -666,8 +666,19 @@ export function useMinimalAssignmentAuthoringController({
   const promptReady = Boolean(state.promptPackage?.id && state.promptText.trim().length > 0);
   const draftDirty = useMemo(() => {
     const original = state.draft?.text ?? '';
-    return state.draftText.trim() !== original.trim();
-  }, [state.draft?.text, state.draftText]);
+    const lineageChanged = Boolean(
+      state.draft?.id &&
+        state.promptPackage?.id &&
+        state.draft.promptPackageId !== state.promptPackage.id,
+    );
+    return lineageChanged || state.draftText.trim() !== original.trim();
+  }, [
+    state.draft?.id,
+    state.draft?.promptPackageId,
+    state.draft?.text,
+    state.draftText,
+    state.promptPackage?.id,
+  ]);
   const draftPreviewGate = useMemo(
     () =>
       getDraftPreviewGate({
@@ -858,22 +869,27 @@ export function useMinimalAssignmentAuthoringController({
   const persistDraftText = useCallback(
     async (
       text: string,
-      options: { preserveCurrentText?: boolean } = {},
+      options: {
+        preserveCurrentText?: boolean;
+        promptPackageId?: string;
+      } = {},
     ): Promise<DraftResponse | null> => {
       const normalizedText = text.trim();
-      if (!state.promptPackage?.id || !normalizedText) {
+      const promptPackageId = options.promptPackageId ?? state.promptPackage?.id;
+      if (!promptPackageId || !normalizedText) {
         return null;
       }
+      const reusableDraft = state.draft?.promptPackageId === promptPackageId ? state.draft : null;
       const persistenceVersion = authoringPersistenceVersionRef.current;
       let response: DraftResponse;
       try {
-        response = state.draft?.id
-          ? await updateDraft(state.draft.id, normalizedText, state.draft.workingVersion)
-          : await createDraft(state.promptPackage.id, normalizedText);
+        response = reusableDraft?.id
+          ? await updateDraft(reusableDraft.id, normalizedText, reusableDraft.workingVersion)
+          : await createDraft(promptPackageId, normalizedText);
       } catch (error) {
-        if (error instanceof ArtifactWorkingConflictApiError && state.draft?.id) {
+        if (error instanceof ArtifactWorkingConflictApiError && reusableDraft?.id) {
           try {
-            const latest = await fetchDraft(state.draft.id);
+            const latest = await fetchDraft(reusableDraft.id);
             if (authoringPersistenceVersionRef.current === persistenceVersion) {
               draftConflictTextRef.current = normalizedText;
               dispatch({
@@ -903,6 +919,7 @@ export function useMinimalAssignmentAuthoringController({
     [
       onDraftPronunciationModeDetected,
       state.draft?.id,
+      state.draft?.promptPackageId,
       state.draft?.workingVersion,
       state.promptPackage?.id,
     ],
@@ -1119,7 +1136,9 @@ export function useMinimalAssignmentAuthoringController({
         });
         if (generated.text?.trim()) {
           try {
-            await persistDraftText(generated.text);
+            await persistDraftText(generated.text, {
+              promptPackageId,
+            });
             draftAutosaveLastSavedAtRef.current = Date.now();
           } catch (error) {
             const message =

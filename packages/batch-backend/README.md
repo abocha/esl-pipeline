@@ -4,7 +4,7 @@
 
 - Audience: maintainers and implementing agents.
 - Authority Level: package entrypoint and operational usage guide.
-- Last Verified Against: 2026-07-19 repo state.
+- Last Verified Against: 2026-07-23 repo state.
 - Owner: batch-backend maintainers + automation agents.
 - Review Cadence: monthly or after major API/worker changes.
 - Status: `active`.
@@ -87,6 +87,11 @@ The assignment builder separates automatic recovery from tutor-owned confirmatio
   Transcript and draft autosaves use independent working-version compare-and-swap, server hashes,
   and content-addressed storage. Source/Create confirmation copy the exact immutable URI, hash, and
   working version into the session snapshot; there are no transcript/draft revision tables.
+- Active lesson-source ownership conflicts return the owning canonical assignment instead of a
+  generic server error. A narrowly identifiable partial session shell (Student confirmed,
+  transcript known, recording missing, no downstream work) resolves to that canonical assignment
+  on read. Recovery also rejects any prompt/draft pair whose draft does not belong to the selected
+  prompt and student.
 - Source confirmation is the only assignment-flow lesson-memory trigger. Its durable intent and
   BullMQ identity are keyed by transcript plus confirmed hash, and the worker reads the confirmed
   URI from its payload rather than the transcript's mutable working pointer. Changed confirmed
@@ -166,5 +171,6 @@ pnpm check:fast
 ## Related
 
 - [`packages/orchestrator/README.md`](../orchestrator/README.md)
+- [`docs/design/CANONICAL_ASSIGNMENT_STATE.md`](../../docs/design/CANONICAL_ASSIGNMENT_STATE.md)
 - [`docs/backend-frontend/batch-backend-ssot.md`](../../docs/backend-frontend/batch-backend-ssot.md)
 - [`docs/backend-frontend/backend-frontend-alignment.md`](../../docs/backend-frontend/backend-frontend-alignment.md)

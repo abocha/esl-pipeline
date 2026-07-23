@@ -28,6 +28,11 @@ the active Slice 2 plan.
 
 ## 2026-07-23 First-Profile Assignment Incident
 
+The follow-on Create-regeneration and exact-source reconciliation failures are documented in the
+focused
+[`Assignment reconciliation incident`](incidents/2026-07-22-assignment-reconciliation.md). That
+record preserves the full two-day sequence and the resulting canonical assignment-state decision.
+
 An alpha tutor's assignment stalled at Teaching context and later returned HTTP 400 when confirming
 Create. The assignment, prompt package, draft, confirmed source, confirmed Context snapshot, and
 active profile revision remained valid. The failure was fail-closed: no assignment was published
