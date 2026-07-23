@@ -1382,6 +1382,7 @@ export function AssignmentStageSection({
             aria-label="Draft markdown"
             value={draftText}
             onChange={(event) => onDraftTextChange(event.target.value)}
+            disabled={assignmentBusy}
             rows={14}
           />
           {validation?.errors?.length ? (

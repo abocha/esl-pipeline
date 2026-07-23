@@ -72,6 +72,17 @@ function writeResumeTargetToQuery(target: { jobId?: string | null; sessionId?: s
   globalThis.history.replaceState(null, '', suffix);
 }
 
+function needsCanonicalSourceResolution(session: AssignmentSession): boolean {
+  return (
+    session.confirmedStep === 'student' &&
+    session.recordingId === null &&
+    session.transcriptId !== null &&
+    session.promptPackageId === null &&
+    session.draftId === null &&
+    session.shareJobId === null
+  );
+}
+
 function describeJobFailureReason(job: Pick<JobStatus, 'publishTarget' | 'error'>): string {
   const reason = job.error?.trim();
   if (!reason) {
@@ -714,7 +725,12 @@ export function useMinimalAssignmentResume({
 
       try {
         const cachedSession = knownSessions?.find((session) => session.id === sessionId);
-        const session = cachedSession ?? (await fetchAssignmentSession(sessionId));
+        // Normal resume uses the coherent list snapshot. Partial source shells and explicit
+        // conflict handoffs re-fetch so the backend can return canonical assignment authority.
+        const session =
+          cachedSession && !needsCanonicalSourceResolution(cachedSession)
+            ? cachedSession
+            : await fetchAssignmentSession(sessionId);
         if (session.confirmedStep === 'share') {
           if (!session.shareJobId) throw new Error('Shared assignment is missing its linked job.');
           return hydrateFromJob(session.shareJobId, undefined, isInitialHydration, session);
@@ -914,6 +930,11 @@ export function useMinimalAssignmentResume({
     void initializeResume();
   }, [hydrateFromJob, hydrateFromSession, loadResumeJobs]);
 
+  const openAssignmentSession = useCallback(
+    (sessionId: string) => hydrateFromSession(sessionId),
+    [hydrateFromSession],
+  );
+
   return {
     resumeJobs,
     assignmentSessions,
@@ -930,6 +951,7 @@ export function useMinimalAssignmentResume({
     loadResumeJobs,
     loadMoreResumeJobs,
     handleResumeSelectedJob,
+    openAssignmentSession,
     applyJobStatusTransition,
   };
 }

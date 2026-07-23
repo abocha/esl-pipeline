@@ -140,6 +140,28 @@ describeHttpServerIntegrationSuite(
       });
     });
 
+    it('rejects recovery that would cross prompt and draft lineage', async () => {
+      vi.spyOn(
+        assignmentSessionsModule,
+        'updateAssignmentSessionRecoveryForUser',
+      ).mockRejectedValue({ code: 'ASSIGNMENT_RECOVERY_LINEAGE_INVALID' });
+
+      const response = await app.inject({
+        method: 'PATCH',
+        url: `/assignment-sessions/${session.id}/recovery`,
+        payload: {
+          expectedRevision: 1,
+          patch: {
+            promptPackageId: '33333333-3333-4333-8333-333333333333',
+            draftId: '44444444-4444-4444-8444-444444444444',
+          },
+        },
+      });
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json()).toEqual({ code: 'assignment_recovery_lineage_invalid' });
+    });
+
     it('confirms a discriminated step and returns artifact CAS conflicts', async () => {
       const confirm = vi
         .spyOn(confirmAssignmentSessionStepModule, 'confirmAssignmentSessionStep')

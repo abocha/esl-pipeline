@@ -132,6 +132,13 @@ export class AssignmentSessionConflictApiError extends Error {
   }
 }
 
+export class AssignmentSourceOwnershipApiError extends Error {
+  constructor(public readonly canonicalSession: AssignmentSession) {
+    super('This lesson already has an assignment. Reopening the saved assignment.');
+    this.name = 'AssignmentSourceOwnershipApiError';
+  }
+}
+
 export class ArtifactWorkingConflictApiError extends Error {
   constructor(public readonly latestArtifact: ContractArtifactWorkingContentDto) {
     super('Newer saved artifact content was found. Review it before confirming again.');
@@ -1698,6 +1705,14 @@ function getAssignmentSessionConflict(error: AxiosError | null): AssignmentSessi
   return data?.code === 'assignment_session_revision_conflict' && data.session
     ? data.session
     : null;
+}
+
+function getAssignmentSourceOwnershipConflict(error: AxiosError | null): AssignmentSession | null {
+  if (error?.response?.status !== 409) return null;
+  const data = error.response.data as
+    | { code?: unknown; session?: ContractAssignmentSessionDto }
+    | undefined;
+  return data?.code === 'assignment_source_already_owned' && data.session ? data.session : null;
 }
 
 function getArtifactWorkingConflict(
@@ -3425,6 +3440,10 @@ export async function updateAssignmentSessionRecovery(
     return response.data;
   } catch (error: unknown) {
     const axiosError = toAxiosError(error);
+    const sourceOwnershipConflict = getAssignmentSourceOwnershipConflict(axiosError);
+    if (sourceOwnershipConflict) {
+      throw new AssignmentSourceOwnershipApiError(sourceOwnershipConflict);
+    }
     const conflict = getAssignmentSessionConflict(axiosError);
     if (conflict) throw new AssignmentSessionConflictApiError(conflict);
     if (axiosError && isAuthError(axiosError)) {
