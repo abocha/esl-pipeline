@@ -5,7 +5,7 @@
 - Audience: operators and implementation agents maintaining the batch backend.
 - Read Time: 5 minutes.
 - Authority Level: active operations runbook.
-- Last Verified Against: 2026-07-02 repo state.
+- Last Verified Against: 2026-07-27 repo state.
 - Owner: batch-backend maintainers + automation agents.
 - Review Cadence: after student-memory tooling changes.
 - Status: `active`.
@@ -147,24 +147,68 @@ Supported options:
 - `--student-id <student-id>`
 - `--strategy manual_rebuild_v1_1|full_rebuild_v1`
 - `--reason <operator-reason>` (required unless `--dry-run`)
+- `--candidate-refresh` (explicitly request downstream profile-candidate refresh)
 - `--provider openai|google_ai_studio|openrouter`
 - `--model <model-id>`
 
 Operator notes:
 
-1. `missing` includes students with no ready snapshot and students whose latest ready snapshot is
-   older than newer canonical lesson/homework memory.
+1. `missing` includes students with no eligible ready snapshot and students whose latest eligible
+   ready snapshot is older than newer canonical lesson/homework memory. A ready snapshot is
+   eligible only when every lesson-memory ID exists, belongs to the same student, remains ready,
+   and has confirmed-source provenance. Homework-only snapshots remain eligible.
 2. Snapshot replay is eventually consistent and does not block prompt-package creation.
 3. Snapshot replay only uses canonical ready lesson-memory and homework-memory inputs.
 4. Non-dry-run replay must name the strategy and operator reason so manual rebuilds are auditable.
 5. Prefer `manual_rebuild_v1_1` for v1.1 manual replay. Use `full_rebuild_v1` only for explicit
    legacy comparison or compatibility checks.
+6. `--candidate-refresh` is opt-in. Use it only when the reviewed replay is also intended to
+   refresh profile candidates from the resulting snapshot.
 
 Example:
 
 ```bash
 pnpm --filter @esl-pipeline/batch-backend exec tsx --tsconfig tsconfig.json src/tools/refresh-student-memory-snapshots.ts --selection missing --limit 20 --strategy manual_rebuild_v1_1 --reason "Backfill missing alpha snapshots"
 ```
+
+### Snapshot eligibility repair recovery
+
+Migration 0045 supersedes stored ready or pending snapshots that reference retired, missing,
+cross-student, or provenance-free lesson memory. It does not enqueue model work. After deploying a
+release that includes 0045, stop after each step and review its bounded output before continuing:
+
+1. Confirm `batch-backend` and `student-memory-worker` are healthy and the migration head is 0045.
+2. Run a dry-run with the exact limit approved for recovery:
+
+   ```bash
+   docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml \
+     --env-file /var/lib/esl-pipeline/deploy/current-images.env \
+     exec batch-backend node dist/tools/refresh-student-memory-snapshots.js \
+     --selection missing --limit <approved-limit> --strategy manual_rebuild_v1_1 \
+     --reason "Repair ineligible snapshots after migration 0045" --candidate-refresh --dry-run
+   ```
+
+3. Compare the selected student count with the pre-deploy read-only audit. Obtain explicit operator
+   approval before removing `--dry-run`.
+4. Execute the same bounded command without `--dry-run` only after that approval.
+5. Verify each processed student has an eligible ready snapshot and candidate-refresh metadata with
+   `enqueueStatus` equal to `enqueued` or `not_requested` for a documented policy reason.
+6. Confirm `student_profile_candidate_refresh_requested` and a processed job event or persisted
+   candidate outcome. `requested: true` by itself is not completion evidence.
+
+If an eligible ready snapshot records requested candidate refresh but enqueue delivery is `pending`,
+`failed`, or legacy metadata has no delivery state, retry only that explicit snapshot ID:
+
+```bash
+docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml \
+  --env-file /var/lib/esl-pipeline/deploy/current-images.env \
+  exec batch-backend node dist/tools/retry-student-profile-candidate-refresh.js \
+  --snapshot-id <eligible-ready-snapshot-uuid>
+```
+
+The candidate-only command revalidates snapshot eligibility and recorded candidate intent. It does
+not regenerate memory or infer candidate intent. Do not run either production command without a
+reviewed scope and explicit operator authorization.
 
 ## Student Lesson Artifact Export
 
