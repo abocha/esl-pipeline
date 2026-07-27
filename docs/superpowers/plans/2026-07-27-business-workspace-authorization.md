@@ -49,6 +49,8 @@ maintenance.
   - prove membership resolution and workspace propagation for all dashboard routes.
 - Modify `packages/batch-backend/tests/transport.http-server.integration.students-content.test.ts`
   - prove membership resolution and workspace propagation for all ten student business routes.
+- Modify `packages/batch-backend/tests/transport.http-server.integration.students-memory.test.ts`
+  - prove the overview composer's schedule/billing call propagates workspace membership.
 - Modify `packages/batch-backend/src/transport/extended-routes/business-routes.ts`
   - resolve membership and map workspace errors.
 - Modify `packages/batch-backend/src/transport/extended-routes/students-routes.ts`
@@ -143,6 +145,10 @@ async function seedStudentInWorkspace(workspaceId: string, name: string) {
 }
 ```
 
+Add `workspaces` to `resetScheduleBillingTables()` after dependent membership/settings tables so
+random two-workspace fixtures cannot accumulate across tests, then recreate the historical default
+workspace exactly as the current setup does.
+
 Update `insertBusinessLesson`, `insertBusinessCreditEvent`, and `insertBusinessPayment` to require a
 `workspaceId` argument instead of inserting `DEFAULT_WORKSPACE_ID` internally. Update existing
 single-workspace callers to pass `DEFAULT_WORKSPACE_ID` so old coverage remains explicit.
@@ -210,10 +216,12 @@ Add separate assertions that:
 
 - `updateBusinessSettings(alpha.workspaceId, ..., alpha.userId)` changes only alpha;
 - alpha schedule/stats exclude beta reminders, credits, lessons, and payments;
+- dashboard helpers require both the business row and its owning student to belong to alpha, so a
+  deliberately mismatched child row cannot expose beta's student identity or totals;
 - alpha dashboard materialization does not add lessons or advance
   `student_lesson_recurrence_rules.materialized_through` for beta; and
-- a null-workspace student/lesson/payment is visible from `DEFAULT_WORKSPACE_ID` and absent from
-  alpha's non-default workspace.
+- null-workspace students, lessons, recurrence rules, reminder preferences, credit events, and
+  payments are visible from `DEFAULT_WORKSPACE_ID` and absent from alpha's non-default workspace.
 
 - [ ] **Step 3: Run the focused PostgreSQL test and capture the expected red state**
 
@@ -237,8 +245,8 @@ Change the four exported signatures to the interfaces above. Replace every
 Thread the workspace ID into every private helper that reads settings, lessons, recurrence,
 reminders, credits, or payments.
 
-For each nullable legacy column, use an explicit default-only predicate. Adapt placeholder numbers
-to each query's existing parameter order:
+For each nullable legacy column, use an explicit default-only predicate. Adapt SQL parameter
+positions to each query's existing argument order:
 
 ```sql
 WHERE (
@@ -251,6 +259,16 @@ WHERE (
 ```
 
 Do not use the requested workspace as the fallback side of `COALESCE`.
+
+Every query joining a child business row to `students` must qualify both authorities. A row tagged
+with workspace A but owned by a workspace B student is excluded from A:
+
+```sql
+AND (
+  students.workspace_id = $workspace_param::uuid
+  OR (students.workspace_id IS NULL AND $workspace_param::uuid = $default_workspace_param::uuid)
+)
+```
 
 `getBusinessSettingsForWorkspace()` may insert a missing settings row for the supplied workspace,
 but it must not create or select the default workspace unless the supplied ID is the default. The
@@ -325,32 +343,88 @@ adjustStudentCredits(workspaceId: string, studentId: string, params: { quantityD
 recordStudentPayment(workspaceId: string, studentId: string, params: RecordStudentPaymentRequest, actorUserId?: string | null): Promise<StudentScheduleBillingSurfaceResponse>;
 ```
 
-- [ ] **Step 1: Add a database mutation snapshot helper**
+- [ ] **Step 1: Add a complete database mutation snapshot helper**
 
-Add a helper that records counts and stable values for the foreign student's business rows:
+Import every scoped mutation used below. Add a helper that captures complete JSON rows—not only
+counts—so updates to existing rows, recurrence materialization state, and nested slots cannot pass
+as unchanged:
 
 ```ts
 async function readStudentBusinessMutationSnapshot(studentId: string) {
   return withPgClientSessionContext({ rlsBypass: true }, async (client) => {
-    const result = await client.query(
-      `SELECT
-         (SELECT COUNT(*)::int FROM student_lesson_plans WHERE student_id = $1) AS lesson_plans,
-         (SELECT COUNT(*)::int FROM student_lesson_recurrence_rules WHERE student_id = $1) AS recurrence_rules,
-         (SELECT COUNT(*)::int FROM student_lessons WHERE student_id = $1) AS lessons,
-         (SELECT COUNT(*)::int FROM student_credit_events WHERE student_id = $1) AS credit_events,
-         (SELECT COUNT(*)::int FROM student_payment_records WHERE student_id = $1) AS payments,
-         (SELECT hidden_lesson_followup_keys FROM student_reminder_preferences WHERE student_id = $1)
-           AS hidden_keys`,
+    const result = await client.query<{ snapshot: Record<string, unknown> }>(
+      `SELECT jsonb_build_object(
+         'lessonPlans', COALESCE((
+           SELECT jsonb_agg(to_jsonb(row_value) ORDER BY row_value.student_id)
+           FROM student_lesson_plans row_value WHERE row_value.student_id = $1
+         ), '[]'::jsonb),
+         'recurrenceRules', COALESCE((
+           SELECT jsonb_agg(to_jsonb(row_value) ORDER BY row_value.id)
+           FROM student_lesson_recurrence_rules row_value WHERE row_value.student_id = $1
+         ), '[]'::jsonb),
+         'recurrenceSlots', COALESCE((
+           SELECT jsonb_agg(to_jsonb(slot_value) ORDER BY slot_value.id)
+           FROM student_lesson_recurrence_slots slot_value
+           JOIN student_lesson_recurrence_rules rule_value ON rule_value.id = slot_value.rule_id
+           WHERE rule_value.student_id = $1
+         ), '[]'::jsonb),
+         'lessons', COALESCE((
+           SELECT jsonb_agg(to_jsonb(row_value) ORDER BY row_value.id)
+           FROM student_lessons row_value WHERE row_value.student_id = $1
+         ), '[]'::jsonb),
+         'reminders', COALESCE((
+           SELECT jsonb_agg(to_jsonb(row_value) ORDER BY row_value.student_id)
+           FROM student_reminder_preferences row_value WHERE row_value.student_id = $1
+         ), '[]'::jsonb),
+         'creditEvents', COALESCE((
+           SELECT jsonb_agg(to_jsonb(row_value) ORDER BY row_value.id)
+           FROM student_credit_events row_value WHERE row_value.student_id = $1
+         ), '[]'::jsonb),
+         'payments', COALESCE((
+           SELECT jsonb_agg(to_jsonb(row_value) ORDER BY row_value.id)
+           FROM student_payment_records row_value WHERE row_value.student_id = $1
+         ), '[]'::jsonb)
+       ) AS snapshot`,
       [studentId],
     );
-    return result.rows[0];
+    return result.rows[0]?.snapshot ?? {};
   });
 }
 ```
 
-- [ ] **Step 2: Write failing foreign-student read and mutation tests**
+- [ ] **Step 2: Reproduce the vulnerability with the current API shape**
 
-Seed alpha and beta workspaces plus a beta student and lesson. Verify the read is hidden:
+Before changing any application signature, seed alpha and beta workspaces plus a beta student and
+lesson. Call the current one-argument API exactly as production does:
+
+```ts
+it('rejects tutor alpha access to tutor beta schedule billing data', async () => {
+  const alpha = await seedWorkspaceTutor('alpha');
+  const beta = await seedWorkspaceTutor('beta');
+  const betaStudentId = await seedStudentInWorkspace(beta.workspaceId, 'Beta student');
+
+  const leaked = await getStudentScheduleBillingSurface(betaStudentId);
+
+  expect(leaked).toBeNull();
+  expect(alpha.workspaceId).not.toBe(beta.workspaceId);
+});
+```
+
+Add one current-shape mutation reproduction, such as
+`updateStudentLessonPlan(betaStudentId, { timezone: 'Asia/Tokyo' }, alpha.userId)`, and expect
+`not_found` plus an unchanged complete snapshot.
+
+- [ ] **Step 3: Run the focused PostgreSQL test and capture the genuine red state**
+
+Run the Task 1 Step 3 command.
+
+Expected: FAIL because the current API returns beta's schedule/billing surface and permits the
+foreign lesson-plan update. Preserve this runtime failure evidence; TypeScript arity errors or
+workspace-first calls against the old positional API do not count as reproduction.
+
+- [ ] **Step 4: Rewrite the regressions for the final workspace-first API**
+
+Change the read assertion to the final contract:
 
 ```ts
 await expect(
@@ -399,27 +473,29 @@ for (const attempt of attempts) {
 Use the concrete valid recurrence, lesson, and payment payload shapes already present in this test
 file; do not bypass their domain validation.
 
-Add a default-workspace compatibility test showing a null-workspace student is found only when
+Add alpha-student/beta-lesson cases for `updateStudentLesson` and
+`hideStudentLessonFollowupReminder`. Assert both reject with the same `not_found` shape and compare
+complete snapshots for both students before and after.
+
+Add a default-workspace compatibility test showing null-workspace students and their lesson plan,
+recurrence rule/slots, lessons, reminders, credit events, and payments are visible only when
 `workspaceId === DEFAULT_WORKSPACE_ID`.
 
-- [ ] **Step 3: Run the focused PostgreSQL test and capture the expected red state**
+- [ ] **Step 5: Make workspace ownership the request-facing student-context predicate**
 
-Run the Task 1 Step 3 command.
-
-Expected: FAIL because the current student functions accept no workspace ID and `getStudentContext`
-filters only by student ID.
-
-- [ ] **Step 4: Make workspace ownership the shared student-context predicate**
-
-Change `getStudentContext` and `requireStudentContext` to accept workspace first:
+Add explicitly authorized helpers for request-facing business functions:
 
 ```ts
-async function getStudentContext(
+async function getAuthorizedStudentContext(
   client: PoolClient,
   workspaceId: string,
   studentId: string,
 ): Promise<StudentContext | null> {
-  const result = await client.query<StudentContextRow>(
+  const result = await client.query<{
+    id: string;
+    student: string;
+    workspace_id: string | null;
+  }>(
     `SELECT id, student, COALESCE(workspace_id, $3::uuid) AS workspace_id
      FROM students
      WHERE id = $1
@@ -433,17 +509,34 @@ async function getStudentContext(
   const row = result.rows[0];
   return row ? { id: row.id, name: row.student, workspaceId: row.workspace_id } : null;
 }
+
+async function requireAuthorizedStudentContext(
+  client: PoolClient,
+  workspaceId: string,
+  studentId: string,
+): Promise<StudentContext> {
+  const context = await getAuthorizedStudentContext(client, workspaceId, studentId);
+  if (!context) throw new StudentScheduleBillingError('not_found', 404, 'Student not found');
+  return context;
+}
 ```
 
 Thread the required workspace ID through all ten exported functions. Every mutation must call
-`requireStudentContext(client, workspaceId, studentId)` before reading or writing nested business
-rows. Keep lesson lookup constrained by both authorized `studentId` and `lessonId`.
+`requireAuthorizedStudentContext(client, workspaceId, studentId)` before reading or writing nested
+business rows. Keep lesson lookup constrained by both authorized `studentId` and `lessonId`.
 
-Update trusted internal callers such as generated lesson title or elapsed-lesson completion only if
-TypeScript identifies them as consumers of the changed helpers; do not add caller-supplied workspace
-authority where the internal operation already derives workspace from an owned lesson record.
+Preserve a separate, non-exported `requireTrustedStudentContextById(client, studentId)` for exactly
+these non-route persisted-authority flows:
 
-- [ ] **Step 5: Update existing application test calls**
+- `completeElapsedScheduledLessonForHomework()`, called from
+  `application/assignment-sessions.ts::completeLinkedElapsedLessonForHomework()` after the session
+  supplies its persisted student/lesson pair; and
+- `applyGeneratedLessonTitleIfPlaceholder()`, which verifies its persisted student/lesson pair.
+
+Rename the helper and update these call sites deliberately. Request-facing functions must never call
+the trusted helper, and no trusted flow may pass `DEFAULT_WORKSPACE_ID` merely to compile.
+
+- [ ] **Step 6: Update existing application test calls**
 
 Make every existing direct call explicit by adding `DEFAULT_WORKSPACE_ID` as the first argument.
 Use TypeScript and `rg` to find every call site:
@@ -455,13 +548,13 @@ rg -n "(getStudentScheduleBillingSurface|hideStudentLessonFollowupReminder|undoL
 Do not satisfy compilation by making `workspaceId` optional or defaulting it inside an exported
 request-facing function.
 
-- [ ] **Step 6: Re-run the focused PostgreSQL test**
+- [ ] **Step 7: Re-run the focused PostgreSQL test**
 
 Run the Task 1 Step 3 command again.
 
 Expected: PASS, including all nine rejected mutations with unchanged database snapshots.
 
-- [ ] **Step 7: Commit the student operation batch**
+- [ ] **Step 8: Commit the student operation batch**
 
 ```powershell
 git add packages/batch-backend/src/application/student-schedule-billing.ts `
@@ -482,14 +575,16 @@ git commit -m "fix(backend): authorize student business operations"
 - Modify: `packages/batch-backend/tests/transport.http-server.integration.harness.ts:1325-1352`
 - Modify: `packages/batch-backend/tests/transport.http-server.integration.business.test.ts`
 - Modify: `packages/batch-backend/tests/transport.http-server.integration.students-content.test.ts`
+- Modify: `packages/batch-backend/tests/transport.http-server.integration.students-memory.test.ts:155-185`
 - Modify: `packages/batch-backend/src/transport/extended-routes/business-routes.ts`
+- Modify: `packages/batch-backend/src/transport/extended-routes/students-routes.ts:253-330`
 - Modify: `packages/batch-backend/src/transport/extended-routes/students-routes.ts:495-764`
 - Modify: `packages/batch-backend/src/transport/extended-routes/students-routes.ts:2377-2402`
 
 **Interfaces:**
 
 - Consumes: workspace-first application signatures from Tasks 1 and 2.
-- Produces: all fourteen scoped routes resolve `test-user-id` to
+- Produces: all fifteen scoped HTTP consumers resolve `test-user-id` to
   `00000000-0000-4000-8000-000000000001` and pass that workspace to the application layer.
 
 - [ ] **Step 1: Expose all authorization-relevant mocks from the HTTP harness**
@@ -551,9 +646,14 @@ expect(mockApplicationFunction).toHaveBeenCalledWith(
 );
 ```
 
-Add a missing-membership test for one route handled through `handleScheduleBillingRouteError` and
-expect the canonical `403 workspace_required` response. The shared helper behavior covers the
-remaining routes; individual propagation expectations cover every call site.
+In `students-memory.test.ts`, update the overview expectation to
+`mockGetStudentScheduleBillingSurface(DEFAULT_WORKSPACE_ID, studentId)` and assert membership
+resolution. Add a missing-membership test for the overview route.
+
+Add a missing-membership test for the direct schedule/billing GET as well. Both GET handlers have
+custom catch blocks, so they require direct `403 workspace_required` coverage. One mutation route
+handled through `handleScheduleBillingRouteError` also gets the same assertion; the shared helper
+then covers the remaining mutations. Restore the default resolver mock after each rejection case.
 
 - [ ] **Step 4: Run focused HTTP integration tests and capture the expected red state**
 
@@ -565,7 +665,8 @@ pnpm --filter @esl-pipeline/batch-backend exec vitest run `
   --reporter=dot `
   --maxWorkers=1 `
   ../../packages/batch-backend/tests/transport.http-server.integration.business.test.ts `
-  ../../packages/batch-backend/tests/transport.http-server.integration.students-content.test.ts
+  ../../packages/batch-backend/tests/transport.http-server.integration.students-content.test.ts `
+  ../../packages/batch-backend/tests/transport.http-server.integration.students-memory.test.ts
 ```
 
 Expected: FAIL because current routes do not resolve or pass workspace context for these calls.
@@ -598,9 +699,11 @@ if (error instanceof WorkspaceContextError) {
 
 - [ ] **Step 6: Resolve workspace in student business routes**
 
-Call the existing `resolveWorkspaceIdForRequest(request)` in all ten handlers and pass the result
-first to the application function. Add this branch to `handleScheduleBillingRouteError` before its
-generic logger:
+Call the existing `resolveWorkspaceIdForRequest(request)` in the overview composer, the direct
+schedule/billing GET, and all nine mutation handlers. Pass the result first to the application
+function. In the overview and schedule/billing GET custom catch blocks, call
+`workspaceContextErrorResponse(reply, error)` before logging a generic 500. Add the same branch to
+`handleScheduleBillingRouteError` before its generic logger:
 
 ```ts
 const workspaceError = workspaceContextErrorResponse(reply, error);
@@ -608,7 +711,9 @@ if (workspaceError) return workspaceError;
 ```
 
 Do not accept workspace identity from request parameters or reuse `authenticatedUser.id` as the
-workspace ID.
+workspace ID. In the overview composer, resolve membership immediately after parsing the student ID
+and before composing its parallel payload; this patch scopes only the schedule/billing application
+call and does not alter unrelated overview data contracts.
 
 - [ ] **Step 7: Re-run the focused HTTP integration tests**
 
@@ -634,7 +739,8 @@ git add packages/batch-backend/src/transport/extended-routes/business-routes.ts 
   packages/batch-backend/src/transport/extended-routes/students-routes.ts `
   packages/batch-backend/tests/transport.http-server.integration.harness.ts `
   packages/batch-backend/tests/transport.http-server.integration.business.test.ts `
-  packages/batch-backend/tests/transport.http-server.integration.students-content.test.ts
+  packages/batch-backend/tests/transport.http-server.integration.students-content.test.ts `
+  packages/batch-backend/tests/transport.http-server.integration.students-memory.test.ts
 git commit -m "fix(backend): propagate tutor workspace to business routes"
 ```
 
@@ -713,14 +819,13 @@ smallest affected test, and send the same reviewer a follow-up for the same auth
 
 ```powershell
 git add packages/batch-backend/README.md `
-  docs/backend-frontend/batch-backend-ssot.md `
-  packages/batch-backend/src `
-  packages/batch-backend/tests
+  docs/backend-frontend/batch-backend-ssot.md
 git commit -m "docs(backend): record business workspace authorization"
 ```
 
 If reviewer corrections already belong in the preceding focused commit, amend only when that commit
-has not been pushed; otherwise use a focused `fix(backend): ...` follow-up commit.
+has not been pushed; otherwise stage only the explicit reviewed files and use a focused
+`fix(backend): ...` follow-up commit. Never stage the entire `src` or `tests` directory.
 
 - [ ] **Step 6: Push and open the draft pull request**
 
@@ -740,7 +845,7 @@ Closes #160
 ## Validation
 
 - focused `application.student-schedule-billing.test.ts`
-- focused Business and student-content HTTP integration tests
+- focused Business, student-content, and student-memory HTTP integration tests
 - `pnpm --filter @esl-pipeline/batch-backend typecheck`
 - `pnpm format`
 - `pnpm run lint:repo-hygiene`
@@ -804,9 +909,13 @@ Do not merge or deploy without a separate user instruction.
 - [ ] `git diff origin/main...HEAD --check` passes.
 - [ ] No scoped exported application function has an optional/default workspace parameter.
 - [ ] No `/business/*` or student schedule/billing route accepts workspace input from the client.
+- [ ] The overview composer passes authenticated workspace into its schedule/billing call and maps
+      missing membership without changing unrelated overview semantics.
 - [ ] Every dashboard query uses the resolved workspace and explicit default-only null handling.
+- [ ] Joined dashboard rows require both child-row and owning-student workspace authority.
 - [ ] Every student business operation authorizes the student before nested reads or writes.
-- [ ] Foreign mutations leave every affected table unchanged.
+- [ ] Foreign-student and foreign-lesson mutations leave complete rows and recurrence slots
+      unchanged.
 - [ ] Request-triggered recurrence materialization cannot affect another workspace.
 - [ ] Focused PostgreSQL and HTTP integration tests pass.
 - [ ] Backend typecheck and `check:fast:agent` pass locally.

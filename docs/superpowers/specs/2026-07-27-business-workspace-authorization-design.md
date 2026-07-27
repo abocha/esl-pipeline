@@ -15,7 +15,9 @@ Each invited tutor receives a distinct workspace, owner membership, and workspac
 row. The current business dashboard does not honor that ownership boundary: its authenticated routes
 call application functions that use the historical default workspace. The related student
 schedule/billing routes accept student identifiers without checking that the student belongs to the
-authenticated tutor's workspace.
+authenticated tutor's workspace. The student overview composer calls the same schedule/billing
+application function and must propagate the workspace too, even though the rest of that composite
+surface remains outside this focused patch.
 
 The repair makes workspace identity explicit from the HTTP boundary through every affected query.
 It does not change business calculations, public DTOs, database schema, frontend behavior, or the
@@ -89,6 +91,7 @@ an authenticated dashboard request.
 
 The following routes require both the resolved workspace and the requested student ID:
 
+- `GET /students/:id/surfaces/overview`, for its schedule/billing application call only;
 - `GET /students/:id/surfaces/schedule-billing`;
 - `PUT /students/:id/operations/lesson-plan`;
 - `PUT /students/:id/operations/primary-lesson-recurrence`;
@@ -105,7 +108,9 @@ the supplied workspace. All nested reads and writes remain downstream of that au
 A student or lesson owned by another workspace returns the existing non-enumerating `404 not_found`
 shape, and the attempted operation performs no write.
 
-This patch does not authorize a general audit of unrelated student-memory, profile, assignment, or
+The first route is an additional direct consumer of the same authorization-sensitive application
+function, not an expansion into overview profile, memory, candidate, or timeline semantics. This
+patch does not authorize a general audit of unrelated student-memory, profile, assignment, or
 content routes. Those surfaces remain outside issue #160.
 
 ### Legacy default-workspace compatibility
@@ -169,9 +174,17 @@ The remaining student mutation functions follow the same ordering:
 `workspaceId`, resource identifiers, request payload, then optional audit actor ID. Audit metadata
 continues to record the authenticated user but does not participate in ownership selection.
 
-`getStudentContext()` and `requireStudentContext()` become the single authorization choke point for
-the scoped student business functions. Nested lesson lookups still constrain by both student and
-lesson ID after the workspace-qualified student context has succeeded.
+`getAuthorizedStudentContext()` and `requireAuthorizedStudentContext()` become the single
+authorization choke point for the scoped request-facing student business functions. Nested lesson
+lookups still constrain by both student and lesson ID after the workspace-qualified student context
+has succeeded.
+
+Two trusted non-route operations—elapsed lesson completion initiated from an owned assignment
+session and generated lesson-title application initiated from a persisted lesson—cannot accept a
+client-authoritative workspace. They use a separately named, non-exported trusted context lookup
+that derives identity from the persisted student/lesson relationship. Request-facing functions
+must never call that trusted helper, and trusted callers must not pass the default workspace merely
+to satisfy compilation.
 
 ### Recurrence materialization
 
@@ -200,17 +213,25 @@ payments.
 
 Before implementation, tests must fail while proving:
 
+- the current one-argument student business API permits a synthetic tutor A operation against
+  tutor B's student, establishing the exploit without relying on TypeScript arity or shifted
+  positional arguments;
 - each workspace's settings, schedule, stats, payments, credit alerts, and reminders exclude the
   other workspace;
 - updating workspace A settings does not change workspace B settings or the default workspace;
 - requesting workspace A with workspace B's student ID returns null or `not_found` for the read and
   every scoped mutation;
-- rejected mutations leave lesson plans, recurrence rules, lessons, reminder preferences, credit
-  events, packages, and payment records unchanged;
+- rejected mutations leave complete lesson-plan, recurrence-rule and slot, lesson, reminder,
+  credit-event/package, and payment rows unchanged, including updated fields and materialization
+  state;
+- update-lesson and hide-reminder calls using an authorized student with a foreign lesson ID return
+  the same not-found response and change neither workspace;
 - dashboard recurrence materialization for workspace A does not create or advance workspace B
   lessons or recurrence state; and
-- null-workspace legacy rows are visible from the default workspace but not from a non-default
-  workspace.
+- null-workspace legacy students, lessons, recurrence rules, reminder preferences, credit events,
+  and payments are visible from the default workspace but not from a non-default workspace; and
+- dashboard child rows are excluded unless both the row and its owning student belong to the
+  requested workspace, protecting against mismatched historical rows.
 
 The tests call the canonical membership resolver for both users so the fixture proves registration
 ownership and application isolation compose correctly without requiring production-like tokens.
@@ -223,6 +244,10 @@ The mocked HTTP integration suites prove each scoped route:
 - passes the resolved workspace ID in the correct application argument position;
 - maps a missing membership to `403 workspace_required`; and
 - preserves existing successful payloads and validation responses.
+
+The overview composer and direct schedule/billing GET each receive focused coverage because their
+custom catch blocks do not use the shared mutation error mapper. Both must map missing membership to
+`403 workspace_required` rather than `500`.
 
 These tests complement rather than replace the real-query isolation suite.
 
@@ -303,7 +328,8 @@ deployment or data repair is not authorized by this design.
 3. Dashboard settings, schedule, stats, and request-triggered recurrence writes affect only the
    resolved workspace.
 4. Foreign student and lesson IDs return non-enumerating not-found responses and perform no write
-   across all ten student business endpoints.
+   across all ten direct student business endpoints; the overview consumer passes the same
+   authorized workspace into its schedule/billing call.
 5. Missing membership returns the canonical `workspace_required` response.
 6. Legacy null-workspace rows remain confined to the historical default workspace.
 7. Existing single-workspace payloads, validation behavior, paths, DTOs, and business calculations
