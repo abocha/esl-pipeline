@@ -76,9 +76,9 @@ Corrections to the original draft:
 
 1. Treat v1.1 observability as an extension of existing inspection surfaces, not a new dashboard
    from scratch.
-2. Prefer `generation_notes` first for v1.1 strategy, coverage, metrics, and candidate-refresh
-   details. Add explicit columns only if implementation needs indexed filtering or if the UI cannot
-   stay simple with parsed notes.
+2. Prefer `generation_notes` first for v1.1 strategy, metrics, and candidate-refresh details.
+   Snapshot `lesson_memory_entry_ids` and `homework_memory_entry_ids` remain the canonical coverage
+   lineage; matching note arrays are diagnostic copies and never override those columns.
 3. Treat the existing `refresh-student-memory-snapshots` tool as the seed for manual rebuild and
    backfill operations, but make strategy and reason explicit before using it as the v1.1 full
    rebuild interface.
@@ -348,7 +348,9 @@ Recommended behavior:
 
 ### Snapshot Coverage Metadata
 
-Each ready snapshot should know what it covers.
+Each eligible ready snapshot should know what it covers. Eligibility requires every referenced
+lesson-memory row to exist, belong to the same student, remain ready, and carry confirmed-source
+provenance. Empty lesson lineage remains valid for homework-only snapshots.
 
 Use typed structured `generation_notes` first. The current table already stores snapshot source ids,
 `content_hash`, and `generation_notes`, and the existing inspection endpoints return the whole
@@ -390,6 +392,9 @@ Important distinction:
 
 - `included*Ids` means sources included in the current model request.
 - `covered*Ids` means sources represented by the resulting snapshot.
+
+The persisted snapshot source-ID columns are authoritative for `covered*Ids`. Generation-note
+copies support inspection only. Incremental refresh must inherit the columns when they disagree.
 
 For incremental refresh, `included*Ids` should be small. `covered*Ids` may refer to the prior coverage plus the new trigger source.
 
@@ -564,6 +569,11 @@ Only request candidate refresh if at least one of the following is true:
 4. Manual replay explicitly requested candidate refresh.
 
 Do not request candidate refresh after every snapshot if the triggering memory contains no profile-worthy material.
+
+Candidate decision and delivery are separate. Persist `not_requested` for a skipped decision,
+`pending` before an intended enqueue, `enqueued` after the stable queue job is accepted, and
+`failed` after enqueue failure. An operator may retry only an explicit eligible ready snapshot that
+already records requested intent; retry does not regenerate the snapshot.
 
 ### Candidate Dedup Policy
 
@@ -960,7 +970,8 @@ Keep v1.1 data in `generation_notes`:
   },
   "candidateRefresh": {
     "requested": true,
-    "reason": "profile_worthy_delta"
+    "reasons": ["personal_facts_hash_changed"],
+    "enqueueStatus": "enqueued"
   }
 }
 ```
@@ -974,13 +985,15 @@ Existing snapshots were created by the full-history v1 strategy.
 
 Migration approach:
 
-1. Treat existing ready snapshots as valid parent snapshots.
+1. Treat only eligible existing ready snapshots as valid parents. Migration 0045 supersedes ready
+   or pending snapshots whose lesson lineage is missing, cross-student, non-ready, or lacks
+   confirmed-source provenance; runtime reads enforce the same rule defensively.
 2. Mark missing strategy as `full_rebuild_v1`.
 3. When first v1.1 incremental snapshot is created:
 
    - parent = latest ready v1 snapshot
    - strategy = `incremental_v1_1`
-   - coverage = inherited/best-effort
+   - coverage = inherited from canonical snapshot source-ID columns
 
 4. Do not force full rebuild for all students.
 5. Allow manual rebuild per student if a snapshot appears corrupted or stale.
@@ -1003,8 +1016,9 @@ v1.1 is successful when:
 
 ## Resolved Implementation Defaults
 
-1. Store strategy, metrics, coverage, and candidate-refresh decisions in typed `generation_notes`
-   for v1.1. Defer explicit columns.
+1. Store strategy, metrics, diagnostic coverage copies, and candidate-refresh decision/delivery in
+   typed `generation_notes` for v1.1. Existing snapshot source-ID columns remain canonical coverage;
+   defer new explicit columns.
 2. Skip duplicate/stale candidate inserts by default; record counts and reasons in metrics/logs.
    Add an audit/debug mode later only if needed.
 3. Reuse the existing generation-budget token estimator; also record prompt byte length.
