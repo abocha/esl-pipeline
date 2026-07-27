@@ -1,4 +1,7 @@
+import { WorkspaceContextError } from '../src/application/workspace-context.js';
 import { describeHttpServerIntegrationSuite } from './transport.http-server.integration.harness.js';
+
+const DEFAULT_WORKSPACE_ID = '00000000-0000-4000-8000-000000000001';
 
 describeHttpServerIntegrationSuite(
   'transport/http-server - integration (in-process) [jobs-config-students-content]',
@@ -12,8 +15,18 @@ describeHttpServerIntegrationSuite(
     mockGetActiveStudentProfileBindingForStudent,
     mockGetStudentProfileById,
     mockGetStudentTimeline,
+    mockGetStudentScheduleBillingSurface,
+    mockHideStudentLessonFollowupReminder,
     mockListStudentProfileBindingsForStudent,
     mockListStudentProfiles,
+    mockResolvePrimaryWorkspaceIdForUser,
+    mockUndoLatestHiddenStudentReminder,
+    mockUpdateStudentLessonPlan,
+    mockCreateStudentLesson,
+    mockUpdateStudentLesson,
+    mockAddStudentPackage,
+    mockAdjustStudentCredits,
+    mockRecordStudentPayment,
     mockUpsertPrimaryStudentLessonRecurrence,
     mockDeleteProfileContent,
     mockGetProfileRevisionForProfile,
@@ -998,6 +1011,173 @@ describeHttpServerIntegrationSuite(
       });
     });
 
+    it('passes authenticated workspace membership through every student business route', async () => {
+      const studentId = deriveStudentId('Anna');
+      const lessonId = 'lesson-1';
+      mockResolvePrimaryWorkspaceIdForUser.mockClear();
+
+      expect(
+        (
+          await app.inject({
+            method: 'GET',
+            url: `/students/${studentId}/surfaces/schedule-billing`,
+          })
+        ).statusCode,
+      ).toBe(200);
+      expect(mockGetStudentScheduleBillingSurface).toHaveBeenCalledWith(
+        DEFAULT_WORKSPACE_ID,
+        studentId,
+      );
+
+      expect(
+        (
+          await app.inject({
+            method: 'PUT',
+            url: `/students/${studentId}/operations/lesson-plan`,
+            payload: { timezone: 'UTC' },
+          })
+        ).statusCode,
+      ).toBe(200);
+      expect(mockUpdateStudentLessonPlan).toHaveBeenCalledWith(
+        DEFAULT_WORKSPACE_ID,
+        studentId,
+        { timezone: 'UTC' },
+        'test-user-id',
+      );
+
+      expect(
+        (
+          await app.inject({
+            method: 'POST',
+            url: `/students/${studentId}/lessons`,
+            payload: { startsAt: '2026-05-08T10:00:00.000Z' },
+          })
+        ).statusCode,
+      ).toBe(201);
+      expect(mockCreateStudentLesson).toHaveBeenCalledWith(
+        DEFAULT_WORKSPACE_ID,
+        studentId,
+        { startsAt: '2026-05-08T10:00:00.000Z' },
+        'test-user-id',
+      );
+
+      expect(
+        (
+          await app.inject({
+            method: 'PATCH',
+            url: `/students/${studentId}/lessons/${lessonId}`,
+            payload: { title: 'Updated lesson' },
+          })
+        ).statusCode,
+      ).toBe(200);
+      expect(mockUpdateStudentLesson).toHaveBeenCalledWith(
+        DEFAULT_WORKSPACE_ID,
+        studentId,
+        lessonId,
+        { title: 'Updated lesson' },
+        'test-user-id',
+      );
+
+      expect(
+        (
+          await app.inject({
+            method: 'PUT',
+            url: `/students/${studentId}/operations/reminders/lesson-followup/${lessonId}/hide`,
+          })
+        ).statusCode,
+      ).toBe(200);
+      expect(mockHideStudentLessonFollowupReminder).toHaveBeenCalledWith(
+        DEFAULT_WORKSPACE_ID,
+        studentId,
+        lessonId,
+        'test-user-id',
+      );
+
+      expect(
+        (
+          await app.inject({
+            method: 'PUT',
+            url: `/students/${studentId}/operations/reminders/latest-hidden/undo`,
+          })
+        ).statusCode,
+      ).toBe(200);
+      expect(mockUndoLatestHiddenStudentReminder).toHaveBeenCalledWith(
+        DEFAULT_WORKSPACE_ID,
+        studentId,
+        'test-user-id',
+      );
+
+      expect(
+        (
+          await app.inject({
+            method: 'POST',
+            url: `/students/${studentId}/packages`,
+            payload: { lessons: 4 },
+          })
+        ).statusCode,
+      ).toBe(201);
+      expect(mockAddStudentPackage).toHaveBeenCalledWith(
+        DEFAULT_WORKSPACE_ID,
+        studentId,
+        { lessons: 4 },
+        'test-user-id',
+      );
+
+      expect(
+        (
+          await app.inject({
+            method: 'POST',
+            url: `/students/${studentId}/credits/adjustments`,
+            payload: { quantityDelta: 2 },
+          })
+        ).statusCode,
+      ).toBe(201);
+      expect(mockAdjustStudentCredits).toHaveBeenCalledWith(
+        DEFAULT_WORKSPACE_ID,
+        studentId,
+        { quantityDelta: 2 },
+        'test-user-id',
+      );
+
+      expect(
+        (
+          await app.inject({
+            method: 'POST',
+            url: `/students/${studentId}/payments`,
+            payload: { amountMinor: 9000, currency: 'USD' },
+          })
+        ).statusCode,
+      ).toBe(201);
+      expect(mockRecordStudentPayment).toHaveBeenCalledWith(
+        DEFAULT_WORKSPACE_ID,
+        studentId,
+        { amountMinor: 9000, currency: 'USD' },
+        'test-user-id',
+      );
+
+      expect(mockResolvePrimaryWorkspaceIdForUser).toHaveBeenCalledWith('test-user-id');
+    });
+
+    it('maps missing workspace membership on direct and shared schedule-billing handlers', async () => {
+      const studentId = deriveStudentId('Anna');
+      mockResolvePrimaryWorkspaceIdForUser.mockRejectedValueOnce(new WorkspaceContextError());
+      const readResponse = await app.inject({
+        method: 'GET',
+        url: `/students/${studentId}/surfaces/schedule-billing`,
+      });
+      expect(readResponse.statusCode).toBe(403);
+      expect(readResponse.json()).toMatchObject({ error: 'workspace_required' });
+
+      mockResolvePrimaryWorkspaceIdForUser.mockRejectedValueOnce(new WorkspaceContextError());
+      const mutationResponse = await app.inject({
+        method: 'POST',
+        url: `/students/${studentId}/credits/adjustments`,
+        payload: { quantityDelta: 2 },
+      });
+      expect(mutationResponse.statusCode).toBe(403);
+      expect(mutationResponse.json()).toMatchObject({ error: 'workspace_required' });
+    });
+
     it('PUT /students/:id/operations/primary-lesson-recurrence validates and saves recurrence rules', async () => {
       const response = await app.inject({
         method: 'PUT',
@@ -1012,6 +1192,7 @@ describeHttpServerIntegrationSuite(
 
       expect(response.statusCode).toBe(200);
       expect(mockUpsertPrimaryStudentLessonRecurrence).toHaveBeenCalledWith(
+        DEFAULT_WORKSPACE_ID,
         deriveStudentId('Anna'),
         {
           timezone: 'Asia/Bangkok',

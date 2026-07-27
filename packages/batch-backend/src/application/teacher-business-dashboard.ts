@@ -195,19 +195,17 @@ const BUSINESS_LESSON_HOMEWORK_JOINS = `
   ) lesson_homework_memory ON TRUE
 `;
 
-export async function getBusinessSettings(): Promise<BusinessSettingsDto> {
-  return withPgClient(async (client) =>
-    getBusinessSettingsForWorkspace(client, DEFAULT_WORKSPACE_ID),
-  );
+export async function getBusinessSettings(workspaceId: string): Promise<BusinessSettingsDto> {
+  return withPgClient(async (client) => getBusinessSettingsForWorkspace(client, workspaceId));
 }
 
 export async function updateBusinessSettings(
+  workspaceId: string,
   params: UpdateBusinessSettingsRequest,
   actorUserId?: string | null,
 ): Promise<BusinessSettingsDto> {
   return withPgClient(async (client) => {
-    await ensureDefaultWorkspace(client);
-    const current = await getBusinessSettingsForWorkspace(client, DEFAULT_WORKSPACE_ID);
+    const current = await getBusinessSettingsForWorkspace(client, workspaceId);
     const next = {
       defaultCurrency: params.defaultCurrency?.toUpperCase() ?? current.defaultCurrency,
       defaultLessonRateMinor: params.defaultLessonRateMinor ?? current.defaultLessonRateMinor,
@@ -251,7 +249,7 @@ export async function updateBusinessSettings(
         updated_at = NOW()
       `,
       [
-        DEFAULT_WORKSPACE_ID,
+        workspaceId,
         next.defaultCurrency,
         next.defaultLessonRateMinor,
         next.defaultLessonDurationMinutes,
@@ -263,16 +261,17 @@ export async function updateBusinessSettings(
         actorUserId ?? null,
       ],
     );
-    return getBusinessSettingsForWorkspace(client, DEFAULT_WORKSPACE_ID);
+    return getBusinessSettingsForWorkspace(client, workspaceId);
   });
 }
 
 export async function getBusinessScheduleSurface(
+  workspaceId: string,
   params: { from?: string; to?: string } = {},
 ): Promise<BusinessScheduleSurfaceResponse> {
   return withPgClient(async (client) => {
-    await materializeWorkspaceLessonRecurrencesWithClient(client);
-    const settings = await getBusinessSettingsForWorkspace(client, DEFAULT_WORKSPACE_ID);
+    await materializeWorkspaceLessonRecurrencesWithClient(client, workspaceId);
+    const settings = await getBusinessSettingsForWorkspace(client, workspaceId);
     const from = params.from ?? toDateInputInTimeZone(new Date(), settings.timezone);
     const to = params.to ?? addDaysToDateInput(from, 7);
     const range = parseDateRange(from, to, 90);
@@ -281,13 +280,14 @@ export async function getBusinessScheduleSurface(
       range.fromDate,
       range.toDate,
       settings.timezone,
+      workspaceId,
     );
     const lessons = lessonItems.map((item) => item.lesson);
-    const reminderSuppressions = await listBusinessReminderSuppressions(client);
+    const reminderSuppressions = await listBusinessReminderSuppressions(client, workspaceId);
     const hiddenFollowupKeys = new Set(
       reminderSuppressions.flatMap((row) => row.hidden_lesson_followup_keys ?? []),
     );
-    const lessonFollowups = (await listOverdueBusinessLessonFollowups(client)).filter(
+    const lessonFollowups = (await listOverdueBusinessLessonFollowups(client, workspaceId)).filter(
       (lesson) => !hiddenFollowupKeys.has(getBusinessLessonFollowupSuppressionKey(lesson)),
     );
     const creditStates = await listStudentCreditStates(
@@ -295,12 +295,13 @@ export async function getBusinessScheduleSurface(
       range.fromInstant,
       range.toExclusiveInstant,
       settings.topUpThreshold,
+      workspaceId,
     );
-    const recentPayments = await listRecentPayments(client, settings.defaultCurrency);
+    const recentPayments = await listRecentPayments(client, settings.defaultCurrency, workspaceId);
     const today = toDateInputInTimeZone(new Date(), settings.timezone);
 
     return {
-      workspaceId: DEFAULT_WORKSPACE_ID,
+      workspaceId,
       from,
       to,
       generatedAt: new Date().toISOString(),
@@ -308,7 +309,11 @@ export async function getBusinessScheduleSurface(
       today: lessonItems.filter((item) => item.localDate === today).map((item) => item.lesson),
       lessons,
       reminders: buildBusinessReminders(creditStates, lessonFollowups),
-      latestHiddenReminder: await getLatestBusinessHiddenReminder(client, reminderSuppressions),
+      latestHiddenReminder: await getLatestBusinessHiddenReminder(
+        client,
+        reminderSuppressions,
+        workspaceId,
+      ),
       creditAlerts: buildCreditAlerts(creditStates),
       recentPayments,
     };
@@ -316,11 +321,12 @@ export async function getBusinessScheduleSurface(
 }
 
 export async function getBusinessStatsSurface(
+  workspaceId: string,
   params: { month?: string } = {},
 ): Promise<BusinessStatsSurfaceResponse> {
   return withPgClient(async (client) => {
-    await materializeWorkspaceLessonRecurrencesWithClient(client);
-    const settings = await getBusinessSettingsForWorkspace(client, DEFAULT_WORKSPACE_ID);
+    await materializeWorkspaceLessonRecurrencesWithClient(client, workspaceId);
+    const settings = await getBusinessSettingsForWorkspace(client, workspaceId);
     const month = params.month ?? toDateInputInTimeZone(new Date(), settings.timezone).slice(0, 7);
     const monthRange = parseMonth(month);
     const forecastFrom = new Date();
@@ -330,25 +336,34 @@ export async function getBusinessStatsSurface(
       monthRange.fromDate,
       monthRange.toExclusiveDate,
       settings.defaultCurrency,
+      workspaceId,
     );
     const excludedCurrencies = await getExcludedCurrenciesForMonth(
       client,
       monthRange.fromDate,
       monthRange.toExclusiveDate,
       settings.defaultCurrency,
+      workspaceId,
     );
     const lessonStats = await getLessonStatsForMonth(
       client,
       monthRange.fromDate,
       monthRange.toExclusiveDate,
       settings.timezone,
+      workspaceId,
     );
-    const forecastLessons = await listForecastLessons(client, forecastFrom, forecastTo);
+    const forecastLessons = await listForecastLessons(
+      client,
+      forecastFrom,
+      forecastTo,
+      workspaceId,
+    );
     const creditStates = await listStudentCreditStates(
       client,
       forecastFrom,
       forecastTo,
       settings.topUpThreshold,
+      workspaceId,
     );
 
     const scheduledGrossMinor = forecastLessons.length * settings.defaultLessonRateMinor;
@@ -361,7 +376,7 @@ export async function getBusinessStatsSurface(
     const pipeline = buildPipelineItems(creditStates);
 
     return {
-      workspaceId: DEFAULT_WORKSPACE_ID,
+      workspaceId,
       month,
       generatedAt: new Date().toISOString(),
       settings,
@@ -390,7 +405,9 @@ async function getBusinessSettingsForWorkspace(
   client: PoolClient,
   workspaceId: string,
 ): Promise<BusinessSettingsDto> {
-  await ensureDefaultWorkspace(client);
+  if (workspaceId === DEFAULT_WORKSPACE_ID) {
+    await ensureDefaultWorkspace(client);
+  }
   await client.query(
     `
     INSERT INTO workspace_business_settings (workspace_id)
@@ -427,6 +444,7 @@ async function listBusinessLessons(
   fromDate: string,
   toDate: string,
   timezone: string,
+  workspaceId: string,
 ): Promise<BusinessLessonWithLocalDate[]> {
   const result = await client.query<BusinessLessonLocalDateRow>(
     `
@@ -437,14 +455,15 @@ async function listBusinessLessons(
     FROM student_lessons
     ${BUSINESS_LESSON_HOMEWORK_JOINS}
     JOIN students ON students.id = student_lessons.student_id
-    WHERE COALESCE(student_lessons.workspace_id, $4::uuid) = $4::uuid
+    WHERE ${workspacePredicate('student_lessons.workspace_id', '$4', '$5')}
+      AND ${workspacePredicate('students.workspace_id', '$4', '$5')}
       AND students.archived_at IS NULL
       AND student_lessons.recurrence_obsolete_at IS NULL
       AND (student_lessons.starts_at AT TIME ZONE $3)::date >= $1::date
       AND (student_lessons.starts_at AT TIME ZONE $3)::date <= $2::date
     ORDER BY student_lessons.starts_at ASC, student_lessons.id ASC
     `,
-    [fromDate, toDate, timezone, DEFAULT_WORKSPACE_ID],
+    [fromDate, toDate, timezone, workspaceId, DEFAULT_WORKSPACE_ID],
   );
   return result.rows.map((row) => ({
     lesson: mapBusinessLesson(row),
@@ -456,6 +475,7 @@ async function listForecastLessons(
   client: PoolClient,
   from: Date,
   toExclusive: Date,
+  workspaceId: string,
 ): Promise<BusinessLessonDto[]> {
   const result = await client.query<BusinessLessonRow>(
     `
@@ -465,7 +485,8 @@ async function listForecastLessons(
     FROM student_lessons
     ${BUSINESS_LESSON_HOMEWORK_JOINS}
     JOIN students ON students.id = student_lessons.student_id
-    WHERE COALESCE(student_lessons.workspace_id, $3::uuid) = $3::uuid
+    WHERE ${workspacePredicate('student_lessons.workspace_id', '$3', '$4')}
+      AND ${workspacePredicate('students.workspace_id', '$3', '$4')}
       AND students.archived_at IS NULL
       AND student_lessons.recurrence_obsolete_at IS NULL
       AND student_lessons.status = 'scheduled'
@@ -473,13 +494,14 @@ async function listForecastLessons(
       AND student_lessons.starts_at < $2
     ORDER BY student_lessons.starts_at ASC, student_lessons.id ASC
     `,
-    [from.toISOString(), toExclusive.toISOString(), DEFAULT_WORKSPACE_ID],
+    [from.toISOString(), toExclusive.toISOString(), workspaceId, DEFAULT_WORKSPACE_ID],
   );
   return result.rows.map(mapBusinessLesson);
 }
 
 async function listOverdueBusinessLessonFollowups(
   client: PoolClient,
+  workspaceId: string,
 ): Promise<BusinessLessonDto[]> {
   const result = await client.query<BusinessLessonRow>(
     `
@@ -489,7 +511,8 @@ async function listOverdueBusinessLessonFollowups(
     FROM student_lessons
     ${BUSINESS_LESSON_HOMEWORK_JOINS}
     JOIN students ON students.id = student_lessons.student_id
-    WHERE COALESCE(student_lessons.workspace_id, $1::uuid) = $1::uuid
+    WHERE ${workspacePredicate('student_lessons.workspace_id', '$1', '$2')}
+      AND ${workspacePredicate('students.workspace_id', '$1', '$2')}
       AND students.archived_at IS NULL
       AND student_lessons.recurrence_obsolete_at IS NULL
       AND student_lessons.status IN ('scheduled', 'completed')
@@ -499,7 +522,7 @@ async function listOverdueBusinessLessonFollowups(
     ORDER BY student_lessons.starts_at DESC, student_lessons.id DESC
     LIMIT 100
     `,
-    [DEFAULT_WORKSPACE_ID],
+    [workspaceId, DEFAULT_WORKSPACE_ID],
   );
   return result.rows.map(mapBusinessLesson).filter(isBusinessLessonFollowUpDue);
 }
@@ -509,6 +532,7 @@ async function listStudentCreditStates(
   from: Date,
   toExclusive: Date,
   topUpThreshold: number,
+  workspaceId: string,
 ): Promise<StudentCreditStateRow[]> {
   const result = await client.query<StudentCreditStateRow>(
     `
@@ -517,8 +541,12 @@ async function listStudentCreditStates(
         student_id,
         COALESCE(SUM(quantity_delta), 0) AS remaining
       FROM student_credit_events
-      WHERE voided_at IS NULL
-      GROUP BY student_id
+      JOIN students credit_students ON credit_students.id = student_credit_events.student_id
+      WHERE student_credit_events.voided_at IS NULL
+        AND ${workspacePredicate('student_credit_events.workspace_id', '$3', '$5')}
+        AND ${workspacePredicate('credit_students.workspace_id', '$3', '$5')}
+        AND credit_students.archived_at IS NULL
+      GROUP BY student_credit_events.student_id
     ),
     upcoming AS (
       SELECT
@@ -531,9 +559,12 @@ async function listStudentCreditStates(
             AND starts_at < $2
         ) AS upcoming_chargeable_lessons
       FROM student_lessons
-      WHERE COALESCE(workspace_id, $3::uuid) = $3::uuid
-        AND recurrence_obsolete_at IS NULL
-      GROUP BY student_id
+      JOIN students lesson_students ON lesson_students.id = student_lessons.student_id
+      WHERE ${workspacePredicate('student_lessons.workspace_id', '$3', '$5')}
+        AND ${workspacePredicate('lesson_students.workspace_id', '$3', '$5')}
+        AND lesson_students.archived_at IS NULL
+        AND student_lessons.recurrence_obsolete_at IS NULL
+      GROUP BY student_lessons.student_id
     )
     SELECT
       students.id AS student_id,
@@ -545,11 +576,17 @@ async function listStudentCreditStates(
     FROM students
     LEFT JOIN credit_totals ON credit_totals.student_id = students.id
     LEFT JOIN upcoming ON upcoming.student_id = students.id
-    WHERE COALESCE(students.workspace_id, $3::uuid) = $3::uuid
+    WHERE ${workspacePredicate('students.workspace_id', '$3', '$5')}
       AND students.archived_at IS NULL
     ORDER BY students.student ASC, students.id ASC
     `,
-    [from.toISOString(), toExclusive.toISOString(), DEFAULT_WORKSPACE_ID, topUpThreshold],
+    [
+      from.toISOString(),
+      toExclusive.toISOString(),
+      workspaceId,
+      topUpThreshold,
+      DEFAULT_WORKSPACE_ID,
+    ],
   );
   return result.rows;
 }
@@ -557,6 +594,7 @@ async function listStudentCreditStates(
 async function listRecentPayments(
   client: PoolClient,
   currency: string,
+  workspaceId: string,
 ): Promise<BusinessPaymentSummaryDto[]> {
   const result = await client.query<PaymentSummaryRow>(
     `
@@ -569,14 +607,15 @@ async function listRecentPayments(
       student_payment_records.method
     FROM student_payment_records
     JOIN students ON students.id = student_payment_records.student_id
-    WHERE COALESCE(student_payment_records.workspace_id, $2::uuid) = $2::uuid
+    WHERE ${workspacePredicate('student_payment_records.workspace_id', '$2', '$3')}
+      AND ${workspacePredicate('students.workspace_id', '$2', '$3')}
       AND students.archived_at IS NULL
       AND student_payment_records.voided_at IS NULL
       AND student_payment_records.currency = $1
     ORDER BY student_payment_records.received_at DESC, student_payment_records.created_at DESC
     LIMIT 8
     `,
-    [currency, DEFAULT_WORKSPACE_ID],
+    [currency, workspaceId, DEFAULT_WORKSPACE_ID],
   );
   return result.rows.map((row) => ({
     studentId: row.student_id,
@@ -591,19 +630,21 @@ async function listRecentPayments(
 
 async function listBusinessReminderSuppressions(
   client: PoolClient,
+  workspaceId: string,
 ): Promise<BusinessReminderSuppressionRow[]> {
   const result = await client.query<BusinessReminderSuppressionRow>(
     `
     SELECT
       student_reminder_preferences.student_id,
       students.student AS student_name,
-      COALESCE(student_reminder_preferences.workspace_id, students.workspace_id, $1::uuid) AS workspace_id,
+      COALESCE(student_reminder_preferences.workspace_id, students.workspace_id, $2::uuid) AS workspace_id,
       student_reminder_preferences.hidden_lesson_followup_keys,
       student_reminder_preferences.latest_hidden_lesson_followup_lesson_id,
       student_reminder_preferences.latest_hidden_lesson_followup_at
     FROM student_reminder_preferences
     JOIN students ON students.id = student_reminder_preferences.student_id
-    WHERE COALESCE(student_reminder_preferences.workspace_id, students.workspace_id, $1::uuid) = $1::uuid
+    WHERE ${workspacePredicate('student_reminder_preferences.workspace_id', '$1', '$2')}
+      AND ${workspacePredicate('students.workspace_id', '$1', '$2')}
       AND students.archived_at IS NULL
       AND (
         cardinality(student_reminder_preferences.hidden_lesson_followup_keys) > 0
@@ -611,7 +652,7 @@ async function listBusinessReminderSuppressions(
       )
     ORDER BY student_reminder_preferences.latest_hidden_lesson_followup_at DESC NULLS LAST
     `,
-    [DEFAULT_WORKSPACE_ID],
+    [workspaceId, DEFAULT_WORKSPACE_ID],
   );
   return result.rows;
 }
@@ -619,10 +660,15 @@ async function listBusinessReminderSuppressions(
 async function getLatestBusinessHiddenReminder(
   client: PoolClient,
   rows: BusinessReminderSuppressionRow[],
+  workspaceId: string,
 ): Promise<BusinessLatestHiddenReminderDto | null> {
   const latest = rows.find((row) => row.latest_hidden_lesson_followup_lesson_id);
   if (!latest?.latest_hidden_lesson_followup_lesson_id) return null;
-  const lesson = await getBusinessLessonRow(client, latest.latest_hidden_lesson_followup_lesson_id);
+  const lesson = await getBusinessLessonRow(
+    client,
+    latest.latest_hidden_lesson_followup_lesson_id,
+    workspaceId,
+  );
   return {
     type: 'lesson_followup',
     lessonId: latest.latest_hidden_lesson_followup_lesson_id,
@@ -639,6 +685,7 @@ async function getLatestBusinessHiddenReminder(
 async function getBusinessLessonRow(
   client: PoolClient,
   lessonId: string,
+  workspaceId: string,
 ): Promise<BusinessLessonRow | null> {
   const result = await client.query<BusinessLessonRow>(
     `
@@ -649,10 +696,11 @@ async function getBusinessLessonRow(
     ${BUSINESS_LESSON_HOMEWORK_JOINS}
     JOIN students ON students.id = student_lessons.student_id
     WHERE student_lessons.id = $1
-      AND COALESCE(student_lessons.workspace_id, $2::uuid) = $2::uuid
+      AND ${workspacePredicate('student_lessons.workspace_id', '$2', '$3')}
+      AND ${workspacePredicate('students.workspace_id', '$2', '$3')}
       AND students.archived_at IS NULL
     `,
-    [lessonId, DEFAULT_WORKSPACE_ID],
+    [lessonId, workspaceId, DEFAULT_WORKSPACE_ID],
   );
   return result.rows[0] ?? null;
 }
@@ -662,20 +710,22 @@ async function getCollectedForMonth(
   fromDate: string,
   toExclusiveDate: string,
   currency: string,
+  workspaceId: string,
 ): Promise<number> {
   const result = await client.query<{ total: string | number | null }>(
     `
     SELECT COALESCE(SUM(student_payment_records.amount_minor), 0) AS total
     FROM student_payment_records
     JOIN students ON students.id = student_payment_records.student_id
-    WHERE COALESCE(student_payment_records.workspace_id, $4::uuid) = $4::uuid
+    WHERE ${workspacePredicate('student_payment_records.workspace_id', '$4', '$5')}
+      AND ${workspacePredicate('students.workspace_id', '$4', '$5')}
       AND students.archived_at IS NULL
       AND student_payment_records.voided_at IS NULL
       AND student_payment_records.currency = $3
       AND student_payment_records.received_at >= $1::date
       AND student_payment_records.received_at < $2::date
     `,
-    [fromDate, toExclusiveDate, currency, DEFAULT_WORKSPACE_ID],
+    [fromDate, toExclusiveDate, currency, workspaceId, DEFAULT_WORKSPACE_ID],
   );
   return Number(result.rows[0]?.total ?? 0);
 }
@@ -685,6 +735,7 @@ async function getExcludedCurrenciesForMonth(
   fromDate: string,
   toExclusiveDate: string,
   currency: string,
+  workspaceId: string,
 ): Promise<BusinessStatsCurrencyExclusionDto[]> {
   const result = await client.query<{
     currency: string;
@@ -698,7 +749,8 @@ async function getExcludedCurrenciesForMonth(
       COUNT(*) AS payment_count
     FROM student_payment_records
     JOIN students ON students.id = student_payment_records.student_id
-    WHERE COALESCE(student_payment_records.workspace_id, $4::uuid) = $4::uuid
+    WHERE ${workspacePredicate('student_payment_records.workspace_id', '$4', '$5')}
+      AND ${workspacePredicate('students.workspace_id', '$4', '$5')}
       AND students.archived_at IS NULL
       AND student_payment_records.voided_at IS NULL
       AND student_payment_records.currency <> $3
@@ -707,7 +759,7 @@ async function getExcludedCurrenciesForMonth(
     GROUP BY student_payment_records.currency
     ORDER BY student_payment_records.currency ASC
     `,
-    [fromDate, toExclusiveDate, currency, DEFAULT_WORKSPACE_ID],
+    [fromDate, toExclusiveDate, currency, workspaceId, DEFAULT_WORKSPACE_ID],
   );
   return result.rows.map((row) => ({
     currency: row.currency,
@@ -721,6 +773,7 @@ async function getLessonStatsForMonth(
   fromDate: string,
   toExclusiveDate: string,
   timezone: string,
+  workspaceId: string,
 ): Promise<{
   completedLessons: number;
   completedChargeableLessons: number;
@@ -746,13 +799,14 @@ async function getLessonStatsForMonth(
       COUNT(*) FILTER (WHERE student_lessons.status = 'canceled') AS canceled_lessons
     FROM student_lessons
     JOIN students ON students.id = student_lessons.student_id
-    WHERE COALESCE(student_lessons.workspace_id, $4::uuid) = $4::uuid
+    WHERE ${workspacePredicate('student_lessons.workspace_id', '$4', '$5')}
+      AND ${workspacePredicate('students.workspace_id', '$4', '$5')}
       AND students.archived_at IS NULL
       AND student_lessons.recurrence_obsolete_at IS NULL
       AND (student_lessons.starts_at AT TIME ZONE $3)::date >= $1::date
       AND (student_lessons.starts_at AT TIME ZONE $3)::date < $2::date
     `,
-    [fromDate, toExclusiveDate, timezone, DEFAULT_WORKSPACE_ID],
+    [fromDate, toExclusiveDate, timezone, workspaceId, DEFAULT_WORKSPACE_ID],
   );
   const row = result.rows[0];
   return {
@@ -937,6 +991,13 @@ function isBusinessLessonFollowUpDue(lesson: BusinessLessonDto): boolean {
   }
   const endsAt = new Date(lesson.startsAt).getTime() + lesson.durationMinutes * 60 * 1000;
   return endsAt <= Date.now();
+}
+
+function workspacePredicate(column: string, workspaceParam: string, defaultParam: string): string {
+  return `(
+    ${column} = ${workspaceParam}::uuid
+    OR (${column} IS NULL AND ${workspaceParam}::uuid = ${defaultParam}::uuid)
+  )`;
 }
 
 async function ensureDefaultWorkspace(client: PoolClient): Promise<void> {

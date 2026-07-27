@@ -1,4 +1,7 @@
+import { WorkspaceContextError } from '../src/application/workspace-context.js';
 import { describeHttpServerIntegrationSuite } from './transport.http-server.integration.harness.js';
+
+const DEFAULT_WORKSPACE_ID = '00000000-0000-4000-8000-000000000001';
 
 describeHttpServerIntegrationSuite(
   'transport/http-server - integration (in-process) [students-memory]',
@@ -18,6 +21,7 @@ describeHttpServerIntegrationSuite(
     mockListStudentProfileCandidatesForStudent,
     mockListProfileRevisionsForProfile,
     mockGetStudentScheduleBillingSurface,
+    mockResolvePrimaryWorkspaceIdForUser,
   }) => {
     it('GET /students/:id/memory returns the overview payload for authenticated inspection', async () => {
       const studentId = deriveStudentId('Anna');
@@ -182,7 +186,11 @@ describeHttpServerIntegrationSuite(
         studentId,
         expect.objectContaining({ limit: 8 }),
       );
-      expect(mockGetStudentScheduleBillingSurface).toHaveBeenCalledWith(studentId);
+      expect(mockResolvePrimaryWorkspaceIdForUser).toHaveBeenCalledWith('test-user-id');
+      expect(mockGetStudentScheduleBillingSurface).toHaveBeenCalledWith(
+        DEFAULT_WORKSPACE_ID,
+        studentId,
+      );
       expect(response.json()).toMatchObject({
         profile: { id: 'profile.md' },
         revisions: { items: [{ id: 'revision-1' }] },
@@ -191,6 +199,19 @@ describeHttpServerIntegrationSuite(
         recentTimeline: { items: [{ type: 'recording_ingested' }] },
         scheduleBilling: { studentId },
       });
+    });
+
+    it('GET /students/:id/surfaces/overview returns workspace_required without membership', async () => {
+      const studentId = deriveStudentId('Anna');
+      mockResolvePrimaryWorkspaceIdForUser.mockRejectedValueOnce(new WorkspaceContextError());
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/students/${studentId}/surfaces/overview`,
+      });
+
+      expect(response.statusCode).toBe(403);
+      expect(response.json()).toMatchObject({ error: 'workspace_required' });
     });
 
     it('GET /students/:id/surfaces/learning composes profile, memory, binding, and candidate data', async () => {
