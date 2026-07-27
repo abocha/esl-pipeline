@@ -450,6 +450,81 @@ describe('application/process-student-memory-snapshot-job', () => {
     warnSpy.mockRestore();
   });
 
+  it('still enqueues and records candidate intent when the initial metadata write fails', async () => {
+    const generator = vi.fn().mockResolvedValue({ snapshot: generatedSnapshot() });
+    const requestRefresh = vi.fn().mockResolvedValue(undefined);
+    const metadataError = new Error('Postgres unavailable');
+    const updateGenerationNotes = vi
+      .fn()
+      .mockRejectedValueOnce(metadataError)
+      .mockResolvedValueOnce(generatedSnapshot());
+    const triggerLesson = {
+      ...lessonMemoryEntry('lesson-1', '2026-03-20T00:00:00.000Z', 'Trigger lesson'),
+      studentFacts: [profileWorthyStudentFact('Wants English for a new role.')],
+    };
+    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+
+    await expect(
+      processStudentMemorySnapshotJob({
+        config: createTestConfig(),
+        payload: {
+          kind: 'student-memory-snapshot-refresh',
+          studentId: 'student-1',
+          pendingEntryId: 'snapshot-pending-1',
+          provider: 'openai',
+          model: 'gpt-5.2',
+          trigger: 'lesson-memory-ready',
+          sourceEntryId: 'lesson-1',
+        },
+        overrides: {
+          lessonMemory: {
+            list: vi.fn(),
+            getById: vi.fn().mockResolvedValue(triggerLesson),
+            listRecentReadyByStudentId: vi.fn().mockResolvedValue([]),
+          },
+          homeworkMemory: {
+            list: vi.fn(),
+            getById: vi.fn(),
+            listRecentReadyByStudentId: vi.fn().mockResolvedValue([]),
+          },
+          snapshots: {
+            getById: vi.fn().mockResolvedValue({
+              id: 'snapshot-pending-1',
+              status: 'pending',
+              generatedAt: new Date('2026-03-20T01:00:00.000Z'),
+              generationNotes: null,
+            }),
+            getLatestReadyByStudentId: vi.fn().mockResolvedValue(readySnapshot()),
+            markFailed: vi.fn(),
+            supersedePendingForStudent: vi.fn().mockResolvedValue([]),
+            updateGenerationNotes,
+          },
+          profileCandidates: { requestRefresh },
+          generator,
+        } as never,
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(requestRefresh).toHaveBeenCalledTimes(1);
+    expect(updateGenerationNotes).toHaveBeenNthCalledWith(2, {
+      id: 'snapshot-ready-1',
+      generationNotes: expect.objectContaining({
+        candidateRefresh: expect.objectContaining({
+          requested: true,
+          enqueueStatus: 'enqueued',
+        }),
+      }),
+    });
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Student profile candidate refresh decision metadata write failed; continuing to enqueue',
+      expect.objectContaining({
+        event: 'student_profile_candidate_refresh_decision_write_failed',
+        error: metadataError.message,
+      }),
+    );
+    warnSpy.mockRestore();
+  });
+
   it('requests candidate refresh when generated snapshot personal facts change', async () => {
     const generator = vi.fn().mockResolvedValue({
       snapshot: generatedSnapshot({
@@ -1341,6 +1416,10 @@ describe('application/process-student-memory-snapshot-job', () => {
         },
       }),
     });
+    expect(warnSpy).not.toHaveBeenCalledWith(
+      'Student-memory snapshot sources changed before ready finalization; retrying',
+      expect.anything(),
+    );
     warnSpy.mockRestore();
   });
 
