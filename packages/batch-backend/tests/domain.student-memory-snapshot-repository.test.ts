@@ -359,6 +359,28 @@ describeIfPg('domain/student-memory-snapshot-repository', () => {
       validSnapshotId,
     ]);
 
+    const unfilteredSnapshots = await listStudentMemorySnapshots({
+      studentId,
+      limit: 20,
+      offset: 0,
+    });
+    expect(unfilteredSnapshots.map((snapshot) => snapshot.id)).toEqual(
+      expect.arrayContaining([pendingInvalidId, validSnapshotId, ...invalidSnapshotIds]),
+    );
+
+    await expect(
+      insertReadySnapshot({
+        studentId,
+        generatedAt: '2026-07-01T15:30:00.000Z',
+        expectedLatestReadySnapshotId: invalidSnapshotIds[0],
+      }),
+    ).rejects.toMatchObject({
+      name: 'StudentMemorySnapshotParentChangedError',
+      studentId,
+      expectedLatestReadySnapshotId: invalidSnapshotIds[0],
+      actualLatestReadySnapshotId: validSnapshotId,
+    } satisfies Partial<StudentMemorySnapshotParentChangedError>);
+
     const child = await insertReadySnapshot({
       studentId,
       generatedAt: '2026-07-01T16:00:00.000Z',
