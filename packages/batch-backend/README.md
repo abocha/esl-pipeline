@@ -72,6 +72,9 @@ Useful indexes:
 - Student-memory snapshot refresh is incremental and budget-guarded for normal lesson/homework
   triggers; replay/backfill is source-truth driven and version 1 repair uses regenerate workflows
   rather than manual memory-row editing.
+- A snapshot is current ready state only when every referenced lesson-memory row exists, belongs to
+  the same student, remains ready, and carries confirmed-source provenance. Snapshot source-ID
+  columns own coverage lineage; matching `generation_notes` arrays are diagnostics only.
 - Schema changes belong in versioned migrations; runtime legacy patching is emergency-only.
 - Fresh database bootstrap uses the generated `schema.sql` baseline; existing databases upgrade through versioned migrations.
 - Extended API and ops-control surfaces are additive and must be explicitly enabled.
@@ -142,6 +145,9 @@ Student-memory operator workflows:
   from compiled production-container `node dist/tools/...` commands.
 - Manual full snapshot rebuild is CLI-only during Gate B through the focused replay/backfill tool;
   no normal tutor-facing rebuild control is part of v1.1.
+- Candidate-refresh notes distinguish `not_requested`, `pending`, `enqueued`, and `failed`
+  delivery. The focused snapshot-ID retry tool recovers requested delivery without regenerating a
+  snapshot or inferring candidate intent.
 - OpenAI Batch replay is operator-only and disabled by default through
   `STUDENT_MEMORY_OPENAI_BATCH_ENABLED=false`; it must not be used as a substitute for fresh
   paced worker generation.
