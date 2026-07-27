@@ -148,8 +148,17 @@ describe('application/speech-performance-planner', () => {
         }),
       }),
     );
-    expect(executor.mock.calls[0]?.[0].request.prompt).toContain(
-      '"supportsFreeFormDirection":true',
+    const prompt = executor.mock.calls[0]?.[0].request.prompt;
+    expect(prompt).toContain('"supportsFreeFormDirection":true');
+    expect(prompt).toContain(
+      'Maintain a natural, consistent conversational tempo across adjacent segments.',
+    );
+    expect(prompt).toContain('Omit pace for ordinary dialogue.');
+    expect(prompt).toContain(
+      'Use slow, measured, or brisk only when a non-natural tempo is explicitly justified by the authored scene or learning goal.',
+    );
+    expect(prompt).toContain(
+      'Do not use pace merely to reinforce emotion, seriousness, regret, reflection, or intonation.',
     );
   });
 

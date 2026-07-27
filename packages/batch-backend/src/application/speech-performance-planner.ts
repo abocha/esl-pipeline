@@ -145,6 +145,10 @@ function buildSpeechPlannerPrompt(
     'Create restrained, natural speech-performance cues for this ESL study text.',
     'Do not rewrite words, add dialogue, or change segment order.',
     'Use non-verbal cues sparingly. Prefer clarity over theatrical delivery.',
+    'Maintain a natural, consistent conversational tempo across adjacent segments.',
+    'Omit pace for ordinary dialogue.',
+    'Use slow, measured, or brisk only when a non-natural tempo is explicitly justified by the authored scene or learning goal.',
+    'Do not use pace merely to reinforce emotion, seriousness, regret, reflection, or intonation.',
     'Only set freeFormDirection for segments whose selected voice supportsFreeFormDirection.',
     JSON.stringify({
       segments: prepared.segments,

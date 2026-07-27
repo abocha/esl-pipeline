@@ -107,6 +107,11 @@ Remote planning runs only for models declaring `prompted` support. The first pro
 `inworld-tts-2`. The planner receives resolved voice capabilities and emits reduced plans for
 non-steerable voices rather than skipping them.
 
+Ordinary dialogue should omit `pace` and maintain a natural, consistent conversational tempo across
+adjacent segments. `slow`, `measured`, and `brisk` are exceptional cues for a non-natural tempo that
+the authored scene or learning goal explicitly justifies; emotion, seriousness, regret, reflection,
+or intonation alone do not justify changing pace.
+
 Batch backend injects a structured-output planner into the orchestrator. The default planner model
 is `gemini-3.1-flash-lite`, configured with:
 
@@ -170,9 +175,10 @@ docker compose logs batch-worker | Select-String "Speech performance planner|Inw
 
 Provider adapters consume the same neutral plan:
 
-- Inworld TTS-2 renders metadata instructions, breaks, restrained non-verbal cues, uppercase
-  emphasis, `deliveryMode`, and `speakingRate` for every voice. It renders additional free-form
-  natural-language direction only for voices tagged `steerable`.
+- Inworld TTS-2 renders emotion and intonation metadata instructions, breaks, restrained non-verbal
+  cues, uppercase emphasis, and `deliveryMode` for every voice. Non-natural pace uses only the
+  numeric `speakingRate` SDK control; `natural` and absent pace both use the provider default. It
+  renders additional free-form natural-language direction only for voices tagged `steerable`.
 - Inworld TTS 1.5 models keep identity plans and use safe SDK controls only.
 - ElevenLabs and Google initially synthesize clean source text from identity plans.
 

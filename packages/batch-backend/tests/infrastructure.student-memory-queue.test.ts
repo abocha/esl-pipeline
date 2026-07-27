@@ -199,33 +199,34 @@ describe('infrastructure/student-memory-queue', () => {
     expect(getMockStorage().queueAdd).toHaveBeenCalledOnce();
   });
 
-  it.each(['waiting', 'active', 'completed'])(
-    'leaves an existing %s stable job unchanged',
-    async (state) => {
-      getMockStorage().queueGetJob!.mockResolvedValue({
-        getState: vi.fn().mockResolvedValue(state),
-        retry: vi.fn(),
-      });
-      const { reconcile } = createStudentMemoryQueue();
+  it.each([
+    'waiting',
+    'active',
+    'completed',
+  ])('leaves an existing %s stable job unchanged', async (state) => {
+    getMockStorage().queueGetJob!.mockResolvedValue({
+      getState: vi.fn().mockResolvedValue(state),
+      retry: vi.fn(),
+    });
+    const { reconcile } = createStudentMemoryQueue();
 
-      await reconcile(
-        {
-          kind: 'lesson-memory-generate',
-          transcriptId: 'transcript-1',
-          recordingId: 'recording-1',
-          studentId: 'student-1',
-          sourceStorageUri: 'local://confirmed/a.txt',
-          sourceContentHash: 'a'.repeat(64),
-          pendingEntryId: 'pending-1',
-          provider: 'openai',
-          model: 'gpt-5.2',
-        },
-        { jobId: 'lesson-memory:transcript-1' },
-      );
+    await reconcile(
+      {
+        kind: 'lesson-memory-generate',
+        transcriptId: 'transcript-1',
+        recordingId: 'recording-1',
+        studentId: 'student-1',
+        sourceStorageUri: 'local://confirmed/a.txt',
+        sourceContentHash: 'a'.repeat(64),
+        pendingEntryId: 'pending-1',
+        provider: 'openai',
+        model: 'gpt-5.2',
+      },
+      { jobId: 'lesson-memory:transcript-1' },
+    );
 
-      expect(getMockStorage().queueAdd).not.toHaveBeenCalled();
-    },
-  );
+    expect(getMockStorage().queueAdd).not.toHaveBeenCalled();
+  });
 
   it('sanitizes student-memory job ids so BullMQ accepts them', async () => {
     const { enqueue } = createStudentMemoryQueue();
