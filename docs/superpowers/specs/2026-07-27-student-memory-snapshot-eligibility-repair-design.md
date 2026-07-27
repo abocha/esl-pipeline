@@ -3,7 +3,7 @@
 ## Meta
 
 - Date: 2026-07-27
-- Status: approved direction, awaiting written-spec review
+- Status: approved
 - Scope: repair post-cutover student-memory snapshot eligibility, retry semantics, candidate-refresh
   recovery, and the corresponding canonical-assignment invariant
 - Delivery: one focused repair pull request followed by a reviewed production replay
