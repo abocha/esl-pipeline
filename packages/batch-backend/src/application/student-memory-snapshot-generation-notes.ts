@@ -69,6 +69,7 @@ export interface StudentMemorySnapshotSourcesChangedFailureDetails {
 
 export interface StudentMemorySnapshotCandidateRefreshDecision {
   requested: boolean;
+  enqueueStatus: StudentMemorySnapshotCandidateRefreshEnqueueStatus;
   reasons: (
     | 'trigger_profile_worthy_student_fact'
     | 'personal_facts_hash_changed'
@@ -88,6 +89,12 @@ export interface StudentMemorySnapshotCandidateRefreshDecision {
   manualReplayRequestedCandidateRefresh: boolean;
   skippedNoProfileWorthyDeltaCount: number;
 }
+
+export type StudentMemorySnapshotCandidateRefreshEnqueueStatus =
+  | 'not_requested'
+  | 'pending'
+  | 'enqueued'
+  | 'failed';
 
 export type StudentMemorySnapshotV11GenerationNotes = StudentMemorySnapshotGenerationNotes & {
   strategy: StudentMemorySnapshotRefreshStrategy;

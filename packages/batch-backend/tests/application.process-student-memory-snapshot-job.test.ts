@@ -285,6 +285,7 @@ describe('application/process-student-memory-snapshot-job', () => {
       generationNotes: expect.objectContaining({
         candidateRefresh: expect.objectContaining({
           requested: false,
+          enqueueStatus: 'not_requested',
           reasons: [],
           triggerProfileWorthyStudentFactCount: 0,
           skippedNoProfileWorthyDeltaCount: 1,
@@ -293,6 +294,7 @@ describe('application/process-student-memory-snapshot-job', () => {
       }),
     });
     expect(requestRefresh).not.toHaveBeenCalled();
+    expect(updateGenerationNotes).toHaveBeenCalledTimes(1);
   });
 
   it('requests candidate refresh when the trigger lesson contains a profile-worthy student fact', async () => {
@@ -343,16 +345,26 @@ describe('application/process-student-memory-snapshot-job', () => {
       } as never,
     });
 
-    expect(updateGenerationNotes).toHaveBeenCalledWith({
+    expect(updateGenerationNotes).toHaveBeenNthCalledWith(1, {
       id: 'snapshot-ready-1',
       generationNotes: expect.objectContaining({
         candidateRefresh: expect.objectContaining({
           requested: true,
+          enqueueStatus: 'pending',
           reasons: ['trigger_profile_worthy_student_fact'],
           triggerProfileWorthyStudentFactCount: 1,
           skippedNoProfileWorthyDeltaCount: 0,
         }),
         materialChange: false,
+      }),
+    });
+    expect(updateGenerationNotes).toHaveBeenNthCalledWith(2, {
+      id: 'snapshot-ready-1',
+      generationNotes: expect.objectContaining({
+        candidateRefresh: expect.objectContaining({
+          requested: true,
+          enqueueStatus: 'enqueued',
+        }),
       }),
     });
     expect(requestRefresh).toHaveBeenCalledWith({
@@ -362,6 +374,80 @@ describe('application/process-student-memory-snapshot-job', () => {
         trigger: 'student-memory-snapshot-ready',
       },
     });
+  });
+
+  it('records failed candidate enqueue delivery without invalidating the ready snapshot', async () => {
+    const generator = vi.fn().mockResolvedValue({ snapshot: generatedSnapshot() });
+    const enqueueError = new Error('Redis unavailable');
+    const requestRefresh = vi.fn().mockRejectedValue(enqueueError);
+    const updateGenerationNotes = vi.fn().mockResolvedValue(generatedSnapshot());
+    const triggerLesson = {
+      ...lessonMemoryEntry('lesson-1', '2026-03-20T00:00:00.000Z', 'Trigger lesson'),
+      studentFacts: [profileWorthyStudentFact('Wants English for a new role.')],
+    };
+    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+
+    await expect(
+      processStudentMemorySnapshotJob({
+        config: createTestConfig(),
+        payload: {
+          kind: 'student-memory-snapshot-refresh',
+          studentId: 'student-1',
+          pendingEntryId: 'snapshot-pending-1',
+          provider: 'openai',
+          model: 'gpt-5.2',
+          trigger: 'lesson-memory-ready',
+          sourceEntryId: 'lesson-1',
+        },
+        overrides: {
+          lessonMemory: {
+            list: vi.fn(),
+            getById: vi.fn().mockResolvedValue(triggerLesson),
+            listRecentReadyByStudentId: vi.fn().mockResolvedValue([]),
+          },
+          homeworkMemory: {
+            list: vi.fn(),
+            getById: vi.fn(),
+            listRecentReadyByStudentId: vi.fn().mockResolvedValue([]),
+          },
+          snapshots: {
+            getById: vi.fn().mockResolvedValue({
+              id: 'snapshot-pending-1',
+              status: 'pending',
+              generatedAt: new Date('2026-03-20T01:00:00.000Z'),
+              generationNotes: null,
+            }),
+            getLatestReadyByStudentId: vi.fn().mockResolvedValue(readySnapshot()),
+            markFailed: vi.fn(),
+            supersedePendingForStudent: vi.fn().mockResolvedValue([]),
+            updateGenerationNotes,
+          },
+          profileCandidates: { requestRefresh },
+          generator,
+        } as never,
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(updateGenerationNotes).toHaveBeenNthCalledWith(1, {
+      id: 'snapshot-ready-1',
+      generationNotes: expect.objectContaining({
+        candidateRefresh: expect.objectContaining({ enqueueStatus: 'pending' }),
+      }),
+    });
+    expect(updateGenerationNotes).toHaveBeenNthCalledWith(2, {
+      id: 'snapshot-ready-1',
+      generationNotes: expect.objectContaining({
+        candidateRefresh: expect.objectContaining({ enqueueStatus: 'failed' }),
+      }),
+    });
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Student profile candidate refresh enqueue failed; continuing',
+      expect.objectContaining({
+        event: 'student_profile_candidate_refresh_enqueue_failed',
+        error: enqueueError.message,
+      }),
+    );
+    warnSpy.mockRestore();
   });
 
   it('requests candidate refresh when generated snapshot personal facts change', async () => {

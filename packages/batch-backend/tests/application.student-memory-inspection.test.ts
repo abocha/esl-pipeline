@@ -188,6 +188,7 @@ describe('application/student-memory-inspection', () => {
         },
         candidateRefresh: {
           requested: false,
+          enqueueStatus: 'not_requested',
           reasons: [],
           triggerProfileWorthyStudentFactCount: 0,
           skippedNoProfileWorthyDeltaCount: 1,
@@ -291,6 +292,7 @@ describe('application/student-memory-inspection', () => {
         },
         candidateRefresh: {
           requested: false,
+          enqueueStatus: 'not_requested',
           skippedNoProfileWorthyDeltaCount: 1,
         },
       },

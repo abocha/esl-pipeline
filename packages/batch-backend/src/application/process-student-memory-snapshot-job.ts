@@ -41,6 +41,7 @@ import {
   buildStudentMemorySnapshotGenerationNotes,
   resolveStudentMemorySnapshotTriggerSourceKind,
   type StudentMemorySnapshotBudgetDecision,
+  type StudentMemorySnapshotCandidateRefreshEnqueueStatus,
   type StudentMemorySnapshotFailureDetails,
   type StudentMemorySnapshotPromptBudgetFailureDetails,
   type StudentMemorySnapshotRefreshStrategy,
@@ -319,7 +320,17 @@ export async function processStudentMemorySnapshotJob(args: {
               : 'student-memory-snapshot-ready',
         },
       });
+      generationNotes = setCandidateRefreshEnqueueStatus(generationNotes, 'enqueued');
+      await snapshots.updateGenerationNotes({
+        id: result.snapshot.id,
+        generationNotes,
+      });
     } catch (enqueueError) {
+      generationNotes = setCandidateRefreshEnqueueStatus(generationNotes, 'failed');
+      await snapshots.updateGenerationNotes({
+        id: result.snapshot.id,
+        generationNotes,
+      });
       logger.warn('Student profile candidate refresh enqueue failed; continuing', {
         event: 'student_profile_candidate_refresh_enqueue_failed',
         studentId: args.payload.studentId,
@@ -547,6 +558,7 @@ async function buildSnapshotRefreshRequest(args: {
 
 interface StudentMemorySnapshotCandidateRefreshMetadata {
   requested: boolean;
+  enqueueStatus: StudentMemorySnapshotCandidateRefreshEnqueueStatus;
   reasons: CandidateRefreshReason[];
   triggerProfileWorthyStudentFactCount: number;
   personalFactsHashBefore: string;
@@ -626,6 +638,7 @@ function buildCandidateRefreshDecision(args: {
     materialChange: snapshotContentHashChanged,
     metadata: {
       requested,
+      enqueueStatus: requested ? 'pending' : 'not_requested',
       reasons,
       triggerProfileWorthyStudentFactCount: args.triggerProfileWorthyStudentFactCount,
       personalFactsHashBefore,
@@ -639,6 +652,22 @@ function buildCandidateRefreshDecision(args: {
       snapshotContentHashChanged,
       manualReplayRequestedCandidateRefresh,
       skippedNoProfileWorthyDeltaCount: requested ? 0 : 1,
+    },
+  };
+}
+
+function setCandidateRefreshEnqueueStatus(
+  generationNotes: StudentMemorySnapshotV11GenerationNotes,
+  enqueueStatus: Extract<StudentMemorySnapshotCandidateRefreshEnqueueStatus, 'enqueued' | 'failed'>,
+): StudentMemorySnapshotV11GenerationNotes {
+  if (!generationNotes.candidateRefresh) {
+    throw new Error('Candidate refresh decision metadata is required before enqueue');
+  }
+  return {
+    ...generationNotes,
+    candidateRefresh: {
+      ...generationNotes.candidateRefresh,
+      enqueueStatus,
     },
   };
 }
