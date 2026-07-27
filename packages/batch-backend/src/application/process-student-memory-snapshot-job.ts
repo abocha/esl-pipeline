@@ -294,10 +294,23 @@ export async function processStudentMemorySnapshotJob(args: {
       materialChange: candidateRefreshDecision.materialChange,
       candidateRefresh: candidateRefreshDecision.metadata,
     } as StudentMemorySnapshotV11GenerationNotes;
-    await snapshots.updateGenerationNotes({
-      id: result.snapshot.id,
-      generationNotes,
-    });
+    try {
+      await snapshots.updateGenerationNotes({
+        id: result.snapshot.id,
+        generationNotes,
+      });
+    } catch (metadataError) {
+      logger.warn(
+        'Student profile candidate refresh decision metadata write failed; continuing to enqueue',
+        {
+          event: 'student_profile_candidate_refresh_decision_write_failed',
+          studentId: args.payload.studentId,
+          sourceSnapshotId: result.snapshot.id,
+          candidateRefreshRequested: candidateRefreshDecision.requested,
+          error: metadataError instanceof Error ? metadataError.message : String(metadataError),
+        },
+      );
+    }
 
     if (!candidateRefreshDecision.requested) {
       logger.info('Student profile candidate refresh skipped after snapshot generation', {
@@ -378,12 +391,14 @@ export async function processStudentMemorySnapshotJob(args: {
         generationNotes,
         error,
       });
-      logger.warn('Student-memory snapshot sources changed before ready finalization; retrying', {
-        event: 'student_memory_snapshot_sources_changed_retry',
-        studentId: args.payload.studentId,
-        pendingEntryId: args.payload.pendingEntryId,
-        unavailableLessonMemoryEntryIds: error.unavailableLessonMemoryEntryIds,
-      });
+      if (!isFinalAttempt(args.attemptsMade, args.maxAttempts)) {
+        logger.warn('Student-memory snapshot sources changed before ready finalization; retrying', {
+          event: 'student_memory_snapshot_sources_changed_retry',
+          studentId: args.payload.studentId,
+          pendingEntryId: args.payload.pendingEntryId,
+          unavailableLessonMemoryEntryIds: error.unavailableLessonMemoryEntryIds,
+        });
+      }
       await markFailureIfFinalAttempt({
         payload: args.payload,
         attemptsMade: args.attemptsMade,
@@ -1120,9 +1135,7 @@ async function markFailureIfFinalAttempt(args: {
   error: unknown;
   generationNotes?: StudentMemorySnapshotV11GenerationNotes | null;
 }): Promise<void> {
-  const maxAttempts = args.maxAttempts ?? 1;
-  const attemptNumber = (args.attemptsMade ?? 0) + 1;
-  if (attemptNumber < maxAttempts) {
+  if (!isFinalAttempt(args.attemptsMade, args.maxAttempts)) {
     return;
   }
 
@@ -1131,4 +1144,8 @@ async function markFailureIfFinalAttempt(args: {
     errorMessage: args.error instanceof Error ? args.error.message : String(args.error),
     generationNotes: args.generationNotes ?? undefined,
   });
+}
+
+function isFinalAttempt(attemptsMade?: number, maxAttempts?: number): boolean {
+  return (attemptsMade ?? 0) + 1 >= (maxAttempts ?? 1);
 }
