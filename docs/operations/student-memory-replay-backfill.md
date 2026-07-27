@@ -164,6 +164,8 @@ Operator notes:
    legacy comparison or compatibility checks.
 6. `--candidate-refresh` is opt-in. Use it only when the reviewed replay is also intended to
    refresh profile candidates from the resulting snapshot.
+7. The CLI exits after its enqueue summary; snapshot and candidate processing remain asynchronous.
+   Verify worker events and persisted outcomes separately before declaring recovery complete.
 
 Example:
 

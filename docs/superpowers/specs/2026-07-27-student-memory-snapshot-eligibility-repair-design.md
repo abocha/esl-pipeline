@@ -3,7 +3,7 @@
 ## Meta
 
 - Date: 2026-07-27
-- Status: implemented and validated on branch; production recovery pending
+- Status: implemented, deployed, and production recovery completed on 2026-07-27
 - Scope: repair post-cutover student-memory snapshot eligibility, retry semantics, candidate-refresh
   recovery, and the corresponding canonical-assignment invariant
 - Delivery: one focused repair pull request followed by a reviewed production replay
@@ -44,6 +44,15 @@ Read-only inspection of the production VPS established:
 
 The production identifiers used to establish those counts are intentionally omitted from this
 document.
+
+### Production recovery closeout
+
+Release `v10.2.5` deployed migration 0045 successfully. The migration left zero invalid current
+ready or pending snapshots. The reviewed replay rebuilt all 16 selected students that had canonical
+ready source memory, recorded candidate delivery as `enqueued` for all 16, and produced three
+pending-review candidates across two students. Two repaired students without canonical ready source
+memory were correctly excluded from replay. One generated-evidence validation failure retried
+successfully; the queue drained and the worker remained healthy with no restart.
 
 ## Root Cause
 

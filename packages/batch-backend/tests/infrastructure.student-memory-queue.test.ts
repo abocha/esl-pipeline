@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  closeStudentMemoryQueue,
   createStudentMemoryQueue,
   createStudentMemoryWorker,
 } from '../src/infrastructure/student-memory-queue.js';
@@ -17,7 +18,9 @@ function getMockStorage() {
 
 vi.mock('bullmq', () => {
   const queueAdd = vi.fn();
+  const queueClose = vi.fn();
   const queueGetJob = vi.fn();
+  const queueEventsClose = vi.fn();
   const queueEventsOn = vi.fn();
   const workerOn = vi.fn();
   const Queue = vi.fn();
@@ -26,7 +29,9 @@ vi.mock('bullmq', () => {
 
   const storage = getMockStorage();
   storage.queueAdd = queueAdd;
+  storage.queueClose = queueClose;
   storage.queueGetJob = queueGetJob;
+  storage.queueEventsClose = queueEventsClose;
   storage.queueEventsOn = queueEventsOn;
   storage.workerOn = workerOn;
   storage.Queue = Queue;
@@ -36,11 +41,11 @@ vi.mock('bullmq', () => {
   return {
     Queue: vi.fn(function (this: unknown, name: string, opts: unknown) {
       Queue(name, opts);
-      return { add: queueAdd, getJob: queueGetJob };
+      return { add: queueAdd, close: queueClose, getJob: queueGetJob };
     }) as unknown,
     QueueEvents: vi.fn(function (this: unknown, name: string, opts: unknown) {
       QueueEvents(name, opts);
-      return { on: queueEventsOn };
+      return { close: queueEventsClose, on: queueEventsOn };
     }) as unknown,
     Worker: vi.fn(function (this: unknown, name: string, processor: unknown, opts: unknown) {
       Worker(name, processor, opts);
@@ -59,6 +64,7 @@ vi.mock('../src/config/env', () => ({
 }));
 
 vi.mock('../src/infrastructure/redis', () => ({
+  closeRedisClient: getMockStorage().redisClose ?? (getMockStorage().redisClose = vi.fn()),
   createRedisClient: vi.fn().mockReturnValue({ mock: 'redis-connection' }),
 }));
 
@@ -193,34 +199,33 @@ describe('infrastructure/student-memory-queue', () => {
     expect(getMockStorage().queueAdd).toHaveBeenCalledOnce();
   });
 
-  it.each([
-    'waiting',
-    'active',
-    'completed',
-  ])('leaves an existing %s stable job unchanged', async (state) => {
-    getMockStorage().queueGetJob!.mockResolvedValue({
-      getState: vi.fn().mockResolvedValue(state),
-      retry: vi.fn(),
-    });
-    const { reconcile } = createStudentMemoryQueue();
+  it.each(['waiting', 'active', 'completed'])(
+    'leaves an existing %s stable job unchanged',
+    async (state) => {
+      getMockStorage().queueGetJob!.mockResolvedValue({
+        getState: vi.fn().mockResolvedValue(state),
+        retry: vi.fn(),
+      });
+      const { reconcile } = createStudentMemoryQueue();
 
-    await reconcile(
-      {
-        kind: 'lesson-memory-generate',
-        transcriptId: 'transcript-1',
-        recordingId: 'recording-1',
-        studentId: 'student-1',
-        sourceStorageUri: 'local://confirmed/a.txt',
-        sourceContentHash: 'a'.repeat(64),
-        pendingEntryId: 'pending-1',
-        provider: 'openai',
-        model: 'gpt-5.2',
-      },
-      { jobId: 'lesson-memory:transcript-1' },
-    );
+      await reconcile(
+        {
+          kind: 'lesson-memory-generate',
+          transcriptId: 'transcript-1',
+          recordingId: 'recording-1',
+          studentId: 'student-1',
+          sourceStorageUri: 'local://confirmed/a.txt',
+          sourceContentHash: 'a'.repeat(64),
+          pendingEntryId: 'pending-1',
+          provider: 'openai',
+          model: 'gpt-5.2',
+        },
+        { jobId: 'lesson-memory:transcript-1' },
+      );
 
-    expect(getMockStorage().queueAdd).not.toHaveBeenCalled();
-  });
+      expect(getMockStorage().queueAdd).not.toHaveBeenCalled();
+    },
+  );
 
   it('sanitizes student-memory job ids so BullMQ accepts them', async () => {
     const { enqueue } = createStudentMemoryQueue();
@@ -266,5 +271,19 @@ describe('infrastructure/student-memory-queue', () => {
         concurrency: 2,
       }),
     );
+  });
+
+  it('closes CLI-owned queue handles and the shared Redis client', async () => {
+    const mocks = getMockStorage();
+    createStudentMemoryQueue();
+
+    await closeStudentMemoryQueue();
+    createStudentMemoryQueue();
+
+    expect(mocks.queueEventsClose).toHaveBeenCalledOnce();
+    expect(mocks.queueClose).toHaveBeenCalledOnce();
+    expect(mocks.redisClose).toHaveBeenCalledOnce();
+    expect(mocks.QueueEvents).toHaveBeenCalledOnce();
+    expect(mocks.Queue).toHaveBeenCalledOnce();
   });
 });
