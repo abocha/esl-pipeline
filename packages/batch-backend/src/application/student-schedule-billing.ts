@@ -236,23 +236,25 @@ const LESSON_HOMEWORK_JOINS = `
 `;
 
 export async function getStudentScheduleBillingSurface(
+  workspaceId: string,
   studentId: string,
 ): Promise<StudentScheduleBillingSurfaceResponse | null> {
   return withPgClient(async (client) => {
-    const context = await getStudentContext(client, studentId);
+    const context = await getAuthorizedStudentContext(client, workspaceId, studentId);
     if (!context) return null;
     return getSurfaceForContext(client, context);
   });
 }
 
 export async function hideStudentLessonFollowupReminder(
+  workspaceId: string,
   studentId: string,
   lessonId: string,
   actorUserId?: string | null,
 ): Promise<StudentScheduleBillingSurfaceResponse> {
   return withPgTransaction(async (client) => {
-    const context = await requireStudentContext(client, studentId);
-    const lesson = await getLessonRow(client, studentId, lessonId);
+    const context = await requireAuthorizedStudentContext(client, workspaceId, studentId);
+    const lesson = await getLessonRow(client, context, lessonId);
     if (!lesson) {
       throw new StudentScheduleBillingError('not_found', 404, 'Lesson not found');
     }
@@ -266,11 +268,12 @@ export async function hideStudentLessonFollowupReminder(
 }
 
 export async function undoLatestHiddenStudentReminder(
+  workspaceId: string,
   studentId: string,
   actorUserId?: string | null,
 ): Promise<StudentScheduleBillingSurfaceResponse> {
   return withPgTransaction(async (client) => {
-    const context = await requireStudentContext(client, studentId);
+    const context = await requireAuthorizedStudentContext(client, workspaceId, studentId);
     const prefs = await getReminderPreferences(client, context);
     if (!prefs.latestHiddenLessonFollowupKey) {
       return getSurfaceForContext(client, context);
@@ -285,21 +288,29 @@ export async function undoLatestHiddenStudentReminder(
           updated_by = $3,
           updated_at = NOW()
       WHERE student_id = $1
+        AND ${workspacePredicate('workspace_id', '$4', '$5')}
       `,
-      [context.id, prefs.latestHiddenLessonFollowupKey, actorUserId ?? null],
+      [
+        context.id,
+        prefs.latestHiddenLessonFollowupKey,
+        actorUserId ?? null,
+        context.workspaceId,
+        DEFAULT_WORKSPACE_ID,
+      ],
     );
     return getSurfaceForContext(client, context);
   });
 }
 
 export async function updateStudentLessonPlan(
+  workspaceId: string,
   studentId: string,
   params: UpdateStudentLessonPlanRequest,
   actorUserId?: string | null,
 ): Promise<StudentScheduleBillingSurfaceResponse> {
   return withPgTransaction(async (client) => {
-    const context = await requireStudentContext(client, studentId);
-    await client.query(
+    const context = await requireAuthorizedStudentContext(client, workspaceId, studentId);
+    const result = await client.query(
       `
       INSERT INTO student_lesson_plans (
         student_id,
@@ -322,6 +333,8 @@ export async function updateStudentLessonPlan(
         scheduling_notes = EXCLUDED.scheduling_notes,
         updated_by = EXCLUDED.updated_by,
         updated_at = NOW()
+      WHERE ${workspacePredicate('student_lesson_plans.workspace_id', '$9', '$10')}
+      RETURNING student_id
       `,
       [
         studentId,
@@ -332,19 +345,25 @@ export async function updateStudentLessonPlan(
         params.preferredTimes ?? null,
         params.schedulingNotes ?? null,
         actorUserId ?? null,
+        context.workspaceId,
+        DEFAULT_WORKSPACE_ID,
       ],
     );
+    if ((result.rowCount ?? 0) === 0) {
+      throw new StudentScheduleBillingError('not_found', 404, 'Lesson plan not found');
+    }
     return getSurfaceForContext(client, context);
   });
 }
 
 export async function upsertPrimaryStudentLessonRecurrence(
+  workspaceId: string,
   studentId: string,
   params: UpsertStudentLessonRecurrenceRequest,
   actorUserId?: string | null,
 ): Promise<StudentScheduleBillingSurfaceResponse> {
   return withPgTransaction(async (client) => {
-    const context = await requireStudentContext(client, studentId);
+    const context = await requireAuthorizedStudentContext(client, workspaceId, studentId);
     const timezone = normalizeTimezone(params.timezone);
     const startsOn = parseDateInput(params.startsOn, 'Invalid recurrence start date');
     const endsOn =
@@ -359,7 +378,10 @@ export async function upsertPrimaryStudentLessonRecurrence(
       );
     }
     const slots = normalizeRecurrenceSlots(params.slots);
-    const existing = await getPrimaryRecurrenceRuleRow(client, studentId);
+    const existing = await getPrimaryRecurrenceRuleRow(client, context);
+    if (!existing && (await hasRecurrenceRuleOutsideWorkspace(client, context))) {
+      throw new StudentScheduleBillingError('not_found', 404, 'Recurrence rule not found');
+    }
     const ruleId = existing?.id ?? randomUUID();
     const status = params.status ?? existing?.status ?? 'active';
     const horizon =
@@ -449,12 +471,13 @@ export async function upsertPrimaryStudentLessonRecurrence(
 }
 
 export async function createStudentLesson(
+  workspaceId: string,
   studentId: string,
   params: CreateStudentLessonRequest,
   actorUserId?: string | null,
 ): Promise<StudentScheduleBillingSurfaceResponse> {
   return withPgTransaction(async (client) => {
-    const context = await requireStudentContext(client, studentId);
+    const context = await requireAuthorizedStudentContext(client, workspaceId, studentId);
     const lessonId = randomUUID();
     await client.query(
       `
@@ -502,8 +525,8 @@ export async function completeElapsedScheduledLessonForHomework(
   actorUserId?: string | null,
 ): Promise<boolean> {
   return withPgTransaction(async (client) => {
-    const context = await requireStudentContext(client, studentId);
-    const existing = await getLessonRow(client, studentId, lessonId);
+    const context = await requireTrustedStudentContextById(client, studentId);
+    const existing = await getLessonRow(client, context, lessonId);
     if (!existing || existing.status !== 'scheduled' || !isLessonHomeworkFollowUpDue(existing)) {
       return false;
     }
@@ -550,7 +573,7 @@ export async function applyGeneratedLessonTitleIfPlaceholder(params: {
   }
 
   return withPgTransaction(async (client) => {
-    const context = await requireStudentContext(client, params.studentId);
+    const context = await requireTrustedStudentContextById(client, params.studentId);
     const result = await client.query(
       `
       UPDATE student_lessons
@@ -573,14 +596,15 @@ export async function applyGeneratedLessonTitleIfPlaceholder(params: {
 }
 
 export async function updateStudentLesson(
+  workspaceId: string,
   studentId: string,
   lessonId: string,
   params: UpdateStudentLessonRequest,
   actorUserId?: string | null,
 ): Promise<StudentScheduleBillingSurfaceResponse> {
   return withPgTransaction(async (client) => {
-    const context = await requireStudentContext(client, studentId);
-    const existing = await getLessonRow(client, studentId, lessonId);
+    const context = await requireAuthorizedStudentContext(client, workspaceId, studentId);
+    const existing = await getLessonRow(client, context, lessonId);
     if (!existing) {
       throw new StudentScheduleBillingError('not_found', 404, 'Lesson not found');
     }
@@ -630,12 +654,13 @@ export async function updateStudentLesson(
 }
 
 export async function addStudentPackage(
+  workspaceId: string,
   studentId: string,
   params: AddStudentPackageRequest,
   actorUserId?: string | null,
 ): Promise<StudentScheduleBillingSurfaceResponse> {
   return withPgTransaction(async (client) => {
-    const context = await requireStudentContext(client, studentId);
+    const context = await requireAuthorizedStudentContext(client, workspaceId, studentId);
     let paymentId: string | null = null;
     if (params.payment) {
       paymentId = randomUUID();
@@ -655,12 +680,13 @@ export async function addStudentPackage(
 }
 
 export async function adjustStudentCredits(
+  workspaceId: string,
   studentId: string,
   params: { quantityDelta: number; note?: string | null },
   actorUserId?: string | null,
 ): Promise<StudentScheduleBillingSurfaceResponse> {
   return withPgTransaction(async (client) => {
-    const context = await requireStudentContext(client, studentId);
+    const context = await requireAuthorizedStudentContext(client, workspaceId, studentId);
     await insertCreditEvent(client, {
       context,
       eventType: 'credit_adjusted',
@@ -675,12 +701,13 @@ export async function adjustStudentCredits(
 }
 
 export async function recordStudentPayment(
+  workspaceId: string,
   studentId: string,
   params: RecordStudentPaymentRequest,
   actorUserId?: string | null,
 ): Promise<StudentScheduleBillingSurfaceResponse> {
   return withPgTransaction(async (client) => {
-    const context = await requireStudentContext(client, studentId);
+    const context = await requireAuthorizedStudentContext(client, workspaceId, studentId);
     await insertPayment(client, context, randomUUID(), params, actorUserId ?? null);
     return getSurfaceForContext(client, context);
   });
@@ -692,25 +719,21 @@ async function getSurfaceForContext(
 ): Promise<StudentScheduleBillingSurfaceResponse> {
   await materializeStudentRecurrenceForContext(client, context, null);
   const plan = await getLessonPlan(client, context);
-  const recurrenceRule = await getPrimaryRecurrenceRule(client, context.id);
-  const nextLesson = await getNextLesson(client, context.id);
-  const lessons = await listLessons(client, context.id);
-  const creditEvents = await listCreditEvents(client, context.id);
-  const payments = await listPayments(client, context.id);
+  const recurrenceRule = await getPrimaryRecurrenceRule(client, context);
+  const nextLesson = await getNextLesson(client, context);
+  const lessons = await listLessons(client, context);
+  const creditEvents = await listCreditEvents(client, context);
+  const payments = await listPayments(client, context);
   const reminderPrefs = await getReminderPreferences(client, context);
   const elapsedHomeworkFollowups = (
-    await listOverdueLessonHomeworkFollowups(client, context.id)
+    await listOverdueLessonHomeworkFollowups(client, context)
   ).filter(
     (lesson) =>
       !reminderPrefs.hiddenLessonFollowupKeys.has(
         getLessonFollowupSuppressionKey(context, lesson.id),
       ),
   );
-  const creditSummary = await getCreditSummary(
-    client,
-    context.id,
-    reminderPrefs.lowBalanceThreshold,
-  );
+  const creditSummary = await getCreditSummary(client, context, reminderPrefs.lowBalanceThreshold);
 
   return {
     studentId: context.id,
@@ -736,15 +759,56 @@ async function getSurfaceForContext(
   };
 }
 
-async function getStudentContext(
+async function getAuthorizedStudentContext(
   client: PoolClient,
+  workspaceId: string,
   studentId: string,
 ): Promise<StudentContext | null> {
-  await ensureDefaultWorkspace(client);
+  if (workspaceId === DEFAULT_WORKSPACE_ID) {
+    await ensureDefaultWorkspace(client);
+  }
   const result = await client.query<{
     id: string;
     student: string;
     workspace_id: string | null;
+  }>(
+    `
+    SELECT id, student, COALESCE(workspace_id, $3::uuid) AS workspace_id
+    FROM students
+    WHERE id = $1
+      AND archived_at IS NULL
+      AND (
+        workspace_id = $2::uuid
+        OR (workspace_id IS NULL AND $2::uuid = $3::uuid)
+      )
+    `,
+    [studentId, workspaceId, DEFAULT_WORKSPACE_ID],
+  );
+  const row = result.rows[0];
+  return row ? { id: row.id, name: row.student, workspaceId: row.workspace_id } : null;
+}
+
+async function requireAuthorizedStudentContext(
+  client: PoolClient,
+  workspaceId: string,
+  studentId: string,
+): Promise<StudentContext> {
+  const context = await getAuthorizedStudentContext(client, workspaceId, studentId);
+  if (!context) {
+    throw new StudentScheduleBillingError('not_found', 404, 'Student not found');
+  }
+  return context;
+}
+
+async function requireTrustedStudentContextById(
+  client: PoolClient,
+  studentId: string,
+): Promise<StudentContext> {
+  await ensureDefaultWorkspace(client);
+  const result = await client.query<{
+    id: string;
+    student: string;
+    workspace_id: string;
   }>(
     `
     SELECT id, student, COALESCE(workspace_id, $2::uuid) AS workspace_id
@@ -755,18 +819,10 @@ async function getStudentContext(
     [studentId, DEFAULT_WORKSPACE_ID],
   );
   const row = result.rows[0];
-  return row ? { id: row.id, name: row.student, workspaceId: row.workspace_id } : null;
-}
-
-async function requireStudentContext(
-  client: PoolClient,
-  studentId: string,
-): Promise<StudentContext> {
-  const context = await getStudentContext(client, studentId);
-  if (!context) {
+  if (!row) {
     throw new StudentScheduleBillingError('not_found', 404, 'Student not found');
   }
-  return context;
+  return { id: row.id, name: row.student, workspaceId: row.workspace_id };
 }
 
 async function getLessonPlan(
@@ -779,8 +835,9 @@ async function getLessonPlan(
            preferred_times, scheduling_notes, updated_at
     FROM student_lesson_plans
     WHERE student_id = $1
+      AND ${workspacePredicate('workspace_id', '$2', '$3')}
     `,
-    [context.id],
+    [context.id, context.workspaceId, DEFAULT_WORKSPACE_ID],
   );
   const row = result.rows[0];
   return {
@@ -797,9 +854,9 @@ async function getLessonPlan(
 
 async function getPrimaryRecurrenceRule(
   client: PoolClient,
-  studentId: string,
+  context: StudentContext,
 ): Promise<StudentLessonRecurrenceRuleDto | null> {
-  const row = await getPrimaryRecurrenceRuleRow(client, studentId);
+  const row = await getPrimaryRecurrenceRuleRow(client, context);
   if (!row) {
     return null;
   }
@@ -809,7 +866,7 @@ async function getPrimaryRecurrenceRule(
 
 async function getPrimaryRecurrenceRuleRow(
   client: PoolClient,
-  studentId: string,
+  context: StudentContext,
 ): Promise<RecurrenceRuleRow | null> {
   const result = await client.query<RecurrenceRuleRow>(
     `
@@ -827,13 +884,32 @@ async function getPrimaryRecurrenceRuleRow(
       updated_at
     FROM student_lesson_recurrence_rules
     WHERE student_id = $1
+      AND ${workspacePredicate('workspace_id', '$2', '$3')}
       AND status <> 'archived'
     ORDER BY created_at ASC, id ASC
     LIMIT 1
     `,
-    [studentId],
+    [context.id, context.workspaceId, DEFAULT_WORKSPACE_ID],
   );
   return result.rows[0] ?? null;
+}
+
+async function hasRecurrenceRuleOutsideWorkspace(
+  client: PoolClient,
+  context: StudentContext,
+): Promise<boolean> {
+  const result = await client.query(
+    `
+    SELECT 1
+    FROM student_lesson_recurrence_rules
+    WHERE student_id = $1
+      AND (${workspacePredicate('workspace_id', '$2', '$3')}) IS NOT TRUE
+      AND status <> 'archived'
+    LIMIT 1
+    `,
+    [context.id, context.workspaceId, DEFAULT_WORKSPACE_ID],
+  );
+  return (result.rowCount ?? 0) > 0;
 }
 
 async function listRecurrenceSlots(
@@ -912,7 +988,7 @@ async function materializeStudentRecurrenceForContext(
   context: StudentContext,
   actorUserId: string | null,
 ): Promise<void> {
-  const rule = await getPrimaryRecurrenceRuleRow(client, context.id);
+  const rule = await getPrimaryRecurrenceRuleRow(client, context);
   if (!rule || rule.status !== 'active') {
     return;
   }
@@ -998,31 +1074,69 @@ async function materializeStudentRecurrenceForContext(
   );
 }
 
-export async function materializeWorkspaceLessonRecurrences(): Promise<void> {
+interface RecurrenceStudentRow {
+  id: string;
+  student: string;
+  workspace_id: string;
+}
+
+export async function materializeAllWorkspaceLessonRecurrences(): Promise<void> {
   await withPgClient(async (client) => {
-    await materializeWorkspaceLessonRecurrencesWithClient(client);
+    const result = await client.query<RecurrenceStudentRow>(
+      `
+      SELECT DISTINCT
+        students.id,
+        students.student,
+        COALESCE(students.workspace_id, $1::uuid) AS workspace_id
+      FROM students
+      JOIN student_lesson_recurrence_rules ON student_lesson_recurrence_rules.student_id = students.id
+      WHERE students.archived_at IS NULL
+        AND student_lesson_recurrence_rules.status = 'active'
+      ORDER BY students.id ASC
+      `,
+      [DEFAULT_WORKSPACE_ID],
+    );
+    await materializeLessonRecurrencesForRows(client, result.rows);
   });
 }
 
 export async function materializeWorkspaceLessonRecurrencesWithClient(
   client: PoolClient,
+  workspaceId: string,
 ): Promise<void> {
-  const result = await client.query<{
-    id: string;
-    student: string;
-    workspace_id: string | null;
-  }>(
+  const result = await client.query<RecurrenceStudentRow>(
     `
-    SELECT DISTINCT students.id, students.student, COALESCE(students.workspace_id, $1::uuid) AS workspace_id
+    SELECT DISTINCT
+      students.id,
+      students.student,
+      COALESCE(students.workspace_id, $2::uuid) AS workspace_id
     FROM students
     JOIN student_lesson_recurrence_rules ON student_lesson_recurrence_rules.student_id = students.id
     WHERE students.archived_at IS NULL
       AND student_lesson_recurrence_rules.status = 'active'
+      AND (
+        students.workspace_id = $1::uuid
+        OR (students.workspace_id IS NULL AND $1::uuid = $2::uuid)
+      )
+      AND (
+        student_lesson_recurrence_rules.workspace_id = $1::uuid
+        OR (
+          student_lesson_recurrence_rules.workspace_id IS NULL
+          AND $1::uuid = $2::uuid
+        )
+      )
     ORDER BY students.id ASC
     `,
-    [DEFAULT_WORKSPACE_ID],
+    [workspaceId, DEFAULT_WORKSPACE_ID],
   );
-  for (const row of result.rows) {
+  await materializeLessonRecurrencesForRows(client, result.rows);
+}
+
+async function materializeLessonRecurrencesForRows(
+  client: PoolClient,
+  rows: RecurrenceStudentRow[],
+): Promise<void> {
+  for (const row of rows) {
     await materializeStudentRecurrenceForContext(
       client,
       { id: row.id, name: row.student, workspaceId: row.workspace_id },
@@ -1082,8 +1196,9 @@ async function getReminderPreferences(
            latest_hidden_lesson_followup_at
     FROM student_reminder_preferences
     WHERE student_id = $1
+      AND ${workspacePredicate('workspace_id', '$2', '$3')}
     `,
-    [context.id],
+    [context.id, context.workspaceId, DEFAULT_WORKSPACE_ID],
   );
   return {
     preferredChannel: result.rows[0]?.preferred_channel ?? 'manual',
@@ -1101,7 +1216,7 @@ async function getReminderPreferences(
 
 async function getCreditSummary(
   client: PoolClient,
-  studentId: string,
+  context: StudentContext,
   lowBalanceThreshold: number,
 ): Promise<StudentCreditSummaryDto> {
   const result = await client.query<{
@@ -1118,9 +1233,10 @@ async function getCreditSummary(
       COALESCE(SUM(quantity_delta), 0) AS remaining
     FROM student_credit_events
     WHERE student_id = $1
+      AND ${workspacePredicate('workspace_id', '$2', '$3')}
       AND voided_at IS NULL
     `,
-    [studentId],
+    [context.id, context.workspaceId, DEFAULT_WORKSPACE_ID],
   );
   const row = result.rows[0];
   const purchased = Number(row?.purchased ?? 0);
@@ -1138,43 +1254,48 @@ async function getCreditSummary(
   };
 }
 
-async function getNextLesson(client: PoolClient, studentId: string): Promise<LessonRow | null> {
+async function getNextLesson(
+  client: PoolClient,
+  context: StudentContext,
+): Promise<LessonRow | null> {
   const result = await client.query<LessonRow>(
     `
     SELECT ${LESSON_HOMEWORK_SELECT}
     FROM student_lessons
     ${LESSON_HOMEWORK_JOINS}
     WHERE student_id = $1
+      AND ${workspacePredicate('workspace_id', '$2', '$3')}
       AND recurrence_obsolete_at IS NULL
       AND status = 'scheduled'
       AND starts_at >= NOW()
     ORDER BY starts_at ASC, id ASC
     LIMIT 1
     `,
-    [studentId],
+    [context.id, context.workspaceId, DEFAULT_WORKSPACE_ID],
   );
   return result.rows[0] ?? null;
 }
 
-async function listLessons(client: PoolClient, studentId: string): Promise<LessonRow[]> {
+async function listLessons(client: PoolClient, context: StudentContext): Promise<LessonRow[]> {
   const result = await client.query<LessonRow>(
     `
     SELECT ${LESSON_HOMEWORK_SELECT}
     FROM student_lessons
     ${LESSON_HOMEWORK_JOINS}
     WHERE student_id = $1
+      AND ${workspacePredicate('workspace_id', '$2', '$3')}
       AND recurrence_obsolete_at IS NULL
     ORDER BY starts_at DESC, id DESC
     LIMIT 30
     `,
-    [studentId],
+    [context.id, context.workspaceId, DEFAULT_WORKSPACE_ID],
   );
   return result.rows;
 }
 
 async function listOverdueLessonHomeworkFollowups(
   client: PoolClient,
-  studentId: string,
+  context: StudentContext,
 ): Promise<LessonRow[]> {
   const result = await client.query<LessonRow>(
     `
@@ -1182,6 +1303,7 @@ async function listOverdueLessonHomeworkFollowups(
     FROM student_lessons
     ${LESSON_HOMEWORK_JOINS}
     WHERE student_id = $1
+      AND ${workspacePredicate('workspace_id', '$2', '$3')}
       AND recurrence_obsolete_at IS NULL
       AND status IN ('scheduled', 'completed')
       AND starts_at + (duration_minutes * INTERVAL '1 minute') <= NOW()
@@ -1190,27 +1312,31 @@ async function listOverdueLessonHomeworkFollowups(
     ORDER BY starts_at DESC, id DESC
     LIMIT 30
     `,
-    [studentId],
+    [context.id, context.workspaceId, DEFAULT_WORKSPACE_ID],
   );
   return result.rows.filter(isLessonHomeworkFollowUpDue);
 }
 
-async function listCreditEvents(client: PoolClient, studentId: string): Promise<CreditEventRow[]> {
+async function listCreditEvents(
+  client: PoolClient,
+  context: StudentContext,
+): Promise<CreditEventRow[]> {
   const result = await client.query<CreditEventRow>(
     `
     SELECT *
     FROM student_credit_events
     WHERE student_id = $1
+      AND ${workspacePredicate('workspace_id', '$2', '$3')}
       AND voided_at IS NULL
     ORDER BY created_at DESC, id DESC
     LIMIT 50
     `,
-    [studentId],
+    [context.id, context.workspaceId, DEFAULT_WORKSPACE_ID],
   );
   return result.rows;
 }
 
-async function listPayments(client: PoolClient, studentId: string): Promise<PaymentRow[]> {
+async function listPayments(client: PoolClient, context: StudentContext): Promise<PaymentRow[]> {
   const result = await client.query<PaymentRow>(
     `
     SELECT
@@ -1227,18 +1353,19 @@ async function listPayments(client: PoolClient, studentId: string): Promise<Paym
       created_at
     FROM student_payment_records
     WHERE student_id = $1
+      AND ${workspacePredicate('workspace_id', '$2', '$3')}
       AND voided_at IS NULL
     ORDER BY received_at DESC, created_at DESC, id DESC
     LIMIT 20
     `,
-    [studentId],
+    [context.id, context.workspaceId, DEFAULT_WORKSPACE_ID],
   );
   return result.rows;
 }
 
 async function getLessonRow(
   client: PoolClient,
-  studentId: string,
+  context: StudentContext,
   lessonId: string,
 ): Promise<LessonRow | null> {
   const result = await client.query<LessonRow>(
@@ -1248,8 +1375,9 @@ async function getLessonRow(
     ${LESSON_HOMEWORK_JOINS}
     WHERE student_lessons.id = $1
       AND student_lessons.student_id = $2
+      AND ${workspacePredicate('student_lessons.workspace_id', '$3', '$4')}
     `,
-    [lessonId, studentId],
+    [lessonId, context.id, context.workspaceId, DEFAULT_WORKSPACE_ID],
   );
   return result.rows[0] ?? null;
 }
@@ -1442,7 +1570,7 @@ async function upsertReminderSuppression(
     actorUserId: string | null;
   },
 ): Promise<void> {
-  await client.query(
+  const result = await client.query(
     `
     INSERT INTO student_reminder_preferences (
       student_id,
@@ -1466,9 +1594,22 @@ async function upsertReminderSuppression(
         latest_hidden_lesson_followup_at = NOW(),
         updated_by = $5,
         updated_at = NOW()
+    WHERE ${workspacePredicate('student_reminder_preferences.workspace_id', '$6', '$7')}
+    RETURNING student_id
     `,
-    [context.id, context.workspaceId, params.suppressionKey, params.lessonId, params.actorUserId],
+    [
+      context.id,
+      context.workspaceId,
+      params.suppressionKey,
+      params.lessonId,
+      params.actorUserId,
+      context.workspaceId,
+      DEFAULT_WORKSPACE_ID,
+    ],
   );
+  if ((result.rowCount ?? 0) === 0) {
+    throw new StudentScheduleBillingError('not_found', 404, 'Reminder preferences not found');
+  }
 }
 
 async function getLatestHiddenReminder(
@@ -1477,7 +1618,7 @@ async function getLatestHiddenReminder(
   prefs: ReminderPreferences,
 ): Promise<StudentLatestHiddenReminderDto | null> {
   if (!prefs.latestHiddenLessonFollowupLessonId) return null;
-  const lesson = await getLessonRow(client, context.id, prefs.latestHiddenLessonFollowupLessonId);
+  const lesson = await getLessonRow(client, context, prefs.latestHiddenLessonFollowupLessonId);
   return {
     type: 'lesson_followup',
     lessonId: prefs.latestHiddenLessonFollowupLessonId,
@@ -1495,6 +1636,13 @@ function getLessonFollowupSuppressionKey(context: StudentContext, lessonId: stri
     lessonId,
     'lesson_followup',
   ].join(':');
+}
+
+function workspacePredicate(column: string, workspaceParam: string, defaultParam: string): string {
+  return `(
+    ${column} = ${workspaceParam}::uuid
+    OR (${column} IS NULL AND ${workspaceParam}::uuid = ${defaultParam}::uuid)
+  )`;
 }
 
 function mapLessonSummary(row: LessonRow): StudentReminderLessonSummaryDto {

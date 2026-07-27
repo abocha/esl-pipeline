@@ -8,6 +8,10 @@ import {
   TeacherBusinessDashboardError,
   updateBusinessSettings,
 } from '../../application/teacher-business-dashboard.js';
+import {
+  resolvePrimaryWorkspaceIdForUser,
+  WorkspaceContextError,
+} from '../../application/workspace-context.js';
 import { getAuthenticatedUser } from '../auth-middleware.js';
 import { errorResponse, resolveRoutePath } from '../route-helpers.js';
 import type { ExtendedRoutesContext } from './context.js';
@@ -53,9 +57,10 @@ export function registerBusinessRoutes(app: FastifyInstance, context: ExtendedRo
       .optional(),
   });
 
-  app.get('/business/settings', { preHandler: [authenticate] }, async (_request, reply) => {
+  app.get('/business/settings', { preHandler: [authenticate] }, async (request, reply) => {
     try {
-      return reply.send(await getBusinessSettings());
+      const workspaceId = await resolveWorkspaceIdForRequest(request);
+      return reply.send(await getBusinessSettings(workspaceId));
     } catch (error: unknown) {
       return handleBusinessRouteError(reply, 'GET /business/settings', error);
     }
@@ -66,7 +71,10 @@ export function registerBusinessRoutes(app: FastifyInstance, context: ExtendedRo
     try {
       const body = settingsSchema.parse(request.body ?? {});
       const authenticatedUser = getAuthenticatedUser(request);
-      return reply.send(await updateBusinessSettings(body, authenticatedUser?.id ?? null));
+      const workspaceId = await resolveWorkspaceIdForRequest(request);
+      return reply.send(
+        await updateBusinessSettings(workspaceId, body, authenticatedUser?.id ?? null),
+      );
     } catch (error: unknown) {
       return handleBusinessRouteError(reply, routePath, error);
     }
@@ -76,7 +84,8 @@ export function registerBusinessRoutes(app: FastifyInstance, context: ExtendedRo
     const routePath = resolveRoutePath(request, 'GET /business/schedule');
     try {
       const query = dateQuerySchema.parse(request.query ?? {});
-      return reply.send(await getBusinessScheduleSurface(query));
+      const workspaceId = await resolveWorkspaceIdForRequest(request);
+      return reply.send(await getBusinessScheduleSurface(workspaceId, query));
     } catch (error: unknown) {
       return handleBusinessRouteError(reply, routePath, error);
     }
@@ -86,11 +95,22 @@ export function registerBusinessRoutes(app: FastifyInstance, context: ExtendedRo
     const routePath = resolveRoutePath(request, 'GET /business/stats');
     try {
       const query = statsQuerySchema.parse(request.query ?? {});
-      return reply.send(await getBusinessStatsSurface(query));
+      const workspaceId = await resolveWorkspaceIdForRequest(request);
+      return reply.send(await getBusinessStatsSurface(workspaceId, query));
     } catch (error: unknown) {
       return handleBusinessRouteError(reply, routePath, error);
     }
   });
+}
+
+async function resolveWorkspaceIdForRequest(
+  request: Parameters<typeof getAuthenticatedUser>[0],
+): Promise<string> {
+  const authenticatedUser = getAuthenticatedUser(request);
+  if (!authenticatedUser) {
+    throw new WorkspaceContextError('Authentication required');
+  }
+  return resolvePrimaryWorkspaceIdForUser(authenticatedUser.id);
 }
 
 function handleBusinessRouteError(
@@ -109,6 +129,13 @@ function handleBusinessRouteError(
     return reply.code(error.status).send({
       error: error.code,
       message: error.message,
+    });
+  }
+  if (error instanceof WorkspaceContextError) {
+    return reply.code(error.status).send({
+      error: error.code,
+      message: error.message,
+      code: error.code,
     });
   }
   return errorResponse(reply, 'internal_error');
