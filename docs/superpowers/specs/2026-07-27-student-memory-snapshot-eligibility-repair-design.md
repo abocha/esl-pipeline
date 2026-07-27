@@ -202,13 +202,14 @@ type StudentMemorySnapshotCandidateRefreshEnqueueStatus =
   | 'failed';
 ```
 
-The snapshot worker stores `pending` before enqueue, then stores `enqueued` after the stable BullMQ
-job is accepted or `failed` after an exhausted enqueue attempt. A skipped candidate decision stores
-`not_requested`. Failure details remain privacy-safe and do not include lesson or profile content.
+The canonical ready-snapshot insert stores `pending` or `not_requested` atomically with the
+candidate decision. The worker then stores `enqueued` after the stable BullMQ job is accepted or
+`failed` after an exhausted enqueue attempt. Failure details remain privacy-safe and do not include
+lesson or profile content.
 
 Add a focused operator command that accepts an explicit ready snapshot ID, revalidates that the
-snapshot is eligible and requested candidate refresh, then idempotently calls the existing stable
-candidate-refresh queue request and records `enqueued`. It does not regenerate the student-memory
+snapshot is eligible and requested candidate refresh, then reconciles the existing stable
+candidate-refresh queue job (including retained failed jobs) and records `enqueued`. It does not regenerate the student-memory
 snapshot or infer candidate intent for snapshots whose decision was not requested.
 
 The replay runbook must document the already-supported `--candidate-refresh` flag, the

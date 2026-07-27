@@ -300,7 +300,7 @@ git commit -m "fix(memory): retry canonical source changes"
 
 - Produces: `StudentMemorySnapshotCandidateRefreshEnqueueStatus` with
   `not_requested | pending | enqueued | failed`.
-- Persists: `candidateRefresh.enqueueStatus` after the snapshot becomes ready.
+- Persists: the initial `candidateRefresh.enqueueStatus` atomically with the ready snapshot.
 - Preserves: current behavior in which candidate enqueue failure does not invalidate a published
   snapshot.
 
@@ -308,9 +308,10 @@ git commit -m "fix(memory): retry canonical source changes"
 
 Cover three paths:
 
-- no candidate requested -> one metadata write with `enqueueStatus: 'not_requested'`;
-- requested and enqueue succeeds -> `pending` then `enqueued`;
-- requested and enqueue throws -> `pending` then `failed`, warning emitted, snapshot remains ready.
+- no candidate requested -> ready insert contains `enqueueStatus: 'not_requested'`;
+- requested and enqueue succeeds -> ready insert contains `pending`, then metadata becomes `enqueued`;
+- requested and enqueue throws -> ready insert contains `pending`, then metadata becomes `failed`,
+  warning emitted, snapshot remains ready.
 
 Update inspection assertions so the typed enqueue status remains visible in snapshot diagnostics.
 
@@ -338,8 +339,9 @@ export type StudentMemorySnapshotCandidateRefreshEnqueueStatus =
   | 'failed';
 ```
 
-Build the initial candidate metadata with `pending` when requested and `not_requested` otherwise.
-After `requestRefresh()` resolves, write the complete nested candidate object with `enqueued`.
+Build the initial candidate metadata with `pending` when requested and `not_requested` otherwise,
+and finalize those notes before the canonical ready insert. After `requestRefresh()` resolves,
+write the complete nested candidate object with `enqueued`.
 When it rejects, write `failed`, log the exception, and retain the ready snapshot. Never replace the
 whole `generation_notes` object with only the candidate fragment.
 

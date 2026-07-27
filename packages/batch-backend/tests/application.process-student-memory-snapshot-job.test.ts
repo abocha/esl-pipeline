@@ -123,6 +123,25 @@ function generatedSnapshot(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function successfulGenerator(snapshot = generatedSnapshot()) {
+  return vi.fn().mockImplementation(async ({ request }) => {
+    const finalizedGenerationNotes =
+      request.finalizeGenerationNotes?.({
+        content: snapshot,
+        contentHash: snapshot.contentHash ?? 'generated-hash',
+      }) ?? {};
+    return {
+      snapshot: {
+        ...snapshot,
+        generationNotes: {
+          ...(snapshot.generationNotes ?? {}),
+          ...finalizedGenerationNotes,
+        },
+      },
+    };
+  });
+}
+
 function finalizationRaceOverrides(args: {
   error: Error;
   markFailed: ReturnType<typeof vi.fn>;
@@ -164,9 +183,7 @@ function finalizationRaceOverrides(args: {
 
 describe('application/process-student-memory-snapshot-job', () => {
   it('uses incremental lesson-memory refresh without calling full-history list-all paths', async () => {
-    const generator = vi.fn().mockResolvedValue({
-      snapshot: generatedSnapshot(),
-    });
+    const generator = successfulGenerator();
     const supersedePendingForStudent = vi.fn().mockResolvedValue([]);
     const requestRefresh = vi.fn().mockImplementation(async () => {});
     const updateGenerationNotes = vi.fn().mockResolvedValue(generatedSnapshot());
@@ -280,9 +297,9 @@ describe('application/process-student-memory-snapshot-job', () => {
       materialChange: null,
     });
     expect(supersedePendingForStudent).toHaveBeenCalled();
-    expect(updateGenerationNotes).toHaveBeenCalledWith({
-      id: 'snapshot-ready-1',
-      generationNotes: expect.objectContaining({
+    const generated = await generator.mock.results[0]?.value;
+    expect(generated.snapshot.generationNotes).toEqual(
+      expect.objectContaining({
         candidateRefresh: expect.objectContaining({
           requested: false,
           enqueueStatus: 'not_requested',
@@ -292,13 +309,13 @@ describe('application/process-student-memory-snapshot-job', () => {
         }),
         materialChange: false,
       }),
-    });
+    );
     expect(requestRefresh).not.toHaveBeenCalled();
-    expect(updateGenerationNotes).toHaveBeenCalledTimes(1);
+    expect(updateGenerationNotes).not.toHaveBeenCalled();
   });
 
   it('requests candidate refresh when the trigger lesson contains a profile-worthy student fact', async () => {
-    const generator = vi.fn().mockResolvedValue({ snapshot: generatedSnapshot() });
+    const generator = successfulGenerator();
     const requestRefresh = vi.fn().mockImplementation(async () => {});
     const updateGenerationNotes = vi.fn().mockResolvedValue(generatedSnapshot());
     const triggerLesson = {
@@ -345,9 +362,9 @@ describe('application/process-student-memory-snapshot-job', () => {
       } as never,
     });
 
-    expect(updateGenerationNotes).toHaveBeenNthCalledWith(1, {
-      id: 'snapshot-ready-1',
-      generationNotes: expect.objectContaining({
+    const generated = await generator.mock.results[0]?.value;
+    expect(generated.snapshot.generationNotes).toEqual(
+      expect.objectContaining({
         candidateRefresh: expect.objectContaining({
           requested: true,
           enqueueStatus: 'pending',
@@ -357,8 +374,8 @@ describe('application/process-student-memory-snapshot-job', () => {
         }),
         materialChange: false,
       }),
-    });
-    expect(updateGenerationNotes).toHaveBeenNthCalledWith(2, {
+    );
+    expect(updateGenerationNotes).toHaveBeenNthCalledWith(1, {
       id: 'snapshot-ready-1',
       generationNotes: expect.objectContaining({
         candidateRefresh: expect.objectContaining({
@@ -377,7 +394,7 @@ describe('application/process-student-memory-snapshot-job', () => {
   });
 
   it('records failed candidate enqueue delivery without invalidating the ready snapshot', async () => {
-    const generator = vi.fn().mockResolvedValue({ snapshot: generatedSnapshot() });
+    const generator = successfulGenerator();
     const enqueueError = new Error('Redis unavailable');
     const requestRefresh = vi.fn().mockRejectedValue(enqueueError);
     const updateGenerationNotes = vi.fn().mockResolvedValue(generatedSnapshot());
@@ -428,13 +445,13 @@ describe('application/process-student-memory-snapshot-job', () => {
       }),
     ).resolves.toBeUndefined();
 
-    expect(updateGenerationNotes).toHaveBeenNthCalledWith(1, {
-      id: 'snapshot-ready-1',
-      generationNotes: expect.objectContaining({
+    const generated = await generator.mock.results[0]?.value;
+    expect(generated.snapshot.generationNotes).toEqual(
+      expect.objectContaining({
         candidateRefresh: expect.objectContaining({ enqueueStatus: 'pending' }),
       }),
-    });
-    expect(updateGenerationNotes).toHaveBeenNthCalledWith(2, {
+    );
+    expect(updateGenerationNotes).toHaveBeenNthCalledWith(1, {
       id: 'snapshot-ready-1',
       generationNotes: expect.objectContaining({
         candidateRefresh: expect.objectContaining({ enqueueStatus: 'failed' }),
@@ -450,8 +467,8 @@ describe('application/process-student-memory-snapshot-job', () => {
     warnSpy.mockRestore();
   });
 
-  it('still enqueues and records candidate intent when the initial metadata write fails', async () => {
-    const generator = vi.fn().mockResolvedValue({ snapshot: generatedSnapshot() });
+  it('retains durable pending intent when the enqueued-status metadata write fails', async () => {
+    const generator = successfulGenerator();
     const requestRefresh = vi.fn().mockResolvedValue(undefined);
     const metadataError = new Error('Postgres unavailable');
     const updateGenerationNotes = vi
@@ -506,19 +523,28 @@ describe('application/process-student-memory-snapshot-job', () => {
     ).resolves.toBeUndefined();
 
     expect(requestRefresh).toHaveBeenCalledTimes(1);
+    const generated = await generator.mock.results[0]?.value;
+    expect(generated.snapshot.generationNotes).toEqual(
+      expect.objectContaining({
+        candidateRefresh: expect.objectContaining({
+          requested: true,
+          enqueueStatus: 'pending',
+        }),
+      }),
+    );
     expect(updateGenerationNotes).toHaveBeenNthCalledWith(2, {
       id: 'snapshot-ready-1',
       generationNotes: expect.objectContaining({
         candidateRefresh: expect.objectContaining({
           requested: true,
-          enqueueStatus: 'enqueued',
+          enqueueStatus: 'failed',
         }),
       }),
     });
     expect(warnSpy).toHaveBeenCalledWith(
-      'Student profile candidate refresh decision metadata write failed; continuing to enqueue',
+      'Student profile candidate refresh enqueue failed; continuing',
       expect.objectContaining({
-        event: 'student_profile_candidate_refresh_decision_write_failed',
+        event: 'student_profile_candidate_refresh_enqueue_failed',
         error: metadataError.message,
       }),
     );
@@ -526,11 +552,11 @@ describe('application/process-student-memory-snapshot-job', () => {
   });
 
   it('requests candidate refresh when generated snapshot personal facts change', async () => {
-    const generator = vi.fn().mockResolvedValue({
-      snapshot: generatedSnapshot({
+    const generator = successfulGenerator(
+      generatedSnapshot({
         personalFacts: [profileWorthyStudentFact('Lives in Da Nang with her family.', 'personal')],
       }),
-    });
+    );
     const requestRefresh = vi.fn().mockImplementation(async () => {});
     const updateGenerationNotes = vi.fn().mockResolvedValue(generatedSnapshot());
 
@@ -590,8 +616,8 @@ describe('application/process-student-memory-snapshot-job', () => {
   });
 
   it('requests candidate refresh when durable preferences or constraints change', async () => {
-    const generator = vi.fn().mockResolvedValue({
-      snapshot: generatedSnapshot({
+    const generator = successfulGenerator(
+      generatedSnapshot({
         personalFacts: [
           profileWorthyStudentFact(
             'Prefers short structured homework checklists.',
@@ -599,7 +625,7 @@ describe('application/process-student-memory-snapshot-job', () => {
           ),
         ],
       }),
-    });
+    );
     const requestRefresh = vi.fn().mockImplementation(async () => {});
     const updateGenerationNotes = vi.fn().mockResolvedValue(generatedSnapshot());
 
@@ -659,9 +685,7 @@ describe('application/process-student-memory-snapshot-job', () => {
   });
 
   it('requests candidate refresh for manual replay only when explicitly requested', async () => {
-    const generator = vi.fn().mockResolvedValue({
-      snapshot: generatedSnapshot({ id: 'snapshot-ready-manual' }),
-    });
+    const generator = successfulGenerator(generatedSnapshot({ id: 'snapshot-ready-manual' }));
     const requestRefresh = vi.fn().mockImplementation(async () => {});
     const updateGenerationNotes = vi.fn().mockResolvedValue(generatedSnapshot());
 
@@ -729,12 +753,12 @@ describe('application/process-student-memory-snapshot-job', () => {
   });
 
   it('does not request candidate refresh for manual replay without the explicit candidate-refresh flag', async () => {
-    const generator = vi.fn().mockResolvedValue({
-      snapshot: generatedSnapshot({
+    const generator = successfulGenerator(
+      generatedSnapshot({
         id: 'snapshot-ready-manual',
         personalFacts: [profileWorthyStudentFact('Lives in Da Nang with her family.', 'personal')],
       }),
-    });
+    );
     const requestRefresh = vi.fn().mockImplementation(async () => {});
     const updateGenerationNotes = vi.fn().mockResolvedValue(generatedSnapshot());
 
@@ -777,27 +801,29 @@ describe('application/process-student-memory-snapshot-job', () => {
       } as never,
     });
 
-    expect(updateGenerationNotes).toHaveBeenCalledWith({
-      id: 'snapshot-ready-manual',
-      generationNotes: expect.objectContaining({
+    const generated = await generator.mock.results[0]?.value;
+    expect(generated.snapshot.generationNotes).toEqual(
+      expect.objectContaining({
         candidateRefresh: expect.objectContaining({
           requested: false,
+          enqueueStatus: 'not_requested',
           reasons: [],
           manualReplayRequestedCandidateRefresh: false,
           skippedNoProfileWorthyDeltaCount: 1,
         }),
       }),
-    });
+    );
+    expect(updateGenerationNotes).not.toHaveBeenCalled();
     expect(requestRefresh).not.toHaveBeenCalled();
   });
 
   it('uses bootstrap incremental refresh for homework-memory jobs without a previous ready snapshot', async () => {
-    const generator = vi.fn().mockResolvedValue({
-      snapshot: {
+    const generator = successfulGenerator(
+      generatedSnapshot({
         id: 'snapshot-ready-1',
         generatedAt: new Date('2026-03-20T02:00:00.000Z'),
-      },
-    });
+      }),
+    );
     const listAllLessonMemory = vi.fn().mockRejectedValue(new Error('must not list all lessons'));
     const listAllHomeworkMemory = vi
       .fn()
@@ -900,12 +926,12 @@ describe('application/process-student-memory-snapshot-job', () => {
 
   it('fails oversized incremental prompts before provider execution', async () => {
     const markFailed = vi.fn().mockResolvedValue(null);
-    const generator = vi.fn().mockResolvedValue({
-      snapshot: {
+    const generator = successfulGenerator(
+      generatedSnapshot({
         id: 'snapshot-ready-oversized',
         generatedAt: new Date('2026-03-20T02:00:00.000Z'),
-      },
-    });
+      }),
+    );
     const pacer = {
       run: vi.fn(async ({ execute }) => execute()),
     };
@@ -994,12 +1020,12 @@ describe('application/process-student-memory-snapshot-job', () => {
   });
 
   it('drops optional incremental supporting context above target before provider execution', async () => {
-    const generator = vi.fn().mockResolvedValue({
-      snapshot: {
+    const generator = successfulGenerator(
+      generatedSnapshot({
         id: 'snapshot-ready-compacted',
         generatedAt: new Date('2026-03-20T02:00:00.000Z'),
-      },
-    });
+      }),
+    );
     const triggerLesson = lessonMemoryEntry(
       'lesson-compact-trigger',
       '2026-03-20T00:00:00.000Z',
@@ -1095,12 +1121,12 @@ describe('application/process-student-memory-snapshot-job', () => {
   });
 
   it('allows oversized explicit manual rebuilds and records warning metadata', async () => {
-    const generator = vi.fn().mockResolvedValue({
-      snapshot: {
+    const generator = successfulGenerator(
+      generatedSnapshot({
         id: 'snapshot-ready-manual',
         generatedAt: new Date('2026-03-20T02:00:00.000Z'),
-      },
-    });
+      }),
+    );
     const manualLesson = lessonMemoryEntry(
       'lesson-manual-large',
       '2026-03-20T00:00:00.000Z',
