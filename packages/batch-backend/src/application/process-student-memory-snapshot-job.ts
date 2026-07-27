@@ -33,6 +33,7 @@ import {
   isStudentMemoryPacingDeferredError,
   type StudentMemoryGenerationPacer,
 } from './student-memory-generation-pacing.js';
+import type { StudentMemorySnapshotContent } from './student-memory-snapshot-content-schema.js';
 import {
   type GenerateStudentMemorySnapshotDependencies,
   generateStudentMemorySnapshot,
@@ -249,6 +250,9 @@ export async function processStudentMemorySnapshotJob(args: {
       });
     }
 
+    const candidateRefreshState: {
+      decision: ReturnType<typeof buildCandidateRefreshDecision> | null;
+    } = { decision: null };
     const result = await pacer.run({
       workload: 'student_memory_snapshot',
       provider: args.payload.provider,
@@ -267,6 +271,21 @@ export async function processStudentMemorySnapshotJob(args: {
             model: args.payload.model,
             prompt,
             envelope,
+            finalizeGenerationNotes: ({ content }) => {
+              const decision = buildCandidateRefreshDecision({
+                payload: args.payload,
+                pendingGenerationNotes: pendingEntry.generationNotes ?? null,
+                parentSnapshot: buildResult.parentSnapshot,
+                generatedSnapshot: content,
+                triggerProfileWorthyStudentFactCount:
+                  buildResult.triggerProfileWorthyStudentFactCount,
+              });
+              candidateRefreshState.decision = decision;
+              return {
+                materialChange: decision.materialChange,
+                candidateRefresh: decision.metadata,
+              };
+            },
             ...(isGuardedSnapshotRefreshStrategy(buildResult.strategy)
               ? { expectedLatestReadySnapshotId: buildResult.parentSnapshotId }
               : {}),
@@ -275,42 +294,19 @@ export async function processStudentMemorySnapshotJob(args: {
         }),
     });
 
+    const candidateRefreshDecision = candidateRefreshState.decision;
+    if (!candidateRefreshDecision) {
+      throw new Error('Snapshot generator did not finalize candidate refresh intent');
+    }
+    generationNotes = (result.snapshot.generationNotes ??
+      generationNotes) as StudentMemorySnapshotV11GenerationNotes;
+
     await snapshots.supersedePendingForStudent({
       studentId: args.payload.studentId,
       supersededById: result.snapshot.id,
       supersededAt: result.snapshot.generatedAt,
       maxGeneratedAt: pendingEntry.generatedAt,
     });
-
-    const candidateRefreshDecision = buildCandidateRefreshDecision({
-      payload: args.payload,
-      pendingGenerationNotes: pendingEntry.generationNotes ?? null,
-      parentSnapshot: buildResult.parentSnapshot,
-      generatedSnapshot: result.snapshot,
-      triggerProfileWorthyStudentFactCount: buildResult.triggerProfileWorthyStudentFactCount,
-    });
-    generationNotes = {
-      ...(result.snapshot.generationNotes ?? generationNotes ?? {}),
-      materialChange: candidateRefreshDecision.materialChange,
-      candidateRefresh: candidateRefreshDecision.metadata,
-    } as StudentMemorySnapshotV11GenerationNotes;
-    try {
-      await snapshots.updateGenerationNotes({
-        id: result.snapshot.id,
-        generationNotes,
-      });
-    } catch (metadataError) {
-      logger.warn(
-        'Student profile candidate refresh decision metadata write failed; continuing to enqueue',
-        {
-          event: 'student_profile_candidate_refresh_decision_write_failed',
-          studentId: args.payload.studentId,
-          sourceSnapshotId: result.snapshot.id,
-          candidateRefreshRequested: candidateRefreshDecision.requested,
-          error: metadataError instanceof Error ? metadataError.message : String(metadataError),
-        },
-      );
-    }
 
     if (!candidateRefreshDecision.requested) {
       logger.info('Student profile candidate refresh skipped after snapshot generation', {
@@ -599,7 +595,7 @@ function buildCandidateRefreshDecision(args: {
   payload: ProcessStudentMemorySnapshotJobPayload;
   pendingGenerationNotes: Record<string, unknown> | null;
   parentSnapshot: StudentMemorySnapshotRecord | null;
-  generatedSnapshot: StudentMemorySnapshotRecord;
+  generatedSnapshot: StudentMemorySnapshotContent;
   triggerProfileWorthyStudentFactCount: number;
 }): {
   requested: boolean;

@@ -26,7 +26,7 @@ function dependencies(snapshot: ReturnType<typeof eligibleSnapshot> | null) {
       })),
     },
     profileCandidates: {
-      requestRefresh: vi.fn().mockResolvedValue(undefined),
+      reconcileRefresh: vi.fn().mockResolvedValue(undefined),
     },
   };
 }
@@ -45,7 +45,7 @@ describe('application/retry-student-profile-candidate-refresh', () => {
     });
 
     expect(result).toEqual({ outcome: 'enqueued', snapshotId: snapshot.id });
-    expect(overrides.profileCandidates.requestRefresh).toHaveBeenCalledWith({
+    expect(overrides.profileCandidates.reconcileRefresh).toHaveBeenCalledWith({
       params: {
         studentId: snapshot.studentId,
         sourceSnapshotId: snapshot.id,
@@ -77,7 +77,7 @@ describe('application/retry-student-profile-candidate-refresh', () => {
       }),
     ).resolves.toMatchObject({ outcome: 'enqueued' });
 
-    expect(overrides.profileCandidates.requestRefresh).toHaveBeenCalledTimes(1);
+    expect(overrides.profileCandidates.reconcileRefresh).toHaveBeenCalledTimes(1);
   });
 
   it('returns already_enqueued without requesting a duplicate job', async () => {
@@ -91,7 +91,7 @@ describe('application/retry-student-profile-candidate-refresh', () => {
       }),
     ).resolves.toEqual({ outcome: 'already_enqueued', snapshotId: snapshot.id });
 
-    expect(overrides.profileCandidates.requestRefresh).not.toHaveBeenCalled();
+    expect(overrides.profileCandidates.reconcileRefresh).not.toHaveBeenCalled();
     expect(overrides.snapshots.updateGenerationNotes).not.toHaveBeenCalled();
   });
 
@@ -114,7 +114,7 @@ describe('application/retry-student-profile-candidate-refresh', () => {
       }),
     ).rejects.toThrow('does not record a requested candidate refresh');
 
-    expect(overrides.profileCandidates.requestRefresh).not.toHaveBeenCalled();
+    expect(overrides.profileCandidates.reconcileRefresh).not.toHaveBeenCalled();
   });
 
   it('rejects a snapshot that is missing or not eligible and ready', async () => {
@@ -127,14 +127,14 @@ describe('application/retry-student-profile-candidate-refresh', () => {
       }),
     ).rejects.toThrow('is not an eligible ready snapshot');
 
-    expect(overrides.profileCandidates.requestRefresh).not.toHaveBeenCalled();
+    expect(overrides.profileCandidates.reconcileRefresh).not.toHaveBeenCalled();
   });
 
   it('records failed delivery and rethrows an enqueue failure', async () => {
     const snapshot = eligibleSnapshot({ requested: true, enqueueStatus: 'failed' });
     const overrides = dependencies(snapshot);
     const enqueueError = new Error('Redis unavailable');
-    overrides.profileCandidates.requestRefresh.mockRejectedValue(enqueueError);
+    overrides.profileCandidates.reconcileRefresh.mockRejectedValue(enqueueError);
 
     await expect(
       retryStudentProfileCandidateRefreshForSnapshot({

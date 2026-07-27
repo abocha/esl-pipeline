@@ -570,9 +570,9 @@ Only request candidate refresh if at least one of the following is true:
 
 Do not request candidate refresh after every snapshot if the triggering memory contains no profile-worthy material.
 
-Candidate decision and delivery are separate. Persist `not_requested` for a skipped decision,
-`pending` before an intended enqueue, `enqueued` after the stable queue job is accepted, and
-`failed` after enqueue failure. An operator may retry only an explicit eligible ready snapshot that
+Candidate decision and delivery are separate. Persist `not_requested` or `pending` atomically with
+the canonical ready snapshot, `enqueued` after the stable queue job is accepted, and `failed`
+after enqueue failure. Operator retry reconciles a retained failed stable job and may target only an explicit eligible ready snapshot that
 already records requested intent; retry does not regenerate the snapshot.
 
 ### Candidate Dedup Policy

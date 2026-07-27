@@ -3,7 +3,7 @@ import {
   getEligibleReadyStudentMemorySnapshotById,
   updateStudentMemorySnapshotGenerationNotes,
 } from '../domain/student-memory-snapshot-repository.js';
-import { requestStudentProfileCandidateRefresh } from './request-student-profile-candidate-refresh.js';
+import { reconcileStudentProfileCandidateRefresh } from './request-student-profile-candidate-refresh.js';
 import type { StudentMemorySnapshotCandidateRefreshEnqueueStatus } from './student-memory-snapshot-generation-notes.js';
 
 interface RetryStudentProfileCandidateRefreshDependencies {
@@ -12,7 +12,7 @@ interface RetryStudentProfileCandidateRefreshDependencies {
     updateGenerationNotes: typeof updateStudentMemorySnapshotGenerationNotes;
   };
   profileCandidates: {
-    requestRefresh: typeof requestStudentProfileCandidateRefresh;
+    reconcileRefresh: typeof reconcileStudentProfileCandidateRefresh;
   };
 }
 
@@ -30,7 +30,7 @@ export async function retryStudentProfileCandidateRefreshForSnapshot(args: {
     updateGenerationNotes: updateStudentMemorySnapshotGenerationNotes,
   };
   const profileCandidates = args.overrides?.profileCandidates ?? {
-    requestRefresh: requestStudentProfileCandidateRefresh,
+    reconcileRefresh: reconcileStudentProfileCandidateRefresh,
   };
   const snapshot = await snapshots.getEligibleReadyById(args.snapshotId);
   if (!snapshot) {
@@ -72,7 +72,7 @@ export async function retryStudentProfileCandidateRefreshForSnapshot(args: {
 
   await persistStatus('pending');
   try {
-    await profileCandidates.requestRefresh({
+    await profileCandidates.reconcileRefresh({
       params: {
         studentId: snapshot.studentId,
         sourceSnapshotId: snapshot.id,
