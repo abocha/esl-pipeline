@@ -139,8 +139,9 @@ resolve the primary workspace, pass the workspace ID into the application call, 
 `WorkspaceContextError` to its canonical response.
 
 The existing `resolveWorkspaceIdForRequest()` helper in `students-routes.ts` is reused for the ten
-student business endpoints. Their schedule/billing error mapper gains `WorkspaceContextError`
-handling so missing membership does not become an internal error.
+direct student business endpoints and the overview schedule/billing consumer. Their
+schedule/billing error mapper gains `WorkspaceContextError` handling so missing membership does not
+become an internal error.
 
 No workspace ID is accepted from a request body, path, query string, or frontend state.
 
@@ -233,8 +234,8 @@ Before implementation, tests must fail while proving:
 - dashboard child rows are excluded unless both the row and its owning student belong to the
   requested workspace, protecting against mismatched historical rows.
 
-The tests call the canonical membership resolver for both users so the fixture proves registration
-ownership and application isolation compose correctly without requiring production-like tokens.
+The tests call the canonical membership resolver for both users so the fixture proves membership
+resolution and application isolation compose correctly without requiring production-like tokens.
 
 ### Transport contract tests
 
