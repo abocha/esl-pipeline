@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.2.7] - 2026-07-27
+
+### Changed
+
+- Automated release from PR #158: Fix duplicated Inworld pace controls (https://github.com/abocha/esl-pipeline/pull/158)
+
 ## [10.2.6] - 2026-07-27
 
 ### Changed
