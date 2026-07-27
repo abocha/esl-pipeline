@@ -61,7 +61,6 @@ export function renderInworldSpeechSegment(args: {
   const metadataInstructions = [
     args.segment.emotion ? `emotion: ${args.segment.emotion}` : undefined,
     args.segment.intonation ? `intonation: ${args.segment.intonation}` : undefined,
-    args.segment.pace ? `pace: ${args.segment.pace}` : undefined,
   ].filter(Boolean);
   const before = capabilities.supportsNonVerbals
     ? (args.segment.nonVerbalsBefore ?? []).map((cue) => `[${cue}]`)
@@ -88,11 +87,11 @@ export function renderInworldSpeechSegment(args: {
     .filter(Boolean)
     .join(' ');
 
+  const speakingRate =
+    args.segment.pace === 'natural' ? undefined : resolveSpeakingRate(args.segment.pace);
   return {
     text,
-    ...(resolveSpeakingRate(args.segment.pace) !== undefined
-      ? { speakingRate: resolveSpeakingRate(args.segment.pace) }
-      : {}),
+    ...(speakingRate !== undefined ? { speakingRate } : {}),
     ...(args.segment.deliveryMode ? { deliveryMode: args.segment.deliveryMode } : {}),
   };
 }

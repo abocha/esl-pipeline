@@ -624,10 +624,30 @@ describe('inworld provider adapter basics', () => {
         },
       }),
     ).toEqual({
-      text: '[emotion: calm concern; intonation: firm but collaborative; pace: measured] [speak as if carefully breaking difficult news] [sigh] <break time="150ms" /> We need a CLEARER DEADLINE. <break time="350ms" />',
+      text: '[emotion: calm concern; intonation: firm but collaborative] [speak as if carefully breaking difficult news] [sigh] <break time="150ms" /> We need a CLEARER DEADLINE. <break time="350ms" />',
       speakingRate: 0.95,
       deliveryMode: 'BALANCED',
     });
+  });
+
+  it.each([
+    [undefined, undefined],
+    ['natural', undefined],
+    ['slow', 0.85],
+    ['measured', 0.95],
+    ['brisk', 1.1],
+  ] as const)('renders TTS-2 pace %s through only the numeric SDK control', (pace, speakingRate) => {
+    const rendered = renderInworldSpeechSegment({
+      model: 'inworld-tts-2',
+      segment: {
+        id: 'segment-1',
+        text: 'Keep a steady tempo.',
+        ...(pace ? { pace } : {}),
+      },
+    });
+
+    expect(rendered.text).toBe('Keep a steady tempo.');
+    expect(rendered.speakingRate).toBe(speakingRate);
   });
 
   it('keeps common TTS-2 controls but omits free-form direction for non-steerable voices', () => {
@@ -654,7 +674,7 @@ describe('inworld provider adapter basics', () => {
     });
   });
 
-  it('keeps TTS 1.5 rendering free from TTS-2 steering syntax', () => {
+  it('keeps TTS 1.5 rendering free from TTS-2 steering syntax without changing natural pace', () => {
     expect(
       renderInworldSpeechSegment({
         model: 'inworld-tts-1.5-mini',
@@ -662,12 +682,13 @@ describe('inworld provider adapter basics', () => {
           id: 'segment-1',
           text: 'We need a clearer deadline.',
           emotion: 'calm concern',
+          pace: 'natural',
           nonVerbalsBefore: ['sigh'],
           pauseAfterMs: 350,
           deliveryMode: 'CREATIVE',
         },
       }),
-    ).toEqual({ text: 'We need a clearer deadline.' });
+    ).toEqual({ text: 'We need a clearer deadline.', speakingRate: 1 });
   });
 
   it('keeps preview cache hashes stable when only ranker timestamps change', async () => {
@@ -741,6 +762,10 @@ describe('inworld provider adapter basics', () => {
     await expect(
       buildHash(createPreviewSpeechPlan({ emphasis: ['clearer deadline'] })),
     ).resolves.not.toBe(baseline);
+    await expect(buildHash(createPreviewSpeechPlan({ pace: 'measured' }))).resolves.not.toBe(
+      baseline,
+    );
+    await expect(buildHash(createPreviewSpeechPlan({ pace: 'natural' }))).resolves.toBe(baseline);
     await expect(
       buildHash(
         createPreviewSpeechPlan(),
