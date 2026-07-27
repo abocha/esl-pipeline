@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.2.5] - 2026-07-27
+
+### Changed
+
+- Automated release from PR #156: Fix student-memory snapshot eligibility recovery (https://github.com/abocha/esl-pipeline/pull/156)
+
 ## [10.2.4] - 2026-07-23
 
 ### Changed
