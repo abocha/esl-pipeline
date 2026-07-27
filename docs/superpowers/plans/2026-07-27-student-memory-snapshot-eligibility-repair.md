@@ -1,5 +1,9 @@
 # Student-Memory Snapshot Eligibility Repair Implementation Plan
 
+> **Status (2026-07-27):** Implemented by PR #156, released as `v10.2.5`, and completed through the
+> reviewed production replay. The task checkboxes below are retained as the original execution
+> procedure rather than live remaining work.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development
 > (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use
 > checkbox (`- [ ]`) syntax for tracking.

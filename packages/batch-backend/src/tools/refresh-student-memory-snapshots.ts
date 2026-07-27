@@ -9,6 +9,7 @@ import {
 import type { StudentMemorySnapshotRefreshStrategy } from '../application/student-memory-snapshot-generation-notes.js';
 import { loadBatchBackendEnv } from '../bootstrap/env.js';
 import { loadConfig } from '../config/env.js';
+import { closeStudentMemoryQueue } from '../infrastructure/student-memory-queue.js';
 
 type ManualSnapshotRefreshStrategy = Extract<
   StudentMemorySnapshotRefreshStrategy,
@@ -227,8 +228,10 @@ async function run(): Promise<void> {
   console.log('[student-memory-snapshot-refresh] dryRun=false');
 }
 
-void run().catch((error) => {
-  const message = error instanceof Error ? error.message : String(error);
-  console.error(`[student-memory-snapshot-refresh] failed: ${message}`);
-  process.exitCode = 1;
-});
+void run()
+  .finally(() => closeStudentMemoryQueue())
+  .catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[student-memory-snapshot-refresh] failed: ${message}`);
+    process.exitCode = 1;
+  });

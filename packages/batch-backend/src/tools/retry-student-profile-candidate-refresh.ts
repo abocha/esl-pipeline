@@ -3,6 +3,7 @@ import { pathToFileURL } from 'node:url';
 import { retryStudentProfileCandidateRefreshForSnapshot } from '../application/retry-student-profile-candidate-refresh.js';
 import { loadBatchBackendEnv } from '../bootstrap/env.js';
 import { loadConfig } from '../config/env.js';
+import { closeStudentMemoryQueue } from '../infrastructure/student-memory-queue.js';
 
 interface CliOptions {
   snapshotId: string;
@@ -60,9 +61,11 @@ async function run(): Promise<void> {
 
 const entrypoint = process.argv[1];
 if (entrypoint && import.meta.url === pathToFileURL(entrypoint).href) {
-  void run().catch((error) => {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(`[student-profile-candidate-refresh-retry] failed: ${message}`);
-    process.exitCode = 1;
-  });
+  void run()
+    .finally(() => closeStudentMemoryQueue())
+    .catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[student-profile-candidate-refresh-retry] failed: ${message}`);
+      process.exitCode = 1;
+    });
 }

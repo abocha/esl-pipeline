@@ -3,10 +3,26 @@ import { JobsOptions, Processor, Queue, QueueEvents, Worker } from 'bullmq';
 import type { StudentMemoryQueuePayload } from '../application/process-student-memory-job.js';
 import { loadConfig } from '../config/env.js';
 import { createJobLogger, logger } from './logger.js';
-import { createRedisClient } from './redis.js';
+import { closeRedisClient, createRedisClient } from './redis.js';
 
 let queueSingleton: Queue<StudentMemoryQueuePayload> | null = null;
 let queueEventsSingleton: QueueEvents | null = null;
+
+export async function closeStudentMemoryQueue(): Promise<void> {
+  const queue = queueSingleton;
+  const queueEvents = queueEventsSingleton;
+  queueSingleton = null;
+  queueEventsSingleton = null;
+
+  const queueResults = await Promise.allSettled([queueEvents?.close(), queue?.close()]);
+  const redisResults = await Promise.allSettled([closeRedisClient()]);
+  const failure = [...queueResults, ...redisResults].find(
+    (result): result is PromiseRejectedResult => result.status === 'rejected',
+  );
+  if (failure) {
+    throw failure.reason;
+  }
+}
 
 export interface EnqueueStudentMemoryOptions {
   jobId?: string;
