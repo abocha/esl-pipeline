@@ -3,7 +3,7 @@
 ## Meta
 
 - Date: 2026-07-27
-- Status: implemented on branch; final validation and production recovery pending
+- Status: implemented and validated on branch; production recovery pending
 - Scope: repair post-cutover student-memory snapshot eligibility, retry semantics, candidate-refresh
   recovery, and the corresponding canonical-assignment invariant
 - Delivery: one focused repair pull request followed by a reviewed production replay
