@@ -1,10 +1,10 @@
-# Agent Handbook (v4)
+# Agent Handbook (v5)
 
 ## Meta
 
 - Audience: AI agents and maintainers.
 - Authority Level: router + compact operating contract.
-- Last Verified Against: 2026-07-15 repo state.
+- Last Verified Against: 2026-07-27 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly or after major workflow/tooling changes.
 - Status: `router`.
@@ -44,6 +44,63 @@ If resuming after context loss, start with
   only when repeated local rules cannot be expressed clearly through those docs.
 - Put one-off goals and acceptance criteria in the task prompt or active plan, not in this router.
 - Put reusable procedures in skills and deterministic enforcement in scripts, hooks, or CI.
+
+## Execution Discipline
+
+### Primary-agent ownership
+
+- The primary agent owns all repository modifications. Perform code, test, documentation, config,
+  and workflow edits inline; do not delegate implementation to subagents.
+- Project subagents are read-only specialists and are not a default step:
+  - `terra_explorer` is for bounded large-context tracing across code paths, contracts, tests, and
+    active documentation.
+  - `sol_reviewer` is for finding-first review where correctness, security, contracts, concurrency,
+    or regression risk justifies high-reasoning review.
+- Use the smallest set of agents that materially improves the result. Do not invoke subagents merely
+  for parallelism, ceremony, or confirmation of work the primary agent can establish cheaply.
+- Give each subagent a concrete, non-overlapping question. When an explorer owns a repository trace,
+  the primary agent synthesizes its evidence instead of repeating the same exploration; perform only
+  the targeted verification needed to make or validate the resulting change.
+
+### Review gates
+
+- Review cadence follows shared implementation context and risk boundaries, not the number of tasks
+  or checkboxes in a plan.
+- Batch related plan steps into one review gate when they operate on the same code surface and form
+  one evidence chain. For example, exploration, a failing regression test, and the minimal green
+  implementation for one subsystem should normally be reviewed together after that batch, not by
+  calling a reviewer once per step.
+- Start a new review batch when the work moves to a materially different subsystem, contract surface,
+  or risk class, or when earlier findings require a redesigned approach. Give the reviewer the full
+  relevant diff, plan context, and validation evidence for that batch.
+- Send follow-up review of the same context to the reviewer that handled the original batch so its
+  findings, assumptions, and residual questions carry forward. Use a fresh reviewer only when the
+  original reviewer is unavailable or an intentionally independent second opinion is required.
+- Avoid both fragmented micro-reviews and one oversized end-only review that mixes unrelated
+  contexts. Reviewer calls must have a specific decision or risk question to answer.
+
+### Tool-call batching
+
+- Within each bounded Code Mode stage, run independent `functions.exec`-available tool calls
+  concurrently in one `functions.exec` call.
+- Use `Promise.allSettled(...)` when partial results are useful and inspect every result. Use
+  `Promise.all(...)` only when any failure should abort the batch.
+- Keep dependencies, waits or resumes, approvals, conflicting or interdependent mutations, and
+  adaptive investigations whose next step depends on the prior result sequential.
+- Do not split otherwise batchable inspections across outer tool calls.
+
+### Quota economy
+
+- Prefer the lowest-cost evidence path that can answer the question reliably: the smallest relevant
+  doc set, targeted search, focused test, or bounded specialist review.
+- Stop exploring once evidence is sufficient for the current decision. Avoid repeated repository
+  scans, duplicate agent work, speculative branches of investigation, and rerunning checks without
+  new evidence.
+- Match validation to the changed risk surface. Do not expand a focused change into broad checks,
+  CI monitoring, or unrelated cleanup unless repo routing, fresh failure evidence, or the user
+  requires it.
+- Preserve quality over token savings when security, data integrity, contracts, production safety,
+  or a genuinely ambiguous implementation decision needs deeper evidence.
 
 ## Common Routes
 
