@@ -9,6 +9,14 @@ import { logger } from './logger.js';
 
 let client: Redis | null = null;
 
+export async function closeRedisClient(): Promise<void> {
+  const redis = client;
+  client = null;
+  if (redis) {
+    await redis.quit();
+  }
+}
+
 // createRedisClient.declaration()
 export function createRedisClient(): Redis {
   if (client) return client;
