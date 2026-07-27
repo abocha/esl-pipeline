@@ -40,7 +40,8 @@ export interface StudentMemorySnapshotBudgetDecision {
 
 export type StudentMemorySnapshotFailureDetails =
   | StudentMemorySnapshotPromptBudgetFailureDetails
-  | StudentMemorySnapshotParentChangedFailureDetails;
+  | StudentMemorySnapshotParentChangedFailureDetails
+  | StudentMemorySnapshotSourcesChangedFailureDetails;
 
 export interface StudentMemorySnapshotPromptBudgetFailureDetails {
   code: 'incremental_prompt_input_tokens_exceeded_hard_budget';
@@ -57,6 +58,13 @@ export interface StudentMemorySnapshotParentChangedFailureDetails {
   message: string;
   expectedLatestReadySnapshotId: string | null;
   actualLatestReadySnapshotId: string | null;
+}
+
+export interface StudentMemorySnapshotSourcesChangedFailureDetails {
+  code: 'student_memory_snapshot_sources_changed_before_finalize';
+  stage: 'snapshot_ready_finalization';
+  message: string;
+  unavailableLessonMemoryEntryIds: string[];
 }
 
 export interface StudentMemorySnapshotCandidateRefreshDecision {

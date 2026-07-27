@@ -21,6 +21,7 @@ import {
   getStudentMemorySnapshotById,
   markStudentMemorySnapshotFailed,
   StudentMemorySnapshotParentChangedError,
+  StudentMemorySnapshotSourcesChangedError,
   supersedePendingStudentMemorySnapshotsForStudent,
   updateStudentMemorySnapshotGenerationNotes,
 } from '../domain/student-memory-snapshot-repository.js';
@@ -361,6 +362,27 @@ export async function processStudentMemorySnapshotJob(args: {
       });
       throw error;
     }
+    if (error instanceof StudentMemorySnapshotSourcesChangedError) {
+      generationNotes = addSourcesChangedFailureDetails({
+        generationNotes,
+        error,
+      });
+      logger.warn('Student-memory snapshot sources changed before ready finalization; retrying', {
+        event: 'student_memory_snapshot_sources_changed_retry',
+        studentId: args.payload.studentId,
+        pendingEntryId: args.payload.pendingEntryId,
+        unavailableLessonMemoryEntryIds: error.unavailableLessonMemoryEntryIds,
+      });
+      await markFailureIfFinalAttempt({
+        payload: args.payload,
+        attemptsMade: args.attemptsMade,
+        maxAttempts: args.maxAttempts,
+        snapshots,
+        error,
+        generationNotes,
+      });
+      throw error;
+    }
     await markFailureIfFinalAttempt({
       payload: args.payload,
       attemptsMade: args.attemptsMade,
@@ -392,6 +414,24 @@ function addParentChangedFailureDetails(args: {
       message: args.error.message,
       expectedLatestReadySnapshotId: args.error.expectedLatestReadySnapshotId,
       actualLatestReadySnapshotId: args.error.actualLatestReadySnapshotId,
+    },
+  };
+}
+
+function addSourcesChangedFailureDetails(args: {
+  generationNotes?: StudentMemorySnapshotV11GenerationNotes | null;
+  error: StudentMemorySnapshotSourcesChangedError;
+}): StudentMemorySnapshotV11GenerationNotes | null {
+  if (!args.generationNotes) {
+    return null;
+  }
+  return {
+    ...args.generationNotes,
+    failureDetails: {
+      code: 'student_memory_snapshot_sources_changed_before_finalize',
+      stage: 'snapshot_ready_finalization',
+      message: args.error.message,
+      unavailableLessonMemoryEntryIds: args.error.unavailableLessonMemoryEntryIds,
     },
   };
 }
@@ -984,14 +1024,9 @@ function resolvePreviousSnapshotCoverage(snapshot: StudentMemorySnapshotRecord |
     };
   }
 
-  const notes = snapshot.generationNotes ?? {};
   return {
-    lessonMemoryEntryIds: Array.isArray(notes.coveredLessonMemoryEntryIds)
-      ? notes.coveredLessonMemoryEntryIds.filter((id): id is string => typeof id === 'string')
-      : snapshot.lessonMemoryEntryIds,
-    homeworkMemoryEntryIds: Array.isArray(notes.coveredHomeworkMemoryEntryIds)
-      ? notes.coveredHomeworkMemoryEntryIds.filter((id): id is string => typeof id === 'string')
-      : snapshot.homeworkMemoryEntryIds,
+    lessonMemoryEntryIds: snapshot.lessonMemoryEntryIds,
+    homeworkMemoryEntryIds: snapshot.homeworkMemoryEntryIds,
   };
 }
 
