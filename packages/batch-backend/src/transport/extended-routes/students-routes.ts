@@ -263,6 +263,7 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
 
       try {
         const params = paramsSchema.parse(request.params ?? {});
+        const workspaceId = await resolveWorkspaceIdForRequest(request);
         const profilePayload = await resolveStudentSurfaceProfile(params.id);
         if (!profilePayload) {
           return errorResponse(reply, 'not_found');
@@ -289,7 +290,7 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
             offset: 0,
             order: 'desc',
           }),
-          getStudentScheduleBillingSurface(params.id),
+          getStudentScheduleBillingSurface(workspaceId, params.id),
         ]);
 
         if (!memory || !pendingCandidates || !scheduleBilling) {
@@ -318,6 +319,9 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
             details: error.issues,
           });
         }
+
+        const workspaceError = workspaceContextErrorResponse(reply, error);
+        if (workspaceError) return workspaceError;
 
         logger.error(error instanceof Error ? error : String(error), {
           event: 'http_request',
@@ -505,7 +509,8 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
 
       try {
         const params = paramsSchema.parse(request.params ?? {});
-        const surface = await getStudentScheduleBillingSurface(params.id);
+        const workspaceId = await resolveWorkspaceIdForRequest(request);
+        const surface = await getStudentScheduleBillingSurface(workspaceId, params.id);
         if (!surface) {
           return errorResponse(reply, 'not_found');
         }
@@ -526,6 +531,9 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
             details: error.issues,
           });
         }
+
+        const workspaceError = workspaceContextErrorResponse(reply, error);
+        if (workspaceError) return workspaceError;
 
         logger.error(error instanceof Error ? error : String(error), {
           event: 'http_request',
@@ -552,8 +560,14 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
         const params = paramsSchema.parse(request.params ?? {});
         const body = lessonPlanBodySchema.parse(request.body ?? {});
         const authenticatedUser = getAuthenticatedUser(request);
+        const workspaceId = await resolveWorkspaceIdForRequest(request);
         return reply.send(
-          await updateStudentLessonPlan(params.id, body, authenticatedUser?.id ?? null),
+          await updateStudentLessonPlan(
+            workspaceId,
+            params.id,
+            body,
+            authenticatedUser?.id ?? null,
+          ),
         );
       } catch (error: unknown) {
         return handleScheduleBillingRouteError(reply, routePath, error);
@@ -577,8 +591,10 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
         const params = paramsSchema.parse(request.params ?? {});
         const body = recurrenceBodySchema.parse(request.body ?? {});
         const authenticatedUser = getAuthenticatedUser(request);
+        const workspaceId = await resolveWorkspaceIdForRequest(request);
         return reply.send(
           await upsertPrimaryStudentLessonRecurrence(
+            workspaceId,
             params.id,
             body,
             authenticatedUser?.id ?? null,
@@ -603,9 +619,12 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
         const params = paramsSchema.parse(request.params ?? {});
         const body = createLessonBodySchema.parse(request.body ?? {});
         const authenticatedUser = getAuthenticatedUser(request);
+        const workspaceId = await resolveWorkspaceIdForRequest(request);
         return reply
           .code(201)
-          .send(await createStudentLesson(params.id, body, authenticatedUser?.id ?? null));
+          .send(
+            await createStudentLesson(workspaceId, params.id, body, authenticatedUser?.id ?? null),
+          );
       } catch (error: unknown) {
         return handleScheduleBillingRouteError(reply, routePath, error);
       }
@@ -628,8 +647,10 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
         const params = paramsSchema.parse(request.params ?? {});
         const body = updateLessonBodySchema.parse(request.body ?? {});
         const authenticatedUser = getAuthenticatedUser(request);
+        const workspaceId = await resolveWorkspaceIdForRequest(request);
         return reply.send(
           await updateStudentLesson(
+            workspaceId,
             params.id,
             params.lessonId,
             body,
@@ -660,8 +681,10 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
       try {
         const params = paramsSchema.parse(request.params ?? {});
         const authenticatedUser = getAuthenticatedUser(request);
+        const workspaceId = await resolveWorkspaceIdForRequest(request);
         return reply.send(
           await hideStudentLessonFollowupReminder(
+            workspaceId,
             params.id,
             params.lessonId,
             authenticatedUser?.id ?? null,
@@ -688,8 +711,13 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
       try {
         const params = paramsSchema.parse(request.params ?? {});
         const authenticatedUser = getAuthenticatedUser(request);
+        const workspaceId = await resolveWorkspaceIdForRequest(request);
         return reply.send(
-          await undoLatestHiddenStudentReminder(params.id, authenticatedUser?.id ?? null),
+          await undoLatestHiddenStudentReminder(
+            workspaceId,
+            params.id,
+            authenticatedUser?.id ?? null,
+          ),
         );
       } catch (error: unknown) {
         return handleScheduleBillingRouteError(reply, routePath, error);
@@ -710,9 +738,12 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
         const params = paramsSchema.parse(request.params ?? {});
         const body = packageBodySchema.parse(request.body ?? {});
         const authenticatedUser = getAuthenticatedUser(request);
+        const workspaceId = await resolveWorkspaceIdForRequest(request);
         return reply
           .code(201)
-          .send(await addStudentPackage(params.id, body, authenticatedUser?.id ?? null));
+          .send(
+            await addStudentPackage(workspaceId, params.id, body, authenticatedUser?.id ?? null),
+          );
       } catch (error: unknown) {
         return handleScheduleBillingRouteError(reply, routePath, error);
       }
@@ -732,9 +763,12 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
         const params = paramsSchema.parse(request.params ?? {});
         const body = creditAdjustmentBodySchema.parse(request.body ?? {});
         const authenticatedUser = getAuthenticatedUser(request);
+        const workspaceId = await resolveWorkspaceIdForRequest(request);
         return reply
           .code(201)
-          .send(await adjustStudentCredits(params.id, body, authenticatedUser?.id ?? null));
+          .send(
+            await adjustStudentCredits(workspaceId, params.id, body, authenticatedUser?.id ?? null),
+          );
       } catch (error: unknown) {
         return handleScheduleBillingRouteError(reply, routePath, error);
       }
@@ -754,9 +788,12 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
         const params = paramsSchema.parse(request.params ?? {});
         const body = paymentSchema.parse(request.body ?? {});
         const authenticatedUser = getAuthenticatedUser(request);
+        const workspaceId = await resolveWorkspaceIdForRequest(request);
         return reply
           .code(201)
-          .send(await recordStudentPayment(params.id, body, authenticatedUser?.id ?? null));
+          .send(
+            await recordStudentPayment(workspaceId, params.id, body, authenticatedUser?.id ?? null),
+          );
       } catch (error: unknown) {
         return handleScheduleBillingRouteError(reply, routePath, error);
       }
@@ -2382,6 +2419,9 @@ function handleScheduleBillingRouteError(reply: FastifyReply, routePath: string,
       details: error.issues,
     });
   }
+
+  const workspaceError = workspaceContextErrorResponse(reply, error);
+  if (workspaceError) return workspaceError;
 
   if (error instanceof StudentScheduleBillingError) {
     return reply.code(error.status).send({

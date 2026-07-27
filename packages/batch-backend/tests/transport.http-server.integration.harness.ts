@@ -44,6 +44,7 @@ import * as templateContentModule from '../src/application/template-content.js';
 import * as updateDraftModule from '../src/application/update-draft.js';
 import * as updateRecordingTranscriptModule from '../src/application/update-recording-transcript.js';
 import { getVersionMeta } from '../src/application/version-meta.js';
+import * as workspaceContextModule from '../src/application/workspace-context.js';
 import { publishJobEvent } from '../src/domain/job-events.js';
 import { publishRecordingEvent } from '../src/domain/recording-events.js';
 import * as recordingRepositoryModule from '../src/domain/recording-repository.js';
@@ -321,6 +322,8 @@ vi.mock('../src/application/student-profile-bindings', () => {
 vi.mock('../src/application/student-schedule-billing', () => {
   return {
     getStudentScheduleBillingSurface: vi.fn(),
+    hideStudentLessonFollowupReminder: vi.fn(),
+    undoLatestHiddenStudentReminder: vi.fn(),
     updateStudentLessonPlan: vi.fn(),
     createStudentLesson: vi.fn(),
     updateStudentLesson: vi.fn(),
@@ -469,8 +472,25 @@ export function describeHttpServerIntegrationSuite(
     const mockGetStudentScheduleBillingSurface = vi.mocked(
       studentScheduleBillingModule.getStudentScheduleBillingSurface,
     );
+    const mockHideStudentLessonFollowupReminder = vi.mocked(
+      studentScheduleBillingModule.hideStudentLessonFollowupReminder,
+    );
+    const mockUndoLatestHiddenStudentReminder = vi.mocked(
+      studentScheduleBillingModule.undoLatestHiddenStudentReminder,
+    );
+    const mockUpdateStudentLessonPlan = vi.mocked(
+      studentScheduleBillingModule.updateStudentLessonPlan,
+    );
+    const mockCreateStudentLesson = vi.mocked(studentScheduleBillingModule.createStudentLesson);
+    const mockUpdateStudentLesson = vi.mocked(studentScheduleBillingModule.updateStudentLesson);
     const mockUpsertPrimaryStudentLessonRecurrence = vi.mocked(
       studentScheduleBillingModule.upsertPrimaryStudentLessonRecurrence,
+    );
+    const mockAddStudentPackage = vi.mocked(studentScheduleBillingModule.addStudentPackage);
+    const mockAdjustStudentCredits = vi.mocked(studentScheduleBillingModule.adjustStudentCredits);
+    const mockRecordStudentPayment = vi.mocked(studentScheduleBillingModule.recordStudentPayment);
+    const mockResolvePrimaryWorkspaceIdForUser = vi.mocked(
+      workspaceContextModule.resolvePrimaryWorkspaceIdForUser,
     );
     const mockGetBusinessSettings = vi.mocked(teacherBusinessDashboardModule.getBusinessSettings);
     const mockUpdateBusinessSettings = vi.mocked(
@@ -486,6 +506,9 @@ export function describeHttpServerIntegrationSuite(
 
     beforeAll(async () => {
       vi.clearAllMocks();
+      mockResolvePrimaryWorkspaceIdForUser.mockResolvedValue(
+        '00000000-0000-4000-8000-000000000001',
+      );
       mockListStudentProfiles.mockResolvedValue({
         items: [
           {
@@ -1125,6 +1148,22 @@ export function describeHttpServerIntegrationSuite(
         reminders: [],
         latestHiddenReminder: null,
       });
+      const scheduleBillingSurface = await mockGetStudentScheduleBillingSurface(
+        '00000000-0000-4000-8000-000000000001',
+        deriveStudentId('Anna'),
+      );
+      if (!scheduleBillingSurface) {
+        throw new Error('Expected schedule billing test fixture');
+      }
+      mockGetStudentScheduleBillingSurface.mockClear();
+      mockHideStudentLessonFollowupReminder.mockResolvedValue(scheduleBillingSurface);
+      mockUndoLatestHiddenStudentReminder.mockResolvedValue(scheduleBillingSurface);
+      mockUpdateStudentLessonPlan.mockResolvedValue(scheduleBillingSurface);
+      mockCreateStudentLesson.mockResolvedValue(scheduleBillingSurface);
+      mockUpdateStudentLesson.mockResolvedValue(scheduleBillingSurface);
+      mockAddStudentPackage.mockResolvedValue(scheduleBillingSurface);
+      mockAdjustStudentCredits.mockResolvedValue(scheduleBillingSurface);
+      mockRecordStudentPayment.mockResolvedValue(scheduleBillingSurface);
       mockUpsertPrimaryStudentLessonRecurrence.mockResolvedValue({
         studentId: deriveStudentId('Anna'),
         workspaceId: '00000000-0000-4000-8000-000000000001',
@@ -1189,8 +1228,8 @@ export function describeHttpServerIntegrationSuite(
         topUpThreshold: 2,
         updatedAt: null,
       });
-      mockUpdateBusinessSettings.mockImplementation(async (body) => ({
-        workspaceId: '00000000-0000-4000-8000-000000000001',
+      mockUpdateBusinessSettings.mockImplementation(async (workspaceId, body) => ({
+        workspaceId,
         defaultCurrency: body.defaultCurrency ?? 'USD',
         defaultLessonRateMinor: body.defaultLessonRateMinor ?? 4000,
         defaultLessonDurationMinutes: body.defaultLessonDurationMinutes ?? 60,
@@ -1206,7 +1245,7 @@ export function describeHttpServerIntegrationSuite(
         from: '2026-05-07',
         to: '2026-05-14',
         generatedAt: '2026-05-07T00:00:00.000Z',
-        settings: await mockGetBusinessSettings(),
+        settings: await mockGetBusinessSettings('00000000-0000-4000-8000-000000000001'),
         today: [],
         lessons: [],
         reminders: [],
@@ -1218,7 +1257,7 @@ export function describeHttpServerIntegrationSuite(
         workspaceId: '00000000-0000-4000-8000-000000000001',
         month: '2026-05',
         generatedAt: '2026-05-07T00:00:00.000Z',
-        settings: await mockGetBusinessSettings(),
+        settings: await mockGetBusinessSettings('00000000-0000-4000-8000-000000000001'),
         currency: 'USD',
         collectedMinor: 12000,
         earnedMinor: 4000,
@@ -1343,7 +1382,16 @@ export function describeHttpServerIntegrationSuite(
       mockListStudentProfileBindingsForStudent,
       mockGetActiveStudentProfileBindingForStudent,
       mockGetStudentScheduleBillingSurface,
+      mockHideStudentLessonFollowupReminder,
+      mockUndoLatestHiddenStudentReminder,
+      mockUpdateStudentLessonPlan,
+      mockCreateStudentLesson,
+      mockUpdateStudentLesson,
       mockUpsertPrimaryStudentLessonRecurrence,
+      mockAddStudentPackage,
+      mockAdjustStudentCredits,
+      mockRecordStudentPayment,
+      mockResolvePrimaryWorkspaceIdForUser,
       mockGetBusinessSettings,
       mockUpdateBusinessSettings,
       mockGetBusinessScheduleSurface,

@@ -14,8 +14,10 @@ import {
   createStudentLesson,
   getStudentScheduleBillingSurface,
   hideStudentLessonFollowupReminder,
+  recordStudentPayment,
   undoLatestHiddenStudentReminder,
   updateStudentLesson,
+  updateStudentLessonPlan,
   upsertPrimaryStudentLessonRecurrence,
 } from '../src/application/student-schedule-billing.js';
 import {
@@ -24,6 +26,7 @@ import {
   getBusinessStatsSurface,
   updateBusinessSettings,
 } from '../src/application/teacher-business-dashboard.js';
+import { resolvePrimaryWorkspaceIdForUser } from '../src/application/workspace-context.js';
 import { closePgPool, withPgClientSessionContext } from '../src/infrastructure/db.js';
 import { requirePgTestEnv } from './support/test-env.js';
 
@@ -57,7 +60,8 @@ async function resetScheduleBillingTables() {
         student_lesson_plans,
         workspace_memberships,
         students,
-      users
+        users,
+        workspaces
       RESTART IDENTITY CASCADE
       `,
     );
@@ -69,6 +73,134 @@ async function resetScheduleBillingTables() {
       `,
       [DEFAULT_WORKSPACE_ID],
     );
+  });
+}
+
+async function seedWorkspaceTutor(label: string) {
+  const userId = randomUUID();
+  const workspaceId = randomUUID();
+  await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+    await client.query(
+      `
+      INSERT INTO users (id, email, password_hash, role)
+      VALUES ($1, $2, 'hash', 'user')
+      `,
+      [userId, `${label}-${userId}@example.test`],
+    );
+    await client.query(
+      `
+      INSERT INTO workspaces (id, name)
+      VALUES ($1, $2)
+      `,
+      [workspaceId, `${label} workspace`],
+    );
+    await client.query(
+      `
+      INSERT INTO workspace_memberships (workspace_id, user_id, role)
+      VALUES ($1, $2, 'owner')
+      `,
+      [workspaceId, userId],
+    );
+    await client.query(
+      `
+      INSERT INTO workspace_business_settings (
+        workspace_id,
+        default_currency,
+        default_lesson_rate_minor,
+        timezone
+      )
+      VALUES ($1, $2, $3, 'UTC')
+      `,
+      [workspaceId, label === 'alpha' ? 'AUD' : 'CAD', label === 'alpha' ? 4100 : 5200],
+    );
+  });
+  return { userId, workspaceId };
+}
+
+async function seedStudentInWorkspace(workspaceId: string, name: string) {
+  const studentId = randomUUID();
+  await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+    await client.query(
+      `
+      INSERT INTO students (id, student, workspace_id, created_at, updated_at)
+      VALUES ($1, $2, $3, NOW(), NOW())
+      `,
+      [studentId, name, workspaceId],
+    );
+  });
+  return studentId;
+}
+
+async function seedLessonInWorkspace(workspaceId: string, studentId: string, startsAt: string) {
+  const lessonId = randomUUID();
+  await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+    await client.query(
+      `
+      INSERT INTO student_lessons (
+        id,
+        student_id,
+        workspace_id,
+        starts_at,
+        timezone,
+        duration_minutes,
+        status,
+        consumes_credit,
+        title
+      )
+      VALUES ($1, $2, $3, $4, 'UTC', 60, 'scheduled', FALSE, 'Seeded lesson')
+      `,
+      [lessonId, studentId, workspaceId, startsAt],
+    );
+  });
+  return lessonId;
+}
+
+async function readStudentBusinessMutationSnapshot(studentId: string) {
+  return withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+    const result = await client.query<{ snapshot: Record<string, unknown> }>(
+      `
+      SELECT jsonb_build_object(
+        'lessonPlans', COALESCE((
+          SELECT jsonb_agg(to_jsonb(row_value) ORDER BY row_value.student_id)
+          FROM student_lesson_plans row_value
+          WHERE row_value.student_id = $1
+        ), '[]'::jsonb),
+        'recurrenceRules', COALESCE((
+          SELECT jsonb_agg(to_jsonb(row_value) ORDER BY row_value.id)
+          FROM student_lesson_recurrence_rules row_value
+          WHERE row_value.student_id = $1
+        ), '[]'::jsonb),
+        'recurrenceSlots', COALESCE((
+          SELECT jsonb_agg(to_jsonb(slot_value) ORDER BY slot_value.id)
+          FROM student_lesson_recurrence_slots slot_value
+          JOIN student_lesson_recurrence_rules rule_value ON rule_value.id = slot_value.rule_id
+          WHERE rule_value.student_id = $1
+        ), '[]'::jsonb),
+        'lessons', COALESCE((
+          SELECT jsonb_agg(to_jsonb(row_value) ORDER BY row_value.id)
+          FROM student_lessons row_value
+          WHERE row_value.student_id = $1
+        ), '[]'::jsonb),
+        'reminders', COALESCE((
+          SELECT jsonb_agg(to_jsonb(row_value) ORDER BY row_value.student_id)
+          FROM student_reminder_preferences row_value
+          WHERE row_value.student_id = $1
+        ), '[]'::jsonb),
+        'creditEvents', COALESCE((
+          SELECT jsonb_agg(to_jsonb(row_value) ORDER BY row_value.id)
+          FROM student_credit_events row_value
+          WHERE row_value.student_id = $1
+        ), '[]'::jsonb),
+        'payments', COALESCE((
+          SELECT jsonb_agg(to_jsonb(row_value) ORDER BY row_value.id)
+          FROM student_payment_records row_value
+          WHERE row_value.student_id = $1
+        ), '[]'::jsonb)
+      ) AS snapshot
+      `,
+      [studentId],
+    );
+    return result.rows[0]?.snapshot ?? {};
   });
 }
 
@@ -328,10 +460,546 @@ describeIfPg('application/student-schedule-billing', () => {
     await closePgPool();
   });
 
+  it('uses the requested tutor workspace for business settings', async () => {
+    const alpha = await seedWorkspaceTutor('alpha');
+    await seedWorkspaceTutor('beta');
+
+    expect(await resolvePrimaryWorkspaceIdForUser(alpha.userId)).toBe(alpha.workspaceId);
+
+    const settings = await getBusinessSettings(alpha.workspaceId);
+
+    expect(settings).toMatchObject({
+      workspaceId: alpha.workspaceId,
+      defaultCurrency: 'AUD',
+      defaultLessonRateMinor: 4100,
+    });
+  });
+
+  it('rejects cross-workspace student schedule-billing reads with the current API shape', async () => {
+    const alpha = await seedWorkspaceTutor('alpha');
+    const beta = await seedWorkspaceTutor('beta');
+    const betaStudentId = await seedStudentInWorkspace(beta.workspaceId, 'Beta student');
+
+    expect(await resolvePrimaryWorkspaceIdForUser(alpha.userId)).toBe(alpha.workspaceId);
+
+    await expect(
+      getStudentScheduleBillingSurface(alpha.workspaceId, betaStudentId),
+    ).resolves.toBeNull();
+  });
+
+  it('rejects cross-workspace lesson-plan updates with the current API shape', async () => {
+    const alpha = await seedWorkspaceTutor('alpha');
+    const beta = await seedWorkspaceTutor('beta');
+    const betaStudentId = await seedStudentInWorkspace(beta.workspaceId, 'Beta student');
+
+    await expect(
+      updateStudentLessonPlan(
+        alpha.workspaceId,
+        betaStudentId,
+        { timezone: 'Asia/Tokyo' },
+        alpha.userId,
+      ),
+    ).rejects.toMatchObject({ code: 'not_found', status: 404 });
+  });
+
+  it('rejects every cross-workspace student business mutation without changing persisted rows', async () => {
+    const alpha = await seedWorkspaceTutor('alpha');
+    const beta = await seedWorkspaceTutor('beta');
+    const betaStudentId = await seedStudentInWorkspace(beta.workspaceId, 'Beta student');
+    const betaLessonId = await seedLessonInWorkspace(
+      beta.workspaceId,
+      betaStudentId,
+      '2026-05-08T10:00:00.000Z',
+    );
+    const recurrence = {
+      timezone: 'UTC',
+      startsOn: '2026-05-04',
+      generationHorizonDays: 14,
+      slots: [{ isoWeekday: 3, localStartTime: '11:00', durationMinutes: 50 }],
+    };
+    const attempts = [
+      () =>
+        updateStudentLessonPlan(
+          alpha.workspaceId,
+          betaStudentId,
+          { timezone: 'Asia/Tokyo' },
+          alpha.userId,
+        ),
+      () =>
+        upsertPrimaryStudentLessonRecurrence(
+          alpha.workspaceId,
+          betaStudentId,
+          recurrence,
+          alpha.userId,
+        ),
+      () =>
+        createStudentLesson(
+          alpha.workspaceId,
+          betaStudentId,
+          { startsAt: '2026-05-09T10:00:00.000Z' },
+          alpha.userId,
+        ),
+      () =>
+        updateStudentLesson(
+          alpha.workspaceId,
+          betaStudentId,
+          betaLessonId,
+          { title: 'Blocked update' },
+          alpha.userId,
+        ),
+      () =>
+        hideStudentLessonFollowupReminder(
+          alpha.workspaceId,
+          betaStudentId,
+          betaLessonId,
+          alpha.userId,
+        ),
+      () => undoLatestHiddenStudentReminder(alpha.workspaceId, betaStudentId, alpha.userId),
+      () => addStudentPackage(alpha.workspaceId, betaStudentId, { lessons: 4 }, alpha.userId),
+      () =>
+        adjustStudentCredits(alpha.workspaceId, betaStudentId, { quantityDelta: 2 }, alpha.userId),
+      () =>
+        recordStudentPayment(
+          alpha.workspaceId,
+          betaStudentId,
+          { amountMinor: 9000, currency: 'CAD', receivedAt: '2026-05-08' },
+          alpha.userId,
+        ),
+    ];
+
+    for (const attempt of attempts) {
+      const before = await readStudentBusinessMutationSnapshot(betaStudentId);
+      await expect(attempt()).rejects.toMatchObject({ code: 'not_found', status: 404 });
+      expect(await readStudentBusinessMutationSnapshot(betaStudentId)).toEqual(before);
+    }
+  });
+
+  it('rejects foreign lesson IDs under an authorized student without changing either student', async () => {
+    const alpha = await seedWorkspaceTutor('alpha');
+    const beta = await seedWorkspaceTutor('beta');
+    const alphaStudentId = await seedStudentInWorkspace(alpha.workspaceId, 'Alpha student');
+    const betaStudentId = await seedStudentInWorkspace(beta.workspaceId, 'Beta student');
+    const betaLessonId = await seedLessonInWorkspace(
+      beta.workspaceId,
+      betaStudentId,
+      '2026-05-08T10:00:00.000Z',
+    );
+    const beforeAlpha = await readStudentBusinessMutationSnapshot(alphaStudentId);
+    const beforeBeta = await readStudentBusinessMutationSnapshot(betaStudentId);
+
+    await expect(
+      updateStudentLesson(
+        alpha.workspaceId,
+        alphaStudentId,
+        betaLessonId,
+        { title: 'Blocked nested update' },
+        alpha.userId,
+      ),
+    ).rejects.toMatchObject({ code: 'not_found', status: 404 });
+    await expect(
+      hideStudentLessonFollowupReminder(
+        alpha.workspaceId,
+        alphaStudentId,
+        betaLessonId,
+        alpha.userId,
+      ),
+    ).rejects.toMatchObject({ code: 'not_found', status: 404 });
+
+    expect(await readStudentBusinessMutationSnapshot(alphaStudentId)).toEqual(beforeAlpha);
+    expect(await readStudentBusinessMutationSnapshot(betaStudentId)).toEqual(beforeBeta);
+  });
+
+  it('isolates dashboard reads, settings writes, and recurrence materialization by workspace', async () => {
+    const alpha = await seedWorkspaceTutor('alpha');
+    const beta = await seedWorkspaceTutor('beta');
+    const alphaStudentId = await seedStudentInWorkspace(alpha.workspaceId, 'Alpha student');
+    const betaStudentId = await seedStudentInWorkspace(beta.workspaceId, 'Beta student');
+    await addStudentPackage(
+      alpha.workspaceId,
+      alphaStudentId,
+      {
+        lessons: 4,
+        payment: { amountMinor: 12000, currency: 'AUD', receivedAt: '2026-05-06' },
+      },
+      alpha.userId,
+    );
+    await addStudentPackage(
+      beta.workspaceId,
+      betaStudentId,
+      {
+        lessons: 6,
+        payment: { amountMinor: 18000, currency: 'CAD', receivedAt: '2026-05-06' },
+      },
+      beta.userId,
+    );
+    await createStudentLesson(
+      alpha.workspaceId,
+      alphaStudentId,
+      {
+        startsAt: '2026-05-08T10:00:00.000Z',
+        status: 'completed',
+        consumesCredit: true,
+      },
+      alpha.userId,
+    );
+    await createStudentLesson(
+      beta.workspaceId,
+      betaStudentId,
+      { startsAt: '2026-05-08T12:00:00.000Z', status: 'scheduled' },
+      beta.userId,
+    );
+    await seedLessonInWorkspace(alpha.workspaceId, betaStudentId, '2026-05-08T14:00:00.000Z');
+    const betaRuleId = randomUUID();
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      await client.query(
+        `
+        INSERT INTO student_lesson_recurrence_rules (
+          id,
+          student_id,
+          workspace_id,
+          timezone,
+          frequency,
+          starts_on,
+          status,
+          generation_horizon_days
+        )
+        VALUES ($1, $2, $3, 'UTC', 'weekly', '2026-05-04', 'active', 14)
+        `,
+        [betaRuleId, betaStudentId, beta.workspaceId],
+      );
+      await client.query(
+        `
+        INSERT INTO student_lesson_recurrence_slots (
+          id,
+          rule_id,
+          iso_weekday,
+          local_start_time,
+          duration_minutes,
+          sort_order
+        )
+        VALUES ($1, $2, 3, '11:00', 50, 0)
+        `,
+        [randomUUID(), betaRuleId],
+      );
+    });
+
+    await updateBusinessSettings(alpha.workspaceId, { topUpThreshold: 1 }, alpha.userId);
+    const schedule = await getBusinessScheduleSurface(alpha.workspaceId, {
+      from: '2026-05-08',
+      to: '2026-05-08',
+    });
+    const stats = await getBusinessStatsSurface(alpha.workspaceId, { month: '2026-05' });
+
+    expect(schedule.workspaceId).toBe(alpha.workspaceId);
+    expect(schedule.lessons.map((lesson) => lesson.studentId)).toEqual([alphaStudentId]);
+    expect(schedule.recentPayments.map((payment) => payment.studentId)).toEqual([alphaStudentId]);
+    expect(stats).toMatchObject({
+      workspaceId: alpha.workspaceId,
+      currency: 'AUD',
+      collectedMinor: 12000,
+      completedLessons: 1,
+    });
+    expect(await getBusinessSettings(beta.workspaceId)).toMatchObject({
+      defaultCurrency: 'CAD',
+      topUpThreshold: 2,
+    });
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      const rule = await client.query<{ materialized_through: string | null }>(
+        'SELECT materialized_through::text FROM student_lesson_recurrence_rules WHERE id = $1',
+        [betaRuleId],
+      );
+      expect(rule.rows[0]?.materialized_through).toBeNull();
+    });
+  });
+
+  it('confines legacy null-workspace business rows to the default workspace', async () => {
+    const { studentId } = await seedStudentWithoutWorkspace();
+    const alpha = await seedWorkspaceTutor('alpha');
+    const lessonId = randomUUID();
+    const ruleId = randomUUID();
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      await client.query(
+        `
+        INSERT INTO student_lesson_plans (student_id, workspace_id, timezone)
+        VALUES ($1, NULL, 'Asia/Bangkok')
+        `,
+        [studentId],
+      );
+      await client.query(
+        `
+        INSERT INTO student_lesson_recurrence_rules (
+          id,
+          student_id,
+          workspace_id,
+          timezone,
+          frequency,
+          starts_on,
+          status,
+          generation_horizon_days
+        )
+        VALUES ($1, $2, NULL, 'UTC', 'weekly', '2026-05-04', 'paused', 14)
+        `,
+        [ruleId, studentId],
+      );
+      await client.query(
+        `
+        INSERT INTO student_lesson_recurrence_slots (
+          id,
+          rule_id,
+          iso_weekday,
+          local_start_time,
+          duration_minutes,
+          sort_order
+        )
+        VALUES ($1, $2, 3, '11:00', 50, 0)
+        `,
+        [randomUUID(), ruleId],
+      );
+      await client.query(
+        `
+        INSERT INTO student_lessons (
+          id,
+          student_id,
+          workspace_id,
+          starts_at,
+          timezone,
+          duration_minutes,
+          status,
+          consumes_credit
+        )
+        VALUES ($1, $2, NULL, '2026-05-08T10:00:00.000Z', 'UTC', 60, 'scheduled', FALSE)
+        `,
+        [lessonId, studentId],
+      );
+      await client.query(
+        `
+        INSERT INTO student_reminder_preferences (
+          student_id,
+          workspace_id,
+          preferred_channel
+        )
+        VALUES ($1, NULL, 'email')
+        `,
+        [studentId],
+      );
+      await client.query(
+        `
+        INSERT INTO student_credit_events (
+          id,
+          student_id,
+          workspace_id,
+          event_type,
+          quantity_delta
+        )
+        VALUES ($1, $2, NULL, 'credit_added', 3)
+        `,
+        [randomUUID(), studentId],
+      );
+      await client.query(
+        `
+        INSERT INTO student_payment_records (
+          id,
+          student_id,
+          workspace_id,
+          amount_minor,
+          currency,
+          received_at
+        )
+        VALUES ($1, $2, NULL, 7000, 'USD', '2026-05-06')
+        `,
+        [randomUUID(), studentId],
+      );
+    });
+
+    const defaultSurface = await getStudentScheduleBillingSurface(DEFAULT_WORKSPACE_ID, studentId);
+    const defaultSchedule = await getBusinessScheduleSurface(DEFAULT_WORKSPACE_ID, {
+      from: '2026-05-08',
+      to: '2026-05-08',
+    });
+    const defaultStats = await getBusinessStatsSurface(DEFAULT_WORKSPACE_ID, { month: '2026-05' });
+
+    expect(defaultSurface).toMatchObject({
+      workspaceId: DEFAULT_WORKSPACE_ID,
+      lessonPlan: { workspaceId: DEFAULT_WORKSPACE_ID, timezone: 'Asia/Bangkok' },
+      recurrenceRule: { id: ruleId, status: 'paused' },
+      creditSummary: { remaining: 3 },
+    });
+    expect(defaultSurface?.lessons.map((lesson) => lesson.id)).toContain(lessonId);
+    expect(defaultSurface?.creditEvents).toHaveLength(1);
+    expect(defaultSurface?.payments).toHaveLength(1);
+    expect(defaultSurface?.reminders.every((reminder) => reminder.channel === 'email')).toBe(true);
+    expect(defaultSchedule.lessons.map((lesson) => lesson.id)).toContain(lessonId);
+    expect(defaultSchedule.recentPayments.map((payment) => payment.studentId)).toContain(studentId);
+    expect(defaultStats.collectedMinor).toBe(7000);
+
+    await expect(
+      getStudentScheduleBillingSurface(alpha.workspaceId, studentId),
+    ).resolves.toBeNull();
+    const alphaSchedule = await getBusinessScheduleSurface(alpha.workspaceId, {
+      from: '2026-05-08',
+      to: '2026-05-08',
+    });
+    const alphaStats = await getBusinessStatsSurface(alpha.workspaceId, { month: '2026-05' });
+    expect(alphaSchedule.lessons).toHaveLength(0);
+    expect(alphaSchedule.recentPayments).toHaveLength(0);
+    expect(alphaStats.collectedMinor).toBe(0);
+  });
+
+  it('excludes mismatched child rows even when they reference an authorized student', async () => {
+    const alpha = await seedWorkspaceTutor('alpha');
+    const beta = await seedWorkspaceTutor('beta');
+    const alphaStudentId = await seedStudentInWorkspace(alpha.workspaceId, 'Alpha student');
+    const mismatchedLessonId = await seedLessonInWorkspace(
+      beta.workspaceId,
+      alphaStudentId,
+      '2026-05-08T10:00:00.000Z',
+    );
+    const alphaLessonId = await seedLessonInWorkspace(
+      alpha.workspaceId,
+      alphaStudentId,
+      '2026-05-09T10:00:00.000Z',
+    );
+    const mismatchedRuleId = randomUUID();
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      await client.query(
+        `
+        INSERT INTO student_lesson_plans (student_id, workspace_id, timezone)
+        VALUES ($1, $2, 'Asia/Tokyo')
+        `,
+        [alphaStudentId, beta.workspaceId],
+      );
+      await client.query(
+        `
+        INSERT INTO student_lesson_recurrence_rules (
+          id,
+          student_id,
+          workspace_id,
+          timezone,
+          frequency,
+          starts_on,
+          status,
+          generation_horizon_days
+        )
+        VALUES ($1, $2, $3, 'UTC', 'weekly', '2026-05-04', 'active', 14)
+        `,
+        [mismatchedRuleId, alphaStudentId, beta.workspaceId],
+      );
+      await client.query(
+        `
+        INSERT INTO student_lesson_recurrence_slots (
+          id,
+          rule_id,
+          iso_weekday,
+          local_start_time,
+          duration_minutes,
+          sort_order
+        )
+        VALUES ($1, $2, 3, '11:00', 50, 0)
+        `,
+        [randomUUID(), mismatchedRuleId],
+      );
+      await client.query(
+        `
+        INSERT INTO student_reminder_preferences (student_id, workspace_id, preferred_channel)
+        VALUES ($1, $2, 'email')
+        `,
+        [alphaStudentId, beta.workspaceId],
+      );
+      await client.query(
+        `
+        INSERT INTO student_credit_events (
+          id,
+          student_id,
+          workspace_id,
+          event_type,
+          quantity_delta
+        )
+        VALUES ($1, $2, $3, 'credit_added', 9)
+        `,
+        [randomUUID(), alphaStudentId, beta.workspaceId],
+      );
+      await client.query(
+        `
+        INSERT INTO student_payment_records (
+          id,
+          student_id,
+          workspace_id,
+          amount_minor,
+          currency,
+          received_at
+        )
+        VALUES ($1, $2, $3, 19000, 'CAD', '2026-05-06')
+        `,
+        [randomUUID(), alphaStudentId, beta.workspaceId],
+      );
+    });
+
+    const surface = await getStudentScheduleBillingSurface(alpha.workspaceId, alphaStudentId);
+
+    expect(surface).toMatchObject({
+      lessonPlan: { timezone: 'UTC', workspaceId: alpha.workspaceId },
+      recurrenceRule: null,
+      creditSummary: { remaining: 0 },
+      creditEvents: [],
+      payments: [],
+    });
+    expect(surface?.lessons.map((lesson) => lesson.id)).toEqual([alphaLessonId]);
+    expect(surface?.reminders.every((reminder) => reminder.channel === 'manual')).toBe(true);
+    const before = await readStudentBusinessMutationSnapshot(alphaStudentId);
+    await expect(
+      updateStudentLessonPlan(
+        alpha.workspaceId,
+        alphaStudentId,
+        { timezone: 'Asia/Bangkok' },
+        alpha.userId,
+      ),
+    ).rejects.toMatchObject({ code: 'not_found', status: 404 });
+    await expect(
+      upsertPrimaryStudentLessonRecurrence(
+        alpha.workspaceId,
+        alphaStudentId,
+        {
+          timezone: 'UTC',
+          startsOn: '2026-05-04',
+          generationHorizonDays: 14,
+          slots: [{ isoWeekday: 3, localStartTime: '11:00', durationMinutes: 50 }],
+        },
+        alpha.userId,
+      ),
+    ).rejects.toMatchObject({ code: 'not_found', status: 404 });
+    await expect(
+      hideStudentLessonFollowupReminder(
+        alpha.workspaceId,
+        alphaStudentId,
+        alphaLessonId,
+        alpha.userId,
+      ),
+    ).rejects.toMatchObject({ code: 'not_found', status: 404 });
+    await expect(
+      updateStudentLesson(
+        alpha.workspaceId,
+        alphaStudentId,
+        mismatchedLessonId,
+        { title: 'Blocked mismatched update' },
+        alpha.userId,
+      ),
+    ).rejects.toMatchObject({ code: 'not_found', status: 404 });
+    await expect(
+      hideStudentLessonFollowupReminder(
+        alpha.workspaceId,
+        alphaStudentId,
+        mismatchedLessonId,
+        alpha.userId,
+      ),
+    ).rejects.toMatchObject({ code: 'not_found', status: 404 });
+    expect(await readStudentBusinessMutationSnapshot(alphaStudentId)).toEqual(before);
+  });
+
   it('adds lesson packages, records payment facts, and derives the remaining balance', async () => {
     const { studentId, userId } = await seedStudent();
 
     const surface = await addStudentPackage(
+      DEFAULT_WORKSPACE_ID,
       studentId,
       {
         lessons: 8,
@@ -366,9 +1034,10 @@ describeIfPg('application/student-schedule-billing', () => {
 
   it('consumes exactly one credit when a chargeable lesson is completed and voids it if uncharged', async () => {
     const { studentId, userId } = await seedStudent();
-    await addStudentPackage(studentId, { lessons: 1 }, userId);
+    await addStudentPackage(DEFAULT_WORKSPACE_ID, studentId, { lessons: 1 }, userId);
 
     let surface = await createStudentLesson(
+      DEFAULT_WORKSPACE_ID,
       studentId,
       {
         startsAt: '2026-05-07T10:00:00.000Z',
@@ -387,6 +1056,7 @@ describeIfPg('application/student-schedule-billing', () => {
     ).toHaveLength(1);
 
     surface = await updateStudentLesson(
+      DEFAULT_WORKSPACE_ID,
       studentId,
       lessonId,
       {
@@ -401,6 +1071,7 @@ describeIfPg('application/student-schedule-billing', () => {
     ).toHaveLength(1);
 
     surface = await updateStudentLesson(
+      DEFAULT_WORKSPACE_ID,
       studentId,
       lessonId,
       {
@@ -427,6 +1098,7 @@ describeIfPg('application/student-schedule-billing', () => {
     ).toHaveLength(0);
 
     surface = await updateStudentLesson(
+      DEFAULT_WORKSPACE_ID,
       studentId,
       lessonId,
       {
@@ -444,7 +1116,7 @@ describeIfPg('application/student-schedule-billing', () => {
   it('returns honest empty-state reminders for students without lessons or credits', async () => {
     const { studentId } = await seedStudent();
 
-    const surface = await getStudentScheduleBillingSurface(studentId);
+    const surface = await getStudentScheduleBillingSurface(DEFAULT_WORKSPACE_ID, studentId);
 
     expect(surface?.nextLesson).toBeNull();
     expect(surface?.creditSummary.remaining).toBe(0);
@@ -469,7 +1141,7 @@ describeIfPg('application/student-schedule-billing', () => {
       consumesCredit: true,
     });
 
-    let surface = await getStudentScheduleBillingSurface(studentId);
+    let surface = await getStudentScheduleBillingSurface(DEFAULT_WORKSPACE_ID, studentId);
 
     expect(
       surface?.reminders.find(
@@ -495,7 +1167,7 @@ describeIfPg('application/student-schedule-billing', () => {
 
     const jobId = await insertSucceededHomeworkJob({ studentId, lessonId: elapsedLessonId });
     await insertFailedHomeworkJob({ studentId, lessonId: elapsedLessonId });
-    surface = await getStudentScheduleBillingSurface(studentId);
+    surface = await getStudentScheduleBillingSurface(DEFAULT_WORKSPACE_ID, studentId);
 
     expect(
       surface?.reminders.some(
@@ -528,7 +1200,7 @@ describeIfPg('application/student-schedule-billing', () => {
       await insertSucceededHomeworkJob({ studentId, lessonId: publishedLessonId });
     }
 
-    const surface = await getStudentScheduleBillingSurface(studentId);
+    const surface = await getStudentScheduleBillingSurface(DEFAULT_WORKSPACE_ID, studentId);
 
     expect(
       surface?.reminders.some(
@@ -635,11 +1307,14 @@ describeIfPg('application/student-schedule-billing', () => {
       );
     });
 
-    let surface = await getStudentScheduleBillingSurface(studentId);
+    let surface = await getStudentScheduleBillingSurface(DEFAULT_WORKSPACE_ID, studentId);
     expect(surface?.lessons.find((lesson) => lesson.id === lessonId)?.homework.status).toBe(
       'not_started',
     );
-    let business = await getBusinessScheduleSurface({ from: '2030-05-18', to: '2030-05-18' });
+    let business = await getBusinessScheduleSurface(DEFAULT_WORKSPACE_ID, {
+      from: '2030-05-18',
+      to: '2030-05-18',
+    });
     expect(business.lessons.find((lesson) => lesson.id === lessonId)?.homework.status).toBe(
       'not_started',
     );
@@ -649,7 +1324,7 @@ describeIfPg('application/student-schedule-billing', () => {
       studentId,
       lessonId,
     });
-    surface = await getStudentScheduleBillingSurface(studentId);
+    surface = await getStudentScheduleBillingSurface(DEFAULT_WORKSPACE_ID, studentId);
     expect(surface?.lessons.find((lesson) => lesson.id === lessonId)?.homework.status).toBe(
       'session_in_progress',
     );
@@ -658,7 +1333,7 @@ describeIfPg('application/student-schedule-billing', () => {
       expectedRevision: session.revision,
       patch: { draftId, promptPackageId, recordingId, transcriptId },
     });
-    surface = await getStudentScheduleBillingSurface(studentId);
+    surface = await getStudentScheduleBillingSurface(DEFAULT_WORKSPACE_ID, studentId);
     expect(surface?.lessons.find((lesson) => lesson.id === lessonId)?.homework.status).toBe(
       'draft_in_progress',
     );
@@ -677,11 +1352,14 @@ describeIfPg('application/student-schedule-billing', () => {
         [session.id, shareJobId],
       );
     });
-    surface = await getStudentScheduleBillingSurface(studentId);
+    surface = await getStudentScheduleBillingSurface(DEFAULT_WORKSPACE_ID, studentId);
     expect(surface?.lessons.find((lesson) => lesson.id === lessonId)?.homework.status).toBe(
       'publishing',
     );
-    business = await getBusinessScheduleSurface({ from: '2030-05-18', to: '2030-05-18' });
+    business = await getBusinessScheduleSurface(DEFAULT_WORKSPACE_ID, {
+      from: '2030-05-18',
+      to: '2030-05-18',
+    });
     expect(business.lessons.find((lesson) => lesson.id === lessonId)?.homework.status).toBe(
       'publishing',
     );
@@ -739,7 +1417,7 @@ describeIfPg('application/student-schedule-billing', () => {
       }),
     ).resolves.toBe(false);
 
-    const surface = await getStudentScheduleBillingSurface(studentId);
+    const surface = await getStudentScheduleBillingSurface(DEFAULT_WORKSPACE_ID, studentId);
     expect(surface?.lessons.find((lesson) => lesson.id === nullTitleLessonId)?.title).toBe(
       'Travel Plans Review',
     );
@@ -756,7 +1434,7 @@ describeIfPg('application/student-schedule-billing', () => {
 
   it('marks an elapsed scheduled lesson completed when homework is added through an assignment session', async () => {
     const { studentId, userId } = await seedStudent();
-    await addStudentPackage(studentId, { lessons: 1 }, userId);
+    await addStudentPackage(DEFAULT_WORKSPACE_ID, studentId, { lessons: 1 }, userId);
     const lessonId = await insertBusinessLesson({
       studentId,
       startsAt: '2000-01-01T10:00:00.000Z',
@@ -770,7 +1448,7 @@ describeIfPg('application/student-schedule-billing', () => {
       lessonId,
     });
 
-    const surface = await getStudentScheduleBillingSurface(studentId);
+    const surface = await getStudentScheduleBillingSurface(DEFAULT_WORKSPACE_ID, studentId);
     expect(surface).not.toBeNull();
     if (!surface) {
       throw new Error('Expected schedule surface');
@@ -795,7 +1473,12 @@ describeIfPg('application/student-schedule-billing', () => {
   it('self-heals the default workspace for baseline-created students without workspace data', async () => {
     const { studentId, userId } = await seedStudentWithoutWorkspace();
 
-    const surface = await addStudentPackage(studentId, { lessons: 3 }, userId);
+    const surface = await addStudentPackage(
+      DEFAULT_WORKSPACE_ID,
+      studentId,
+      { lessons: 3 },
+      userId,
+    );
 
     expect(surface.workspaceId).toBe(DEFAULT_WORKSPACE_ID);
     expect(surface.creditSummary.remaining).toBe(3);
@@ -812,13 +1495,14 @@ describeIfPg('application/student-schedule-billing', () => {
 
     for (let index = 0; index < 60; index += 1) {
       await adjustStudentCredits(
+        DEFAULT_WORKSPACE_ID,
         studentId,
         { quantityDelta: 1, note: `Adjustment ${index}` },
         userId,
       );
     }
 
-    const surface = await getStudentScheduleBillingSurface(studentId);
+    const surface = await getStudentScheduleBillingSurface(DEFAULT_WORKSPACE_ID, studentId);
 
     expect(surface?.creditEvents).toHaveLength(50);
     expect(surface?.creditSummary).toMatchObject({
@@ -849,7 +1533,7 @@ describeIfPg('application/student-schedule-billing', () => {
       );
     });
 
-    const surface = await getStudentScheduleBillingSurface(studentId);
+    const surface = await getStudentScheduleBillingSurface(DEFAULT_WORKSPACE_ID, studentId);
 
     expect(surface?.reminders).toHaveLength(1);
     expect(surface?.reminders[0]).toMatchObject({
@@ -871,7 +1555,12 @@ describeIfPg('application/student-schedule-billing', () => {
       title: 'Second follow-up',
     });
 
-    const hiddenOnce = await hideStudentLessonFollowupReminder(studentId, firstLessonId, userId);
+    const hiddenOnce = await hideStudentLessonFollowupReminder(
+      DEFAULT_WORKSPACE_ID,
+      studentId,
+      firstLessonId,
+      userId,
+    );
     expect(
       hiddenOnce.reminders.some(
         (reminder) => reminder.type === 'lesson_followup' && reminder.lessonId === firstLessonId,
@@ -886,13 +1575,18 @@ describeIfPg('application/student-schedule-billing', () => {
       },
     });
 
-    const hiddenTwice = await hideStudentLessonFollowupReminder(studentId, secondLessonId, userId);
+    const hiddenTwice = await hideStudentLessonFollowupReminder(
+      DEFAULT_WORKSPACE_ID,
+      studentId,
+      secondLessonId,
+      userId,
+    );
     expect(hiddenTwice.latestHiddenReminder).toMatchObject({
       type: 'lesson_followup',
       lessonId: secondLessonId,
     });
 
-    const reloaded = await getStudentScheduleBillingSurface(studentId);
+    const reloaded = await getStudentScheduleBillingSurface(DEFAULT_WORKSPACE_ID, studentId);
     expect(
       reloaded?.reminders.some(
         (reminder) =>
@@ -902,7 +1596,7 @@ describeIfPg('application/student-schedule-billing', () => {
     ).toBe(false);
     expect(reloaded?.latestHiddenReminder?.lessonId).toBe(secondLessonId);
 
-    const undone = await undoLatestHiddenStudentReminder(studentId, userId);
+    const undone = await undoLatestHiddenStudentReminder(DEFAULT_WORKSPACE_ID, studentId, userId);
     expect(undone.latestHiddenReminder).toBeNull();
     expect(
       undone.reminders.some(
@@ -920,6 +1614,7 @@ describeIfPg('application/student-schedule-billing', () => {
     const { studentId, userId } = await seedStudent();
 
     const surface = await upsertPrimaryStudentLessonRecurrence(
+      DEFAULT_WORKSPACE_ID,
       studentId,
       {
         timezone: 'Asia/Bangkok',
@@ -950,7 +1645,7 @@ describeIfPg('application/student-schedule-billing', () => {
       ),
     ).toBe(true);
 
-    const reloaded = await getStudentScheduleBillingSurface(studentId);
+    const reloaded = await getStudentScheduleBillingSurface(DEFAULT_WORKSPACE_ID, studentId);
     expect(
       reloaded?.lessons
         .filter((lesson) => lesson.recurrenceOrigin === 'generated')
@@ -971,7 +1666,12 @@ describeIfPg('application/student-schedule-billing', () => {
       ],
     };
 
-    const first = await upsertPrimaryStudentLessonRecurrence(studentId, recurrence, userId);
+    const first = await upsertPrimaryStudentLessonRecurrence(
+      DEFAULT_WORKSPACE_ID,
+      studentId,
+      recurrence,
+      userId,
+    );
     const firstRuleId = first.recurrenceRule?.id ?? '';
     const firstSlots = first.recurrenceRule?.slots.map((slot) => ({
       id: slot.id,
@@ -988,7 +1688,12 @@ describeIfPg('application/student-schedule-billing', () => {
       }))
       .sort((left, right) => left.id.localeCompare(right.id));
 
-    const second = await upsertPrimaryStudentLessonRecurrence(studentId, recurrence, userId);
+    const second = await upsertPrimaryStudentLessonRecurrence(
+      DEFAULT_WORKSPACE_ID,
+      studentId,
+      recurrence,
+      userId,
+    );
     const secondGenerated = second.lessons
       .filter((lesson) => lesson.recurrenceOrigin === 'generated')
       .map((lesson) => ({
@@ -1014,6 +1719,7 @@ describeIfPg('application/student-schedule-billing', () => {
   it('reports the actual generated horizon when a recurrence rule shrinks', async () => {
     const { studentId, userId } = await seedStudent();
     const first = await upsertPrimaryStudentLessonRecurrence(
+      DEFAULT_WORKSPACE_ID,
       studentId,
       {
         timezone: 'Asia/Bangkok',
@@ -1026,6 +1732,7 @@ describeIfPg('application/student-schedule-billing', () => {
     const initialThrough = first.recurrenceRule?.materializedThrough;
 
     const shrunk = await upsertPrimaryStudentLessonRecurrence(
+      DEFAULT_WORKSPACE_ID,
       studentId,
       {
         timezone: 'Asia/Bangkok',
@@ -1045,6 +1752,7 @@ describeIfPg('application/student-schedule-billing', () => {
   it('uses IANA timezone conversion for half-hour recurrence zones', async () => {
     const { studentId, userId } = await seedStudent();
     const surface = await upsertPrimaryStudentLessonRecurrence(
+      DEFAULT_WORKSPACE_ID,
       studentId,
       {
         timezone: 'Asia/Kolkata',
@@ -1063,7 +1771,7 @@ describeIfPg('application/student-schedule-billing', () => {
 
   it('feeds generated recurrence lessons into business schedule and stats', async () => {
     const { studentId, userId } = await seedStudent();
-    await updateBusinessSettings({
+    await updateBusinessSettings(DEFAULT_WORKSPACE_ID, {
       defaultCurrency: 'USD',
       defaultLessonRateMinor: 4000,
       noShowRateBasisPoints: 0,
@@ -1072,6 +1780,7 @@ describeIfPg('application/student-schedule-billing', () => {
     });
 
     await upsertPrimaryStudentLessonRecurrence(
+      DEFAULT_WORKSPACE_ID,
       studentId,
       {
         timezone: 'Asia/Bangkok',
@@ -1082,7 +1791,7 @@ describeIfPg('application/student-schedule-billing', () => {
       userId,
     );
 
-    const schedule = await getBusinessScheduleSurface({
+    const schedule = await getBusinessScheduleSurface(DEFAULT_WORKSPACE_ID, {
       from: '2026-05-11',
       to: '2026-05-11',
     });
@@ -1093,7 +1802,7 @@ describeIfPg('application/student-schedule-billing', () => {
       durationMinutes: 50,
     });
 
-    const stats = await getBusinessStatsSurface({ month: '2026-05' });
+    const stats = await getBusinessStatsSurface(DEFAULT_WORKSPACE_ID, { month: '2026-05' });
     expect(stats.scheduledLessons).toBeGreaterThan(0);
     expect(stats.forecastMinor).toBe(stats.scheduledLessons * 4000);
   });
@@ -1101,6 +1810,7 @@ describeIfPg('application/student-schedule-billing', () => {
   it('keeps manual generated-lesson changes while obsolete placeholders are replaced', async () => {
     const { studentId, userId } = await seedStudent();
     let surface = await upsertPrimaryStudentLessonRecurrence(
+      DEFAULT_WORKSPACE_ID,
       studentId,
       {
         timezone: 'Asia/Bangkok',
@@ -1114,6 +1824,7 @@ describeIfPg('application/student-schedule-billing', () => {
     expect(generated).toBeDefined();
 
     surface = await updateStudentLesson(
+      DEFAULT_WORKSPACE_ID,
       studentId,
       generated?.id ?? '',
       { status: 'canceled', consumesCredit: false },
@@ -1125,6 +1836,7 @@ describeIfPg('application/student-schedule-billing', () => {
     });
 
     surface = await upsertPrimaryStudentLessonRecurrence(
+      DEFAULT_WORKSPACE_ID,
       studentId,
       {
         timezone: 'Asia/Bangkok',
@@ -1149,6 +1861,7 @@ describeIfPg('application/student-schedule-billing', () => {
   it('preserves chargeable-state edits on generated lesson occurrences', async () => {
     const { studentId, userId } = await seedStudent();
     let surface = await upsertPrimaryStudentLessonRecurrence(
+      DEFAULT_WORKSPACE_ID,
       studentId,
       {
         timezone: 'Asia/Bangkok',
@@ -1162,6 +1875,7 @@ describeIfPg('application/student-schedule-billing', () => {
     expect(generated).toBeDefined();
 
     surface = await updateStudentLesson(
+      DEFAULT_WORKSPACE_ID,
       studentId,
       generated?.id ?? '',
       { status: 'scheduled', consumesCredit: false },
@@ -1174,6 +1888,7 @@ describeIfPg('application/student-schedule-billing', () => {
     });
 
     surface = await upsertPrimaryStudentLessonRecurrence(
+      DEFAULT_WORKSPACE_ID,
       studentId,
       {
         timezone: 'Asia/Bangkok',
@@ -1191,7 +1906,7 @@ describeIfPg('application/student-schedule-billing', () => {
   });
 
   it('self-heals workspace business settings and updates forecast defaults', async () => {
-    const settings = await getBusinessSettings();
+    const settings = await getBusinessSettings(DEFAULT_WORKSPACE_ID);
 
     expect(settings).toMatchObject({
       workspaceId: DEFAULT_WORKSPACE_ID,
@@ -1200,7 +1915,7 @@ describeIfPg('application/student-schedule-billing', () => {
       forecastHorizonDays: 45,
     });
 
-    const updated = await updateBusinessSettings({
+    const updated = await updateBusinessSettings(DEFAULT_WORKSPACE_ID, {
       defaultCurrency: 'EUR',
       defaultLessonRateMinor: 3500,
       noShowRateBasisPoints: 1000,
@@ -1214,12 +1929,14 @@ describeIfPg('application/student-schedule-billing', () => {
       topUpThreshold: 1,
     });
 
-    await expect(updateBusinessSettings({ timezone: 'UTC+7' })).resolves.toMatchObject({
+    await expect(
+      updateBusinessSettings(DEFAULT_WORKSPACE_ID, { timezone: 'UTC+7' }),
+    ).resolves.toMatchObject({
       timezone: 'Asia/Bangkok',
     });
-    await expect(updateBusinessSettings({ timezone: 'Not/A_Timezone' })).rejects.toThrow(
-      'Invalid timezone',
-    );
+    await expect(
+      updateBusinessSettings(DEFAULT_WORKSPACE_ID, { timezone: 'Not/A_Timezone' }),
+    ).rejects.toThrow('Invalid timezone');
   });
 
   it('aggregates active-student business schedule, reminders, alerts, and payments', async () => {
@@ -1243,9 +1960,9 @@ describeIfPg('application/student-schedule-billing', () => {
       currency: 'USD',
       receivedAt: '2026-05-07',
     });
-    await updateBusinessSettings({ topUpThreshold: 4 });
+    await updateBusinessSettings(DEFAULT_WORKSPACE_ID, { topUpThreshold: 4 });
 
-    const surface = await getBusinessScheduleSurface({
+    const surface = await getBusinessScheduleSurface(DEFAULT_WORKSPACE_ID, {
       from: '2026-05-07',
       to: '2026-05-09',
     });
@@ -1278,7 +1995,7 @@ describeIfPg('application/student-schedule-billing', () => {
       consumesCredit: true,
     });
 
-    const surface = await getBusinessScheduleSurface();
+    const surface = await getBusinessScheduleSurface(DEFAULT_WORKSPACE_ID);
 
     expect(surface.lessons.some((lesson) => lesson.id === lessonId)).toBe(false);
 
@@ -1296,7 +2013,7 @@ describeIfPg('application/student-schedule-billing', () => {
 
     const jobId = await insertSucceededHomeworkJob({ studentId, lessonId });
     await insertFailedHomeworkJob({ studentId, lessonId });
-    const surfaceAfterPublish = await getBusinessScheduleSurface();
+    const surfaceAfterPublish = await getBusinessScheduleSurface(DEFAULT_WORKSPACE_ID);
 
     expect(
       surfaceAfterPublish.reminders.some(
@@ -1314,8 +2031,8 @@ describeIfPg('application/student-schedule-billing', () => {
       title: 'Shared hidden follow-up',
     });
 
-    await hideStudentLessonFollowupReminder(studentId, lessonId, userId);
-    const surface = await getBusinessScheduleSurface();
+    await hideStudentLessonFollowupReminder(DEFAULT_WORKSPACE_ID, studentId, lessonId, userId);
+    const surface = await getBusinessScheduleSurface(DEFAULT_WORKSPACE_ID);
 
     expect(
       surface.reminders.some(
@@ -1350,7 +2067,7 @@ describeIfPg('application/student-schedule-billing', () => {
       await insertSucceededHomeworkJob({ studentId, lessonId: publishedLessonId });
     }
 
-    const surface = await getBusinessScheduleSurface();
+    const surface = await getBusinessScheduleSurface(DEFAULT_WORKSPACE_ID);
 
     expect(
       surface.reminders.some(
@@ -1362,14 +2079,14 @@ describeIfPg('application/student-schedule-billing', () => {
 
   it('uses the configured business timezone for schedule day ranges', async () => {
     const { studentId } = await seedStudent();
-    await updateBusinessSettings({ timezone: 'Asia/Bangkok' });
+    await updateBusinessSettings(DEFAULT_WORKSPACE_ID, { timezone: 'Asia/Bangkok' });
     await insertBusinessLesson({
       studentId,
       startsAt: '2026-05-06T18:30:00.000Z',
       consumesCredit: true,
     });
 
-    const surface = await getBusinessScheduleSurface({
+    const surface = await getBusinessScheduleSurface(DEFAULT_WORKSPACE_ID, {
       from: '2026-05-07',
       to: '2026-05-07',
     });
@@ -1400,7 +2117,7 @@ describeIfPg('application/student-schedule-billing', () => {
       consumesCredit: true,
     });
 
-    const surface = await getBusinessScheduleSurface({
+    const surface = await getBusinessScheduleSurface(DEFAULT_WORKSPACE_ID, {
       from: '2026-05-07',
       to: '2026-05-07',
     });
@@ -1413,7 +2130,7 @@ describeIfPg('application/student-schedule-billing', () => {
     const { studentId: alexId } = await seedStudent();
     const beaId = await seedAdditionalStudent('Bea');
     const archivedId = await seedAdditionalStudent('Archived', true);
-    await updateBusinessSettings({
+    await updateBusinessSettings(DEFAULT_WORKSPACE_ID, {
       defaultCurrency: 'USD',
       defaultLessonRateMinor: 4000,
       noShowRateBasisPoints: 1000,
@@ -1455,7 +2172,7 @@ describeIfPg('application/student-schedule-billing', () => {
       receivedAt: '2026-05-02',
     });
 
-    const stats = await getBusinessStatsSurface({ month: '2026-05' });
+    const stats = await getBusinessStatsSurface(DEFAULT_WORKSPACE_ID, { month: '2026-05' });
 
     expect(stats.collectedMinor).toBe(12000);
     expect(stats.earnedMinor).toBe(4000);
@@ -1472,7 +2189,7 @@ describeIfPg('application/student-schedule-billing', () => {
 
   it('uses the configured business timezone for monthly lesson stats', async () => {
     const { studentId } = await seedStudent();
-    await updateBusinessSettings({
+    await updateBusinessSettings(DEFAULT_WORKSPACE_ID, {
       defaultLessonRateMinor: 4000,
       timezone: 'Asia/Bangkok',
     });
@@ -1484,7 +2201,7 @@ describeIfPg('application/student-schedule-billing', () => {
       durationMinutes: 60,
     });
 
-    const stats = await getBusinessStatsSurface({ month: '2026-05' });
+    const stats = await getBusinessStatsSurface(DEFAULT_WORKSPACE_ID, { month: '2026-05' });
 
     expect(stats.completedLessons).toBe(1);
     expect(stats.earnedMinor).toBe(4000);

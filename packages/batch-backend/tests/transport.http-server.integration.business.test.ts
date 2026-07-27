@@ -1,4 +1,7 @@
+import { WorkspaceContextError } from '../src/application/workspace-context.js';
 import { describeHttpServerIntegrationSuite } from './transport.http-server.integration.harness.js';
+
+const DEFAULT_WORKSPACE_ID = '00000000-0000-4000-8000-000000000001';
 
 describeHttpServerIntegrationSuite(
   'transport/http-server - integration (in-process) [business-dashboard]',
@@ -9,6 +12,7 @@ describeHttpServerIntegrationSuite(
     mockGetBusinessScheduleSurface,
     mockGetBusinessSettings,
     mockGetBusinessStatsSurface,
+    mockResolvePrimaryWorkspaceIdForUser,
     mockUpdateBusinessSettings,
   }) => {
     it('serves business settings', async () => {
@@ -23,7 +27,8 @@ describeHttpServerIntegrationSuite(
         defaultLessonRateMinor: 4000,
         forecastHorizonDays: 45,
       });
-      expect(mockGetBusinessSettings).toHaveBeenCalled();
+      expect(mockResolvePrimaryWorkspaceIdForUser).toHaveBeenCalledWith('test-user-id');
+      expect(mockGetBusinessSettings).toHaveBeenCalledWith(DEFAULT_WORKSPACE_ID);
     });
 
     it('updates business settings with the authenticated actor', async () => {
@@ -44,6 +49,7 @@ describeHttpServerIntegrationSuite(
         forecastHorizonDays: 60,
       });
       expect(mockUpdateBusinessSettings).toHaveBeenCalledWith(
+        DEFAULT_WORKSPACE_ID,
         {
           defaultCurrency: 'EUR',
           defaultLessonRateMinor: 4500,
@@ -64,7 +70,7 @@ describeHttpServerIntegrationSuite(
         from: '2026-05-07',
         to: '2026-05-14',
       });
-      expect(mockGetBusinessScheduleSurface).toHaveBeenCalledWith({
+      expect(mockGetBusinessScheduleSurface).toHaveBeenCalledWith(DEFAULT_WORKSPACE_ID, {
         from: '2026-05-07',
         to: '2026-05-14',
       });
@@ -82,7 +88,21 @@ describeHttpServerIntegrationSuite(
         currency: 'USD',
         collectedMinor: 12000,
       });
-      expect(mockGetBusinessStatsSurface).toHaveBeenCalledWith({ month: '2026-05' });
+      expect(mockGetBusinessStatsSurface).toHaveBeenCalledWith(DEFAULT_WORKSPACE_ID, {
+        month: '2026-05',
+      });
+    });
+
+    it('returns workspace_required when the authenticated tutor has no workspace membership', async () => {
+      mockResolvePrimaryWorkspaceIdForUser.mockRejectedValueOnce(new WorkspaceContextError());
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/business/settings',
+      });
+
+      expect(response.statusCode).toBe(403);
+      expect(response.json()).toMatchObject({ error: 'workspace_required' });
     });
 
     it('rejects invalid business query parameters', async () => {

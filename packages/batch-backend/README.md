@@ -36,6 +36,10 @@ Core surfaces:
 - student archive/restore under `/students/:id/archive` and `/students/:id/restore`; archived students are hidden from default student reads without deleting history
 - student-area route payloads under `/students/:id/surfaces/overview`, `/students/:id/surfaces/learning`, and `/students/:id/surfaces/history`
 - student schedule/billing route payloads under `/students/:id/surfaces/schedule-billing`, including lesson-credit state and elapsed lesson homework follow-ups
+- tutor business dashboard and student schedule/billing routes resolve the active workspace from the
+  authenticated tutor's membership before application reads or writes. Foreign students, lessons,
+  and mismatched child rows use non-enumerating not-found responses and are never mutated; legacy
+  rows with a null workspace remain visible only to the default workspace.
 - student-memory inspection under `/students/:id/memory`, `/students/:id/memory/health`,
   `/students/:id/lesson-memory`, `/students/:id/homework-memory`, and
   `/students/:id/memory-snapshots`
