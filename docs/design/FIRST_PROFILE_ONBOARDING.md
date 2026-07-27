@@ -86,6 +86,12 @@ The enrichment source is the exact confirmed assignment source, including transc
 content hash, and the canonical ready lesson-memory evidence derived from it. Older ready lesson
 memory cannot satisfy readiness for the current assignment.
 
+Dependent student-memory snapshots are usable only while that lesson evidence remains canonical:
+the row must still exist, belong to the same student, remain ready, and retain confirmed-source
+provenance. Source retirement or replacement must invalidate dependent projections atomically or
+make all canonical reads reject them immediately. First-profile onboarding must never use a stored
+`ready` snapshot whose source authority has changed.
+
 The assignment and source must first satisfy the lifetime-canonical identity rules in
 [`Canonical assignment state`](CANONICAL_ASSIGNMENT_STATE.md). Re-selecting the same source resumes
 that assignment; it cannot create a competing enrichment or assignment session.

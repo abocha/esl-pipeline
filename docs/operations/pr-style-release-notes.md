@@ -4,7 +4,7 @@
 
 - Audience: maintainers and AI agents preparing release notes.
 - Authority Level: operations runbook.
-- Last Verified Against: 2026-06-10 repo state.
+- Last Verified Against: 2026-07-27 repo state.
 - Owner: maintainer + automation agents.
 - Review Cadence: quarterly or after git tooling changes.
 - Status: `runbook`.

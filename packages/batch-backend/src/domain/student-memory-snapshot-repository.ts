@@ -128,6 +128,25 @@ export interface ListStudentMemorySnapshotsOptions {
   order?: 'asc' | 'desc';
 }
 
+export function buildEligibleStudentMemorySnapshotLineageSqlPredicate(
+  snapshotAlias: string,
+): string {
+  if (!/^[a-z_][a-z0-9_]*$/.test(snapshotAlias)) {
+    throw new Error('Invalid student-memory snapshot SQL alias');
+  }
+
+  return `NOT EXISTS (
+    SELECT 1
+    FROM unnest(${snapshotAlias}.lesson_memory_entry_ids) AS source(lesson_memory_entry_id)
+    LEFT JOIN lesson_memory_entries AS eligible_lesson
+      ON eligible_lesson.id = source.lesson_memory_entry_id
+     AND eligible_lesson.student_id = ${snapshotAlias}.student_id
+     AND eligible_lesson.status = 'ready'
+     AND eligible_lesson.source_content_hash IS NOT NULL
+    WHERE eligible_lesson.id IS NULL
+  )`;
+}
+
 export async function ensurePendingStudentMemorySnapshot(
   params: EnsurePendingStudentMemorySnapshotParams,
 ): Promise<EnsurePendingStudentMemorySnapshotResult> {
@@ -409,13 +428,15 @@ export async function insertCanonicalReadyStudentMemorySnapshot(
       }
 
       if (params.expectedLatestReadySnapshotId !== undefined) {
+        const eligibleLineage = buildEligibleStudentMemorySnapshotLineageSqlPredicate('snapshot');
         const latestResult = await client.query<{ id: string }>(
           `
-          SELECT id
-          FROM student_memory_snapshots
-          WHERE student_id = $1
-            AND status = 'ready'
-          ORDER BY generated_at DESC, created_at DESC, id DESC
+          SELECT snapshot.id
+          FROM student_memory_snapshots AS snapshot
+          WHERE snapshot.student_id = $1
+            AND snapshot.status = 'ready'
+            AND ${eligibleLineage}
+          ORDER BY snapshot.generated_at DESC, snapshot.created_at DESC, snapshot.id DESC
           LIMIT 1
           `,
           [params.studentId],
@@ -590,6 +611,7 @@ export async function getStudentMemorySnapshotById(
 export async function getLatestReadyStudentMemorySnapshotByStudentId(
   studentId: string,
 ): Promise<StudentMemorySnapshotRecord | null> {
+  const eligibleLineage = buildEligibleStudentMemorySnapshotLineageSqlPredicate('snapshot');
   const row = await withPgClient(async (client: PoolClient) => {
     const result = await client.query(
       `
@@ -618,13 +640,59 @@ export async function getLatestReadyStudentMemorySnapshotByStudentId(
         superseded_at,
         created_at,
         updated_at
-      FROM student_memory_snapshots
-      WHERE student_id = $1
-        AND status = 'ready'
-      ORDER BY generated_at DESC, created_at DESC, id DESC
+      FROM student_memory_snapshots AS snapshot
+      WHERE snapshot.student_id = $1
+        AND snapshot.status = 'ready'
+        AND ${eligibleLineage}
+      ORDER BY snapshot.generated_at DESC, snapshot.created_at DESC, snapshot.id DESC
       LIMIT 1
       `,
       [studentId],
+    );
+    return result.rows[0];
+  });
+
+  return row ? mapRowToStudentMemorySnapshot(row) : null;
+}
+
+export async function getEligibleReadyStudentMemorySnapshotById(
+  id: string,
+): Promise<StudentMemorySnapshotRecord | null> {
+  const eligibleLineage = buildEligibleStudentMemorySnapshotLineageSqlPredicate('snapshot');
+  const row = await withPgClient(async (client: PoolClient) => {
+    const result = await client.query<StudentMemorySnapshotRow>(
+      `
+      SELECT
+        id,
+        student_id,
+        schema_version,
+        generated_at,
+        provider,
+        model,
+        status,
+        source_kind,
+        lesson_memory_entry_ids,
+        homework_memory_entry_ids,
+        content_hash,
+        generation_notes,
+        stable_strengths,
+        recurring_issues,
+        active_review_backlog,
+        recent_progress,
+        personal_facts,
+        recommended_assignment_directions,
+        unresolved_issues,
+        snapshot_summary,
+        superseded_by_id,
+        superseded_at,
+        created_at,
+        updated_at
+      FROM student_memory_snapshots AS snapshot
+      WHERE snapshot.id = $1
+        AND snapshot.status = 'ready'
+        AND ${eligibleLineage}
+      `,
+      [id],
     );
     return result.rows[0];
   });
@@ -821,12 +889,16 @@ export async function listStudentMemorySnapshots(
 
   if (studentId) {
     values.push(studentId);
-    clauses.push(`student_id = $${values.length}`);
+    clauses.push(`snapshot.student_id = $${values.length}`);
   }
 
   if (statuses && statuses.length > 0) {
     values.push(statuses);
-    clauses.push(`status = ANY($${values.length}::text[])`);
+    clauses.push(`snapshot.status = ANY($${values.length}::text[])`);
+    if (statuses.includes('ready')) {
+      const eligibleLineage = buildEligibleStudentMemorySnapshotLineageSqlPredicate('snapshot');
+      clauses.push(`(snapshot.status <> 'ready' OR ${eligibleLineage})`);
+    }
   }
 
   values.push(limit);
@@ -865,9 +937,9 @@ export async function listStudentMemorySnapshots(
         superseded_at,
         created_at,
         updated_at
-      FROM student_memory_snapshots
+      FROM student_memory_snapshots AS snapshot
       ${whereClause}
-      ORDER BY generated_at ${orderDirection}, created_at ${orderDirection}, id ${orderDirection}
+      ORDER BY snapshot.generated_at ${orderDirection}, snapshot.created_at ${orderDirection}, snapshot.id ${orderDirection}
       LIMIT $${limitParam}
       OFFSET $${offsetParam}
       `,

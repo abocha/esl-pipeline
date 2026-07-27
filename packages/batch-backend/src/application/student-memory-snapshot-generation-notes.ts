@@ -40,7 +40,8 @@ export interface StudentMemorySnapshotBudgetDecision {
 
 export type StudentMemorySnapshotFailureDetails =
   | StudentMemorySnapshotPromptBudgetFailureDetails
-  | StudentMemorySnapshotParentChangedFailureDetails;
+  | StudentMemorySnapshotParentChangedFailureDetails
+  | StudentMemorySnapshotSourcesChangedFailureDetails;
 
 export interface StudentMemorySnapshotPromptBudgetFailureDetails {
   code: 'incremental_prompt_input_tokens_exceeded_hard_budget';
@@ -59,8 +60,16 @@ export interface StudentMemorySnapshotParentChangedFailureDetails {
   actualLatestReadySnapshotId: string | null;
 }
 
+export interface StudentMemorySnapshotSourcesChangedFailureDetails {
+  code: 'student_memory_snapshot_sources_changed_before_finalize';
+  stage: 'snapshot_ready_finalization';
+  message: string;
+  unavailableLessonMemoryEntryIds: string[];
+}
+
 export interface StudentMemorySnapshotCandidateRefreshDecision {
   requested: boolean;
+  enqueueStatus: StudentMemorySnapshotCandidateRefreshEnqueueStatus;
   reasons: (
     | 'trigger_profile_worthy_student_fact'
     | 'personal_facts_hash_changed'
@@ -80,6 +89,12 @@ export interface StudentMemorySnapshotCandidateRefreshDecision {
   manualReplayRequestedCandidateRefresh: boolean;
   skippedNoProfileWorthyDeltaCount: number;
 }
+
+export type StudentMemorySnapshotCandidateRefreshEnqueueStatus =
+  | 'not_requested'
+  | 'pending'
+  | 'enqueued'
+  | 'failed';
 
 export type StudentMemorySnapshotV11GenerationNotes = StudentMemorySnapshotGenerationNotes & {
   strategy: StudentMemorySnapshotRefreshStrategy;

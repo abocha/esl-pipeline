@@ -5,8 +5,8 @@ import { describe, expect, it } from 'vitest';
 import { DB_MIGRATION_HEAD } from '../../contracts/src/contract-versions.js';
 
 describe('contracts/db contract version', () => {
-  it('publishes the assignment confirmation migration head', () => {
-    expect(DB_MIGRATION_HEAD).toBe('0044_assignment_step_confirmation_contract');
+  it('publishes the student-memory snapshot eligibility repair migration head', () => {
+    expect(DB_MIGRATION_HEAD).toBe('0045_student_memory_snapshot_eligibility_repair');
   });
 
   it('tracks the latest backend migration head', async () => {

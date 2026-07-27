@@ -21,6 +21,7 @@ import {
   getStudentMemorySnapshotById,
   markStudentMemorySnapshotFailed,
   StudentMemorySnapshotParentChangedError,
+  StudentMemorySnapshotSourcesChangedError,
   supersedePendingStudentMemorySnapshotsForStudent,
   updateStudentMemorySnapshotGenerationNotes,
 } from '../domain/student-memory-snapshot-repository.js';
@@ -32,6 +33,7 @@ import {
   isStudentMemoryPacingDeferredError,
   type StudentMemoryGenerationPacer,
 } from './student-memory-generation-pacing.js';
+import type { StudentMemorySnapshotContent } from './student-memory-snapshot-content-schema.js';
 import {
   type GenerateStudentMemorySnapshotDependencies,
   generateStudentMemorySnapshot,
@@ -40,6 +42,7 @@ import {
   buildStudentMemorySnapshotGenerationNotes,
   resolveStudentMemorySnapshotTriggerSourceKind,
   type StudentMemorySnapshotBudgetDecision,
+  type StudentMemorySnapshotCandidateRefreshEnqueueStatus,
   type StudentMemorySnapshotFailureDetails,
   type StudentMemorySnapshotPromptBudgetFailureDetails,
   type StudentMemorySnapshotRefreshStrategy,
@@ -247,6 +250,9 @@ export async function processStudentMemorySnapshotJob(args: {
       });
     }
 
+    const candidateRefreshState: {
+      decision: ReturnType<typeof buildCandidateRefreshDecision> | null;
+    } = { decision: null };
     const result = await pacer.run({
       workload: 'student_memory_snapshot',
       provider: args.payload.provider,
@@ -265,6 +271,21 @@ export async function processStudentMemorySnapshotJob(args: {
             model: args.payload.model,
             prompt,
             envelope,
+            finalizeGenerationNotes: ({ content }) => {
+              const decision = buildCandidateRefreshDecision({
+                payload: args.payload,
+                pendingGenerationNotes: pendingEntry.generationNotes ?? null,
+                parentSnapshot: buildResult.parentSnapshot,
+                generatedSnapshot: content,
+                triggerProfileWorthyStudentFactCount:
+                  buildResult.triggerProfileWorthyStudentFactCount,
+              });
+              candidateRefreshState.decision = decision;
+              return {
+                materialChange: decision.materialChange,
+                candidateRefresh: decision.metadata,
+              };
+            },
             ...(isGuardedSnapshotRefreshStrategy(buildResult.strategy)
               ? { expectedLatestReadySnapshotId: buildResult.parentSnapshotId }
               : {}),
@@ -273,28 +294,18 @@ export async function processStudentMemorySnapshotJob(args: {
         }),
     });
 
+    const candidateRefreshDecision = candidateRefreshState.decision;
+    if (!candidateRefreshDecision) {
+      throw new Error('Snapshot generator did not finalize candidate refresh intent');
+    }
+    generationNotes = (result.snapshot.generationNotes ??
+      generationNotes) as StudentMemorySnapshotV11GenerationNotes;
+
     await snapshots.supersedePendingForStudent({
       studentId: args.payload.studentId,
       supersededById: result.snapshot.id,
       supersededAt: result.snapshot.generatedAt,
       maxGeneratedAt: pendingEntry.generatedAt,
-    });
-
-    const candidateRefreshDecision = buildCandidateRefreshDecision({
-      payload: args.payload,
-      pendingGenerationNotes: pendingEntry.generationNotes ?? null,
-      parentSnapshot: buildResult.parentSnapshot,
-      generatedSnapshot: result.snapshot,
-      triggerProfileWorthyStudentFactCount: buildResult.triggerProfileWorthyStudentFactCount,
-    });
-    generationNotes = {
-      ...(result.snapshot.generationNotes ?? generationNotes ?? {}),
-      materialChange: candidateRefreshDecision.materialChange,
-      candidateRefresh: candidateRefreshDecision.metadata,
-    } as StudentMemorySnapshotV11GenerationNotes;
-    await snapshots.updateGenerationNotes({
-      id: result.snapshot.id,
-      generationNotes,
     });
 
     if (!candidateRefreshDecision.requested) {
@@ -318,7 +329,17 @@ export async function processStudentMemorySnapshotJob(args: {
               : 'student-memory-snapshot-ready',
         },
       });
+      generationNotes = setCandidateRefreshEnqueueStatus(generationNotes, 'enqueued');
+      await snapshots.updateGenerationNotes({
+        id: result.snapshot.id,
+        generationNotes,
+      });
     } catch (enqueueError) {
+      generationNotes = setCandidateRefreshEnqueueStatus(generationNotes, 'failed');
+      await snapshots.updateGenerationNotes({
+        id: result.snapshot.id,
+        generationNotes,
+      });
       logger.warn('Student profile candidate refresh enqueue failed; continuing', {
         event: 'student_profile_candidate_refresh_enqueue_failed',
         studentId: args.payload.studentId,
@@ -361,6 +382,29 @@ export async function processStudentMemorySnapshotJob(args: {
       });
       throw error;
     }
+    if (error instanceof StudentMemorySnapshotSourcesChangedError) {
+      generationNotes = addSourcesChangedFailureDetails({
+        generationNotes,
+        error,
+      });
+      if (!isFinalAttempt(args.attemptsMade, args.maxAttempts)) {
+        logger.warn('Student-memory snapshot sources changed before ready finalization; retrying', {
+          event: 'student_memory_snapshot_sources_changed_retry',
+          studentId: args.payload.studentId,
+          pendingEntryId: args.payload.pendingEntryId,
+          unavailableLessonMemoryEntryIds: error.unavailableLessonMemoryEntryIds,
+        });
+      }
+      await markFailureIfFinalAttempt({
+        payload: args.payload,
+        attemptsMade: args.attemptsMade,
+        maxAttempts: args.maxAttempts,
+        snapshots,
+        error,
+        generationNotes,
+      });
+      throw error;
+    }
     await markFailureIfFinalAttempt({
       payload: args.payload,
       attemptsMade: args.attemptsMade,
@@ -392,6 +436,24 @@ function addParentChangedFailureDetails(args: {
       message: args.error.message,
       expectedLatestReadySnapshotId: args.error.expectedLatestReadySnapshotId,
       actualLatestReadySnapshotId: args.error.actualLatestReadySnapshotId,
+    },
+  };
+}
+
+function addSourcesChangedFailureDetails(args: {
+  generationNotes?: StudentMemorySnapshotV11GenerationNotes | null;
+  error: StudentMemorySnapshotSourcesChangedError;
+}): StudentMemorySnapshotV11GenerationNotes | null {
+  if (!args.generationNotes) {
+    return null;
+  }
+  return {
+    ...args.generationNotes,
+    failureDetails: {
+      code: 'student_memory_snapshot_sources_changed_before_finalize',
+      stage: 'snapshot_ready_finalization',
+      message: args.error.message,
+      unavailableLessonMemoryEntryIds: args.error.unavailableLessonMemoryEntryIds,
     },
   };
 }
@@ -507,6 +569,7 @@ async function buildSnapshotRefreshRequest(args: {
 
 interface StudentMemorySnapshotCandidateRefreshMetadata {
   requested: boolean;
+  enqueueStatus: StudentMemorySnapshotCandidateRefreshEnqueueStatus;
   reasons: CandidateRefreshReason[];
   triggerProfileWorthyStudentFactCount: number;
   personalFactsHashBefore: string;
@@ -532,7 +595,7 @@ function buildCandidateRefreshDecision(args: {
   payload: ProcessStudentMemorySnapshotJobPayload;
   pendingGenerationNotes: Record<string, unknown> | null;
   parentSnapshot: StudentMemorySnapshotRecord | null;
-  generatedSnapshot: StudentMemorySnapshotRecord;
+  generatedSnapshot: StudentMemorySnapshotContent;
   triggerProfileWorthyStudentFactCount: number;
 }): {
   requested: boolean;
@@ -586,6 +649,7 @@ function buildCandidateRefreshDecision(args: {
     materialChange: snapshotContentHashChanged,
     metadata: {
       requested,
+      enqueueStatus: requested ? 'pending' : 'not_requested',
       reasons,
       triggerProfileWorthyStudentFactCount: args.triggerProfileWorthyStudentFactCount,
       personalFactsHashBefore,
@@ -599,6 +663,22 @@ function buildCandidateRefreshDecision(args: {
       snapshotContentHashChanged,
       manualReplayRequestedCandidateRefresh,
       skippedNoProfileWorthyDeltaCount: requested ? 0 : 1,
+    },
+  };
+}
+
+function setCandidateRefreshEnqueueStatus(
+  generationNotes: StudentMemorySnapshotV11GenerationNotes,
+  enqueueStatus: Extract<StudentMemorySnapshotCandidateRefreshEnqueueStatus, 'enqueued' | 'failed'>,
+): StudentMemorySnapshotV11GenerationNotes {
+  if (!generationNotes.candidateRefresh) {
+    throw new Error('Candidate refresh decision metadata is required before enqueue');
+  }
+  return {
+    ...generationNotes,
+    candidateRefresh: {
+      ...generationNotes.candidateRefresh,
+      enqueueStatus,
     },
   };
 }
@@ -984,14 +1064,9 @@ function resolvePreviousSnapshotCoverage(snapshot: StudentMemorySnapshotRecord |
     };
   }
 
-  const notes = snapshot.generationNotes ?? {};
   return {
-    lessonMemoryEntryIds: Array.isArray(notes.coveredLessonMemoryEntryIds)
-      ? notes.coveredLessonMemoryEntryIds.filter((id): id is string => typeof id === 'string')
-      : snapshot.lessonMemoryEntryIds,
-    homeworkMemoryEntryIds: Array.isArray(notes.coveredHomeworkMemoryEntryIds)
-      ? notes.coveredHomeworkMemoryEntryIds.filter((id): id is string => typeof id === 'string')
-      : snapshot.homeworkMemoryEntryIds,
+    lessonMemoryEntryIds: snapshot.lessonMemoryEntryIds,
+    homeworkMemoryEntryIds: snapshot.homeworkMemoryEntryIds,
   };
 }
 
@@ -1056,9 +1131,7 @@ async function markFailureIfFinalAttempt(args: {
   error: unknown;
   generationNotes?: StudentMemorySnapshotV11GenerationNotes | null;
 }): Promise<void> {
-  const maxAttempts = args.maxAttempts ?? 1;
-  const attemptNumber = (args.attemptsMade ?? 0) + 1;
-  if (attemptNumber < maxAttempts) {
+  if (!isFinalAttempt(args.attemptsMade, args.maxAttempts)) {
     return;
   }
 
@@ -1067,4 +1140,8 @@ async function markFailureIfFinalAttempt(args: {
     errorMessage: args.error instanceof Error ? args.error.message : String(args.error),
     generationNotes: args.generationNotes ?? undefined,
   });
+}
+
+function isFinalAttempt(attemptsMade?: number, maxAttempts?: number): boolean {
+  return (attemptsMade ?? 0) + 1 >= (maxAttempts ?? 1);
 }

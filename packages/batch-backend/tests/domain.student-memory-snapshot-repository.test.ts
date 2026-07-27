@@ -3,7 +3,9 @@ import './support/bootstrap-pg-test-env.js';
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
+import { listStudentMemorySnapshotBackfillTargets } from '../src/application/student-memory-snapshot-backfill.js';
 import {
+  getEligibleReadyStudentMemorySnapshotById,
   getLatestReadyStudentMemorySnapshotByStudentId,
   insertCanonicalReadyStudentMemorySnapshot,
   listStudentMemorySnapshots,
@@ -43,6 +45,74 @@ async function insertStudent(studentId = randomUUID()) {
     ),
   );
   return studentId;
+}
+
+async function insertLessonMemory(args: {
+  studentId: string;
+  status: 'ready' | 'superseded';
+  withConfirmedSource: boolean;
+}) {
+  const recordingId = randomUUID();
+  const transcriptId = randomUUID();
+  const lessonMemoryId = randomUUID();
+  await withPgClient(async (client) => {
+    await client.query(
+      `INSERT INTO recordings
+         (id, source, student_id, source_path, storage_uri, bytes, status, created_at, updated_at)
+       VALUES ($1, 'upload', $2, 'lesson.wav', $3, 100, 'ingested', NOW(), NOW())`,
+      [recordingId, args.studentId, `local://recordings/${recordingId}.wav`],
+    );
+    await client.query(
+      `INSERT INTO transcripts
+         (id, recording_id, storage_uri, mode, model, language, stt_provider,
+          fallback_used, created_at, updated_at)
+       VALUES ($1, $2, $3, 'timeline', 'nova-3', 'multi', 'deepgram', FALSE, NOW(), NOW())`,
+      [transcriptId, recordingId, `local://transcripts/${transcriptId}.txt`],
+    );
+    await client.query(
+      `INSERT INTO lesson_memory_entries
+         (id, student_id, transcript_id, recording_id, schema_version, generated_at,
+          provider, model, status, source_kind, source_storage_uri, source_content_hash)
+       VALUES ($1, $2, $3, $4, 'lesson-memory.v1', NOW(), 'openai', 'gpt-5.2', $5,
+               'lesson_transcript', $6, $7)`,
+      [
+        lessonMemoryId,
+        args.studentId,
+        transcriptId,
+        recordingId,
+        args.status,
+        args.withConfirmedSource ? `local://confirmed/${transcriptId}.txt` : null,
+        args.withConfirmedSource ? 'a'.repeat(64) : null,
+      ],
+    );
+  });
+  return lessonMemoryId;
+}
+
+async function insertStoredSnapshot(args: {
+  id?: string;
+  studentId: string;
+  status?: 'pending' | 'ready' | 'failed';
+  generatedAt: string;
+  lessonMemoryEntryIds: string[];
+}) {
+  const id = args.id ?? randomUUID();
+  await withPgClient((client) =>
+    client.query(
+      `INSERT INTO student_memory_snapshots
+         (id, student_id, schema_version, generated_at, provider, model, status,
+          lesson_memory_entry_ids)
+       VALUES ($1, $2, 'student-memory-snapshot.v1', $3, 'openai', 'gpt-5.2', $4, $5)`,
+      [
+        id,
+        args.studentId,
+        new Date(args.generatedAt),
+        args.status ?? 'ready',
+        args.lessonMemoryEntryIds,
+      ],
+    ),
+  );
+  return id;
 }
 
 async function insertReadySnapshot(args: {
@@ -212,6 +282,114 @@ describeIfPg('domain/student-memory-snapshot-repository', () => {
     });
   });
 
+  it('uses only eligible ready snapshots as canonical parents and inspection rows', async () => {
+    const studentId = await insertStudent();
+    const otherStudentId = await insertStudent();
+    const validLessonId = await insertLessonMemory({
+      studentId,
+      status: 'ready',
+      withConfirmedSource: true,
+    });
+    const crossStudentLessonId = await insertLessonMemory({
+      studentId: otherStudentId,
+      status: 'ready',
+      withConfirmedSource: true,
+    });
+    const nonReadyLessonId = await insertLessonMemory({
+      studentId,
+      status: 'superseded',
+      withConfirmedSource: true,
+    });
+    const provenanceFreeLessonId = await insertLessonMemory({
+      studentId,
+      status: 'ready',
+      withConfirmedSource: false,
+    });
+    const validSnapshotId = await insertStoredSnapshot({
+      studentId,
+      generatedAt: '2026-07-01T10:00:00.000Z',
+      lessonMemoryEntryIds: [validLessonId],
+    });
+    const invalidSnapshotIds = await Promise.all(
+      [[randomUUID()], [crossStudentLessonId], [nonReadyLessonId], [provenanceFreeLessonId]].map(
+        (lessonMemoryEntryIds, index) =>
+          insertStoredSnapshot({
+            studentId,
+            generatedAt: `2026-07-01T1${index + 1}:00:00.000Z`,
+            lessonMemoryEntryIds,
+          }),
+      ),
+    );
+    const pendingInvalidId = await insertStoredSnapshot({
+      studentId,
+      status: 'pending',
+      generatedAt: '2026-07-01T15:00:00.000Z',
+      lessonMemoryEntryIds: [randomUUID()],
+    });
+
+    await expect(getLatestReadyStudentMemorySnapshotByStudentId(studentId)).resolves.toMatchObject({
+      id: validSnapshotId,
+    });
+    for (const invalidSnapshotId of invalidSnapshotIds) {
+      await expect(
+        getEligibleReadyStudentMemorySnapshotById(invalidSnapshotId),
+      ).resolves.toBeNull();
+    }
+    await expect(getEligibleReadyStudentMemorySnapshotById(validSnapshotId)).resolves.toMatchObject(
+      {
+        id: validSnapshotId,
+      },
+    );
+
+    const readySnapshots = await listStudentMemorySnapshots({
+      studentId,
+      statuses: ['ready'],
+      limit: 20,
+      offset: 0,
+    });
+    expect(readySnapshots.map((snapshot) => snapshot.id)).toEqual([validSnapshotId]);
+
+    const readyAndPendingSnapshots = await listStudentMemorySnapshots({
+      studentId,
+      statuses: ['ready', 'pending'],
+      limit: 20,
+      offset: 0,
+    });
+    expect(readyAndPendingSnapshots.map((snapshot) => snapshot.id)).toEqual([
+      pendingInvalidId,
+      validSnapshotId,
+    ]);
+
+    const unfilteredSnapshots = await listStudentMemorySnapshots({
+      studentId,
+      limit: 20,
+      offset: 0,
+    });
+    expect(unfilteredSnapshots.map((snapshot) => snapshot.id)).toEqual(
+      expect.arrayContaining([pendingInvalidId, validSnapshotId, ...invalidSnapshotIds]),
+    );
+
+    await expect(
+      insertReadySnapshot({
+        studentId,
+        generatedAt: '2026-07-01T15:30:00.000Z',
+        expectedLatestReadySnapshotId: invalidSnapshotIds[0],
+      }),
+    ).rejects.toMatchObject({
+      name: 'StudentMemorySnapshotParentChangedError',
+      studentId,
+      expectedLatestReadySnapshotId: invalidSnapshotIds[0],
+      actualLatestReadySnapshotId: validSnapshotId,
+    } satisfies Partial<StudentMemorySnapshotParentChangedError>);
+
+    const child = await insertReadySnapshot({
+      studentId,
+      generatedAt: '2026-07-01T16:00:00.000Z',
+      expectedLatestReadySnapshotId: validSnapshotId,
+    });
+    expect(child.status).toBe('ready');
+  });
+
   it('rejects a stale bootstrap result after its confirmed lesson source is superseded', async () => {
     const studentId = await insertStudent();
     const recordingId = randomUUID();
@@ -259,5 +437,52 @@ describeIfPg('domain/student-memory-snapshot-repository', () => {
     } satisfies Partial<StudentMemorySnapshotSourcesChangedError>);
 
     await expect(getLatestReadyStudentMemorySnapshotByStudentId(studentId)).resolves.toBeNull();
+  });
+
+  it('treats an ineligible stored-ready snapshot as missing during replay selection', async () => {
+    const missingStudentId = await insertStudent();
+    const eligibleStudentId = await insertStudent();
+    const missingStudentLessonId = await insertLessonMemory({
+      studentId: missingStudentId,
+      status: 'ready',
+      withConfirmedSource: true,
+    });
+    const eligibleStudentLessonId = await insertLessonMemory({
+      studentId: eligibleStudentId,
+      status: 'ready',
+      withConfirmedSource: true,
+    });
+    await insertStoredSnapshot({
+      studentId: missingStudentId,
+      generatedAt: '2099-07-01T10:00:00.000Z',
+      lessonMemoryEntryIds: [randomUUID()],
+    });
+    await insertStoredSnapshot({
+      studentId: eligibleStudentId,
+      generatedAt: '2099-07-01T10:00:00.000Z',
+      lessonMemoryEntryIds: [eligibleStudentLessonId],
+    });
+
+    const missingTargets = await listStudentMemorySnapshotBackfillTargets({
+      selection: 'missing',
+      limit: 10,
+    });
+    expect(missingTargets.map((target) => target.studentId)).toEqual([missingStudentId]);
+    expect(missingTargets[0]).toMatchObject({
+      hasReadySnapshot: false,
+      latestReadySnapshotAt: null,
+    });
+
+    await insertStoredSnapshot({
+      studentId: missingStudentId,
+      status: 'failed',
+      generatedAt: '2099-07-01T11:00:00.000Z',
+      lessonMemoryEntryIds: [missingStudentLessonId],
+    });
+    const failedTargets = await listStudentMemorySnapshotBackfillTargets({
+      selection: 'failed',
+      limit: 10,
+    });
+    expect(failedTargets.map((target) => target.studentId)).toEqual([missingStudentId]);
   });
 });
