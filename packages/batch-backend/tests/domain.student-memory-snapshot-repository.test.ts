@@ -3,6 +3,7 @@ import './support/bootstrap-pg-test-env.js';
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
+import { listStudentMemorySnapshotBackfillTargets } from '../src/application/student-memory-snapshot-backfill.js';
 import {
   getEligibleReadyStudentMemorySnapshotById,
   getLatestReadyStudentMemorySnapshotByStudentId,
@@ -91,7 +92,7 @@ async function insertLessonMemory(args: {
 async function insertStoredSnapshot(args: {
   id?: string;
   studentId: string;
-  status?: 'pending' | 'ready';
+  status?: 'pending' | 'ready' | 'failed';
   generatedAt: string;
   lessonMemoryEntryIds: string[];
 }) {
@@ -436,5 +437,52 @@ describeIfPg('domain/student-memory-snapshot-repository', () => {
     } satisfies Partial<StudentMemorySnapshotSourcesChangedError>);
 
     await expect(getLatestReadyStudentMemorySnapshotByStudentId(studentId)).resolves.toBeNull();
+  });
+
+  it('treats an ineligible stored-ready snapshot as missing during replay selection', async () => {
+    const missingStudentId = await insertStudent();
+    const eligibleStudentId = await insertStudent();
+    const missingStudentLessonId = await insertLessonMemory({
+      studentId: missingStudentId,
+      status: 'ready',
+      withConfirmedSource: true,
+    });
+    const eligibleStudentLessonId = await insertLessonMemory({
+      studentId: eligibleStudentId,
+      status: 'ready',
+      withConfirmedSource: true,
+    });
+    await insertStoredSnapshot({
+      studentId: missingStudentId,
+      generatedAt: '2099-07-01T10:00:00.000Z',
+      lessonMemoryEntryIds: [randomUUID()],
+    });
+    await insertStoredSnapshot({
+      studentId: eligibleStudentId,
+      generatedAt: '2099-07-01T10:00:00.000Z',
+      lessonMemoryEntryIds: [eligibleStudentLessonId],
+    });
+
+    const missingTargets = await listStudentMemorySnapshotBackfillTargets({
+      selection: 'missing',
+      limit: 10,
+    });
+    expect(missingTargets.map((target) => target.studentId)).toEqual([missingStudentId]);
+    expect(missingTargets[0]).toMatchObject({
+      hasReadySnapshot: false,
+      latestReadySnapshotAt: null,
+    });
+
+    await insertStoredSnapshot({
+      studentId: missingStudentId,
+      status: 'failed',
+      generatedAt: '2099-07-01T11:00:00.000Z',
+      lessonMemoryEntryIds: [missingStudentLessonId],
+    });
+    const failedTargets = await listStudentMemorySnapshotBackfillTargets({
+      selection: 'failed',
+      limit: 10,
+    });
+    expect(failedTargets.map((target) => target.studentId)).toEqual([missingStudentId]);
   });
 });

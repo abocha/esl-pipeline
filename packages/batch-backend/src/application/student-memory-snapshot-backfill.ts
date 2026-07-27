@@ -3,6 +3,7 @@ import type { PoolClient } from 'pg';
 import type { GenerationProvider } from '@esl-pipeline/contracts';
 
 import type { BatchBackendConfig } from '../config/env.js';
+import { buildEligibleStudentMemorySnapshotLineageSqlPredicate } from '../domain/student-memory-snapshot-repository.js';
 import { withPgClient } from '../infrastructure/db.js';
 import { resolveGenerationCandidates } from './generation-policy.js';
 import { requestStudentMemorySnapshotRefresh } from './request-student-memory-snapshot-refresh.js';
@@ -99,6 +100,7 @@ async function listSnapshotReplayCandidates(args: {
   selection: StudentMemorySnapshotBackfillSelection;
   studentId?: string;
 }): Promise<StudentMemorySnapshotCandidateRow[]> {
+  const eligibleLineage = buildEligibleStudentMemorySnapshotLineageSqlPredicate('snapshot_row');
   return withPgClient(async (client: PoolClient) => {
     const values: (string | number)[] = [];
     const filters: string[] = [];
@@ -139,12 +141,18 @@ async function listSnapshotReplayCandidates(args: {
       ),
       snapshot AS (
         SELECT
-          student_id,
-          BOOL_OR(status = 'ready') AS has_ready_snapshot,
-          BOOL_OR(status = 'failed') AS has_failed_snapshot,
-          MAX(generated_at) FILTER (WHERE status = 'ready') AS latest_ready_snapshot_at
-        FROM student_memory_snapshots
-        GROUP BY student_id
+          snapshot_row.student_id,
+          BOOL_OR(
+            snapshot_row.status = 'ready'
+            AND ${eligibleLineage}
+          ) AS has_ready_snapshot,
+          BOOL_OR(snapshot_row.status = 'failed') AS has_failed_snapshot,
+          MAX(snapshot_row.generated_at) FILTER (
+            WHERE snapshot_row.status = 'ready'
+              AND ${eligibleLineage}
+          ) AS latest_ready_snapshot_at
+        FROM student_memory_snapshots AS snapshot_row
+        GROUP BY snapshot_row.student_id
       )
       SELECT
         memory.student_id,
