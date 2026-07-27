@@ -5,6 +5,7 @@ import type { StudentMemorySnapshotRecord } from '../domain/student-memory-snaps
 import { insertCanonicalReadyStudentMemorySnapshot } from '../domain/student-memory-snapshot-repository.js';
 import type { ProviderStructuredExecutionResult } from './generation-providers.js';
 import type { GenerationRequestEnvelopeV1 } from './generation-request-envelope.js';
+import type { StudentMemorySnapshotContent } from './student-memory-snapshot-content-schema.js';
 import {
   type ExtractStudentMemorySnapshotContentRequest,
   extractStudentMemorySnapshotContent,
@@ -25,6 +26,10 @@ export interface GenerateStudentMemorySnapshotRequest {
   envelope?: GenerationRequestEnvelopeV1;
   maxOutputTokens?: number;
   expectedLatestReadySnapshotId?: string | null;
+  finalizeGenerationNotes?: (args: {
+    content: StudentMemorySnapshotContent;
+    contentHash: string;
+  }) => Record<string, unknown>;
 }
 
 export interface GenerateStudentMemorySnapshotResult {
@@ -65,6 +70,11 @@ export async function generateStudentMemorySnapshot(args: {
 
   const generatedAt = now();
   const contentHash = hashStudentMemorySnapshotContent(extraction.content);
+  const finalizedGenerationNotes =
+    args.request.finalizeGenerationNotes?.({
+      content: extraction.content,
+      contentHash,
+    }) ?? {};
 
   const snapshot = await repository.insertCanonicalReady({
     studentId: args.request.studentId,
@@ -77,6 +87,7 @@ export async function generateStudentMemorySnapshot(args: {
     contentHash,
     generationNotes: {
       ...args.request.pendingGenerationNotes,
+      ...finalizedGenerationNotes,
       pendingEntryId: args.request.pendingEntryId ?? null,
       providerRequestId: extraction.providerRequestId ?? null,
       usage: extraction.usage ?? null,

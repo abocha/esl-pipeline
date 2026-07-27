@@ -96,6 +96,18 @@ The backend controls:
 - invalidation and outdated-artifact relationships; and
 - legal workflow transitions.
 
+### Dependent projection invalidation
+
+Confirmed source identity is also authority for lesson memory and every student-memory snapshot
+that covers it. Replacing or retiring a confirmed source must either invalidate dependent memory
+projections in the same authoritative transition or make every canonical reader derive their
+ineligibility immediately. A stored `ready` label alone cannot keep a snapshot current after its
+lesson evidence loses readiness, ownership, existence, or confirmed-source provenance.
+
+This invariant is implemented for the current cutover by the student-memory snapshot eligibility
+repair. The future lifetime-canonical assignment package must preserve it across every source
+replacement path rather than relying on a later cleanup migration.
+
 Frontend requests may echo server-issued versions, hashes, or opaque lineage tokens to prove what
 the tutor saw. They may not use hidden identifiers to dictate arbitrary structural combinations.
 Partial profile lineage, a prompt paired with another prompt's draft, or a source owned by another

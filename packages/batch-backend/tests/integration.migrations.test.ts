@@ -318,6 +318,16 @@ describe('integration/migrations', () => {
         rootJob: randomUUID(),
         rerunJob: randomUUID(),
         homeworkMemory: randomUUID(),
+        otherStudent: randomUUID(),
+        legacyLessonMemory: randomUUID(),
+        sameStudentReadyLessonMemory: randomUUID(),
+        otherStudentReadyLessonMemory: randomUUID(),
+        invalidReadySnapshot: randomUUID(),
+        invalidPendingSnapshot: randomUUID(),
+        crossStudentSnapshot: randomUUID(),
+        validReadySnapshot: randomUUID(),
+        emptyReadySnapshot: randomUUID(),
+        failedSnapshot: randomUUID(),
       };
       const publishedUrl = 'https://example.test/handouts/completed';
       const markdownUri = 'local://historical-handouts/completed.md';
@@ -342,6 +352,9 @@ describe('integration/migrations', () => {
           );
           await pool.query(`INSERT INTO students (id, student) VALUES ($1, 'Alpha Tester')`, [
             ids.student,
+          ]);
+          await pool.query(`INSERT INTO students (id, student) VALUES ($1, 'Other Tester')`, [
+            ids.otherStudent,
           ]);
           await pool.query(
             `
@@ -471,6 +484,40 @@ describe('integration/migrations', () => {
               ids.draft,
             ],
           );
+          await pool.query(
+            `
+            INSERT INTO lesson_memory_entries (
+              id, student_id, transcript_id, recording_id, schema_version, generated_at,
+              provider, model, status
+            )
+            VALUES ($1, $2, $3, $4, 'lesson-memory.v1', NOW(), 'openai', 'gpt-5.6', 'ready')
+            `,
+            [ids.legacyLessonMemory, ids.student, ids.transcript, ids.recording],
+          );
+          await pool.query(
+            `
+            INSERT INTO student_memory_snapshots (
+              id, student_id, schema_version, generated_at, provider, model, status,
+              lesson_memory_entry_ids, homework_memory_entry_ids, superseded_by_id
+            )
+            VALUES
+              ($1, $2, 'student-memory.v1', NOW(), 'openai', 'gpt-5.6', 'failed', $3::uuid[], ARRAY[]::uuid[], NULL),
+              ($4, $2, 'student-memory.v1', NOW(), 'openai', 'gpt-5.6', 'ready', $5::uuid[], ARRAY[]::uuid[], $1),
+              ($6, $2, 'student-memory.v1', NOW(), 'openai', 'gpt-5.6', 'pending', $7::uuid[], ARRAY[]::uuid[], $1),
+              ($8, $2, 'student-memory.v1', NOW(), 'openai', 'gpt-5.6', 'ready', ARRAY[]::uuid[], $9::uuid[], NULL)
+            `,
+            [
+              ids.failedSnapshot,
+              ids.student,
+              [randomUUID()],
+              ids.invalidReadySnapshot,
+              [ids.legacyLessonMemory],
+              ids.invalidPendingSnapshot,
+              [randomUUID()],
+              ids.emptyReadySnapshot,
+              [ids.homeworkMemory],
+            ],
+          );
 
           const cutoverSql = await fs.readFile(
             path.join(migrationsPath, '0044_assignment_step_confirmation_contract.sql'),
@@ -483,6 +530,124 @@ describe('integration/migrations', () => {
             VALUES ('0044_assignment_step_confirmation_contract', $1, 0, 'integration-cutover-fixture')
             `,
             [createHash('sha256').update(cutoverSql).digest('hex')],
+          );
+
+          await pool.query(
+            `
+            INSERT INTO lesson_memory_entries (
+              id, student_id, transcript_id, recording_id, schema_version, generated_at,
+              provider, model, status, source_storage_uri, source_content_hash
+            )
+            VALUES
+              ($1, $2, $3, $4, 'lesson-memory.v1', NOW(), 'openai', 'gpt-5.6', 'ready',
+               'local://confirmed/same-student.txt', $5),
+              ($6, $7, $3, $4, 'lesson-memory.v1', NOW(), 'openai', 'gpt-5.6', 'ready',
+               'local://confirmed/other-student.txt', $8)
+            `,
+            [
+              ids.sameStudentReadyLessonMemory,
+              ids.student,
+              ids.transcript,
+              ids.recording,
+              'a'.repeat(64),
+              ids.otherStudentReadyLessonMemory,
+              ids.otherStudent,
+              'b'.repeat(64),
+            ],
+          );
+          await pool.query(
+            `
+            INSERT INTO student_memory_snapshots (
+              id, student_id, schema_version, generated_at, provider, model, status,
+              lesson_memory_entry_ids, superseded_by_id
+            )
+            VALUES
+              ($1, $2, 'student-memory.v1', NOW(), 'openai', 'gpt-5.6', 'ready', $3::uuid[], $4),
+              ($5, $2, 'student-memory.v1', NOW(), 'openai', 'gpt-5.6', 'ready', $6::uuid[], NULL)
+            `,
+            [
+              ids.crossStudentSnapshot,
+              ids.student,
+              [ids.otherStudentReadyLessonMemory],
+              ids.failedSnapshot,
+              ids.validReadySnapshot,
+              [ids.sameStudentReadyLessonMemory],
+            ],
+          );
+
+          const eligibilityRepairSql = await fs.readFile(
+            path.join(migrationsPath, '0045_student_memory_snapshot_eligibility_repair.sql'),
+            'utf8',
+          );
+          await pool.query(eligibilityRepairSql);
+          const repairedSnapshots = await pool.query<{
+            id: string;
+            status: string;
+            superseded_at: Date | null;
+            superseded_by_id: string | null;
+          }>(
+            `
+            SELECT id, status, superseded_at, superseded_by_id
+            FROM student_memory_snapshots
+            WHERE id = ANY($1::uuid[])
+            ORDER BY id
+            `,
+            [
+              [
+                ids.invalidReadySnapshot,
+                ids.invalidPendingSnapshot,
+                ids.crossStudentSnapshot,
+                ids.validReadySnapshot,
+                ids.emptyReadySnapshot,
+                ids.failedSnapshot,
+              ],
+            ],
+          );
+          const repairedById = new Map(
+            repairedSnapshots.rows.map((snapshot) => [snapshot.id, snapshot]),
+          );
+          for (const id of [
+            ids.invalidReadySnapshot,
+            ids.invalidPendingSnapshot,
+            ids.crossStudentSnapshot,
+          ]) {
+            expect(repairedById.get(id)).toMatchObject({
+              status: 'superseded',
+              superseded_by_id: null,
+            });
+            expect(repairedById.get(id)?.superseded_at).toBeInstanceOf(Date);
+          }
+          expect(repairedById.get(ids.validReadySnapshot)).toMatchObject({ status: 'ready' });
+          expect(repairedById.get(ids.emptyReadySnapshot)).toMatchObject({ status: 'ready' });
+          expect(repairedById.get(ids.failedSnapshot)).toMatchObject({ status: 'failed' });
+
+          const repairedTimestamps = new Map(
+            repairedSnapshots.rows.map((snapshot) => [
+              snapshot.id,
+              snapshot.superseded_at?.toISOString(),
+            ]),
+          );
+          await pool.query(eligibilityRepairSql);
+          const rerunSnapshots = await pool.query<{
+            id: string;
+            status: string;
+            superseded_at: Date | null;
+          }>(
+            `SELECT id, status, superseded_at FROM student_memory_snapshots WHERE id = ANY($1::uuid[]) ORDER BY id`,
+            [Array.from(repairedById.keys())],
+          );
+          expect(
+            rerunSnapshots.rows.map((snapshot) => ({
+              id: snapshot.id,
+              status: snapshot.status,
+              superseded_at: snapshot.superseded_at?.toISOString(),
+            })),
+          ).toEqual(
+            repairedSnapshots.rows.map((snapshot) => ({
+              id: snapshot.id,
+              status: snapshot.status,
+              superseded_at: repairedTimestamps.get(snapshot.id),
+            })),
           );
 
           for (const table of ['assignment_sessions', 'drafts', 'prompt_packages']) {

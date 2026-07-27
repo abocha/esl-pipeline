@@ -280,6 +280,13 @@ describe('application/student-memory-snapshot-generation', () => {
       }),
     );
     const now = () => new Date('2026-03-20T17:30:00.000Z');
+    const finalizeGenerationNotes = vi.fn(() => ({
+      materialChange: true,
+      candidateRefresh: {
+        requested: true,
+        enqueueStatus: 'pending',
+      },
+    }));
 
     const result = await generateStudentMemorySnapshot({
       config: {} as never,
@@ -291,6 +298,7 @@ describe('application/student-memory-snapshot-generation', () => {
         model: 'gpt-5.4',
         prompt: 'extract student memory snapshot',
         expectedLatestReadySnapshotId: 'snapshot-parent',
+        finalizeGenerationNotes,
       },
       overrides: {
         extractor,
@@ -327,6 +335,20 @@ describe('application/student-memory-snapshot-generation', () => {
 
     const insertedParams = insertCanonicalReady.mock.calls[0]?.[0];
     expect(insertedParams.contentHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(finalizeGenerationNotes).toHaveBeenCalledWith({
+      content: expect.objectContaining({
+        snapshotSummary:
+          'The student is more fluent and willing to speak, but tense contrast remains unresolved.',
+      }),
+      contentHash: insertedParams.contentHash,
+    });
+    expect(insertedParams.generationNotes).toMatchObject({
+      materialChange: true,
+      candidateRefresh: {
+        requested: true,
+        enqueueStatus: 'pending',
+      },
+    });
     expect(result.providerRequestId).toBe('snapshot-req-1');
     expect(result.usage?.totalTokens).toBe(180);
   });
