@@ -4,7 +4,7 @@
 
 - Audience: maintainers and AI agents operating backup archival.
 - Authority Level: operations runbook.
-- Last Verified Against: 2026-06-11 repo state.
+- Last Verified Against: 2026-07-27 repo state.
 - Owner: ops maintainer + automation agents.
 - Review Cadence: monthly or after scheduler/env changes.
 - Status: `runbook`.
