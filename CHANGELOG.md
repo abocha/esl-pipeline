@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.2.6] - 2026-07-27
+
+### Changed
+
+- Automated release from PR #157: Fix student-memory replay CLI shutdown (https://github.com/abocha/esl-pipeline/pull/157)
+
 ## [10.2.5] - 2026-07-27
 
 ### Changed
