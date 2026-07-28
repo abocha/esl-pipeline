@@ -21,6 +21,10 @@ import {
   formatAgentCheckSummary,
   resolvePackageManagerCommand,
 } from './agent-check-lib.mjs';
+import {
+  buildExecutionLanes,
+  runExecutionLanes,
+} from './execution-lane-lib.mjs';
 
 const repoRoot = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const cliArgs = process.argv.slice(2);
@@ -100,16 +104,17 @@ if (!agentMode) {
   console.log('');
 }
 
-const laneResults = [];
 const lanes = buildExecutionLanes(plan);
-for (const lane of lanes) {
-  const result = await runLane(lane);
-  laneResults.push(result);
-  if (!agentMode) {
-    console.log(`${result.status === 'pass' ? 'PASS' : 'FAIL'} ${result.name}`);
-  }
-  if (result.status !== 'pass') break;
-}
+const laneResults = await runExecutionLanes({
+  lanes,
+  runLane,
+  onResult(result) {
+    if (!agentMode) {
+      const status = result.status === 'pass' ? 'PASS' : result.status.toUpperCase();
+      console.log(`${status} ${result.name}`);
+    }
+  },
+});
 
 const summary = buildAgentCheckSummary({
   label: agentMode ? 'check:fast:agent' : 'check:fast',
@@ -135,30 +140,7 @@ if (plan.turbo) {
   }
 }
 
-process.exit(summary.firstFailure?.exitCode ?? 0);
-
-function buildExecutionLanes(currentPlan) {
-  const preTurboLanes = currentPlan.triggeredLanes.filter(
-    (lane) => !lane.id.startsWith('backend:'),
-  );
-  const postTurboLanes = currentPlan.triggeredLanes.filter((lane) =>
-    lane.id.startsWith('backend:'),
-  );
-  const lanes = [...preTurboLanes.map((lane) => ({ ...lane, kind: 'pnpm' }))];
-  if (currentPlan.turbo) {
-    lanes.push(
-      ...currentPlan.turbo.taskGroups.map((group) => ({
-        id: group.id,
-        pnpmArgs: group.args,
-        reason: `affected workspace package ${group.task} graph`,
-        repro: group.repro,
-        kind: 'pnpm',
-      })),
-    );
-  }
-  lanes.push(...postTurboLanes.map((lane) => ({ ...lane, kind: 'pnpm' })));
-  return lanes;
-}
+process.exit(summary.firstFailure?.exitCode ?? (summary.problems.length > 0 ? 1 : 0));
 
 async function runLane(lane) {
   const artifacts = buildAgentCheckArtifacts({
