@@ -30,16 +30,18 @@ describe('TTS request cancellation', () => {
     expect(() => throwIfTtsCancelled({ signal: controller.signal }, () => 100)).toThrow(
       TtsSynthesisCancelledError,
     );
+    let cancellation: unknown;
     try {
       throwIfTtsCancelled({ signal: controller.signal }, () => 100);
     } catch (error) {
-      expect(error).toMatchObject({
-        name: 'TtsSynthesisCancelledError',
-        code: 'TTS_SYNTHESIS_CANCELLED',
-        message: 'TTS synthesis cancelled',
-        reason: 'operator stop',
-      });
+      cancellation = error;
     }
+    expect(cancellation).toMatchObject({
+      name: 'TtsSynthesisCancelledError',
+      code: 'TTS_SYNTHESIS_CANCELLED',
+      message: 'TTS synthesis cancelled',
+      reason: 'operator stop',
+    });
   });
 
   it('treats an exact deadline boundary as caller cancellation', () => {

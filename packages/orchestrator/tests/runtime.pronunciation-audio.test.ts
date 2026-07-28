@@ -121,7 +121,7 @@ describe('runtime/pronunciation-audio', () => {
       sectionStartLine: 1,
       issues: [],
     });
-    const pending: Array<() => void> = [];
+    const pending: (() => void)[] = [];
     vi.mocked(buildPronunciationTextMp3).mockImplementation(
       ({ text, voiceId }) =>
         new Promise((resolve) => {
@@ -135,16 +135,14 @@ describe('runtime/pronunciation-audio', () => {
         }),
     );
     const controller = new AbortController();
-    const result = expect(
-      synthesizePronunciationAudio({
-        context: {} as never,
-        mdPath: '/tmp/example.md',
-        outPath: '/tmp',
-        regeneratePrimary: false,
-        primaryVoiceId: 'voice-primary',
-        signal: controller.signal,
-      }),
-    ).rejects.toBeInstanceOf(TtsSynthesisCancelledError);
+    const result = synthesizePronunciationAudio({
+      context: {} as never,
+      mdPath: '/tmp/example.md',
+      outPath: '/tmp',
+      regeneratePrimary: false,
+      primaryVoiceId: 'voice-primary',
+      signal: controller.signal,
+    }).catch((error: unknown) => error);
 
     await vi.waitFor(() => expect(buildPronunciationTextMp3).toHaveBeenCalledTimes(3));
     controller.abort('operator stop');
@@ -152,7 +150,7 @@ describe('runtime/pronunciation-audio', () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
     for (const resolve of pending.slice(3)) resolve();
 
-    await result;
+    await expect(result).resolves.toBeInstanceOf(TtsSynthesisCancelledError);
     expect(buildPronunciationTextMp3).toHaveBeenCalledTimes(3);
   });
 
@@ -170,7 +168,7 @@ describe('runtime/pronunciation-audio', () => {
       sectionStartLine: 1,
       issues: [],
     });
-    const pending: Array<{ resolve: () => void; reject: () => void }> = [];
+    const pending: { resolve: () => void; reject: () => void }[] = [];
     vi.mocked(buildPronunciationTextMp3).mockImplementation(
       ({ text, voiceId }) =>
         new Promise((resolve, reject) => {
@@ -188,7 +186,7 @@ describe('runtime/pronunciation-audio', () => {
       regeneratePrimary: false,
       primaryVoiceId: 'voice-primary',
       signal: controller.signal,
-    });
+    }).catch((error: unknown) => error);
 
     await vi.waitFor(() => expect(buildPronunciationTextMp3).toHaveBeenCalledTimes(3));
     controller.abort('operator stop');
@@ -196,7 +194,7 @@ describe('runtime/pronunciation-audio', () => {
     pending[1]!.resolve();
     pending[2]!.resolve();
 
-    await expect(result).rejects.toBeInstanceOf(TtsSynthesisCancelledError);
+    await expect(result).resolves.toBeInstanceOf(TtsSynthesisCancelledError);
     expect(buildPronunciationTextMp3).toHaveBeenCalledTimes(3);
   });
 
@@ -222,13 +220,13 @@ describe('runtime/pronunciation-audio', () => {
       outPath: '/tmp',
       primaryVoiceId: 'voice-primary',
       signal: controller.signal,
-    });
+    }).catch((error: unknown) => error);
 
     await vi.waitFor(() => expect(buildPronunciationShadowSentenceMp3).toHaveBeenCalledTimes(1));
     controller.abort('operator stop');
     rejectPrimary(new Error('provider failure'));
 
-    await expect(result).rejects.toBeInstanceOf(TtsSynthesisCancelledError);
+    await expect(result).resolves.toBeInstanceOf(TtsSynthesisCancelledError);
     expect(buildPronunciationTextMp3).not.toHaveBeenCalled();
   });
 
