@@ -8,6 +8,7 @@ import {
   createInworldTtsProvider,
   loadInworldVoicesCatalog,
   renderInworldSpeechSegment,
+  resolveInworldVoiceCapabilities,
   resolveInworldAssemblyGapDurations,
   resolveInworldSpeakerAssignmentsFromCatalog,
   resolveInworldSpeakerAssignmentsWithRankerFromCatalog,
@@ -63,6 +64,85 @@ function createPreviewSpeechPlan(segment: Record<string, unknown> = {}) {
 }
 
 describe('inworld provider adapter basics', () => {
+  it('derives steering capabilities from the selected Inworld model', () => {
+    expect(resolveInworldVoiceCapabilities('inworld-tts-2')).toEqual({
+      supportsMetadataInstructions: true,
+      supportsNonVerbals: true,
+      supportsUppercaseEmphasis: true,
+      supportsFreeFormDirection: true,
+    });
+    expect(resolveInworldVoiceCapabilities('inworld-tts-1.5-max')).toEqual({
+      supportsMetadataInstructions: false,
+      supportsNonVerbals: false,
+      supportsUppercaseEmphasis: false,
+      supportsFreeFormDirection: false,
+    });
+    expect(resolveInworldVoiceCapabilities('inworld-tts-1.5-mini')).toEqual({
+      supportsMetadataInstructions: false,
+      supportsNonVerbals: false,
+      supportsUppercaseEmphasis: false,
+      supportsFreeFormDirection: false,
+    });
+  });
+
+  it('preserves typed voice metadata and canonicalizes SDK language', async () => {
+    const catalog = await loadInworldVoicesCatalog({
+      client: {
+        listVoices: vi.fn().mockResolvedValue([
+          {
+            voiceId: 'workspace-maya',
+            displayName: 'Maya Display',
+            name: 'maya_internal',
+            langCode: 'en_US',
+            description: 'Warm classroom voice',
+            tags: ['warm'],
+            source: 'workspace',
+          },
+        ]),
+      },
+    });
+    const voice = catalog.voices.find((candidate) => candidate.id === 'workspace-maya');
+
+    expect(voice).toMatchObject({
+      name: 'Maya Display',
+      labels: {
+        display_name: 'Maya Display',
+        name: 'maya_internal',
+        language: 'en-US',
+        description: 'Warm classroom voice',
+        tags: ['warm'],
+        source: 'workspace',
+      },
+      verifiedLanguages: [{ language: 'en-US', locale: 'en-US' }],
+    });
+    expect(
+      resolveInworldSpeakerAssignmentsFromCatalog(['Maya'], {}, catalog, {
+        model: 'inworld-tts-2',
+      }),
+    ).toMatchObject([{ voiceId: 'workspace-maya', language: 'en-US' }]);
+  });
+
+  it('logs one privacy-safe warning when the live catalog falls back', async () => {
+    const logger = { log: vi.fn() };
+    const client = { listVoices: vi.fn().mockRejectedValue(new Error('secret response body')) };
+
+    const catalog = await loadInworldVoicesCatalog({ logger, client });
+
+    expect(catalog.voices.map((voice) => voice.id)).toEqual(['Ashley', 'Dennis']);
+    expect(logger.log).toHaveBeenCalledTimes(1);
+    expect(logger.log).toHaveBeenCalledWith({
+      level: 'warn',
+      stage: 'voice-plan',
+      message: 'Inworld voice catalog fell back to static voices',
+      detail: {
+        provider: 'inworld',
+        errorCategory: expect.any(String),
+        fallbackVoiceCount: 2,
+      },
+    });
+    expect(JSON.stringify(logger.log.mock.calls)).not.toContain('secret response body');
+  });
+
   it('defaults model family to inworld-tts-2', () => {
     delete process.env.ESL_TTS_PROVIDER_INWORLD_MODEL;
 
@@ -286,7 +366,7 @@ describe('inworld provider adapter basics', () => {
     ]);
   });
 
-  it('records TTS-2 voice capability tiers and prefers steerable voices when fit is close', () => {
+  it('treats every TTS-2 voice as steerable without a tag or ranking bonus', () => {
     expect(
       resolveInworldSpeakerAssignmentsFromCatalog(
         ['Nina'],
@@ -321,7 +401,8 @@ describe('inworld provider adapter basics', () => {
     ).toMatchObject([
       {
         speaker: 'Nina',
-        voiceId: 'Calm Steerable',
+        voiceId: 'Calm Plain',
+        capabilityMatches: ['accent:american', 'persona:calm,neutral'],
         capabilities: {
           supportsMetadataInstructions: true,
           supportsNonVerbals: true,
@@ -379,7 +460,8 @@ describe('inworld provider adapter basics', () => {
           voiceId: 'Warm Plain',
           source: 'auto',
           selectionReason: 'Selected by Inworld voice ranker: warmer conversational fit',
-          capabilities: { supportsFreeFormDirection: false },
+          capabilities: { supportsFreeFormDirection: true },
+          language: 'en-US',
         },
       ],
     });
