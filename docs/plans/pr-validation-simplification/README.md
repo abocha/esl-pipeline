@@ -3,11 +3,11 @@
 ## Meta
 
 - Status: `active`.
-- Last Verified Against: 2026-07-28 repo state (`9951fe79`).
+- Last Verified Against: 2026-07-29 repo state (`65584896`).
 - Exit Trigger: archive this topic after all three implementation PRs merge and the resulting
   contracts are authoritative in `AGENTS.md`, `docs/reference/agents-ssot.md`, and
   `docs/reference/TESTING_GUIDELINES.md`.
-- Current Focus: PR 2, explicit backend test routing.
+- Current Focus: PR 3, CI service evidence handoff.
 - Owner: founder-maintainer + primary implementation agent.
 
 ## Goal
