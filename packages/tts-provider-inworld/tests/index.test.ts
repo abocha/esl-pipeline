@@ -277,6 +277,82 @@ describe('inworld provider adapter basics', () => {
     expect(JSON.stringify(logger.log.mock.calls)).not.toContain('secret response body');
   });
 
+  it('reports cancellation when an in-flight catalog call resolves after abort', async () => {
+    const controller = new AbortController();
+    const logger = { log: vi.fn() };
+    let resolveCatalog!: (voices: []) => void;
+    const listVoices = vi.fn(
+      () =>
+        new Promise<[]>((resolve) => {
+          resolveCatalog = resolve;
+        }),
+    );
+    const result = loadInworldVoicesCatalog({
+      logger,
+      client: { listVoices },
+      signal: controller.signal,
+    });
+
+    await vi.waitFor(() => expect(listVoices).toHaveBeenCalledTimes(1));
+    controller.abort('operator stop');
+    resolveCatalog([]);
+
+    await expect(result).rejects.toBeInstanceOf(TtsSynthesisCancelledError);
+    expect(logger.log).not.toHaveBeenCalled();
+  });
+
+  it('reports cancellation when an in-flight catalog call rejects after abort', async () => {
+    const controller = new AbortController();
+    const logger = { log: vi.fn() };
+    let rejectCatalog!: (error: Error) => void;
+    const listVoices = vi.fn(
+      () =>
+        new Promise<[]>((_resolve, reject) => {
+          rejectCatalog = reject;
+        }),
+    );
+    const result = loadInworldVoicesCatalog({
+      logger,
+      client: { listVoices },
+      signal: controller.signal,
+    });
+
+    await vi.waitFor(() => expect(listVoices).toHaveBeenCalledTimes(1));
+    controller.abort('operator stop');
+    rejectCatalog(new Error('provider failure'));
+
+    await expect(result).rejects.toBeInstanceOf(TtsSynthesisCancelledError);
+    expect(logger.log).not.toHaveBeenCalled();
+  });
+
+  it('reports cancellation when the deadline expires before an in-flight catalog rejection', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(0);
+    const logger = { log: vi.fn() };
+    let rejectCatalog!: (error: Error) => void;
+    const listVoices = vi.fn(
+      () =>
+        new Promise<[]>((_resolve, reject) => {
+          rejectCatalog = reject;
+        }),
+    );
+
+    try {
+      const result = loadInworldVoicesCatalog({
+        logger,
+        client: { listVoices },
+        deadlineAtMs: 1_000,
+      });
+      await vi.waitFor(() => expect(listVoices).toHaveBeenCalledTimes(1));
+      now.mockReturnValue(2_000);
+      rejectCatalog(new Error('provider failure'));
+
+      await expect(result).rejects.toBeInstanceOf(TtsSynthesisCancelledError);
+      expect(logger.log).not.toHaveBeenCalled();
+    } finally {
+      now.mockRestore();
+    }
+  });
+
   it('emits aggregate cache hit and miss counts without learner text', async () => {
     const outPath = join(tmpdir(), `inworld-cache-${process.pid}-${Date.now()}`);
     const logger = { log: vi.fn() };

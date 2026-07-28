@@ -604,6 +604,7 @@ export async function loadInworldVoicesCatalog(
         dependencies.client ?? (dependencies.clientProvider ?? createInworldClientProvider()).get();
       throwIfTtsCancelled(dependencies);
       const workspaceVoices = await client.listVoices();
+      throwIfTtsCancelled(dependencies);
       for (const voice of workspaceVoices) {
         if (!voice.voiceId) continue;
         const metadata = resolveInworldVoiceMetadata(voice);
@@ -630,6 +631,7 @@ export async function loadInworldVoicesCatalog(
         });
       }
     } catch (error) {
+      throwIfTtsCancelled(dependencies);
       dependencies.logger?.log({
         level: 'warn',
         stage: 'voice-plan',
