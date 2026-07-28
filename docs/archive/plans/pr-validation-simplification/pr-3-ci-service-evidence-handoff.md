@@ -36,7 +36,7 @@
 - Adds plan field: `ciRequirements: Array<{ id: string, reason: string }>`.
 - Adds aggregate status: `pass_with_ci_requirements`.
 
-- [ ] **Step 1: Write planner ownership tests**
+- [x] **Step 1: Write planner ownership tests**
 
   Assert representative paths produce these outcomes:
 
@@ -51,17 +51,17 @@
 
   Assert owner metadata never depends on ambient environment variables.
 
-- [ ] **Step 2: Run planner tests and verify failure**
+- [x] **Step 2: Run planner tests and verify failure**
 
   Run: `node --test scripts/check/affected-check-lib.test.mjs scripts/check/agent-check-lib.test.mjs`
 
   Expected: FAIL because ownership and `pass_with_ci_requirements` do not exist.
 
-- [ ] **Step 3: Add ownership without changing selection**
+- [x] **Step 3: Add ownership without changing selection**
 
   Retain selected service lanes in the plan for visibility, mark them `owner: 'ci'`, and have `buildExecutionLanes` execute only `owner: 'local'`. Populate `ciRequirements` from the skipped CI-owned lanes.
 
-- [ ] **Step 4: Format honest local outcomes**
+- [x] **Step 4: Format honest local outcomes**
 
   A run with all local lanes passing and at least one CI requirement must print:
 
@@ -74,7 +74,7 @@
 
   A local failure remains `FAIL` even when CI requirements are present.
 
-- [ ] **Step 5: Run planner, runner, and formatting tests**
+- [x] **Step 5: Run planner, runner, and formatting tests**
 
   ```powershell
   node --test scripts/check/affected-check-lib.test.mjs scripts/check/execution-lane-lib.test.mjs scripts/check/agent-check-lib.test.mjs scripts/check/run-ci-scope.test.mjs
@@ -83,7 +83,7 @@
 
   Expected: PASS; dry-run separately displays locally executed lanes and required CI evidence.
 
-- [ ] **Step 6: Commit local-to-CI ownership**
+- [x] **Step 6: Commit local-to-CI ownership**
 
   ```powershell
   git add scripts/check/affected-check-lib.mjs scripts/check/affected-check-lib.test.mjs scripts/check/run-affected-check.mjs scripts/check/agent-check-lib.mjs scripts/check/agent-check-lib.test.mjs
@@ -104,11 +104,11 @@
 - Preserves CI output `backend_db_worker` as the one resource-efficient service job selector.
 - Consumes the PR 2 package scripts guarded by `test-routing.json`.
 
-- [ ] **Step 1: Add committed-scope regression cases**
+- [x] **Step 1: Add committed-scope regression cases**
 
   Cover migrations, every positively listed PostgreSQL/worker test, backend repository implementation paths, queue/worker implementation paths, contracts, shared infrastructure, workflow changes, renames, deletes, and unknown roots. Each must require `backend_db_worker=true` where currently conservative coverage requires it.
 
-- [ ] **Step 2: Run CI-scope tests**
+- [x] **Step 2: Run CI-scope tests**
 
   Run:
 
@@ -118,7 +118,7 @@
 
   Expected: any missing mapping fails before workflow edits.
 
-- [ ] **Step 3: Keep the existing isolated service job**
+- [x] **Step 3: Keep the existing isolated service job**
 
   Do not split PostgreSQL and Redis into additional jobs in this resource-constrained design. Continue provisioning both in `backend-db-integration`, then invoke the manifest-guarded public scripts:
 
@@ -130,7 +130,7 @@
 
   Preserve health checks, migration preflight, schema failure evidence, artifact upload, and the final `ci-gate` required-job check.
 
-- [ ] **Step 4: Verify the workflow contract statically**
+- [x] **Step 4: Verify the workflow contract statically**
 
   Run:
 
@@ -141,7 +141,7 @@
 
   Expected: PASS; the CI service job remains conditionally selected and fail-closed.
 
-- [ ] **Step 5: Commit CI alignment**
+- [x] **Step 5: Commit CI alignment**
 
   ```powershell
   git add .github/workflows/ci.yml scripts/check/affected-check-lib.mjs scripts/check/affected-check-lib.test.mjs scripts/check/run-ci-scope.test.mjs
@@ -158,15 +158,15 @@
 
 - Produces always-uploaded `tmp/ci-logs/static-checks/` and `tmp/ci-logs/integration-tests/` artifacts.
 
-- [ ] **Step 1: Capture static and integration logs without hiding exit codes**
+- [x] **Step 1: Capture static and integration logs without hiding exit codes**
 
   Use the Linux runner's `set -o pipefail`, write command output with `tee`, and preserve step failure. Keep commands as separate steps where their independence helps diagnosis; do not collapse the entire job into one opaque shell script.
 
-- [ ] **Step 2: Upload artifacts with `if: always()`**
+- [x] **Step 2: Upload artifacts with `if: always()`**
 
   Follow the existing pinned `actions/upload-artifact` convention. Use 14-day retention to match current DB/Telegram evidence. Each artifact must include a short manifest naming the command, conclusion, and log path.
 
-- [ ] **Step 3: Verify YAML and repository policy**
+- [x] **Step 3: Verify YAML and repository policy**
 
   ```powershell
   pnpm format
@@ -176,7 +176,7 @@
 
   Expected: PASS and no unpinned action references.
 
-- [ ] **Step 4: Commit CI artifacts**
+- [x] **Step 4: Commit CI artifacts**
 
   ```powershell
   git add .github/workflows/ci.yml scripts/check/agent-check-lib.mjs scripts/check/agent-check-lib.test.mjs
@@ -198,7 +198,7 @@
 
 - Makes local, PR CI, and automatic release responsibilities authoritative.
 
-- [ ] **Step 1: Document the final agent contract**
+- [x] **Step 1: Document the final agent contract**
 
   Keep `AGENTS.md` compact. State:
 
@@ -213,15 +213,15 @@
   merge to main automatically starts release production
   ```
 
-- [ ] **Step 2: Document the absence of a nightly tier**
+- [x] **Step 2: Document the absence of a nightly tier**
 
   Remove any new plan wording that assigns required evidence to nightly validation. Manual diagnostics may exist, but no release-blocking test may depend on a future scheduled run.
 
-- [ ] **Step 3: Preserve the release workflow boundary**
+- [x] **Step 3: Preserve the release workflow boundary**
 
   Confirm `release-on-merge.yml` is unchanged. The docs must state that PR CI owns application readiness, while the merge workflow decides versioning and publishes immutable images. Deployment remains a separate operator action.
 
-- [ ] **Step 4: Run final focused and canonical validation**
+- [x] **Step 4: Run final focused and canonical validation**
 
   ```powershell
   pnpm test:tooling
@@ -239,14 +239,14 @@
 
   Confirm `change-scope`, `static-checks`, selected integration/service jobs, and `ci-gate` pass. Verify exactly one release label. Do not merge until all selected required evidence passes because merge automatically begins the release transaction.
 
-- [ ] **Step 6: Complete lifecycle documentation**
+- [x] **Step 6: Complete lifecycle documentation**
 
   After implementation and validation are complete but before the final PR 3 commit, move this topic
   directory to `docs/archive/plans/pr-validation-simplification/`, remove it from the active plan
   router, regenerate documentation indexes, and rerun `pnpm docs:check`. The merged PR therefore
   leaves no completed plan under the active router.
 
-- [ ] **Step 7: Commit final policy and lifecycle changes**
+- [x] **Step 7: Commit final policy and lifecycle changes**
 
   ```powershell
   git add AGENTS.md docs/reference/agents-ssot.md docs/reference/TESTING_GUIDELINES.md .github/pull_request_template.md docs/plans/README.md docs/archive/plans/pr-validation-simplification

@@ -2,12 +2,10 @@
 
 ## Meta
 
-- Status: `active`.
-- Last Verified Against: 2026-07-29 repo state (`65584896`).
-- Exit Trigger: archive this topic after all three implementation PRs merge and the resulting
-  contracts are authoritative in `AGENTS.md`, `docs/reference/agents-ssot.md`, and
-  `docs/reference/TESTING_GUIDELINES.md`.
-- Current Focus: PR 3, CI service evidence handoff.
+- Status: `completed`.
+- Last Verified Against: 2026-07-29 PR 3 implementation state.
+- Exit Trigger: satisfied by the PR 3 policy handoff and archive move.
+- Current Focus: historical trace; hosted PR CI remains the merge prerequisite.
 - Owner: founder-maintainer + primary implementation agent.
 
 ## Goal
