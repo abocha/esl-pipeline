@@ -4,6 +4,7 @@ import { mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { resolveValidationLaneEnv } from '../test/pure-test-env.mjs';
 import {
   buildAffectedCheckPlan,
   buildBroadCheckPlan,
@@ -155,7 +156,9 @@ async function runLane(lane) {
   mkdirSync(artifacts.laneDir, { recursive: true });
 
   const laneStartedMs = Date.now();
-  const result = await runCommand(resolvePackageManagerCommand(lane.pnpmArgs));
+  const result = await runCommand(resolvePackageManagerCommand(lane.pnpmArgs), {
+    env: resolveValidationLaneEnv({ laneId: lane.id, sourceEnv: process.env }),
+  });
   writeFileSync(artifacts.rawLog, result.output, 'utf8');
 
   return {
@@ -185,12 +188,12 @@ function runGit(args) {
   });
 }
 
-function runCommand(invocation) {
+function runCommand(invocation, { env = process.env } = {}) {
   return new Promise((resolve, reject) => {
     const spawnInvocation = buildSpawnInvocation(invocation);
     const child = spawn(spawnInvocation.command, spawnInvocation.args, {
       cwd: repoRoot,
-      env: process.env,
+      env,
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
     });
