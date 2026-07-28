@@ -22,34 +22,34 @@ function createSpeechPlanResponseSchema(plannerPauseMaximumMs: number) {
             additionalProperties: false,
             required: ['id'],
             properties: {
-            id: { type: 'string' },
-            emotion: { type: 'string' },
-            intonation: { type: 'string' },
-            pace: { type: 'string', enum: ['slow', 'measured', 'natural', 'brisk'] },
-            emphasis: { type: 'array', items: { type: 'string' } },
-            pauseBeforeMs: {
-              type: 'integer',
-              minimum: 0,
-              maximum: plannerPauseMaximumMs,
-            },
-            pauseAfterMs: {
-              type: 'integer',
-              minimum: 0,
-              maximum: plannerPauseMaximumMs,
-            },
-            nonVerbalsBefore: {
-              type: 'array',
-              items: { type: 'string', enum: ['sigh', 'laugh', 'chuckle', 'breath'] },
-            },
-            nonVerbalsAfter: {
-              type: 'array',
-              items: { type: 'string', enum: ['sigh', 'laugh', 'chuckle', 'breath'] },
-            },
-            deliveryMode: {
-              type: 'string',
-              enum: ['STABLE', 'BALANCED', 'CREATIVE'],
-            },
-            freeFormDirection: { type: 'string' },
+              id: { type: 'string' },
+              emotion: { type: 'string' },
+              intonation: { type: 'string' },
+              pace: { type: 'string', enum: ['slow', 'measured', 'natural', 'brisk'] },
+              emphasis: { type: 'array', items: { type: 'string' } },
+              pauseBeforeMs: {
+                type: 'integer',
+                minimum: 0,
+                maximum: plannerPauseMaximumMs,
+              },
+              pauseAfterMs: {
+                type: 'integer',
+                minimum: 0,
+                maximum: plannerPauseMaximumMs,
+              },
+              nonVerbalsBefore: {
+                type: 'array',
+                items: { type: 'string', enum: ['sigh', 'laugh', 'chuckle', 'breath'] },
+              },
+              nonVerbalsAfter: {
+                type: 'array',
+                items: { type: 'string', enum: ['sigh', 'laugh', 'chuckle', 'breath'] },
+              },
+              deliveryMode: {
+                type: 'string',
+                enum: ['STABLE', 'BALANCED', 'CREATIVE'],
+              },
+              freeFormDirection: { type: 'string' },
             },
           },
         },

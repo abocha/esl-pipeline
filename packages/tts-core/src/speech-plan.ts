@@ -202,10 +202,7 @@ function validateSegment(
   }
   const emotion = normalizeOptionalCue('emotion', segment.emotion);
   const intonation = normalizeOptionalCue('intonation', segment.intonation);
-  const freeFormDirection = normalizeOptionalCue(
-    'freeFormDirection',
-    segment.freeFormDirection,
-  );
+  const freeFormDirection = normalizeOptionalCue('freeFormDirection', segment.freeFormDirection);
   return {
     ...segment,
     emotion,

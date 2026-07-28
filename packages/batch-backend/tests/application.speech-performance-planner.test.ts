@@ -3,13 +3,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { SpeechPerformancePlannerInvalidOutputError } from '@esl-pipeline/tts-core';
 
 import {
-  buildSpeechPlannerRequest,
-  SPEECH_PERFORMANCE_PROMPT_POLICIES,
-} from '../src/application/speech-performance-prompt.js';
-import {
   createBackendSpeechPerformancePlanner,
   executeSpeechPlannerAttempt,
 } from '../src/application/speech-performance-planner.js';
+import {
+  buildSpeechPlannerRequest,
+  SPEECH_PERFORMANCE_PROMPT_POLICIES,
+} from '../src/application/speech-performance-prompt.js';
 import { loadConfig } from '../src/config/env.js';
 
 function createPrepared() {
@@ -84,9 +84,8 @@ describe('application/speech-performance-planner', () => {
   });
 
   it('defines the complete Inworld TTS-2 prompt policy', () => {
-    const policy = SPEECH_PERFORMANCE_PROMPT_POLICIES[
-      'speech-performance-v2-inworld-tts2'
-    ].join('\n');
+    const policy =
+      SPEECH_PERFORMANCE_PROMPT_POLICIES['speech-performance-v2-inworld-tts2'].join('\n');
 
     expect(policy).toContain('authored words and segment order are immutable');
     expect(policy).toContain('one complete free-form direction');
@@ -367,11 +366,13 @@ describe('application/speech-performance-planner', () => {
         }),
       ],
     });
-    expect(executor.mock.calls[0]?.[0].request.responseSchema.schema.properties.segments.items.properties)
-      .toMatchObject({
-        pauseBeforeMs: { maximum: 1000 },
-        pauseAfterMs: { maximum: 1000 },
-      });
+    expect(
+      executor.mock.calls[0]?.[0].request.responseSchema.schema.properties.segments.items
+        .properties,
+    ).toMatchObject({
+      pauseBeforeMs: { maximum: 1000 },
+      pauseAfterMs: { maximum: 1000 },
+    });
   });
 });
 

@@ -7,9 +7,8 @@ import type {
   SpeechPerformancePlanSegment,
 } from './types.js';
 
-const SAFE_CUE_TEXT = /^[\p{L}\p{N}\p{M}\p{Zs},.!?;:'"()\-–—]+$/u;
-const UNSAFE_CONTROL = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/u;
-const UNSAFE_MARKUP_DELIMITER = /[\[\]<>{}]/u;
+const SAFE_CUE_TEXT = /^[\p{L}\p{N}\p{M}\p{Zs},.!?;:'"()–—-]+$/u;
+const UNSAFE_MARKUP_DELIMITERS = new Set(['[', ']', '<', '>', '{', '}']);
 
 export type SpeechCueTextField = 'emotion' | 'intonation' | 'freeFormDirection';
 
@@ -51,10 +50,10 @@ export interface ValidatedSpeechPlanAnalysis extends SpeechPlanCandidateAnalysis
 
 export function normalizeSpeechCueText(field: SpeechCueTextField, input: string): string {
   const normalized = input.normalize('NFKC');
-  if (UNSAFE_CONTROL.test(normalized)) {
+  if ([...normalized].some(isUnsafeControlCharacter)) {
     throw new ConfigurationError(`${field} contains a control character or newline.`);
   }
-  if (UNSAFE_MARKUP_DELIMITER.test(normalized)) {
+  if ([...normalized].some((character) => UNSAFE_MARKUP_DELIMITERS.has(character))) {
     throw new ConfigurationError(`${field} contains an unsafe markup delimiter.`);
   }
   const compact = normalized.trim().replaceAll(/\s+/gu, ' ');
@@ -66,6 +65,16 @@ export function normalizeSpeechCueText(field: SpeechCueTextField, input: string)
     throw new ConfigurationError(`${field} contains an unsupported character.`);
   }
   return compact;
+}
+
+function isUnsafeControlCharacter(character: string): boolean {
+  const codePoint = character.codePointAt(0)!;
+  return (
+    codePoint <= 0x1f ||
+    (codePoint >= 0x7f && codePoint <= 0x9f) ||
+    codePoint === 0x2028 ||
+    codePoint === 0x2029
+  );
 }
 
 export function analyzeSpeechPlanCandidate(
@@ -222,7 +231,8 @@ export function analyzeValidatedSpeechPlan(
       if (!capabilities.naturalLanguageSteering) {
         hardFailures.push(issue('unsupported_free_form_direction', segment.id));
       }
-      if (hasMetadata) warnings.push(issue('redundant_instruction_components', segment.id, {}, 'warning'));
+      if (hasMetadata)
+        warnings.push(issue('redundant_instruction_components', segment.id, {}, 'warning'));
     }
     if (segment.pace) {
       paceCount += 1;
@@ -264,8 +274,10 @@ export function analyzeValidatedSpeechPlan(
         hardFailures.push(issue('unsupported_delivery_mode', segment.id));
       }
     }
-    if (hasMetadata) cueCount += Number(Boolean(segment.emotion)) + Number(Boolean(segment.intonation));
-    if (cueCountForSegment(segment) > 5) warnings.push(issue('high_cue_density', segment.id, {}, 'warning'));
+    if (hasMetadata)
+      cueCount += Number(Boolean(segment.emotion)) + Number(Boolean(segment.intonation));
+    if (cueCountForSegment(segment) > 5)
+      warnings.push(issue('high_cue_density', segment.id, {}, 'warning'));
 
     if (renderedSegments.length > 0) {
       const rendered = renderedById.get(segment.id);

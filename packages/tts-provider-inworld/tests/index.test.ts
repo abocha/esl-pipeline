@@ -9,11 +9,11 @@ import {
   INWORLD_RENDERER_POLICY_VERSION,
   loadInworldVoicesCatalog,
   renderInworldSpeechSegment,
-  resolveInworldVoiceCapabilities,
   resolveInworldAssemblyGapDurations,
   resolveInworldSpeakerAssignmentsFromCatalog,
   resolveInworldSpeakerAssignmentsWithRankerFromCatalog,
   resolveInworldTtsModel,
+  resolveInworldVoiceCapabilities,
 } from '../src/index.js';
 
 function createPreviewContext() {
@@ -788,9 +788,10 @@ describe('inworld provider adapter basics', () => {
     });
   });
 
-  it.each(['inworld-tts-1.5-max', 'inworld-tts-1.5-mini'] as const)(
-    'keeps %s rendering free from TTS-2 steering syntax without changing natural pace',
-    (model) => {
+  it.each([
+    'inworld-tts-1.5-max',
+    'inworld-tts-1.5-mini',
+  ] as const)('keeps %s rendering free from TTS-2 steering syntax without changing natural pace', (model) => {
     expect(
       renderInworldSpeechSegment({
         model,
@@ -810,8 +811,7 @@ describe('inworld provider adapter basics', () => {
       leadingInstructionTagCount: 0,
       speakingRate: 1,
     });
-    },
-  );
+  });
 
   it('changes preview cache identity when language or renderer policy changes', async () => {
     const context = createPreviewContext();
@@ -822,12 +822,7 @@ describe('inworld provider adapter basics', () => {
           voiceMapPath: 'voices.yml',
           outPath: '/tmp',
           preview: true,
-          voicePlan: createPreviewVoicePlan(
-            '2026-06-02T00:00:00.000Z',
-            'Maya',
-            'Ashley',
-            language,
-          ),
+          voicePlan: createPreviewVoicePlan('2026-06-02T00:00:00.000Z', 'Maya', 'Ashley', language),
         },
         { rendererPolicyVersion },
       );
