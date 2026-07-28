@@ -272,7 +272,10 @@ export function analyzeValidatedSpeechPlan(
       if (!rendered) {
         hardFailures.push(issue('segment_not_rendered', segment.id));
       } else {
-        if (lexicalSignature(rendered.lexicalText) !== lexicalSignature(source?.text ?? '')) {
+        if (
+          renderedLexicalSignature(rendered.lexicalText) !==
+          authoredLexicalSignature(source?.text ?? '')
+        ) {
           hardFailures.push(issue('rendered_words_changed', segment.id));
         }
         const instructionCount =
@@ -365,8 +368,25 @@ function countLeadingInstructionTags(text: string): number {
   return count;
 }
 
-function lexicalSignature(text: string): string {
-  return (text.normalize('NFKC').match(/[\p{L}\p{N}\p{M}]+/gu) ?? [])
-    .map((token) => token.toLocaleLowerCase())
-    .join('\u001f');
+function authoredLexicalSignature(text: string): string {
+  const withoutMarkdownStructure = text
+    .normalize('NFC')
+    .replace(/^\s*#{1,6}\s+/u, '')
+    .replace(/^\s*>\s?/u, '')
+    .replace(/^\s*[-*+]\s+/u, '')
+    .replace(/^\s*\d+[.)]\s+/u, '')
+    .replace(/!\[(.*?)\]\([^)]*\)/gu, '$1')
+    .replace(/\[(.+?)\]\((.+?)\)/gu, '$1')
+    .replace(/<[^>]+>/gu, '')
+    .replace(/\*\*(.+?)\*\*/gu, '$1')
+    .replace(/__(.+?)__/gu, '$1')
+    .replace(/\*(.+?)\*/gu, '$1')
+    .replace(/_([^_]+)_/gu, '$1')
+    .replace(/~~(.+?)~~/gu, '$1')
+    .replace(/`{1,3}([^`]+)`{1,3}/gu, '$1');
+  return renderedLexicalSignature(withoutMarkdownStructure);
+}
+
+function renderedLexicalSignature(text: string): string {
+  return text.normalize('NFC').toLocaleLowerCase().replaceAll(/\s+/gu, ' ').trim();
 }

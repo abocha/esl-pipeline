@@ -137,6 +137,27 @@ describe('speech performance plans', () => {
     );
   });
 
+  it.each([
+    ['$5 is due.', '5 is due.'],
+    ['Completion is 50%.', 'Completion is 50.'],
+    ['Use C++ here.', 'Use C here.'],
+    ['Read ½ aloud.', 'Read 1/2 aloud.'],
+  ])('detects spoken symbol changes from %j to %j', (authored, rendered) => {
+    const prepared: PreparedStudyTextSynthesis = {
+      ...createPrepared(),
+      segments: [{ id: 'segment-1', text: authored }],
+    };
+    const plan = createIdentitySpeechPerformancePlan(prepared);
+
+    expect(
+      analyzeValidatedSpeechPlan(prepared, plan, [
+        { id: 'segment-1', text: rendered, lexicalText: rendered },
+      ]).hardFailures,
+    ).toContainEqual(
+      expect.objectContaining({ code: 'rendered_words_changed', segmentId: 'segment-1' }),
+    );
+  });
+
   it('analyzes normalized plans and blocks privacy-safe synthesis failures', () => {
     const prepared: PreparedStudyTextSynthesis = {
       ...createPrepared(),
