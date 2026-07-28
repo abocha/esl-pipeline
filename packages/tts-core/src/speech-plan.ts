@@ -3,6 +3,7 @@ import { extractFrontmatter, extractStudyText } from '@esl-pipeline/pmd';
 
 import { resolveTtsSelection } from './descriptors.js';
 import { hashStudyText } from './hash.js';
+import { normalizeSpeechCueText } from './speech-plan-analysis.js';
 import type {
   BuildStudyTextInput,
   BuildStudyTextOptions,
@@ -199,5 +200,22 @@ function validateSegment(
       );
     }
   }
-  return emphasis.length > 0 ? { ...segment, emphasis } : segment;
+  const emotion = normalizeOptionalCue('emotion', segment.emotion);
+  const intonation = normalizeOptionalCue('intonation', segment.intonation);
+  const freeFormDirection = normalizeOptionalCue('freeFormDirection', segment.freeFormDirection);
+  return {
+    ...segment,
+    emotion,
+    intonation,
+    freeFormDirection,
+    emphasis: emphasis.length > 0 ? [...new Set(emphasis)] : undefined,
+  };
+}
+
+function normalizeOptionalCue(
+  field: 'emotion' | 'intonation' | 'freeFormDirection',
+  value: string | undefined,
+): string | undefined {
+  if (value === undefined) return undefined;
+  return normalizeSpeechCueText(field, value) || undefined;
 }

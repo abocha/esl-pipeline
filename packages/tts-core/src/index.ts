@@ -99,6 +99,20 @@ export {
   validateSpeechPerformancePlan,
 } from './speech-plan.js';
 export type {
+  RenderedSpeechSegmentSummary,
+  SpeechCueTextField,
+  SpeechPlanCandidateAnalysis,
+  SpeechPlanQualityIssue,
+  SpeechPlanQualityMetrics,
+  ValidatedSpeechPlanAnalysis,
+} from './speech-plan-analysis.js';
+export {
+  analyzeSpeechPlanCandidate,
+  analyzeValidatedSpeechPlan,
+  assertSpeechPlanSafeForSynthesis,
+  normalizeSpeechCueText,
+} from './speech-plan-analysis.js';
+export type {
   BuildPronunciationShadowSentenceInput,
   BuildPronunciationShadowSentenceOptions,
   BuildPronunciationShadowSentenceResult,
@@ -123,6 +137,7 @@ export type {
   SpeechPerformancePlannerFallbackReason,
   SpeechPerformancePlannerMetadata,
   SpeechPerformancePlanSegment,
+  SpeechPerformancePromptPolicyId,
   TtsEngine,
   TtsModelCapabilities,
   TtsModelId,
@@ -148,4 +163,10 @@ export type {
   VoiceProviderAdapter,
   VoiceSelectionSummary,
 } from './types.js';
-export { createResolvedVoicePlan, validateVoicePlan, withVoicePlan } from './voice-plan.js';
+export {
+  createResolvedVoicePlan,
+  resolveVoicePlanForExecution,
+  validateVoicePlan,
+  voiceAssignmentCapabilitiesForModel,
+  withVoicePlan,
+} from './voice-plan.js';

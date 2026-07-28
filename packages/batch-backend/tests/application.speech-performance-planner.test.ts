@@ -2,7 +2,14 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { SpeechPerformancePlannerInvalidOutputError } from '@esl-pipeline/tts-core';
 
-import { createBackendSpeechPerformancePlanner } from '../src/application/speech-performance-planner.js';
+import {
+  createBackendSpeechPerformancePlanner,
+  executeSpeechPlannerAttempt,
+} from '../src/application/speech-performance-planner.js';
+import {
+  buildSpeechPlannerRequest,
+  SPEECH_PERFORMANCE_PROMPT_POLICIES,
+} from '../src/application/speech-performance-prompt.js';
 import { loadConfig } from '../src/config/env.js';
 
 function createPrepared() {
@@ -36,6 +43,61 @@ function createPrepared() {
 }
 
 describe('application/speech-performance-planner', () => {
+  it('preserves the immutable v1 prompt bytes and hash', () => {
+    const expectedPrompt = [
+      'Create restrained, natural speech-performance cues for this ESL study text.',
+      'Do not rewrite words, add dialogue, or change segment order.',
+      'Use non-verbal cues sparingly. Prefer clarity over theatrical delivery.',
+      'Maintain a natural, consistent conversational tempo across adjacent segments.',
+      'Omit pace for ordinary dialogue.',
+      'Use slow, measured, or brisk only when a non-natural tempo is explicitly justified by the authored scene or learning goal.',
+      'Do not use pace merely to reinforce emotion, seriousness, regret, reflection, or intonation.',
+      'Only set freeFormDirection for segments whose selected voice supportsFreeFormDirection.',
+      JSON.stringify({
+        segments: createPrepared().segments,
+        voiceAssignments: createPrepared().voicePlan.assignments,
+      }),
+    ].join('\n\n');
+
+    expect(
+      buildSpeechPlannerRequest(
+        createPrepared(),
+        'speech-performance-v1-restrained-natural',
+        'gemini-3.1-flash-lite',
+      ),
+    ).toMatchObject({
+      prompt: expectedPrompt,
+      promptHash: 'a3f4e2a544f8594bb4af2550bce555353fe77f79f0053f6575e68f9b5cb23fc2',
+      promptPolicyVersion: 'speech-performance-v1-restrained-natural',
+      responseSchema: expect.objectContaining({ strict: true }),
+    });
+    expect(
+      buildSpeechPlannerRequest(
+        createPrepared(),
+        'speech-performance-v1-restrained-natural',
+        'gemini-3.1-flash-lite',
+      ).responseSchema.schema.properties.segments.items.properties,
+    ).toMatchObject({
+      pauseBeforeMs: { maximum: 3000 },
+      pauseAfterMs: { maximum: 3000 },
+    });
+  });
+
+  it('defines the complete Inworld TTS-2 prompt policy', () => {
+    const policy =
+      SPEECH_PERFORMANCE_PROMPT_POLICIES['speech-performance-v2-inworld-tts2'].join('\n');
+
+    expect(policy).toContain('authored words and segment order are immutable');
+    expect(policy).toContain('one complete free-form direction');
+    expect(policy).toContain('emotion, articulation, intonation, volume, pitch, range, speed');
+    expect(policy).toContain('Do not combine conflicting directions');
+    expect(policy).toContain('Optional cues must be sparse');
+    expect(policy).toContain('1000 ms');
+    expect(policy).toContain('one nonverbal cue total');
+    expect(policy).toContain('Omit pace for ordinary dialogue');
+    expect(policy).toContain('deliveryMode must remain BALANCED');
+  });
+
   it('stays disabled by default', () => {
     const config = loadConfig();
     expect(config.speechPlanner.enabled).toBe(false);
@@ -126,6 +188,8 @@ describe('application/speech-performance-planner', () => {
         provider: 'google_ai_studio',
         model: 'gemini-3.1-flash-lite',
         generatedAt: '2026-05-31T00:00:00.000Z',
+        promptPolicyVersion: 'speech-performance-v2-inworld-tts2',
+        promptHash: expect.stringMatching(/^[a-f0-9]{64}$/),
       },
       segments: [
         {
@@ -210,11 +274,105 @@ describe('application/speech-performance-planner', () => {
 
     await expect(binding.planner!.plan(createPrepared())).rejects.toMatchObject({
       name: 'SpeechPerformancePlannerInvalidOutputError',
-      validationMessage:
-        'Speech plan segment "segment-1" pause must be an integer from 0 to 3000ms.',
+      validationMessage: 'planner_pause_exceeds_cap',
       rejectedOutput,
       rawText,
     } satisfies Partial<SpeechPerformancePlannerInvalidOutputError>);
+  });
+
+  it('returns invalid planner attempts without converting them to fallback plans', async () => {
+    const config = createEnabledConfig();
+    const rejectedOutput = {
+      segments: [{ id: 'segment-1', pauseAfterMs: 4000 }],
+    };
+    const rawText = JSON.stringify(rejectedOutput);
+
+    await expect(
+      executeSpeechPlannerAttempt({
+        config,
+        prepared: createPrepared(),
+        promptPolicyVersion: 'speech-performance-v2-inworld-tts2',
+        executor: vi.fn().mockResolvedValue({
+          output: rejectedOutput,
+          rawText,
+          usage: { totalTokens: 12 },
+        }),
+        now: () => new Date('2026-05-31T00:00:00.000Z'),
+      }),
+    ).resolves.toMatchObject({
+      promptPolicyVersion: 'speech-performance-v2-inworld-tts2',
+      promptHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+      rawText,
+      parsedCandidate: rejectedOutput,
+      validation: { status: 'invalid' },
+      plan: undefined,
+      fallback: undefined,
+      usage: { totalTokens: 12 },
+      latencyMs: 0,
+    });
+  });
+
+  it('retains candidate analysis before duplicate IDs can be merged away', async () => {
+    const config = createEnabledConfig();
+    const duplicateIds = {
+      segments: [{ id: 'segment-1' }, { id: 'segment-1' }],
+    };
+
+    const attempt = await executeSpeechPlannerAttempt({
+      config,
+      prepared: createPrepared(),
+      promptPolicyVersion: 'speech-performance-v2-inworld-tts2',
+      executor: vi.fn().mockResolvedValue({
+        output: duplicateIds,
+        rawText: JSON.stringify(duplicateIds),
+      }),
+    });
+    expect(attempt).toMatchObject({
+      validation: { status: 'invalid' },
+      parsedCandidate: duplicateIds,
+      plan: undefined,
+      fallback: undefined,
+    });
+    expect(attempt.candidateAnalysis?.hardFailures).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'duplicate_segment_id', segmentId: 'segment-1' }),
+      ]),
+    );
+  });
+
+  it('uses the 1000ms planner schema cap and normalizes sparse optional cues', async () => {
+    const config = createEnabledConfig();
+    const executor = vi.fn().mockResolvedValue({
+      output: {
+        segments: [
+          {
+            id: 'segment-1',
+            emotion: '   ',
+            emphasis: ['we', 'WE'],
+            nonVerbalsBefore: ['sigh'],
+          },
+        ],
+      },
+      rawText: '{}',
+    });
+    const binding = createBackendSpeechPerformancePlanner(config, { executor });
+
+    await expect(binding.planner!.plan(createPrepared())).resolves.toMatchObject({
+      segments: [
+        expect.objectContaining({
+          emphasis: ['We'],
+          nonVerbalsBefore: ['sigh'],
+          emotion: undefined,
+        }),
+      ],
+    });
+    expect(
+      executor.mock.calls[0]?.[0].request.responseSchema.schema.properties.segments.items
+        .properties,
+    ).toMatchObject({
+      pauseBeforeMs: { maximum: 1000 },
+      pauseAfterMs: { maximum: 1000 },
+    });
   });
 });
 
@@ -236,8 +394,8 @@ function createEnabledConfig() {
       enabled: true,
       model: 'gemini-3.1-flash-lite',
       maxOutputTokens: 2400,
-      rpmBudget: 4,
-      dailyRequestBudget: 120,
+      rpmBudget: 100,
+      dailyRequestBudget: 1000,
       debugLogPlan: false,
     },
   };

@@ -114,7 +114,47 @@ function sanitizeAudioArtifactManifest(
 }
 
 function sanitizeVoicePlan(plan: VoicePlan): VoicePlan {
-  return (plan as { mode: string }).mode === 'resolved' ? { ...plan, mode: 'deterministic' } : plan;
+  const { capabilityPolicyVersion: _capabilityPolicyVersion, assignments, ...rest } = plan;
+  const sanitized: VoicePlan = {
+    ...rest,
+    mode: (plan as { mode: string }).mode === 'resolved' ? 'deterministic' : plan.mode,
+    assignments: assignments.map((assignment) => {
+      const { language: _language, ...assignmentRest } = assignment;
+      return {
+        ...assignmentRest,
+        ...(typeof assignment.language === 'string' && assignment.language.trim().length > 0
+          ? { language: assignment.language }
+          : {}),
+      };
+    }),
+  };
+  return plan.capabilityPolicyVersion === 'model-scoped-v1'
+    ? { ...sanitized, capabilityPolicyVersion: plan.capabilityPolicyVersion }
+    : sanitized;
+}
+
+function sanitizeSpeechPlan(plan: SpeechPerformancePlan): SpeechPerformancePlan {
+  if (!plan.planner) return plan;
+  const {
+    promptPolicyVersion: _promptPolicyVersion,
+    promptHash: _promptHash,
+    ...planner
+  } = plan.planner;
+  const promptPolicyVersion = plan.planner.promptPolicyVersion;
+  const promptHash = plan.planner.promptHash;
+  return {
+    ...plan,
+    planner: {
+      ...planner,
+      ...(promptPolicyVersion === 'speech-performance-v1-restrained-natural' ||
+      promptPolicyVersion === 'speech-performance-v2-inworld-tts2'
+        ? { promptPolicyVersion }
+        : {}),
+      ...(typeof promptHash === 'string' && /^[a-f0-9]{64}$/u.test(promptHash)
+        ? { promptHash }
+        : {}),
+    },
+  };
 }
 
 export function sanitizeAssignmentManifest(manifest: AssignmentManifest): AssignmentManifest {
@@ -170,7 +210,15 @@ export function sanitizeAssignmentManifest(manifest: AssignmentManifest): Assign
     ...(manifest.htmlEtag !== undefined ? { htmlEtag: manifest.htmlEtag } : {}),
     ...(manifest.htmlReused !== undefined ? { htmlReused: manifest.htmlReused } : {}),
     ...(audioArtifacts !== undefined ? { audioArtifacts } : {}),
-    ...(manifest.speechPlans !== undefined ? { speechPlans: manifest.speechPlans } : {}),
+    ...(manifest.speechPlans !== undefined
+      ? {
+          speechPlans: {
+            ...(manifest.speechPlans.studyText
+              ? { studyText: sanitizeSpeechPlan(manifest.speechPlans.studyText) }
+              : {}),
+          },
+        }
+      : {}),
     ...(manifest.voicePlans !== undefined
       ? {
           voicePlans: {
