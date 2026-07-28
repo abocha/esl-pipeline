@@ -3,7 +3,13 @@ import { writeFile } from 'node:fs/promises';
 import { ApiError, MissingApiKeyError, NetworkError } from '@inworld/tts';
 
 import { InfrastructureError, type VoiceProviderErrorCategory } from '@esl-pipeline/contracts';
-import type { InworldTtsModel, SpeechDeliveryMode } from '@esl-pipeline/tts-core';
+import {
+  type InworldTtsModel,
+  type SpeechDeliveryMode,
+  throwIfTtsCancelled,
+  type TtsRequestControl,
+  TtsSynthesisCancelledError,
+} from '@esl-pipeline/tts-core';
 
 import {
   createInworldClientProvider,
@@ -42,7 +48,7 @@ export interface InworldRetryDependencies {
   now(): number;
 }
 
-interface InworldSynthesisOptions {
+interface InworldSynthesisOptions extends TtsRequestControl {
   model: InworldTtsModel;
   speakingRate?: number;
   temperature?: number;
@@ -270,6 +276,7 @@ export async function runInworldSynthesisWithRetry(args: {
   client: InworldClientAdapter;
   maxRetries?: number;
   deadlineAtMs?: number;
+  signal?: AbortSignal;
   dependencies?: Partial<InworldRetryDependencies>;
 }): Promise<Buffer> {
   const dependencies = { ...defaultRetryDependencies, ...args.dependencies };
@@ -277,41 +284,33 @@ export async function runInworldSynthesisWithRetry(args: {
   const maxAttempts = maxRetries + 1;
   let attempts = 0;
 
-  if (args.deadlineAtMs !== undefined && args.deadlineAtMs <= dependencies.now()) {
-    throw buildRuntimeError({
-      ...args,
-      attempts,
-      maxAttempts,
-      failure: { kind: 'caller_cancelled', retryable: false },
-    });
-  }
-
   while (attempts < maxAttempts) {
+    throwIfTtsCancelled(args, dependencies.now);
     attempts += 1;
+    let audio: Uint8Array;
     try {
-      const audio = await args.client.generate(
+      audio = await args.client.generate(
         buildGenerateOptions(args.text, args.voiceId, args.options),
       );
-      return Buffer.from(audio);
     } catch (error) {
+      if (error instanceof TtsSynthesisCancelledError) throw error;
       const failure = classifyInworldFailure(error);
       if (!failure.retryable || attempts >= maxAttempts) {
         throw buildRuntimeError({ ...args, attempts, maxAttempts, failure });
       }
 
+      throwIfTtsCancelled(args, dependencies.now);
       const baseMs = RETRY_BACKOFF_BASE_MS[attempts - 1]!;
       const sample = Math.min(1, Math.max(0, dependencies.random()));
       const delayMs = Math.max(0, Math.round(baseMs * (0.8 + sample * 0.4)));
-      if (args.deadlineAtMs !== undefined && args.deadlineAtMs <= dependencies.now() + delayMs) {
-        throw buildRuntimeError({
-          ...args,
-          attempts,
-          maxAttempts,
-          failure: { kind: 'caller_cancelled', retryable: false },
-        });
-      }
+      throwIfTtsCancelled(args, () => dependencies.now() + delayMs);
       await dependencies.sleep(delayMs);
+      throwIfTtsCancelled(args, dependencies.now);
+      continue;
     }
+
+    throwIfTtsCancelled(args, dependencies.now);
+    return Buffer.from(audio);
   }
 
   throw new Error('Unreachable Inworld retry state');
@@ -324,7 +323,15 @@ export async function synthesizeInworldSpeech(
   dependencies: { clientProvider?: InworldClientProvider } = {},
 ): Promise<Buffer> {
   const client = (dependencies.clientProvider ?? createInworldClientProvider()).get();
-  return runInworldSynthesisWithRetry({ text, voiceId, options, client, maxRetries: 0 });
+  return runInworldSynthesisWithRetry({
+    text,
+    voiceId,
+    options,
+    client,
+    maxRetries: 0,
+    signal: options.signal,
+    deadlineAtMs: options.deadlineAtMs,
+  });
 }
 
 export async function synthesizeInworldChunkWithRetry(
@@ -343,6 +350,8 @@ export async function synthesizeInworldChunkWithRetry(
     voiceId,
     options,
     client,
+    signal: options.signal,
+    deadlineAtMs: options.deadlineAtMs,
     dependencies: dependencies.retry,
   });
   await writeFile(outFile, audio);

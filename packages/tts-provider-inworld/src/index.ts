@@ -507,6 +507,8 @@ export async function buildStudyTextMp3Inworld(
         deliveryMode: segment.deliveryMode,
         sampleRateHertz,
         language: segment.language,
+        signal: opts.signal,
+        deadlineAtMs: opts.deadlineAtMs,
       },
       { clientProvider },
     );
@@ -608,7 +610,13 @@ export async function buildPronunciationShadowSentenceMp3Inworld(
     message: 'Generating pronunciation shadow sentence audio',
     detail: { provider: 'inworld', voiceId, model },
   });
-  await synthesizeInworldChunkWithRetry(sentence, voiceId, targetPath, { model }, dependencies);
+  await synthesizeInworldChunkWithRetry(
+    sentence,
+    voiceId,
+    targetPath,
+    { model, signal: opts.signal, deadlineAtMs: opts.deadlineAtMs },
+    dependencies,
+  );
   return {
     path: targetPath,
     duration: undefined,
@@ -689,7 +697,13 @@ export async function buildPronunciationTextMp3Inworld(
     message: 'Generating pronunciation text audio',
     detail: { provider: 'inworld', voiceId, model, fileStem },
   });
-  await synthesizeInworldChunkWithRetry(sentence, voiceId, targetPath, { model }, dependencies);
+  await synthesizeInworldChunkWithRetry(
+    sentence,
+    voiceId,
+    targetPath,
+    { model, signal: opts.signal, deadlineAtMs: opts.deadlineAtMs },
+    dependencies,
+  );
   return {
     path: targetPath,
     duration: undefined,

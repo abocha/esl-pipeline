@@ -11,6 +11,8 @@ import type {
 } from '@esl-pipeline/contracts';
 import type { ParsedMarkdownContext } from '@esl-pipeline/pmd';
 
+import type { TtsRequestControl } from './errors.js';
+
 export type TtsStrategy = 'auto' | 'tts' | 'dialogue';
 export type { ElevenLabsTtsModelId, GoogleTtsModel, InworldTtsModel, TtsModelId, TtsProviderId };
 
@@ -207,7 +209,7 @@ export interface BuildPronunciationTextInput {
   kind?: string;
 }
 
-export interface BuildStudyTextOptions {
+export interface BuildStudyTextOptions extends TtsRequestControl {
   voiceMapPath: string;
   outPath: string;
   preview?: boolean;
@@ -231,7 +233,7 @@ export interface BuildStudyTextOptions {
   speechPlan?: SpeechPerformancePlan;
 }
 
-export interface BuildPronunciationShadowSentenceOptions {
+export interface BuildPronunciationShadowSentenceOptions extends TtsRequestControl {
   outPath: string;
   preview?: boolean;
   force?: boolean;
@@ -245,7 +247,7 @@ export interface BuildPronunciationShadowSentenceOptions {
   googleModelName?: string;
 }
 
-export interface BuildPronunciationTextOptions {
+export interface BuildPronunciationTextOptions extends TtsRequestControl {
   outPath: string;
   preview?: boolean;
   force?: boolean;

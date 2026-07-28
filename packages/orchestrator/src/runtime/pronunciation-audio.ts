@@ -12,6 +12,8 @@ import {
   type GoogleTtsModel,
   isTtsModelForProvider,
   resolveDefaultTtsModel,
+  throwIfTtsCancelled,
+  type TtsRequestControl,
   type TtsModelId,
   type TtsProviderId,
 } from '@esl-pipeline/tts-core';
@@ -21,7 +23,7 @@ import type { PronunciationAudioArtifact } from './audio-artifacts.js';
 
 type PronunciationClipRecord = PronunciationAudioClip & AudioArtifactManifest;
 
-interface PronunciationAudioSynthesisOptions {
+interface PronunciationAudioSynthesisOptions extends TtsRequestControl {
   context: ParsedMarkdownContext;
   mdPath: string;
   outPath: string;
@@ -135,7 +137,11 @@ async function mapWithConcurrency<T, R>(
     }
   }
 
-  await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
+  const settled = await Promise.allSettled(Array.from({ length: workerCount }, () => runWorker()));
+  const rejected = settled.find(
+    (result): result is PromiseRejectedResult => result.status === 'rejected',
+  );
+  if (rejected) throw rejected.reason;
   return results;
 }
 
@@ -238,6 +244,7 @@ async function synthesizeProviderClip(
   options: PronunciationAudioSynthesisOptions,
   config: ProviderClipSynthesisConfig,
 ): Promise<PronunciationClipRecord | null> {
+  throwIfTtsCancelled(options);
   const previous = findPreviousClip(options.previousAudio, clip);
   if (canReusePreviousClip(clip, previous, config)) {
     return buildReusedClip(clip, previous);
@@ -264,8 +271,11 @@ async function synthesizeProviderClip(
       logger: options.logger,
       fileStem: clip.id,
       titleSuffix: clip.label ?? 'Pronunciation',
+      signal: options.signal,
+      deadlineAtMs: options.deadlineAtMs,
     },
   );
+  throwIfTtsCancelled(options);
 
   return toPrimaryClip(clip, {
     path: result.path,
@@ -284,6 +294,7 @@ async function synthesizeShadowPrimary(
   focus: Extract<PronunciationFocus, { mode: 'shadow_sentence' }>,
   options: PronunciationAudioSynthesisOptions,
 ): Promise<PronunciationClipRecord | null> {
+  throwIfTtsCancelled(options);
   const normalizedText = focus.shadowSentence ? normalizeSpeechText(focus.shadowSentence) : '';
   const baseClip: PronunciationAudioClip = {
     id: 'primary-shadow-sentence',
@@ -319,8 +330,11 @@ async function synthesizeShadowPrimary(
       ttsProvider: options.primaryTtsProvider,
       ttsModel: options.primaryTtsModel,
       logger: options.logger,
+      signal: options.signal,
+      deadlineAtMs: options.deadlineAtMs,
     },
   );
+  throwIfTtsCancelled(options);
 
   return {
     ...baseClip,
@@ -382,6 +396,7 @@ function resolveDefaultPronunciationModel(provider: TtsProviderId): TtsModelId {
 export async function synthesizePronunciationAudio(
   options: PronunciationAudioSynthesisOptions,
 ): Promise<PronunciationAudioArtifact | undefined> {
+  throwIfTtsCancelled(options);
   const focus = extractPronunciationFocus(options.context);
   if (!focus) {
     return undefined;

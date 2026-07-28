@@ -4,7 +4,8 @@ vi.mock('@esl-pipeline/pmd', () => ({
   extractPronunciationFocus: vi.fn(),
 }));
 
-vi.mock('@esl-pipeline/tts-core', () => ({
+vi.mock('@esl-pipeline/tts-core', async () => ({
+  ...(await vi.importActual<typeof import('@esl-pipeline/tts-core')>('@esl-pipeline/tts-core')),
   buildPronunciationShadowSentenceMp3: vi.fn(),
   buildPronunciationTextMp3: vi.fn(),
   isTtsModelForProvider: (provider: string, model: string) =>
@@ -24,13 +25,135 @@ vi.mock('@esl-pipeline/tts-core', () => ({
 }));
 
 import { extractPronunciationFocus } from '@esl-pipeline/pmd';
-import { buildPronunciationTextMp3 } from '@esl-pipeline/tts-core';
+import {
+  buildPronunciationShadowSentenceMp3,
+  buildPronunciationTextMp3,
+  TtsSynthesisCancelledError,
+} from '@esl-pipeline/tts-core';
 
 import { synthesizePronunciationAudio } from '../src/runtime/pronunciation-audio.js';
 
 describe('runtime/pronunciation-audio', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('propagates one request control to shadow primary and item synthesis', async () => {
+    vi.mocked(extractPronunciationFocus).mockReturnValue({
+      mode: 'shadow_sentence',
+      shadowSentence: 'Use one shared request control.',
+      words: [{ line: 1, text: 'shared request', transcription: '/shared request/' }],
+      sectionStartLine: 1,
+      issues: [],
+    });
+    vi.mocked(buildPronunciationShadowSentenceMp3).mockResolvedValue({
+      path: '/tmp/shadow.mp3',
+      hash: 'shadow-hash',
+      voiceId: 'voice-primary',
+    });
+    vi.mocked(buildPronunciationTextMp3).mockResolvedValue({
+      path: '/tmp/item.mp3',
+      hash: 'item-hash',
+      voiceId: 'voice-primary',
+    });
+    const controller = new AbortController();
+    const deadlineAtMs = Date.now() + 60_000;
+
+    await synthesizePronunciationAudio({
+      context: {} as never,
+      mdPath: '/tmp/example.md',
+      outPath: '/tmp',
+      primaryTtsProvider: 'inworld',
+      primaryVoiceId: 'voice-primary',
+      signal: controller.signal,
+      deadlineAtMs,
+    });
+
+    expect(vi.mocked(buildPronunciationShadowSentenceMp3)).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ signal: controller.signal, deadlineAtMs }),
+    );
+    expect(vi.mocked(buildPronunciationTextMp3)).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ signal: controller.signal, deadlineAtMs }),
+    );
+  });
+
+  it('starts no pronunciation worker when the caller is already cancelled', async () => {
+    vi.mocked(extractPronunciationFocus).mockReturnValue({
+      mode: 'minimal_pair',
+      pairs: [
+        {
+          line: 1,
+          left: { text: 'pull', transcription: '/pʊl/', line: 1 },
+          right: { text: 'pool', transcription: '/puːl/', line: 1 },
+        },
+      ],
+      sectionStartLine: 1,
+      issues: [],
+    });
+    const controller = new AbortController();
+    controller.abort('operator stop');
+
+    await expect(
+      synthesizePronunciationAudio({
+        context: {} as never,
+        mdPath: '/tmp/example.md',
+        outPath: '/tmp',
+        primaryVoiceId: 'voice-primary',
+        signal: controller.signal,
+      }),
+    ).rejects.toBeInstanceOf(TtsSynthesisCancelledError);
+    expect(vi.mocked(buildPronunciationTextMp3)).not.toHaveBeenCalled();
+  });
+
+  it('lets started pronunciation calls settle but launches no more after cancellation', async () => {
+    vi.mocked(extractPronunciationFocus).mockReturnValue({
+      mode: 'sentence_stress',
+      naturalSentence: 'One two three four five.',
+      drills: [
+        { line: 1, text: 'one' },
+        { line: 2, text: 'two' },
+        { line: 3, text: 'three' },
+        { line: 4, text: 'four' },
+        { line: 5, text: 'five' },
+      ],
+      sectionStartLine: 1,
+      issues: [],
+    });
+    const pending: Array<() => void> = [];
+    vi.mocked(buildPronunciationTextMp3).mockImplementation(
+      ({ text, voiceId }) =>
+        new Promise((resolve) => {
+          pending.push(() =>
+            resolve({
+              path: `/tmp/${text}.mp3`,
+              hash: `hash-${text}`,
+              voiceId,
+            }),
+          );
+        }),
+    );
+    const controller = new AbortController();
+    const result = expect(
+      synthesizePronunciationAudio({
+        context: {} as never,
+        mdPath: '/tmp/example.md',
+        outPath: '/tmp',
+        regeneratePrimary: false,
+        primaryVoiceId: 'voice-primary',
+        signal: controller.signal,
+      }),
+    ).rejects.toBeInstanceOf(TtsSynthesisCancelledError);
+
+    await vi.waitFor(() => expect(buildPronunciationTextMp3).toHaveBeenCalledTimes(3));
+    controller.abort('operator stop');
+    for (const resolve of pending.slice(0, 3)) resolve();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    for (const resolve of pending.slice(3)) resolve();
+
+    await result;
+    expect(buildPronunciationTextMp3).toHaveBeenCalledTimes(3);
   });
 
   it('synthesizes one Word clip per shadow drill without duplicate Natural clips', async () => {

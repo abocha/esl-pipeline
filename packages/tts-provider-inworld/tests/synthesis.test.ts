@@ -1,6 +1,8 @@
 import { ApiError, NetworkError } from '@inworld/tts';
 import { describe, expect, it, vi } from 'vitest';
 
+import { TtsSynthesisCancelledError } from '@esl-pipeline/tts-core';
+
 import { classifyInworldFailure, runInworldSynthesisWithRetry } from '../src/synthesis.js';
 
 const request = {
@@ -10,7 +12,10 @@ const request = {
 };
 
 function apiError(status: number, details: Record<string, unknown> = {}) {
-  return new ApiError('raw provider body', status, details);
+  const error = new ApiError('raw provider body');
+  error.code = status;
+  error.details = details;
+  return error;
 }
 
 describe('Inworld failure classification', () => {
@@ -142,10 +147,70 @@ describe('Inworld application retry owner', () => {
         deadlineAtMs: 1100,
         dependencies: { sleep, random: () => 0.5, now: () => 100 },
       }),
-    ).rejects.toMatchObject({ failure: { kind: 'caller_cancelled' }, attempts: 1 });
+    ).rejects.toBeInstanceOf(TtsSynthesisCancelledError);
 
     expect(generate).toHaveBeenCalledTimes(1);
     expect(sleep).not.toHaveBeenCalled();
+  });
+
+  it('does not start the initial SDK call when the caller is already aborted', async () => {
+    const controller = new AbortController();
+    controller.abort('operator stop');
+    const generate = vi.fn();
+
+    await expect(
+      runInworldSynthesisWithRetry({
+        ...request,
+        client: { generate, listVoices: vi.fn() },
+        signal: controller.signal,
+      }),
+    ).rejects.toMatchObject({
+      name: 'TtsSynthesisCancelledError',
+      code: 'TTS_SYNTHESIS_CANCELLED',
+    });
+    expect(generate).not.toHaveBeenCalled();
+  });
+
+  it('does not retry when the caller aborts during backoff', async () => {
+    const controller = new AbortController();
+    const generate = vi.fn().mockRejectedValue(apiError(429));
+    const sleep = vi.fn().mockImplementation(async () => {
+      controller.abort('operator stop');
+    });
+
+    await expect(
+      runInworldSynthesisWithRetry({
+        ...request,
+        client: { generate, listVoices: vi.fn() },
+        signal: controller.signal,
+        dependencies: { sleep, random: () => 0.5, now: () => 0 },
+      }),
+    ).rejects.toBeInstanceOf(TtsSynthesisCancelledError);
+    expect(generate).toHaveBeenCalledTimes(1);
+    expect(sleep).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets an in-flight SDK call settle, then observes caller cancellation without retrying', async () => {
+    const controller = new AbortController();
+    let resolveGenerate!: (audio: Uint8Array) => void;
+    const generate = vi.fn(
+      () =>
+        new Promise<Uint8Array>((resolve) => {
+          resolveGenerate = resolve;
+        }),
+    );
+    const result = runInworldSynthesisWithRetry({
+      ...request,
+      client: { generate, listVoices: vi.fn() },
+      signal: controller.signal,
+    });
+
+    await vi.waitFor(() => expect(generate).toHaveBeenCalledTimes(1));
+    controller.abort('operator stop');
+    resolveGenerate(new Uint8Array([1, 2, 3]));
+
+    await expect(result).rejects.toBeInstanceOf(TtsSynthesisCancelledError);
+    expect(generate).toHaveBeenCalledTimes(1);
   });
 
   it.each([
@@ -205,6 +270,6 @@ describe('Inworld application retry owner', () => {
       attempts: 1,
       failure: { kind: 'server', status: 500 },
     });
-    expect(error.contentHash).toMatch(/^[a-f0-9]{64}$/);
+    expect((error as { contentHash: string }).contentHash).toMatch(/^[a-f0-9]{64}$/);
   });
 });
