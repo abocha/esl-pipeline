@@ -26,3 +26,33 @@ Automatic dialogue selection considers English voices only, prefers requested re
 stable speaker-profile hints, and emits observable fallback diagnostics. Explicit `voices.yml`
 mappings and configured default voices remain higher priority.
 `Ashley` and `Dennis` are static fallbacks when credentialed English voices are unavailable.
+
+## Reliability and diagnostics
+
+The provider retains the official `@inworld/tts` SDK behind an internal adapter. Each registered
+provider or direct helper lifecycle creates one client lazily and reuses it for catalog and
+synthesis calls. SDK `maxRetries` is fixed at `0`; the application is the only retry owner.
+
+`ESL_TTS_PROVIDER_INWORLD_RETRY_MAX` defaults to `3` and is clamped to `0`-`3`, for at most four
+total attempts. Retries use 1, 2, and 4 second exponential bases with uniform bounded jitter of
+plus or minus 20 percent. HTTP 408, 429, 5xx, typed SDK network failures, timeouts, connection
+resets, and provider-originated transient disconnects are retryable. Caller cancellation, expired
+deadlines, authentication/permission failures, invalid requests, invalid voices, and other
+deterministic 4xx responses fail without retry.
+
+The caller's `AbortSignal` and optional deadline are checked before provider calls and at every
+retry/sleep boundary. The installed SDK does not accept an `AbortSignal` for `generate()`, so an SDK
+call already in flight cannot be cancelled; it is allowed to settle and remains bounded by
+`ESL_TTS_PROVIDER_INWORLD_TIMEOUT_MS` or the SDK default timeout. No additional call starts after
+caller cancellation is observed.
+
+Synthesis events contain provider/model/voice/language, content SHA-256, character count,
+attempt/max attempts, normalized failure kind and public category, HTTP status when available,
+elapsed milliseconds, output bytes, and outcome. Cache summaries use provider/model plus aggregate
+hit/miss counts, and catalog fallback records a normalized failure kind and fallback count. Errors
+and routine provider logs never include the API key, learner line, rendered instruction, or raw
+provider body.
+
+The previously observed `non-retryable streaming request` message after `stage.add-audio.start`
+remains an unconfirmed, separate anomaly. This SDK reliability work does not claim to fix it unless
+it is reproduced through the adapter and classification tests.

@@ -5,7 +5,7 @@
 - Audience: maintainers, operators, and AI agents changing TTS behavior.
 - Read Time: 7 minutes.
 - Authority Level: target runtime contract for the speech-performance rollout.
-- Last Verified Against: 2026-07-28 repo state.
+- Last Verified Against: 2026-07-29 repo state.
 - Owner: founder-maintainer + backend/orchestrator maintainers.
 - Review Cadence: after TTS provider, prompt, or manifest contract changes.
 - Status: `active`.
@@ -215,6 +215,38 @@ Unsupported cues are ignored by conservative renderers rather than being spoken 
 
 The Inworld SDK reference documents `speakingRate`, `temperature`, and TTS-2-only `deliveryMode`.
 Inworld's prompting guide documents TTS-2 natural-language steering.
+
+## Inworld SDK reliability boundary
+
+The Inworld provider retains the official `@inworld/tts` SDK behind one injected adapter. A
+registered provider or direct helper creates one client lazily and reuses it for catalog and
+synthesis. SDK `maxRetries` is fixed at zero. The application owns the complete logical retry:
+
+- `ESL_TTS_PROVIDER_INWORLD_RETRY_MAX` defaults to three and clamps to zero through three, so the
+  total bound is the initial attempt plus at most three retries;
+- retry delays use 1000, 2000, and 4000 ms bases with uniform plus or minus 20 percent jitter;
+- HTTP 408, 429, 5xx, typed SDK network failures, timeouts, connection resets, and
+  provider-originated transient disconnects retry; and
+- caller cancellation, expired deadline, auth/permission, invalid request/voice, unsupported
+  controls, and other deterministic 4xx failures do not retry.
+
+The shared TTS request-control contract propagates the caller `AbortSignal` and optional deadline
+through new-assignment and rerun study text plus pronunciation primary, item, and shadow paths.
+Cancellation is checked before calls, before and after retry sleep, and before another attempt.
+Concurrent pronunciation calls already started are allowed to settle, while workers launch no new
+calls after cancellation. The installed SDK has no per-`generate()` `AbortSignal`, so an in-flight
+call cannot be cancelled; `ESL_TTS_PROVIDER_INWORLD_TIMEOUT_MS` or the SDK default timeout remains
+its bound.
+
+Routine synthesis events contain provider/model/voice/language, content SHA-256, character count,
+attempt bounds, normalized failure/category/status, elapsed milliseconds, output bytes, and final
+outcome. Retry exhaustion, catalog fallback, and aggregate cache hit/miss counts are explicit.
+These events and thrown provider errors exclude API keys, learner lines, complete rendered
+instructions, and raw provider messages/bodies.
+
+The recurring `non-retryable streaming request` message previously observed after
+`stage.add-audio.start` remains an unconfirmed separate anomaly. It is not claimed fixed unless a
+new adapter/classification test reproduces its cause.
 
 ## Student-Facing Audio Export
 
