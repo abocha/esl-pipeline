@@ -7,6 +7,7 @@ import type {
   SpeechPerformancePromptPolicyId,
 } from '@esl-pipeline/tts-core';
 import {
+  analyzeSpeechPlanCandidate,
   createIdentitySpeechPerformancePlan,
   SpeechPerformancePlannerInvalidOutputError,
   validateSpeechPerformancePlan,
@@ -36,6 +37,7 @@ export interface SpeechPlannerAttemptResult {
   promptHash: string;
   rawText?: string;
   parsedCandidate?: unknown;
+  candidateAnalysis?: import('@esl-pipeline/tts-core').SpeechPlanCandidateAnalysis;
   validation: { status: 'valid' } | { status: 'invalid'; reason: string };
   plan?: SpeechPerformancePlan;
   usage?: ProviderStructuredExecutionResult['usage'];
@@ -87,6 +89,24 @@ export async function executeSpeechPlannerAttempt(args: {
   });
   await recordUsage(args.config, repository, now, result);
   const latencyMs = Math.max(0, now().getTime() - startedAt.getTime());
+  const candidateAnalysis = analyzeSpeechPlanCandidate(args.prepared, result.output);
+  if (candidateAnalysis.hardFailures.length > 0) {
+    return {
+      promptPolicyVersion: request.promptPolicyVersion,
+      promptHash: request.promptHash,
+      rawText: result.rawText,
+      parsedCandidate: result.output,
+      candidateAnalysis,
+      validation: {
+        status: 'invalid',
+        reason: candidateAnalysis.hardFailures.map((failure) => failure.code).join(','),
+      },
+      plan: undefined,
+      usage: result.usage,
+      latencyMs,
+      fallback: undefined,
+    };
+  }
   try {
     const plan = validateSpeechPerformancePlan(
       args.prepared,
@@ -103,6 +123,7 @@ export async function executeSpeechPlannerAttempt(args: {
       promptHash: request.promptHash,
       rawText: result.rawText,
       parsedCandidate: result.output,
+      candidateAnalysis,
       validation: { status: 'valid' },
       plan,
       usage: result.usage,
@@ -114,6 +135,7 @@ export async function executeSpeechPlannerAttempt(args: {
       promptHash: request.promptHash,
       rawText: result.rawText,
       parsedCandidate: result.output,
+      candidateAnalysis,
       validation: {
         status: 'invalid',
         reason: error instanceof Error ? error.message : String(error),
@@ -197,15 +219,26 @@ function sanitizeOptionalCueValues(
   sourceText: string,
   cue: Record<string, unknown>,
 ): Record<string, unknown> {
-  if (!Array.isArray(cue.emphasis)) return cue;
+  const normalized = Object.fromEntries(
+    Object.entries(cue).filter(([, value]) => {
+      if (typeof value === 'string') return value.trim().length > 0;
+      if (Array.isArray(value)) return value.length > 0;
+      return value !== undefined;
+    }),
+  );
+  if (!Array.isArray(normalized.emphasis)) return normalized;
   const sourceLower = sourceText.toLocaleLowerCase();
-  const emphasis = cue.emphasis.filter(
+  const emphasis = normalized.emphasis.filter(
     (phrase): phrase is string =>
       typeof phrase === 'string' &&
       phrase.length > 0 &&
       sourceLower.includes(phrase.toLocaleLowerCase()),
   );
-  return { ...cue, emphasis };
+  const canonical = emphasis.map((phrase) => {
+    const index = sourceLower.indexOf(phrase.toLocaleLowerCase());
+    return sourceText.slice(index, index + phrase.length);
+  });
+  return { ...normalized, emphasis: [...new Set(canonical)] };
 }
 
 async function recordUsage(

@@ -3,13 +3,18 @@ import { describe, expect, it } from 'vitest';
 import { parseMarkdownContext } from '@esl-pipeline/pmd';
 
 import {
+  analyzeSpeechPlanCandidate,
+  analyzeValidatedSpeechPlan,
+  assertSpeechPlanSafeForSynthesis,
   createIdentitySpeechPerformancePlan,
   createPreparedStudyTextSynthesis,
   createResolvedVoicePlan,
   getTtsModelCapabilities,
+  normalizeSpeechCueText,
   type PreparedStudyTextSynthesis,
   resolveVoicePlanForExecution,
   type SpeechPerformancePlan,
+  type VoicePlan,
   validateSpeechPerformancePlan,
   validateVoicePlan,
   withVoicePlan,
@@ -29,6 +34,95 @@ function createPrepared(): PreparedStudyTextSynthesis {
 }
 
 describe('speech performance plans', () => {
+  it.each(['[laugh]', '<break />', '{voice}', 'line\nbreak', '\u0007alarm']) (
+    'rejects unsafe cue text %j',
+    (cue) => {
+      expect(() => normalizeSpeechCueText('freeFormDirection', cue)).toThrow();
+    },
+  );
+
+  it('normalizes bounded Unicode cue text and rejects excessive or unsupported content', () => {
+    expect(normalizeSpeechCueText('emotion', '  gently — but clearly  ')).toBe(
+      'gently — but clearly',
+    );
+    expect(() => normalizeSpeechCueText('emotion', 'é'.repeat(81))).toThrow('80 code points');
+    expect(() => normalizeSpeechCueText('freeFormDirection', 'calm / clear')).toThrow(
+      'unsupported character',
+    );
+  });
+
+  it('analyzes raw candidate identity, cue grammar, and planner caps before merge', () => {
+    const analysis = analyzeSpeechPlanCandidate(createPrepared(), {
+      segments: [
+        {
+          id: 'segment-1',
+          emotion: '[urgent]',
+          pauseAfterMs: 1001,
+          nonVerbalsBefore: ['sigh'],
+          nonVerbalsAfter: ['laugh'],
+        },
+        { id: 'segment-1' },
+        { id: 'unknown-segment' },
+      ],
+    });
+
+    expect(analysis.hardFailures).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'duplicate_segment_id', segmentId: 'segment-1' }),
+        expect.objectContaining({ code: 'unknown_segment_id', segmentId: 'unknown-segment' }),
+        expect.objectContaining({ code: 'missing_source_segment', segmentId: 'segment-2' }),
+        expect.objectContaining({ code: 'unsafe_cue_text', segmentId: 'segment-1' }),
+        expect.objectContaining({ code: 'planner_pause_exceeds_cap', segmentId: 'segment-1' }),
+        expect.objectContaining({
+          code: 'planner_nonverbal_cap_exceeded',
+          segmentId: 'segment-1',
+        }),
+      ]),
+    );
+  });
+
+  it('analyzes normalized plans and blocks privacy-safe synthesis failures', () => {
+    const prepared: PreparedStudyTextSynthesis = {
+      ...createPrepared(),
+      selection: { provider: 'inworld', model: 'inworld-tts-1.5-mini' },
+    };
+    const plan: SpeechPerformancePlan = {
+      ...createIdentitySpeechPerformancePlan(prepared),
+      mode: 'prompted',
+      segments: [
+        {
+          ...prepared.segments[0]!,
+          emotion: 'concerned',
+          freeFormDirection: 'speak gently',
+          nonVerbalsBefore: ['sigh'],
+          pauseAfterMs: 1001,
+        },
+        prepared.segments[1]!,
+      ],
+    };
+    const analysis = analyzeValidatedSpeechPlan(prepared, plan, [
+      { id: 'segment-1', text: '[one] [two] We need a clearer deadline.' },
+      { id: 'segment-2', text: 'I can revise the plan today.' },
+    ]);
+
+    expect(analysis.hardFailures).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'unsupported_metadata_instruction' }),
+        expect.objectContaining({ code: 'unsupported_free_form_direction' }),
+        expect.objectContaining({ code: 'unsupported_nonverbal' }),
+        expect.objectContaining({ code: 'planner_pause_exceeds_cap' }),
+        expect.objectContaining({ code: 'leading_instruction_tag_count_exceeded' }),
+      ]),
+    );
+    expect(analysis.metrics.pauseCount).toBe(1);
+    expect(() => assertSpeechPlanSafeForSynthesis(analysis)).toThrow(
+      'leading_instruction_tag_count_exceeded:segment-1',
+    );
+    expect(() => assertSpeechPlanSafeForSynthesis(analysis)).not.toThrowError(
+      /We need a clearer deadline/,
+    );
+  });
+
   it('marks newly resolved voice plans with model-scoped capability provenance', () => {
     const prepared = createPrepared();
     const plan = createResolvedVoicePlan(prepared, [
@@ -50,7 +144,7 @@ describe('speech performance plans', () => {
 
   it('normalizes legacy Inworld capabilities into an immutable execution view', () => {
     const prepared = createPrepared();
-    const legacy = {
+    const legacy: VoicePlan = {
       schemaVersion: 1,
       mode: 'deterministic',
       provider: 'inworld',
@@ -69,7 +163,7 @@ describe('speech performance plans', () => {
           },
         },
       ],
-    } as const;
+    };
 
     const effective = resolveVoicePlanForExecution(prepared, legacy);
 

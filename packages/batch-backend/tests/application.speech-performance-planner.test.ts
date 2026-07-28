@@ -264,8 +264,7 @@ describe('application/speech-performance-planner', () => {
 
     await expect(binding.planner!.plan(createPrepared())).rejects.toMatchObject({
       name: 'SpeechPerformancePlannerInvalidOutputError',
-      validationMessage:
-        'Speech plan segment "segment-1" pause must be an integer from 0 to 3000ms.',
+      validationMessage: 'planner_pause_exceeds_cap',
       rejectedOutput,
       rawText,
     } satisfies Partial<SpeechPerformancePlannerInvalidOutputError>);
@@ -302,6 +301,67 @@ describe('application/speech-performance-planner', () => {
       latencyMs: 0,
     });
   });
+
+  it('retains candidate analysis before duplicate IDs can be merged away', async () => {
+    const config = createEnabledConfig();
+    const duplicateIds = {
+      segments: [{ id: 'segment-1' }, { id: 'segment-1' }],
+    };
+
+    const attempt = await executeSpeechPlannerAttempt({
+      config,
+      prepared: createPrepared(),
+      promptPolicyVersion: 'speech-performance-v2-inworld-tts2',
+      executor: vi.fn().mockResolvedValue({
+        output: duplicateIds,
+        rawText: JSON.stringify(duplicateIds),
+      }),
+    });
+    expect(attempt).toMatchObject({
+      validation: { status: 'invalid' },
+      parsedCandidate: duplicateIds,
+      plan: undefined,
+      fallback: undefined,
+    });
+    expect(attempt.candidateAnalysis?.hardFailures).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'duplicate_segment_id', segmentId: 'segment-1' }),
+      ]),
+    );
+  });
+
+  it('uses the 1000ms planner schema cap and normalizes sparse optional cues', async () => {
+    const config = createEnabledConfig();
+    const executor = vi.fn().mockResolvedValue({
+      output: {
+        segments: [
+          {
+            id: 'segment-1',
+            emotion: '   ',
+            emphasis: ['we', 'WE'],
+            nonVerbalsBefore: ['sigh'],
+          },
+        ],
+      },
+      rawText: '{}',
+    });
+    const binding = createBackendSpeechPerformancePlanner(config, { executor });
+
+    await expect(binding.planner!.plan(createPrepared())).resolves.toMatchObject({
+      segments: [
+        expect.objectContaining({
+          emphasis: ['We'],
+          nonVerbalsBefore: ['sigh'],
+          emotion: undefined,
+        }),
+      ],
+    });
+    expect(executor.mock.calls[0]?.[0].request.responseSchema.schema.properties.segments.items.properties)
+      .toMatchObject({
+        pauseBeforeMs: { maximum: 1000 },
+        pauseAfterMs: { maximum: 1000 },
+      });
+  });
 });
 
 function createEnabledConfig() {
@@ -322,8 +382,8 @@ function createEnabledConfig() {
       enabled: true,
       model: 'gemini-3.1-flash-lite',
       maxOutputTokens: 2400,
-      rpmBudget: 4,
-      dailyRequestBudget: 120,
+      rpmBudget: 100,
+      dailyRequestBudget: 1000,
       debugLogPlan: false,
     },
   };

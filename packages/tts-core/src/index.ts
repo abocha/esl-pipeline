@@ -92,6 +92,20 @@ export { createTtsEngine } from './engine.js';
 export { hashStudyText } from './hash.js';
 export { resolveSpeakerRoutingHint } from './speaker-routing.js';
 export {
+  analyzeSpeechPlanCandidate,
+  analyzeValidatedSpeechPlan,
+  assertSpeechPlanSafeForSynthesis,
+  normalizeSpeechCueText,
+} from './speech-plan-analysis.js';
+export type {
+  RenderedSpeechSegmentSummary,
+  SpeechCueTextField,
+  SpeechPlanCandidateAnalysis,
+  SpeechPlanQualityIssue,
+  SpeechPlanQualityMetrics,
+  ValidatedSpeechPlanAnalysis,
+} from './speech-plan-analysis.js';
+export {
   createIdentitySpeechPerformancePlan,
   createPreparedStudyTextSynthesis,
   normalizeStudyTextSpeakerToken,
