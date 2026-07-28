@@ -19,6 +19,9 @@ export type TtsSpeechPlanningMode = 'identity' | 'prompted';
 export type SpeechDeliveryMode = 'STABLE' | 'BALANCED' | 'CREATIVE';
 export type SpeechPace = 'slow' | 'measured' | 'natural' | 'brisk';
 export type SpeechNonVerbal = 'sigh' | 'laugh' | 'chuckle' | 'breath';
+export type SpeechPerformancePromptPolicyId =
+  | 'speech-performance-v1-restrained-natural'
+  | 'speech-performance-v2-inworld-tts2';
 
 export interface TtsModelCapabilities {
   planningMode: TtsSpeechPlanningMode;
@@ -78,6 +81,8 @@ export interface SpeechPerformancePlannerMetadata {
   provider: string;
   model: string;
   generatedAt: string;
+  promptPolicyVersion?: SpeechPerformancePromptPolicyId;
+  promptHash?: string;
 }
 
 export interface SpeechPerformancePlan {
@@ -110,6 +115,7 @@ export interface VoiceAssignmentCapabilities {
 
 export interface VoicePlanAssignment extends SpeakerVoiceAssignment {
   capabilities: VoiceAssignmentCapabilities;
+  language?: string;
 }
 
 export interface VoicePlanRankerMetadata {
@@ -120,6 +126,7 @@ export interface VoicePlanRankerMetadata {
 
 export interface VoicePlan {
   schemaVersion: 1;
+  capabilityPolicyVersion?: 'model-scoped-v1';
   mode: 'ranked' | 'deterministic' | 'fallback';
   provider: TtsProviderId;
   model: TtsModelId;

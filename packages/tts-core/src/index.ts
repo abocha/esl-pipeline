@@ -122,6 +122,7 @@ export type {
   SpeechPerformancePlannerBinding,
   SpeechPerformancePlannerFallbackReason,
   SpeechPerformancePlannerMetadata,
+  SpeechPerformancePromptPolicyId,
   SpeechPerformancePlanSegment,
   TtsEngine,
   TtsModelCapabilities,
@@ -148,4 +149,10 @@ export type {
   VoiceProviderAdapter,
   VoiceSelectionSummary,
 } from './types.js';
-export { createResolvedVoicePlan, validateVoicePlan, withVoicePlan } from './voice-plan.js';
+export {
+  createResolvedVoicePlan,
+  resolveVoicePlanForExecution,
+  validateVoicePlan,
+  voiceAssignmentCapabilitiesForModel,
+  withVoicePlan,
+} from './voice-plan.js';
