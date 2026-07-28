@@ -124,6 +124,7 @@ const summary = buildAgentCheckSummary({
   label: runLabel,
   durationMs: Date.now() - startedMs,
   lanes: laneResults,
+  ciRequirements: plan.ciRequirements,
 });
 writeFileSync(runArtifacts.summaryJson, `${JSON.stringify(summary, null, 2)}\n`, 'utf8');
 

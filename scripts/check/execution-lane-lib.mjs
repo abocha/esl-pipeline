@@ -3,12 +3,9 @@ const broadBuildLaneId = 'build';
 const routingLaneId = 'test:check-routing';
 
 export function buildExecutionLanes(currentPlan) {
-  const preTurboLanes = currentPlan.triggeredLanes.filter(
-    (lane) => !lane.id.startsWith('backend:'),
-  );
-  const postTurboLanes = currentPlan.triggeredLanes.filter((lane) =>
-    lane.id.startsWith('backend:'),
-  );
+  const localTriggeredLanes = currentPlan.triggeredLanes.filter((lane) => lane.owner !== 'ci');
+  const preTurboLanes = localTriggeredLanes.filter((lane) => !lane.id.startsWith('backend:'));
+  const postTurboLanes = localTriggeredLanes.filter((lane) => lane.id.startsWith('backend:'));
   const lanes = [...preTurboLanes.map((lane) => ({ ...lane, kind: 'pnpm' }))];
   if (currentPlan.turbo) {
     lanes.push(
