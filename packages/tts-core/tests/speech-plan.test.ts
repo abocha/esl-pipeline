@@ -34,7 +34,15 @@ function createPrepared(): PreparedStudyTextSynthesis {
 }
 
 describe('speech performance plans', () => {
-  it.each(['[laugh]', '<break />', '{voice}', 'line\nbreak', '\u0007alarm']) (
+  it.each([
+    '[laugh]',
+    '<break />',
+    '{voice}',
+    'line\nbreak',
+    'line\u2028break',
+    'line\u2029break',
+    '\u0007alarm',
+  ]) (
     'rejects unsafe cue text %j',
     (cue) => {
       expect(() => normalizeSpeechCueText('freeFormDirection', cue)).toThrow();
@@ -78,6 +86,56 @@ describe('speech performance plans', () => {
           segmentId: 'segment-1',
         }),
       ]),
+    );
+  });
+
+  it('rejects raw candidate enum and collection shapes before merge', () => {
+    const analysis = analyzeSpeechPlanCandidate(createPrepared(), {
+      segments: [
+        {
+          id: 'segment-1',
+          pace: 'warp',
+          deliveryMode: 'LOUD',
+          emphasis: 'deadline',
+          nonVerbalsBefore: ['</s>'],
+        },
+        { id: 'segment-2' },
+      ],
+    });
+
+    expect(analysis.hardFailures).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'candidate_pace_invalid', segmentId: 'segment-1' }),
+        expect.objectContaining({
+          code: 'candidate_delivery_mode_invalid',
+          segmentId: 'segment-1',
+        }),
+        expect.objectContaining({ code: 'candidate_emphasis_invalid', segmentId: 'segment-1' }),
+        expect.objectContaining({ code: 'candidate_nonverbal_invalid', segmentId: 'segment-1' }),
+      ]),
+    );
+  });
+
+  it('detects rendered lexical changes from explicit renderer summaries', () => {
+    const prepared = createPrepared();
+    const plan = createIdentitySpeechPerformancePlan(prepared);
+    const analysis = analyzeValidatedSpeechPlan(prepared, plan, [
+      {
+        id: 'segment-1',
+        text: 'Goodbye world.',
+        lexicalText: 'Goodbye world.',
+        expectedLexicalText: 'We need a clearer deadline.',
+      },
+      {
+        id: 'segment-2',
+        text: 'I can revise the plan today.',
+        lexicalText: 'I can revise the plan today.',
+        expectedLexicalText: 'I can revise the plan today.',
+      },
+    ]);
+
+    expect(analysis.hardFailures).toContainEqual(
+      expect.objectContaining({ code: 'rendered_words_changed', segmentId: 'segment-1' }),
     );
   });
 
