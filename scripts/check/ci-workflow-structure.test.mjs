@@ -145,7 +145,7 @@ test('static tooling bootstrap verifies bundled shellcheck before extracting ver
 
 test('tooling tests remain an unconditional static guard', () => {
   const step = namedStep(jobBlock('static-checks'), 'Tooling tests');
-  assert.match(step, /run: pnpm test:tooling/u);
+  assert.match(step, /run: \|[\s\S]*pnpm test:tooling 2>&1 \| tee/u);
   assert.doesNotMatch(step, /^\s+if:/mu);
 });
 
