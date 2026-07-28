@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.3.0] - 2026-07-28
+
+### Changed
+
+- Automated release from PR #162: feat(tts): harden Inworld contract rendering quality (https://github.com/abocha/esl-pipeline/pull/162)
+
 ## [10.2.8] - 2026-07-27
 
 ### Changed
