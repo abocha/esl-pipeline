@@ -12,10 +12,10 @@ import {
   type GoogleTtsModel,
   isTtsModelForProvider,
   resolveDefaultTtsModel,
-  throwIfTtsCancelled,
-  type TtsRequestControl,
   type TtsModelId,
   type TtsProviderId,
+  type TtsRequestControl,
+  throwIfTtsCancelled,
 } from '@esl-pipeline/tts-core';
 
 import type { AudioArtifactManifest, PronunciationAudioWarning } from '../manifest.js';
@@ -254,27 +254,33 @@ async function synthesizeProviderClip(
     return null;
   }
 
-  const result = await buildPronunciationTextMp3(
-    {
-      text: clip.text,
-      voiceId: config.voiceId.trim(),
-      mdPath: options.mdPath,
-      title: options.title ?? undefined,
-      kind: clip.kind,
-    },
-    {
-      outPath: options.outPath,
-      preview: options.preview,
-      force: options.force,
-      ttsProvider: config.ttsProvider,
-      ttsModel: config.ttsModel,
-      logger: options.logger,
-      fileStem: clip.id,
-      titleSuffix: clip.label ?? 'Pronunciation',
-      signal: options.signal,
-      deadlineAtMs: options.deadlineAtMs,
-    },
-  );
+  let result;
+  try {
+    result = await buildPronunciationTextMp3(
+      {
+        text: clip.text,
+        voiceId: config.voiceId.trim(),
+        mdPath: options.mdPath,
+        title: options.title ?? undefined,
+        kind: clip.kind,
+      },
+      {
+        outPath: options.outPath,
+        preview: options.preview,
+        force: options.force,
+        ttsProvider: config.ttsProvider,
+        ttsModel: config.ttsModel,
+        logger: options.logger,
+        fileStem: clip.id,
+        titleSuffix: clip.label ?? 'Pronunciation',
+        signal: options.signal,
+        deadlineAtMs: options.deadlineAtMs,
+      },
+    );
+  } catch (error) {
+    throwIfTtsCancelled(options);
+    throw error;
+  }
   throwIfTtsCancelled(options);
 
   return toPrimaryClip(clip, {
@@ -317,23 +323,29 @@ async function synthesizeShadowPrimary(
     return null;
   }
 
-  const result = await buildPronunciationShadowSentenceMp3(
-    {
-      context: options.context,
-      mdPath: options.mdPath,
-      voiceId: options.primaryVoiceId.trim(),
-    },
-    {
-      outPath: options.outPath,
-      preview: options.preview,
-      force: options.force,
-      ttsProvider: options.primaryTtsProvider,
-      ttsModel: options.primaryTtsModel,
-      logger: options.logger,
-      signal: options.signal,
-      deadlineAtMs: options.deadlineAtMs,
-    },
-  );
+  let result;
+  try {
+    result = await buildPronunciationShadowSentenceMp3(
+      {
+        context: options.context,
+        mdPath: options.mdPath,
+        voiceId: options.primaryVoiceId.trim(),
+      },
+      {
+        outPath: options.outPath,
+        preview: options.preview,
+        force: options.force,
+        ttsProvider: options.primaryTtsProvider,
+        ttsModel: options.primaryTtsModel,
+        logger: options.logger,
+        signal: options.signal,
+        deadlineAtMs: options.deadlineAtMs,
+      },
+    );
+  } catch (error) {
+    throwIfTtsCancelled(options);
+    throw error;
+  }
   throwIfTtsCancelled(options);
 
   return {

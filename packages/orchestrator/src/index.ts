@@ -624,6 +624,8 @@ export async function newAssignment(
             ttsModel: flags.ttsModel,
             logger,
             voiceRanker: dependencies.voiceRanker,
+            signal,
+            deadlineAtMs: dependencies.deadlineAtMs,
           },
         );
         studyTextVoicePlan = prepared.voicePlan;
@@ -1249,6 +1251,8 @@ export async function rerunAssignment(
             ttsModel: flags.studyTextTtsModel,
             logger,
             voiceRanker: dependencies.voiceRanker,
+            signal,
+            deadlineAtMs: dependencies.deadlineAtMs,
           },
         );
         studyTextVoicePlan = prepared.voicePlan;

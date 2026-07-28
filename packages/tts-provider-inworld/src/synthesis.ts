@@ -10,9 +10,9 @@ import {
 import {
   type InworldTtsModel,
   type SpeechDeliveryMode,
-  throwIfTtsCancelled,
   type TtsRequestControl,
   TtsSynthesisCancelledError,
+  throwIfTtsCancelled,
 } from '@esl-pipeline/tts-core';
 
 import {
@@ -313,6 +313,7 @@ export async function runInworldSynthesisWithRetry(args: {
     } catch (error) {
       if (error instanceof TtsSynthesisCancelledError) throw error;
       const failedAt = dependencies.now();
+      throwIfTtsCancelled(args, () => failedAt);
       const failure = classifyInworldFailure(error);
       const exhausted = failure.retryable && attempts >= maxAttempts;
       args.logger?.log({

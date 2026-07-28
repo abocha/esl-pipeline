@@ -77,7 +77,7 @@ describe('orchestrator observability', () => {
     process.env.S3_BUCKET = 'observability-bucket';
     process.env.AWS_REGION = 'us-east-1';
 
-    const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-core');
+    const { buildStudyTextMp3, prepareStudyTextSynthesis } = await import('@esl-pipeline/tts-core');
     vi.mocked(buildStudyTextMp3).mockResolvedValue({
       path: audioPath,
       hash: 'abc123',
@@ -122,6 +122,8 @@ describe('orchestrator observability', () => {
       increment: (metric, value, tags) => increments.push({ metric, value, tags }),
     };
 
+    const controller = new AbortController();
+    const deadlineAtMs = Date.now() + 60_000;
     const { newAssignment } = await import('../src/index.js');
     await newAssignment(
       {
@@ -133,7 +135,12 @@ describe('orchestrator observability', () => {
         dryRun: true,
       },
       {},
-      { logger, metrics, runId: 'run-new' },
+      { logger, metrics, runId: 'run-new', signal: controller.signal, deadlineAtMs },
+    );
+
+    expect(vi.mocked(prepareStudyTextSynthesis)).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ signal: controller.signal, deadlineAtMs }),
     );
 
     const expectedStages = [

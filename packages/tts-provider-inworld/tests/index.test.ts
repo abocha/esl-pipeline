@@ -1,11 +1,14 @@
 import { readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-
 import { describe, expect, it, vi } from 'vitest';
 
 import { parseMarkdownContext } from '@esl-pipeline/pmd';
-import { hashStudyText, type SpeechPerformancePlan } from '@esl-pipeline/tts-core';
+import {
+  hashStudyText,
+  type SpeechPerformancePlan,
+  TtsSynthesisCancelledError,
+} from '@esl-pipeline/tts-core';
 
 import {
   buildInworldChunkHash,
@@ -155,6 +158,33 @@ describe('inworld provider adapter basics', () => {
     } finally {
       await rm(outPath, { recursive: true, force: true });
     }
+  });
+
+  it('does not call the SDK catalog or synthesis after study-text cancellation', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const sdkClient = {
+      listVoices: vi.fn().mockResolvedValue([]),
+      generate: vi.fn().mockResolvedValue(new Uint8Array([4, 5, 6])),
+    };
+    const sdkFactory = vi.fn(() => sdkClient);
+
+    await expect(
+      buildStudyTextMp3Inworld(
+        { context: createPreviewContext() },
+        {
+          voiceMapPath: 'voices.yml',
+          outPath: '/path-that-must-not-be-created',
+          force: true,
+          ttsModel: 'inworld-tts-2',
+          signal: controller.signal,
+        },
+        { apiKey: 'test-api-key', sdkFactory },
+      ),
+    ).rejects.toBeInstanceOf(TtsSynthesisCancelledError);
+    expect(sdkFactory).not.toHaveBeenCalled();
+    expect(sdkClient.listVoices).not.toHaveBeenCalled();
+    expect(sdkClient.generate).not.toHaveBeenCalled();
   });
 
   it('does not construct the injected SDK client when credentials are missing', async () => {
