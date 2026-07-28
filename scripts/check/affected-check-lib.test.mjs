@@ -578,7 +578,12 @@ test('broad pre-PR plan exposes every command as an independent lane', () => {
     plan.triggeredLanes.every((lane) => lane.owner === 'local'),
     true,
   );
-  assert.deepEqual(plan.ciRequirements, []);
+  assert.deepEqual(plan.ciRequirements, [
+    {
+      id: 'backend-db-integration',
+      reason: 'explicit broad validation requires hosted service evidence',
+    },
+  ]);
 });
 
 test('comparison base fails conservatively when origin main is missing', async () => {

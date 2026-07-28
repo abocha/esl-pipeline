@@ -104,6 +104,9 @@ For deep system maps, prefer the linked docs rather than growing this file again
 - Prefer CI-built Docker images tagged by Git commit SHA for production deployments. Avoid relying
   only on mutable tags such as `latest`; record the deployed Git SHA or image version in deployment
   evidence.
+- PR CI owns application readiness. Merge to `main` automatically starts the release workflow,
+  which decides versioning and publishes immutable images. Production deployment remains a separate
+  operator action. Do not defer required release-blocking evidence to a nightly or post-merge run.
 - Every PR to `main` must carry exactly one label from `release:none`, `release:patch`,
   `release:minor`, or `release:major`. `release:none` is valid only when the fail-closed release
   policy classifies the complete PR file set as maintenance-only; deployable and unknown changes
@@ -190,9 +193,15 @@ Required repo checks for behavior changes:
   and agent unit lanes run with ambient PostgreSQL, Redis, Docker endpoint, and provider credentials
   removed and `VALIDATION_TEST_CLASS=pure`. Explicit DB/worker lanes preserve their constructed
   service environment.
+- Selected PostgreSQL and Redis lanes remain visible in affected plans with CI ownership. Local
+  validation reports them as `ciRequirements` and does not silently start services. A local run with
+  all executed lanes passing and outstanding CI evidence reports `PASS_WITH_CI_REQUIREMENTS`; this
+  permits PR creation but not merge.
 - An isolated rerun is allowed only to diagnose a specific failure and does not replace the complete
-  gate result. Repeat the complete gate only after relevant source, configuration, toolchain, or a
-  diagnosed prerequisite condition changed.
+  gate result. Allow at most one isolated diagnostic rerun per unchanged failure. Repeat the complete
+  gate only after relevant source, configuration, toolchain, or a diagnosed prerequisite condition
+  changed. Stop and report a stable infrastructure or prerequisite failure instead of assembling a
+  green cache through reruns.
 - A successful `pnpm check` subsumes both narrower pre-push gates.
 - Run `pnpm check` when reproducing CI locally or when DB, migration, worker, integration, or
   similarly broad behavior changed.
@@ -200,7 +209,8 @@ Required repo checks for behavior changes:
 Canonical blocking PR check names are `CI gate`, `static checks (node 24.x)`,
 `integration lane (blocking)`, `backend db + worker integration (blocking)`, and
 `telegram command-loop compose smoke`. `CI gate` is the aggregate result and should become the
-single branch-protection requirement when repository plan capabilities permit.
+single branch-protection requirement when repository plan capabilities permit. Every selected job
+must succeed; a required job that is missing, cancelled, or unexpectedly skipped fails the gate.
 
 Docs-heavy changes also require:
 

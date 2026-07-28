@@ -359,7 +359,13 @@ export function buildBroadCheckPlan({
     affectedPackages: [],
     dependencyPackages: [],
     triggeredLanes: broadPrePrLanes,
-    ciRequirements: resolveCiRequirements(normalizedFiles, { conservativeUnknown: fallback }),
+    ciRequirements: resolveCiRequirements(normalizedFiles, {
+      conservativeReason: fallback
+        ? 'changed scope requires conservative hosted service evidence'
+        : normalizedFiles.length === 0
+          ? 'explicit broad validation requires hosted service evidence'
+          : null,
+    }),
     skippedBroadLanes: [],
     turbo: null,
     fallback: fallback
@@ -898,7 +904,7 @@ function lane(id, pnpmArgs, options = {}) {
   };
 }
 
-function resolveCiRequirements(files, { conservativeUnknown = false } = {}) {
+function resolveCiRequirements(files, { conservativeReason = null } = {}) {
   const reasons = [];
   const addReason = (reason) => {
     if (!reasons.includes(reason)) reasons.push(reason);
@@ -926,8 +932,8 @@ function resolveCiRequirements(files, { conservativeUnknown = false } = {}) {
     }
   }
 
-  if (conservativeUnknown && reasons.length === 0 && files.length > 0) {
-    addReason('changed scope requires conservative hosted service evidence');
+  if (conservativeReason && reasons.length === 0) {
+    addReason(conservativeReason);
   }
   if (reasons.length === 0) return [];
   return [{ id: 'backend-db-integration', reason: reasons.join('; ') }];
