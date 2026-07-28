@@ -1,4 +1,4 @@
-import { InworldTTS, type InworldTTSClient, type VoiceInfo } from '@inworld/tts';
+import type { InworldTTSClient, VoiceInfo } from '@inworld/tts';
 
 import type { PipelineLogger, SpeakerProfile } from '@esl-pipeline/contracts';
 import {
@@ -12,10 +12,11 @@ import {
 } from '@esl-pipeline/tts-core';
 
 import {
-  classifyInworldTtsProviderError,
+  createInworldClientProvider,
+  type InworldClientProvider,
   resolveInworldApiKey,
-  resolveInworldTimeoutMs,
-} from './synthesis.js';
+} from './client.js';
+import { classifyInworldTtsProviderError } from './synthesis.js';
 
 export const DEFAULT_INWORLD_VOICES = ['Ashley', 'Dennis'] as const;
 const DEFAULT_INWORLD_TTS_MODEL: InworldTtsModel = 'inworld-tts-2';
@@ -570,7 +571,11 @@ function findInworldMetadataToken(text: string, tokens: string[]): string | unde
 }
 
 export async function loadInworldVoicesCatalog(
-  dependencies: { logger?: PipelineLogger; client?: Pick<InworldTTSClient, 'listVoices'> } = {},
+  dependencies: {
+    logger?: PipelineLogger;
+    client?: Pick<InworldTTSClient, 'listVoices'>;
+    clientProvider?: InworldClientProvider;
+  } = {},
 ): Promise<VoiceCatalog> {
   const generatedAt = new Date().toISOString();
   const voices: VoiceCatalog['voices'] = DEFAULT_INWORLD_VOICES.map((voiceId) => ({
@@ -588,12 +593,11 @@ export async function loadInworldVoicesCatalog(
     verifiedLanguages: [{ language: 'en', locale: 'en-US' }],
   }));
 
-  const apiKey = resolveInworldApiKey();
-  if (apiKey || dependencies.client) {
+  const configured = dependencies.clientProvider?.isConfigured() ?? Boolean(resolveInworldApiKey());
+  if (configured || dependencies.client) {
     try {
       const client =
-        dependencies.client ??
-        InworldTTS({ apiKey: apiKey!, timeout: resolveInworldTimeoutMs() ?? 30_000 });
+        dependencies.client ?? (dependencies.clientProvider ?? createInworldClientProvider()).get();
       const workspaceVoices = await client.listVoices();
       for (const voice of workspaceVoices) {
         if (!voice.voiceId) continue;
