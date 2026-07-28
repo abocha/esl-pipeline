@@ -61,6 +61,77 @@ describe('Inworld failure classification', () => {
 });
 
 describe('Inworld application retry owner', () => {
+  it('emits safe structured attempt and retry-exhaustion events', async () => {
+    const generate = vi.fn().mockRejectedValue(apiError(500));
+    const logger = { log: vi.fn() };
+
+    const error = await runInworldSynthesisWithRetry({
+      ...request,
+      client: { generate, listVoices: vi.fn() },
+      maxRetries: 1,
+      logger,
+      dependencies: { sleep: vi.fn(), random: () => 0.5, now: () => 100 },
+    }).catch((caught: unknown) => caught);
+    const serialized = JSON.stringify({ calls: logger.log.mock.calls, error });
+
+    expect(serialized).not.toContain('PRIVATE LEARNER SENTENCE');
+    expect(serialized).not.toContain('raw provider body');
+    expect(logger.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        level: 'warn',
+        stage: 'tts',
+        message: 'Inworld TTS synthesis attempt failed',
+        detail: expect.objectContaining({
+          provider: 'inworld',
+          model: 'inworld-tts-2',
+          voiceId: 'Ashley',
+          characterCount: 24,
+          attempt: 2,
+          maxAttempts: 2,
+          failureKind: 'server',
+          category: 'provider_timeout',
+          status: 500,
+          outcome: 'exhausted',
+        }),
+      }),
+    );
+    expect(logger.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: 'Inworld TTS synthesis retries exhausted',
+        detail: expect.objectContaining({ attemptCount: 2, failureKind: 'server' }),
+      }),
+    );
+    expect(serialized).toMatch(/[a-f0-9]{64}/);
+  });
+
+  it('emits safe success latency and output-byte telemetry', async () => {
+    const logger = { log: vi.fn() };
+
+    await runInworldSynthesisWithRetry({
+      ...request,
+      client: {
+        generate: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3])),
+        listVoices: vi.fn(),
+      },
+      logger,
+      dependencies: { now: vi.fn().mockReturnValueOnce(100).mockReturnValue(125) },
+    });
+
+    expect(logger.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        level: 'info',
+        stage: 'tts',
+        message: 'Inworld TTS synthesis attempt succeeded',
+        detail: expect.objectContaining({
+          attempt: 1,
+          elapsedMs: 25,
+          outputBytes: 3,
+          outcome: 'success',
+        }),
+      }),
+    );
+  });
+
   it.each([
     408, 429, 500, 502, 503, 504,
   ])('retries transient HTTP %i exactly three times with 1/2/4 second bases', async (status) => {
