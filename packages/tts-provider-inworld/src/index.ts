@@ -3,7 +3,12 @@ import { copyFile, mkdir, readFile, stat } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import * as yaml from 'js-yaml';
 
-import { ConfigurationError, noopLogger, ValidationError } from '@esl-pipeline/contracts';
+import {
+  ConfigurationError,
+  noopLogger,
+  type PipelineLogger,
+  ValidationError,
+} from '@esl-pipeline/contracts';
 import {
   extractFrontmatter,
   extractPronunciationShadowFocus,
@@ -223,6 +228,20 @@ function buildVoiceSummaries(
     capabilityMatches: assignment.capabilityMatches,
     capabilityMismatches: assignment.capabilityMismatches,
   }));
+}
+
+function logInworldCacheSummary(
+  logger: PipelineLogger | undefined,
+  model: InworldTtsModel,
+  cacheHits: number,
+  cacheMisses: number,
+): void {
+  logger?.log({
+    level: 'info',
+    stage: 'tts',
+    message: 'Inworld TTS chunk cache summary',
+    detail: { provider: 'inworld', model, cacheHits, cacheMisses },
+  });
 }
 
 function normalizeInworldSpeakerAssignment(
@@ -456,6 +475,7 @@ export async function buildStudyTextMp3Inworld(
 
   await mkdir(outputDir, { recursive: true });
   if (!opts.force && (await fileExistsNonEmpty(targetPath))) {
+    logInworldCacheSummary(opts.logger, model, renderedSegments.length, 0);
     return {
       path: targetPath,
       hash,
@@ -473,6 +493,8 @@ export async function buildStudyTextMp3Inworld(
   const runSegments: Array<Pick<StudyTextSegment, 'speaker'>> = [];
   let generatedCharacters = 0;
   let cachedCharacters = 0;
+  let cacheHits = 0;
+  let cacheMisses = 0;
 
   for (const [index, segment] of renderedSegments.entries()) {
     const speechText = segment.text;
@@ -494,6 +516,7 @@ export async function buildStudyTextMp3Inworld(
       runFiles.push(chunkFilePath);
       runSegments.push({ speaker: segment.speaker });
       cachedCharacters += speechText.length;
+      cacheHits += 1;
       continue;
     }
     await (dependencies.synthesizeChunk ?? synthesizeInworldChunkWithRetry)(
@@ -509,12 +532,14 @@ export async function buildStudyTextMp3Inworld(
         language: segment.language,
         signal: opts.signal,
         deadlineAtMs: opts.deadlineAtMs,
+        logger: opts.logger,
       },
       { clientProvider },
     );
     runFiles.push(chunkFilePath);
     runSegments.push({ speaker: segment.speaker });
     generatedCharacters += speechText.length;
+    cacheMisses += 1;
   }
 
   if (runFiles.length === 0) {
@@ -533,6 +558,8 @@ export async function buildStudyTextMp3Inworld(
       resolveInworldAssemblyGapDurations(runSegments),
     );
   }
+
+  logInworldCacheSummary(opts.logger, model, cacheHits, cacheMisses);
 
   return {
     path: targetPath,
@@ -593,6 +620,7 @@ export async function buildPronunciationShadowSentenceMp3Inworld(
 
   await mkdir(outputDir, { recursive: true });
   if (!opts.force && (await fileExistsNonEmpty(targetPath))) {
+    logInworldCacheSummary(logger, model, 1, 0);
     return {
       path: targetPath,
       duration: undefined,
@@ -614,9 +642,10 @@ export async function buildPronunciationShadowSentenceMp3Inworld(
     sentence,
     voiceId,
     targetPath,
-    { model, signal: opts.signal, deadlineAtMs: opts.deadlineAtMs },
+    { model, signal: opts.signal, deadlineAtMs: opts.deadlineAtMs, logger },
     dependencies,
   );
+  logInworldCacheSummary(logger, model, 0, 1);
   return {
     path: targetPath,
     duration: undefined,
@@ -680,6 +709,7 @@ export async function buildPronunciationTextMp3Inworld(
 
   await mkdir(outputDir, { recursive: true });
   if (!opts.force && (await fileExistsNonEmpty(targetPath))) {
+    logInworldCacheSummary(logger, model, 1, 0);
     return {
       path: targetPath,
       duration: undefined,
@@ -701,9 +731,10 @@ export async function buildPronunciationTextMp3Inworld(
     sentence,
     voiceId,
     targetPath,
-    { model, signal: opts.signal, deadlineAtMs: opts.deadlineAtMs },
+    { model, signal: opts.signal, deadlineAtMs: opts.deadlineAtMs, logger },
     dependencies,
   );
+  logInworldCacheSummary(logger, model, 0, 1);
   return {
     path: targetPath,
     duration: undefined,

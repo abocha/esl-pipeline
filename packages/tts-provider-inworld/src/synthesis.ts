@@ -2,7 +2,11 @@ import { createHash } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
 import { ApiError, MissingApiKeyError, NetworkError } from '@inworld/tts';
 
-import { InfrastructureError, type VoiceProviderErrorCategory } from '@esl-pipeline/contracts';
+import {
+  InfrastructureError,
+  type PipelineLogger,
+  type VoiceProviderErrorCategory,
+} from '@esl-pipeline/contracts';
 import {
   type InworldTtsModel,
   type SpeechDeliveryMode,
@@ -55,6 +59,7 @@ interface InworldSynthesisOptions extends TtsRequestControl {
   deliveryMode?: SpeechDeliveryMode;
   sampleRateHertz?: number;
   language?: string;
+  logger?: PipelineLogger;
 }
 
 export class InworldSynthesisRuntimeError extends InfrastructureError {
@@ -277,15 +282,28 @@ export async function runInworldSynthesisWithRetry(args: {
   maxRetries?: number;
   deadlineAtMs?: number;
   signal?: AbortSignal;
+  logger?: PipelineLogger;
   dependencies?: Partial<InworldRetryDependencies>;
 }): Promise<Buffer> {
   const dependencies = { ...defaultRetryDependencies, ...args.dependencies };
   const maxRetries = clampMaxRetries(args.maxRetries ?? resolveInworldMaxRetries());
   const maxAttempts = maxRetries + 1;
   let attempts = 0;
+  const contentHash = createHash('sha256').update(args.text).digest('hex');
+  const language = args.language ?? args.options.language;
+  const safeRequestDetail = {
+    provider: 'inworld',
+    model: args.options.model,
+    voiceId: args.voiceId,
+    ...(language ? { language } : {}),
+    contentHash,
+    characterCount: args.text.length,
+    maxAttempts,
+  };
 
   while (attempts < maxAttempts) {
-    throwIfTtsCancelled(args, dependencies.now);
+    const attemptStartedAt = dependencies.now();
+    throwIfTtsCancelled(args, () => attemptStartedAt);
     attempts += 1;
     let audio: Uint8Array;
     try {
@@ -294,22 +312,65 @@ export async function runInworldSynthesisWithRetry(args: {
       );
     } catch (error) {
       if (error instanceof TtsSynthesisCancelledError) throw error;
+      const failedAt = dependencies.now();
       const failure = classifyInworldFailure(error);
+      const exhausted = failure.retryable && attempts >= maxAttempts;
+      args.logger?.log({
+        level: 'warn',
+        stage: 'tts',
+        message: 'Inworld TTS synthesis attempt failed',
+        detail: {
+          ...safeRequestDetail,
+          attempt: attempts,
+          failureKind: failure.kind,
+          category: mapInworldFailureToPublicCategory(failure),
+          ...(failure.status !== undefined ? { status: failure.status } : {}),
+          elapsedMs: Math.max(failedAt - attemptStartedAt, 0),
+          outcome: exhausted ? 'exhausted' : failure.retryable ? 'retry' : 'failure',
+        },
+      });
+      if (exhausted) {
+        args.logger?.log({
+          level: 'warn',
+          stage: 'tts',
+          message: 'Inworld TTS synthesis retries exhausted',
+          detail: {
+            ...safeRequestDetail,
+            attemptCount: attempts,
+            failureKind: failure.kind,
+            category: mapInworldFailureToPublicCategory(failure),
+            ...(failure.status !== undefined ? { status: failure.status } : {}),
+          },
+        });
+      }
       if (!failure.retryable || attempts >= maxAttempts) {
         throw buildRuntimeError({ ...args, attempts, maxAttempts, failure });
       }
 
-      throwIfTtsCancelled(args, dependencies.now);
+      throwIfTtsCancelled(args, () => failedAt);
       const baseMs = RETRY_BACKOFF_BASE_MS[attempts - 1]!;
       const sample = Math.min(1, Math.max(0, dependencies.random()));
       const delayMs = Math.max(0, Math.round(baseMs * (0.8 + sample * 0.4)));
-      throwIfTtsCancelled(args, () => dependencies.now() + delayMs);
+      throwIfTtsCancelled(args, () => failedAt + delayMs);
       await dependencies.sleep(delayMs);
       throwIfTtsCancelled(args, dependencies.now);
       continue;
     }
 
-    throwIfTtsCancelled(args, dependencies.now);
+    const completedAt = dependencies.now();
+    throwIfTtsCancelled(args, () => completedAt);
+    args.logger?.log({
+      level: 'info',
+      stage: 'tts',
+      message: 'Inworld TTS synthesis attempt succeeded',
+      detail: {
+        ...safeRequestDetail,
+        attempt: attempts,
+        elapsedMs: Math.max(completedAt - attemptStartedAt, 0),
+        outputBytes: audio.byteLength,
+        outcome: 'success',
+      },
+    });
     return Buffer.from(audio);
   }
 
@@ -331,6 +392,7 @@ export async function synthesizeInworldSpeech(
     maxRetries: 0,
     signal: options.signal,
     deadlineAtMs: options.deadlineAtMs,
+    logger: options.logger,
   });
 }
 
@@ -352,6 +414,7 @@ export async function synthesizeInworldChunkWithRetry(
     client,
     signal: options.signal,
     deadlineAtMs: options.deadlineAtMs,
+    logger: options.logger,
     dependencies: dependencies.retry,
   });
   await writeFile(outFile, audio);

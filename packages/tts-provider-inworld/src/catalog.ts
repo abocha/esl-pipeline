@@ -16,7 +16,7 @@ import {
   type InworldClientProvider,
   resolveInworldApiKey,
 } from './client.js';
-import { classifyInworldTtsProviderError } from './synthesis.js';
+import { classifyInworldFailure, classifyInworldTtsProviderError } from './synthesis.js';
 
 export const DEFAULT_INWORLD_VOICES = ['Ashley', 'Dennis'] as const;
 const DEFAULT_INWORLD_TTS_MODEL: InworldTtsModel = 'inworld-tts-2';
@@ -632,6 +632,7 @@ export async function loadInworldVoicesCatalog(
         detail: {
           provider: 'inworld',
           errorCategory: classifyInworldTtsProviderError(error),
+          failureKind: classifyInworldFailure(error).kind,
           fallbackVoiceCount: DEFAULT_INWORLD_VOICES.length,
         },
       });
