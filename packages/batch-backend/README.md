@@ -4,7 +4,7 @@
 
 - Audience: maintainers and implementing agents.
 - Authority Level: package entrypoint and operational usage guide.
-- Last Verified Against: 2026-07-23 repo state.
+- Last Verified Against: 2026-07-29 repo state.
 - Owner: batch-backend maintainers + automation agents.
 - Review Cadence: monthly or after major API/worker changes.
 - Status: `active`.
@@ -166,8 +166,15 @@ From repo root:
 pnpm --filter @esl-pipeline/batch-backend build
 pnpm --filter @esl-pipeline/batch-backend test
 pnpm --filter @esl-pipeline/batch-backend test:integration:http
+pnpm test:check-routing
 pnpm --filter @esl-pipeline/batch-backend db:verify-baseline
 ```
+
+Backend tests are classified by prerequisites in [`tests/test-routing.json`](tests/test-routing.json):
+pure unit, deterministic in-process HTTP, PostgreSQL migrations/queries, or PostgreSQL + Redis worker
+integration. Service tests are positively listed; unit is the guarded remainder. Test names remain
+descriptive only, so update the manifest and package script membership together when prerequisites
+change.
 
 `db:generate-baseline` and `db:verify-baseline` require a Postgres connection that can create and drop temporary databases on the target server.
 

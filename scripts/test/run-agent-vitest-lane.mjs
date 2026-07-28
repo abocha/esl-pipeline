@@ -13,6 +13,7 @@ import {
   parsePackageTestScript,
   withAgentVitestArgs,
 } from './agent-vitest-lib.mjs';
+import { resolveValidationLaneEnv } from './pure-test-env.mjs';
 
 const ansiEscapePattern = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'gu');
 
@@ -28,7 +29,14 @@ const runArtifacts = buildAgentVitestArtifacts({
 
 mkdirSync(runArtifacts.runDir, { recursive: true });
 
-const env = options.backendDbEnv ? await buildBackendDbEnv() : process.env;
+const sourceEnv = options.backendDbEnv ? await buildBackendDbEnv() : process.env;
+const env = resolveValidationLaneEnv({
+  laneId: options.scripts.every((scriptName) => scriptName.startsWith('test:unit'))
+    ? 'agent:test:unit'
+    : options.lane,
+  sourceEnv,
+  backendDbEnv: options.backendDbEnv,
+});
 const packages = discoverPackages()
   .filter((pkg) => options.filters.length === 0 || options.filters.includes(pkg.name))
   .filter((pkg) => options.scripts.some((scriptName) => pkg.scripts?.[scriptName]));

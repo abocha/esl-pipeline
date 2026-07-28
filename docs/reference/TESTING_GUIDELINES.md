@@ -5,7 +5,7 @@
 - Audience: maintainers and AI agents adding or updating tests.
 - Read Time: 6 minutes.
 - Authority Level: active test methodology guide.
-- Last Verified Against: 2026-07-28 repo state.
+- Last Verified Against: 2026-07-29 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly or after test-lane/CI changes.
 - Status: `active`.
@@ -37,6 +37,9 @@ If this guide conflicts with [`docs/reference/agents-ssot.md`](agents-ssot.md), 
   - Runs every root `scripts/**/*.test.mjs` test.
   - Runs inside `check`, `check:pre-pr`, and the always-run static CI guard.
 - Focused CI-routing tooling lane: `pnpm test:check-routing`
+  - Validates every discovered backend test against the operational routing manifest and package
+    scripts.
+  - Runs before affected and broad unit lanes; a routing failure blocks unit execution only.
 - Root unit timing lane: `pnpm test:timings:unit`
 - Root integration lane: `pnpm test:integration`
 - Root prebuilt integration lane: `pnpm test:integration:prebuilt`
@@ -98,7 +101,7 @@ configuration, toolchain, or diagnosed prerequisite state changed.
 
 ## Script Methodology
 
-When adding integration coverage to a package:
+When adding integration coverage to a package other than `@esl-pipeline/batch-backend`:
 
 - Keep `test` mapped to `test:unit`.
 - Define `test:unit` with explicit excludes for integration files.
@@ -122,6 +125,23 @@ Script contract baseline for unit-only packages:
 
 For `@esl-pipeline/batch-backend`:
 
+- Classify tests by operational prerequisite in
+  [`packages/batch-backend/tests/test-routing.json`](../../packages/batch-backend/tests/test-routing.json).
+  File naming is descriptive but does not determine the lane.
+- Preserve these public routes:
+  - pure unit: `test:unit`, `test:unit:prebuilt`, and `test:unit:timings`;
+  - deterministic in-process HTTP: `test:integration:http`;
+  - serial PostgreSQL migrations: `test:db:migrations`;
+  - serial PostgreSQL repositories/queries: `test:db:postgres`;
+  - serial PostgreSQL + Redis workers: `test:integration:worker`.
+- Service-backed tests are positively listed. Unit is the discovered remainder, guarded against known
+  PostgreSQL/Redis bootstrap imports and environment signals. Every service test must be selected by
+  its service script and excluded from every unit script.
+- Run `pnpm test:check-routing` after adding, moving, or changing the prerequisites of a backend test.
+- Canonical affected/broad and agent unit lanes remove ambient PostgreSQL, Redis, Docker endpoint,
+  AWS/provider credentials and set `VALIDATION_TEST_CLASS=pure`. Explicit DB/worker agent lanes keep
+  their constructed service environment. Deterministic HTTP fixtures must explicitly disable or
+  replace service-backed facilities they do not exercise.
 - Keep `test:ci` as the ordered aggregator.
 - `test:ci` must include:
   - `test:unit`
@@ -156,14 +176,11 @@ pnpm --filter @esl-pipeline/batch-backend exec vitest run --config ../../vitest.
 
 ## File Naming and Routing
 
-- Unit tests:
-  - `*.test.ts`
-  - `*.test.tsx`
-- Integration tests:
-  - `*.integration.test.ts`
-  - `*.integration.test.tsx`
-
-Use naming that matches lane scripts so tests are routed correctly.
+Use `*.test.ts` and `*.test.tsx` for tests. An `.integration` segment may communicate intent, but it
+does not establish prerequisites or lane membership. Package scripts and, for batch-backend, the
+guarded routing manifest are authoritative. Classify by what the test actually acquires: no external
+service, deterministic in-process integration, PostgreSQL, PostgreSQL + Redis, browser, subprocess,
+container, or provider access.
 
 ## Suite Topology and Performance
 
@@ -225,6 +242,7 @@ The wrapper:
 - maps files to workspace packages from `pnpm-workspace.yaml`;
 - expands changed packages to transitive dependents;
 - asks Turbo to run package tasks only for packages that expose each script;
+- always runs `test:check-routing` and blocks unit consumers when the routing contract fails;
 - runs selected commands serially, aggregates every independent failure, and blocks only prebuilt
   consumers of a failed build;
 - runs changed-file Biome, changed-file Prettier, specialized ESLint, docs, workflow, shell,

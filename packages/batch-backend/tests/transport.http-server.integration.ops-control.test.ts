@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 
 import * as opsControlModule from '../src/application/ops-control.js';
+import { loadConfig } from '../src/config/env.js';
 import { describeHttpServerIntegrationSuite } from './transport.http-server.integration.harness.js';
 
 describeHttpServerIntegrationSuite(
@@ -15,6 +16,8 @@ describeHttpServerIntegrationSuite(
         ...process.env,
         NODE_ENV: 'test',
         PG_ENABLED: 'false',
+        REDIS_ENABLED: 'false',
+        ENABLE_RATE_LIMITING: 'false',
         BATCH_BACKEND_ENABLE_EXTENDED_API: 'true',
         BATCH_BACKEND_ENABLE_OPS_CONTROL: 'true',
         BATCH_BACKEND_OPS_CONTROL_STATUS_COMMAND: 'test-status',
@@ -33,6 +36,23 @@ describeHttpServerIntegrationSuite(
         process.env = oldEnv;
       }
     }
+
+    it('keeps the deterministic ops app isolated from ambient Redis', async () => {
+      const oldRedisEnabled = process.env.REDIS_ENABLED;
+      const oldEnableRateLimiting = process.env.ENABLE_RATE_LIMITING;
+      process.env.REDIS_ENABLED = 'true';
+      process.env.ENABLE_RATE_LIMITING = 'true';
+      try {
+        await withOpsApp({}, async () => {
+          const config = loadConfig();
+          expect(config.redis.enabled).toBe(false);
+          expect(config.security.enableRateLimiting).toBe(false);
+        });
+      } finally {
+        process.env.REDIS_ENABLED = oldRedisEnabled;
+        process.env.ENABLE_RATE_LIMITING = oldEnableRateLimiting;
+      }
+    });
 
     it('returns 404 when /ops routes are disabled', async () => {
       await withOpsApp(

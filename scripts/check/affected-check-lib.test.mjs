@@ -436,6 +436,7 @@ test('unclassified root changes fall back to broad pre-PR validation', () => {
     [
       'guard:orchestrator:boundary',
       'release:verify:contracts',
+      'test:check-routing',
       'test:tooling',
       'build',
       'typecheck',
@@ -468,6 +469,7 @@ test('broad pre-PR plan exposes every command as an independent lane', () => {
     [
       ['guard:orchestrator:boundary', ['run', 'guard:orchestrator:boundary']],
       ['release:verify:contracts', ['run', 'release:verify:contracts']],
+      ['test:check-routing', ['run', 'test:check-routing']],
       ['test:tooling', ['run', 'test:tooling']],
       ['build', ['run', 'build']],
       ['typecheck', ['run', 'typecheck']],

@@ -4,7 +4,7 @@
 
 - Audience: AI agents and maintainers.
 - Authority Level: router + compact operating contract.
-- Last Verified Against: 2026-07-28 repo state.
+- Last Verified Against: 2026-07-29 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly or after major workflow/tooling changes.
 - Status: `router`.
@@ -166,6 +166,13 @@ when their build prerequisite fails. Read the aggregate summary and cited lane a
 rerun. Use an isolated rerun only to diagnose a specific failure; it does not replace canonical gate
 evidence. Repeat the complete gate only after relevant source, configuration, toolchain, or diagnosed
 prerequisite state changed.
+
+Backend tests are routed by operational prerequisite, not filename alone. The positive service
+inventory in `packages/batch-backend/tests/test-routing.json` owns deterministic HTTP, PostgreSQL
+migration, PostgreSQL query, and PostgreSQL + Redis worker suites; unit is the guarded remainder.
+`test:check-routing` must pass before unit execution. Canonical local and agent unit lanes remove
+ambient service/provider credentials and set `VALIDATION_TEST_CLASS=pure`; focused DB/worker lanes
+retain only their explicitly constructed service environment.
 
 After focused tests, choose one normal pre-push gate: use `check:fast:agent` by default; use
 `check:pre-pr` directly when the branch is already broad, cross-cutting, shared-contract, or
