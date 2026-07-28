@@ -14,11 +14,41 @@ import {
   type PreparedStudyTextSynthesis,
   resolveVoicePlanForExecution,
   type SpeechPerformancePlan,
+  throwIfTtsCancelled,
+  TtsSynthesisCancelledError,
   type VoicePlan,
   validateSpeechPerformancePlan,
   validateVoicePlan,
   withVoicePlan,
 } from '../src/index.js';
+
+describe('TTS request cancellation', () => {
+  it('throws a stable cancellation error for an aborted caller signal', () => {
+    const controller = new AbortController();
+    controller.abort('operator stop');
+
+    expect(() => throwIfTtsCancelled({ signal: controller.signal }, () => 100)).toThrow(
+      TtsSynthesisCancelledError,
+    );
+    try {
+      throwIfTtsCancelled({ signal: controller.signal }, () => 100);
+    } catch (error) {
+      expect(error).toMatchObject({
+        name: 'TtsSynthesisCancelledError',
+        code: 'TTS_SYNTHESIS_CANCELLED',
+        message: 'TTS synthesis cancelled',
+        reason: 'operator stop',
+      });
+    }
+  });
+
+  it('treats an exact deadline boundary as caller cancellation', () => {
+    expect(() => throwIfTtsCancelled({ deadlineAtMs: 100 }, () => 100)).toThrow(
+      TtsSynthesisCancelledError,
+    );
+    expect(() => throwIfTtsCancelled({ deadlineAtMs: 101 }, () => 100)).not.toThrow();
+  });
+});
 
 function createPrepared(): PreparedStudyTextSynthesis {
   return {

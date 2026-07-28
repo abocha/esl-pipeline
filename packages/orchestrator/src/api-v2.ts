@@ -26,6 +26,8 @@ function isCancelledErrorLike(error: unknown): error is Error & { stage?: string
   return (
     error.name === 'PipelineCancelledError' ||
     code === 'PIPELINE_CANCELLED' ||
+    error.name === 'TtsSynthesisCancelledError' ||
+    code === 'TTS_SYNTHESIS_CANCELLED' ||
     error.message.toLowerCase() === 'cancelled' ||
     error.message.toLowerCase().startsWith('cancelled:')
   );

@@ -91,6 +91,7 @@ export interface OrchestratorDependencies {
   metrics?: PipelineMetrics;
   runId?: string;
   signal?: AbortSignal;
+  deadlineAtMs?: number;
   speechPlanner?: SpeechPerformancePlanner;
   speechPlannerUnavailableReason?: SpeechPerformancePlannerFallbackReason;
   speechPlannerDebugLogPlan?: boolean;
