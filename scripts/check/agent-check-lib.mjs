@@ -16,17 +16,20 @@ export function buildAgentCheckArtifacts({ repoRoot, runLabel, lane, timestamp }
 }
 
 export function buildAgentCheckSummary({ label, durationMs, lanes }) {
-  const firstFailure = lanes.find((lane) => lane.status !== 'pass') ?? null;
+  const problems = lanes.filter((lane) => lane.status !== 'pass');
+  const firstFailure = lanes.find((lane) => lane.status === 'fail') ?? null;
   return {
     label,
-    status: firstFailure ? 'fail' : 'pass',
+    status: problems.length > 0 ? 'fail' : 'pass',
     durationMs,
     counts: {
       total: lanes.length,
       passed: lanes.filter((lane) => lane.status === 'pass').length,
-      failed: lanes.filter((lane) => lane.status !== 'pass').length,
+      failed: lanes.filter((lane) => lane.status === 'fail').length,
+      blocked: lanes.filter((lane) => lane.status === 'blocked').length,
     },
     lanes,
+    problems,
     firstFailure,
   };
 }
@@ -41,16 +44,26 @@ export function formatAgentCheckSummary(summary, { logsDir }) {
     return lines.join('\n');
   }
 
-  const failure = summary.firstFailure;
   lines.push(
-    `lane ${failure.name} failed`,
-    `exit ${failure.exitCode}`,
-    'signal:',
-    indent(failure.signal || '(no signal)', '  '),
-    `repro: ${failure.repro}`,
-    `raw log: ${failure.artifacts.rawLog}`,
-    `logs ${logsDir}`,
+    `lanes ${summary.counts.failed} failed, ${summary.counts.blocked} blocked, ${summary.counts.passed} passed`,
   );
+  for (const problem of summary.problems) {
+    lines.push(
+      '',
+      `lane ${problem.name} ${problem.status === 'blocked' ? 'blocked' : 'failed'}`,
+    );
+    if (Number.isInteger(problem.exitCode)) {
+      lines.push(`exit ${problem.exitCode}`);
+    }
+    lines.push('signal:', indent(problem.signal || '(no signal)', '  '));
+    if (problem.repro) {
+      lines.push(`repro: ${problem.repro}`);
+    }
+    if (problem.artifacts?.rawLog) {
+      lines.push(`raw log: ${problem.artifacts.rawLog}`);
+    }
+  }
+  lines.push('', `logs ${logsDir}`);
   return lines.join('\n');
 }
 
