@@ -155,6 +155,9 @@ numbers, ordinary spaces, and limited punctuation, with control characters, newl
 tag delimiters, and other markup syntax rejected. Pause values are capped at `1000` ms and each
 segment may contain at most one non-verbal cue. Candidate analysis runs before normalization;
 validated-plan analysis runs again before provider synthesis.
+The provider boundary also revalidates the plan's provider/model, source hash, segment count, and
+ordered segment identity. Authored or rendered lexical text containing provider-control markup
+delimiters is rejected before preview hashing, cache lookup, or synthesis.
 
 Planner enablement remains opt-in. After changing planner env values for a Compose deployment,
 recreate `batch-backend` and `batch-worker` so both processes load the same configuration.
