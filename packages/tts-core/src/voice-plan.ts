@@ -1,7 +1,28 @@
 import { ConfigurationError } from '@esl-pipeline/contracts';
 
+import { getTtsModelCapabilities } from './descriptors.js';
 import { normalizeStudyTextSpeakerToken } from './speech-plan.js';
-import type { PreparedStudyTextSynthesis, VoicePlan, VoicePlanAssignment } from './types.js';
+import type {
+  PreparedStudyTextSynthesis,
+  TtsModelId,
+  TtsProviderId,
+  VoiceAssignmentCapabilities,
+  VoicePlan,
+  VoicePlanAssignment,
+} from './types.js';
+
+export function voiceAssignmentCapabilitiesForModel(
+  provider: TtsProviderId,
+  model: TtsModelId,
+): VoiceAssignmentCapabilities {
+  const capabilities = getTtsModelCapabilities(provider, model);
+  return {
+    supportsMetadataInstructions: capabilities.metadataInstructions === true,
+    supportsNonVerbals: capabilities.nonVerbals === true,
+    supportsUppercaseEmphasis: capabilities.uppercaseEmphasis === true,
+    supportsFreeFormDirection: capabilities.naturalLanguageSteering === true,
+  };
+}
 
 export function createResolvedVoicePlan(
   prepared: PreparedStudyTextSynthesis,
@@ -12,12 +33,39 @@ export function createResolvedVoicePlan(
 ): VoicePlan {
   return {
     schemaVersion: 1,
+    capabilityPolicyVersion: 'model-scoped-v1',
     provider: prepared.selection.provider,
     model: prepared.selection.model,
     sourceHash: prepared.sourceHash,
     ...options,
     assignments,
   };
+}
+
+function capabilitySnapshotsMatch(
+  actual: VoiceAssignmentCapabilities,
+  expected: VoiceAssignmentCapabilities,
+): boolean {
+  return (
+    actual.supportsMetadataInstructions === expected.supportsMetadataInstructions &&
+    actual.supportsNonVerbals === expected.supportsNonVerbals &&
+    actual.supportsUppercaseEmphasis === expected.supportsUppercaseEmphasis &&
+    actual.supportsFreeFormDirection === expected.supportsFreeFormDirection
+  );
+}
+
+function assertCapabilitySnapshotsMatch(
+  assignments: VoicePlanAssignment[],
+  expected: VoiceAssignmentCapabilities,
+): void {
+  const contradictory = assignments.find(
+    (assignment) => !capabilitySnapshotsMatch(assignment.capabilities, expected),
+  );
+  if (contradictory) {
+    throw new ConfigurationError(
+      `Voice plan assignment for speaker "${contradictory.speaker}" contradicts model-scoped capabilities.`,
+    );
+  }
 }
 
 export function validateVoicePlan(
@@ -63,11 +111,32 @@ export function validateVoicePlan(
   return plan;
 }
 
+export function resolveVoicePlanForExecution(
+  prepared: PreparedStudyTextSynthesis,
+  plan: VoicePlan,
+): VoicePlan {
+  const validated = validateVoicePlan(prepared, plan);
+  const expected = voiceAssignmentCapabilitiesForModel(validated.provider, validated.model);
+  if (validated.capabilityPolicyVersion === 'model-scoped-v1') {
+    assertCapabilitySnapshotsMatch(validated.assignments, expected);
+    return validated;
+  }
+  if (validated.provider !== 'inworld') return validated;
+
+  let changed = false;
+  const assignments = validated.assignments.map((assignment) => {
+    if (capabilitySnapshotsMatch(assignment.capabilities, expected)) return assignment;
+    changed = true;
+    return { ...assignment, capabilities: expected };
+  });
+  return changed ? { ...validated, assignments } : validated;
+}
+
 export function withVoicePlan(
   prepared: PreparedStudyTextSynthesis,
   voicePlan: VoicePlan,
 ): PreparedStudyTextSynthesis {
-  const validated = validateVoicePlan(prepared, voicePlan);
+  const validated = resolveVoicePlanForExecution(prepared, voicePlan);
   return {
     ...prepared,
     voicePlan: validated,

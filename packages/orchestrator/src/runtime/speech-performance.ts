@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 
 import {
+  analyzeValidatedSpeechPlan,
   createIdentitySpeechPerformancePlan,
   getTtsModelCapabilities,
   type PreparedStudyTextSynthesis,
@@ -60,7 +61,7 @@ export async function resolveSpeechPerformancePlan(args: {
 
   try {
     const resolved = finalize(validateSpeechPerformancePlan(args.prepared, planned));
-    logPromptedPlan(args.logger, resolved, args.debugLogPlan ?? false);
+    logPromptedPlan(args.logger, args.prepared, resolved, args.debugLogPlan ?? false);
     return resolved;
   } catch (error) {
     logPlannerFallback(args.logger, 'planner_invalid', error, args.debugLogPlan ?? false);
@@ -74,9 +75,12 @@ export async function resolveSpeechPerformancePlan(args: {
 
 function logPromptedPlan(
   logger: PipelineLogger | undefined,
+  prepared: PreparedStudyTextSynthesis,
   resolved: ResolvedSpeechPerformancePlan,
   debugLogPlan: boolean,
 ): void {
+  const analysis = analyzeValidatedSpeechPlan(prepared, resolved.plan);
+  const qualityIssues = [...analysis.hardFailures, ...analysis.warnings];
   const cueCounts = {
     emotion: 0,
     intonation: 0,
@@ -107,8 +111,11 @@ function logPromptedPlan(
       provider: resolved.plan.provider,
       model: resolved.plan.model,
       speechPlanHash: resolved.hash,
-      planner: resolved.plan.planner ?? null,
+      promptPolicyVersion: resolved.plan.planner?.promptPolicyVersion ?? 'legacy-unversioned-v1',
+      promptHash: resolved.plan.planner?.promptHash ?? null,
       segmentCount: resolved.plan.segments.length,
+      qualityIssueCount: qualityIssues.length,
+      qualityIssueCodes: qualityIssues.map((issue) => issue.code),
       cueCounts,
     },
   });
@@ -133,6 +140,7 @@ function logPlannerFallback(
 ): void {
   const invalidOutputError =
     error instanceof SpeechPerformancePlannerInvalidOutputError ? error : undefined;
+  const qualityIssueCodes = invalidOutputError ? ['planner_output_invalid'] : [];
   logger?.log({
     level: 'warn',
     stage: 'speech-plan',
@@ -140,7 +148,10 @@ function logPlannerFallback(
     detail: {
       fallbackReason,
       errorName: error instanceof Error ? error.name : 'UnknownError',
-      ...(invalidOutputError?.validationMessage
+      ...(invalidOutputError
+        ? { qualityIssueCount: qualityIssueCodes.length, qualityIssueCodes }
+        : {}),
+      ...(debugLogPlan && invalidOutputError?.validationMessage
         ? { validationMessage: invalidOutputError.validationMessage }
         : {}),
       ...(debugLogPlan && invalidOutputError?.rejectedOutput !== undefined

@@ -53,6 +53,13 @@ describe('runtime/speech-performance', () => {
           return {
             ...identity,
             mode: 'prompted',
+            planner: {
+              provider: 'openai',
+              model: 'gpt-5.6',
+              generatedAt: '2026-07-28T00:00:00.000Z',
+              promptPolicyVersion: 'speech-performance-v2-inworld-tts2',
+              promptHash: 'a'.repeat(64),
+            },
             segments: [{ ...identity.segments[0]!, emotion: 'calm concern' }],
           };
         },
@@ -71,8 +78,11 @@ describe('runtime/speech-performance', () => {
         provider: 'inworld',
         model: 'inworld-tts-2',
         speechPlanHash: result.hash,
-        planner: null,
+        promptPolicyVersion: 'speech-performance-v2-inworld-tts2',
+        promptHash: 'a'.repeat(64),
         segmentCount: 1,
+        qualityIssueCount: 0,
+        qualityIssueCodes: [],
         cueCounts: {
           emotion: 1,
           intonation: 0,
@@ -126,6 +136,15 @@ describe('runtime/speech-performance', () => {
         speechPlan: result.plan,
       },
     });
+    expect(logger.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: 'Speech performance planner produced a prompted plan',
+        detail: expect.objectContaining({
+          promptPolicyVersion: 'legacy-unversioned-v1',
+          promptHash: null,
+        }),
+      }),
+    );
   });
 
   it('falls back when planner output violates source immutability', async () => {
@@ -224,7 +243,8 @@ describe('runtime/speech-performance', () => {
       detail: {
         fallbackReason: 'planner_invalid',
         errorName: 'SpeechPerformancePlannerInvalidOutputError',
-        validationMessage: 'emphasis "what" is not present in authored text.',
+        qualityIssueCount: 1,
+        qualityIssueCodes: ['planner_output_invalid'],
       },
     });
     expect(JSON.stringify(logger.log.mock.calls)).not.toContain('rejectedPlannerOutput');
@@ -263,6 +283,8 @@ describe('runtime/speech-performance', () => {
         fallbackReason: 'planner_invalid',
         errorName: 'SpeechPerformancePlannerInvalidOutputError',
         validationMessage: 'emphasis "what" is not present in authored text.',
+        qualityIssueCount: 1,
+        qualityIssueCodes: ['planner_output_invalid'],
         rejectedPlannerOutput: rejectedOutput,
         rejectedPlannerRawText: rawText,
       },

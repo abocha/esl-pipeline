@@ -25,14 +25,11 @@ import type {
   VoiceAssignmentResolution,
   VoiceCatalog,
 } from './types.js';
-import { createResolvedVoicePlan, withVoicePlan } from './voice-plan.js';
-
-const IDENTITY_VOICE_CAPABILITIES = {
-  supportsMetadataInstructions: false,
-  supportsNonVerbals: false,
-  supportsUppercaseEmphasis: false,
-  supportsFreeFormDirection: false,
-} as const;
+import {
+  createResolvedVoicePlan,
+  voiceAssignmentCapabilitiesForModel,
+  withVoicePlan,
+} from './voice-plan.js';
 
 export class DefaultTtsEngine implements TtsEngine {
   private readonly providers = new Map<TtsProviderId, TtsProviderAdapter>();
@@ -116,13 +113,21 @@ export class DefaultTtsEngine implements TtsEngine {
     );
     return withVoicePlan(
       prepared,
-      createResolvedVoicePlan(prepared, normalizeVoiceAssignments(resolution.assignments), {
-        mode: resolution.mode,
-        ...(resolution.fallbackReason ? { fallbackReason: resolution.fallbackReason } : {}),
-        ...(resolution.mode === 'ranked' && options.voiceRanker
-          ? { ranker: options.voiceRanker.metadata }
-          : {}),
-      }),
+      createResolvedVoicePlan(
+        prepared,
+        normalizeVoiceAssignments(
+          resolution.assignments,
+          prepared.selection.provider,
+          prepared.selection.model,
+        ),
+        {
+          mode: resolution.mode,
+          ...(resolution.fallbackReason ? { fallbackReason: resolution.fallbackReason } : {}),
+          ...(resolution.mode === 'ranked' && options.voiceRanker
+            ? { ranker: options.voiceRanker.metadata }
+            : {}),
+        },
+      ),
     );
   }
 
@@ -161,7 +166,12 @@ export class DefaultTtsEngine implements TtsEngine {
   }
 }
 
-function normalizeVoiceAssignments(assignments: SpeakerVoiceAssignment[]) {
+function normalizeVoiceAssignments(
+  assignments: SpeakerVoiceAssignment[],
+  provider: TtsProviderId,
+  model: TtsModelId,
+) {
+  const modelCapabilities = voiceAssignmentCapabilitiesForModel(provider, model);
   const normalized = new Map<string, SpeakerVoiceAssignment>();
   for (const assignment of assignments) {
     const speaker = normalizeStudyTextSpeakerToken(assignment.speaker) ?? assignment.speaker;
@@ -169,12 +179,12 @@ function normalizeVoiceAssignments(assignments: SpeakerVoiceAssignment[]) {
     normalized.set(speaker, {
       ...assignment,
       speaker,
-      capabilities: assignment.capabilities ?? IDENTITY_VOICE_CAPABILITIES,
+      capabilities: assignment.capabilities ?? modelCapabilities,
     });
   }
   return [...normalized.values()].map((assignment) => ({
     ...assignment,
-    capabilities: assignment.capabilities ?? IDENTITY_VOICE_CAPABILITIES,
+    capabilities: assignment.capabilities ?? modelCapabilities,
   }));
 }
 

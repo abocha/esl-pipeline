@@ -22,6 +22,9 @@ const MARKDOWN_STRIPPERS: [RegExp, string][] = [
 
 export interface RenderedInworldSpeechSegment {
   text: string;
+  lexicalText: string;
+  leadingInstructionTagCount: number;
+  language?: string;
   speakingRate?: number;
   temperature?: number;
   deliveryMode?: SpeechDeliveryMode;
@@ -41,11 +44,15 @@ export function renderInworldSpeechSegment(args: {
   model: InworldTtsModel;
   segment: SpeechPerformancePlanSegment;
   capabilities?: VoiceAssignmentCapabilities;
+  language?: string;
 }): RenderedInworldSpeechSegment {
   const cleanText = cleanSpeechText(args.segment.text);
   if (args.model !== 'inworld-tts-2') {
     return {
       text: cleanText,
+      lexicalText: cleanText,
+      leadingInstructionTagCount: 0,
+      ...(args.language ? { language: args.language } : {}),
       ...(resolveSpeakingRate(args.segment.pace) !== undefined
         ? { speakingRate: resolveSpeakingRate(args.segment.pace) }
         : {}),
@@ -56,28 +63,20 @@ export function renderInworldSpeechSegment(args: {
     supportsMetadataInstructions: true,
     supportsNonVerbals: true,
     supportsUppercaseEmphasis: true,
-    supportsFreeFormDirection: false,
+    supportsFreeFormDirection: true,
   };
-  const metadataInstructions = [
-    args.segment.emotion ? `emotion: ${args.segment.emotion}` : undefined,
-    args.segment.intonation ? `intonation: ${args.segment.intonation}` : undefined,
-  ].filter(Boolean);
-  const before = capabilities.supportsNonVerbals
-    ? (args.segment.nonVerbalsBefore ?? []).map((cue) => `[${cue}]`)
-    : [];
-  const after = capabilities.supportsNonVerbals
-    ? (args.segment.nonVerbalsAfter ?? []).map((cue) => `[${cue}]`)
-    : [];
+  const instruction = compileInworldSteeringInstruction(args.segment, capabilities);
+  const beforeCue = capabilities.supportsNonVerbals
+    ? args.segment.nonVerbalsBefore?.[0]
+    : undefined;
+  const afterCue = capabilities.supportsNonVerbals ? args.segment.nonVerbalsAfter?.[0] : undefined;
+  const before = beforeCue ? [`[${beforeCue}]`] : [];
+  const after = !beforeCue && afterCue ? [`[${afterCue}]`] : [];
   const spokenText = capabilities.supportsUppercaseEmphasis
     ? applyUppercaseEmphasis(cleanText, args.segment.emphasis)
     : cleanText;
   const text = [
-    capabilities.supportsMetadataInstructions && metadataInstructions.length
-      ? `[${metadataInstructions.join('; ')}]`
-      : undefined,
-    capabilities.supportsFreeFormDirection && args.segment.freeFormDirection
-      ? `[${args.segment.freeFormDirection}]`
-      : undefined,
+    instruction ? `[${instruction}]` : undefined,
     ...before,
     args.segment.pauseBeforeMs ? `<break time="${args.segment.pauseBeforeMs}ms" />` : undefined,
     spokenText,
@@ -91,9 +90,30 @@ export function renderInworldSpeechSegment(args: {
     args.segment.pace === 'natural' ? undefined : resolveSpeakingRate(args.segment.pace);
   return {
     text,
+    lexicalText: spokenText,
+    leadingInstructionTagCount: instruction ? 1 : 0,
+    ...(args.language ? { language: args.language } : {}),
     ...(speakingRate !== undefined ? { speakingRate } : {}),
     ...(args.segment.deliveryMode ? { deliveryMode: args.segment.deliveryMode } : {}),
   };
+}
+
+export function compileInworldSteeringInstruction(
+  segment: SpeechPerformancePlanSegment,
+  capabilities: VoiceAssignmentCapabilities = {
+    supportsMetadataInstructions: true,
+    supportsNonVerbals: true,
+    supportsUppercaseEmphasis: true,
+    supportsFreeFormDirection: true,
+  },
+): string | undefined {
+  const freeFormDirection = segment.freeFormDirection?.trim();
+  if (capabilities.supportsFreeFormDirection && freeFormDirection) return freeFormDirection;
+  if (!capabilities.supportsMetadataInstructions) return undefined;
+  const qualities = [segment.emotion?.trim(), segment.intonation?.trim()].filter(
+    (quality): quality is string => Boolean(quality),
+  );
+  return qualities.length > 0 ? `speak with ${qualities.join(' and ')}` : undefined;
 }
 
 function applyUppercaseEmphasis(text: string, emphasis: string[] | undefined): string {

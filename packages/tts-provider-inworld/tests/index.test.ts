@@ -1,17 +1,20 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { parseMarkdownContext } from '@esl-pipeline/pmd';
+import { hashStudyText, type SpeechPerformancePlan } from '@esl-pipeline/tts-core';
 
 import {
   buildInworldChunkHash,
   buildStudyTextMp3Inworld,
   createInworldTtsProvider,
+  INWORLD_RENDERER_POLICY_VERSION,
   loadInworldVoicesCatalog,
   renderInworldSpeechSegment,
   resolveInworldAssemblyGapDurations,
   resolveInworldSpeakerAssignmentsFromCatalog,
   resolveInworldSpeakerAssignmentsWithRankerFromCatalog,
   resolveInworldTtsModel,
+  resolveInworldVoiceCapabilities,
 } from '../src/index.js';
 
 function createPreviewContext() {
@@ -20,7 +23,12 @@ function createPreviewContext() {
   );
 }
 
-function createPreviewVoicePlan(generatedAt: string, speaker = 'Maya', voiceId = 'Ashley') {
+function createPreviewVoicePlan(
+  generatedAt: string,
+  speaker = 'Maya',
+  voiceId = 'Ashley',
+  language?: string,
+) {
   return {
     schemaVersion: 1 as const,
     mode: 'ranked' as const,
@@ -32,6 +40,7 @@ function createPreviewVoicePlan(generatedAt: string, speaker = 'Maya', voiceId =
       {
         speaker,
         voiceId,
+        ...(language ? { language } : {}),
         source: 'auto' as const,
         capabilities: {
           supportsMetadataInstructions: true,
@@ -44,18 +53,25 @@ function createPreviewVoicePlan(generatedAt: string, speaker = 'Maya', voiceId =
   };
 }
 
-function createPreviewSpeechPlan(segment: Record<string, unknown> = {}) {
+function createPreviewSpeechPlan(
+  segment: Partial<SpeechPerformancePlan['segments'][number]> = {},
+): SpeechPerformancePlan {
+  const sourceSegments = [
+    {
+      id: 'segment-1',
+      speaker: 'Maya',
+      text: 'We need a clearer deadline.',
+    },
+  ];
   return {
     schemaVersion: 1 as const,
     mode: 'prompted' as const,
     provider: 'inworld' as const,
     model: 'inworld-tts-2' as const,
-    sourceHash: 'source-hash',
+    sourceHash: hashStudyText(JSON.stringify(sourceSegments)),
     segments: [
       {
-        id: 'segment-1',
-        speaker: 'Maya',
-        text: 'We need a clearer deadline.',
+        ...sourceSegments[0]!,
         ...segment,
       },
     ],
@@ -63,6 +79,85 @@ function createPreviewSpeechPlan(segment: Record<string, unknown> = {}) {
 }
 
 describe('inworld provider adapter basics', () => {
+  it('derives steering capabilities from the selected Inworld model', () => {
+    expect(resolveInworldVoiceCapabilities('inworld-tts-2')).toEqual({
+      supportsMetadataInstructions: true,
+      supportsNonVerbals: true,
+      supportsUppercaseEmphasis: true,
+      supportsFreeFormDirection: true,
+    });
+    expect(resolveInworldVoiceCapabilities('inworld-tts-1.5-max')).toEqual({
+      supportsMetadataInstructions: false,
+      supportsNonVerbals: false,
+      supportsUppercaseEmphasis: false,
+      supportsFreeFormDirection: false,
+    });
+    expect(resolveInworldVoiceCapabilities('inworld-tts-1.5-mini')).toEqual({
+      supportsMetadataInstructions: false,
+      supportsNonVerbals: false,
+      supportsUppercaseEmphasis: false,
+      supportsFreeFormDirection: false,
+    });
+  });
+
+  it('preserves typed voice metadata and canonicalizes SDK language', async () => {
+    const catalog = await loadInworldVoicesCatalog({
+      client: {
+        listVoices: vi.fn().mockResolvedValue([
+          {
+            voiceId: 'workspace-maya',
+            displayName: 'Maya Display',
+            name: 'maya_internal',
+            langCode: 'en_US',
+            description: 'Warm classroom voice',
+            tags: ['warm'],
+            source: 'workspace',
+          },
+        ]),
+      },
+    });
+    const voice = catalog.voices.find((candidate) => candidate.id === 'workspace-maya');
+
+    expect(voice).toMatchObject({
+      name: 'Maya Display',
+      labels: {
+        display_name: 'Maya Display',
+        name: 'maya_internal',
+        language: 'en-US',
+        description: 'Warm classroom voice',
+        tags: ['warm'],
+        source: 'workspace',
+      },
+      verifiedLanguages: [{ language: 'en-US', locale: 'en-US' }],
+    });
+    expect(
+      resolveInworldSpeakerAssignmentsFromCatalog(['Maya'], {}, catalog, {
+        model: 'inworld-tts-2',
+      }),
+    ).toMatchObject([{ voiceId: 'workspace-maya', language: 'en-US' }]);
+  });
+
+  it('logs one privacy-safe warning when the live catalog falls back', async () => {
+    const logger = { log: vi.fn() };
+    const client = { listVoices: vi.fn().mockRejectedValue(new Error('secret response body')) };
+
+    const catalog = await loadInworldVoicesCatalog({ logger, client });
+
+    expect(catalog.voices.map((voice) => voice.id)).toEqual(['Ashley', 'Dennis']);
+    expect(logger.log).toHaveBeenCalledTimes(1);
+    expect(logger.log).toHaveBeenCalledWith({
+      level: 'warn',
+      stage: 'voice-plan',
+      message: 'Inworld voice catalog fell back to static voices',
+      detail: {
+        provider: 'inworld',
+        errorCategory: expect.any(String),
+        fallbackVoiceCount: 2,
+      },
+    });
+    expect(JSON.stringify(logger.log.mock.calls)).not.toContain('secret response body');
+  });
+
   it('defaults model family to inworld-tts-2', () => {
     delete process.env.ESL_TTS_PROVIDER_INWORLD_MODEL;
 
@@ -286,7 +381,7 @@ describe('inworld provider adapter basics', () => {
     ]);
   });
 
-  it('records TTS-2 voice capability tiers and prefers steerable voices when fit is close', () => {
+  it('treats every TTS-2 voice as steerable without a tag or ranking bonus', () => {
     expect(
       resolveInworldSpeakerAssignmentsFromCatalog(
         ['Nina'],
@@ -321,7 +416,8 @@ describe('inworld provider adapter basics', () => {
     ).toMatchObject([
       {
         speaker: 'Nina',
-        voiceId: 'Calm Steerable',
+        voiceId: 'Calm Plain',
+        capabilityMatches: ['accent:american', 'persona:calm,neutral'],
         capabilities: {
           supportsMetadataInstructions: true,
           supportsNonVerbals: true,
@@ -379,7 +475,8 @@ describe('inworld provider adapter basics', () => {
           voiceId: 'Warm Plain',
           source: 'auto',
           selectionReason: 'Selected by Inworld voice ranker: warmer conversational fit',
-          capabilities: { supportsFreeFormDirection: false },
+          capabilities: { supportsFreeFormDirection: true },
+          language: 'en-US',
         },
       ],
     });
@@ -624,9 +721,31 @@ describe('inworld provider adapter basics', () => {
         },
       }),
     ).toEqual({
-      text: '[emotion: calm concern; intonation: firm but collaborative] [speak as if carefully breaking difficult news] [sigh] <break time="150ms" /> We need a CLEARER DEADLINE. <break time="350ms" />',
+      text: '[speak as if carefully breaking difficult news] [sigh] <break time="150ms" /> We need a CLEARER DEADLINE. <break time="350ms" />',
+      lexicalText: 'We need a CLEARER DEADLINE.',
+      leadingInstructionTagCount: 1,
       speakingRate: 0.95,
       deliveryMode: 'BALANCED',
+    });
+  });
+
+  it('combines emotion and intonation into one TTS-2 instruction without free-form direction', () => {
+    expect(
+      renderInworldSpeechSegment({
+        model: 'inworld-tts-2',
+        segment: {
+          id: 'segment-1',
+          text: 'We need a clearer deadline.',
+          emotion: 'grounded concern',
+          intonation: 'a gently falling pitch',
+          pace: 'measured',
+        },
+      }),
+    ).toEqual({
+      text: '[speak with grounded concern and a gently falling pitch] We need a clearer deadline.',
+      lexicalText: 'We need a clearer deadline.',
+      leadingInstructionTagCount: 1,
+      speakingRate: 0.95,
     });
   });
 
@@ -647,10 +766,11 @@ describe('inworld provider adapter basics', () => {
     });
 
     expect(rendered.text).toBe('Keep a steady tempo.');
+    expect(rendered.text).not.toContain('pace');
     expect(rendered.speakingRate).toBe(speakingRate);
   });
 
-  it('keeps common TTS-2 controls but omits free-form direction for non-steerable voices', () => {
+  it('keeps at most one leading instruction when capability input is conservative', () => {
     expect(
       renderInworldSpeechSegment({
         model: 'inworld-tts-2',
@@ -670,14 +790,19 @@ describe('inworld provider adapter basics', () => {
         },
       }),
     ).toEqual({
-      text: '[emotion: calm concern] [sigh] We need a CLEARER DEADLINE.',
+      text: '[speak with calm concern] [sigh] We need a CLEARER DEADLINE.',
+      lexicalText: 'We need a CLEARER DEADLINE.',
+      leadingInstructionTagCount: 1,
     });
   });
 
-  it('keeps TTS 1.5 rendering free from TTS-2 steering syntax without changing natural pace', () => {
+  it.each([
+    'inworld-tts-1.5-max',
+    'inworld-tts-1.5-mini',
+  ] as const)('keeps %s rendering free from TTS-2 steering syntax without changing natural pace', (model) => {
     expect(
       renderInworldSpeechSegment({
-        model: 'inworld-tts-1.5-mini',
+        model,
         segment: {
           id: 'segment-1',
           text: 'We need a clearer deadline.',
@@ -688,7 +813,144 @@ describe('inworld provider adapter basics', () => {
           deliveryMode: 'CREATIVE',
         },
       }),
-    ).toEqual({ text: 'We need a clearer deadline.', speakingRate: 1 });
+    ).toEqual({
+      text: 'We need a clearer deadline.',
+      lexicalText: 'We need a clearer deadline.',
+      leadingInstructionTagCount: 0,
+      speakingRate: 1,
+    });
+  });
+
+  it('changes preview cache identity when language or renderer policy changes', async () => {
+    const context = createPreviewContext();
+    const buildHash = (language: string, rendererPolicyVersion = INWORLD_RENDERER_POLICY_VERSION) =>
+      buildStudyTextMp3Inworld(
+        { context },
+        {
+          voiceMapPath: 'voices.yml',
+          outPath: '/tmp',
+          preview: true,
+          voicePlan: createPreviewVoicePlan('2026-06-02T00:00:00.000Z', 'Maya', 'Ashley', language),
+        },
+        { rendererPolicyVersion },
+      );
+
+    const baseline = await buildHash('en-US');
+    await expect(buildHash('en-GB')).resolves.not.toMatchObject({ hash: baseline.hash });
+    await expect(buildHash('en-US', 'inworld-renderer-v3')).resolves.not.toMatchObject({
+      hash: baseline.hash,
+    });
+  });
+
+  it('blocks unsafe speech plans before calling injected synthesis', async () => {
+    const synthesizeChunk = vi.fn();
+    const context = createPreviewContext();
+    const voicePlan = createPreviewVoicePlan('2026-06-02T00:00:00.000Z');
+    voicePlan.assignments[0]!.capabilities.supportsFreeFormDirection = true;
+
+    await expect(
+      buildStudyTextMp3Inworld(
+        { context },
+        {
+          voiceMapPath: 'voices.yml',
+          outPath: '/path-that-must-not-be-created',
+          force: true,
+          speechPlan: createPreviewSpeechPlan({ freeFormDirection: '[inject]' }),
+          voicePlan,
+        },
+        { synthesizeChunk },
+      ),
+    ).rejects.toThrow('freeFormDirection contains an unsafe markup delimiter');
+    expect(synthesizeChunk).not.toHaveBeenCalled();
+  });
+
+  it('blocks authored provider-control markup before calling injected synthesis', async () => {
+    const synthesizeChunk = vi.fn();
+    const context = parseMarkdownContext(
+      '---\ntitle: Test\nstudent: Alex\nlevel: B1\ntopic: work\ninput_type: generate\n---\n\n:::study-text\n[Maya]: [whisper] Do not share the answer.\n:::',
+    );
+
+    await expect(
+      buildStudyTextMp3Inworld(
+        { context },
+        {
+          voiceMapPath: 'voices.yml',
+          outPath: '/path-that-must-not-be-created',
+          force: true,
+          voicePlan: createPreviewVoicePlan('2026-06-02T00:00:00.000Z'),
+        },
+        { synthesizeChunk },
+      ),
+    ).rejects.toThrow('authored_markup_delimiter:segment-1');
+    expect(synthesizeChunk).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['partial', (segments: SpeechPerformancePlan['segments']) => segments.slice(0, 1)],
+    [
+      'extra',
+      (segments: SpeechPerformancePlan['segments']) => [
+        ...segments,
+        { id: 'segment-3', speaker: 'Maya', text: 'This segment is foreign.' },
+      ],
+    ],
+    ['reordered', (segments: SpeechPerformancePlan['segments']) => [...segments].reverse()],
+  ] as const)('blocks a %s speech plan before calling injected synthesis', async (_caseName, mutateSegments) => {
+    const synthesizeChunk = vi.fn();
+    const context = parseMarkdownContext(
+      '---\ntitle: Test\nstudent: Alex\nlevel: B1\ntopic: work\ninput_type: generate\n---\n\n:::study-text\n[Maya]: First authored line.\n[Leo]: Second authored line.\n:::',
+    );
+    const sourceSegments = [
+      { id: 'segment-1', speaker: 'Maya', text: 'First authored line.' },
+      { id: 'segment-2', speaker: 'Leo', text: 'Second authored line.' },
+    ];
+    const speechPlan: SpeechPerformancePlan = {
+      schemaVersion: 1,
+      mode: 'prompted',
+      provider: 'inworld',
+      model: 'inworld-tts-2',
+      sourceHash: hashStudyText(JSON.stringify(sourceSegments)),
+      segments: mutateSegments(sourceSegments),
+    };
+
+    await expect(
+      buildStudyTextMp3Inworld(
+        { context },
+        {
+          voiceMapPath: 'voices.yml',
+          outPath: '/path-that-must-not-be-created',
+          force: true,
+          speechPlan,
+          voicePlan: createPreviewVoicePlan('2026-06-02T00:00:00.000Z'),
+        },
+        { synthesizeChunk },
+      ),
+    ).rejects.toThrow(/Speech plan (segment count|segment)/);
+    expect(synthesizeChunk).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['foreign selection', { provider: 'google', model: 'chirp3_hd' }],
+    ['foreign source hash', { sourceHash: 'foreign-source-hash' }],
+  ] as const)('blocks a speech plan with %s before calling injected synthesis', async (_caseName, override) => {
+    const synthesizeChunk = vi.fn();
+    const context = createPreviewContext();
+    const speechPlan = { ...createPreviewSpeechPlan(), ...override } as SpeechPerformancePlan;
+
+    await expect(
+      buildStudyTextMp3Inworld(
+        { context },
+        {
+          voiceMapPath: 'voices.yml',
+          outPath: '/path-that-must-not-be-created',
+          force: true,
+          speechPlan,
+          voicePlan: createPreviewVoicePlan('2026-06-02T00:00:00.000Z'),
+        },
+        { synthesizeChunk },
+      ),
+    ).rejects.toThrow('selection or source hash does not match prepared text');
+    expect(synthesizeChunk).not.toHaveBeenCalled();
   });
 
   it('keeps preview cache hashes stable when only ranker timestamps change', async () => {
@@ -790,9 +1052,16 @@ describe('inworld provider adapter basics', () => {
     const same = buildInworldChunkHash({ ...chunkArgs });
     const differentSampleRate = buildInworldChunkHash({ ...chunkArgs, sampleRateHertz: 24_000 });
     const differentEncoding = buildInworldChunkHash({ ...chunkArgs, encoding: 'LINEAR16' });
+    const differentLanguage = buildInworldChunkHash({ ...chunkArgs, language: 'en-GB' });
+    const differentPolicy = buildInworldChunkHash({
+      ...chunkArgs,
+      rendererPolicyVersion: 'inworld-renderer-v3',
+    });
 
     expect(same).toBe(first);
     expect(differentSampleRate).not.toBe(first);
     expect(differentEncoding).not.toBe(first);
+    expect(differentLanguage).not.toBe(first);
+    expect(differentPolicy).not.toBe(first);
   });
 });

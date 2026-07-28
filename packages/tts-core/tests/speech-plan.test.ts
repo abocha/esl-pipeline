@@ -3,12 +3,18 @@ import { describe, expect, it } from 'vitest';
 import { parseMarkdownContext } from '@esl-pipeline/pmd';
 
 import {
+  analyzeSpeechPlanCandidate,
+  analyzeValidatedSpeechPlan,
+  assertSpeechPlanSafeForSynthesis,
   createIdentitySpeechPerformancePlan,
   createPreparedStudyTextSynthesis,
   createResolvedVoicePlan,
   getTtsModelCapabilities,
+  normalizeSpeechCueText,
   type PreparedStudyTextSynthesis,
+  resolveVoicePlanForExecution,
   type SpeechPerformancePlan,
+  type VoicePlan,
   validateSpeechPerformancePlan,
   validateVoicePlan,
   withVoicePlan,
@@ -28,6 +34,268 @@ function createPrepared(): PreparedStudyTextSynthesis {
 }
 
 describe('speech performance plans', () => {
+  it.each([
+    '[laugh]',
+    '<break />',
+    '{voice}',
+    'line\nbreak',
+    'line\u2028break',
+    'line\u2029break',
+    '\u0007alarm',
+  ])('rejects unsafe cue text %j', (cue) => {
+    expect(() => normalizeSpeechCueText('freeFormDirection', cue)).toThrow();
+  });
+
+  it('normalizes bounded Unicode cue text and rejects excessive or unsupported content', () => {
+    expect(normalizeSpeechCueText('emotion', '  gently — but clearly  ')).toBe(
+      'gently — but clearly',
+    );
+    expect(() => normalizeSpeechCueText('emotion', 'é'.repeat(81))).toThrow('80 code points');
+    expect(() => normalizeSpeechCueText('freeFormDirection', 'calm / clear')).toThrow(
+      'unsupported character',
+    );
+  });
+
+  it('analyzes raw candidate identity, cue grammar, and planner caps before merge', () => {
+    const analysis = analyzeSpeechPlanCandidate(createPrepared(), {
+      segments: [
+        {
+          id: 'segment-1',
+          emotion: '[urgent]',
+          pauseAfterMs: 1001,
+          nonVerbalsBefore: ['sigh'],
+          nonVerbalsAfter: ['laugh'],
+        },
+        { id: 'segment-1' },
+        { id: 'unknown-segment' },
+      ],
+    });
+
+    expect(analysis.hardFailures).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'duplicate_segment_id', segmentId: 'segment-1' }),
+        expect.objectContaining({ code: 'unknown_segment_id', segmentId: 'unknown-segment' }),
+        expect.objectContaining({ code: 'missing_source_segment', segmentId: 'segment-2' }),
+        expect.objectContaining({ code: 'unsafe_cue_text', segmentId: 'segment-1' }),
+        expect.objectContaining({ code: 'planner_pause_exceeds_cap', segmentId: 'segment-1' }),
+        expect.objectContaining({
+          code: 'planner_nonverbal_cap_exceeded',
+          segmentId: 'segment-1',
+        }),
+      ]),
+    );
+  });
+
+  it('rejects raw candidate enum and collection shapes before merge', () => {
+    const analysis = analyzeSpeechPlanCandidate(createPrepared(), {
+      segments: [
+        {
+          id: 'segment-1',
+          pace: 'warp',
+          deliveryMode: 'LOUD',
+          emphasis: 'deadline',
+          nonVerbalsBefore: ['</s>'],
+        },
+        { id: 'segment-2' },
+      ],
+    });
+
+    expect(analysis.hardFailures).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'candidate_pace_invalid', segmentId: 'segment-1' }),
+        expect.objectContaining({
+          code: 'candidate_delivery_mode_invalid',
+          segmentId: 'segment-1',
+        }),
+        expect.objectContaining({ code: 'candidate_emphasis_invalid', segmentId: 'segment-1' }),
+        expect.objectContaining({ code: 'candidate_nonverbal_invalid', segmentId: 'segment-1' }),
+      ]),
+    );
+  });
+
+  it('detects rendered lexical changes from explicit renderer summaries', () => {
+    const prepared = createPrepared();
+    const plan = createIdentitySpeechPerformancePlan(prepared);
+    const analysis = analyzeValidatedSpeechPlan(prepared, plan, [
+      {
+        id: 'segment-1',
+        text: 'Goodbye world.',
+        lexicalText: 'Goodbye world.',
+      },
+      {
+        id: 'segment-2',
+        text: 'I can revise the plan today.',
+        lexicalText: 'I can revise the plan today.',
+      },
+    ]);
+
+    expect(analysis.hardFailures).toContainEqual(
+      expect.objectContaining({ code: 'rendered_words_changed', segmentId: 'segment-1' }),
+    );
+  });
+
+  it.each([
+    ['$5 is due.', '5 is due.'],
+    ['Completion is 50%.', 'Completion is 50.'],
+    ['Use C++ here.', 'Use C here.'],
+    ['Read ½ aloud.', 'Read 1/2 aloud.'],
+  ])('detects spoken symbol changes from %j to %j', (authored, rendered) => {
+    const prepared: PreparedStudyTextSynthesis = {
+      ...createPrepared(),
+      segments: [{ id: 'segment-1', text: authored }],
+    };
+    const plan = createIdentitySpeechPerformancePlan(prepared);
+
+    expect(
+      analyzeValidatedSpeechPlan(prepared, plan, [
+        { id: 'segment-1', text: rendered, lexicalText: rendered },
+      ]).hardFailures,
+    ).toContainEqual(
+      expect.objectContaining({ code: 'rendered_words_changed', segmentId: 'segment-1' }),
+    );
+  });
+
+  it('analyzes normalized plans and blocks privacy-safe synthesis failures', () => {
+    const prepared: PreparedStudyTextSynthesis = {
+      ...createPrepared(),
+      selection: { provider: 'inworld', model: 'inworld-tts-1.5-mini' },
+    };
+    const plan: SpeechPerformancePlan = {
+      ...createIdentitySpeechPerformancePlan(prepared),
+      mode: 'prompted',
+      segments: [
+        {
+          ...prepared.segments[0]!,
+          emotion: 'concerned',
+          freeFormDirection: 'speak gently',
+          nonVerbalsBefore: ['sigh'],
+          pauseAfterMs: 1001,
+        },
+        prepared.segments[1]!,
+      ],
+    };
+    const analysis = analyzeValidatedSpeechPlan(prepared, plan, [
+      {
+        id: 'segment-1',
+        text: '[one] [two] We need a clearer deadline.',
+        lexicalText: 'We need a clearer deadline.',
+      },
+      {
+        id: 'segment-2',
+        text: 'I can revise the plan today.',
+        lexicalText: 'I can revise the plan today.',
+      },
+    ]);
+
+    expect(analysis.hardFailures).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'unsupported_metadata_instruction' }),
+        expect.objectContaining({ code: 'unsupported_free_form_direction' }),
+        expect.objectContaining({ code: 'unsupported_nonverbal' }),
+        expect.objectContaining({ code: 'planner_pause_exceeds_cap' }),
+        expect.objectContaining({ code: 'leading_instruction_tag_count_exceeded' }),
+      ]),
+    );
+    expect(analysis.metrics.pauseCount).toBe(1);
+    expect(() => assertSpeechPlanSafeForSynthesis(analysis)).toThrow(
+      'leading_instruction_tag_count_exceeded:segment-1',
+    );
+    expect(() => assertSpeechPlanSafeForSynthesis(analysis)).not.toThrowError(
+      /We need a clearer deadline/,
+    );
+  });
+
+  it('marks newly resolved voice plans with model-scoped capability provenance', () => {
+    const prepared = createPrepared();
+    const plan = createResolvedVoicePlan(prepared, [
+      {
+        speaker: 'Maya',
+        voiceId: 'Ashley',
+        source: 'auto',
+        capabilities: {
+          supportsMetadataInstructions: true,
+          supportsNonVerbals: true,
+          supportsUppercaseEmphasis: true,
+          supportsFreeFormDirection: true,
+        },
+      },
+    ]);
+
+    expect(plan.capabilityPolicyVersion).toBe('model-scoped-v1');
+  });
+
+  it('normalizes legacy Inworld capabilities into an immutable execution view', () => {
+    const prepared = createPrepared();
+    const legacy: VoicePlan = {
+      schemaVersion: 1,
+      mode: 'deterministic',
+      provider: 'inworld',
+      model: 'inworld-tts-2',
+      sourceHash: prepared.sourceHash,
+      assignments: [
+        {
+          speaker: 'Maya',
+          voiceId: 'Ashley',
+          source: 'auto',
+          capabilities: {
+            supportsMetadataInstructions: false,
+            supportsNonVerbals: false,
+            supportsUppercaseEmphasis: false,
+            supportsFreeFormDirection: false,
+          },
+        },
+      ],
+    };
+
+    const effective = resolveVoicePlanForExecution(prepared, legacy);
+
+    expect(effective).not.toBe(legacy);
+    expect(effective.assignments[0]?.capabilities).toEqual({
+      supportsMetadataInstructions: true,
+      supportsNonVerbals: true,
+      supportsUppercaseEmphasis: true,
+      supportsFreeFormDirection: true,
+    });
+    expect(effective.assignments[0]?.language).toBeUndefined();
+    expect(legacy.assignments[0]?.capabilities.supportsFreeFormDirection).toBe(false);
+    expect(withVoicePlan(prepared, legacy).voicePlan).toEqual(effective);
+  });
+
+  it.each([
+    ['inworld', 'inworld-tts-2'],
+    ['google', 'chirp3_hd'],
+    ['elevenlabs', 'eleven_v3'],
+  ] as const)('rejects contradictory marked %s voice plans', (provider, model) => {
+    const prepared: PreparedStudyTextSynthesis = {
+      ...createPrepared(),
+      selection: { provider, model },
+    };
+
+    expect(() =>
+      resolveVoicePlanForExecution(prepared, {
+        schemaVersion: 1,
+        capabilityPolicyVersion: 'model-scoped-v1',
+        mode: 'deterministic',
+        provider,
+        model,
+        sourceHash: prepared.sourceHash,
+        assignments: [
+          {
+            speaker: 'Maya',
+            voiceId: 'voice-1',
+            source: 'auto',
+            capabilities: {
+              supportsMetadataInstructions: provider !== 'inworld',
+              supportsNonVerbals: provider !== 'inworld',
+              supportsUppercaseEmphasis: provider !== 'inworld',
+              supportsFreeFormDirection: false,
+            },
+          },
+        ],
+      }),
+    ).toThrow('contradicts model-scoped capabilities');
+  });
+
   it('declares prompted expressive capabilities only for Inworld TTS-2', () => {
     expect(getTtsModelCapabilities('inworld', 'inworld-tts-2')).toMatchObject({
       planningMode: 'prompted',
@@ -110,7 +378,7 @@ describe('speech performance plans', () => {
               supportsMetadataInstructions: true,
               supportsNonVerbals: true,
               supportsUppercaseEmphasis: true,
-              supportsFreeFormDirection: false,
+              supportsFreeFormDirection: true,
             },
           },
         ],
@@ -154,7 +422,7 @@ describe('speech performance plans', () => {
             supportsMetadataInstructions: true,
             supportsNonVerbals: true,
             supportsUppercaseEmphasis: true,
-            supportsFreeFormDirection: false,
+            supportsFreeFormDirection: true,
           },
         },
       ]),
@@ -234,8 +502,11 @@ describe('speech performance plans', () => {
     );
   });
 
-  it('rejects free-form direction for a selected voice without that capability', () => {
-    const source = createPrepared();
+  it('rejects free-form direction for a selected model without that capability', () => {
+    const source: PreparedStudyTextSynthesis = {
+      ...createPrepared(),
+      selection: { provider: 'google', model: 'chirp3_hd' },
+    };
     const prepared = withVoicePlan(
       source,
       createResolvedVoicePlan(source, [
@@ -244,9 +515,9 @@ describe('speech performance plans', () => {
           voiceId: 'Ashley',
           source: 'auto',
           capabilities: {
-            supportsMetadataInstructions: true,
-            supportsNonVerbals: true,
-            supportsUppercaseEmphasis: true,
+            supportsMetadataInstructions: false,
+            supportsNonVerbals: false,
+            supportsUppercaseEmphasis: false,
             supportsFreeFormDirection: false,
           },
         },
@@ -282,7 +553,7 @@ describe('speech performance plans', () => {
           supportsMetadataInstructions: true,
           supportsNonVerbals: true,
           supportsUppercaseEmphasis: true,
-          supportsFreeFormDirection: false,
+          supportsFreeFormDirection: true,
         },
       },
       {
@@ -312,7 +583,7 @@ describe('speech performance plans', () => {
           supportsMetadataInstructions: true,
           supportsNonVerbals: true,
           supportsUppercaseEmphasis: true,
-          supportsFreeFormDirection: false,
+          supportsFreeFormDirection: true,
         },
       },
       {
@@ -323,7 +594,7 @@ describe('speech performance plans', () => {
           supportsMetadataInstructions: true,
           supportsNonVerbals: true,
           supportsUppercaseEmphasis: true,
-          supportsFreeFormDirection: false,
+          supportsFreeFormDirection: true,
         },
       },
     ]);

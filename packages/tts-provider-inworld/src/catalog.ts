@@ -1,4 +1,4 @@
-import { InworldTTS, type VoiceInfo } from '@inworld/tts';
+import { InworldTTS, type InworldTTSClient, type VoiceInfo } from '@inworld/tts';
 
 import type { PipelineLogger, SpeakerProfile } from '@esl-pipeline/contracts';
 import {
@@ -11,7 +11,11 @@ import {
   type VoicePlanRanker,
 } from '@esl-pipeline/tts-core';
 
-import { resolveInworldApiKey, resolveInworldTimeoutMs } from './synthesis.js';
+import {
+  classifyInworldTtsProviderError,
+  resolveInworldApiKey,
+  resolveInworldTimeoutMs,
+} from './synthesis.js';
 
 export const DEFAULT_INWORLD_VOICES = ['Ashley', 'Dennis'] as const;
 const DEFAULT_INWORLD_TTS_MODEL: InworldTtsModel = 'inworld-tts-2';
@@ -34,6 +38,7 @@ export interface VoiceMapConfig extends Record<string, unknown> {
 export interface InworldSpeakerAssignment extends SpeakerVoiceAssignment {
   selectionReason: string;
   capabilities: VoiceAssignmentCapabilities;
+  language?: string;
 }
 
 export interface InworldSpeakerAssignmentOptions {
@@ -79,6 +84,7 @@ export function resolveInworldSpeakerAssignmentsFromCatalog(
   options: InworldSpeakerAssignmentOptions = {},
 ): InworldSpeakerAssignment[] {
   const configuredDefault = options.defaultVoiceId ?? normalizeVoiceMapToken(voiceMap.default);
+  const model = options.model ?? DEFAULT_INWORLD_TTS_MODEL;
   const credentialedEnglishVoices = catalog.voices.filter(
     (voice) => !isStaticInworldVoice(voice.id) && isEnglishInworldVoice(voice),
   );
@@ -98,7 +104,10 @@ export function resolveInworldSpeakerAssignmentsFromCatalog(
         selectionReason: explicit
           ? 'Selected from voices.yml explicit speaker mapping.'
           : 'Selected from configured Inworld default voice.',
-        capabilities: resolveInworldVoiceCapabilities(catalogVoice),
+        capabilities: resolveInworldVoiceCapabilities(model),
+        ...(resolveCatalogVoiceLanguage(catalogVoice)
+          ? { language: resolveCatalogVoiceLanguage(catalogVoice) }
+          : {}),
       };
     }
 
@@ -106,7 +115,7 @@ export function resolveInworldSpeakerAssignmentsFromCatalog(
     const preferredAccent =
       normalizeRequestedAccent(profile?.accent) ?? normalizeRequestedAccent(options.defaultAccent);
     const candidates = credentialedEnglishVoices
-      .map((voice) => scoreInworldVoiceCandidate({ voice, profile, preferredAccent }))
+      .map((voice) => scoreInworldVoiceCandidate({ voice, profile, preferredAccent, model }))
       .sort(
         (a, b) =>
           b.score - a.score ||
@@ -129,6 +138,9 @@ export function resolveInworldSpeakerAssignmentsFromCatalog(
         capabilityMatches: selected.capabilityMatches,
         capabilityMismatches: selected.capabilityMismatches,
         capabilities: selected.capabilities,
+        ...(resolveCatalogVoiceLanguage(selected.voice)
+          ? { language: resolveCatalogVoiceLanguage(selected.voice) }
+          : {}),
       };
     }
 
@@ -143,9 +155,14 @@ export function resolveInworldSpeakerAssignmentsFromCatalog(
       source: 'fallback',
       score: 50 - index,
       selectionReason: 'Selected from Inworld static fallback voices.',
-      capabilities: resolveInworldVoiceCapabilities(
-        catalog.voices.find((voice) => voice.id === staticVoice),
-      ),
+      capabilities: resolveInworldVoiceCapabilities(model),
+      ...(resolveCatalogVoiceLanguage(catalog.voices.find((voice) => voice.id === staticVoice))
+        ? {
+            language: resolveCatalogVoiceLanguage(
+              catalog.voices.find((voice) => voice.id === staticVoice),
+            ),
+          }
+        : {}),
     };
   });
 }
@@ -192,7 +209,14 @@ export async function resolveInworldSpeakerAssignmentsWithRankerFromCatalog(
     const preferredAccent =
       normalizeRequestedAccent(profile?.accent) ?? normalizeRequestedAccent(options.defaultAccent);
     const candidates = credentialedEnglishVoices
-      .map((voice) => scoreInworldVoiceCandidate({ voice, profile, preferredAccent }))
+      .map((voice) =>
+        scoreInworldVoiceCandidate({
+          voice,
+          profile,
+          preferredAccent,
+          model: options.model ?? DEFAULT_INWORLD_TTS_MODEL,
+        }),
+      )
       .sort(
         (a, b) =>
           b.score - a.score ||
@@ -286,6 +310,9 @@ export async function resolveInworldSpeakerAssignmentsWithRankerFromCatalog(
         capabilityMatches: rankedCandidate.capabilityMatches,
         capabilityMismatches: rankedCandidate.capabilityMismatches,
         capabilities: rankedCandidate.capabilities,
+        ...(resolveCatalogVoiceLanguage(rankedCandidate.voice)
+          ? { language: resolveCatalogVoiceLanguage(rankedCandidate.voice) }
+          : {}),
       };
     });
     options.logger?.log({
@@ -374,17 +401,39 @@ function isEnglishInworldVoice(voice: VoiceCatalog['voices'][number]): boolean {
   });
 }
 
+function normalizeInworldLanguage(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const hyphenated = value.trim().replaceAll('_', '-');
+  if (!hyphenated) return undefined;
+  try {
+    return Intl.getCanonicalLocales(hyphenated)[0] ?? hyphenated;
+  } catch {
+    return hyphenated;
+  }
+}
+
+function resolveCatalogVoiceLanguage(
+  voice: VoiceCatalog['voices'][number] | undefined,
+): string | undefined {
+  return normalizeInworldLanguage(
+    voice?.verifiedLanguages?.[0]?.locale ??
+      voice?.verifiedLanguages?.[0]?.language ??
+      voice?.labels?.language,
+  );
+}
+
 export function scoreInworldVoiceCandidate(args: {
   voice: VoiceCatalog['voices'][number];
   profile?: SpeakerProfile;
   preferredAccent?: string;
+  model?: InworldTtsModel;
 }) {
   const accent = readInworldVoiceLabel(args.voice, 'accent');
   const gender = readInworldVoiceLabel(args.voice, 'gender');
   const age = readInworldVoiceLabel(args.voice, 'age');
   const capabilityMatches: string[] = [];
   const capabilityMismatches: string[] = [];
-  const capabilities = resolveInworldVoiceCapabilities(args.voice);
+  const capabilities = resolveInworldVoiceCapabilities(args.model ?? DEFAULT_INWORLD_TTS_MODEL);
   let score = 50;
 
   if (args.preferredAccent) {
@@ -431,10 +480,6 @@ export function scoreInworldVoiceCandidate(args: {
     score += Math.min(10, personaMatches.length * 2);
     capabilityMatches.push(`persona:${personaMatches.join(',')}`);
   }
-  if (capabilities.supportsFreeFormDirection) {
-    score += 8;
-    capabilityMatches.push('steerable');
-  }
   const mismatchedQualities = ['strident', 'promotional', 'shouty', 'theatrical'];
   const requestedQualities = new Set(profileText.match(/[a-z]{4,}/g) ?? []);
   const qualityMismatches = mismatchedQualities.filter(
@@ -456,16 +501,14 @@ export function scoreInworldVoiceCandidate(args: {
 }
 
 export function resolveInworldVoiceCapabilities(
-  voice: VoiceCatalog['voices'][number] | undefined,
+  model: InworldTtsModel,
 ): VoiceAssignmentCapabilities {
-  const tags = Array.isArray(voice?.labels?.tags)
-    ? voice.labels.tags.map((tag) => normalizeInworldToken(tag))
-    : [];
+  const supportsTts2Steering = model === 'inworld-tts-2';
   return {
-    supportsMetadataInstructions: true,
-    supportsNonVerbals: true,
-    supportsUppercaseEmphasis: true,
-    supportsFreeFormDirection: tags.includes('steerable'),
+    supportsMetadataInstructions: supportsTts2Steering,
+    supportsNonVerbals: supportsTts2Steering,
+    supportsUppercaseEmphasis: supportsTts2Steering,
+    supportsFreeFormDirection: supportsTts2Steering,
   };
 }
 
@@ -526,7 +569,9 @@ function findInworldMetadataToken(text: string, tokens: string[]): string | unde
   );
 }
 
-export async function loadInworldVoicesCatalog(): Promise<VoiceCatalog> {
+export async function loadInworldVoicesCatalog(
+  dependencies: { logger?: PipelineLogger; client?: Pick<InworldTTSClient, 'listVoices'> } = {},
+): Promise<VoiceCatalog> {
   const generatedAt = new Date().toISOString();
   const voices: VoiceCatalog['voices'] = DEFAULT_INWORLD_VOICES.map((voiceId) => ({
     id: voiceId,
@@ -544,13 +589,16 @@ export async function loadInworldVoicesCatalog(): Promise<VoiceCatalog> {
   }));
 
   const apiKey = resolveInworldApiKey();
-  if (apiKey) {
+  if (apiKey || dependencies.client) {
     try {
-      const client = InworldTTS({ apiKey, timeout: resolveInworldTimeoutMs() ?? 30_000 });
+      const client =
+        dependencies.client ??
+        InworldTTS({ apiKey: apiKey!, timeout: resolveInworldTimeoutMs() ?? 30_000 });
       const workspaceVoices = await client.listVoices();
       for (const voice of workspaceVoices) {
         if (!voice.voiceId) continue;
         const metadata = resolveInworldVoiceMetadata(voice);
+        const language = normalizeInworldLanguage(voice.langCode);
         voices.push({
           id: voice.voiceId,
           name: voice.displayName || voice.voiceId,
@@ -558,7 +606,9 @@ export async function loadInworldVoicesCatalog(): Promise<VoiceCatalog> {
           labels: {
             provider: 'inworld',
             model_family: DEFAULT_INWORLD_TTS_MODEL,
-            language: voice.langCode?.toLowerCase() ?? 'en',
+            ...(voice.displayName ? { display_name: voice.displayName } : {}),
+            ...(voice.name ? { name: voice.name } : {}),
+            ...(language ? { language } : {}),
             ...(metadata.accent ? { accent: metadata.accent } : {}),
             ...(metadata.gender ? { gender: metadata.gender } : {}),
             ...(metadata.age ? { age: metadata.age } : {}),
@@ -567,18 +617,20 @@ export async function loadInworldVoicesCatalog(): Promise<VoiceCatalog> {
             ...(voice.source ? { source: voice.source } : {}),
           },
           useCase: DEFAULT_INWORLD_TTS_MODEL,
-          verifiedLanguages: voice.langCode
-            ? [
-                {
-                  language: voice.langCode.toLowerCase(),
-                  locale: voice.langCode.replaceAll('_', '-'),
-                },
-              ]
-            : [{ language: 'en', locale: 'en-US' }],
+          verifiedLanguages: language ? [{ language, locale: language }] : [],
         });
       }
-    } catch {
-      // Keep fallback voices available if live catalog loading fails.
+    } catch (error) {
+      dependencies.logger?.log({
+        level: 'warn',
+        stage: 'voice-plan',
+        message: 'Inworld voice catalog fell back to static voices',
+        detail: {
+          provider: 'inworld',
+          errorCategory: classifyInworldTtsProviderError(error),
+          fallbackVoiceCount: DEFAULT_INWORLD_VOICES.length,
+        },
+      });
     }
   }
 
