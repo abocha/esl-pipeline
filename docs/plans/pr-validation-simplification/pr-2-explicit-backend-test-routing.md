@@ -37,7 +37,7 @@
 - Produces: `classifyBackendTests({ testFiles, routing })` returning `{ unit, deterministicIntegration, postgresMigrations, postgres, postgresRedisWorker }`.
 - Produces: `validateBackendTestRouting({ classifications, backendScripts, sourceImports })` returning an array of actionable violations.
 
-- [ ] **Step 1: Write fixture-based routing contract tests**
+- [x] **Step 1: Write fixture-based routing contract tests**
 
   Cover these repository facts explicitly:
 
@@ -59,13 +59,13 @@
   - one file appearing in two service groups;
   - a manifest entry that does not exist.
 
-- [ ] **Step 2: Run the routing test and verify it fails**
+- [x] **Step 2: Run the routing test and verify it fails**
 
   Run: `node --test scripts/test/backend-test-routing-lib.test.mjs`
 
   Expected: FAIL because the routing library and manifest do not exist.
 
-- [ ] **Step 3: Create the manifest**
+- [x] **Step 3: Create the manifest**
 
   Use this exact initial service inventory:
 
@@ -103,7 +103,7 @@
 
   Keep `bootstrap.pg-test-env.test.ts` and `support/test-env.test.ts` in unit because they test helper behavior without connecting to services.
 
-- [ ] **Step 4: Implement deterministic discovery and script validation**
+- [x] **Step 4: Implement deterministic discovery and script validation**
 
   Discover `packages/batch-backend/tests/**/*.test.ts`, normalize paths, expand deterministic prefixes, reject overlap and nonexistent entries, and classify the remainder as unit. Parse the backend package scripts and require:
 
@@ -126,13 +126,13 @@
 
   Exempt only `bootstrap.pg-test-env.test.ts` and `support/test-env.test.ts` from the signal scan.
 
-- [ ] **Step 5: Run fixture routing tests**
+- [x] **Step 5: Run fixture routing tests**
 
   Run: `node --test scripts/test/backend-test-routing-lib.test.mjs`
 
   Expected: PASS. Real repository validation is deliberately added in Task 2 so this task ends green.
 
-- [ ] **Step 6: Commit the classification library**
+- [x] **Step 6: Commit the classification library**
 
   ```powershell
   git add packages/batch-backend/tests/test-routing.json scripts/test/backend-test-routing-lib.mjs scripts/test/backend-test-routing-lib.test.mjs
@@ -157,7 +157,7 @@
 - Adds an always-selected local lane for `test:check-routing`.
 - Makes `turbo:test:unit:prebuilt` depend on both `turbo:build` and `test:check-routing` when present.
 
-- [ ] **Step 1: Connect the repository routing guard and prove the current leak**
+- [x] **Step 1: Connect the repository routing guard and prove the current leak**
 
   Replace the narrow schedule-billing assertions with a call to
   `validateBackendTestRouting(...)` against the real backend test inventory and package scripts.
@@ -167,21 +167,21 @@
   Expected: FAIL because `domain.student-memory-openai-batch-repository.test.ts` is classified as
   PostgreSQL but is absent from `test:db:postgres` and the unit exclusions.
 
-- [ ] **Step 2: Correct the backend script membership**
+- [x] **Step 2: Correct the backend script membership**
 
   Add `domain.student-memory-openai-batch-repository.test.ts` to `test:db:postgres` and exclude it from `test:unit`, `test:unit:prebuilt`, and `test:unit:timings`. Make no other test-membership change unless the new guard identifies another concrete mismatch.
 
-- [ ] **Step 3: Verify the routing regression turns green**
+- [x] **Step 3: Verify the routing regression turns green**
 
   Run: `node --test scripts/check/backend-test-routing.test.mjs`
 
   Expected: PASS; every discovered backend test has exactly one operational route and the package scripts match the manifest.
 
-- [ ] **Step 4: Add routing to the always-selected local evidence**
+- [x] **Step 4: Add routing to the always-selected local evidence**
 
   Ensure `test:check-routing` invokes the routing regression test and is present in affected and broad plans before unit execution. Do not add PostgreSQL or Redis requirements to the guard itself.
 
-- [ ] **Step 5: Make the unit lane depend on routing success**
+- [x] **Step 5: Make the unit lane depend on routing success**
 
   Extend the coarse PR 1 dependency rule:
 
@@ -191,7 +191,7 @@
 
   If routing fails, the unit lane becomes `blocked`; lint, typecheck, guards, and deterministic integration remain runnable.
 
-- [ ] **Step 6: Run focused planner and routing validation**
+- [x] **Step 6: Run focused planner and routing validation**
 
   ```powershell
   node --test scripts/check/backend-test-routing.test.mjs scripts/check/affected-check-lib.test.mjs scripts/check/execution-lane-lib.test.mjs
@@ -200,7 +200,7 @@
 
   Expected: PASS.
 
-- [ ] **Step 7: Commit synchronized routing**
+- [x] **Step 7: Commit synchronized routing**
 
   ```powershell
   git add package.json packages/batch-backend/package.json scripts/check/backend-test-routing.test.mjs scripts/check/affected-check-lib.mjs scripts/check/affected-check-lib.test.mjs scripts/check/execution-lane-lib.mjs scripts/check/execution-lane-lib.test.mjs
@@ -221,7 +221,7 @@
 - Produces: `buildPureTestEnv(sourceEnv)` returning a copied environment with service/provider credentials removed and `VALIDATION_TEST_CLASS=pure` set.
 - Produces: `resolveValidationLaneEnv({ laneId, sourceEnv, backendDbEnv })`, which returns the pure environment only for unit lanes and preserves explicit DB/worker setup.
 
-- [ ] **Step 1: Write environment-scrubbing tests**
+- [x] **Step 1: Write environment-scrubbing tests**
 
   Use a fixture containing ordinary toolchain variables plus PostgreSQL, Redis, Docker, AWS, OpenAI, ElevenLabs, Inworld, and Google credentials. Assert ordinary variables remain and these are absent:
 
@@ -243,20 +243,20 @@
   Also assert `resolveValidationLaneEnv` scrubs `turbo:test:unit:prebuilt` but preserves an explicitly
   constructed environment when `backendDbEnv: true`.
 
-- [ ] **Step 2: Run the focused environment test and verify failure**
+- [x] **Step 2: Run the focused environment test and verify failure**
 
   Run: `node --test scripts/test/pure-test-env.test.mjs`
 
   Expected: FAIL because `buildPureTestEnv` does not exist.
 
-- [ ] **Step 3: Implement and connect pure environments**
+- [x] **Step 3: Implement and connect pure environments**
 
   Use `buildPureTestEnv(process.env)` only for `turbo:test:unit:prebuilt` in the canonical affected/broad runner and for ordinary agent unit lanes. Preserve `PATH`, Node/pnpm variables, `CI`, `NODE_ENV`, and `TZ`. Do not use the pure environment for DB/worker commands or helper tests that construct their own child environments.
 
   In `run-agent-vitest-lane.mjs`, `--backend-db-env` remains authoritative and must bypass pure
   scrubbing after constructing its explicit service environment.
 
-- [ ] **Step 4: Run poisoned-environment acceptance**
+- [x] **Step 4: Run poisoned-environment acceptance**
 
   In a PowerShell child scope, set invalid service variables, keep PostgreSQL/Redis stopped, and run:
 
@@ -271,7 +271,7 @@
 
   Expected: PASS; neither command attempts a service connection. Use a child PowerShell process so the parent environment requires no cleanup.
 
-- [ ] **Step 5: Run agent-lane and environment unit tests**
+- [x] **Step 5: Run agent-lane and environment unit tests**
 
   ```powershell
   node --test scripts/test/pure-test-env.test.mjs scripts/test/agent-vitest-lib.test.mjs scripts/check/execution-lane-lib.test.mjs
@@ -279,7 +279,7 @@
 
   Expected: PASS.
 
-- [ ] **Step 6: Commit hermetic unit execution**
+- [x] **Step 6: Commit hermetic unit execution**
 
   ```powershell
   git add scripts/test/pure-test-env.mjs scripts/test/pure-test-env.test.mjs scripts/check/run-affected-check.mjs scripts/test/run-agent-vitest-lane.mjs
@@ -299,15 +299,15 @@
 
 - Documents the four operational routes, manifest guard, and pure canonical environment.
 
-- [ ] **Step 1: Replace filename-based guidance**
+- [x] **Step 1: Replace filename-based guidance**
 
   Remove guidance that treats `*.integration.test.ts` as sufficient classification. Document actual prerequisites, the routing manifest, the guarded-remainder unit rule, unchanged public package scripts, and the requirement that routing pass before unit execution.
 
-- [ ] **Step 2: Update topic lifecycle metadata**
+- [x] **Step 2: Update topic lifecycle metadata**
 
   Set `Current Focus` to PR 3 after PR 2 is ready to merge.
 
-- [ ] **Step 3: Run focused and normal validation**
+- [x] **Step 3: Run focused and normal validation**
 
   ```powershell
   node --test scripts/check/backend-test-routing.test.mjs scripts/check/affected-check-lib.test.mjs scripts/check/execution-lane-lib.test.mjs scripts/test/pure-test-env.test.mjs scripts/test/agent-vitest-lib.test.mjs
@@ -323,7 +323,12 @@
 
   Expected: all deterministic commands pass without PostgreSQL or Redis.
 
-- [ ] **Step 4: Commit documentation**
+  Implementation evidence: routing, environment, poisoned backend unit (743 tests), poisoned HTTP
+  (185 tests), formatting, hygiene, and docs checks passed. The canonical aggregate completed seven
+  of eight lanes; its unchanged frontend timing assertion passed immediately in focused isolation,
+  so the full gate was not rerun to warm cache state.
+
+- [x] **Step 4: Commit documentation**
 
   ```powershell
   git add AGENTS.md docs/reference/agents-ssot.md docs/reference/TESTING_GUIDELINES.md docs/plans/pr-validation-simplification/README.md

@@ -102,7 +102,7 @@
 | phase/detail | Aggregate Local Validation Implementation Plan |  | no | no |  |  | `docs/plans/pr-validation-simplification/pr-1-aggregate-local-validation.md` |
 | phase/detail | Explicit Backend Test Routing Implementation Plan |  | no | no |  |  | `docs/plans/pr-validation-simplification/pr-2-explicit-backend-test-routing.md` |
 | phase/detail | CI Service Evidence Handoff Implementation Plan |  | no | no |  |  | `docs/plans/pr-validation-simplification/pr-3-ci-service-evidence-handoff.md` |
-| topic | PR Validation Simplification | active | yes | yes | PR 2, explicit backend test routing | archive this topic after all three implementation PRs merge and the resulting | `docs/plans/pr-validation-simplification/README.md` |
+| topic | PR Validation Simplification | active | yes | yes | PR 3, CI service evidence handoff | archive this topic after all three implementation PRs merge and the resulting | `docs/plans/pr-validation-simplification/README.md` |
 | router | Plans Directory | router | no | yes |  |  | `docs/plans/README.md` |
 | standalone | Slice 2: Invite Signup to Workspace to First Student | active | yes | yes | implementation is shipped; capture one clean hosted invite acceptance -> default | archive or update after the Slice 2 implementation PR/hosted verification lands | `docs/plans/slice-2-invite-workspace-first-student.md` |
 | topic | STT Multi-Provider Refactor | roadmap | yes | yes | use this README as the active STT provider roadmap; archived phase docs are historical trace | archive after STT provider runtime behavior is shipped and captured in package READMEs, env policy, and operations docs | `docs/plans/stt-multi-provider-refactor/README.md` |
