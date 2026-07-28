@@ -26,8 +26,8 @@ export const SPEECH_PLAN_RESPONSE_SCHEMA = {
             intonation: { type: 'string' },
             pace: { type: 'string', enum: ['slow', 'measured', 'natural', 'brisk'] },
             emphasis: { type: 'array', items: { type: 'string' } },
-            pauseBeforeMs: { type: 'integer', minimum: 0, maximum: 3000 },
-            pauseAfterMs: { type: 'integer', minimum: 0, maximum: 3000 },
+            pauseBeforeMs: { type: 'integer', minimum: 0, maximum: 1000 },
+            pauseAfterMs: { type: 'integer', minimum: 0, maximum: 1000 },
             nonVerbalsBefore: {
               type: 'array',
               items: { type: 'string', enum: ['sigh', 'laugh', 'chuckle', 'breath'] },
