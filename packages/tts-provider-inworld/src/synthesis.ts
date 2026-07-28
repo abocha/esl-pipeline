@@ -100,6 +100,7 @@ export async function synthesizeInworldSpeech(
     temperature?: number;
     deliveryMode?: SpeechDeliveryMode;
     sampleRateHertz?: number;
+    language?: string;
   },
 ): Promise<Buffer> {
   const apiKey = resolveInworldApiKey();
@@ -123,6 +124,7 @@ export async function synthesizeInworldSpeech(
     ...(options.speakingRate !== undefined ? { speakingRate: options.speakingRate } : {}),
     ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
     ...(options.deliveryMode !== undefined ? { deliveryMode: options.deliveryMode } : {}),
+    ...(options.language !== undefined ? { language: options.language } : {}),
   });
   return Buffer.from(audio);
 }
@@ -137,6 +139,7 @@ export async function synthesizeInworldChunkWithRetry(
     temperature?: number;
     deliveryMode?: SpeechDeliveryMode;
     sampleRateHertz?: number;
+    language?: string;
   },
 ): Promise<void> {
   const candidate = { text, voiceId, outFile };

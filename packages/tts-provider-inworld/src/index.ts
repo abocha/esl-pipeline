@@ -11,6 +11,8 @@ import {
   type Frontmatter,
 } from '@esl-pipeline/pmd';
 import {
+  analyzeValidatedSpeechPlan,
+  assertSpeechPlanSafeForSynthesis,
   type BuildPronunciationShadowSentenceInput,
   type BuildPronunciationShadowSentenceOptions,
   type BuildPronunciationShadowSentenceResult,
@@ -49,6 +51,7 @@ export const INWORLD_ASSEMBLY_MARGIN_POLICY = {
   sameSpeakerMs: 180,
   speakerSwitchMs: 320,
 } as const;
+export const INWORLD_RENDERER_POLICY_VERSION = 'inworld-renderer-v2';
 interface StudyTextSegment {
   speaker?: string;
   text: string;
@@ -285,6 +288,8 @@ export function buildInworldChunkHash(args: {
   deliveryMode?: string;
   sampleRateHertz: number;
   encoding?: string;
+  language?: string;
+  rendererPolicyVersion?: string;
 }): string {
   return createHash('sha256')
     .update(
@@ -299,6 +304,8 @@ export function buildInworldChunkHash(args: {
         deliveryMode: args.deliveryMode,
         sampleRateHertz: args.sampleRateHertz,
         encoding: args.encoding ?? 'MP3',
+        language: args.language,
+        rendererPolicyVersion: args.rendererPolicyVersion ?? INWORLD_RENDERER_POLICY_VERSION,
       }),
     )
     .digest('hex');
@@ -307,6 +314,10 @@ export function buildInworldChunkHash(args: {
 export async function buildStudyTextMp3Inworld(
   input: BuildStudyTextInput,
   opts: BuildStudyTextOptions,
+  dependencies: {
+    synthesizeChunk?: typeof synthesizeInworldChunkWithRetry;
+    rendererPolicyVersion?: string;
+  } = {},
 ): Promise<BuildStudyTextResult> {
   const plan = await resolveAssignmentsForStudyText(input, opts);
   const { frontmatter, segments, normalizedText, model, assignments, voiceSummaries } = plan;
@@ -318,6 +329,13 @@ export async function buildStudyTextMp3Inworld(
     assignments.map((assignment) => [cleanSpeakerName(assignment.speaker), assignment]),
   );
   const gapDurations = resolveInworldAssemblyGapDurations(segments);
+  const rendererPolicyVersion =
+    dependencies.rendererPolicyVersion ?? INWORLD_RENDERER_POLICY_VERSION;
+  const sourceSegments = segments.map((segment, index) => ({
+    id: `segment-${index + 1}`,
+    speaker: segment.speaker,
+    text: segment.text,
+  }));
   const renderedSegments = segments.flatMap((segment, index) => {
     const speechPlanSegment = opts.speechPlan?.segments[index];
     const assignment =
@@ -331,13 +349,18 @@ export async function buildStudyTextMp3Inworld(
         text: segment.text,
       },
       capabilities: assignment?.capabilities,
+      language: assignment?.language,
     });
     if (!rendered.text) return [];
     return [
       {
         speaker: segment.speaker,
+        id: speechPlanSegment?.id ?? `segment-${index + 1}`,
         voiceId: assignment?.voiceId ?? resolveInworldVoiceId(opts.defaultVoiceId),
         text: rendered.text,
+        lexicalText: rendered.lexicalText,
+        leadingInstructionTagCount: rendered.leadingInstructionTagCount,
+        language: rendered.language,
         speakingRate: rendered.speakingRate,
         temperature: rendered.temperature,
         deliveryMode: rendered.deliveryMode,
@@ -345,23 +368,54 @@ export async function buildStudyTextMp3Inworld(
       },
     ];
   });
+  const effectiveSpeechPlan =
+    opts.speechPlan ??
+    ({
+      schemaVersion: 1,
+      mode: 'identity',
+      provider: 'inworld',
+      model,
+      sourceHash: hashStudyText(JSON.stringify(sourceSegments)),
+      segments: sourceSegments,
+    } as const);
+  assertSpeechPlanSafeForSynthesis(
+    analyzeValidatedSpeechPlan(
+      {
+        selection: { provider: 'inworld', model },
+        sourceHash: effectiveSpeechPlan.sourceHash,
+        segments: sourceSegments,
+        voices: voiceSummaries,
+        voiceAssignments,
+        voicePlan: opts.voicePlan,
+      },
+      effectiveSpeechPlan,
+      renderedSegments.map((segment) => ({
+        id: segment.id,
+        text: segment.text,
+        lexicalText: segment.lexicalText,
+        leadingInstructionTagCount: segment.leadingInstructionTagCount,
+      })),
+    ),
+  );
   const hash = hashStudyText(
     JSON.stringify({
       provider: 'inworld',
       model,
       segments: renderedSegments.map(
-        ({ voiceId, text, speakingRate, temperature, deliveryMode, gapAfterMs }) => ({
+        ({ voiceId, text, speakingRate, temperature, deliveryMode, gapAfterMs, language }) => ({
           voiceId,
           text,
           ...(speakingRate !== undefined ? { speakingRate } : {}),
           ...(temperature !== undefined ? { temperature } : {}),
           ...(deliveryMode !== undefined ? { deliveryMode } : {}),
           ...(gapAfterMs !== undefined ? { gapAfterMs } : {}),
+          ...(language !== undefined ? { language } : {}),
         }),
       ),
       sampleRateHertz,
       encoding: 'MP3',
       assemblyMargins: INWORLD_ASSEMBLY_MARGIN_POLICY,
+      rendererPolicyVersion,
     }),
   );
   const outputDir = resolve(opts.outPath || (input.mdPath ? dirname(input.mdPath) : process.cwd()));
@@ -413,6 +467,8 @@ export async function buildStudyTextMp3Inworld(
       temperature: segment.temperature,
       deliveryMode: segment.deliveryMode,
       sampleRateHertz,
+      language: segment.language,
+      rendererPolicyVersion,
     });
     const chunkFilePath = resolve(outputDir, `${chunkHash}.mp3`);
     if (!opts.force && (await fileExistsNonEmpty(chunkFilePath))) {
@@ -421,13 +477,19 @@ export async function buildStudyTextMp3Inworld(
       cachedCharacters += speechText.length;
       continue;
     }
-    await synthesizeInworldChunkWithRetry(speechText, voiceId, chunkFilePath, {
+    await (dependencies.synthesizeChunk ?? synthesizeInworldChunkWithRetry)(
+      speechText,
+      voiceId,
+      chunkFilePath,
+      {
       model,
       speakingRate: segment.speakingRate,
       temperature: segment.temperature,
       deliveryMode: segment.deliveryMode,
       sampleRateHertz,
-    });
+      language: segment.language,
+      },
+    );
     runFiles.push(chunkFilePath);
     runSegments.push({ speaker: segment.speaker });
     generatedCharacters += speechText.length;
@@ -701,4 +763,4 @@ export {
   resolveInworldSpeakerAssignmentsWithRankerFromCatalog,
 } from './catalog.js';
 export { FfmpegNotFoundError, resolveFfmpegPath } from './ffmpeg.js';
-export { renderInworldSpeechSegment } from './rendering.js';
+export { compileInworldSteeringInstruction, renderInworldSpeechSegment } from './rendering.js';

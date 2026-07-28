@@ -6,6 +6,7 @@ import {
   buildInworldChunkHash,
   buildStudyTextMp3Inworld,
   createInworldTtsProvider,
+  INWORLD_RENDERER_POLICY_VERSION,
   loadInworldVoicesCatalog,
   renderInworldSpeechSegment,
   resolveInworldVoiceCapabilities,
@@ -21,7 +22,12 @@ function createPreviewContext() {
   );
 }
 
-function createPreviewVoicePlan(generatedAt: string, speaker = 'Maya', voiceId = 'Ashley') {
+function createPreviewVoicePlan(
+  generatedAt: string,
+  speaker = 'Maya',
+  voiceId = 'Ashley',
+  language?: string,
+) {
   return {
     schemaVersion: 1 as const,
     mode: 'ranked' as const,
@@ -33,6 +39,7 @@ function createPreviewVoicePlan(generatedAt: string, speaker = 'Maya', voiceId =
       {
         speaker,
         voiceId,
+        ...(language ? { language } : {}),
         source: 'auto' as const,
         capabilities: {
           supportsMetadataInstructions: true,
@@ -706,9 +713,31 @@ describe('inworld provider adapter basics', () => {
         },
       }),
     ).toEqual({
-      text: '[emotion: calm concern; intonation: firm but collaborative] [speak as if carefully breaking difficult news] [sigh] <break time="150ms" /> We need a CLEARER DEADLINE. <break time="350ms" />',
+      text: '[speak as if carefully breaking difficult news] [sigh] <break time="150ms" /> We need a CLEARER DEADLINE. <break time="350ms" />',
+      lexicalText: 'We need a CLEARER DEADLINE.',
+      leadingInstructionTagCount: 1,
       speakingRate: 0.95,
       deliveryMode: 'BALANCED',
+    });
+  });
+
+  it('combines emotion and intonation into one TTS-2 instruction without free-form direction', () => {
+    expect(
+      renderInworldSpeechSegment({
+        model: 'inworld-tts-2',
+        segment: {
+          id: 'segment-1',
+          text: 'We need a clearer deadline.',
+          emotion: 'grounded concern',
+          intonation: 'a gently falling pitch',
+          pace: 'measured',
+        },
+      }),
+    ).toEqual({
+      text: '[speak with grounded concern and a gently falling pitch] We need a clearer deadline.',
+      lexicalText: 'We need a clearer deadline.',
+      leadingInstructionTagCount: 1,
+      speakingRate: 0.95,
     });
   });
 
@@ -729,10 +758,11 @@ describe('inworld provider adapter basics', () => {
     });
 
     expect(rendered.text).toBe('Keep a steady tempo.');
+    expect(rendered.text).not.toContain('pace');
     expect(rendered.speakingRate).toBe(speakingRate);
   });
 
-  it('keeps common TTS-2 controls but omits free-form direction for non-steerable voices', () => {
+  it('keeps at most one leading instruction when capability input is conservative', () => {
     expect(
       renderInworldSpeechSegment({
         model: 'inworld-tts-2',
@@ -752,14 +782,18 @@ describe('inworld provider adapter basics', () => {
         },
       }),
     ).toEqual({
-      text: '[emotion: calm concern] [sigh] We need a CLEARER DEADLINE.',
+      text: '[speak with calm concern] [sigh] We need a CLEARER DEADLINE.',
+      lexicalText: 'We need a CLEARER DEADLINE.',
+      leadingInstructionTagCount: 1,
     });
   });
 
-  it('keeps TTS 1.5 rendering free from TTS-2 steering syntax without changing natural pace', () => {
+  it.each(['inworld-tts-1.5-max', 'inworld-tts-1.5-mini'] as const)(
+    'keeps %s rendering free from TTS-2 steering syntax without changing natural pace',
+    (model) => {
     expect(
       renderInworldSpeechSegment({
-        model: 'inworld-tts-1.5-mini',
+        model,
         segment: {
           id: 'segment-1',
           text: 'We need a clearer deadline.',
@@ -770,7 +804,59 @@ describe('inworld provider adapter basics', () => {
           deliveryMode: 'CREATIVE',
         },
       }),
-    ).toEqual({ text: 'We need a clearer deadline.', speakingRate: 1 });
+    ).toEqual({
+      text: 'We need a clearer deadline.',
+      lexicalText: 'We need a clearer deadline.',
+      leadingInstructionTagCount: 0,
+      speakingRate: 1,
+    });
+    },
+  );
+
+  it('changes preview cache identity when language or renderer policy changes', async () => {
+    const context = createPreviewContext();
+    const buildHash = (language: string, rendererPolicyVersion = INWORLD_RENDERER_POLICY_VERSION) =>
+      buildStudyTextMp3Inworld(
+        { context },
+        {
+          voiceMapPath: 'voices.yml',
+          outPath: '/tmp',
+          preview: true,
+          voicePlan: createPreviewVoicePlan(
+            '2026-06-02T00:00:00.000Z',
+            'Maya',
+            'Ashley',
+            language,
+          ),
+        },
+        { rendererPolicyVersion },
+      );
+
+    const baseline = await buildHash('en-US');
+    await expect(buildHash('en-GB')).resolves.not.toMatchObject({ hash: baseline.hash });
+    await expect(buildHash('en-US', 'inworld-renderer-v3')).resolves.not.toMatchObject({
+      hash: baseline.hash,
+    });
+  });
+
+  it('blocks unsafe speech plans before calling injected synthesis', async () => {
+    const synthesizeChunk = vi.fn();
+    const context = createPreviewContext();
+
+    await expect(
+      buildStudyTextMp3Inworld(
+        { context },
+        {
+          voiceMapPath: 'voices.yml',
+          outPath: '/path-that-must-not-be-created',
+          force: true,
+          speechPlan: createPreviewSpeechPlan({ freeFormDirection: '[inject]' }),
+          voicePlan: createPreviewVoicePlan('2026-06-02T00:00:00.000Z'),
+        },
+        { synthesizeChunk },
+      ),
+    ).rejects.toThrow('unsafe_cue_text:segment-1');
+    expect(synthesizeChunk).not.toHaveBeenCalled();
   });
 
   it('keeps preview cache hashes stable when only ranker timestamps change', async () => {
@@ -872,9 +958,16 @@ describe('inworld provider adapter basics', () => {
     const same = buildInworldChunkHash({ ...chunkArgs });
     const differentSampleRate = buildInworldChunkHash({ ...chunkArgs, sampleRateHertz: 24_000 });
     const differentEncoding = buildInworldChunkHash({ ...chunkArgs, encoding: 'LINEAR16' });
+    const differentLanguage = buildInworldChunkHash({ ...chunkArgs, language: 'en-GB' });
+    const differentPolicy = buildInworldChunkHash({
+      ...chunkArgs,
+      rendererPolicyVersion: 'inworld-renderer-v3',
+    });
 
     expect(same).toBe(first);
     expect(differentSampleRate).not.toBe(first);
     expect(differentEncoding).not.toBe(first);
+    expect(differentLanguage).not.toBe(first);
+    expect(differentPolicy).not.toBe(first);
   });
 });
