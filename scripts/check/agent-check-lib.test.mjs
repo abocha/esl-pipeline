@@ -32,7 +32,7 @@ test('agent check summary reports a passing run without captured lane output', (
   assert.doesNotMatch(text, /guard-orchestrator-boundary PASS/);
 });
 
-test('agent check summary reports only the first failed lane', () => {
+test('agent check summary aggregates every failed and blocked lane', () => {
   const summary = buildAgentCheckSummary({
     label: 'check:fast:agent',
     durationMs: 30_000,
@@ -50,6 +50,16 @@ test('agent check summary reports only the first failed lane', () => {
         },
       },
       {
+        name: 'test:unit:prebuilt',
+        status: 'blocked',
+        exitCode: null,
+        durationMs: 0,
+        signal: 'blocked by failed prerequisite: build',
+        blockedBy: ['build'],
+        repro: 'pnpm test:unit:prebuilt',
+        artifacts: {},
+      },
+      {
         name: 'lint',
         status: 'fail',
         exitCode: 1,
@@ -60,8 +70,25 @@ test('agent check summary reports only the first failed lane', () => {
           rawLog: 'tmp/check-logs/2026-check-fast/lint/raw.log',
         },
       },
+      lanePass('typecheck'),
     ],
   });
+
+  assert.equal(summary.status, 'fail');
+  assert.deepEqual(summary.counts, {
+    total: 5,
+    passed: 2,
+    failed: 2,
+    blocked: 1,
+  });
+  assert.deepEqual(
+    summary.problems.map((lane) => [lane.name, lane.status]),
+    [
+      ['build', 'fail'],
+      ['test:unit:prebuilt', 'blocked'],
+      ['lint', 'fail'],
+    ],
+  );
 
   const text = formatAgentCheckSummary(summary, {
     logsDir: 'tmp/check-logs/2026-check-fast',
@@ -73,7 +100,10 @@ test('agent check summary reports only the first failed lane', () => {
   assert.match(text, /TS2741/);
   assert.match(text, /repro: pnpm build/);
   assert.match(text, /raw log: tmp\/check-logs\/2026-check-fast\/build\/raw\.log/);
-  assert.doesNotMatch(text, /this must not appear/);
+  assert.match(text, /lane test:unit:prebuilt blocked/);
+  assert.match(text, /blocked by failed prerequisite: build/);
+  assert.match(text, /lane lint failed/);
+  assert.match(text, /this must not appear/);
 });
 
 test('agent check artifact paths are lane scoped and sanitized', () => {

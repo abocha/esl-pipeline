@@ -74,6 +74,7 @@
 6. `docs/plans/student-profile-enrichment/README.md`
 7. `docs/plans/student-area-redesign/README.md`
 8. `docs/plans/backlog/README.md`
+9. `docs/plans/pr-validation-simplification/README.md`
 
 ### Standalone active plans
 

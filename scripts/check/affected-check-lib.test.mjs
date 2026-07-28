@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   buildAffectedCheckPlan,
+  buildBroadCheckPlan,
   buildCiScopeDecision,
   collectChangedFileScopes,
   collectChangedFiles,
@@ -430,6 +431,18 @@ test('unclassified root changes fall back to broad pre-PR validation', () => {
 
   assert.equal(plan.fallback?.lane, 'check:pre-pr');
   assert.match(plan.fallback?.reason ?? '', /unclassified root file/u);
+  assert.deepEqual(
+    plan.triggeredLanes.map((lane) => lane.id),
+    [
+      'guard:orchestrator:boundary',
+      'release:verify:contracts',
+      'test:tooling',
+      'build',
+      'typecheck',
+      'lint',
+      'test:unit:prebuilt:fast',
+    ],
+  );
   assert.equal(plan.turbo, null);
 });
 
@@ -443,6 +456,27 @@ test('gitignore changes are classified as root validation fallback', () => {
 
   assert.equal(plan.fallback?.lane, 'check:pre-pr');
   assert.match(plan.fallback?.reason ?? '', /root validation/u);
+});
+
+test('broad pre-PR plan exposes every command as an independent lane', () => {
+  const plan = buildBroadCheckPlan({
+    reason: 'explicit broad validation requested',
+  });
+
+  assert.deepEqual(
+    plan.triggeredLanes.map((lane) => [lane.id, lane.pnpmArgs]),
+    [
+      ['guard:orchestrator:boundary', ['run', 'guard:orchestrator:boundary']],
+      ['release:verify:contracts', ['run', 'release:verify:contracts']],
+      ['test:tooling', ['run', 'test:tooling']],
+      ['build', ['run', 'build']],
+      ['typecheck', ['run', 'typecheck']],
+      ['lint', ['run', 'lint']],
+      ['test:unit:prebuilt:fast', ['run', 'test:unit:prebuilt:fast']],
+    ],
+  );
+  assert.equal(plan.fallback, null);
+  assert.equal(plan.turbo, null);
 });
 
 test('comparison base fails conservatively when origin main is missing', async () => {

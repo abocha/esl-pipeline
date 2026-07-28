@@ -13,6 +13,7 @@
 - [ ] `pnpm release:verify:contracts` and `pnpm --filter @esl-pipeline/batch-backend run db:verify-baseline` when migrations/schema/contracts changed
 - [ ] Targeted package tests (if applicable)
 - [ ] Manual smoke test (if applicable)
+- [ ] I inspected the aggregate validation summary before any rerun; focused reruns were diagnostic only
 
 ## Risk Notes
 
