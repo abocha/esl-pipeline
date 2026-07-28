@@ -317,6 +317,7 @@ export function buildAffectedCheckPlan({
 
   const changedFileLanes = resolveChangedFileLanes(normalizedFiles);
   const triggeredLanes = uniqueLanes([...alwaysLanes, ...changedFileLanes, ...pathTriggeredLanes]);
+  const ciRequirements = resolveCiRequirements(normalizedFiles);
 
   return {
     baseRef,
@@ -326,6 +327,7 @@ export function buildAffectedCheckPlan({
     affectedPackages,
     dependencyPackages,
     triggeredLanes,
+    ciRequirements,
     skippedBroadLanes: resolveSkippedBroadLanes({ changedFiles: normalizedFiles, triggeredLanes }),
     turbo: buildTurboPlan({
       affectedPackages,
@@ -348,14 +350,16 @@ export function buildBroadCheckPlan({
   changedFiles = [],
   fallback = false,
 }) {
+  const normalizedFiles = uniqueSorted(changedFiles.map(normalizePath));
   return {
     baseRef,
     mergeBase,
-    changedFiles: uniqueSorted(changedFiles.map(normalizePath)),
+    changedFiles: normalizedFiles,
     changedPackages: [],
     affectedPackages: [],
     dependencyPackages: [],
     triggeredLanes: broadPrePrLanes,
+    ciRequirements: resolveCiRequirements(normalizedFiles, { conservativeUnknown: fallback }),
     skippedBroadLanes: [],
     turbo: null,
     fallback: fallback
@@ -452,6 +456,13 @@ export function formatPlanSummary(plan) {
 
   if (plan.fallback) {
     lines.push('', `Fallback: ${plan.fallback.lane}`, `Reason: ${plan.fallback.reason}`);
+    if (plan.ciRequirements.length > 0) {
+      lines.push(
+        '',
+        'CI required:',
+        ...plan.ciRequirements.map((requirement) => `  - ${requirement.id}: ${requirement.reason}`),
+      );
+    }
     return lines.join('\n');
   }
 
@@ -474,10 +485,18 @@ export function formatPlanSummary(plan) {
     );
   }
 
-  lines.push(
-    'Triggered lanes:',
-    ...plan.triggeredLanes.map((lane) => `  - ${lane.id}: ${lane.reason}`),
-  );
+  const localLanes = plan.triggeredLanes.filter((lane) => lane.owner === 'local');
+  const ciLanes = plan.triggeredLanes.filter((lane) => lane.owner === 'ci');
+  lines.push('Local lanes:', ...localLanes.map((lane) => `  - ${lane.id}: ${lane.reason}`));
+  if (ciLanes.length > 0) {
+    lines.push('CI-owned lanes:', ...ciLanes.map((lane) => `  - ${lane.id}: ${lane.reason}`));
+  }
+  if (plan.ciRequirements.length > 0) {
+    lines.push(
+      'CI required:',
+      ...plan.ciRequirements.map((requirement) => `  - ${requirement.id}: ${requirement.reason}`),
+    );
+  }
 
   if (plan.turbo) {
     lines.push(
@@ -667,29 +686,61 @@ function resolvePathTriggeredLanes(file) {
         'run',
         'db:verify-baseline',
       ]),
-      lane('backend:test:db:migrations', [
-        '--filter',
-        '@esl-pipeline/batch-backend',
-        'run',
-        'test:db:migrations',
-      ]),
-      lane('backend:test:db:postgres', [
-        '--filter',
-        '@esl-pipeline/batch-backend',
-        'run',
-        'test:db:postgres',
-      ]),
+      lane(
+        'backend:test:db:migrations',
+        ['--filter', '@esl-pipeline/batch-backend', 'run', 'test:db:migrations'],
+        {
+          owner: 'ci',
+          reason: 'backend migrations or schema changed',
+        },
+      ),
+      lane(
+        'backend:test:db:postgres',
+        ['--filter', '@esl-pipeline/batch-backend', 'run', 'test:db:postgres'],
+        {
+          owner: 'ci',
+          reason: 'backend migrations or schema changed',
+        },
+      ),
     );
   }
 
   if (isBackendWorkerFile(file)) {
     lanes.push(
-      lane('backend:test:integration:worker', [
-        '--filter',
-        '@esl-pipeline/batch-backend',
-        'run',
-        'test:integration:worker',
-      ]),
+      lane(
+        'backend:test:integration:worker',
+        ['--filter', '@esl-pipeline/batch-backend', 'run', 'test:integration:worker'],
+        {
+          owner: 'ci',
+          reason: 'backend worker or queue behavior changed',
+        },
+      ),
+    );
+  }
+
+  if (isBackendWorkerTest(file)) {
+    lanes.push(
+      lane(
+        'backend:test:integration:worker',
+        ['--filter', '@esl-pipeline/batch-backend', 'run', 'test:integration:worker'],
+        {
+          owner: 'ci',
+          reason: 'backend worker or queue behavior changed',
+        },
+      ),
+    );
+  }
+
+  if (isBackendPostgresTest(file) || isBackendRepositoryImplementation(file)) {
+    lanes.push(
+      lane(
+        'backend:test:db:postgres',
+        ['--filter', '@esl-pipeline/batch-backend', 'run', 'test:db:postgres'],
+        {
+          owner: 'ci',
+          reason: 'backend repository or database test behavior changed',
+        },
+      ),
     );
   }
 
@@ -841,9 +892,61 @@ function lane(id, pnpmArgs, options = {}) {
   return {
     id,
     pnpmArgs,
+    owner: options.owner ?? 'local',
     reason: options.reason ?? id,
     repro: ['pnpm', ...pnpmArgs].join(' '),
   };
+}
+
+function resolveCiRequirements(files, { conservativeUnknown = false } = {}) {
+  const reasons = [];
+  const addReason = (reason) => {
+    if (!reasons.includes(reason)) reasons.push(reason);
+  };
+
+  for (const file of files) {
+    if (isBackendMigrationOrSchema(file)) {
+      addReason('backend migrations or schema changed');
+    } else if (isBackendWorkerFile(file) || isBackendWorkerTest(file)) {
+      addReason('backend worker or queue behavior changed');
+    } else if (
+      isBackendPostgresTest(file) ||
+      isBackendRepositoryImplementation(file) ||
+      file.startsWith('packages/batch-backend/tests/support/')
+    ) {
+      addReason('backend repository or database test behavior changed');
+    } else if (file.startsWith('packages/batch-backend/src/infrastructure/')) {
+      addReason('backend service infrastructure changed');
+    } else if (file.startsWith('packages/contracts/')) {
+      addReason('shared contracts changed');
+    } else if (file.startsWith('packages/shared-infrastructure/')) {
+      addReason('shared infrastructure changed');
+    } else if (file.startsWith('.github/workflows/') || isCiRootToolchainPath(file)) {
+      addReason('validation or workflow infrastructure changed');
+    }
+  }
+
+  if (conservativeUnknown && reasons.length === 0 && files.length > 0) {
+    addReason('changed scope requires conservative hosted service evidence');
+  }
+  if (reasons.length === 0) return [];
+  return [{ id: 'backend-db-integration', reason: reasons.join('; ') }];
+}
+
+function isBackendPostgresTest(file) {
+  return /^packages\/batch-backend\/tests\/(?:domain\.(?:.*-repository|student-memory-openai-batch-import|student-repository\.workspace)|application\.(?:assignment-step-confirmation|homework-memory-source|student-timeline|student-schedule-billing|alpha-invites\.registration)|integration\.(?:migrations|query-plan-regression))\.test\.ts$/u.test(
+    file,
+  );
+}
+
+function isBackendWorkerTest(file) {
+  return /^packages\/batch-backend\/tests\/(?:transport\.worker-runner\.integration|integration\.student-memory-pacing-delay)\.test\.ts$/u.test(
+    file,
+  );
+}
+
+function isBackendRepositoryImplementation(file) {
+  return /^packages\/batch-backend\/src\/domain\/.*-repository\.ts$/u.test(file);
 }
 
 function readWorkspacePatterns(workspaceFile) {
@@ -908,11 +1011,11 @@ function isCiBackendDbWorkerPath(file) {
   return (
     /^packages\/batch-backend\/(?:migrations\/|schema\.sql$)/u.test(file) ||
     /^packages\/batch-backend\/src\/infrastructure\//u.test(file) ||
+    isBackendRepositoryImplementation(file) ||
     /^packages\/batch-backend\/src\/.*(?:worker|queue|process-(?:queue-)?job)/u.test(file) ||
     /^packages\/batch-backend\/tests\/support\//u.test(file) ||
-    /^packages\/batch-backend\/tests\/(?:domain\.(?:.*-repository|student-memory-openai-batch-import|student-repository\.workspace)|application\.(?:homework-memory-source|student-timeline|student-schedule-billing|alpha-invites\.registration)|integration\.(?:migrations|query-plan-regression|student-memory-pacing-delay)|transport\.worker-runner\.integration)\.test\.ts$/u.test(
-      file,
-    )
+    isBackendPostgresTest(file) ||
+    isBackendWorkerTest(file)
   );
 }
 

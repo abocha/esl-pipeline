@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import {
@@ -9,9 +10,14 @@ import {
   collectChangedFiles,
   expandTransitiveDependents,
   flattenChangedFileRecords,
+  formatPlanSummary,
   parseNameStatusZ,
   resolveComparisonBase,
 } from './affected-check-lib.mjs';
+
+const backendTestRouting = JSON.parse(
+  readFileSync(new URL('../../packages/batch-backend/tests/test-routing.json', import.meta.url)),
+);
 
 const workspacePackages = [
   pkg('@esl-pipeline/contracts', 'packages/contracts', [], ['build', 'typecheck']),
@@ -163,28 +169,29 @@ test('CI scope keeps docs-only exclusive and blocking scopes monotonic', () => {
 
 test('CI scope routes every explicit backend DB and worker file plus shared support', () => {
   const backendDbWorkerFiles = [
-    'packages/batch-backend/tests/integration.migrations.test.ts',
-    'packages/batch-backend/tests/domain.job-repository.test.ts',
-    'packages/batch-backend/tests/domain.revision-repository.test.ts',
-    'packages/batch-backend/tests/domain.lesson-memory-repository.test.ts',
-    'packages/batch-backend/tests/domain.homework-memory-repository.test.ts',
-    'packages/batch-backend/tests/domain.student-profile-candidate-repository.test.ts',
-    'packages/batch-backend/tests/domain.student-memory-snapshot-repository.test.ts',
-    'packages/batch-backend/tests/domain.student-memory-openai-batch-import.test.ts',
-    'packages/batch-backend/tests/domain.assignment-session-repository.test.ts',
-    'packages/batch-backend/tests/domain.student-repository.workspace.test.ts',
-    'packages/batch-backend/tests/application.homework-memory-source.test.ts',
-    'packages/batch-backend/tests/application.student-timeline.test.ts',
-    'packages/batch-backend/tests/application.student-schedule-billing.test.ts',
-    'packages/batch-backend/tests/application.alpha-invites.registration.test.ts',
-    'packages/batch-backend/tests/integration.query-plan-regression.test.ts',
-    'packages/batch-backend/tests/transport.worker-runner.integration.test.ts',
-    'packages/batch-backend/tests/integration.student-memory-pacing-delay.test.ts',
+    ...[
+      ...backendTestRouting.postgresMigrations,
+      ...backendTestRouting.postgres,
+      ...backendTestRouting.postgresRedisWorker,
+    ].map((file) => `packages/batch-backend/tests/${file}`),
     'packages/batch-backend/tests/support/bootstrap-pg-test-env.ts',
     'packages/batch-backend/tests/support/test-env.ts',
   ];
 
   for (const file of backendDbWorkerFiles) {
+    const decision = buildCiScopeDecision({
+      changedFileRecords: records('M', file),
+      workspacePackages: ciWorkspacePackages,
+    });
+    assert.equal(decision.backend_db_worker, true, `${file} must select backend DB/worker CI`);
+  }
+});
+
+test('CI scope selects service evidence for backend repository implementations', () => {
+  for (const file of [
+    'packages/batch-backend/src/domain/job-repository.ts',
+    'packages/batch-backend/src/domain/student-memory-snapshot-repository.ts',
+  ]) {
     const decision = buildCiScopeDecision({
       changedFileRecords: records('M', file),
       workspacePackages: ciWorkspacePackages,
@@ -326,6 +333,11 @@ test('frontend-only changes select frontend Turbo work without backend tests', (
     plan.triggeredLanes.some((lane) => lane.id === 'test:integration:worker'),
     false,
   );
+  assert.equal(
+    plan.triggeredLanes.every((lane) => lane.owner === 'local'),
+    true,
+  );
+  assert.deepEqual(plan.ciRequirements, []);
 });
 
 test('contracts changes expand to consumers and keep contract verification explicit', () => {
@@ -351,6 +363,44 @@ test('contracts changes expand to consumers and keep contract verification expli
     plan.turbo.taskGroups.find((group) => group.task === 'test:unit:prebuilt')?.filters,
     ['@esl-pipeline/batch-backend', '@esl-pipeline/batch-frontend', '@esl-pipeline/orchestrator'],
   );
+  assert.deepEqual(plan.ciRequirements, [
+    {
+      id: 'backend-db-integration',
+      reason: 'shared contracts changed',
+    },
+  ]);
+});
+
+test('service ownership selection is independent of ambient service variables', () => {
+  const changedFiles = ['packages/batch-backend/tests/domain.job-repository.test.ts'];
+  const before = buildAffectedCheckPlan({
+    baseRef: 'origin/main',
+    mergeBase: 'abc123',
+    changedFiles,
+    workspacePackages,
+  });
+  const previousPg = process.env.PG_CONNECTION_STRING;
+  const previousRedis = process.env.REDIS_URL;
+  process.env.PG_CONNECTION_STRING = 'postgresql://ambient.invalid/example';
+  process.env.REDIS_URL = 'redis://ambient.invalid:6379';
+  try {
+    const after = buildAffectedCheckPlan({
+      baseRef: 'origin/main',
+      mergeBase: 'abc123',
+      changedFiles,
+      workspacePackages,
+    });
+    assert.deepEqual(after, before);
+    assert.deepEqual(
+      after.triggeredLanes
+        .filter((lane) => lane.id === 'backend:test:db:postgres')
+        .map((lane) => lane.owner),
+      ['ci'],
+    );
+  } finally {
+    restoreEnv('PG_CONNECTION_STRING', previousPg);
+    restoreEnv('REDIS_URL', previousRedis);
+  }
 });
 
 test('docs-only changes run docs checks without package Turbo work', () => {
@@ -419,6 +469,44 @@ test('migration changes trigger backend graph, DB baseline, migration, and postg
     plan.triggeredLanes.map((lane) => lane.id).filter((id) => id.startsWith('backend:')),
     ['backend:db:verify-baseline', 'backend:test:db:migrations', 'backend:test:db:postgres'],
   );
+  assert.deepEqual(
+    plan.triggeredLanes
+      .filter((lane) => lane.id.startsWith('backend:'))
+      .map((lane) => [lane.id, lane.owner]),
+    [
+      ['backend:db:verify-baseline', 'local'],
+      ['backend:test:db:migrations', 'ci'],
+      ['backend:test:db:postgres', 'ci'],
+    ],
+  );
+  assert.deepEqual(plan.ciRequirements, [
+    {
+      id: 'backend-db-integration',
+      reason: 'backend migrations or schema changed',
+    },
+  ]);
+});
+
+test('worker changes retain the service lane as one CI evidence requirement', () => {
+  const plan = buildAffectedCheckPlan({
+    baseRef: 'origin/main',
+    mergeBase: 'abc123',
+    changedFiles: ['packages/batch-backend/src/application/process-student-memory-snapshot-job.ts'],
+    workspacePackages,
+  });
+
+  assert.deepEqual(
+    plan.triggeredLanes
+      .filter((lane) => lane.id === 'backend:test:integration:worker')
+      .map((lane) => lane.owner),
+    ['ci'],
+  );
+  assert.deepEqual(plan.ciRequirements, [
+    {
+      id: 'backend-db-integration',
+      reason: 'backend worker or queue behavior changed',
+    },
+  ]);
 });
 
 test('unclassified root changes fall back to broad pre-PR validation', () => {
@@ -445,6 +533,13 @@ test('unclassified root changes fall back to broad pre-PR validation', () => {
     ],
   );
   assert.equal(plan.turbo, null);
+  assert.deepEqual(plan.ciRequirements, [
+    {
+      id: 'backend-db-integration',
+      reason: 'changed scope requires conservative hosted service evidence',
+    },
+  ]);
+  assert.match(formatPlanSummary(plan), /CI required:\n  - backend-db-integration:/u);
 });
 
 test('gitignore changes are classified as root validation fallback', () => {
@@ -479,6 +574,11 @@ test('broad pre-PR plan exposes every command as an independent lane', () => {
   );
   assert.equal(plan.fallback, null);
   assert.equal(plan.turbo, null);
+  assert.equal(
+    plan.triggeredLanes.every((lane) => lane.owner === 'local'),
+    true,
+  );
+  assert.deepEqual(plan.ciRequirements, []);
 });
 
 test('comparison base fails conservatively when origin main is missing', async () => {
@@ -539,4 +639,12 @@ function pkg(name, dir, dependencies, scripts = ['build', 'typecheck', 'test:uni
     dependencies,
     scripts,
   };
+}
+
+function restoreEnv(name, value) {
+  if (value === undefined) {
+    delete process.env[name];
+  } else {
+    process.env[name] = value;
+  }
 }
