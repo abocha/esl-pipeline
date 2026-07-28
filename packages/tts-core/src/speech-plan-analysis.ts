@@ -77,6 +77,10 @@ function isUnsafeControlCharacter(character: string): boolean {
   );
 }
 
+function containsUnsafeMarkupDelimiter(value: string): boolean {
+  return [...value].some((character) => UNSAFE_MARKUP_DELIMITERS.has(character));
+}
+
 export function analyzeSpeechPlanCandidate(
   prepared: PreparedStudyTextSynthesis,
   candidate: unknown,
@@ -212,6 +216,9 @@ export function analyzeValidatedSpeechPlan(
     if (!source || segment.id !== source.id || segment.text !== source.text) {
       hardFailures.push(issue('authored_words_changed', segment.id));
     }
+    if (source && containsUnsafeMarkupDelimiter(source.text)) {
+      hardFailures.push(issue('authored_markup_delimiter', segment.id));
+    }
     for (const field of ['emotion', 'intonation', 'freeFormDirection'] as const) {
       const value = segment[field];
       if (!value) continue;
@@ -284,6 +291,9 @@ export function analyzeValidatedSpeechPlan(
       if (!rendered) {
         hardFailures.push(issue('segment_not_rendered', segment.id));
       } else {
+        if (containsUnsafeMarkupDelimiter(rendered.lexicalText)) {
+          hardFailures.push(issue('rendered_markup_delimiter', segment.id));
+        }
         if (
           renderedLexicalSignature(rendered.lexicalText) !==
           authoredLexicalSignature(source?.text ?? '')

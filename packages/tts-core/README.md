@@ -40,6 +40,8 @@ profiles and optional speech-performance plans.
 - Cue text is NFKC-normalized and restricted to a bounded markup-safe grammar. Planner pauses are
   capped at `1000` ms and each segment may carry at most one non-verbal cue. Candidate and validated
   plan analyzers expose privacy-safe issue codes.
+- Provider synthesis revalidates exact plan selection, source hash, and ordered segment coverage.
+  Authored or rendered lexical provider-control markup is rejected before cache or synthesis.
 - Provider adapters receive canonical assignment language. Inworld TTS-2 compiles at most one safe
   instruction tag; both TTS 1.5 models receive none. Renderer policy and effective language are
   part of complete and chunk cache identity.

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { parseMarkdownContext } from '@esl-pipeline/pmd';
+import { hashStudyText, type SpeechPerformancePlan } from '@esl-pipeline/tts-core';
 
 import {
   buildInworldChunkHash,
@@ -52,18 +53,25 @@ function createPreviewVoicePlan(
   };
 }
 
-function createPreviewSpeechPlan(segment: Record<string, unknown> = {}) {
+function createPreviewSpeechPlan(
+  segment: Partial<SpeechPerformancePlan['segments'][number]> = {},
+): SpeechPerformancePlan {
+  const sourceSegments = [
+    {
+      id: 'segment-1',
+      speaker: 'Maya',
+      text: 'We need a clearer deadline.',
+    },
+  ];
   return {
     schemaVersion: 1 as const,
     mode: 'prompted' as const,
     provider: 'inworld' as const,
     model: 'inworld-tts-2' as const,
-    sourceHash: 'source-hash',
+    sourceHash: hashStudyText(JSON.stringify(sourceSegments)),
     segments: [
       {
-        id: 'segment-1',
-        speaker: 'Maya',
-        text: 'We need a clearer deadline.',
+        ...sourceSegments[0]!,
         ...segment,
       },
     ],
@@ -837,6 +845,8 @@ describe('inworld provider adapter basics', () => {
   it('blocks unsafe speech plans before calling injected synthesis', async () => {
     const synthesizeChunk = vi.fn();
     const context = createPreviewContext();
+    const voicePlan = createPreviewVoicePlan('2026-06-02T00:00:00.000Z');
+    voicePlan.assignments[0]!.capabilities.supportsFreeFormDirection = true;
 
     await expect(
       buildStudyTextMp3Inworld(
@@ -846,11 +856,100 @@ describe('inworld provider adapter basics', () => {
           outPath: '/path-that-must-not-be-created',
           force: true,
           speechPlan: createPreviewSpeechPlan({ freeFormDirection: '[inject]' }),
+          voicePlan,
+        },
+        { synthesizeChunk },
+      ),
+    ).rejects.toThrow('freeFormDirection contains an unsafe markup delimiter');
+    expect(synthesizeChunk).not.toHaveBeenCalled();
+  });
+
+  it('blocks authored provider-control markup before calling injected synthesis', async () => {
+    const synthesizeChunk = vi.fn();
+    const context = parseMarkdownContext(
+      '---\ntitle: Test\nstudent: Alex\nlevel: B1\ntopic: work\ninput_type: generate\n---\n\n:::study-text\n[Maya]: [whisper] Do not share the answer.\n:::',
+    );
+
+    await expect(
+      buildStudyTextMp3Inworld(
+        { context },
+        {
+          voiceMapPath: 'voices.yml',
+          outPath: '/path-that-must-not-be-created',
+          force: true,
           voicePlan: createPreviewVoicePlan('2026-06-02T00:00:00.000Z'),
         },
         { synthesizeChunk },
       ),
-    ).rejects.toThrow('unsafe_cue_text:segment-1');
+    ).rejects.toThrow('authored_markup_delimiter:segment-1');
+    expect(synthesizeChunk).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['partial', (segments: SpeechPerformancePlan['segments']) => segments.slice(0, 1)],
+    [
+      'extra',
+      (segments: SpeechPerformancePlan['segments']) => [
+        ...segments,
+        { id: 'segment-3', speaker: 'Maya', text: 'This segment is foreign.' },
+      ],
+    ],
+    ['reordered', (segments: SpeechPerformancePlan['segments']) => [...segments].reverse()],
+  ] as const)('blocks a %s speech plan before calling injected synthesis', async (_caseName, mutateSegments) => {
+    const synthesizeChunk = vi.fn();
+    const context = parseMarkdownContext(
+      '---\ntitle: Test\nstudent: Alex\nlevel: B1\ntopic: work\ninput_type: generate\n---\n\n:::study-text\n[Maya]: First authored line.\n[Leo]: Second authored line.\n:::',
+    );
+    const sourceSegments = [
+      { id: 'segment-1', speaker: 'Maya', text: 'First authored line.' },
+      { id: 'segment-2', speaker: 'Leo', text: 'Second authored line.' },
+    ];
+    const speechPlan: SpeechPerformancePlan = {
+      schemaVersion: 1,
+      mode: 'prompted',
+      provider: 'inworld',
+      model: 'inworld-tts-2',
+      sourceHash: hashStudyText(JSON.stringify(sourceSegments)),
+      segments: mutateSegments(sourceSegments),
+    };
+
+    await expect(
+      buildStudyTextMp3Inworld(
+        { context },
+        {
+          voiceMapPath: 'voices.yml',
+          outPath: '/path-that-must-not-be-created',
+          force: true,
+          speechPlan,
+          voicePlan: createPreviewVoicePlan('2026-06-02T00:00:00.000Z'),
+        },
+        { synthesizeChunk },
+      ),
+    ).rejects.toThrow(/Speech plan (segment count|segment)/);
+    expect(synthesizeChunk).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['foreign selection', { provider: 'google', model: 'chirp3_hd' }],
+    ['foreign source hash', { sourceHash: 'foreign-source-hash' }],
+  ] as const)('blocks a speech plan with %s before calling injected synthesis', async (_caseName, override) => {
+    const synthesizeChunk = vi.fn();
+    const context = createPreviewContext();
+    const speechPlan = { ...createPreviewSpeechPlan(), ...override } as SpeechPerformancePlan;
+
+    await expect(
+      buildStudyTextMp3Inworld(
+        { context },
+        {
+          voiceMapPath: 'voices.yml',
+          outPath: '/path-that-must-not-be-created',
+          force: true,
+          speechPlan,
+          voicePlan: createPreviewVoicePlan('2026-06-02T00:00:00.000Z'),
+        },
+        { synthesizeChunk },
+      ),
+    ).rejects.toThrow('selection or source hash does not match prepared text');
     expect(synthesizeChunk).not.toHaveBeenCalled();
   });
 

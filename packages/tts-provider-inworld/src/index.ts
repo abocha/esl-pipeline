@@ -30,6 +30,7 @@ import {
   type SpeakerVoiceAssignment,
   type TtsProviderAdapter,
   type VoiceAssignmentResolution,
+  validateSpeechPerformancePlan,
 } from '@esl-pipeline/tts-core';
 
 import {
@@ -336,18 +337,33 @@ export async function buildStudyTextMp3Inworld(
     speaker: segment.speaker,
     text: segment.text,
   }));
+  const preparedSpeechPlan = {
+    selection: { provider: 'inworld' as const, model },
+    sourceHash: hashStudyText(JSON.stringify(sourceSegments)),
+    segments: sourceSegments,
+    voices: voiceSummaries,
+    voiceAssignments,
+    voicePlan: opts.voicePlan,
+  };
+  const effectiveSpeechPlan = validateSpeechPerformancePlan(
+    preparedSpeechPlan,
+    opts.speechPlan ?? {
+      schemaVersion: 1,
+      mode: 'identity',
+      provider: 'inworld',
+      model,
+      sourceHash: preparedSpeechPlan.sourceHash,
+      segments: sourceSegments,
+    },
+  );
   const renderedSegments = segments.flatMap((segment, index) => {
-    const speechPlanSegment = opts.speechPlan?.segments[index];
+    const speechPlanSegment = effectiveSpeechPlan.segments[index]!;
     const assignment =
       (segment.speaker ? assignmentLookup.get(cleanSpeakerName(segment.speaker)) : undefined) ??
       assignments[0];
     const rendered = renderInworldSpeechSegment({
       model,
-      segment: speechPlanSegment ?? {
-        id: `segment-${index + 1}`,
-        speaker: segment.speaker,
-        text: segment.text,
-      },
+      segment: speechPlanSegment,
       capabilities: assignment?.capabilities,
       language: assignment?.language,
     });
@@ -355,7 +371,7 @@ export async function buildStudyTextMp3Inworld(
     return [
       {
         speaker: segment.speaker,
-        id: speechPlanSegment?.id ?? `segment-${index + 1}`,
+        id: speechPlanSegment.id,
         voiceId: assignment?.voiceId ?? resolveInworldVoiceId(opts.defaultVoiceId),
         text: rendered.text,
         lexicalText: rendered.lexicalText,
@@ -368,26 +384,9 @@ export async function buildStudyTextMp3Inworld(
       },
     ];
   });
-  const effectiveSpeechPlan =
-    opts.speechPlan ??
-    ({
-      schemaVersion: 1,
-      mode: 'identity',
-      provider: 'inworld',
-      model,
-      sourceHash: hashStudyText(JSON.stringify(sourceSegments)),
-      segments: sourceSegments,
-    } as const);
   assertSpeechPlanSafeForSynthesis(
     analyzeValidatedSpeechPlan(
-      {
-        selection: { provider: 'inworld', model },
-        sourceHash: effectiveSpeechPlan.sourceHash,
-        segments: sourceSegments,
-        voices: voiceSummaries,
-        voiceAssignments,
-        voicePlan: opts.voicePlan,
-      },
+      preparedSpeechPlan,
       effectiveSpeechPlan,
       renderedSegments.map((segment) => ({
         id: segment.id,
