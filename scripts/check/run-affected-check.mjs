@@ -22,10 +22,7 @@ import {
   formatAgentCheckSummary,
   resolvePackageManagerCommand,
 } from './agent-check-lib.mjs';
-import {
-  buildExecutionLanes,
-  runExecutionLanes,
-} from './execution-lane-lib.mjs';
+import { buildExecutionLanes, runExecutionLanes } from './execution-lane-lib.mjs';
 
 const repoRoot = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const cliArgs = process.argv.slice(2);

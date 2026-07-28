@@ -4,7 +4,7 @@
 
 - Audience: maintainers and AI agents implementing or reviewing repo behavior.
 - Authority Level: authoritative contracts and invariants.
-- Last Verified Against: 2026-07-15 repo state.
+- Last Verified Against: 2026-07-28 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: monthly and after contract-level changes.
 - Status: `reference`.
@@ -179,6 +179,12 @@ Required repo checks for behavior changes:
   preview. A `check:fast:agent` fallback to `check:pre-pr` satisfies the broad gate.
 - `check:pre-pr` is the direct gate for a branch already known to be broad. It runs the broad build,
   typecheck, lint, and core unit regression sweep.
+- Affected and broad local validation run selected lanes serially to completion. Independent lanes
+  continue after another lane fails; prebuilt test lanes are blocked when their build prerequisite
+  fails. The aggregate summary and cited raw logs are the canonical diagnostic starting point.
+- An isolated rerun is allowed only to diagnose a specific failure and does not replace the complete
+  gate result. Repeat the complete gate only after relevant source, configuration, toolchain, or a
+  diagnosed prerequisite condition changed.
 - A successful `pnpm check` subsumes both narrower pre-push gates.
 - Run `pnpm check` when reproducing CI locally or when DB, migration, worker, integration, or
   similarly broad behavior changed.

@@ -48,10 +48,7 @@ export function formatAgentCheckSummary(summary, { logsDir }) {
     `lanes ${summary.counts.failed} failed, ${summary.counts.blocked} blocked, ${summary.counts.passed} passed`,
   );
   for (const problem of summary.problems) {
-    lines.push(
-      '',
-      `lane ${problem.name} ${problem.status === 'blocked' ? 'blocked' : 'failed'}`,
-    );
+    lines.push('', `lane ${problem.name} ${problem.status === 'blocked' ? 'blocked' : 'failed'}`);
     if (Number.isInteger(problem.exitCode)) {
       lines.push(`exit ${problem.exitCode}`);
     }

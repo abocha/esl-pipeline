@@ -5,7 +5,7 @@
 - Audience: maintainers and AI agents adding or updating tests.
 - Read Time: 6 minutes.
 - Authority Level: active test methodology guide.
-- Last Verified Against: 2026-07-15 repo state.
+- Last Verified Against: 2026-07-28 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly or after test-lane/CI changes.
 - Status: `active`.
@@ -55,6 +55,8 @@ If this guide conflicts with [`docs/reference/agents-ssot.md`](agents-ssot.md), 
 - Root broad pre-PR check: `pnpm check:pre-pr`
   - Runs repo guards, contract consistency, root tooling tests, build, typecheck, lint, and the fast
     prebuilt core unit subset for orchestrator, batch-backend, and batch-frontend.
+  - Uses the same serial aggregate runner as `check:fast`; it does not hide the broad commands behind
+    an opaque shell `&&` chain.
 - Root full check: `pnpm check`
   - Runs root tooling tests, `build`, `typecheck`, `lint`, `test:unit:prebuilt`,
     `test:integration:prebuilt`, and the backend DB + worker lane.
@@ -86,6 +88,13 @@ After focused tests, choose one normal pre-push gate. Use `check:fast:agent` by 
 toolchain-level. A `check:fast:agent` fallback to `check:pre-pr` satisfies the broad gate. A
 successful full `check` subsumes both narrower gates. Clearly docs-only work may use the documented
 docs-specific lanes. Do not use `check:pre-pr` as a routine editing-loop command.
+
+Affected and broad gates run selected lanes serially. Independent lanes continue after failure so one
+run reports every available problem. A prebuilt test lane is marked blocked when its build
+prerequisite fails; lint, typecheck, docs, contracts, and unrelated guards still run. Inspect the
+aggregate summary and cited raw logs before rerunning anything. An isolated rerun may diagnose one
+failure but does not replace the canonical result. Repeat a complete gate only after relevant source,
+configuration, toolchain, or diagnosed prerequisite state changed.
 
 ## Script Methodology
 
@@ -216,6 +225,8 @@ The wrapper:
 - maps files to workspace packages from `pnpm-workspace.yaml`;
 - expands changed packages to transitive dependents;
 - asks Turbo to run package tasks only for packages that expose each script;
+- runs selected commands serially, aggregates every independent failure, and blocks only prebuilt
+  consumers of a failed build;
 - runs changed-file Biome, changed-file Prettier, specialized ESLint, docs, workflow, shell,
   Docker, DB, HTTP, and worker lanes when path rules trigger;
 - prints the base, changed files, package expansion, triggered lanes, skipped broad lanes, artifacts,
@@ -236,7 +247,7 @@ Important path rules:
 - backend worker, queue, and `process-*-job.ts` paths trigger worker integration.
 - backend HTTP transport route and middleware paths trigger HTTP integration.
 - root validation config, package manager metadata, Turbo config, and validation-runner files fall
-  back to `check:pre-pr`.
+  back to the explicit broad `check:pre-pr` lane plan.
 
 For production image changes:
 
