@@ -570,10 +570,7 @@ function findInworldMetadataToken(text: string, tokens: string[]): string | unde
 }
 
 export async function loadInworldVoicesCatalog(
-  dependencies: {
-    logger?: PipelineLogger;
-    client?: Pick<InworldTTSClient, 'listVoices'>;
-  } = {},
+  dependencies: { logger?: PipelineLogger; client?: Pick<InworldTTSClient, 'listVoices'> } = {},
 ): Promise<VoiceCatalog> {
   const generatedAt = new Date().toISOString();
   const voices: VoiceCatalog['voices'] = DEFAULT_INWORLD_VOICES.map((voiceId) => ({

@@ -163,7 +163,7 @@ describe('DefaultTtsEngine provider selection', () => {
                 supportsMetadataInstructions: true,
                 supportsNonVerbals: true,
                 supportsUppercaseEmphasis: true,
-                supportsFreeFormDirection: false,
+                supportsFreeFormDirection: true,
               },
             },
             {
@@ -193,7 +193,7 @@ describe('DefaultTtsEngine provider selection', () => {
       {
         speaker: 'Maya',
         voiceId: 'Ashley',
-        capabilities: { supportsFreeFormDirection: false },
+        capabilities: { supportsFreeFormDirection: true },
       },
     ]);
     expect(prepared.voiceAssignments).toEqual({ Maya: 'Ashley' });

@@ -482,12 +482,12 @@ export async function buildStudyTextMp3Inworld(
       voiceId,
       chunkFilePath,
       {
-      model,
-      speakingRate: segment.speakingRate,
-      temperature: segment.temperature,
-      deliveryMode: segment.deliveryMode,
-      sampleRateHertz,
-      language: segment.language,
+        model,
+        speakingRate: segment.speakingRate,
+        temperature: segment.temperature,
+        deliveryMode: segment.deliveryMode,
+        sampleRateHertz,
+        language: segment.language,
       },
     );
     runFiles.push(chunkFilePath);
@@ -758,9 +758,9 @@ export function createInworldTtsProvider(): TtsProviderAdapter {
 
 export {
   loadInworldVoicesCatalog,
-  resolveInworldVoiceCapabilities,
   resolveInworldSpeakerAssignmentsFromCatalog,
   resolveInworldSpeakerAssignmentsWithRankerFromCatalog,
+  resolveInworldVoiceCapabilities,
 } from './catalog.js';
 export { FfmpegNotFoundError, resolveFfmpegPath } from './ffmpeg.js';
 export { compileInworldSteeringInstruction, renderInworldSpeechSegment } from './rendering.js';

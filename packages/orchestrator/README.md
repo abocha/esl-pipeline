@@ -51,6 +51,19 @@ back to the persisted manifest preset. Batch-backend worker payloads must forwar
 rerun flags so rerun HTML uses the same heading color theme as the original assignment unless the
 operator intentionally changes it.
 
+## Speech Plan Manifest Contract
+
+The orchestrator persists optional schema-v1 voice and speech plans without inventing provenance
+for legacy manifests. New plans may carry the `model-scoped-v1` capability policy, canonical
+assignment language, an immutable speech prompt-policy ID, and its SHA-256 prompt hash. Manifest
+sanitization retains only supported optional policy values. Runtime logs derive
+`legacy-unversioned-v1` for unversioned prompted plans and keep learner-bearing validation detail
+behind explicit debug logging.
+
+See
+[`docs/reference/TTS_SPEECH_PERFORMANCE_SYSTEM.md`](../../docs/reference/TTS_SPEECH_PERFORMANCE_SYSTEM.md)
+and [`docs/reference/pipeline-manifest.md`](../../docs/reference/pipeline-manifest.md).
+
 ## Read Next
 
 - [`docs/reference/agents-ssot.md`](../../docs/reference/agents-ssot.md)

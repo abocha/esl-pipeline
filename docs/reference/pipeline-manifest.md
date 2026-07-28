@@ -5,7 +5,7 @@
 - Audience: maintainers and implementing agents.
 - Read Time: 6 minutes.
 - Authority Level: canonical manifest schema reference.
-- Last Verified Against: 2026-06-13 repo state.
+- Last Verified Against: 2026-07-28 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: monthly or after manifest schema changes.
 - Status: `reference`.
@@ -93,10 +93,24 @@ This document captures the canonical schema so remote stores and services can va
   "voicePlans": {
     "studyText": {
       "schemaVersion": 1,
+      "capabilityPolicyVersion": "model-scoped-v1",
       "provider": "inworld",
       "model": "inworld-tts-2",
       "sourceHash": "<sha256 prepared source hash>",
-      "assignments": [],
+      "assignments": [
+        {
+          "speaker": "Narrator",
+          "voiceId": "voice-id",
+          "language": "en-US",
+          "source": "auto",
+          "capabilities": {
+            "supportsMetadataInstructions": true,
+            "supportsNonVerbals": true,
+            "supportsUppercaseEmphasis": true,
+            "supportsFreeFormDirection": true,
+          },
+        },
+      ],
     },
   },
   "speechPlans": {
@@ -106,6 +120,13 @@ This document captures the canonical schema so remote stores and services can va
       "model": "inworld-tts-2",
       "sourceHash": "<sha256 prepared source hash>",
       "mode": "prompted",
+      "planner": {
+        "provider": "google",
+        "model": "gemini-3.1-flash-lite",
+        "generatedAt": "2026-07-28T00:00:00.000Z",
+        "promptPolicyVersion": "speech-performance-v2-inworld-tts2",
+        "promptHash": "<sha256 immutable prompt hash>",
+      },
       "segments": [],
     },
   },
@@ -133,9 +154,13 @@ This document captures the canonical schema so remote stores and services can va
 - `audioArtifacts.studyText.key`/`audioArtifacts.studyText.hash` provide deterministic artifact identity for reruns and upload dedupe.
 - `voicePlans.studyText` stores provider-neutral cast selection and per-assignment capability
   provenance. The matching `audioArtifacts.studyText.voicePlanHash` links generated study-text
-  audio to the consumed cast.
+  audio to the consumed cast. New plans carry `capabilityPolicyVersion: model-scoped-v1`; each
+  assignment may carry its canonical provider language (for example, `en-US`).
 - `speechPlans.studyText` stores validated provider-neutral delivery provenance. The matching
   `audioArtifacts.studyText.speechPlanHash` links generated study-text audio to the consumed plan.
+  Schema-v1 planner provenance optionally records the immutable policy ID and SHA-256 prompt hash.
+  The supported prompt policy IDs are `speech-performance-v1-restrained-natural` and
+  `speech-performance-v2-inworld-tts2`.
 - `audioArtifacts.studyText.reused` and `htmlReused` are operational hints showing whether remote upload/publish reused
   an existing content-addressed object.
 - `audioArtifacts` stores per-target audio artifacts:
@@ -155,6 +180,10 @@ This document captures the canonical schema so remote stores and services can va
   do not get implicit alias fallback and should be regenerated to schema `2`.
 - Remote stores should persist manifests verbatim to avoid losing optional fields used by other
   stages (e.g., future metadata for adapters).
+- The optional voice and prompt policy fields are additive. Unversioned schema-v1 plans remain
+  readable and are not rewritten with invented markers or hashes. At execution time, legacy
+  Inworld capability snapshots are normalized against the selected model; the derived runtime log
+  label `legacy-unversioned-v1` is not persisted into the manifest.
 
 ## Future Changes
 
@@ -176,6 +205,10 @@ The capability-tiered Inworld rollout adds optional `voicePlans.studyText` prove
 `audioArtifacts.studyText.voicePlanHash`. The voice plan records the selected cast and compact
 capability snapshots before speech planning. Older manifests without voice plans remain readable
 and reusable.
+
+The manifest contract version `3.1.0` adds optional model-scoped capability provenance, canonical
+assignment language, and immutable planner prompt-policy provenance without changing manifest
+schema version `5` or schema-v1 plan compatibility.
 
 ## Migrating from Filesystem to S3
 

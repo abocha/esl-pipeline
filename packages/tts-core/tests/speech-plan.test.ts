@@ -42,12 +42,9 @@ describe('speech performance plans', () => {
     'line\u2028break',
     'line\u2029break',
     '\u0007alarm',
-  ]) (
-    'rejects unsafe cue text %j',
-    (cue) => {
-      expect(() => normalizeSpeechCueText('freeFormDirection', cue)).toThrow();
-    },
-  );
+  ])('rejects unsafe cue text %j', (cue) => {
+    expect(() => normalizeSpeechCueText('freeFormDirection', cue)).toThrow();
+  });
 
   it('normalizes bounded Unicode cue text and rejects excessive or unsupported content', () => {
     expect(normalizeSpeechCueText('emotion', '  gently — but clearly  ')).toBe(
@@ -378,10 +375,10 @@ describe('speech performance plans', () => {
             voiceId: 'Ashley',
             source: 'auto',
             capabilities: {
-            supportsMetadataInstructions: true,
-            supportsNonVerbals: true,
-            supportsUppercaseEmphasis: true,
-            supportsFreeFormDirection: true,
+              supportsMetadataInstructions: true,
+              supportsNonVerbals: true,
+              supportsUppercaseEmphasis: true,
+              supportsFreeFormDirection: true,
             },
           },
         ],
@@ -552,11 +549,11 @@ describe('speech performance plans', () => {
         speaker: 'Maya',
         voiceId: 'Ashley',
         source: 'auto',
-          capabilities: {
-            supportsMetadataInstructions: true,
-            supportsNonVerbals: true,
-            supportsUppercaseEmphasis: true,
-            supportsFreeFormDirection: true,
+        capabilities: {
+          supportsMetadataInstructions: true,
+          supportsNonVerbals: true,
+          supportsUppercaseEmphasis: true,
+          supportsFreeFormDirection: true,
         },
       },
       {
@@ -582,22 +579,22 @@ describe('speech performance plans', () => {
         speaker: 'Maya',
         voiceId: 'Ashley',
         source: 'auto',
-          capabilities: {
-            supportsMetadataInstructions: true,
-            supportsNonVerbals: true,
-            supportsUppercaseEmphasis: true,
-            supportsFreeFormDirection: true,
+        capabilities: {
+          supportsMetadataInstructions: true,
+          supportsNonVerbals: true,
+          supportsUppercaseEmphasis: true,
+          supportsFreeFormDirection: true,
         },
       },
       {
         speaker: 'maya',
         voiceId: 'Ashley',
         source: 'auto',
-          capabilities: {
-            supportsMetadataInstructions: true,
-            supportsNonVerbals: true,
-            supportsUppercaseEmphasis: true,
-            supportsFreeFormDirection: true,
+        capabilities: {
+          supportsMetadataInstructions: true,
+          supportsNonVerbals: true,
+          supportsUppercaseEmphasis: true,
+          supportsFreeFormDirection: true,
         },
       },
     ]);

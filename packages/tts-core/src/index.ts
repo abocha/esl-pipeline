@@ -92,11 +92,12 @@ export { createTtsEngine } from './engine.js';
 export { hashStudyText } from './hash.js';
 export { resolveSpeakerRoutingHint } from './speaker-routing.js';
 export {
-  analyzeSpeechPlanCandidate,
-  analyzeValidatedSpeechPlan,
-  assertSpeechPlanSafeForSynthesis,
-  normalizeSpeechCueText,
-} from './speech-plan-analysis.js';
+  createIdentitySpeechPerformancePlan,
+  createPreparedStudyTextSynthesis,
+  normalizeStudyTextSpeakerToken,
+  SpeechPerformancePlannerInvalidOutputError,
+  validateSpeechPerformancePlan,
+} from './speech-plan.js';
 export type {
   RenderedSpeechSegmentSummary,
   SpeechCueTextField,
@@ -106,12 +107,11 @@ export type {
   ValidatedSpeechPlanAnalysis,
 } from './speech-plan-analysis.js';
 export {
-  createIdentitySpeechPerformancePlan,
-  createPreparedStudyTextSynthesis,
-  normalizeStudyTextSpeakerToken,
-  SpeechPerformancePlannerInvalidOutputError,
-  validateSpeechPerformancePlan,
-} from './speech-plan.js';
+  analyzeSpeechPlanCandidate,
+  analyzeValidatedSpeechPlan,
+  assertSpeechPlanSafeForSynthesis,
+  normalizeSpeechCueText,
+} from './speech-plan-analysis.js';
 export type {
   BuildPronunciationShadowSentenceInput,
   BuildPronunciationShadowSentenceOptions,
@@ -136,8 +136,8 @@ export type {
   SpeechPerformancePlannerBinding,
   SpeechPerformancePlannerFallbackReason,
   SpeechPerformancePlannerMetadata,
-  SpeechPerformancePromptPolicyId,
   SpeechPerformancePlanSegment,
+  SpeechPerformancePromptPolicyId,
   TtsEngine,
   TtsModelCapabilities,
   TtsModelId,

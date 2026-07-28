@@ -66,7 +66,9 @@ export function renderInworldSpeechSegment(args: {
     supportsFreeFormDirection: true,
   };
   const instruction = compileInworldSteeringInstruction(args.segment, capabilities);
-  const beforeCue = capabilities.supportsNonVerbals ? args.segment.nonVerbalsBefore?.[0] : undefined;
+  const beforeCue = capabilities.supportsNonVerbals
+    ? args.segment.nonVerbalsBefore?.[0]
+    : undefined;
   const afterCue = capabilities.supportsNonVerbals ? args.segment.nonVerbalsAfter?.[0] : undefined;
   const before = beforeCue ? [`[${beforeCue}]`] : [];
   const after = !beforeCue && afterCue ? [`[${afterCue}]`] : [];

@@ -5,7 +5,7 @@
 - Audience: maintainers, operators, and AI agents changing TTS behavior.
 - Read Time: 7 minutes.
 - Authority Level: target runtime contract for the speech-performance rollout.
-- Last Verified Against: 2026-07-12 repo state.
+- Last Verified Against: 2026-07-28 repo state.
 - Owner: founder-maintainer + backend/orchestrator maintainers.
 - Review Cadence: after TTS provider, prompt, or manifest contract changes.
 - Status: `active`.
@@ -67,45 +67,52 @@ Capabilities are model-scoped and voice-scoped:
 
 The model descriptor identifies whether speech planning is `identity` or `prompted`, plus supported
 controls such as speaking rate, temperature, delivery mode, metadata instructions, SSML breaks,
-non-verbal cues, uppercase emphasis, and free-form direction. For `inworld-tts-2`, common expressive
-controls apply to every voice. Only voices tagged `steerable` receive free-form natural-language
-direction.
+non-verbal cues, uppercase emphasis, and free-form direction. These capabilities are derived from
+the selected model, never inferred from mutable voice tags. `inworld-tts-2` supports the complete
+model-scoped expressive set for every selected voice. `inworld-tts-1.5-max` and
+`inworld-tts-1.5-mini` are non-steerable identity models: they do not receive metadata,
+free-form direction, non-verbals, uppercase emphasis, or delivery modes.
 
 ## Neutral Voice Plan
 
 The voice plan is structured JSON resolved before speech planning. It contains:
 
-- schema version, source hash, provider/model selection, and plan hash
+- schema version, optional `model-scoped-v1` capability-policy provenance, source hash,
+  provider/model selection, and plan hash
 - a resolution mode: `ranked`, `deterministic`, or `fallback`
-- selected speaker assignments with compact capability snapshots
+- selected speaker assignments with canonical optional language and compact model-derived
+  capability snapshots
 - optional semantic-ranker provenance and fallback reason
 - compact shortlist diagnostics suitable for manifest persistence
 
-The Inworld adapter retains rich credentialed-catalog metadata and builds deterministic English
+The Inworld adapter retains the documented typed SDK voice fields and builds deterministic English
 shortlists. Explicit `voices.yml` mappings and configured defaults win first. Automatic selection
 uses `gemma-4-31b-it` by default to rank suitable shortlist candidates against stable
-speaker-profile intent. The `steerable` tag is a useful ranking bonus, not an eligibility
-requirement: a clearly better non-steerable voice may win.
+speaker-profile intent. Capability decisions do not use voice tags. The current typed SDK catalog
+surface provides identifiers, names, language code, description, tags, and source; fields absent
+from that surface are not guessed from the raw response.
 
 ## Neutral Speech Plan
 
 The speech plan is structured JSON. It preserves the authored words and stores expressive intent in
 separate cue fields. A plan contains:
 
-- schema version, source hash, provider/model selection, plan mode, and planner provenance
+- schema version, source hash, provider/model selection, plan mode, and optional planner provenance
 - one plan segment for each prepared study-text segment
 - optional emotion, intonation, pace, emphasis, pauses, restrained non-verbal cues, delivery mode,
   and steerable-only free-form direction
 - an optional fallback reason when the remote planner could not produce a usable plan
 
 The planner must never rewrite learner-visible spoken words. Provider renderers may add supported
-delivery instructions around those words.
+delivery instructions around those words. Schema-v1 provenance optionally carries the exact
+immutable policy ID and its prompt SHA-256 hash. Older schema-v1 plans remain valid without these
+fields and are shown in runtime diagnostics as `legacy-unversioned-v1` without mutating storage.
 
 ## Planner Policy
 
 Remote planning runs only for models declaring `prompted` support. The first prompted model is
-`inworld-tts-2`. The planner receives resolved voice capabilities and emits reduced plans for
-non-steerable voices rather than skipping them.
+`inworld-tts-2`. Production uses `speech-performance-v2-inworld-tts2`; the immutable compatibility
+fixture remains `speech-performance-v1-restrained-natural`. Both prompt texts are hash-versioned.
 
 Ordinary dialogue should omit `pace` and maintain a natural, consistent conversational tempo across
 adjacent segments. `slow`, `measured`, and `brisk` are exceptional cues for a non-natural tempo that
@@ -143,18 +150,25 @@ Identity fallback reasons are intentionally specific:
 - `planner_execution_failed`
 - `planner_invalid`
 
+Planner candidate strings accept only a bounded safe cue grammar after NFKC normalization: letters,
+numbers, ordinary spaces, and limited punctuation, with control characters, newlines, brackets,
+tag delimiters, and other markup syntax rejected. Pause values are capped at `1000` ms and each
+segment may contain at most one non-verbal cue. Candidate analysis runs before normalization;
+validated-plan analysis runs again before provider synthesis.
+
 Planner enablement remains opt-in. After changing planner env values for a Compose deployment,
 recreate `batch-backend` and `batch-worker` so both processes load the same configuration.
 
 Successful prompted plans emit a compact `Speech performance planner produced a prompted plan`
-log with the validated plan hash and cue counts. For local development inspection, set
+log with the validated plan hash, prompt policy/hash, cue counts, and stable quality issue
+codes/counts. For local development inspection, set
 `ESL_TTS_SPEECH_PLANNER_DEBUG_LOG_PLAN=true` and recreate both services. The worker then emits a
 `Speech performance planner validated plan debug payload` log containing the complete validated
 neutral plan consumed by synthesis. This includes learner text, so leave the flag disabled outside
 short-lived debugging sessions.
 
-Invalid prompted plans continue with identity synthesis. Routine warning logs include the concise
-local validation reason. With `ESL_TTS_SPEECH_PLANNER_DEBUG_LOG_PLAN=true`, the same warning also
+Invalid prompted plans continue with identity synthesis. Routine warning logs include only stable
+quality issue codes/counts. With `ESL_TTS_SPEECH_PLANNER_DEBUG_LOG_PLAN=true`, the same warning also
 includes the rejected parsed output and raw model text. These fields can include learner text.
 Invalid optional emphasis phrases are discarded at the backend planner boundary before durable-plan
 validation. This preserves usable expressive cues when the remote planner paraphrases a phrase
@@ -175,11 +189,13 @@ docker compose logs batch-worker | Select-String "Speech performance planner|Inw
 
 Provider adapters consume the same neutral plan:
 
-- Inworld TTS-2 renders emotion and intonation metadata instructions, breaks, restrained non-verbal
-  cues, uppercase emphasis, and `deliveryMode` for every voice. Non-natural pace uses only the
-  numeric `speakingRate` SDK control; `natural` and absent pace both use the provider default. It
-  renders additional free-form natural-language direction only for voices tagged `steerable`.
-- Inworld TTS 1.5 models keep identity plans and use safe SDK controls only.
+- Inworld TTS-2 compiles at most one bounded instruction tag. A safe free-form direction is
+  authoritative; otherwise emotion/intonation compile to one combined instruction. It also renders
+  breaks, at most one restrained non-verbal cue, uppercase emphasis, and `deliveryMode` for every
+  voice. Non-natural pace uses only numeric `speakingRate`; `natural` and absent pace use the
+  provider default.
+- Inworld TTS 1.5 Max and Mini keep identity plans, render no steering tags, and retain their
+  existing safe numeric SDK behavior, including natural `speakingRate: 1`.
 - ElevenLabs and Google initially synthesize clean source text from identity plans.
 
 Inworld automatic dialogue voice selection is credentialed-catalog aware. Explicit `voices.yml`
@@ -189,7 +205,8 @@ where possible, and records capability matches or mismatches. Semantic ranking u
 descriptions, and steerability without treating `EN_US` locale as proof of an American accent. If
 the requested accent is unavailable, the adapter uses a deterministic English fallback. Static
 `Ashley` / `Dennis` voices are reserved for the case where credentialed English voices are
-unavailable.
+unavailable. Canonical catalog language propagates through the selected assignment into the typed
+SDK generation options.
 
 Unsupported cues are ignored by conservative renderers rather than being spoken aloud.
 
@@ -238,7 +255,8 @@ voice-plan and speech-plan hashes. New voice plans use the explicit `ranked`, `d
 manifest loading normalizes that legacy token to `deterministic`.
 
 Inworld audio caching is derived from already-rendered segment payloads: voice ID, rendered text,
-SDK controls, effective inter-segment gaps, encoding, sample rate, and the assembly-margin policy.
+SDK controls, effective language, renderer policy version, effective inter-segment gaps, encoding,
+sample rate, and the assembly-margin policy.
 Planner and ranker timestamps do not affect audio identity. Any change that affects rendered audio,
 including emphasis, pauses, delivery mode, voice selection, or speaker-switch margins, invalidates
 the cache.
