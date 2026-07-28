@@ -34,6 +34,7 @@ import {
   resolveTtsSelection,
   type SpeakerVoiceAssignment,
   type TtsProviderAdapter,
+  throwIfTtsCancelled,
   type VoiceAssignmentResolution,
   validateSpeechPerformancePlan,
 } from '@esl-pipeline/tts-core';
@@ -286,6 +287,8 @@ async function resolveAssignmentsForStudyText(
           await loadInworldVoicesCatalog({
             logger: opts.logger,
             clientProvider: dependencies.clientProvider,
+            signal: opts.signal,
+            deadlineAtMs: opts.deadlineAtMs,
           }),
           {
             defaultVoiceId: opts.defaultVoiceId,
@@ -352,6 +355,7 @@ export async function buildStudyTextMp3Inworld(
     sdkFactory?: InworldClientFactory;
   } = {},
 ): Promise<BuildStudyTextResult> {
+  throwIfTtsCancelled(opts);
   const clientProvider =
     dependencies.clientProvider ??
     createInworldClientProvider({
@@ -760,6 +764,8 @@ export async function resolveInworldSpeakerAssignments(
     await loadInworldVoicesCatalog({
       logger: options.logger,
       clientProvider: dependencies.clientProvider,
+      signal: options.signal,
+      deadlineAtMs: options.deadlineAtMs,
     }),
     {
       defaultVoiceId: options.defaultVoiceId,

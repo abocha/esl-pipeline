@@ -5,6 +5,8 @@ import {
   INWORLD_TTS_MODELS,
   type InworldTtsModel,
   type SpeakerVoiceAssignment,
+  type TtsRequestControl,
+  throwIfTtsCancelled,
   type VoiceAssignmentCapabilities,
   type VoiceAssignmentResolution,
   type VoiceCatalog,
@@ -575,8 +577,9 @@ export async function loadInworldVoicesCatalog(
     logger?: PipelineLogger;
     client?: Pick<InworldTTSClient, 'listVoices'>;
     clientProvider?: InworldClientProvider;
-  } = {},
+  } & TtsRequestControl = {},
 ): Promise<VoiceCatalog> {
+  throwIfTtsCancelled(dependencies);
   const generatedAt = new Date().toISOString();
   const voices: VoiceCatalog['voices'] = DEFAULT_INWORLD_VOICES.map((voiceId) => ({
     id: voiceId,
@@ -596,8 +599,10 @@ export async function loadInworldVoicesCatalog(
   const configured = dependencies.clientProvider?.isConfigured() ?? Boolean(resolveInworldApiKey());
   if (configured || dependencies.client) {
     try {
+      throwIfTtsCancelled(dependencies);
       const client =
         dependencies.client ?? (dependencies.clientProvider ?? createInworldClientProvider()).get();
+      throwIfTtsCancelled(dependencies);
       const workspaceVoices = await client.listVoices();
       for (const voice of workspaceVoices) {
         if (!voice.voiceId) continue;

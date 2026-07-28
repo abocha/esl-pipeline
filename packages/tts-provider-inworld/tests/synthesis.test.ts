@@ -284,6 +284,52 @@ describe('Inworld application retry owner', () => {
     expect(generate).toHaveBeenCalledTimes(1);
   });
 
+  it('reports cancellation when an in-flight SDK call rejects after caller abort', async () => {
+    const controller = new AbortController();
+    let rejectGenerate!: (error: Error) => void;
+    const generate = vi.fn(
+      () =>
+        new Promise<Uint8Array>((_resolve, reject) => {
+          rejectGenerate = reject;
+        }),
+    );
+    const result = runInworldSynthesisWithRetry({
+      ...request,
+      client: { generate, listVoices: vi.fn() },
+      signal: controller.signal,
+    });
+
+    await vi.waitFor(() => expect(generate).toHaveBeenCalledTimes(1));
+    controller.abort('operator stop');
+    rejectGenerate(apiError(401));
+
+    await expect(result).rejects.toBeInstanceOf(TtsSynthesisCancelledError);
+    expect(generate).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports cancellation when the deadline expires before an in-flight SDK rejection', async () => {
+    let rejectGenerate!: (error: Error) => void;
+    const generate = vi.fn(
+      () =>
+        new Promise<Uint8Array>((_resolve, reject) => {
+          rejectGenerate = reject;
+        }),
+    );
+    const now = vi.fn().mockReturnValueOnce(0).mockReturnValue(2_000);
+    const result = runInworldSynthesisWithRetry({
+      ...request,
+      client: { generate, listVoices: vi.fn() },
+      deadlineAtMs: 1_000,
+      dependencies: { now },
+    });
+
+    await vi.waitFor(() => expect(generate).toHaveBeenCalledTimes(1));
+    rejectGenerate(apiError(401));
+
+    await expect(result).rejects.toBeInstanceOf(TtsSynthesisCancelledError);
+    expect(generate).toHaveBeenCalledTimes(1);
+  });
+
   it.each([
     [-5, 1],
     [0, 1],
