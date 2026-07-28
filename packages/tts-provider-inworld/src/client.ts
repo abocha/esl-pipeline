@@ -1,4 +1,4 @@
-import { InworldTTS, type ClientOptions, type GenerateOptions, type VoiceInfo } from '@inworld/tts';
+import { type ClientOptions, type GenerateOptions, InworldTTS, type VoiceInfo } from '@inworld/tts';
 
 import { ConfigurationError } from '@esl-pipeline/contracts';
 
