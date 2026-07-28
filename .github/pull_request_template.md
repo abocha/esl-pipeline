@@ -7,13 +7,14 @@
 
 - [ ] `pnpm format`
 - [ ] `pnpm run lint:repo-hygiene`
-- [ ] `pnpm check:fast` or `pnpm --silent run check:fast:agent` (affected validation)
+- [ ] `pnpm check:fast` or `pnpm --silent run check:fast:agent` completed as `PASS` or `PASS_WITH_CI_REQUIREMENTS`
+- [ ] I listed every reported CI requirement for the hosted merge gate
 - [ ] Risk-specific lanes, such as DB, migration, worker, HTTP, Docker, workflow, or docs checks
 - [ ] `pnpm check:pre-pr` when the change is broad or cross-cutting
 - [ ] `pnpm release:verify:contracts` and `pnpm --filter @esl-pipeline/batch-backend run db:verify-baseline` when migrations/schema/contracts changed
 - [ ] Targeted package tests (if applicable)
 - [ ] Manual smoke test (if applicable)
-- [ ] I inspected the aggregate validation summary before any rerun; focused reruns were diagnostic only
+- [ ] I inspected the aggregate summary before rerunning and used at most one isolated diagnostic rerun per unchanged failure
 
 ## Risk Notes
 

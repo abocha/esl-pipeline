@@ -96,8 +96,16 @@ Affected and broad gates run selected lanes serially. Independent lanes continue
 run reports every available problem. A prebuilt test lane is marked blocked when its build
 prerequisite fails; lint, typecheck, docs, contracts, and unrelated guards still run. Inspect the
 aggregate summary and cited raw logs before rerunning anything. An isolated rerun may diagnose one
-failure but does not replace the canonical result. Repeat a complete gate only after relevant source,
-configuration, toolchain, or diagnosed prerequisite state changed.
+failure but does not replace the canonical result. Allow at most one isolated diagnostic rerun per
+unchanged failure. Repeat a complete gate only after relevant source, configuration, toolchain, or
+diagnosed prerequisite state changed.
+
+Affected plans assign every selected lane to `local` or `ci`. Local execution runs only local lanes;
+selected PostgreSQL and Redis lanes remain visible as required `backend-db-integration` evidence. If
+all local lanes pass while CI evidence remains, the agent summary reports
+`PASS_WITH_CI_REQUIREMENTS`. That outcome permits PR creation, not merge, and never means service
+coverage was skipped. A direct `check:pre-pr` run has no affected-file projection, so it
+conservatively reports the same hosted service requirement.
 
 ## Script Methodology
 
@@ -246,7 +254,9 @@ The wrapper:
 - runs selected commands serially, aggregates every independent failure, and blocks only prebuilt
   consumers of a failed build;
 - runs changed-file Biome, changed-file Prettier, specialized ESLint, docs, workflow, shell,
-  Docker, DB, HTTP, and worker lanes when path rules trigger;
+  Docker, deterministic HTTP, and safe DB-baseline lanes when path rules trigger;
+- reports selected PostgreSQL and Redis service lanes as CI-owned requirements instead of executing
+  them locally;
 - prints the base, changed files, package expansion, triggered lanes, skipped broad lanes, artifacts,
   and reproduction commands.
 
@@ -260,9 +270,12 @@ Important path rules:
 - `scripts/**/*.sh` triggers `lint:shell`.
 - Docker Compose files, Dockerfiles, `scripts/docker/**`, and `scripts/deploy/**` trigger Docker
   lint/config checks.
-- `packages/batch-backend/migrations/**` and `packages/batch-backend/schema.sql` trigger backend
-  DB baseline, migration, and PostgreSQL lanes.
-- backend worker, queue, and `process-*-job.ts` paths trigger worker integration.
+- `packages/batch-backend/migrations/**` and `packages/batch-backend/schema.sql` trigger the local DB
+  baseline guard and require the CI migration/PostgreSQL service job.
+- backend repository implementations/tests, worker, queue, and `process-*-job.ts` paths require the
+  CI PostgreSQL/Redis service job.
+- contracts, shared infrastructure, workflow changes, and unknown scope conservatively require the
+  CI PostgreSQL/Redis service job.
 - backend HTTP transport route and middleware paths trigger HTTP integration.
 - root validation config, package manager metadata, Turbo config, and validation-runner files fall
   back to the explicit broad `check:pre-pr` lane plan.
@@ -288,8 +301,16 @@ Deployment/test gating currently uses these blocking names:
 
 `CI gate` is the canonical aggregate status and should become the single required branch-protection
 check when repository plan capabilities permit. Selected runtime steps and jobs remain blocking;
-unselected conditional jobs may report skipped. Coverage and timing diagnostics run weekly or by
-manual dispatch outside blocking PR CI.
+unselected conditional jobs may report skipped, but a selected job that is missing, cancelled, or
+skipped fails the gate. Static and deterministic integration jobs always upload 14-day log artifacts
+with a command/outcome manifest. PostgreSQL and Redis are provisioned only in the isolated
+`backend-db-integration` job, which runs the manifest-guarded migration, PostgreSQL, and worker
+scripts.
+
+There is no nightly validation tier. Coverage and timing diagnostics may run weekly or by manual
+dispatch, but no release-blocking evidence may depend on them. PR CI owns application readiness;
+merge to `main` automatically starts versioning and immutable image publication, while production
+deployment remains a separate operator action.
 
 ## Related
 

@@ -164,8 +164,8 @@ Affected and broad pre-PR validation execute selected lanes serially. Independen
 after a failure so one run reports every available problem; prebuilt test lanes are marked blocked
 when their build prerequisite fails. Read the aggregate summary and cited lane artifacts before any
 rerun. Use an isolated rerun only to diagnose a specific failure; it does not replace canonical gate
-evidence. Repeat the complete gate only after relevant source, configuration, toolchain, or diagnosed
-prerequisite state changed.
+evidence. Allow at most one isolated diagnostic rerun per unchanged failure. Repeat the complete gate
+only after relevant source, configuration, toolchain, or diagnosed prerequisite state changed.
 
 Backend tests are routed by operational prerequisite, not filename alone. The positive service
 inventory in `packages/batch-backend/tests/test-routing.json` owns deterministic HTTP, PostgreSQL
@@ -173,6 +173,13 @@ migration, PostgreSQL query, and PostgreSQL + Redis worker suites; unit is the g
 `test:check-routing` must pass before unit execution. Canonical local and agent unit lanes remove
 ambient service/provider credentials and set `VALIDATION_TEST_CLASS=pure`; focused DB/worker lanes
 retain only their explicitly constructed service environment.
+
+Selected PostgreSQL and Redis lanes are visible in the local plan but owned by PR CI; ordinary local
+validation does not start those services. `PASS_WITH_CI_REQUIREMENTS` permits opening or updating a
+PR, but it is not merge evidence. Before merge, every selected CI job and the aggregate `CI gate`
+must pass. Static and deterministic integration CI logs are retained as artifacts for failure
+classification. Merge to `main` automatically starts the release workflow, so required application
+evidence must not be deferred to a nightly or post-merge regression run.
 
 After focused tests, choose one normal pre-push gate: use `check:fast:agent` by default; use
 `check:pre-pr` directly when the branch is already broad, cross-cutting, shared-contract, or

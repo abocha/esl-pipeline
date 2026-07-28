@@ -129,11 +129,22 @@ jobs:
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
+      - name: Initialize static check logs
+        run: mkdir -p tmp/ci-logs/static-checks
+
       - name: Validate environment template
-        run: pnpm env:validate:example
+        id: env_template
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm env:validate:example 2>&1 | tee tmp/ci-logs/static-checks/env-validate-example.log
 
       - name: Tooling tests
-        run: pnpm test:tooling
+        id: tooling_tests
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm test:tooling 2>&1 | tee tmp/ci-logs/static-checks/test-tooling.log
 
       - name: Verify repo hygiene tools
         shell: bash
@@ -153,27 +164,54 @@ jobs:
           echo "$RUNNER_TEMP/actionlint-bin" >> "$GITHUB_PATH"
 
       - name: Lint GitHub workflows
-        run: pnpm run lint:workflows
+        id: lint_workflows
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm run lint:workflows 2>&1 | tee tmp/ci-logs/static-checks/lint-workflows.log
 
       - name: Lint shell scripts
-        run: pnpm run lint:shell
+        id: lint_shell
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm run lint:shell 2>&1 | tee tmp/ci-logs/static-checks/lint-shell.log
 
       - name: Lint Docker configuration
-        run: pnpm docker:lint
+        id: docker_lint
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm docker:lint 2>&1 | tee tmp/ci-logs/static-checks/docker-lint.log
 
       - name: Dependency audit
-        run: pnpm deps:audit:strict
+        id: dependency_audit
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm deps:audit:strict 2>&1 | tee tmp/ci-logs/static-checks/deps-audit-strict.log
 
       - name: Contract version consistency
-        run: pnpm release:verify:contracts
+        id: contract_versions
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm release:verify:contracts 2>&1 | tee tmp/ci-logs/static-checks/release-verify-contracts.log
 
       - name: Orchestrator boundary guardrails
-        run: pnpm guard:orchestrator:boundary
+        id: orchestrator_boundary
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm guard:orchestrator:boundary 2>&1 | tee tmp/ci-logs/static-checks/guard-orchestrator-boundary.log
 
       - name: Docs sanity checks
         id: docs_sanity
         continue-on-error: true
-        run: pnpm docs:check
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm docs:check 2>&1 | tee tmp/ci-logs/static-checks/docs-check.log
 
       - name: Generate docs health report
         if: always()
@@ -198,20 +236,55 @@ jobs:
           exit 1
 
       - name: Build
+        id: build
         if: ${{ fromJSON(needs.change-scope.outputs.runtime) }}
-        run: pnpm build
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm build 2>&1 | tee tmp/ci-logs/static-checks/build.log
 
       - name: Typecheck
+        id: typecheck
         if: ${{ fromJSON(needs.change-scope.outputs.runtime) }}
-        run: pnpm typecheck
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm typecheck 2>&1 | tee tmp/ci-logs/static-checks/typecheck.log
 
       - name: Lint
+        id: lint
         if: ${{ fromJSON(needs.change-scope.outputs.runtime) }}
-        run: pnpm lint
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm lint 2>&1 | tee tmp/ci-logs/static-checks/lint.log
 
       - name: Unit tests
+        id: unit_tests
         if: ${{ fromJSON(needs.change-scope.outputs.runtime) }}
-        run: pnpm test:unit:prebuilt
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm test:unit:prebuilt 2>&1 | tee tmp/ci-logs/static-checks/test-unit-prebuilt.log
+
+      - name: Write static check log manifest
+        if: always()
+        env:
+          STATIC_RESULTS: >-
+            [{"command":"pnpm env:validate:example","conclusion":"${{ steps.env_template.outcome }}","logPath":"tmp/ci-logs/static-checks/env-validate-example.log"},{"command":"pnpm test:tooling","conclusion":"${{ steps.tooling_tests.outcome }}","logPath":"tmp/ci-logs/static-checks/test-tooling.log"},{"command":"pnpm run lint:workflows","conclusion":"${{ steps.lint_workflows.outcome }}","logPath":"tmp/ci-logs/static-checks/lint-workflows.log"},{"command":"pnpm run lint:shell","conclusion":"${{ steps.lint_shell.outcome }}","logPath":"tmp/ci-logs/static-checks/lint-shell.log"},{"command":"pnpm docker:lint","conclusion":"${{ steps.docker_lint.outcome }}","logPath":"tmp/ci-logs/static-checks/docker-lint.log"},{"command":"pnpm deps:audit:strict","conclusion":"${{ steps.dependency_audit.outcome }}","logPath":"tmp/ci-logs/static-checks/deps-audit-strict.log"},{"command":"pnpm release:verify:contracts","conclusion":"${{ steps.contract_versions.outcome }}","logPath":"tmp/ci-logs/static-checks/release-verify-contracts.log"},{"command":"pnpm guard:orchestrator:boundary","conclusion":"${{ steps.orchestrator_boundary.outcome }}","logPath":"tmp/ci-logs/static-checks/guard-orchestrator-boundary.log"},{"command":"pnpm docs:check","conclusion":"${{ steps.docs_sanity.outcome }}","logPath":"tmp/ci-logs/static-checks/docs-check.log"},{"command":"pnpm build","conclusion":"${{ steps.build.outcome }}","logPath":"tmp/ci-logs/static-checks/build.log"},{"command":"pnpm typecheck","conclusion":"${{ steps.typecheck.outcome }}","logPath":"tmp/ci-logs/static-checks/typecheck.log"},{"command":"pnpm lint","conclusion":"${{ steps.lint.outcome }}","logPath":"tmp/ci-logs/static-checks/lint.log"},{"command":"pnpm test:unit:prebuilt","conclusion":"${{ steps.unit_tests.outcome }}","logPath":"tmp/ci-logs/static-checks/test-unit-prebuilt.log"}]
+        run: |
+          mkdir -p tmp/ci-logs/static-checks
+          node -e "require('node:fs').writeFileSync('tmp/ci-logs/static-checks/manifest.json', JSON.stringify(JSON.parse(process.env.STATIC_RESULTS), null, 2) + '\n')"
+
+      - name: Upload static check logs
+        if: always()
+        # actions/upload-artifact v7.0.0
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        with:
+          name: static-checks-logs
+          path: tmp/ci-logs/static-checks
+          if-no-files-found: warn
+          retention-days: 14
 
   integration-tests:
     name: integration lane (blocking)
@@ -241,7 +314,31 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Integration tests
-        run: pnpm test:integration
+        id: integration_tests
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p tmp/ci-logs/integration-tests
+          pnpm test:integration 2>&1 | tee tmp/ci-logs/integration-tests/test-integration.log
+
+      - name: Write integration log manifest
+        if: always()
+        env:
+          INTEGRATION_RESULTS: >-
+            [{"command":"pnpm test:integration","conclusion":"${{ steps.integration_tests.outcome }}","logPath":"tmp/ci-logs/integration-tests/test-integration.log"}]
+        run: |
+          mkdir -p tmp/ci-logs/integration-tests
+          node -e "require('node:fs').writeFileSync('tmp/ci-logs/integration-tests/manifest.json', JSON.stringify(JSON.parse(process.env.INTEGRATION_RESULTS), null, 2) + '\n')"
+
+      - name: Upload integration test logs
+        if: always()
+        # actions/upload-artifact v7.0.0
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        with:
+          name: integration-tests-logs
+          path: tmp/ci-logs/integration-tests
+          if-no-files-found: warn
+          retention-days: 14
 
   backend-db-integration:
     name: backend db + worker integration (blocking)

@@ -44,6 +44,22 @@ test('execution lanes do not invent a build dependency when no build lane was se
   assert.deepEqual(laneById(lanes, 'backend:test:integration:http').dependsOn, []);
 });
 
+test('execution lanes omit CI-owned lanes while retaining local lanes', () => {
+  const lanes = buildExecutionLanes({
+    triggeredLanes: [
+      { ...lane('backend:db:verify-baseline'), owner: 'local' },
+      { ...lane('backend:test:db:migrations'), owner: 'ci' },
+      { ...lane('backend:test:db:postgres'), owner: 'ci' },
+    ],
+    turbo: null,
+  });
+
+  assert.deepEqual(
+    lanes.map((laneEntry) => laneEntry.id),
+    ['backend:db:verify-baseline'],
+  );
+});
+
 test('broad prebuilt units depend on the explicit root build lane', () => {
   const lanes = buildExecutionLanes({
     triggeredLanes: [
