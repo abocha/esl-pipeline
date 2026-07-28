@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   buildAffectedCheckPlan,
+  buildBroadCheckPlan,
   buildCiScopeDecision,
   collectChangedFileScopes,
   formatPlanSummary,
@@ -30,8 +31,15 @@ const repoRoot = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const cliArgs = process.argv.slice(2);
 const agentMode = cliArgs.includes('--agent');
 const dryRun = cliArgs.includes('--dry-run');
+const broadRun = cliArgs.includes('--broad');
 const baseRef = readOption('--base') ?? 'origin/main';
-const runLabel = agentMode ? 'check:fast:agent' : 'check:fast';
+const runLabel = broadRun
+  ? agentMode
+    ? 'check:pre-pr:agent'
+    : 'check:pre-pr'
+  : agentMode
+    ? 'check:fast:agent'
+    : 'check:fast';
 const timestamp = new Date().toISOString().replace(/[:.]/gu, '-');
 const startedMs = Date.now();
 
@@ -47,42 +55,40 @@ let plan;
 let hostedDecision;
 let uncommittedFiles = [];
 try {
-  const base = await resolveComparisonBase({
-    baseRef,
-    runGit,
-  });
-  const scopes = await collectChangedFileScopes({
-    mergeBase: base.mergeBase,
-    runGit,
-  });
-  const workspacePackages = readWorkspacePackages(repoRoot);
-  plan = buildAffectedCheckPlan({
-    baseRef: base.baseRef,
-    mergeBase: base.mergeBase,
-    changedFiles: scopes.localFiles,
-    workspacePackages,
-  });
-  hostedDecision = buildCiScopeDecision({
-    changedFileRecords: scopes.hostedRecords,
-    workspacePackages,
-  });
-  uncommittedFiles = scopes.uncommittedFiles;
+  if (broadRun) {
+    plan = buildBroadCheckPlan({ reason: 'explicit broad validation requested' });
+    hostedDecision = broadHostedDecision();
+  } else {
+    const base = await resolveComparisonBase({
+      baseRef,
+      runGit,
+    });
+    const scopes = await collectChangedFileScopes({
+      mergeBase: base.mergeBase,
+      runGit,
+    });
+    const workspacePackages = readWorkspacePackages(repoRoot);
+    plan = buildAffectedCheckPlan({
+      baseRef: base.baseRef,
+      mergeBase: base.mergeBase,
+      changedFiles: scopes.localFiles,
+      workspacePackages,
+    });
+    hostedDecision = buildCiScopeDecision({
+      changedFileRecords: scopes.hostedRecords,
+      workspacePackages,
+    });
+    uncommittedFiles = scopes.uncommittedFiles;
+  }
 } catch (error) {
   const reason = error instanceof Error ? error.message : String(error);
-  plan = buildBaseFailurePlan({
+  plan = buildBroadCheckPlan({
     baseRef,
+    mergeBase: '(unavailable)',
     reason,
+    fallback: true,
   });
-  hostedDecision = {
-    runtime: true,
-    integration: true,
-    backend_db_worker: true,
-    telegram: true,
-    docs_only: false,
-    changedFiles: [],
-    affectedPackages: [],
-    reasons: [{ code: 'comparison-base-failure', scope: 'all', subject: reason }],
-  };
+  hostedDecision = broadHostedDecision('comparison-base-failure', reason);
 }
 
 const planText = formatPlanSummary(plan);
@@ -96,7 +102,7 @@ writeFileSync(
 if (dryRun) {
   console.log(formatScopePreview({ planText, hostedDecision, uncommittedFiles }));
   console.log(`Artifacts: ${relativeArtifactPath(runArtifacts.runDir)}`);
-  process.exit(plan.fallback ? 1 : 0);
+  process.exit(plan.fallback && !broadRun ? 1 : 0);
 }
 
 if (!agentMode) {
@@ -117,7 +123,7 @@ const laneResults = await runExecutionLanes({
 });
 
 const summary = buildAgentCheckSummary({
-  label: agentMode ? 'check:fast:agent' : 'check:fast',
+  label: runLabel,
   durationMs: Date.now() - startedMs,
   lanes: laneResults,
 });
@@ -221,28 +227,19 @@ function runCommand(invocation) {
   });
 }
 
-function buildBaseFailurePlan({ baseRef, reason }) {
+function broadHostedDecision(
+  code = 'explicit-broad-validation',
+  subject = 'explicit broad validation requested',
+) {
   return {
-    baseRef,
-    mergeBase: '(unavailable)',
+    runtime: true,
+    integration: true,
+    backend_db_worker: true,
+    telegram: true,
+    docs_only: false,
     changedFiles: [],
-    changedPackages: [],
     affectedPackages: [],
-    dependencyPackages: [],
-    triggeredLanes: [
-      {
-        id: 'check:pre-pr',
-        pnpmArgs: ['run', 'check:pre-pr'],
-        reason,
-        repro: 'pnpm run check:pre-pr',
-      },
-    ],
-    skippedBroadLanes: [],
-    turbo: null,
-    fallback: {
-      lane: 'check:pre-pr',
-      reason,
-    },
+    reasons: [{ code, scope: 'all', subject }],
   };
 }
 

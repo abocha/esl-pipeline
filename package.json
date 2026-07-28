@@ -28,7 +28,7 @@
     "check:fast": "node scripts/check/run-affected-check.mjs",
     "check:fast:agent": "node scripts/check/run-affected-check.mjs --agent",
     "check:fast:dry-run": "node scripts/check/run-affected-check.mjs --dry-run",
-    "check:pre-pr": "pnpm guard:orchestrator:boundary && pnpm release:verify:contracts && pnpm test:tooling && pnpm build && pnpm typecheck && pnpm lint && pnpm test:unit:prebuilt:fast",
+    "check:pre-pr": "node scripts/check/run-affected-check.mjs --broad",
     "clean": "pnpm -r --filter \"./packages/*\" --if-present run clean",
     "clean:artifacts": "node -e \"const fs=require('node:fs'); for (const dir of ['out','tmp','uploads']) fs.rmSync(dir,{recursive:true,force:true});\"",
     "deps:audit": "pnpm exec knip --dependencies --reporter compact --no-progress --no-exit-code",
