@@ -124,7 +124,10 @@ function normalizeEntries(entries) {
 }
 
 function normalizeTestFile(file) {
-  return String(file).replaceAll('\\', '/').split('/').at(-1);
+  return String(file)
+    .replaceAll('\\', '/')
+    .replace(/^.*packages\/batch-backend\/tests\//u, '')
+    .replace(/^\.\//u, '');
 }
 
 function normalizeSourceImports(sourceImports) {

@@ -9,6 +9,9 @@ const alwaysLanes = [
   lane('release:verify:contracts', ['run', 'release:verify:contracts'], {
     reason: 'cheap global contract consistency guard',
   }),
+  lane('test:check-routing', ['run', 'test:check-routing'], {
+    reason: 'backend operational test routing guard',
+  }),
 ];
 const broadPrePrLanes = [
   ...alwaysLanes,
