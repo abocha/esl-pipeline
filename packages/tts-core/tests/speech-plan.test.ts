@@ -124,13 +124,11 @@ describe('speech performance plans', () => {
         id: 'segment-1',
         text: 'Goodbye world.',
         lexicalText: 'Goodbye world.',
-        expectedLexicalText: 'We need a clearer deadline.',
       },
       {
         id: 'segment-2',
         text: 'I can revise the plan today.',
         lexicalText: 'I can revise the plan today.',
-        expectedLexicalText: 'I can revise the plan today.',
       },
     ]);
 
@@ -159,8 +157,16 @@ describe('speech performance plans', () => {
       ],
     };
     const analysis = analyzeValidatedSpeechPlan(prepared, plan, [
-      { id: 'segment-1', text: '[one] [two] We need a clearer deadline.' },
-      { id: 'segment-2', text: 'I can revise the plan today.' },
+      {
+        id: 'segment-1',
+        text: '[one] [two] We need a clearer deadline.',
+        lexicalText: 'We need a clearer deadline.',
+      },
+      {
+        id: 'segment-2',
+        text: 'I can revise the plan today.',
+        lexicalText: 'I can revise the plan today.',
+      },
     ]);
 
     expect(analysis.hardFailures).toEqual(
