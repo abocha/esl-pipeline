@@ -218,11 +218,12 @@ function buildVoiceSummaries(
 
 function normalizeInworldSpeakerAssignment(
   assignment: SpeakerVoiceAssignment,
+  model: InworldTtsModel,
 ): InworldSpeakerAssignment {
   return {
     ...assignment,
     selectionReason: assignment.selectionReason ?? 'Selected from prepared voice plan.',
-    capabilities: assignment.capabilities ?? resolveInworldVoiceCapabilities(undefined),
+    capabilities: assignment.capabilities ?? resolveInworldVoiceCapabilities(model),
   };
 }
 
@@ -246,12 +247,14 @@ async function resolveAssignmentsForStudyText(
   const normalizedText = sanitizedSegments.join('\n');
   const model = resolveInworldTtsModel(opts.ttsModel);
   const assignments = opts.voicePlan
-    ? opts.voicePlan.assignments.map(normalizeInworldSpeakerAssignment)
+    ? opts.voicePlan.assignments.map((assignment) =>
+        normalizeInworldSpeakerAssignment(assignment, model),
+      )
     : (
         await resolveInworldSpeakerAssignmentsWithRankerFromCatalog(
           collectSpeakers(segments, frontmatter),
           await loadVoiceMap(opts.voiceMapPath),
-          await loadInworldVoicesCatalog(),
+          await loadInworldVoicesCatalog({ logger: opts.logger }),
           {
             defaultVoiceId: opts.defaultVoiceId,
             defaultAccent: opts.defaultAccent,
@@ -261,7 +264,7 @@ async function resolveAssignmentsForStudyText(
             logger: opts.logger,
           },
         )
-      ).assignments.map(normalizeInworldSpeakerAssignment);
+      ).assignments.map((assignment) => normalizeInworldSpeakerAssignment(assignment, model));
   return {
     frontmatter,
     segments,
@@ -624,7 +627,7 @@ export async function resolveInworldSpeakerAssignments(
   const resolution = await resolveInworldSpeakerAssignmentsWithRankerFromCatalog(
     collectSpeakers(segments, frontmatter),
     await loadVoiceMap(options.voiceMapPath),
-    await loadInworldVoicesCatalog(),
+    await loadInworldVoicesCatalog({ logger: options.logger }),
     {
       defaultVoiceId: options.defaultVoiceId,
       defaultAccent: options.defaultAccent,
@@ -645,6 +648,7 @@ export async function resolveInworldSpeakerAssignments(
       capabilityMatches: assignment.capabilityMatches,
       capabilityMismatches: assignment.capabilityMismatches,
       capabilities: assignment.capabilities,
+      language: assignment.language,
     })),
   };
 }
@@ -692,6 +696,7 @@ export function createInworldTtsProvider(): TtsProviderAdapter {
 
 export {
   loadInworldVoicesCatalog,
+  resolveInworldVoiceCapabilities,
   resolveInworldSpeakerAssignmentsFromCatalog,
   resolveInworldSpeakerAssignmentsWithRankerFromCatalog,
 } from './catalog.js';

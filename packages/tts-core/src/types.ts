@@ -341,6 +341,7 @@ export interface VoiceCatalogCapabilities {
 export interface SpeakerVoiceAssignment {
   speaker: string;
   voiceId: string;
+  language?: string;
   source: 'profile' | 'voiceMap' | 'default' | 'auto' | 'fallback' | 'reuse';
   score?: number;
   selectionReason?: string;
