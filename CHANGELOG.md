@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.3.1] - 2026-07-28
+
+### Changed
+
+- Automated release from PR #163: refactor(validation): aggregate local validation (https://github.com/abocha/esl-pipeline/pull/163)
+
 ## [10.3.0] - 2026-07-28
 
 ### Changed
