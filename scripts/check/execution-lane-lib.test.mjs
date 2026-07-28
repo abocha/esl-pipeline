@@ -10,7 +10,11 @@ import {
 
 test('execution lanes keep independent checks runnable and bind prebuilt consumers to build', () => {
   const lanes = buildExecutionLanes({
-    triggeredLanes: [lane('guard:orchestrator:boundary'), lane('backend:test:integration:http')],
+    triggeredLanes: [
+      lane('guard:orchestrator:boundary'),
+      lane('test:check-routing'),
+      lane('backend:test:integration:http'),
+    ],
     turbo: {
       taskGroups: [
         turboGroup('build'),
@@ -24,7 +28,10 @@ test('execution lanes keep independent checks runnable and bind prebuilt consume
   assert.deepEqual(laneById(lanes, 'guard:orchestrator:boundary').dependsOn, []);
   assert.deepEqual(laneById(lanes, 'turbo:typecheck').dependsOn, []);
   assert.deepEqual(laneById(lanes, 'turbo:lint').dependsOn, []);
-  assert.deepEqual(laneById(lanes, 'turbo:test:unit:prebuilt').dependsOn, ['turbo:build']);
+  assert.deepEqual(laneById(lanes, 'turbo:test:unit:prebuilt').dependsOn, [
+    'turbo:build',
+    'test:check-routing',
+  ]);
   assert.deepEqual(laneById(lanes, 'backend:test:integration:http').dependsOn, ['turbo:build']);
 });
 
@@ -39,12 +46,20 @@ test('execution lanes do not invent a build dependency when no build lane was se
 
 test('broad prebuilt units depend on the explicit root build lane', () => {
   const lanes = buildExecutionLanes({
-    triggeredLanes: [lane('build'), lane('typecheck'), lane('test:unit:prebuilt:fast')],
+    triggeredLanes: [
+      lane('test:check-routing'),
+      lane('build'),
+      lane('typecheck'),
+      lane('test:unit:prebuilt:fast'),
+    ],
     turbo: null,
   });
 
   assert.deepEqual(laneById(lanes, 'typecheck').dependsOn, []);
-  assert.deepEqual(laneById(lanes, 'test:unit:prebuilt:fast').dependsOn, ['build']);
+  assert.deepEqual(laneById(lanes, 'test:unit:prebuilt:fast').dependsOn, [
+    'build',
+    'test:check-routing',
+  ]);
 });
 
 test('failed dependencies block consumers while independent lanes still run', () => {
