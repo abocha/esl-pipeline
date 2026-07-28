@@ -28,8 +28,7 @@ export interface SpeechPlanCandidateAnalysis {
 export interface RenderedSpeechSegmentSummary {
   id: string;
   text: string;
-  lexicalText?: string;
-  expectedLexicalText?: string;
+  lexicalText: string;
   leadingInstructionTagCount?: number;
 }
 
@@ -273,11 +272,7 @@ export function analyzeValidatedSpeechPlan(
       if (!rendered) {
         hardFailures.push(issue('segment_not_rendered', segment.id));
       } else {
-        if (
-          rendered.lexicalText !== undefined &&
-          rendered.expectedLexicalText !== undefined &&
-          rendered.lexicalText !== rendered.expectedLexicalText
-        ) {
+        if (lexicalSignature(rendered.lexicalText) !== lexicalSignature(source?.text ?? '')) {
           hardFailures.push(issue('rendered_words_changed', segment.id));
         }
         const instructionCount =
@@ -368,4 +363,10 @@ function countLeadingInstructionTags(text: string): number {
     remaining = remaining.slice(end + 1).trimStart();
   }
   return count;
+}
+
+function lexicalSignature(text: string): string {
+  return (text.normalize('NFKC').match(/[\p{L}\p{N}\p{M}]+/gu) ?? [])
+    .map((token) => token.toLocaleLowerCase())
+    .join('\u001f');
 }
