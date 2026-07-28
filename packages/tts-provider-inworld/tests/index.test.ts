@@ -1,3 +1,7 @@
+import { readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { describe, expect, it, vi } from 'vitest';
 
 import { parseMarkdownContext } from '@esl-pipeline/pmd';
@@ -6,6 +10,7 @@ import { hashStudyText, type SpeechPerformancePlan } from '@esl-pipeline/tts-cor
 import {
   buildInworldChunkHash,
   buildStudyTextMp3Inworld,
+  createInworldClientProvider,
   createInworldTtsProvider,
   INWORLD_RENDERER_POLICY_VERSION,
   loadInworldVoicesCatalog,
@@ -79,6 +84,65 @@ function createPreviewSpeechPlan(
 }
 
 describe('inworld provider adapter basics', () => {
+  it('constructs one lazy SDK client with retries disabled', () => {
+    const sdkClient = {
+      listVoices: vi.fn().mockResolvedValue([]),
+      generate: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3])),
+    };
+    const sdkFactory = vi.fn(() => sdkClient);
+    const clientProvider = createInworldClientProvider({
+      apiKey: 'test-api-key',
+      sdkFactory,
+    });
+
+    expect(sdkFactory).not.toHaveBeenCalled();
+    expect(clientProvider.get()).toBe(sdkClient);
+    expect(clientProvider.get()).toBe(sdkClient);
+    expect(sdkFactory).toHaveBeenCalledTimes(1);
+    expect(sdkFactory).toHaveBeenCalledWith(
+      expect.objectContaining({ apiKey: 'test-api-key', maxRetries: 0 }),
+    );
+  });
+
+  it('shares one injected SDK client between catalog and synthesis', async () => {
+    const outPath = join(tmpdir(), `inworld-provider-${process.pid}-${Date.now()}`);
+    const sdkClient = {
+      listVoices: vi.fn().mockResolvedValue([]),
+      generate: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3])),
+    };
+    const sdkFactory = vi.fn(() => sdkClient);
+    const provider = createInworldTtsProvider({ apiKey: 'test-api-key', sdkFactory });
+
+    try {
+      await provider.voice.loadCatalog();
+      const result = await provider.synthesizePronunciationText(
+        { text: 'Deterministic test line.', voiceId: 'Ashley' },
+        { outPath, force: true, ttsModel: 'inworld-tts-2' },
+      );
+
+      expect(sdkFactory).toHaveBeenCalledTimes(1);
+      expect(sdkFactory).toHaveBeenCalledWith(
+        expect.objectContaining({ apiKey: 'test-api-key', maxRetries: 0 }),
+      );
+      expect(sdkClient.generate).toHaveBeenCalledWith(
+        expect.objectContaining({ text: 'Deterministic test line.', voice: 'Ashley' }),
+      );
+      await expect(readFile(result.path)).resolves.toEqual(Buffer.from([1, 2, 3]));
+    } finally {
+      await rm(outPath, { recursive: true, force: true });
+    }
+  });
+
+  it('does not construct the injected SDK client when credentials are missing', async () => {
+    const sdkFactory = vi.fn();
+    const provider = createInworldTtsProvider({ apiKey: undefined, sdkFactory });
+
+    await expect(provider.voice.loadCatalog()).resolves.toMatchObject({
+      voices: [{ id: 'Ashley' }, { id: 'Dennis' }],
+    });
+    expect(sdkFactory).not.toHaveBeenCalled();
+  });
+
   it('derives steering capabilities from the selected Inworld model', () => {
     expect(resolveInworldVoiceCapabilities('inworld-tts-2')).toEqual({
       supportsMetadataInstructions: true,

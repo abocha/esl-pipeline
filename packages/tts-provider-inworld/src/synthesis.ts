@@ -1,13 +1,11 @@
 import { writeFile } from 'node:fs/promises';
-import { ApiError, InworldTTS, MissingApiKeyError, NetworkError } from '@inworld/tts';
+import { ApiError, MissingApiKeyError, NetworkError } from '@inworld/tts';
 
-import {
-  ConfigurationError,
-  InfrastructureError,
-  type VoiceProviderErrorCategory,
-} from '@esl-pipeline/contracts';
+import { InfrastructureError, type VoiceProviderErrorCategory } from '@esl-pipeline/contracts';
 import { runProviderFallbackLadder } from '@esl-pipeline/provider-runtime';
 import type { InworldTtsModel, SpeechDeliveryMode } from '@esl-pipeline/tts-core';
+
+import { createInworldClientProvider, type InworldClientProvider } from './client.js';
 
 const DEFAULT_SAMPLE_RATE_HERTZ = 48_000;
 const DEFAULT_MAX_RETRIES = 2;
@@ -24,27 +22,11 @@ class InworldSynthesisRuntimeError extends InfrastructureError {
   }
 }
 
-export function resolveInworldApiKey(): string | undefined {
-  return (
-    process.env.ESL_TTS_PROVIDER_INWORLD_API_KEY?.trim() ||
-    process.env.INWORLD_API_KEY?.trim() ||
-    undefined
-  );
-}
-
 export function resolveInworldSampleRateHertz(): number {
   const raw = process.env.ESL_TTS_PROVIDER_INWORLD_SAMPLE_RATE_HERTZ;
   if (!raw) return DEFAULT_SAMPLE_RATE_HERTZ;
   const parsed = Number(raw);
   if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_SAMPLE_RATE_HERTZ;
-  return Math.floor(parsed);
-}
-
-export function resolveInworldTimeoutMs(): number | undefined {
-  const raw = process.env.ESL_TTS_PROVIDER_INWORLD_TIMEOUT_MS;
-  if (!raw) return undefined;
-  const parsed = Number(raw);
-  if (!Number.isFinite(parsed) || parsed <= 0) return undefined;
   return Math.floor(parsed);
 }
 
@@ -102,19 +84,9 @@ export async function synthesizeInworldSpeech(
     sampleRateHertz?: number;
     language?: string;
   },
+  dependencies: { clientProvider?: InworldClientProvider } = {},
 ): Promise<Buffer> {
-  const apiKey = resolveInworldApiKey();
-  if (!apiKey) {
-    throw new ConfigurationError(
-      'Inworld TTS requires ESL_TTS_PROVIDER_INWORLD_API_KEY or INWORLD_API_KEY.',
-    );
-  }
-  const timeout = resolveInworldTimeoutMs();
-  const client = InworldTTS({
-    apiKey,
-    maxRetries: resolveInworldMaxRetries(),
-    ...(timeout ? { timeout } : {}),
-  });
+  const client = (dependencies.clientProvider ?? createInworldClientProvider()).get();
   const audio = await client.generate({
     text,
     voice: voiceId,
@@ -141,13 +113,19 @@ export async function synthesizeInworldChunkWithRetry(
     sampleRateHertz?: number;
     language?: string;
   },
+  dependencies: { clientProvider?: InworldClientProvider } = {},
 ): Promise<void> {
   const candidate = { text, voiceId, outFile };
   let backoffAttempt = 0;
   await runProviderFallbackLadder<typeof candidate, void, InworldSynthesisRuntimeError>({
     candidates: [candidate],
     runCandidate: async (current) => {
-      const audio = await synthesizeInworldSpeech(current.text, current.voiceId, options);
+      const audio = await synthesizeInworldSpeech(
+        current.text,
+        current.voiceId,
+        options,
+        dependencies,
+      );
       await writeFile(current.outFile, audio);
     },
     mapError: (current, error) => mapInworldSynthesisRuntimeError(error, current),
