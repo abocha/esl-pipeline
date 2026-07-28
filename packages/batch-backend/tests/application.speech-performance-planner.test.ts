@@ -71,6 +71,16 @@ describe('application/speech-performance-planner', () => {
       promptPolicyVersion: 'speech-performance-v1-restrained-natural',
       responseSchema: expect.objectContaining({ strict: true }),
     });
+    expect(
+      buildSpeechPlannerRequest(
+        createPrepared(),
+        'speech-performance-v1-restrained-natural',
+        'gemini-3.1-flash-lite',
+      ).responseSchema.schema.properties.segments.items.properties,
+    ).toMatchObject({
+      pauseBeforeMs: { maximum: 3000 },
+      pauseAfterMs: { maximum: 3000 },
+    });
   });
 
   it('defines the complete Inworld TTS-2 prompt policy', () => {
@@ -86,6 +96,7 @@ describe('application/speech-performance-planner', () => {
     expect(policy).toContain('1000 ms');
     expect(policy).toContain('one nonverbal cue total');
     expect(policy).toContain('Omit pace for ordinary dialogue');
+    expect(policy).toContain('deliveryMode must remain BALANCED');
   });
 
   it('stays disabled by default', () => {

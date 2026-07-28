@@ -5,29 +5,38 @@ import type {
   SpeechPerformancePromptPolicyId,
 } from '@esl-pipeline/tts-core';
 
-export const SPEECH_PLAN_RESPONSE_SCHEMA = {
-  name: 'tts_speech_performance_plan',
-  description: 'Provider-neutral expressive speech cues for immutable study-text segments.',
-  strict: true,
-  schema: {
-    type: 'object',
-    additionalProperties: false,
-    required: ['segments'],
-    properties: {
-      segments: {
-        type: 'array',
-        items: {
-          type: 'object',
-          additionalProperties: false,
-          required: ['id'],
-          properties: {
+function createSpeechPlanResponseSchema(plannerPauseMaximumMs: number) {
+  return {
+    name: 'tts_speech_performance_plan',
+    description: 'Provider-neutral expressive speech cues for immutable study-text segments.',
+    strict: true,
+    schema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['segments'],
+      properties: {
+        segments: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['id'],
+            properties: {
             id: { type: 'string' },
             emotion: { type: 'string' },
             intonation: { type: 'string' },
             pace: { type: 'string', enum: ['slow', 'measured', 'natural', 'brisk'] },
             emphasis: { type: 'array', items: { type: 'string' } },
-            pauseBeforeMs: { type: 'integer', minimum: 0, maximum: 1000 },
-            pauseAfterMs: { type: 'integer', minimum: 0, maximum: 1000 },
+            pauseBeforeMs: {
+              type: 'integer',
+              minimum: 0,
+              maximum: plannerPauseMaximumMs,
+            },
+            pauseAfterMs: {
+              type: 'integer',
+              minimum: 0,
+              maximum: plannerPauseMaximumMs,
+            },
             nonVerbalsBefore: {
               type: 'array',
               items: { type: 'string', enum: ['sigh', 'laugh', 'chuckle', 'breath'] },
@@ -41,12 +50,16 @@ export const SPEECH_PLAN_RESPONSE_SCHEMA = {
               enum: ['STABLE', 'BALANCED', 'CREATIVE'],
             },
             freeFormDirection: { type: 'string' },
+            },
           },
         },
       },
     },
-  },
-} as const;
+  } as const;
+}
+
+const V1_SPEECH_PLAN_RESPONSE_SCHEMA = createSpeechPlanResponseSchema(3000);
+export const SPEECH_PLAN_RESPONSE_SCHEMA = createSpeechPlanResponseSchema(1000);
 
 const V1_LINES = [
   'Create restrained, natural speech-performance cues for this ESL study text.',
@@ -73,6 +86,7 @@ const V2_LINES = [
   'Use slow, measured, or brisk only when a non-natural tempo is explicitly justified by the authored scene or learning goal.',
   'Do not use pace merely to reinforce emotion, seriousness, regret, reflection, or intonation.',
   'Only set freeFormDirection for segments whose selected voice supportsFreeFormDirection.',
+  'Unless an explicit existing use case requires otherwise, deliveryMode must remain BALANCED.',
 ] as const;
 
 export const SPEECH_PERFORMANCE_PROMPT_POLICIES: Record<
@@ -99,6 +113,9 @@ export function buildSpeechPlannerRequest(
     prompt,
     promptHash: createHash('sha256').update(prompt).digest('hex'),
     promptPolicyVersion,
-    responseSchema: SPEECH_PLAN_RESPONSE_SCHEMA,
+    responseSchema:
+      promptPolicyVersion === 'speech-performance-v1-restrained-natural'
+        ? V1_SPEECH_PLAN_RESPONSE_SCHEMA
+        : SPEECH_PLAN_RESPONSE_SCHEMA,
   };
 }

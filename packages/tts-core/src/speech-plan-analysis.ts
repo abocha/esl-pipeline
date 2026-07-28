@@ -8,7 +8,7 @@ import type {
 } from './types.js';
 
 const SAFE_CUE_TEXT = /^[\p{L}\p{N}\p{M}\p{Zs},.!?;:'"()\-–—]+$/u;
-const UNSAFE_CONTROL = /[\u0000-\u001f\u007f-\u009f]/u;
+const UNSAFE_CONTROL = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/u;
 const UNSAFE_MARKUP_DELIMITER = /[\[\]<>{}]/u;
 
 export type SpeechCueTextField = 'emotion' | 'intonation' | 'freeFormDirection';
@@ -28,6 +28,8 @@ export interface SpeechPlanCandidateAnalysis {
 export interface RenderedSpeechSegmentSummary {
   id: string;
   text: string;
+  lexicalText?: string;
+  expectedLexicalText?: string;
   leadingInstructionTagCount?: number;
 }
 
@@ -97,6 +99,25 @@ export function analyzeSpeechPlanCandidate(
     seen.add(id);
     if (!sourceIds.has(id)) hardFailures.push(issue('unknown_segment_id', id));
 
+    const allowedFields = new Set([
+      'id',
+      'emotion',
+      'intonation',
+      'pace',
+      'emphasis',
+      'pauseBeforeMs',
+      'pauseAfterMs',
+      'nonVerbalsBefore',
+      'nonVerbalsAfter',
+      'deliveryMode',
+      'freeFormDirection',
+    ]);
+    for (const field of Object.keys(segment)) {
+      if (!allowedFields.has(field)) {
+        hardFailures.push(issue('candidate_field_unknown', id, { field }));
+      }
+    }
+
     for (const field of ['emotion', 'intonation', 'freeFormDirection'] as const) {
       const value = segment[field];
       if (value === undefined) continue;
@@ -116,6 +137,36 @@ export function analyzeSpeechPlanCandidate(
         hardFailures.push(issue('candidate_pause_invalid', id, { field }));
       } else if (typeof value === 'number' && value > 1000) {
         hardFailures.push(issue('planner_pause_exceeds_cap', id, { field, value }));
+      }
+    }
+    if (
+      segment.pace !== undefined &&
+      !['slow', 'measured', 'natural', 'brisk'].includes(String(segment.pace))
+    ) {
+      hardFailures.push(issue('candidate_pace_invalid', id));
+    }
+    if (
+      segment.deliveryMode !== undefined &&
+      !['STABLE', 'BALANCED', 'CREATIVE'].includes(String(segment.deliveryMode))
+    ) {
+      hardFailures.push(issue('candidate_delivery_mode_invalid', id));
+    }
+    if (
+      segment.emphasis !== undefined &&
+      (!Array.isArray(segment.emphasis) ||
+        segment.emphasis.some((phrase) => typeof phrase !== 'string'))
+    ) {
+      hardFailures.push(issue('candidate_emphasis_invalid', id));
+    }
+    const supportedNonverbals = new Set(['sigh', 'laugh', 'chuckle', 'breath']);
+    for (const field of ['nonVerbalsBefore', 'nonVerbalsAfter'] as const) {
+      const value = segment[field];
+      if (
+        value !== undefined &&
+        (!Array.isArray(value) ||
+          value.some((cue) => typeof cue !== 'string' || !supportedNonverbals.has(cue)))
+      ) {
+        hardFailures.push(issue('candidate_nonverbal_invalid', id, { field }));
       }
     }
     const nonverbalCount =
@@ -222,6 +273,13 @@ export function analyzeValidatedSpeechPlan(
       if (!rendered) {
         hardFailures.push(issue('segment_not_rendered', segment.id));
       } else {
+        if (
+          rendered.lexicalText !== undefined &&
+          rendered.expectedLexicalText !== undefined &&
+          rendered.lexicalText !== rendered.expectedLexicalText
+        ) {
+          hardFailures.push(issue('rendered_words_changed', segment.id));
+        }
         const instructionCount =
           rendered.leadingInstructionTagCount ?? countLeadingInstructionTags(rendered.text);
         if (instructionCount > 1) {
