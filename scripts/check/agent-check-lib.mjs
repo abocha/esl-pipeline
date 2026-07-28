@@ -15,12 +15,17 @@ export function buildAgentCheckArtifacts({ repoRoot, runLabel, lane, timestamp }
   };
 }
 
-export function buildAgentCheckSummary({ label, durationMs, lanes }) {
+export function buildAgentCheckSummary({ label, durationMs, lanes, ciRequirements = [] }) {
   const problems = lanes.filter((lane) => lane.status !== 'pass');
   const firstFailure = lanes.find((lane) => lane.status === 'fail') ?? null;
   return {
     label,
-    status: problems.length > 0 ? 'fail' : 'pass',
+    status:
+      problems.length > 0
+        ? 'fail'
+        : ciRequirements.length > 0
+          ? 'pass_with_ci_requirements'
+          : 'pass',
     durationMs,
     counts: {
       total: lanes.length,
@@ -29,6 +34,7 @@ export function buildAgentCheckSummary({ label, durationMs, lanes }) {
       blocked: lanes.filter((lane) => lane.status === 'blocked').length,
     },
     lanes,
+    ciRequirements,
     problems,
     firstFailure,
   };
@@ -41,6 +47,18 @@ export function formatAgentCheckSummary(summary, { logsDir }) {
 
   if (summary.status === 'pass') {
     lines.push(`lanes ${summary.counts.passed} passed`, `logs ${logsDir}`);
+    return lines.join('\n');
+  }
+
+  if (summary.status === 'pass_with_ci_requirements') {
+    lines.push(
+      `local lanes ${summary.counts.passed} passed`,
+      'CI required:',
+      ...summary.ciRequirements.map(
+        (requirement) => `  - ${requirement.id}: ${requirement.reason}`,
+      ),
+      `logs ${logsDir}`,
+    );
     return lines.join('\n');
   }
 

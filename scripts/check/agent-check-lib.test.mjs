@@ -32,6 +32,57 @@ test('agent check summary reports a passing run without captured lane output', (
   assert.doesNotMatch(text, /guard-orchestrator-boundary PASS/);
 });
 
+test('agent check summary reports passing local evidence with required CI evidence', () => {
+  const ciRequirements = [
+    {
+      id: 'backend-db-integration',
+      reason: 'backend worker or queue behavior changed',
+    },
+  ];
+  const summary = buildAgentCheckSummary({
+    label: 'check:fast:agent',
+    durationMs: 12_500,
+    lanes: [lanePass('test:check-routing'), lanePass('turbo:test:unit:prebuilt')],
+    ciRequirements,
+  });
+
+  assert.equal(summary.status, 'pass_with_ci_requirements');
+  assert.deepEqual(summary.ciRequirements, ciRequirements);
+
+  const text = formatAgentCheckSummary(summary, {
+    logsDir: 'tmp/check-logs/2026-check-fast',
+  });
+
+  assert.match(text, /check:fast:agent PASS_WITH_CI_REQUIREMENTS/u);
+  assert.match(text, /local lanes 2 passed/u);
+  assert.match(
+    text,
+    /CI required:\n  - backend-db-integration: backend worker or queue behavior changed/u,
+  );
+});
+
+test('local failures remain failures when CI evidence is also required', () => {
+  const summary = buildAgentCheckSummary({
+    label: 'check:fast:agent',
+    durationMs: 1000,
+    lanes: [
+      {
+        ...lanePass('lint'),
+        status: 'fail',
+        exitCode: 1,
+      },
+    ],
+    ciRequirements: [
+      {
+        id: 'backend-db-integration',
+        reason: 'backend repository behavior changed',
+      },
+    ],
+  });
+
+  assert.equal(summary.status, 'fail');
+});
+
 test('agent check summary aggregates every failed and blocked lane', () => {
   const summary = buildAgentCheckSummary({
     label: 'check:fast:agent',

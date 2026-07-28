@@ -5,7 +5,7 @@
 - Audience: maintainers and AI agents working from plan docs.
 - Read Time: 4 minutes.
 - Authority Level: planning router.
-- Last Verified Against: 2026-07-14 repo state.
+- Last Verified Against: 2026-07-29 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: monthly or after major planning-topology changes.
 - Status: `router`.
@@ -74,7 +74,6 @@
 6. `docs/plans/student-profile-enrichment/README.md`
 7. `docs/plans/student-area-redesign/README.md`
 8. `docs/plans/backlog/README.md`
-9. `docs/plans/pr-validation-simplification/README.md`
 
 ### Standalone active plans
 
