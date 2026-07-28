@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.3.2] - 2026-07-28
+
+### Changed
+
+- Automated release from PR #164: fix(validation): enforce backend test routing (https://github.com/abocha/esl-pipeline/pull/164)
+
 ## [10.3.1] - 2026-07-28
 
 ### Changed
