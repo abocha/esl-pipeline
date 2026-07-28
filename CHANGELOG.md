@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.3.3] - 2026-07-28
+
+### Changed
+
+- Automated release from PR #165: feat(validation): hand service evidence to CI (https://github.com/abocha/esl-pipeline/pull/165)
+
 ## [10.3.2] - 2026-07-28
 
 ### Changed
