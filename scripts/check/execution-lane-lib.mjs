@@ -1,4 +1,5 @@
-const buildLaneId = 'turbo:build';
+const turboBuildLaneId = 'turbo:build';
+const broadBuildLaneId = 'build';
 
 export function buildExecutionLanes(currentPlan) {
   const preTurboLanes = currentPlan.triggeredLanes.filter(
@@ -21,11 +22,15 @@ export function buildExecutionLanes(currentPlan) {
   }
   lanes.push(...postTurboLanes.map((lane) => ({ ...lane, kind: 'pnpm' })));
 
-  const hasBuildLane = lanes.some((lane) => lane.id === buildLaneId);
+  const hasTurboBuildLane = lanes.some((lane) => lane.id === turboBuildLaneId);
+  const hasBroadBuildLane = lanes.some((lane) => lane.id === broadBuildLaneId);
   return lanes.map((lane) => ({
     ...lane,
-    dependsOn:
-      hasBuildLane && isPrebuiltConsumer(lane.id) ? [buildLaneId] : [],
+    dependsOn: resolveBuildDependencies({
+      laneId: lane.id,
+      hasTurboBuildLane,
+      hasBroadBuildLane,
+    }),
   }));
 }
 
@@ -66,4 +71,14 @@ export async function runExecutionLanes({ lanes, runLane, onResult = () => {} })
 
 function isPrebuiltConsumer(laneId) {
   return laneId === 'turbo:test:unit:prebuilt' || laneId.startsWith('backend:test:');
+}
+
+function resolveBuildDependencies({ laneId, hasTurboBuildLane, hasBroadBuildLane }) {
+  if (hasTurboBuildLane && isPrebuiltConsumer(laneId)) {
+    return [turboBuildLaneId];
+  }
+  if (hasBroadBuildLane && laneId === 'test:unit:prebuilt:fast') {
+    return [broadBuildLaneId];
+  }
+  return [];
 }

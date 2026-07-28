@@ -10,6 +10,24 @@ const alwaysLanes = [
     reason: 'cheap global contract consistency guard',
   }),
 ];
+const broadPrePrLanes = [
+  ...alwaysLanes,
+  lane('test:tooling', ['run', 'test:tooling'], {
+    reason: 'broad repository tooling regression coverage',
+  }),
+  lane('build', ['run', 'build'], {
+    reason: 'broad workspace build coverage',
+  }),
+  lane('typecheck', ['run', 'typecheck'], {
+    reason: 'broad workspace typecheck coverage',
+  }),
+  lane('lint', ['run', 'lint'], {
+    reason: 'broad workspace lint coverage',
+  }),
+  lane('test:unit:prebuilt:fast', ['run', 'test:unit:prebuilt:fast'], {
+    reason: 'broad prebuilt core unit regression coverage',
+  }),
+];
 
 const broadFallbackFiles = new Set([
   '.gitignore',
@@ -316,26 +334,34 @@ export function buildAffectedCheckPlan({
   };
 
   function fallbackPlan({ baseRef, mergeBase, changedFiles, reason }) {
-    return {
-      baseRef,
-      mergeBase,
-      changedFiles,
-      changedPackages: [],
-      affectedPackages: [],
-      dependencyPackages: [],
-      triggeredLanes: [
-        lane('check:pre-pr', ['run', 'check:pre-pr'], {
-          reason,
-        }),
-      ],
-      skippedBroadLanes: [],
-      turbo: null,
-      fallback: {
-        lane: 'check:pre-pr',
-        reason,
-      },
-    };
+    return buildBroadCheckPlan({ baseRef, mergeBase, changedFiles, reason, fallback: true });
   }
+}
+
+export function buildBroadCheckPlan({
+  reason,
+  baseRef = '(broad)',
+  mergeBase = '(broad)',
+  changedFiles = [],
+  fallback = false,
+}) {
+  return {
+    baseRef,
+    mergeBase,
+    changedFiles: uniqueSorted(changedFiles.map(normalizePath)),
+    changedPackages: [],
+    affectedPackages: [],
+    dependencyPackages: [],
+    triggeredLanes: broadPrePrLanes,
+    skippedBroadLanes: [],
+    turbo: null,
+    fallback: fallback
+      ? {
+          lane: 'check:pre-pr',
+          reason,
+        }
+      : null,
+  };
 }
 
 export function expandTransitiveDependents({ packageNames, workspacePackages }) {

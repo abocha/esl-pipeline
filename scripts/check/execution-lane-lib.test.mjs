@@ -42,6 +42,16 @@ test('execution lanes do not invent a build dependency when no build lane was se
   assert.deepEqual(laneById(lanes, 'backend:test:integration:http').dependsOn, []);
 });
 
+test('broad prebuilt units depend on the explicit root build lane', () => {
+  const lanes = buildExecutionLanes({
+    triggeredLanes: [lane('build'), lane('typecheck'), lane('test:unit:prebuilt:fast')],
+    turbo: null,
+  });
+
+  assert.deepEqual(laneById(lanes, 'typecheck').dependsOn, []);
+  assert.deepEqual(laneById(lanes, 'test:unit:prebuilt:fast').dependsOn, ['build']);
+});
+
 test('failed dependencies block consumers while independent lanes still run', () => {
   const failedBuild = result('turbo:build', 'fail');
 
