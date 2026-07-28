@@ -8,6 +8,7 @@ import {
   createResolvedVoicePlan,
   getTtsModelCapabilities,
   type PreparedStudyTextSynthesis,
+  resolveVoicePlanForExecution,
   type SpeechPerformancePlan,
   validateSpeechPerformancePlan,
   validateVoicePlan,
@@ -28,6 +29,97 @@ function createPrepared(): PreparedStudyTextSynthesis {
 }
 
 describe('speech performance plans', () => {
+  it('marks newly resolved voice plans with model-scoped capability provenance', () => {
+    const prepared = createPrepared();
+    const plan = createResolvedVoicePlan(prepared, [
+      {
+        speaker: 'Maya',
+        voiceId: 'Ashley',
+        source: 'auto',
+        capabilities: {
+          supportsMetadataInstructions: true,
+          supportsNonVerbals: true,
+          supportsUppercaseEmphasis: true,
+          supportsFreeFormDirection: true,
+        },
+      },
+    ]);
+
+    expect(plan.capabilityPolicyVersion).toBe('model-scoped-v1');
+  });
+
+  it('normalizes legacy Inworld capabilities into an immutable execution view', () => {
+    const prepared = createPrepared();
+    const legacy = {
+      schemaVersion: 1,
+      mode: 'deterministic',
+      provider: 'inworld',
+      model: 'inworld-tts-2',
+      sourceHash: prepared.sourceHash,
+      assignments: [
+        {
+          speaker: 'Maya',
+          voiceId: 'Ashley',
+          source: 'auto',
+          capabilities: {
+            supportsMetadataInstructions: false,
+            supportsNonVerbals: false,
+            supportsUppercaseEmphasis: false,
+            supportsFreeFormDirection: false,
+          },
+        },
+      ],
+    } as const;
+
+    const effective = resolveVoicePlanForExecution(prepared, legacy);
+
+    expect(effective).not.toBe(legacy);
+    expect(effective.assignments[0]?.capabilities).toEqual({
+      supportsMetadataInstructions: true,
+      supportsNonVerbals: true,
+      supportsUppercaseEmphasis: true,
+      supportsFreeFormDirection: true,
+    });
+    expect(effective.assignments[0]?.language).toBeUndefined();
+    expect(legacy.assignments[0]?.capabilities.supportsFreeFormDirection).toBe(false);
+    expect(withVoicePlan(prepared, legacy).voicePlan).toEqual(effective);
+  });
+
+  it.each([
+    ['inworld', 'inworld-tts-2'],
+    ['google', 'chirp3_hd'],
+    ['elevenlabs', 'eleven_v3'],
+  ] as const)('rejects contradictory marked %s voice plans', (provider, model) => {
+    const prepared: PreparedStudyTextSynthesis = {
+      ...createPrepared(),
+      selection: { provider, model },
+    };
+
+    expect(() =>
+      resolveVoicePlanForExecution(prepared, {
+        schemaVersion: 1,
+        capabilityPolicyVersion: 'model-scoped-v1',
+        mode: 'deterministic',
+        provider,
+        model,
+        sourceHash: prepared.sourceHash,
+        assignments: [
+          {
+            speaker: 'Maya',
+            voiceId: 'voice-1',
+            source: 'auto',
+            capabilities: {
+              supportsMetadataInstructions: provider !== 'inworld',
+              supportsNonVerbals: provider !== 'inworld',
+              supportsUppercaseEmphasis: provider !== 'inworld',
+              supportsFreeFormDirection: false,
+            },
+          },
+        ],
+      }),
+    ).toThrow('contradicts model-scoped capabilities');
+  });
+
   it('declares prompted expressive capabilities only for Inworld TTS-2', () => {
     expect(getTtsModelCapabilities('inworld', 'inworld-tts-2')).toMatchObject({
       planningMode: 'prompted',
@@ -107,10 +199,10 @@ describe('speech performance plans', () => {
             voiceId: 'Ashley',
             source: 'auto',
             capabilities: {
-              supportsMetadataInstructions: true,
-              supportsNonVerbals: true,
-              supportsUppercaseEmphasis: true,
-              supportsFreeFormDirection: false,
+            supportsMetadataInstructions: true,
+            supportsNonVerbals: true,
+            supportsUppercaseEmphasis: true,
+            supportsFreeFormDirection: true,
             },
           },
         ],
@@ -154,7 +246,7 @@ describe('speech performance plans', () => {
             supportsMetadataInstructions: true,
             supportsNonVerbals: true,
             supportsUppercaseEmphasis: true,
-            supportsFreeFormDirection: false,
+            supportsFreeFormDirection: true,
           },
         },
       ]),
@@ -234,8 +326,11 @@ describe('speech performance plans', () => {
     );
   });
 
-  it('rejects free-form direction for a selected voice without that capability', () => {
-    const source = createPrepared();
+  it('rejects free-form direction for a selected model without that capability', () => {
+    const source: PreparedStudyTextSynthesis = {
+      ...createPrepared(),
+      selection: { provider: 'google', model: 'chirp3_hd' },
+    };
     const prepared = withVoicePlan(
       source,
       createResolvedVoicePlan(source, [
@@ -244,9 +339,9 @@ describe('speech performance plans', () => {
           voiceId: 'Ashley',
           source: 'auto',
           capabilities: {
-            supportsMetadataInstructions: true,
-            supportsNonVerbals: true,
-            supportsUppercaseEmphasis: true,
+            supportsMetadataInstructions: false,
+            supportsNonVerbals: false,
+            supportsUppercaseEmphasis: false,
             supportsFreeFormDirection: false,
           },
         },
@@ -278,11 +373,11 @@ describe('speech performance plans', () => {
         speaker: 'Maya',
         voiceId: 'Ashley',
         source: 'auto',
-        capabilities: {
-          supportsMetadataInstructions: true,
-          supportsNonVerbals: true,
-          supportsUppercaseEmphasis: true,
-          supportsFreeFormDirection: false,
+          capabilities: {
+            supportsMetadataInstructions: true,
+            supportsNonVerbals: true,
+            supportsUppercaseEmphasis: true,
+            supportsFreeFormDirection: true,
         },
       },
       {
@@ -308,22 +403,22 @@ describe('speech performance plans', () => {
         speaker: 'Maya',
         voiceId: 'Ashley',
         source: 'auto',
-        capabilities: {
-          supportsMetadataInstructions: true,
-          supportsNonVerbals: true,
-          supportsUppercaseEmphasis: true,
-          supportsFreeFormDirection: false,
+          capabilities: {
+            supportsMetadataInstructions: true,
+            supportsNonVerbals: true,
+            supportsUppercaseEmphasis: true,
+            supportsFreeFormDirection: true,
         },
       },
       {
         speaker: 'maya',
         voiceId: 'Ashley',
         source: 'auto',
-        capabilities: {
-          supportsMetadataInstructions: true,
-          supportsNonVerbals: true,
-          supportsUppercaseEmphasis: true,
-          supportsFreeFormDirection: false,
+          capabilities: {
+            supportsMetadataInstructions: true,
+            supportsNonVerbals: true,
+            supportsUppercaseEmphasis: true,
+            supportsFreeFormDirection: true,
         },
       },
     ]);
