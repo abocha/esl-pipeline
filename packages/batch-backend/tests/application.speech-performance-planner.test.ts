@@ -2,7 +2,14 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { SpeechPerformancePlannerInvalidOutputError } from '@esl-pipeline/tts-core';
 
-import { createBackendSpeechPerformancePlanner } from '../src/application/speech-performance-planner.js';
+import {
+  buildSpeechPlannerRequest,
+  SPEECH_PERFORMANCE_PROMPT_POLICIES,
+} from '../src/application/speech-performance-prompt.js';
+import {
+  createBackendSpeechPerformancePlanner,
+  executeSpeechPlannerAttempt,
+} from '../src/application/speech-performance-planner.js';
 import { loadConfig } from '../src/config/env.js';
 
 function createPrepared() {
@@ -36,6 +43,51 @@ function createPrepared() {
 }
 
 describe('application/speech-performance-planner', () => {
+  it('preserves the immutable v1 prompt bytes and hash', () => {
+    const expectedPrompt = [
+      'Create restrained, natural speech-performance cues for this ESL study text.',
+      'Do not rewrite words, add dialogue, or change segment order.',
+      'Use non-verbal cues sparingly. Prefer clarity over theatrical delivery.',
+      'Maintain a natural, consistent conversational tempo across adjacent segments.',
+      'Omit pace for ordinary dialogue.',
+      'Use slow, measured, or brisk only when a non-natural tempo is explicitly justified by the authored scene or learning goal.',
+      'Do not use pace merely to reinforce emotion, seriousness, regret, reflection, or intonation.',
+      'Only set freeFormDirection for segments whose selected voice supportsFreeFormDirection.',
+      JSON.stringify({
+        segments: createPrepared().segments,
+        voiceAssignments: createPrepared().voicePlan.assignments,
+      }),
+    ].join('\n\n');
+
+    expect(
+      buildSpeechPlannerRequest(
+        createPrepared(),
+        'speech-performance-v1-restrained-natural',
+        'gemini-3.1-flash-lite',
+      ),
+    ).toMatchObject({
+      prompt: expectedPrompt,
+      promptHash: 'a3f4e2a544f8594bb4af2550bce555353fe77f79f0053f6575e68f9b5cb23fc2',
+      promptPolicyVersion: 'speech-performance-v1-restrained-natural',
+      responseSchema: expect.objectContaining({ strict: true }),
+    });
+  });
+
+  it('defines the complete Inworld TTS-2 prompt policy', () => {
+    const policy = SPEECH_PERFORMANCE_PROMPT_POLICIES[
+      'speech-performance-v2-inworld-tts2'
+    ].join('\n');
+
+    expect(policy).toContain('authored words and segment order are immutable');
+    expect(policy).toContain('one complete free-form direction');
+    expect(policy).toContain('emotion, articulation, intonation, volume, pitch, range, speed');
+    expect(policy).toContain('Do not combine conflicting directions');
+    expect(policy).toContain('Optional cues must be sparse');
+    expect(policy).toContain('1000 ms');
+    expect(policy).toContain('one nonverbal cue total');
+    expect(policy).toContain('Omit pace for ordinary dialogue');
+  });
+
   it('stays disabled by default', () => {
     const config = loadConfig();
     expect(config.speechPlanner.enabled).toBe(false);
@@ -126,6 +178,8 @@ describe('application/speech-performance-planner', () => {
         provider: 'google_ai_studio',
         model: 'gemini-3.1-flash-lite',
         generatedAt: '2026-05-31T00:00:00.000Z',
+        promptPolicyVersion: 'speech-performance-v2-inworld-tts2',
+        promptHash: expect.stringMatching(/^[a-f0-9]{64}$/),
       },
       segments: [
         {
@@ -215,6 +269,38 @@ describe('application/speech-performance-planner', () => {
       rejectedOutput,
       rawText,
     } satisfies Partial<SpeechPerformancePlannerInvalidOutputError>);
+  });
+
+  it('returns invalid planner attempts without converting them to fallback plans', async () => {
+    const config = createEnabledConfig();
+    const rejectedOutput = {
+      segments: [{ id: 'segment-1', pauseAfterMs: 4000 }],
+    };
+    const rawText = JSON.stringify(rejectedOutput);
+
+    await expect(
+      executeSpeechPlannerAttempt({
+        config,
+        prepared: createPrepared(),
+        promptPolicyVersion: 'speech-performance-v2-inworld-tts2',
+        executor: vi.fn().mockResolvedValue({
+          output: rejectedOutput,
+          rawText,
+          usage: { totalTokens: 12 },
+        }),
+        now: () => new Date('2026-05-31T00:00:00.000Z'),
+      }),
+    ).resolves.toMatchObject({
+      promptPolicyVersion: 'speech-performance-v2-inworld-tts2',
+      promptHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+      rawText,
+      parsedCandidate: rejectedOutput,
+      validation: { status: 'invalid' },
+      plan: undefined,
+      fallback: undefined,
+      usage: { totalTokens: 12 },
+      latencyMs: 0,
+    });
   });
 });
 

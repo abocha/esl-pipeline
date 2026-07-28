@@ -1,7 +1,10 @@
 import type {
+  PreparedStudyTextSynthesis,
   SpeechPerformancePlan,
   SpeechPerformancePlanner,
   SpeechPerformancePlannerBinding,
+  SpeechPerformancePlannerFallbackReason,
+  SpeechPerformancePromptPolicyId,
 } from '@esl-pipeline/tts-core';
 import {
   createIdentitySpeechPerformancePlan,
@@ -20,6 +23,7 @@ import {
   executeGoogleStructuredGeneration,
   type ProviderStructuredExecutionResult,
 } from './generation-providers.js';
+import { buildSpeechPlannerRequest } from './speech-performance-prompt.js';
 
 type GoogleStructuredExecutor = typeof executeGoogleStructuredGeneration;
 
@@ -27,48 +31,100 @@ interface SpeechPlannerOutput {
   segments: Array<Record<string, unknown>>;
 }
 
-const SPEECH_PLAN_RESPONSE_SCHEMA = {
-  name: 'tts_speech_performance_plan',
-  description: 'Provider-neutral expressive speech cues for immutable study-text segments.',
-  strict: true,
-  schema: {
-    type: 'object',
-    additionalProperties: false,
-    required: ['segments'],
-    properties: {
-      segments: {
-        type: 'array',
-        items: {
-          type: 'object',
-          additionalProperties: false,
-          required: ['id'],
-          properties: {
-            id: { type: 'string' },
-            emotion: { type: 'string' },
-            intonation: { type: 'string' },
-            pace: { type: 'string', enum: ['slow', 'measured', 'natural', 'brisk'] },
-            emphasis: { type: 'array', items: { type: 'string' } },
-            pauseBeforeMs: { type: 'integer', minimum: 0, maximum: 3000 },
-            pauseAfterMs: { type: 'integer', minimum: 0, maximum: 3000 },
-            nonVerbalsBefore: {
-              type: 'array',
-              items: { type: 'string', enum: ['sigh', 'laugh', 'chuckle', 'breath'] },
-            },
-            nonVerbalsAfter: {
-              type: 'array',
-              items: { type: 'string', enum: ['sigh', 'laugh', 'chuckle', 'breath'] },
-            },
-            deliveryMode: {
-              type: 'string',
-              enum: ['STABLE', 'BALANCED', 'CREATIVE'],
-            },
-            freeFormDirection: { type: 'string' },
-          },
-        },
-      },
+export interface SpeechPlannerAttemptResult {
+  promptPolicyVersion: SpeechPerformancePromptPolicyId;
+  promptHash: string;
+  rawText?: string;
+  parsedCandidate?: unknown;
+  validation: { status: 'valid' } | { status: 'invalid'; reason: string };
+  plan?: SpeechPerformancePlan;
+  usage?: ProviderStructuredExecutionResult['usage'];
+  latencyMs: number;
+  fallback?: { reason: SpeechPerformancePlannerFallbackReason };
+}
+
+export async function executeSpeechPlannerAttempt(args: {
+  config: BatchBackendConfig;
+  prepared: PreparedStudyTextSynthesis;
+  promptPolicyVersion: SpeechPerformancePromptPolicyId;
+  executor?: GoogleStructuredExecutor;
+  budget?: GenerationBudgetGuardDependencies;
+  now?: () => Date;
+  repository?: ReturnType<typeof resolveGenerationBudgetRepository>;
+}): Promise<SpeechPlannerAttemptResult> {
+  const executor = args.executor ?? executeGoogleStructuredGeneration;
+  const now = args.now ?? (() => new Date());
+  const repository =
+    args.repository ??
+    resolveGenerationBudgetRepository({ config: args.config, overrides: args.budget });
+  const request = buildSpeechPlannerRequest(
+    args.prepared,
+    args.promptPolicyVersion,
+    args.config.speechPlanner.model,
+  );
+  const startedAt = now();
+  await enforceGenerationBudgetBeforeAttempt({
+    config: args.config,
+    provider: 'google_ai_studio',
+    model: args.config.speechPlanner.model,
+    prompt: request.prompt,
+    maxOutputTokens: args.config.speechPlanner.maxOutputTokens,
+    now: startedAt,
+    repository,
+    limits: {
+      rpmBudget: args.config.speechPlanner.rpmBudget,
+      dailyRequestBudget: args.config.speechPlanner.dailyRequestBudget,
     },
-  },
-} as const;
+  });
+  const result = await executor({
+    config: args.config.generation,
+    request: {
+      model: args.config.speechPlanner.model,
+      prompt: request.prompt,
+      maxOutputTokens: args.config.speechPlanner.maxOutputTokens,
+      responseSchema: request.responseSchema,
+    },
+  });
+  await recordUsage(args.config, repository, now, result);
+  const latencyMs = Math.max(0, now().getTime() - startedAt.getTime());
+  try {
+    const plan = validateSpeechPerformancePlan(
+      args.prepared,
+      mergePlannerOutput(args.prepared, result.output, {
+        provider: 'google_ai_studio',
+        model: args.config.speechPlanner.model,
+        generatedAt: now().toISOString(),
+        promptPolicyVersion: request.promptPolicyVersion,
+        promptHash: request.promptHash,
+      }),
+    );
+    return {
+      promptPolicyVersion: request.promptPolicyVersion,
+      promptHash: request.promptHash,
+      rawText: result.rawText,
+      parsedCandidate: result.output,
+      validation: { status: 'valid' },
+      plan,
+      usage: result.usage,
+      latencyMs,
+    };
+  } catch (error) {
+    return {
+      promptPolicyVersion: request.promptPolicyVersion,
+      promptHash: request.promptHash,
+      rawText: result.rawText,
+      parsedCandidate: result.output,
+      validation: {
+        status: 'invalid',
+        reason: error instanceof Error ? error.message : String(error),
+      },
+      plan: undefined,
+      usage: result.usage,
+      latencyMs,
+      fallback: undefined,
+    };
+  }
+}
 
 export function createBackendSpeechPerformancePlanner(
   config: BatchBackendConfig,
@@ -89,72 +145,29 @@ export function createBackendSpeechPerformancePlanner(
   return {
     planner: {
       async plan(prepared) {
-        const prompt = buildSpeechPlannerPrompt(prepared);
-        await enforceGenerationBudgetBeforeAttempt({
+        const attempt = await executeSpeechPlannerAttempt({
           config,
-          provider: 'google_ai_studio',
-          model: config.speechPlanner.model,
-          prompt,
-          maxOutputTokens: config.speechPlanner.maxOutputTokens,
-          now: now(),
+          prepared,
+          promptPolicyVersion: 'speech-performance-v2-inworld-tts2',
+          executor,
+          now,
           repository,
-          limits: {
-            rpmBudget: config.speechPlanner.rpmBudget,
-            dailyRequestBudget: config.speechPlanner.dailyRequestBudget,
-          },
         });
-        const result = await executor({
-          config: config.generation,
-          request: {
-            model: config.speechPlanner.model,
-            prompt,
-            maxOutputTokens: config.speechPlanner.maxOutputTokens,
-            responseSchema: SPEECH_PLAN_RESPONSE_SCHEMA,
+        if (attempt.plan) return attempt.plan;
+        throw new SpeechPerformancePlannerInvalidOutputError(
+          'Speech planner output failed validation.',
+          {
+            validationMessage:
+              attempt.validation.status === 'invalid'
+                ? attempt.validation.reason
+                : 'Speech planner output was not validated.',
+            rejectedOutput: attempt.parsedCandidate,
+            rawText: attempt.rawText,
           },
-        });
-        await recordUsage(config, repository, now, result);
-        try {
-          return validateSpeechPerformancePlan(
-            prepared,
-            mergePlannerOutput(prepared, result.output, {
-              provider: 'google_ai_studio',
-              model: config.speechPlanner.model,
-              generatedAt: now().toISOString(),
-            }),
-          );
-        } catch (error) {
-          throw new SpeechPerformancePlannerInvalidOutputError(
-            'Speech planner output failed validation.',
-            {
-              cause: error,
-              validationMessage: error instanceof Error ? error.message : String(error),
-              rejectedOutput: result.output,
-              rawText: result.rawText,
-            },
-          );
-        }
+        );
       },
     },
   };
-}
-
-function buildSpeechPlannerPrompt(
-  prepared: Parameters<SpeechPerformancePlanner['plan']>[0],
-): string {
-  return [
-    'Create restrained, natural speech-performance cues for this ESL study text.',
-    'Do not rewrite words, add dialogue, or change segment order.',
-    'Use non-verbal cues sparingly. Prefer clarity over theatrical delivery.',
-    'Maintain a natural, consistent conversational tempo across adjacent segments.',
-    'Omit pace for ordinary dialogue.',
-    'Use slow, measured, or brisk only when a non-natural tempo is explicitly justified by the authored scene or learning goal.',
-    'Do not use pace merely to reinforce emotion, seriousness, regret, reflection, or intonation.',
-    'Only set freeFormDirection for segments whose selected voice supportsFreeFormDirection.',
-    JSON.stringify({
-      segments: prepared.segments,
-      voiceAssignments: prepared.voicePlan?.assignments ?? [],
-    }),
-  ].join('\n\n');
 }
 
 function mergePlannerOutput(
