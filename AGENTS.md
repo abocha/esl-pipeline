@@ -4,7 +4,7 @@
 
 - Audience: AI agents and maintainers.
 - Authority Level: router + compact operating contract.
-- Last Verified Against: 2026-07-27 repo state.
+- Last Verified Against: 2026-07-28 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly or after major workflow/tooling changes.
 - Status: `router`.
@@ -160,6 +160,12 @@ workspace dependents, applies path-risk rules, and prints why packages or lanes 
 failure, read the reported artifact before rerunning raw commands. Use raw lanes only when the agent
 lane is missing or when the artifact shows that full stream output is needed for diagnosis.
 `check:fast:dry-run` prints the local working-tree scope and committed hosted CI preview separately.
+Affected and broad pre-PR validation execute selected lanes serially. Independent lanes continue
+after a failure so one run reports every available problem; prebuilt test lanes are marked blocked
+when their build prerequisite fails. Read the aggregate summary and cited lane artifacts before any
+rerun. Use an isolated rerun only to diagnose a specific failure; it does not replace canonical gate
+evidence. Repeat the complete gate only after relevant source, configuration, toolchain, or diagnosed
+prerequisite state changed.
 
 After focused tests, choose one normal pre-push gate: use `check:fast:agent` by default; use
 `check:pre-pr` directly when the branch is already broad, cross-cutting, shared-contract, or

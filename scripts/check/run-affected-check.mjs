@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   buildAffectedCheckPlan,
+  buildBroadCheckPlan,
   buildCiScopeDecision,
   collectChangedFileScopes,
   formatPlanSummary,
@@ -21,13 +22,21 @@ import {
   formatAgentCheckSummary,
   resolvePackageManagerCommand,
 } from './agent-check-lib.mjs';
+import { buildExecutionLanes, runExecutionLanes } from './execution-lane-lib.mjs';
 
 const repoRoot = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const cliArgs = process.argv.slice(2);
 const agentMode = cliArgs.includes('--agent');
 const dryRun = cliArgs.includes('--dry-run');
+const broadRun = cliArgs.includes('--broad');
 const baseRef = readOption('--base') ?? 'origin/main';
-const runLabel = agentMode ? 'check:fast:agent' : 'check:fast';
+const runLabel = broadRun
+  ? agentMode
+    ? 'check:pre-pr:agent'
+    : 'check:pre-pr'
+  : agentMode
+    ? 'check:fast:agent'
+    : 'check:fast';
 const timestamp = new Date().toISOString().replace(/[:.]/gu, '-');
 const startedMs = Date.now();
 
@@ -43,42 +52,40 @@ let plan;
 let hostedDecision;
 let uncommittedFiles = [];
 try {
-  const base = await resolveComparisonBase({
-    baseRef,
-    runGit,
-  });
-  const scopes = await collectChangedFileScopes({
-    mergeBase: base.mergeBase,
-    runGit,
-  });
-  const workspacePackages = readWorkspacePackages(repoRoot);
-  plan = buildAffectedCheckPlan({
-    baseRef: base.baseRef,
-    mergeBase: base.mergeBase,
-    changedFiles: scopes.localFiles,
-    workspacePackages,
-  });
-  hostedDecision = buildCiScopeDecision({
-    changedFileRecords: scopes.hostedRecords,
-    workspacePackages,
-  });
-  uncommittedFiles = scopes.uncommittedFiles;
+  if (broadRun) {
+    plan = buildBroadCheckPlan({ reason: 'explicit broad validation requested' });
+    hostedDecision = broadHostedDecision();
+  } else {
+    const base = await resolveComparisonBase({
+      baseRef,
+      runGit,
+    });
+    const scopes = await collectChangedFileScopes({
+      mergeBase: base.mergeBase,
+      runGit,
+    });
+    const workspacePackages = readWorkspacePackages(repoRoot);
+    plan = buildAffectedCheckPlan({
+      baseRef: base.baseRef,
+      mergeBase: base.mergeBase,
+      changedFiles: scopes.localFiles,
+      workspacePackages,
+    });
+    hostedDecision = buildCiScopeDecision({
+      changedFileRecords: scopes.hostedRecords,
+      workspacePackages,
+    });
+    uncommittedFiles = scopes.uncommittedFiles;
+  }
 } catch (error) {
   const reason = error instanceof Error ? error.message : String(error);
-  plan = buildBaseFailurePlan({
+  plan = buildBroadCheckPlan({
     baseRef,
+    mergeBase: '(unavailable)',
     reason,
+    fallback: true,
   });
-  hostedDecision = {
-    runtime: true,
-    integration: true,
-    backend_db_worker: true,
-    telegram: true,
-    docs_only: false,
-    changedFiles: [],
-    affectedPackages: [],
-    reasons: [{ code: 'comparison-base-failure', scope: 'all', subject: reason }],
-  };
+  hostedDecision = broadHostedDecision('comparison-base-failure', reason);
 }
 
 const planText = formatPlanSummary(plan);
@@ -92,7 +99,7 @@ writeFileSync(
 if (dryRun) {
   console.log(formatScopePreview({ planText, hostedDecision, uncommittedFiles }));
   console.log(`Artifacts: ${relativeArtifactPath(runArtifacts.runDir)}`);
-  process.exit(plan.fallback ? 1 : 0);
+  process.exit(plan.fallback && !broadRun ? 1 : 0);
 }
 
 if (!agentMode) {
@@ -100,19 +107,20 @@ if (!agentMode) {
   console.log('');
 }
 
-const laneResults = [];
 const lanes = buildExecutionLanes(plan);
-for (const lane of lanes) {
-  const result = await runLane(lane);
-  laneResults.push(result);
-  if (!agentMode) {
-    console.log(`${result.status === 'pass' ? 'PASS' : 'FAIL'} ${result.name}`);
-  }
-  if (result.status !== 'pass') break;
-}
+const laneResults = await runExecutionLanes({
+  lanes,
+  runLane,
+  onResult(result) {
+    if (!agentMode) {
+      const status = result.status === 'pass' ? 'PASS' : result.status.toUpperCase();
+      console.log(`${status} ${result.name}`);
+    }
+  },
+});
 
 const summary = buildAgentCheckSummary({
-  label: agentMode ? 'check:fast:agent' : 'check:fast',
+  label: runLabel,
   durationMs: Date.now() - startedMs,
   lanes: laneResults,
 });
@@ -135,30 +143,7 @@ if (plan.turbo) {
   }
 }
 
-process.exit(summary.firstFailure?.exitCode ?? 0);
-
-function buildExecutionLanes(currentPlan) {
-  const preTurboLanes = currentPlan.triggeredLanes.filter(
-    (lane) => !lane.id.startsWith('backend:'),
-  );
-  const postTurboLanes = currentPlan.triggeredLanes.filter((lane) =>
-    lane.id.startsWith('backend:'),
-  );
-  const lanes = [...preTurboLanes.map((lane) => ({ ...lane, kind: 'pnpm' }))];
-  if (currentPlan.turbo) {
-    lanes.push(
-      ...currentPlan.turbo.taskGroups.map((group) => ({
-        id: group.id,
-        pnpmArgs: group.args,
-        reason: `affected workspace package ${group.task} graph`,
-        repro: group.repro,
-        kind: 'pnpm',
-      })),
-    );
-  }
-  lanes.push(...postTurboLanes.map((lane) => ({ ...lane, kind: 'pnpm' })));
-  return lanes;
-}
+process.exit(summary.firstFailure?.exitCode ?? (summary.problems.length > 0 ? 1 : 0));
 
 async function runLane(lane) {
   const artifacts = buildAgentCheckArtifacts({
@@ -239,28 +224,19 @@ function runCommand(invocation) {
   });
 }
 
-function buildBaseFailurePlan({ baseRef, reason }) {
+function broadHostedDecision(
+  code = 'explicit-broad-validation',
+  subject = 'explicit broad validation requested',
+) {
   return {
-    baseRef,
-    mergeBase: '(unavailable)',
+    runtime: true,
+    integration: true,
+    backend_db_worker: true,
+    telegram: true,
+    docs_only: false,
     changedFiles: [],
-    changedPackages: [],
     affectedPackages: [],
-    dependencyPackages: [],
-    triggeredLanes: [
-      {
-        id: 'check:pre-pr',
-        pnpmArgs: ['run', 'check:pre-pr'],
-        reason,
-        repro: 'pnpm run check:pre-pr',
-      },
-    ],
-    skippedBroadLanes: [],
-    turbo: null,
-    fallback: {
-      lane: 'check:pre-pr',
-      reason,
-    },
+    reasons: [{ code, scope: 'all', subject }],
   };
 }
 
