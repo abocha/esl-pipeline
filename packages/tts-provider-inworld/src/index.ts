@@ -328,9 +328,19 @@ export async function buildStudyTextMp3Inworld(
     synthesizeChunk?: typeof synthesizeInworldChunkWithRetry;
     rendererPolicyVersion?: string;
     clientProvider?: InworldClientProvider;
+    apiKey?: string;
+    timeoutMs?: number;
+    sdkFactory?: InworldClientFactory;
   } = {},
 ): Promise<BuildStudyTextResult> {
-  const plan = await resolveAssignmentsForStudyText(input, opts, dependencies);
+  const clientProvider =
+    dependencies.clientProvider ??
+    createInworldClientProvider({
+      apiKey: dependencies.apiKey,
+      timeoutMs: dependencies.timeoutMs,
+      sdkFactory: dependencies.sdkFactory,
+    });
+  const plan = await resolveAssignmentsForStudyText(input, opts, { clientProvider });
   const { frontmatter, segments, normalizedText, model, assignments, voiceSummaries } = plan;
   const sampleRateHertz = resolveInworldSampleRateHertz();
   const voiceAssignments = Object.fromEntries(
@@ -498,7 +508,7 @@ export async function buildStudyTextMp3Inworld(
         sampleRateHertz,
         language: segment.language,
       },
-      { clientProvider: dependencies.clientProvider },
+      { clientProvider },
     );
     runFiles.push(chunkFilePath);
     runSegments.push({ speaker: segment.speaker });

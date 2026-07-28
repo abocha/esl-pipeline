@@ -133,6 +133,30 @@ describe('inworld provider adapter basics', () => {
     }
   });
 
+  it('shares one local SDK client across the exported study-text helper', async () => {
+    const outPath = join(tmpdir(), `inworld-study-text-${process.pid}-${Date.now()}`);
+    const sdkClient = {
+      listVoices: vi.fn().mockResolvedValue([]),
+      generate: vi.fn().mockResolvedValue(new Uint8Array([4, 5, 6])),
+    };
+    const sdkFactory = vi.fn(() => sdkClient);
+
+    try {
+      const result = await buildStudyTextMp3Inworld(
+        { context: createPreviewContext() },
+        { voiceMapPath: 'voices.yml', outPath, force: true, ttsModel: 'inworld-tts-2' },
+        { apiKey: 'test-api-key', sdkFactory },
+      );
+
+      expect(sdkFactory).toHaveBeenCalledTimes(1);
+      expect(sdkClient.listVoices).toHaveBeenCalledTimes(1);
+      expect(sdkClient.generate).toHaveBeenCalledTimes(1);
+      await expect(readFile(result.path)).resolves.toEqual(Buffer.from([4, 5, 6]));
+    } finally {
+      await rm(outPath, { recursive: true, force: true });
+    }
+  });
+
   it('does not construct the injected SDK client when credentials are missing', async () => {
     const sdkFactory = vi.fn();
     const provider = createInworldTtsProvider({ apiKey: undefined, sdkFactory });
