@@ -40,7 +40,9 @@ The paid public baseline is exactly 10 prompted TTS-2 fixtures x 2 models x 2 pr
 repetitions = 120 physical planner requests with zero automatic retries. A separate checked-in
 TTS 1.5 control suite follows production identity routing, exercises the real deterministic renderer
 and analyzer, and performs zero provider requests. Its results are not attributed to a planner model
-or prompt. The first Gemini 3.5 cell is the compatibility smoke. The dry run reports configured
+or prompt. Custom and private paid corpora must also select a prompted TTS model; identity-only
+fixtures are rejected before preflight or provider construction and belong in the deterministic
+control suite. The first Gemini 3.5 cell is the compatibility smoke. The dry run reports configured
 daily/RPM limits, remaining capacity, current-day usage as unverified, and the exact required
 allowlist state. A missing model is reported as remediation without blocking dry-run inspection; it
 remains fatal before any live provider construction.
@@ -76,6 +78,11 @@ immutable configuration, fixture, and control hashes, preflights only missing at
 appends them. It refuses mismatched or overwritten artifacts. If a call-intent, plan, or rendered
 artifact exists without its completed attempt record, resume fails closed as an indeterminate
 physical request and does not call the provider again.
+
+A safe interruption between attempts can resume: the new resume activity marks an earlier partial
+planner activity as interrupted while preserving its audit record. Completed live attempts require
+exact immutable call-intent artifacts, and their per-activity counts must reconcile before resume.
+Partial or failed selected-audio activity remains unresolved until a successful audio continuation.
 
 Schema 4 `run.json` records the resolved mode and paths, exact variants, non-secret environment flags,
 allowlist and configured-limit preflight facts, complete versioned price snapshot, source revision,

@@ -186,6 +186,64 @@ describe('speech planner evaluator', () => {
     expect(readSpeechPlannerEvalRunMetadata(runDirectory).status).toBe('partial');
   });
 
+  it('supersedes an interrupted planner activity on a safe later resume', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'speech-planner-activity-resume-'));
+    tempRoots.push(root);
+    const runDirectory = join(root, 'run');
+    const fixture = loadSpeechPlannerEvalFixtures()[0]!;
+    const variants = buildSpeechPlannerEvalMatrix({
+      fixtures: [fixture],
+      repetitions: 1,
+      models: ['gemini-3.1-flash-lite'],
+      promptPolicies: ['speech-performance-v2-inworld-tts2'],
+    });
+    await runSpeechPlannerEvaluation({
+      runDirectory,
+      gitSha: 'a'.repeat(40),
+      variants,
+      fixtures: [fixture],
+      priceSnapshot: loadSpeechPlannerPriceSnapshot(),
+      executeVariant: async () => ({
+        status: 'completed',
+        rawText: JSON.stringify({ segments: fixture.prepared.segments.map(({ id }) => ({ id })) }),
+        latencyMs: 1,
+      }),
+    });
+    const metadata = readSpeechPlannerEvalRunMetadata(runDirectory);
+    const runContext = {
+      mode: metadata.mode,
+      resolvedConfig: metadata.resolvedConfig,
+      environmentFlags: metadata.environmentFlags,
+      preflight: metadata.preflight,
+    };
+    beginSpeechPlannerEvalRunActivity({ runDirectory, kind: 'planner_resume', runContext });
+    const recoveryId = beginSpeechPlannerEvalRunActivity({
+      runDirectory,
+      kind: 'planner_resume',
+      runContext,
+    });
+    finishSpeechPlannerEvalRunActivity({
+      runDirectory,
+      activityId: recoveryId,
+      status: 'completed',
+      completedAttempts: 1,
+      completedControls: 0,
+      providerCalls: 0,
+    });
+
+    const recovered = readSpeechPlannerEvalRunMetadata(runDirectory);
+    expect(recovered.status).toBe('completed');
+    expect(recovered.activities).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'planner_resume',
+          status: 'interrupted',
+          normalizedErrorCategory: 'interrupted_before_resume',
+        }),
+      ]),
+    );
+  });
+
   it('keeps visible output and thinking tokens separate in transparent cost math', () => {
     expect(
       estimateSpeechPlannerAttemptCost({
@@ -264,6 +322,54 @@ describe('speech planner evaluator', () => {
           byFixture: { [fixture.id]: 1 },
           byFieldPair: { 'emotion,freeFormDirection': 1 },
           byCell: { [`${variant.model}|${variant.promptPolicyVersion}`]: 1 },
+        },
+      },
+    });
+  });
+
+  it('derives warning field pairs from a real evaluated plan without changing shared warnings', () => {
+    const fixture = loadSpeechPlannerEvalFixtures()[0]!;
+    const variant = buildSpeechPlannerEvalMatrix({ fixtures: [fixture], repetitions: 1 })[0]!;
+    const [first, ...remaining] = fixture.prepared.segments;
+    const record = evaluateSpeechPlannerAttemptRecord({
+      variant,
+      fixture,
+      rawText: JSON.stringify({
+        segments: [
+          {
+            id: first!.id,
+            emotion: 'warm',
+            intonation: 'gently rising',
+            freeFormDirection: 'Keep the delivery warm and clear.',
+            pace: 'measured',
+            pauseBeforeMs: 100,
+            pauseAfterMs: 200,
+            deliveryMode: 'BALANCED',
+          },
+          ...remaining.map(({ id }) => ({ id })),
+        ],
+      }),
+      latencyMs: 1,
+      priceSnapshot: loadSpeechPlannerPriceSnapshot(),
+    });
+
+    expect(summarizeSpeechPlannerEvalAttempts([record])).toMatchObject({
+      warningCounts: {
+        redundant_instruction_components: 1,
+        high_cue_density: 1,
+      },
+      warningBreakdown: {
+        redundant_instruction_components: {
+          byFieldPair: {
+            'emotion,freeFormDirection': 1,
+            'intonation,freeFormDirection': 1,
+          },
+        },
+        high_cue_density: {
+          byFieldPair: {
+            'emotion,freeFormDirection': 1,
+            'pauseBeforeMs,pauseAfterMs': 1,
+          },
         },
       },
     });
@@ -428,6 +534,7 @@ describe('speech planner evaluator', () => {
         mode: 'live',
         resolvedConfig: {
           corpusPath: 'packages/batch-backend/fixtures/speech-planner-eval/corpus-v1.json',
+          controlsPath: 'packages/batch-backend/fixtures/speech-planner-eval/controls-v1.json',
           priceSnapshotPath:
             'packages/batch-backend/fixtures/speech-planner-eval/pricing-2026-07-28.json',
           models: ['gemini-3.1-flash-lite', 'gemini-3.5-flash-lite'],
@@ -722,5 +829,36 @@ describe('speech planner evaluator', () => {
     expect(JSON.parse(readFileSync(join(runDirectory, 'run.json'), 'utf8'))).toMatchObject({
       activities: [expect.objectContaining({ providerCalls: 1 })],
     });
+
+    const callPath = join(runDirectory, 'calls', `${variants[0]!.attemptId}.json`);
+    const immutableCall = readFileSync(callPath, 'utf8');
+    rmSync(callPath);
+    await expect(
+      runSpeechPlannerEvaluation({
+        runDirectory,
+        gitSha: 'a'.repeat(40),
+        variants,
+        fixtures: [fixture],
+        priceSnapshot: loadSpeechPlannerPriceSnapshot(),
+        executeVariant,
+        resume: true,
+      }),
+    ).rejects.toThrow('call-intent');
+    writeFileSync(callPath, immutableCall, 'utf8');
+    const tampered = JSON.parse(immutableCall) as { retryAttempted: boolean };
+    tampered.retryAttempted = true;
+    writeFileSync(callPath, JSON.stringify(tampered, null, 2), 'utf8');
+    await expect(
+      runSpeechPlannerEvaluation({
+        runDirectory,
+        gitSha: 'a'.repeat(40),
+        variants,
+        fixtures: [fixture],
+        priceSnapshot: loadSpeechPlannerPriceSnapshot(),
+        executeVariant,
+        resume: true,
+      }),
+    ).rejects.toThrow('call-intent');
+    expect(executeVariant).toHaveBeenCalledOnce();
   });
 });
