@@ -68,6 +68,92 @@ describe('speech planner eval preflight', () => {
     ).toMatchObject({ allowed: false, category: 'rpm_unavailable' });
   });
 
+  it.each([Number.NaN, -1, 1.5])('rejects invalid current-day usage %s', (usedToday) => {
+    const variants = buildSpeechPlannerEvalMatrix({
+      fixtures: loadSpeechPlannerEvalFixtures(),
+      repetitions: 3,
+    });
+    expect(
+      preflightSpeechPlannerEval({
+        variants,
+        live: true,
+        credentialsPresent: true,
+        usedToday,
+        dailyLimit: 120,
+        rpm: 4,
+        allowedModels,
+      }),
+    ).toMatchObject({ allowed: false, category: 'invalid_usage' });
+    expect(() => createSpeechPlannerEvalBudgetRepository({ usedToday })).toThrow(
+      'nonnegative integer',
+    );
+  });
+
+  it.each([
+    { dailyLimit: Number.NaN, rpm: 4 },
+    { dailyLimit: -1, rpm: 4 },
+    { dailyLimit: 120.5, rpm: 4 },
+    { dailyLimit: 120, rpm: Number.NaN },
+    { dailyLimit: 120, rpm: 1.5 },
+  ])('rejects invalid configured limits %#', ({ dailyLimit, rpm }) => {
+    const variants = buildSpeechPlannerEvalMatrix({
+      fixtures: loadSpeechPlannerEvalFixtures(),
+      repetitions: 3,
+    });
+    expect(
+      preflightSpeechPlannerEval({
+        variants,
+        live: true,
+        credentialsPresent: true,
+        usedToday: 0,
+        dailyLimit,
+        rpm,
+        allowedModels,
+      }),
+    ).toMatchObject({ allowed: false, category: 'invalid_limits' });
+  });
+
+  it('requires both stable models even for a filtered or resumed live matrix', () => {
+    const variants = buildSpeechPlannerEvalMatrix({
+      fixtures: loadSpeechPlannerEvalFixtures().slice(0, 1),
+      repetitions: 1,
+      models: ['gemini-3.1-flash-lite'],
+    });
+    expect(
+      preflightSpeechPlannerEval({
+        variants,
+        live: true,
+        credentialsPresent: true,
+        usedToday: 0,
+        dailyLimit: 120,
+        rpm: 4,
+        allowedModels: ['gemini-3.1-flash-lite'],
+      }),
+    ).toMatchObject({
+      allowed: false,
+      category: 'model_not_allowed',
+      remediation: expect.stringContaining('gemini-3.5-flash-lite'),
+    });
+  });
+
+  it('reports remaining capacity in dry-run when usage is supplied', () => {
+    const variants = buildSpeechPlannerEvalMatrix({
+      fixtures: loadSpeechPlannerEvalFixtures().slice(0, 1),
+      repetitions: 1,
+    });
+    expect(
+      preflightSpeechPlannerEval({
+        variants,
+        live: false,
+        credentialsPresent: false,
+        usedToday: 7,
+        dailyLimit: 120,
+        rpm: 4,
+        allowedModels,
+      }),
+    ).toMatchObject({ allowed: true, usageVerified: true, remainingDailyCapacity: 113 });
+  });
+
   it('accepts the fixed run with renewable RPM and counts the smoke inside 120 attempts', () => {
     const variants = buildSpeechPlannerEvalMatrix({
       fixtures: loadSpeechPlannerEvalFixtures(),

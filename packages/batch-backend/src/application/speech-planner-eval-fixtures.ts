@@ -56,6 +56,14 @@ export type OfflineSpeechPlannerClassification =
   | 'unsafe_cue'
   | 'tts_1_5_protection';
 
+const OFFLINE_CLASSIFICATIONS = new Set<OfflineSpeechPlannerClassification>([
+  'valid',
+  'invalid',
+  'fallback_triggering',
+  'unsafe_cue',
+  'tts_1_5_protection',
+]);
+
 export interface OfflineSpeechPlannerOutput {
   id: string;
   fixtureId: string;
@@ -156,6 +164,9 @@ export function loadOfflineSpeechPlannerOutputs(
     const output = entry as OfflineSpeechPlannerOutput;
     if (!fixtureIds.has(output.fixtureId))
       throw new Error(`Unknown fixture ID: ${output.fixtureId}`);
+    if (!OFFLINE_CLASSIFICATIONS.has(output.expectedClassification)) {
+      throw new Error(`Unknown offline classification: ${String(output.expectedClassification)}`);
+    }
     if (typeof output.rawText !== 'string' || sha256(output.rawText) !== output.contentHash) {
       throw new Error(`Offline output hash mismatch: ${output.id}`);
     }

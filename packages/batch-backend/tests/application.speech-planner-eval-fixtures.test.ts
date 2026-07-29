@@ -1,3 +1,7 @@
+import { createHash } from 'node:crypto';
+import { rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -70,5 +74,28 @@ describe('speech planner evaluation fixtures', () => {
       new Set(['valid', 'invalid', 'fallback_triggering', 'unsafe_cue', 'tts_1_5_protection']),
     );
     expect(outputs.every((fixture) => /^[a-f0-9]{64}$/.test(fixture.contentHash))).toBe(true);
+  });
+
+  it('rejects unknown offline classification labels', () => {
+    const rawText = '{"segments":[]}';
+    const path = join(tmpdir(), `speech-planner-output-${process.pid}-${Date.now()}.json`);
+    writeFileSync(
+      path,
+      JSON.stringify([
+        {
+          id: 'misspelled-classification',
+          fixtureId: 'neutral-dialogue',
+          rawText,
+          expectedClassification: 'validd',
+          contentHash: createHash('sha256').update(rawText).digest('hex'),
+        },
+      ]),
+    );
+
+    try {
+      expect(() => loadOfflineSpeechPlannerOutputs(path)).toThrow('Unknown offline classification');
+    } finally {
+      rmSync(path, { force: true });
+    }
   });
 });

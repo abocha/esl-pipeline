@@ -2,9 +2,9 @@
   {
     "id": "valid-balanced",
     "fixtureId": "neutral-dialogue",
-    "rawText": "{\"segments\":[{\"id\":\"neutral-1\",\"deliveryMode\":\"BALANCED\"}]}",
+    "rawText": "{\"segments\":[{\"id\":\"neutral-1\",\"deliveryMode\":\"BALANCED\"},{\"id\":\"neutral-2\",\"deliveryMode\":\"BALANCED\"}]}",
     "expectedClassification": "valid",
-    "contentHash": "1e5b8bfb262f9497a0aa5022495dc11913443b803e1afdbd49193bdac8138c96"
+    "contentHash": "79cea8b05c59e5d11087e9d88946d48eeee60729e0d97973a0a103b68cf0c244"
   },
   {
     "id": "invalid-missing-segments",
