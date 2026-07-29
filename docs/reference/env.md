@@ -5,7 +5,7 @@
 - Audience: maintainers and implementing agents.
 - Read Time: 5 minutes.
 - Authority Level: environment contract reference.
-- Last Verified Against: 2026-06-13 repo state.
+- Last Verified Against: 2026-07-29 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly or after environment contract changes.
 - Status: `reference`.
