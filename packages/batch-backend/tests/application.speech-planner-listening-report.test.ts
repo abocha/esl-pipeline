@@ -25,6 +25,7 @@ function createBlockRecords(): SpeechPlannerEvalAttemptRecord[] {
       attemptId: `${requestedModel}-${index}`,
       fixtureId: 'neutral-dialogue',
       fixtureTags: ['neutral-dialogue'],
+      ttsModel: 'inworld-tts-2',
       requestedModel,
       promptPolicyVersion,
       repetition: 1,

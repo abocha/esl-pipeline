@@ -174,7 +174,7 @@ describe('speech planner evaluator', () => {
     expect(
       readFileSync(join(runDirectory, 'attempts.jsonl'), 'utf8').trim().split('\n'),
     ).toHaveLength(4);
-    expect(() =>
+    await expect(
       runSpeechPlannerEvaluation({
         runDirectory,
         gitSha: 'a'.repeat(40),

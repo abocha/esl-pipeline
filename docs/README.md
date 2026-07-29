@@ -57,6 +57,7 @@ Route each task to the smallest authoritative doc set. Use
 | Telegram operations              | [`operations/telegram-ops-control-panel.md`](operations/telegram-ops-control-panel.md)                                                                                                                                             |
 | Student-memory replay            | [`operations/student-memory-replay-backfill.md`](operations/student-memory-replay-backfill.md)                                                                                                                                     |
 | Prompt gallery bootstrap         | [`operations/prompt-gallery-bootstrap.md`](operations/prompt-gallery-bootstrap.md)                                                                                                                                                 |
+| Speech-planner evaluation        | [`operations/speech-planner-evaluation.md`](operations/speech-planner-evaluation.md)                                                                                                                                               |
 
 ## Product and Planning Routes
 

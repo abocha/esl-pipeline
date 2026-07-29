@@ -871,5 +871,6 @@ export {
   type InworldClientFactory,
   type InworldClientProvider,
 } from './client.js';
-export { FfmpegNotFoundError, resolveFfmpegPath } from './ffmpeg.js';
+export { concatMp3Segments, FfmpegNotFoundError, resolveFfmpegPath } from './ffmpeg.js';
 export { compileInworldSteeringInstruction, renderInworldSpeechSegment } from './rendering.js';
+export { type InworldSynthesisOptions, synthesizeInworldChunkWithRetry } from './synthesis.js';

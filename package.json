@@ -85,6 +85,7 @@
     "docs:stale:active": "node scripts/docs/find-stale-active-docs.mjs",
     "env:validate": "tsx --tsconfig packages/batch-backend/tsconfig.json packages/batch-backend/src/tools/validate-env.ts",
     "env:validate:example": "pnpm env:validate -- --example --profile=development",
+    "eval:speech-planner": "pnpm --filter @esl-pipeline/batch-backend speech-planner:eval",
     "format": "pnpm run format:biome && pnpm run format:prettier",
     "format:biome": "pnpm exec biome check --formatter-enabled=true --linter-enabled=false --assist-enabled=true .",
     "format:biome:write": "pnpm exec biome check --write --formatter-enabled=true --linter-enabled=false --assist-enabled=true .",
