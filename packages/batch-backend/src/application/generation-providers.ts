@@ -63,6 +63,18 @@ export interface ProviderStructuredExecutionResult {
   finishReason?: string;
 }
 
+export interface ProviderStructuredRawExecutionResult {
+  rawText: string;
+  model?: string;
+  providerRequestId?: string;
+  usage?: GenerateDraftUsage;
+  finishReason?: string;
+}
+
+export type StructuredJsonParseResult =
+  | { status: 'parsed'; output: unknown; extraction: 'direct' | 'object' | 'array' }
+  | { status: 'malformed'; reason: 'empty' | 'invalid_json' };
+
 export class ProviderExecutionError extends Error {
   readonly provider: GenerationProvider;
   readonly status?: number;
@@ -137,14 +149,14 @@ function parseErrorMessage(errorBody: unknown, fallback: string): string {
   return fallback;
 }
 
-function extractJsonValue(text: string): unknown {
+export function parseStructuredJsonText(text: string): StructuredJsonParseResult {
   const direct = text.trim();
   if (!direct) {
-    throw new Error('Structured output text was empty');
+    return { status: 'malformed', reason: 'empty' };
   }
 
   try {
-    return JSON.parse(direct);
+    return { status: 'parsed', output: JSON.parse(direct), extraction: 'direct' };
   } catch {
     // noop
   }
@@ -153,7 +165,11 @@ function extractJsonValue(text: string): unknown {
   const objectEnd = direct.lastIndexOf('}');
   if (objectStart !== -1 && objectEnd !== -1 && objectEnd > objectStart) {
     try {
-      return JSON.parse(direct.slice(objectStart, objectEnd + 1));
+      return {
+        status: 'parsed',
+        output: JSON.parse(direct.slice(objectStart, objectEnd + 1)),
+        extraction: 'object',
+      };
     } catch {
       // noop
     }
@@ -163,13 +179,27 @@ function extractJsonValue(text: string): unknown {
   const arrayEnd = direct.lastIndexOf(']');
   if (arrayStart !== -1 && arrayEnd !== -1 && arrayEnd > arrayStart) {
     try {
-      return JSON.parse(direct.slice(arrayStart, arrayEnd + 1));
+      return {
+        status: 'parsed',
+        output: JSON.parse(direct.slice(arrayStart, arrayEnd + 1)),
+        extraction: 'array',
+      };
     } catch {
       // noop
     }
   }
 
-  throw new Error('Structured output text did not contain valid JSON');
+  return { status: 'malformed', reason: 'invalid_json' };
+}
+
+function extractJsonValue(text: string): unknown {
+  const parsed = parseStructuredJsonText(text);
+  if (parsed.status === 'parsed') return parsed.output;
+  throw new Error(
+    parsed.reason === 'empty'
+      ? 'Structured output text was empty'
+      : 'Structured output text did not contain valid JSON',
+  );
 }
 
 function setUsageField<Key extends keyof GenerateDraftUsage>(
@@ -676,10 +706,10 @@ export async function executeGoogleGeneration(args: {
   };
 }
 
-export async function executeGoogleStructuredGeneration(args: {
+export async function executeGoogleStructuredGenerationRaw(args: {
   config: BatchBackendConfig['generation'];
   request: ProviderStructuredExecutionRequest;
-}): Promise<ProviderStructuredExecutionResult> {
+}): Promise<ProviderStructuredRawExecutionResult> {
   const apiKey = args.config.providers.googleAiStudio.apiKey;
   if (!apiKey) {
     throw new ProviderExecutionError({
@@ -767,30 +797,34 @@ export async function executeGoogleStructuredGeneration(args: {
     });
   }
 
-  let output: unknown;
-  try {
-    output = extractJsonValue(rawText);
-  } catch (error) {
-    throw new ProviderExecutionError({
-      provider: 'google_ai_studio',
-      message:
-        error instanceof Error
-          ? error.message
-          : 'Google AI Studio structured response JSON parsing failed',
-      status: 502,
-      code: 'malformed_structured_output',
-      rawText,
-    });
-  }
-
   return {
-    output,
     rawText,
     model: typeof cast.modelVersion === 'string' ? cast.modelVersion : undefined,
     providerRequestId: typeof cast.responseId === 'string' ? cast.responseId : undefined,
     usage: parseGoogleUsage(cast),
     finishReason: extractGoogleFinishReason(cast),
   };
+}
+
+export async function executeGoogleStructuredGeneration(args: {
+  config: BatchBackendConfig['generation'];
+  request: ProviderStructuredExecutionRequest;
+}): Promise<ProviderStructuredExecutionResult> {
+  const raw = await executeGoogleStructuredGenerationRaw(args);
+  const parsed = parseStructuredJsonText(raw.rawText);
+  if (parsed.status === 'malformed') {
+    throw new ProviderExecutionError({
+      provider: 'google_ai_studio',
+      message:
+        parsed.reason === 'empty'
+          ? 'Structured output text was empty'
+          : 'Structured output text did not contain valid JSON',
+      status: 502,
+      code: 'malformed_structured_output',
+      rawText: raw.rawText,
+    });
+  }
+  return { ...raw, output: parsed.output };
 }
 
 export async function executeOpenRouterGeneration(args: {

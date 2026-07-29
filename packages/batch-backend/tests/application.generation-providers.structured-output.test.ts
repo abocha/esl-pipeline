@@ -2,10 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   executeGoogleStructuredGeneration,
+  executeGoogleStructuredGenerationRaw,
   executeOpenAiGeneration,
   executeOpenAiStructuredGeneration,
   executeOpenRouterStructuredGeneration,
   ProviderExecutionError,
+  parseStructuredJsonText,
 } from '../src/application/generation-providers.js';
 import { createGenerationRequestEnvelope } from '../src/application/generation-request-envelope.js';
 import type { BatchBackendConfig } from '../src/config/env.js';
@@ -58,6 +60,56 @@ describe('application/generation-providers structured output', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  it('uses one parser for direct, wrapped, array, empty, and malformed JSON text', () => {
+    expect(parseStructuredJsonText('{"segments":[]}')).toMatchObject({
+      status: 'parsed',
+      output: { segments: [] },
+    });
+    expect(parseStructuredJsonText('result: {"segments":[]} done')).toMatchObject({
+      status: 'parsed',
+      output: { segments: [] },
+    });
+    expect(parseStructuredJsonText('result: [1,2] done')).toMatchObject({
+      status: 'parsed',
+      output: [1, 2],
+    });
+    expect(parseStructuredJsonText('')).toEqual({ status: 'malformed', reason: 'empty' });
+    expect(parseStructuredJsonText('not json')).toEqual({
+      status: 'malformed',
+      reason: 'invalid_json',
+    });
+  });
+
+  it('returns raw Google structured output without parsing it', async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValue(
+      createJsonResponse({
+        responseId: 'raw-1',
+        modelVersion: 'gemini-3.5-flash-lite-2026-07-21',
+        candidates: [{ content: { parts: [{ text: 'not json' }] }, finishReason: 'STOP' }],
+        usageMetadata: { promptTokenCount: 4, candidatesTokenCount: 2, totalTokenCount: 6 },
+      }),
+    );
+
+    await expect(
+      executeGoogleStructuredGenerationRaw({
+        config: createGenerationConfig(),
+        request: {
+          model: 'gemini-3.5-flash-lite',
+          prompt: 'planner prompt',
+          responseSchema: { name: 'speech_plan', schema: { type: 'object' } },
+          maxOutputTokens: 2400,
+        },
+      }),
+    ).resolves.toEqual({
+      rawText: 'not json',
+      model: 'gemini-3.5-flash-lite-2026-07-21',
+      providerRequestId: 'raw-1',
+      finishReason: 'STOP',
+      usage: { inputTokens: 4, outputTokens: 2, totalTokens: 6 },
+    });
   });
 
   it('sends trusted envelope instructions separately from OpenAI source-data input', async () => {
