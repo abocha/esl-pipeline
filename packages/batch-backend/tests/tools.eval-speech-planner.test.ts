@@ -311,6 +311,16 @@ describe('eval speech planner CLI', () => {
       ]),
     );
 
+    const plannerOnlyResume = await runEvalSpeechPlannerCli(
+      ['--live', '--used-today=4', `--resume-run=${first.runDirectory!}`],
+      { stdout: vi.fn(), config, gitSha: 'a'.repeat(40), executeAttempt },
+    );
+    expect(plannerOnlyResume).toMatchObject({ providerCalls: 0, synthesisCalls: 0 });
+    expect(JSON.parse(readFileSync(join(first.runDirectory!, 'run.json'), 'utf8'))).toMatchObject({
+      status: 'partial',
+      environmentFlags: { selectedAudio: true },
+    });
+
     const completedAudio = vi.fn(async () => 4);
     const audioResult = await runEvalSpeechPlannerCli(
       ['--live', '--audio=selected', '--used-today=4', `--resume-run=${first.runDirectory!}`],

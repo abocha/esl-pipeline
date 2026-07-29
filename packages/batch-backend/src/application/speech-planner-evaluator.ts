@@ -408,14 +408,25 @@ export function finishSpeechPlannerEvalRunActivity(args: {
         }
       : activity,
   );
+  let lastFailedAudioIndex = -1;
+  let lastCompletedAudioIndex = -1;
+  activities.forEach((activity, index) => {
+    if (activity.kind !== 'selected_audio') return;
+    if (activity.status === 'failed') lastFailedAudioIndex = index;
+    if (activity.status === 'completed') lastCompletedAudioIndex = index;
+  });
+  const hasUnresolvedAudioFailure = lastFailedAudioIndex > lastCompletedAudioIndex;
+  const hasPartialActivity = activities.some((activity) => activity.status === 'partial');
+  const runCompleted =
+    args.status === 'completed' && !hasUnresolvedAudioFailure && !hasPartialActivity;
   const updated: SpeechPlannerEvalRunMetadata = {
     ...metadata,
-    status: args.status === 'completed' ? 'completed' : 'partial',
-    ...(args.status === 'completed' ? { completedAt } : {}),
+    status: runCompleted ? 'completed' : 'partial',
+    ...(runCompleted ? { completedAt } : {}),
     ...(args.completedAttempts === undefined ? {} : { completedAttempts: args.completedAttempts }),
     activities,
   };
-  if (args.status === 'failed') delete updated.completedAt;
+  if (!runCompleted) delete updated.completedAt;
   writeAtomicFile(join(args.runDirectory, 'run.json'), JSON.stringify(updated, null, 2));
 }
 
