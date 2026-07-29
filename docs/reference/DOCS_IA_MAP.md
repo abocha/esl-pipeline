@@ -60,6 +60,7 @@ open the second only when the task crosses that boundary.
 | Product readiness                           | `docs/reference/PRODUCT_NORTH_STAR_AND_READINESS.md`                    | `docs/plans/2026-06-23-alpha-readiness.md`                   |
 | Broad V1 continuity                         | `docs/reference/V1_IMPLEMENTATION_TRACKER.md`                           | `docs/playbooks/RESTART_TOMORROW.md`                         |
 | Create or locate an active plan             | `docs/plans/README.md`                                                  | `docs/generated/plans-index.md`                              |
+| Repair or extend speech-planner evaluation  | `docs/plans/2026-07-29-speech-planner-evaluation-gap-remediation.md`    | `docs/operations/speech-planner-evaluation.md`               |
 | Execute an approved implementation artifact | Exact file under `docs/superpowers/specs/` or `docs/superpowers/plans/` | Current task-specific reference or runbook                   |
 
 ## Docs, Agent Harness, and Release
