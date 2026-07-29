@@ -169,6 +169,15 @@ export function buildSpeechPlannerEvalMatrix(args: {
   const promptPolicies = args.promptPolicies ?? SPEECH_PLANNER_EVAL_PROMPT_POLICIES;
   const variants: SpeechPlannerEvalVariant[] = [];
   for (const fixture of [...args.fixtures].sort((left, right) => left.id.localeCompare(right.id))) {
+    const capabilities = getTtsModelCapabilities(
+      fixture.prepared.selection.provider,
+      fixture.prepared.selection.model,
+    );
+    if (capabilities.planningMode !== 'prompted') {
+      throw new Error(
+        `Paid speech planner eval fixtures must select a prompted TTS model: ${fixture.id}`,
+      );
+    }
     for (const model of models) {
       for (const promptPolicyVersion of promptPolicies) {
         for (let repetition = 1; repetition <= args.repetitions; repetition += 1) {

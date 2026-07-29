@@ -80,6 +80,42 @@ function issueCodes(record: SpeechPlannerEvalAttemptRecord): string[] {
   ].map((issue) => issue.code);
 }
 
+function warningFieldPairs(
+  record: SpeechPlannerEvalAttemptRecord,
+  warning: { code: string; segmentId?: string; detail?: Record<string, string | number | boolean> },
+): string[] {
+  const explicit = warning.detail?.fields;
+  if (typeof explicit === 'string') return [explicit];
+  const segment = record.plan?.segments.find((candidate) => candidate.id === warning.segmentId);
+  if (!segment) return [];
+  const allFields = [
+    'emotion',
+    'intonation',
+    'freeFormDirection',
+    'pace',
+    'pauseBeforeMs',
+    'pauseAfterMs',
+    'nonVerbalsBefore',
+    'nonVerbalsAfter',
+    'emphasis',
+    'deliveryMode',
+  ].filter((field) => {
+    const value = segment[field as keyof typeof segment];
+    return Array.isArray(value) ? value.length > 0 : value !== undefined;
+  });
+  const fields =
+    warning.code === 'redundant_instruction_components'
+      ? allFields.filter((field) => ['emotion', 'intonation', 'freeFormDirection'].includes(field))
+      : allFields;
+  const pairs: string[] = [];
+  for (let left = 0; left < fields.length; left += 1) {
+    for (let right = left + 1; right < fields.length; right += 1) {
+      pairs.push(`${fields[left]},${fields[right]}`);
+    }
+  }
+  return pairs;
+}
+
 function summarizeWithoutCells(
   records: readonly SpeechPlannerEvalAttemptRecord[],
 ): Omit<SpeechPlannerEvalSummary, 'cells' | 'controls'> {
@@ -112,8 +148,7 @@ function summarizeWithoutCells(
       });
       breakdown.total += 1;
       breakdown.byFixture[record.fixtureId] = (breakdown.byFixture[record.fixtureId] ?? 0) + 1;
-      const fields = warning.detail?.fields;
-      if (typeof fields === 'string') {
+      for (const fields of warningFieldPairs(record, warning)) {
         breakdown.byFieldPair[fields] = (breakdown.byFieldPair[fields] ?? 0) + 1;
       }
       const cell = `${record.requestedModel}|${record.promptPolicyVersion}`;

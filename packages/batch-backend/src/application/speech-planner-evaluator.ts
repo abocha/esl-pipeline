@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import {
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   renameSync,
   unlinkSync,
@@ -373,7 +374,7 @@ export interface SpeechPlannerEvalRunMetadata {
 export interface SpeechPlannerEvalRunActivity {
   id: string;
   kind: 'planner_initial' | 'planner_resume' | 'selected_audio';
-  status: 'partial' | 'completed' | 'failed';
+  status: 'partial' | 'completed' | 'failed' | 'interrupted';
   startedAt: string;
   completedAt?: string;
   environmentFlags: SpeechPlannerEvalRunContext['environmentFlags'];
@@ -421,6 +422,19 @@ export function beginSpeechPlannerEvalRunActivity(args: {
 }): string {
   const metadata = readSpeechPlannerEvalRunMetadata(args.runDirectory);
   const id = randomUUID();
+  const interruptedAt = new Date().toISOString();
+  const priorActivities = metadata.activities.map((activity) =>
+    args.kind === 'planner_resume' &&
+    activity.status === 'partial' &&
+    (activity.kind === 'planner_initial' || activity.kind === 'planner_resume')
+      ? {
+          ...activity,
+          status: 'interrupted' as const,
+          completedAt: interruptedAt,
+          normalizedErrorCategory: 'interrupted_before_resume',
+        }
+      : activity,
+  );
   const pending: SpeechPlannerEvalRunMetadata = {
     ...metadata,
     status: 'partial',
@@ -429,7 +443,7 @@ export function beginSpeechPlannerEvalRunActivity(args: {
       selectedAudio: metadata.environmentFlags.selectedAudio || args.kind === 'selected_audio',
     },
     activities: [
-      ...metadata.activities,
+      ...priorActivities,
       {
         id,
         kind: args.kind,
@@ -667,21 +681,36 @@ function assertNoIndeterminateAttempts(args: {
   }
 }
 
-function recordPhysicalCallIntent(runDirectory: string, variant: SpeechPlannerEvalVariant): void {
+interface SpeechPlannerPhysicalCallIntent {
+  attemptId: string;
+  activityId: string;
+  fixtureId: string;
+  requestedModel: SpeechPlannerEvalModel;
+  promptPolicyVersion: SpeechPlannerEvalVariant['promptPolicyVersion'];
+  repetition: number;
+  retryAttempted: false;
+}
+
+function physicalCallIntentContent(intent: SpeechPlannerPhysicalCallIntent): string {
+  return JSON.stringify(intent, null, 2);
+}
+
+function recordPhysicalCallIntent(
+  runDirectory: string,
+  variant: SpeechPlannerEvalVariant,
+  activityId: string,
+): void {
   writeImmutableFile(
     join(runDirectory, 'calls', `${variant.attemptId}.json`),
-    JSON.stringify(
-      {
-        attemptId: variant.attemptId,
-        fixtureId: variant.fixtureId,
-        requestedModel: variant.model,
-        promptPolicyVersion: variant.promptPolicyVersion,
-        repetition: variant.repetition,
-        retryAttempted: false,
-      },
-      null,
-      2,
-    ),
+    physicalCallIntentContent({
+      attemptId: variant.attemptId,
+      activityId,
+      fixtureId: variant.fixtureId,
+      requestedModel: variant.model,
+      promptPolicyVersion: variant.promptPolicyVersion,
+      repetition: variant.repetition,
+      retryAttempted: false,
+    }),
   );
 }
 
@@ -709,6 +738,8 @@ function planArtifactContent(record: SpeechPlannerEvalAttemptRecord): string {
 function validateImmutableArtifacts(
   runDirectory: string,
   records: readonly SpeechPlannerEvalAttemptRecord[],
+  metadata: SpeechPlannerEvalRunMetadata,
+  variants: readonly SpeechPlannerEvalVariant[],
 ): void {
   for (const record of records) {
     if (record.rawText !== undefined) {
@@ -725,6 +756,65 @@ function validateImmutableArtifacts(
       ) {
         throw new Error(`Speech planner eval immutable artifact mismatch: ${renderedPath}`);
       }
+    }
+  }
+  if (metadata.mode !== 'live') return;
+  const variantsById = new Map(variants.map((variant) => [variant.attemptId, variant]));
+  const plannerActivityIds = new Set(
+    metadata.activities
+      .filter((activity) => activity.kind !== 'selected_audio')
+      .map((activity) => activity.id),
+  );
+  const expectedAttemptIds = new Set(
+    records
+      .filter((record) => record.promptedPlanStatus !== 'skipped_incompatible')
+      .map((record) => record.attemptId),
+  );
+  const callsDirectory = join(runDirectory, 'calls');
+  const callFiles = existsSync(callsDirectory)
+    ? readdirSync(callsDirectory).filter((name) => name.endsWith('.json'))
+    : [];
+  const actualAttemptIds = new Set(callFiles.map((name) => name.slice(0, -'.json'.length)));
+  if (
+    actualAttemptIds.size !== expectedAttemptIds.size ||
+    [...actualAttemptIds].some((attemptId) => !expectedAttemptIds.has(attemptId))
+  ) {
+    throw new Error('Speech planner eval physical call-intent artifacts do not match attempts.');
+  }
+  const callsByActivity = new Map<string, number>();
+  for (const attemptId of expectedAttemptIds) {
+    const variant = variantsById.get(attemptId);
+    const path = join(callsDirectory, `${attemptId}.json`);
+    if (!variant || !existsSync(path)) {
+      throw new Error(`Speech planner eval immutable call-intent artifact mismatch: ${path}`);
+    }
+    let intent: SpeechPlannerPhysicalCallIntent;
+    try {
+      intent = JSON.parse(readFileSync(path, 'utf8')) as SpeechPlannerPhysicalCallIntent;
+    } catch {
+      throw new Error(`Speech planner eval immutable call-intent artifact mismatch: ${path}`);
+    }
+    if (
+      !plannerActivityIds.has(intent.activityId) ||
+      readFileSync(path, 'utf8') !==
+        physicalCallIntentContent({
+          attemptId: variant.attemptId,
+          activityId: intent.activityId,
+          fixtureId: variant.fixtureId,
+          requestedModel: variant.model,
+          promptPolicyVersion: variant.promptPolicyVersion,
+          repetition: variant.repetition,
+          retryAttempted: false,
+        })
+    ) {
+      throw new Error(`Speech planner eval immutable call-intent artifact mismatch: ${path}`);
+    }
+    callsByActivity.set(intent.activityId, (callsByActivity.get(intent.activityId) ?? 0) + 1);
+  }
+  for (const activity of metadata.activities) {
+    if (activity.kind === 'selected_audio' || activity.providerCalls === undefined) continue;
+    if ((callsByActivity.get(activity.id) ?? 0) !== activity.providerCalls) {
+      throw new Error(`Speech planner eval activity call count mismatch: ${activity.id}`);
     }
   }
 }
@@ -905,7 +995,9 @@ export async function runSpeechPlannerEvaluation(args: {
   });
 
   const records = readAttempts(attemptsPath);
-  if (args.resume) validateImmutableArtifacts(args.runDirectory, records);
+  if (args.resume) {
+    validateImmutableArtifacts(args.runDirectory, records, metadata, args.variants);
+  }
   const completed = new Set(records.map((record) => record.attemptId));
   if (args.resume) {
     assertNoIndeterminateAttempts({
@@ -965,7 +1057,7 @@ export async function runSpeechPlannerEvaluation(args: {
     let result: ExecuteVariantResult;
     try {
       if (activityContext.mode === 'live') {
-        recordPhysicalCallIntent(args.runDirectory, variant);
+        recordPhysicalCallIntent(args.runDirectory, variant, activityId);
         providerCalls += 1;
       }
       result = await args.executeVariant(variant);

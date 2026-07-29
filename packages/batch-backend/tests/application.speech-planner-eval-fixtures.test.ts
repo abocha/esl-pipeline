@@ -44,6 +44,25 @@ describe('speech planner evaluation fixtures', () => {
     expect(matrix[0]?.attemptId).toMatch(/^[a-z0-9-]+-[a-f0-9]{12}$/);
   });
 
+  it('rejects identity-only TTS fixtures before constructing paid planner variants', () => {
+    const control = loadSpeechPlannerEvalControls()[0]!;
+    expect(() =>
+      buildSpeechPlannerEvalMatrix({
+        fixtures: [
+          {
+            id: 'identity-private-fixture',
+            why: 'must not be remotely planned',
+            tags: ['private'],
+            prepared: control.prepared,
+            expectedHardInvariants: [],
+            contentHash: 'a'.repeat(64),
+          },
+        ],
+        repetitions: 1,
+      }),
+    ).toThrow('must select a prompted TTS model');
+  });
+
   it('covers the approved synthetic corpus categories without private identifiers', () => {
     const fixtures = loadSpeechPlannerEvalFixtures();
     const tags = new Set(fixtures.flatMap((fixture) => fixture.tags));

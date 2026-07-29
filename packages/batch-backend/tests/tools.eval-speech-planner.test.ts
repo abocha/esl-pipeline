@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { loadSpeechPlannerEvalControls } from '../src/application/speech-planner-eval-fixtures.js';
 import type { SpeechPlannerEvalAttemptRecord } from '../src/application/speech-planner-evaluator.js';
 import { loadConfig } from '../src/config/env.js';
 import {
@@ -86,6 +87,36 @@ describe('eval speech planner CLI', () => {
       missingRequiredModels: ['gemini-3.5-flash-lite'],
       plannerAttempts: 120,
     });
+    expect(executeAttempt).not.toHaveBeenCalled();
+  });
+
+  it('rejects identity-only custom fixtures before any planner provider call', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'speech-eval-identity-corpus-'));
+    roots.push(root);
+    const corpusPath = join(root, 'corpus.json');
+    const control = loadSpeechPlannerEvalControls()[0]!;
+    writeFileSync(
+      corpusPath,
+      JSON.stringify([
+        {
+          id: 'identity-custom-fixture',
+          why: 'production routes this without remote planning',
+          tags: ['identity'],
+          prepared: control.prepared,
+          expectedHardInvariants: [],
+        },
+      ]),
+    );
+    const executeAttempt = vi.fn();
+
+    await expect(
+      runEvalSpeechPlannerCli([`--corpus=${corpusPath}`], {
+        stdout: vi.fn(),
+        config: loadConfig(),
+        gitSha: 'a'.repeat(40),
+        executeAttempt,
+      }),
+    ).rejects.toThrow('must select a prompted TTS model');
     expect(executeAttempt).not.toHaveBeenCalled();
   });
 
