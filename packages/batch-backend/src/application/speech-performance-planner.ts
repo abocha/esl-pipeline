@@ -21,12 +21,13 @@ import {
   resolveGenerationBudgetRepository,
 } from './generation-budget-guard.js';
 import {
-  executeGoogleStructuredGeneration,
-  type ProviderStructuredExecutionResult,
+  executeGoogleStructuredGenerationRaw,
+  type ProviderStructuredRawExecutionResult,
+  parseStructuredJsonText,
 } from './generation-providers.js';
 import { buildSpeechPlannerRequest } from './speech-performance-prompt.js';
 
-type GoogleStructuredExecutor = typeof executeGoogleStructuredGeneration;
+type GoogleStructuredExecutor = typeof executeGoogleStructuredGenerationRaw;
 
 interface SpeechPlannerOutput {
   segments: Array<Record<string, unknown>>;
@@ -36,11 +37,15 @@ export interface SpeechPlannerAttemptResult {
   promptPolicyVersion: SpeechPerformancePromptPolicyId;
   promptHash: string;
   rawText?: string;
+  rawParse?: ReturnType<typeof parseStructuredJsonText>;
   parsedCandidate?: unknown;
   candidateAnalysis?: import('@esl-pipeline/tts-core').SpeechPlanCandidateAnalysis;
   validation: { status: 'valid' } | { status: 'invalid'; reason: string };
   plan?: SpeechPerformancePlan;
-  usage?: ProviderStructuredExecutionResult['usage'];
+  usage?: ProviderStructuredRawExecutionResult['usage'];
+  returnedModel?: string;
+  providerRequestId?: string;
+  finishReason?: string;
   latencyMs: number;
   fallback?: { reason: SpeechPerformancePlannerFallbackReason };
 }
@@ -54,7 +59,7 @@ export async function executeSpeechPlannerAttempt(args: {
   now?: () => Date;
   repository?: ReturnType<typeof resolveGenerationBudgetRepository>;
 }): Promise<SpeechPlannerAttemptResult> {
-  const executor = args.executor ?? executeGoogleStructuredGeneration;
+  const executor = args.executor ?? executeGoogleStructuredGenerationRaw;
   const now = args.now ?? (() => new Date());
   const repository =
     args.repository ??
@@ -88,62 +93,99 @@ export async function executeSpeechPlannerAttempt(args: {
     },
   });
   await recordUsage(args.config, repository, now, result);
-  const latencyMs = Math.max(0, now().getTime() - startedAt.getTime());
-  const candidateAnalysis = analyzeSpeechPlanCandidate(args.prepared, result.output);
+  const finishedAt = now();
+  return evaluateSpeechPlannerRawOutput({
+    prepared: args.prepared,
+    rawText: result.rawText,
+    promptPolicyVersion: request.promptPolicyVersion,
+    promptHash: request.promptHash,
+    plannerModel: args.config.speechPlanner.model,
+    generatedAt: finishedAt.toISOString(),
+    latencyMs: Math.max(0, finishedAt.getTime() - startedAt.getTime()),
+    usage: result.usage,
+    returnedModel: result.model,
+    providerRequestId: result.providerRequestId,
+    finishReason: result.finishReason,
+  });
+}
+
+export function evaluateSpeechPlannerRawOutput(args: {
+  prepared: PreparedStudyTextSynthesis;
+  rawText: string;
+  promptPolicyVersion: SpeechPerformancePromptPolicyId;
+  promptHash: string;
+  plannerModel: string;
+  generatedAt: string;
+  latencyMs: number;
+  usage?: ProviderStructuredRawExecutionResult['usage'];
+  returnedModel?: string;
+  providerRequestId?: string;
+  finishReason?: string;
+}): SpeechPlannerAttemptResult {
+  const rawParse = parseStructuredJsonText(args.rawText);
+  const metadata = {
+    promptPolicyVersion: args.promptPolicyVersion,
+    promptHash: args.promptHash,
+    rawText: args.rawText,
+    rawParse,
+    usage: args.usage,
+    latencyMs: args.latencyMs,
+    returnedModel: args.returnedModel,
+    providerRequestId: args.providerRequestId,
+    finishReason: args.finishReason,
+  };
+  if (rawParse.status === 'malformed') {
+    return {
+      ...metadata,
+      validation: { status: 'invalid', reason: 'malformed_structured_output' },
+      plan: undefined,
+      fallback: { reason: 'planner_invalid' },
+    };
+  }
+  const candidate = rawParse.output;
+  const candidateAnalysis = analyzeSpeechPlanCandidate(args.prepared, candidate);
   if (candidateAnalysis.hardFailures.length > 0) {
     return {
-      promptPolicyVersion: request.promptPolicyVersion,
-      promptHash: request.promptHash,
-      rawText: result.rawText,
-      parsedCandidate: result.output,
+      ...metadata,
+      parsedCandidate: candidate,
       candidateAnalysis,
       validation: {
         status: 'invalid',
         reason: candidateAnalysis.hardFailures.map((failure) => failure.code).join(','),
       },
       plan: undefined,
-      usage: result.usage,
-      latencyMs,
-      fallback: undefined,
+      fallback: { reason: 'planner_invalid' },
     };
   }
   try {
     const plan = validateSpeechPerformancePlan(
       args.prepared,
-      mergePlannerOutput(args.prepared, result.output, {
+      mergePlannerOutput(args.prepared, candidate, {
         provider: 'google_ai_studio',
-        model: args.config.speechPlanner.model,
-        generatedAt: now().toISOString(),
-        promptPolicyVersion: request.promptPolicyVersion,
-        promptHash: request.promptHash,
+        model: args.plannerModel,
+        generatedAt: args.generatedAt,
+        promptPolicyVersion: args.promptPolicyVersion,
+        promptHash: args.promptHash,
       }),
     );
     return {
-      promptPolicyVersion: request.promptPolicyVersion,
-      promptHash: request.promptHash,
-      rawText: result.rawText,
-      parsedCandidate: result.output,
+      ...metadata,
+      parsedCandidate: candidate,
       candidateAnalysis,
       validation: { status: 'valid' },
       plan,
-      usage: result.usage,
-      latencyMs,
     };
   } catch (error) {
     return {
-      promptPolicyVersion: request.promptPolicyVersion,
-      promptHash: request.promptHash,
-      rawText: result.rawText,
-      parsedCandidate: result.output,
+      ...metadata,
+      parsedCandidate: candidate,
       candidateAnalysis,
       validation: {
         status: 'invalid',
         reason: error instanceof Error ? error.message : String(error),
       },
       plan: undefined,
-      usage: result.usage,
-      latencyMs,
-      fallback: undefined,
+      fallback: { reason: 'planner_invalid' },
     };
   }
 }
@@ -160,7 +202,7 @@ export function createBackendSpeechPerformancePlanner(
   if (!config.generation.providers.googleAiStudio.apiKey) {
     return { unavailableReason: 'planner_missing_credentials' };
   }
-  const executor = overrides.executor ?? executeGoogleStructuredGeneration;
+  const executor = overrides.executor ?? executeGoogleStructuredGenerationRaw;
   const now = overrides.now ?? (() => new Date());
   const repository = resolveGenerationBudgetRepository({ config, overrides: overrides.budget });
 
@@ -245,7 +287,7 @@ async function recordUsage(
   config: BatchBackendConfig,
   repository: ReturnType<typeof resolveGenerationBudgetRepository>,
   now: () => Date,
-  result: ProviderStructuredExecutionResult,
+  result: ProviderStructuredRawExecutionResult,
 ): Promise<void> {
   await recordGenerationBudgetUsageAfterSuccess({
     config,

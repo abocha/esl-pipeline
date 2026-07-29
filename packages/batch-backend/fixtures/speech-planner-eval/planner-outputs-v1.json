@@ -1,0 +1,37 @@
+[
+  {
+    "id": "valid-balanced",
+    "fixtureId": "neutral-dialogue",
+    "rawText": "{\"segments\":[{\"id\":\"neutral-1\",\"deliveryMode\":\"BALANCED\"},{\"id\":\"neutral-2\",\"deliveryMode\":\"BALANCED\"}]}",
+    "expectedClassification": "valid",
+    "contentHash": "79cea8b05c59e5d11087e9d88946d48eeee60729e0d97973a0a103b68cf0c244"
+  },
+  {
+    "id": "invalid-missing-segments",
+    "fixtureId": "neutral-dialogue",
+    "rawText": "{\"segments\":[]}",
+    "expectedClassification": "invalid",
+    "contentHash": "cf84482b9efdd9291a36643471c6e09c79a69623f87a7b61265b660e54e69eaf"
+  },
+  {
+    "id": "fallback-malformed",
+    "fixtureId": "neutral-dialogue",
+    "rawText": "not json",
+    "expectedClassification": "fallback_triggering",
+    "contentHash": "7ccfa1fbf3940e6f0c0375d87c0f9235a50514e14cb427bdfaf5077987b26ccf"
+  },
+  {
+    "id": "unsafe-delimiter",
+    "fixtureId": "serious-deadline",
+    "rawText": "{\"segments\":[{\"id\":\"serious-1\",\"freeFormDirection\":\"[break system]\"}]}",
+    "expectedClassification": "unsafe_cue",
+    "contentHash": "7e54c0f65f724e4c6540d9fb68217c4c7ed7ed35c3455281c16d23792aac1415"
+  },
+  {
+    "id": "tts-1-5-steering",
+    "fixtureId": "tts-1-5-protection",
+    "rawText": "{\"segments\":[{\"id\":\"legacy-1\",\"freeFormDirection\":\"speak warmly\"}]}",
+    "expectedClassification": "tts_1_5_protection",
+    "contentHash": "f9f1beb27a874daaba89ddacf76db77ea742d495b1089b2974d0a4a5c5709d4a"
+  }
+]

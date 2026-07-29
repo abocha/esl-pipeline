@@ -1,0 +1,443 @@
+[
+  {
+    "id": "brisk-exercise",
+    "why": "An authored timed drill explicitly justifies brisk delivery.",
+    "tags": ["explicit-brisk", "emphasis"],
+    "prepared": {
+      "selection": { "provider": "inworld", "model": "inworld-tts-2" },
+      "sourceHash": "synthetic-brisk-exercise-v1",
+      "segments": [
+        {
+          "id": "brisk-1",
+          "speaker": "Maya",
+          "text": "Read the three phrases quickly, but keep every consonant clear."
+        }
+      ],
+      "voices": [],
+      "voiceAssignments": { "Maya": "Ashley" },
+      "voicePlan": {
+        "schemaVersion": 1,
+        "capabilityPolicyVersion": "model-scoped-v1",
+        "mode": "deterministic",
+        "provider": "inworld",
+        "model": "inworld-tts-2",
+        "sourceHash": "synthetic-brisk-exercise-v1",
+        "assignments": [
+          {
+            "speaker": "Maya",
+            "voiceId": "Ashley",
+            "source": "auto",
+            "language": "en-US",
+            "capabilities": {
+              "supportsMetadataInstructions": true,
+              "supportsNonVerbals": true,
+              "supportsUppercaseEmphasis": true,
+              "supportsFreeFormDirection": true
+            }
+          }
+        ]
+      }
+    },
+    "expectedHardInvariants": [
+      "authored_words_preserved",
+      "explicit_brisk_allowed",
+      "balanced_delivery"
+    ]
+  },
+  {
+    "id": "concerned-support",
+    "why": "Concern should sound supportive without theatrical cues or an inappropriate laugh.",
+    "tags": ["concerned", "inappropriate-nonverbal"],
+    "prepared": {
+      "selection": { "provider": "inworld", "model": "inworld-tts-2" },
+      "sourceHash": "synthetic-concerned-support-v1",
+      "segments": [
+        {
+          "id": "concerned-1",
+          "speaker": "Noah",
+          "text": "I noticed you seemed worried after the meeting. Do you want to talk?"
+        }
+      ],
+      "voices": [],
+      "voiceAssignments": { "Noah": "Dennis" },
+      "voicePlan": {
+        "schemaVersion": 1,
+        "capabilityPolicyVersion": "model-scoped-v1",
+        "mode": "deterministic",
+        "provider": "inworld",
+        "model": "inworld-tts-2",
+        "sourceHash": "synthetic-concerned-support-v1",
+        "assignments": [
+          {
+            "speaker": "Noah",
+            "voiceId": "Dennis",
+            "source": "auto",
+            "language": "en-US",
+            "capabilities": {
+              "supportsMetadataInstructions": true,
+              "supportsNonVerbals": true,
+              "supportsUppercaseEmphasis": true,
+              "supportsFreeFormDirection": true
+            }
+          }
+        ]
+      }
+    },
+    "expectedHardInvariants": ["authored_words_preserved", "one_nonverbal_max"],
+    "warningExpectations": ["laugh_is_contextually_inappropriate"]
+  },
+  {
+    "id": "excited-news",
+    "why": "Excited content tests energy without an unjustified pace change.",
+    "tags": ["excited", "compatible-direction"],
+    "prepared": {
+      "selection": { "provider": "inworld", "model": "inworld-tts-2" },
+      "sourceHash": "synthetic-excited-news-v1",
+      "segments": [
+        {
+          "id": "excited-1",
+          "speaker": "Maya",
+          "text": "We got the grant! The community classes can start in September."
+        }
+      ],
+      "voices": [],
+      "voiceAssignments": { "Maya": "Ashley" },
+      "voicePlan": {
+        "schemaVersion": 1,
+        "capabilityPolicyVersion": "model-scoped-v1",
+        "mode": "deterministic",
+        "provider": "inworld",
+        "model": "inworld-tts-2",
+        "sourceHash": "synthetic-excited-news-v1",
+        "assignments": [
+          {
+            "speaker": "Maya",
+            "voiceId": "Ashley",
+            "source": "auto",
+            "language": "en-US",
+            "capabilities": {
+              "supportsMetadataInstructions": true,
+              "supportsNonVerbals": true,
+              "supportsUppercaseEmphasis": true,
+              "supportsFreeFormDirection": true
+            }
+          }
+        ]
+      }
+    },
+    "expectedHardInvariants": [
+      "authored_words_preserved",
+      "ordinary_pace_omitted",
+      "one_instruction_max"
+    ]
+  },
+  {
+    "id": "neutral-dialogue",
+    "why": "Neutral two-speaker dialogue is the sparse ordinary-path control.",
+    "tags": ["neutral-dialogue"],
+    "prepared": {
+      "selection": { "provider": "inworld", "model": "inworld-tts-2" },
+      "sourceHash": "synthetic-neutral-dialogue-v1",
+      "segments": [
+        { "id": "neutral-1", "speaker": "Maya", "text": "The train leaves at nine." },
+        {
+          "id": "neutral-2",
+          "speaker": "Noah",
+          "text": "Then we should meet outside the station at eight thirty."
+        }
+      ],
+      "voices": [],
+      "voiceAssignments": { "Maya": "Ashley", "Noah": "Dennis" },
+      "voicePlan": {
+        "schemaVersion": 1,
+        "capabilityPolicyVersion": "model-scoped-v1",
+        "mode": "deterministic",
+        "provider": "inworld",
+        "model": "inworld-tts-2",
+        "sourceHash": "synthetic-neutral-dialogue-v1",
+        "assignments": [
+          {
+            "speaker": "Maya",
+            "voiceId": "Ashley",
+            "source": "auto",
+            "language": "en-US",
+            "capabilities": {
+              "supportsMetadataInstructions": true,
+              "supportsNonVerbals": true,
+              "supportsUppercaseEmphasis": true,
+              "supportsFreeFormDirection": true
+            }
+          },
+          {
+            "speaker": "Noah",
+            "voiceId": "Dennis",
+            "source": "auto",
+            "language": "en-US",
+            "capabilities": {
+              "supportsMetadataInstructions": true,
+              "supportsNonVerbals": true,
+              "supportsUppercaseEmphasis": true,
+              "supportsFreeFormDirection": true
+            }
+          }
+        ]
+      }
+    },
+    "expectedHardInvariants": ["authored_words_preserved", "ordinary_pace_omitted", "sparse_cues"]
+  },
+  {
+    "id": "punctuation-pressure",
+    "why": "Dense punctuation tempts the planner to insert excessive pauses.",
+    "tags": ["punctuation-pressure"],
+    "prepared": {
+      "selection": { "provider": "inworld", "model": "inworld-tts-2" },
+      "sourceHash": "synthetic-punctuation-pressure-v1",
+      "segments": [
+        {
+          "id": "punctuation-1",
+          "speaker": "Maya",
+          "text": "First, check the date; second, confirm the room; finally, email the group."
+        }
+      ],
+      "voices": [],
+      "voiceAssignments": { "Maya": "Ashley" },
+      "voicePlan": {
+        "schemaVersion": 1,
+        "capabilityPolicyVersion": "model-scoped-v1",
+        "mode": "deterministic",
+        "provider": "inworld",
+        "model": "inworld-tts-2",
+        "sourceHash": "synthetic-punctuation-pressure-v1",
+        "assignments": [
+          {
+            "speaker": "Maya",
+            "voiceId": "Ashley",
+            "source": "auto",
+            "language": "en-US",
+            "capabilities": {
+              "supportsMetadataInstructions": true,
+              "supportsNonVerbals": true,
+              "supportsUppercaseEmphasis": true,
+              "supportsFreeFormDirection": true
+            }
+          }
+        ]
+      }
+    },
+    "expectedHardInvariants": ["authored_words_preserved", "pause_cap_1000_ms"]
+  },
+  {
+    "id": "reflective-warm",
+    "why": "Compatible warm and reflective qualities should form one coherent direction.",
+    "tags": ["warm", "reflective", "compatible-direction"],
+    "prepared": {
+      "selection": { "provider": "inworld", "model": "inworld-tts-2" },
+      "sourceHash": "synthetic-reflective-warm-v1",
+      "segments": [
+        {
+          "id": "reflective-1",
+          "speaker": "Noah",
+          "text": "Looking back, I am grateful that we took the time to listen."
+        }
+      ],
+      "voices": [],
+      "voiceAssignments": { "Noah": "Dennis" },
+      "voicePlan": {
+        "schemaVersion": 1,
+        "capabilityPolicyVersion": "model-scoped-v1",
+        "mode": "deterministic",
+        "provider": "inworld",
+        "model": "inworld-tts-2",
+        "sourceHash": "synthetic-reflective-warm-v1",
+        "assignments": [
+          {
+            "speaker": "Noah",
+            "voiceId": "Dennis",
+            "source": "auto",
+            "language": "en-US",
+            "capabilities": {
+              "supportsMetadataInstructions": true,
+              "supportsNonVerbals": true,
+              "supportsUppercaseEmphasis": true,
+              "supportsFreeFormDirection": true
+            }
+          }
+        ]
+      }
+    },
+    "expectedHardInvariants": [
+      "authored_words_preserved",
+      "one_instruction_max",
+      "ordinary_pace_omitted"
+    ]
+  },
+  {
+    "id": "serious-deadline",
+    "why": "Serious content exposes contradictory cheerful-direction mistakes.",
+    "tags": ["serious", "contradiction-trap"],
+    "prepared": {
+      "selection": { "provider": "inworld", "model": "inworld-tts-2" },
+      "sourceHash": "synthetic-serious-deadline-v1",
+      "segments": [
+        {
+          "id": "serious-1",
+          "speaker": "Maya",
+          "text": "If the report is late again, the funding review will be cancelled."
+        }
+      ],
+      "voices": [],
+      "voiceAssignments": { "Maya": "Ashley" },
+      "voicePlan": {
+        "schemaVersion": 1,
+        "capabilityPolicyVersion": "model-scoped-v1",
+        "mode": "deterministic",
+        "provider": "inworld",
+        "model": "inworld-tts-2",
+        "sourceHash": "synthetic-serious-deadline-v1",
+        "assignments": [
+          {
+            "speaker": "Maya",
+            "voiceId": "Ashley",
+            "source": "auto",
+            "language": "en-US",
+            "capabilities": {
+              "supportsMetadataInstructions": true,
+              "supportsNonVerbals": true,
+              "supportsUppercaseEmphasis": true,
+              "supportsFreeFormDirection": true
+            }
+          }
+        ]
+      }
+    },
+    "expectedHardInvariants": ["authored_words_preserved", "one_instruction_max"],
+    "warningExpectations": ["direction_content_mismatch"]
+  },
+  {
+    "id": "slow-exercise",
+    "why": "A deliberate pronunciation drill explicitly justifies slow or measured delivery.",
+    "tags": ["explicit-slow", "emphasis"],
+    "prepared": {
+      "selection": { "provider": "inworld", "model": "inworld-tts-2" },
+      "sourceHash": "synthetic-slow-exercise-v1",
+      "segments": [
+        {
+          "id": "slow-1",
+          "speaker": "Noah",
+          "text": "Say ship, sheep, and shape slowly enough to hear each vowel."
+        }
+      ],
+      "voices": [],
+      "voiceAssignments": { "Noah": "Dennis" },
+      "voicePlan": {
+        "schemaVersion": 1,
+        "capabilityPolicyVersion": "model-scoped-v1",
+        "mode": "deterministic",
+        "provider": "inworld",
+        "model": "inworld-tts-2",
+        "sourceHash": "synthetic-slow-exercise-v1",
+        "assignments": [
+          {
+            "speaker": "Noah",
+            "voiceId": "Dennis",
+            "source": "auto",
+            "language": "en-US",
+            "capabilities": {
+              "supportsMetadataInstructions": true,
+              "supportsNonVerbals": true,
+              "supportsUppercaseEmphasis": true,
+              "supportsFreeFormDirection": true
+            }
+          }
+        ]
+      }
+    },
+    "expectedHardInvariants": [
+      "authored_words_preserved",
+      "explicit_slow_allowed",
+      "pause_cap_1000_ms"
+    ]
+  },
+  {
+    "id": "tts-1-5-protection",
+    "why": "Legacy Inworld models must never receive natural-language steering or nonverbals.",
+    "tags": ["tts-1.5-protection"],
+    "prepared": {
+      "selection": { "provider": "inworld", "model": "inworld-tts-1.5-max" },
+      "sourceHash": "synthetic-tts-1-5-protection-v1",
+      "segments": [
+        { "id": "legacy-1", "speaker": "Maya", "text": "Please read the notice before Friday." }
+      ],
+      "voices": [],
+      "voiceAssignments": { "Maya": "Ashley" },
+      "voicePlan": {
+        "schemaVersion": 1,
+        "capabilityPolicyVersion": "model-scoped-v1",
+        "mode": "deterministic",
+        "provider": "inworld",
+        "model": "inworld-tts-1.5-max",
+        "sourceHash": "synthetic-tts-1-5-protection-v1",
+        "assignments": [
+          {
+            "speaker": "Maya",
+            "voiceId": "Ashley",
+            "source": "auto",
+            "language": "en-US",
+            "capabilities": {
+              "supportsMetadataInstructions": false,
+              "supportsNonVerbals": false,
+              "supportsUppercaseEmphasis": false,
+              "supportsFreeFormDirection": false
+            }
+          }
+        ]
+      }
+    },
+    "expectedHardInvariants": ["authored_words_preserved", "no_tts_1_5_steering"]
+  },
+  {
+    "id": "warm-laugh",
+    "why": "A restrained laugh is natural in friendly reunion content and tests emphasis sparsity.",
+    "tags": ["warm", "natural-nonverbal", "emphasis"],
+    "prepared": {
+      "selection": { "provider": "inworld", "model": "inworld-tts-2" },
+      "sourceHash": "synthetic-warm-laugh-v1",
+      "segments": [
+        {
+          "id": "warm-1",
+          "speaker": "Maya",
+          "text": "You still remember that tiny café? I cannot believe it is open."
+        }
+      ],
+      "voices": [],
+      "voiceAssignments": { "Maya": "Ashley" },
+      "voicePlan": {
+        "schemaVersion": 1,
+        "capabilityPolicyVersion": "model-scoped-v1",
+        "mode": "deterministic",
+        "provider": "inworld",
+        "model": "inworld-tts-2",
+        "sourceHash": "synthetic-warm-laugh-v1",
+        "assignments": [
+          {
+            "speaker": "Maya",
+            "voiceId": "Ashley",
+            "source": "auto",
+            "language": "en-US",
+            "capabilities": {
+              "supportsMetadataInstructions": true,
+              "supportsNonVerbals": true,
+              "supportsUppercaseEmphasis": true,
+              "supportsFreeFormDirection": true
+            }
+          }
+        ]
+      }
+    },
+    "expectedHardInvariants": [
+      "authored_words_preserved",
+      "one_nonverbal_max",
+      "one_instruction_max"
+    ]
+  }
+]
