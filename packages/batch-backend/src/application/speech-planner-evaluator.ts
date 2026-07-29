@@ -69,6 +69,7 @@ export function estimateSpeechPlannerAttemptCost(args: {
 export interface SpeechPlannerEvalAttemptRecord {
   attemptId: string;
   fixtureId: string;
+  fixtureTags?: string[];
   requestedModel: SpeechPlannerEvalModel;
   returnedModel?: string;
   promptPolicyVersion: SpeechPlannerEvalVariant['promptPolicyVersion'];
@@ -141,6 +142,7 @@ export function evaluateSpeechPlannerAttemptRecord(args: {
   const base: SpeechPlannerEvalAttemptRecord = {
     attemptId: args.variant.attemptId,
     fixtureId: args.variant.fixtureId,
+    fixtureTags: args.fixture.tags,
     requestedModel: args.variant.model,
     returnedModel: args.returnedModel,
     promptPolicyVersion: args.variant.promptPolicyVersion,
