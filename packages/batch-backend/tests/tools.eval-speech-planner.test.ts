@@ -1,4 +1,12 @@
-import { mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -238,9 +246,34 @@ describe('eval speech planner CLI', () => {
     expect(readFileSync(join(root, 'listening', 'key.json'), 'utf8')).toContain('gemini');
     expect(synthesizeChunk).toHaveBeenCalledTimes(4);
 
-    const key = JSON.parse(readFileSync(join(root, 'listening', 'key.json'), 'utf8')) as {
+    const indexPath = join(root, 'listening', 'index.html');
+    const keyPath = join(root, 'listening', 'key.json');
+    renameSync(indexPath, `${indexPath}.incomplete`);
+    renameSync(keyPath, `${keyPath}.incomplete`);
+    writeFileSync(indexPath, 'interrupted replacement');
+    expect(
+      await writeSelectedInworldAudio(
+        { runDirectory: root, records },
+        { synthesizeChunk, concatenate, ffmpegPath: 'ffmpeg' },
+      ),
+    ).toBe(0);
+    expect(existsSync(`${indexPath}.incomplete`)).toBe(false);
+    expect(existsSync(`${keyPath}.incomplete`)).toBe(false);
+
+    const originalKey = readFileSync(keyPath, 'utf8');
+    const key = JSON.parse(originalKey) as {
       blocks: Array<{ variants: Array<{ synthesis: { audioPath: string } }> }>;
     };
+    key.blocks[0]!.variants.pop();
+    writeFileSync(keyPath, JSON.stringify(key), 'utf8');
+    await expect(
+      writeSelectedInworldAudio(
+        { runDirectory: root, records },
+        { synthesizeChunk, concatenate, ffmpegPath: 'ffmpeg' },
+      ),
+    ).rejects.toThrow('listening key identity mismatch');
+    writeFileSync(keyPath, originalKey, 'utf8');
+
     const firstAudio = key.blocks[0]!.variants[0]!.synthesis.audioPath;
     writeFileSync(join(root, 'listening', firstAudio), Buffer.from('tampered'));
     await expect(

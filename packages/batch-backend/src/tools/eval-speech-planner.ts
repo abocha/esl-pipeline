@@ -1,6 +1,14 @@
 import { execFileSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync } from 'node:fs';
+import { createHash, randomUUID } from 'node:crypto';
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  statSync,
+  unlinkSync,
+} from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -43,6 +51,8 @@ import {
   type SpeechPlannerEvalAttemptRecord,
 } from '../application/speech-planner-evaluator.js';
 import {
+  buildSpeechPlannerListeningIdentity,
+  hashSpeechPlannerListeningIdentity,
   selectSpeechPlannerAudioBlocks,
   writeBlindListeningReport,
 } from '../application/speech-planner-listening-report.js';
@@ -482,16 +492,73 @@ export async function writeSelectedInworldAudio(
   const indexPath = join(outputDirectory, 'index.html');
   const keyPath = join(outputDirectory, 'key.json');
   const incompleteBackups: string[] = [];
+  const interruptedFiles: string[] = [];
+  for (const reportPath of [indexPath, keyPath]) {
+    const backupPath = `${reportPath}.incomplete`;
+    if (!existsSync(backupPath)) continue;
+    if (existsSync(reportPath)) {
+      const interruptedPath = `${reportPath}.interrupted-${randomUUID()}`;
+      renameSync(reportPath, interruptedPath);
+      interruptedFiles.push(interruptedPath);
+    }
+    renameSync(backupPath, reportPath);
+  }
+  const cleanupInterruptedFiles = () => {
+    for (const path of interruptedFiles) {
+      if (existsSync(path)) unlinkSync(path);
+    }
+    if (!existsSync(outputDirectory)) return;
+    for (const name of readdirSync(outputDirectory).filter((entry) =>
+      entry.includes('.interrupted-'),
+    )) {
+      unlinkSync(join(outputDirectory, name));
+    }
+  };
   const expectedAudioHashes = new Map<string, { bytes: number; contentHash: string }>();
+  const listeningSeed = createHash('sha256').update(args.runDirectory).digest('hex');
+  const expectedIdentity = buildSpeechPlannerListeningIdentity(blocks, listeningSeed);
   if (existsSync(indexPath) || existsSync(keyPath)) {
     if (existsSync(keyPath)) {
       const key = JSON.parse(readFileSync(keyPath, 'utf8')) as {
+        seed?: string;
+        identityHash?: string;
         blocks?: Array<{
+          blockId?: string;
+          fixtureId?: string;
+          complete?: boolean;
+          preferenceEligible?: boolean;
           variants?: Array<{
+            blindLabel?: string;
+            attemptId?: string;
+            requestedModel?: SpeechPlannerEvalModel;
+            promptPolicyVersion?: SpeechPerformancePromptPolicyId;
+            settingsHash?: string;
             synthesis?: { audioPath?: string; bytes?: number; contentHash?: string };
           }>;
         }>;
       };
+      const actualIdentity =
+        key.blocks?.map((block) => ({
+          blockId: block.blockId,
+          fixtureId: block.fixtureId,
+          complete: block.complete,
+          preferenceEligible: block.preferenceEligible,
+          variants:
+            block.variants?.map((variant) => ({
+              blindLabel: variant.blindLabel,
+              attemptId: variant.attemptId,
+              requestedModel: variant.requestedModel,
+              promptPolicyVersion: variant.promptPolicyVersion,
+              settingsHash: variant.settingsHash,
+            })) ?? [],
+        })) ?? [];
+      if (
+        key.seed !== listeningSeed ||
+        key.identityHash !== hashSpeechPlannerListeningIdentity(expectedIdentity) ||
+        JSON.stringify(actualIdentity) !== JSON.stringify(expectedIdentity)
+      ) {
+        throw new Error('Selected audio listening key identity mismatch.');
+      }
       for (const variant of key.blocks?.flatMap((block) => block.variants ?? []) ?? []) {
         const synthesis = variant.synthesis;
         if (
@@ -526,7 +593,10 @@ export async function writeSelectedInworldAudio(
           throw new Error(`Selected audio immutable audio mismatch: ${audioPath}`);
         }
       }
-      if (!missingAudio) return 0;
+      if (!missingAudio) {
+        cleanupInterruptedFiles();
+        return 0;
+      }
     }
     for (const reportPath of [indexPath, keyPath].filter((path) => existsSync(path))) {
       const backupPath = `${reportPath}.incomplete`;
@@ -550,7 +620,7 @@ export async function writeSelectedInworldAudio(
   await writeBlindListeningReport({
     outputDirectory,
     blocks,
-    seed: createHash('sha256').update(args.runDirectory).digest('hex'),
+    seed: listeningSeed,
     synthesize: async ({ block, variant, blindLabel }) => {
       const startedAt = Date.now();
       const rendered = variant.record.rendered ?? [];
@@ -620,6 +690,7 @@ export async function writeSelectedInworldAudio(
     },
   });
   for (const backupPath of incompleteBackups) unlinkSync(backupPath);
+  cleanupInterruptedFiles();
   return synthesisCalls;
 }
 
