@@ -118,3 +118,18 @@ Authored-word preservation, supported controls, renderer safety, and compatibili
 Cost, latency, and blind preference are comparative evidence. Mixed, incomplete, compatibility-
 skipped, private-fixture-missing, or human-review-missing results retain `gemini-3.1-flash-lite` and
 the existing TTS defaults. A default change is a separate evidence-backed configuration decision.
+
+## Recorded Evidence and Active Remediation
+
+The first complete live public baseline is recorded in
+[`speech-planner-evaluation-evidence-2026-07-29.md`](speech-planner-evaluation-evidence-2026-07-29.md).
+It found a promising Gemini 3.5 production-policy signal, but also proved that the live matrix was
+not production-faithful for identity-only TTS 1.5. Production skips remote planning for identity
+models; the harness called the planner and attributed the resulting unsupported controls to model
+quality. Do not use that aggregate red gate to infer a production TTS 1.5 regression.
+
+The active repair sequence is
+[`../plans/2026-07-29-speech-planner-evaluation-gap-remediation.md`](../plans/2026-07-29-speech-planner-evaluation-gap-remediation.md).
+It repairs this routing mismatch and cost/reporting gaps before rerunning Gemini. A provider-neutral
+`gpt-5.6-luna` comparison follows only after corrected Gemini evidence and does not itself authorize
+a default change.
