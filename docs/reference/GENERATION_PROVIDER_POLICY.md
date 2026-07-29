@@ -5,7 +5,7 @@
 - Audience: founder-maintainer and implementing agents.
 - Read Time: 5 minutes.
 - Authority Level: canonical provider/model/quota policy.
-- Last Verified Against: 2026-07-11 repo state.
+- Last Verified Against: 2026-07-29 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly or after provider policy/availability changes.
 - Status: `reference`.
@@ -61,7 +61,8 @@ prompts only for a measured failure or concrete contradiction.
   - `gemini-3.1-pro-preview`
   - `gemini-3-flash-preview`
   - `gemini-3.5-flash`
-  - `gemini-3.1-flash-lite-preview`
+  - `gemini-3.1-flash-lite`
+  - `gemini-3.5-flash-lite`
   - `gemini-2.5-pro`
   - `gemini-2.5-flash`
   - `gemini-2.5-flash-lite`
@@ -70,6 +71,15 @@ prompts only for a measured failure or concrete contradiction.
   decision lands.
 - No model-specific quota baseline is set for `gemini-3.5-flash`; generic Google provider budgets
   still apply, and provider dashboard limits remain the external truth.
+- Speech planning keeps `gemini-3.1-flash-lite` as its production default. Allowlisting the exact
+  stable `gemini-3.5-flash-lite` ID enables explicit evaluation only; it does not select that model
+  for production. Gemini 3.5 Flash-Lite uses default/minimal thinking for the baseline and receives
+  no deprecated `temperature`, `top_p`, or `top_k` fields or prefilled model turn.
+- The speech-planner evaluation price snapshot captured from the official Gemini pricing page on
+  2026-07-28 records standard-text input/output rates per one million tokens as USD 0.25/1.50 for
+  Gemini 3.1 Flash-Lite and USD 0.30/2.50 for Gemini 3.5 Flash-Lite. Output pricing includes
+  thinking tokens; every run records its versioned snapshot rather than assuming these values are
+  current indefinitely.
 
 ### OpenRouter
 

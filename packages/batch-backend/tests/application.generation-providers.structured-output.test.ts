@@ -2,10 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   executeGoogleStructuredGeneration,
+  executeGoogleStructuredGenerationRaw,
   executeOpenAiGeneration,
   executeOpenAiStructuredGeneration,
   executeOpenRouterStructuredGeneration,
   ProviderExecutionError,
+  parseStructuredJsonText,
 } from '../src/application/generation-providers.js';
 import { createGenerationRequestEnvelope } from '../src/application/generation-request-envelope.js';
 import type { BatchBackendConfig } from '../src/config/env.js';
@@ -58,6 +60,56 @@ describe('application/generation-providers structured output', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  it('uses one parser for direct, wrapped, array, empty, and malformed JSON text', () => {
+    expect(parseStructuredJsonText('{"segments":[]}')).toMatchObject({
+      status: 'parsed',
+      output: { segments: [] },
+    });
+    expect(parseStructuredJsonText('result: {"segments":[]} done')).toMatchObject({
+      status: 'parsed',
+      output: { segments: [] },
+    });
+    expect(parseStructuredJsonText('result: [1,2] done')).toMatchObject({
+      status: 'parsed',
+      output: [1, 2],
+    });
+    expect(parseStructuredJsonText('')).toEqual({ status: 'malformed', reason: 'empty' });
+    expect(parseStructuredJsonText('not json')).toEqual({
+      status: 'malformed',
+      reason: 'invalid_json',
+    });
+  });
+
+  it('returns raw Google structured output without parsing it', async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValue(
+      createJsonResponse({
+        responseId: 'raw-1',
+        modelVersion: 'gemini-3.5-flash-lite-2026-07-21',
+        candidates: [{ content: { parts: [{ text: 'not json' }] }, finishReason: 'STOP' }],
+        usageMetadata: { promptTokenCount: 4, candidatesTokenCount: 2, totalTokenCount: 6 },
+      }),
+    );
+
+    await expect(
+      executeGoogleStructuredGenerationRaw({
+        config: createGenerationConfig(),
+        request: {
+          model: 'gemini-3.5-flash-lite',
+          prompt: 'planner prompt',
+          responseSchema: { name: 'speech_plan', schema: { type: 'object' } },
+          maxOutputTokens: 2400,
+        },
+      }),
+    ).resolves.toEqual({
+      rawText: 'not json',
+      model: 'gemini-3.5-flash-lite-2026-07-21',
+      providerRequestId: 'raw-1',
+      finishReason: 'STOP',
+      usage: { inputTokens: 4, outputTokens: 2, totalTokens: 6 },
+    });
   });
 
   it('sends trusted envelope instructions separately from OpenAI source-data input', async () => {
@@ -175,11 +227,12 @@ describe('application/generation-providers structured output', () => {
     });
   });
 
-  it('sends Google structured-output requests and parses JSON text', async () => {
+  it('sends a Gemini 3.5 compatible structured-output request and preserves returned model usage', async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValue(
       createJsonResponse({
         responseId: 'google-response-1',
+        modelVersion: 'gemini-3.5-flash-lite-2026-07-21',
         candidates: [
           {
             content: {
@@ -188,9 +241,11 @@ describe('application/generation-providers structured output', () => {
           },
         ],
         usageMetadata: {
-          promptTokenCount: 3,
-          candidatesTokenCount: 5,
-          totalTokenCount: 8,
+          promptTokenCount: 100,
+          candidatesTokenCount: 20,
+          cachedContentTokenCount: 7,
+          thoughtsTokenCount: 5,
+          totalTokenCount: 125,
         },
       }),
     );
@@ -198,8 +253,8 @@ describe('application/generation-providers structured output', () => {
     const result = await executeGoogleStructuredGeneration({
       config: createGenerationConfig(),
       request: {
-        model: 'gemini-3.1-pro-preview',
-        prompt: 'Extract lesson memory',
+        model: 'gemini-3.5-flash-lite',
+        prompt: 'planner prompt',
         responseSchema: {
           name: 'lesson_memory_content',
           schema: {
@@ -212,26 +267,37 @@ describe('application/generation-providers structured output', () => {
             additionalProperties: false,
           },
         },
-        maxOutputTokens: 512,
+        maxOutputTokens: 2400,
       },
     });
 
     expect(result.output).toMatchObject({ lessonSummary: 'Summary', topicsDiscussed: [] });
     expect(result.providerRequestId).toBe('google-response-1');
+    expect(result.model).toBe('gemini-3.5-flash-lite-2026-07-21');
+    expect(result.usage).toEqual({
+      inputTokens: 100,
+      outputTokens: 20,
+      cachedTokens: 7,
+      reasoningTokens: 5,
+      totalTokens: 125,
+    });
 
     const [, init] = fetchMock.mock.calls[0] ?? [];
     const body = JSON.parse(String(init?.body));
-    expect(body.generationConfig).toEqual({
-      maxOutputTokens: 512,
-      responseMimeType: 'application/json',
-      responseJsonSchema: {
-        type: 'object',
-        properties: {
-          lessonSummary: { type: 'string' },
-          topicsDiscussed: { type: 'array', items: { type: 'string' } },
+    expect(body).toEqual({
+      contents: [{ role: 'user', parts: [{ text: 'planner prompt' }] }],
+      generationConfig: {
+        maxOutputTokens: 2400,
+        responseMimeType: 'application/json',
+        responseJsonSchema: {
+          type: 'object',
+          properties: {
+            lessonSummary: { type: 'string' },
+            topicsDiscussed: { type: 'array', items: { type: 'string' } },
+          },
+          required: ['lessonSummary', 'topicsDiscussed'],
+          additionalProperties: false,
         },
-        required: ['lessonSummary', 'topicsDiscussed'],
-        additionalProperties: false,
       },
     });
   });

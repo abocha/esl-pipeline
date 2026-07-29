@@ -45,6 +45,7 @@ open the second only when the task crosses that boundary.
 | Telegram ops bot                               | `docs/operations/telegram-ops-control-panel.md`     | `packages/telegram-ops-bot/README.md`                       |
 | Prompt gallery runtime                         | `docs/operations/prompt-gallery-bootstrap.md`       | `docs/reference/env.md`                                     |
 | Voice-alignment rollout                        | `docs/operations/voice-alignment-v2-runbook.md`     | `docs/reference/TTS_SPEECH_PERFORMANCE_SYSTEM.md`           |
+| Speech-planner evaluation                      | `docs/operations/speech-planner-evaluation.md`      | `docs/reference/TTS_SPEECH_PERFORMANCE_SYSTEM.md`           |
 | Student-memory replay or backfill              | `docs/operations/student-memory-replay-backfill.md` | `packages/batch-backend/README.md`                          |
 | Legacy profile normalization                   | `docs/operations/legacy-profile-normalization.md`   | `docs/reference/STUDENT_SYSTEM_ROADMAP.md`                  |
 

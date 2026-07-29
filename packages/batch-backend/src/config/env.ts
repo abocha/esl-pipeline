@@ -728,6 +728,7 @@ export function loadConfig(): BatchBackendConfig {
       generationGoogleModelPrimary,
       'gemini-3.5-flash',
       'gemini-3.1-flash-lite',
+      'gemini-3.5-flash-lite',
       generationGoogleModelTertiary,
       'gemini-2.5-flash',
       generationGoogleModelFallback,

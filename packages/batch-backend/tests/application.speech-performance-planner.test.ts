@@ -4,6 +4,7 @@ import { SpeechPerformancePlannerInvalidOutputError } from '@esl-pipeline/tts-co
 
 import {
   createBackendSpeechPerformancePlanner,
+  evaluateSpeechPlannerRawOutput,
   executeSpeechPlannerAttempt,
 } from '../src/application/speech-performance-planner.js';
 import {
@@ -101,6 +102,7 @@ describe('application/speech-performance-planner', () => {
   it('stays disabled by default', () => {
     const config = loadConfig();
     expect(config.speechPlanner.enabled).toBe(false);
+    expect(config.speechPlanner.model).toBe('gemini-3.1-flash-lite');
     expect(createBackendSpeechPerformancePlanner(config)).toEqual({
       unavailableReason: 'planner_disabled',
     });
@@ -171,7 +173,18 @@ describe('application/speech-performance-planner', () => {
           },
         ],
       },
-      rawText: '{}',
+      rawText: JSON.stringify({
+        segments: [
+          {
+            id: 'segment-1',
+            emotion: 'calm concern',
+            intonation: 'firm but collaborative',
+            pace: 'measured',
+            deliveryMode: 'BALANCED',
+            freeFormDirection: 'Speak with grounded concern.',
+          },
+        ],
+      }),
       usage: { totalTokens: 24 },
     });
     const binding = createBackendSpeechPerformancePlanner(config, {
@@ -280,7 +293,7 @@ describe('application/speech-performance-planner', () => {
     } satisfies Partial<SpeechPerformancePlannerInvalidOutputError>);
   });
 
-  it('returns invalid planner attempts without converting them to fallback plans', async () => {
+  it('records the production identity fallback without crediting an invalid prompted plan', async () => {
     const config = createEnabledConfig();
     const rejectedOutput = {
       segments: [{ id: 'segment-1', pauseAfterMs: 4000 }],
@@ -306,9 +319,43 @@ describe('application/speech-performance-planner', () => {
       parsedCandidate: rejectedOutput,
       validation: { status: 'invalid' },
       plan: undefined,
-      fallback: undefined,
+      fallback: { reason: 'planner_invalid' },
       usage: { totalTokens: 12 },
       latencyMs: 0,
+    });
+  });
+
+  it('classifies wrapped and malformed offline output through the shared parser', () => {
+    const common = {
+      prepared: createPrepared(),
+      promptPolicyVersion: 'speech-performance-v2-inworld-tts2' as const,
+      promptHash: 'a'.repeat(64),
+      plannerModel: 'gemini-3.5-flash-lite',
+      generatedAt: '2026-07-29T00:00:00.000Z',
+      latencyMs: 0,
+    };
+    expect(
+      evaluateSpeechPlannerRawOutput({
+        ...common,
+        rawText: 'wrapped {"segments":[{"id":"segment-1"}]} output',
+      }),
+    ).toMatchObject({
+      rawParse: { status: 'parsed' },
+      validation: { status: 'valid' },
+      plan: expect.objectContaining({ mode: 'prompted' }),
+    });
+    expect(
+      evaluateSpeechPlannerRawOutput({
+        ...common,
+        rawText: 'not json',
+        usage: { inputTokens: 4, outputTokens: 2, reasoningTokens: 1 },
+      }),
+    ).toMatchObject({
+      rawParse: { status: 'malformed', reason: 'invalid_json' },
+      validation: { status: 'invalid', reason: 'malformed_structured_output' },
+      usage: { inputTokens: 4, outputTokens: 2, reasoningTokens: 1 },
+      plan: undefined,
+      fallback: { reason: 'planner_invalid' },
     });
   });
 
@@ -331,7 +378,7 @@ describe('application/speech-performance-planner', () => {
       validation: { status: 'invalid' },
       parsedCandidate: duplicateIds,
       plan: undefined,
-      fallback: undefined,
+      fallback: { reason: 'planner_invalid' },
     });
     expect(attempt.candidateAnalysis?.hardFailures).toEqual(
       expect.arrayContaining([
@@ -353,7 +400,16 @@ describe('application/speech-performance-planner', () => {
           },
         ],
       },
-      rawText: '{}',
+      rawText: JSON.stringify({
+        segments: [
+          {
+            id: 'segment-1',
+            emotion: '   ',
+            emphasis: ['we', 'WE'],
+            nonVerbalsBefore: ['sigh'],
+          },
+        ],
+      }),
     });
     const binding = createBackendSpeechPerformancePlanner(config, { executor });
 

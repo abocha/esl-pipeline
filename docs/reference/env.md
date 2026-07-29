@@ -79,7 +79,8 @@ Primary groups:
     cancel `generate()` after it starts, so the configured SDK timeout remains the in-flight bound.
     Routine diagnostics use hashes, counts, normalized categories, latency, cache totals, and output
     bytes without learner text or raw provider bodies.
-  - Expressive TTS planning uses opt-in `ESL_TTS_SPEECH_PLANNER_ENABLED`, optional `ESL_TTS_SPEECH_PLANNER_MODEL`, optional `ESL_TTS_SPEECH_PLANNER_MAX_OUTPUT_TOKENS`, and separate `ESL_TTS_SPEECH_PLANNER_*_BUDGET` limits. The planner reuses server-side `GEMINI_API_KEY`.
+  - Expressive TTS planning uses opt-in `ESL_TTS_SPEECH_PLANNER_ENABLED`, optional `ESL_TTS_SPEECH_PLANNER_MODEL`, optional `ESL_TTS_SPEECH_PLANNER_MAX_OUTPUT_TOKENS`, and separate `ESL_TTS_SPEECH_PLANNER_*_BUDGET` limits. The production default remains `gemini-3.1-flash-lite`; `gemini-3.5-flash-lite` is allowlisted for explicit evaluation without changing that default. The planner reuses server-side `GEMINI_API_KEY`.
+  - Live speech-planner evaluation must opt in at the CLI, verify both exact stable IDs in `GEN_ALLOWED_MODELS_GOOGLE`, supply current-day request usage explicitly, and fit the full requested matrix within `ESL_TTS_SPEECH_PLANNER_DAILY_REQUEST_BUDGET`. It never raises daily or RPM limits implicitly.
   - Inworld voice planning uses `ESL_TTS_VOICE_RANKER_ENABLED`, optional `ESL_TTS_VOICE_RANKER_MODEL`, optional `ESL_TTS_VOICE_RANKER_MAX_OUTPUT_TOKENS`, and separate `ESL_TTS_VOICE_RANKER_*_BUDGET` limits. The default semantic ranker is `gemma-4-31b-it`.
   - Local planner inspection can opt into full validated or rejected plan logs with `ESL_TTS_SPEECH_PLANNER_DEBUG_LOG_PLAN=true`. Voice-ranker inspection can opt into shortlist and failure details with `ESL_TTS_VOICE_RANKER_DEBUG_LOG_PLAN=true`. Leave these disabled outside short-lived debugging because logs may include learner text.
   - After changing planner env values in a Compose deployment, recreate `batch-backend` and `batch-worker`.

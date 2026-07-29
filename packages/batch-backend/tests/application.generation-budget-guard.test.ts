@@ -3,10 +3,30 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   enforceGenerationBudgetBeforeAttempt,
   estimateGenerationTokens,
+  getConfiguredGenerationAllowedModels,
+  getConfiguredGenerationProviderLimits,
+  getConfiguredSpeechPlannerLimits,
 } from '../src/application/generation-budget-guard.js';
 import { loadConfig } from '../src/config/env.js';
 
 describe('generation budget guard', () => {
+  it('exposes Gemini eval allowlist and configured Google limits without resolving a repository', () => {
+    const config = loadConfig();
+
+    expect(getConfiguredGenerationAllowedModels(config.generation, 'google_ai_studio')).toContain(
+      'gemini-3.5-flash-lite',
+    );
+    expect(getConfiguredGenerationProviderLimits(config.generation, 'google_ai_studio')).toEqual({
+      rpmBudget: 4,
+      dailyRequestBudget: 12,
+      dailyTokenBudget: undefined,
+    });
+    expect(getConfiguredSpeechPlannerLimits(config)).toEqual({
+      rpmBudget: 4,
+      dailyRequestBudget: 120,
+    });
+  });
+
   it('uses one exported token estimate for reservations and pacing', () => {
     expect(
       estimateGenerationTokens({
