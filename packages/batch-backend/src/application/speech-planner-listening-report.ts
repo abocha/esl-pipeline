@@ -160,6 +160,45 @@ function shuffle<T>(values: readonly T[], seed: string): T[] {
   );
 }
 
+export interface SpeechPlannerListeningIdentityBlock {
+  blockId: string;
+  fixtureId: string;
+  complete: boolean;
+  preferenceEligible: boolean;
+  variants: Array<{
+    blindLabel: string;
+    attemptId: string;
+    requestedModel: SpeechPlannerListeningVariant['requestedModel'];
+    promptPolicyVersion: SpeechPlannerListeningVariant['promptPolicyVersion'];
+    settingsHash: string;
+  }>;
+}
+
+export function buildSpeechPlannerListeningIdentity(
+  blocks: readonly SpeechPlannerAudioBlock[],
+  seed: string,
+): SpeechPlannerListeningIdentityBlock[] {
+  return blocks.map((block) => ({
+    blockId: block.blockId,
+    fixtureId: block.fixtureId,
+    complete: block.complete,
+    preferenceEligible: block.preferenceEligible,
+    variants: shuffle(block.variants, `${seed}|${block.blockId}`).map((variant, index) => ({
+      blindLabel: String.fromCharCode(65 + index),
+      attemptId: variant.attemptId,
+      requestedModel: variant.requestedModel,
+      promptPolicyVersion: variant.promptPolicyVersion,
+      settingsHash: variant.settingsHash,
+    })),
+  }));
+}
+
+export function hashSpeechPlannerListeningIdentity(
+  identity: readonly SpeechPlannerListeningIdentityBlock[],
+): string {
+  return hash(JSON.stringify(identity));
+}
+
 function escapeHtml(value: string): string {
   return value
     .replaceAll('&', '&amp;')
@@ -189,6 +228,7 @@ export async function writeBlindListeningReport(args: {
   mkdirSync(args.outputDirectory, { recursive: true });
   const keyBlocks: unknown[] = [];
   const htmlBlocks: string[] = [];
+  const identity = buildSpeechPlannerListeningIdentity(args.blocks, args.seed);
   for (const block of args.blocks) {
     const ordered = shuffle(block.variants, `${args.seed}|${block.blockId}`);
     const keyedVariants: unknown[] = [];
@@ -244,7 +284,15 @@ ${[
   writeFileSync(join(args.outputDirectory, 'index.html'), html, { encoding: 'utf8', flag: 'wx' });
   writeFileSync(
     join(args.outputDirectory, 'key.json'),
-    JSON.stringify({ seed: args.seed, blocks: keyBlocks }, null, 2),
+    JSON.stringify(
+      {
+        seed: args.seed,
+        identityHash: hashSpeechPlannerListeningIdentity(identity),
+        blocks: keyBlocks,
+      },
+      null,
+      2,
+    ),
     { encoding: 'utf8', flag: 'wx' },
   );
 }
