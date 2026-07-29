@@ -716,9 +716,6 @@ importers:
       '@esl-pipeline/pmd':
         specifier: workspace:*
         version: link:../pmd
-      '@esl-pipeline/provider-runtime':
-        specifier: workspace:*
-        version: link:../provider-runtime
       '@esl-pipeline/tts-core':
         specifier: workspace:*
         version: link:../tts-core
