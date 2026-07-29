@@ -431,6 +431,7 @@ export function beginSpeechPlannerEvalRunActivity(args: {
           ...activity,
           status: 'interrupted' as const,
           completedAt: interruptedAt,
+          providerCalls: countPhysicalCallIntentsForActivity(args.runDirectory, activity.id),
           normalizedErrorCategory: 'interrupted_before_resume',
         }
       : activity,
@@ -689,6 +690,24 @@ interface SpeechPlannerPhysicalCallIntent {
   promptPolicyVersion: SpeechPlannerEvalVariant['promptPolicyVersion'];
   repetition: number;
   retryAttempted: false;
+}
+
+function countPhysicalCallIntentsForActivity(runDirectory: string, activityId: string): number {
+  const callsDirectory = join(runDirectory, 'calls');
+  if (!existsSync(callsDirectory)) return 0;
+  return readdirSync(callsDirectory)
+    .filter((name) => name.endsWith('.json'))
+    .reduce((count, name) => {
+      const path = join(callsDirectory, name);
+      try {
+        const intent = JSON.parse(
+          readFileSync(path, 'utf8'),
+        ) as Partial<SpeechPlannerPhysicalCallIntent>;
+        return count + Number(intent.activityId === activityId);
+      } catch {
+        throw new Error(`Speech planner eval immutable call-intent artifact mismatch: ${path}`);
+      }
+    }, 0);
 }
 
 function physicalCallIntentContent(intent: SpeechPlannerPhysicalCallIntent): string {

@@ -107,6 +107,11 @@ function warningFieldPairs(
     warning.code === 'redundant_instruction_components'
       ? allFields.filter((field) => ['emotion', 'intonation', 'freeFormDirection'].includes(field))
       : allFields;
+  if (warning.code === 'redundant_instruction_components') {
+    return fields
+      .filter((field) => field !== 'freeFormDirection')
+      .map((field) => `${field},freeFormDirection`);
+  }
   const pairs: string[] = [];
   for (let left = 0; left < fields.length; left += 1) {
     for (let right = left + 1; right < fields.length; right += 1) {
