@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.3.4] - 2026-07-29
+
+### Changed
+
+- Automated release from PR #166: fix(tts): harden Inworld SDK reliability (https://github.com/abocha/esl-pipeline/pull/166)
+
 ## [10.3.3] - 2026-07-28
 
 ### Changed
