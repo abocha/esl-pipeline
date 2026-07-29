@@ -3,7 +3,12 @@ import { copyFile, mkdir, readFile, stat } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import * as yaml from 'js-yaml';
 
-import { ConfigurationError, noopLogger, ValidationError } from '@esl-pipeline/contracts';
+import {
+  ConfigurationError,
+  noopLogger,
+  type PipelineLogger,
+  ValidationError,
+} from '@esl-pipeline/contracts';
 import {
   extractFrontmatter,
   extractPronunciationShadowFocus,
@@ -29,6 +34,7 @@ import {
   resolveTtsSelection,
   type SpeakerVoiceAssignment,
   type TtsProviderAdapter,
+  throwIfTtsCancelled,
   type VoiceAssignmentResolution,
   validateSpeechPerformancePlan,
 } from '@esl-pipeline/tts-core';
@@ -41,6 +47,11 @@ import {
   resolveInworldVoiceCapabilities,
   type VoiceMapConfig,
 } from './catalog.js';
+import {
+  createInworldClientProvider,
+  type InworldClientFactory,
+  type InworldClientProvider,
+} from './client.js';
 import { cleanSpeechText, renderInworldSpeechSegment } from './rendering.js';
 import {
   classifyInworldTtsProviderError,
@@ -220,6 +231,20 @@ function buildVoiceSummaries(
   }));
 }
 
+function logInworldCacheSummary(
+  logger: PipelineLogger | undefined,
+  model: InworldTtsModel,
+  cacheHits: number,
+  cacheMisses: number,
+): void {
+  logger?.log({
+    level: 'info',
+    stage: 'tts',
+    message: 'Inworld TTS chunk cache summary',
+    detail: { provider: 'inworld', model, cacheHits, cacheMisses },
+  });
+}
+
 function normalizeInworldSpeakerAssignment(
   assignment: SpeakerVoiceAssignment,
   model: InworldTtsModel,
@@ -234,6 +259,7 @@ function normalizeInworldSpeakerAssignment(
 async function resolveAssignmentsForStudyText(
   input: BuildStudyTextInput,
   opts: BuildStudyTextOptions,
+  dependencies: { clientProvider?: InworldClientProvider } = {},
 ): Promise<{
   frontmatter: Frontmatter;
   segments: StudyTextSegment[];
@@ -258,7 +284,12 @@ async function resolveAssignmentsForStudyText(
         await resolveInworldSpeakerAssignmentsWithRankerFromCatalog(
           collectSpeakers(segments, frontmatter),
           await loadVoiceMap(opts.voiceMapPath),
-          await loadInworldVoicesCatalog({ logger: opts.logger }),
+          await loadInworldVoicesCatalog({
+            logger: opts.logger,
+            clientProvider: dependencies.clientProvider,
+            signal: opts.signal,
+            deadlineAtMs: opts.deadlineAtMs,
+          }),
           {
             defaultVoiceId: opts.defaultVoiceId,
             defaultAccent: opts.defaultAccent,
@@ -318,9 +349,21 @@ export async function buildStudyTextMp3Inworld(
   dependencies: {
     synthesizeChunk?: typeof synthesizeInworldChunkWithRetry;
     rendererPolicyVersion?: string;
+    clientProvider?: InworldClientProvider;
+    apiKey?: string;
+    timeoutMs?: number;
+    sdkFactory?: InworldClientFactory;
   } = {},
 ): Promise<BuildStudyTextResult> {
-  const plan = await resolveAssignmentsForStudyText(input, opts);
+  throwIfTtsCancelled(opts);
+  const clientProvider =
+    dependencies.clientProvider ??
+    createInworldClientProvider({
+      apiKey: dependencies.apiKey,
+      timeoutMs: dependencies.timeoutMs,
+      sdkFactory: dependencies.sdkFactory,
+    });
+  const plan = await resolveAssignmentsForStudyText(input, opts, { clientProvider });
   const { frontmatter, segments, normalizedText, model, assignments, voiceSummaries } = plan;
   const sampleRateHertz = resolveInworldSampleRateHertz();
   const voiceAssignments = Object.fromEntries(
@@ -436,6 +479,7 @@ export async function buildStudyTextMp3Inworld(
 
   await mkdir(outputDir, { recursive: true });
   if (!opts.force && (await fileExistsNonEmpty(targetPath))) {
+    logInworldCacheSummary(opts.logger, model, renderedSegments.length, 0);
     return {
       path: targetPath,
       hash,
@@ -453,6 +497,8 @@ export async function buildStudyTextMp3Inworld(
   const runSegments: Array<Pick<StudyTextSegment, 'speaker'>> = [];
   let generatedCharacters = 0;
   let cachedCharacters = 0;
+  let cacheHits = 0;
+  let cacheMisses = 0;
 
   for (const [index, segment] of renderedSegments.entries()) {
     const speechText = segment.text;
@@ -474,6 +520,7 @@ export async function buildStudyTextMp3Inworld(
       runFiles.push(chunkFilePath);
       runSegments.push({ speaker: segment.speaker });
       cachedCharacters += speechText.length;
+      cacheHits += 1;
       continue;
     }
     await (dependencies.synthesizeChunk ?? synthesizeInworldChunkWithRetry)(
@@ -487,11 +534,16 @@ export async function buildStudyTextMp3Inworld(
         deliveryMode: segment.deliveryMode,
         sampleRateHertz,
         language: segment.language,
+        signal: opts.signal,
+        deadlineAtMs: opts.deadlineAtMs,
+        logger: opts.logger,
       },
+      { clientProvider },
     );
     runFiles.push(chunkFilePath);
     runSegments.push({ speaker: segment.speaker });
     generatedCharacters += speechText.length;
+    cacheMisses += 1;
   }
 
   if (runFiles.length === 0) {
@@ -511,6 +563,8 @@ export async function buildStudyTextMp3Inworld(
     );
   }
 
+  logInworldCacheSummary(opts.logger, model, cacheHits, cacheMisses);
+
   return {
     path: targetPath,
     hash,
@@ -527,6 +581,7 @@ export async function buildStudyTextMp3Inworld(
 export async function buildPronunciationShadowSentenceMp3Inworld(
   input: BuildPronunciationShadowSentenceInput,
   opts: BuildPronunciationShadowSentenceOptions,
+  dependencies: { clientProvider?: InworldClientProvider } = {},
 ): Promise<BuildPronunciationShadowSentenceResult> {
   const logger = opts.logger ?? noopLogger;
   const frontmatter = extractFrontmatter(input.context);
@@ -569,6 +624,7 @@ export async function buildPronunciationShadowSentenceMp3Inworld(
 
   await mkdir(outputDir, { recursive: true });
   if (!opts.force && (await fileExistsNonEmpty(targetPath))) {
+    logInworldCacheSummary(logger, model, 1, 0);
     return {
       path: targetPath,
       duration: undefined,
@@ -586,7 +642,14 @@ export async function buildPronunciationShadowSentenceMp3Inworld(
     message: 'Generating pronunciation shadow sentence audio',
     detail: { provider: 'inworld', voiceId, model },
   });
-  await synthesizeInworldChunkWithRetry(sentence, voiceId, targetPath, { model });
+  await synthesizeInworldChunkWithRetry(
+    sentence,
+    voiceId,
+    targetPath,
+    { model, signal: opts.signal, deadlineAtMs: opts.deadlineAtMs, logger },
+    dependencies,
+  );
+  logInworldCacheSummary(logger, model, 0, 1);
   return {
     path: targetPath,
     duration: undefined,
@@ -602,6 +665,7 @@ export async function buildPronunciationShadowSentenceMp3Inworld(
 export async function buildPronunciationTextMp3Inworld(
   input: BuildPronunciationTextInput,
   opts: BuildPronunciationTextOptions,
+  dependencies: { clientProvider?: InworldClientProvider } = {},
 ): Promise<BuildPronunciationTextResult> {
   const logger = opts.logger ?? noopLogger;
   const sentence = cleanSpeechText(input.text ?? '');
@@ -649,6 +713,7 @@ export async function buildPronunciationTextMp3Inworld(
 
   await mkdir(outputDir, { recursive: true });
   if (!opts.force && (await fileExistsNonEmpty(targetPath))) {
+    logInworldCacheSummary(logger, model, 1, 0);
     return {
       path: targetPath,
       duration: undefined,
@@ -666,7 +731,14 @@ export async function buildPronunciationTextMp3Inworld(
     message: 'Generating pronunciation text audio',
     detail: { provider: 'inworld', voiceId, model, fileStem },
   });
-  await synthesizeInworldChunkWithRetry(sentence, voiceId, targetPath, { model });
+  await synthesizeInworldChunkWithRetry(
+    sentence,
+    voiceId,
+    targetPath,
+    { model, signal: opts.signal, deadlineAtMs: opts.deadlineAtMs, logger },
+    dependencies,
+  );
+  logInworldCacheSummary(logger, model, 0, 1);
   return {
     path: targetPath,
     duration: undefined,
@@ -682,13 +754,19 @@ export async function buildPronunciationTextMp3Inworld(
 export async function resolveInworldSpeakerAssignments(
   input: BuildStudyTextInput,
   options: BuildStudyTextOptions,
+  dependencies: { clientProvider?: InworldClientProvider } = {},
 ): Promise<VoiceAssignmentResolution> {
   const frontmatter = extractFrontmatter(input.context);
   const segments = resolveStudyTextSegments(extractStudyText(input.context).lines, frontmatter);
   const resolution = await resolveInworldSpeakerAssignmentsWithRankerFromCatalog(
     collectSpeakers(segments, frontmatter),
     await loadVoiceMap(options.voiceMapPath),
-    await loadInworldVoicesCatalog({ logger: options.logger }),
+    await loadInworldVoicesCatalog({
+      logger: options.logger,
+      clientProvider: dependencies.clientProvider,
+      signal: options.signal,
+      deadlineAtMs: options.deadlineAtMs,
+    }),
     {
       defaultVoiceId: options.defaultVoiceId,
       defaultAccent: options.defaultAccent,
@@ -714,7 +792,21 @@ export async function resolveInworldSpeakerAssignments(
   };
 }
 
-export function createInworldTtsProvider(): TtsProviderAdapter {
+export function createInworldTtsProvider(
+  options: {
+    apiKey?: string;
+    timeoutMs?: number;
+    sdkFactory?: InworldClientFactory;
+    clientProvider?: InworldClientProvider;
+  } = {},
+): TtsProviderAdapter {
+  const clientProvider =
+    options.clientProvider ??
+    createInworldClientProvider({
+      apiKey: options.apiKey,
+      timeoutMs: options.timeoutMs,
+      sdkFactory: options.sdkFactory,
+    });
   return {
     id: 'inworld',
     providerMetadata(args) {
@@ -731,26 +823,38 @@ export function createInworldTtsProvider(): TtsProviderAdapter {
     },
     voice: {
       async loadCatalog() {
-        return loadInworldVoicesCatalog();
+        return loadInworldVoicesCatalog({ clientProvider });
       },
       async resolveSpeakerAssignments(args) {
-        return resolveInworldSpeakerAssignments(args.input, args.options);
+        return resolveInworldSpeakerAssignments(args.input, args.options, { clientProvider });
       },
     },
     async synthesizeStudyText(input, options) {
-      return buildStudyTextMp3Inworld(input, { ...options, ttsProvider: 'inworld' });
+      return buildStudyTextMp3Inworld(
+        input,
+        { ...options, ttsProvider: 'inworld' },
+        { clientProvider },
+      );
     },
     async synthesizeShadowSentence(input, options) {
-      return buildPronunciationShadowSentenceMp3Inworld(input, {
-        ...options,
-        ttsProvider: 'inworld',
-      });
+      return buildPronunciationShadowSentenceMp3Inworld(
+        input,
+        {
+          ...options,
+          ttsProvider: 'inworld',
+        },
+        { clientProvider },
+      );
     },
     async synthesizePronunciationText(input, options) {
-      return buildPronunciationTextMp3Inworld(input, {
-        ...options,
-        ttsProvider: 'inworld',
-      });
+      return buildPronunciationTextMp3Inworld(
+        input,
+        {
+          ...options,
+          ttsProvider: 'inworld',
+        },
+        { clientProvider },
+      );
     },
   };
 }
@@ -761,5 +865,11 @@ export {
   resolveInworldSpeakerAssignmentsWithRankerFromCatalog,
   resolveInworldVoiceCapabilities,
 } from './catalog.js';
+export {
+  createInworldClientProvider,
+  type InworldClientAdapter,
+  type InworldClientFactory,
+  type InworldClientProvider,
+} from './client.js';
 export { FfmpegNotFoundError, resolveFfmpegPath } from './ffmpeg.js';
 export { compileInworldSteeringInstruction, renderInworldSpeechSegment } from './rendering.js';

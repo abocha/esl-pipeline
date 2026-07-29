@@ -1,10 +1,12 @@
-import { InworldTTS, type InworldTTSClient, type VoiceInfo } from '@inworld/tts';
+import type { InworldTTSClient, VoiceInfo } from '@inworld/tts';
 
 import type { PipelineLogger, SpeakerProfile } from '@esl-pipeline/contracts';
 import {
   INWORLD_TTS_MODELS,
   type InworldTtsModel,
   type SpeakerVoiceAssignment,
+  type TtsRequestControl,
+  throwIfTtsCancelled,
   type VoiceAssignmentCapabilities,
   type VoiceAssignmentResolution,
   type VoiceCatalog,
@@ -12,10 +14,11 @@ import {
 } from '@esl-pipeline/tts-core';
 
 import {
-  classifyInworldTtsProviderError,
+  createInworldClientProvider,
+  type InworldClientProvider,
   resolveInworldApiKey,
-  resolveInworldTimeoutMs,
-} from './synthesis.js';
+} from './client.js';
+import { classifyInworldFailure, classifyInworldTtsProviderError } from './synthesis.js';
 
 export const DEFAULT_INWORLD_VOICES = ['Ashley', 'Dennis'] as const;
 const DEFAULT_INWORLD_TTS_MODEL: InworldTtsModel = 'inworld-tts-2';
@@ -570,8 +573,13 @@ function findInworldMetadataToken(text: string, tokens: string[]): string | unde
 }
 
 export async function loadInworldVoicesCatalog(
-  dependencies: { logger?: PipelineLogger; client?: Pick<InworldTTSClient, 'listVoices'> } = {},
+  dependencies: {
+    logger?: PipelineLogger;
+    client?: Pick<InworldTTSClient, 'listVoices'>;
+    clientProvider?: InworldClientProvider;
+  } & TtsRequestControl = {},
 ): Promise<VoiceCatalog> {
+  throwIfTtsCancelled(dependencies);
   const generatedAt = new Date().toISOString();
   const voices: VoiceCatalog['voices'] = DEFAULT_INWORLD_VOICES.map((voiceId) => ({
     id: voiceId,
@@ -588,13 +596,15 @@ export async function loadInworldVoicesCatalog(
     verifiedLanguages: [{ language: 'en', locale: 'en-US' }],
   }));
 
-  const apiKey = resolveInworldApiKey();
-  if (apiKey || dependencies.client) {
+  const configured = dependencies.clientProvider?.isConfigured() ?? Boolean(resolveInworldApiKey());
+  if (configured || dependencies.client) {
     try {
+      throwIfTtsCancelled(dependencies);
       const client =
-        dependencies.client ??
-        InworldTTS({ apiKey: apiKey!, timeout: resolveInworldTimeoutMs() ?? 30_000 });
+        dependencies.client ?? (dependencies.clientProvider ?? createInworldClientProvider()).get();
+      throwIfTtsCancelled(dependencies);
       const workspaceVoices = await client.listVoices();
+      throwIfTtsCancelled(dependencies);
       for (const voice of workspaceVoices) {
         if (!voice.voiceId) continue;
         const metadata = resolveInworldVoiceMetadata(voice);
@@ -621,6 +631,7 @@ export async function loadInworldVoicesCatalog(
         });
       }
     } catch (error) {
+      throwIfTtsCancelled(dependencies);
       dependencies.logger?.log({
         level: 'warn',
         stage: 'voice-plan',
@@ -628,6 +639,7 @@ export async function loadInworldVoicesCatalog(
         detail: {
           provider: 'inworld',
           errorCategory: classifyInworldTtsProviderError(error),
+          failureKind: classifyInworldFailure(error).kind,
           fallbackVoiceCount: DEFAULT_INWORLD_VOICES.length,
         },
       });

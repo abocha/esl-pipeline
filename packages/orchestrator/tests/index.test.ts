@@ -41,19 +41,29 @@ default: voice_id_default
       hash: 'abc123',
       voices: [{ speaker: 'Narrator', voiceId: 'voice_id_default', source: 'default' }],
     });
-    const result = await newAssignment({
-      md: mdPath,
-      preset: 'default',
-      withTts: true,
-      upload: 's3',
-      dryRun: true,
-      voices: voiceMapPath,
-    });
+    const controller = new AbortController();
+    const deadlineAtMs = Date.now() + 60_000;
+    const result = await newAssignment(
+      {
+        md: mdPath,
+        preset: 'default',
+        withTts: true,
+        upload: 's3',
+        dryRun: true,
+        voices: voiceMapPath,
+      },
+      {},
+      { signal: controller.signal, deadlineAtMs },
+    );
 
     expect(result.steps).toContain('import');
     expect(result.manifestPath).toBeDefined();
     expect(result.audio?.url).toMatch(
       /^https:\/\/test-bucket\.s3\.amazonaws\.com\/audio\/final\/[a-f0-9]+\/Conditionals%20Type%202%20-%20Study%20Text\.mp3$/,
+    );
+    expect(buildStudyTextMp3).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ signal: controller.signal, deadlineAtMs }),
     );
   }, 30_000);
 
@@ -184,6 +194,24 @@ default: voice_id_default
       dryRun: true,
       voices: voiceMapPath,
     });
+
+    vi.mocked(buildStudyTextMp3).mockClear();
+    const activeController = new AbortController();
+    const deadlineAtMs = Date.now() + 60_000;
+    await rerunAssignment(
+      {
+        md: mdPath,
+        regenerateStudyTextAudio: true,
+        upload: 's3',
+        dryRun: true,
+        voices: voiceMapPath,
+      },
+      { signal: activeController.signal, deadlineAtMs },
+    );
+    expect(buildStudyTextMp3).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ signal: activeController.signal, deadlineAtMs }),
+    );
 
     const controller = new AbortController();
     controller.abort('rerun stopped');

@@ -249,6 +249,21 @@ export function isPipelineCancelledError(error: unknown): error is PipelineCance
   );
 }
 
+function normalizePipelineCancellation(error: unknown): PipelineCancelledError | undefined {
+  if (isPipelineCancelledError(error)) return error;
+  if (
+    error instanceof Error &&
+    (error.name === 'TtsSynthesisCancelledError' ||
+      (error as { code?: string }).code === 'TTS_SYNTHESIS_CANCELLED')
+  ) {
+    return new PipelineCancelledError(
+      'tts',
+      'reason' in error ? (error as Error & { reason?: unknown }).reason : undefined,
+    );
+  }
+  return undefined;
+}
+
 function throwIfCancelled(signal: AbortSignal | undefined, stage: AssignmentStage): void {
   if (!signal?.aborted) return;
   throw new PipelineCancelledError(stage, signal.reason);
@@ -609,6 +624,8 @@ export async function newAssignment(
             ttsModel: flags.ttsModel,
             logger,
             voiceRanker: dependencies.voiceRanker,
+            signal,
+            deadlineAtMs: dependencies.deadlineAtMs,
           },
         );
         studyTextVoicePlan = prepared.voicePlan;
@@ -685,6 +702,8 @@ export async function newAssignment(
               logger,
               voicePlan: studyTextVoicePlan,
               speechPlan: studyTextSpeechPlan,
+              signal,
+              deadlineAtMs: dependencies.deadlineAtMs,
             },
           );
           throwIfCancelled(signal, 'tts');
@@ -776,6 +795,8 @@ export async function newAssignment(
           primaryVoiceId: fallbackVoiceId,
           chunkTtsProvider: defaultChunkProvider,
           chunkTtsModel: defaultChunkProvider === flags.ttsProvider ? flags.ttsModel : undefined,
+          signal,
+          deadlineAtMs: dependencies.deadlineAtMs,
         });
         emitPronunciationProviderCharacterMetrics(metrics, audioArtifacts.pronunciation);
       }
@@ -976,7 +997,8 @@ export async function newAssignment(
     };
   } catch (error) {
     const durationMs = Math.max(Date.now() - pipelineStartedAt, 0);
-    if (isPipelineCancelledError(error)) {
+    const cancellation = normalizePipelineCancellation(error);
+    if (cancellation) {
       logger.log({
         level: 'warn',
         message: 'pipeline.newAssignment.cancelled',
@@ -984,15 +1006,15 @@ export async function newAssignment(
         stage: 'pipeline',
         detail: {
           durationMs,
-          error: error.message,
-          cancelledStage: error.stage,
+          error: cancellation.message,
+          cancelledStage: cancellation.stage,
         },
       });
       metrics.timing('esl.pipeline.new_assignment.duration_ms', durationMs, {
         result: 'cancelled',
       });
       metrics.increment('esl.pipeline.new_assignment.cancelled', 1, {});
-      throw error;
+      throw cancellation;
     }
 
     logger.log({
@@ -1229,6 +1251,8 @@ export async function rerunAssignment(
             ttsModel: flags.studyTextTtsModel,
             logger,
             voiceRanker: dependencies.voiceRanker,
+            signal,
+            deadlineAtMs: dependencies.deadlineAtMs,
           },
         );
         studyTextVoicePlan = prepared.voicePlan;
@@ -1306,6 +1330,8 @@ export async function rerunAssignment(
               logger,
               voicePlan: studyTextVoicePlan,
               speechPlan: studyTextSpeechPlan,
+              signal,
+              deadlineAtMs: dependencies.deadlineAtMs,
             },
           );
           throwIfCancelled(signal, 'tts');
@@ -1510,6 +1536,8 @@ export async function rerunAssignment(
           chunkVoiceId: resolvedChunkVoiceId,
           previousAudio: previousPronunciationAudio,
           logger,
+          signal,
+          deadlineAtMs: dependencies.deadlineAtMs,
         });
         audioArtifacts.pronunciation = generatedPronunciation
           ? {
@@ -1787,7 +1815,8 @@ export async function rerunAssignment(
     };
   } catch (error) {
     const durationMs = Math.max(Date.now() - pipelineStartedAt, 0);
-    if (isPipelineCancelledError(error)) {
+    const cancellation = normalizePipelineCancellation(error);
+    if (cancellation) {
       logger.log({
         level: 'warn',
         message: 'pipeline.rerunAssignment.cancelled',
@@ -1795,15 +1824,15 @@ export async function rerunAssignment(
         stage: 'pipeline',
         detail: {
           durationMs,
-          error: error.message,
-          cancelledStage: error.stage,
+          error: cancellation.message,
+          cancelledStage: cancellation.stage,
         },
       });
       metrics.timing('esl.pipeline.rerun.duration_ms', durationMs, {
         result: 'cancelled',
       });
       metrics.increment('esl.pipeline.rerun.cancelled', 1, {});
-      throw error;
+      throw cancellation;
     }
 
     logger.log({
