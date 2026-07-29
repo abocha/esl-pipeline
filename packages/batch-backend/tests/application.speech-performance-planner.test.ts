@@ -101,6 +101,7 @@ describe('application/speech-performance-planner', () => {
   it('stays disabled by default', () => {
     const config = loadConfig();
     expect(config.speechPlanner.enabled).toBe(false);
+    expect(config.speechPlanner.model).toBe('gemini-3.1-flash-lite');
     expect(createBackendSpeechPerformancePlanner(config)).toEqual({
       unavailableReason: 'planner_disabled',
     });

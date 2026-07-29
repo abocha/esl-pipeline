@@ -324,6 +324,29 @@ function resolveAllowedModels(
   return new Set(config.models.openrouter.allowed.map((model) => model.trim()).filter(Boolean));
 }
 
+export function getConfiguredGenerationAllowedModels(
+  config: BatchBackendConfig['generation'],
+  provider: GenerationProvider,
+): readonly string[] {
+  return [...resolveAllowedModels(config, provider)];
+}
+
+export function getConfiguredGenerationProviderLimits(
+  config: BatchBackendConfig['generation'],
+  provider: GenerationProvider,
+): Readonly<GenerationBudgetLimits> {
+  return resolveProviderLimits(config, provider);
+}
+
+export function getConfiguredSpeechPlannerLimits(
+  config: BatchBackendConfig,
+): Readonly<Pick<GenerationBudgetLimits, 'rpmBudget' | 'dailyRequestBudget'>> {
+  return {
+    rpmBudget: config.speechPlanner.rpmBudget,
+    dailyRequestBudget: config.speechPlanner.dailyRequestBudget,
+  };
+}
+
 export function estimateGenerationTokens(args: {
   prompt: string;
   requestedMaxOutputTokens?: number;

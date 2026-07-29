@@ -669,6 +669,7 @@ export async function executeGoogleGeneration(args: {
 
   return {
     text,
+    model: typeof cast.modelVersion === 'string' ? cast.modelVersion : undefined,
     providerRequestId: typeof cast.responseId === 'string' ? cast.responseId : undefined,
     usage: parseGoogleUsage(cast),
     finishReason: extractGoogleFinishReason(cast),
@@ -785,6 +786,7 @@ export async function executeGoogleStructuredGeneration(args: {
   return {
     output,
     rawText,
+    model: typeof cast.modelVersion === 'string' ? cast.modelVersion : undefined,
     providerRequestId: typeof cast.responseId === 'string' ? cast.responseId : undefined,
     usage: parseGoogleUsage(cast),
     finishReason: extractGoogleFinishReason(cast),
