@@ -522,6 +522,7 @@ export async function writeSelectedInworldAudio(
       const key = JSON.parse(readFileSync(keyPath, 'utf8')) as {
         seed?: string;
         identityHash?: string;
+        htmlContentHash?: string;
         blocks?: Array<{
           blockId?: string;
           fixtureId?: string;
@@ -555,29 +556,39 @@ export async function writeSelectedInworldAudio(
       if (
         key.seed !== listeningSeed ||
         key.identityHash !== hashSpeechPlannerListeningIdentity(expectedIdentity) ||
+        (existsSync(indexPath) &&
+          key.htmlContentHash !==
+            createHash('sha256').update(readFileSync(indexPath, 'utf8')).digest('hex')) ||
         JSON.stringify(actualIdentity) !== JSON.stringify(expectedIdentity)
       ) {
         throw new Error('Selected audio listening key identity mismatch.');
       }
-      for (const variant of key.blocks?.flatMap((block) => block.variants ?? []) ?? []) {
-        const synthesis = variant.synthesis;
-        if (
-          !synthesis?.audioPath ||
-          !Number.isInteger(synthesis.bytes) ||
-          synthesis.bytes! < 1 ||
-          !/^[a-f0-9]{64}$/u.test(synthesis.contentHash ?? '')
-        ) {
-          throw new Error('Selected audio key contains invalid integrity metadata.');
+      for (const block of key.blocks ?? []) {
+        for (const variant of block.variants ?? []) {
+          const synthesis = variant.synthesis;
+          const expectedAudioPath = `audio/${block.blockId}-${variant.blindLabel}.mp3`;
+          if (
+            !synthesis?.audioPath ||
+            synthesis.audioPath !== expectedAudioPath ||
+            !Number.isInteger(synthesis.bytes) ||
+            synthesis.bytes! < 1 ||
+            !/^[a-f0-9]{64}$/u.test(synthesis.contentHash ?? '')
+          ) {
+            throw new Error('Selected audio key contains invalid integrity metadata.');
+          }
+          const absoluteAudioPath = resolve(outputDirectory, synthesis.audioPath);
+          const relation = relative(outputDirectory, absoluteAudioPath);
+          if (!relation || relation.startsWith('..') || isAbsolute(relation)) {
+            throw new Error('Selected audio key contains an unsafe audio path.');
+          }
+          if (expectedAudioHashes.has(absoluteAudioPath)) {
+            throw new Error('Selected audio key contains duplicate audio paths.');
+          }
+          expectedAudioHashes.set(absoluteAudioPath, {
+            bytes: synthesis.bytes!,
+            contentHash: synthesis.contentHash!,
+          });
         }
-        const absoluteAudioPath = resolve(outputDirectory, synthesis.audioPath);
-        const relation = relative(outputDirectory, absoluteAudioPath);
-        if (!relation || relation.startsWith('..') || isAbsolute(relation)) {
-          throw new Error('Selected audio key contains an unsafe audio path.');
-        }
-        expectedAudioHashes.set(absoluteAudioPath, {
-          bytes: synthesis.bytes!,
-          contentHash: synthesis.contentHash!,
-        });
       }
     }
     if (existsSync(indexPath) && existsSync(keyPath)) {

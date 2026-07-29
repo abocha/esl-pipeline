@@ -274,6 +274,20 @@ describe('eval speech planner CLI', () => {
     ).rejects.toThrow('listening key identity mismatch');
     writeFileSync(keyPath, originalKey, 'utf8');
 
+    const remappedKey = JSON.parse(originalKey) as {
+      blocks: Array<{ variants: Array<{ synthesis: { audioPath: string } }> }>;
+    };
+    remappedKey.blocks[0]!.variants[1]!.synthesis.audioPath =
+      remappedKey.blocks[0]!.variants[0]!.synthesis.audioPath;
+    writeFileSync(keyPath, JSON.stringify(remappedKey), 'utf8');
+    await expect(
+      writeSelectedInworldAudio(
+        { runDirectory: root, records },
+        { synthesizeChunk, concatenate, ffmpegPath: 'ffmpeg' },
+      ),
+    ).rejects.toThrow('invalid integrity metadata');
+    writeFileSync(keyPath, originalKey, 'utf8');
+
     const firstAudio = key.blocks[0]!.variants[0]!.synthesis.audioPath;
     writeFileSync(join(root, 'listening', firstAudio), Buffer.from('tampered'));
     await expect(

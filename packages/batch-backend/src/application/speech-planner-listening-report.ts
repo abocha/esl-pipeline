@@ -288,6 +288,7 @@ ${[
       {
         seed: args.seed,
         identityHash: hashSpeechPlannerListeningIdentity(identity),
+        htmlContentHash: hash(html),
         blocks: keyBlocks,
       },
       null,
