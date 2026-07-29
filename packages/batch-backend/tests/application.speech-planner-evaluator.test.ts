@@ -872,12 +872,12 @@ describe('speech planner evaluator', () => {
     const interruptedMetadata = JSON.parse(readFileSync(runPath, 'utf8')) as {
       status: string;
       completedAt?: string;
-      activities: Array<{
+      activities: {
         kind: string;
         status: string;
         completedAt?: string;
         providerCalls?: number;
-      }>;
+      }[];
     };
     interruptedMetadata.status = 'partial';
     delete interruptedMetadata.completedAt;
