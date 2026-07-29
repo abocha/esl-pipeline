@@ -293,7 +293,7 @@ describe('application/speech-performance-planner', () => {
     } satisfies Partial<SpeechPerformancePlannerInvalidOutputError>);
   });
 
-  it('returns invalid planner attempts without converting them to fallback plans', async () => {
+  it('records the production identity fallback without crediting an invalid prompted plan', async () => {
     const config = createEnabledConfig();
     const rejectedOutput = {
       segments: [{ id: 'segment-1', pauseAfterMs: 4000 }],
@@ -319,7 +319,7 @@ describe('application/speech-performance-planner', () => {
       parsedCandidate: rejectedOutput,
       validation: { status: 'invalid' },
       plan: undefined,
-      fallback: undefined,
+      fallback: { reason: 'planner_invalid' },
       usage: { totalTokens: 12 },
       latencyMs: 0,
     });
@@ -355,6 +355,7 @@ describe('application/speech-performance-planner', () => {
       validation: { status: 'invalid', reason: 'malformed_structured_output' },
       usage: { inputTokens: 4, outputTokens: 2, reasoningTokens: 1 },
       plan: undefined,
+      fallback: { reason: 'planner_invalid' },
     });
   });
 
@@ -377,7 +378,7 @@ describe('application/speech-performance-planner', () => {
       validation: { status: 'invalid' },
       parsedCandidate: duplicateIds,
       plan: undefined,
-      fallback: undefined,
+      fallback: { reason: 'planner_invalid' },
     });
     expect(attempt.candidateAnalysis?.hardFailures).toEqual(
       expect.arrayContaining([

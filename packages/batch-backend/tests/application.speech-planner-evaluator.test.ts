@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -67,12 +67,16 @@ describe('speech planner evaluator', () => {
       priceSnapshot: loadSpeechPlannerPriceSnapshot(),
     });
     expect(valid).toMatchObject({
+      promptHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+      rendererPolicyVersion: 'inworld-renderer-v2',
+      fixtureContentHash: fixture.contentHash,
       rawParseStatus: 'parsed',
       promptedPlanStatus: 'valid',
       fallbackStatus: 'not_used',
       returnedModel: 'gemini-3.5-flash-lite-2026-07-21',
       estimatedCostUsd: 0.0000925,
       analysis: { hardFailures: [] },
+      candidateAnalysis: { hardFailures: [] },
       rendered: expect.arrayContaining([
         expect.objectContaining({ id: 'neutral-1', leadingInstructionTagCount: 0 }),
       ]),
@@ -114,6 +118,24 @@ describe('speech planner evaluator', () => {
         latencyMs: 10,
         costStatus: 'estimated' as const,
         estimatedCostUsd: 0.001,
+        usage: { inputTokens: 10, outputTokens: 4, reasoningTokens: 2 },
+        analysis: {
+          hardFailures: [],
+          warnings: [],
+          metrics: {
+            segmentCount: 1,
+            paceCount: 0,
+            pauseCount: 1,
+            pauseValuesMs: [300],
+            nonverbalCount: 0,
+            emphasisCount: 0,
+            freeFormDirectionCount: 0,
+            deliveryModeCounts: { BALANCED: 1 },
+            cueCount: 2,
+            cueRate: 2,
+          },
+        },
+        rendered: [{ id: 'a', text: 'a', lexicalText: 'a', leadingInstructionTagCount: 1 }],
       },
       {
         attemptId: variants[1]!.attemptId,
@@ -138,6 +160,14 @@ describe('speech planner evaluator', () => {
       latencyMs: { median: 20, p95: 30, statisticalStatus: 'descriptive' },
       medianEstimatedCostPerValidPlanUsd: 0.001,
       estimatedCostPer100ValidPlansUsd: 0.1,
+      compatibility: { failures: 0, skipped: 0 },
+      returnedModelIdentity: { mismatches: 0 },
+      outputTokens: { reported: 1, unavailable: 1, median: 4, p95: 4 },
+      thinkingTokens: { reported: 1, unavailable: 1, median: 2, p95: 2 },
+      cueDensity: { reported: 1, median: 2, p95: 2, maximum: 2 },
+      pausesMs: { reported: 1, median: 300, p95: 300, maximum: 300 },
+      deliveryModeCounts: { BALANCED: 1 },
+      hardGates: { passed: false, schemaInvalidAttempts: 1 },
     });
   });
 
@@ -197,5 +227,136 @@ describe('speech planner evaluator', () => {
     });
     expect(resumed.records).toHaveLength(4);
     expect(executeVariant).not.toHaveBeenCalled();
+  });
+
+  it('short-circuits remaining model cells when the compatibility smoke output is invalid', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'speech-planner-smoke-'));
+    tempRoots.push(root);
+    const fixture = loadSpeechPlannerEvalFixtures()[0]!;
+    const variants = buildSpeechPlannerEvalMatrix({ fixtures: [fixture], repetitions: 1 });
+    const executeVariant = vi.fn(async (variant: (typeof variants)[number]) => ({
+      status: 'completed' as const,
+      rawText: variant.compatibilitySmoke
+        ? 'not json'
+        : JSON.stringify({ segments: fixture.prepared.segments.map(({ id }) => ({ id })) }),
+      latencyMs: 10,
+      fallbackUsed: variant.compatibilitySmoke,
+    }));
+
+    const run = await runSpeechPlannerEvaluation({
+      runDirectory: join(root, 'run'),
+      gitSha: 'a'.repeat(40),
+      variants,
+      fixtures: [fixture],
+      priceSnapshot: loadSpeechPlannerPriceSnapshot(),
+      executeVariant,
+    });
+
+    expect(executeVariant).toHaveBeenCalledTimes(3);
+    expect(run.records.find((record) => record.compatibilitySmoke)).toMatchObject({
+      promptedPlanStatus: 'invalid',
+      fallbackStatus: 'identity',
+      normalizedErrorCategory: 'compatibility_invalid_output',
+    });
+    expect(
+      run.records.filter((record) => record.promptedPlanStatus === 'skipped_incompatible'),
+    ).toHaveLength(1);
+  });
+
+  it('short-circuits a compatibility smoke that returns another model identity', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'speech-planner-model-id-'));
+    tempRoots.push(root);
+    const fixture = loadSpeechPlannerEvalFixtures()[0]!;
+    const variants = buildSpeechPlannerEvalMatrix({ fixtures: [fixture], repetitions: 1 });
+    const executeVariant = vi.fn(async (variant: (typeof variants)[number]) => ({
+      status: 'completed' as const,
+      rawText: JSON.stringify({
+        segments: fixture.prepared.segments.map(({ id }) => ({ id })),
+      }),
+      returnedModel: variant.compatibilitySmoke ? 'gemini-3.1-flash-lite' : variant.model,
+      latencyMs: 10,
+    }));
+
+    const run = await runSpeechPlannerEvaluation({
+      runDirectory: join(root, 'run'),
+      gitSha: 'a'.repeat(40),
+      variants,
+      fixtures: [fixture],
+      priceSnapshot: loadSpeechPlannerPriceSnapshot(),
+      executeVariant,
+    });
+
+    expect(executeVariant).toHaveBeenCalledTimes(3);
+    expect(run.records.find((record) => record.compatibilitySmoke)).toMatchObject({
+      normalizedErrorCategory: 'compatibility_returned_model_mismatch',
+    });
+  });
+
+  it('recovers an artifact-first interrupted attempt without overwriting immutable content', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'speech-planner-resume-'));
+    tempRoots.push(root);
+    const runDirectory = join(root, 'run');
+    const fixture = loadSpeechPlannerEvalFixtures()[0]!;
+    const variants = buildSpeechPlannerEvalMatrix({
+      fixtures: [fixture],
+      repetitions: 1,
+      models: ['gemini-3.1-flash-lite'],
+      promptPolicies: ['speech-performance-v2-inworld-tts2'],
+    });
+    const rawText = JSON.stringify({
+      segments: fixture.prepared.segments.map(({ id }) => ({ id })),
+    });
+    const executeVariant = vi.fn(async () => ({
+      status: 'completed' as const,
+      rawText,
+      latencyMs: 10,
+    }));
+    await runSpeechPlannerEvaluation({
+      runDirectory,
+      gitSha: 'a'.repeat(40),
+      variants,
+      fixtures: [fixture],
+      priceSnapshot: loadSpeechPlannerPriceSnapshot(),
+      executeVariant,
+    });
+    const immutablePlan = readFileSync(
+      join(runDirectory, 'plans', `${variants[0]!.attemptId}.json`),
+      'utf8',
+    );
+    writeFileSync(join(runDirectory, 'attempts.jsonl'), '', 'utf8');
+    executeVariant.mockClear();
+
+    const resumed = await runSpeechPlannerEvaluation({
+      runDirectory,
+      gitSha: 'a'.repeat(40),
+      variants,
+      fixtures: [fixture],
+      priceSnapshot: loadSpeechPlannerPriceSnapshot(),
+      executeVariant,
+      resume: true,
+    });
+
+    expect(executeVariant).toHaveBeenCalledOnce();
+    expect(resumed.records).toHaveLength(1);
+    expect(
+      readFileSync(join(runDirectory, 'plans', `${variants[0]!.attemptId}.json`), 'utf8'),
+    ).toBe(immutablePlan);
+
+    writeFileSync(
+      join(runDirectory, 'plans', `${variants[0]!.attemptId}.json`),
+      '{"tampered":true}',
+      'utf8',
+    );
+    await expect(
+      runSpeechPlannerEvaluation({
+        runDirectory,
+        gitSha: 'a'.repeat(40),
+        variants,
+        fixtures: [fixture],
+        priceSnapshot: loadSpeechPlannerPriceSnapshot(),
+        executeVariant,
+        resume: true,
+      }),
+    ).rejects.toThrow('immutable artifact mismatch');
   });
 });

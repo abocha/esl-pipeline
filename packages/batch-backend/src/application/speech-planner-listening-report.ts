@@ -101,6 +101,39 @@ export function selectSpeechPlannerAudioBlocks(
     } satisfies SpeechPlannerAudioBlock;
   });
 
+  const cueDensityByBlock = blocks
+    .map((block) => ({
+      block,
+      maximum: Math.max(
+        ...block.variants
+          .map((variant) => variant.record.analysis?.metrics.cueRate)
+          .filter((value): value is number => value !== undefined),
+      ),
+    }))
+    .filter((entry) => Number.isFinite(entry.maximum));
+  if (cueDensityByBlock.length > 0) {
+    const maximum = Math.max(...cueDensityByBlock.map((entry) => entry.maximum));
+    for (const entry of cueDensityByBlock.filter((candidate) => candidate.maximum === maximum)) {
+      entry.block.reasons.push('highest_cue_density');
+    }
+  }
+  const pauseByBlock = blocks
+    .map((block) => ({
+      block,
+      maximum: Math.max(
+        ...block.variants.flatMap(
+          (variant) => variant.record.analysis?.metrics.pauseValuesMs ?? [],
+        ),
+      ),
+    }))
+    .filter((entry) => Number.isFinite(entry.maximum));
+  if (pauseByBlock.length > 0) {
+    const maximum = Math.max(...pauseByBlock.map((entry) => entry.maximum));
+    for (const entry of pauseByBlock.filter((candidate) => candidate.maximum === maximum)) {
+      entry.block.reasons.push('longest_pause');
+    }
+  }
+
   const selected = new Map<string, SpeechPlannerAudioBlock>();
   const addFirst = (reason: string) => {
     const block = blocks.find((candidate) => candidate.reasons.includes(reason));
@@ -109,6 +142,8 @@ export function selectSpeechPlannerAudioBlocks(
   addFirst('neutral');
   addFirst('explicit_pace');
   addFirst('high_cue_density');
+  addFirst('highest_cue_density');
+  addFirst('longest_pause');
   addFirst('metric_disagreement');
   for (const block of blocks.filter((candidate) =>
     candidate.reasons.includes('renderer_failure'),
