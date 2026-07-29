@@ -75,6 +75,56 @@ describe('speech planner blocked listening report', () => {
     expect(block).toMatchObject({ complete: false, preferenceEligible: false });
   });
 
+  it('selects the actual highest-cue and longest-pause blocks', () => {
+    const metrics = (cueRate: number, pauseValuesMs: number[]) => ({
+      hardFailures: [],
+      warnings: [],
+      metrics: {
+        segmentCount: 1,
+        paceCount: 0,
+        pauseCount: pauseValuesMs.length,
+        pauseValuesMs,
+        nonverbalCount: 0,
+        emphasisCount: 0,
+        freeFormDirectionCount: 0,
+        deliveryModeCounts: {},
+        cueCount: cueRate,
+        cueRate,
+      },
+    });
+    const base = createBlockRecords();
+    const records = [
+      ...base.map((record) => ({
+        ...record,
+        fixtureId: 'first',
+        fixtureTags: [],
+        analysis: metrics(1, [100]),
+      })),
+      ...base.map((record) => ({
+        ...record,
+        attemptId: `cue-${record.attemptId}`,
+        fixtureId: 'cue-max',
+        fixtureTags: [],
+        analysis: metrics(5, [200]),
+      })),
+      ...base.map((record) => ({
+        ...record,
+        attemptId: `pause-${record.attemptId}`,
+        fixtureId: 'pause-max',
+        fixtureTags: [],
+        analysis: metrics(2, [900]),
+      })),
+    ];
+
+    const selected = selectSpeechPlannerAudioBlocks(records);
+    expect(selected.find((block) => block.fixtureId === 'cue-max')?.reasons).toContain(
+      'highest_cue_density',
+    );
+    expect(selected.find((block) => block.fixtureId === 'pause-max')?.reasons).toContain(
+      'longest_pause',
+    );
+  });
+
   it('writes seeded blind HTML without identities and a separate identity key', async () => {
     const root = mkdtempSync(join(tmpdir(), 'speech-listening-'));
     tempRoots.push(root);

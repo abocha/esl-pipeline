@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -54,6 +54,7 @@ const DEFAULT_PRICES =
   'packages/batch-backend/fixtures/speech-planner-eval/pricing-2026-07-28.json';
 const REPO_ROOT = fileURLToPath(new URL('../../../../', import.meta.url));
 const PRIVATE_ROOT = resolve(REPO_ROOT, 'tmp/speech-planner-eval-private');
+const IGNORED_ARTIFACT_ROOT = resolve(REPO_ROOT, 'tmp');
 
 function resolveInputPath(path: string): string {
   return isAbsolute(path) ? path : resolve(REPO_ROOT, path);
@@ -99,6 +100,14 @@ function assertPrivatePath(path: string): string {
     throw new Error('Private fixtures must be contained by tmp/speech-planner-eval-private.');
   }
   return absolute;
+}
+
+function assertPrivateArtifactPath(path: string): void {
+  const absolute = resolveInputPath(path);
+  const relation = relative(IGNORED_ARTIFACT_ROOT, absolute);
+  if (!relation || relation.startsWith('..') || isAbsolute(relation)) {
+    throw new Error('Private evaluation output must remain under the ignored tmp root.');
+  }
 }
 
 export function parseEvalSpeechPlannerArgs(argv: readonly string[]): EvalSpeechPlannerOptions {
@@ -235,6 +244,12 @@ export async function runEvalSpeechPlannerCli(
   if (options.privateOnly && !options.privateFixture) {
     throw new Error('--private-only requires --private-fixture.');
   }
+  if (options.privateFixture && !options.privateOnly) {
+    throw new Error('--private-fixture requires --private-only.');
+  }
+  if (options.privateOnly) {
+    assertPrivateArtifactPath(options.resumeRun ?? options.output);
+  }
   const stdout = dependencies.stdout ?? console.log;
   const config = dependencies.config ?? loadConfig();
   const gitSha = dependencies.gitSha ?? resolveGitSha();
@@ -269,9 +284,7 @@ export async function runEvalSpeechPlannerCli(
         compatibilitySmoke: false,
       };
     });
-    const outputByAttempt = new Map(
-      outputs.map((output) => [`offline-${output.id}`, output.rawText]),
-    );
+    const outputByAttempt = new Map(outputs.map((output) => [`offline-${output.id}`, output]));
     const run = await runSpeechPlannerEvaluation({
       runDirectory,
       gitSha,
@@ -280,8 +293,10 @@ export async function runEvalSpeechPlannerCli(
       priceSnapshot,
       executeVariant: async (variant) => ({
         status: 'completed',
-        rawText: outputByAttempt.get(variant.attemptId)!,
+        rawText: outputByAttempt.get(variant.attemptId)!.rawText,
         latencyMs: 0,
+        fallbackUsed:
+          outputByAttempt.get(variant.attemptId)!.expectedClassification === 'fallback_triggering',
       }),
     });
     const result: EvalSpeechPlannerCliResult = {
@@ -386,6 +401,7 @@ export async function runEvalSpeechPlannerCli(
           providerRequestId: attempt.providerRequestId,
           finishReason: attempt.finishReason,
           usage: attempt.usage,
+          fallbackUsed: Boolean(attempt.fallback),
           startedAt: startedAt.toISOString(),
           endedAt: endedAt.toISOString(),
         };
@@ -440,6 +456,21 @@ export async function writeSelectedInworldAudio(
 ): Promise<number> {
   const blocks = selectSpeechPlannerAudioBlocks(args.records);
   const outputDirectory = join(args.runDirectory, 'listening');
+  const indexPath = join(outputDirectory, 'index.html');
+  const keyPath = join(outputDirectory, 'key.json');
+  const incompleteBackups: string[] = [];
+  if (existsSync(indexPath) || existsSync(keyPath)) {
+    if (existsSync(indexPath) && existsSync(keyPath)) {
+      return 0;
+    }
+    const incompletePath = existsSync(indexPath) ? indexPath : keyPath;
+    const backupPath = `${incompletePath}.incomplete`;
+    if (existsSync(backupPath)) {
+      throw new Error('Selected audio resume contains multiple incomplete listening reports.');
+    }
+    renameSync(incompletePath, backupPath);
+    incompleteBackups.push(backupPath);
+  }
   const chunksDirectory = join(outputDirectory, 'chunks');
   const audioDirectory = join(outputDirectory, 'audio');
   mkdirSync(chunksDirectory, { recursive: true });
@@ -447,6 +478,7 @@ export async function writeSelectedInworldAudio(
   const synthesizeChunk = dependencies.synthesizeChunk ?? synthesizeInworldChunkWithRetry;
   const concatenate = dependencies.concatenate ?? concatMp3Segments;
   const ffmpegPath = dependencies.ffmpegPath ?? (await resolveFfmpegPath());
+  const clientProvider = createInworldClientProvider();
   let synthesisCalls = 0;
 
   await writeBlindListeningReport({
@@ -460,44 +492,57 @@ export async function writeSelectedInworldAudio(
         throw new Error(`Attempt ${variant.attemptId} has no synthesizable rendered plan.`);
       }
       const chunkPaths: string[] = [];
+      let generatedVariantChunk = false;
       for (const [index, segment] of rendered.entries()) {
         if (!segment.voiceId) {
           throw new Error(`Attempt ${variant.attemptId} segment ${segment.id} has no voice ID.`);
         }
         const chunkPath = join(chunksDirectory, `${variant.attemptId}-${index}.mp3`);
-        await synthesizeChunk(segment.text, segment.voiceId, chunkPath, {
-          model: variant.record.ttsModel,
-          speakingRate: segment.speakingRate,
-          temperature: segment.temperature,
-          deliveryMode: segment.deliveryMode,
-          language: segment.language,
-        });
-        synthesisCalls += 1;
+        if (!existsSync(chunkPath) || statSync(chunkPath).size === 0) {
+          await synthesizeChunk(
+            segment.text,
+            segment.voiceId,
+            chunkPath,
+            {
+              model: variant.record.ttsModel,
+              speakingRate: segment.speakingRate,
+              temperature: segment.temperature,
+              deliveryMode: segment.deliveryMode,
+              language: segment.language,
+            },
+            { clientProvider },
+          );
+          synthesisCalls += 1;
+          generatedVariantChunk = true;
+        }
         chunkPaths.push(chunkPath);
       }
       const audioFileName = `${block.blockId}-${blindLabel}.mp3`;
       const audioPath = join(audioDirectory, audioFileName);
-      if (chunkPaths.length === 1) {
-        await concatenate(chunkPaths, audioPath, true, ffmpegPath);
-      } else {
-        await concatenate(
-          chunkPaths,
-          audioPath,
-          true,
-          ffmpegPath,
-          resolveInworldAssemblyGapDurations(
-            rendered.map((segment) => ({ speaker: segment.speaker })),
-          ),
-        );
+      if (!existsSync(audioPath) || statSync(audioPath).size === 0) {
+        if (chunkPaths.length === 1) {
+          await concatenate(chunkPaths, audioPath, true, ffmpegPath);
+        } else {
+          await concatenate(
+            chunkPaths,
+            audioPath,
+            true,
+            ffmpegPath,
+            resolveInworldAssemblyGapDurations(
+              rendered.map((segment) => ({ speaker: segment.speaker })),
+            ),
+          );
+        }
       }
       return {
         audioPath: `audio/${audioFileName}`,
         latencyMs: Date.now() - startedAt,
         bytes: statSync(audioPath).size,
-        cacheOutcome: 'miss' as const,
+        cacheOutcome: generatedVariantChunk ? ('miss' as const) : ('hit' as const),
       };
     },
   });
+  for (const backupPath of incompleteBackups) unlinkSync(backupPath);
   return synthesisCalls;
 }
 

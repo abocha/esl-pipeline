@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -114,6 +114,12 @@ describe('eval speech planner CLI', () => {
       completedAttempts: 5,
     });
     expect(executeAttempt).not.toHaveBeenCalled();
+    expect(
+      JSON.parse(readFileSync(join(result.runDirectory!, 'summary.json'), 'utf8')),
+    ).toMatchObject({
+      identityFallbackRate: 0.2,
+      hardGates: { tts15SteeringLeakageFailures: 1 },
+    });
   });
 
   it('refuses private fixtures outside the ignored private root and audio without live mode', async () => {
@@ -131,6 +137,16 @@ describe('eval speech planner CLI', () => {
         gitSha: 'a'.repeat(40),
       }),
     ).rejects.toThrow('--audio=selected requires --live');
+    await expect(
+      runEvalSpeechPlannerCli(
+        [
+          '--private-fixture=tmp/speech-planner-eval-private/issue-154.json',
+          '--private-only',
+          '--output=packages/batch-backend/private-eval-output',
+        ],
+        { stdout: vi.fn(), config: loadConfig(), gitSha: 'a'.repeat(40) },
+      ),
+    ).rejects.toThrow('Private evaluation output must remain under the ignored tmp root');
   });
 
   it('accepts only paths contained by the resolved private root', () => {
@@ -176,7 +192,9 @@ describe('eval speech planner CLI', () => {
         ],
       })),
     );
-    const synthesizeChunk = vi.fn(async (_text, _voiceId, outFile: string) => {
+    const clientProviders: unknown[] = [];
+    const synthesizeChunk = vi.fn(async (_text, _voiceId, outFile: string, _options, deps) => {
+      clientProviders.push(deps?.clientProvider);
       writeFileSync(outFile, Buffer.from('chunk'));
     });
     const concatenate = vi.fn(async (_segments, outFile: string) => {
@@ -191,6 +209,24 @@ describe('eval speech planner CLI', () => {
     expect(calls).toBe(4);
     expect(synthesizeChunk).toHaveBeenCalledTimes(4);
     expect(concatenate).toHaveBeenCalledTimes(4);
+    expect(new Set(clientProviders).size).toBe(1);
     expect(readFileSync(join(root, 'listening', 'index.html'), 'utf8')).not.toContain('gemini');
+
+    const resumedCalls = await writeSelectedInworldAudio(
+      { runDirectory: root, records },
+      { synthesizeChunk, concatenate, ffmpegPath: 'ffmpeg' },
+    );
+    expect(resumedCalls).toBe(0);
+    expect(synthesizeChunk).toHaveBeenCalledTimes(4);
+    expect(concatenate).toHaveBeenCalledTimes(4);
+
+    unlinkSync(join(root, 'listening', 'key.json'));
+    const recoveredCalls = await writeSelectedInworldAudio(
+      { runDirectory: root, records },
+      { synthesizeChunk, concatenate, ffmpegPath: 'ffmpeg' },
+    );
+    expect(recoveredCalls).toBe(0);
+    expect(readFileSync(join(root, 'listening', 'key.json'), 'utf8')).toContain('gemini');
+    expect(synthesizeChunk).toHaveBeenCalledTimes(4);
   });
 });

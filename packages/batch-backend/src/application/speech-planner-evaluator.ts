@@ -1,10 +1,20 @@
-import { createHash } from 'node:crypto';
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createHash, randomUUID } from 'node:crypto';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 
 import type { GenerateDraftUsage, InworldTtsModel } from '@esl-pipeline/contracts';
 import { analyzeValidatedSpeechPlan, type SpeechDeliveryMode } from '@esl-pipeline/tts-core';
-import { renderInworldSpeechSegment } from '@esl-pipeline/tts-provider-inworld';
+import {
+  INWORLD_RENDERER_POLICY_VERSION,
+  renderInworldSpeechSegment,
+} from '@esl-pipeline/tts-provider-inworld';
 
 import { evaluateSpeechPlannerRawOutput } from './speech-performance-planner.js';
 import { buildSpeechPlannerRequest } from './speech-performance-prompt.js';
@@ -70,6 +80,7 @@ export interface SpeechPlannerEvalAttemptRecord {
   attemptId: string;
   fixtureId: string;
   fixtureTags?: string[];
+  fixtureContentHash?: string;
   ttsModel?: InworldTtsModel;
   requestedModel: SpeechPlannerEvalModel;
   returnedModel?: string;
@@ -81,14 +92,22 @@ export interface SpeechPlannerEvalAttemptRecord {
   rawParseStatus: 'parsed' | 'malformed' | 'not_attempted';
   promptedPlanStatus: 'valid' | 'invalid' | 'provider_error' | 'skipped_incompatible';
   fallbackStatus: 'not_used' | 'identity';
+  promptHash?: string;
+  rendererPolicyVersion?: string;
   latencyMs?: number;
   usage?: GenerateDraftUsage;
   costStatus: 'estimated' | 'unavailable';
   estimatedCostUsd?: number;
   costFormula?: SpeechPlannerAttemptCost['formula'];
   normalizedErrorCategory?: string;
+  providerRequestId?: string;
+  finishReason?: string;
+  validationReason?: string;
   rawText?: string;
+  rawTextHash?: string;
+  rawParse?: ReturnType<typeof evaluateSpeechPlannerRawOutput>['rawParse'];
   parsedCandidate?: unknown;
+  candidateAnalysis?: ReturnType<typeof evaluateSpeechPlannerRawOutput>['candidateAnalysis'];
   analysis?: ReturnType<typeof analyzeValidatedSpeechPlan>;
   plan?: ReturnType<typeof evaluateSpeechPlannerRawOutput>['plan'];
   rendered?: Array<{
@@ -103,6 +122,7 @@ export interface SpeechPlannerEvalAttemptRecord {
     temperature?: number;
     speaker?: string;
   }>;
+  renderedContentHash?: string;
 }
 
 export function evaluateSpeechPlannerAttemptRecord(args: {
@@ -146,6 +166,7 @@ export function evaluateSpeechPlannerAttemptRecord(args: {
     attemptId: args.variant.attemptId,
     fixtureId: args.variant.fixtureId,
     fixtureTags: args.fixture.tags,
+    fixtureContentHash: args.fixture.contentHash,
     ttsModel: args.fixture.prepared.selection.model as InworldTtsModel,
     requestedModel: args.variant.model,
     returnedModel: args.returnedModel,
@@ -157,11 +178,21 @@ export function evaluateSpeechPlannerAttemptRecord(args: {
     rawParseStatus: evaluated.rawParse?.status ?? 'malformed',
     promptedPlanStatus: evaluated.plan ? 'valid' : 'invalid',
     fallbackStatus: args.fallbackUsed ? 'identity' : 'not_used',
+    promptHash: request.promptHash,
+    rendererPolicyVersion: INWORLD_RENDERER_POLICY_VERSION,
     latencyMs: args.latencyMs,
     usage: args.usage,
     costStatus: cost.costStatus,
     rawText: args.rawText,
+    rawTextHash: createHash('sha256').update(args.rawText).digest('hex'),
+    rawParse: evaluated.rawParse,
     parsedCandidate: evaluated.parsedCandidate,
+    candidateAnalysis: evaluated.candidateAnalysis,
+    providerRequestId: args.providerRequestId,
+    finishReason: args.finishReason,
+    ...(evaluated.validation.status === 'invalid'
+      ? { validationReason: evaluated.validation.reason }
+      : {}),
     ...(cost.costStatus === 'estimated'
       ? { estimatedCostUsd: cost.estimatedCostUsd, costFormula: cost.formula }
       : {}),
@@ -202,7 +233,12 @@ export function evaluateSpeechPlannerAttemptRecord(args: {
       leadingInstructionTagCount: segment.leadingInstructionTagCount,
     })),
   );
-  return { ...base, rendered, analysis };
+  return {
+    ...base,
+    rendered,
+    renderedContentHash: stableHash(rendered),
+    analysis,
+  };
 }
 
 type ExecuteVariantResult =
@@ -226,12 +262,21 @@ interface RunMetadata {
   configHash: string;
   gitSha: string;
   priceSnapshotVersion: string;
+  rendererPolicyVersion: string;
+  promptHashes: string[];
   attemptIds: string[];
-  status: 'running' | 'complete' | 'partial';
 }
 
 function stableHash(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex');
+}
+
+function returnedModelMatchesRequest(record: SpeechPlannerEvalAttemptRecord): boolean {
+  return (
+    record.returnedModel === undefined ||
+    record.returnedModel === record.requestedModel ||
+    record.returnedModel.startsWith(`${record.requestedModel}-`)
+  );
 }
 
 function readAttempts(path: string): SpeechPlannerEvalAttemptRecord[] {
@@ -251,31 +296,92 @@ function appendRecord(
   runDirectory: string,
   record: SpeechPlannerEvalAttemptRecord,
 ): SpeechPlannerEvalAttemptRecord {
-  appendFileSync(join(runDirectory, 'attempts.jsonl'), `${JSON.stringify(record)}\n`, 'utf8');
   if (record.rawText !== undefined) {
-    writeFileSync(
+    writeImmutableFile(
       join(runDirectory, 'plans', `${record.attemptId}.json`),
-      JSON.stringify(
-        {
-          rawText: record.rawText,
-          parsedCandidate: record.parsedCandidate,
-          plan: record.plan,
-          analysis: record.analysis,
-        },
-        null,
-        2,
-      ),
-      { encoding: 'utf8', flag: 'wx' },
+      planArtifactContent(record),
     );
   }
   if (record.rendered) {
-    writeFileSync(
+    writeImmutableFile(
       join(runDirectory, 'rendered', `${record.attemptId}.json`),
       JSON.stringify(record.rendered, null, 2),
-      { encoding: 'utf8', flag: 'wx' },
     );
   }
+  const attemptsPath = join(runDirectory, 'attempts.jsonl');
+  const records = [...readAttempts(attemptsPath), record];
+  writeAtomicFile(attemptsPath, `${records.map((entry) => JSON.stringify(entry)).join('\n')}\n`);
   return record;
+}
+
+function planArtifactContent(record: SpeechPlannerEvalAttemptRecord): string {
+  return JSON.stringify(
+    {
+      rawText: record.rawText,
+      rawTextHash: record.rawTextHash,
+      rawParse: record.rawParse,
+      parsedCandidate: record.parsedCandidate,
+      candidateAnalysis: record.candidateAnalysis,
+      validationReason: record.validationReason,
+      promptHash: record.promptHash,
+      rendererPolicyVersion: record.rendererPolicyVersion,
+      fixtureContentHash: record.fixtureContentHash,
+      renderedContentHash: record.renderedContentHash,
+      plan: record.plan,
+      analysis: record.analysis,
+    },
+    null,
+    2,
+  );
+}
+
+function validateImmutableArtifacts(
+  runDirectory: string,
+  records: readonly SpeechPlannerEvalAttemptRecord[],
+): void {
+  for (const record of records) {
+    if (record.rawText !== undefined) {
+      const planPath = join(runDirectory, 'plans', `${record.attemptId}.json`);
+      if (!existsSync(planPath) || readFileSync(planPath, 'utf8') !== planArtifactContent(record)) {
+        throw new Error(`Speech planner eval immutable artifact mismatch: ${planPath}`);
+      }
+    }
+    if (record.rendered) {
+      const renderedPath = join(runDirectory, 'rendered', `${record.attemptId}.json`);
+      if (
+        !existsSync(renderedPath) ||
+        readFileSync(renderedPath, 'utf8') !== JSON.stringify(record.rendered, null, 2)
+      ) {
+        throw new Error(`Speech planner eval immutable artifact mismatch: ${renderedPath}`);
+      }
+    }
+  }
+}
+
+function writeImmutableFile(path: string, content: string): void {
+  if (existsSync(path)) {
+    if (readFileSync(path, 'utf8') !== content) {
+      throw new Error(`Speech planner eval immutable artifact mismatch: ${path}`);
+    }
+    return;
+  }
+  const temporaryPath = `${path}.${randomUUID()}.tmp`;
+  try {
+    writeFileSync(temporaryPath, content, { encoding: 'utf8', flag: 'wx' });
+    renameSync(temporaryPath, path);
+  } finally {
+    if (existsSync(temporaryPath)) unlinkSync(temporaryPath);
+  }
+}
+
+function writeAtomicFile(path: string, content: string): void {
+  const temporaryPath = `${path}.${randomUUID()}.tmp`;
+  try {
+    writeFileSync(temporaryPath, content, { encoding: 'utf8', flag: 'wx' });
+    renameSync(temporaryPath, path);
+  } finally {
+    if (existsSync(temporaryPath)) unlinkSync(temporaryPath);
+  }
 }
 
 export async function runSpeechPlannerEvaluation(args: {
@@ -290,11 +396,27 @@ export async function runSpeechPlannerEvaluation(args: {
   records: SpeechPlannerEvalAttemptRecord[];
   summary: ReturnType<typeof summarizeSpeechPlannerEvalAttempts>;
 }> {
+  const fixtureById = new Map(args.fixtures.map((fixture) => [fixture.id, fixture]));
+  const promptHashes = [
+    ...new Set(
+      args.variants.map((variant) => {
+        const fixture = fixtureById.get(variant.fixtureId);
+        if (!fixture) throw new Error(`Unknown speech planner eval fixture: ${variant.fixtureId}`);
+        return buildSpeechPlannerRequest(
+          fixture.prepared,
+          variant.promptPolicyVersion,
+          variant.model,
+        ).promptHash;
+      }),
+    ),
+  ].sort();
   const configHash = stableHash({
     gitSha: args.gitSha,
     variants: args.variants,
     fixtureHashes: args.fixtures.map((fixture) => [fixture.id, fixture.contentHash]),
     priceSnapshot: args.priceSnapshot,
+    rendererPolicyVersion: INWORLD_RENDERER_POLICY_VERSION,
+    promptHashes,
   });
   const runPath = join(args.runDirectory, 'run.json');
   const attemptsPath = join(args.runDirectory, 'attempts.jsonl');
@@ -318,24 +440,38 @@ export async function runSpeechPlannerEvaluation(args: {
       configHash,
       gitSha: args.gitSha,
       priceSnapshotVersion: args.priceSnapshot.version,
+      rendererPolicyVersion: INWORLD_RENDERER_POLICY_VERSION,
+      promptHashes,
       attemptIds: args.variants.map((variant) => variant.attemptId),
-      status: 'running',
     };
     writeFileSync(runPath, JSON.stringify(metadata, null, 2), { encoding: 'utf8', flag: 'wx' });
   }
 
   const records = readAttempts(attemptsPath);
+  if (args.resume) validateImmutableArtifacts(args.runDirectory, records);
   const completed = new Set(records.map((record) => record.attemptId));
-  const fixtureById = new Map(args.fixtures.map((fixture) => [fixture.id, fixture]));
+  const attemptIdentity = (variant: SpeechPlannerEvalVariant) => {
+    const fixture = fixtureById.get(variant.fixtureId);
+    if (!fixture) throw new Error(`Unknown speech planner eval fixture: ${variant.fixtureId}`);
+    return {
+      fixtureTags: fixture.tags,
+      fixtureContentHash: fixture.contentHash,
+      ttsModel: fixture.prepared.selection.model as InworldTtsModel,
+      promptHash: buildSpeechPlannerRequest(
+        fixture.prepared,
+        variant.promptPolicyVersion,
+        variant.model,
+      ).promptHash,
+      rendererPolicyVersion: INWORLD_RENDERER_POLICY_VERSION,
+    };
+  };
   const smoke = args.variants.find((variant) => variant.compatibilitySmoke);
   const ordered = smoke
     ? [smoke, ...args.variants.filter((variant) => variant.attemptId !== smoke.attemptId)]
     : [...args.variants];
   let incompatibleModel = records.find(
     (record) =>
-      record.compatibilitySmoke &&
-      record.promptedPlanStatus === 'provider_error' &&
-      record.normalizedErrorCategory?.startsWith('compatibility_'),
+      record.compatibilitySmoke && record.normalizedErrorCategory?.startsWith('compatibility_'),
   )?.requestedModel;
 
   for (const variant of ordered) {
@@ -345,6 +481,7 @@ export async function runSpeechPlannerEvaluation(args: {
         appendRecord(args.runDirectory, {
           attemptId: variant.attemptId,
           fixtureId: variant.fixtureId,
+          ...attemptIdentity(variant),
           requestedModel: variant.model,
           promptPolicyVersion: variant.promptPolicyVersion,
           repetition: variant.repetition,
@@ -370,6 +507,7 @@ export async function runSpeechPlannerEvaluation(args: {
         appendRecord(args.runDirectory, {
           attemptId: variant.attemptId,
           fixtureId: variant.fixtureId,
+          ...attemptIdentity(variant),
           requestedModel: variant.model,
           promptPolicyVersion: variant.promptPolicyVersion,
           repetition: variant.repetition,
@@ -388,6 +526,7 @@ export async function runSpeechPlannerEvaluation(args: {
         appendRecord(args.runDirectory, {
           attemptId: variant.attemptId,
           fixtureId: variant.fixtureId,
+          ...attemptIdentity(variant),
           requestedModel: variant.model,
           promptPolicyVersion: variant.promptPolicyVersion,
           repetition: variant.repetition,
@@ -404,35 +543,35 @@ export async function runSpeechPlannerEvaluation(args: {
     }
     const fixture = fixtureById.get(variant.fixtureId);
     if (!fixture) throw new Error(`Unknown speech planner eval fixture: ${variant.fixtureId}`);
-    records.push(
-      appendRecord(
-        args.runDirectory,
-        evaluateSpeechPlannerAttemptRecord({
-          variant,
-          fixture,
-          rawText: result.rawText,
-          returnedModel: result.returnedModel,
-          providerRequestId: result.providerRequestId,
-          finishReason: result.finishReason,
-          usage: result.usage,
-          latencyMs: result.latencyMs,
-          priceSnapshot: args.priceSnapshot,
-          fallbackUsed: result.fallbackUsed,
-          startedAt: result.startedAt,
-          endedAt: result.endedAt,
-        }),
-      ),
-    );
+    const record = evaluateSpeechPlannerAttemptRecord({
+      variant,
+      fixture,
+      rawText: result.rawText,
+      returnedModel: result.returnedModel,
+      providerRequestId: result.providerRequestId,
+      finishReason: result.finishReason,
+      usage: result.usage,
+      latencyMs: result.latencyMs,
+      priceSnapshot: args.priceSnapshot,
+      fallbackUsed: result.fallbackUsed,
+      startedAt: result.startedAt,
+      endedAt: result.endedAt,
+    });
+    if (variant.compatibilitySmoke && !record.plan) {
+      incompatibleModel = variant.model;
+      record.normalizedErrorCategory = 'compatibility_invalid_output';
+    } else if (variant.compatibilitySmoke && !returnedModelMatchesRequest(record)) {
+      incompatibleModel = variant.model;
+      record.normalizedErrorCategory = 'compatibility_returned_model_mismatch';
+    }
+    records.push(appendRecord(args.runDirectory, record));
   }
 
   const summary = summarizeSpeechPlannerEvalAttempts(records);
-  writeFileSync(join(args.runDirectory, 'summary.json'), JSON.stringify(summary, null, 2), 'utf8');
-  writeFileSync(
+  writeAtomicFile(join(args.runDirectory, 'summary.json'), JSON.stringify(summary, null, 2));
+  writeAtomicFile(
     join(args.runDirectory, 'summary.md'),
     renderSpeechPlannerEvalSummaryMarkdown(summary),
-    'utf8',
   );
-  metadata.status = records.length === args.variants.length ? 'complete' : 'partial';
-  writeFileSync(runPath, JSON.stringify(metadata, null, 2), 'utf8');
   return { records, summary };
 }

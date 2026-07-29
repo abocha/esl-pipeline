@@ -139,7 +139,7 @@ export function evaluateSpeechPlannerRawOutput(args: {
       ...metadata,
       validation: { status: 'invalid', reason: 'malformed_structured_output' },
       plan: undefined,
-      fallback: undefined,
+      fallback: { reason: 'planner_invalid' },
     };
   }
   const candidate = rawParse.output;
@@ -154,7 +154,7 @@ export function evaluateSpeechPlannerRawOutput(args: {
         reason: candidateAnalysis.hardFailures.map((failure) => failure.code).join(','),
       },
       plan: undefined,
-      fallback: undefined,
+      fallback: { reason: 'planner_invalid' },
     };
   }
   try {
@@ -185,7 +185,7 @@ export function evaluateSpeechPlannerRawOutput(args: {
         reason: error instanceof Error ? error.message : String(error),
       },
       plan: undefined,
-      fallback: undefined,
+      fallback: { reason: 'planner_invalid' },
     };
   }
 }
