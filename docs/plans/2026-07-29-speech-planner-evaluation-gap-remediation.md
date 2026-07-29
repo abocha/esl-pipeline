@@ -27,6 +27,12 @@
   make an evaluation green.
 - Keep the public live comparison fixed and bounded. Do not silently raise harness daily/RPM limits
   or provider spend.
+- Count physical provider requests, not logical variants. The corrected 120-attempt Gemini baseline
+  uses zero automatic retries and may issue at most 120 physical requests. A transient provider
+  failure is recorded with `retryAttempted: false`.
+- Fail closed on an indeterminate in-flight request after interruption. Do not automatically replay
+  an attempt whose durable artifacts show that provider execution may already have occurred. A
+  future retry design requires a separate crash-safe physical-call ledger and budget review.
 - Never commit live raw outputs, audio, private learner text, credentials, environment dumps, or the
   ignored original-issue fixture.
 - Tests must fail for the expected reason before implementation. Run `pnpm test:check-routing`
@@ -71,9 +77,20 @@ pnpm --filter @esl-pipeline/batch-backend exec vitest run tests/application.spee
 - [ ] Move TTS 1.5 protection into a deterministic zero-provider control suite. Reuse
       `getTtsModelCapabilities()` and `createIdentitySpeechPerformancePlan()` rather than duplicating
       capability policy in the CLI.
+- [ ] Run every TTS 1.5 control through the real deterministic renderer and
+      `analyzeValidatedSpeechPlan()`. Assert unchanged lexical text, zero semantic steering or
+      instruction tags, supported controls only, and the documented natural `speakingRate: 1`, without
+      constructing an Inworld client.
 - [ ] Record control-suite results separately from model-quality cells in `run.json`,
       `summary.json`, and `summary.md`. The aggregate may pass only when both suites pass, but identity
       controls must not be attributed to a planner model or prompt.
+- [ ] Bump the run schema and make controls first-class immutable/resumable evidence: stable control
+      IDs, input/content hashes, expected/completed control counts, immutable per-control records,
+      control definitions in `configHash`, and resume verification. Keep paid `expectedAttempts` and
+      physical `providerCalls` separate from `expectedControls`.
+- [ ] Write aggregate completion only after both paid attempts and deterministic controls are
+      complete and validated. An interrupted or altered control artifact keeps the run partial or is
+      rejected on resume.
 - [ ] Prove no Postgres adapter, Gemini client, OpenAI client, or Inworld client is constructed by
       deterministic control execution.
 
@@ -105,10 +122,16 @@ pnpm eval:speech-planner -- --offline-output-fixtures=packages/batch-backend/fix
       proving ordinary safe prose is rejected today.
 - [ ] Trace the 3.1 `UNAVAILABLE` attempt through
       `packages/batch-backend/src/application/generation-providers.ts` and the planner retry owner.
-      Preserve the one-logical-retry-owner contract; do not add SDK plus application retry stacking.
+      Preserve the one-logical-retry-owner contract and configure the evaluation baseline for zero
+      automatic retries; do not add SDK plus application retry stacking.
 - [ ] Make reports distinguish provider availability failures from schema/parser failures and show
-      whether a retry was attempted, without persisting provider messages or learner text.
-- [ ] Add deterministic tests for no-retry deterministic failures and bounded retryable failures.
+      `retryAttempted: false` for the fixed baseline, without persisting provider messages or learner
+      text.
+- [ ] Add deterministic tests proving both deterministic and transient failures perform no retry in
+      the fixed baseline and every physical request is counted against preflight/activity limits.
+- [ ] Add a crash-window regression test: if an immutable plan/call-intent artifact exists without a
+      completed JSONL attempt, resume must fail closed as indeterminate instead of calling the provider
+      again. Do not introduce automatic replay without a separately reviewed physical-call ledger.
 
 Focused validation:
 
@@ -148,8 +171,12 @@ pnpm --filter @esl-pipeline/batch-backend exec vitest run tests/application.gene
       model, and prompt using offline records.
 - [ ] Add report tests proving warning counts refer to model-controllable behavior and do not
       double-count the same semantic control.
-- [ ] Decide from evidence whether to revise the v2 prompt, warning definitions, or both. Any prompt
-      edit requires a new immutable prompt-policy ID/hash; never rewrite v2 in place.
+- [ ] Keep this pre-rerun work evaluator-only. Freeze the v1/v2 prompt IDs and shared `tts-core`
+      warning definitions so the corrected 120-attempt run differs only in harness fidelity and
+      diagnostics.
+- [ ] Record any evidence-supported prompt or production-warning change as a later separately
+      budgeted experiment. A prompt edit requires a new immutable policy ID/hash; never rewrite v2 in
+      place. A shared warning change also requires review of production log-contract impact.
 - [ ] Keep warnings comparative. Do not promote a warning to a hard gate without a documented
       provider-safety or learner-quality invariant.
 
@@ -163,7 +190,7 @@ Primary files:
 ## Task 6: Re-run the corrected Gemini baseline and listening program
 
 - [ ] Complete dry-run and offline fixtures first; verify the matrix remains exactly 120 paid
-      attempts plus zero-provider deterministic controls.
+      physical requests with zero automatic retries, plus zero-provider deterministic controls.
 - [ ] Obtain a complete current-day project request count, verify both stable Gemini IDs are
       allowlisted, and fail closed unless all missing attempts fit the configured local daily/RPM caps.
 - [ ] Run the corrected 3.1 versus 3.5 live matrix once. Record a new run ID and a committed
@@ -174,23 +201,30 @@ Primary files:
 - [ ] Run the separate private fixture only if the ignored file exists. Otherwise retain exactly:
       `Original issue fixture unavailable; record that limitation before closeout.`
 
-## Task 7: Add Luna as a provider-neutral contender
+## Task 7: Design a future Luna comparison
 
 - [ ] Start only after Task 6 produces trustworthy corrected Gemini evidence.
-- [ ] Write and review a bounded Luna comparison design before implementation. Define the exact
+- [ ] Stop after writing and reviewing a bounded Luna comparison design; implementation requires
+      separate approval after corrected Gemini and listening evidence. Define the exact
       stable model ID, OpenAI Responses structured-output request, reasoning effort, compatibility
       smoke, current-day budget source, RPM limiter, price snapshot, retry ownership, returned-model
       identity, and accounted call count.
-- [ ] Replace the Gemini-only model union with an explicit provider/model variant while keeping one
-      shared parser, plan analyzer, report schema, artifact privacy contract, and listening selector.
-- [ ] Add provider-specific preflight adapters; never make a Google quota observation authorize
-      OpenAI spend or vice versa.
-- [ ] Compare Luna against the best corrected Gemini production-policy cell on the same prompted
-      corpus and repetitions. Keep provider latency and cost labeled as descriptive and provider-specific.
-- [ ] Require the same automatic hard gates and paired blind listening before considering Luna for a
-      default decision.
+- [ ] Require that later implementation replace the Gemini-only model union with an explicit
+      provider/model variant while keeping one shared parser, plan analyzer, report schema, artifact
+      privacy contract, and listening selector. Provider provenance must participate in raw-plan
+      metadata, attempt identity, cell keys, cost snapshots, artifacts, and listening pairing.
+- [ ] Require the later design to consolidate the tolerant structured-JSON parser rather than
+      creating a provider-specific duplicate.
+- [ ] Specify that future implementation must add provider-specific preflight adapters; a Google
+      quota observation must never authorize OpenAI spend or vice versa.
+- [ ] Specify a future comparison of Luna against the best corrected Gemini production-policy cell
+      on the same prompted corpus and repetitions, with latency and cost labeled as descriptive and
+      provider-specific.
+- [ ] Specify the same automatic hard gates and paired blind listening as prerequisites for any
+      future Luna default decision. Do not implement adapters, make OpenAI calls, or generate Luna
+      listening artifacts in this plan.
 
-Likely files:
+Future implementation surfaces:
 
 - `packages/batch-backend/src/application/speech-planner-eval-fixtures.ts`
 - `packages/batch-backend/src/application/speech-planner-evaluator.ts`
