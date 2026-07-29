@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SpeechPlannerEvalAttemptRecord } from '../src/application/speech-planner-evaluator.js';
 import { loadConfig } from '../src/config/env.js';
 import {
+  assertEvaluationSourceRevision,
   parseEvalSpeechPlannerArgs,
   runEvalSpeechPlannerCli,
   writeSelectedInworldAudio,
@@ -17,6 +18,14 @@ afterEach(() => {
 });
 
 describe('eval speech planner CLI', () => {
+  it('refuses artifact-producing evaluation from a dirty source revision', () => {
+    expect(() =>
+      assertEvaluationSourceRevision({ writesArtifacts: true, porcelain: ' M src/file.ts' }),
+    ).toThrow('clean Git worktree');
+    expect(() =>
+      assertEvaluationSourceRevision({ writesArtifacts: false, porcelain: ' M src/file.ts' }),
+    ).not.toThrow();
+  });
   it('defaults to a provider-free 120-attempt dry-run', async () => {
     const stdout = vi.fn();
     const executeAttempt = vi.fn();
@@ -117,7 +126,7 @@ describe('eval speech planner CLI', () => {
     expect(
       JSON.parse(readFileSync(join(result.runDirectory!, 'summary.json'), 'utf8')),
     ).toMatchObject({
-      identityFallbackRate: 0.2,
+      identityFallbackRate: 0.8,
       hardGates: { tts15SteeringLeakageFailures: 1 },
     });
   });
@@ -228,5 +237,17 @@ describe('eval speech planner CLI', () => {
     expect(recoveredCalls).toBe(0);
     expect(readFileSync(join(root, 'listening', 'key.json'), 'utf8')).toContain('gemini');
     expect(synthesizeChunk).toHaveBeenCalledTimes(4);
+
+    const key = JSON.parse(readFileSync(join(root, 'listening', 'key.json'), 'utf8')) as {
+      blocks: Array<{ variants: Array<{ synthesis: { audioPath: string } }> }>;
+    };
+    const firstAudio = key.blocks[0]!.variants[0]!.synthesis.audioPath;
+    writeFileSync(join(root, 'listening', firstAudio), Buffer.from('tampered'));
+    await expect(
+      writeSelectedInworldAudio(
+        { runDirectory: root, records },
+        { synthesizeChunk, concatenate, ffmpegPath: 'ffmpeg' },
+      ),
+    ).rejects.toThrow('immutable audio mismatch');
   });
 });

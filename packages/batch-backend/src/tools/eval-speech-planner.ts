@@ -195,6 +195,25 @@ function resolveGitSha(): string {
   return execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
 }
 
+export function assertEvaluationSourceRevision(args: {
+  writesArtifacts: boolean;
+  porcelain: string;
+}): void {
+  if (args.writesArtifacts && args.porcelain.trim()) {
+    throw new Error('Speech planner evaluation artifacts require a clean Git worktree.');
+  }
+}
+
+function resolveEvaluationGitSha(writesArtifacts: boolean): string {
+  assertEvaluationSourceRevision({
+    writesArtifacts,
+    porcelain: execFileSync('git', ['status', '--porcelain', '--untracked-files=all'], {
+      encoding: 'utf8',
+    }),
+  });
+  return resolveGitSha();
+}
+
 export interface EvalSpeechPlannerCliResult {
   mode: 'dry-run' | 'offline' | 'live';
   plannerAttempts: number;
@@ -252,7 +271,9 @@ export async function runEvalSpeechPlannerCli(
   }
   const stdout = dependencies.stdout ?? console.log;
   const config = dependencies.config ?? loadConfig();
-  const gitSha = dependencies.gitSha ?? resolveGitSha();
+  const gitSha =
+    dependencies.gitSha ??
+    resolveEvaluationGitSha(options.live || options.offlineOutputFixtures !== undefined);
   const priceSnapshot = loadSpeechPlannerPriceSnapshot(resolveInputPath(options.priceSnapshot));
   const fixtures = options.privateOnly
     ? loadPrivateFixture(options.privateFixture!)
@@ -296,7 +317,9 @@ export async function runEvalSpeechPlannerCli(
         rawText: outputByAttempt.get(variant.attemptId)!.rawText,
         latencyMs: 0,
         fallbackUsed:
-          outputByAttempt.get(variant.attemptId)!.expectedClassification === 'fallback_triggering',
+          outputByAttempt.get(variant.attemptId)!.expectedClassification === 'fallback_triggering'
+            ? true
+            : undefined,
       }),
     });
     const result: EvalSpeechPlannerCliResult = {
@@ -459,17 +482,60 @@ export async function writeSelectedInworldAudio(
   const indexPath = join(outputDirectory, 'index.html');
   const keyPath = join(outputDirectory, 'key.json');
   const incompleteBackups: string[] = [];
+  const expectedAudioHashes = new Map<string, { bytes: number; contentHash: string }>();
   if (existsSync(indexPath) || existsSync(keyPath)) {
+    if (existsSync(keyPath)) {
+      const key = JSON.parse(readFileSync(keyPath, 'utf8')) as {
+        blocks?: Array<{
+          variants?: Array<{
+            synthesis?: { audioPath?: string; bytes?: number; contentHash?: string };
+          }>;
+        }>;
+      };
+      for (const variant of key.blocks?.flatMap((block) => block.variants ?? []) ?? []) {
+        const synthesis = variant.synthesis;
+        if (
+          !synthesis?.audioPath ||
+          !Number.isInteger(synthesis.bytes) ||
+          synthesis.bytes! < 1 ||
+          !/^[a-f0-9]{64}$/u.test(synthesis.contentHash ?? '')
+        ) {
+          throw new Error('Selected audio key contains invalid integrity metadata.');
+        }
+        const absoluteAudioPath = resolve(outputDirectory, synthesis.audioPath);
+        const relation = relative(outputDirectory, absoluteAudioPath);
+        if (!relation || relation.startsWith('..') || isAbsolute(relation)) {
+          throw new Error('Selected audio key contains an unsafe audio path.');
+        }
+        expectedAudioHashes.set(absoluteAudioPath, {
+          bytes: synthesis.bytes!,
+          contentHash: synthesis.contentHash!,
+        });
+      }
+    }
     if (existsSync(indexPath) && existsSync(keyPath)) {
-      return 0;
+      let missingAudio = false;
+      for (const [audioPath, integrity] of expectedAudioHashes) {
+        if (!existsSync(audioPath)) {
+          missingAudio = true;
+          continue;
+        }
+        const content = readFileSync(audioPath);
+        const contentHash = createHash('sha256').update(content).digest('hex');
+        if (content.length !== integrity.bytes || contentHash !== integrity.contentHash) {
+          throw new Error(`Selected audio immutable audio mismatch: ${audioPath}`);
+        }
+      }
+      if (!missingAudio) return 0;
     }
-    const incompletePath = existsSync(indexPath) ? indexPath : keyPath;
-    const backupPath = `${incompletePath}.incomplete`;
-    if (existsSync(backupPath)) {
-      throw new Error('Selected audio resume contains multiple incomplete listening reports.');
+    for (const reportPath of [indexPath, keyPath].filter((path) => existsSync(path))) {
+      const backupPath = `${reportPath}.incomplete`;
+      if (existsSync(backupPath)) {
+        throw new Error('Selected audio resume contains multiple incomplete listening reports.');
+      }
+      renameSync(reportPath, backupPath);
+      incompleteBackups.push(backupPath);
     }
-    renameSync(incompletePath, backupPath);
-    incompleteBackups.push(backupPath);
   }
   const chunksDirectory = join(outputDirectory, 'chunks');
   const audioDirectory = join(outputDirectory, 'audio');
@@ -534,10 +600,21 @@ export async function writeSelectedInworldAudio(
           );
         }
       }
+      const audioContent = readFileSync(audioPath);
+      const contentHash = createHash('sha256').update(audioContent).digest('hex');
+      const expectedIntegrity = expectedAudioHashes.get(audioPath);
+      if (
+        expectedIntegrity &&
+        (audioContent.length !== expectedIntegrity.bytes ||
+          contentHash !== expectedIntegrity.contentHash)
+      ) {
+        throw new Error(`Selected audio immutable audio mismatch: ${audioPath}`);
+      }
       return {
         audioPath: `audio/${audioFileName}`,
         latencyMs: Date.now() - startedAt,
-        bytes: statSync(audioPath).size,
+        bytes: audioContent.length,
+        contentHash,
         cacheOutcome: generatedVariantChunk ? ('miss' as const) : ('hit' as const),
       };
     },
