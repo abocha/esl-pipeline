@@ -317,6 +317,10 @@ voice-capability snapshot provenance.
 ## Operational Notes
 
 - Planner enablement is opt-in because it adds a billable model call.
+- Planner model comparisons use the database-free, fail-closed harness documented in
+  [`../operations/speech-planner-evaluation.md`](../operations/speech-planner-evaluation.md). The
+  harness does not change the production planner default; only complete evaluation evidence can
+  justify a separate configuration change.
 - Identity fallback is expected and observable; it is not a publish blocker.
 - Voice catalog refresh remains useful for provider assignment quality and diagnostics.
 - Explicit operator overrides remain supported outside authored Markdown.

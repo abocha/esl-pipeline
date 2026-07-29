@@ -3,7 +3,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } fr
 import { join } from 'node:path';
 
 import type { GenerateDraftUsage, InworldTtsModel } from '@esl-pipeline/contracts';
-import { analyzeValidatedSpeechPlan } from '@esl-pipeline/tts-core';
+import { analyzeValidatedSpeechPlan, type SpeechDeliveryMode } from '@esl-pipeline/tts-core';
 import { renderInworldSpeechSegment } from '@esl-pipeline/tts-provider-inworld';
 
 import { evaluateSpeechPlannerRawOutput } from './speech-performance-planner.js';
@@ -70,6 +70,7 @@ export interface SpeechPlannerEvalAttemptRecord {
   attemptId: string;
   fixtureId: string;
   fixtureTags?: string[];
+  ttsModel?: InworldTtsModel;
   requestedModel: SpeechPlannerEvalModel;
   returnedModel?: string;
   promptPolicyVersion: SpeechPlannerEvalVariant['promptPolicyVersion'];
@@ -98,7 +99,9 @@ export interface SpeechPlannerEvalAttemptRecord {
     voiceId?: string;
     language?: string;
     speakingRate?: number;
-    deliveryMode?: string;
+    deliveryMode?: SpeechDeliveryMode;
+    temperature?: number;
+    speaker?: string;
   }>;
 }
 
@@ -143,6 +146,7 @@ export function evaluateSpeechPlannerAttemptRecord(args: {
     attemptId: args.variant.attemptId,
     fixtureId: args.variant.fixtureId,
     fixtureTags: args.fixture.tags,
+    ttsModel: args.fixture.prepared.selection.model as InworldTtsModel,
     requestedModel: args.variant.model,
     returnedModel: args.returnedModel,
     promptPolicyVersion: args.variant.promptPolicyVersion,
@@ -184,6 +188,7 @@ export function evaluateSpeechPlannerAttemptRecord(args: {
     return {
       id: segment.id,
       ...output,
+      ...(segment.speaker ? { speaker: segment.speaker } : {}),
       ...(assignment?.voiceId ? { voiceId: assignment.voiceId } : {}),
     };
   });

@@ -34,6 +34,7 @@
     "profile:migrate-legacy": "tsx --tsconfig tsconfig.json src/tools/migrate-legacy-profiles.ts",
     "prompt-assets:bootstrap": "tsx --tsconfig tsconfig.json src/tools/bootstrap-prompt-assets.ts",
     "prompt-assets:bootstrap:dry": "tsx --tsconfig tsconfig.json src/tools/bootstrap-prompt-assets.ts --dry-run",
+    "speech-planner:eval": "tsx --tsconfig tsconfig.json src/tools/eval-speech-planner.ts",
     "start:api": "node dist/transport/http-server.js",
     "start:student-memory-worker": "node dist/transport/student-memory-worker.js",
     "start:transcribe-worker": "node dist/transport/transcribe-worker.js",

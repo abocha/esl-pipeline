@@ -73,6 +73,7 @@ export function selectSpeechPlannerAudioBlocks(
       JSON.stringify({
         fixtureId: first.fixtureId,
         repetition: first.repetition,
+        ttsModel: first.ttsModel,
         rendered: first.rendered?.map((segment) => ({
           voiceId: segment.voiceId,
           language: segment.language,

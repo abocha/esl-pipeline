@@ -52,7 +52,7 @@ export interface InworldRetryDependencies {
   now(): number;
 }
 
-interface InworldSynthesisOptions extends TtsRequestControl {
+export interface InworldSynthesisOptions extends TtsRequestControl {
   model: InworldTtsModel;
   speakingRate?: number;
   temperature?: number;

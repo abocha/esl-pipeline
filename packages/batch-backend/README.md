@@ -127,6 +127,7 @@ Read these instead of relying on this README for exhaustive env details:
 
 - [`docs/reference/env.md`](../../docs/reference/env.md)
 - [`docs/operations/prompt-gallery-bootstrap.md`](../../docs/operations/prompt-gallery-bootstrap.md)
+- [`docs/operations/speech-planner-evaluation.md`](../../docs/operations/speech-planner-evaluation.md)
 - [`docs/operations/postgres-backup-restore.md`](../../docs/operations/postgres-backup-restore.md)
 - [`docs/operations/telegram-ops-control-panel.md`](../../docs/operations/telegram-ops-control-panel.md)
 
