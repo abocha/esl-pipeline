@@ -47,6 +47,8 @@ import {
   SpeechPlannerEvalRateLimiter,
 } from '../application/speech-planner-eval-preflight.js';
 import {
+  beginSpeechPlannerEvalRunActivity,
+  finishSpeechPlannerEvalRunActivity,
   readSpeechPlannerEvalRunMetadata,
   runSpeechPlannerEvaluation,
   type SpeechPlannerEvalAttemptRecord,
@@ -263,6 +265,7 @@ export async function runEvalSpeechPlannerCli(
     config?: BatchBackendConfig;
     gitSha?: string;
     executeAttempt?: AttemptExecutor;
+    inworldConfigured?: boolean;
     writeSelectedAudio?: (args: {
       runDirectory: string;
       records: SpeechPlannerEvalAttemptRecord[];
@@ -299,7 +302,10 @@ export async function runEvalSpeechPlannerCli(
   if (options.audio === 'selected' && !options.live) {
     throw new Error('--audio=selected requires --live.');
   }
-  if (options.audio === 'selected' && !createInworldClientProvider().isConfigured()) {
+  if (
+    options.audio === 'selected' &&
+    !(dependencies.inworldConfigured ?? createInworldClientProvider().isConfigured())
+  ) {
     throw new Error(
       '--audio=selected requires ESL_TTS_PROVIDER_INWORLD_API_KEY or INWORLD_API_KEY.',
     );
@@ -486,6 +492,42 @@ export async function runEvalSpeechPlannerCli(
   const limiter = new SpeechPlannerEvalRateLimiter({ rpm: limits.rpmBudget ?? 0 });
   const executeAttempt = dependencies.executeAttempt ?? executeSpeechPlannerAttempt;
   let providerCalls = 0;
+  const liveRunContext = {
+    mode: 'live',
+    resolvedConfig: {
+      corpusPath: artifactInputPath(options.corpus),
+      priceSnapshotPath: artifactInputPath(options.priceSnapshot),
+      ...(options.privateFixture
+        ? { privateFixturePath: artifactInputPath(options.privateFixture) }
+        : {}),
+      models: options.models,
+      promptPolicies: options.prompts,
+      repetitions: options.repetitions,
+      privateOnly: options.privateOnly,
+    },
+    environmentFlags: {
+      live: true,
+      offlineOutputFixtures: false,
+      selectedAudio: options.audio === 'selected',
+      privateOnly: options.privateOnly,
+      postgresAdapters: 0,
+    },
+    preflight: {
+      status: 'allowed',
+      allowedModels,
+      requiredModels: [...SPEECH_PLANNER_EVAL_MODELS],
+      missingRequiredModels: preflight.missingRequiredModels,
+      allowlistReady: preflight.allowlistReady,
+      credentialsPresent: Boolean(config.generation.providers.googleAiStudio.apiKey),
+      usageVerified: preflight.usageVerified,
+      usedToday: options.usedToday,
+      dailyLimit: limits.dailyRequestBudget ?? 0,
+      rpm: limits.rpmBudget ?? 0,
+      remainingDailyCapacity: preflight.remainingDailyCapacity,
+      plannerAttempts: preflight.plannerAttempts,
+      compatibilityChecks: preflight.compatibilityChecks,
+    },
+  } satisfies SpeechPlannerEvalRunContext;
   const run = await runSpeechPlannerEvaluation({
     runDirectory,
     gitSha,
@@ -493,42 +535,7 @@ export async function runEvalSpeechPlannerCli(
     fixtures,
     priceSnapshot,
     resume: Boolean(options.resumeRun),
-    runContext: {
-      mode: 'live',
-      resolvedConfig: {
-        corpusPath: artifactInputPath(options.corpus),
-        priceSnapshotPath: artifactInputPath(options.priceSnapshot),
-        ...(options.privateFixture
-          ? { privateFixturePath: artifactInputPath(options.privateFixture) }
-          : {}),
-        models: options.models,
-        promptPolicies: options.prompts,
-        repetitions: options.repetitions,
-        privateOnly: options.privateOnly,
-      },
-      environmentFlags: {
-        live: true,
-        offlineOutputFixtures: false,
-        selectedAudio: options.audio === 'selected',
-        privateOnly: options.privateOnly,
-        postgresAdapters: 0,
-      },
-      preflight: {
-        status: 'allowed',
-        allowedModels,
-        requiredModels: [...SPEECH_PLANNER_EVAL_MODELS],
-        missingRequiredModels: preflight.missingRequiredModels,
-        allowlistReady: preflight.allowlistReady,
-        credentialsPresent: Boolean(config.generation.providers.googleAiStudio.apiKey),
-        usageVerified: preflight.usageVerified,
-        usedToday: options.usedToday,
-        dailyLimit: limits.dailyRequestBudget ?? 0,
-        rpm: limits.rpmBudget ?? 0,
-        remainingDailyCapacity: preflight.remainingDailyCapacity,
-        plannerAttempts: preflight.plannerAttempts,
-        compatibilityChecks: preflight.compatibilityChecks,
-      },
-    } satisfies SpeechPlannerEvalRunContext,
+    runContext: liveRunContext,
     executeVariant: async (variant) => {
       const fixture = fixtures.find((candidate) => candidate.id === variant.fixtureId)!;
       await limiter.acquire();
@@ -576,13 +583,34 @@ export async function runEvalSpeechPlannerCli(
       }
     },
   });
-  const synthesisCalls =
-    options.audio === 'selected'
-      ? await (dependencies.writeSelectedAudio ?? writeSelectedInworldAudio)({
-          runDirectory,
-          records: run.records,
-        })
-      : 0;
+  let synthesisCalls = 0;
+  if (options.audio === 'selected') {
+    const activityId = beginSpeechPlannerEvalRunActivity({
+      runDirectory,
+      kind: 'selected_audio',
+      runContext: liveRunContext,
+    });
+    try {
+      synthesisCalls = await (dependencies.writeSelectedAudio ?? writeSelectedInworldAudio)({
+        runDirectory,
+        records: run.records,
+      });
+      finishSpeechPlannerEvalRunActivity({
+        runDirectory,
+        activityId,
+        status: 'completed',
+        synthesisCalls,
+      });
+    } catch (error) {
+      finishSpeechPlannerEvalRunActivity({
+        runDirectory,
+        activityId,
+        status: 'failed',
+        normalizedErrorCategory: 'selected_audio_failed',
+      });
+      throw error;
+    }
+  }
   const result: EvalSpeechPlannerCliResult = {
     mode: 'live',
     plannerAttempts: preflight.plannerAttempts,

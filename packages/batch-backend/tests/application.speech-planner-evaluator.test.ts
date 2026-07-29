@@ -249,7 +249,7 @@ describe('speech planner evaluator', () => {
     expect(executeVariant).toHaveBeenCalledTimes(3);
     expect(observedPartialStatus).toBe(true);
     expect(JSON.parse(readFileSync(join(runDirectory, 'run.json'), 'utf8'))).toMatchObject({
-      schemaVersion: 2,
+      schemaVersion: 3,
       status: 'completed',
       mode: 'live',
       resolvedConfig: {
@@ -263,6 +263,13 @@ describe('speech planner evaluator', () => {
         rpm: 4,
       },
       priceSnapshot: loadSpeechPlannerPriceSnapshot(),
+      activities: [
+        {
+          kind: 'planner_initial',
+          status: 'completed',
+          preflight: { usedToday: 0, plannerAttempts: 4 },
+        },
+      ],
     });
     expect(
       readFileSync(join(runDirectory, 'attempts.jsonl'), 'utf8').trim().split('\n'),
