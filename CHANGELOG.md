@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.4.0] - 2026-07-29
+
+### Changed
+
+- Automated release from PR #167: feat(speech-planner): add evaluation harness (https://github.com/abocha/esl-pipeline/pull/167)
+
 ## [10.3.4] - 2026-07-29
 
 ### Changed
