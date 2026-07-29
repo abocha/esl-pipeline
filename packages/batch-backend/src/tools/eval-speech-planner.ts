@@ -33,6 +33,7 @@ import {
 import {
   buildSpeechPlannerEvalMatrix,
   loadOfflineSpeechPlannerOutputs,
+  loadSpeechPlannerEvalControls,
   loadSpeechPlannerEvalFixtures,
   loadSpeechPlannerPriceSnapshot,
   SPEECH_PLANNER_EVAL_MODELS,
@@ -65,6 +66,7 @@ import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
 
 const DEFAULT_CORPUS = 'packages/batch-backend/fixtures/speech-planner-eval/corpus-v1.json';
+const DEFAULT_CONTROLS = 'packages/batch-backend/fixtures/speech-planner-eval/controls-v1.json';
 const DEFAULT_PRICES =
   'packages/batch-backend/fixtures/speech-planner-eval/pricing-2026-07-28.json';
 const REPO_ROOT = fileURLToPath(new URL('../../../../', import.meta.url));
@@ -246,6 +248,7 @@ export interface EvalSpeechPlannerCliResult {
   postgresAdapters: 0;
   currentDayUsage: number | 'unverified';
   completedAttempts?: number;
+  completedControls?: number;
   runDirectory?: string;
 }
 
@@ -331,6 +334,8 @@ export async function runEvalSpeechPlannerCli(
   const fixtures = options.privateOnly
     ? loadPrivateFixture(options.privateFixture!)
     : loadSpeechPlannerEvalFixtures(resolveInputPath(options.corpus));
+  const controlsPath = resumeMetadata?.resolvedConfig.controlsPath ?? DEFAULT_CONTROLS;
+  const controls = loadSpeechPlannerEvalControls(resolveInputPath(controlsPath));
   const variants =
     resumeMetadata?.variants ??
     buildSpeechPlannerEvalMatrix({
@@ -370,12 +375,14 @@ export async function runEvalSpeechPlannerCli(
       gitSha,
       variants: offlineVariants,
       fixtures,
+      controls,
       priceSnapshot,
       resume: Boolean(options.resumeRun),
       runContext: {
         mode: 'offline',
         resolvedConfig: {
           corpusPath: artifactInputPath(options.corpus),
+          controlsPath: artifactInputPath(controlsPath),
           priceSnapshotPath: artifactInputPath(options.priceSnapshot),
           offlineOutputFixturesPath: artifactInputPath(options.offlineOutputFixtures),
           ...(options.privateFixture
@@ -411,15 +418,21 @@ export async function runEvalSpeechPlannerCli(
           compatibilityChecks: 0,
         },
       },
-      executeVariant: async (variant) => ({
-        status: 'completed',
-        rawText: outputByAttempt.get(variant.attemptId)!.rawText,
-        latencyMs: 0,
-        fallbackUsed:
-          outputByAttempt.get(variant.attemptId)!.expectedClassification === 'fallback_triggering'
-            ? true
-            : undefined,
-      }),
+      executeVariant: async (variant) => {
+        const output = outputByAttempt.get(variant.attemptId)!;
+        if (output.expectedClassification === 'provider_error') {
+          return {
+            status: 'provider_error',
+            category: output.normalizedErrorCategory ?? 'provider_error',
+          };
+        }
+        return {
+          status: 'completed',
+          rawText: output.rawText!,
+          latencyMs: 0,
+          fallbackUsed: output.expectedClassification === 'fallback_triggering' ? true : undefined,
+        };
+      },
     });
     const result: EvalSpeechPlannerCliResult = {
       mode: 'offline',
@@ -430,6 +443,7 @@ export async function runEvalSpeechPlannerCli(
       postgresAdapters: 0,
       currentDayUsage: 'unverified',
       completedAttempts: run.records.length,
+      completedControls: run.controls.length,
       runDirectory,
     };
     stdout(JSON.stringify(result));
@@ -496,6 +510,7 @@ export async function runEvalSpeechPlannerCli(
     mode: 'live',
     resolvedConfig: {
       corpusPath: artifactInputPath(options.corpus),
+      controlsPath: artifactInputPath(controlsPath),
       priceSnapshotPath: artifactInputPath(options.priceSnapshot),
       ...(options.privateFixture
         ? { privateFixturePath: artifactInputPath(options.privateFixture) }
@@ -533,6 +548,7 @@ export async function runEvalSpeechPlannerCli(
     gitSha,
     variants,
     fixtures,
+    controls,
     priceSnapshot,
     resume: Boolean(options.resumeRun),
     runContext: liveRunContext,
@@ -620,6 +636,7 @@ export async function runEvalSpeechPlannerCli(
     postgresAdapters: 0,
     currentDayUsage: options.usedToday,
     completedAttempts: run.records.length,
+    completedControls: run.controls.length,
     runDirectory,
   };
   stdout(JSON.stringify(result));

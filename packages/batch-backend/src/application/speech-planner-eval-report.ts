@@ -1,4 +1,7 @@
-import type { SpeechPlannerEvalAttemptRecord } from './speech-planner-evaluator.js';
+import type {
+  SpeechPlannerEvalAttemptRecord,
+  SpeechPlannerEvalControlRecord,
+} from './speech-planner-evaluator.js';
 
 export interface SpeechPlannerEvalSummary {
   attempts: number;
@@ -7,6 +10,16 @@ export interface SpeechPlannerEvalSummary {
   identityFallbackRate: number;
   hardFailureCount: number;
   warningCounts: Record<string, number>;
+  warningBreakdown: Record<
+    string,
+    {
+      total: number;
+      byFixture: Record<string, number>;
+      byFieldPair: Record<string, number>;
+      byCell: Record<string, number>;
+    }
+  >;
+  costUnavailableReasons: Record<string, number>;
   latencyMs: { median?: number; p95?: number; statisticalStatus: 'descriptive' };
   medianEstimatedCostPerValidPlanUsd?: number;
   estimatedCostPer100ValidPlansUsd?: number;
@@ -29,8 +42,10 @@ export interface SpeechPlannerEvalSummary {
     compatibilityFailures: number;
     unexplainedFallbacks: number;
     providerFailures: number;
+    deterministicControlFailures: number;
   };
-  cells: Record<string, Omit<SpeechPlannerEvalSummary, 'cells'>>;
+  controls: { expected: number; completed: number; passed: number; failed: number };
+  cells: Record<string, Omit<SpeechPlannerEvalSummary, 'cells' | 'controls'>>;
 }
 
 interface NumericDistribution {
@@ -67,7 +82,7 @@ function issueCodes(record: SpeechPlannerEvalAttemptRecord): string[] {
 
 function summarizeWithoutCells(
   records: readonly SpeechPlannerEvalAttemptRecord[],
-): Omit<SpeechPlannerEvalSummary, 'cells'> {
+): Omit<SpeechPlannerEvalSummary, 'cells' | 'controls'> {
   const count = records.length;
   const validCosts = records
     .filter((record) => record.promptedPlanStatus === 'valid')
@@ -75,12 +90,42 @@ function summarizeWithoutCells(
     .filter((value): value is number => value !== undefined);
   const medianCost = median(validCosts);
   const warningCounts: Record<string, number> = {};
+  const warningBreakdown: SpeechPlannerEvalSummary['warningBreakdown'] = {};
   for (const record of records) {
+    const seen = new Set<string>();
     for (const warning of [
       ...(record.candidateAnalysis?.warnings ?? []),
       ...(record.analysis?.warnings ?? []),
     ]) {
+      const detail = JSON.stringify(
+        Object.entries(warning.detail ?? {}).sort(([left], [right]) => left.localeCompare(right)),
+      );
+      const identity = `${warning.code}|${warning.segmentId ?? ''}|${detail}`;
+      if (seen.has(identity)) continue;
+      seen.add(identity);
       warningCounts[warning.code] = (warningCounts[warning.code] ?? 0) + 1;
+      const breakdown = (warningBreakdown[warning.code] ??= {
+        total: 0,
+        byFixture: {},
+        byFieldPair: {},
+        byCell: {},
+      });
+      breakdown.total += 1;
+      breakdown.byFixture[record.fixtureId] = (breakdown.byFixture[record.fixtureId] ?? 0) + 1;
+      const fields = warning.detail?.fields;
+      if (typeof fields === 'string') {
+        breakdown.byFieldPair[fields] = (breakdown.byFieldPair[fields] ?? 0) + 1;
+      }
+      const cell = `${record.requestedModel}|${record.promptPolicyVersion}`;
+      breakdown.byCell[cell] = (breakdown.byCell[cell] ?? 0) + 1;
+    }
+  }
+  const costUnavailableReasons: Record<string, number> = {};
+  for (const record of records) {
+    if (record.costStatus !== 'unavailable') continue;
+    const missing = record.costMissingUsageFields ?? ['unreported_reason'];
+    for (const field of missing) {
+      costUnavailableReasons[field] = (costUnavailableReasons[field] ?? 0) + 1;
     }
   }
   const outputTokens = records
@@ -146,6 +191,7 @@ function summarizeWithoutCells(
     ).length,
     providerFailures: records.filter((record) => record.promptedPlanStatus === 'provider_error')
       .length,
+    deterministicControlFailures: 0,
   };
   const hardGatePassed = Object.values(hardGates).every((value) => value === 0);
   return {
@@ -170,6 +216,8 @@ function summarizeWithoutCells(
       0,
     ),
     warningCounts,
+    warningBreakdown,
+    costUnavailableReasons,
     latencyMs: {
       median: median(
         records.map((record) => record.latencyMs).filter((value) => value !== undefined),
@@ -222,6 +270,7 @@ function summarizeWithoutCells(
 
 export function summarizeSpeechPlannerEvalAttempts(
   records: readonly SpeechPlannerEvalAttemptRecord[],
+  controls: readonly SpeechPlannerEvalControlRecord[] = [],
 ): SpeechPlannerEvalSummary {
   const grouped = new Map<string, SpeechPlannerEvalAttemptRecord[]>();
   for (const record of records) {
@@ -230,8 +279,21 @@ export function summarizeSpeechPlannerEvalAttempts(
     cell.push(record);
     grouped.set(key, cell);
   }
+  const base = summarizeWithoutCells(records);
+  const failedControls = controls.filter((control) => control.status === 'failed').length;
   return {
-    ...summarizeWithoutCells(records),
+    ...base,
+    controls: {
+      expected: controls.length,
+      completed: controls.length,
+      passed: controls.length - failedControls,
+      failed: failedControls,
+    },
+    hardGates: {
+      ...base.hardGates,
+      deterministicControlFailures: failedControls,
+      passed: base.hardGates.passed && failedControls === 0,
+    },
     cells: Object.fromEntries(
       [...grouped.entries()].map(([key, cell]) => [key, summarizeWithoutCells(cell)]),
     ),
@@ -248,6 +310,7 @@ export function renderSpeechPlannerEvalSummaryMarkdown(summary: SpeechPlannerEva
     `Identity fallback rate: ${summary.identityFallbackRate.toFixed(4)}`,
     `Hard failures: ${summary.hardFailureCount}`,
     `Hard gates passed: ${summary.hardGates.passed ? 'yes' : 'no'}`,
+    `Deterministic controls passed: ${summary.controls.passed}/${summary.controls.expected}`,
     `Compatibility failures/skips: ${summary.compatibility.failures}/${summary.compatibility.skipped}`,
     `Returned-model mismatches: ${summary.returnedModelIdentity.mismatches}`,
     '',

@@ -1,0 +1,53 @@
+[
+  {
+    "id": "tts-1-5-identity-rendering",
+    "why": "TTS 1.5 must bypass remote planning and render identity text without semantic steering.",
+    "prepared": {
+      "selection": { "provider": "inworld", "model": "inworld-tts-1.5-max" },
+      "sourceHash": "synthetic-tts-1-5-identity-rendering-v1",
+      "segments": [
+        {
+          "id": "legacy-natural",
+          "speaker": "Maya",
+          "text": "Please read the notice before Friday.",
+          "pace": "natural"
+        },
+        {
+          "id": "legacy-default",
+          "speaker": "Maya",
+          "text": "The office closes at five."
+        }
+      ],
+      "voices": [],
+      "voiceAssignments": { "Maya": "Ashley" },
+      "voicePlan": {
+        "schemaVersion": 1,
+        "capabilityPolicyVersion": "model-scoped-v1",
+        "mode": "deterministic",
+        "provider": "inworld",
+        "model": "inworld-tts-1.5-max",
+        "sourceHash": "synthetic-tts-1-5-identity-rendering-v1",
+        "assignments": [
+          {
+            "speaker": "Maya",
+            "voiceId": "Ashley",
+            "source": "auto",
+            "language": "en-US",
+            "capabilities": {
+              "supportsMetadataInstructions": false,
+              "supportsNonVerbals": false,
+              "supportsUppercaseEmphasis": false,
+              "supportsFreeFormDirection": false
+            }
+          }
+        ]
+      }
+    },
+    "expected": {
+      "planningMode": "identity",
+      "naturalSpeakingRate": 1,
+      "defaultSpeakingRate": null,
+      "maximumInstructionTags": 0
+    }
+  }
+]
