@@ -154,6 +154,30 @@ describe('speech planner eval preflight', () => {
     ).toMatchObject({ allowed: true, usageVerified: true, remainingDailyCapacity: 113 });
   });
 
+  it('reports a missing required allowlist model without blocking dry-run inspection', () => {
+    const variants = buildSpeechPlannerEvalMatrix({
+      fixtures: loadSpeechPlannerEvalFixtures(),
+      repetitions: 3,
+    });
+
+    expect(
+      preflightSpeechPlannerEval({
+        variants,
+        live: false,
+        credentialsPresent: false,
+        dailyLimit: 120,
+        rpm: 4,
+        allowedModels: ['gemini-3.1-flash-lite'],
+      }),
+    ).toMatchObject({
+      allowed: true,
+      usageVerified: false,
+      allowlistReady: false,
+      missingRequiredModels: ['gemini-3.5-flash-lite'],
+      plannerAttempts: 120,
+    });
+  });
+
   it('accepts the fixed run with renewable RPM and counts the smoke inside 120 attempts', () => {
     const variants = buildSpeechPlannerEvalMatrix({
       fixtures: loadSpeechPlannerEvalFixtures(),

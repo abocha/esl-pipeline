@@ -257,14 +257,80 @@ type ExecuteVariantResult =
   | { status: 'compatibility_failure'; category: string }
   | { status: 'provider_error'; category: string; latencyMs?: number };
 
-interface RunMetadata {
-  schemaVersion: 1;
+export interface SpeechPlannerEvalRunContext {
+  mode: 'offline' | 'live';
+  resolvedConfig: {
+    corpusPath: string;
+    priceSnapshotPath: string;
+    offlineOutputFixturesPath?: string;
+    privateFixturePath?: string;
+    models: SpeechPlannerEvalVariant['model'][];
+    promptPolicies: SpeechPlannerEvalVariant['promptPolicyVersion'][];
+    repetitions: number;
+    privateOnly: boolean;
+  };
+  environmentFlags: {
+    live: boolean;
+    offlineOutputFixtures: boolean;
+    selectedAudio: boolean;
+    privateOnly: boolean;
+    postgresAdapters: 0;
+  };
+  preflight: {
+    status: 'not_applicable' | 'allowed';
+    allowedModels: readonly string[];
+    requiredModels: string[];
+    missingRequiredModels: string[];
+    allowlistReady: boolean;
+    credentialsPresent: boolean;
+    usageVerified: boolean;
+    usedToday?: number;
+    dailyLimit: number;
+    rpm: number;
+    remainingDailyCapacity?: number;
+    plannerAttempts: number;
+    compatibilityChecks: number;
+  };
+}
+
+export interface SpeechPlannerEvalRunMetadata {
+  schemaVersion: 2;
+  status: 'partial' | 'completed';
+  createdAt: string;
+  completedAt?: string;
+  completedAttempts: number;
+  expectedAttempts: number;
+  mode: 'offline' | 'live';
   configHash: string;
   gitSha: string;
-  priceSnapshotVersion: string;
+  resolvedConfig: SpeechPlannerEvalRunContext['resolvedConfig'];
+  environmentFlags: SpeechPlannerEvalRunContext['environmentFlags'];
+  preflight: SpeechPlannerEvalRunContext['preflight'];
+  priceSnapshot: SpeechPlannerPriceSnapshot;
   rendererPolicyVersion: string;
   promptHashes: string[];
+  variants: SpeechPlannerEvalVariant[];
   attemptIds: string[];
+}
+
+export function readSpeechPlannerEvalRunMetadata(
+  runDirectory: string,
+): SpeechPlannerEvalRunMetadata {
+  const path = join(runDirectory, 'run.json');
+  if (!existsSync(path)) throw new Error('Speech planner eval resume run.json is missing.');
+  const metadata = JSON.parse(readFileSync(path, 'utf8')) as Partial<SpeechPlannerEvalRunMetadata>;
+  if (
+    metadata.schemaVersion !== 2 ||
+    (metadata.status !== 'partial' && metadata.status !== 'completed') ||
+    !metadata.resolvedConfig ||
+    !metadata.environmentFlags ||
+    !metadata.preflight ||
+    !metadata.priceSnapshot ||
+    !Array.isArray(metadata.variants)
+  ) {
+    throw new Error('Speech planner eval resume run.json has an unsupported metadata contract.');
+  }
+  return metadata as SpeechPlannerEvalRunMetadata;
 }
 
 function stableHash(value: unknown): string {
@@ -392,6 +458,7 @@ export async function runSpeechPlannerEvaluation(args: {
   priceSnapshot: SpeechPlannerPriceSnapshot;
   executeVariant: (variant: SpeechPlannerEvalVariant) => Promise<ExecuteVariantResult>;
   resume?: boolean;
+  runContext?: SpeechPlannerEvalRunContext;
 }): Promise<{
   records: SpeechPlannerEvalAttemptRecord[];
   summary: ReturnType<typeof summarizeSpeechPlannerEvalAttempts>;
@@ -423,10 +490,9 @@ export async function runSpeechPlannerEvaluation(args: {
   if (existsSync(args.runDirectory) && !args.resume) {
     throw new Error(`Speech planner eval run directory already exists: ${args.runDirectory}`);
   }
-  let metadata: RunMetadata;
+  let metadata: SpeechPlannerEvalRunMetadata;
   if (args.resume) {
-    if (!existsSync(runPath)) throw new Error('Speech planner eval resume run.json is missing.');
-    metadata = JSON.parse(readFileSync(runPath, 'utf8')) as RunMetadata;
+    metadata = readSpeechPlannerEvalRunMetadata(args.runDirectory);
     if (metadata.configHash !== configHash) {
       throw new Error('Speech planner eval resume configuration hash does not match.');
     }
@@ -435,13 +501,55 @@ export async function runSpeechPlannerEvaluation(args: {
     mkdirSync(join(args.runDirectory, 'rendered'), { recursive: true });
     mkdirSync(join(args.runDirectory, 'audio'), { recursive: true });
     mkdirSync(join(args.runDirectory, 'listening'), { recursive: true });
+    const runContext =
+      args.runContext ??
+      ({
+        mode: 'offline',
+        resolvedConfig: {
+          corpusPath: 'injected',
+          priceSnapshotPath: 'injected',
+          models: [...new Set(args.variants.map((variant) => variant.model))],
+          promptPolicies: [...new Set(args.variants.map((variant) => variant.promptPolicyVersion))],
+          repetitions: Math.max(0, ...args.variants.map((variant) => variant.repetition)),
+          privateOnly: false,
+        },
+        environmentFlags: {
+          live: false,
+          offlineOutputFixtures: true,
+          selectedAudio: false,
+          privateOnly: false,
+          postgresAdapters: 0,
+        },
+        preflight: {
+          status: 'not_applicable',
+          allowedModels: [],
+          requiredModels: [],
+          missingRequiredModels: [],
+          allowlistReady: false,
+          credentialsPresent: false,
+          usageVerified: false,
+          dailyLimit: 0,
+          rpm: 0,
+          plannerAttempts: args.variants.length,
+          compatibilityChecks: args.variants.filter((variant) => variant.compatibilitySmoke).length,
+        },
+      } satisfies SpeechPlannerEvalRunContext);
     metadata = {
-      schemaVersion: 1,
+      schemaVersion: 2,
+      status: 'partial',
+      createdAt: new Date().toISOString(),
+      completedAttempts: 0,
+      expectedAttempts: args.variants.length,
+      mode: runContext.mode,
       configHash,
       gitSha: args.gitSha,
-      priceSnapshotVersion: args.priceSnapshot.version,
+      resolvedConfig: runContext.resolvedConfig,
+      environmentFlags: runContext.environmentFlags,
+      preflight: runContext.preflight,
+      priceSnapshot: args.priceSnapshot,
       rendererPolicyVersion: INWORLD_RENDERER_POLICY_VERSION,
       promptHashes,
+      variants: [...args.variants],
       attemptIds: args.variants.map((variant) => variant.attemptId),
     };
     writeFileSync(runPath, JSON.stringify(metadata, null, 2), { encoding: 'utf8', flag: 'wx' });
@@ -573,5 +681,12 @@ export async function runSpeechPlannerEvaluation(args: {
     join(args.runDirectory, 'summary.md'),
     renderSpeechPlannerEvalSummaryMarkdown(summary),
   );
+  metadata = {
+    ...metadata,
+    status: 'completed',
+    completedAt: metadata.completedAt ?? new Date().toISOString(),
+    completedAttempts: records.length,
+  };
+  writeAtomicFile(runPath, JSON.stringify(metadata, null, 2));
   return { records, summary };
 }
