@@ -277,6 +277,69 @@ describe('eval speech planner CLI', () => {
     );
     expect(resumed).toMatchObject({ mode: 'live', providerCalls: 0, completedAttempts: 4 });
     expect(executeAttempt).not.toHaveBeenCalled();
+
+    const failedAudio = vi.fn(async () => {
+      throw new Error('synthetic audio interruption');
+    });
+    await expect(
+      runEvalSpeechPlannerCli(
+        ['--live', '--audio=selected', '--used-today=4', `--resume-run=${first.runDirectory!}`],
+        {
+          stdout: vi.fn(),
+          config,
+          gitSha: 'a'.repeat(40),
+          executeAttempt,
+          inworldConfigured: true,
+          writeSelectedAudio: failedAudio,
+        },
+      ),
+    ).rejects.toThrow('synthetic audio interruption');
+    const failedMetadata = JSON.parse(
+      readFileSync(join(first.runDirectory!, 'run.json'), 'utf8'),
+    ) as { status: string; environmentFlags: { selectedAudio: boolean }; activities: unknown[] };
+    expect(failedMetadata).toMatchObject({
+      status: 'partial',
+      environmentFlags: { selectedAudio: true },
+    });
+    expect(failedMetadata.activities).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'selected_audio',
+          status: 'failed',
+          preflight: expect.objectContaining({ usedToday: 4, plannerAttempts: 0 }),
+        }),
+      ]),
+    );
+
+    const completedAudio = vi.fn(async () => 4);
+    const audioResult = await runEvalSpeechPlannerCli(
+      ['--live', '--audio=selected', '--used-today=4', `--resume-run=${first.runDirectory!}`],
+      {
+        stdout: vi.fn(),
+        config,
+        gitSha: 'a'.repeat(40),
+        executeAttempt,
+        inworldConfigured: true,
+        writeSelectedAudio: completedAudio,
+      },
+    );
+    expect(audioResult).toMatchObject({ providerCalls: 0, synthesisCalls: 4 });
+    const completedMetadata = JSON.parse(
+      readFileSync(join(first.runDirectory!, 'run.json'), 'utf8'),
+    ) as { status: string; environmentFlags: { selectedAudio: boolean }; activities: unknown[] };
+    expect(completedMetadata).toMatchObject({
+      status: 'completed',
+      environmentFlags: { selectedAudio: true },
+    });
+    expect(completedMetadata.activities).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'selected_audio',
+          status: 'completed',
+          synthesisCalls: 4,
+        }),
+      ]),
+    );
   });
 
   it('writes selected audio through the direct Inworld synthesis path', async () => {

@@ -74,7 +74,10 @@ refuses mismatched or overwritten artifacts.
 allowlist and configured-limit preflight facts, complete versioned price snapshot, source revision,
 prompt and renderer identities, and expected/completed attempt counts. Its status is `partial` while
 attempt evidence is being assembled and changes atomically to `completed` only after summaries are
-written. Provider credentials and environment dumps are never recorded.
+written. Every planner resume appends its fresh preflight and provider-call count as an activity;
+selected-audio attempts append their own partial/completed/failed activity and synthesis count. A
+failed audio continuation returns the overall run to `partial` until a later successful recovery.
+Provider credentials and environment dumps are never recorded.
 
 ## Selected Audio and Blind Review
 

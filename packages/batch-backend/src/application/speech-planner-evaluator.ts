@@ -294,7 +294,7 @@ export interface SpeechPlannerEvalRunContext {
 }
 
 export interface SpeechPlannerEvalRunMetadata {
-  schemaVersion: 2;
+  schemaVersion: 3;
   status: 'partial' | 'completed';
   createdAt: string;
   completedAt?: string;
@@ -311,6 +311,20 @@ export interface SpeechPlannerEvalRunMetadata {
   promptHashes: string[];
   variants: SpeechPlannerEvalVariant[];
   attemptIds: string[];
+  activities: SpeechPlannerEvalRunActivity[];
+}
+
+export interface SpeechPlannerEvalRunActivity {
+  id: string;
+  kind: 'planner_initial' | 'planner_resume' | 'selected_audio';
+  status: 'partial' | 'completed' | 'failed';
+  startedAt: string;
+  completedAt?: string;
+  environmentFlags: SpeechPlannerEvalRunContext['environmentFlags'];
+  preflight: SpeechPlannerEvalRunContext['preflight'];
+  providerCalls?: number;
+  synthesisCalls?: number;
+  normalizedErrorCategory?: string;
 }
 
 export function readSpeechPlannerEvalRunMetadata(
@@ -320,17 +334,89 @@ export function readSpeechPlannerEvalRunMetadata(
   if (!existsSync(path)) throw new Error('Speech planner eval resume run.json is missing.');
   const metadata = JSON.parse(readFileSync(path, 'utf8')) as Partial<SpeechPlannerEvalRunMetadata>;
   if (
-    metadata.schemaVersion !== 2 ||
+    metadata.schemaVersion !== 3 ||
     (metadata.status !== 'partial' && metadata.status !== 'completed') ||
     !metadata.resolvedConfig ||
     !metadata.environmentFlags ||
     !metadata.preflight ||
     !metadata.priceSnapshot ||
-    !Array.isArray(metadata.variants)
+    !Array.isArray(metadata.variants) ||
+    !Array.isArray(metadata.activities)
   ) {
     throw new Error('Speech planner eval resume run.json has an unsupported metadata contract.');
   }
   return metadata as SpeechPlannerEvalRunMetadata;
+}
+
+export function beginSpeechPlannerEvalRunActivity(args: {
+  runDirectory: string;
+  kind: SpeechPlannerEvalRunActivity['kind'];
+  runContext: SpeechPlannerEvalRunContext;
+}): string {
+  const metadata = readSpeechPlannerEvalRunMetadata(args.runDirectory);
+  const id = randomUUID();
+  const pending: SpeechPlannerEvalRunMetadata = {
+    ...metadata,
+    status: 'partial',
+    environmentFlags: {
+      ...metadata.environmentFlags,
+      selectedAudio: metadata.environmentFlags.selectedAudio || args.kind === 'selected_audio',
+    },
+    activities: [
+      ...metadata.activities,
+      {
+        id,
+        kind: args.kind,
+        status: 'partial',
+        startedAt: new Date().toISOString(),
+        environmentFlags: args.runContext.environmentFlags,
+        preflight: args.runContext.preflight,
+      },
+    ],
+  };
+  delete pending.completedAt;
+  writeAtomicFile(join(args.runDirectory, 'run.json'), JSON.stringify(pending, null, 2));
+  return id;
+}
+
+export function finishSpeechPlannerEvalRunActivity(args: {
+  runDirectory: string;
+  activityId: string;
+  status: 'completed' | 'failed';
+  completedAttempts?: number;
+  providerCalls?: number;
+  synthesisCalls?: number;
+  normalizedErrorCategory?: string;
+}): void {
+  const metadata = readSpeechPlannerEvalRunMetadata(args.runDirectory);
+  const activityIndex = metadata.activities.findIndex(
+    (activity) => activity.id === args.activityId,
+  );
+  if (activityIndex < 0) throw new Error('Speech planner eval run activity is missing.');
+  const completedAt = new Date().toISOString();
+  const activities = metadata.activities.map((activity, index) =>
+    index === activityIndex
+      ? {
+          ...activity,
+          status: args.status,
+          completedAt,
+          ...(args.providerCalls === undefined ? {} : { providerCalls: args.providerCalls }),
+          ...(args.synthesisCalls === undefined ? {} : { synthesisCalls: args.synthesisCalls }),
+          ...(args.normalizedErrorCategory === undefined
+            ? {}
+            : { normalizedErrorCategory: args.normalizedErrorCategory }),
+        }
+      : activity,
+  );
+  const updated: SpeechPlannerEvalRunMetadata = {
+    ...metadata,
+    status: args.status === 'completed' ? 'completed' : 'partial',
+    ...(args.status === 'completed' ? { completedAt } : {}),
+    ...(args.completedAttempts === undefined ? {} : { completedAttempts: args.completedAttempts }),
+    activities,
+  };
+  if (args.status === 'failed') delete updated.completedAt;
+  writeAtomicFile(join(args.runDirectory, 'run.json'), JSON.stringify(updated, null, 2));
 }
 
 function stableHash(value: unknown): string {
@@ -491,11 +577,25 @@ export async function runSpeechPlannerEvaluation(args: {
     throw new Error(`Speech planner eval run directory already exists: ${args.runDirectory}`);
   }
   let metadata: SpeechPlannerEvalRunMetadata;
+  let activityContext: SpeechPlannerEvalRunContext;
+  let activityId: string;
   if (args.resume) {
     metadata = readSpeechPlannerEvalRunMetadata(args.runDirectory);
     if (metadata.configHash !== configHash) {
       throw new Error('Speech planner eval resume configuration hash does not match.');
     }
+    activityContext = args.runContext ?? {
+      mode: metadata.mode,
+      resolvedConfig: metadata.resolvedConfig,
+      environmentFlags: metadata.environmentFlags,
+      preflight: metadata.preflight,
+    };
+    activityId = beginSpeechPlannerEvalRunActivity({
+      runDirectory: args.runDirectory,
+      kind: 'planner_resume',
+      runContext: activityContext,
+    });
+    metadata = readSpeechPlannerEvalRunMetadata(args.runDirectory);
   } else {
     mkdirSync(join(args.runDirectory, 'plans'), { recursive: true });
     mkdirSync(join(args.runDirectory, 'rendered'), { recursive: true });
@@ -534,8 +634,10 @@ export async function runSpeechPlannerEvaluation(args: {
           compatibilityChecks: args.variants.filter((variant) => variant.compatibilitySmoke).length,
         },
       } satisfies SpeechPlannerEvalRunContext);
+    activityContext = runContext;
+    activityId = randomUUID();
     metadata = {
-      schemaVersion: 2,
+      schemaVersion: 3,
       status: 'partial',
       createdAt: new Date().toISOString(),
       completedAttempts: 0,
@@ -551,6 +653,16 @@ export async function runSpeechPlannerEvaluation(args: {
       promptHashes,
       variants: [...args.variants],
       attemptIds: args.variants.map((variant) => variant.attemptId),
+      activities: [
+        {
+          id: activityId,
+          kind: 'planner_initial',
+          status: 'partial',
+          startedAt: new Date().toISOString(),
+          environmentFlags: runContext.environmentFlags,
+          preflight: runContext.preflight,
+        },
+      ],
     };
     writeFileSync(runPath, JSON.stringify(metadata, null, 2), { encoding: 'utf8', flag: 'wx' });
   }
@@ -581,6 +693,7 @@ export async function runSpeechPlannerEvaluation(args: {
     (record) =>
       record.compatibilitySmoke && record.normalizedErrorCategory?.startsWith('compatibility_'),
   )?.requestedModel;
+  let providerCalls = 0;
 
   for (const variant of ordered) {
     if (completed.has(variant.attemptId)) continue;
@@ -605,6 +718,7 @@ export async function runSpeechPlannerEvaluation(args: {
     }
     let result: ExecuteVariantResult;
     try {
+      if (activityContext.mode === 'live') providerCalls += 1;
       result = await args.executeVariant(variant);
     } catch {
       result = { status: 'provider_error', category: 'unexpected_execution_error' };
@@ -681,12 +795,12 @@ export async function runSpeechPlannerEvaluation(args: {
     join(args.runDirectory, 'summary.md'),
     renderSpeechPlannerEvalSummaryMarkdown(summary),
   );
-  metadata = {
-    ...metadata,
+  finishSpeechPlannerEvalRunActivity({
+    runDirectory: args.runDirectory,
+    activityId,
     status: 'completed',
-    completedAt: metadata.completedAt ?? new Date().toISOString(),
     completedAttempts: records.length,
-  };
-  writeAtomicFile(runPath, JSON.stringify(metadata, null, 2));
+    providerCalls,
+  });
   return { records, summary };
 }
