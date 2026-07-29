@@ -182,6 +182,7 @@ export async function writeBlindListeningReport(args: {
     latencyMs: number;
     durationSeconds?: number;
     bytes: number;
+    contentHash: string;
     cacheOutcome: 'hit' | 'miss' | 'unknown';
   }>;
 }): Promise<void> {
@@ -215,11 +216,14 @@ export async function writeBlindListeningReport(args: {
       preferenceEligible: block.preferenceEligible,
       variants: keyedVariants,
     });
+    const preferenceInputs = block.preferenceEligible
+      ? `<label>Pairwise preference <input name="${escapeHtml(block.blockId)}-pairwise" /></label>
+<label>Ranked choice <input name="${escapeHtml(block.blockId)}-ranked" /></label>`
+      : '<p>Incomplete comparison; pairwise and ranked preferences are disabled.</p>';
     htmlBlocks.push(`<section>
 <h2>Listening block ${escapeHtml(block.blockId)}</h2>
 ${players.join('\n')}
-<label>Pairwise preference <input name="${escapeHtml(block.blockId)}-pairwise" /></label>
-<label>Ranked choice <input name="${escapeHtml(block.blockId)}-ranked" /></label>
+${preferenceInputs}
 ${[
   'Naturalness',
   'Clarity for an ESL learner',

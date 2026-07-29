@@ -133,6 +133,7 @@ describe('speech planner blocked listening report', () => {
       latencyMs: 100,
       durationSeconds: 2,
       bytes: 2048,
+      contentHash: 'a'.repeat(64),
       cacheOutcome: 'miss' as const,
     }));
 
@@ -156,5 +157,26 @@ describe('speech planner blocked listening report', () => {
     expect(key).toContain('gemini-3.5-flash-lite');
     expect(key).toContain('speech-performance-v2-inworld-tts2');
     expect(synthesize).toHaveBeenCalledTimes(4);
+  });
+
+  it('does not offer pairwise or ranked preferences for an incomplete block', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'speech-listening-incomplete-'));
+    tempRoots.push(root);
+    await writeBlindListeningReport({
+      outputDirectory: root,
+      blocks: selectSpeechPlannerAudioBlocks(createBlockRecords().slice(0, 3)),
+      seed: 'fixed-seed',
+      synthesize: async ({ blindLabel }) => ({
+        audioPath: `audio/${blindLabel}.mp3`,
+        latencyMs: 0,
+        bytes: 1,
+        contentHash: 'b'.repeat(64),
+        cacheOutcome: 'miss',
+      }),
+    });
+    const html = readFileSync(join(root, 'index.html'), 'utf8');
+    expect(html).toContain('Incomplete comparison');
+    expect(html).not.toContain('Pairwise preference');
+    expect(html).not.toContain('Ranked choice');
   });
 });
