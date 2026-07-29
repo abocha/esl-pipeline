@@ -3,6 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+import { TtsSynthesisCancelledError } from '@esl-pipeline/tts-core';
+
 import {
   categorizeOrchestratorError,
   executeGetAssignmentStatusV2,
@@ -114,5 +116,18 @@ describe('orchestrator api v2', () => {
     expect(categorized.category).toBe('cancelled');
     expect(categorized.code).toBe('PIPELINE_CANCELLED');
     expect(categorized.stage).toBe('tts');
+  });
+
+  it('categorizes shared TTS cancellation as pipeline cancellation', () => {
+    const categorized = categorizeOrchestratorError(
+      'rerun',
+      new TtsSynthesisCancelledError('operator stop'),
+    );
+
+    expect(categorized).toMatchObject({
+      category: 'cancelled',
+      code: 'PIPELINE_CANCELLED',
+      retryable: false,
+    });
   });
 });

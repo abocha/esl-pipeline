@@ -14,6 +14,8 @@ import {
   resolveDefaultTtsModel,
   type TtsModelId,
   type TtsProviderId,
+  type TtsRequestControl,
+  throwIfTtsCancelled,
 } from '@esl-pipeline/tts-core';
 
 import type { AudioArtifactManifest, PronunciationAudioWarning } from '../manifest.js';
@@ -21,7 +23,7 @@ import type { PronunciationAudioArtifact } from './audio-artifacts.js';
 
 type PronunciationClipRecord = PronunciationAudioClip & AudioArtifactManifest;
 
-interface PronunciationAudioSynthesisOptions {
+interface PronunciationAudioSynthesisOptions extends TtsRequestControl {
   context: ParsedMarkdownContext;
   mdPath: string;
   outPath: string;
@@ -135,7 +137,11 @@ async function mapWithConcurrency<T, R>(
     }
   }
 
-  await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
+  const settled = await Promise.allSettled(Array.from({ length: workerCount }, () => runWorker()));
+  const rejected = settled.find(
+    (result): result is PromiseRejectedResult => result.status === 'rejected',
+  );
+  if (rejected) throw rejected.reason;
   return results;
 }
 
@@ -238,6 +244,7 @@ async function synthesizeProviderClip(
   options: PronunciationAudioSynthesisOptions,
   config: ProviderClipSynthesisConfig,
 ): Promise<PronunciationClipRecord | null> {
+  throwIfTtsCancelled(options);
   const previous = findPreviousClip(options.previousAudio, clip);
   if (canReusePreviousClip(clip, previous, config)) {
     return buildReusedClip(clip, previous);
@@ -247,25 +254,34 @@ async function synthesizeProviderClip(
     return null;
   }
 
-  const result = await buildPronunciationTextMp3(
-    {
-      text: clip.text,
-      voiceId: config.voiceId.trim(),
-      mdPath: options.mdPath,
-      title: options.title ?? undefined,
-      kind: clip.kind,
-    },
-    {
-      outPath: options.outPath,
-      preview: options.preview,
-      force: options.force,
-      ttsProvider: config.ttsProvider,
-      ttsModel: config.ttsModel,
-      logger: options.logger,
-      fileStem: clip.id,
-      titleSuffix: clip.label ?? 'Pronunciation',
-    },
-  );
+  let result;
+  try {
+    result = await buildPronunciationTextMp3(
+      {
+        text: clip.text,
+        voiceId: config.voiceId.trim(),
+        mdPath: options.mdPath,
+        title: options.title ?? undefined,
+        kind: clip.kind,
+      },
+      {
+        outPath: options.outPath,
+        preview: options.preview,
+        force: options.force,
+        ttsProvider: config.ttsProvider,
+        ttsModel: config.ttsModel,
+        logger: options.logger,
+        fileStem: clip.id,
+        titleSuffix: clip.label ?? 'Pronunciation',
+        signal: options.signal,
+        deadlineAtMs: options.deadlineAtMs,
+      },
+    );
+  } catch (error) {
+    throwIfTtsCancelled(options);
+    throw error;
+  }
+  throwIfTtsCancelled(options);
 
   return toPrimaryClip(clip, {
     path: result.path,
@@ -284,6 +300,7 @@ async function synthesizeShadowPrimary(
   focus: Extract<PronunciationFocus, { mode: 'shadow_sentence' }>,
   options: PronunciationAudioSynthesisOptions,
 ): Promise<PronunciationClipRecord | null> {
+  throwIfTtsCancelled(options);
   const normalizedText = focus.shadowSentence ? normalizeSpeechText(focus.shadowSentence) : '';
   const baseClip: PronunciationAudioClip = {
     id: 'primary-shadow-sentence',
@@ -306,21 +323,30 @@ async function synthesizeShadowPrimary(
     return null;
   }
 
-  const result = await buildPronunciationShadowSentenceMp3(
-    {
-      context: options.context,
-      mdPath: options.mdPath,
-      voiceId: options.primaryVoiceId.trim(),
-    },
-    {
-      outPath: options.outPath,
-      preview: options.preview,
-      force: options.force,
-      ttsProvider: options.primaryTtsProvider,
-      ttsModel: options.primaryTtsModel,
-      logger: options.logger,
-    },
-  );
+  let result;
+  try {
+    result = await buildPronunciationShadowSentenceMp3(
+      {
+        context: options.context,
+        mdPath: options.mdPath,
+        voiceId: options.primaryVoiceId.trim(),
+      },
+      {
+        outPath: options.outPath,
+        preview: options.preview,
+        force: options.force,
+        ttsProvider: options.primaryTtsProvider,
+        ttsModel: options.primaryTtsModel,
+        logger: options.logger,
+        signal: options.signal,
+        deadlineAtMs: options.deadlineAtMs,
+      },
+    );
+  } catch (error) {
+    throwIfTtsCancelled(options);
+    throw error;
+  }
+  throwIfTtsCancelled(options);
 
   return {
     ...baseClip,
@@ -382,6 +408,7 @@ function resolveDefaultPronunciationModel(provider: TtsProviderId): TtsModelId {
 export async function synthesizePronunciationAudio(
   options: PronunciationAudioSynthesisOptions,
 ): Promise<PronunciationAudioArtifact | undefined> {
+  throwIfTtsCancelled(options);
   const focus = extractPronunciationFocus(options.context);
   if (!focus) {
     return undefined;

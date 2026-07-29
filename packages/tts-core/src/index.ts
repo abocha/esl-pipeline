@@ -89,6 +89,11 @@ export {
   validateTtsSelection,
 } from './descriptors.js';
 export { createTtsEngine } from './engine.js';
+export {
+  type TtsRequestControl,
+  TtsSynthesisCancelledError,
+  throwIfTtsCancelled,
+} from './errors.js';
 export { hashStudyText } from './hash.js';
 export { resolveSpeakerRoutingHint } from './speaker-routing.js';
 export {

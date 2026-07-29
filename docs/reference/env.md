@@ -5,7 +5,7 @@
 - Audience: maintainers and implementing agents.
 - Read Time: 5 minutes.
 - Authority Level: environment contract reference.
-- Last Verified Against: 2026-06-13 repo state.
+- Last Verified Against: 2026-07-29 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly or after environment contract changes.
 - Status: `reference`.
@@ -68,6 +68,17 @@ Primary groups:
 - Speech runtime:
   - `ESL_TTS_*`, `ESL_STT_*`, `VOICE_ALIGNMENT_V2_*`
   - Inworld TTS uses `INWORLD_API_KEY` or `ESL_TTS_PROVIDER_INWORLD_API_KEY`, plus optional `ESL_TTS_PROVIDER_INWORLD_*` model/voice/runtime overrides.
+  - `ESL_TTS_PROVIDER_INWORLD_TIMEOUT_MS` bounds each in-flight SDK request. The SDK client is lazy
+    and reusable, and its internal `maxRetries` is always `0`.
+  - `ESL_TTS_PROVIDER_INWORLD_RETRY_MAX` defaults to `3` and is clamped to `0`-`3`. The application
+    owns the initial attempt plus up to three retries with 1/2/4-second bases and uniform plus or
+    minus 20 percent jitter. Only HTTP 408/429/5xx and typed transient network, reset, disconnect,
+    or timeout failures retry; caller cancellation, expired deadlines, auth/permission, invalid
+    requests/voices, and other deterministic 4xx failures do not.
+  - Caller cancellation and deadlines are observed between SDK calls. The installed SDK cannot
+    cancel `generate()` after it starts, so the configured SDK timeout remains the in-flight bound.
+    Routine diagnostics use hashes, counts, normalized categories, latency, cache totals, and output
+    bytes without learner text or raw provider bodies.
   - Expressive TTS planning uses opt-in `ESL_TTS_SPEECH_PLANNER_ENABLED`, optional `ESL_TTS_SPEECH_PLANNER_MODEL`, optional `ESL_TTS_SPEECH_PLANNER_MAX_OUTPUT_TOKENS`, and separate `ESL_TTS_SPEECH_PLANNER_*_BUDGET` limits. The planner reuses server-side `GEMINI_API_KEY`.
   - Inworld voice planning uses `ESL_TTS_VOICE_RANKER_ENABLED`, optional `ESL_TTS_VOICE_RANKER_MODEL`, optional `ESL_TTS_VOICE_RANKER_MAX_OUTPUT_TOKENS`, and separate `ESL_TTS_VOICE_RANKER_*_BUDGET` limits. The default semantic ranker is `gemma-4-31b-it`.
   - Local planner inspection can opt into full validated or rejected plan logs with `ESL_TTS_SPEECH_PLANNER_DEBUG_LOG_PLAN=true`. Voice-ranker inspection can opt into shortlist and failure details with `ESL_TTS_VOICE_RANKER_DEBUG_LOG_PLAN=true`. Leave these disabled outside short-lived debugging because logs may include learner text.

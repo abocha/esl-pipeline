@@ -1,11 +1,19 @@
+import { readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 import { parseMarkdownContext } from '@esl-pipeline/pmd';
-import { hashStudyText, type SpeechPerformancePlan } from '@esl-pipeline/tts-core';
+import {
+  hashStudyText,
+  type SpeechPerformancePlan,
+  TtsSynthesisCancelledError,
+} from '@esl-pipeline/tts-core';
 
 import {
   buildInworldChunkHash,
   buildStudyTextMp3Inworld,
+  createInworldClientProvider,
   createInworldTtsProvider,
   INWORLD_RENDERER_POLICY_VERSION,
   loadInworldVoicesCatalog,
@@ -79,6 +87,116 @@ function createPreviewSpeechPlan(
 }
 
 describe('inworld provider adapter basics', () => {
+  it('constructs one lazy SDK client with retries disabled', () => {
+    const sdkClient = {
+      listVoices: vi.fn().mockResolvedValue([]),
+      generate: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3])),
+    };
+    const sdkFactory = vi.fn(() => sdkClient);
+    const clientProvider = createInworldClientProvider({
+      apiKey: 'test-api-key',
+      sdkFactory,
+    });
+
+    expect(sdkFactory).not.toHaveBeenCalled();
+    expect(clientProvider.get()).toBe(sdkClient);
+    expect(clientProvider.get()).toBe(sdkClient);
+    expect(sdkFactory).toHaveBeenCalledTimes(1);
+    expect(sdkFactory).toHaveBeenCalledWith(
+      expect.objectContaining({ apiKey: 'test-api-key', maxRetries: 0 }),
+    );
+  });
+
+  it('shares one injected SDK client between catalog and synthesis', async () => {
+    const outPath = join(tmpdir(), `inworld-provider-${process.pid}-${Date.now()}`);
+    const sdkClient = {
+      listVoices: vi.fn().mockResolvedValue([]),
+      generate: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3])),
+    };
+    const sdkFactory = vi.fn(() => sdkClient);
+    const provider = createInworldTtsProvider({ apiKey: 'test-api-key', sdkFactory });
+
+    try {
+      await provider.voice.loadCatalog();
+      const result = await provider.synthesizePronunciationText(
+        { text: 'Deterministic test line.', voiceId: 'Ashley' },
+        { outPath, force: true, ttsModel: 'inworld-tts-2' },
+      );
+
+      expect(sdkFactory).toHaveBeenCalledTimes(1);
+      expect(sdkFactory).toHaveBeenCalledWith(
+        expect.objectContaining({ apiKey: 'test-api-key', maxRetries: 0 }),
+      );
+      expect(sdkClient.generate).toHaveBeenCalledWith(
+        expect.objectContaining({ text: 'Deterministic test line.', voice: 'Ashley' }),
+      );
+      await expect(readFile(result.path)).resolves.toEqual(Buffer.from([1, 2, 3]));
+    } finally {
+      await rm(outPath, { recursive: true, force: true });
+    }
+  });
+
+  it('shares one local SDK client across the exported study-text helper', async () => {
+    const outPath = join(tmpdir(), `inworld-study-text-${process.pid}-${Date.now()}`);
+    const sdkClient = {
+      listVoices: vi.fn().mockResolvedValue([]),
+      generate: vi.fn().mockResolvedValue(new Uint8Array([4, 5, 6])),
+    };
+    const sdkFactory = vi.fn(() => sdkClient);
+
+    try {
+      const result = await buildStudyTextMp3Inworld(
+        { context: createPreviewContext() },
+        { voiceMapPath: 'voices.yml', outPath, force: true, ttsModel: 'inworld-tts-2' },
+        { apiKey: 'test-api-key', sdkFactory },
+      );
+
+      expect(sdkFactory).toHaveBeenCalledTimes(1);
+      expect(sdkClient.listVoices).toHaveBeenCalledTimes(1);
+      expect(sdkClient.generate).toHaveBeenCalledTimes(1);
+      await expect(readFile(result.path)).resolves.toEqual(Buffer.from([4, 5, 6]));
+    } finally {
+      await rm(outPath, { recursive: true, force: true });
+    }
+  });
+
+  it('does not call the SDK catalog or synthesis after study-text cancellation', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const sdkClient = {
+      listVoices: vi.fn().mockResolvedValue([]),
+      generate: vi.fn().mockResolvedValue(new Uint8Array([4, 5, 6])),
+    };
+    const sdkFactory = vi.fn(() => sdkClient);
+
+    await expect(
+      buildStudyTextMp3Inworld(
+        { context: createPreviewContext() },
+        {
+          voiceMapPath: 'voices.yml',
+          outPath: '/path-that-must-not-be-created',
+          force: true,
+          ttsModel: 'inworld-tts-2',
+          signal: controller.signal,
+        },
+        { apiKey: 'test-api-key', sdkFactory },
+      ),
+    ).rejects.toBeInstanceOf(TtsSynthesisCancelledError);
+    expect(sdkFactory).not.toHaveBeenCalled();
+    expect(sdkClient.listVoices).not.toHaveBeenCalled();
+    expect(sdkClient.generate).not.toHaveBeenCalled();
+  });
+
+  it('does not construct the injected SDK client when credentials are missing', async () => {
+    const sdkFactory = vi.fn();
+    const provider = createInworldTtsProvider({ apiKey: undefined, sdkFactory });
+
+    await expect(provider.voice.loadCatalog()).resolves.toMatchObject({
+      voices: [{ id: 'Ashley' }, { id: 'Dennis' }],
+    });
+    expect(sdkFactory).not.toHaveBeenCalled();
+  });
+
   it('derives steering capabilities from the selected Inworld model', () => {
     expect(resolveInworldVoiceCapabilities('inworld-tts-2')).toEqual({
       supportsMetadataInstructions: true,
@@ -152,10 +270,131 @@ describe('inworld provider adapter basics', () => {
       detail: {
         provider: 'inworld',
         errorCategory: expect.any(String),
+        failureKind: 'unknown',
         fallbackVoiceCount: 2,
       },
     });
     expect(JSON.stringify(logger.log.mock.calls)).not.toContain('secret response body');
+  });
+
+  it('reports cancellation when an in-flight catalog call resolves after abort', async () => {
+    const controller = new AbortController();
+    const logger = { log: vi.fn() };
+    let resolveCatalog!: (voices: []) => void;
+    const listVoices = vi.fn(
+      () =>
+        new Promise<[]>((resolve) => {
+          resolveCatalog = resolve;
+        }),
+    );
+    const result = loadInworldVoicesCatalog({
+      logger,
+      client: { listVoices },
+      signal: controller.signal,
+    });
+
+    await vi.waitFor(() => expect(listVoices).toHaveBeenCalledTimes(1));
+    controller.abort('operator stop');
+    resolveCatalog([]);
+
+    await expect(result).rejects.toBeInstanceOf(TtsSynthesisCancelledError);
+    expect(logger.log).not.toHaveBeenCalled();
+  });
+
+  it('reports cancellation when an in-flight catalog call rejects after abort', async () => {
+    const controller = new AbortController();
+    const logger = { log: vi.fn() };
+    let rejectCatalog!: (error: Error) => void;
+    const listVoices = vi.fn(
+      () =>
+        new Promise<[]>((_resolve, reject) => {
+          rejectCatalog = reject;
+        }),
+    );
+    const result = loadInworldVoicesCatalog({
+      logger,
+      client: { listVoices },
+      signal: controller.signal,
+    });
+
+    await vi.waitFor(() => expect(listVoices).toHaveBeenCalledTimes(1));
+    controller.abort('operator stop');
+    rejectCatalog(new Error('provider failure'));
+
+    await expect(result).rejects.toBeInstanceOf(TtsSynthesisCancelledError);
+    expect(logger.log).not.toHaveBeenCalled();
+  });
+
+  it('reports cancellation when the deadline expires before an in-flight catalog rejection', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(0);
+    const logger = { log: vi.fn() };
+    let rejectCatalog!: (error: Error) => void;
+    const listVoices = vi.fn(
+      () =>
+        new Promise<[]>((_resolve, reject) => {
+          rejectCatalog = reject;
+        }),
+    );
+
+    try {
+      const result = loadInworldVoicesCatalog({
+        logger,
+        client: { listVoices },
+        deadlineAtMs: 1_000,
+      });
+      await vi.waitFor(() => expect(listVoices).toHaveBeenCalledTimes(1));
+      now.mockReturnValue(2_000);
+      rejectCatalog(new Error('provider failure'));
+
+      await expect(result).rejects.toBeInstanceOf(TtsSynthesisCancelledError);
+      expect(logger.log).not.toHaveBeenCalled();
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it('emits aggregate cache hit and miss counts without learner text', async () => {
+    const outPath = join(tmpdir(), `inworld-cache-${process.pid}-${Date.now()}`);
+    const logger = { log: vi.fn() };
+    const sdkFactory = vi.fn(() => ({
+      listVoices: vi.fn().mockResolvedValue([]),
+      generate: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3])),
+    }));
+    const options = {
+      voiceMapPath: 'voices.yml',
+      outPath,
+      ttsModel: 'inworld-tts-2' as const,
+      voicePlan: createPreviewVoicePlan('2026-06-02T00:00:00.000Z'),
+      logger,
+    };
+
+    try {
+      await buildStudyTextMp3Inworld(
+        { context: createPreviewContext() },
+        { ...options, force: true },
+        { apiKey: 'test-api-key', sdkFactory },
+      );
+      await buildStudyTextMp3Inworld({ context: createPreviewContext() }, options, {
+        apiKey: 'test-api-key',
+        sdkFactory,
+      });
+
+      expect(logger.log).toHaveBeenCalledWith({
+        level: 'info',
+        stage: 'tts',
+        message: 'Inworld TTS chunk cache summary',
+        detail: { provider: 'inworld', model: 'inworld-tts-2', cacheHits: 0, cacheMisses: 1 },
+      });
+      expect(logger.log).toHaveBeenCalledWith({
+        level: 'info',
+        stage: 'tts',
+        message: 'Inworld TTS chunk cache summary',
+        detail: { provider: 'inworld', model: 'inworld-tts-2', cacheHits: 1, cacheMisses: 0 },
+      });
+      expect(JSON.stringify(logger.log.mock.calls)).not.toContain('We need a clearer deadline.');
+    } finally {
+      await rm(outPath, { recursive: true, force: true });
+    }
   });
 
   it('defaults model family to inworld-tts-2', () => {
