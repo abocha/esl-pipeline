@@ -1,5 +1,8 @@
 import type { GenerationBudgetRepository } from './generation-budget-guard.js';
-import type { SpeechPlannerEvalVariant } from './speech-planner-eval-fixtures.js';
+import {
+  SPEECH_PLANNER_EVAL_MODELS,
+  type SpeechPlannerEvalVariant,
+} from './speech-planner-eval-fixtures.js';
 
 export interface SpeechPlannerEvalRunPlan {
   plannerAttempts: number;
@@ -37,6 +40,8 @@ export type SpeechPlannerEvalPreflightResult =
         | 'missing_credentials'
         | 'model_not_allowed'
         | 'usage_unverified'
+        | 'invalid_usage'
+        | 'invalid_limits'
         | 'daily_capacity'
         | 'rpm_unavailable';
       remediation: string;
@@ -63,12 +68,30 @@ export function preflightSpeechPlannerEval(args: {
     plannerAttempts: plan.plannerAttempts,
     compatibilityChecks: plan.compatibilityChecks,
   };
-  const requiredModels = new Set(
-    args.variants
-      .filter((variant) => plan.missingAttemptIds.includes(variant.attemptId))
-      .map((variant) => variant.model),
+  if (
+    !Number.isInteger(args.dailyLimit) ||
+    args.dailyLimit < 0 ||
+    !Number.isInteger(args.rpm) ||
+    args.rpm < 0
+  ) {
+    return {
+      allowed: false,
+      category: 'invalid_limits',
+      remediation: 'Configured daily and RPM limits must be finite nonnegative integers.',
+      ...base,
+    };
+  }
+  if (args.usedToday !== undefined && (!Number.isInteger(args.usedToday) || args.usedToday < 0)) {
+    return {
+      allowed: false,
+      category: 'invalid_usage',
+      remediation: 'Current-day usage must be a finite nonnegative integer.',
+      ...base,
+    };
+  }
+  const missingModels = SPEECH_PLANNER_EVAL_MODELS.filter(
+    (model) => !args.allowedModels.includes(model),
   );
-  const missingModels = [...requiredModels].filter((model) => !args.allowedModels.includes(model));
   if (missingModels.length > 0) {
     return {
       allowed: false,
@@ -78,7 +101,14 @@ export function preflightSpeechPlannerEval(args: {
     };
   }
   if (!args.live) {
-    return { allowed: true, usageVerified: args.usedToday !== undefined, ...base };
+    return {
+      allowed: true,
+      usageVerified: args.usedToday !== undefined,
+      ...(args.usedToday === undefined
+        ? {}
+        : { remainingDailyCapacity: Math.max(0, args.dailyLimit - args.usedToday) }),
+      ...base,
+    };
   }
   if (!args.credentialsPresent) {
     return {
@@ -126,6 +156,9 @@ export function preflightSpeechPlannerEval(args: {
 export function createSpeechPlannerEvalBudgetRepository(args: {
   usedToday: number;
 }): GenerationBudgetRepository {
+  if (!Number.isInteger(args.usedToday) || args.usedToday < 0) {
+    throw new Error('Speech planner eval current-day usage must be a finite nonnegative integer.');
+  }
   let requestsToday = args.usedToday;
   let reservedTokensToday = 0;
   let actualTokensToday = 0;
