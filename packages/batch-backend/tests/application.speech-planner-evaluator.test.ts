@@ -314,7 +314,8 @@ describe('speech planner evaluator', () => {
       },
     };
 
-    expect(summarizeSpeechPlannerEvalAttempts([record])).toMatchObject({
+    const summary = summarizeSpeechPlannerEvalAttempts([record]);
+    expect(summary).toMatchObject({
       warningCounts: { redundant_instruction_components: 1 },
       warningBreakdown: {
         redundant_instruction_components: {
@@ -353,7 +354,8 @@ describe('speech planner evaluator', () => {
       priceSnapshot: loadSpeechPlannerPriceSnapshot(),
     });
 
-    expect(summarizeSpeechPlannerEvalAttempts([record])).toMatchObject({
+    const summary = summarizeSpeechPlannerEvalAttempts([record]);
+    expect(summary).toMatchObject({
       warningCounts: {
         redundant_instruction_components: 1,
         high_cue_density: 1,
@@ -372,6 +374,10 @@ describe('speech planner evaluator', () => {
           },
         },
       },
+    });
+    expect(summary.warningBreakdown.redundant_instruction_components?.byFieldPair).toEqual({
+      'emotion,freeFormDirection': 1,
+      'intonation,freeFormDirection': 1,
     });
   });
 
@@ -859,6 +865,44 @@ describe('speech planner evaluator', () => {
         resume: true,
       }),
     ).rejects.toThrow('call-intent');
+    expect(executeVariant).toHaveBeenCalledOnce();
+
+    writeFileSync(callPath, immutableCall, 'utf8');
+    const runPath = join(runDirectory, 'run.json');
+    const interruptedMetadata = JSON.parse(readFileSync(runPath, 'utf8')) as {
+      status: string;
+      completedAt?: string;
+      activities: Array<{
+        kind: string;
+        status: string;
+        completedAt?: string;
+        providerCalls?: number;
+      }>;
+    };
+    interruptedMetadata.status = 'partial';
+    delete interruptedMetadata.completedAt;
+    interruptedMetadata.activities[0]!.status = 'partial';
+    delete interruptedMetadata.activities[0]!.completedAt;
+    delete interruptedMetadata.activities[0]!.providerCalls;
+    writeFileSync(runPath, JSON.stringify(interruptedMetadata, null, 2), 'utf8');
+
+    await runSpeechPlannerEvaluation({
+      runDirectory,
+      gitSha: 'a'.repeat(40),
+      variants,
+      fixtures: [fixture],
+      priceSnapshot: loadSpeechPlannerPriceSnapshot(),
+      executeVariant,
+      resume: true,
+    });
+    const recovered = readSpeechPlannerEvalRunMetadata(runDirectory);
+    expect(recovered.status).toBe('completed');
+    expect(recovered.activities[0]).toMatchObject({
+      kind: 'planner_initial',
+      status: 'interrupted',
+      providerCalls: 1,
+      normalizedErrorCategory: 'interrupted_before_resume',
+    });
     expect(executeVariant).toHaveBeenCalledOnce();
   });
 });
