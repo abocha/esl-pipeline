@@ -12,6 +12,16 @@ const UNSAFE_MARKUP_DELIMITERS = new Set(['[', ']', '<', '>', '{', '}']);
 
 export type SpeechCueTextField = 'emotion' | 'intonation' | 'freeFormDirection';
 
+class SpeechCueTextValidationError extends ConfigurationError {
+  constructor(
+    message: string,
+    readonly issueCode: 'unsafe_cue_text' | 'cue_text_too_long',
+    readonly issueDetail: Record<string, string | number | boolean>,
+  ) {
+    super(message);
+  }
+}
+
 export interface SpeechPlanQualityIssue {
   severity: 'hard_failure' | 'warning';
   code: string;
@@ -51,18 +61,35 @@ export interface ValidatedSpeechPlanAnalysis extends SpeechPlanCandidateAnalysis
 export function normalizeSpeechCueText(field: SpeechCueTextField, input: string): string {
   const normalized = input.normalize('NFKC');
   if ([...normalized].some(isUnsafeControlCharacter)) {
-    throw new ConfigurationError(`${field} contains a control character or newline.`);
+    throw new SpeechCueTextValidationError(
+      `${field} contains a control character or newline.`,
+      'unsafe_cue_text',
+      { field },
+    );
   }
   if ([...normalized].some((character) => UNSAFE_MARKUP_DELIMITERS.has(character))) {
-    throw new ConfigurationError(`${field} contains an unsafe markup delimiter.`);
+    throw new SpeechCueTextValidationError(
+      `${field} contains an unsafe markup delimiter.`,
+      'unsafe_cue_text',
+      { field },
+    );
   }
   const compact = normalized.trim().replaceAll(/\s+/gu, ' ');
   const maximum = field === 'freeFormDirection' ? 200 : 80;
-  if ([...compact].length > maximum) {
-    throw new ConfigurationError(`${field} must not exceed ${maximum} code points.`);
+  const observedCodePoints = [...compact].length;
+  if (observedCodePoints > maximum) {
+    throw new SpeechCueTextValidationError(
+      `${field} must not exceed ${maximum} code points.`,
+      'cue_text_too_long',
+      { field, limit: maximum, observedCodePoints },
+    );
   }
   if (compact && !SAFE_CUE_TEXT.test(compact)) {
-    throw new ConfigurationError(`${field} contains an unsupported character.`);
+    throw new SpeechCueTextValidationError(
+      `${field} contains an unsupported character.`,
+      'unsafe_cue_text',
+      { field },
+    );
   }
   return compact;
 }
@@ -139,8 +166,8 @@ export function analyzeSpeechPlanCandidate(
       }
       try {
         normalizeSpeechCueText(field, value);
-      } catch {
-        hardFailures.push(issue('unsafe_cue_text', id, { field }));
+      } catch (error) {
+        hardFailures.push(cueTextIssue(error, id, field));
       }
     }
     for (const field of ['pauseBeforeMs', 'pauseAfterMs'] as const) {
@@ -224,8 +251,8 @@ export function analyzeValidatedSpeechPlan(
       if (!value) continue;
       try {
         normalizeSpeechCueText(field, value);
-      } catch {
-        hardFailures.push(issue('unsafe_cue_text', segment.id, { field }));
+      } catch (error) {
+        hardFailures.push(cueTextIssue(error, segment.id, field));
       }
     }
     const hasMetadata = Boolean(segment.emotion || segment.intonation);
@@ -361,6 +388,17 @@ function issue(
     ...(segmentId ? { segmentId } : {}),
     ...(detail && Object.keys(detail).length > 0 ? { detail } : {}),
   };
+}
+
+function cueTextIssue(
+  error: unknown,
+  segmentId: string,
+  field: SpeechCueTextField,
+): SpeechPlanQualityIssue {
+  if (error instanceof SpeechCueTextValidationError) {
+    return issue(error.issueCode, segmentId, error.issueDetail);
+  }
+  return issue('unsafe_cue_text', segmentId, { field });
 }
 
 function cueCountForSegment(segment: SpeechPerformancePlanSegment): number {

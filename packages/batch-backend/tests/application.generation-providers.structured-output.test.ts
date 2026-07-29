@@ -302,6 +302,73 @@ describe('application/generation-providers structured output', () => {
     });
   });
 
+  it.each([
+    {
+      label: 'preserves an explicitly reported zero thinking count',
+      usageMetadata: {
+        promptTokenCount: 100,
+        candidatesTokenCount: 20,
+        thoughtsTokenCount: 0,
+        totalTokenCount: 120,
+      },
+      expected: { inputTokens: 100, outputTokens: 20, reasoningTokens: 0, totalTokens: 120 },
+    },
+    {
+      label: 'does not infer zero thinking from a reconcilable total',
+      usageMetadata: {
+        promptTokenCount: 100,
+        candidatesTokenCount: 20,
+        totalTokenCount: 120,
+      },
+      expected: { inputTokens: 100, outputTokens: 20, totalTokens: 120 },
+    },
+    {
+      label: 'leaves thinking unavailable when the total is ambiguous',
+      usageMetadata: {
+        promptTokenCount: 100,
+        candidatesTokenCount: 20,
+        totalTokenCount: 127,
+      },
+      expected: { inputTokens: 100, outputTokens: 20, totalTokens: 127 },
+    },
+  ])('$label', async ({ usageMetadata, expected }) => {
+    vi.mocked(fetch).mockResolvedValue(
+      createJsonResponse({
+        candidates: [
+          {
+            content: {
+              parts: [{ text: '{"lessonSummary":"Summary","topicsDiscussed":[]}' }],
+            },
+          },
+        ],
+        usageMetadata,
+      }),
+    );
+
+    const result = await executeGoogleStructuredGeneration({
+      config: createGenerationConfig(),
+      request: {
+        model: 'gemini-3.5-flash-lite',
+        prompt: 'planner prompt',
+        responseSchema: {
+          name: 'lesson_memory_content',
+          schema: {
+            type: 'object',
+            properties: {
+              lessonSummary: { type: 'string' },
+              topicsDiscussed: { type: 'array', items: { type: 'string' } },
+            },
+            required: ['lessonSummary', 'topicsDiscussed'],
+            additionalProperties: false,
+          },
+        },
+        maxOutputTokens: 2400,
+      },
+    });
+
+    expect(result.usage).toEqual(expected);
+  });
+
   it('retains malformed Google structured-output text for debug logging', async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValue(

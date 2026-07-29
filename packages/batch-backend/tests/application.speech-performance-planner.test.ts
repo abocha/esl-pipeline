@@ -387,6 +387,48 @@ describe('application/speech-performance-planner', () => {
     );
   });
 
+  it('classifies an overlong live-eval cue without retaining the rejected text', () => {
+    const intonation =
+      'rising at the end of the first sentence, slightly surprised at the end of the second';
+    expect([...intonation].length).toBe(84);
+
+    const result = evaluateSpeechPlannerRawOutput({
+      prepared: {
+        ...createPrepared(),
+        segments: [
+          {
+            id: 'segment-1',
+            speaker: 'Maya',
+            text: 'You still remember that tiny café?',
+          },
+        ],
+      },
+      rawText: JSON.stringify({ segments: [{ id: 'segment-1', intonation }] }),
+      promptPolicyVersion: 'speech-performance-v2-inworld-tts2',
+      promptHash: 'a'.repeat(64),
+      plannerModel: 'gemini-3.1-flash-lite',
+      generatedAt: '2026-07-29T00:00:00.000Z',
+      latencyMs: 0,
+    });
+
+    expect(result).toMatchObject({
+      validation: { status: 'invalid', reason: 'cue_text_too_long' },
+      candidateAnalysis: {
+        hardFailures: [
+          {
+            severity: 'hard_failure',
+            code: 'cue_text_too_long',
+            segmentId: 'segment-1',
+            detail: { field: 'intonation', limit: 80, observedCodePoints: 84 },
+          },
+        ],
+      },
+      plan: undefined,
+      fallback: { reason: 'planner_invalid' },
+    });
+    expect(JSON.stringify(result.candidateAnalysis)).not.toContain(intonation);
+  });
+
   it('uses the 1000ms planner schema cap and normalizes sparse optional cues', async () => {
     const config = createEnabledConfig();
     const executor = vi.fn().mockResolvedValue({

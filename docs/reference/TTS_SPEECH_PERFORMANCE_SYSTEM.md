@@ -319,7 +319,9 @@ voice-capability snapshot provenance.
 - Planner enablement is opt-in because it adds a billable model call.
 - Planner model comparisons use the database-free, fail-closed harness documented in
   [`../operations/speech-planner-evaluation.md`](../operations/speech-planner-evaluation.md). The
-  harness does not change the production planner default; only complete evaluation evidence can
+  paid matrix contains prompted TTS-2 fixtures only; deterministic TTS 1.5 identity controls use the
+  same capability, identity-plan, renderer, and analysis boundaries without a remote planner call.
+  The harness does not change the production planner default; only complete evaluation evidence can
   justify a separate configuration change.
 - Identity fallback is expected and observable; it is not a publish blocker.
 - Voice catalog refresh remains useful for provider assignment quality and diagnostics.

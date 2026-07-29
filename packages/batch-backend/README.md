@@ -140,6 +140,11 @@ High-signal env groups for this package:
 - generation: assignments use `gpt-5.6-sol` at medium reasoning; memory/profile workloads use
   `gpt-5.6-luna` at low or medium reasoning according to the versioned request envelope
 
+The speech-planner evaluation CLI is database-free and fail-closed. Its fixed live baseline counts
+physical provider requests with no automatic retry, while checked-in TTS 1.5 identity controls run
+through the production capability, renderer, and analysis boundaries with zero provider calls. See
+the evaluation runbook for immutable artifact, resume, privacy, and current-day budget requirements.
+
 All local, Compose, and production application settings come from the repository-root `.env`.
 Validate it with `pnpm env:validate -- --profile=development`; use the production profile before a
 VPS deployment. Mounted `.secrets/` files and generated deploy image-state files are separate.

@@ -161,14 +161,20 @@ describe('eval speech planner CLI', () => {
       providerCalls: 0,
       synthesisCalls: 0,
       postgresAdapters: 0,
-      completedAttempts: 5,
+      completedAttempts: 6,
+      completedControls: 1,
     });
     expect(executeAttempt).not.toHaveBeenCalled();
     expect(
       JSON.parse(readFileSync(join(result.runDirectory!, 'summary.json'), 'utf8')),
     ).toMatchObject({
-      identityFallbackRate: 0.8,
-      hardGates: { tts15SteeringLeakageFailures: 1 },
+      identityFallbackRate: 5 / 6,
+      controls: { expected: 1, completed: 1, passed: 1, failed: 0 },
+      hardGates: {
+        providerFailures: 1,
+        tts15SteeringLeakageFailures: 0,
+        deterministicControlFailures: 0,
+      },
     });
   });
 
@@ -268,14 +274,24 @@ describe('eval speech planner CLI', () => {
       ],
       { stdout: vi.fn(), config, gitSha: 'a'.repeat(40), executeAttempt },
     );
-    expect(first).toMatchObject({ mode: 'live', providerCalls: 4, completedAttempts: 4 });
+    expect(first).toMatchObject({
+      mode: 'live',
+      providerCalls: 4,
+      completedAttempts: 4,
+      completedControls: 1,
+    });
     executeAttempt.mockClear();
 
     const resumed = await runEvalSpeechPlannerCli(
       ['--live', '--used-today=4', `--resume-run=${first.runDirectory!}`],
       { stdout: vi.fn(), config, gitSha: 'a'.repeat(40), executeAttempt },
     );
-    expect(resumed).toMatchObject({ mode: 'live', providerCalls: 0, completedAttempts: 4 });
+    expect(resumed).toMatchObject({
+      mode: 'live',
+      providerCalls: 0,
+      completedAttempts: 4,
+      completedControls: 1,
+    });
     expect(executeAttempt).not.toHaveBeenCalled();
 
     const failedAudio = vi.fn(async () => {
