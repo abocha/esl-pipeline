@@ -188,19 +188,82 @@ describe('speech planner evaluator', () => {
       };
     });
 
+    let observedPartialStatus = false;
     const first = await runSpeechPlannerEvaluation({
       runDirectory,
       gitSha: 'a'.repeat(40),
       variants,
       fixtures: [fixture],
       priceSnapshot: loadSpeechPlannerPriceSnapshot(),
-      executeVariant,
+      executeVariant: async (variant) => {
+        observedPartialStatus ||=
+          (
+            JSON.parse(readFileSync(join(runDirectory, 'run.json'), 'utf8')) as {
+              status?: string;
+            }
+          ).status === 'partial';
+        return executeVariant(variant);
+      },
+      runContext: {
+        mode: 'live',
+        resolvedConfig: {
+          corpusPath: 'packages/batch-backend/fixtures/speech-planner-eval/corpus-v1.json',
+          priceSnapshotPath:
+            'packages/batch-backend/fixtures/speech-planner-eval/pricing-2026-07-28.json',
+          models: ['gemini-3.1-flash-lite', 'gemini-3.5-flash-lite'],
+          promptPolicies: [
+            'speech-performance-v1-restrained-natural',
+            'speech-performance-v2-inworld-tts2',
+          ],
+          repetitions: 1,
+          privateOnly: false,
+        },
+        environmentFlags: {
+          live: true,
+          offlineOutputFixtures: false,
+          selectedAudio: false,
+          privateOnly: false,
+          postgresAdapters: 0,
+        },
+        preflight: {
+          status: 'allowed',
+          allowedModels: ['gemini-3.1-flash-lite', 'gemini-3.5-flash-lite'],
+          requiredModels: ['gemini-3.1-flash-lite', 'gemini-3.5-flash-lite'],
+          missingRequiredModels: [],
+          allowlistReady: true,
+          credentialsPresent: true,
+          usageVerified: true,
+          usedToday: 0,
+          dailyLimit: 120,
+          rpm: 4,
+          remainingDailyCapacity: 120,
+          plannerAttempts: 4,
+          compatibilityChecks: 1,
+        },
+      },
     });
     expect(first.records).toHaveLength(4);
     expect(
       first.records.filter((record) => record.promptedPlanStatus === 'skipped_incompatible'),
     ).toHaveLength(1);
     expect(executeVariant).toHaveBeenCalledTimes(3);
+    expect(observedPartialStatus).toBe(true);
+    expect(JSON.parse(readFileSync(join(runDirectory, 'run.json'), 'utf8'))).toMatchObject({
+      schemaVersion: 2,
+      status: 'completed',
+      mode: 'live',
+      resolvedConfig: {
+        repetitions: 1,
+        privateOnly: false,
+      },
+      environmentFlags: { live: true, selectedAudio: false },
+      preflight: {
+        allowlistReady: true,
+        dailyLimit: 120,
+        rpm: 4,
+      },
+      priceSnapshot: loadSpeechPlannerPriceSnapshot(),
+    });
     expect(
       readFileSync(join(runDirectory, 'attempts.jsonl'), 'utf8').trim().split('\n'),
     ).toHaveLength(4);

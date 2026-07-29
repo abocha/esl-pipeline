@@ -38,7 +38,9 @@ pnpm eval:speech-planner -- --models=gemini-3.1-flash-lite,gemini-3.5-flash-lite
 
 The public baseline is exactly 10 fixtures x 2 models x 2 prompts x 3 repetitions = 120 planner
 attempts. Its first Gemini 3.5 cell is the compatibility smoke. The dry run reports configured
-daily/RPM limits, remaining capacity, and current-day usage as unverified.
+daily/RPM limits, remaining capacity, current-day usage as unverified, and the exact required
+allowlist state. A missing model is reported as remediation without blocking dry-run inspection; it
+remains fatal before any live provider construction.
 
 ## Live Preflight and Baseline
 
@@ -63,8 +65,16 @@ If interrupted, obtain a fresh current-day count and resume the exact printed di
 pnpm eval:speech-planner -- --live --used-today=$currentGeminiRequestsToday --resume-run="tmp/speech-planner-eval/<run-id>"
 ```
 
-Resume verifies the immutable configuration and fixture hashes, preflights only missing attempt IDs,
-and appends them. It refuses mismatched or overwritten artifacts.
+Resume reconstructs the saved corpus, exact model/prompt matrix, repetitions, price snapshot, and
+private/offline mode from `run.json`; custom flags do not need to be repeated. It verifies the
+immutable configuration and fixture hashes, preflights only missing attempt IDs, and appends them. It
+refuses mismatched or overwritten artifacts.
+
+`run.json` records the resolved mode and paths, exact variants, non-secret environment flags,
+allowlist and configured-limit preflight facts, complete versioned price snapshot, source revision,
+prompt and renderer identities, and expected/completed attempt counts. Its status is `partial` while
+attempt evidence is being assembled and changes atomically to `completed` only after summaries are
+written. Provider credentials and environment dumps are never recorded.
 
 ## Selected Audio and Blind Review
 

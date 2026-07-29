@@ -30,6 +30,8 @@ export type SpeechPlannerEvalPreflightResult =
   | {
       allowed: true;
       usageVerified: boolean;
+      allowlistReady: boolean;
+      missingRequiredModels: string[];
       plannerAttempts: number;
       compatibilityChecks: number;
       remainingDailyCapacity?: number;
@@ -45,6 +47,8 @@ export type SpeechPlannerEvalPreflightResult =
         | 'daily_capacity'
         | 'rpm_unavailable';
       remediation: string;
+      allowlistReady: boolean;
+      missingRequiredModels: string[];
       plannerAttempts: number;
       compatibilityChecks: number;
       remainingDailyCapacity?: number;
@@ -68,6 +72,13 @@ export function preflightSpeechPlannerEval(args: {
     plannerAttempts: plan.plannerAttempts,
     compatibilityChecks: plan.compatibilityChecks,
   };
+  const missingModels = SPEECH_PLANNER_EVAL_MODELS.filter(
+    (model) => !args.allowedModels.includes(model),
+  );
+  const allowlist = {
+    allowlistReady: missingModels.length === 0,
+    missingRequiredModels: missingModels,
+  };
   if (
     !Number.isInteger(args.dailyLimit) ||
     args.dailyLimit < 0 ||
@@ -78,6 +89,7 @@ export function preflightSpeechPlannerEval(args: {
       allowed: false,
       category: 'invalid_limits',
       remediation: 'Configured daily and RPM limits must be finite nonnegative integers.',
+      ...allowlist,
       ...base,
     };
   }
@@ -86,17 +98,16 @@ export function preflightSpeechPlannerEval(args: {
       allowed: false,
       category: 'invalid_usage',
       remediation: 'Current-day usage must be a finite nonnegative integer.',
+      ...allowlist,
       ...base,
     };
   }
-  const missingModels = SPEECH_PLANNER_EVAL_MODELS.filter(
-    (model) => !args.allowedModels.includes(model),
-  );
-  if (missingModels.length > 0) {
+  if (args.live && missingModels.length > 0) {
     return {
       allowed: false,
       category: 'model_not_allowed',
       remediation: `Add the exact stable model IDs to GEN_ALLOWED_MODELS_GOOGLE: ${missingModels.join(', ')}.`,
+      ...allowlist,
       ...base,
     };
   }
@@ -104,6 +115,7 @@ export function preflightSpeechPlannerEval(args: {
     return {
       allowed: true,
       usageVerified: args.usedToday !== undefined,
+      ...allowlist,
       ...(args.usedToday === undefined
         ? {}
         : { remainingDailyCapacity: Math.max(0, args.dailyLimit - args.usedToday) }),
@@ -115,6 +127,7 @@ export function preflightSpeechPlannerEval(args: {
       allowed: false,
       category: 'missing_credentials',
       remediation: 'Configure GEMINI_API_KEY before a live evaluation.',
+      ...allowlist,
       ...base,
     };
   }
@@ -123,6 +136,7 @@ export function preflightSpeechPlannerEval(args: {
       allowed: false,
       category: 'usage_unverified',
       remediation: 'Supply current provider usage with --used-today=<nonnegative integer>.',
+      ...allowlist,
       ...base,
     };
   }
@@ -132,6 +146,7 @@ export function preflightSpeechPlannerEval(args: {
       allowed: false,
       category: 'daily_capacity',
       remediation: `Increase remaining daily request capacity by at least ${plan.plannerAttempts - remainingDailyCapacity} request${plan.plannerAttempts - remainingDailyCapacity === 1 ? '' : 's'}.`,
+      ...allowlist,
       remainingDailyCapacity,
       ...base,
     };
@@ -141,6 +156,7 @@ export function preflightSpeechPlannerEval(args: {
       allowed: false,
       category: 'rpm_unavailable',
       remediation: 'Set an operator-approved positive ESL_TTS_SPEECH_PLANNER_RPM_BUDGET.',
+      ...allowlist,
       remainingDailyCapacity,
       ...base,
     };
@@ -148,6 +164,7 @@ export function preflightSpeechPlannerEval(args: {
   return {
     allowed: true,
     usageVerified: true,
+    ...allowlist,
     remainingDailyCapacity,
     ...base,
   };

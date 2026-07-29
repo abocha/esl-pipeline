@@ -47,8 +47,11 @@ import {
   SpeechPlannerEvalRateLimiter,
 } from '../application/speech-planner-eval-preflight.js';
 import {
+  readSpeechPlannerEvalRunMetadata,
   runSpeechPlannerEvaluation,
   type SpeechPlannerEvalAttemptRecord,
+  type SpeechPlannerEvalRunContext,
+  type SpeechPlannerEvalRunMetadata,
 } from '../application/speech-planner-evaluator.js';
 import {
   buildSpeechPlannerListeningIdentity,
@@ -68,6 +71,14 @@ const IGNORED_ARTIFACT_ROOT = resolve(REPO_ROOT, 'tmp');
 
 function resolveInputPath(path: string): string {
   return isAbsolute(path) ? path : resolve(REPO_ROOT, path);
+}
+
+function artifactInputPath(path: string): string {
+  const absolute = resolveInputPath(path);
+  const relation = relative(REPO_ROOT, absolute);
+  return relation && !relation.startsWith('..') && !isAbsolute(relation)
+    ? relation.replaceAll('\\', '/')
+    : absolute;
 }
 
 export interface EvalSpeechPlannerOptions {
@@ -258,7 +269,33 @@ export async function runEvalSpeechPlannerCli(
     }) => Promise<number>;
   } = {},
 ): Promise<EvalSpeechPlannerCliResult> {
-  const options = parseEvalSpeechPlannerArgs(argv);
+  let options = parseEvalSpeechPlannerArgs(argv);
+  const resumeDirectory = options.resumeRun ? resolveInputPath(options.resumeRun) : undefined;
+  const resumeMetadata: SpeechPlannerEvalRunMetadata | undefined = resumeDirectory
+    ? readSpeechPlannerEvalRunMetadata(resumeDirectory)
+    : undefined;
+  if (resumeMetadata) {
+    if (resumeMetadata.mode === 'live' && !options.live) {
+      throw new Error('Resuming a live speech planner evaluation requires --live.');
+    }
+    if (resumeMetadata.mode === 'offline' && options.live) {
+      throw new Error('An offline speech planner evaluation cannot be resumed with --live.');
+    }
+    const saved = resumeMetadata.resolvedConfig;
+    options = {
+      ...options,
+      models: saved.models,
+      prompts: saved.promptPolicies,
+      repetitions: saved.repetitions,
+      corpus: saved.corpusPath,
+      priceSnapshot: saved.priceSnapshotPath,
+      offlineOutputFixtures: saved.offlineOutputFixturesPath,
+      privateFixture: saved.privateFixturePath
+        ? assertPrivatePath(saved.privateFixturePath)
+        : undefined,
+      privateOnly: saved.privateOnly,
+    };
+  }
   if (options.audio === 'selected' && !options.live) {
     throw new Error('--audio=selected requires --live.');
   }
@@ -288,12 +325,16 @@ export async function runEvalSpeechPlannerCli(
   const fixtures = options.privateOnly
     ? loadPrivateFixture(options.privateFixture!)
     : loadSpeechPlannerEvalFixtures(resolveInputPath(options.corpus));
-  const variants = buildSpeechPlannerEvalMatrix({
-    fixtures,
-    repetitions: options.repetitions,
-    models: options.models,
-    promptPolicies: options.prompts,
-  });
+  const variants =
+    resumeMetadata?.variants ??
+    buildSpeechPlannerEvalMatrix({
+      fixtures,
+      repetitions: options.repetitions,
+      models: options.models,
+      promptPolicies: options.prompts,
+    });
+  const allowedModels = getConfiguredGenerationAllowedModels(config.generation, 'google_ai_studio');
+  const limits = getConfiguredSpeechPlannerLimits(config);
   if (options.offlineOutputFixtures) {
     const runDirectory = options.resumeRun
       ? resolveInputPath(options.resumeRun)
@@ -302,19 +343,21 @@ export async function runEvalSpeechPlannerCli(
       resolveInputPath(options.offlineOutputFixtures),
     );
     const fixtureById = new Map(fixtures.map((fixture) => [fixture.id, fixture]));
-    const offlineVariants: SpeechPlannerEvalVariant[] = outputs.map((output) => {
-      const fixture = fixtureById.get(output.fixtureId);
-      if (!fixture) throw new Error(`Unknown offline fixture: ${output.fixtureId}`);
-      return {
-        attemptId: `offline-${output.id}`,
-        fixtureId: output.fixtureId,
-        fixtureHash: fixture.contentHash,
-        model: 'gemini-3.1-flash-lite',
-        promptPolicyVersion: 'speech-performance-v2-inworld-tts2',
-        repetition: 1,
-        compatibilitySmoke: false,
-      };
-    });
+    const offlineVariants: SpeechPlannerEvalVariant[] =
+      resumeMetadata?.variants ??
+      outputs.map((output) => {
+        const fixture = fixtureById.get(output.fixtureId);
+        if (!fixture) throw new Error(`Unknown offline fixture: ${output.fixtureId}`);
+        return {
+          attemptId: `offline-${output.id}`,
+          fixtureId: output.fixtureId,
+          fixtureHash: fixture.contentHash,
+          model: 'gemini-3.1-flash-lite',
+          promptPolicyVersion: 'speech-performance-v2-inworld-tts2',
+          repetition: 1,
+          compatibilitySmoke: false,
+        };
+      });
     const outputByAttempt = new Map(outputs.map((output) => [`offline-${output.id}`, output]));
     const run = await runSpeechPlannerEvaluation({
       runDirectory,
@@ -322,6 +365,46 @@ export async function runEvalSpeechPlannerCli(
       variants: offlineVariants,
       fixtures,
       priceSnapshot,
+      resume: Boolean(options.resumeRun),
+      runContext: {
+        mode: 'offline',
+        resolvedConfig: {
+          corpusPath: artifactInputPath(options.corpus),
+          priceSnapshotPath: artifactInputPath(options.priceSnapshot),
+          offlineOutputFixturesPath: artifactInputPath(options.offlineOutputFixtures),
+          ...(options.privateFixture
+            ? { privateFixturePath: artifactInputPath(options.privateFixture) }
+            : {}),
+          models: options.models,
+          promptPolicies: options.prompts,
+          repetitions: options.repetitions,
+          privateOnly: options.privateOnly,
+        },
+        environmentFlags: {
+          live: false,
+          offlineOutputFixtures: true,
+          selectedAudio: false,
+          privateOnly: options.privateOnly,
+          postgresAdapters: 0,
+        },
+        preflight: {
+          status: 'not_applicable',
+          allowedModels,
+          requiredModels: [...SPEECH_PLANNER_EVAL_MODELS],
+          missingRequiredModels: SPEECH_PLANNER_EVAL_MODELS.filter(
+            (model) => !allowedModels.includes(model),
+          ),
+          allowlistReady: SPEECH_PLANNER_EVAL_MODELS.every((model) =>
+            allowedModels.includes(model),
+          ),
+          credentialsPresent: Boolean(config.generation.providers.googleAiStudio.apiKey),
+          usageVerified: false,
+          dailyLimit: limits.dailyRequestBudget ?? 0,
+          rpm: limits.rpmBudget ?? 0,
+          plannerAttempts: offlineVariants.length,
+          compatibilityChecks: 0,
+        },
+      },
       executeVariant: async (variant) => ({
         status: 'completed',
         rawText: outputByAttempt.get(variant.attemptId)!.rawText,
@@ -346,9 +429,6 @@ export async function runEvalSpeechPlannerCli(
     stdout(JSON.stringify(result));
     return result;
   }
-  const allowedModels = getConfiguredGenerationAllowedModels(config.generation, 'google_ai_studio');
-  const limits = getConfiguredSpeechPlannerLimits(config);
-  const resumeDirectory = options.resumeRun ? resolveInputPath(options.resumeRun) : undefined;
   const completedAttemptIds = resumeDirectory
     ? readCompletedAttemptIds(resumeDirectory)
     : new Set<string>();
@@ -383,6 +463,9 @@ export async function runEvalSpeechPlannerCli(
         configuredDailyLimit: limits.dailyRequestBudget,
         configuredRpm: limits.rpmBudget,
         remainingDailyCapacity: preflight.remainingDailyCapacity,
+        allowlistReady: preflight.allowlistReady,
+        missingRequiredModels: preflight.missingRequiredModels,
+        requiredAllowlist: SPEECH_PLANNER_EVAL_MODELS,
         priceSnapshot: priceSnapshot.version,
         output: resolveInputPath(options.output),
       }),
@@ -410,6 +493,42 @@ export async function runEvalSpeechPlannerCli(
     fixtures,
     priceSnapshot,
     resume: Boolean(options.resumeRun),
+    runContext: {
+      mode: 'live',
+      resolvedConfig: {
+        corpusPath: artifactInputPath(options.corpus),
+        priceSnapshotPath: artifactInputPath(options.priceSnapshot),
+        ...(options.privateFixture
+          ? { privateFixturePath: artifactInputPath(options.privateFixture) }
+          : {}),
+        models: options.models,
+        promptPolicies: options.prompts,
+        repetitions: options.repetitions,
+        privateOnly: options.privateOnly,
+      },
+      environmentFlags: {
+        live: true,
+        offlineOutputFixtures: false,
+        selectedAudio: options.audio === 'selected',
+        privateOnly: options.privateOnly,
+        postgresAdapters: 0,
+      },
+      preflight: {
+        status: 'allowed',
+        allowedModels,
+        requiredModels: [...SPEECH_PLANNER_EVAL_MODELS],
+        missingRequiredModels: preflight.missingRequiredModels,
+        allowlistReady: preflight.allowlistReady,
+        credentialsPresent: Boolean(config.generation.providers.googleAiStudio.apiKey),
+        usageVerified: preflight.usageVerified,
+        usedToday: options.usedToday,
+        dailyLimit: limits.dailyRequestBudget ?? 0,
+        rpm: limits.rpmBudget ?? 0,
+        remainingDailyCapacity: preflight.remainingDailyCapacity,
+        plannerAttempts: preflight.plannerAttempts,
+        compatibilityChecks: preflight.compatibilityChecks,
+      },
+    } satisfies SpeechPlannerEvalRunContext,
     executeVariant: async (variant) => {
       const fixture = fixtures.find((candidate) => candidate.id === variant.fixtureId)!;
       await limiter.acquire();
