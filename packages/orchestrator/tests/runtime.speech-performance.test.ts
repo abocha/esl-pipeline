@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createIdentitySpeechPerformancePlan,
   type PreparedStudyTextSynthesis,
+  SpeechPerformancePlannerBudgetExceededError,
   SpeechPerformancePlannerInvalidOutputError,
 } from '@esl-pipeline/tts-core';
 
@@ -198,8 +199,7 @@ describe('runtime/speech-performance', () => {
   });
 
   it('reports budget exhaustion separately from provider execution failures', async () => {
-    const error = new Error('budget exhausted');
-    error.name = 'GenerationBudgetExceededError';
+    const error = new SpeechPerformancePlannerBudgetExceededError('budget exhausted');
     const result = await resolveSpeechPerformancePlan({
       prepared: createPrepared(),
       planner: {

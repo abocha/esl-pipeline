@@ -535,6 +535,24 @@ describe('speech performance plans', () => {
     expect(prepared.performanceSource?.speakerProfiles).toEqual([]);
   });
 
+  it('rejects dialogue when any turn lacks authored speaker ownership', () => {
+    const context = parseMarkdownContext(
+      `---\ntitle: Deadline conversation\nstudent: Alex\nlevel: B1\ntopic: work\ninput_type: generate\nstudy_text_type: dialogue\nspeaker_labels: [Maya, Leo]\nspeaker_profiles:\n  - id: Maya\n  - id: Leo\n---\n\n:::study-text\nMaya: We need a clearer deadline.\nI can revise the plan today.\n:::`,
+    );
+
+    expect(() =>
+      createPreparedStudyTextSynthesis(
+        { context },
+        {
+          voiceMapPath: 'voices.yml',
+          outPath: '/tmp',
+          ttsProvider: 'inworld',
+          ttsStrategy: 'dialogue',
+        },
+      ),
+    ).toThrow('dialogue strategy requires an authored speaker for every study-text segment');
+  });
+
   it('rejects explicit monologue strategy with multiple authored speakers', () => {
     const context = parseMarkdownContext(
       `---\ntitle: Deadline conversation\nstudent: Alex\nlevel: B1\ntopic: work\ninput_type: generate\n---\n\n:::study-text\nMaya: We need a clearer deadline.\nLeo: I can revise the plan today.\n:::`,

@@ -102,6 +102,7 @@ export {
   createPreparedStudyTextSynthesis,
   normalizeStudyTextSpeakerToken,
   resolveStudyTextPerformanceMode,
+  SpeechPerformancePlannerBudgetExceededError,
   SpeechPerformancePlannerInvalidOutputError,
   validateSpeechPerformancePlan,
 } from './speech-plan.js';

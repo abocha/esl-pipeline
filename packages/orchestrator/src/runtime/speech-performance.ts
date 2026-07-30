@@ -7,6 +7,7 @@ import {
   type PreparedStudyTextSynthesis,
   type SpeechPerformancePlan,
   type SpeechPerformancePlanner,
+  SpeechPerformancePlannerBudgetExceededError,
   type SpeechPerformancePlannerFallbackReason,
   SpeechPerformancePlannerInvalidOutputError,
   validateSpeechPerformancePlan,
@@ -48,7 +49,11 @@ export async function resolveSpeechPerformancePlan(args: {
     const fallbackReason =
       error instanceof SpeechPerformancePlannerInvalidOutputError
         ? 'planner_invalid'
-        : error instanceof Error && error.name === 'GenerationBudgetExceededError'
+        : error instanceof SpeechPerformancePlannerBudgetExceededError ||
+            (typeof error === 'object' &&
+              error !== null &&
+              'category' in error &&
+              error.category === 'budget_exceeded')
           ? 'planner_budget_exceeded'
           : 'planner_execution_failed';
     logPlannerFallback(args.logger, fallbackReason, error, args.debugLogPlan ?? false);

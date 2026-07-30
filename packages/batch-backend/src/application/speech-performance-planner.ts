@@ -16,6 +16,7 @@ import type {
 import {
   analyzeSpeechPlanCandidate,
   createIdentitySpeechPerformancePlan,
+  SpeechPerformancePlannerBudgetExceededError,
   SpeechPerformancePlannerInvalidOutputError,
   validateSpeechPerformancePlan,
 } from '@esl-pipeline/tts-core';
@@ -83,6 +84,10 @@ class SpeechPlannerProviderRuntimeError extends Error {
   }
 }
 
+type SpeechPlannerMappedError =
+  | SpeechPlannerProviderRuntimeError
+  | SpeechPerformancePlannerBudgetExceededError;
+
 export interface SpeechPlannerAttemptResult {
   promptPolicyVersion: SpeechPerformancePromptPolicyId;
   promptHash: string;
@@ -127,7 +132,7 @@ export async function executeSpeechPlannerAttempt(args: {
   const result = await runProviderFallbackLadder<
     typeof candidate,
     ProviderStructuredRawExecutionResult,
-    SpeechPlannerProviderRuntimeError
+    SpeechPlannerMappedError
   >({
     candidates: [candidate],
     runCandidate: async (selected) => {
@@ -587,15 +592,11 @@ function retryBackoffForProvider(
 function mapSpeechPlannerProviderError(
   candidate: { provider: SpeechPlannerProvider; model: string },
   error: unknown,
-): SpeechPlannerProviderRuntimeError {
+): SpeechPlannerMappedError {
   if (error instanceof SpeechPlannerProviderRuntimeError) return error;
+  if (error instanceof SpeechPerformancePlannerBudgetExceededError) return error;
   if (error instanceof GenerationBudgetExceededError) {
-    return new SpeechPlannerProviderRuntimeError({
-      category: 'budget_exceeded',
-      provider: candidate.provider,
-      model: candidate.model,
-      message: error.message,
-    });
+    return new SpeechPerformancePlannerBudgetExceededError(error.message, { cause: error });
   }
   const details = getProviderErrorDetails(error);
   const contractCodes = new Set([
