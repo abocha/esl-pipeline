@@ -91,10 +91,10 @@ function createPreviewSpeechPlan(
 
 function createSchemaV2RenderPlan(
   args: {
-    overallComponents?: Array<{
+    overallComponents?: {
       dimension: 'relationship' | 'style' | 'intonation' | 'tempo';
       direction: string;
-    }>;
+    }[];
     segment?: Partial<Extract<SpeechPerformancePlan, { schemaVersion: 2 }>['segments'][number]>;
   } = {},
 ) {
