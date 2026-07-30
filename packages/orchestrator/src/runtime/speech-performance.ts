@@ -108,6 +108,20 @@ function logPromptedPlan(
     if (segment.deliveryMode) cueCounts.deliveryMode += 1;
     if (segment.freeFormDirection) cueCounts.freeFormDirection += 1;
   }
+  const schemaMetrics =
+    resolved.plan.schemaVersion === 2
+      ? {
+          schemaVersion: 2,
+          resolvedPerformanceMode: resolved.plan.resolvedPerformanceMode,
+          overallDirectionComponentCount:
+            resolved.plan.performanceContext.overallDirection.components.length,
+          speakerEnvelopeCount: resolved.plan.performanceContext.speakerEnvelopes.length,
+          turnAdjustmentCount: resolved.plan.segments.filter((segment) => segment.turnAdjustment)
+            .length,
+          effectiveInstructionCount: analysis.metrics.instructionCount,
+          effectiveCueCount: analysis.metrics.cueCount,
+        }
+      : { cueCounts };
   logger?.log({
     level: 'info',
     stage: 'speech-plan',
@@ -121,7 +135,7 @@ function logPromptedPlan(
       segmentCount: resolved.plan.segments.length,
       qualityIssueCount: qualityIssues.length,
       qualityIssueCodes: qualityIssues.map((issue) => issue.code),
-      cueCounts,
+      ...schemaMetrics,
     },
   });
   if (debugLogPlan) {
