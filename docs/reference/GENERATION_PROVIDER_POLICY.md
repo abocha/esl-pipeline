@@ -5,7 +5,7 @@
 - Audience: founder-maintainer and implementing agents.
 - Read Time: 5 minutes.
 - Authority Level: canonical provider/model/quota policy.
-- Last Verified Against: 2026-07-29 repo state.
+- Last Verified Against: 2026-07-30 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly or after provider policy/availability changes.
 - Status: `reference`.
@@ -80,6 +80,21 @@ prompts only for a measured failure or concrete contradiction.
   Gemini 3.1 Flash-Lite and USD 0.30/2.50 for Gemini 3.5 Flash-Lite. Output pricing includes
   thinking tokens; every run records its versioned snapshot rather than assuming these values are
   current indefinitely.
+
+### Study-text speech planning
+
+- The production speech-planner selection remains disabled `google_ai_studio` plus
+  `gemini-3.1-flash-lite`. Exact `openai` plus `gpt-5.6-luna` is an opt-in contender and does not
+  alter the default by being allowlisted.
+- Speech planning selects exactly one provider and never crosses providers on retry or failure.
+  Google uses `GEMINI_API_KEY`; OpenAI uses `OPENAI_API_KEY`, strict structured output, medium
+  reasoning, low verbosity, and `store: false`.
+- Provider/model RPM, daily requests, daily tokens, and spend accounting remain separate. Each
+  typed-timeout retry reserves another physical request before execution; actual returned usage is
+  recorded once for the successful logical call.
+- Prompt policy `speech-performance-v3-contextual-continuity` produces schema-v2 dialogue or
+  monologue envelopes. Pronunciation is excluded. Historical v1/v2 evaluation results are not
+  reclassified as schema-v2 or Luna evidence.
 
 ### OpenRouter
 

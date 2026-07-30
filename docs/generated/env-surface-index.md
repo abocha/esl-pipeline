@@ -104,6 +104,7 @@
 | `ESL_TTS_SPEECH_PLANNER_ENABLED` | `.env.example` | speech_runtime | `docs/reference/env.md` |
 | `ESL_TTS_SPEECH_PLANNER_MAX_OUTPUT_TOKENS` | `.env.example` | speech_runtime | `docs/reference/env.md` |
 | `ESL_TTS_SPEECH_PLANNER_MODEL` | `.env.example` | speech_runtime | `docs/reference/env.md` |
+| `ESL_TTS_SPEECH_PLANNER_PROVIDER` | `.env.example` | speech_runtime | `docs/reference/env.md` |
 | `ESL_TTS_SPEECH_PLANNER_RPM_BUDGET` | `.env.example` | speech_runtime | `docs/reference/env.md` |
 | `ESL_TTS_VOICE_RANKER_DAILY_REQUEST_BUDGET` | `.env.example` | speech_runtime | `docs/reference/env.md` |
 | `ESL_TTS_VOICE_RANKER_DEBUG_LOG_PLAN` | `.env.example` | speech_runtime | `docs/reference/env.md` |
