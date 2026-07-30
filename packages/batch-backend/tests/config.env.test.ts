@@ -200,7 +200,9 @@ describe('config/env - speech planner provider selection', () => {
           NODE_ENV: 'test',
           ESL_TTS_SPEECH_PLANNER_PROVIDER: provider,
         },
-        async () => loadConfigFresh(),
+        async () => {
+          await loadConfigFresh();
+        },
       ),
     ).rejects.toThrow('ESL_TTS_SPEECH_PLANNER_PROVIDER');
   });
