@@ -517,7 +517,10 @@ describe('application/speech-performance-planner', () => {
           repository: { reserve, recordActual: vi.fn(), getUsage: vi.fn() },
         },
       }),
-    ).rejects.toMatchObject({ category: 'budget_exceeded' });
+    ).rejects.toMatchObject({
+      name: 'SpeechPerformancePlannerBudgetExceededError',
+      category: 'budget_exceeded',
+    });
     expect(executor).not.toHaveBeenCalled();
     expect(reserve).toHaveBeenCalledOnce();
   });

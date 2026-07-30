@@ -41,6 +41,15 @@ export class SpeechPerformancePlannerInvalidOutputError extends Error {
   }
 }
 
+export class SpeechPerformancePlannerBudgetExceededError extends Error {
+  readonly category = 'budget_exceeded' as const;
+
+  constructor(message: string, options: ErrorOptions = {}) {
+    super(message, options);
+    this.name = 'SpeechPerformancePlannerBudgetExceededError';
+  }
+}
+
 export function createPreparedStudyTextSynthesis(
   input: BuildStudyTextInput,
   options: BuildStudyTextOptions,
@@ -72,6 +81,11 @@ export function createPreparedStudyTextSynthesis(
     studyTextType: studyText.type,
     speakers: segmentSpeakers,
   });
+  if (performanceMode === 'dialogue' && segments.some((segment) => !segment.speaker)) {
+    throw new ConfigurationError(
+      'dialogue strategy requires an authored speaker for every study-text segment.',
+    );
+  }
   const performanceSpeakers = resolvePerformanceSpeakers({
     mode: performanceMode,
     ttsStrategy: options.ttsStrategy,
