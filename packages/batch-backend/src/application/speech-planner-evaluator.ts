@@ -254,6 +254,7 @@ export function evaluateSpeechPlannerAttemptRecord(args: {
     plan: evaluated.plan,
   };
   if (!evaluated.plan) return base;
+  const evaluatedPlan = evaluated.plan;
 
   const assignments = new Map(
     args.fixture.prepared.voicePlan?.assignments.map((assignment) => [
@@ -261,12 +262,13 @@ export function evaluateSpeechPlannerAttemptRecord(args: {
       assignment,
     ]) ?? [],
   );
-  const rendered = evaluated.plan.segments.map((segment) => {
+  const rendered = evaluatedPlan.segments.map((segment) => {
     const assignment = segment.speaker
       ? assignments.get(segment.speaker.toLocaleLowerCase())
       : undefined;
     const output = renderInworldSpeechSegment({
       model: args.fixture.prepared.selection.model as InworldTtsModel,
+      plan: evaluatedPlan,
       segment,
       capabilities: assignment?.capabilities,
       language: assignment?.language,
@@ -280,7 +282,7 @@ export function evaluateSpeechPlannerAttemptRecord(args: {
   });
   const analysis = analyzeValidatedSpeechPlan(
     args.fixture.prepared,
-    evaluated.plan,
+    evaluatedPlan,
     rendered.map((segment) => ({
       id: segment.id,
       text: segment.text,
@@ -583,6 +585,7 @@ function evaluateDeterministicControl(
       id: segment.id,
       ...renderInworldSpeechSegment({
         model: control.prepared.selection.model as InworldTtsModel,
+        plan,
         segment,
         capabilities: assignment?.capabilities,
         language: assignment?.language,

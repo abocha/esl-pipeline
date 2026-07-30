@@ -36,13 +36,16 @@ function createPreviewVoicePlan(
   speaker = 'Maya',
   voiceId = 'Ashley',
   language?: string,
+  sourceHash = hashStudyText(
+    JSON.stringify([{ id: 'segment-1', speaker: 'Maya', text: 'We need a clearer deadline.' }]),
+  ),
 ) {
   return {
     schemaVersion: 1 as const,
     mode: 'ranked' as const,
     provider: 'inworld' as const,
     model: 'inworld-tts-2' as const,
-    sourceHash: 'source-hash',
+    sourceHash,
     ranker: { provider: 'google_ai_studio', model: 'gemma-4-26b-a4b-it', generatedAt },
     assignments: [
       {
@@ -84,6 +87,69 @@ function createPreviewSpeechPlan(
       },
     ],
   };
+}
+
+function createSchemaV2RenderPlan(
+  args: {
+    overallComponents?: Array<{
+      dimension: 'relationship' | 'style' | 'intonation' | 'tempo';
+      direction: string;
+    }>;
+    segment?: Partial<Extract<SpeechPerformancePlan, { schemaVersion: 2 }>['segments'][number]>;
+  } = {},
+) {
+  const segment = {
+    id: 'segment-1',
+    speaker: 'Maya',
+    text: 'We need a clearer deadline.',
+    turnAdjustment: {
+      components: [{ dimension: 'intonation' as const, direction: 'land the deadline firmly' }],
+      reason: 'The authored correction hinges on the deadline.',
+      evidence: [
+        {
+          kind: 'authored_substring' as const,
+          segmentId: 'segment-1',
+          quote: 'deadline',
+        },
+      ],
+    },
+    ...args.segment,
+  };
+  const plan: Extract<SpeechPerformancePlan, { schemaVersion: 2 }> = {
+    schemaVersion: 2,
+    mode: 'prompted',
+    provider: 'inworld',
+    model: 'inworld-tts-2',
+    sourceHash: 'source-hash',
+    performanceContextHash: 'c'.repeat(64),
+    resolvedPerformanceMode: 'dialogue',
+    performanceContext: {
+      overallDirection: {
+        components: args.overallComponents ?? [
+          { dimension: 'relationship', direction: 'sound like colleagues solving a real problem' },
+        ],
+        basis: ['frontmatter:topic'],
+      },
+      speakerEnvelopes: [
+        {
+          speaker: 'Maya',
+          baselineDirection: {
+            components: [{ dimension: 'style', direction: 'warm practical and direct' }],
+            basis: ['speaker_profile:Maya:persona'],
+          },
+        },
+      ],
+    },
+    planner: {
+      provider: 'google_ai_studio',
+      model: 'gemini-3.1-flash-lite',
+      generatedAt: '2026-07-30T00:00:00.000Z',
+      promptPolicyVersion: 'speech-performance-v3-contextual-continuity',
+      promptHash: 'a'.repeat(64),
+    },
+    segments: [segment],
+  };
+  return { plan, segment: plan.segments[0]! };
 }
 
 describe('inworld provider adapter basics', () => {
@@ -935,23 +1001,22 @@ describe('inworld provider adapter basics', () => {
   });
 
   it('renders TTS-2 plan cues into prompt text and SDK controls', () => {
+    const plan = createPreviewSpeechPlan({
+      emotion: 'calm concern',
+      intonation: 'firm but collaborative',
+      pace: 'measured',
+      emphasis: ['clearer deadline'],
+      pauseBeforeMs: 150,
+      pauseAfterMs: 350,
+      nonVerbalsBefore: ['sigh'],
+      deliveryMode: 'BALANCED',
+      freeFormDirection: 'speak as if carefully breaking difficult news',
+    });
     expect(
       renderInworldSpeechSegment({
         model: 'inworld-tts-2',
-        segment: {
-          id: 'segment-1',
-          speaker: 'Maya',
-          text: 'We need a clearer deadline.',
-          emotion: 'calm concern',
-          intonation: 'firm but collaborative',
-          pace: 'measured',
-          emphasis: ['clearer deadline'],
-          pauseBeforeMs: 150,
-          pauseAfterMs: 350,
-          nonVerbalsBefore: ['sigh'],
-          deliveryMode: 'BALANCED',
-          freeFormDirection: 'speak as if carefully breaking difficult news',
-        },
+        plan,
+        segment: plan.segments[0]!,
         capabilities: {
           supportsMetadataInstructions: true,
           supportsNonVerbals: true,
@@ -969,16 +1034,16 @@ describe('inworld provider adapter basics', () => {
   });
 
   it('combines emotion and intonation into one TTS-2 instruction without free-form direction', () => {
+    const plan = createPreviewSpeechPlan({
+      emotion: 'grounded concern',
+      intonation: 'a gently falling pitch',
+      pace: 'measured',
+    });
     expect(
       renderInworldSpeechSegment({
         model: 'inworld-tts-2',
-        segment: {
-          id: 'segment-1',
-          text: 'We need a clearer deadline.',
-          emotion: 'grounded concern',
-          intonation: 'a gently falling pitch',
-          pace: 'measured',
-        },
+        plan,
+        segment: plan.segments[0]!,
       }),
     ).toEqual({
       text: '[speak with grounded concern and a gently falling pitch] We need a clearer deadline.',
@@ -995,13 +1060,11 @@ describe('inworld provider adapter basics', () => {
     ['measured', 0.95],
     ['brisk', 1.1],
   ] as const)('renders TTS-2 pace %s through only the numeric SDK control', (pace, speakingRate) => {
+    const plan = createPreviewSpeechPlan({ ...(pace ? { pace } : {}) });
     const rendered = renderInworldSpeechSegment({
       model: 'inworld-tts-2',
-      segment: {
-        id: 'segment-1',
-        text: 'Keep a steady tempo.',
-        ...(pace ? { pace } : {}),
-      },
+      plan,
+      segment: { ...plan.segments[0]!, text: 'Keep a steady tempo.' },
     });
 
     expect(rendered.text).toBe('Keep a steady tempo.');
@@ -1010,17 +1073,17 @@ describe('inworld provider adapter basics', () => {
   });
 
   it('keeps at most one leading instruction when capability input is conservative', () => {
+    const plan = createPreviewSpeechPlan({
+      emotion: 'calm concern',
+      emphasis: ['clearer deadline'],
+      nonVerbalsBefore: ['sigh'],
+      freeFormDirection: 'speak as if carefully breaking difficult news',
+    });
     expect(
       renderInworldSpeechSegment({
         model: 'inworld-tts-2',
-        segment: {
-          id: 'segment-1',
-          text: 'We need a clearer deadline.',
-          emotion: 'calm concern',
-          emphasis: ['clearer deadline'],
-          nonVerbalsBefore: ['sigh'],
-          freeFormDirection: 'speak as if carefully breaking difficult news',
-        },
+        plan,
+        segment: plan.segments[0]!,
         capabilities: {
           supportsMetadataInstructions: true,
           supportsNonVerbals: true,
@@ -1035,22 +1098,150 @@ describe('inworld provider adapter basics', () => {
     });
   });
 
+  it('renders scene, speaker, and evidenced turn context as one instruction', () => {
+    const { plan, segment } = createSchemaV2RenderPlan();
+
+    expect(renderInworldSpeechSegment({ model: 'inworld-tts-2', plan, segment })).toEqual({
+      text: '[sound like colleagues solving a real problem warm practical and direct land the deadline firmly] We need a clearer deadline.',
+      lexicalText: 'We need a clearer deadline.',
+      leadingInstructionTagCount: 1,
+    });
+  });
+
+  it('gives numeric pace sole ownership of tempo', () => {
+    const { plan, segment } = createSchemaV2RenderPlan({
+      overallComponents: [{ dimension: 'tempo', direction: 'keep a naturally brisk exchange' }],
+      segment: { pace: 'brisk' },
+    });
+
+    const rendered = renderInworldSpeechSegment({ model: 'inworld-tts-2', plan, segment });
+    expect(rendered.text).toBe(
+      '[warm practical and direct land the deadline firmly] We need a clearer deadline.',
+    );
+    expect(rendered.speakingRate).toBe(1.1);
+  });
+
+  it('omits default and zero controls from rendered text and SDK options', () => {
+    const { plan, segment } = createSchemaV2RenderPlan({
+      overallComponents: [],
+      segment: {
+        turnAdjustment: undefined,
+        pauseBeforeMs: 0,
+        pauseAfterMs: 0,
+        deliveryMode: 'BALANCED',
+      },
+    });
+
+    expect(renderInworldSpeechSegment({ model: 'inworld-tts-2', plan, segment })).toEqual({
+      text: '[warm practical and direct] We need a clearer deadline.',
+      lexicalText: 'We need a clearer deadline.',
+      leadingInstructionTagCount: 1,
+    });
+  });
+
+  it('renders pace with emphasis only when learner meaning evidence requires both controls', () => {
+    const createRendered = (learnerMeaningRequired: boolean) => {
+      const { plan, segment } = createSchemaV2RenderPlan({
+        overallComponents: [],
+        segment: {
+          turnAdjustment: undefined,
+          pace: 'brisk',
+          emphasis: ['deadline'],
+          controlEvidence: [
+            {
+              control: 'pace',
+              reason: 'The correction is deliberately brisk.',
+              evidence: [{ kind: 'authored_substring', segmentId: 'segment-1', quote: 'deadline' }],
+              learnerMeaningRequired: false,
+            },
+            {
+              control: 'emphasis',
+              reason: 'The deadline carries the contrast.',
+              evidence: [{ kind: 'authored_substring', segmentId: 'segment-1', quote: 'deadline' }],
+              learnerMeaningRequired,
+            },
+          ],
+        },
+      });
+      return renderInworldSpeechSegment({ model: 'inworld-tts-2', plan, segment });
+    };
+
+    expect(createRendered(false).lexicalText).toBe('We need a clearer deadline.');
+    expect(createRendered(true).lexicalText).toBe('We need a clearer DEADLINE.');
+  });
+
+  it('omits an unevidenced nonverbal and keeps positive pause placement', () => {
+    const { plan, segment } = createSchemaV2RenderPlan({
+      overallComponents: [],
+      segment: {
+        turnAdjustment: undefined,
+        pauseBeforeMs: 150,
+        pauseAfterMs: 350,
+        nonVerbalsBefore: ['sigh'],
+        controlEvidence: [
+          {
+            control: 'pause_before',
+            reason: 'The authored hesitation precedes the correction.',
+            evidence: [{ kind: 'authored_substring', segmentId: 'segment-1', quote: 'deadline' }],
+            learnerMeaningRequired: false,
+          },
+          {
+            control: 'pause_after',
+            reason: 'The authored deadline lands before the next reply.',
+            evidence: [{ kind: 'authored_substring', segmentId: 'segment-1', quote: 'deadline' }],
+            learnerMeaningRequired: false,
+          },
+        ],
+      },
+    });
+
+    const rendered = renderInworldSpeechSegment({ model: 'inworld-tts-2', plan, segment });
+    expect(rendered.text).toBe(
+      '[warm practical and direct] <break time="150ms" /> We need a clearer deadline. <break time="350ms" />',
+    );
+    expect(rendered.text).not.toContain('authored hesitation');
+    expect(rendered.text).not.toContain('frontmatter:topic');
+  });
+
+  it('renders one evidenced nonverbal without exposing its reason or evidence', () => {
+    const { plan, segment } = createSchemaV2RenderPlan({
+      overallComponents: [],
+      segment: {
+        turnAdjustment: undefined,
+        nonVerbalsBefore: ['sigh'],
+        controlEvidence: [
+          {
+            control: 'nonverbal',
+            reason: 'The authored hesitation is meaningful.',
+            evidence: [{ kind: 'authored_substring', segmentId: 'segment-1', quote: 'deadline' }],
+            learnerMeaningRequired: false,
+          },
+        ],
+      },
+    });
+
+    const rendered = renderInworldSpeechSegment({ model: 'inworld-tts-2', plan, segment });
+    expect(rendered.text).toBe('[warm practical and direct] [sigh] We need a clearer deadline.');
+    expect(rendered.text).not.toContain('authored hesitation');
+    expect(rendered.leadingInstructionTagCount).toBe(1);
+  });
+
   it.each([
     'inworld-tts-1.5-max',
     'inworld-tts-1.5-mini',
   ] as const)('keeps %s rendering free from TTS-2 steering syntax without changing natural pace', (model) => {
+    const plan = createPreviewSpeechPlan({
+      emotion: 'calm concern',
+      pace: 'natural',
+      nonVerbalsBefore: ['sigh'],
+      pauseAfterMs: 350,
+      deliveryMode: 'CREATIVE',
+    });
     expect(
       renderInworldSpeechSegment({
         model,
-        segment: {
-          id: 'segment-1',
-          text: 'We need a clearer deadline.',
-          emotion: 'calm concern',
-          pace: 'natural',
-          nonVerbalsBefore: ['sigh'],
-          pauseAfterMs: 350,
-          deliveryMode: 'CREATIVE',
-        },
+        plan,
+        segment: plan.segments[0]!,
       }),
     ).toEqual({
       text: 'We need a clearer deadline.',
@@ -1116,7 +1307,17 @@ describe('inworld provider adapter basics', () => {
           voiceMapPath: 'voices.yml',
           outPath: '/path-that-must-not-be-created',
           force: true,
-          voicePlan: createPreviewVoicePlan('2026-06-02T00:00:00.000Z'),
+          voicePlan: createPreviewVoicePlan(
+            '2026-06-02T00:00:00.000Z',
+            'Maya',
+            'Ashley',
+            undefined,
+            hashStudyText(
+              JSON.stringify([
+                { id: 'segment-1', speaker: 'Maya', text: '[whisper] Do not share the answer.' },
+              ]),
+            ),
+          ),
         },
         { synthesizeChunk },
       ),
@@ -1160,7 +1361,13 @@ describe('inworld provider adapter basics', () => {
           outPath: '/path-that-must-not-be-created',
           force: true,
           speechPlan,
-          voicePlan: createPreviewVoicePlan('2026-06-02T00:00:00.000Z'),
+          voicePlan: createPreviewVoicePlan(
+            '2026-06-02T00:00:00.000Z',
+            'Maya',
+            'Ashley',
+            undefined,
+            hashStudyText(JSON.stringify(sourceSegments)),
+          ),
         },
         { synthesizeChunk },
       ),
