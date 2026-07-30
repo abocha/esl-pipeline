@@ -527,6 +527,7 @@ function createConfig(): BatchBackendConfig {
     },
     speechPlanner: {
       enabled: false,
+      provider: 'google_ai_studio',
       model: 'gemini-3.1-flash-lite',
       maxOutputTokens: 2400,
       rpmBudget: 4,

@@ -1,3 +1,9 @@
+import {
+  classifyProviderRuntimeFailure,
+  type ProviderRuntimeCategory,
+  type ProviderRuntimeClassificationRules,
+  runProviderFallbackLadder,
+} from '@esl-pipeline/provider-runtime';
 import type {
   PreparedStudyTextSynthesis,
   SpeechPerformancePlan,
@@ -14,27 +20,68 @@ import {
   validateSpeechPerformancePlan,
 } from '@esl-pipeline/tts-core';
 
-import type { BatchBackendConfig } from '../config/env.js';
+import type { BatchBackendConfig, SpeechPlannerProvider } from '../config/env.js';
 import {
   enforceGenerationBudgetBeforeAttempt,
+  GenerationBudgetExceededError,
   type GenerationBudgetGuardDependencies,
+  getConfiguredGenerationAllowedModels,
+  getConfiguredGenerationProviderLimits,
+  getConfiguredSpeechPlannerLimits,
   recordGenerationBudgetUsageAfterSuccess,
   resolveGenerationBudgetRepository,
 } from './generation-budget-guard.js';
 import {
   executeGoogleStructuredGenerationRaw,
+  executeOpenAiStructuredGenerationRaw,
+  ProviderExecutionError,
+  type ProviderStructuredExecutionRequest,
   type ProviderStructuredRawExecutionResult,
   parseStructuredJsonText,
 } from './generation-providers.js';
 import { buildSpeechPlannerRequest } from './speech-performance-prompt.js';
 
-type GoogleStructuredExecutor = typeof executeGoogleStructuredGenerationRaw;
+type SpeechPlannerExecutor = (args: {
+  config: BatchBackendConfig['generation'];
+  request: ProviderStructuredExecutionRequest;
+}) => Promise<ProviderStructuredRawExecutionResult>;
+
+const DEFAULT_EXECUTORS: Record<SpeechPlannerProvider, SpeechPlannerExecutor> = {
+  google_ai_studio: executeGoogleStructuredGenerationRaw,
+  openai: executeOpenAiStructuredGenerationRaw,
+};
+
+const SPEECH_PLANNER_RUNTIME_CLASSIFICATION_RULES: ProviderRuntimeClassificationRules = {
+  byProvider: {
+    openai: { timeoutStatusMin: 500, timeoutCodes: ['server_error'] },
+    google_ai_studio: { timeoutStatusMin: 500 },
+  },
+};
 
 interface SpeechPlannerOutput {
   segments: Array<Record<string, unknown>>;
 }
 
-export type SpeechPlannerProvider = 'google_ai_studio' | 'openai';
+export type { SpeechPlannerProvider } from '../config/env.js';
+
+class SpeechPlannerProviderRuntimeError extends Error {
+  readonly category: ProviderRuntimeCategory | 'budget_exceeded';
+  readonly provider: SpeechPlannerProvider;
+  readonly model: string;
+
+  constructor(args: {
+    category: ProviderRuntimeCategory | 'budget_exceeded';
+    provider: SpeechPlannerProvider;
+    model: string;
+    message: string;
+  }) {
+    super(args.message);
+    this.name = 'SpeechPlannerProviderRuntimeError';
+    this.category = args.category;
+    this.provider = args.provider;
+    this.model = args.model;
+  }
+}
 
 export interface SpeechPlannerAttemptResult {
   promptPolicyVersion: SpeechPerformancePromptPolicyId;
@@ -57,45 +104,69 @@ export async function executeSpeechPlannerAttempt(args: {
   config: BatchBackendConfig;
   prepared: PreparedStudyTextSynthesis;
   promptPolicyVersion: SpeechPerformancePromptPolicyId;
-  executor?: GoogleStructuredExecutor;
+  executors?: Partial<Record<SpeechPlannerProvider, SpeechPlannerExecutor>>;
+  /** @deprecated Use provider-indexed executors. */
+  executor?: SpeechPlannerExecutor;
   budget?: GenerationBudgetGuardDependencies;
   now?: () => Date;
+  sleep?: (ms: number) => Promise<void>;
   repository?: ReturnType<typeof resolveGenerationBudgetRepository>;
 }): Promise<SpeechPlannerAttemptResult> {
-  const executor = args.executor ?? executeGoogleStructuredGenerationRaw;
+  const provider = args.config.speechPlanner.provider;
+  const executors = { ...DEFAULT_EXECUTORS, ...args.executors };
+  if (args.executor) executors[provider] = args.executor;
+  const executor = executors[provider];
   const now = args.now ?? (() => new Date());
+  const sleep = args.sleep ?? ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)));
   const repository =
     args.repository ??
     resolveGenerationBudgetRepository({ config: args.config, overrides: args.budget });
-  const request = buildSpeechPlannerRequest(
-    args.prepared,
-    args.promptPolicyVersion,
-    args.config.speechPlanner.model,
-  );
+  const request = buildSpeechPlannerRequest(args.prepared, args.promptPolicyVersion, { provider });
   const startedAt = now();
-  await enforceGenerationBudgetBeforeAttempt({
-    config: args.config,
-    provider: 'google_ai_studio',
-    model: args.config.speechPlanner.model,
-    prompt: request.prompt,
-    maxOutputTokens: args.config.speechPlanner.maxOutputTokens,
-    now: startedAt,
-    repository,
-    limits: {
-      rpmBudget: args.config.speechPlanner.rpmBudget,
-      dailyRequestBudget: args.config.speechPlanner.dailyRequestBudget,
+  const candidate = { provider, model: args.config.speechPlanner.model } as const;
+  const result = await runProviderFallbackLadder<
+    typeof candidate,
+    ProviderStructuredRawExecutionResult,
+    SpeechPlannerProviderRuntimeError
+  >({
+    candidates: [candidate],
+    runCandidate: async (selected) => {
+      await enforceGenerationBudgetBeforeAttempt({
+        config: args.config,
+        provider: selected.provider,
+        model: selected.model,
+        prompt: request.prompt,
+        maxOutputTokens: args.config.speechPlanner.maxOutputTokens,
+        now: now(),
+        repository,
+        limits: {
+          ...getConfiguredGenerationProviderLimits(args.config.generation, selected.provider),
+          ...getConfiguredSpeechPlannerLimits(args.config),
+        },
+      });
+      const executed = await executor({
+        config: args.config.generation,
+        request: {
+          model: selected.model,
+          prompt: request.prompt,
+          ...(request.envelope ? { envelope: request.envelope } : {}),
+          maxOutputTokens: args.config.speechPlanner.maxOutputTokens,
+          responseSchema: request.responseSchema,
+          ...(selected.provider === 'openai' ? { store: false } : {}),
+        },
+      });
+      await recordUsage(args.config, repository, now, selected.provider, executed);
+      return executed;
     },
+    mapError: (selected, error) => mapSpeechPlannerProviderError(selected, error),
+    isTimeoutError: (error) => error.category === 'provider_timeout',
+    isFailFastError: (error) =>
+      error.category === 'provider_contract_error' || error.category === 'budget_exceeded',
+    getRetryMax: (selected) => retryMaxForProvider(args.config.generation, selected.provider),
+    getRetryBackoffMs: (selected) =>
+      retryBackoffForProvider(args.config.generation, selected.provider),
+    sleep,
   });
-  const result = await executor({
-    config: args.config.generation,
-    request: {
-      model: args.config.speechPlanner.model,
-      prompt: request.prompt,
-      maxOutputTokens: args.config.speechPlanner.maxOutputTokens,
-      responseSchema: request.responseSchema,
-    },
-  });
-  await recordUsage(args.config, repository, now, result);
   const finishedAt = now();
   return evaluateSpeechPlannerRawOutput({
     prepared: args.prepared,
@@ -109,7 +180,19 @@ export async function executeSpeechPlannerAttempt(args: {
     returnedModel: result.model,
     providerRequestId: result.providerRequestId,
     finishReason: result.finishReason,
+    plannerProvider: provider,
   });
+}
+
+export function returnedModelMatchesRequestedModel(
+  requestedModel: string,
+  returnedModel: string | undefined,
+): boolean {
+  return (
+    returnedModel === undefined ||
+    returnedModel === requestedModel ||
+    returnedModel.startsWith(`${requestedModel}-`)
+  );
 }
 
 export function evaluateSpeechPlannerRawOutput(args: {
@@ -126,18 +209,26 @@ export function evaluateSpeechPlannerRawOutput(args: {
   finishReason?: string;
   plannerProvider?: SpeechPlannerProvider;
 }): SpeechPlannerAttemptResult {
-  const rawParse = parseStructuredJsonText(args.rawText);
-  const metadata = {
+  const baseMetadata = {
     promptPolicyVersion: args.promptPolicyVersion,
     promptHash: args.promptHash,
     rawText: args.rawText,
-    rawParse,
     usage: args.usage,
     latencyMs: args.latencyMs,
     returnedModel: args.returnedModel,
     providerRequestId: args.providerRequestId,
     finishReason: args.finishReason,
   };
+  if (!returnedModelMatchesRequestedModel(args.plannerModel, args.returnedModel)) {
+    return {
+      ...baseMetadata,
+      validation: { status: 'invalid', reason: 'returned_model_mismatch' },
+      plan: undefined,
+      fallback: { reason: 'planner_invalid' },
+    };
+  }
+  const rawParse = parseStructuredJsonText(args.rawText);
+  const metadata = { ...baseMetadata, rawParse };
   if (rawParse.status === 'malformed') {
     return {
       ...metadata,
@@ -169,6 +260,7 @@ export function evaluateSpeechPlannerRawOutput(args: {
       mergePlannerOutput(args.prepared, candidate, {
         provider: args.plannerProvider ?? 'google_ai_studio',
         model: args.plannerModel,
+        ...(args.returnedModel ? { returnedModel: args.returnedModel } : {}),
         generatedAt: args.generatedAt,
         promptPolicyVersion: args.promptPolicyVersion,
         promptHash: args.promptHash,
@@ -199,16 +291,26 @@ export function evaluateSpeechPlannerRawOutput(args: {
 export function createBackendSpeechPerformancePlanner(
   config: BatchBackendConfig,
   overrides: {
-    executor?: GoogleStructuredExecutor;
+    executors?: Partial<Record<SpeechPlannerProvider, SpeechPlannerExecutor>>;
+    /** @deprecated Use provider-indexed executors. */
+    executor?: SpeechPlannerExecutor;
     budget?: GenerationBudgetGuardDependencies;
     now?: () => Date;
+    sleep?: (ms: number) => Promise<void>;
   } = {},
 ): SpeechPerformancePlannerBinding {
   if (!config.speechPlanner?.enabled) return { unavailableReason: 'planner_disabled' };
-  if (!config.generation.providers.googleAiStudio.apiKey) {
+  const provider = config.speechPlanner.provider;
+  if (
+    !getConfiguredGenerationAllowedModels(config.generation, provider).includes(
+      config.speechPlanner.model,
+    )
+  ) {
+    return { unavailableReason: 'planner_unavailable' };
+  }
+  if (!credentialForProvider(config.generation, provider)) {
     return { unavailableReason: 'planner_missing_credentials' };
   }
-  const executor = overrides.executor ?? executeGoogleStructuredGenerationRaw;
   const now = overrides.now ?? (() => new Date());
   const repository = resolveGenerationBudgetRepository({ config, overrides: overrides.budget });
 
@@ -218,9 +320,11 @@ export function createBackendSpeechPerformancePlanner(
         const attempt = await executeSpeechPlannerAttempt({
           config,
           prepared,
-          promptPolicyVersion: 'speech-performance-v2-inworld-tts2',
-          executor,
+          promptPolicyVersion: 'speech-performance-v3-contextual-continuity',
+          executors: overrides.executors,
+          executor: overrides.executor,
           now,
+          sleep: overrides.sleep,
           repository,
         });
         if (attempt.plan) return attempt.plan;
@@ -434,14 +538,107 @@ async function recordUsage(
   config: BatchBackendConfig,
   repository: ReturnType<typeof resolveGenerationBudgetRepository>,
   now: () => Date,
+  provider: SpeechPlannerProvider,
   result: ProviderStructuredRawExecutionResult,
 ): Promise<void> {
   await recordGenerationBudgetUsageAfterSuccess({
     config,
-    provider: 'google_ai_studio',
+    provider,
     model: config.speechPlanner.model,
     usageTotalTokens: result.usage?.totalTokens,
     now: now(),
     repository,
   });
+}
+
+function credentialForProvider(
+  config: BatchBackendConfig['generation'],
+  provider: SpeechPlannerProvider,
+): string | undefined {
+  return provider === 'openai'
+    ? config.providers.openai.apiKey
+    : config.providers.googleAiStudio.apiKey;
+}
+
+function retryMaxForProvider(
+  config: BatchBackendConfig['generation'],
+  provider: SpeechPlannerProvider,
+): number {
+  return Math.max(
+    0,
+    provider === 'openai'
+      ? config.providers.openai.retryMax
+      : config.providers.googleAiStudio.retryMax,
+  );
+}
+
+function retryBackoffForProvider(
+  config: BatchBackendConfig['generation'],
+  provider: SpeechPlannerProvider,
+): number {
+  return Math.max(
+    0,
+    provider === 'openai'
+      ? config.providers.openai.retryBackoffMs
+      : config.providers.googleAiStudio.retryBackoffMs,
+  );
+}
+
+function mapSpeechPlannerProviderError(
+  candidate: { provider: SpeechPlannerProvider; model: string },
+  error: unknown,
+): SpeechPlannerProviderRuntimeError {
+  if (error instanceof SpeechPlannerProviderRuntimeError) return error;
+  if (error instanceof GenerationBudgetExceededError) {
+    return new SpeechPlannerProviderRuntimeError({
+      category: 'budget_exceeded',
+      provider: candidate.provider,
+      model: candidate.model,
+      message: error.message,
+    });
+  }
+  const details = getProviderErrorDetails(error);
+  const contractCodes = new Set([
+    'malformed_payload',
+    'malformed_structured_output',
+    'missing_api_key',
+  ]);
+  return new SpeechPlannerProviderRuntimeError({
+    category: contractCodes.has(details.code ?? '')
+      ? 'provider_contract_error'
+      : classifyProviderRuntimeFailure({
+          provider: candidate.provider,
+          ...details,
+          rules: SPEECH_PLANNER_RUNTIME_CLASSIFICATION_RULES,
+        }),
+    provider: candidate.provider,
+    model: candidate.model,
+    message: details.message,
+  });
+}
+
+function getProviderErrorDetails(error: unknown): {
+  status?: number;
+  code?: string;
+  message: string;
+  name?: string;
+} {
+  if (error instanceof ProviderExecutionError) {
+    return {
+      status: error.status,
+      code: error.code,
+      message: error.message,
+      name: error.name,
+    };
+  }
+  if (error instanceof Error) {
+    const cast = error as Error & { status?: number; code?: unknown };
+    return {
+      status: cast.status,
+      code: typeof cast.code === 'string' ? cast.code : undefined,
+      message: error.message,
+      name: error.name,
+    };
+  }
+  return { message: String(error) };
 }

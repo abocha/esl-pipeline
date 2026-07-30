@@ -225,6 +225,7 @@ export interface BatchBackendConfig {
   };
   speechPlanner: {
     enabled: boolean;
+    provider: SpeechPlannerProvider;
     model: string;
     maxOutputTokens: number;
     rpmBudget: number;
@@ -263,6 +264,8 @@ export interface BatchBackendConfig {
     extendedApiEnabled: boolean;
   };
 }
+
+export type SpeechPlannerProvider = 'google_ai_studio' | 'openai';
 
 function normalizeSameSite(value: string): 'lax' | 'strict' | 'none' {
   const normalized = value.trim().toLowerCase();
@@ -768,6 +771,16 @@ export function loadConfig(): BatchBackendConfig {
 
   const extendedApiEnabled = readBool('BATCH_BACKEND_ENABLE_EXTENDED_API', true);
   const speechPlannerEnabled = readBool('ESL_TTS_SPEECH_PLANNER_ENABLED', false);
+  const speechPlannerProviderRaw = readString(
+    'ESL_TTS_SPEECH_PLANNER_PROVIDER',
+    'google_ai_studio',
+  )!;
+  if (speechPlannerProviderRaw !== 'google_ai_studio' && speechPlannerProviderRaw !== 'openai') {
+    throw new Error(
+      'ESL_TTS_SPEECH_PLANNER_PROVIDER must be either "google_ai_studio" or "openai"',
+    );
+  }
+  const speechPlannerProvider: SpeechPlannerProvider = speechPlannerProviderRaw;
   const speechPlannerModel = readString('ESL_TTS_SPEECH_PLANNER_MODEL', 'gemini-3.1-flash-lite')!;
   const speechPlannerMaxOutputTokens = readInt('ESL_TTS_SPEECH_PLANNER_MAX_OUTPUT_TOKENS', 2400);
   const speechPlannerRpmBudget = readInt('ESL_TTS_SPEECH_PLANNER_RPM_BUDGET', 4);
@@ -996,6 +1009,7 @@ export function loadConfig(): BatchBackendConfig {
     },
     speechPlanner: {
       enabled: speechPlannerEnabled,
+      provider: speechPlannerProvider,
       model: speechPlannerModel,
       maxOutputTokens: speechPlannerMaxOutputTokens,
       rpmBudget: speechPlannerRpmBudget,
