@@ -31,6 +31,7 @@ export interface ProviderStructuredExecutionRequest {
   envelope?: GenerationRequestEnvelopeV1;
   responseSchema: StructuredOutputSchema;
   maxOutputTokens?: number;
+  store?: boolean;
 }
 
 function resolveProviderPrompt(request: {
@@ -530,6 +531,27 @@ export async function executeOpenAiStructuredGeneration(args: {
   config: BatchBackendConfig['generation'];
   request: ProviderStructuredExecutionRequest;
 }): Promise<ProviderStructuredExecutionResult> {
+  const raw = await executeOpenAiStructuredGenerationRaw(args);
+  const parsed = parseStructuredJsonText(raw.rawText);
+  if (parsed.status === 'malformed') {
+    throw new ProviderExecutionError({
+      provider: 'openai',
+      message:
+        parsed.reason === 'empty'
+          ? 'Structured output text was empty'
+          : 'Structured output text did not contain valid JSON',
+      status: 502,
+      code: 'malformed_structured_output',
+      rawText: raw.rawText,
+    });
+  }
+  return { ...raw, output: parsed.output };
+}
+
+export async function executeOpenAiStructuredGenerationRaw(args: {
+  config: BatchBackendConfig['generation'];
+  request: ProviderStructuredExecutionRequest;
+}): Promise<ProviderStructuredRawExecutionResult> {
   const apiKey = args.config.providers.openai.apiKey;
   if (!apiKey) {
     throw new ProviderExecutionError({
@@ -591,24 +613,10 @@ export async function executeOpenAiStructuredGeneration(args: {
     });
   }
 
-  let output: unknown;
-  try {
-    output = extractJsonValue(parsed.text);
-  } catch (error) {
-    throw new ProviderExecutionError({
-      provider: 'openai',
-      message:
-        error instanceof Error ? error.message : 'OpenAI structured response JSON parsing failed',
-      status: 502,
-      code: 'malformed_structured_output',
-      rawText: parsed.text,
-    });
-  }
-
+  const { text, ...metadata } = parsed;
   return {
-    output,
-    rawText: parsed.text,
-    ...parsed,
+    rawText: text,
+    ...metadata,
   };
 }
 

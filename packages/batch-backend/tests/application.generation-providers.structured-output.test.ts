@@ -5,6 +5,7 @@ import {
   executeGoogleStructuredGenerationRaw,
   executeOpenAiGeneration,
   executeOpenAiStructuredGeneration,
+  executeOpenAiStructuredGenerationRaw,
   executeOpenRouterStructuredGeneration,
   ProviderExecutionError,
   parseStructuredJsonText,
@@ -225,6 +226,78 @@ describe('application/generation-providers structured output', () => {
       },
       strict: true,
     });
+  });
+
+  it('sends a non-stored Luna planner request and returns raw metadata without candidate parsing', async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValue(
+      createJsonResponse({
+        id: 'resp-luna-planner-1',
+        model: 'gpt-5.6-luna-2026-07-15',
+        status: 'completed',
+        output: [{ content: [{ text: 'not json' }], finish_reason: 'stop' }],
+        usage: {
+          input_tokens: 100,
+          input_tokens_details: { cached_tokens: 7 },
+          output_tokens: 25,
+          output_tokens_details: { reasoning_tokens: 5 },
+          total_tokens: 125,
+        },
+      }),
+    );
+    const envelope = createGenerationRequestEnvelope({
+      workload: 'speech_performance_plan',
+      instructions: 'Plan the performance.',
+      sources: [{ id: 'study-text', label: 'STUDY_TEXT', content: 'A: Hello.' }],
+    });
+
+    const result = await executeOpenAiStructuredGenerationRaw({
+      config: createGenerationConfig(),
+      request: {
+        model: 'gpt-5.6-luna',
+        envelope,
+        responseSchema: {
+          name: 'tts_speech_performance_plan_v2',
+          schema: { type: 'object', properties: {}, required: [], additionalProperties: false },
+          strict: true,
+        },
+        maxOutputTokens: 2400,
+        store: false,
+      },
+    });
+
+    expect(result).toEqual({
+      rawText: 'not json',
+      model: 'gpt-5.6-luna-2026-07-15',
+      providerRequestId: 'resp-luna-planner-1',
+      finishReason: 'stop',
+      usage: {
+        inputTokens: 100,
+        cachedTokens: 7,
+        outputTokens: 25,
+        reasoningTokens: 5,
+        totalTokens: 125,
+      },
+    });
+    const [, init] = fetchMock.mock.calls[0] ?? [];
+    const body = JSON.parse(String(init?.body));
+    expect(body).toMatchObject({
+      model: 'gpt-5.6-luna',
+      stream: false,
+      reasoning: { effort: 'medium' },
+      text: {
+        verbosity: 'low',
+        format: {
+          type: 'json_schema',
+          name: 'tts_speech_performance_plan_v2',
+          strict: true,
+        },
+      },
+      max_output_tokens: 2400,
+      store: false,
+    });
+    expect(body).not.toHaveProperty('tools');
+    expect(body).not.toHaveProperty('previous_response_id');
   });
 
   it('sends a Gemini 3.5 compatible structured-output request and preserves returned model usage', async () => {

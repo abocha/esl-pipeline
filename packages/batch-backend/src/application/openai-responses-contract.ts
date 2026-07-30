@@ -15,6 +15,7 @@ export interface OpenAiResponsesRequestBodyArgs {
   envelope?: GenerationRequestEnvelopeV1;
   responseSchema?: OpenAiResponsesSchema;
   maxOutputTokens?: number;
+  store?: boolean;
 }
 
 export interface ParsedOpenAiResponsesPayload {
@@ -56,6 +57,7 @@ export function buildOpenAiResponsesRequestBody(
     ...(typeof args.maxOutputTokens === 'number'
       ? { max_output_tokens: args.maxOutputTokens }
       : {}),
+    ...(typeof args.store === 'boolean' ? { store: args.store } : {}),
   };
 }
 

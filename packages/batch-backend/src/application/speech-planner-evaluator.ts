@@ -22,7 +22,10 @@ import {
   renderInworldSpeechSegment,
 } from '@esl-pipeline/tts-provider-inworld';
 
-import { evaluateSpeechPlannerRawOutput } from './speech-performance-planner.js';
+import {
+  evaluateSpeechPlannerRawOutput,
+  returnedModelMatchesRequestedModel,
+} from './speech-performance-planner.js';
 import { buildSpeechPlannerRequest } from './speech-performance-prompt.js';
 import type {
   SpeechPlannerEvalControl,
@@ -521,14 +524,6 @@ export function finishSpeechPlannerEvalRunActivity(args: {
 
 function stableHash(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex');
-}
-
-function returnedModelMatchesRequest(record: SpeechPlannerEvalAttemptRecord): boolean {
-  return (
-    record.returnedModel === undefined ||
-    record.returnedModel === record.requestedModel ||
-    record.returnedModel.startsWith(`${record.requestedModel}-`)
-  );
 }
 
 function readAttempts(path: string): SpeechPlannerEvalAttemptRecord[] {
@@ -1145,12 +1140,15 @@ export async function runSpeechPlannerEvaluation(args: {
       startedAt: result.startedAt,
       endedAt: result.endedAt,
     });
-    if (variant.compatibilitySmoke && !record.plan) {
-      incompatibleModel = variant.model;
-      record.normalizedErrorCategory = 'compatibility_invalid_output';
-    } else if (variant.compatibilitySmoke && !returnedModelMatchesRequest(record)) {
+    if (
+      variant.compatibilitySmoke &&
+      !returnedModelMatchesRequestedModel(record.requestedModel, record.returnedModel)
+    ) {
       incompatibleModel = variant.model;
       record.normalizedErrorCategory = 'compatibility_returned_model_mismatch';
+    } else if (variant.compatibilitySmoke && !record.plan) {
+      incompatibleModel = variant.model;
+      record.normalizedErrorCategory = 'compatibility_invalid_output';
     }
     records.push(appendRecord(args.runDirectory, record));
   }

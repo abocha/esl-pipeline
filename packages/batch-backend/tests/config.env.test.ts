@@ -75,6 +75,11 @@ describe('config/env - core defaults', () => {
         expect(cfg.speechPlanner.rpmBudget).toBe(4);
         expect(cfg.speechPlanner.dailyRequestBudget).toBe(120);
         expect(cfg.speechPlanner.debugLogPlan).toBe(false);
+        expect(cfg.speechPlanner).toMatchObject({
+          enabled: false,
+          provider: 'google_ai_studio',
+          model: 'gemini-3.1-flash-lite',
+        });
       },
     );
   });
@@ -159,6 +164,45 @@ describe('config/env - speech planner debug logging', () => {
         expect(cfg.speechPlanner.debugLogPlan).toBe(true);
       },
     );
+  });
+});
+
+describe('config/env - speech planner provider selection', () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it('accepts explicit OpenAI Luna without changing the built-in default', async () => {
+    await withEnv(
+      {
+        NODE_ENV: 'test',
+        ESL_TTS_SPEECH_PLANNER_PROVIDER: 'openai',
+        ESL_TTS_SPEECH_PLANNER_MODEL: 'gpt-5.6-luna',
+      },
+      async () => {
+        expect((await loadConfigFresh()).speechPlanner).toMatchObject({
+          enabled: false,
+          provider: 'openai',
+          model: 'gpt-5.6-luna',
+        });
+      },
+    );
+  });
+
+  it.each([
+    'google',
+    'openrouter',
+    'OPENAI',
+  ])('rejects invalid speech planner provider %s', async (provider) => {
+    await expect(
+      withEnv(
+        {
+          NODE_ENV: 'test',
+          ESL_TTS_SPEECH_PLANNER_PROVIDER: provider,
+        },
+        async () => loadConfigFresh(),
+      ),
+    ).rejects.toThrow('ESL_TTS_SPEECH_PLANNER_PROVIDER');
   });
 });
 
