@@ -262,7 +262,10 @@ function normalizeInworldSpeakerAssignment(
 async function resolveAssignmentsForStudyText(
   input: BuildStudyTextInput,
   opts: BuildStudyTextOptions,
-  dependencies: { clientProvider?: InworldClientProvider } = {},
+  dependencies: {
+    clientProvider?: InworldClientProvider;
+    model?: InworldTtsModel;
+  } = {},
 ): Promise<{
   frontmatter: Frontmatter;
   segments: StudyTextSegment[];
@@ -278,7 +281,7 @@ async function resolveAssignmentsForStudyText(
     .map((segment) => cleanSpeechText(segment.text))
     .filter((segment) => segment.length > 0);
   const normalizedText = sanitizedSegments.join('\n');
-  const model = resolveInworldTtsModel(opts.ttsModel);
+  const model = dependencies.model ?? resolveInworldTtsModel(opts.ttsModel);
   const assignments = opts.voicePlan
     ? opts.voicePlan.assignments.map((assignment) =>
         normalizeInworldSpeakerAssignment(assignment, model),
@@ -359,6 +362,12 @@ export async function buildStudyTextMp3Inworld(
   } = {},
 ): Promise<BuildStudyTextResult> {
   throwIfTtsCancelled(opts);
+  const model = resolveInworldTtsModel(opts.ttsModel);
+  const basePreparedSpeechPlan = createPreparedStudyTextSynthesis(input, {
+    ...opts,
+    ttsProvider: 'inworld',
+    ttsModel: model,
+  });
   const clientProvider =
     dependencies.clientProvider ??
     createInworldClientProvider({
@@ -366,8 +375,8 @@ export async function buildStudyTextMp3Inworld(
       timeoutMs: dependencies.timeoutMs,
       sdkFactory: dependencies.sdkFactory,
     });
-  const plan = await resolveAssignmentsForStudyText(input, opts, { clientProvider });
-  const { frontmatter, segments, normalizedText, model, assignments, voiceSummaries } = plan;
+  const plan = await resolveAssignmentsForStudyText(input, opts, { clientProvider, model });
+  const { frontmatter, segments, normalizedText, assignments, voiceSummaries } = plan;
   const sampleRateHertz = resolveInworldSampleRateHertz();
   const voiceAssignments = Object.fromEntries(
     assignments.map((assignment) => [cleanSpeakerName(assignment.speaker), assignment.voiceId]),
@@ -378,11 +387,6 @@ export async function buildStudyTextMp3Inworld(
   const gapDurations = resolveInworldAssemblyGapDurations(segments);
   const rendererPolicyVersion =
     dependencies.rendererPolicyVersion ?? INWORLD_RENDERER_POLICY_VERSION;
-  const basePreparedSpeechPlan = createPreparedStudyTextSynthesis(input, {
-    ...opts,
-    ttsProvider: 'inworld',
-    ttsModel: model,
-  });
   const executionVoicePlan =
     opts.voicePlan ?? createResolvedVoicePlan(basePreparedSpeechPlan, assignments);
   const preparedSpeechPlan = {
