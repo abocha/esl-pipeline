@@ -119,6 +119,8 @@ export {
   assertSpeechPlanSafeForSynthesis,
   normalizeSpeechCueText,
 } from './speech-plan-analysis.js';
+export type { EffectiveSpeechDirection } from './speech-plan-direction.js';
+export { resolveEffectiveSpeechDirection } from './speech-plan-direction.js';
 export type {
   BuildPronunciationShadowSentenceInput,
   BuildPronunciationShadowSentenceOptions,

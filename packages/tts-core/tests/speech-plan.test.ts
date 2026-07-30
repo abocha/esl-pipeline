@@ -12,9 +12,11 @@ import {
   getTtsModelCapabilities,
   normalizeSpeechCueText,
   type PreparedStudyTextSynthesis,
+  resolveEffectiveSpeechDirection,
   resolveStudyTextPerformanceMode,
   resolveVoicePlanForExecution,
   type SpeechPerformancePlan,
+  type SpeechPerformancePlanV2,
   TtsSynthesisCancelledError,
   throwIfTtsCancelled,
   type VoicePlan,
@@ -63,6 +65,85 @@ function createPrepared(): PreparedStudyTextSynthesis {
     ],
     voices: [],
     voiceAssignments: { Maya: 'Ashley', Leo: 'Dennis' },
+  };
+}
+
+function createPreparedWithPerformanceContext(): PreparedStudyTextSynthesis {
+  const context = parseMarkdownContext(
+    `---\ntitle: Deadline conversation\nstudent: Alex\nlevel: B1\ntopic: [work, deadlines]\ninput_type: generate\nstudy_text_type: dialogue\nspeaker_profiles:\n  - id: Maya\n    role: project manager\n    persona: warm practical and direct\n  - id: Leo\n    role: developer\n    persona: thoughtful and responsive\n---\n\n:::study-text\nMaya: We need a clearer deadline.\nLeo: I can revise the plan today.\nMaya: That would help the whole team.\n:::`,
+  );
+  const prepared = createPreparedStudyTextSynthesis(
+    { context },
+    {
+      voiceMapPath: 'voices.yml',
+      outPath: '/tmp',
+      ttsProvider: 'inworld',
+      ttsStrategy: 'dialogue',
+    },
+  );
+  const capabilities = {
+    supportsMetadataInstructions: true,
+    supportsNonVerbals: true,
+    supportsUppercaseEmphasis: true,
+    supportsFreeFormDirection: true,
+  };
+  return withVoicePlan(
+    prepared,
+    createResolvedVoicePlan(prepared, [
+      { speaker: 'Maya', voiceId: 'Ashley', source: 'auto', capabilities, language: 'en-US' },
+      { speaker: 'Leo', voiceId: 'Dennis', source: 'auto', capabilities, language: 'en-US' },
+    ]),
+  );
+}
+
+function createSchemaV2Plan(prepared: PreparedStudyTextSynthesis): SpeechPerformancePlanV2 {
+  return {
+    schemaVersion: 2,
+    mode: 'prompted',
+    provider: prepared.selection.provider,
+    model: prepared.selection.model,
+    sourceHash: prepared.sourceHash,
+    performanceContextHash: prepared.performanceContextHash!,
+    resolvedPerformanceMode: prepared.performanceMode!,
+    performanceContext: {
+      overallDirection: {
+        components: [
+          {
+            dimension: 'relationship',
+            direction: 'sound like colleagues solving a real problem',
+          },
+          { dimension: 'energy', direction: 'keep the exchange engaged but grounded' },
+        ],
+        basis: ['frontmatter:topic'],
+      },
+      speakerEnvelopes: [
+        {
+          speaker: 'Maya',
+          baselineDirection: {
+            components: [
+              { dimension: 'style', direction: 'warm practical and direct' },
+              { dimension: 'intonation', direction: 'use clear collaborative phrasing' },
+            ],
+            basis: ['speaker_profile:Maya:persona'],
+          },
+        },
+        {
+          speaker: 'Leo',
+          baselineDirection: {
+            components: [{ dimension: 'style', direction: 'thoughtful and responsive' }],
+            basis: ['speaker_profile:Leo:persona'],
+          },
+        },
+      ],
+    },
+    planner: {
+      provider: 'google_ai_studio',
+      model: 'gemini-3.1-flash-lite',
+      generatedAt: '2026-07-30T00:00:00.000Z',
+      promptPolicyVersion: 'speech-performance-v3-contextual-continuity',
+      promptHash: 'a'.repeat(64),
+    },
+    segments: prepared.segments.map((segment) => ({ ...segment })),
   };
 }
 
@@ -777,5 +858,268 @@ describe('speech performance plans', () => {
     expect(() => validateSpeechPerformancePlan(prepared, plan)).toThrow(
       'Speech plan segment "segment-1" changed the authored text.',
     );
+  });
+
+  it('validates one envelope per speaker and composes closest-scope direction', () => {
+    const prepared = createPreparedWithPerformanceContext();
+    const plan = createSchemaV2Plan(prepared);
+    plan.segments[0]!.turnAdjustment = {
+      components: [{ dimension: 'intonation', direction: 'land the deadline firmly' }],
+      reason: 'The correction needs a clear boundary',
+      evidence: [
+        {
+          kind: 'authored_substring',
+          segmentId: 'segment-1',
+          quote: 'clearer deadline',
+        },
+      ],
+    };
+
+    const validated = validateSpeechPerformancePlan(prepared, plan);
+    expect(resolveEffectiveSpeechDirection(validated, validated.segments[0]!)).toEqual({
+      components: [
+        { dimension: 'relationship', direction: 'sound like colleagues solving a real problem' },
+        { dimension: 'energy', direction: 'keep the exchange engaged but grounded' },
+        { dimension: 'style', direction: 'warm practical and direct' },
+        { dimension: 'intonation', direction: 'land the deadline firmly' },
+      ],
+      instruction:
+        'sound like colleagues solving a real problem keep the exchange engaged but grounded warm practical and direct land the deadline firmly',
+    });
+  });
+
+  it.each([
+    [
+      'missing envelope',
+      (plan: SpeechPerformancePlanV2) => {
+        plan.performanceContext.speakerEnvelopes.shift();
+      },
+      'missing speaker envelope',
+    ],
+    [
+      'unknown envelope',
+      (plan: SpeechPerformancePlanV2) => {
+        plan.performanceContext.speakerEnvelopes.push({
+          speaker: 'Unknown',
+          baselineDirection: { components: [], basis: ['frontmatter:title'] },
+        });
+      },
+      'unknown speaker envelope',
+    ],
+    [
+      'duplicate dimension',
+      (plan: SpeechPerformancePlanV2) => {
+        plan.performanceContext.speakerEnvelopes[0]!.baselineDirection.components.push({
+          dimension: 'style',
+          direction: 'another style',
+        });
+      },
+      'duplicate direction dimension',
+    ],
+    [
+      'foreign basis',
+      (plan: SpeechPerformancePlanV2) => {
+        plan.performanceContext.overallDirection.basis = ['frontmatter:student'];
+      },
+      'basis reference',
+    ],
+    [
+      'changed words',
+      (plan: SpeechPerformancePlanV2) => {
+        plan.segments[0]!.text = 'Changed words.';
+      },
+      'changed the authored text',
+    ],
+    [
+      'non-adjacent evidence',
+      (plan: SpeechPerformancePlanV2) => {
+        plan.segments[0]!.turnAdjustment = {
+          components: [{ dimension: 'intonation', direction: 'respond to the later point' }],
+          reason: 'A later point changes the delivery',
+          evidence: [{ kind: 'adjacent_segment', segmentId: 'segment-3', quote: 'whole team' }],
+        };
+      },
+      'must reference an adjacent segment',
+    ],
+  ] as const)('rejects schema-v2 %s', (_name, mutate, message) => {
+    const prepared = createPreparedWithPerformanceContext();
+    const plan = createSchemaV2Plan(prepared);
+    mutate(plan);
+    expect(() => validateSpeechPerformancePlan(prepared, plan)).toThrow(message);
+  });
+
+  it('rejects a schema-v2 plan when decision-relevant context changed', () => {
+    const prepared = createPreparedWithPerformanceContext();
+    const plan = createSchemaV2Plan(prepared);
+    const changed: PreparedStudyTextSynthesis = {
+      ...prepared,
+      performanceContextHash: 'b'.repeat(64),
+    };
+
+    expect(() => validateSpeechPerformancePlan(changed, plan)).toThrow('performance context hash');
+  });
+
+  it('canonicalizes defaults and requires evidence for surviving auxiliary controls', () => {
+    const prepared = createPreparedWithPerformanceContext();
+    const plan = createSchemaV2Plan(prepared);
+    Object.assign(plan.segments[0]!, {
+      pace: 'natural',
+      pauseBeforeMs: 0,
+      pauseAfterMs: 250,
+      deliveryMode: 'BALANCED',
+      controlEvidence: [
+        {
+          control: 'pause_after',
+          reason: 'The completed boundary needs a deliberate beat',
+          learnerMeaningRequired: false,
+          evidence: [
+            {
+              kind: 'authored_substring',
+              segmentId: 'segment-1',
+              quote: 'deadline',
+            },
+          ],
+        },
+      ],
+    });
+
+    const validated = validateSpeechPerformancePlan(prepared, plan);
+    expect(validated.segments[0]).toMatchObject({ pauseAfterMs: 250 });
+    expect(validated.segments[0]).not.toHaveProperty('pace');
+    expect(validated.segments[0]).not.toHaveProperty('pauseBeforeMs');
+    expect(validated.segments[0]).not.toHaveProperty('deliveryMode');
+
+    const missingEvidence = createSchemaV2Plan(prepared);
+    missingEvidence.segments[0]!.pace = 'brisk';
+    expect(() => validateSpeechPerformancePlan(prepared, missingEvidence)).toThrow(
+      'control evidence',
+    );
+  });
+
+  it('requires learner-meaning evidence when pace and emphasis are both active', () => {
+    const prepared = createPreparedWithPerformanceContext();
+    const plan = createSchemaV2Plan(prepared);
+    Object.assign(plan.segments[0]!, {
+      pace: 'brisk',
+      emphasis: ['deadline'],
+      controlEvidence: [
+        {
+          control: 'pace',
+          reason: 'The correction is intentionally brisk',
+          learnerMeaningRequired: false,
+          evidence: [{ kind: 'authored_substring', segmentId: 'segment-1', quote: 'deadline' }],
+        },
+        {
+          control: 'emphasis',
+          reason: 'The same word also received an acoustic cue',
+          learnerMeaningRequired: false,
+          evidence: [{ kind: 'authored_substring', segmentId: 'segment-1', quote: 'deadline' }],
+        },
+      ],
+    });
+
+    expect(() => validateSpeechPerformancePlan(prepared, plan)).toThrow('learner-meaning evidence');
+  });
+
+  it('counts effective controls instead of raw defaults and shadowed fields', () => {
+    const prepared = createPreparedWithPerformanceContext();
+    const plan = createSchemaV2Plan(prepared);
+    plan.performanceContext.overallDirection.components.push({
+      dimension: 'tempo',
+      direction: 'keep a naturally brisk exchange',
+    });
+    Object.assign(plan.segments[0]!, {
+      pace: 'brisk',
+      pauseBeforeMs: 0,
+      pauseAfterMs: 250,
+      deliveryMode: 'BALANCED',
+      controlEvidence: [
+        {
+          control: 'pace',
+          reason: 'The deadline correction is intentionally brisk',
+          learnerMeaningRequired: false,
+          evidence: [{ kind: 'authored_substring', segmentId: 'segment-1', quote: 'deadline' }],
+        },
+        {
+          control: 'pause_after',
+          reason: 'The correction needs a boundary',
+          learnerMeaningRequired: false,
+          evidence: [{ kind: 'authored_substring', segmentId: 'segment-1', quote: 'deadline' }],
+        },
+      ],
+    });
+    const validated = validateSpeechPerformancePlan(prepared, plan);
+    const effective = resolveEffectiveSpeechDirection(validated, validated.segments[0]!);
+    expect(effective.components).not.toContainEqual(
+      expect.objectContaining({ dimension: 'tempo' }),
+    );
+
+    const analysis = analyzeValidatedSpeechPlan(prepared, validated);
+    expect(analysis.metrics).toMatchObject({
+      instructionCount: 3,
+      paceCount: 1,
+      pauseCount: 1,
+      emphasisCount: 0,
+      nonverbalCount: 0,
+      nonDefaultDeliveryModeCount: 0,
+      cueCount: 5,
+    });
+    expect(analysis.warnings).not.toContainEqual(
+      expect.objectContaining({ code: 'high_cue_density' }),
+    );
+  });
+
+  it('warns about structural continuity risks without blocking synthesis', () => {
+    const prepared = createPreparedWithPerformanceContext();
+    const plan = createSchemaV2Plan(prepared);
+    const paces = ['slow', 'brisk', 'slow'] as const;
+    for (const [index, segment] of plan.segments.entries()) {
+      segment.pace = paces[index]!;
+      segment.turnAdjustment = {
+        components: [{ dimension: 'energy', direction: `change energy for turn ${index + 1}` }],
+        reason: 'The authored words create a local shift',
+        evidence: [
+          {
+            kind: 'authored_substring',
+            segmentId: segment.id,
+            quote: segment.text.split(' ').at(-1)!.replace('.', ''),
+          },
+        ],
+      };
+      segment.controlEvidence = [
+        {
+          control: 'pace',
+          reason: 'The turn needs an intentionally extreme pace',
+          learnerMeaningRequired: index === 0,
+          evidence: [
+            {
+              kind: 'authored_substring',
+              segmentId: segment.id,
+              quote: segment.text.split(' ')[0]!,
+            },
+          ],
+        },
+      ];
+    }
+    plan.segments[0]!.emphasis = ['deadline'];
+    plan.segments[0]!.controlEvidence!.push({
+      control: 'emphasis',
+      reason: 'Deadline is the learner meaning contrast',
+      learnerMeaningRequired: true,
+      evidence: [{ kind: 'authored_substring', segmentId: 'segment-1', quote: 'deadline' }],
+    });
+
+    const analysis = analyzeValidatedSpeechPlan(
+      prepared,
+      validateSpeechPerformancePlan(prepared, plan),
+    );
+    expect(analysis.warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'pace_with_emphasis' }),
+        expect.objectContaining({ code: 'abrupt_adjacent_pace_change' }),
+        expect.objectContaining({ code: 'excessive_same_speaker_changes' }),
+      ]),
+    );
+    expect(analysis.hardFailures).toEqual([]);
   });
 });
