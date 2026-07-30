@@ -23,7 +23,71 @@ export type SpeechPace = 'slow' | 'measured' | 'natural' | 'brisk';
 export type SpeechNonVerbal = 'sigh' | 'laugh' | 'chuckle' | 'breath';
 export type SpeechPerformancePromptPolicyId =
   | 'speech-performance-v1-restrained-natural'
-  | 'speech-performance-v2-inworld-tts2';
+  | 'speech-performance-v2-inworld-tts2'
+  | 'speech-performance-v3-contextual-continuity';
+
+export type SpeechPerformanceMode = 'dialogue' | 'monologue';
+export type SpeechDirectionDimension =
+  | 'relationship'
+  | 'energy'
+  | 'formality'
+  | 'emotion'
+  | 'articulation'
+  | 'intonation'
+  | 'volume'
+  | 'pitch'
+  | 'range'
+  | 'tempo'
+  | 'style';
+
+export interface SpeechDirectionComponent {
+  dimension: SpeechDirectionDimension;
+  direction: string;
+}
+
+export interface SpeechDirectionEnvelope {
+  components: SpeechDirectionComponent[];
+  basis: string[];
+}
+
+export interface SpeechTurnEvidence {
+  kind: 'authored_substring' | 'adjacent_segment';
+  segmentId: string;
+  quote: string;
+}
+
+export type SpeechAuxiliaryControl =
+  | 'pace'
+  | 'emphasis'
+  | 'pause_before'
+  | 'pause_after'
+  | 'nonverbal'
+  | 'delivery_mode';
+
+export interface SpeechControlEvidence {
+  control: SpeechAuxiliaryControl;
+  reason: string;
+  evidence: SpeechTurnEvidence[];
+  learnerMeaningRequired: boolean;
+}
+
+export interface SpeechTurnAdjustment {
+  components: SpeechDirectionComponent[];
+  reason: string;
+  evidence: SpeechTurnEvidence[];
+}
+
+export interface SpeechSpeakerEnvelope {
+  speaker: string;
+  baselineDirection: SpeechDirectionEnvelope;
+}
+
+export interface SpeechPerformanceSourceContext {
+  title: string;
+  topics: string[];
+  studyTextType: 'dialogue' | 'monologue';
+  speakerProfiles: Array<Pick<SpeakerProfile, 'id' | 'role' | 'persona' | 'voice_direction'>>;
+}
 
 export interface TtsModelCapabilities {
   planningMode: TtsSpeechPlanningMode;
@@ -82,12 +146,13 @@ export interface SpeechPerformancePlanSegment {
 export interface SpeechPerformancePlannerMetadata {
   provider: string;
   model: string;
+  returnedModel?: string;
   generatedAt: string;
   promptPolicyVersion?: SpeechPerformancePromptPolicyId;
   promptHash?: string;
 }
 
-export interface SpeechPerformancePlan {
+export interface SpeechPerformancePlanV1 {
   schemaVersion: 1;
   mode: TtsSpeechPlanningMode;
   provider: TtsProviderId;
@@ -98,11 +163,39 @@ export interface SpeechPerformancePlan {
   segments: SpeechPerformancePlanSegment[];
 }
 
+export interface SpeechPerformancePlanSegmentV2 extends SpeechPerformancePlanSegment {
+  turnAdjustment?: SpeechTurnAdjustment;
+  controlEvidence?: SpeechControlEvidence[];
+}
+
+export interface SpeechPerformancePlanV2 {
+  schemaVersion: 2;
+  mode: 'prompted';
+  provider: TtsProviderId;
+  model: TtsModelId;
+  sourceHash: string;
+  performanceContextHash: string;
+  resolvedPerformanceMode: SpeechPerformanceMode;
+  performanceContext: {
+    overallDirection: SpeechDirectionEnvelope;
+    speakerEnvelopes: SpeechSpeakerEnvelope[];
+  };
+  planner: SpeechPerformancePlannerMetadata;
+  fallbackReason?: string;
+  segments: SpeechPerformancePlanSegmentV2[];
+}
+
+export type SpeechPerformancePlan = SpeechPerformancePlanV1 | SpeechPerformancePlanV2;
+
 export interface PreparedStudyTextSynthesis {
   selection: TtsSelection;
   sourceHash: string;
   segments: SpeechPerformancePlanSegment[];
   speakerLabels?: string[];
+  performanceMode?: SpeechPerformanceMode;
+  performanceSpeakers?: string[];
+  performanceSource?: SpeechPerformanceSourceContext;
+  performanceContextHash?: string;
   voices: VoiceSelectionSummary[];
   voiceAssignments: Record<string, string>;
   voicePlan?: VoicePlan;

@@ -12,6 +12,7 @@ import {
   getTtsModelCapabilities,
   normalizeSpeechCueText,
   type PreparedStudyTextSynthesis,
+  resolveStudyTextPerformanceMode,
   resolveVoicePlanForExecution,
   type SpeechPerformancePlan,
   TtsSynthesisCancelledError,
@@ -381,6 +382,132 @@ describe('speech performance plans', () => {
         { id: 'segment-2', speaker: 'Leo', text: 'I can revise the plan today.' },
       ],
     });
+  });
+
+  it.each([
+    ['dialogue', 'monologue', ['Maya'], 'dialogue'],
+    ['tts', 'dialogue', ['Maya', 'Leo'], 'monologue'],
+    ['auto', 'monologue', ['Narrator'], 'monologue'],
+    ['auto', 'dialogue', ['Maya'], 'monologue'],
+    ['auto', 'dialogue', ['Maya', 'Leo'], 'dialogue'],
+  ] as const)('resolves strategy %s, parsed type %s, and speakers %j', (ttsStrategy, studyTextType, speakers, expected) => {
+    expect(resolveStudyTextPerformanceMode({ ttsStrategy, studyTextType, speakers })).toBe(
+      expected,
+    );
+  });
+
+  it('prepares only decision-relevant performance context', () => {
+    const context = parseMarkdownContext(
+      `---\ntitle: Deadline conversation\nstudent: private learner\nlevel: B1\ntopic: [work, deadlines]\ninput_type: generate\nstudy_text_type: dialogue\nspeaker_profiles:\n  - id: Maya\n    role: project manager clarifying an unrealistic deadline\n    persona: warm, practical, and direct\n    voice_direction: calm, clear, conversational adult voice\n    voice: secret-provider-id\n  - id: Unused\n    persona: must not escape\n---\n\n:::study-text\nMaya: We need a clearer deadline.\nLeo: I can revise the plan today.\n:::`,
+    );
+
+    const prepared = createPreparedStudyTextSynthesis(
+      { context },
+      {
+        voiceMapPath: 'voices.yml',
+        outPath: '/tmp',
+        ttsProvider: 'inworld',
+        ttsStrategy: 'dialogue',
+      },
+    );
+
+    expect(prepared).toMatchObject({
+      performanceMode: 'dialogue',
+      performanceSpeakers: ['Maya', 'Leo'],
+      performanceContextHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+      performanceSource: {
+        title: 'Deadline conversation',
+        topics: ['work', 'deadlines'],
+        studyTextType: 'dialogue',
+        speakerProfiles: [
+          {
+            id: 'Maya',
+            role: 'project manager clarifying an unrealistic deadline',
+            persona: 'warm, practical, and direct',
+            voice_direction: 'calm, clear, conversational adult voice',
+          },
+        ],
+      },
+    });
+    expect(JSON.stringify(prepared)).not.toContain('private learner');
+    expect(JSON.stringify(prepared)).not.toContain('secret-provider-id');
+    expect(JSON.stringify(prepared)).not.toContain('must not escape');
+  });
+
+  it('uses one stable narrator for an unlabeled monologue', () => {
+    const context = parseMarkdownContext(
+      `---\ntitle: Update\nstudent: Alex\nlevel: B1\ntopic: work\ninput_type: generate\nspeaker_profiles:\n  - id: Maya\n  - id: Leo\n---\n\n:::study-text\nWe need a clearer deadline.\nI can revise the plan today.\n:::`,
+    );
+
+    const prepared = createPreparedStudyTextSynthesis(
+      { context },
+      {
+        voiceMapPath: 'voices.yml',
+        outPath: '/tmp',
+        ttsProvider: 'inworld',
+        ttsStrategy: 'auto',
+      },
+    );
+
+    expect(prepared.performanceMode).toBe('monologue');
+    expect(prepared.performanceSpeakers).toEqual(['Narrator']);
+    expect(prepared.performanceSource?.speakerProfiles).toEqual([]);
+  });
+
+  it('rejects explicit monologue strategy with multiple authored speakers', () => {
+    const context = parseMarkdownContext(
+      `---\ntitle: Deadline conversation\nstudent: Alex\nlevel: B1\ntopic: work\ninput_type: generate\n---\n\n:::study-text\nMaya: We need a clearer deadline.\nLeo: I can revise the plan today.\n:::`,
+    );
+
+    expect(() =>
+      createPreparedStudyTextSynthesis(
+        { context },
+        {
+          voiceMapPath: 'voices.yml',
+          outPath: '/tmp',
+          ttsProvider: 'inworld',
+          ttsStrategy: 'tts',
+        },
+      ),
+    ).toThrow('tts strategy requires one authored study-text speaker');
+  });
+
+  it('changes only the performance context hash when voice language changes', () => {
+    const context = parseMarkdownContext(
+      `---\ntitle: Update\nstudent: Alex\nlevel: B1\ntopic: work\ninput_type: generate\n---\n\n:::study-text\nMaya: We need a clearer deadline.\nMaya: I can revise the plan today.\n:::`,
+    );
+    const prepared = createPreparedStudyTextSynthesis(
+      { context },
+      {
+        voiceMapPath: 'voices.yml',
+        outPath: '/tmp',
+        ttsProvider: 'inworld',
+        ttsStrategy: 'auto',
+      },
+    );
+    const assignment = {
+      speaker: 'Maya',
+      voiceId: 'Ashley',
+      source: 'auto' as const,
+      capabilities: {
+        supportsMetadataInstructions: true,
+        supportsNonVerbals: true,
+        supportsUppercaseEmphasis: true,
+        supportsFreeFormDirection: true,
+      },
+    };
+
+    const first = withVoicePlan(
+      prepared,
+      createResolvedVoicePlan(prepared, [{ ...assignment, language: 'en-US' }]),
+    );
+    const second = withVoicePlan(
+      prepared,
+      createResolvedVoicePlan(prepared, [{ ...assignment, language: 'en-GB' }]),
+    );
+
+    expect(first.sourceHash).toBe(second.sourceHash);
+    expect(first.performanceContextHash).not.toBe(second.performanceContextHash);
   });
 
   it('preserves normalized speaker labels for frontmatter-only speaker universes', () => {
