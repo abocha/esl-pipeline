@@ -145,6 +145,12 @@ physical provider requests with no automatic retry, while checked-in TTS 1.5 ide
 through the production capability, renderer, and analysis boundaries with zero provider calls. See
 the evaluation runbook for immutable artifact, resume, privacy, and current-day budget requirements.
 
+Production study-text planning remains disabled by default on `google_ai_studio` with
+`gemini-3.1-flash-lite`. Explicit `openai` plus `gpt-5.6-luna` is an opt-in contender. The providers
+use separate credentials, allowlists, and provider/model budgets; OpenAI planner calls set
+`store: false`, and each typed-timeout retry reserves a physical request. Policy v3 produces
+contextual schema-v2 dialogue/monologue plans. Pronunciation never invokes either planner.
+
 All local, Compose, and production application settings come from the repository-root `.env`.
 Validate it with `pnpm env:validate -- --profile=development`; use the production profile before a
 VPS deployment. Mounted `.secrets/` files and generated deploy image-state files are separate.

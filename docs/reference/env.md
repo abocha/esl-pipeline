@@ -5,7 +5,7 @@
 - Audience: maintainers and implementing agents.
 - Read Time: 5 minutes.
 - Authority Level: environment contract reference.
-- Last Verified Against: 2026-07-29 repo state.
+- Last Verified Against: 2026-07-30 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly or after environment contract changes.
 - Status: `reference`.
@@ -79,10 +79,22 @@ Primary groups:
     cancel `generate()` after it starts, so the configured SDK timeout remains the in-flight bound.
     Routine diagnostics use hashes, counts, normalized categories, latency, cache totals, and output
     bytes without learner text or raw provider bodies.
-  - Expressive TTS planning uses opt-in `ESL_TTS_SPEECH_PLANNER_ENABLED`, optional `ESL_TTS_SPEECH_PLANNER_MODEL`, optional `ESL_TTS_SPEECH_PLANNER_MAX_OUTPUT_TOKENS`, and separate `ESL_TTS_SPEECH_PLANNER_*_BUDGET` limits. The production default remains `gemini-3.1-flash-lite`; `gemini-3.5-flash-lite` is allowlisted for explicit evaluation without changing that default. The planner reuses server-side `GEMINI_API_KEY`.
+  - Expressive study-text planning uses opt-in `ESL_TTS_SPEECH_PLANNER_ENABLED`, explicit
+    `ESL_TTS_SPEECH_PLANNER_PROVIDER`, optional model/output-token controls, and separate
+    `ESL_TTS_SPEECH_PLANNER_*_BUDGET` limits. The built-in default remains disabled
+    `google_ai_studio` plus `gemini-3.1-flash-lite`; `gemini-3.5-flash-lite` remains allowlisted for
+    the historical comparison without changing that default. `openai` plus exact
+    `gpt-5.6-luna` is an explicit contender configuration only.
+  - Google speech planning uses server-side `GEMINI_API_KEY`; OpenAI uses `OPENAI_API_KEY` and
+    sends `store: false`. Credentials, allowlists, RPM/daily request limits, token budgets, and
+    spend accounting remain provider/model keyed. Typed timeout retries stay within one provider
+    and reserve every physical request attempt.
   - Live speech-planner evaluation must opt in at the CLI, verify both exact stable IDs in `GEN_ALLOWED_MODELS_GOOGLE`, supply current-day request usage explicitly, and fit the full requested matrix within `ESL_TTS_SPEECH_PLANNER_DAILY_REQUEST_BUDGET`. It never raises daily or RPM limits implicitly.
   - Inworld voice planning uses `ESL_TTS_VOICE_RANKER_ENABLED`, optional `ESL_TTS_VOICE_RANKER_MODEL`, optional `ESL_TTS_VOICE_RANKER_MAX_OUTPUT_TOKENS`, and separate `ESL_TTS_VOICE_RANKER_*_BUDGET` limits. The default semantic ranker is `gemma-4-31b-it`.
   - Local planner inspection can opt into full validated or rejected plan logs with `ESL_TTS_SPEECH_PLANNER_DEBUG_LOG_PLAN=true`. Voice-ranker inspection can opt into shortlist and failure details with `ESL_TTS_VOICE_RANKER_DEBUG_LOG_PLAN=true`. Leave these disabled outside short-lived debugging because logs may include learner text.
+  - Pronunciation primary/item synthesis never uses the speech planner. Dialogue and monologue
+    study-text synthesis do; `auto` resolves dialogue only for two or more distinct authored
+    speakers.
   - After changing planner env values in a Compose deployment, recreate `batch-backend` and `batch-worker`.
 - Remote config:
   - `ESL_PIPELINE_CONFIG_*`

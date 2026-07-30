@@ -4,7 +4,7 @@
 
 - Audience: maintainers and implementing agents.
 - Authority Level: package entrypoint and API usage guide.
-- Last Verified Against: 2026-06-27 repo state.
+- Last Verified Against: 2026-07-30 repo state.
 - Owner: orchestrator maintainers + automation agents.
 - Review Cadence: monthly or after major API/runtime changes.
 - Status: `active`.
@@ -53,12 +53,15 @@ operator intentionally changes it.
 
 ## Speech Plan Manifest Contract
 
-The orchestrator persists optional schema-v1 voice and speech plans without inventing provenance
-for legacy manifests. New plans may carry the `model-scoped-v1` capability policy, canonical
-assignment language, an immutable speech prompt-policy ID, and its SHA-256 prompt hash. Manifest
-sanitization retains only supported optional policy values. Runtime logs derive
-`legacy-unversioned-v1` for unversioned prompted plans and keep learner-bearing validation detail
-behind explicit debug logging.
+The orchestrator persists schema-v1 and schema-v2 speech plans without inventing provenance for
+legacy manifests. Schema v2 records resolved dialogue/monologue mode, decision-relevant context
+hash, envelopes, exact returned planner model, immutable v3 policy, and prompt hash. New assignment
+planning receives the authored TTS strategy; rerun planning receives the explicit override or
+persisted effective strategy. Pronunciation-only reruns bypass study-text preparation and planning.
+
+Normal schema-v2 logs contain only mode, counts, hashes, and stable issue codes. Schema-v1 logs
+retain their historical cue counts. Learner-bearing direction/evidence and rejected provider text
+remain behind explicit debug logging.
 
 See
 [`docs/reference/TTS_SPEECH_PERFORMANCE_SYSTEM.md`](../../docs/reference/TTS_SPEECH_PERFORMANCE_SYSTEM.md)
