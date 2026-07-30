@@ -27,6 +27,8 @@ import {
   type BuildStudyTextInput,
   type BuildStudyTextOptions,
   type BuildStudyTextResult,
+  createPreparedStudyTextSynthesis,
+  createResolvedVoicePlan,
   hashStudyText,
   INWORLD_TTS_MODELS,
   type InworldTtsModel,
@@ -37,6 +39,7 @@ import {
   throwIfTtsCancelled,
   type VoiceAssignmentResolution,
   validateSpeechPerformancePlan,
+  withVoicePlan,
 } from '@esl-pipeline/tts-core';
 
 import {
@@ -63,7 +66,7 @@ export const INWORLD_ASSEMBLY_MARGIN_POLICY = {
   sameSpeakerMs: 180,
   speakerSwitchMs: 320,
 } as const;
-export const INWORLD_RENDERER_POLICY_VERSION = 'inworld-renderer-v2';
+export const INWORLD_RENDERER_POLICY_VERSION = 'inworld-renderer-v3-contextual-continuity';
 interface StudyTextSegment {
   speaker?: string;
   text: string;
@@ -375,18 +378,17 @@ export async function buildStudyTextMp3Inworld(
   const gapDurations = resolveInworldAssemblyGapDurations(segments);
   const rendererPolicyVersion =
     dependencies.rendererPolicyVersion ?? INWORLD_RENDERER_POLICY_VERSION;
-  const sourceSegments = segments.map((segment, index) => ({
-    id: `segment-${index + 1}`,
-    speaker: segment.speaker,
-    text: segment.text,
-  }));
+  const basePreparedSpeechPlan = createPreparedStudyTextSynthesis(input, {
+    ...opts,
+    ttsProvider: 'inworld',
+    ttsModel: model,
+  });
+  const executionVoicePlan =
+    opts.voicePlan ?? createResolvedVoicePlan(basePreparedSpeechPlan, assignments);
   const preparedSpeechPlan = {
-    selection: { provider: 'inworld' as const, model },
-    sourceHash: hashStudyText(JSON.stringify(sourceSegments)),
-    segments: sourceSegments,
+    ...withVoicePlan(basePreparedSpeechPlan, executionVoicePlan),
     voices: voiceSummaries,
     voiceAssignments,
-    voicePlan: opts.voicePlan,
   };
   const effectiveSpeechPlan = validateSpeechPerformancePlan(
     preparedSpeechPlan,
@@ -396,7 +398,7 @@ export async function buildStudyTextMp3Inworld(
       provider: 'inworld',
       model,
       sourceHash: preparedSpeechPlan.sourceHash,
-      segments: sourceSegments,
+      segments: preparedSpeechPlan.segments,
     },
   );
   const renderedSegments = segments.flatMap((segment, index) => {
@@ -406,6 +408,7 @@ export async function buildStudyTextMp3Inworld(
       assignments[0];
     const rendered = renderInworldSpeechSegment({
       model,
+      plan: effectiveSpeechPlan,
       segment: speechPlanSegment,
       capabilities: assignment?.capabilities,
       language: assignment?.language,

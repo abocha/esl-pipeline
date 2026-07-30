@@ -400,7 +400,7 @@ describe('speech planner evaluator', () => {
     });
     expect(valid).toMatchObject({
       promptHash: expect.stringMatching(/^[a-f0-9]{64}$/),
-      rendererPolicyVersion: 'inworld-renderer-v2',
+      rendererPolicyVersion: 'inworld-renderer-v3-contextual-continuity',
       fixtureContentHash: fixture.contentHash,
       rawParseStatus: 'parsed',
       promptedPlanStatus: 'valid',
