@@ -3,6 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
+import type { PreparedStudyTextSynthesis, SpeechPerformancePlanV2 } from '@esl-pipeline/tts-core';
+
 import { newAssignment, rerunAssignment } from '../src/index.js';
 
 vi.mock('@esl-pipeline/tts-core', async () => {
@@ -11,6 +13,11 @@ vi.mock('@esl-pipeline/tts-core', async () => {
   return {
     ...actual,
     buildStudyTextMp3: vi.fn(),
+    buildPronunciationShadowSentenceMp3: vi.fn(),
+    buildPronunciationTextMp3: vi.fn(),
+    prepareStudyTextSynthesis: vi.fn((input, options) =>
+      actual.prepareStudyTextSynthesis(input, options),
+    ),
   };
 });
 
@@ -33,7 +40,7 @@ default: voice_id_default
     process.env.S3_BUCKET = 'test-bucket';
     process.env.AWS_REGION = 'us-east-1';
 
-    const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-core');
+    const { buildStudyTextMp3, prepareStudyTextSynthesis } = await import('@esl-pipeline/tts-core');
     const audioPath = join(dir, 'lesson.mp3');
     await writeFile(audioPath, 'dummy');
     vi.mocked(buildStudyTextMp3).mockResolvedValue({
@@ -48,6 +55,7 @@ default: voice_id_default
         md: mdPath,
         preset: 'default',
         withTts: true,
+        ttsStrategy: 'auto',
         upload: 's3',
         dryRun: true,
         voices: voiceMapPath,
@@ -64,6 +72,10 @@ default: voice_id_default
     expect(buildStudyTextMp3).toHaveBeenCalledWith(
       expect.any(Object),
       expect.objectContaining({ signal: controller.signal, deadlineAtMs }),
+    );
+    expect(prepareStudyTextSynthesis).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ ttsStrategy: 'auto' }),
     );
   }, 30_000);
 
@@ -82,7 +94,7 @@ default: voice_id_default
     process.env.S3_BUCKET = 'test-bucket';
     process.env.AWS_REGION = 'us-east-1';
 
-    const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-core');
+    const { buildStudyTextMp3, prepareStudyTextSynthesis } = await import('@esl-pipeline/tts-core');
     const audioPath = join(dir, 'lesson.mp3');
     await writeFile(audioPath, 'dummy');
     vi.mocked(buildStudyTextMp3).mockResolvedValue({
@@ -110,6 +122,7 @@ default: voice_id_default
     expect(manifestJson.audioArtifacts.studyText.url).toBeDefined();
 
     vi.mocked(buildStudyTextMp3).mockClear();
+    vi.mocked(prepareStudyTextSynthesis).mockClear();
 
     const second = await newAssignment({
       ...baseFlags,
@@ -134,6 +147,99 @@ default: voice_id_default
     expect(manifestJsonUpdated.dialogueLanguage).toBe('es');
     expect(manifestJsonUpdated.dialogueStability).toBe(0.65);
     expect(manifestJsonUpdated.dialogueSeed).toBe(321);
+  });
+
+  it('persists contextual planner mode, hash, returned model, and policy provenance', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'orchestrator-contextual-plan-'));
+    const mdPath = join(dir, 'lesson.md');
+    const voiceMapPath = join(dir, 'voices.yml');
+    const okDoc = await readFile(okFixturePath, 'utf8');
+    await writeFile(mdPath, okDoc);
+    await writeFile(voiceMapPath, 'default: voice_id_default');
+    process.env.S3_BUCKET = 'test-bucket';
+    process.env.AWS_REGION = 'us-east-1';
+
+    const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-core');
+    const audioPath = join(dir, 'lesson.mp3');
+    await writeFile(audioPath, 'dummy');
+    vi.mocked(buildStudyTextMp3).mockResolvedValue({
+      path: audioPath,
+      hash: 'abc123',
+      voices: [
+        { speaker: 'Alex', voiceId: 'voice_id_default', source: 'default' },
+        { speaker: 'Mara', voiceId: 'voice_id_second', source: 'auto' },
+      ],
+    });
+    const speechPlanner = {
+      async plan(prepared: PreparedStudyTextSynthesis): Promise<SpeechPerformancePlanV2> {
+        return {
+          schemaVersion: 2,
+          mode: 'prompted',
+          provider: prepared.selection.provider,
+          model: prepared.selection.model,
+          sourceHash: prepared.sourceHash,
+          performanceContextHash: prepared.performanceContextHash!,
+          resolvedPerformanceMode: prepared.performanceMode!,
+          performanceContext: {
+            overallDirection: {
+              components: [
+                {
+                  dimension: 'relationship',
+                  direction: 'sound like friendly conversation partners',
+                },
+              ],
+              basis: ['frontmatter:topic'],
+            },
+            speakerEnvelopes: prepared.performanceSpeakers!.map((speaker) => ({
+              speaker,
+              baselineDirection: {
+                components: [{ dimension: 'style', direction: 'stay natural and responsive' }],
+                basis: ['frontmatter:topic'],
+              },
+            })),
+          },
+          planner: {
+            provider: 'google_ai_studio',
+            model: 'gemini-3.1-flash-lite',
+            returnedModel: 'gemini-3.1-flash-lite-2026-07-15',
+            generatedAt: '2026-07-30T00:00:00.000Z',
+            promptPolicyVersion: 'speech-performance-v3-contextual-continuity',
+            promptHash: 'a'.repeat(64),
+          },
+          segments: prepared.segments.map((segment) => ({ ...segment })),
+        };
+      },
+    };
+
+    const result = await newAssignment(
+      {
+        md: mdPath,
+        withTts: true,
+        upload: 's3',
+        dryRun: true,
+        voices: voiceMapPath,
+        ttsProvider: 'inworld',
+        ttsModel: 'inworld-tts-2',
+        ttsStrategy: 'dialogue',
+      },
+      {},
+      { speechPlanner },
+    );
+    const manifest = JSON.parse(await readFile(result.manifestPath!, 'utf8'));
+
+    expect(manifest.speechPlans.studyText).toMatchObject({
+      schemaVersion: 2,
+      resolvedPerformanceMode: 'dialogue',
+      performanceContextHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+      planner: {
+        provider: 'google_ai_studio',
+        model: 'gemini-3.1-flash-lite',
+        returnedModel: 'gemini-3.1-flash-lite-2026-07-15',
+        generatedAt: '2026-07-30T00:00:00.000Z',
+        promptPolicyVersion: 'speech-performance-v3-contextual-continuity',
+        promptHash: 'a'.repeat(64),
+      },
+    });
   });
 
   it('throws a cancellation error and skips manifest write when signal is aborted', async () => {
@@ -178,7 +284,7 @@ default: voice_id_default
     process.env.S3_BUCKET = 'test-bucket';
     process.env.AWS_REGION = 'us-east-1';
 
-    const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-core');
+    const { buildStudyTextMp3, prepareStudyTextSynthesis } = await import('@esl-pipeline/tts-core');
     const audioPath = join(dir, 'lesson.mp3');
     await writeFile(audioPath, 'dummy');
     vi.mocked(buildStudyTextMp3).mockResolvedValue({
@@ -202,6 +308,7 @@ default: voice_id_default
       {
         md: mdPath,
         regenerateStudyTextAudio: true,
+        studyTextTtsStrategy: 'dialogue',
         upload: 's3',
         dryRun: true,
         voices: voiceMapPath,
@@ -211,6 +318,10 @@ default: voice_id_default
     expect(buildStudyTextMp3).toHaveBeenCalledWith(
       expect.any(Object),
       expect.objectContaining({ signal: activeController.signal, deadlineAtMs }),
+    );
+    expect(prepareStudyTextSynthesis).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ ttsStrategy: 'dialogue' }),
     );
 
     const controller = new AbortController();
@@ -288,5 +399,93 @@ default: voice_id_default
       /^https:\/\/test-bucket\.s3\.amazonaws\.com\//,
     );
     expect(manifestAfterRerun.timestamp).toBeTypeOf('string');
+  });
+
+  it('keeps pronunciation-only reruns outside speech planning', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'orchestrator-pronunciation-only-'));
+    const mdPath = join(dir, 'lesson.md');
+    const voiceMapPath = join(dir, 'voices.yml');
+    const okDoc = await readFile(okFixturePath, 'utf8');
+    const pronunciation = `:::callout 🗣️
+**Mode:** shadow_sentence
+**Shadow sentence:** I was thinking about working this morning.
+1. **thinking** — /ˈθɪŋkɪŋ/
+2. **working** — /ˈwɜːrkɪŋ/
+:::`;
+    await writeFile(
+      mdPath,
+      okDoc.replace(
+        /(### C\. 🎙️ Pronunciation Micro-Focus \(≈1 min\)\r?\n\r?\n)text/u,
+        `$1${pronunciation}`,
+      ),
+    );
+    await writeFile(voiceMapPath, 'default: voice_id_default');
+    process.env.S3_BUCKET = 'test-bucket';
+    process.env.AWS_REGION = 'us-east-1';
+
+    const {
+      buildPronunciationShadowSentenceMp3,
+      buildPronunciationTextMp3,
+      buildStudyTextMp3,
+      prepareStudyTextSynthesis,
+    } = await import('@esl-pipeline/tts-core');
+    const audioPath = join(dir, 'lesson.mp3');
+    await writeFile(audioPath, 'dummy');
+    vi.mocked(buildStudyTextMp3).mockResolvedValue({
+      path: audioPath,
+      hash: 'abc123',
+      voices: [{ speaker: 'Narrator', voiceId: 'voice_id_default', source: 'default' }],
+    });
+    vi.mocked(buildPronunciationShadowSentenceMp3).mockResolvedValue({
+      path: join(dir, 'shadow.mp3'),
+      hash: 'shadow-hash',
+      voiceId: 'voice_id_default',
+    });
+    vi.mocked(buildPronunciationTextMp3).mockResolvedValue({
+      path: join(dir, 'item.mp3'),
+      hash: 'item-hash',
+      voiceId: 'voice_id_default',
+    });
+
+    await newAssignment({
+      md: mdPath,
+      withTts: true,
+      upload: 's3',
+      dryRun: true,
+      voices: voiceMapPath,
+    });
+
+    await writeFile(
+      mdPath,
+      okDoc.replace(
+        /(### C\. 🎙️ Pronunciation Micro-Focus \(≈1 min\)\r?\n\r?\n)text/u,
+        `$1${pronunciation.replace('this morning', 'before the meeting').replaceAll('working', 'planning')}`,
+      ),
+    );
+
+    vi.mocked(prepareStudyTextSynthesis).mockClear();
+    vi.mocked(buildPronunciationShadowSentenceMp3).mockClear();
+    vi.mocked(buildPronunciationTextMp3).mockClear();
+    const speechPlanner = {
+      plan: vi.fn().mockRejectedValue(new Error('must not be called')),
+    };
+
+    await rerunAssignment(
+      {
+        md: mdPath,
+        regenerateStudyTextAudio: false,
+        regeneratePronunciationMainAudio: true,
+        regeneratePronunciationChunkAudio: true,
+        upload: 's3',
+        dryRun: true,
+        voices: voiceMapPath,
+      },
+      { speechPlanner },
+    );
+
+    expect(speechPlanner.plan).not.toHaveBeenCalled();
+    expect(prepareStudyTextSynthesis).not.toHaveBeenCalled();
+    expect(buildPronunciationShadowSentenceMp3).toHaveBeenCalledTimes(1);
+    expect(buildPronunciationTextMp3).toHaveBeenCalled();
   });
 });

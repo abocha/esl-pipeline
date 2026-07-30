@@ -1,8 +1,15 @@
+import { mkdtemp } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { createResolvedVoicePlan, type PreparedStudyTextSynthesis } from '@esl-pipeline/tts-core';
 
-import { sanitizeAssignmentManifest } from '../src/manifest.js';
+import {
+  type AssignmentManifest,
+  createFilesystemManifestStore,
+  sanitizeAssignmentManifest,
+} from '../src/manifest.js';
 
 describe('assignment manifest voice plans', () => {
   it('normalizes legacy resolved voice plans to deterministic mode', () => {
@@ -80,6 +87,76 @@ describe('assignment manifest voice plans', () => {
       promptPolicyVersion: 'speech-performance-v2-inworld-tts2',
       promptHash,
     });
+  });
+
+  it('round-trips contextual schema-v2 speech plans through the manifest store', async () => {
+    const promptHash = 'b'.repeat(64);
+    const input: AssignmentManifest = {
+      schemaVersion: 5,
+      mdHash: 'md-hash',
+      timestamp: '2026-07-30T00:00:00.000Z',
+      speechPlans: {
+        studyText: {
+          schemaVersion: 2,
+          mode: 'prompted',
+          provider: 'inworld',
+          model: 'inworld-tts-2',
+          sourceHash: 'source-hash',
+          performanceContextHash: 'c'.repeat(64),
+          resolvedPerformanceMode: 'dialogue',
+          performanceContext: {
+            overallDirection: {
+              components: [
+                { dimension: 'relationship', direction: 'sound like collaborative colleagues' },
+              ],
+              basis: ['frontmatter:topic'],
+            },
+            speakerEnvelopes: [
+              {
+                speaker: 'Maya',
+                baselineDirection: {
+                  components: [{ dimension: 'style', direction: 'warm practical and direct' }],
+                  basis: ['speaker_profile:Maya:persona'],
+                },
+              },
+            ],
+          },
+          planner: {
+            provider: 'google_ai_studio',
+            model: 'gemini-3.1-flash-lite',
+            returnedModel: 'gemini-3.1-flash-lite-2026-07-15',
+            generatedAt: '2026-07-30T00:00:00.000Z',
+            promptPolicyVersion: 'speech-performance-v3-contextual-continuity',
+            promptHash,
+          },
+          segments: [
+            {
+              id: 'segment-1',
+              speaker: 'Maya',
+              text: 'We need a clearer deadline.',
+            },
+          ],
+        },
+      },
+    };
+    const dir = await mkdtemp(join(tmpdir(), 'orchestrator-manifest-v2-'));
+    const mdPath = join(dir, 'lesson.md');
+    const store = createFilesystemManifestStore();
+    await store.writeManifest(mdPath, input);
+    const manifest = await store.readManifest(mdPath);
+
+    expect(manifest?.speechPlans?.studyText).toEqual(
+      expect.objectContaining({
+        schemaVersion: 2,
+        resolvedPerformanceMode: 'dialogue',
+        performanceContextHash: 'c'.repeat(64),
+        planner: expect.objectContaining({
+          returnedModel: 'gemini-3.1-flash-lite-2026-07-15',
+          promptPolicyVersion: 'speech-performance-v3-contextual-continuity',
+          promptHash,
+        }),
+      }),
+    );
   });
 
   it('does not invent provenance for unversioned legacy plans', () => {
