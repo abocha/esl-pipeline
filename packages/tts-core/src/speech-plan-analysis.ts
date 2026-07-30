@@ -1,6 +1,7 @@
 import { ConfigurationError } from '@esl-pipeline/contracts';
 
 import { getTtsModelCapabilities } from './descriptors.js';
+import { resolveEffectiveSpeechDirection } from './speech-plan-direction.js';
 import type {
   PreparedStudyTextSynthesis,
   SpeechPerformancePlan,
@@ -49,6 +50,8 @@ export interface SpeechPlanQualityMetrics {
   nonverbalCount: number;
   emphasisCount: number;
   freeFormDirectionCount: number;
+  instructionCount: number;
+  nonDefaultDeliveryModeCount: number;
   deliveryModeCounts: Record<string, number>;
   cueCount: number;
   cueRate: number;
@@ -235,6 +238,8 @@ export function analyzeValidatedSpeechPlan(
   let nonverbalCount = 0;
   let emphasisCount = 0;
   let freeFormDirectionCount = 0;
+  let instructionCount = 0;
+  let nonDefaultDeliveryModeCount = 0;
   let cueCount = 0;
 
   for (let index = 0; index < plan.segments.length; index += 1) {
@@ -245,6 +250,19 @@ export function analyzeValidatedSpeechPlan(
     }
     if (source && containsUnsafeMarkupDelimiter(source.text)) {
       hardFailures.push(issue('authored_markup_delimiter', segment.id));
+    }
+    const effectiveDirection = resolveEffectiveSpeechDirection(plan, segment);
+    if (plan.schemaVersion === 2 && effectiveDirection.instruction) {
+      instructionCount += 1;
+      cueCount += 1;
+      try {
+        normalizeSpeechCueText('freeFormDirection', effectiveDirection.instruction);
+      } catch (error) {
+        hardFailures.push(cueTextIssue(error, segment.id, 'freeFormDirection'));
+      }
+      if (!capabilities.naturalLanguageSteering) {
+        hardFailures.push(issue('unsupported_free_form_direction', segment.id));
+      }
     }
     for (const field of ['emotion', 'intonation', 'freeFormDirection'] as const) {
       const value = segment[field];
@@ -268,13 +286,13 @@ export function analyzeValidatedSpeechPlan(
       if (hasMetadata)
         warnings.push(issue('redundant_instruction_components', segment.id, {}, 'warning'));
     }
-    if (segment.pace) {
+    if (segment.pace && (plan.schemaVersion === 1 || segment.pace !== 'natural')) {
       paceCount += 1;
       cueCount += 1;
       if (!capabilities.speakingRate) hardFailures.push(issue('unsupported_pace', segment.id));
     }
     const pauses = [segment.pauseBeforeMs, segment.pauseAfterMs].filter(
-      (value): value is number => value !== undefined,
+      (value): value is number => value !== undefined && (plan.schemaVersion === 1 || value > 0),
     );
     pauseValuesMs.push(...pauses);
     cueCount += pauses.length;
@@ -300,9 +318,10 @@ export function analyzeValidatedSpeechPlan(
     if (segmentEmphasis && !capabilities.uppercaseEmphasis) {
       hardFailures.push(issue('unsupported_uppercase_emphasis', segment.id));
     }
-    if (segment.deliveryMode) {
+    if (segment.deliveryMode && (plan.schemaVersion === 1 || segment.deliveryMode !== 'BALANCED')) {
       deliveryModeCounts[segment.deliveryMode] =
         (deliveryModeCounts[segment.deliveryMode] ?? 0) + 1;
+      if (plan.schemaVersion === 2) nonDefaultDeliveryModeCount += 1;
       cueCount += 1;
       if (!capabilities.deliveryModes?.includes(segment.deliveryMode)) {
         hardFailures.push(issue('unsupported_delivery_mode', segment.id));
@@ -310,7 +329,10 @@ export function analyzeValidatedSpeechPlan(
     }
     if (hasMetadata)
       cueCount += Number(Boolean(segment.emotion)) + Number(Boolean(segment.intonation));
-    if (cueCountForSegment(segment) > 5)
+    if (segment.pace && segment.pace !== 'natural' && (segment.emphasis?.length ?? 0) > 0) {
+      warnings.push(issue('pace_with_emphasis', segment.id, {}, 'warning'));
+    }
+    if (effectiveCueCountForSegment(plan, segment) > 5)
       warnings.push(issue('high_cue_density', segment.id, {}, 'warning'));
 
     if (renderedSegments.length > 0) {
@@ -340,6 +362,39 @@ export function analyzeValidatedSpeechPlan(
     }
   }
 
+  if (plan.schemaVersion === 2) {
+    for (let index = 1; index < plan.segments.length; index += 1) {
+      const previous = plan.segments[index - 1]!.pace;
+      const current = plan.segments[index]!.pace;
+      if (
+        (previous === 'slow' && current === 'brisk') ||
+        (previous === 'brisk' && current === 'slow')
+      ) {
+        warnings.push(
+          issue('abrupt_adjacent_pace_change', plan.segments[index]!.id, {}, 'warning'),
+        );
+      }
+    }
+    const bySpeaker = new Map<string, typeof plan.segments>();
+    for (const segment of plan.segments) {
+      const speaker =
+        segment.speaker ??
+        (plan.resolvedPerformanceMode === 'monologue'
+          ? plan.performanceContext.speakerEnvelopes[0]?.speaker
+          : undefined);
+      if (!speaker) continue;
+      const key = speaker.toLocaleLowerCase();
+      bySpeaker.set(key, [...(bySpeaker.get(key) ?? []), segment]);
+    }
+    for (const turns of bySpeaker.values()) {
+      if (turns.length >= 2 && turns.every((turn) => turn.turnAdjustment)) {
+        warnings.push(
+          issue('excessive_same_speaker_changes', turns[0]!.id, { turns: turns.length }, 'warning'),
+        );
+      }
+    }
+  }
+
   return {
     hardFailures,
     warnings,
@@ -351,6 +406,8 @@ export function analyzeValidatedSpeechPlan(
       nonverbalCount,
       emphasisCount,
       freeFormDirectionCount,
+      instructionCount,
+      nonDefaultDeliveryModeCount,
       deliveryModeCounts,
       cueCount,
       cueRate: plan.segments.length > 0 ? cueCount / plan.segments.length : 0,
@@ -401,7 +458,22 @@ function cueTextIssue(
   return issue('unsafe_cue_text', segmentId, { field });
 }
 
-function cueCountForSegment(segment: SpeechPerformancePlanSegment): number {
+function effectiveCueCountForSegment(
+  plan: SpeechPerformancePlan,
+  segment: SpeechPerformancePlanSegment,
+): number {
+  if (plan.schemaVersion === 2) {
+    return (
+      Number(Boolean(resolveEffectiveSpeechDirection(plan, segment).instruction)) +
+      Number(Boolean(segment.pace && segment.pace !== 'natural')) +
+      (segment.emphasis?.length ?? 0) +
+      Number((segment.pauseBeforeMs ?? 0) > 0) +
+      Number((segment.pauseAfterMs ?? 0) > 0) +
+      (segment.nonVerbalsBefore?.length ?? 0) +
+      (segment.nonVerbalsAfter?.length ?? 0) +
+      Number(Boolean(segment.deliveryMode && segment.deliveryMode !== 'BALANCED'))
+    );
+  }
   return (
     Number(Boolean(segment.emotion)) +
     Number(Boolean(segment.intonation)) +
