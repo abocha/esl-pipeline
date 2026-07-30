@@ -114,7 +114,9 @@ function containsUnsafeMarkupDelimiter(value: string): boolean {
 export function analyzeSpeechPlanCandidate(
   prepared: PreparedStudyTextSynthesis,
   candidate: unknown,
+  options: { schemaVersion?: 1 | 2 } = {},
 ): SpeechPlanCandidateAnalysis {
+  if (options.schemaVersion === 2) return analyzeSpeechPlanCandidateV2(prepared, candidate);
   const hardFailures: SpeechPlanQualityIssue[] = [];
   const warnings: SpeechPlanQualityIssue[] = [];
   const parsed = asRecord(candidate);
@@ -221,6 +223,169 @@ export function analyzeSpeechPlanCandidate(
     if (!seen.has(sourceId)) hardFailures.push(issue('missing_source_segment', sourceId));
   }
   return { hardFailures, warnings };
+}
+
+function analyzeSpeechPlanCandidateV2(
+  prepared: PreparedStudyTextSynthesis,
+  candidate: unknown,
+): SpeechPlanCandidateAnalysis {
+  const hardFailures: SpeechPlanQualityIssue[] = [];
+  const warnings: SpeechPlanQualityIssue[] = [];
+  const parsed = asRecord(candidate);
+  const context = asRecord(parsed?.performanceContext);
+  const overall = asRecord(context?.overallDirection);
+  const envelopes = context?.speakerEnvelopes;
+  const segments = parsed?.segments;
+  if (!parsed || !context || !overall || !Array.isArray(envelopes) || !Array.isArray(segments)) {
+    return { hardFailures: [issue('candidate_shape_invalid')], warnings };
+  }
+  for (const basis of collectBasisReferences(overall, envelopes)) {
+    if (!candidateBasisIsGrounded(prepared, basis)) {
+      hardFailures.push(issue('invalid_basis_reference'));
+    }
+  }
+  const sourceIds = new Set(prepared.segments.map((segment) => segment.id));
+  const seen = new Set<string>();
+  for (const [index, value] of segments.entries()) {
+    const segment = asRecord(value);
+    if (!segment) {
+      hardFailures.push(issue('candidate_segment_shape_invalid'));
+      continue;
+    }
+    const id = typeof segment.id === 'string' && segment.id ? segment.id : undefined;
+    if (!id) {
+      hardFailures.push(issue('missing_segment_id'));
+      continue;
+    }
+    if (seen.has(id)) hardFailures.push(issue('duplicate_segment_id', id));
+    seen.add(id);
+    if (!sourceIds.has(id)) hardFailures.push(issue('unknown_segment_id', id));
+    const pace = segment.pace;
+    if (!['omit', 'slow', 'measured', 'brisk'].includes(String(pace))) {
+      hardFailures.push(issue('candidate_pace_invalid', id));
+    }
+    if (!Array.isArray(segment.emphasis)) {
+      hardFailures.push(issue('candidate_emphasis_invalid', id));
+    } else if (pace !== 'omit' && segment.emphasis.length > 0) {
+      warnings.push(issue('pace_with_emphasis', id, {}, 'warning'));
+    }
+    if (!['DEFAULT', 'STABLE', 'CREATIVE'].includes(String(segment.deliveryMode))) {
+      hardFailures.push(issue('candidate_delivery_mode_invalid', id));
+    }
+    for (const field of ['pauseBeforeMs', 'pauseAfterMs'] as const) {
+      const pause = segment[field];
+      if (!Number.isInteger(pause) || Number(pause) < 0 || Number(pause) > 1000) {
+        hardFailures.push(issue('candidate_pause_invalid', id, { field }));
+      }
+    }
+    const turn = asRecord(segment.turnAdjustment);
+    if (!turn || !Array.isArray(turn.components) || !Array.isArray(turn.evidence)) {
+      hardFailures.push(issue('candidate_turn_adjustment_invalid', id));
+    } else {
+      validateCandidateEvidence(prepared, id, index, turn.evidence, hardFailures);
+      if (turn.components.length > 0 && turn.evidence.length === 0) {
+        hardFailures.push(issue('invalid_turn_provenance', id));
+        warnings.push(issue('missing_turn_evidence', id, {}, 'warning'));
+      }
+    }
+    const controlEvidence = Array.isArray(segment.controlEvidence) ? segment.controlEvidence : [];
+    for (const entry of controlEvidence) {
+      const evidenceRecord = asRecord(entry);
+      if (!evidenceRecord || !Array.isArray(evidenceRecord.evidence)) {
+        hardFailures.push(issue('invalid_control_provenance', id));
+        continue;
+      }
+      validateCandidateEvidence(prepared, id, index, evidenceRecord.evidence, hardFailures);
+    }
+    const requiredControls = new Set<string>();
+    if (pace !== 'omit') requiredControls.add('pace');
+    if (Array.isArray(segment.emphasis) && segment.emphasis.length > 0)
+      requiredControls.add('emphasis');
+    if (Number(segment.pauseBeforeMs) > 0) requiredControls.add('pause_before');
+    if (Number(segment.pauseAfterMs) > 0) requiredControls.add('pause_after');
+    if (arrayLength(segment.nonVerbalsBefore) + arrayLength(segment.nonVerbalsAfter) > 0)
+      requiredControls.add('nonverbal');
+    if (segment.deliveryMode !== 'DEFAULT') requiredControls.add('delivery_mode');
+    for (const control of requiredControls) {
+      const found = controlEvidence.some((entry) => {
+        const record = asRecord(entry);
+        return (
+          record?.control === control &&
+          Array.isArray(record.evidence) &&
+          record.evidence.length > 0
+        );
+      });
+      if (!found) {
+        hardFailures.push(issue('invalid_control_provenance', id, { control }));
+        warnings.push(issue('missing_control_evidence', id, { control }, 'warning'));
+      }
+    }
+  }
+  for (const sourceId of sourceIds) {
+    if (!seen.has(sourceId)) hardFailures.push(issue('missing_source_segment', sourceId));
+  }
+  return { hardFailures, warnings };
+}
+
+function collectBasisReferences(overall: Record<string, unknown>, envelopes: unknown[]): string[] {
+  const references = Array.isArray(overall.basis)
+    ? overall.basis.filter((value): value is string => typeof value === 'string')
+    : [];
+  for (const envelope of envelopes) {
+    const baseline = asRecord(asRecord(envelope)?.baselineDirection);
+    if (!Array.isArray(baseline?.basis)) continue;
+    references.push(
+      ...baseline.basis.filter((value): value is string => typeof value === 'string'),
+    );
+  }
+  return references;
+}
+
+function candidateBasisIsGrounded(
+  prepared: PreparedStudyTextSynthesis,
+  reference: string,
+): boolean {
+  if (reference === 'frontmatter:title') return Boolean(prepared.performanceSource?.title);
+  if (reference === 'frontmatter:topic')
+    return (prepared.performanceSource?.topics.length ?? 0) > 0;
+  if (reference === 'frontmatter:study_text_type') return Boolean(prepared.performanceSource);
+  if (reference.startsWith('segment:')) {
+    return prepared.segments.some((segment) => segment.id === reference.slice('segment:'.length));
+  }
+  const match = /^speaker_profile:([^:]+):(role|persona|voice_direction)$/u.exec(reference);
+  if (!match) return false;
+  const profile = prepared.performanceSource?.speakerProfiles.find(
+    (candidate) => candidate.id.toLocaleLowerCase() === match[1]!.toLocaleLowerCase(),
+  );
+  return Boolean(profile?.[match[2] as 'role' | 'persona' | 'voice_direction']);
+}
+
+function validateCandidateEvidence(
+  prepared: PreparedStudyTextSynthesis,
+  currentId: string,
+  currentIndex: number,
+  evidence: unknown[],
+  hardFailures: SpeechPlanQualityIssue[],
+): void {
+  for (const value of evidence) {
+    const entry = asRecord(value);
+    const referencedIndex = prepared.segments.findIndex(
+      (segment) => segment.id === entry?.segmentId,
+    );
+    if (
+      !entry ||
+      typeof entry.quote !== 'string' ||
+      referencedIndex < 0 ||
+      (entry.kind === 'authored_substring' && entry.segmentId !== currentId) ||
+      (entry.kind === 'adjacent_segment' && Math.abs(referencedIndex - currentIndex) !== 1) ||
+      (entry.kind !== 'authored_substring' && entry.kind !== 'adjacent_segment') ||
+      !prepared.segments[referencedIndex]!.text.toLocaleLowerCase().includes(
+        entry.quote.toLocaleLowerCase(),
+      )
+    ) {
+      hardFailures.push(issue('invalid_evidence_reference', currentId));
+    }
+  }
 }
 
 export function analyzeValidatedSpeechPlan(

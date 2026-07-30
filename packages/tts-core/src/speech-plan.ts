@@ -625,6 +625,7 @@ function validateSegmentV2(
     ...(controlEvidence.length > 0 ? { controlEvidence } : {}),
   };
   if (!pace) delete canonical.pace;
+  if ((common.emphasis?.length ?? 0) === 0) delete canonical.emphasis;
   if (!pauseBeforeMs) delete canonical.pauseBeforeMs;
   if (!pauseAfterMs) delete canonical.pauseAfterMs;
   if (!deliveryMode) delete canonical.deliveryMode;

@@ -4,6 +4,7 @@ import type {
   SpeechPerformancePlanner,
   SpeechPerformancePlannerBinding,
   SpeechPerformancePlannerFallbackReason,
+  SpeechPerformancePlanV2,
   SpeechPerformancePromptPolicyId,
 } from '@esl-pipeline/tts-core';
 import {
@@ -32,6 +33,8 @@ type GoogleStructuredExecutor = typeof executeGoogleStructuredGenerationRaw;
 interface SpeechPlannerOutput {
   segments: Array<Record<string, unknown>>;
 }
+
+export type SpeechPlannerProvider = 'google_ai_studio' | 'openai';
 
 export interface SpeechPlannerAttemptResult {
   promptPolicyVersion: SpeechPerformancePromptPolicyId;
@@ -121,6 +124,7 @@ export function evaluateSpeechPlannerRawOutput(args: {
   returnedModel?: string;
   providerRequestId?: string;
   finishReason?: string;
+  plannerProvider?: SpeechPlannerProvider;
 }): SpeechPlannerAttemptResult {
   const rawParse = parseStructuredJsonText(args.rawText);
   const metadata = {
@@ -143,7 +147,9 @@ export function evaluateSpeechPlannerRawOutput(args: {
     };
   }
   const candidate = rawParse.output;
-  const candidateAnalysis = analyzeSpeechPlanCandidate(args.prepared, candidate);
+  const schemaVersion =
+    args.promptPolicyVersion === 'speech-performance-v3-contextual-continuity' ? 2 : 1;
+  const candidateAnalysis = analyzeSpeechPlanCandidate(args.prepared, candidate, { schemaVersion });
   if (candidateAnalysis.hardFailures.length > 0) {
     return {
       ...metadata,
@@ -161,7 +167,7 @@ export function evaluateSpeechPlannerRawOutput(args: {
     const plan = validateSpeechPerformancePlan(
       args.prepared,
       mergePlannerOutput(args.prepared, candidate, {
-        provider: 'google_ai_studio',
+        provider: args.plannerProvider ?? 'google_ai_studio',
         model: args.plannerModel,
         generatedAt: args.generatedAt,
         promptPolicyVersion: args.promptPolicyVersion,
@@ -239,6 +245,17 @@ function mergePlannerOutput(
   output: unknown,
   planner: NonNullable<SpeechPerformancePlan['planner']>,
 ): SpeechPerformancePlan {
+  if (planner.promptPolicyVersion === 'speech-performance-v3-contextual-continuity') {
+    return mergePlannerOutputV2(prepared, output, planner);
+  }
+  return mergePlannerOutputV1(prepared, output, planner);
+}
+
+function mergePlannerOutputV1(
+  prepared: Parameters<SpeechPerformancePlanner['plan']>[0],
+  output: unknown,
+  planner: NonNullable<SpeechPerformancePlan['planner']>,
+): SpeechPerformancePlan {
   const parsed = output as Partial<SpeechPlannerOutput>;
   if (!Array.isArray(parsed?.segments) || parsed.segments.length !== prepared.segments.length) {
     throw new Error('Speech planner output must contain one cue object per source segment.');
@@ -255,6 +272,136 @@ function mergePlannerOutput(
       return { ...segment, ...sanitizeOptionalCueValues(segment.text, safeCue) };
     }) as SpeechPerformancePlan['segments'],
   };
+}
+
+function mergePlannerOutputV2(
+  prepared: PreparedStudyTextSynthesis,
+  output: unknown,
+  planner: NonNullable<SpeechPerformancePlan['planner']>,
+): SpeechPerformancePlanV2 {
+  if (
+    !prepared.performanceMode ||
+    !prepared.performanceContextHash ||
+    !prepared.performanceSpeakers
+  ) {
+    throw new Error('Speech planner v3 output requires prepared performance context.');
+  }
+  const parsed = output as {
+    performanceContext?: {
+      overallDirection?: unknown;
+      speakerEnvelopes?: unknown;
+    };
+    segments?: Array<Record<string, unknown>>;
+  };
+  if (
+    !parsed.performanceContext ||
+    !Array.isArray(parsed.performanceContext.speakerEnvelopes) ||
+    !Array.isArray(parsed.segments) ||
+    parsed.segments.length !== prepared.segments.length
+  ) {
+    throw new Error('Speech planner v3 output has an invalid contextual plan shape.');
+  }
+  const cueById = new Map(parsed.segments.map((segment) => [String(segment.id ?? ''), segment]));
+  const plan: SpeechPerformancePlanV2 = {
+    schemaVersion: 2,
+    mode: 'prompted',
+    provider: prepared.selection.provider,
+    model: prepared.selection.model,
+    sourceHash: prepared.sourceHash,
+    performanceContextHash: prepared.performanceContextHash,
+    resolvedPerformanceMode: prepared.performanceMode,
+    performanceContext: {
+      overallDirection: parsed.performanceContext
+        .overallDirection as SpeechPerformancePlanV2['performanceContext']['overallDirection'],
+      speakerEnvelopes: parsed.performanceContext
+        .speakerEnvelopes as SpeechPerformancePlanV2['performanceContext']['speakerEnvelopes'],
+    },
+    planner,
+    segments: prepared.segments.map((source) => {
+      const raw = cueById.get(source.id);
+      if (!raw) throw new Error(`Speech planner output is missing segment "${source.id}".`);
+      const pace = raw.pace === 'omit' ? undefined : raw.pace;
+      const deliveryMode = raw.deliveryMode === 'DEFAULT' ? undefined : raw.deliveryMode;
+      const emphasis = canonicalizeEmphasis(source.text, raw.emphasis);
+      const rawControlEvidence = Array.isArray(raw.controlEvidence)
+        ? (raw.controlEvidence as Array<Record<string, unknown>>)
+        : [];
+      const paceWithEmphasis = Boolean(pace && emphasis.length > 0);
+      const keepEmphasis =
+        !paceWithEmphasis ||
+        rawControlEvidence.some(
+          (entry) => entry.control === 'emphasis' && entry.learnerMeaningRequired === true,
+        );
+      const survivingEmphasis = keepEmphasis ? emphasis : [];
+      const controlEvidence = rawControlEvidence.filter(
+        (entry) => entry.control !== 'emphasis' || survivingEmphasis.length > 0,
+      ) as unknown as NonNullable<SpeechPerformancePlanV2['segments'][number]['controlEvidence']>;
+      const rawTurn = raw.turnAdjustment as Record<string, unknown> | undefined;
+      const turnAdjustment =
+        rawTurn &&
+        Array.isArray(rawTurn.components) &&
+        rawTurn.components.length > 0 &&
+        Array.isArray(rawTurn.evidence) &&
+        rawTurn.evidence.length > 0 &&
+        typeof rawTurn.reason === 'string' &&
+        rawTurn.reason.trim()
+          ? (rawTurn as unknown as NonNullable<
+              SpeechPerformancePlanV2['segments'][number]['turnAdjustment']
+            >)
+          : undefined;
+      return {
+        ...source,
+        ...(turnAdjustment ? { turnAdjustment } : {}),
+        ...(pace
+          ? { pace: pace as NonNullable<SpeechPerformancePlanV2['segments'][number]['pace']> }
+          : {}),
+        ...(survivingEmphasis.length > 0 ? { emphasis: survivingEmphasis } : {}),
+        ...(typeof raw.pauseBeforeMs === 'number' && raw.pauseBeforeMs > 0
+          ? { pauseBeforeMs: raw.pauseBeforeMs }
+          : {}),
+        ...(typeof raw.pauseAfterMs === 'number' && raw.pauseAfterMs > 0
+          ? { pauseAfterMs: raw.pauseAfterMs }
+          : {}),
+        ...(Array.isArray(raw.nonVerbalsBefore) && raw.nonVerbalsBefore.length > 0
+          ? {
+              nonVerbalsBefore: raw.nonVerbalsBefore as NonNullable<
+                SpeechPerformancePlanV2['segments'][number]['nonVerbalsBefore']
+              >,
+            }
+          : {}),
+        ...(Array.isArray(raw.nonVerbalsAfter) && raw.nonVerbalsAfter.length > 0
+          ? {
+              nonVerbalsAfter: raw.nonVerbalsAfter as NonNullable<
+                SpeechPerformancePlanV2['segments'][number]['nonVerbalsAfter']
+              >,
+            }
+          : {}),
+        ...(deliveryMode
+          ? {
+              deliveryMode: deliveryMode as NonNullable<
+                SpeechPerformancePlanV2['segments'][number]['deliveryMode']
+              >,
+            }
+          : {}),
+        ...(controlEvidence.length > 0 ? { controlEvidence } : {}),
+      };
+    }),
+  };
+  return validateSpeechPerformancePlan(prepared, plan) as SpeechPerformancePlanV2;
+}
+
+function canonicalizeEmphasis(sourceText: string, value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const sourceLower = sourceText.toLocaleLowerCase();
+  return [
+    ...new Set(
+      value.flatMap((phrase) => {
+        if (typeof phrase !== 'string' || !phrase) return [];
+        const index = sourceLower.indexOf(phrase.toLocaleLowerCase());
+        return index < 0 ? [] : [sourceText.slice(index, index + phrase.length)];
+      }),
+    ),
+  ];
 }
 
 function sanitizeOptionalCueValues(

@@ -56,6 +56,16 @@ describe('generation request envelope', () => {
     expect(envelope.settings).toEqual({ reasoningEffort: 'medium', textVerbosity: 'medium' });
   });
 
+  it('uses medium reasoning and low verbosity for speech performance plans', () => {
+    const envelope = createGenerationRequestEnvelope({
+      workload: 'speech_performance_plan',
+      instructions: 'Plan grounded speech performance.',
+      sources: [{ id: 'study-text:1', label: 'STUDY_TEXT', content: 'Maya: Hello.' }],
+    });
+
+    expect(envelope.settings).toEqual({ reasoningEffort: 'medium', textVerbosity: 'low' });
+  });
+
   it('preserves an optional strict structured-output schema', () => {
     const envelope = createGenerationRequestEnvelope({
       workload: 'lesson_memory',

@@ -8,7 +8,8 @@ export type GenerationEnvelopeWorkload =
   | 'homework_memory'
   | 'student_memory_snapshot'
   | 'profile_revision'
-  | 'profile_candidate_patch';
+  | 'profile_candidate_patch'
+  | 'speech_performance_plan';
 
 export interface GenerationEnvelopeSource {
   id: string;
@@ -87,6 +88,7 @@ function resolveEnvelopeSettings(
     student_memory_snapshot: { reasoningEffort: 'medium', textVerbosity: 'low' },
     profile_revision: { reasoningEffort: 'medium', textVerbosity: 'low' },
     profile_candidate_patch: { reasoningEffort: 'low', textVerbosity: 'low' },
+    speech_performance_plan: { reasoningEffort: 'medium', textVerbosity: 'low' },
   };
   return { ...defaults[workload], ...overrides };
 }
