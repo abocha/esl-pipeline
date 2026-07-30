@@ -253,6 +253,46 @@ describe('inworld provider adapter basics', () => {
     expect(sdkClient.generate).not.toHaveBeenCalled();
   });
 
+  it('rejects unlabeled dialogue before catalog, ranker, or synthesis calls', async () => {
+    const context = parseMarkdownContext(
+      '---\ntitle: Test dialogue\nstudent: Alex\nlevel: B1\ntopic: work\nstudy_text_type: dialogue\nspeaker_labels: [Maya, Leo]\n---\n\n:::study-text\nThis turn has no authored owner.\n:::',
+    );
+    const sdkClient = {
+      listVoices: vi.fn().mockResolvedValue([]),
+      generate: vi.fn().mockResolvedValue(new Uint8Array([4, 5, 6])),
+    };
+    const sdkFactory = vi.fn(() => sdkClient);
+    const ranker = {
+      metadata: {
+        provider: 'google_ai_studio',
+        model: 'gemma-4-31b-it',
+        generatedAt: '2026-07-30T00:00:00.000Z',
+      },
+      rank: vi.fn(),
+    };
+
+    await expect(
+      buildStudyTextMp3Inworld(
+        { context },
+        {
+          voiceMapPath: 'voices.yml',
+          outPath: '/path-that-must-not-be-created',
+          force: true,
+          ttsModel: 'inworld-tts-2',
+          ttsStrategy: 'dialogue',
+          voiceRanker: ranker,
+        },
+        { apiKey: 'test-api-key', sdkFactory },
+      ),
+    ).rejects.toThrow(
+      'dialogue strategy requires an authored speaker for every study-text segment',
+    );
+    expect(sdkFactory).not.toHaveBeenCalled();
+    expect(sdkClient.listVoices).not.toHaveBeenCalled();
+    expect(ranker.rank).not.toHaveBeenCalled();
+    expect(sdkClient.generate).not.toHaveBeenCalled();
+  });
+
   it('does not construct the injected SDK client when credentials are missing', async () => {
     const sdkFactory = vi.fn();
     const provider = createInworldTtsProvider({ apiKey: undefined, sdkFactory });
