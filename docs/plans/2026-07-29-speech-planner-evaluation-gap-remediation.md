@@ -19,10 +19,17 @@
 - Current Focus: repair evaluator fidelity and accounting before any additional model comparison.
 - Exit Trigger: archive after the remediation PR and corrected evidence PR merge and durable behavior is represented in the runbook/reference docs.
 
+### Subsequent decision (2026-08-01)
+
+The corrected Gemini evidence informed the later contextual-continuity design. The founder then
+selected disabled-by-default `openai` plus `gpt-5.6-luna` for the new schema-v2 planner. The active
+v3 plan and current reference documentation supersede the historical default constraint below;
+the fixed 120-attempt Gemini baseline remains immutable historical evidence.
+
 ## Global Constraints
 
-- Preserve the production default `gemini-3.1-flash-lite` until corrected automatic and human
-  evidence supports a separate configuration decision.
+- Preserve the historical Gemini baseline and its evidence; current planner defaults are governed
+  by the subsequent v3 decision above.
 - Do not change production TTS rendering, retry, cache, manifest, or speaking-rate policy merely to
   make an evaluation green.
 - Keep the public live comparison fixed and bounded. Do not silently raise harness daily/RPM limits

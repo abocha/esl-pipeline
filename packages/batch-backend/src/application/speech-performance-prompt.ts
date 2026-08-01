@@ -87,7 +87,7 @@ const DIRECTION_COMPONENT_SCHEMA = {
         'style',
       ],
     },
-    direction: { type: 'string' },
+    direction: { type: 'string', maxLength: 36 },
   },
 } as const;
 
@@ -107,8 +107,8 @@ const DIRECTION_ENVELOPE_SCHEMA = {
   additionalProperties: false,
   required: ['components', 'basis'],
   properties: {
-    components: { type: 'array', items: DIRECTION_COMPONENT_SCHEMA },
-    basis: { type: 'array', items: { type: 'string' } },
+    components: { type: 'array', maxItems: 2, items: DIRECTION_COMPONENT_SCHEMA },
+    basis: { type: 'array', items: { type: 'string', enum: [] as string[] } },
   },
 } as const;
 
@@ -165,7 +165,7 @@ export const SPEECH_PLAN_V3_RESPONSE_SCHEMA = {
               additionalProperties: false,
               required: ['components', 'reason', 'evidence'],
               properties: {
-                components: { type: 'array', items: DIRECTION_COMPONENT_SCHEMA },
+                components: { type: 'array', maxItems: 1, items: DIRECTION_COMPONENT_SCHEMA },
                 reason: { type: 'string' },
                 evidence: { type: 'array', items: EVIDENCE_SCHEMA },
               },
@@ -214,6 +214,25 @@ export const SPEECH_PLAN_V3_RESPONSE_SCHEMA = {
   },
 } as const;
 
+function createSpeechPlanV3ResponseSchema(prepared: PreparedStudyTextSynthesis) {
+  const allowedBasisReferences = [
+    ...(prepared.performanceSource?.title ? ['frontmatter:title'] : []),
+    ...(prepared.performanceSource?.topics.length ? ['frontmatter:topic'] : []),
+    ...(prepared.performanceSource ? ['frontmatter:study_text_type'] : []),
+    ...(prepared.performanceSource?.speakerProfiles.flatMap((profile) =>
+      (['role', 'persona', 'voice_direction'] as const).flatMap((field) =>
+        profile[field] ? [`speaker_profile:${profile.id}:${field}`] : [],
+      ),
+    ) ?? []),
+    ...prepared.segments.map((segment) => `segment:${segment.id}`),
+  ];
+  const responseSchema = structuredClone(SPEECH_PLAN_V3_RESPONSE_SCHEMA);
+  const overallBasisReferences = responseSchema.schema.properties.performanceContext.properties
+    .overallDirection.properties.basis.items.enum as string[];
+  overallBasisReferences.push(...allowedBasisReferences);
+  return responseSchema;
+}
+
 const V1_LINES = [
   'Create restrained, natural speech-performance cues for this ESL study text.',
   'Do not rewrite words, add dialogue, or change segment order.',
@@ -250,7 +269,9 @@ const V3_LINES = [
   'Create exactly one speaker envelope for every supplied speaker and ground it in speaker-profile or speaker-owned segment references.',
   'Keep each speaker baseline recognizable across their turns without making every turn identical.',
   'Add a turn adjustment only when its current words or one adjacent turn provide an exact quoted reason for change.',
+  "Keep turn adjustments sparse: use empty components by default and adjust no more than half of each speaker's turns, rounded up.",
   'Direction components must use only the supplied provider-neutral dimension vocabulary and must not duplicate a dimension within one scope.',
+  'Keep the merged instruction within 200 code points: use at most two overall components, two speaker-baseline components, and one turn component, with each direction at most 36 code points.',
   'Compatible dimensions will be combined into one Inworld instruction; do not emit provider tags SDK values SSML or control markup.',
   'Omit pace for natural delivery; use slow measured or brisk only for an evidenced deliberately non-natural speed.',
   'When pace is present do not add a tempo direction component.',
@@ -310,6 +331,7 @@ export function buildSpeechPlannerRequest(
         ];
       }),
     };
+    const responseSchema = createSpeechPlanV3ResponseSchema(prepared);
     const envelope = createGenerationRequestEnvelope({
       workload: 'speech_performance_plan',
       promptVersion: promptPolicyVersion,
@@ -321,7 +343,7 @@ export function buildSpeechPlannerRequest(
           content: JSON.stringify(sourceData),
         },
       ],
-      responseSchema: SPEECH_PLAN_V3_RESPONSE_SCHEMA,
+      responseSchema,
     });
     const prompt = flattenGenerationRequestEnvelope(envelope);
     return {
@@ -329,7 +351,7 @@ export function buildSpeechPlannerRequest(
       envelope: provider === 'openai' ? envelope : undefined,
       promptHash: createHash('sha256').update(prompt).digest('hex'),
       promptPolicyVersion,
-      responseSchema: SPEECH_PLAN_V3_RESPONSE_SCHEMA,
+      responseSchema,
     };
   }
   const prompt = [

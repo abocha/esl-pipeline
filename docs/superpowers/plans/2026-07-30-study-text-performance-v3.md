@@ -5,8 +5,7 @@
 > subagents are read-only reviewers only.
 
 **Goal:** Add grounded dialogue/monologue continuity planning, non-stacking Inworld rendering, and
-an opt-in GPT-5.6 Luna planner while preserving pronunciation, legacy speech plans, and the Gemini
-3.1 production default.
+GPT-5.6 Luna planning while preserving pronunciation and legacy speech plans.
 
 **Architecture:** Extend the provider-neutral speech contract with schema-v2 scene, speaker, and
 turn envelopes whose direction components remain dimension-labelled until deterministic rendering.
@@ -31,6 +30,13 @@ generation, OpenAI Responses strict structured output, pnpm.
 - Exit Trigger: archive after implementation, deterministic validation, bounded human listening,
   and the resulting default decision are represented in active documentation.
 
+### Post-implementation decision (2026-08-01)
+
+The founder approved `openai` plus `gpt-5.6-luna` as the disabled built-in planner selection and
+high reasoning for speech-performance plans. The bounded trial is now a four-candidate Luna
+functionality proof, not a Gemini comparison. Historical task steps below remain an implementation
+record; this decision and current reference documentation are authoritative for defaults.
+
 ## Approved Design
 
 Implement against
@@ -39,10 +45,8 @@ If this plan and that design disagree, stop and correct the plan before changing
 
 ## Global Constraints
 
-- Keep `ESL_TTS_SPEECH_PLANNER_ENABLED=false` and the built-in planner selection Google AI Studio +
-  `gemini-3.1-flash-lite` until bounded listening evidence supports a separate activation decision.
-- Add exact `gpt-5.6-luna` support only behind explicit
-  `ESL_TTS_SPEECH_PLANNER_PROVIDER=openai` and a compatible allowlisted model.
+- Keep `ESL_TTS_SPEECH_PLANNER_ENABLED=false`; select exact `openai` plus `gpt-5.6-luna` when the
+  operator enables the planner without explicit provider/model overrides.
 - Preserve the fixed v1/v2 Gemini evaluation matrix, checked-in fixture hashes, immutable prompt
   bytes, and historical evidence. Do not add Luna or policy v3 to that 120-attempt baseline.
 - Preserve schema-v1 speech plans and prompt policies
@@ -1241,11 +1245,10 @@ Use this `.env.example` wording:
 
 ```text
 # Optional opt-in server-side performance planner for expressive study-text TTS.
-# Provider defaults to google_ai_studio; model defaults to gemini-3.1-flash-lite.
-# Set provider=openai and model=gpt-5.6-luna explicitly for the Luna contender.
+# Provider defaults to openai; model defaults to gpt-5.6-luna.
 # Google uses GEMINI_API_KEY; OpenAI uses OPENAI_API_KEY. Budgets remain provider/model keyed.
 # Pronunciation audio never uses this planner.
-# ESL_TTS_SPEECH_PLANNER_PROVIDER=google_ai_studio
+# ESL_TTS_SPEECH_PLANNER_PROVIDER=openai
 ```
 
 - [ ] **Step 3: Generate indexes and run docs/contract checks**
@@ -1383,8 +1386,7 @@ Report:
 - `PASS`, `PASS_WITH_CI_REQUIREMENTS`, or `FAIL` classification;
 - confirmation that the fixed v1/v2 offline evaluator remains green;
 - confirmation that pronunciation made zero planner calls in regression coverage;
-- current default decision (`google_ai_studio` + `gemini-3.1-flash-lite` unless later listening says
-  otherwise);
-- the exact eight-candidate manual command/procedure and provider-specific preflight inputs still
+- current default decision (`openai` + `gpt-5.6-luna`, still disabled until explicitly enabled);
+- the exact four-candidate Luna manual command/procedure and provider-specific preflight inputs still
   required from the user; and
 - any CI-owned DB/worker requirements.

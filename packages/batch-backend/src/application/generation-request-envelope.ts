@@ -83,12 +83,12 @@ function resolveEnvelopeSettings(
 ): GenerationRequestEnvelopeV1['settings'] {
   const defaults: Record<GenerationEnvelopeWorkload, GenerationRequestEnvelopeV1['settings']> = {
     assignment_draft: { reasoningEffort: 'medium', textVerbosity: 'medium' },
-    lesson_memory: { reasoningEffort: 'low', textVerbosity: 'low' },
-    homework_memory: { reasoningEffort: 'low', textVerbosity: 'low' },
-    student_memory_snapshot: { reasoningEffort: 'medium', textVerbosity: 'low' },
+    lesson_memory: { reasoningEffort: 'medium', textVerbosity: 'low' },
+    homework_memory: { reasoningEffort: 'medium', textVerbosity: 'low' },
+    student_memory_snapshot: { reasoningEffort: 'high', textVerbosity: 'low' },
     profile_revision: { reasoningEffort: 'medium', textVerbosity: 'low' },
-    profile_candidate_patch: { reasoningEffort: 'low', textVerbosity: 'low' },
-    speech_performance_plan: { reasoningEffort: 'medium', textVerbosity: 'low' },
+    profile_candidate_patch: { reasoningEffort: 'medium', textVerbosity: 'low' },
+    speech_performance_plan: { reasoningEffort: 'high', textVerbosity: 'low' },
   };
   return { ...defaults[workload], ...overrides };
 }

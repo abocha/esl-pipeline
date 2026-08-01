@@ -74,11 +74,12 @@ describe('config/env - core defaults', () => {
         });
         expect(cfg.speechPlanner.rpmBudget).toBe(4);
         expect(cfg.speechPlanner.dailyRequestBudget).toBe(120);
+        expect(cfg.speechPlanner.maxOutputTokens).toBe(12000);
         expect(cfg.speechPlanner.debugLogPlan).toBe(false);
         expect(cfg.speechPlanner).toMatchObject({
           enabled: false,
-          provider: 'google_ai_studio',
-          model: 'gemini-3.1-flash-lite',
+          provider: 'openai',
+          model: 'gpt-5.6-luna',
         });
       },
     );
@@ -172,7 +173,7 @@ describe('config/env - speech planner provider selection', () => {
     vi.resetModules();
   });
 
-  it('accepts explicit OpenAI Luna without changing the built-in default', async () => {
+  it('accepts an explicit OpenAI Luna selection matching the built-in default', async () => {
     await withEnv(
       {
         NODE_ENV: 'test',
@@ -528,7 +529,7 @@ describe('config/env - generation provider mapping', () => {
         expect(cfg.generation.quotaSourceMode).toBe('hybrid');
         expect(cfg.generation.safetyMode).toBe('hard_stop');
         expect(cfg.generation.strictNoPaid).toBe(true);
-        expect(cfg.generation.maxOutputTokensHard).toBe(3200);
+        expect(cfg.generation.maxOutputTokensHard).toBe(12000);
         expect(cfg.generation.budgetEmergencyOverride).toBe(false);
         expect(cfg.generation.models.openai.primary).toBe('gpt-5.6-sol');
         expect(cfg.generation.models.openai.fallback).toBe('gpt-5.6-luna');

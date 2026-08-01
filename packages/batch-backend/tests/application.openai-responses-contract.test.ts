@@ -24,7 +24,7 @@ describe('application/openai-responses-contract', () => {
       input: envelope.input,
       instructions: envelope.instructions,
       stream: false,
-      reasoning: { effort: 'low' },
+      reasoning: { effort: 'medium' },
       text: {
         verbosity: 'low',
         format: {

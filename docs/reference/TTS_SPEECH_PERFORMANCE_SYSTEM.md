@@ -131,6 +131,12 @@ overall for the same dimension; unrelated dimensions inherit. Metrics count the 
 effective instruction and controls, not the number of raw planner fields. Absent controls,
 `pace: natural`, zero pauses, and `deliveryMode: BALANCED` contribute no effective cue.
 
+Policy v3 bounds stacking against the renderer's 200-code-point free-form limit: at most two
+overall components, two speaker-baseline components, and one turn component, each at most 36 code
+points. Turn components default empty and the prompt permits adjustments on no more than half of
+each speaker's turns, rounded up. `excessive_same_speaker_changes` remains observable and the bounded
+Luna proof refuses candidates that emit it.
+
 ## Planner Policy
 
 Remote planning runs only for models declaring `prompted` support. `inworld-tts-2` uses the new
@@ -143,14 +149,14 @@ adjacent segments. `slow`, `measured`, and `brisk` are exceptional cues for a no
 the authored scene or learning goal explicitly justifies; emotion, seriousness, regret, reflection,
 or intonation alone do not justify changing pace.
 
-Batch backend injects a structured-output planner into the orchestrator. The default planner model
-is `gemini-3.1-flash-lite`, configured with:
+Batch backend injects a structured-output planner into the orchestrator. The planner remains
+disabled by default, with OpenAI and exact `gpt-5.6-luna` selected when enabled without overrides:
 
 ```text
 ESL_TTS_SPEECH_PLANNER_ENABLED=false
-ESL_TTS_SPEECH_PLANNER_PROVIDER=google_ai_studio
-ESL_TTS_SPEECH_PLANNER_MODEL=gemini-3.1-flash-lite
-ESL_TTS_SPEECH_PLANNER_MAX_OUTPUT_TOKENS=2400
+ESL_TTS_SPEECH_PLANNER_PROVIDER=openai
+ESL_TTS_SPEECH_PLANNER_MODEL=gpt-5.6-luna
+ESL_TTS_SPEECH_PLANNER_MAX_OUTPUT_TOKENS=12000
 ESL_TTS_SPEECH_PLANNER_DEBUG_LOG_PLAN=false
 ESL_TTS_SPEECH_PLANNER_RPM_BUDGET=4
 ESL_TTS_SPEECH_PLANNER_DAILY_REQUEST_BUDGET=120
@@ -163,11 +169,11 @@ ESL_TTS_VOICE_RANKER_DAILY_REQUEST_BUDGET=1000
 ESL_TTS_VOICE_RANKER_DEBUG_LOG_PLAN=false
 ```
 
-The built-in default remains disabled Google AI Studio plus `gemini-3.1-flash-lite`. Luna is an
-opt-in contender only: set provider `openai`, model `gpt-5.6-luna`, and include that exact model in
-the OpenAI allowlist. Google uses `GEMINI_API_KEY`; OpenAI uses `OPENAI_API_KEY`. Provider/model
+The planner remains disabled until explicitly enabled. Its built-in selection is OpenAI plus exact
+`gpt-5.6-luna`; alternate compatible providers and models require explicit overrides. Google uses
+`GEMINI_API_KEY`; OpenAI uses `OPENAI_API_KEY`. Provider/model
 allowlists, RPM, daily requests, daily tokens, and spend accounting remain separate, and there is
-no cross-provider fallback. OpenAI planner calls use strict structured output, medium reasoning,
+no cross-provider fallback. OpenAI planner calls use strict structured output, high reasoning,
 low verbosity, and `store: false`.
 
 Only typed provider timeouts may retry, within the selected provider. Every physical attempt
@@ -356,6 +362,8 @@ voice-capability snapshot provenance.
 ## Operational Notes
 
 - Planner enablement is opt-in because it adds a billable model call.
+- The first complete Luna schema-v2 functionality proof is recorded in
+  [`../operations/study-text-performance-v3-luna-evidence-2026-08-01.md`](../operations/study-text-performance-v3-luna-evidence-2026-08-01.md).
 - Planner model comparisons use the database-free, fail-closed harness documented in
   [`../operations/speech-planner-evaluation.md`](../operations/speech-planner-evaluation.md). The
   paid matrix contains prompted TTS-2 fixtures only; deterministic TTS 1.5 identity controls use the
