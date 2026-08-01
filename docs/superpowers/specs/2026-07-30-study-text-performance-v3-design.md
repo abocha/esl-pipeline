@@ -19,9 +19,9 @@ allow natural evidence-based variation from turn to turn, give a monologue a coh
 and avoid redundant controls that make otherwise good audio sound mechanical.
 
 The implementation introduces `speech-performance-v3-contextual-continuity` as a new immutable
-planner policy and adds `gpt-5.6-luna` as an opt-in planner contender. Neither capability changes the
-production planner default merely by becoming available. Gemini 3.1 remains the default until a
-bounded, matched listening comparison supplies enough evidence for a separate activation decision.
+planner policy and adds `gpt-5.6-luna`. A 2026-08-01 post-implementation decision selects Luna as the
+disabled planner default; the bounded trial now proves that Luna planning and synthesis work rather
+than comparing it against Gemini.
 
 ## Non-goals
 
@@ -337,9 +337,9 @@ ESL_TTS_SPEECH_PLANNER_PROVIDER=google_ai_studio|openai
 ESL_TTS_SPEECH_PLANNER_MODEL=<provider-supported-model>
 ```
 
-The built-in production default remains Google AI Studio with `gemini-3.1-flash-lite`. Provider and
-model are validated as a compatible pair. Allowlisting or testing Luna cannot silently reroute
-production.
+The built-in selection is OpenAI with `gpt-5.6-luna`, while planner enablement remains false by
+default. Provider and model are validated as a compatible pair, and explicit overrides remain
+authoritative.
 
 Both adapters feed one provider-neutral candidate parser, schema-v2 validator, canonicalizer,
 analyzer, and Inworld renderer. Returned-model identity and token usage remain observable.
@@ -349,13 +349,13 @@ analyzer, and Inworld renderer. Returned-model identity and token usage remain o
 The current Google structured-output execution, retries, timeout, quota accounting, and returned
 model validation remain authoritative. Gemini 3.5 stays allowlisted but is not made the default.
 
-### OpenAI adapter and Luna contender
+### OpenAI adapter and Luna default
 
 The OpenAI planner adapter reuses the repository's Responses API contract and structured-generation
-executor. The contender configuration is:
+executor. The default configuration is:
 
 - model: `gpt-5.6-luna`;
-- reasoning effort: `medium`;
+- reasoning effort: `high`;
 - text verbosity: `low`;
 - strict structured output;
 - standard request mode; and
@@ -369,10 +369,9 @@ Official model documentation confirms Responses API, reasoning, and structured-o
 - [GPT-5.6 Luna model](https://developers.openai.com/api/docs/models/gpt-5.6-luna)
 - [OpenAI latest-model guide](https://developers.openai.com/api/docs/guides/latest-model)
 
-The 2026-07-30 public list price is $1 per million input tokens, $0.10 per million cached input
-tokens, and $6 per million output tokens. That is inexpensive in absolute terms but roughly four
-times the stored Gemini 3.1 input/output rates used by the current evaluation cost snapshot. Cost
-and expected intelligence are hypotheses to test, not activation evidence.
+The official OpenAI pricing page listed standard short-context pricing on 2026-08-01 as $0.20 per
+million input tokens, $0.02 per million cached input tokens, and $1.20 per million output tokens.
+That dated snapshot supports the default decision but is not a permanent price contract.
 
 ### Budget separation
 
@@ -450,11 +449,11 @@ pass, exercise the ordinary application path with:
 
 - one representative alternating dialogue;
 - one representative multi-segment monologue;
-- Gemini 3.1 + policy v3 and Luna + policy v3;
-- two generations per model and mode; and
+- Luna + policy v3 only;
+- two generations per mode; and
 - identical text, selected voices, Inworld model, renderer, and assembly policy.
 
-This produces eight full study-text listening candidates and uses eight accounted planner calls.
+This produces four full study-text listening candidates and uses four accounted planner calls.
 The number of Inworld segment requests is the sum of the segments in those candidates, not eight.
 Artifacts stay in ignored `tmp/` storage. Listening checks:
 

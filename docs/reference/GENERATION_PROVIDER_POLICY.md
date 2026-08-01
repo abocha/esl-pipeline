@@ -71,9 +71,8 @@ prompts only for a measured failure or concrete contradiction.
   decision lands.
 - No model-specific quota baseline is set for `gemini-3.5-flash`; generic Google provider budgets
   still apply, and provider dashboard limits remain the external truth.
-- Speech planning keeps `gemini-3.1-flash-lite` as its production default. Allowlisting the exact
-  stable `gemini-3.5-flash-lite` ID enables explicit evaluation only; it does not select that model
-  for production. Gemini 3.5 Flash-Lite uses default/minimal thinking for the baseline and receives
+- Historical speech-planner evaluation keeps the exact stable Gemini model matrix immutable.
+  Gemini 3.5 Flash-Lite uses default/minimal thinking for that baseline and receives
   no deprecated `temperature`, `top_p`, or `top_k` fields or prefilled model turn.
 - The speech-planner evaluation price snapshot captured from the official Gemini pricing page on
   2026-07-28 records standard-text input/output rates per one million tokens as USD 0.25/1.50 for
@@ -83,12 +82,24 @@ prompts only for a measured failure or concrete contradiction.
 
 ### Study-text speech planning
 
-- The production speech-planner selection remains disabled `google_ai_studio` plus
-  `gemini-3.1-flash-lite`. Exact `openai` plus `gpt-5.6-luna` is an opt-in contender and does not
-  alter the default by being allowlisted.
+- The production speech planner remains disabled until explicitly enabled. Its built-in selection
+  is exact `openai` plus `gpt-5.6-luna`; Google models are explicit overrides and historical
+  evaluation targets.
 - Speech planning selects exactly one provider and never crosses providers on retry or failure.
-  Google uses `GEMINI_API_KEY`; OpenAI uses `OPENAI_API_KEY`, strict structured output, medium
+  Google uses `GEMINI_API_KEY`; OpenAI uses `OPENAI_API_KEY`, strict structured output, high
   reasoning, low verbosity, and `store: false`.
+- The official OpenAI API pricing page listed standard short-context Luna pricing as $0.20 per
+  million input tokens, $0.02 per million cached input tokens, and $1.20 per million output tokens
+  on 2026-08-01. Treat that dated snapshot as decision evidence, not a permanent price contract.
+- The organization currently opts into API input/output sharing. Under OpenAI's 2026-08-01 Tier 1
+  complimentary-token terms, the shared model group containing GPT-5.6 Luna and Terra has a 2.5
+  million-token daily allowance; the group containing GPT-5.6 Sol has a separate 250,000-token
+  daily allowance. These external allowances reset at 00:00 UTC and are operator-verified inputs,
+  not hardcoded application entitlements. Retain local request, token, and spend guards because
+  offer eligibility and terms may change.
+- Data sharing is an operator-controlled governance decision. Synthetic evaluation inputs are
+  eligible for the bounded trial; learner or other sensitive, confidential, or proprietary content
+  must be shared only when the organization has the necessary permission and policy basis.
 - Provider/model RPM, daily requests, daily tokens, and spend accounting remain separate. Each
   typed-timeout retry reserves another physical request before execution; actual returned usage is
   recorded once for the successful logical call.
@@ -145,7 +156,7 @@ prompts only for a measured failure or concrete contradiction.
 
 - `GEN_SAFETY_MODE=hard_stop`
 - `GEN_STRICT_NO_PAID=true`
-- `GEN_MAX_OUTPUT_TOKENS_HARD=3200`
+- `GEN_MAX_OUTPUT_TOKENS_HARD=12000`
 - `GEN_ALLOW_PAID_SPEND=false`
 
 Additional rules:

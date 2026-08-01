@@ -81,10 +81,9 @@ Primary groups:
     bytes without learner text or raw provider bodies.
   - Expressive study-text planning uses opt-in `ESL_TTS_SPEECH_PLANNER_ENABLED`, explicit
     `ESL_TTS_SPEECH_PLANNER_PROVIDER`, optional model/output-token controls, and separate
-    `ESL_TTS_SPEECH_PLANNER_*_BUDGET` limits. The built-in default remains disabled
-    `google_ai_studio` plus `gemini-3.1-flash-lite`; `gemini-3.5-flash-lite` remains allowlisted for
-    the historical comparison without changing that default. `openai` plus exact
-    `gpt-5.6-luna` is an explicit contender configuration only.
+    `ESL_TTS_SPEECH_PLANNER_*_BUDGET` limits. The planner remains disabled until explicitly enabled,
+    with `openai` plus exact `gpt-5.6-luna` selected by default. Gemini models remain allowlisted for
+    historical evidence and explicit overrides only.
   - Google speech planning uses server-side `GEMINI_API_KEY`; OpenAI uses `OPENAI_API_KEY` and
     sends `store: false`. Credentials, allowlists, RPM/daily request limits, token budgets, and
     spend accounting remain provider/model keyed. Typed timeout retries stay within one provider
@@ -196,7 +195,7 @@ Read next:
 - Generation battle-testing defaults should stay fail-safe:
   - `GEN_SAFETY_MODE=hard_stop`
   - `GEN_STRICT_NO_PAID=true`
-  - `GEN_MAX_OUTPUT_TOKENS_HARD=3200`
+  - `GEN_MAX_OUTPUT_TOKENS_HARD=12000`
 - Direct generation provider requests default to 240000 ms unless overridden per provider.
 - `GEN_OPENAI_TPM_BUDGET` defaults to `160000`; it is an operator capacity setting, not a billing or
   plan-tier setting.

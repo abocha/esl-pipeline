@@ -138,18 +138,18 @@ High-signal env groups for this package:
 - auth/security/upload controls: `JWT_*`, `REFRESH_*`, `ENABLE_*`
 - optional ops control: `BATCH_BACKEND_OPS_CONTROL_*`
 - generation: assignments use `gpt-5.6-sol` at medium reasoning; memory/profile workloads use
-  `gpt-5.6-luna` at low or medium reasoning according to the versioned request envelope
+  `gpt-5.6-luna` at medium or high reasoning according to the versioned request envelope
 
 The speech-planner evaluation CLI is database-free and fail-closed. Its fixed live baseline counts
 physical provider requests with no automatic retry, while checked-in TTS 1.5 identity controls run
 through the production capability, renderer, and analysis boundaries with zero provider calls. See
 the evaluation runbook for immutable artifact, resume, privacy, and current-day budget requirements.
 
-Production study-text planning remains disabled by default on `google_ai_studio` with
-`gemini-3.1-flash-lite`. Explicit `openai` plus `gpt-5.6-luna` is an opt-in contender. The providers
-use separate credentials, allowlists, and provider/model budgets; OpenAI planner calls set
-`store: false`, and each typed-timeout retry reserves a physical request. Policy v3 produces
-contextual schema-v2 dialogue/monologue plans. Pronunciation never invokes either planner.
+Production study-text planning remains disabled until explicitly enabled, with `openai` plus
+`gpt-5.6-luna` selected by default. Providers use separate credentials, allowlists, and
+provider/model budgets; OpenAI planner calls use high reasoning, low verbosity, `store: false`, and
+each typed-timeout retry reserves a physical request. Policy v3 produces contextual schema-v2
+dialogue/monologue plans. Pronunciation never invokes the planner.
 
 All local, Compose, and production application settings come from the repository-root `.env`.
 Validate it with `pnpm env:validate -- --profile=development`; use the production profile before a

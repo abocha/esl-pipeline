@@ -284,7 +284,7 @@ describe('application/generation-providers structured output', () => {
     expect(body).toMatchObject({
       model: 'gpt-5.6-luna',
       stream: false,
-      reasoning: { effort: 'medium' },
+      reasoning: { effort: 'high' },
       text: {
         verbosity: 'low',
         format: {
