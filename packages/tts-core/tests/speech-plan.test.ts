@@ -183,6 +183,19 @@ describe('speech performance plans', () => {
     expect(() => validateSpeechPerformancePlan(prepared, wrongVersion)).toThrow(
       'Unsupported speech enhancer version',
     );
+
+    const unsupportedPrepared: PreparedStudyTextSynthesis = {
+      ...prepared,
+      selection: { provider: 'google', model: 'chirp3_hd' },
+    };
+    const unsupportedPlan = {
+      ...createPlan(),
+      provider: 'google',
+      model: 'chirp3_hd',
+    } as unknown as SpeechPerformancePlanV2;
+    expect(() => validateSpeechPerformancePlan(unsupportedPrepared, unsupportedPlan)).toThrow(
+      'require Inworld TTS-2',
+    );
   });
 
   it.each([

@@ -1,8 +1,15 @@
 import type {
   InworldTtsModel,
+  SpeechEnhancementVersion,
   SpeechDeliveryMode,
   SpeechPerformancePlanSegment,
+  SpeechPerformancePlanSegmentV2,
   VoiceAssignmentCapabilities,
+} from '@esl-pipeline/tts-core';
+import {
+  SPEECH_ANNOTATION_CLOSE,
+  SPEECH_ANNOTATION_OPEN,
+  validateSpeechAnnotationText,
 } from '@esl-pipeline/tts-core';
 
 const MARKDOWN_STRIPPERS: [RegExp, string][] = [
@@ -28,6 +35,7 @@ export interface RenderedInworldSpeechSegment {
   speakingRate?: number;
   temperature?: number;
   deliveryMode?: SpeechDeliveryMode;
+  enhancerVersion?: SpeechEnhancementVersion;
 }
 
 export function cleanSpeechText(text: string): string {
@@ -42,10 +50,26 @@ export function cleanSpeechText(text: string): string {
 
 export function renderInworldSpeechSegment(args: {
   model: InworldTtsModel;
-  segment: SpeechPerformancePlanSegment;
+  segment: SpeechPerformancePlanSegment | SpeechPerformancePlanSegmentV2;
+  enhancerVersion?: SpeechEnhancementVersion;
   capabilities?: VoiceAssignmentCapabilities;
   language?: string;
 }): RenderedInworldSpeechSegment {
+  if ('synthesisText' in args.segment) {
+    if (args.model !== 'inworld-tts-2' || !args.enhancerVersion) {
+      throw new Error('Contextual speech annotations require Inworld TTS-2 and an enhancer version.');
+    }
+    const validated = validateSpeechAnnotationText(args.segment.text, args.segment.synthesisText);
+    const converted = convertSpeechAnnotationsToInworldText(validated.synthesisText);
+    return {
+      text: converted.text,
+      lexicalText: args.segment.text,
+      leadingInstructionTagCount: converted.leadingAnnotationCount,
+      ...(args.language ? { language: args.language } : {}),
+      deliveryMode: 'BALANCED',
+      enhancerVersion: args.enhancerVersion,
+    };
+  }
   const cleanText = cleanSpeechText(args.segment.text);
   if (args.model !== 'inworld-tts-2') {
     return {
@@ -96,6 +120,39 @@ export function renderInworldSpeechSegment(args: {
     ...(speakingRate !== undefined ? { speakingRate } : {}),
     ...(args.segment.deliveryMode ? { deliveryMode: args.segment.deliveryMode } : {}),
   };
+}
+
+function convertSpeechAnnotationsToInworldText(synthesisText: string): {
+  text: string;
+  leadingAnnotationCount: number;
+} {
+  let cursor = 0;
+  let authoredBefore = '';
+  let text = '';
+  let leadingAnnotationCount = 0;
+  while (cursor < synthesisText.length) {
+    const openAt = synthesisText.indexOf(SPEECH_ANNOTATION_OPEN, cursor);
+    if (openAt < 0) {
+      text += synthesisText.slice(cursor);
+      break;
+    }
+    const authoredChunk = synthesisText.slice(cursor, openAt);
+    text += authoredChunk;
+    authoredBefore += authoredChunk;
+    const bodyStart = openAt + SPEECH_ANNOTATION_OPEN.length;
+    const closeAt = synthesisText.indexOf(SPEECH_ANNOTATION_CLOSE, bodyStart);
+    const afterMarker = closeAt + SPEECH_ANNOTATION_CLOSE.length;
+    const annotation = synthesisText.slice(bodyStart, closeAt);
+    const left = Array.from(authoredBefore).at(-1);
+    const remainder = synthesisText.slice(afterMarker);
+    const nextMarker = remainder.indexOf(SPEECH_ANNOTATION_OPEN);
+    const nextAuthored = nextMarker < 0 ? remainder : remainder.slice(0, nextMarker);
+    const right = Array.from(nextAuthored)[0];
+    if (authoredBefore.trim().length === 0) leadingAnnotationCount += 1;
+    text += `${left && !/\s/u.test(left) ? ' ' : ''}[${annotation}]${right && !/\s/u.test(right) ? ' ' : ''}`;
+    cursor = afterMarker;
+  }
+  return { text, leadingAnnotationCount };
 }
 
 export function compileInworldSteeringInstruction(

@@ -5,6 +5,41 @@ import { createResolvedVoicePlan, type PreparedStudyTextSynthesis } from '@esl-p
 import { sanitizeAssignmentManifest } from '../src/manifest.js';
 
 describe('assignment manifest voice plans', () => {
+  it('round-trips accepted contextual annotations and enhancer provenance', () => {
+    const synthesisText =
+      '<tts-annotation>Trying not to sound accusatory</tts-annotation>Hello.';
+    const manifest = sanitizeAssignmentManifest({
+      schemaVersion: 5,
+      mdHash: 'md-hash',
+      timestamp: '2026-08-04T00:00:00.000Z',
+      speechPlans: {
+        studyText: {
+          schemaVersion: 2,
+          mode: 'prompted',
+          provider: 'inworld',
+          model: 'inworld-tts-2',
+          sourceHash: 'source-hash',
+          enhancerVersion: 'contextual-bracket-annotation-v1',
+          planner: {
+            provider: 'openai',
+            model: 'gpt-5.6-luna',
+            generatedAt: '2026-08-04T00:00:00.000Z',
+            promptPolicyVersion: 'contextual-bracket-annotation-v1',
+            promptHash: 'a'.repeat(64),
+          },
+          segments: [{ id: 'segment-1', text: 'Hello.', synthesisText }],
+        },
+      },
+    });
+
+    expect(manifest.speechPlans?.studyText).toMatchObject({
+      schemaVersion: 2,
+      enhancerVersion: 'contextual-bracket-annotation-v1',
+      planner: { promptPolicyVersion: 'contextual-bracket-annotation-v1' },
+      segments: [{ text: 'Hello.', synthesisText }],
+    });
+  });
+
   it('normalizes legacy resolved voice plans to deterministic mode', () => {
     const manifest = sanitizeAssignmentManifest({
       schemaVersion: 5,

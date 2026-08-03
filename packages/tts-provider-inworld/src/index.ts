@@ -322,6 +322,7 @@ export function buildInworldChunkHash(args: {
   encoding?: string;
   language?: string;
   rendererPolicyVersion?: string;
+  enhancerVersion?: string;
 }): string {
   return createHash('sha256')
     .update(
@@ -338,6 +339,7 @@ export function buildInworldChunkHash(args: {
         encoding: args.encoding ?? 'MP3',
         language: args.language,
         rendererPolicyVersion: args.rendererPolicyVersion ?? INWORLD_RENDERER_POLICY_VERSION,
+        enhancerVersion: args.enhancerVersion,
       }),
     )
     .digest('hex');
@@ -407,6 +409,9 @@ export async function buildStudyTextMp3Inworld(
     const rendered = renderInworldSpeechSegment({
       model,
       segment: speechPlanSegment,
+      ...(effectiveSpeechPlan.schemaVersion === 2
+        ? { enhancerVersion: effectiveSpeechPlan.enhancerVersion }
+        : {}),
       capabilities: assignment?.capabilities,
       language: assignment?.language,
     });
@@ -423,6 +428,7 @@ export async function buildStudyTextMp3Inworld(
         speakingRate: rendered.speakingRate,
         temperature: rendered.temperature,
         deliveryMode: rendered.deliveryMode,
+        enhancerVersion: rendered.enhancerVersion,
         gapAfterMs: gapDurations[index],
       },
     ];
@@ -444,12 +450,22 @@ export async function buildStudyTextMp3Inworld(
       provider: 'inworld',
       model,
       segments: renderedSegments.map(
-        ({ voiceId, text, speakingRate, temperature, deliveryMode, gapAfterMs, language }) => ({
+        ({
+          voiceId,
+          text,
+          speakingRate,
+          temperature,
+          deliveryMode,
+          enhancerVersion,
+          gapAfterMs,
+          language,
+        }) => ({
           voiceId,
           text,
           ...(speakingRate !== undefined ? { speakingRate } : {}),
           ...(temperature !== undefined ? { temperature } : {}),
           ...(deliveryMode !== undefined ? { deliveryMode } : {}),
+          ...(enhancerVersion !== undefined ? { enhancerVersion } : {}),
           ...(gapAfterMs !== undefined ? { gapAfterMs } : {}),
           ...(language !== undefined ? { language } : {}),
         }),
@@ -514,6 +530,7 @@ export async function buildStudyTextMp3Inworld(
       sampleRateHertz,
       language: segment.language,
       rendererPolicyVersion,
+      enhancerVersion: segment.enhancerVersion,
     });
     const chunkFilePath = resolve(outputDir, `${chunkHash}.mp3`);
     if (!opts.force && (await fileExistsNonEmpty(chunkFilePath))) {
