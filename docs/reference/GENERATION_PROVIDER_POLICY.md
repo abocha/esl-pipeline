@@ -103,9 +103,10 @@ prompts only for a measured failure or concrete contradiction.
 - Provider/model RPM, daily requests, daily tokens, and spend accounting remain separate. Each
   typed-timeout retry reserves another physical request before execution; actual returned usage is
   recorded once for the successful logical call.
-- Prompt policy `speech-performance-v3-contextual-continuity` produces schema-v2 dialogue or
-  monologue envelopes. Pronunciation is excluded. Historical v1/v2 evaluation results are not
-  reclassified as schema-v2 or Luna evidence.
+- Prompt policy `contextual-bracket-annotation-v1` gives Luna complete dialogue or monologue
+  assignment context and returns only optional reserved annotations inserted into immutable spoken
+  segments. Pronunciation is excluded. Historical v1/v2 evaluation results are not reclassified as
+  replacement schema-v2 or Luna listening evidence.
 
 ### OpenRouter
 

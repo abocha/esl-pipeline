@@ -161,13 +161,11 @@ This document captures the canonical schema so remote stores and services can va
   Schema-v1 planner provenance optionally records the immutable policy ID and SHA-256 prompt hash.
   The supported prompt policy IDs are `speech-performance-v1-restrained-natural`,
   `speech-performance-v2-inworld-tts2`, and
-  `speech-performance-v3-contextual-continuity`.
-- Schema-v2 `speechPlans.studyText` adds `resolvedPerformanceMode`, `performanceContextHash`, an
-  overall direction envelope, one speaker envelope per canonical performance speaker, optional
-  evidenced turn adjustments/controls, and optional `planner.returnedModel`. These fields are
-  additive under manifest schema `5`. The performance-context hash invalidates a plan when its
-  decision-relevant mode, source context, speaker intent, assignment language, or capabilities
-  change.
+  `contextual-bracket-annotation-v1`.
+- Schema-v2 `speechPlans.studyText` adds `enhancerVersion` and ordered segments containing canonical
+  authored `text` plus validated TTS-only `synthesisText`. Optional `planner.returnedModel` remains
+  provenance. These fields are additive under manifest schema `5`; annotations never replace
+  learner-visible assignment content.
 - `audioArtifacts.studyText.reused` and `htmlReused` are operational hints showing whether remote upload/publish reused
   an existing content-addressed object.
 - `audioArtifacts` stores per-target audio artifacts:
@@ -216,7 +214,7 @@ and reusable.
 
 The manifest contract version `3.1.0` added optional model-scoped capability provenance, canonical
 assignment language, and immutable planner prompt-policy provenance. Contract version `3.2.0`
-adds schema-v2 contextual performance plans and exact returned-model provenance. Neither change
+adds schema-v2 contextual annotation plans and exact returned-model provenance. Neither change
 bumps manifest schema version `5` or alters schema-v1 compatibility.
 
 ## Migrating from Filesystem to S3

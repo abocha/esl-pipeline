@@ -54,14 +54,13 @@ operator intentionally changes it.
 ## Speech Plan Manifest Contract
 
 The orchestrator persists schema-v1 and schema-v2 speech plans without inventing provenance for
-legacy manifests. Schema v2 records resolved dialogue/monologue mode, decision-relevant context
-hash, envelopes, exact returned planner model, immutable v3 policy, and prompt hash. New assignment
-planning receives the authored TTS strategy; rerun planning receives the explicit override or
-persisted effective strategy. Pronunciation-only reruns bypass study-text preparation and planning.
+legacy manifests. Schema v2 records immutable authored text, validated TTS-only synthesis text,
+enhancer version, exact returned planner model, immutable annotation policy, and prompt hash.
+Pronunciation-only reruns bypass study-text preparation and planning.
 
-Normal schema-v2 logs contain only mode, counts, hashes, and stable issue codes. Schema-v1 logs
-retain their historical cue counts. Learner-bearing direction/evidence and rejected provider text
-remain behind explicit debug logging.
+Normal schema-v2 logs contain only annotation/segment counts, hashes, enhancer version, and stable
+issue codes. Schema-v1 logs retain their historical cue counts. Learner-bearing annotations and
+rejected provider text remain behind explicit debug logging.
 
 See
 [`docs/reference/TTS_SPEECH_PERFORMANCE_SYSTEM.md`](../../docs/reference/TTS_SPEECH_PERFORMANCE_SYSTEM.md)
