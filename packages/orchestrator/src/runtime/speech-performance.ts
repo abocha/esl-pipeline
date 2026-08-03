@@ -4,6 +4,7 @@ import {
   analyzeValidatedSpeechPlan,
   createIdentitySpeechPerformancePlan,
   getTtsModelCapabilities,
+  SPEECH_ANNOTATION_OPEN,
   type PreparedStudyTextSynthesis,
   type SpeechPerformancePlan,
   type SpeechPerformancePlanner,
@@ -81,6 +82,38 @@ function logPromptedPlan(
 ): void {
   const analysis = analyzeValidatedSpeechPlan(prepared, resolved.plan);
   const qualityIssues = [...analysis.hardFailures, ...analysis.warnings];
+  if (resolved.plan.schemaVersion === 2) {
+    const annotationCounts = resolved.plan.segments.map(
+      (segment) => segment.synthesisText.split(SPEECH_ANNOTATION_OPEN).length - 1,
+    );
+    logger?.log({
+      level: 'info',
+      stage: 'speech-plan',
+      message: 'Speech performance planner produced a prompted plan',
+      detail: {
+        provider: resolved.plan.provider,
+        model: resolved.plan.model,
+        speechPlanHash: resolved.hash,
+        promptPolicyVersion: resolved.plan.planner.promptPolicyVersion,
+        promptHash: resolved.plan.planner.promptHash ?? null,
+        enhancerVersion: resolved.plan.enhancerVersion,
+        segmentCount: resolved.plan.segments.length,
+        annotatedSegmentCount: annotationCounts.filter((count) => count > 0).length,
+        annotationCount: annotationCounts.reduce((total, count) => total + count, 0),
+        qualityIssueCount: qualityIssues.length,
+        qualityIssueCodes: qualityIssues.map((issue) => issue.code),
+      },
+    });
+    if (debugLogPlan) {
+      logger?.log({
+        level: 'info',
+        stage: 'speech-plan',
+        message: 'Speech performance planner validated plan debug payload',
+        detail: { speechPlanHash: resolved.hash, speechPlan: resolved.plan },
+      });
+    }
+    return;
+  }
   const cueCounts = {
     emotion: 0,
     intonation: 0,
