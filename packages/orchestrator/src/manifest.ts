@@ -147,8 +147,7 @@ function sanitizeSpeechPlan(plan: SpeechPerformancePlan): SpeechPerformancePlan 
     planner: {
       ...planner,
       ...(promptPolicyVersion === 'speech-performance-v1-restrained-natural' ||
-      promptPolicyVersion === 'speech-performance-v2-inworld-tts2' ||
-      promptPolicyVersion === 'speech-performance-v3-contextual-continuity'
+      promptPolicyVersion === 'speech-performance-v2-inworld-tts2'
         ? { promptPolicyVersion }
         : {}),
       ...(typeof promptHash === 'string' && /^[a-f0-9]{64}$/u.test(promptHash)

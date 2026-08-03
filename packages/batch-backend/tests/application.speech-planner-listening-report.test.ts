@@ -87,8 +87,6 @@ describe('speech planner blocked listening report', () => {
         nonverbalCount: 0,
         emphasisCount: 0,
         freeFormDirectionCount: 0,
-        instructionCount: 0,
-        nonDefaultDeliveryModeCount: 0,
         deliveryModeCounts: {},
         cueCount: cueRate,
         cueRate,

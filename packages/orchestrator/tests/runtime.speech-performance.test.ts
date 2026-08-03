@@ -3,9 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createIdentitySpeechPerformancePlan,
   type PreparedStudyTextSynthesis,
-  SpeechPerformancePlannerBudgetExceededError,
   SpeechPerformancePlannerInvalidOutputError,
-  type SpeechPerformancePlanV2,
 } from '@esl-pipeline/tts-core';
 
 import { resolveSpeechPerformancePlan } from '../src/runtime/speech-performance.js';
@@ -17,107 +15,6 @@ function createPrepared(): PreparedStudyTextSynthesis {
     segments: [{ id: 'segment-1', speaker: 'Maya', text: 'We need a clearer deadline.' }],
     voices: [],
     voiceAssignments: {},
-  };
-}
-
-function createPreparedV2(): PreparedStudyTextSynthesis {
-  return {
-    selection: { provider: 'inworld', model: 'inworld-tts-2' },
-    sourceHash: 'source-hash-v2',
-    segments: [
-      { id: 'segment-1', speaker: 'Maya', text: 'We need a clearer deadline.' },
-      { id: 'segment-2', speaker: 'Leo', text: 'I can revise the plan today.' },
-    ],
-    performanceMode: 'dialogue',
-    performanceSpeakers: ['Maya', 'Leo'],
-    performanceSource: {
-      title: 'Deadline conversation',
-      topics: ['work'],
-      studyTextType: 'dialogue',
-      speakerProfiles: [
-        { id: 'Maya', persona: 'warm practical and direct' },
-        { id: 'Leo', persona: 'thoughtful and responsive' },
-      ],
-    },
-    performanceContextHash: 'c'.repeat(64),
-    voices: [],
-    voiceAssignments: { Maya: 'voice-1', Leo: 'voice-2' },
-  };
-}
-
-function createPlanV2(prepared: PreparedStudyTextSynthesis): SpeechPerformancePlanV2 {
-  return {
-    schemaVersion: 2,
-    mode: 'prompted',
-    provider: 'inworld',
-    model: 'inworld-tts-2',
-    sourceHash: prepared.sourceHash,
-    performanceContextHash: prepared.performanceContextHash!,
-    resolvedPerformanceMode: 'dialogue',
-    performanceContext: {
-      overallDirection: {
-        components: [
-          { dimension: 'relationship', direction: 'sound like collaborative colleagues' },
-        ],
-        basis: ['frontmatter:topic'],
-      },
-      speakerEnvelopes: [
-        {
-          speaker: 'Maya',
-          baselineDirection: {
-            components: [{ dimension: 'style', direction: 'warm practical and direct' }],
-            basis: ['speaker_profile:Maya:persona'],
-          },
-        },
-        {
-          speaker: 'Leo',
-          baselineDirection: {
-            components: [{ dimension: 'style', direction: 'thoughtful and responsive' }],
-            basis: ['speaker_profile:Leo:persona'],
-          },
-        },
-      ],
-    },
-    planner: {
-      provider: 'google_ai_studio',
-      model: 'gemini-3.1-flash-lite',
-      returnedModel: 'gemini-3.1-flash-lite-2026-07-15',
-      generatedAt: '2026-07-30T00:00:00.000Z',
-      promptPolicyVersion: 'speech-performance-v3-contextual-continuity',
-      promptHash: 'a'.repeat(64),
-    },
-    segments: [
-      {
-        ...prepared.segments[0]!,
-        pauseAfterMs: 180,
-        turnAdjustment: {
-          components: [{ dimension: 'intonation', direction: 'land the deadline firmly' }],
-          reason: 'The correction needs a clear boundary',
-          evidence: [
-            {
-              kind: 'authored_substring',
-              segmentId: 'segment-1',
-              quote: 'clearer deadline',
-            },
-          ],
-        },
-        controlEvidence: [
-          {
-            control: 'pause_after',
-            reason: 'Preserve the reply boundary',
-            evidence: [
-              {
-                kind: 'authored_substring',
-                segmentId: 'segment-1',
-                quote: 'deadline',
-              },
-            ],
-            learnerMeaningRequired: false,
-          },
-        ],
-      },
-      { ...prepared.segments[1]! },
-    ],
   };
 }
 
@@ -250,47 +147,6 @@ describe('runtime/speech-performance', () => {
     );
   });
 
-  it('logs contextual plan metrics without direction or evidence text', async () => {
-    const prepared = createPreparedV2();
-    const plan = createPlanV2(prepared);
-    const logger = { log: vi.fn() };
-    const result = await resolveSpeechPerformancePlan({
-      prepared,
-      logger,
-      planner: {
-        async plan() {
-          return plan;
-        },
-      },
-    });
-
-    expect(result.plan).toEqual(plan);
-    expect(logger.log).toHaveBeenCalledWith({
-      level: 'info',
-      stage: 'speech-plan',
-      message: 'Speech performance planner produced a prompted plan',
-      detail: {
-        provider: 'inworld',
-        model: 'inworld-tts-2',
-        speechPlanHash: result.hash,
-        promptPolicyVersion: 'speech-performance-v3-contextual-continuity',
-        promptHash: 'a'.repeat(64),
-        segmentCount: 2,
-        schemaVersion: 2,
-        resolvedPerformanceMode: 'dialogue',
-        overallDirectionComponentCount: 1,
-        speakerEnvelopeCount: 2,
-        turnAdjustmentCount: 1,
-        effectiveInstructionCount: 2,
-        effectiveCueCount: 3,
-        qualityIssueCount: 0,
-        qualityIssueCodes: [],
-      },
-    });
-    expect(JSON.stringify(logger.log.mock.calls)).not.toContain('land the deadline firmly');
-    expect(JSON.stringify(logger.log.mock.calls)).not.toContain('Preserve the reply boundary');
-  });
-
   it('falls back when planner output violates source immutability', async () => {
     const prepared = createPrepared();
     const identity = createIdentitySpeechPerformancePlan(prepared);
@@ -342,7 +198,8 @@ describe('runtime/speech-performance', () => {
   });
 
   it('reports budget exhaustion separately from provider execution failures', async () => {
-    const error = new SpeechPerformancePlannerBudgetExceededError('budget exhausted');
+    const error = new Error('budget exhausted');
+    error.name = 'GenerationBudgetExceededError';
     const result = await resolveSpeechPerformancePlan({
       prepared: createPrepared(),
       planner: {

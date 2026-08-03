@@ -12,7 +12,6 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { loadSpeechPlannerEvalControls } from '../src/application/speech-planner-eval-fixtures.js';
 import type { SpeechPlannerEvalAttemptRecord } from '../src/application/speech-planner-evaluator.js';
 import { loadConfig } from '../src/config/env.js';
 import {
@@ -90,36 +89,6 @@ describe('eval speech planner CLI', () => {
     expect(executeAttempt).not.toHaveBeenCalled();
   });
 
-  it('rejects identity-only custom fixtures before any planner provider call', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'speech-eval-identity-corpus-'));
-    roots.push(root);
-    const corpusPath = join(root, 'corpus.json');
-    const control = loadSpeechPlannerEvalControls()[0]!;
-    writeFileSync(
-      corpusPath,
-      JSON.stringify([
-        {
-          id: 'identity-custom-fixture',
-          why: 'production routes this without remote planning',
-          tags: ['identity'],
-          prepared: control.prepared,
-          expectedHardInvariants: [],
-        },
-      ]),
-    );
-    const executeAttempt = vi.fn();
-
-    await expect(
-      runEvalSpeechPlannerCli([`--corpus=${corpusPath}`], {
-        stdout: vi.fn(),
-        config: loadConfig(),
-        gitSha: 'a'.repeat(40),
-        executeAttempt,
-      }),
-    ).rejects.toThrow('must select a prompted TTS model');
-    expect(executeAttempt).not.toHaveBeenCalled();
-  });
-
   it('parses explicit matrix, usage, audio, private, output, and resume flags', () => {
     expect(
       parseEvalSpeechPlannerArgs([
@@ -192,20 +161,14 @@ describe('eval speech planner CLI', () => {
       providerCalls: 0,
       synthesisCalls: 0,
       postgresAdapters: 0,
-      completedAttempts: 6,
-      completedControls: 1,
+      completedAttempts: 5,
     });
     expect(executeAttempt).not.toHaveBeenCalled();
     expect(
       JSON.parse(readFileSync(join(result.runDirectory!, 'summary.json'), 'utf8')),
     ).toMatchObject({
-      identityFallbackRate: 5 / 6,
-      controls: { expected: 1, completed: 1, passed: 1, failed: 0 },
-      hardGates: {
-        providerFailures: 1,
-        tts15SteeringLeakageFailures: 0,
-        deterministicControlFailures: 0,
-      },
+      identityFallbackRate: 0.8,
+      hardGates: { tts15SteeringLeakageFailures: 1 },
     });
   });
 
@@ -305,24 +268,14 @@ describe('eval speech planner CLI', () => {
       ],
       { stdout: vi.fn(), config, gitSha: 'a'.repeat(40), executeAttempt },
     );
-    expect(first).toMatchObject({
-      mode: 'live',
-      providerCalls: 4,
-      completedAttempts: 4,
-      completedControls: 1,
-    });
+    expect(first).toMatchObject({ mode: 'live', providerCalls: 4, completedAttempts: 4 });
     executeAttempt.mockClear();
 
     const resumed = await runEvalSpeechPlannerCli(
       ['--live', '--used-today=4', `--resume-run=${first.runDirectory!}`],
       { stdout: vi.fn(), config, gitSha: 'a'.repeat(40), executeAttempt },
     );
-    expect(resumed).toMatchObject({
-      mode: 'live',
-      providerCalls: 0,
-      completedAttempts: 4,
-      completedControls: 1,
-    });
+    expect(resumed).toMatchObject({ mode: 'live', providerCalls: 0, completedAttempts: 4 });
     expect(executeAttempt).not.toHaveBeenCalled();
 
     const failedAudio = vi.fn(async () => {
