@@ -82,10 +82,7 @@ export function validateSpeechAnnotationText(
 }
 
 export function assertSourceHasNoReservedDelimiter(sourceText: string): void {
-  if (
-    sourceText.includes(SPEECH_ANNOTATION_OPEN) ||
-    sourceText.includes(SPEECH_ANNOTATION_CLOSE)
-  ) {
+  if (sourceText.includes(SPEECH_ANNOTATION_OPEN) || sourceText.includes(SPEECH_ANNOTATION_CLOSE)) {
     throw new ConfigurationError('Authored text contains a reserved annotation delimiter.');
   }
 }

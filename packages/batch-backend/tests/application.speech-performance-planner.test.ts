@@ -483,7 +483,6 @@ describe('application/speech-performance-planner', () => {
       ]),
     );
   });
-
 });
 
 function createEnabledConfig() {

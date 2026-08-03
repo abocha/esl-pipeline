@@ -12,17 +12,17 @@ import {
   createResolvedVoicePlan,
   getTtsModelCapabilities,
   normalizeSpeechCueText,
-  SPEECH_ANNOTATION_CLOSE,
-  SPEECH_ANNOTATION_OPEN,
   type PreparedStudyTextSynthesis,
   resolveVoicePlanForExecution,
+  SPEECH_ANNOTATION_CLOSE,
+  SPEECH_ANNOTATION_OPEN,
   type SpeechPerformancePlan,
   type SpeechPerformancePlanV2,
   TtsSynthesisCancelledError,
   throwIfTtsCancelled,
   type VoicePlan,
-  validateSpeechPerformancePlan,
   validateSpeechAnnotationText,
+  validateSpeechPerformancePlan,
   validateVoicePlan,
   withVoicePlan,
 } from '../src/index.js';
@@ -108,7 +108,11 @@ describe('speech performance plans', () => {
     ['empty annotation', 'Stay calm.', '<tts-annotation> </tts-annotation>Stay calm.'],
     ['word split', 'Stay calm.', 'St<tts-annotation>slowly</tts-annotation>ay calm.'],
     ['punctuation split', 'Really?!', 'Really?<tts-annotation>surprised</tts-annotation>!'],
-    ['Unicode code-point split', 'Hi 😀.', 'Hi \ud83d<tts-annotation>amused</tts-annotation>\ude00.'],
+    [
+      'Unicode code-point split',
+      'Hi 😀.',
+      'Hi \ud83d<tts-annotation>amused</tts-annotation>\ude00.',
+    ],
   ])('rejects %s', (_case, sourceText, synthesisText) => {
     expect(() => validateSpeechAnnotationText(sourceText, synthesisText)).toThrow();
   });

@@ -7,10 +7,10 @@ import {
 import type {
   PreparedStudyTextSynthesis,
   SpeechPerformancePlan,
-  SpeechPerformancePlanV2,
   SpeechPerformancePlanner,
   SpeechPerformancePlannerBinding,
   SpeechPerformancePlannerFallbackReason,
+  SpeechPerformancePlanV2,
   SpeechPerformancePromptPolicyId,
 } from '@esl-pipeline/tts-core';
 import {

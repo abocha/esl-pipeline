@@ -108,7 +108,6 @@ describe('runtime/speech-performance', () => {
     expect(JSON.stringify(logger.log.mock.calls)).not.toContain('Trying not to sound accusatory');
   });
 
-
   it('records identity fallback when a prompted model has no injected planner', async () => {
     const result = await resolveSpeechPerformancePlan({ prepared: createPrepared() });
 

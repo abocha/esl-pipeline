@@ -6,8 +6,7 @@ import { sanitizeAssignmentManifest } from '../src/manifest.js';
 
 describe('assignment manifest voice plans', () => {
   it('round-trips accepted contextual annotations and enhancer provenance', () => {
-    const synthesisText =
-      '<tts-annotation>Trying not to sound accusatory</tts-annotation>Hello.';
+    const synthesisText = '<tts-annotation>Trying not to sound accusatory</tts-annotation>Hello.';
     const manifest = sanitizeAssignmentManifest({
       schemaVersion: 5,
       mdHash: 'md-hash',

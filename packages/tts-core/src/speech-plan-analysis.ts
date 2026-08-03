@@ -4,8 +4,8 @@ import { getTtsModelCapabilities } from './descriptors.js';
 import type {
   PreparedStudyTextSynthesis,
   SpeechPerformancePlan,
-  SpeechPerformancePlanV2,
   SpeechPerformancePlanSegment,
+  SpeechPerformancePlanV2,
 } from './types.js';
 
 const SAFE_CUE_TEXT = /^[\p{L}\p{N}\p{M}\p{Zs},.!?;:'"()–—-]+$/u;
