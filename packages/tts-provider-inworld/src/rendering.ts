@@ -1,7 +1,7 @@
 import type {
   InworldTtsModel,
-  SpeechEnhancementVersion,
   SpeechDeliveryMode,
+  SpeechEnhancementVersion,
   SpeechPerformancePlanSegment,
   SpeechPerformancePlanSegmentV2,
   VoiceAssignmentCapabilities,
@@ -57,7 +57,9 @@ export function renderInworldSpeechSegment(args: {
 }): RenderedInworldSpeechSegment {
   if ('synthesisText' in args.segment) {
     if (args.model !== 'inworld-tts-2' || !args.enhancerVersion) {
-      throw new Error('Contextual speech annotations require Inworld TTS-2 and an enhancer version.');
+      throw new Error(
+        'Contextual speech annotations require Inworld TTS-2 and an enhancer version.',
+      );
     }
     const validated = validateSpeechAnnotationText(args.segment.text, args.segment.synthesisText);
     const converted = convertSpeechAnnotationsToInworldText(validated.synthesisText);

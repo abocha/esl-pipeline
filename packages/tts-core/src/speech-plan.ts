@@ -3,20 +3,20 @@ import { extractFrontmatter, extractStudyText } from '@esl-pipeline/pmd';
 
 import { resolveTtsSelection } from './descriptors.js';
 import { hashStudyText } from './hash.js';
-import { normalizeSpeechCueText } from './speech-plan-analysis.js';
 import {
   CONTEXTUAL_SPEECH_ANNOTATION_VERSION,
   validateSpeechAnnotationText,
 } from './speech-annotation.js';
+import { normalizeSpeechCueText } from './speech-plan-analysis.js';
 import type {
   BuildStudyTextInput,
   BuildStudyTextOptions,
   PreparedStudyTextSynthesis,
   SpeechPerformancePlan,
-  SpeechPerformancePlanV1,
-  SpeechPerformancePlanV2,
   SpeechPerformancePlannerFallbackReason,
   SpeechPerformancePlanSegment,
+  SpeechPerformancePlanV1,
+  SpeechPerformancePlanV2,
 } from './types.js';
 
 export class SpeechPerformancePlannerInvalidOutputError extends Error {
@@ -212,7 +212,9 @@ function validateSpeechPerformancePlanV2(
       );
     }
     if (segment.text !== source.text) {
-      throw new ConfigurationError(`Speech plan segment "${segment.id}" changed the authored text.`);
+      throw new ConfigurationError(
+        `Speech plan segment "${segment.id}" changed the authored text.`,
+      );
     }
     if (segment.speaker !== source.speaker) {
       throw new ConfigurationError(

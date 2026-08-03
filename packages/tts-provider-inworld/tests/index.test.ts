@@ -995,8 +995,7 @@ describe('inworld provider adapter basics', () => {
         segment: {
           id: 'segment-2',
           text: "You're right. I completely forgot.",
-          synthesisText:
-            "You're right.<tts-annotation>sighs</tts-annotation> I completely forgot.",
+          synthesisText: "You're right.<tts-annotation>sighs</tts-annotation> I completely forgot.",
         },
       }).text,
     ).toBe("You're right. [sighs] I completely forgot.");
