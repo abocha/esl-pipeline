@@ -7,6 +7,7 @@ import {
 import type {
   PreparedStudyTextSynthesis,
   SpeechPerformancePlan,
+  SpeechPerformancePlanV2,
   SpeechPerformancePlanner,
   SpeechPerformancePlannerBinding,
   SpeechPerformancePlannerFallbackReason,
@@ -14,6 +15,8 @@ import type {
 } from '@esl-pipeline/tts-core';
 import {
   analyzeSpeechPlanCandidate,
+  assertSourceHasNoReservedDelimiter,
+  CONTEXTUAL_SPEECH_ANNOTATION_VERSION,
   createIdentitySpeechPerformancePlan,
   SpeechPerformancePlannerBudgetExceededError,
   SpeechPerformancePlannerInvalidOutputError,
@@ -60,6 +63,10 @@ const SPEECH_PLANNER_RUNTIME_CLASSIFICATION_RULES: ProviderRuntimeClassification
 
 interface SpeechPlannerOutput {
   segments: Array<Record<string, unknown>>;
+}
+
+interface SpeechAnnotationOutput {
+  segments: Array<{ id: string; synthesisText: string }>;
 }
 
 export type { SpeechPlannerProvider } from '../config/env.js';
@@ -130,6 +137,24 @@ export async function executeSpeechPlannerAttempt(args: {
     args.promptPolicyVersion,
     args.config.speechPlanner.model,
   );
+  if (args.promptPolicyVersion === 'contextual-bracket-annotation-v1') {
+    try {
+      for (const segment of args.prepared.segments) {
+        assertSourceHasNoReservedDelimiter(segment.text);
+      }
+    } catch (error) {
+      return {
+        promptPolicyVersion: request.promptPolicyVersion,
+        promptHash: request.promptHash,
+        validation: {
+          status: 'invalid',
+          reason: error instanceof Error ? error.message : String(error),
+        },
+        latencyMs: 0,
+        fallback: { reason: 'planner_invalid' },
+      };
+    }
+  }
   const startedAt = now();
   const candidate = { provider, model: args.config.speechPlanner.model } as const;
   const result = await runProviderFallbackLadder<
@@ -245,7 +270,10 @@ export function evaluateSpeechPlannerRawOutput(args: {
     };
   }
   const candidate = rawParse.output;
-  const candidateAnalysis = analyzeSpeechPlanCandidate(args.prepared, candidate);
+  const candidateAnalysis =
+    args.promptPolicyVersion === 'contextual-bracket-annotation-v1'
+      ? { hardFailures: [], warnings: [] }
+      : analyzeSpeechPlanCandidate(args.prepared, candidate);
   if (candidateAnalysis.hardFailures.length > 0) {
     return {
       ...metadata,
@@ -325,7 +353,7 @@ export function createBackendSpeechPerformancePlanner(
         const attempt = await executeSpeechPlannerAttempt({
           config,
           prepared,
-          promptPolicyVersion: 'speech-performance-v2-inworld-tts2',
+          promptPolicyVersion: 'contextual-bracket-annotation-v1',
           executors: overrides.executors,
           executor: overrides.executor,
           now,
@@ -354,7 +382,43 @@ function mergePlannerOutput(
   output: unknown,
   planner: NonNullable<SpeechPerformancePlan['planner']>,
 ): SpeechPerformancePlan {
+  if (planner.promptPolicyVersion === 'contextual-bracket-annotation-v1') {
+    return mergePlannerOutputV2(prepared, output, planner);
+  }
   return mergePlannerOutputV1(prepared, output, planner);
+}
+
+function mergePlannerOutputV2(
+  prepared: Parameters<SpeechPerformancePlanner['plan']>[0],
+  output: unknown,
+  planner: NonNullable<SpeechPerformancePlan['planner']>,
+): SpeechPerformancePlanV2 {
+  const parsed = output as Partial<SpeechAnnotationOutput>;
+  if (!Array.isArray(parsed?.segments) || parsed.segments.length !== prepared.segments.length) {
+    throw new Error('Speech annotation output must contain every source segment exactly once.');
+  }
+  const segments = prepared.segments.map((source, index) => {
+    const candidate = parsed.segments![index];
+    if (!candidate || candidate.id !== source.id) {
+      throw new Error(
+        `Speech annotation segment at index ${index} does not match source segment "${source.id}".`,
+      );
+    }
+    if (typeof candidate.synthesisText !== 'string') {
+      throw new Error(`Speech annotation segment "${source.id}" has no synthesisText.`);
+    }
+    return { ...source, synthesisText: candidate.synthesisText };
+  });
+  return {
+    schemaVersion: 2,
+    mode: 'prompted',
+    provider: prepared.selection.provider,
+    model: prepared.selection.model,
+    sourceHash: prepared.sourceHash,
+    enhancerVersion: CONTEXTUAL_SPEECH_ANNOTATION_VERSION,
+    planner,
+    segments,
+  };
 }
 
 function mergePlannerOutputV1(

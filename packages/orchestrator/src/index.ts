@@ -655,7 +655,9 @@ export async function newAssignment(
           mode: studyTextSpeechPlan.mode,
           provider: studyTextSpeechPlan.provider,
           model: studyTextSpeechPlan.model,
-          fallbackReason: studyTextSpeechPlan.fallbackReason,
+          ...(studyTextSpeechPlan.schemaVersion === 1
+            ? { fallbackReason: studyTextSpeechPlan.fallbackReason }
+            : {}),
           segmentCount: studyTextSpeechPlan.segments.length,
         });
 
@@ -1281,7 +1283,9 @@ export async function rerunAssignment(
           mode: studyTextSpeechPlan.mode,
           provider: studyTextSpeechPlan.provider,
           model: studyTextSpeechPlan.model,
-          fallbackReason: studyTextSpeechPlan.fallbackReason,
+          ...(studyTextSpeechPlan.schemaVersion === 1
+            ? { fallbackReason: studyTextSpeechPlan.fallbackReason }
+            : {}),
           segmentCount: studyTextSpeechPlan.segments.length,
         });
       } else {
