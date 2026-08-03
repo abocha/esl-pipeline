@@ -7,7 +7,6 @@ import {
   type PreparedStudyTextSynthesis,
   type SpeechPerformancePlan,
   type SpeechPerformancePlanner,
-  SpeechPerformancePlannerBudgetExceededError,
   type SpeechPerformancePlannerFallbackReason,
   SpeechPerformancePlannerInvalidOutputError,
   validateSpeechPerformancePlan,
@@ -49,11 +48,7 @@ export async function resolveSpeechPerformancePlan(args: {
     const fallbackReason =
       error instanceof SpeechPerformancePlannerInvalidOutputError
         ? 'planner_invalid'
-        : error instanceof SpeechPerformancePlannerBudgetExceededError ||
-            (typeof error === 'object' &&
-              error !== null &&
-              'category' in error &&
-              error.category === 'budget_exceeded')
+        : error instanceof Error && error.name === 'GenerationBudgetExceededError'
           ? 'planner_budget_exceeded'
           : 'planner_execution_failed';
     logPlannerFallback(args.logger, fallbackReason, error, args.debugLogPlan ?? false);
@@ -108,20 +103,6 @@ function logPromptedPlan(
     if (segment.deliveryMode) cueCounts.deliveryMode += 1;
     if (segment.freeFormDirection) cueCounts.freeFormDirection += 1;
   }
-  const schemaMetrics =
-    resolved.plan.schemaVersion === 2
-      ? {
-          schemaVersion: 2,
-          resolvedPerformanceMode: resolved.plan.resolvedPerformanceMode,
-          overallDirectionComponentCount:
-            resolved.plan.performanceContext.overallDirection.components.length,
-          speakerEnvelopeCount: resolved.plan.performanceContext.speakerEnvelopes.length,
-          turnAdjustmentCount: resolved.plan.segments.filter((segment) => segment.turnAdjustment)
-            .length,
-          effectiveInstructionCount: analysis.metrics.instructionCount,
-          effectiveCueCount: analysis.metrics.cueCount,
-        }
-      : { cueCounts };
   logger?.log({
     level: 'info',
     stage: 'speech-plan',
@@ -135,7 +116,7 @@ function logPromptedPlan(
       segmentCount: resolved.plan.segments.length,
       qualityIssueCount: qualityIssues.length,
       qualityIssueCodes: qualityIssues.map((issue) => issue.code),
-      ...schemaMetrics,
+      cueCounts,
     },
   });
   if (debugLogPlan) {

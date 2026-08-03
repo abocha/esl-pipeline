@@ -97,11 +97,9 @@ export {
 export { hashStudyText } from './hash.js';
 export { resolveSpeakerRoutingHint } from './speaker-routing.js';
 export {
-  computeSpeechPerformanceContextHash,
   createIdentitySpeechPerformancePlan,
   createPreparedStudyTextSynthesis,
   normalizeStudyTextSpeakerToken,
-  resolveStudyTextPerformanceMode,
   SpeechPerformancePlannerBudgetExceededError,
   SpeechPerformancePlannerInvalidOutputError,
   validateSpeechPerformancePlan,
@@ -120,8 +118,6 @@ export {
   assertSpeechPlanSafeForSynthesis,
   normalizeSpeechCueText,
 } from './speech-plan-analysis.js';
-export type { EffectiveSpeechDirection } from './speech-plan-direction.js';
-export { resolveEffectiveSpeechDirection } from './speech-plan-direction.js';
 export type {
   BuildPronunciationShadowSentenceInput,
   BuildPronunciationShadowSentenceOptions,
@@ -138,29 +134,16 @@ export type {
   PreparedStudyTextSynthesis,
   SpeakerRoutingHint,
   SpeakerVoiceAssignment,
-  SpeechAuxiliaryControl,
-  SpeechControlEvidence,
   SpeechDeliveryMode,
-  SpeechDirectionComponent,
-  SpeechDirectionDimension,
-  SpeechDirectionEnvelope,
   SpeechNonVerbal,
   SpeechPace,
-  SpeechPerformanceMode,
   SpeechPerformancePlan,
   SpeechPerformancePlanner,
   SpeechPerformancePlannerBinding,
   SpeechPerformancePlannerFallbackReason,
   SpeechPerformancePlannerMetadata,
   SpeechPerformancePlanSegment,
-  SpeechPerformancePlanSegmentV2,
-  SpeechPerformancePlanV1,
-  SpeechPerformancePlanV2,
   SpeechPerformancePromptPolicyId,
-  SpeechPerformanceSourceContext,
-  SpeechSpeakerEnvelope,
-  SpeechTurnAdjustment,
-  SpeechTurnEvidence,
   TtsEngine,
   TtsModelCapabilities,
   TtsModelId,

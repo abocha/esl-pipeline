@@ -2,7 +2,6 @@ import { createHash, randomUUID } from 'node:crypto';
 import {
   existsSync,
   mkdirSync,
-  readdirSync,
   readFileSync,
   renameSync,
   unlinkSync,
@@ -11,24 +10,15 @@ import {
 import { join } from 'node:path';
 
 import type { GenerateDraftUsage, InworldTtsModel } from '@esl-pipeline/contracts';
-import {
-  analyzeValidatedSpeechPlan,
-  createIdentitySpeechPerformancePlan,
-  getTtsModelCapabilities,
-  type SpeechDeliveryMode,
-} from '@esl-pipeline/tts-core';
+import { analyzeValidatedSpeechPlan, type SpeechDeliveryMode } from '@esl-pipeline/tts-core';
 import {
   INWORLD_RENDERER_POLICY_VERSION,
   renderInworldSpeechSegment,
 } from '@esl-pipeline/tts-provider-inworld';
 
-import {
-  evaluateSpeechPlannerRawOutput,
-  returnedModelMatchesRequestedModel,
-} from './speech-performance-planner.js';
+import { evaluateSpeechPlannerRawOutput } from './speech-performance-planner.js';
 import { buildSpeechPlannerRequest } from './speech-performance-prompt.js';
 import type {
-  SpeechPlannerEvalControl,
   SpeechPlannerEvalFixture,
   SpeechPlannerEvalModel,
   SpeechPlannerEvalVariant,
@@ -53,21 +43,11 @@ export interface SpeechPlannerAttemptCost {
   };
 }
 
-export interface SpeechPlannerAttemptCostUnavailable {
-  costStatus: 'unavailable';
-  missingUsageFields: Array<'inputTokens' | 'visibleOutputTokens' | 'thinkingTokens'>;
-  knownUsage: {
-    inputTokens?: number;
-    visibleOutputTokens?: number;
-    thinkingTokens?: number;
-  };
-}
-
 export function estimateSpeechPlannerAttemptCost(args: {
   model: SpeechPlannerEvalModel;
   usage?: GenerateDraftUsage;
   priceSnapshot: SpeechPlannerPriceSnapshot;
-}): SpeechPlannerAttemptCost | SpeechPlannerAttemptCostUnavailable {
+}): SpeechPlannerAttemptCost | { costStatus: 'unavailable' } {
   const inputTokens = args.usage?.inputTokens;
   const visibleOutputTokens = args.usage?.outputTokens;
   const thinkingTokens = args.usage?.reasoningTokens;
@@ -76,19 +56,7 @@ export function estimateSpeechPlannerAttemptCost(args: {
     visibleOutputTokens === undefined ||
     thinkingTokens === undefined
   ) {
-    return {
-      costStatus: 'unavailable',
-      missingUsageFields: [
-        ...(inputTokens === undefined ? (['inputTokens'] as const) : []),
-        ...(visibleOutputTokens === undefined ? (['visibleOutputTokens'] as const) : []),
-        ...(thinkingTokens === undefined ? (['thinkingTokens'] as const) : []),
-      ],
-      knownUsage: {
-        ...(inputTokens === undefined ? {} : { inputTokens }),
-        ...(visibleOutputTokens === undefined ? {} : { visibleOutputTokens }),
-        ...(thinkingTokens === undefined ? {} : { thinkingTokens }),
-      },
-    };
+    return { costStatus: 'unavailable' };
   }
   const rates = args.priceSnapshot.perMillionTokens[args.model];
   const estimatedCostUsd =
@@ -131,10 +99,7 @@ export interface SpeechPlannerEvalAttemptRecord {
   costStatus: 'estimated' | 'unavailable';
   estimatedCostUsd?: number;
   costFormula?: SpeechPlannerAttemptCost['formula'];
-  costMissingUsageFields?: SpeechPlannerAttemptCostUnavailable['missingUsageFields'];
-  costKnownUsage?: SpeechPlannerAttemptCostUnavailable['knownUsage'];
   normalizedErrorCategory?: string;
-  retryAttempted?: false;
   providerRequestId?: string;
   finishReason?: string;
   validationReason?: string;
@@ -158,23 +123,6 @@ export interface SpeechPlannerEvalAttemptRecord {
     speaker?: string;
   }>;
   renderedContentHash?: string;
-}
-
-export interface SpeechPlannerEvalControlRecord {
-  controlId: string;
-  controlContentHash: string;
-  status: 'passed' | 'failed';
-  planMode: 'identity';
-  rendered: Array<{
-    id: string;
-    text: string;
-    lexicalText: string;
-    leadingInstructionTagCount: number;
-    language?: string;
-    speakingRate?: number;
-  }>;
-  analysis: ReturnType<typeof analyzeValidatedSpeechPlan>;
-  failedChecks: string[];
 }
 
 export function evaluateSpeechPlannerAttemptRecord(args: {
@@ -247,14 +195,10 @@ export function evaluateSpeechPlannerAttemptRecord(args: {
       : {}),
     ...(cost.costStatus === 'estimated'
       ? { estimatedCostUsd: cost.estimatedCostUsd, costFormula: cost.formula }
-      : {
-          costMissingUsageFields: cost.missingUsageFields,
-          costKnownUsage: cost.knownUsage,
-        }),
+      : {}),
     plan: evaluated.plan,
   };
   if (!evaluated.plan) return base;
-  const evaluatedPlan = evaluated.plan;
 
   const assignments = new Map(
     args.fixture.prepared.voicePlan?.assignments.map((assignment) => [
@@ -262,13 +206,12 @@ export function evaluateSpeechPlannerAttemptRecord(args: {
       assignment,
     ]) ?? [],
   );
-  const rendered = evaluatedPlan.segments.map((segment) => {
+  const rendered = evaluated.plan.segments.map((segment) => {
     const assignment = segment.speaker
       ? assignments.get(segment.speaker.toLocaleLowerCase())
       : undefined;
     const output = renderInworldSpeechSegment({
       model: args.fixture.prepared.selection.model as InworldTtsModel,
-      plan: evaluatedPlan,
       segment,
       capabilities: assignment?.capabilities,
       language: assignment?.language,
@@ -282,7 +225,7 @@ export function evaluateSpeechPlannerAttemptRecord(args: {
   });
   const analysis = analyzeValidatedSpeechPlan(
     args.fixture.prepared,
-    evaluatedPlan,
+    evaluated.plan,
     rendered.map((segment) => ({
       id: segment.id,
       text: segment.text,
@@ -318,7 +261,6 @@ export interface SpeechPlannerEvalRunContext {
   mode: 'offline' | 'live';
   resolvedConfig: {
     corpusPath: string;
-    controlsPath: string;
     priceSnapshotPath: string;
     offlineOutputFixturesPath?: string;
     privateFixturePath?: string;
@@ -352,14 +294,12 @@ export interface SpeechPlannerEvalRunContext {
 }
 
 export interface SpeechPlannerEvalRunMetadata {
-  schemaVersion: 4;
+  schemaVersion: 3;
   status: 'partial' | 'completed';
   createdAt: string;
   completedAt?: string;
   completedAttempts: number;
   expectedAttempts: number;
-  completedControls: number;
-  expectedControls: number;
   mode: 'offline' | 'live';
   configHash: string;
   gitSha: string;
@@ -371,15 +311,13 @@ export interface SpeechPlannerEvalRunMetadata {
   promptHashes: string[];
   variants: SpeechPlannerEvalVariant[];
   attemptIds: string[];
-  controlIds: string[];
-  controlHashes: string[];
   activities: SpeechPlannerEvalRunActivity[];
 }
 
 export interface SpeechPlannerEvalRunActivity {
   id: string;
   kind: 'planner_initial' | 'planner_resume' | 'selected_audio';
-  status: 'partial' | 'completed' | 'failed' | 'interrupted';
+  status: 'partial' | 'completed' | 'failed';
   startedAt: string;
   completedAt?: string;
   environmentFlags: SpeechPlannerEvalRunContext['environmentFlags'];
@@ -396,23 +334,13 @@ export function readSpeechPlannerEvalRunMetadata(
   if (!existsSync(path)) throw new Error('Speech planner eval resume run.json is missing.');
   const metadata = JSON.parse(readFileSync(path, 'utf8')) as Partial<SpeechPlannerEvalRunMetadata>;
   if (
-    metadata.schemaVersion !== 4 ||
+    metadata.schemaVersion !== 3 ||
     (metadata.status !== 'partial' && metadata.status !== 'completed') ||
     !metadata.resolvedConfig ||
     !metadata.environmentFlags ||
     !metadata.preflight ||
     !metadata.priceSnapshot ||
     !Array.isArray(metadata.variants) ||
-    !Number.isInteger(metadata.completedAttempts) ||
-    !Number.isInteger(metadata.expectedAttempts) ||
-    !Number.isInteger(metadata.completedControls) ||
-    !Number.isInteger(metadata.expectedControls) ||
-    (metadata.completedAttempts ?? -1) < 0 ||
-    (metadata.expectedAttempts ?? -1) < 0 ||
-    (metadata.completedControls ?? -1) < 0 ||
-    (metadata.expectedControls ?? -1) < 0 ||
-    !Array.isArray(metadata.controlIds) ||
-    !Array.isArray(metadata.controlHashes) ||
     !Array.isArray(metadata.activities)
   ) {
     throw new Error('Speech planner eval resume run.json has an unsupported metadata contract.');
@@ -427,20 +355,6 @@ export function beginSpeechPlannerEvalRunActivity(args: {
 }): string {
   const metadata = readSpeechPlannerEvalRunMetadata(args.runDirectory);
   const id = randomUUID();
-  const interruptedAt = new Date().toISOString();
-  const priorActivities = metadata.activities.map((activity) =>
-    args.kind === 'planner_resume' &&
-    activity.status === 'partial' &&
-    (activity.kind === 'planner_initial' || activity.kind === 'planner_resume')
-      ? {
-          ...activity,
-          status: 'interrupted' as const,
-          completedAt: interruptedAt,
-          providerCalls: countPhysicalCallIntentsForActivity(args.runDirectory, activity.id),
-          normalizedErrorCategory: 'interrupted_before_resume',
-        }
-      : activity,
-  );
   const pending: SpeechPlannerEvalRunMetadata = {
     ...metadata,
     status: 'partial',
@@ -449,7 +363,7 @@ export function beginSpeechPlannerEvalRunActivity(args: {
       selectedAudio: metadata.environmentFlags.selectedAudio || args.kind === 'selected_audio',
     },
     activities: [
-      ...priorActivities,
+      ...metadata.activities,
       {
         id,
         kind: args.kind,
@@ -470,7 +384,6 @@ export function finishSpeechPlannerEvalRunActivity(args: {
   activityId: string;
   status: 'completed' | 'failed';
   completedAttempts?: number;
-  completedControls?: number;
   providerCalls?: number;
   synthesisCalls?: number;
   normalizedErrorCategory?: string;
@@ -504,20 +417,13 @@ export function finishSpeechPlannerEvalRunActivity(args: {
   });
   const hasUnresolvedAudioFailure = lastFailedAudioIndex > lastCompletedAudioIndex;
   const hasPartialActivity = activities.some((activity) => activity.status === 'partial');
-  const completedAttempts = args.completedAttempts ?? metadata.completedAttempts;
-  const completedControls = args.completedControls ?? metadata.completedControls;
   const runCompleted =
-    args.status === 'completed' &&
-    !hasUnresolvedAudioFailure &&
-    !hasPartialActivity &&
-    completedAttempts === metadata.expectedAttempts &&
-    completedControls === metadata.expectedControls;
+    args.status === 'completed' && !hasUnresolvedAudioFailure && !hasPartialActivity;
   const updated: SpeechPlannerEvalRunMetadata = {
     ...metadata,
     status: runCompleted ? 'completed' : 'partial',
     ...(runCompleted ? { completedAt } : {}),
-    completedAttempts,
-    completedControls,
+    ...(args.completedAttempts === undefined ? {} : { completedAttempts: args.completedAttempts }),
     activities,
   };
   if (!runCompleted) delete updated.completedAt;
@@ -526,6 +432,14 @@ export function finishSpeechPlannerEvalRunActivity(args: {
 
 function stableHash(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex');
+}
+
+function returnedModelMatchesRequest(record: SpeechPlannerEvalAttemptRecord): boolean {
+  return (
+    record.returnedModel === undefined ||
+    record.returnedModel === record.requestedModel ||
+    record.returnedModel.startsWith(`${record.requestedModel}-`)
+  );
 }
 
 function readAttempts(path: string): SpeechPlannerEvalAttemptRecord[] {
@@ -563,174 +477,6 @@ function appendRecord(
   return record;
 }
 
-function evaluateDeterministicControl(
-  control: SpeechPlannerEvalControl,
-): SpeechPlannerEvalControlRecord {
-  const capabilities = getTtsModelCapabilities(
-    control.prepared.selection.provider,
-    control.prepared.selection.model,
-  );
-  const plan = createIdentitySpeechPerformancePlan(control.prepared);
-  const assignments = new Map(
-    control.prepared.voicePlan?.assignments.map((assignment) => [
-      assignment.speaker.toLocaleLowerCase(),
-      assignment,
-    ]) ?? [],
-  );
-  const rendered = plan.segments.map((segment) => {
-    const assignment = segment.speaker
-      ? assignments.get(segment.speaker.toLocaleLowerCase())
-      : undefined;
-    return {
-      id: segment.id,
-      ...renderInworldSpeechSegment({
-        model: control.prepared.selection.model as InworldTtsModel,
-        plan,
-        segment,
-        capabilities: assignment?.capabilities,
-        language: assignment?.language,
-      }),
-    };
-  });
-  const analysis = analyzeValidatedSpeechPlan(
-    control.prepared,
-    plan,
-    rendered.map(({ id, text, lexicalText, leadingInstructionTagCount }) => ({
-      id,
-      text,
-      lexicalText,
-      leadingInstructionTagCount,
-    })),
-  );
-  const natural = rendered.find((segment) => segment.id === 'legacy-natural');
-  const defaultPace = rendered.find((segment) => segment.id === 'legacy-default');
-  const failedChecks: string[] = [];
-  if (capabilities.planningMode !== control.expected.planningMode)
-    failedChecks.push('planning_mode');
-  if (plan.mode !== control.expected.planningMode) failedChecks.push('plan_mode');
-  if (natural?.speakingRate !== control.expected.naturalSpeakingRate)
-    failedChecks.push('natural_speaking_rate');
-  if (defaultPace?.speakingRate !== undefined) failedChecks.push('default_speaking_rate');
-  if (
-    Math.max(0, ...rendered.map((segment) => segment.leadingInstructionTagCount)) >
-    control.expected.maximumInstructionTags
-  )
-    failedChecks.push('instruction_tags');
-  if (rendered.some((segment) => 'deliveryMode' in segment))
-    failedChecks.push('unsupported_delivery_mode');
-  if (analysis.hardFailures.length > 0) failedChecks.push('validated_analysis');
-
-  return {
-    controlId: control.id,
-    controlContentHash: control.contentHash,
-    status: failedChecks.length === 0 ? 'passed' : 'failed',
-    planMode: 'identity',
-    rendered,
-    analysis,
-    failedChecks,
-  };
-}
-
-function materializeDeterministicControls(args: {
-  runDirectory: string;
-  controls: readonly SpeechPlannerEvalControl[];
-  resume: boolean;
-  completedControls: number;
-}): SpeechPlannerEvalControlRecord[] {
-  return args.controls.map((control) => {
-    const record = evaluateDeterministicControl(control);
-    const path = join(args.runDirectory, 'controls', `${control.id}.json`);
-    const content = JSON.stringify(record, null, 2);
-    if (existsSync(path)) {
-      if (readFileSync(path, 'utf8') !== content) {
-        throw new Error(`Speech planner eval control artifact does not match: ${control.id}`);
-      }
-    } else {
-      if (args.resume && args.completedControls > 0) {
-        throw new Error(`Speech planner eval control artifact is missing: ${control.id}`);
-      }
-      writeImmutableFile(path, content);
-    }
-    if (record.status !== 'passed') {
-      throw new Error(
-        `Speech planner eval deterministic control failed: ${control.id} (${record.failedChecks.join(',')})`,
-      );
-    }
-    return record;
-  });
-}
-
-function assertNoIndeterminateAttempts(args: {
-  runDirectory: string;
-  variants: readonly SpeechPlannerEvalVariant[];
-  completed: ReadonlySet<string>;
-}): void {
-  for (const variant of args.variants) {
-    if (args.completed.has(variant.attemptId)) continue;
-    const artifacts = [
-      join(args.runDirectory, 'calls', `${variant.attemptId}.json`),
-      join(args.runDirectory, 'plans', `${variant.attemptId}.json`),
-      join(args.runDirectory, 'rendered', `${variant.attemptId}.json`),
-    ];
-    if (artifacts.some((path) => existsSync(path))) {
-      throw new Error(
-        `Speech planner eval attempt is indeterminate and will not be replayed: ${variant.attemptId}`,
-      );
-    }
-  }
-}
-
-interface SpeechPlannerPhysicalCallIntent {
-  attemptId: string;
-  activityId: string;
-  fixtureId: string;
-  requestedModel: SpeechPlannerEvalModel;
-  promptPolicyVersion: SpeechPlannerEvalVariant['promptPolicyVersion'];
-  repetition: number;
-  retryAttempted: false;
-}
-
-function countPhysicalCallIntentsForActivity(runDirectory: string, activityId: string): number {
-  const callsDirectory = join(runDirectory, 'calls');
-  if (!existsSync(callsDirectory)) return 0;
-  return readdirSync(callsDirectory)
-    .filter((name) => name.endsWith('.json'))
-    .reduce((count, name) => {
-      const path = join(callsDirectory, name);
-      try {
-        const intent = JSON.parse(
-          readFileSync(path, 'utf8'),
-        ) as Partial<SpeechPlannerPhysicalCallIntent>;
-        return count + Number(intent.activityId === activityId);
-      } catch {
-        throw new Error(`Speech planner eval immutable call-intent artifact mismatch: ${path}`);
-      }
-    }, 0);
-}
-
-function physicalCallIntentContent(intent: SpeechPlannerPhysicalCallIntent): string {
-  return JSON.stringify(intent, null, 2);
-}
-
-function recordPhysicalCallIntent(
-  runDirectory: string,
-  variant: SpeechPlannerEvalVariant,
-  activityId: string,
-): void {
-  writeImmutableFile(
-    join(runDirectory, 'calls', `${variant.attemptId}.json`),
-    physicalCallIntentContent({
-      attemptId: variant.attemptId,
-      activityId,
-      fixtureId: variant.fixtureId,
-      requestedModel: variant.model,
-      promptPolicyVersion: variant.promptPolicyVersion,
-      repetition: variant.repetition,
-      retryAttempted: false,
-    }),
-  );
-}
-
 function planArtifactContent(record: SpeechPlannerEvalAttemptRecord): string {
   return JSON.stringify(
     {
@@ -755,8 +501,6 @@ function planArtifactContent(record: SpeechPlannerEvalAttemptRecord): string {
 function validateImmutableArtifacts(
   runDirectory: string,
   records: readonly SpeechPlannerEvalAttemptRecord[],
-  metadata: SpeechPlannerEvalRunMetadata,
-  variants: readonly SpeechPlannerEvalVariant[],
 ): void {
   for (const record of records) {
     if (record.rawText !== undefined) {
@@ -773,65 +517,6 @@ function validateImmutableArtifacts(
       ) {
         throw new Error(`Speech planner eval immutable artifact mismatch: ${renderedPath}`);
       }
-    }
-  }
-  if (metadata.mode !== 'live') return;
-  const variantsById = new Map(variants.map((variant) => [variant.attemptId, variant]));
-  const plannerActivityIds = new Set(
-    metadata.activities
-      .filter((activity) => activity.kind !== 'selected_audio')
-      .map((activity) => activity.id),
-  );
-  const expectedAttemptIds = new Set(
-    records
-      .filter((record) => record.promptedPlanStatus !== 'skipped_incompatible')
-      .map((record) => record.attemptId),
-  );
-  const callsDirectory = join(runDirectory, 'calls');
-  const callFiles = existsSync(callsDirectory)
-    ? readdirSync(callsDirectory).filter((name) => name.endsWith('.json'))
-    : [];
-  const actualAttemptIds = new Set(callFiles.map((name) => name.slice(0, -'.json'.length)));
-  if (
-    actualAttemptIds.size !== expectedAttemptIds.size ||
-    [...actualAttemptIds].some((attemptId) => !expectedAttemptIds.has(attemptId))
-  ) {
-    throw new Error('Speech planner eval physical call-intent artifacts do not match attempts.');
-  }
-  const callsByActivity = new Map<string, number>();
-  for (const attemptId of expectedAttemptIds) {
-    const variant = variantsById.get(attemptId);
-    const path = join(callsDirectory, `${attemptId}.json`);
-    if (!variant || !existsSync(path)) {
-      throw new Error(`Speech planner eval immutable call-intent artifact mismatch: ${path}`);
-    }
-    let intent: SpeechPlannerPhysicalCallIntent;
-    try {
-      intent = JSON.parse(readFileSync(path, 'utf8')) as SpeechPlannerPhysicalCallIntent;
-    } catch {
-      throw new Error(`Speech planner eval immutable call-intent artifact mismatch: ${path}`);
-    }
-    if (
-      !plannerActivityIds.has(intent.activityId) ||
-      readFileSync(path, 'utf8') !==
-        physicalCallIntentContent({
-          attemptId: variant.attemptId,
-          activityId: intent.activityId,
-          fixtureId: variant.fixtureId,
-          requestedModel: variant.model,
-          promptPolicyVersion: variant.promptPolicyVersion,
-          repetition: variant.repetition,
-          retryAttempted: false,
-        })
-    ) {
-      throw new Error(`Speech planner eval immutable call-intent artifact mismatch: ${path}`);
-    }
-    callsByActivity.set(intent.activityId, (callsByActivity.get(intent.activityId) ?? 0) + 1);
-  }
-  for (const activity of metadata.activities) {
-    if (activity.kind === 'selected_audio' || activity.providerCalls === undefined) continue;
-    if ((callsByActivity.get(activity.id) ?? 0) !== activity.providerCalls) {
-      throw new Error(`Speech planner eval activity call count mismatch: ${activity.id}`);
     }
   }
 }
@@ -867,17 +552,14 @@ export async function runSpeechPlannerEvaluation(args: {
   gitSha: string;
   variants: readonly SpeechPlannerEvalVariant[];
   fixtures: readonly SpeechPlannerEvalFixture[];
-  controls?: readonly SpeechPlannerEvalControl[];
   priceSnapshot: SpeechPlannerPriceSnapshot;
   executeVariant: (variant: SpeechPlannerEvalVariant) => Promise<ExecuteVariantResult>;
   resume?: boolean;
   runContext?: SpeechPlannerEvalRunContext;
 }): Promise<{
   records: SpeechPlannerEvalAttemptRecord[];
-  controls: SpeechPlannerEvalControlRecord[];
   summary: ReturnType<typeof summarizeSpeechPlannerEvalAttempts>;
 }> {
-  const controls = args.controls ?? [];
   const fixtureById = new Map(args.fixtures.map((fixture) => [fixture.id, fixture]));
   const promptHashes = [
     ...new Set(
@@ -896,7 +578,6 @@ export async function runSpeechPlannerEvaluation(args: {
     gitSha: args.gitSha,
     variants: args.variants,
     fixtureHashes: args.fixtures.map((fixture) => [fixture.id, fixture.contentHash]),
-    controlHashes: controls.map((control) => [control.id, control.contentHash]),
     priceSnapshot: args.priceSnapshot,
     rendererPolicyVersion: INWORLD_RENDERER_POLICY_VERSION,
     promptHashes,
@@ -929,8 +610,6 @@ export async function runSpeechPlannerEvaluation(args: {
   } else {
     mkdirSync(join(args.runDirectory, 'plans'), { recursive: true });
     mkdirSync(join(args.runDirectory, 'rendered'), { recursive: true });
-    mkdirSync(join(args.runDirectory, 'controls'), { recursive: true });
-    mkdirSync(join(args.runDirectory, 'calls'), { recursive: true });
     mkdirSync(join(args.runDirectory, 'audio'), { recursive: true });
     mkdirSync(join(args.runDirectory, 'listening'), { recursive: true });
     const runContext =
@@ -939,7 +618,6 @@ export async function runSpeechPlannerEvaluation(args: {
         mode: 'offline',
         resolvedConfig: {
           corpusPath: 'injected',
-          controlsPath: 'injected',
           priceSnapshotPath: 'injected',
           models: [...new Set(args.variants.map((variant) => variant.model))],
           promptPolicies: [...new Set(args.variants.map((variant) => variant.promptPolicyVersion))],
@@ -970,13 +648,11 @@ export async function runSpeechPlannerEvaluation(args: {
     activityContext = runContext;
     activityId = randomUUID();
     metadata = {
-      schemaVersion: 4,
+      schemaVersion: 3,
       status: 'partial',
       createdAt: new Date().toISOString(),
       completedAttempts: 0,
       expectedAttempts: args.variants.length,
-      completedControls: 0,
-      expectedControls: controls.length,
       mode: runContext.mode,
       configHash,
       gitSha: args.gitSha,
@@ -988,8 +664,6 @@ export async function runSpeechPlannerEvaluation(args: {
       promptHashes,
       variants: [...args.variants],
       attemptIds: args.variants.map((variant) => variant.attemptId),
-      controlIds: controls.map((control) => control.id),
-      controlHashes: controls.map((control) => control.contentHash),
       activities: [
         {
           id: activityId,
@@ -1004,25 +678,9 @@ export async function runSpeechPlannerEvaluation(args: {
     writeFileSync(runPath, JSON.stringify(metadata, null, 2), { encoding: 'utf8', flag: 'wx' });
   }
 
-  const controlRecords = materializeDeterministicControls({
-    runDirectory: args.runDirectory,
-    controls,
-    resume: args.resume ?? false,
-    completedControls: metadata.completedControls,
-  });
-
   const records = readAttempts(attemptsPath);
-  if (args.resume) {
-    validateImmutableArtifacts(args.runDirectory, records, metadata, args.variants);
-  }
+  if (args.resume) validateImmutableArtifacts(args.runDirectory, records);
   const completed = new Set(records.map((record) => record.attemptId));
-  if (args.resume) {
-    assertNoIndeterminateAttempts({
-      runDirectory: args.runDirectory,
-      variants: args.variants,
-      completed,
-    });
-  }
   const attemptIdentity = (variant: SpeechPlannerEvalVariant) => {
     const fixture = fixtureById.get(variant.fixtureId);
     if (!fixture) throw new Error(`Unknown speech planner eval fixture: ${variant.fixtureId}`);
@@ -1064,8 +722,6 @@ export async function runSpeechPlannerEvaluation(args: {
           promptedPlanStatus: 'skipped_incompatible',
           fallbackStatus: 'not_used',
           costStatus: 'unavailable',
-          costMissingUsageFields: ['inputTokens', 'visibleOutputTokens', 'thinkingTokens'],
-          costKnownUsage: {},
           normalizedErrorCategory: 'skipped_incompatible',
         }),
       );
@@ -1073,10 +729,7 @@ export async function runSpeechPlannerEvaluation(args: {
     }
     let result: ExecuteVariantResult;
     try {
-      if (activityContext.mode === 'live') {
-        recordPhysicalCallIntent(args.runDirectory, variant, activityId);
-        providerCalls += 1;
-      }
+      if (activityContext.mode === 'live') providerCalls += 1;
       result = await args.executeVariant(variant);
     } catch {
       result = { status: 'provider_error', category: 'unexpected_execution_error' };
@@ -1096,10 +749,7 @@ export async function runSpeechPlannerEvaluation(args: {
           promptedPlanStatus: 'provider_error',
           fallbackStatus: 'identity',
           costStatus: 'unavailable',
-          costMissingUsageFields: ['inputTokens', 'visibleOutputTokens', 'thinkingTokens'],
-          costKnownUsage: {},
           normalizedErrorCategory: `compatibility_${result.category}`,
-          retryAttempted: false,
         }),
       );
       continue;
@@ -1119,10 +769,7 @@ export async function runSpeechPlannerEvaluation(args: {
           fallbackStatus: 'identity',
           latencyMs: result.latencyMs,
           costStatus: 'unavailable',
-          costMissingUsageFields: ['inputTokens', 'visibleOutputTokens', 'thinkingTokens'],
-          costKnownUsage: {},
           normalizedErrorCategory: result.category,
-          retryAttempted: false,
         }),
       );
       continue;
@@ -1143,10 +790,7 @@ export async function runSpeechPlannerEvaluation(args: {
       startedAt: result.startedAt,
       endedAt: result.endedAt,
     });
-    if (
-      variant.compatibilitySmoke &&
-      !returnedModelMatchesRequestedModel(record.requestedModel, record.returnedModel)
-    ) {
+    if (variant.compatibilitySmoke && !returnedModelMatchesRequest(record)) {
       incompatibleModel = variant.model;
       record.normalizedErrorCategory = 'compatibility_returned_model_mismatch';
     } else if (variant.compatibilitySmoke && !record.plan) {
@@ -1156,7 +800,7 @@ export async function runSpeechPlannerEvaluation(args: {
     records.push(appendRecord(args.runDirectory, record));
   }
 
-  const summary = summarizeSpeechPlannerEvalAttempts(records, controlRecords);
+  const summary = summarizeSpeechPlannerEvalAttempts(records);
   writeAtomicFile(join(args.runDirectory, 'summary.json'), JSON.stringify(summary, null, 2));
   writeAtomicFile(
     join(args.runDirectory, 'summary.md'),
@@ -1167,8 +811,7 @@ export async function runSpeechPlannerEvaluation(args: {
     activityId,
     status: 'completed',
     completedAttempts: records.length,
-    completedControls: controlRecords.length,
     providerCalls,
   });
-  return { records, controls: controlRecords, summary };
+  return { records, summary };
 }

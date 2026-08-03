@@ -5,16 +5,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   buildSpeechPlannerEvalMatrix,
-  loadSpeechPlannerEvalControls,
   loadSpeechPlannerEvalFixtures,
   loadSpeechPlannerPriceSnapshot,
 } from '../src/application/speech-planner-eval-fixtures.js';
 import {
-  beginSpeechPlannerEvalRunActivity,
   estimateSpeechPlannerAttemptCost,
   evaluateSpeechPlannerAttemptRecord,
-  finishSpeechPlannerEvalRunActivity,
-  readSpeechPlannerEvalRunMetadata,
   runSpeechPlannerEvaluation,
   summarizeSpeechPlannerEvalAttempts,
 } from '../src/application/speech-planner-evaluator.js';
@@ -26,224 +22,6 @@ afterEach(() => {
 });
 
 describe('speech planner evaluator', () => {
-  it('records immutable production-faithful identity controls without provider calls', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'speech-planner-controls-'));
-    tempRoots.push(root);
-    const runDirectory = join(root, 'run');
-    const fixture = loadSpeechPlannerEvalFixtures()[0]!;
-    const variants = buildSpeechPlannerEvalMatrix({
-      fixtures: [fixture],
-      repetitions: 1,
-      models: ['gemini-3.1-flash-lite'],
-      promptPolicies: ['speech-performance-v2-inworld-tts2'],
-    });
-    const controls = loadSpeechPlannerEvalControls();
-    const executeVariant = vi.fn(async () => ({
-      status: 'completed' as const,
-      rawText: JSON.stringify({
-        segments: fixture.prepared.segments.map(({ id }) => ({ id })),
-      }),
-      latencyMs: 10,
-    }));
-
-    const result = await runSpeechPlannerEvaluation({
-      runDirectory,
-      gitSha: 'a'.repeat(40),
-      variants,
-      fixtures: [fixture],
-      controls,
-      priceSnapshot: loadSpeechPlannerPriceSnapshot(),
-      executeVariant,
-    });
-
-    expect(executeVariant).toHaveBeenCalledOnce();
-    expect(result.controls).toEqual([
-      expect.objectContaining({
-        controlId: 'tts-1-5-identity-rendering',
-        controlContentHash: controls[0]!.contentHash,
-        status: 'passed',
-        planMode: 'identity',
-        analysis: expect.objectContaining({ hardFailures: [] }),
-        rendered: [
-          expect.objectContaining({
-            id: 'legacy-natural',
-            text: 'Please read the notice before Friday.',
-            lexicalText: 'Please read the notice before Friday.',
-            leadingInstructionTagCount: 0,
-            speakingRate: 1,
-          }),
-          expect.not.objectContaining({ speakingRate: expect.anything() }),
-        ],
-      }),
-    ]);
-    expect(JSON.parse(readFileSync(join(runDirectory, 'run.json'), 'utf8'))).toMatchObject({
-      schemaVersion: 4,
-      expectedControls: 1,
-      completedControls: 1,
-      controlIds: ['tts-1-5-identity-rendering'],
-      controlHashes: [controls[0]!.contentHash],
-      status: 'completed',
-    });
-    const controlPath = join(runDirectory, 'controls', 'tts-1-5-identity-rendering.json');
-    const immutableControl = readFileSync(controlPath, 'utf8');
-
-    executeVariant.mockClear();
-    const resumed = await runSpeechPlannerEvaluation({
-      runDirectory,
-      gitSha: 'a'.repeat(40),
-      variants,
-      fixtures: [fixture],
-      controls,
-      priceSnapshot: loadSpeechPlannerPriceSnapshot(),
-      executeVariant,
-      resume: true,
-    });
-    expect(executeVariant).not.toHaveBeenCalled();
-    expect(resumed.controls).toHaveLength(1);
-    expect(readFileSync(controlPath, 'utf8')).toBe(immutableControl);
-
-    writeFileSync(controlPath, '{"tampered":true}', 'utf8');
-    await expect(
-      runSpeechPlannerEvaluation({
-        runDirectory,
-        gitSha: 'a'.repeat(40),
-        variants,
-        fixtures: [fixture],
-        controls,
-        priceSnapshot: loadSpeechPlannerPriceSnapshot(),
-        executeVariant,
-        resume: true,
-      }),
-    ).rejects.toThrow('control artifact');
-  });
-
-  it('rejects schema 4 metadata without explicit control completion counts', () => {
-    const root = mkdtempSync(join(tmpdir(), 'speech-planner-metadata-'));
-    tempRoots.push(root);
-    writeFileSync(
-      join(root, 'run.json'),
-      JSON.stringify({
-        schemaVersion: 4,
-        status: 'partial',
-        resolvedConfig: {},
-        environmentFlags: {},
-        preflight: {},
-        priceSnapshot: {},
-        variants: [],
-        controlIds: [],
-        controlHashes: [],
-        activities: [],
-      }),
-    );
-
-    expect(() => readSpeechPlannerEvalRunMetadata(root)).toThrow('unsupported metadata contract');
-  });
-
-  it('keeps aggregate status partial until paid attempts and controls are both complete', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'speech-planner-completion-'));
-    tempRoots.push(root);
-    const runDirectory = join(root, 'run');
-    const fixture = loadSpeechPlannerEvalFixtures()[0]!;
-    const variants = buildSpeechPlannerEvalMatrix({
-      fixtures: [fixture],
-      repetitions: 1,
-      models: ['gemini-3.1-flash-lite'],
-      promptPolicies: ['speech-performance-v2-inworld-tts2'],
-    });
-    await runSpeechPlannerEvaluation({
-      runDirectory,
-      gitSha: 'a'.repeat(40),
-      variants,
-      fixtures: [fixture],
-      controls: loadSpeechPlannerEvalControls(),
-      priceSnapshot: loadSpeechPlannerPriceSnapshot(),
-      executeVariant: async () => ({
-        status: 'completed',
-        rawText: JSON.stringify({ segments: fixture.prepared.segments.map(({ id }) => ({ id })) }),
-        latencyMs: 1,
-      }),
-    });
-    const metadata = readSpeechPlannerEvalRunMetadata(runDirectory);
-    const runContext = {
-      mode: metadata.mode,
-      resolvedConfig: metadata.resolvedConfig,
-      environmentFlags: metadata.environmentFlags,
-      preflight: metadata.preflight,
-    };
-    const activityId = beginSpeechPlannerEvalRunActivity({
-      runDirectory,
-      kind: 'planner_resume',
-      runContext,
-    });
-    finishSpeechPlannerEvalRunActivity({
-      runDirectory,
-      activityId,
-      status: 'completed',
-      completedAttempts: 0,
-      completedControls: 1,
-    });
-
-    expect(readSpeechPlannerEvalRunMetadata(runDirectory).status).toBe('partial');
-  });
-
-  it('supersedes an interrupted planner activity on a safe later resume', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'speech-planner-activity-resume-'));
-    tempRoots.push(root);
-    const runDirectory = join(root, 'run');
-    const fixture = loadSpeechPlannerEvalFixtures()[0]!;
-    const variants = buildSpeechPlannerEvalMatrix({
-      fixtures: [fixture],
-      repetitions: 1,
-      models: ['gemini-3.1-flash-lite'],
-      promptPolicies: ['speech-performance-v2-inworld-tts2'],
-    });
-    await runSpeechPlannerEvaluation({
-      runDirectory,
-      gitSha: 'a'.repeat(40),
-      variants,
-      fixtures: [fixture],
-      priceSnapshot: loadSpeechPlannerPriceSnapshot(),
-      executeVariant: async () => ({
-        status: 'completed',
-        rawText: JSON.stringify({ segments: fixture.prepared.segments.map(({ id }) => ({ id })) }),
-        latencyMs: 1,
-      }),
-    });
-    const metadata = readSpeechPlannerEvalRunMetadata(runDirectory);
-    const runContext = {
-      mode: metadata.mode,
-      resolvedConfig: metadata.resolvedConfig,
-      environmentFlags: metadata.environmentFlags,
-      preflight: metadata.preflight,
-    };
-    beginSpeechPlannerEvalRunActivity({ runDirectory, kind: 'planner_resume', runContext });
-    const recoveryId = beginSpeechPlannerEvalRunActivity({
-      runDirectory,
-      kind: 'planner_resume',
-      runContext,
-    });
-    finishSpeechPlannerEvalRunActivity({
-      runDirectory,
-      activityId: recoveryId,
-      status: 'completed',
-      completedAttempts: 1,
-      completedControls: 0,
-      providerCalls: 0,
-    });
-
-    const recovered = readSpeechPlannerEvalRunMetadata(runDirectory);
-    expect(recovered.status).toBe('completed');
-    expect(recovered.activities).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          kind: 'planner_resume',
-          status: 'interrupted',
-          normalizedErrorCategory: 'interrupted_before_resume',
-        }),
-      ]),
-    );
-  });
-
   it('keeps visible output and thinking tokens separate in transparent cost math', () => {
     expect(
       estimateSpeechPlannerAttemptCost({
@@ -268,119 +46,7 @@ describe('speech planner evaluator', () => {
         usage: { inputTokens: 100, outputTokens: 20 },
         priceSnapshot: loadSpeechPlannerPriceSnapshot(),
       }),
-    ).toEqual({
-      costStatus: 'unavailable',
-      missingUsageFields: ['thinkingTokens'],
-      knownUsage: { inputTokens: 100, visibleOutputTokens: 20 },
-    });
-  });
-
-  it('deduplicates the same semantic warning and breaks warnings down by cell and fixture', () => {
-    const fixture = loadSpeechPlannerEvalFixtures()[0]!;
-    const variant = buildSpeechPlannerEvalMatrix({ fixtures: [fixture], repetitions: 1 })[0]!;
-    const duplicateWarning = {
-      severity: 'warning' as const,
-      code: 'redundant_instruction_components',
-      segmentId: 'segment-1',
-      detail: { fields: 'emotion,freeFormDirection' },
-    };
-    const record = {
-      attemptId: variant.attemptId,
-      fixtureId: fixture.id,
-      requestedModel: variant.model,
-      promptPolicyVersion: variant.promptPolicyVersion,
-      repetition: 1,
-      compatibilitySmoke: false,
-      rawParseStatus: 'parsed' as const,
-      promptedPlanStatus: 'valid' as const,
-      fallbackStatus: 'not_used' as const,
-      costStatus: 'unavailable' as const,
-      candidateAnalysis: { hardFailures: [], warnings: [duplicateWarning] },
-      analysis: {
-        hardFailures: [],
-        warnings: [duplicateWarning],
-        metrics: {
-          segmentCount: 1,
-          paceCount: 0,
-          pauseCount: 0,
-          pauseValuesMs: [],
-          nonverbalCount: 0,
-          emphasisCount: 0,
-          freeFormDirectionCount: 1,
-          instructionCount: 0,
-          nonDefaultDeliveryModeCount: 0,
-          deliveryModeCounts: {},
-          cueCount: 2,
-          cueRate: 2,
-        },
-      },
-    };
-
-    const summary = summarizeSpeechPlannerEvalAttempts([record]);
-    expect(summary).toMatchObject({
-      warningCounts: { redundant_instruction_components: 1 },
-      warningBreakdown: {
-        redundant_instruction_components: {
-          total: 1,
-          byFixture: { [fixture.id]: 1 },
-          byFieldPair: { 'emotion,freeFormDirection': 1 },
-          byCell: { [`${variant.model}|${variant.promptPolicyVersion}`]: 1 },
-        },
-      },
-    });
-  });
-
-  it('derives warning field pairs from a real evaluated plan without changing shared warnings', () => {
-    const fixture = loadSpeechPlannerEvalFixtures()[0]!;
-    const variant = buildSpeechPlannerEvalMatrix({ fixtures: [fixture], repetitions: 1 })[0]!;
-    const [first, ...remaining] = fixture.prepared.segments;
-    const record = evaluateSpeechPlannerAttemptRecord({
-      variant,
-      fixture,
-      rawText: JSON.stringify({
-        segments: [
-          {
-            id: first!.id,
-            emotion: 'warm',
-            intonation: 'gently rising',
-            freeFormDirection: 'Keep the delivery warm and clear.',
-            pace: 'measured',
-            pauseBeforeMs: 100,
-            pauseAfterMs: 200,
-            deliveryMode: 'BALANCED',
-          },
-          ...remaining.map(({ id }) => ({ id })),
-        ],
-      }),
-      latencyMs: 1,
-      priceSnapshot: loadSpeechPlannerPriceSnapshot(),
-    });
-
-    const summary = summarizeSpeechPlannerEvalAttempts([record]);
-    expect(summary).toMatchObject({
-      warningCounts: {
-        redundant_instruction_components: 1,
-        high_cue_density: 1,
-      },
-      warningBreakdown: {
-        redundant_instruction_components: {
-          byFieldPair: {
-            'emotion,freeFormDirection': 1,
-            'intonation,freeFormDirection': 1,
-          },
-        },
-        high_cue_density: {
-          byFieldPair: {
-            'emotion,freeFormDirection': 1,
-            'pauseBeforeMs,pauseAfterMs': 1,
-          },
-        },
-      },
-    });
-    expect(summary.warningBreakdown.redundant_instruction_components?.byFieldPair).toEqual({
-      'emotion,freeFormDirection': 1,
-      'intonation,freeFormDirection': 1,
-    });
+    ).toEqual({ costStatus: 'unavailable' });
   });
 
   it('separates raw parsing, valid prompted plans, fallback, rendering, and hard gates', () => {
@@ -402,7 +68,7 @@ describe('speech planner evaluator', () => {
     });
     expect(valid).toMatchObject({
       promptHash: expect.stringMatching(/^[a-f0-9]{64}$/),
-      rendererPolicyVersion: 'inworld-renderer-v3-contextual-continuity',
+      rendererPolicyVersion: 'inworld-renderer-v2',
       fixtureContentHash: fixture.contentHash,
       rawParseStatus: 'parsed',
       promptedPlanStatus: 'valid',
@@ -464,8 +130,6 @@ describe('speech planner evaluator', () => {
             nonverbalCount: 0,
             emphasisCount: 0,
             freeFormDirectionCount: 0,
-            instructionCount: 0,
-            nonDefaultDeliveryModeCount: 0,
             deliveryModeCounts: { BALANCED: 1 },
             cueCount: 2,
             cueRate: 2,
@@ -544,7 +208,6 @@ describe('speech planner evaluator', () => {
         mode: 'live',
         resolvedConfig: {
           corpusPath: 'packages/batch-backend/fixtures/speech-planner-eval/corpus-v1.json',
-          controlsPath: 'packages/batch-backend/fixtures/speech-planner-eval/controls-v1.json',
           priceSnapshotPath:
             'packages/batch-backend/fixtures/speech-planner-eval/pricing-2026-07-28.json',
           models: ['gemini-3.1-flash-lite', 'gemini-3.5-flash-lite'],
@@ -586,7 +249,7 @@ describe('speech planner evaluator', () => {
     expect(executeVariant).toHaveBeenCalledTimes(3);
     expect(observedPartialStatus).toBe(true);
     expect(JSON.parse(readFileSync(join(runDirectory, 'run.json'), 'utf8'))).toMatchObject({
-      schemaVersion: 4,
+      schemaVersion: 3,
       status: 'completed',
       mode: 'live',
       resolvedConfig: {
@@ -699,7 +362,7 @@ describe('speech planner evaluator', () => {
     });
   });
 
-  it('fails closed on an artifact-first interrupted attempt without another provider call', async () => {
+  it('recovers an artifact-first interrupted attempt without overwriting immutable content', async () => {
     const root = mkdtempSync(join(tmpdir(), 'speech-planner-resume-'));
     tempRoots.push(root);
     const runDirectory = join(root, 'run');
@@ -733,19 +396,18 @@ describe('speech planner evaluator', () => {
     writeFileSync(join(runDirectory, 'attempts.jsonl'), '', 'utf8');
     executeVariant.mockClear();
 
-    await expect(
-      runSpeechPlannerEvaluation({
-        runDirectory,
-        gitSha: 'a'.repeat(40),
-        variants,
-        fixtures: [fixture],
-        priceSnapshot: loadSpeechPlannerPriceSnapshot(),
-        executeVariant,
-        resume: true,
-      }),
-    ).rejects.toThrow('indeterminate');
+    const resumed = await runSpeechPlannerEvaluation({
+      runDirectory,
+      gitSha: 'a'.repeat(40),
+      variants,
+      fixtures: [fixture],
+      priceSnapshot: loadSpeechPlannerPriceSnapshot(),
+      executeVariant,
+      resume: true,
+    });
 
-    expect(executeVariant).not.toHaveBeenCalled();
+    expect(executeVariant).toHaveBeenCalledOnce();
+    expect(resumed.records).toHaveLength(1);
     expect(
       readFileSync(join(runDirectory, 'plans', `${variants[0]!.attemptId}.json`), 'utf8'),
     ).toBe(immutablePlan);
@@ -765,148 +427,6 @@ describe('speech planner evaluator', () => {
         executeVariant,
         resume: true,
       }),
-    ).rejects.toThrow('indeterminate');
-  });
-
-  it('records a transient provider failure as one physical call with no retry', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'speech-planner-provider-failure-'));
-    tempRoots.push(root);
-    const runDirectory = join(root, 'run');
-    const fixture = loadSpeechPlannerEvalFixtures()[0]!;
-    const variants = buildSpeechPlannerEvalMatrix({
-      fixtures: [fixture],
-      repetitions: 1,
-      models: ['gemini-3.1-flash-lite'],
-      promptPolicies: ['speech-performance-v2-inworld-tts2'],
-    });
-    const executeVariant = vi.fn(async () => ({
-      status: 'provider_error' as const,
-      category: 'UNAVAILABLE',
-      latencyMs: 12,
-    }));
-
-    const run = await runSpeechPlannerEvaluation({
-      runDirectory,
-      gitSha: 'a'.repeat(40),
-      variants,
-      fixtures: [fixture],
-      priceSnapshot: loadSpeechPlannerPriceSnapshot(),
-      executeVariant,
-      runContext: {
-        mode: 'live',
-        resolvedConfig: {
-          corpusPath: 'injected',
-          controlsPath: 'injected',
-          priceSnapshotPath: 'injected',
-          models: ['gemini-3.1-flash-lite'],
-          promptPolicies: ['speech-performance-v2-inworld-tts2'],
-          repetitions: 1,
-          privateOnly: false,
-        },
-        environmentFlags: {
-          live: true,
-          offlineOutputFixtures: false,
-          selectedAudio: false,
-          privateOnly: false,
-          postgresAdapters: 0,
-        },
-        preflight: {
-          status: 'allowed',
-          allowedModels: ['gemini-3.1-flash-lite'],
-          requiredModels: ['gemini-3.1-flash-lite'],
-          missingRequiredModels: [],
-          allowlistReady: true,
-          credentialsPresent: true,
-          usageVerified: true,
-          usedToday: 0,
-          dailyLimit: 120,
-          rpm: 4,
-          remainingDailyCapacity: 120,
-          plannerAttempts: 1,
-          compatibilityChecks: 0,
-        },
-      },
-    });
-
-    expect(executeVariant).toHaveBeenCalledOnce();
-    expect(run.records).toEqual([
-      expect.objectContaining({
-        promptedPlanStatus: 'provider_error',
-        normalizedErrorCategory: 'UNAVAILABLE',
-        retryAttempted: false,
-      }),
-    ]);
-    expect(JSON.parse(readFileSync(join(runDirectory, 'run.json'), 'utf8'))).toMatchObject({
-      activities: [expect.objectContaining({ providerCalls: 1 })],
-    });
-
-    const callPath = join(runDirectory, 'calls', `${variants[0]!.attemptId}.json`);
-    const immutableCall = readFileSync(callPath, 'utf8');
-    rmSync(callPath);
-    await expect(
-      runSpeechPlannerEvaluation({
-        runDirectory,
-        gitSha: 'a'.repeat(40),
-        variants,
-        fixtures: [fixture],
-        priceSnapshot: loadSpeechPlannerPriceSnapshot(),
-        executeVariant,
-        resume: true,
-      }),
-    ).rejects.toThrow('call-intent');
-    writeFileSync(callPath, immutableCall, 'utf8');
-    const tampered = JSON.parse(immutableCall) as { retryAttempted: boolean };
-    tampered.retryAttempted = true;
-    writeFileSync(callPath, JSON.stringify(tampered, null, 2), 'utf8');
-    await expect(
-      runSpeechPlannerEvaluation({
-        runDirectory,
-        gitSha: 'a'.repeat(40),
-        variants,
-        fixtures: [fixture],
-        priceSnapshot: loadSpeechPlannerPriceSnapshot(),
-        executeVariant,
-        resume: true,
-      }),
-    ).rejects.toThrow('call-intent');
-    expect(executeVariant).toHaveBeenCalledOnce();
-
-    writeFileSync(callPath, immutableCall, 'utf8');
-    const runPath = join(runDirectory, 'run.json');
-    const interruptedMetadata = JSON.parse(readFileSync(runPath, 'utf8')) as {
-      status: string;
-      completedAt?: string;
-      activities: {
-        kind: string;
-        status: string;
-        completedAt?: string;
-        providerCalls?: number;
-      }[];
-    };
-    interruptedMetadata.status = 'partial';
-    delete interruptedMetadata.completedAt;
-    interruptedMetadata.activities[0]!.status = 'partial';
-    delete interruptedMetadata.activities[0]!.completedAt;
-    delete interruptedMetadata.activities[0]!.providerCalls;
-    writeFileSync(runPath, JSON.stringify(interruptedMetadata, null, 2), 'utf8');
-
-    await runSpeechPlannerEvaluation({
-      runDirectory,
-      gitSha: 'a'.repeat(40),
-      variants,
-      fixtures: [fixture],
-      priceSnapshot: loadSpeechPlannerPriceSnapshot(),
-      executeVariant,
-      resume: true,
-    });
-    const recovered = readSpeechPlannerEvalRunMetadata(runDirectory);
-    expect(recovered.status).toBe('completed');
-    expect(recovered.activities[0]).toMatchObject({
-      kind: 'planner_initial',
-      status: 'interrupted',
-      providerCalls: 1,
-      normalizedErrorCategory: 'interrupted_before_resume',
-    });
-    expect(executeVariant).toHaveBeenCalledOnce();
+    ).rejects.toThrow('immutable artifact mismatch');
   });
 });

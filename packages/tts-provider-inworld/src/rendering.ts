@@ -1,11 +1,9 @@
 import type {
   InworldTtsModel,
   SpeechDeliveryMode,
-  SpeechPerformancePlan,
   SpeechPerformancePlanSegment,
   VoiceAssignmentCapabilities,
 } from '@esl-pipeline/tts-core';
-import { resolveEffectiveSpeechDirection } from '@esl-pipeline/tts-core';
 
 const MARKDOWN_STRIPPERS: [RegExp, string][] = [
   [/\r?\n/g, ' '],
@@ -44,8 +42,7 @@ export function cleanSpeechText(text: string): string {
 
 export function renderInworldSpeechSegment(args: {
   model: InworldTtsModel;
-  plan: SpeechPerformancePlan;
-  segment: SpeechPerformancePlan['segments'][number];
+  segment: SpeechPerformancePlanSegment;
   capabilities?: VoiceAssignmentCapabilities;
   language?: string;
 }): RenderedInworldSpeechSegment {
@@ -68,31 +65,15 @@ export function renderInworldSpeechSegment(args: {
     supportsUppercaseEmphasis: true,
     supportsFreeFormDirection: true,
   };
-  const instruction =
-    args.plan.schemaVersion === 2
-      ? resolveEffectiveSpeechDirection(args.plan, args.segment).instruction
-      : compileInworldSteeringInstruction(args.segment, capabilities);
-  const hasEvidencedNonverbal =
-    args.plan.schemaVersion === 1 || hasControlEvidence(args.segment, 'nonverbal');
-  const beforeCue =
-    capabilities.supportsNonVerbals && hasEvidencedNonverbal
-      ? args.segment.nonVerbalsBefore?.[0]
-      : undefined;
-  const afterCue =
-    capabilities.supportsNonVerbals && hasEvidencedNonverbal
-      ? args.segment.nonVerbalsAfter?.[0]
-      : undefined;
+  const instruction = compileInworldSteeringInstruction(args.segment, capabilities);
+  const beforeCue = capabilities.supportsNonVerbals
+    ? args.segment.nonVerbalsBefore?.[0]
+    : undefined;
+  const afterCue = capabilities.supportsNonVerbals ? args.segment.nonVerbalsAfter?.[0] : undefined;
   const before = beforeCue ? [`[${beforeCue}]`] : [];
   const after = !beforeCue && afterCue ? [`[${afterCue}]`] : [];
-  const emphasis =
-    args.plan.schemaVersion === 2 &&
-    args.segment.pace &&
-    args.segment.pace !== 'natural' &&
-    !hasLearnerMeaningEvidence(args.segment, 'emphasis')
-      ? undefined
-      : args.segment.emphasis;
   const spokenText = capabilities.supportsUppercaseEmphasis
-    ? applyUppercaseEmphasis(cleanText, emphasis)
+    ? applyUppercaseEmphasis(cleanText, args.segment.emphasis)
     : cleanText;
   const text = [
     instruction ? `[${instruction}]` : undefined,
@@ -113,38 +94,8 @@ export function renderInworldSpeechSegment(args: {
     leadingInstructionTagCount: instruction ? 1 : 0,
     ...(args.language ? { language: args.language } : {}),
     ...(speakingRate !== undefined ? { speakingRate } : {}),
-    ...(args.segment.deliveryMode &&
-    (args.plan.schemaVersion === 1 || args.segment.deliveryMode !== 'BALANCED')
-      ? { deliveryMode: args.segment.deliveryMode }
-      : {}),
+    ...(args.segment.deliveryMode ? { deliveryMode: args.segment.deliveryMode } : {}),
   };
-}
-
-function hasControlEvidence(
-  segment: SpeechPerformancePlan['segments'][number],
-  control: string,
-): boolean {
-  return Boolean(
-    'controlEvidence' in segment &&
-      segment.controlEvidence?.some(
-        (entry) => entry.control === control && entry.evidence.length > 0,
-      ),
-  );
-}
-
-function hasLearnerMeaningEvidence(
-  segment: SpeechPerformancePlan['segments'][number],
-  control: string,
-): boolean {
-  return Boolean(
-    'controlEvidence' in segment &&
-      segment.controlEvidence?.some(
-        (entry) =>
-          entry.control === control &&
-          entry.learnerMeaningRequired === true &&
-          entry.evidence.length > 0,
-      ),
-  );
 }
 
 export function compileInworldSteeringInstruction(

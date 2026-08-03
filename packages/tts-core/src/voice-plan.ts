@@ -1,10 +1,7 @@
 import { ConfigurationError } from '@esl-pipeline/contracts';
 
 import { getTtsModelCapabilities } from './descriptors.js';
-import {
-  computeSpeechPerformanceContextHash,
-  normalizeStudyTextSpeakerToken,
-} from './speech-plan.js';
+import { normalizeStudyTextSpeakerToken } from './speech-plan.js';
 import type {
   PreparedStudyTextSynthesis,
   TtsModelId,
@@ -140,16 +137,11 @@ export function withVoicePlan(
   voicePlan: VoicePlan,
 ): PreparedStudyTextSynthesis {
   const validated = resolveVoicePlanForExecution(prepared, voicePlan);
-  const withPlan: PreparedStudyTextSynthesis = {
+  return {
     ...prepared,
     voicePlan: validated,
     voiceAssignments: Object.fromEntries(
       validated.assignments.map((assignment) => [assignment.speaker, assignment.voiceId]),
     ),
-  };
-  const performanceContextHash = computeSpeechPerformanceContextHash(withPlan);
-  return {
-    ...withPlan,
-    ...(performanceContextHash ? { performanceContextHash } : {}),
   };
 }
