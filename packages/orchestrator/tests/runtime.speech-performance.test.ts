@@ -19,6 +19,96 @@ function createPrepared(): PreparedStudyTextSynthesis {
 }
 
 describe('runtime/speech-performance', () => {
+  it('rejects one malformed annotation segment with assignment-wide identity fallback', async () => {
+    const prepared: PreparedStudyTextSynthesis = {
+      ...createPrepared(),
+      segments: [
+        ...createPrepared().segments,
+        { id: 'segment-2', speaker: 'Leo', text: 'I can revise the plan today.' },
+      ],
+    };
+    const result = await resolveSpeechPerformancePlan({
+      prepared,
+      planner: {
+        async plan() {
+          return {
+            schemaVersion: 2,
+            mode: 'prompted',
+            provider: 'inworld',
+            model: 'inworld-tts-2',
+            sourceHash: prepared.sourceHash,
+            enhancerVersion: 'contextual-bracket-annotation-v1',
+            planner: {
+              provider: 'openai',
+              model: 'gpt-5.6-luna',
+              generatedAt: '2026-08-04T00:00:00.000Z',
+              promptPolicyVersion: 'contextual-bracket-annotation-v1',
+            },
+            segments: [
+              { ...prepared.segments[0]!, synthesisText: prepared.segments[0]!.text },
+              { ...prepared.segments[1]!, synthesisText: 'I can revise the plan tomorrow.' },
+            ],
+          };
+        },
+      },
+    });
+
+    expect(result.plan).toMatchObject({
+      schemaVersion: 1,
+      mode: 'identity',
+      fallbackReason: 'planner_invalid',
+      segments: prepared.segments,
+    });
+  });
+
+  it('logs contextual annotation counts without annotation bodies by default', async () => {
+    const prepared = createPrepared();
+    const logger = { log: vi.fn() };
+    const result = await resolveSpeechPerformancePlan({
+      prepared,
+      logger,
+      planner: {
+        async plan() {
+          return {
+            schemaVersion: 2,
+            mode: 'prompted',
+            provider: 'inworld',
+            model: 'inworld-tts-2',
+            sourceHash: prepared.sourceHash,
+            enhancerVersion: 'contextual-bracket-annotation-v1',
+            planner: {
+              provider: 'openai',
+              model: 'gpt-5.6-luna',
+              generatedAt: '2026-08-04T00:00:00.000Z',
+              promptPolicyVersion: 'contextual-bracket-annotation-v1',
+              promptHash: 'a'.repeat(64),
+            },
+            segments: [
+              {
+                ...prepared.segments[0]!,
+                synthesisText:
+                  '<tts-annotation>Trying not to sound accusatory</tts-annotation>We need a clearer deadline.',
+              },
+            ],
+          };
+        },
+      },
+    });
+
+    expect(result.plan.schemaVersion).toBe(2);
+    expect(logger.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        detail: expect.objectContaining({
+          enhancerVersion: 'contextual-bracket-annotation-v1',
+          annotatedSegmentCount: 1,
+          annotationCount: 1,
+        }),
+      }),
+    );
+    expect(JSON.stringify(logger.log.mock.calls)).not.toContain('Trying not to sound accusatory');
+  });
+
+
   it('records identity fallback when a prompted model has no injected planner', async () => {
     const result = await resolveSpeechPerformancePlan({ prepared: createPrepared() });
 

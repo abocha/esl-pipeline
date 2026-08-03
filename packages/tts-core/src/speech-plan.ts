@@ -174,6 +174,9 @@ function validateSpeechPerformancePlanV2(
   prepared: PreparedStudyTextSynthesis,
   plan: SpeechPerformancePlanV2,
 ): SpeechPerformancePlanV2 {
+  if (plan.provider !== 'inworld' || plan.model !== 'inworld-tts-2') {
+    throw new ConfigurationError('Contextual speech annotations require Inworld TTS-2.');
+  }
   if (plan.mode !== 'prompted') {
     throw new ConfigurationError('Speech annotation plan mode must be "prompted".');
   }
