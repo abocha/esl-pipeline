@@ -97,6 +97,13 @@ export {
 export { hashStudyText } from './hash.js';
 export { resolveSpeakerRoutingHint } from './speaker-routing.js';
 export {
+  assertSourceHasNoReservedDelimiter,
+  CONTEXTUAL_SPEECH_ANNOTATION_VERSION,
+  SPEECH_ANNOTATION_CLOSE,
+  SPEECH_ANNOTATION_OPEN,
+  validateSpeechAnnotationText,
+} from './speech-annotation.js';
+export {
   createIdentitySpeechPerformancePlan,
   createPreparedStudyTextSynthesis,
   normalizeStudyTextSpeakerToken,
@@ -138,11 +145,15 @@ export type {
   SpeechNonVerbal,
   SpeechPace,
   SpeechPerformancePlan,
+  SpeechPerformancePlanV1,
+  SpeechPerformancePlanV2,
   SpeechPerformancePlanner,
   SpeechPerformancePlannerBinding,
   SpeechPerformancePlannerFallbackReason,
   SpeechPerformancePlannerMetadata,
   SpeechPerformancePlanSegment,
+  SpeechPerformancePlanSegmentV2,
+  SpeechEnhancementVersion,
   SpeechPerformancePromptPolicyId,
   TtsEngine,
   TtsModelCapabilities,

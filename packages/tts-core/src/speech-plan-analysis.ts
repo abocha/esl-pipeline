@@ -4,6 +4,7 @@ import { getTtsModelCapabilities } from './descriptors.js';
 import type {
   PreparedStudyTextSynthesis,
   SpeechPerformancePlan,
+  SpeechPerformancePlanV2,
   SpeechPerformancePlanSegment,
 } from './types.js';
 
@@ -198,6 +199,9 @@ export function analyzeValidatedSpeechPlan(
   plan: SpeechPerformancePlan,
   renderedSegments: readonly RenderedSpeechSegmentSummary[] = [],
 ): ValidatedSpeechPlanAnalysis {
+  if (plan.schemaVersion === 2) {
+    return analyzeValidatedSpeechAnnotationPlan(prepared, plan, renderedSegments);
+  }
   const hardFailures: SpeechPlanQualityIssue[] = [];
   const warnings: SpeechPlanQualityIssue[] = [];
   const capabilities = getTtsModelCapabilities(plan.provider, plan.model);
@@ -327,6 +331,50 @@ export function analyzeValidatedSpeechPlan(
       deliveryModeCounts,
       cueCount,
       cueRate: plan.segments.length > 0 ? cueCount / plan.segments.length : 0,
+    },
+  };
+}
+
+function analyzeValidatedSpeechAnnotationPlan(
+  prepared: PreparedStudyTextSynthesis,
+  plan: SpeechPerformancePlanV2,
+  renderedSegments: readonly RenderedSpeechSegmentSummary[],
+): ValidatedSpeechPlanAnalysis {
+  const hardFailures: SpeechPlanQualityIssue[] = [];
+  const renderedById = new Map(renderedSegments.map((segment) => [segment.id, segment]));
+  for (let index = 0; index < plan.segments.length; index += 1) {
+    const segment = plan.segments[index]!;
+    const source = prepared.segments[index];
+    if (
+      !source ||
+      segment.id !== source.id ||
+      segment.speaker !== source.speaker ||
+      segment.text !== source.text
+    ) {
+      hardFailures.push(issue('authored_words_changed', segment.id));
+    }
+    if (renderedSegments.length === 0) continue;
+    const rendered = renderedById.get(segment.id);
+    if (!rendered) {
+      hardFailures.push(issue('segment_not_rendered', segment.id));
+    } else if (rendered.lexicalText !== segment.text) {
+      hardFailures.push(issue('rendered_words_changed', segment.id));
+    }
+  }
+  return {
+    hardFailures,
+    warnings: [],
+    metrics: {
+      segmentCount: plan.segments.length,
+      paceCount: 0,
+      pauseCount: 0,
+      pauseValuesMs: [],
+      nonverbalCount: 0,
+      emphasisCount: 0,
+      freeFormDirectionCount: 0,
+      deliveryModeCounts: {},
+      cueCount: 0,
+      cueRate: 0,
     },
   };
 }
