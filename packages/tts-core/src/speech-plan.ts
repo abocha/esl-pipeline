@@ -4,11 +4,17 @@ import { extractFrontmatter, extractStudyText } from '@esl-pipeline/pmd';
 import { resolveTtsSelection } from './descriptors.js';
 import { hashStudyText } from './hash.js';
 import { normalizeSpeechCueText } from './speech-plan-analysis.js';
+import {
+  CONTEXTUAL_SPEECH_ANNOTATION_VERSION,
+  validateSpeechAnnotationText,
+} from './speech-annotation.js';
 import type {
   BuildStudyTextInput,
   BuildStudyTextOptions,
   PreparedStudyTextSynthesis,
   SpeechPerformancePlan,
+  SpeechPerformancePlanV1,
+  SpeechPerformancePlanV2,
   SpeechPerformancePlannerFallbackReason,
   SpeechPerformancePlanSegment,
 } from './types.js';
@@ -72,6 +78,7 @@ export function createPreparedStudyTextSynthesis(
     speakerLabels,
     voices: [],
     voiceAssignments: {},
+    enhancementContext: { assignmentMarkdown: input.context.rawMarkdown },
   };
 }
 
@@ -122,7 +129,7 @@ function collectSpeakerLabels(
 export function createIdentitySpeechPerformancePlan(
   prepared: PreparedStudyTextSynthesis,
   options: { fallbackReason?: SpeechPerformancePlannerFallbackReason } = {},
-): SpeechPerformancePlan {
+): SpeechPerformancePlanV1 {
   return {
     schemaVersion: 1,
     mode: 'identity',
@@ -138,8 +145,11 @@ export function validateSpeechPerformancePlan(
   prepared: PreparedStudyTextSynthesis,
   plan: SpeechPerformancePlan,
 ): SpeechPerformancePlan {
+  if (plan.schemaVersion === 2) return validateSpeechPerformancePlanV2(prepared, plan);
   if (plan.schemaVersion !== 1) {
-    throw new ConfigurationError(`Unsupported speech plan schema version "${plan.schemaVersion}".`);
+    throw new ConfigurationError(
+      `Unsupported speech plan schema version "${String((plan as { schemaVersion?: unknown }).schemaVersion)}".`,
+    );
   }
   if (
     plan.provider !== prepared.selection.provider ||
@@ -157,6 +167,58 @@ export function validateSpeechPerformancePlan(
   const segments = plan.segments.map((segment, index) =>
     validateSegment(prepared, prepared.segments[index]!, segment),
   );
+  return { ...plan, segments };
+}
+
+function validateSpeechPerformancePlanV2(
+  prepared: PreparedStudyTextSynthesis,
+  plan: SpeechPerformancePlanV2,
+): SpeechPerformancePlanV2 {
+  if (plan.mode !== 'prompted') {
+    throw new ConfigurationError('Speech annotation plan mode must be "prompted".');
+  }
+  if (
+    plan.provider !== prepared.selection.provider ||
+    plan.model !== prepared.selection.model ||
+    plan.sourceHash !== prepared.sourceHash
+  ) {
+    throw new ConfigurationError(
+      'Speech plan selection or source hash does not match prepared text.',
+    );
+  }
+  if (plan.enhancerVersion !== CONTEXTUAL_SPEECH_ANNOTATION_VERSION) {
+    throw new ConfigurationError(`Unsupported speech enhancer version "${plan.enhancerVersion}".`);
+  }
+  if (
+    !plan.planner ||
+    typeof plan.planner.provider !== 'string' ||
+    typeof plan.planner.model !== 'string' ||
+    typeof plan.planner.generatedAt !== 'string'
+  ) {
+    throw new ConfigurationError('Speech annotation plan requires planner provenance.');
+  }
+  if (plan.segments.length !== prepared.segments.length) {
+    throw new ConfigurationError('Speech plan segment count does not match prepared text.');
+  }
+
+  const segments = plan.segments.map((segment, index) => {
+    const source = prepared.segments[index]!;
+    if (segment.id !== source.id) {
+      throw new ConfigurationError(
+        `Speech plan segment "${segment.id}" does not match source segment "${source.id}".`,
+      );
+    }
+    if (segment.text !== source.text) {
+      throw new ConfigurationError(`Speech plan segment "${segment.id}" changed the authored text.`);
+    }
+    if (segment.speaker !== source.speaker) {
+      throw new ConfigurationError(
+        `Speech plan segment "${segment.id}" changed the authored speaker.`,
+      );
+    }
+    const validated = validateSpeechAnnotationText(source.text, segment.synthesisText);
+    return { ...segment, synthesisText: validated.synthesisText };
+  });
   return { ...plan, segments };
 }
 
