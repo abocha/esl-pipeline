@@ -7,12 +7,16 @@
 - Source Run: `20260801T133028792Z`.
 - Status: automatic proof complete; blind human listening pending.
 
+> Historical notice: this run validated Luna/provider execution for the discarded contextual
+> envelope schema. It is retained as evidence of provider and ordinary-pipeline connectivity, but
+> it does not validate the replacement contextual bracket-annotation contract or its audio quality.
+
 ## Decision Context
 
-The founder selected disabled-by-default `openai` plus exact `gpt-5.6-luna` for schema-v2
-study-text performance planning. This trial proves that the ordinary planner, validator,
-orchestrator, Inworld renderer, and audio assembly path works for Luna. It is not a Gemini model
-comparison and does not claim human audio preference.
+The founder selected disabled-by-default `openai` plus exact `gpt-5.6-luna` for the then-current
+schema-v2 study-text performance design. This trial proved that the ordinary planner, validator,
+orchestrator, Inworld renderer, and audio assembly path worked for Luna under that discarded
+design. It is not a Gemini model comparison and does not claim human audio preference.
 
 The organization opted into the OpenAI
 [API input/output sharing program](https://help.openai.com/en/articles/10306912-sharing-feedback-evaluation-and-fine-tuning-data-and-api-inputs-and-outputs-with-openai).
