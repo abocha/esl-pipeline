@@ -80,4 +80,37 @@ describe('environment validation', () => {
 
     expect(validateEnvironment({ cwd, profile: 'development', shellEnv: {} }).errors).toEqual([]);
   });
+
+  it.each([
+    {
+      provider: 'openai',
+      credential: 'OPENAI_API_KEY=test-openai-key',
+      missingCredentialError:
+        'ESL_TTS_SPEECH_PLANNER_ENABLED=true with provider openai requires OPENAI_API_KEY.',
+    },
+    {
+      provider: 'google_ai_studio',
+      credential: 'GEMINI_API_KEY=test-gemini-key',
+      missingCredentialError:
+        'ESL_TTS_SPEECH_PLANNER_ENABLED=true with provider google_ai_studio requires GEMINI_API_KEY.',
+    },
+  ])('requires only the selected $provider speech-planner credential', ({
+    provider,
+    credential,
+    missingCredentialError,
+  }) => {
+    const enabled = [
+      'ESL_TTS_SPEECH_PLANNER_ENABLED=true',
+      `ESL_TTS_SPEECH_PLANNER_PROVIDER=${provider}`,
+    ];
+    const configuredCwd = writeFixture([...enabled, credential].join('\n'));
+    const missingCwd = writeFixture(enabled.join('\n'));
+
+    expect(
+      validateEnvironment({ cwd: configuredCwd, profile: 'development', shellEnv: {} }).errors,
+    ).toEqual([]);
+    expect(
+      validateEnvironment({ cwd: missingCwd, profile: 'development', shellEnv: {} }).errors,
+    ).toContain(missingCredentialError);
+  });
 });
