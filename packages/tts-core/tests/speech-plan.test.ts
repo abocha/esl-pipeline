@@ -567,6 +567,27 @@ describe('speech performance plans', () => {
     ).toEqual(['Narrator']);
   });
 
+  it('carries the active monologue speaker across unlabeled paragraphs', () => {
+    const context = parseMarkdownContext(
+      `---\ntitle: Test\nstudent: Alex\nlevel: B1\ntopic: travel\ninput_type: generate\nstudy_text_type: monologue\nspeaker_labels: [Lena]\n---\n\n:::study-text\nLena: I expected a quiet weekend.\nThe schedule was full from morning to evening.\nBy Sunday, I had changed my mind.\n:::`,
+    );
+
+    const prepared = createPreparedStudyTextSynthesis(
+      { context },
+      { voiceMapPath: 'voices.yml', outPath: '/tmp', ttsProvider: 'inworld' },
+    );
+
+    expect(prepared.segments).toEqual([
+      { id: 'segment-1', speaker: 'Lena', text: 'I expected a quiet weekend.' },
+      {
+        id: 'segment-2',
+        speaker: 'Lena',
+        text: 'The schedule was full from morning to evening.',
+      },
+      { id: 'segment-3', speaker: 'Lena', text: 'By Sunday, I had changed my mind.' },
+    ]);
+  });
+
   it('accepts expressive cues while preserving authored words', () => {
     const prepared = withVoicePlan(
       createPrepared(),
