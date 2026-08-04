@@ -335,6 +335,10 @@ voice-capability snapshot provenance.
   evidence in
   [`../operations/study-text-performance-v3-luna-evidence-2026-08-01.md`](../operations/study-text-performance-v3-luna-evidence-2026-08-01.md).
   It does not validate replacement bracket-annotation quality.
+- The replacement contextual bracket-annotation contract completed a blinded three-assignment
+  product trial with two enhancement wins, zero baseline wins, and one tie. The non-private evidence
+  is retained in
+  [`../operations/contextual-speech-annotation-luna-listening-evidence-2026-08-04.md`](../operations/contextual-speech-annotation-luna-listening-evidence-2026-08-04.md).
 - Planner model comparisons use the database-free, fail-closed harness documented in
   [`../operations/speech-planner-evaluation.md`](../operations/speech-planner-evaluation.md). The
   paid matrix contains prompted TTS-2 fixtures only; deterministic TTS 1.5 identity controls use the
