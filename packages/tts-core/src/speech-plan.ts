@@ -55,14 +55,17 @@ export function createPreparedStudyTextSynthesis(
 ): PreparedStudyTextSynthesis {
   const selection = resolveTtsSelection({ provider: options.ttsProvider, model: options.ttsModel });
   const frontmatter = extractFrontmatter(input.context);
+  let activeSpeaker: string | undefined;
   const segments = extractStudyText(input.context)
     .lines.map((line, index) => {
       const separator = line.indexOf(':');
-      const speaker =
+      const explicitSpeaker =
         separator > 0 && separator < 40
           ? normalizeStudyTextSpeakerToken(line.slice(0, separator))
           : undefined;
-      const text = (speaker ? line.slice(separator + 1) : line).trim();
+      const speaker = explicitSpeaker ?? activeSpeaker;
+      if (speaker) activeSpeaker = speaker;
+      const text = (explicitSpeaker ? line.slice(separator + 1) : line).trim();
       return { id: `segment-${index + 1}`, ...(speaker ? { speaker } : {}), text };
     })
     .filter((segment) => segment.text.length > 0);
