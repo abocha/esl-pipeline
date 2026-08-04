@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { SpeechPerformancePlannerInvalidOutputError } from '@esl-pipeline/tts-core';
+import {
+  SPEECH_ANNOTATION_OPEN,
+  SpeechPerformancePlannerInvalidOutputError,
+} from '@esl-pipeline/tts-core';
 
 import {
   createBackendSpeechPerformancePlanner,
@@ -14,12 +17,29 @@ import {
 import { loadConfig } from '../src/config/env.js';
 
 function createPrepared() {
+  const assignmentMarkdown = `---
+title: Deadline conversation
+study_text_type: dialogue
+speaker_profiles:
+  - id: Maya
+    role: project manager
+    persona: warm, practical, and direct
+    voice_direction: calm conversational voice
+  - id: Leo
+    role: colleague
+---
+
+:::study-text
+Maya: We need a clearer deadline.
+Leo: I can revise the plan today.
+:::`;
   return {
     selection: { provider: 'inworld' as const, model: 'inworld-tts-2' as const },
     sourceHash: 'source-hash',
     segments: [{ id: 'segment-1', speaker: 'Maya', text: 'We need a clearer deadline.' }],
     voices: [],
     voiceAssignments: {},
+    enhancementContext: { assignmentMarkdown },
     voicePlan: {
       schemaVersion: 1 as const,
       mode: 'deterministic' as const,
@@ -43,7 +63,132 @@ function createPrepared() {
   };
 }
 
+function createDialoguePrepared() {
+  const prepared = createPrepared();
+  return {
+    ...prepared,
+    segments: [
+      ...prepared.segments,
+      { id: 'segment-2', speaker: 'Leo', text: 'I can revise the plan today.' },
+    ],
+  };
+}
+
 describe('application/speech-performance-planner', () => {
+  it('builds the immutable contextual-annotation request from complete assignment context', () => {
+    const prepared = createDialoguePrepared();
+    const request = buildSpeechPlannerRequest(
+      prepared,
+      'contextual-bracket-annotation-v1',
+      'gpt-5.6-luna',
+    );
+
+    expect(request.responseSchema.schema.properties.segments.items.required).toEqual([
+      'id',
+      'synthesisText',
+    ]);
+    expect(request.prompt).toContain(prepared.enhancementContext.assignmentMarkdown);
+    expect(request.prompt).toContain(SPEECH_ANNOTATION_OPEN);
+    expect(request.prompt).not.toContain('speakerEnvelopes');
+    expect(request.prompt).not.toContain('turnAdjustment');
+  });
+
+  it.each([
+    ['unchanged', ['We need a clearer deadline.', 'I can revise the plan today.']],
+    [
+      'leading direction',
+      [
+        '<tts-annotation>Trying not to sound accusatory</tts-annotation>We need a clearer deadline.',
+        'I can revise the plan today.',
+      ],
+    ],
+    [
+      'inline nonverbal',
+      [
+        'We need a clearer deadline.',
+        'I can revise the plan<tts-annotation>small relieved breath</tts-annotation> today.',
+      ],
+    ],
+  ])('accepts %s annotation output atomically', (_case, synthesisTexts) => {
+    const prepared = createDialoguePrepared();
+    const candidate = {
+      segments: prepared.segments.map((segment, index) => ({
+        id: segment.id,
+        synthesisText: synthesisTexts[index],
+      })),
+    };
+    const result = evaluateSpeechPlannerRawOutput({
+      prepared,
+      rawText: JSON.stringify(candidate),
+      promptPolicyVersion: 'contextual-bracket-annotation-v1',
+      promptHash: 'a'.repeat(64),
+      plannerProvider: 'openai',
+      plannerModel: 'gpt-5.6-luna',
+      generatedAt: '2026-08-04T00:00:00.000Z',
+      latencyMs: 10,
+    });
+
+    expect(result).toMatchObject({
+      validation: { status: 'valid' },
+      plan: {
+        schemaVersion: 2,
+        enhancerVersion: 'contextual-bracket-annotation-v1',
+        segments: prepared.segments.map((segment, index) => ({
+          ...segment,
+          synthesisText: synthesisTexts[index],
+        })),
+      },
+    });
+  });
+
+  it('rejects the complete enhancement when only the final segment changes punctuation', () => {
+    const prepared = createDialoguePrepared();
+    const candidate = {
+      segments: [
+        { id: 'segment-1', synthesisText: 'We need a clearer deadline.' },
+        { id: 'segment-2', synthesisText: 'I can revise the plan today!' },
+      ],
+    };
+    const result = evaluateSpeechPlannerRawOutput({
+      prepared,
+      rawText: JSON.stringify(candidate),
+      promptPolicyVersion: 'contextual-bracket-annotation-v1',
+      promptHash: 'a'.repeat(64),
+      plannerProvider: 'openai',
+      plannerModel: 'gpt-5.6-luna',
+      generatedAt: '2026-08-04T00:00:00.000Z',
+      latencyMs: 10,
+    });
+
+    expect(result).toMatchObject({
+      validation: { status: 'invalid' },
+      plan: undefined,
+      fallback: { reason: 'planner_invalid' },
+    });
+  });
+
+  it('refuses reserved source delimiters before making a provider request', async () => {
+    const prepared = createPrepared();
+    prepared.segments[0] = {
+      ...prepared.segments[0]!,
+      text: `Say ${SPEECH_ANNOTATION_OPEN} literally.`,
+    };
+    const executor = vi.fn();
+
+    await expect(
+      executeSpeechPlannerAttempt({
+        config: createEnabledConfig(),
+        prepared,
+        promptPolicyVersion: 'contextual-bracket-annotation-v1',
+        executor,
+      }),
+    ).resolves.toMatchObject({
+      validation: { status: 'invalid' },
+      fallback: { reason: 'planner_invalid' },
+    });
+    expect(executor).not.toHaveBeenCalled();
+  });
+
   it('preserves the immutable v1 prompt bytes and hash', () => {
     const expectedPrompt = [
       'Create restrained, natural speech-performance cues for this ESL study text.',
@@ -102,7 +247,7 @@ describe('application/speech-performance-planner', () => {
   it('stays disabled by default', () => {
     const config = loadConfig();
     expect(config.speechPlanner.enabled).toBe(false);
-    expect(config.speechPlanner.model).toBe('gemini-3.1-flash-lite');
+    expect(config.speechPlanner.model).toBe('gpt-5.6-luna');
     expect(createBackendSpeechPerformancePlanner(config)).toEqual({
       unavailableReason: 'planner_disabled',
     });
@@ -126,6 +271,7 @@ describe('application/speech-performance-planner', () => {
         },
         speechPlanner: {
           enabled: true,
+          provider: 'google_ai_studio' as const,
           model: 'gemini-3.1-flash-lite',
           maxOutputTokens: 2400,
           rpmBudget: 4,
@@ -138,22 +284,23 @@ describe('application/speech-performance-planner', () => {
     });
   });
 
-  it('uses structured Gemini output and preserves authored text', async () => {
+  it('uses structured Luna output and preserves authored text', async () => {
     const config = {
       ...loadConfig(),
       generation: {
         ...loadConfig().generation,
         providers: {
           ...loadConfig().generation.providers,
-          googleAiStudio: {
-            ...loadConfig().generation.providers.googleAiStudio,
-            apiKey: 'test-gemini-key',
+          openai: {
+            ...loadConfig().generation.providers.openai,
+            apiKey: 'test-openai-key',
           },
         },
       },
       speechPlanner: {
         enabled: true,
-        model: 'gemini-3.1-flash-lite',
+        provider: 'openai' as const,
+        model: 'gpt-5.6-luna',
         maxOutputTokens: 2400,
         rpmBudget: 4,
         dailyRequestBudget: 120,
@@ -165,11 +312,8 @@ describe('application/speech-performance-planner', () => {
         segments: [
           {
             id: 'segment-1',
-            emotion: 'calm concern',
-            intonation: 'firm but collaborative',
-            pace: 'measured',
-            deliveryMode: 'BALANCED',
-            freeFormDirection: 'Speak with grounded concern.',
+            synthesisText:
+              '<tts-annotation>Trying not to sound accusatory</tts-annotation>We need a clearer deadline.',
           },
         ],
       },
@@ -177,11 +321,8 @@ describe('application/speech-performance-planner', () => {
         segments: [
           {
             id: 'segment-1',
-            emotion: 'calm concern',
-            intonation: 'firm but collaborative',
-            pace: 'measured',
-            deliveryMode: 'BALANCED',
-            freeFormDirection: 'Speak with grounded concern.',
+            synthesisText:
+              '<tts-annotation>Trying not to sound accusatory</tts-annotation>We need a clearer deadline.',
           },
         ],
       }),
@@ -195,87 +336,43 @@ describe('application/speech-performance-planner', () => {
     expect(binding.unavailableReason).toBeUndefined();
     expect(binding.planner).toBeDefined();
     await expect(binding.planner!.plan(createPrepared())).resolves.toMatchObject({
-      schemaVersion: 1,
+      schemaVersion: 2,
       mode: 'prompted',
+      enhancerVersion: 'contextual-bracket-annotation-v1',
       planner: {
-        provider: 'google_ai_studio',
-        model: 'gemini-3.1-flash-lite',
+        provider: 'openai',
+        model: 'gpt-5.6-luna',
         generatedAt: '2026-05-31T00:00:00.000Z',
-        promptPolicyVersion: 'speech-performance-v2-inworld-tts2',
+        promptPolicyVersion: 'contextual-bracket-annotation-v1',
         promptHash: expect.stringMatching(/^[a-f0-9]{64}$/),
       },
       segments: [
         {
           id: 'segment-1',
           text: 'We need a clearer deadline.',
-          emotion: 'calm concern',
-          intonation: 'firm but collaborative',
-          pace: 'measured',
-          deliveryMode: 'BALANCED',
-          freeFormDirection: 'Speak with grounded concern.',
+          synthesisText:
+            '<tts-annotation>Trying not to sound accusatory</tts-annotation>We need a clearer deadline.',
         },
       ],
     });
     expect(executor).toHaveBeenCalledWith(
       expect.objectContaining({
         request: expect.objectContaining({
-          model: 'gemini-3.1-flash-lite',
+          model: 'gpt-5.6-luna',
           maxOutputTokens: 2400,
           responseSchema: expect.objectContaining({ strict: true }),
         }),
       }),
     );
     const prompt = executor.mock.calls[0]?.[0].request.prompt;
-    expect(prompt).toContain('"supportsFreeFormDirection":true');
-    expect(prompt).toContain(
-      'Maintain a natural, consistent conversational tempo across adjacent segments.',
-    );
-    expect(prompt).toContain('Omit pace for ordinary dialogue.');
-    expect(prompt).toContain(
-      'Use slow, measured, or brisk only when a non-natural tempo is explicitly justified by the authored scene or learning goal.',
-    );
-    expect(prompt).toContain(
-      'Do not use pace merely to reinforce emotion, seriousness, regret, reflection, or intonation.',
-    );
-  });
-
-  it('canonicalizes lowercase Gemini emphasis to the authored text casing', async () => {
-    const config = createEnabledConfig();
-    const executor = vi.fn().mockResolvedValue({
-      output: {
-        segments: [{ id: 'segment-1', emphasis: ['we'] }],
-      },
-      rawText: '{"segments":[{"id":"segment-1","emphasis":["we"]}]}',
-      usage: { totalTokens: 12 },
-    });
-    const binding = createBackendSpeechPerformancePlanner(config, { executor });
-
-    await expect(binding.planner!.plan(createPrepared())).resolves.toMatchObject({
-      segments: [{ id: 'segment-1', emphasis: ['We'] }],
-    });
-  });
-
-  it('drops invalid optional Gemini emphasis while preserving valid authored phrases', async () => {
-    const config = createEnabledConfig();
-    const executor = vi.fn().mockResolvedValue({
-      output: {
-        segments: [{ id: 'segment-1', emphasis: ['deadline', 'no strong reason', ''] }],
-      },
-      rawText: '{"segments":[{"id":"segment-1","emphasis":["deadline","no strong reason",""]}]}',
-      usage: { totalTokens: 12 },
-    });
-    const binding = createBackendSpeechPerformancePlanner(config, { executor });
-
-    await expect(binding.planner!.plan(createPrepared())).resolves.toMatchObject({
-      mode: 'prompted',
-      segments: [{ id: 'segment-1', emphasis: ['deadline'] }],
-    });
+    expect(prompt).toContain(createPrepared().enhancementContext.assignmentMarkdown);
+    expect(prompt).toContain('Unchanged synthesisText is completely valid.');
   });
 
   it('retains rejected structured output diagnostics when local validation fails', async () => {
     const config = createEnabledConfig();
     const rejectedOutput = {
-      segments: [{ id: 'segment-1', pauseAfterMs: 4000 }],
+      segments: [{ id: 'segment-1', synthesisText: 'We need a clearer deadline!' }],
     };
     const rawText = JSON.stringify(rejectedOutput);
     const executor = vi.fn().mockResolvedValue({
@@ -287,7 +384,7 @@ describe('application/speech-performance-planner', () => {
 
     await expect(binding.planner!.plan(createPrepared())).rejects.toMatchObject({
       name: 'SpeechPerformancePlannerInvalidOutputError',
-      validationMessage: 'planner_pause_exceeds_cap',
+      validationMessage: 'Speech annotation text changed the authored text.',
       rejectedOutput,
       rawText,
     } satisfies Partial<SpeechPerformancePlannerInvalidOutputError>);
@@ -386,50 +483,6 @@ describe('application/speech-performance-planner', () => {
       ]),
     );
   });
-
-  it('uses the 1000ms planner schema cap and normalizes sparse optional cues', async () => {
-    const config = createEnabledConfig();
-    const executor = vi.fn().mockResolvedValue({
-      output: {
-        segments: [
-          {
-            id: 'segment-1',
-            emotion: '   ',
-            emphasis: ['we', 'WE'],
-            nonVerbalsBefore: ['sigh'],
-          },
-        ],
-      },
-      rawText: JSON.stringify({
-        segments: [
-          {
-            id: 'segment-1',
-            emotion: '   ',
-            emphasis: ['we', 'WE'],
-            nonVerbalsBefore: ['sigh'],
-          },
-        ],
-      }),
-    });
-    const binding = createBackendSpeechPerformancePlanner(config, { executor });
-
-    await expect(binding.planner!.plan(createPrepared())).resolves.toMatchObject({
-      segments: [
-        expect.objectContaining({
-          emphasis: ['We'],
-          nonVerbalsBefore: ['sigh'],
-          emotion: undefined,
-        }),
-      ],
-    });
-    expect(
-      executor.mock.calls[0]?.[0].request.responseSchema.schema.properties.segments.items
-        .properties,
-    ).toMatchObject({
-      pauseBeforeMs: { maximum: 1000 },
-      pauseAfterMs: { maximum: 1000 },
-    });
-  });
 });
 
 function createEnabledConfig() {
@@ -440,15 +493,16 @@ function createEnabledConfig() {
       ...config.generation,
       providers: {
         ...config.generation.providers,
-        googleAiStudio: {
-          ...config.generation.providers.googleAiStudio,
-          apiKey: 'test-gemini-key',
+        openai: {
+          ...config.generation.providers.openai,
+          apiKey: 'test-openai-key',
         },
       },
     },
     speechPlanner: {
       enabled: true,
-      model: 'gemini-3.1-flash-lite',
+      provider: 'openai' as const,
+      model: 'gpt-5.6-luna',
       maxOutputTokens: 2400,
       rpmBudget: 100,
       dailyRequestBudget: 1000,

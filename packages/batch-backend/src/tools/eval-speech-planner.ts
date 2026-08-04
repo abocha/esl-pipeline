@@ -411,15 +411,21 @@ export async function runEvalSpeechPlannerCli(
           compatibilityChecks: 0,
         },
       },
-      executeVariant: async (variant) => ({
-        status: 'completed',
-        rawText: outputByAttempt.get(variant.attemptId)!.rawText,
-        latencyMs: 0,
-        fallbackUsed:
-          outputByAttempt.get(variant.attemptId)!.expectedClassification === 'fallback_triggering'
-            ? true
-            : undefined,
-      }),
+      executeVariant: async (variant) => {
+        const output = outputByAttempt.get(variant.attemptId)!;
+        if (output.expectedClassification === 'provider_error') {
+          return {
+            status: 'provider_error',
+            category: output.normalizedErrorCategory ?? 'provider_error',
+          };
+        }
+        return {
+          status: 'completed',
+          rawText: output.rawText!,
+          latencyMs: 0,
+          fallbackUsed: output.expectedClassification === 'fallback_triggering' ? true : undefined,
+        };
+      },
     });
     const result: EvalSpeechPlannerCliResult = {
       mode: 'offline',

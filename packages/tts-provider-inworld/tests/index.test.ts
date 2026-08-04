@@ -968,6 +968,56 @@ describe('inworld provider adapter basics', () => {
     });
   });
 
+  it('renders validated contextual annotations directly with balanced native delivery', () => {
+    expect(
+      renderInworldSpeechSegment({
+        model: 'inworld-tts-2',
+        enhancerVersion: 'contextual-bracket-annotation-v1',
+        segment: {
+          id: 'segment-1',
+          text: 'I thought we agreed on [Friday].',
+          synthesisText:
+            '<tts-annotation>Trying not to sound accusatory</tts-annotation>I thought we agreed on [Friday].',
+        },
+      }),
+    ).toEqual({
+      text: '[Trying not to sound accusatory] I thought we agreed on [Friday].',
+      lexicalText: 'I thought we agreed on [Friday].',
+      leadingInstructionTagCount: 1,
+      deliveryMode: 'BALANCED',
+      enhancerVersion: 'contextual-bracket-annotation-v1',
+    });
+
+    expect(
+      renderInworldSpeechSegment({
+        model: 'inworld-tts-2',
+        enhancerVersion: 'contextual-bracket-annotation-v1',
+        segment: {
+          id: 'segment-2',
+          text: "You're right. I completely forgot.",
+          synthesisText: "You're right.<tts-annotation>sighs</tts-annotation> I completely forgot.",
+        },
+      }).text,
+    ).toBe("You're right. [sighs] I completely forgot.");
+  });
+
+  it('includes contextual enhancer version in chunk cache identity', () => {
+    const common = {
+      model: 'inworld-tts-2',
+      voiceId: 'Ashley',
+      text: '[quietly] Hello.',
+      index: 0,
+      deliveryMode: 'BALANCED',
+      sampleRateHertz: 48_000,
+    };
+    expect(buildInworldChunkHash(common)).not.toBe(
+      buildInworldChunkHash({
+        ...common,
+        enhancerVersion: 'contextual-bracket-annotation-v1',
+      }),
+    );
+  });
+
   it('combines emotion and intonation into one TTS-2 instruction without free-form direction', () => {
     expect(
       renderInworldSpeechSegment({
@@ -1079,6 +1129,50 @@ describe('inworld provider adapter basics', () => {
     await expect(buildHash('en-US', 'inworld-renderer-v3')).resolves.not.toMatchObject({
       hash: baseline.hash,
     });
+  });
+
+  it('changes complete preview identity when only validated synthesis text changes', async () => {
+    const context = createPreviewContext();
+    const source = {
+      id: 'segment-1',
+      speaker: 'Maya',
+      text: 'We need a clearer deadline.',
+    };
+    const createPlan = (synthesisText: string): SpeechPerformancePlan => ({
+      schemaVersion: 2,
+      mode: 'prompted',
+      provider: 'inworld',
+      model: 'inworld-tts-2',
+      sourceHash: hashStudyText(JSON.stringify([source])),
+      enhancerVersion: 'contextual-bracket-annotation-v1',
+      planner: {
+        provider: 'openai',
+        model: 'gpt-5.6-luna',
+        generatedAt: '2026-08-04T00:00:00.000Z',
+        promptPolicyVersion: 'contextual-bracket-annotation-v1',
+      },
+      segments: [{ ...source, synthesisText }],
+    });
+    const buildHash = async (synthesisText: string) =>
+      (
+        await buildStudyTextMp3Inworld(
+          { context },
+          {
+            voiceMapPath: 'voices.yml',
+            outPath: '/tmp',
+            preview: true,
+            speechPlan: createPlan(synthesisText),
+            voicePlan: createPreviewVoicePlan('2026-08-04T00:00:00.000Z'),
+          },
+        )
+      ).hash;
+
+    const unchanged = await buildHash(source.text);
+    await expect(
+      buildHash(
+        '<tts-annotation>Trying not to sound accusatory</tts-annotation>We need a clearer deadline.',
+      ),
+    ).resolves.not.toBe(unchanged);
   });
 
   it('blocks unsafe speech plans before calling injected synthesis', async () => {

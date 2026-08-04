@@ -36,12 +36,18 @@ profiles and optional speech-performance plans.
   execution time.
 - Schema-v1 speech plans optionally record `speech-performance-v1-restrained-natural` or
   `speech-performance-v2-inworld-tts2` plus the immutable prompt hash. Old schema-v1 plans remain
-  readable without invented provenance.
-- Cue text is NFKC-normalized and restricted to a bounded markup-safe grammar. Planner pauses are
-  capped at `1000` ms and each segment may carry at most one non-verbal cue. Candidate and validated
-  plan analyzers expose privacy-safe issue codes.
+  readable without invented provenance. Schema v2 uses `contextual-bracket-annotation-v1` and
+  stores immutable authored `text` separately from validated TTS-only `synthesisText`.
+- Luna receives the complete assignment as read-only context for dialogue and monologue. It may
+  insert optional reserved annotation spans, but it cannot rewrite or reorder authored characters,
+  IDs, speakers, or segments. Pronunciation bypasses enhancement.
+- The reserved-span validator rejects malformed placement and proves byte-for-byte authored-text
+  restoration. One invalid segment rejects the complete enhancement and selects schema-v1 identity
+  fallback.
 - Provider synthesis revalidates exact plan selection, source hash, and ordered segment coverage.
   Authored or rendered lexical provider-control markup is rejected before cache or synthesis.
-- Provider adapters receive canonical assignment language. Inworld TTS-2 compiles at most one safe
-  instruction tag; both TTS 1.5 models receive none. Renderer policy and effective language are
-  part of complete and chunk cache identity.
+- Inworld TTS-2 converts only validated reserved spans to square-bracket annotations, uses
+  `BALANCED`, and omits speaking-rate control. Validated synthesis text and enhancer version are
+  part of complete and chunk cache identity; schema-v1 rendering remains compatible.
+- Pronunciation input/options never accept a speech planner, performance plan, or performance
+  source context.

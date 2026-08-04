@@ -74,7 +74,13 @@ describe('config/env - core defaults', () => {
         });
         expect(cfg.speechPlanner.rpmBudget).toBe(4);
         expect(cfg.speechPlanner.dailyRequestBudget).toBe(120);
+        expect(cfg.speechPlanner.maxOutputTokens).toBe(12000);
         expect(cfg.speechPlanner.debugLogPlan).toBe(false);
+        expect(cfg.speechPlanner).toMatchObject({
+          enabled: false,
+          provider: 'openai',
+          model: 'gpt-5.6-luna',
+        });
       },
     );
   });
@@ -159,6 +165,47 @@ describe('config/env - speech planner debug logging', () => {
         expect(cfg.speechPlanner.debugLogPlan).toBe(true);
       },
     );
+  });
+});
+
+describe('config/env - speech planner provider selection', () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it('accepts an explicit OpenAI Luna selection matching the built-in default', async () => {
+    await withEnv(
+      {
+        NODE_ENV: 'test',
+        ESL_TTS_SPEECH_PLANNER_PROVIDER: 'openai',
+        ESL_TTS_SPEECH_PLANNER_MODEL: 'gpt-5.6-luna',
+      },
+      async () => {
+        expect((await loadConfigFresh()).speechPlanner).toMatchObject({
+          enabled: false,
+          provider: 'openai',
+          model: 'gpt-5.6-luna',
+        });
+      },
+    );
+  });
+
+  it.each([
+    'google',
+    'openrouter',
+    'OPENAI',
+  ])('rejects invalid speech planner provider %s', async (provider) => {
+    await expect(
+      withEnv(
+        {
+          NODE_ENV: 'test',
+          ESL_TTS_SPEECH_PLANNER_PROVIDER: provider,
+        },
+        async () => {
+          await loadConfigFresh();
+        },
+      ),
+    ).rejects.toThrow('ESL_TTS_SPEECH_PLANNER_PROVIDER');
   });
 });
 
@@ -482,7 +529,7 @@ describe('config/env - generation provider mapping', () => {
         expect(cfg.generation.quotaSourceMode).toBe('hybrid');
         expect(cfg.generation.safetyMode).toBe('hard_stop');
         expect(cfg.generation.strictNoPaid).toBe(true);
-        expect(cfg.generation.maxOutputTokensHard).toBe(3200);
+        expect(cfg.generation.maxOutputTokensHard).toBe(12000);
         expect(cfg.generation.budgetEmergencyOverride).toBe(false);
         expect(cfg.generation.models.openai.primary).toBe('gpt-5.6-sol');
         expect(cfg.generation.models.openai.fallback).toBe('gpt-5.6-luna');

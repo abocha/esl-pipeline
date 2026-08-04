@@ -36,8 +36,13 @@ Inspect the fixed public matrix without provider calls:
 pnpm eval:speech-planner -- --models=gemini-3.1-flash-lite,gemini-3.5-flash-lite --prompts=speech-performance-v1-restrained-natural,speech-performance-v2-inworld-tts2 --repetitions=3
 ```
 
-The public baseline is exactly 10 fixtures x 2 models x 2 prompts x 3 repetitions = 120 planner
-attempts. Its first Gemini 3.5 cell is the compatibility smoke. The dry run reports configured
+The paid public baseline is exactly 10 prompted TTS-2 fixtures x 2 models x 2 prompts x 3
+repetitions = 120 physical planner requests with zero automatic retries. A separate checked-in
+TTS 1.5 control suite follows production identity routing, exercises the real deterministic renderer
+and analyzer, and performs zero provider requests. Its results are not attributed to a planner model
+or prompt. Custom and private paid corpora must also select a prompted TTS model; identity-only
+fixtures are rejected before preflight or provider construction and belong in the deterministic
+control suite. The first Gemini 3.5 cell is the compatibility smoke. The dry run reports configured
 daily/RPM limits, remaining capacity, current-day usage as unverified, and the exact required
 allowlist state. A missing model is reported as remediation without blocking dry-run inspection; it
 remains fatal before any live provider construction.
@@ -56,8 +61,10 @@ pnpm eval:speech-planner -- --live --used-today=$currentGeminiRequestsToday --mo
 ```
 
 The renewable rolling RPM limiter determines the minimum duration. At 4 RPM, 120 calls take roughly
-30 minutes. A Gemini 3.5 compatibility failure short-circuits its remaining cells and records derived
-skips instead of spending the rest of that model's matrix.
+30 minutes. The harness records an immutable privacy-safe call intent before each live request and
+counts the physical request once, including provider failures. It never retries a baseline request.
+A Gemini 3.5 compatibility failure short-circuits its remaining cells and records derived skips
+instead of spending the rest of that model's matrix.
 
 If interrupted, obtain a fresh current-day count and resume the exact printed directory:
 
@@ -67,14 +74,23 @@ pnpm eval:speech-planner -- --live --used-today=$currentGeminiRequestsToday --re
 
 Resume reconstructs the saved corpus, exact model/prompt matrix, repetitions, price snapshot, and
 private/offline mode from `run.json`; custom flags do not need to be repeated. It verifies the
-immutable configuration and fixture hashes, preflights only missing attempt IDs, and appends them. It
-refuses mismatched or overwritten artifacts.
+immutable configuration, fixture, and control hashes, preflights only missing attempt IDs, and
+appends them. It refuses mismatched or overwritten artifacts. If a call-intent, plan, or rendered
+artifact exists without its completed attempt record, resume fails closed as an indeterminate
+physical request and does not call the provider again.
 
-`run.json` records the resolved mode and paths, exact variants, non-secret environment flags,
+A safe interruption between attempts can resume: the new resume activity marks an earlier partial
+planner activity as interrupted while preserving its audit record. Completed live attempts require
+exact immutable call-intent artifacts, and their per-activity counts must reconcile before resume.
+Partial or failed selected-audio activity remains unresolved until a successful audio continuation.
+
+Schema 4 `run.json` records the resolved mode and paths, exact variants, non-secret environment flags,
 allowlist and configured-limit preflight facts, complete versioned price snapshot, source revision,
-prompt and renderer identities, and expected/completed attempt counts. Its status is `partial` while
-attempt evidence is being assembled and changes atomically to `completed` only after summaries are
-written. Every planner resume appends its fresh preflight and provider-call count as an activity;
+prompt and renderer identities, expected/completed paid attempt counts, and separate stable control
+IDs, hashes, and expected/completed counts. Immutable per-control evidence lives under `controls/`;
+privacy-safe physical-call intents live under `calls/`. Status is `partial` while either suite is
+incomplete and changes atomically to `completed` only after both suites and summaries are written.
+Every planner resume appends its fresh preflight and physical provider-call count as an activity;
 selected-audio attempts append their own partial/completed/failed activity and synthesis count. A
 failed audio continuation returns the overall run to `partial` until a later successful recovery.
 Provider credentials and environment dumps are never recorded.
@@ -110,11 +126,33 @@ If the file is absent, record exactly: `Original issue fixture unavailable; reco
 ## Interpretation and Closeout
 
 Use `summary.json` and `summary.md` to distinguish raw parse validity from identity fallback and to
-compare hard failures, warnings, latency, returned model identity, and estimated cost. Cost is
+compare hard failures, warnings, latency, returned model identity, and estimated cost. Warning
+breakdowns are evaluator-only comparative evidence by fixture, field pair, and model/prompt cell;
+the harness deduplicates the same semantic warning across raw-candidate and validated analysis. Cost is
 available only when input, visible candidate output, and thinking-token counts are all present; the
-formula prices candidate plus thinking tokens at the output rate from the versioned snapshot.
+formula prices candidate plus thinking tokens at the output rate from the versioned snapshot. When
+Google omits a thinking count, the report preserves known input/output components and names the
+missing field rather than inferring zero or presenting an exact total.
 
 Authored-word preservation, supported controls, renderer safety, and compatibility are hard gates.
 Cost, latency, and blind preference are comparative evidence. Mixed, incomplete, compatibility-
 skipped, private-fixture-missing, or human-review-missing results retain `gemini-3.1-flash-lite` and
 the existing TTS defaults. A default change is a separate evidence-backed configuration decision.
+
+## Recorded Evidence and Active Remediation
+
+The first complete live public baseline is recorded in
+[`speech-planner-evaluation-evidence-2026-07-29.md`](speech-planner-evaluation-evidence-2026-07-29.md).
+It found a promising Gemini 3.5 production-policy signal, but also proved that the live matrix was
+not production-faithful for identity-only TTS 1.5. Production skips remote planning for identity
+models; the harness called the planner and attributed the resulting unsupported controls to model
+quality. Do not use that aggregate red gate to infer a production TTS 1.5 regression.
+
+The active repair sequence is
+[`../plans/2026-07-29-speech-planner-evaluation-gap-remediation.md`](../plans/2026-07-29-speech-planner-evaluation-gap-remediation.md).
+The harness-fidelity implementation repairs this routing mismatch, physical-call accounting,
+diagnostics, and cost/reporting gaps before rerunning Gemini. It deliberately keeps both immutable
+prompt policies and the shared production warning definitions unchanged so the corrected comparison
+isolates harness fidelity. A provider-neutral
+`gpt-5.6-luna` comparison follows only after corrected Gemini evidence and does not itself authorize
+a default change.

@@ -5,7 +5,7 @@
 - Audience: maintainers and implementing agents.
 - Read Time: 6 minutes.
 - Authority Level: canonical manifest schema reference.
-- Last Verified Against: 2026-07-28 repo state.
+- Last Verified Against: 2026-07-30 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: monthly or after manifest schema changes.
 - Status: `reference`.
@@ -159,8 +159,13 @@ This document captures the canonical schema so remote stores and services can va
 - `speechPlans.studyText` stores validated provider-neutral delivery provenance. The matching
   `audioArtifacts.studyText.speechPlanHash` links generated study-text audio to the consumed plan.
   Schema-v1 planner provenance optionally records the immutable policy ID and SHA-256 prompt hash.
-  The supported prompt policy IDs are `speech-performance-v1-restrained-natural` and
-  `speech-performance-v2-inworld-tts2`.
+  The supported prompt policy IDs are `speech-performance-v1-restrained-natural`,
+  `speech-performance-v2-inworld-tts2`, and
+  `contextual-bracket-annotation-v1`.
+- Schema-v2 `speechPlans.studyText` adds `enhancerVersion` and ordered segments containing canonical
+  authored `text` plus validated TTS-only `synthesisText`. Optional `planner.returnedModel` remains
+  provenance. These fields are additive under manifest schema `5`; annotations never replace
+  learner-visible assignment content.
 - `audioArtifacts.studyText.reused` and `htmlReused` are operational hints showing whether remote upload/publish reused
   an existing content-addressed object.
 - `audioArtifacts` stores per-target audio artifacts:
@@ -180,10 +185,11 @@ This document captures the canonical schema so remote stores and services can va
   do not get implicit alias fallback and should be regenerated to schema `2`.
 - Remote stores should persist manifests verbatim to avoid losing optional fields used by other
   stages (e.g., future metadata for adapters).
-- The optional voice and prompt policy fields are additive. Unversioned schema-v1 plans remain
-  readable and are not rewritten with invented markers or hashes. At execution time, legacy
-  Inworld capability snapshots are normalized against the selected model; the derived runtime log
-  label `legacy-unversioned-v1` is not persisted into the manifest.
+- The optional voice, schema-v2 envelope, returned-model, and prompt-policy fields are additive.
+  Unversioned schema-v1 plans remain readable and are not rewritten with invented markers or
+  hashes. At execution time, legacy Inworld capability snapshots are normalized against the
+  selected model; the derived runtime log label `legacy-unversioned-v1` is not persisted into the
+  manifest.
 
 ## Future Changes
 
@@ -206,9 +212,10 @@ The capability-tiered Inworld rollout adds optional `voicePlans.studyText` prove
 capability snapshots before speech planning. Older manifests without voice plans remain readable
 and reusable.
 
-The manifest contract version `3.1.0` adds optional model-scoped capability provenance, canonical
-assignment language, and immutable planner prompt-policy provenance without changing manifest
-schema version `5` or schema-v1 plan compatibility.
+The manifest contract version `3.1.0` added optional model-scoped capability provenance, canonical
+assignment language, and immutable planner prompt-policy provenance. Contract version `3.2.0`
+adds schema-v2 contextual annotation plans and exact returned-model provenance. Neither change
+bumps manifest schema version `5` or alters schema-v1 compatibility.
 
 ## Migrating from Filesystem to S3
 

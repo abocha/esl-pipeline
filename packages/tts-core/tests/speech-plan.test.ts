@@ -6,6 +6,7 @@ import {
   analyzeSpeechPlanCandidate,
   analyzeValidatedSpeechPlan,
   assertSpeechPlanSafeForSynthesis,
+  CONTEXTUAL_SPEECH_ANNOTATION_VERSION,
   createIdentitySpeechPerformancePlan,
   createPreparedStudyTextSynthesis,
   createResolvedVoicePlan,
@@ -13,10 +14,14 @@ import {
   normalizeSpeechCueText,
   type PreparedStudyTextSynthesis,
   resolveVoicePlanForExecution,
+  SPEECH_ANNOTATION_CLOSE,
+  SPEECH_ANNOTATION_OPEN,
   type SpeechPerformancePlan,
+  type SpeechPerformancePlanV2,
   TtsSynthesisCancelledError,
   throwIfTtsCancelled,
   type VoicePlan,
+  validateSpeechAnnotationText,
   validateSpeechPerformancePlan,
   validateVoicePlan,
   withVoicePlan,
@@ -66,6 +71,137 @@ function createPrepared(): PreparedStudyTextSynthesis {
 }
 
 describe('speech performance plans', () => {
+  it('validates leading and inline reserved annotations without changing authored bytes', () => {
+    expect(
+      validateSpeechAnnotationText(
+        'I thought we agreed on Friday.',
+        '<tts-annotation>Trying not to sound accusatory</tts-annotation>I thought we agreed on Friday.',
+      ),
+    ).toEqual({
+      synthesisText:
+        '<tts-annotation>Trying not to sound accusatory</tts-annotation>I thought we agreed on Friday.',
+      annotationCount: 1,
+    });
+    expect(
+      validateSpeechAnnotationText(
+        "You're right. I completely forgot.",
+        "You're right.<tts-annotation>sighs</tts-annotation> I completely forgot.",
+      ),
+    ).toMatchObject({ annotationCount: 1 });
+    expect(validateSpeechAnnotationText('Use [A] here.', 'Use [A] here.')).toEqual({
+      synthesisText: 'Use [A] here.',
+      annotationCount: 0,
+    });
+  });
+
+  it.each([
+    ['changed character', 'Stay calm.', 'Stay clam.'],
+    ['changed capitalization', 'Stay calm.', 'stay calm.'],
+    ['changed punctuation', 'Stay calm.', 'Stay calm!'],
+    ['changed whitespace', 'Stay calm.', 'Stay  calm.'],
+    ['missing close marker', 'Stay calm.', '<tts-annotation>quietlyStay calm.'],
+    [
+      'nested marker',
+      'Stay calm.',
+      '<tts-annotation>quietly<tts-annotation>softly</tts-annotation></tts-annotation>Stay calm.',
+    ],
+    ['empty annotation', 'Stay calm.', '<tts-annotation> </tts-annotation>Stay calm.'],
+    ['word split', 'Stay calm.', 'St<tts-annotation>slowly</tts-annotation>ay calm.'],
+    ['punctuation split', 'Really?!', 'Really?<tts-annotation>surprised</tts-annotation>!'],
+    [
+      'Unicode code-point split',
+      'Hi 😀.',
+      'Hi \ud83d<tts-annotation>amused</tts-annotation>\ude00.',
+    ],
+  ])('rejects %s', (_case, sourceText, synthesisText) => {
+    expect(() => validateSpeechAnnotationText(sourceText, synthesisText)).toThrow();
+  });
+
+  it('rejects authored text containing the reserved annotation delimiters', () => {
+    expect(() =>
+      validateSpeechAnnotationText(
+        `Say ${SPEECH_ANNOTATION_OPEN} literally.`,
+        `Say ${SPEECH_ANNOTATION_OPEN} literally.`,
+      ),
+    ).toThrow('reserved annotation delimiter');
+    expect(SPEECH_ANNOTATION_CLOSE).toBe('</tts-annotation>');
+  });
+
+  it('validates replacement schema-v2 coverage, order, speakers, and source integrity atomically', () => {
+    const prepared = createPrepared();
+    const createPlan = (): SpeechPerformancePlanV2 => ({
+      schemaVersion: 2,
+      mode: 'prompted',
+      provider: 'inworld',
+      model: 'inworld-tts-2',
+      sourceHash: prepared.sourceHash,
+      enhancerVersion: CONTEXTUAL_SPEECH_ANNOTATION_VERSION,
+      planner: {
+        provider: 'openai',
+        model: 'gpt-5.6-luna',
+        generatedAt: '2026-08-04T00:00:00.000Z',
+      },
+      segments: prepared.segments.map((segment) => ({
+        ...segment,
+        synthesisText: segment.text,
+      })),
+    });
+
+    expect(validateSpeechPerformancePlan(prepared, createPlan())).toEqual(createPlan());
+
+    const reordered = createPlan();
+    reordered.segments.reverse();
+    expect(() => validateSpeechPerformancePlan(prepared, reordered)).toThrow('does not match');
+
+    const duplicate = createPlan();
+    duplicate.segments[1] = { ...duplicate.segments[0]! };
+    expect(() => validateSpeechPerformancePlan(prepared, duplicate)).toThrow('does not match');
+
+    const missing = createPlan();
+    missing.segments.pop();
+    expect(() => validateSpeechPerformancePlan(prepared, missing)).toThrow('segment count');
+
+    const unknown = createPlan();
+    unknown.segments[1] = { ...unknown.segments[1]!, id: 'unknown' };
+    expect(() => validateSpeechPerformancePlan(prepared, unknown)).toThrow('does not match');
+
+    const changedFinalSegment = createPlan();
+    changedFinalSegment.segments[1] = {
+      ...changedFinalSegment.segments[1]!,
+      synthesisText: 'I can revise the plan tomorrow.',
+    };
+    expect(() => validateSpeechPerformancePlan(prepared, changedFinalSegment)).toThrow(
+      'changed the authored text',
+    );
+
+    const changedSpeaker = createPlan();
+    changedSpeaker.segments[1] = { ...changedSpeaker.segments[1]!, speaker: 'Maya' };
+    expect(() => validateSpeechPerformancePlan(prepared, changedSpeaker)).toThrow(
+      'changed the authored speaker',
+    );
+
+    const wrongVersion = {
+      ...createPlan(),
+      enhancerVersion: 'contextual-bracket-annotation-v2',
+    } as unknown as SpeechPerformancePlanV2;
+    expect(() => validateSpeechPerformancePlan(prepared, wrongVersion)).toThrow(
+      'Unsupported speech enhancer version',
+    );
+
+    const unsupportedPrepared: PreparedStudyTextSynthesis = {
+      ...prepared,
+      selection: { provider: 'google', model: 'chirp3_hd' },
+    };
+    const unsupportedPlan = {
+      ...createPlan(),
+      provider: 'google',
+      model: 'chirp3_hd',
+    } as unknown as SpeechPerformancePlanV2;
+    expect(() => validateSpeechPerformancePlan(unsupportedPrepared, unsupportedPlan)).toThrow(
+      'require Inworld TTS-2',
+    );
+  });
+
   it.each([
     '[laugh]',
     '<break />',
@@ -431,6 +567,27 @@ describe('speech performance plans', () => {
     ).toEqual(['Narrator']);
   });
 
+  it('carries the active monologue speaker across unlabeled paragraphs', () => {
+    const context = parseMarkdownContext(
+      `---\ntitle: Test\nstudent: Alex\nlevel: B1\ntopic: travel\ninput_type: generate\nstudy_text_type: monologue\nspeaker_labels: [Lena]\n---\n\n:::study-text\nLena: I expected a quiet weekend.\nThe schedule was full from morning to evening.\nBy Sunday, I had changed my mind.\n:::`,
+    );
+
+    const prepared = createPreparedStudyTextSynthesis(
+      { context },
+      { voiceMapPath: 'voices.yml', outPath: '/tmp', ttsProvider: 'inworld' },
+    );
+
+    expect(prepared.segments).toEqual([
+      { id: 'segment-1', speaker: 'Lena', text: 'I expected a quiet weekend.' },
+      {
+        id: 'segment-2',
+        speaker: 'Lena',
+        text: 'The schedule was full from morning to evening.',
+      },
+      { id: 'segment-3', speaker: 'Lena', text: 'By Sunday, I had changed my mind.' },
+    ]);
+  });
+
   it('accepts expressive cues while preserving authored words', () => {
     const prepared = withVoicePlan(
       createPrepared(),
@@ -503,10 +660,10 @@ describe('speech performance plans', () => {
       ],
     };
 
-    expect(validateSpeechPerformancePlan(prepared, plan).segments[0]?.emphasis).toEqual([
-      'We',
-      'deadline',
-    ]);
+    const validated = validateSpeechPerformancePlan(prepared, plan);
+    expect(validated.schemaVersion).toBe(1);
+    if (validated.schemaVersion !== 1) throw new Error('Expected schema-v1 plan.');
+    expect(validated.segments[0]?.emphasis).toEqual(['We', 'deadline']);
     expect(prepared.segments[0]?.text).toBe('We need a clearer deadline.');
   });
 

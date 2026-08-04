@@ -4,8 +4,8 @@
 
 - Audience: maintainers, operators, and AI agents changing TTS behavior.
 - Read Time: 7 minutes.
-- Authority Level: target runtime contract for the speech-performance rollout.
-- Last Verified Against: 2026-07-29 repo state.
+- Authority Level: canonical runtime contract for speech-performance planning and rendering.
+- Last Verified Against: 2026-08-04 repo state.
 - Owner: founder-maintainer + backend/orchestrator maintainers.
 - Review Cadence: after TTS provider, prompt, or manifest contract changes.
 - Status: `active`.
@@ -26,7 +26,8 @@ validate -> import -> colorize -> voice-plan -> speech-plan -> tts -> upload -> 
 
 `voice-plan` resolves study-text speaker assignments before expressive planning. `speech-plan`
 consumes those resolved assignments and emits a durable provider-neutral performance plan.
-Pronunciation audio remains deterministic and outside these stages in the first rollout.
+Pronunciation primary and item synthesis never constructs or receives a speech planner, speech
+plan, or performance source context.
 
 The stage is skipped when study-text TTS is disabled, when a rerun is republish-only, or when a
 rerun regenerates pronunciation audio without regenerating study-text audio.
@@ -94,38 +95,46 @@ from that surface are not guessed from the raw response.
 
 ## Neutral Speech Plan
 
-The speech plan is structured JSON. It preserves the authored words and stores expressive intent in
-separate cue fields. A plan contains:
+The speech plan is structured JSON. Two schema variants remain supported:
 
-- schema version, source hash, provider/model selection, plan mode, and optional planner provenance
-- one plan segment for each prepared study-text segment
-- optional emotion, intonation, pace, emphasis, pauses, restrained non-verbal cues, delivery mode,
-  and steerable-only free-form direction
-- an optional fallback reason when the remote planner could not produce a usable plan
+- Schema v1 retains the original per-segment cue fields and the immutable
+  `speech-performance-v1-restrained-natural` and `speech-performance-v2-inworld-tts2` prompt
+  policies byte-for-byte.
+- Schema v2 uses immutable policy and enhancer version `contextual-bracket-annotation-v1`. Each
+  ordered segment keeps canonical authored `text` and separate TTS-only `synthesisText` containing
+  optional reserved `<tts-annotation>...</tts-annotation>` spans.
+- Both variants retain exact provider/model/source provenance and one segment per prepared
+  study-text segment.
 
-The planner must never rewrite learner-visible spoken words. Provider renderers may add supported
-delivery instructions around those words. Schema-v1 provenance optionally carries the exact
-immutable policy ID and its prompt SHA-256 hash. Older schema-v1 plans remain valid without these
-fields and are shown in runtime diagnostics as `legacy-unversioned-v1` without mutating storage.
+The planner must never rewrite learner-visible spoken words. Luna sees the complete assignment as
+read-only context, including frontmatter, speaker profiles, roles, personas, voice directions, and
+the complete dialogue or monologue. It returns only ordered segment IDs and synthesis text.
+Annotations are optional: unchanged output is valid and there is no density target or taxonomy.
+
+Validation is mechanical and atomic. Segment count, order, IDs, speakers, provider/model, source
+hash, enhancer version, reserved syntax, and insertion boundaries must match. Removing only the
+reserved spans must reconstruct every authored segment byte-for-byte. Any failure rejects the
+complete enhancement and uses schema-v1 identity synthesis. Dialogue and monologue share this
+complete-context pass; pronunciation never constructs a planner.
+
+Schema-v1 provenance optionally carries the exact immutable policy ID and prompt SHA-256 hash.
+Older schema-v1 plans remain valid without those fields and appear as `legacy-unversioned-v1`
+without mutating storage.
 
 ## Planner Policy
 
-Remote planning runs only for models declaring `prompted` support. The first prompted model is
-`inworld-tts-2`. Production uses `speech-performance-v2-inworld-tts2`; the immutable compatibility
-fixture remains `speech-performance-v1-restrained-natural`. Both prompt texts are hash-versioned.
+Remote planning runs only for models declaring `prompted` support. `inworld-tts-2` uses immutable
+policy `contextual-bracket-annotation-v1` to produce schema-v2 plans. The fixed historical
+evaluation baseline continues to exercise the v1/v2 schema-v1 policies without reinterpretation.
 
-Ordinary dialogue should omit `pace` and maintain a natural, consistent conversational tempo across
-adjacent segments. `slow`, `measured`, and `brisk` are exceptional cues for a non-natural tempo that
-the authored scene or learning goal explicitly justifies; emotion, seriousness, regret, reflection,
-or intonation alone do not justify changing pace.
-
-Batch backend injects a structured-output planner into the orchestrator. The default planner model
-is `gemini-3.1-flash-lite`, configured with:
+Batch backend injects a structured-output planner into the orchestrator. The planner remains
+disabled by default, with OpenAI and exact `gpt-5.6-luna` selected when enabled without overrides:
 
 ```text
 ESL_TTS_SPEECH_PLANNER_ENABLED=false
-ESL_TTS_SPEECH_PLANNER_MODEL=gemini-3.1-flash-lite
-ESL_TTS_SPEECH_PLANNER_MAX_OUTPUT_TOKENS=2400
+ESL_TTS_SPEECH_PLANNER_PROVIDER=openai
+ESL_TTS_SPEECH_PLANNER_MODEL=gpt-5.6-luna
+ESL_TTS_SPEECH_PLANNER_MAX_OUTPUT_TOKENS=12000
 ESL_TTS_SPEECH_PLANNER_DEBUG_LOG_PLAN=false
 ESL_TTS_SPEECH_PLANNER_RPM_BUDGET=4
 ESL_TTS_SPEECH_PLANNER_DAILY_REQUEST_BUDGET=120
@@ -138,9 +147,17 @@ ESL_TTS_VOICE_RANKER_DAILY_REQUEST_BUDGET=1000
 ESL_TTS_VOICE_RANKER_DEBUG_LOG_PLAN=false
 ```
 
-The planner reuses server-side `GEMINI_API_KEY` and existing generation-budget accounting. If the
-planner is disabled, unavailable, or invalid, the orchestrator records an identity plan and
-continues synthesis.
+The planner remains disabled until explicitly enabled. Its built-in selection is OpenAI plus exact
+`gpt-5.6-luna`; alternate compatible providers and models require explicit overrides. Google uses
+`GEMINI_API_KEY`; OpenAI uses `OPENAI_API_KEY`. Provider/model
+allowlists, RPM, daily requests, daily tokens, and spend accounting remain separate, and there is
+no cross-provider fallback. OpenAI planner calls use strict structured output, high reasoning,
+low verbosity, and `store: false`.
+
+Only typed provider timeouts may retry, within the selected provider. Every physical attempt
+reserves the provider/model request budget before execution; one successful logical call records
+the actual returned usage once. If the planner is disabled, unavailable, over budget, or invalid,
+the orchestrator records an identity plan and continues synthesis.
 
 Identity fallback reasons are intentionally specific:
 
@@ -149,33 +166,28 @@ Identity fallback reasons are intentionally specific:
 - `planner_unavailable`
 - `planner_execution_failed`
 - `planner_invalid`
+- `planner_budget_exceeded`
 
-Planner candidate strings accept only a bounded safe cue grammar after NFKC normalization: letters,
-numbers, ordinary spaces, and limited punctuation, with control characters, newlines, brackets,
-tag delimiters, and other markup syntax rejected. Pause values are capped at `1000` ms and each
-segment may contain at most one non-verbal cue. Candidate analysis runs before normalization;
-validated-plan analysis runs again before provider synthesis.
-The provider boundary also revalidates the plan's provider/model, source hash, segment count, and
-ordered segment identity. Authored or rendered lexical text containing provider-control markup
-delimiters is rejected before preview hashing, cache lookup, or synthesis.
+Annotation bodies accept the existing bounded markup-safe natural-language grammar. Reserved spans
+must be well formed, non-empty, and placed only at authored-character boundaries; they cannot split
+a word, Unicode code point, or punctuation sequence. The provider boundary revalidates the plan and
+exact source restoration before preview hashing, cache lookup, or synthesis.
 
 Planner enablement remains opt-in. After changing planner env values for a Compose deployment,
 recreate `batch-backend` and `batch-worker` so both processes load the same configuration.
 
-Successful prompted plans emit a compact `Speech performance planner produced a prompted plan`
-log with the validated plan hash, prompt policy/hash, cue counts, and stable quality issue
-codes/counts. For local development inspection, set
+Successful schema-v2 plans emit a compact `Speech performance planner produced a prompted plan`
+log with enhancer version, segment/annotation counts, plan/prompt hashes, and stable issue
+codes/counts. Annotation bodies are omitted. Schema-v1 logs retain their historical cue-count shape. For
+local development inspection, set
 `ESL_TTS_SPEECH_PLANNER_DEBUG_LOG_PLAN=true` and recreate both services. The worker then emits a
 `Speech performance planner validated plan debug payload` log containing the complete validated
-neutral plan consumed by synthesis. This includes learner text, so leave the flag disabled outside
+plan consumed by synthesis. This includes learner text and accepted annotations, so leave the flag disabled outside
 short-lived debugging sessions.
 
 Invalid prompted plans continue with identity synthesis. Routine warning logs include only stable
 quality issue codes/counts. With `ESL_TTS_SPEECH_PLANNER_DEBUG_LOG_PLAN=true`, the same warning also
 includes the rejected parsed output and raw model text. These fields can include learner text.
-Invalid optional emphasis phrases are discarded at the backend planner boundary before durable-plan
-validation. This preserves usable expressive cues when the remote planner paraphrases a phrase
-instead of returning an exact authored-text substring.
 
 Voice-plan logs report whether the optional Inworld Gemma ranker selected voices, skipped ranking,
 or fell back to deterministic catalog scoring. Set `ESL_TTS_VOICE_RANKER_DEBUG_LOG_PLAN=true` for
@@ -192,11 +204,11 @@ docker compose logs batch-worker | Select-String "Speech performance planner|Inw
 
 Provider adapters consume the same neutral plan:
 
-- Inworld TTS-2 compiles at most one bounded instruction tag. A safe free-form direction is
-  authoritative; otherwise emotion/intonation compile to one combined instruction. It also renders
-  breaks, at most one restrained non-verbal cue, uppercase emphasis, and `deliveryMode` for every
-  voice. Non-natural pace uses only numeric `speakingRate`; `natural` and absent pace use the
-  provider default.
+- Inworld TTS-2 schema v2 converts only validated reserved spans into provider-compatible square
+  brackets and sends the resulting synthesis text directly. It uses provider-level `BALANCED` and
+  omits speaking-rate control. No scene, speaker, turn, pace, pause, emphasis, or delivery layer is
+  compiled.
+- Inworld TTS-2 schema v1 remains byte-for-byte compatible with the historical compiler.
 - Inworld TTS 1.5 Max and Mini keep identity plans, render no steering tags, and retain their
   existing safe numeric SDK behavior, including natural `speakingRate: 1`.
 - ElevenLabs and Google initially synthesize clean source text from identity plans.
@@ -290,8 +302,8 @@ voice-plan and speech-plan hashes. New voice plans use the explicit `ranked`, `d
 manifest loading normalizes that legacy token to `deterministic`.
 
 Inworld audio caching is derived from already-rendered segment payloads: voice ID, rendered text,
-SDK controls, effective language, renderer policy version, effective inter-segment gaps, encoding,
-sample rate, and the assembly-margin policy.
+enhancer version, SDK controls, effective language, renderer policy version, effective
+inter-segment gaps, encoding, sample rate, and the assembly-margin policy.
 Planner and ranker timestamps do not affect audio identity. Any change that affects rendered audio,
 including emphasis, pauses, delivery mode, voice selection, or speaker-switch margins, invalidates
 the cache.
@@ -302,8 +314,10 @@ Study-text assembly inserts deterministic minimum margins before applying option
 - speaker switch: `320ms`
 
 When a rerun regenerates study-text audio, it regenerates the speech plan. When study-text audio is
-reused, the existing plan is reused if present. Older manifests without a speech plan remain
-readable.
+reused, the existing plan is reused if present. New assignment planning receives the authored
+strategy; rerun planning receives the explicitly overridden or persisted effective strategy.
+Pronunciation-only reruns skip study-text preparation and the planner. Older manifests without a
+speech plan and schema-v1 plans remain readable.
 
 ## Prompt Capability Retirement
 
@@ -317,9 +331,20 @@ voice-capability snapshot provenance.
 ## Operational Notes
 
 - Planner enablement is opt-in because it adds a billable model call.
+- The first Luna schema-v2 envelope functionality proof is retained as historical connectivity
+  evidence in
+  [`../operations/study-text-performance-v3-luna-evidence-2026-08-01.md`](../operations/study-text-performance-v3-luna-evidence-2026-08-01.md).
+  It does not validate replacement bracket-annotation quality.
+- The replacement contextual bracket-annotation contract completed a blinded three-assignment
+  product trial with two enhancement wins, zero baseline wins, and one tie. The non-private evidence
+  is retained in
+  [`../operations/contextual-speech-annotation-luna-listening-evidence-2026-08-04.md`](../operations/contextual-speech-annotation-luna-listening-evidence-2026-08-04.md).
 - Planner model comparisons use the database-free, fail-closed harness documented in
   [`../operations/speech-planner-evaluation.md`](../operations/speech-planner-evaluation.md). The
-  harness does not change the production planner default; only complete evaluation evidence can
+  paid matrix contains prompted TTS-2 fixtures only; deterministic TTS 1.5 identity controls use the
+  same capability, identity-plan, renderer, and analysis boundaries without a remote planner call.
+  Those v1/v2 results are historical evidence, not evidence for schema v2 or Luna. The harness does
+  not change the production planner default; only complete ordinary-path listening evidence can
   justify a separate configuration change.
 - Identity fallback is expected and observable; it is not a publish blocker.
 - Voice catalog refresh remains useful for provider assignment quality and diagnostics.

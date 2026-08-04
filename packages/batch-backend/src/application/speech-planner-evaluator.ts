@@ -790,12 +790,12 @@ export async function runSpeechPlannerEvaluation(args: {
       startedAt: result.startedAt,
       endedAt: result.endedAt,
     });
-    if (variant.compatibilitySmoke && !record.plan) {
-      incompatibleModel = variant.model;
-      record.normalizedErrorCategory = 'compatibility_invalid_output';
-    } else if (variant.compatibilitySmoke && !returnedModelMatchesRequest(record)) {
+    if (variant.compatibilitySmoke && !returnedModelMatchesRequest(record)) {
       incompatibleModel = variant.model;
       record.normalizedErrorCategory = 'compatibility_returned_model_mismatch';
+    } else if (variant.compatibilitySmoke && !record.plan) {
+      incompatibleModel = variant.model;
+      record.normalizedErrorCategory = 'compatibility_invalid_output';
     }
     records.push(appendRecord(args.runDirectory, record));
   }

@@ -23,7 +23,8 @@ export type SpeechPace = 'slow' | 'measured' | 'natural' | 'brisk';
 export type SpeechNonVerbal = 'sigh' | 'laugh' | 'chuckle' | 'breath';
 export type SpeechPerformancePromptPolicyId =
   | 'speech-performance-v1-restrained-natural'
-  | 'speech-performance-v2-inworld-tts2';
+  | 'speech-performance-v2-inworld-tts2'
+  | 'contextual-bracket-annotation-v1';
 
 export interface TtsModelCapabilities {
   planningMode: TtsSpeechPlanningMode;
@@ -87,7 +88,7 @@ export interface SpeechPerformancePlannerMetadata {
   promptHash?: string;
 }
 
-export interface SpeechPerformancePlan {
+export interface SpeechPerformancePlanV1 {
   schemaVersion: 1;
   mode: TtsSpeechPlanningMode;
   provider: TtsProviderId;
@@ -98,6 +99,28 @@ export interface SpeechPerformancePlan {
   segments: SpeechPerformancePlanSegment[];
 }
 
+export type SpeechEnhancementVersion = 'contextual-bracket-annotation-v1';
+
+export interface SpeechPerformancePlanSegmentV2 {
+  id: string;
+  speaker?: string;
+  text: string;
+  synthesisText: string;
+}
+
+export interface SpeechPerformancePlanV2 {
+  schemaVersion: 2;
+  mode: 'prompted';
+  provider: TtsProviderId;
+  model: TtsModelId;
+  sourceHash: string;
+  enhancerVersion: SpeechEnhancementVersion;
+  planner: SpeechPerformancePlannerMetadata;
+  segments: SpeechPerformancePlanSegmentV2[];
+}
+
+export type SpeechPerformancePlan = SpeechPerformancePlanV1 | SpeechPerformancePlanV2;
+
 export interface PreparedStudyTextSynthesis {
   selection: TtsSelection;
   sourceHash: string;
@@ -106,6 +129,7 @@ export interface PreparedStudyTextSynthesis {
   voices: VoiceSelectionSummary[];
   voiceAssignments: Record<string, string>;
   voicePlan?: VoicePlan;
+  enhancementContext?: { assignmentMarkdown: string };
 }
 
 export interface VoiceAssignmentCapabilities {

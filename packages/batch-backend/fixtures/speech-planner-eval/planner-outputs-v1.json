@@ -28,10 +28,18 @@
     "contentHash": "7e54c0f65f724e4c6540d9fb68217c4c7ed7ed35c3455281c16d23792aac1415"
   },
   {
-    "id": "tts-1-5-steering",
-    "fixtureId": "tts-1-5-protection",
-    "rawText": "{\"segments\":[{\"id\":\"legacy-1\",\"freeFormDirection\":\"speak warmly\"}]}",
-    "expectedClassification": "tts_1_5_protection",
-    "contentHash": "f9f1beb27a874daaba89ddacf76db77ea742d495b1089b2974d0a4a5c5709d4a"
+    "id": "live-warm-laugh-cue-too-long",
+    "fixtureId": "warm-laugh",
+    "rawText": "{\"segments\":[{\"id\":\"warm-1\",\"emotion\":\"nostalgic\",\"intonation\":\"rising at the end of the first sentence, slightly surprised at the end of the second\",\"deliveryMode\":\"BALANCED\",\"freeFormDirection\":\"Deliver with a gentle, reflective tone, keeping the pace natural and conversational.\"}]}",
+    "expectedClassification": "unsafe_cue",
+    "contentHash": "0bb415fe7f6d7a653b3f1a187f1badbc3f9146d62d063509a205dbd2be542a88"
+  },
+  {
+    "id": "transient-unavailable",
+    "fixtureId": "neutral-dialogue",
+    "expectedClassification": "provider_error",
+    "normalizedErrorCategory": "UNAVAILABLE",
+    "retryAttempted": false,
+    "contentHash": "e8b5657db5b50ea68c68e70cbf3a15a7232bdaf86d5c673422528e083013eb31"
   }
 ]
