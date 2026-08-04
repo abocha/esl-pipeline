@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.5.1] - 2026-08-04
+
+### Changed
+
+- Automated release from PR #169: fix(config): validate speech planner credential by provider (https://github.com/abocha/esl-pipeline/pull/169)
+
 ## [10.5.0] - 2026-08-04
 
 ### Changed
