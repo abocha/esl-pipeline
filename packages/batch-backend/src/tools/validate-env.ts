@@ -76,8 +76,18 @@ function addEnabledFeatureRequirements(env: NodeJS.ProcessEnv, errors: string[])
     errors.push('STUDENT_MEMORY_OPENAI_BATCH_ENABLED=true requires OPENAI_API_KEY.');
   }
 
-  if (isEnabled(env.ESL_TTS_SPEECH_PLANNER_ENABLED) && !hasValue(env.GEMINI_API_KEY)) {
-    errors.push('ESL_TTS_SPEECH_PLANNER_ENABLED=true requires GEMINI_API_KEY.');
+  if (isEnabled(env.ESL_TTS_SPEECH_PLANNER_ENABLED)) {
+    const provider = env.ESL_TTS_SPEECH_PLANNER_PROVIDER?.trim() || 'openai';
+    if (provider === 'openai' && !hasValue(env.OPENAI_API_KEY)) {
+      errors.push(
+        'ESL_TTS_SPEECH_PLANNER_ENABLED=true with provider openai requires OPENAI_API_KEY.',
+      );
+    }
+    if (provider === 'google_ai_studio' && !hasValue(env.GEMINI_API_KEY)) {
+      errors.push(
+        'ESL_TTS_SPEECH_PLANNER_ENABLED=true with provider google_ai_studio requires GEMINI_API_KEY.',
+      );
+    }
   }
 
   if (
