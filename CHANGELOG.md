@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.5.0] - 2026-08-04
+
+### Changed
+
+- Automated release from PR #168: feat(tts): add contextual Luna speech enhancement (https://github.com/abocha/esl-pipeline/pull/168)
+
 ## [10.4.0] - 2026-07-29
 
 ### Changed
