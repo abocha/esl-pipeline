@@ -77,12 +77,13 @@
 
 ### Standalone active plans
 
-1. `docs/plans/legacy-retirement/legacy-retirement-backlog.md`
-2. `docs/plans/legacy-retirement/legacy-retirement-inventory.md`
-3. `docs/plans/legacy-retirement/legacy-retirement-execution-playbook.md`
-4. `docs/plans/2026-05-20-cross-workstream-change-intake.md`
-5. `docs/plans/slice-2-invite-workspace-first-student.md`
-6. `docs/plans/2026-06-23-alpha-readiness.md`
+1. `docs/plans/2026-07-29-speech-planner-evaluation-gap-remediation.md`
+2. `docs/plans/legacy-retirement/legacy-retirement-backlog.md`
+3. `docs/plans/legacy-retirement/legacy-retirement-inventory.md`
+4. `docs/plans/legacy-retirement/legacy-retirement-execution-playbook.md`
+5. `docs/plans/2026-05-20-cross-workstream-change-intake.md`
+6. `docs/plans/slice-2-invite-workspace-first-student.md`
+7. `docs/plans/2026-06-23-alpha-readiness.md`
 
 ## Historical and Generated Aids
 

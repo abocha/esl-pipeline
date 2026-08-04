@@ -359,14 +359,14 @@
     ]
   },
   {
-    "id": "tts-1-5-protection",
-    "why": "Legacy Inworld models must never receive natural-language steering or nonverbals.",
-    "tags": ["tts-1.5-protection"],
+    "id": "tts2-control-safety",
+    "why": "The paid planner matrix must preserve authored words while using only TTS-2-supported controls.",
+    "tags": ["tts2-control-safety", "authored-word-protection"],
     "prepared": {
-      "selection": { "provider": "inworld", "model": "inworld-tts-1.5-max" },
-      "sourceHash": "synthetic-tts-1-5-protection-v1",
+      "selection": { "provider": "inworld", "model": "inworld-tts-2" },
+      "sourceHash": "synthetic-tts2-control-safety-v1",
       "segments": [
-        { "id": "legacy-1", "speaker": "Maya", "text": "Please read the notice before Friday." }
+        { "id": "safety-1", "speaker": "Maya", "text": "Please read the notice before Friday." }
       ],
       "voices": [],
       "voiceAssignments": { "Maya": "Ashley" },
@@ -375,8 +375,8 @@
         "capabilityPolicyVersion": "model-scoped-v1",
         "mode": "deterministic",
         "provider": "inworld",
-        "model": "inworld-tts-1.5-max",
-        "sourceHash": "synthetic-tts-1-5-protection-v1",
+        "model": "inworld-tts-2",
+        "sourceHash": "synthetic-tts2-control-safety-v1",
         "assignments": [
           {
             "speaker": "Maya",
@@ -384,16 +384,16 @@
             "source": "auto",
             "language": "en-US",
             "capabilities": {
-              "supportsMetadataInstructions": false,
-              "supportsNonVerbals": false,
-              "supportsUppercaseEmphasis": false,
-              "supportsFreeFormDirection": false
+              "supportsMetadataInstructions": true,
+              "supportsNonVerbals": true,
+              "supportsUppercaseEmphasis": true,
+              "supportsFreeFormDirection": true
             }
           }
         ]
       }
     },
-    "expectedHardInvariants": ["authored_words_preserved", "no_tts_1_5_steering"]
+    "expectedHardInvariants": ["authored_words_preserved", "supported_controls_only"]
   },
   {
     "id": "warm-laugh",

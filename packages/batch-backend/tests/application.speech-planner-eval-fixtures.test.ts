@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildSpeechPlannerEvalMatrix,
   loadOfflineSpeechPlannerOutputs,
+  loadSpeechPlannerEvalControls,
   loadSpeechPlannerEvalFixtures,
   loadSpeechPlannerPriceSnapshot,
 } from '../src/application/speech-planner-eval-fixtures.js';
@@ -14,9 +15,22 @@ import {
 describe('speech planner evaluation fixtures', () => {
   it('expands the fixed public baseline to 120 stable unique attempts', () => {
     const fixtures = loadSpeechPlannerEvalFixtures();
+    const controls = loadSpeechPlannerEvalControls();
     const matrix = buildSpeechPlannerEvalMatrix({ fixtures, repetitions: 3 });
 
     expect(fixtures).toHaveLength(10);
+    expect(fixtures.every((fixture) => fixture.prepared.selection.model === 'inworld-tts-2')).toBe(
+      true,
+    );
+    expect(controls).toEqual([
+      expect.objectContaining({
+        id: 'tts-1-5-identity-rendering',
+        contentHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+        prepared: expect.objectContaining({
+          selection: { provider: 'inworld', model: 'inworld-tts-1.5-max' },
+        }),
+      }),
+    ]);
     expect(new Set(fixtures.map((fixture) => fixture.id)).size).toBe(10);
     expect(matrix).toHaveLength(120);
     expect(new Set(matrix.map((entry) => entry.attemptId)).size).toBe(120);
@@ -28,6 +42,25 @@ describe('speech planner evaluation fixtures', () => {
     );
     expect(matrix.filter((entry) => entry.compatibilitySmoke)).toHaveLength(1);
     expect(matrix[0]?.attemptId).toMatch(/^[a-z0-9-]+-[a-f0-9]{12}$/);
+  });
+
+  it('rejects identity-only TTS fixtures before constructing paid planner variants', () => {
+    const control = loadSpeechPlannerEvalControls()[0]!;
+    expect(() =>
+      buildSpeechPlannerEvalMatrix({
+        fixtures: [
+          {
+            id: 'identity-private-fixture',
+            why: 'must not be remotely planned',
+            tags: ['private'],
+            prepared: control.prepared,
+            expectedHardInvariants: [],
+            contentHash: 'a'.repeat(64),
+          },
+        ],
+        repetitions: 1,
+      }),
+    ).toThrow('must select a prompted TTS model');
   });
 
   it('covers the approved synthetic corpus categories without private identifiers', () => {
@@ -54,7 +87,7 @@ describe('speech planner evaluation fixtures', () => {
       'compatible-direction',
       'contradiction-trap',
       'emphasis',
-      'tts-1.5-protection',
+      'tts2-control-safety',
     ]) {
       expect(tags.has(required), `missing ${required}`).toBe(true);
     }
@@ -71,7 +104,24 @@ describe('speech planner evaluation fixtures', () => {
       'gemini-3.5-flash-lite': { input: 0.3, outputIncludingThinking: 2.5 },
     });
     expect(new Set(outputs.map((fixture) => fixture.expectedClassification))).toEqual(
-      new Set(['valid', 'invalid', 'fallback_triggering', 'unsafe_cue', 'tts_1_5_protection']),
+      new Set(['valid', 'invalid', 'fallback_triggering', 'unsafe_cue', 'provider_error']),
+    );
+    expect(outputs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'live-warm-laugh-cue-too-long',
+          fixtureId: 'warm-laugh',
+          expectedClassification: 'unsafe_cue',
+        }),
+        {
+          id: 'transient-unavailable',
+          fixtureId: 'neutral-dialogue',
+          expectedClassification: 'provider_error',
+          normalizedErrorCategory: 'UNAVAILABLE',
+          retryAttempted: false,
+          contentHash: 'e8b5657db5b50ea68c68e70cbf3a15a7232bdaf86d5c673422528e083013eb31',
+        },
+      ]),
     );
     expect(outputs.every((fixture) => /^[a-f0-9]{64}$/.test(fixture.contentHash))).toBe(true);
   });

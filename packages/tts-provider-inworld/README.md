@@ -10,11 +10,17 @@ Inworld TTS provider adapter for ESL Pipeline.
 - Default voices: `Ashley`, `Dennis`
 
 The adapter uses the official `@inworld/tts` SDK and keeps provider credentials server-side.
-For `inworld-tts-2`, neutral speech-performance cues are rendered into model-scoped Inworld
-prompting syntax and SDK controls. Every TTS-2 voice supports metadata instructions, non-verbals,
-uppercase emphasis, breaks, and free-form natural-language direction regardless of catalog tags.
+For `inworld-tts-2`, schema-v2 `synthesisText` contains mechanically validated reserved annotation
+spans. The adapter converts only those spans into Inworld square brackets, sends the result with
+`BALANCED`, and omits speaking-rate control. Authored text remains the lexical transcript, and
+schema-v1 rendering remains compatible.
 Both `inworld-tts-1.5-max` and `inworld-tts-1.5-mini` intentionally synthesize clean source text
 with safe SDK defaults only and receive no steering tags.
+
+Rendered synthesis text, enhancer version, renderer policy, voice, language, and SDK controls
+participate in full and segment cache identity. The provider boundary revalidates exact source
+restoration before cache lookup or synthesis. Study-text assembly retains 180 ms same-speaker and
+320 ms speaker-switch minimum gaps.
 
 Credentialed voice catalogs retain the installed SDK's typed display name, name, locale,
 description, tags, and source metadata. Locale values are canonicalized to BCP 47 and propagated

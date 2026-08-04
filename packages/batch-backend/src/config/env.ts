@@ -225,6 +225,7 @@ export interface BatchBackendConfig {
   };
   speechPlanner: {
     enabled: boolean;
+    provider: SpeechPlannerProvider;
     model: string;
     maxOutputTokens: number;
     rpmBudget: number;
@@ -263,6 +264,8 @@ export interface BatchBackendConfig {
     extendedApiEnabled: boolean;
   };
 }
+
+export type SpeechPlannerProvider = 'google_ai_studio' | 'openai';
 
 function normalizeSameSite(value: string): 'lax' | 'strict' | 'none' {
   const normalized = value.trim().toLowerCase();
@@ -671,7 +674,7 @@ export function loadConfig(): BatchBackendConfig {
     readString('GEN_SAFETY_MODE', 'hard_stop')!,
   );
   const generationStrictNoPaid = readBool('GEN_STRICT_NO_PAID', true);
-  const generationMaxOutputTokensHard = readInt('GEN_MAX_OUTPUT_TOKENS_HARD', 3200);
+  const generationMaxOutputTokensHard = readInt('GEN_MAX_OUTPUT_TOKENS_HARD', 12000);
   const generationAllowPaidSpend = readBool('GEN_ALLOW_PAID_SPEND', false);
   const generationBudgetEmergencyOverride = generationAllowPaidSpend;
   // Retained as an operator-visible compatibility gate while every built-in default
@@ -768,8 +771,15 @@ export function loadConfig(): BatchBackendConfig {
 
   const extendedApiEnabled = readBool('BATCH_BACKEND_ENABLE_EXTENDED_API', true);
   const speechPlannerEnabled = readBool('ESL_TTS_SPEECH_PLANNER_ENABLED', false);
-  const speechPlannerModel = readString('ESL_TTS_SPEECH_PLANNER_MODEL', 'gemini-3.1-flash-lite')!;
-  const speechPlannerMaxOutputTokens = readInt('ESL_TTS_SPEECH_PLANNER_MAX_OUTPUT_TOKENS', 2400);
+  const speechPlannerProviderRaw = readString('ESL_TTS_SPEECH_PLANNER_PROVIDER', 'openai')!;
+  if (speechPlannerProviderRaw !== 'google_ai_studio' && speechPlannerProviderRaw !== 'openai') {
+    throw new Error(
+      'ESL_TTS_SPEECH_PLANNER_PROVIDER must be either "google_ai_studio" or "openai"',
+    );
+  }
+  const speechPlannerProvider: SpeechPlannerProvider = speechPlannerProviderRaw;
+  const speechPlannerModel = readString('ESL_TTS_SPEECH_PLANNER_MODEL', 'gpt-5.6-luna')!;
+  const speechPlannerMaxOutputTokens = readInt('ESL_TTS_SPEECH_PLANNER_MAX_OUTPUT_TOKENS', 12000);
   const speechPlannerRpmBudget = readInt('ESL_TTS_SPEECH_PLANNER_RPM_BUDGET', 4);
   const speechPlannerDailyRequestBudget = readInt(
     'ESL_TTS_SPEECH_PLANNER_DAILY_REQUEST_BUDGET',
@@ -996,6 +1006,7 @@ export function loadConfig(): BatchBackendConfig {
     },
     speechPlanner: {
       enabled: speechPlannerEnabled,
+      provider: speechPlannerProvider,
       model: speechPlannerModel,
       maxOutputTokens: speechPlannerMaxOutputTokens,
       rpmBudget: speechPlannerRpmBudget,

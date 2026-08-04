@@ -63,6 +63,10 @@ For deep system maps, prefer the linked docs rather than growing this file again
   Manifests containing the older `resolved` token normalize it to `deterministic` when read.
 - Authored lesson Markdown stays provider-neutral. Provider capability resolution and expressive
   speech rendering happen after TTS provider/model selection.
+- Study-text performance mode is orchestrator-owned: authored `dialogue` stays dialogue, authored
+  `tts` stays monologue, and `auto` resolves dialogue only for two or more distinct authored
+  speakers. Schema-v2 directions merge by dimension into one Inworld instruction; pronunciation
+  remains planner-free.
 - Rerun family selection is contract-level:
   - unchecked study-text / pronunciation families must preserve prior published artifacts and persisted family defaults
   - checked families must replace the published artifact for that family even when deterministic upload keys or hashes are unchanged

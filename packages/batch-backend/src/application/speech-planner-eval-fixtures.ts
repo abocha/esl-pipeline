@@ -2,9 +2,10 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import type {
-  PreparedStudyTextSynthesis,
-  SpeechPerformancePromptPolicyId,
+import {
+  getTtsModelCapabilities,
+  type PreparedStudyTextSynthesis,
+  type SpeechPerformancePromptPolicyId,
 } from '@esl-pipeline/tts-core';
 
 export const SPEECH_PLANNER_EVAL_MODELS = [
@@ -25,6 +26,19 @@ export interface SpeechPlannerEvalFixture {
   prepared: PreparedStudyTextSynthesis;
   expectedHardInvariants: string[];
   warningExpectations?: string[];
+  contentHash: string;
+}
+
+export interface SpeechPlannerEvalControl {
+  id: string;
+  why: string;
+  prepared: PreparedStudyTextSynthesis;
+  expected: {
+    planningMode: 'identity';
+    naturalSpeakingRate: number;
+    defaultSpeakingRate: null;
+    maximumInstructionTags: number;
+  };
   contentHash: string;
 }
 
@@ -54,21 +68,23 @@ export type OfflineSpeechPlannerClassification =
   | 'invalid'
   | 'fallback_triggering'
   | 'unsafe_cue'
-  | 'tts_1_5_protection';
+  | 'provider_error';
 
 const OFFLINE_CLASSIFICATIONS = new Set<OfflineSpeechPlannerClassification>([
   'valid',
   'invalid',
   'fallback_triggering',
   'unsafe_cue',
-  'tts_1_5_protection',
+  'provider_error',
 ]);
 
 export interface OfflineSpeechPlannerOutput {
   id: string;
   fixtureId: string;
-  rawText: string;
+  rawText?: string;
   expectedClassification: OfflineSpeechPlannerClassification;
+  normalizedErrorCategory?: string;
+  retryAttempted?: false;
   contentHash: string;
 }
 
@@ -113,6 +129,33 @@ export function loadSpeechPlannerEvalFixtures(
   return fixtures;
 }
 
+export function loadSpeechPlannerEvalControls(
+  path = `${FIXTURE_ROOT}controls-v1.json`,
+): SpeechPlannerEvalControl[] {
+  const parsed = readJson(path);
+  if (!Array.isArray(parsed)) throw new Error('Speech planner eval controls must be an array.');
+  const controls = parsed.map((entry) => {
+    if (!entry || typeof entry !== 'object')
+      throw new Error('Invalid speech planner eval control.');
+    const control = entry as Omit<SpeechPlannerEvalControl, 'contentHash'>;
+    if (!control.id || !control.prepared || !control.expected) {
+      throw new Error('Speech planner eval control is missing required fields.');
+    }
+    const capabilities = getTtsModelCapabilities(
+      control.prepared.selection.provider,
+      control.prepared.selection.model,
+    );
+    if (capabilities.planningMode !== 'identity') {
+      throw new Error(`Speech planner eval control must select an identity model: ${control.id}`);
+    }
+    return { ...control, contentHash: sha256(stableJson(control)) };
+  });
+  if (new Set(controls.map((control) => control.id)).size !== controls.length) {
+    throw new Error('Speech planner eval control IDs must be unique.');
+  }
+  return controls;
+}
+
 export function buildSpeechPlannerEvalMatrix(args: {
   fixtures: readonly SpeechPlannerEvalFixture[];
   repetitions: number;
@@ -126,6 +169,15 @@ export function buildSpeechPlannerEvalMatrix(args: {
   const promptPolicies = args.promptPolicies ?? SPEECH_PLANNER_EVAL_PROMPT_POLICIES;
   const variants: SpeechPlannerEvalVariant[] = [];
   for (const fixture of [...args.fixtures].sort((left, right) => left.id.localeCompare(right.id))) {
+    const capabilities = getTtsModelCapabilities(
+      fixture.prepared.selection.provider,
+      fixture.prepared.selection.model,
+    );
+    if (capabilities.planningMode !== 'prompted') {
+      throw new Error(
+        `Paid speech planner eval fixtures must select a prompted TTS model: ${fixture.id}`,
+      );
+    }
     for (const model of models) {
       for (const promptPolicyVersion of promptPolicies) {
         for (let repetition = 1; repetition <= args.repetitions; repetition += 1) {
@@ -167,7 +219,25 @@ export function loadOfflineSpeechPlannerOutputs(
     if (!OFFLINE_CLASSIFICATIONS.has(output.expectedClassification)) {
       throw new Error(`Unknown offline classification: ${String(output.expectedClassification)}`);
     }
-    if (typeof output.rawText !== 'string' || sha256(output.rawText) !== output.contentHash) {
+    const expectedHash =
+      output.expectedClassification === 'provider_error'
+        ? sha256(
+            stableJson({
+              id: output.id,
+              fixtureId: output.fixtureId,
+              expectedClassification: output.expectedClassification,
+              normalizedErrorCategory: output.normalizedErrorCategory,
+              retryAttempted: output.retryAttempted,
+            }),
+          )
+        : typeof output.rawText === 'string'
+          ? sha256(output.rawText)
+          : undefined;
+    if (
+      expectedHash !== output.contentHash ||
+      (output.expectedClassification === 'provider_error' &&
+        (!output.normalizedErrorCategory || output.retryAttempted !== false))
+    ) {
       throw new Error(`Offline output hash mismatch: ${output.id}`);
     }
     return output;

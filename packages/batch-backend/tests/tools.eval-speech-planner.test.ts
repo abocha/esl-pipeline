@@ -161,14 +161,14 @@ describe('eval speech planner CLI', () => {
       providerCalls: 0,
       synthesisCalls: 0,
       postgresAdapters: 0,
-      completedAttempts: 5,
+      completedAttempts: 6,
     });
     expect(executeAttempt).not.toHaveBeenCalled();
     expect(
       JSON.parse(readFileSync(join(result.runDirectory!, 'summary.json'), 'utf8')),
     ).toMatchObject({
-      identityFallbackRate: 0.8,
-      hardGates: { tts15SteeringLeakageFailures: 1 },
+      identityFallbackRate: 5 / 6,
+      hardGates: { providerFailures: 1, tts15SteeringLeakageFailures: 0 },
     });
   });
 

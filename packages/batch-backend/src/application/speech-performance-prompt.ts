@@ -4,6 +4,7 @@ import type {
   PreparedStudyTextSynthesis,
   SpeechPerformancePromptPolicyId,
 } from '@esl-pipeline/tts-core';
+import { SPEECH_ANNOTATION_CLOSE, SPEECH_ANNOTATION_OPEN } from '@esl-pipeline/tts-core';
 
 function createSpeechPlanResponseSchema(plannerPauseMaximumMs: number) {
   return {
@@ -61,6 +62,31 @@ function createSpeechPlanResponseSchema(plannerPauseMaximumMs: number) {
 const V1_SPEECH_PLAN_RESPONSE_SCHEMA = createSpeechPlanResponseSchema(3000);
 export const SPEECH_PLAN_RESPONSE_SCHEMA = createSpeechPlanResponseSchema(1000);
 
+export const SPEECH_ANNOTATION_RESPONSE_SCHEMA = {
+  name: 'tts_contextual_speech_annotations',
+  description: 'Optional performance annotations inserted into immutable authored speech.',
+  strict: true,
+  schema: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['segments'],
+    properties: {
+      segments: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['id', 'synthesisText'],
+          properties: {
+            id: { type: 'string' },
+            synthesisText: { type: 'string' },
+          },
+        },
+      },
+    },
+  },
+} as const;
+
 const V1_LINES = [
   'Create restrained, natural speech-performance cues for this ESL study text.',
   'Do not rewrite words, add dialogue, or change segment order.',
@@ -89,12 +115,24 @@ const V2_LINES = [
   'Unless an explicit existing use case requires otherwise, deliveryMode must remain BALANCED.',
 ] as const;
 
+const CONTEXTUAL_ANNOTATION_LINES = [
+  'Enhance the spoken segments using the complete assignment below as read-only context.',
+  'Return only the ordered spoken segments with their existing id and synthesisText.',
+  'Every authored character in each segment is immutable: do not change, add, remove, reorder, normalize, or reproduce it differently.',
+  `You may insert optional performance annotations only as ${SPEECH_ANNOTATION_OPEN}natural playable direction${SPEECH_ANNOTATION_CLOSE}.`,
+  'Annotations may be leading directions or inline nonverbals such as sighs, laughs, breaths, or more context-specific natural-language variants.',
+  'Unchanged synthesisText is completely valid. Do not add annotations to satisfy a quota.',
+  'Do not invent reactions that materially change the event, characterization, or intended meaning.',
+  'Ordinary square brackets are authored text; only the reserved tts-annotation delimiters identify your insertions.',
+] as const;
+
 export const SPEECH_PERFORMANCE_PROMPT_POLICIES: Record<
   SpeechPerformancePromptPolicyId,
   readonly string[]
 > = {
   'speech-performance-v1-restrained-natural': V1_LINES,
   'speech-performance-v2-inworld-tts2': V2_LINES,
+  'contextual-bracket-annotation-v1': CONTEXTUAL_ANNOTATION_LINES,
 };
 
 export function buildSpeechPlannerRequest(
@@ -102,19 +140,33 @@ export function buildSpeechPlannerRequest(
   promptPolicyVersion: SpeechPerformancePromptPolicyId,
   _model: string,
 ) {
-  const prompt = [
-    ...SPEECH_PERFORMANCE_PROMPT_POLICIES[promptPolicyVersion],
-    JSON.stringify({
-      segments: prepared.segments,
-      voiceAssignments: prepared.voicePlan?.assignments ?? [],
-    }),
-  ].join('\n\n');
+  const contextual = promptPolicyVersion === 'contextual-bracket-annotation-v1';
+  const assignmentMarkdown = prepared.enhancementContext?.assignmentMarkdown;
+  if (contextual && !assignmentMarkdown) {
+    throw new Error('Contextual speech annotation requires complete assignment Markdown.');
+  }
+  const prompt = contextual
+    ? [
+        ...SPEECH_PERFORMANCE_PROMPT_POLICIES[promptPolicyVersion],
+        'COMPLETE ASSIGNMENT (READ ONLY):',
+        assignmentMarkdown!,
+        'ORDERED SPOKEN SEGMENTS:',
+        JSON.stringify({ segments: prepared.segments }),
+      ].join('\n\n')
+    : [
+        ...SPEECH_PERFORMANCE_PROMPT_POLICIES[promptPolicyVersion],
+        JSON.stringify({
+          segments: prepared.segments,
+          voiceAssignments: prepared.voicePlan?.assignments ?? [],
+        }),
+      ].join('\n\n');
   return {
     prompt,
     promptHash: createHash('sha256').update(prompt).digest('hex'),
     promptPolicyVersion,
-    responseSchema:
-      promptPolicyVersion === 'speech-performance-v1-restrained-natural'
+    responseSchema: contextual
+      ? SPEECH_ANNOTATION_RESPONSE_SCHEMA
+      : promptPolicyVersion === 'speech-performance-v1-restrained-natural'
         ? V1_SPEECH_PLAN_RESPONSE_SCHEMA
         : SPEECH_PLAN_RESPONSE_SCHEMA,
   };
