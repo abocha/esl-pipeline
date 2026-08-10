@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.5.2] - 2026-08-10
+
+### Changed
+
+- Automated release from PR #170: docs(agents): adopt measured Codex orchestration (https://github.com/abocha/esl-pipeline/pull/170)
+
 ## [10.5.1] - 2026-08-04
 
 ### Changed
