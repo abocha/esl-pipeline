@@ -340,6 +340,54 @@ test('frontend-only changes select frontend Turbo work without backend tests', (
   assert.deepEqual(plan.ciRequirements, []);
 });
 
+test('package manifests use a Biome formatting and assist guard instead of Prettier', () => {
+  const rootPlan = buildAffectedCheckPlan({
+    baseRef: 'origin/main',
+    mergeBase: 'abc123',
+    changedFiles: ['package.json'],
+    workspacePackages,
+  });
+  const manifestLane = rootPlan.triggeredLanes.find((lane) => lane.id === 'format:biome:changed');
+
+  assert.deepEqual(manifestLane?.pnpmArgs, [
+    'exec',
+    'biome',
+    'check',
+    '--formatter-enabled=true',
+    '--linter-enabled=false',
+    '--assist-enabled=true',
+    'package.json',
+  ]);
+  assert.equal(
+    rootPlan.triggeredLanes.some((lane) => lane.id === 'format:prettier:changed'),
+    false,
+  );
+});
+
+test('frontend and test source changes use the general Biome lane without specialized ESLint', () => {
+  for (const changedFile of [
+    'packages/batch-frontend/src/App.tsx',
+    'packages/batch-frontend/src/styles.css',
+    'packages/batch-backend/tests/example.test.ts',
+  ]) {
+    const plan = buildAffectedCheckPlan({
+      baseRef: 'origin/main',
+      mergeBase: 'abc123',
+      changedFiles: [changedFile],
+      workspacePackages,
+    });
+
+    assert.equal(
+      plan.triggeredLanes.some((lane) => lane.id === 'biome:changed-files'),
+      true,
+    );
+    assert.equal(
+      plan.triggeredLanes.some((lane) => lane.id === 'lint:eslint:specialized'),
+      false,
+    );
+  }
+});
+
 test('contracts changes expand to consumers and keep contract verification explicit', () => {
   const plan = buildAffectedCheckPlan({
     baseRef: 'origin/main',

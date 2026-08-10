@@ -46,7 +46,7 @@ The initial allowlist is deliberately narrow:
 - the dedicated Hadolint runner and its tests;
 - these exact repository-only files: `.dclintrc.json`, `.editorconfig`, `.gitattributes`,
   `.gitignore`, `.hadolint.yaml`, `.prettierignore`, `.prettierrc.json`, `biome.json`,
-  `eslint.config.js`, and `knip.json`.
+  and `knip.json`.
 
 Everything else requires `release:patch`, `release:minor`, or `release:major`. In particular,
 `packages/**`, `.dockerignore`, `.env.example`, `.nvmrc`, dependency manifests and lockfiles,

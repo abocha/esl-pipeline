@@ -4,6 +4,18 @@ import test from 'node:test';
 
 const root = new URL('../../', import.meta.url);
 const pkg = JSON.parse(readFileSync(new URL('package.json', root), 'utf8'));
+const frontendPkg = JSON.parse(
+  readFileSync(new URL('packages/batch-frontend/package.json', root), 'utf8'),
+);
+const backendPkg = JSON.parse(
+  readFileSync(new URL('packages/batch-backend/package.json', root), 'utf8'),
+);
+const biomeConfig = JSON.parse(readFileSync(new URL('biome.json', root), 'utf8'));
+const prettierConfig = JSON.parse(readFileSync(new URL('.prettierrc.json', root), 'utf8'));
+const frontendViteConfig = readFileSync(
+  new URL('packages/batch-frontend/vite.config.ts', root),
+  'utf8',
+);
 
 const retiredFiles = [
   'scripts/deps/safe-upgrade.mjs',
@@ -14,6 +26,7 @@ const retiredFiles = [
   'scripts/docker/prepare-host-paths.sh',
   'scripts/setup-agent-env.sh',
   'scripts/git/gh-auth-from-env.sh',
+  'eslint.config.js',
 ];
 
 const retiredScripts = [
@@ -29,6 +42,7 @@ const retiredScripts = [
   'test:env',
   'test:timings:frontend',
   'test:topo',
+  'lint:eslint:specialized',
 ];
 
 test('retired tooling files and aliases stay absent', () => {
@@ -75,4 +89,54 @@ test('docker lint composes the canonical compose and Dockerfile lanes', () => {
     'dclint docker-compose.yml docker-compose.prod.yml --fix',
   );
   assert.equal(pkg.scripts['docker:lint:dockerfiles'], 'node scripts/docker/run-hadolint.mjs');
+});
+
+test('Biome owns code and package-manifest tooling while Prettier remains docs-only', () => {
+  for (const dependency of [
+    '@eslint-react/eslint-plugin',
+    '@vitest/eslint-plugin',
+    'eslint',
+    'eslint-config-prettier',
+    'eslint-plugin-react-refresh',
+    'globals',
+    'prettier-plugin-packagejson',
+    'typescript-eslint',
+  ]) {
+    assert.equal(pkg.devDependencies[dependency], undefined, dependency);
+  }
+  assert.equal(pkg.devDependencies['@biomejs/biome'], '2.5.6');
+  assert.equal(pkg.scripts['lint:eslint:specialized'], undefined);
+  assert.match(pkg.scripts['format:biome'], /assist-enabled=true/u);
+  assert.doesNotMatch(pkg.scripts['format:prettier'], /package\.json/u);
+  assert.doesNotMatch(pkg.scripts['format:prettier:write'], /package\.json/u);
+  assert.equal(frontendPkg.devDependencies.eslint, undefined);
+  assert.doesNotMatch(frontendPkg.scripts.lint, /eslint/u);
+  assert.doesNotMatch(backendPkg.scripts.lint, /eslint/u);
+  assert.equal(prettierConfig.plugins, undefined);
+});
+
+test('Biome config keeps the intentional React, hook, and test protections', () => {
+  assert.equal(biomeConfig.assist.actions.source.useSortedPackageJson.level, 'on');
+  assert.equal(biomeConfig.linter.rules.correctness.useExhaustiveDependencies, 'warn');
+  assert.deepEqual(biomeConfig.linter.rules.style.useComponentExportOnlyModules, {
+    level: 'warn',
+    options: { allowConstantExport: true },
+  });
+  assert.equal(biomeConfig.linter.rules.suspicious.noFocusedTests, 'error');
+  assert.equal(biomeConfig.linter.rules.suspicious.noSkippedTests, 'warn');
+  assert.equal(biomeConfig.linter.rules.nursery.noConditionalExpect, 'warn');
+  assert.equal(biomeConfig.linter.rules.nursery.noIdenticalTestTitle, 'error');
+  assert.equal(
+    biomeConfig.overrides.find((override) =>
+      override.includes.includes('packages/batch-frontend/src/context/**/*.{ts,tsx}'),
+    ).linter.rules.style.useComponentExportOnlyModules,
+    'off',
+  );
+});
+
+test('frontend Vite config has no dead Vitest test configuration', () => {
+  assert.match(frontendViteConfig, /from 'vite'/u);
+  assert.doesNotMatch(frontendViteConfig, /vitest\/config/u);
+  assert.doesNotMatch(frontendViteConfig, /^\s*test:\s*\{/mu);
+  assert.doesNotMatch(frontendViteConfig, /eslint-disable/u);
 });

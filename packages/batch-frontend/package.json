@@ -6,7 +6,7 @@
     "build": "vite build",
     "clean": "node -e \"fs.rmSync('dist', {recursive:true, force:true})\"",
     "dev": "vite",
-    "lint": "pnpm exec biome lint . && pnpm exec eslint .",
+    "lint": "pnpm exec biome lint .",
     "preview": "vite preview",
     "test": "pnpm run test:unit",
     "test:unit": "vitest run --testTimeout=15000 --passWithNoTests --exclude \"**/*.integration.test.ts\" --exclude \"**/*.integration.test.tsx\"",
@@ -32,7 +32,6 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^6.0.5",
-    "eslint": "^10.6.0",
     "jsdom": "^29.1.1",
     "typescript": "^6.0.3",
     "vite": "^8.2.1"

@@ -71,7 +71,6 @@ test('maintenance-only paths accept release:none', () => {
     '.prettierignore',
     '.prettierrc.json',
     'biome.json',
-    'eslint.config.js',
     'knip.json',
   ];
   const paths = [

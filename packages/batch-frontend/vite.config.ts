@@ -1,7 +1,6 @@
-/// <reference types="vitest" />
 import react from '@vitejs/plugin-react';
 import type { ProxyOptions } from 'vite';
-import { defineConfig } from 'vitest/config';
+import { defineConfig } from 'vite';
 
 // Minimal Vite config for local dev inside the monorepo.
 // - Serves frontend on :5173 by default.
@@ -63,8 +62,5 @@ export default defineConfig({
         assetFileNames: 'assets/[name]-[hash].[ext]',
       },
     },
-  },
-  test: {
-    exclude: ['tests/e2e/**', 'node_modules/**'],
   },
 });

@@ -3,7 +3,6 @@
   "globalDependencies": [
     ".nvmrc",
     "biome.json",
-    "eslint.config.js",
     "pnpm-workspace.yaml",
     "vitest.config.ts"
   ],
