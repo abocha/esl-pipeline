@@ -77,6 +77,8 @@ test('maintenance-only paths accept release:none', () => {
   const paths = [
     '.github/workflows/ci.yml',
     '.impeccable/critique/local.md',
+    '.codex/ORCHESTRATION.md',
+    '.codex/agents/terra_explorer.toml',
     'AGENTS.md',
     'docs/reference/VERSIONING_MODEL.md',
     'scripts/check/ci-workflow-structure.test.mjs',
