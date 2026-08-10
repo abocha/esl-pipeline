@@ -31,7 +31,6 @@ const SAFE_ROOT_FILES = new Set([
   'biome.json',
   'docker-compose.dev.yml',
   'docker-compose.yml',
-  'eslint.config.js',
   'knip.json',
 ]);
 

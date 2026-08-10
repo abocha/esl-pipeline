@@ -165,21 +165,24 @@ describe('assignment recovery API', () => {
           requestId: 'job-1',
         }),
     ],
-  ] as const)('retries transient %s mutation failures with the same request', async (_label, run) => {
-    vi.useFakeTimers();
-    vi.mocked(apiClient.post)
-      .mockRejectedValueOnce(makeAxiosError(503))
-      .mockRejectedValueOnce(makeAxiosError(429))
-      .mockResolvedValueOnce({ data: { id: 'result' } } as never);
+  ] as const)(
+    'retries transient %s mutation failures with the same request',
+    async (_label, run) => {
+      vi.useFakeTimers();
+      vi.mocked(apiClient.post)
+        .mockRejectedValueOnce(makeAxiosError(503))
+        .mockRejectedValueOnce(makeAxiosError(429))
+        .mockResolvedValueOnce({ data: { id: 'result' } } as never);
 
-    const resultPromise = run();
-    await vi.runAllTimersAsync();
-    await expect(resultPromise).resolves.toBeTruthy();
-    expect(apiClient.post).toHaveBeenCalledTimes(3);
-    expect(vi.mocked(apiClient.post).mock.calls[0]).toEqual(
-      vi.mocked(apiClient.post).mock.calls[2],
-    );
-  });
+      const resultPromise = run();
+      await vi.runAllTimersAsync();
+      await expect(resultPromise).resolves.toBeTruthy();
+      expect(apiClient.post).toHaveBeenCalledTimes(3);
+      expect(vi.mocked(apiClient.post).mock.calls[0]).toEqual(
+        vi.mocked(apiClient.post).mock.calls[2],
+      );
+    },
+  );
 
   it('stops semantic mutation retry after three total attempts', async () => {
     vi.useFakeTimers();

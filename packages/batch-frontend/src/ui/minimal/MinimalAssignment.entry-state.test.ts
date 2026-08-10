@@ -76,28 +76,34 @@ describe('assignment entry state presentation', () => {
     ['succeeded', false, 'ready-to-share', 'Ready to share', 'Review assignment'],
     ['succeeded', true, 'published', 'Published', 'Open assignment'],
     ['failed', false, 'needs-attention', 'Needs attention', 'Review issue'],
-  ] as const)('maps %s jobs to the teacher-facing resume state', (jobState, isPublished, state, statusLabel, actionLabel) => {
-    expect(getJobRecentAssignmentPresentation(jobState, isPublished)).toMatchObject({
-      state,
-      statusLabel,
-      actionLabel,
-      destination: 'review',
-    });
-  });
+  ] as const)(
+    'maps %s jobs to the teacher-facing resume state',
+    (jobState, isPublished, state, statusLabel, actionLabel) => {
+      expect(getJobRecentAssignmentPresentation(jobState, isPublished)).toMatchObject({
+        state,
+        statusLabel,
+        actionLabel,
+        destination: 'review',
+      });
+    },
+  );
 
   it.each([
     ['student', 'Lesson source in progress', 'source'],
     ['source', 'Learner context in progress', 'context'],
     ['context', 'Draft in progress', 'assignment'],
     ['create', 'Ready to preview or share', 'review'],
-  ] as const)('derives a %s-confirmed session presentation', (confirmedStep, activityLabel, destination) => {
-    expect(getSessionRecentAssignmentPresentation(session(confirmedStep))).toMatchObject({
-      state: 'unfinished',
-      activityLabel,
-      actionLabel: 'Continue assignment',
-      destination,
-    });
-  });
+  ] as const)(
+    'derives a %s-confirmed session presentation',
+    (confirmedStep, activityLabel, destination) => {
+      expect(getSessionRecentAssignmentPresentation(session(confirmedStep))).toMatchObject({
+        state: 'unfinished',
+        activityLabel,
+        actionLabel: 'Continue assignment',
+        destination,
+      });
+    },
+  );
 
   it('rejects completed Share sessions from the resumable-session presentation path', () => {
     expect(() => getSessionRecentAssignmentPresentation(session('share'))).toThrow(

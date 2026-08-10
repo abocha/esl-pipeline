@@ -36,7 +36,6 @@ const broadFallbackFiles = new Set([
   '.gitignore',
   '.nvmrc',
   'biome.json',
-  'eslint.config.js',
   'package.json',
   'pnpm-lock.yaml',
   'pnpm-workspace.yaml',
@@ -302,7 +301,7 @@ export function buildAffectedCheckPlan({
       mergeBase,
       changedFiles: normalizedFiles,
       reason:
-        'root validation, package manager, TypeScript, Vitest, Biome, ESLint, or Turbo config changed',
+        'root validation, package manager, TypeScript, Vitest, Biome, or Turbo config changed',
     });
   }
 
@@ -339,7 +338,16 @@ export function buildAffectedCheckPlan({
   };
 
   function fallbackPlan({ baseRef, mergeBase, changedFiles, reason }) {
-    return buildBroadCheckPlan({ baseRef, mergeBase, changedFiles, reason, fallback: true });
+    const plan = buildBroadCheckPlan({ baseRef, mergeBase, changedFiles, reason, fallback: true });
+    return {
+      ...plan,
+      triggeredLanes: uniqueLanes([
+        ...plan.triggeredLanes,
+        ...resolveChangedFileLanes(changedFiles).filter(
+          (laneEntry) => laneEntry.id === 'format:biome:changed',
+        ),
+      ]),
+    };
   }
 }
 
@@ -616,19 +624,32 @@ function resolveChangedFileLanes(files) {
     );
   }
 
+  const biomeManifestFiles = files.filter(isBiomeManifestCandidate);
+  if (biomeManifestFiles.length > 0) {
+    lanes.push(
+      lane(
+        'format:biome:changed',
+        [
+          'exec',
+          'biome',
+          'check',
+          '--formatter-enabled=true',
+          '--linter-enabled=false',
+          '--assist-enabled=true',
+          ...biomeManifestFiles,
+        ],
+        {
+          reason: 'package manifest formatting and sorting is owned by Biome',
+        },
+      ),
+    );
+  }
+
   const prettierFiles = files.filter(isPrettierCandidate);
   if (prettierFiles.length > 0) {
     lanes.push(
       lane('format:prettier:changed', ['exec', 'prettier', '--check', ...prettierFiles], {
-        reason: 'Markdown, YAML, or package JSON changed',
-      }),
-    );
-  }
-
-  if (files.some(isSpecializedEslintCandidate)) {
-    lanes.push(
-      lane('lint:eslint:specialized', ['run', 'lint:eslint:specialized'], {
-        reason: 'frontend or test file touched specialized ESLint coverage',
+        reason: 'Markdown or YAML changed',
       }),
     );
   }
@@ -864,26 +885,20 @@ function isBackendHttpFile(file) {
 
 function isBiomeLintCandidate(file) {
   return (
-    /^(packages|scripts)\//u.test(file) &&
-    /\.(?:js|mjs|cjs|ts|tsx|json|jsonc)$/u.test(file) &&
+    (/^(packages|scripts)\//u.test(file) || /(^|\/)package\.json$/u.test(file)) &&
+    /\.(?:js|jsx|mjs|cjs|ts|tsx|css|json|jsonc)$/u.test(file) &&
     !isGeneratedDocsFile(file) &&
     !file.includes('/dist/') &&
     !file.includes('/node_modules/')
   );
 }
 
-function isPrettierCandidate(file) {
-  return (
-    !isGeneratedDocsFile(file) &&
-    (/\.(?:md|ya?ml)$/u.test(file) || /(^|\/)package\.json$/u.test(file))
-  );
+function isBiomeManifestCandidate(file) {
+  return !isGeneratedDocsFile(file) && /(^|\/)package\.json$/u.test(file);
 }
 
-function isSpecializedEslintCandidate(file) {
-  return (
-    /^packages\/batch-frontend\/.*\.(?:ts|tsx)$/u.test(file) ||
-    /^packages\/.*\.(?:test|spec)\.(?:js|mjs|cjs|ts|tsx)$/u.test(file)
-  );
+function isPrettierCandidate(file) {
+  return !isGeneratedDocsFile(file) && /\.(?:md|ya?ml)$/u.test(file);
 }
 
 function uniqueLanes(lanes) {

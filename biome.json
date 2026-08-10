@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.5.1/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.5.6/schema.json",
   "vcs": {
     "enabled": true,
     "clientKind": "git",
@@ -11,16 +11,14 @@
     "includes": [
       "packages/**",
       "scripts/**",
-      "eslint.config.js",
+      "package.json",
       "vitest.config.ts",
       "!**/dist",
       "!coverage",
       "!docs/generated",
       "!out",
       "!**/playwright-report",
-      "!**/test-results",
-      "!package.json",
-      "!**/package.json"
+      "!**/test-results"
     ]
   },
   "formatter": {
@@ -48,19 +46,31 @@
       },
       "correctness": {
         "noVoidTypeReturn": "off",
-        "useExhaustiveDependencies": "off"
+        "useExhaustiveDependencies": "warn"
       },
       "style": {
         "noNonNullAssertion": "off",
         "useExponentiationOperator": "off",
         "useExportType": "off",
-        "useImportType": "off"
+        "useImportType": "off",
+        "useComponentExportOnlyModules": {
+          "level": "warn",
+          "options": {
+            "allowConstantExport": true
+          }
+        }
       },
       "suspicious": {
         "noArrayIndexKey": "off",
         "noAssignInExpressions": "off",
+        "noFocusedTests": "error",
         "noImplicitAnyLet": "off",
-        "noMisleadingCharacterClass": "off"
+        "noMisleadingCharacterClass": "off",
+        "noSkippedTests": "warn"
+      },
+      "nursery": {
+        "noConditionalExpect": "warn",
+        "noIdenticalTestTitle": "error"
       }
     }
   },
@@ -82,6 +92,16 @@
           "suspicious": {
             "noExplicitAny": "off",
             "noUselessEscapeInString": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/batch-frontend/src/context/**/*.{ts,tsx}"],
+      "linter": {
+        "rules": {
+          "style": {
+            "useComponentExportOnlyModules": "off"
           }
         }
       }
@@ -122,6 +142,9 @@
               ":PATH:"
             ]
           }
+        },
+        "useSortedPackageJson": {
+          "level": "on"
         }
       }
     }
