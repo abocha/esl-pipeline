@@ -576,7 +576,7 @@ and these three steps after checkout/setup:
       for ((index = 0; index < path_count; index += 1)); do
         IFS= read -r -d '' changed_path
         case "$changed_path" in
-          .github/workflows/*|scripts/check/*|.nvmrc|package.json|pnpm-lock.yaml|pnpm-workspace.yaml|turbo.json|biome.json|eslint.config.*|vitest.config.*|tsconfig*.json)
+          .github/workflows/*|scripts/check/*|.nvmrc|package.json|pnpm-lock.yaml|pnpm-workspace.yaml|turbo.json|biome.json|vitest.config.*|tsconfig*.json)
             force_all=true
             ;;
         esac

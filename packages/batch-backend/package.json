@@ -30,7 +30,7 @@
     "lesson-memory:refresh:dist": "node dist/tools/refresh-student-lesson-history.js",
     "lesson-memory:refresh:dist:dry": "node dist/tools/refresh-student-lesson-history.js --dry-run",
     "lesson-memory:refresh:dry": "tsx --tsconfig tsconfig.json src/tools/refresh-student-lesson-history.ts --dry-run",
-    "lint": "pnpm exec biome lint . && pnpm exec eslint \"tests/**/*.{js,mjs,cjs,ts,tsx}\"",
+    "lint": "pnpm exec biome lint .",
     "profile:migrate-legacy": "tsx --tsconfig tsconfig.json src/tools/migrate-legacy-profiles.ts",
     "prompt-assets:bootstrap": "tsx --tsconfig tsconfig.json src/tools/bootstrap-prompt-assets.ts",
     "prompt-assets:bootstrap:dry": "tsx --tsconfig tsconfig.json src/tools/bootstrap-prompt-assets.ts --dry-run",

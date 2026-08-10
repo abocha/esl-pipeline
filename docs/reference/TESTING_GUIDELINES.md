@@ -64,7 +64,7 @@ If this guide conflicts with [`docs/reference/agents-ssot.md`](agents-ssot.md), 
   - Runs root tooling tests, `build`, `typecheck`, `lint`, `test:unit:prebuilt`,
     `test:integration:prebuilt`, and the backend DB + worker lane.
 - Root lint lane:
-  - `pnpm lint` runs Biome for baseline JS/TS/TSX/JSON linting, then ESLint for specialized React and Vitest checks.
+  - `pnpm lint` runs Biome for JS/TS/TSX/JSX/CSS/JSON linting, including the selected React, Fast Refresh, TypeScript, and Vitest protections.
 - Root lane behavior:
   - `pnpm test` delegates to `pnpm test:unit`.
   - `pnpm test:unit` runs package-level `test:unit` scripts in parallel (`--if-present`).
@@ -253,7 +253,7 @@ The wrapper:
 - always runs `test:check-routing` and blocks unit consumers when the routing contract fails;
 - runs selected commands serially, aggregates every independent failure, and blocks only prebuilt
   consumers of a failed build;
-- runs changed-file Biome, changed-file Prettier, specialized ESLint, docs, workflow, shell,
+- runs changed-file Biome linting, changed-file Biome package-manifest formatting/assist, changed-file Prettier for Markdown/YAML, docs, workflow, shell,
   Docker, deterministic HTTP, and safe DB-baseline lanes when path rules trigger;
 - reports selected PostgreSQL and Redis service lanes as CI-owned requirements instead of executing
   them locally;
