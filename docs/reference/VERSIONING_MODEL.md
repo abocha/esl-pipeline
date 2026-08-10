@@ -71,7 +71,8 @@ The dedicated `Release Label Guard` workflow fails if none or multiple are prese
 `release:none` is reserved for changes that do not alter a deployable release. The guard accepts it
 only when the complete, count-validated PR file set is inside the repository's conservative
 maintenance-only allowlist: GitHub metadata, non-runtime documentation, selected repository test
-and documentation tooling, the Hadolint runner, and explicitly named lint/editor configuration.
+and documentation tooling, project-local Codex maintainer configuration under `.codex/**`, the
+Hadolint runner, and explicitly named lint/editor configuration.
 Unknown or mixed paths require a normal release label. `docs/prompt-gallery/**` is runtime content
 copied into the backend image and always requires a normal release.
 

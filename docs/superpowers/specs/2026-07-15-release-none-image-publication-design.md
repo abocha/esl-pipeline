@@ -38,6 +38,7 @@ The initial allowlist is deliberately narrow:
 
 - `.github/**`;
 - `.impeccable/**`;
+- `.codex/**` project-local Codex maintainer configuration;
 - non-runtime `docs/**`, excluding `docs/prompt-gallery/**`;
 - root Markdown documentation;
 - repository checker, docs, and test harnesses under `scripts/check/**`, `scripts/docs/**`, and

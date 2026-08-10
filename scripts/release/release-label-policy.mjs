@@ -85,6 +85,7 @@ function isMaintenanceOnlyPath(path) {
   if (MAINTENANCE_ONLY_ROOT_FILES.has(path) || MAINTENANCE_ONLY_EXACT_PATHS.has(path)) return true;
   if (/^[^/]+\.md$/u.test(path)) return true;
   if (path.startsWith('.github/') || path.startsWith('.impeccable/')) return true;
+  if (path.startsWith('.codex/')) return true;
   if (path.startsWith('docs/')) return !path.startsWith('docs/prompt-gallery/');
   return (
     path.startsWith('scripts/check/') ||
