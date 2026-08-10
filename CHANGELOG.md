@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.5.3] - 2026-08-10
+
+### Changed
+
+- Automated release from PR #171: chore(tooling): consolidate Biome linting and refresh workspace dependencies (https://github.com/abocha/esl-pipeline/pull/171)
+
 ## [10.5.2] - 2026-08-10
 
 ### Changed
