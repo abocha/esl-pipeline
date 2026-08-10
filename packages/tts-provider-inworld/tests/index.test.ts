@@ -1044,20 +1044,23 @@ describe('inworld provider adapter basics', () => {
     ['slow', 0.85],
     ['measured', 0.95],
     ['brisk', 1.1],
-  ] as const)('renders TTS-2 pace %s through only the numeric SDK control', (pace, speakingRate) => {
-    const rendered = renderInworldSpeechSegment({
-      model: 'inworld-tts-2',
-      segment: {
-        id: 'segment-1',
-        text: 'Keep a steady tempo.',
-        ...(pace ? { pace } : {}),
-      },
-    });
+  ] as const)(
+    'renders TTS-2 pace %s through only the numeric SDK control',
+    (pace, speakingRate) => {
+      const rendered = renderInworldSpeechSegment({
+        model: 'inworld-tts-2',
+        segment: {
+          id: 'segment-1',
+          text: 'Keep a steady tempo.',
+          ...(pace ? { pace } : {}),
+        },
+      });
 
-    expect(rendered.text).toBe('Keep a steady tempo.');
-    expect(rendered.text).not.toContain('pace');
-    expect(rendered.speakingRate).toBe(speakingRate);
-  });
+      expect(rendered.text).toBe('Keep a steady tempo.');
+      expect(rendered.text).not.toContain('pace');
+      expect(rendered.speakingRate).toBe(speakingRate);
+    },
+  );
 
   it('keeps at most one leading instruction when capability input is conservative', () => {
     expect(
@@ -1085,30 +1088,30 @@ describe('inworld provider adapter basics', () => {
     });
   });
 
-  it.each([
-    'inworld-tts-1.5-max',
-    'inworld-tts-1.5-mini',
-  ] as const)('keeps %s rendering free from TTS-2 steering syntax without changing natural pace', (model) => {
-    expect(
-      renderInworldSpeechSegment({
-        model,
-        segment: {
-          id: 'segment-1',
-          text: 'We need a clearer deadline.',
-          emotion: 'calm concern',
-          pace: 'natural',
-          nonVerbalsBefore: ['sigh'],
-          pauseAfterMs: 350,
-          deliveryMode: 'CREATIVE',
-        },
-      }),
-    ).toEqual({
-      text: 'We need a clearer deadline.',
-      lexicalText: 'We need a clearer deadline.',
-      leadingInstructionTagCount: 0,
-      speakingRate: 1,
-    });
-  });
+  it.each(['inworld-tts-1.5-max', 'inworld-tts-1.5-mini'] as const)(
+    'keeps %s rendering free from TTS-2 steering syntax without changing natural pace',
+    (model) => {
+      expect(
+        renderInworldSpeechSegment({
+          model,
+          segment: {
+            id: 'segment-1',
+            text: 'We need a clearer deadline.',
+            emotion: 'calm concern',
+            pace: 'natural',
+            nonVerbalsBefore: ['sigh'],
+            pauseAfterMs: 350,
+            deliveryMode: 'CREATIVE',
+          },
+        }),
+      ).toEqual({
+        text: 'We need a clearer deadline.',
+        lexicalText: 'We need a clearer deadline.',
+        leadingInstructionTagCount: 0,
+        speakingRate: 1,
+      });
+    },
+  );
 
   it('changes preview cache identity when language or renderer policy changes', async () => {
     const context = createPreviewContext();
@@ -1228,63 +1231,69 @@ describe('inworld provider adapter basics', () => {
       ],
     ],
     ['reordered', (segments: SpeechPerformancePlan['segments']) => [...segments].reverse()],
-  ] as const)('blocks a %s speech plan before calling injected synthesis', async (_caseName, mutateSegments) => {
-    const synthesizeChunk = vi.fn();
-    const context = parseMarkdownContext(
-      '---\ntitle: Test\nstudent: Alex\nlevel: B1\ntopic: work\ninput_type: generate\n---\n\n:::study-text\n[Maya]: First authored line.\n[Leo]: Second authored line.\n:::',
-    );
-    const sourceSegments = [
-      { id: 'segment-1', speaker: 'Maya', text: 'First authored line.' },
-      { id: 'segment-2', speaker: 'Leo', text: 'Second authored line.' },
-    ];
-    const speechPlan: SpeechPerformancePlan = {
-      schemaVersion: 1,
-      mode: 'prompted',
-      provider: 'inworld',
-      model: 'inworld-tts-2',
-      sourceHash: hashStudyText(JSON.stringify(sourceSegments)),
-      segments: mutateSegments(sourceSegments),
-    };
+  ] as const)(
+    'blocks a %s speech plan before calling injected synthesis',
+    async (_caseName, mutateSegments) => {
+      const synthesizeChunk = vi.fn();
+      const context = parseMarkdownContext(
+        '---\ntitle: Test\nstudent: Alex\nlevel: B1\ntopic: work\ninput_type: generate\n---\n\n:::study-text\n[Maya]: First authored line.\n[Leo]: Second authored line.\n:::',
+      );
+      const sourceSegments = [
+        { id: 'segment-1', speaker: 'Maya', text: 'First authored line.' },
+        { id: 'segment-2', speaker: 'Leo', text: 'Second authored line.' },
+      ];
+      const speechPlan: SpeechPerformancePlan = {
+        schemaVersion: 1,
+        mode: 'prompted',
+        provider: 'inworld',
+        model: 'inworld-tts-2',
+        sourceHash: hashStudyText(JSON.stringify(sourceSegments)),
+        segments: mutateSegments(sourceSegments),
+      };
 
-    await expect(
-      buildStudyTextMp3Inworld(
-        { context },
-        {
-          voiceMapPath: 'voices.yml',
-          outPath: '/path-that-must-not-be-created',
-          force: true,
-          speechPlan,
-          voicePlan: createPreviewVoicePlan('2026-06-02T00:00:00.000Z'),
-        },
-        { synthesizeChunk },
-      ),
-    ).rejects.toThrow(/Speech plan (segment count|segment)/);
-    expect(synthesizeChunk).not.toHaveBeenCalled();
-  });
+      await expect(
+        buildStudyTextMp3Inworld(
+          { context },
+          {
+            voiceMapPath: 'voices.yml',
+            outPath: '/path-that-must-not-be-created',
+            force: true,
+            speechPlan,
+            voicePlan: createPreviewVoicePlan('2026-06-02T00:00:00.000Z'),
+          },
+          { synthesizeChunk },
+        ),
+      ).rejects.toThrow(/Speech plan (segment count|segment)/);
+      expect(synthesizeChunk).not.toHaveBeenCalled();
+    },
+  );
 
   it.each([
     ['foreign selection', { provider: 'google', model: 'chirp3_hd' }],
     ['foreign source hash', { sourceHash: 'foreign-source-hash' }],
-  ] as const)('blocks a speech plan with %s before calling injected synthesis', async (_caseName, override) => {
-    const synthesizeChunk = vi.fn();
-    const context = createPreviewContext();
-    const speechPlan = { ...createPreviewSpeechPlan(), ...override } as SpeechPerformancePlan;
+  ] as const)(
+    'blocks a speech plan with %s before calling injected synthesis',
+    async (_caseName, override) => {
+      const synthesizeChunk = vi.fn();
+      const context = createPreviewContext();
+      const speechPlan = { ...createPreviewSpeechPlan(), ...override } as SpeechPerformancePlan;
 
-    await expect(
-      buildStudyTextMp3Inworld(
-        { context },
-        {
-          voiceMapPath: 'voices.yml',
-          outPath: '/path-that-must-not-be-created',
-          force: true,
-          speechPlan,
-          voicePlan: createPreviewVoicePlan('2026-06-02T00:00:00.000Z'),
-        },
-        { synthesizeChunk },
-      ),
-    ).rejects.toThrow('selection or source hash does not match prepared text');
-    expect(synthesizeChunk).not.toHaveBeenCalled();
-  });
+      await expect(
+        buildStudyTextMp3Inworld(
+          { context },
+          {
+            voiceMapPath: 'voices.yml',
+            outPath: '/path-that-must-not-be-created',
+            force: true,
+            speechPlan,
+            voicePlan: createPreviewVoicePlan('2026-06-02T00:00:00.000Z'),
+          },
+          { synthesizeChunk },
+        ),
+      ).rejects.toThrow('selection or source hash does not match prepared text');
+      expect(synthesizeChunk).not.toHaveBeenCalled();
+    },
+  );
 
   it('keeps preview cache hashes stable when only ranker timestamps change', async () => {
     const context = createPreviewContext();

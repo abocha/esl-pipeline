@@ -134,29 +134,31 @@ describe('md-validator [general-english-v2]', () => {
     });
   });
 
-  it.each([
-    'audio',
-    'video',
-  ])('blocks emitted %s directives that lack a URL in strict v2', async (media) => {
-    const markdown = (await createStrictGolden()).replace(
-      'Text\n\n## 2. 🗺️ Your Homework Roadmap',
-      `Text\n\n:::${media}\n\n## 2. 🗺️ Your Homework Roadmap`,
-    );
+  it.each(['audio', 'video'])(
+    'blocks emitted %s directives that lack a URL in strict v2',
+    async (media) => {
+      const markdown = (await createStrictGolden()).replace(
+        'Text\n\n## 2. 🗺️ Your Homework Roadmap',
+        `Text\n\n:::${media}\n\n## 2. 🗺️ Your Homework Roadmap`,
+      );
 
-    const result = await validateMarkdown({ markdown, strict: true });
+      const result = await validateMarkdown({ markdown, strict: true });
 
-    expect(result.ok).toBe(false);
-    expect(result.errors.join('\n')).toMatch(new RegExp(`${media} directive requires a URL`, 'i'));
-    expect(result.issues).toContainEqual(
-      expect.objectContaining({
-        code: 'media.directive_missing_url',
-        ruleId: 'media-directive',
-        severity: 'warning',
-        category: 'runtime',
-        blockingInStrict: true,
-      }),
-    );
-  });
+      expect(result.ok).toBe(false);
+      expect(result.errors.join('\n')).toMatch(
+        new RegExp(`${media} directive requires a URL`, 'i'),
+      );
+      expect(result.issues).toContainEqual(
+        expect.objectContaining({
+          code: 'media.directive_missing_url',
+          ruleId: 'media-directive',
+          severity: 'warning',
+          category: 'runtime',
+          blockingInStrict: true,
+        }),
+      );
+    },
+  );
 
   it('keeps structural contract failures blocking with stable v2 codes', async () => {
     const markdown = (await createStrictGolden())
