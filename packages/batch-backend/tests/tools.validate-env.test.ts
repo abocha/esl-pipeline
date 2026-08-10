@@ -94,23 +94,22 @@ describe('environment validation', () => {
       missingCredentialError:
         'ESL_TTS_SPEECH_PLANNER_ENABLED=true with provider google_ai_studio requires GEMINI_API_KEY.',
     },
-  ])('requires only the selected $provider speech-planner credential', ({
-    provider,
-    credential,
-    missingCredentialError,
-  }) => {
-    const enabled = [
-      'ESL_TTS_SPEECH_PLANNER_ENABLED=true',
-      `ESL_TTS_SPEECH_PLANNER_PROVIDER=${provider}`,
-    ];
-    const configuredCwd = writeFixture([...enabled, credential].join('\n'));
-    const missingCwd = writeFixture(enabled.join('\n'));
+  ])(
+    'requires only the selected $provider speech-planner credential',
+    ({ provider, credential, missingCredentialError }) => {
+      const enabled = [
+        'ESL_TTS_SPEECH_PLANNER_ENABLED=true',
+        `ESL_TTS_SPEECH_PLANNER_PROVIDER=${provider}`,
+      ];
+      const configuredCwd = writeFixture([...enabled, credential].join('\n'));
+      const missingCwd = writeFixture(enabled.join('\n'));
 
-    expect(
-      validateEnvironment({ cwd: configuredCwd, profile: 'development', shellEnv: {} }).errors,
-    ).toEqual([]);
-    expect(
-      validateEnvironment({ cwd: missingCwd, profile: 'development', shellEnv: {} }).errors,
-    ).toContain(missingCredentialError);
-  });
+      expect(
+        validateEnvironment({ cwd: configuredCwd, profile: 'development', shellEnv: {} }).errors,
+      ).toEqual([]);
+      expect(
+        validateEnvironment({ cwd: missingCwd, profile: 'development', shellEnv: {} }).errors,
+      ).toContain(missingCredentialError);
+    },
+  );
 });

@@ -1,5 +1,3 @@
-/* eslint-disable react-refresh/only-export-components */
-
 import type { Ref } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 

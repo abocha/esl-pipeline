@@ -10,12 +10,13 @@ type ContainerPlugin = (md: MarkdownItInstance, name: string, options: unknown) 
 
 const TASK_LIST_ITEM_MARKER_REGEX = /^\[( |x|X)\]\s+/;
 
-export function createRenderer(): MarkdownIt {
+export function createRenderer(): MarkdownItInstance {
   const md = new MarkdownIt({
     html: true,
     linkify: true,
     breaks: true,
   });
+  md.linkify.set({ fuzzyLink: true });
 
   md.use(anchor);
   md.use(toc, { listType: 'ul', containerClass: 'table-of-contents' });
@@ -97,7 +98,7 @@ export function createRenderer(): MarkdownIt {
   return md;
 }
 
-function applyTaskListRule(md: MarkdownIt): void {
+function applyTaskListRule(md: MarkdownItInstance): void {
   md.core.ruler.after('inline', 'task_list_checkboxes', (state) => {
     const listStack: number[] = [];
     const listItemStack: { tokenIndex: number; firstInlineSeen: boolean }[] = [];
@@ -185,7 +186,7 @@ function applyTaskListRule(md: MarkdownIt): void {
   });
 }
 
-function applyH4OrderedListContinuationRule(md: MarkdownIt): void {
+function applyH4OrderedListContinuationRule(md: MarkdownItInstance): void {
   md.core.ruler.after('inline', 'continue_ordered_lists_across_h4', (state) => {
     let lastOrderedListNextStart: number | null = null;
     let sawContinuationH4 = false;
@@ -285,15 +286,15 @@ function applyH4OrderedListContinuationRule(md: MarkdownIt): void {
   });
 }
 
-function parseStartAttr(token: { attrGet: (name: string) => string | null }): number {
+function parseStartAttr(token: { attrGet: (name: string) => string | number | null }): number {
   const raw = token.attrGet('start');
-  const value = Number.parseInt(raw ?? '1', 10);
+  const value = typeof raw === 'number' ? raw : Number.parseInt(raw ?? '1', 10);
   return Number.isFinite(value) && value > 0 ? value : 1;
 }
 
 function appendTokenClass(
   token: {
-    attrGet: (name: string) => string | null;
+    attrGet: (name: string) => string | number | null;
     attrSet: (name: string, value: string) => void;
   },
   className: string,
@@ -304,7 +305,7 @@ function appendTokenClass(
     return;
   }
 
-  const classes = new Set(current.split(/\s+/).filter(Boolean));
+  const classes = new Set(String(current).split(/\s+/).filter(Boolean));
   classes.add(className);
   token.attrSet('class', [...classes].join(' '));
 }

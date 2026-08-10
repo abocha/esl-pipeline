@@ -14,7 +14,6 @@ const MAINTENANCE_ONLY_ROOT_FILES = new Set([
   '.prettierignore',
   '.prettierrc.json',
   'biome.json',
-  'eslint.config.js',
   'knip.json',
 ]);
 

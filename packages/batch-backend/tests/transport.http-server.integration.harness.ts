@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { request as httpRequest } from 'node:http';
 import { Readable } from 'node:stream';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';

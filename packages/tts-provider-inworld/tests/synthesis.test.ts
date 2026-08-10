@@ -132,23 +132,24 @@ describe('Inworld application retry owner', () => {
     );
   });
 
-  it.each([
-    408, 429, 500, 502, 503, 504,
-  ])('retries transient HTTP %i exactly three times with 1/2/4 second bases', async (status) => {
-    const generate = vi.fn().mockRejectedValue(apiError(status));
-    const sleep = vi.fn().mockResolvedValue(undefined);
+  it.each([408, 429, 500, 502, 503, 504])(
+    'retries transient HTTP %i exactly three times with 1/2/4 second bases',
+    async (status) => {
+      const generate = vi.fn().mockRejectedValue(apiError(status));
+      const sleep = vi.fn().mockResolvedValue(undefined);
 
-    await expect(
-      runInworldSynthesisWithRetry({
-        ...request,
-        client: { generate, listVoices: vi.fn() },
-        dependencies: { sleep, random: () => 0.5, now: () => 0 },
-      }),
-    ).rejects.toMatchObject({ attempts: 4 });
+      await expect(
+        runInworldSynthesisWithRetry({
+          ...request,
+          client: { generate, listVoices: vi.fn() },
+          dependencies: { sleep, random: () => 0.5, now: () => 0 },
+        }),
+      ).rejects.toMatchObject({ attempts: 4 });
 
-    expect(generate).toHaveBeenCalledTimes(4);
-    expect(sleep.mock.calls.map(([delay]) => delay)).toEqual([1000, 2000, 4000]);
-  });
+      expect(generate).toHaveBeenCalledTimes(4);
+      expect(sleep.mock.calls.map(([delay]) => delay)).toEqual([1000, 2000, 4000]);
+    },
+  );
 
   it.each([400, 401, 403, 404])('does not retry deterministic HTTP %i', async (status) => {
     const generate = vi.fn().mockRejectedValue(apiError(status));
@@ -334,20 +335,23 @@ describe('Inworld application retry owner', () => {
     [-5, 1],
     [0, 1],
     [99, 4],
-  ])('clamps configured retries %i to the supported attempt bound', async (maxRetries, attempts) => {
-    const generate = vi.fn().mockRejectedValue(apiError(500));
+  ])(
+    'clamps configured retries %i to the supported attempt bound',
+    async (maxRetries, attempts) => {
+      const generate = vi.fn().mockRejectedValue(apiError(500));
 
-    await expect(
-      runInworldSynthesisWithRetry({
-        ...request,
-        client: { generate, listVoices: vi.fn() },
-        maxRetries,
-        dependencies: { sleep: vi.fn(), random: () => 0.5, now: () => 0 },
-      }),
-    ).rejects.toMatchObject({ attempts });
+      await expect(
+        runInworldSynthesisWithRetry({
+          ...request,
+          client: { generate, listVoices: vi.fn() },
+          maxRetries,
+          dependencies: { sleep: vi.fn(), random: () => 0.5, now: () => 0 },
+        }),
+      ).rejects.toMatchObject({ attempts });
 
-    expect(generate).toHaveBeenCalledTimes(attempts);
-  });
+      expect(generate).toHaveBeenCalledTimes(attempts);
+    },
+  );
 
   it('returns generated audio after a transient failure', async () => {
     const generate = vi

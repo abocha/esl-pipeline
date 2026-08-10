@@ -189,36 +189,33 @@ function createHarness(
 }
 
 describe('application/share-assignment-session', () => {
-  it.each([
-    'reservation',
-    'materialization',
-    'approval',
-    'enqueue',
-    'confirmation',
-  ])('resumes after interruption at %s with one stable job', async (stopAfter) => {
-    const harness = createHarness(stopAfter);
-    await expect(harness.firstAttempt()).rejects.toThrow('simulated interruption');
+  it.each(['reservation', 'materialization', 'approval', 'enqueue', 'confirmation'])(
+    'resumes after interruption at %s with one stable job',
+    async (stopAfter) => {
+      const harness = createHarness(stopAfter);
+      await expect(harness.firstAttempt()).rejects.toThrow('simulated interruption');
 
-    const recovered = await harness.retrySameRequest();
+      const recovered = await harness.retrySameRequest();
 
-    expect(recovered.session.confirmedStep).toBe('share');
-    expect(recovered.session.shareJobId).toBe(request.requestId);
-    expect(harness.createdJobIds).toEqual([request.requestId]);
-    expect([...harness.enqueuedJobIds]).toEqual([request.requestId]);
-    expect(harness.materialize).toHaveBeenCalledWith({
-      draftId: 'draft-1',
-      jobId: request.requestId,
-      sourceStorageUri: 'local://confirmed/draft.md',
-      expectedContentHash: 'b'.repeat(64),
-      assignmentShare: { sessionId: 'session-1', userId: 'user-1' },
-    });
-    expect(harness.completeShare).toHaveBeenCalledWith({
-      sessionId: 'session-1',
-      userId: 'user-1',
-      jobId: request.requestId,
-      enqueueSatisfied: true,
-    });
-  });
+      expect(recovered.session.confirmedStep).toBe('share');
+      expect(recovered.session.shareJobId).toBe(request.requestId);
+      expect(harness.createdJobIds).toEqual([request.requestId]);
+      expect([...harness.enqueuedJobIds]).toEqual([request.requestId]);
+      expect(harness.materialize).toHaveBeenCalledWith({
+        draftId: 'draft-1',
+        jobId: request.requestId,
+        sourceStorageUri: 'local://confirmed/draft.md',
+        expectedContentHash: 'b'.repeat(64),
+        assignmentShare: { sessionId: 'session-1', userId: 'user-1' },
+      });
+      expect(harness.completeShare).toHaveBeenCalledWith({
+        sessionId: 'session-1',
+        userId: 'user-1',
+        jobId: request.requestId,
+        enqueueSatisfied: true,
+      });
+    },
+  );
 
   it('resets and re-enqueues a failed linked job under the same identity', async () => {
     const harness = createHarness();

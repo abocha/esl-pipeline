@@ -1,5 +1,5 @@
 {
-  // Extend the repo base config so editor/ESLint see shared settings.
+  // Extend the repo base config so editor and TypeScript tooling see shared settings.
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     // Frontend-specific overrides.
@@ -13,7 +13,7 @@
     "esModuleInterop": true,
     "allowJs": false,
     "resolveJsonModule": true,
-    // Make sure Vite/DOM types are available in the editor for ESLint/TS.
+    // Make sure Vite/DOM types are available in the editor and TypeScript.
     "types": ["vite/client", "vitest"],
     // Local path aliases for this package.
     "paths": {

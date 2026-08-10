@@ -127,26 +127,29 @@ describe('AssignmentEntryStep', () => {
   it.each([
     ['student', '1'],
     ['assignment', '4'],
-  ] as const)('renders the unfinished %s destination as a compact step number', (destination, stepNumber) => {
-    const { container } = render(
-      <EntryHarness
-        initialView="resume"
-        recentItems={[
-          makeRecentItem(`session-${destination}`, 'Cora', {
-            kind: 'session',
-            state: 'unfinished',
-            statusLabel: 'Unfinished',
-            statusTone: 'progress',
-            destination,
-          }),
-        ]}
-      />,
-    );
+  ] as const)(
+    'renders the unfinished %s destination as a compact step number',
+    (destination, stepNumber) => {
+      const { container } = render(
+        <EntryHarness
+          initialView="resume"
+          recentItems={[
+            makeRecentItem(`session-${destination}`, 'Cora', {
+              kind: 'session',
+              state: 'unfinished',
+              statusLabel: 'Unfinished',
+              statusTone: 'progress',
+              destination,
+            }),
+          ]}
+        />,
+      );
 
-    expect(container.querySelector('.assignment-entry-step__recent-state-icon')?.textContent).toBe(
-      stepNumber,
-    );
-  });
+      expect(
+        container.querySelector('.assignment-entry-step__recent-state-icon')?.textContent,
+      ).toBe(stepNumber);
+    },
+  );
 
   it('disables both unselected choices while recent work is loading', () => {
     render(<EntryHarness recentLoading />);
@@ -365,13 +368,16 @@ describe('AssignmentEntryStep', () => {
     ['ready-to-share', 'Ready to share'],
     ['published', 'Published'],
     ['needs-attention', 'Needs attention'],
-  ] as const)('renders the %s summary state without an entry route', (summaryState, expectedLabel) => {
-    render(<EntryHarness initialView="summary" summaryState={summaryState} />);
+  ] as const)(
+    'renders the %s summary state without an entry route',
+    (summaryState, expectedLabel) => {
+      render(<EntryHarness initialView="summary" summaryState={summaryState} />);
 
-    expect(screen.getByText(expectedLabel)).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Resume recent work' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Start new assignment' })).toBeNull();
-  });
+      expect(screen.getByText(expectedLabel)).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Resume recent work' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Start new assignment' })).toBeNull();
+    },
+  );
 
   it('shows the completed Resume summary without an entry route', () => {
     render(<EntryHarness initialView="summary" />);

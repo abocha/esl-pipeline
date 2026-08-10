@@ -78,7 +78,7 @@ Classification is fail-conservative:
 
 - An unknown or unclassified path enables every blocking hosted scope.
 - An empty hosted PR diff is an error and cannot become docs-only.
-- Root package-manager, TypeScript, Vitest, Biome, ESLint, Turbo, workflow, and CI-classifier changes
+- Root package-manager, TypeScript, Vitest, Biome, Turbo, workflow, and CI-classifier changes
   enable every blocking hosted scope.
 - Mixed documentation and runtime changes are runtime changes, never docs-only.
 - Generated documentation remains documentation.
@@ -94,7 +94,7 @@ projection implementation. Before consuming classifier output, it checks changed
 - `.github/workflows/**`;
 - `scripts/check/**`;
 - `.nvmrc`, `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, and `turbo.json`;
-- root TypeScript, Vitest, Biome, and ESLint configuration.
+- root TypeScript, Vitest, and Biome configuration.
 
 Any bootstrap match forces all blocking scopes true after the projection is evaluated. This is an
 intentional duplication of the minimum trust-boundary list, not a second general path classifier.

@@ -31,7 +31,10 @@ Purpose: record which non-code lint tools are promoted in this repo, which are a
 
 - Main code lint lane:
   - `pnpm lint`
-  - Runs Biome + specialized ESLint only.
+  - Runs Biome for JS/TS/TSX/JSX/CSS/JSON and package-manifest linting.
+- Formatting ownership:
+  - Biome formats and sorts all `package.json` files and formats supported code files.
+  - Core Prettier formats Markdown, YAML, and YML only.
 - Repo hygiene lane:
   - `pnpm run lint:repo-hygiene`
   - Runs `actionlint` + `ShellCheck`.
