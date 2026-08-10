@@ -56,39 +56,42 @@ describe('application/student-memory-generation-pacing', () => {
   it.each([
     ['rpm', 'budget_rpm_minute'],
     ['tpm', 'budget_tpm_minute'],
-  ] as const)('defers minute %s exhaustion without calling the executor', async (limitType, reason) => {
-    const repository = createRepository(
-      vi.fn().mockResolvedValue({
-        allowed: false,
-        reason: { limitType, window: 'minute', limit: 3, used: 3 },
-        usage: USAGE,
-      }),
-    );
-    const execute = vi.fn();
-    const pacer = createStudentMemoryGenerationPacer(createConfig(), {
-      repository,
-      now: () => NOW,
-    });
+  ] as const)(
+    'defers minute %s exhaustion without calling the executor',
+    async (limitType, reason) => {
+      const repository = createRepository(
+        vi.fn().mockResolvedValue({
+          allowed: false,
+          reason: { limitType, window: 'minute', limit: 3, used: 3 },
+          usage: USAGE,
+        }),
+      );
+      const execute = vi.fn();
+      const pacer = createStudentMemoryGenerationPacer(createConfig(), {
+        repository,
+        now: () => NOW,
+      });
 
-    await expect(
-      pacer.run({
-        workload: 'lesson_memory',
+      await expect(
+        pacer.run({
+          workload: 'lesson_memory',
+          provider: 'openai',
+          model: 'gpt-5.4-mini',
+          prompt: 'memory source',
+          execute,
+        }),
+      ).rejects.toMatchObject({
+        name: 'StudentMemoryPacingDeferredError',
+        reason,
         provider: 'openai',
         model: 'gpt-5.4-mini',
-        prompt: 'memory source',
-        execute,
-      }),
-    ).rejects.toMatchObject({
-      name: 'StudentMemoryPacingDeferredError',
-      reason,
-      provider: 'openai',
-      model: 'gpt-5.4-mini',
-      notBefore: new Date('2026-06-21T10:12:00.000Z'),
-    } satisfies Partial<StudentMemoryPacingDeferredError>);
+        notBefore: new Date('2026-06-21T10:12:00.000Z'),
+      } satisfies Partial<StudentMemoryPacingDeferredError>);
 
-    expect(execute).not.toHaveBeenCalled();
-    expect(repository.recordActual).not.toHaveBeenCalled();
-  });
+      expect(execute).not.toHaveBeenCalled();
+      expect(repository.recordActual).not.toHaveBeenCalled();
+    },
+  );
 
   it('leaves daily budget exhaustion as an ordinary failure', async () => {
     const repository = createRepository(

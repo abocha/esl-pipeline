@@ -190,23 +190,22 @@ describe('config/env - speech planner provider selection', () => {
     );
   });
 
-  it.each([
-    'google',
-    'openrouter',
-    'OPENAI',
-  ])('rejects invalid speech planner provider %s', async (provider) => {
-    await expect(
-      withEnv(
-        {
-          NODE_ENV: 'test',
-          ESL_TTS_SPEECH_PLANNER_PROVIDER: provider,
-        },
-        async () => {
-          await loadConfigFresh();
-        },
-      ),
-    ).rejects.toThrow('ESL_TTS_SPEECH_PLANNER_PROVIDER');
-  });
+  it.each(['google', 'openrouter', 'OPENAI'])(
+    'rejects invalid speech planner provider %s',
+    async (provider) => {
+      await expect(
+        withEnv(
+          {
+            NODE_ENV: 'test',
+            ESL_TTS_SPEECH_PLANNER_PROVIDER: provider,
+          },
+          async () => {
+            await loadConfigFresh();
+          },
+        ),
+      ).rejects.toThrow('ESL_TTS_SPEECH_PLANNER_PROVIDER');
+    },
+  );
 });
 
 describe('config/env - job options static fallback gate', () => {

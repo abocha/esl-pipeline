@@ -32,39 +32,39 @@ function dependencies(snapshot: ReturnType<typeof eligibleSnapshot> | null) {
 }
 
 describe('application/retry-student-profile-candidate-refresh', () => {
-  it.each([
-    'pending',
-    'failed',
-  ] as const)('enqueues an eligible requested snapshot from %s delivery state', async (enqueueStatus) => {
-    const snapshot = eligibleSnapshot({ requested: true, enqueueStatus });
-    const overrides = dependencies(snapshot);
+  it.each(['pending', 'failed'] as const)(
+    'enqueues an eligible requested snapshot from %s delivery state',
+    async (enqueueStatus) => {
+      const snapshot = eligibleSnapshot({ requested: true, enqueueStatus });
+      const overrides = dependencies(snapshot);
 
-    const result = await retryStudentProfileCandidateRefreshForSnapshot({
-      snapshotId: snapshot.id,
-      overrides: overrides as never,
-    });
+      const result = await retryStudentProfileCandidateRefreshForSnapshot({
+        snapshotId: snapshot.id,
+        overrides: overrides as never,
+      });
 
-    expect(result).toEqual({ outcome: 'enqueued', snapshotId: snapshot.id });
-    expect(overrides.profileCandidates.reconcileRefresh).toHaveBeenCalledWith({
-      params: {
-        studentId: snapshot.studentId,
-        sourceSnapshotId: snapshot.id,
-        trigger: 'manual-replay',
-      },
-    });
-    expect(overrides.snapshots.updateGenerationNotes).toHaveBeenNthCalledWith(1, {
-      id: snapshot.id,
-      generationNotes: {
-        candidateRefresh: { requested: true, enqueueStatus: 'pending' },
-      },
-    });
-    expect(overrides.snapshots.updateGenerationNotes).toHaveBeenNthCalledWith(2, {
-      id: snapshot.id,
-      generationNotes: {
-        candidateRefresh: { requested: true, enqueueStatus: 'enqueued' },
-      },
-    });
-  });
+      expect(result).toEqual({ outcome: 'enqueued', snapshotId: snapshot.id });
+      expect(overrides.profileCandidates.reconcileRefresh).toHaveBeenCalledWith({
+        params: {
+          studentId: snapshot.studentId,
+          sourceSnapshotId: snapshot.id,
+          trigger: 'manual-replay',
+        },
+      });
+      expect(overrides.snapshots.updateGenerationNotes).toHaveBeenNthCalledWith(1, {
+        id: snapshot.id,
+        generationNotes: {
+          candidateRefresh: { requested: true, enqueueStatus: 'pending' },
+        },
+      });
+      expect(overrides.snapshots.updateGenerationNotes).toHaveBeenNthCalledWith(2, {
+        id: snapshot.id,
+        generationNotes: {
+          candidateRefresh: { requested: true, enqueueStatus: 'enqueued' },
+        },
+      });
+    },
+  );
 
   it('treats legacy requested metadata without delivery state as pending', async () => {
     const snapshot = eligibleSnapshot({ requested: true });

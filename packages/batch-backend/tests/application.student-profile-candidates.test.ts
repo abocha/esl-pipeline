@@ -125,73 +125,72 @@ describe('application/student-profile-candidates', () => {
     });
   });
 
-  it.each([
-    'pending_review',
-    'approved',
-    'promoted',
-  ] as const)('skips duplicate insertion when a matching %s candidate already exists', async (status) => {
-    const insert = vi.fn();
+  it.each(['pending_review', 'approved', 'promoted'] as const)(
+    'skips duplicate insertion when a matching %s candidate already exists',
+    async (status) => {
+      const insert = vi.fn();
 
-    const result = await refreshStudentProfileCandidatesFromCanonicalMemory({
-      studentId: 'student-1',
-      overrides: {
-        students: {
-          getById: vi.fn().mockResolvedValue({ id: 'student-1' }),
-        },
-        snapshots: {
-          getLatestReadyByStudentId: vi.fn().mockResolvedValue(null),
-        },
-        lessonMemory: {
-          listRecentReadyByStudentId: vi.fn().mockResolvedValue([
-            {
-              id: 'lesson-1',
-              generatedAt: new Date('2026-03-21T10:00:00.000Z'),
-              createdAt: new Date('2026-03-21T10:00:00.000Z'),
-              topicsDiscussed: [],
-              studentFacts: [
-                {
-                  fact: 'Wants to speak English more confidently at work.',
-                  category: 'goal',
-                  authority: 'student_stated',
-                  confidence: 'high',
-                  reviewNeeded: false,
-                  evidence: [],
-                },
-              ],
-            },
-          ]),
-        },
-        candidates: {
-          getById: vi.fn(),
-          insert,
-          listLatestByKeys: vi.fn().mockResolvedValue(
-            new Map([
-              [
-                'goals_motivation:wants to speak english more confidently at work',
-                {
-                  id: 'candidate-existing',
-                  status,
-                },
-              ],
+      const result = await refreshStudentProfileCandidatesFromCanonicalMemory({
+        studentId: 'student-1',
+        overrides: {
+          students: {
+            getById: vi.fn().mockResolvedValue({ id: 'student-1' }),
+          },
+          snapshots: {
+            getLatestReadyByStudentId: vi.fn().mockResolvedValue(null),
+          },
+          lessonMemory: {
+            listRecentReadyByStudentId: vi.fn().mockResolvedValue([
+              {
+                id: 'lesson-1',
+                generatedAt: new Date('2026-03-21T10:00:00.000Z'),
+                createdAt: new Date('2026-03-21T10:00:00.000Z'),
+                topicsDiscussed: [],
+                studentFacts: [
+                  {
+                    fact: 'Wants to speak English more confidently at work.',
+                    category: 'goal',
+                    authority: 'student_stated',
+                    confidence: 'high',
+                    reviewNeeded: false,
+                    evidence: [],
+                  },
+                ],
+              },
             ]),
-          ),
-          supersedePending: vi.fn(),
-          updateReview: vi.fn(),
+          },
+          candidates: {
+            getById: vi.fn(),
+            insert,
+            listLatestByKeys: vi.fn().mockResolvedValue(
+              new Map([
+                [
+                  'goals_motivation:wants to speak english more confidently at work',
+                  {
+                    id: 'candidate-existing',
+                    status,
+                  },
+                ],
+              ]),
+            ),
+            supersedePending: vi.fn(),
+            updateReview: vi.fn(),
+          },
         },
-      },
-    });
+      });
 
-    expect(insert).not.toHaveBeenCalled();
-    expect(result).toMatchObject({
-      created: [],
-      skippedCandidateKeys: ['goals_motivation:wants to speak english more confidently at work'],
-      skippedDuplicateCandidateKeys: [
-        'goals_motivation:wants to speak english more confidently at work',
-      ],
-      skippedDuplicateCount: 1,
-      skippedStaleCount: 0,
-    });
-  });
+      expect(insert).not.toHaveBeenCalled();
+      expect(result).toMatchObject({
+        created: [],
+        skippedCandidateKeys: ['goals_motivation:wants to speak english more confidently at work'],
+        skippedDuplicateCandidateKeys: [
+          'goals_motivation:wants to speak english more confidently at work',
+        ],
+        skippedDuplicateCount: 1,
+        skippedStaleCount: 0,
+      });
+    },
+  );
 
   it('skips stale candidate insertion when latest lesson repeats existing snapshot personal facts', async () => {
     const insert = vi.fn();
