@@ -22,6 +22,18 @@ describe('rendering', () => {
     expect(html).toContain('<img src="images/pic.png" alt="Alt">');
   });
 
+  it('preserves fuzzy bare-domain linkification', async () => {
+    const html = await renderToHtml('Visit example.com for details.', 'Fuzzy URL');
+
+    expect(html).toContain('<a href="http://example.com/">example.com</a>');
+  });
+
+  it('preserves explicit URL linkification', async () => {
+    const html = await renderToHtml('Visit https://example.com for details.', 'Explicit URL');
+
+    expect(html).toContain('<a href="https://example.com/">https://example.com</a>');
+  });
+
   it('keeps unsafe javascript links blocked while preserving safe relatives', async () => {
     const markdown = `<a href="javascript:alert(1)">Unsafe</a>\n\n[Safe](./lesson-2.md)`;
     const html = await renderToHtml(markdown, 'Href Sanitization', { allowRawHtml: true });
