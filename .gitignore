@@ -30,7 +30,17 @@ packages/orchestrator/configs/students/*.json
 # Skill-related artifacts
 skills
 skills-lock.json
-.codex
+.codex/**
+!.codex/ORCHESTRATION.md
+!.codex/PLANNING_HANDOFF.md
+!.codex/PROJECT.md
+!.codex/agents/
+.codex/agents/**
+!.codex/agents/luna_implementer.toml
+!.codex/agents/terra_workhorse.toml
+!.codex/agents/terra_explorer.toml
+!.codex/agents/terra_reviewer.toml
+!.codex/agents/sol_reviewer.toml
 .artifacts
 .superpowers/
 .impeccable/
