@@ -21,8 +21,18 @@ const backendTestRouting = JSON.parse(
 
 const workspacePackages = [
   pkg('@esl-pipeline/contracts', 'packages/contracts', [], ['build', 'typecheck']),
-  pkg('@esl-pipeline/batch-frontend', 'packages/batch-frontend', ['@esl-pipeline/contracts']),
-  pkg('@esl-pipeline/batch-backend', 'packages/batch-backend', ['@esl-pipeline/contracts']),
+  pkg(
+    '@esl-pipeline/batch-frontend',
+    'packages/batch-frontend',
+    ['@esl-pipeline/contracts'],
+    ['build', 'typecheck', 'lint', 'test:unit:prebuilt'],
+  ),
+  pkg(
+    '@esl-pipeline/batch-backend',
+    'packages/batch-backend',
+    ['@esl-pipeline/contracts'],
+    ['build', 'typecheck', 'lint', 'test:unit:prebuilt'],
+  ),
   pkg('@esl-pipeline/tts-provider-google', 'packages/tts-provider-google', []),
   pkg('@esl-pipeline/orchestrator', 'packages/orchestrator', [
     '@esl-pipeline/contracts',
@@ -330,6 +340,14 @@ test('frontend-only changes select frontend Turbo work without backend tests', (
     ['build', 'typecheck', 'test:unit:prebuilt'],
   );
   assert.equal(
+    plan.triggeredLanes.some((lane) => lane.id === 'biome:changed-files'),
+    true,
+  );
+  assert.equal(
+    plan.turbo.taskGroups.some((group) => group.task === 'lint'),
+    false,
+  );
+  assert.equal(
     plan.triggeredLanes.some((lane) => lane.id === 'test:integration:worker'),
     false,
   );
@@ -380,6 +398,10 @@ test('frontend and test source changes use the general Biome lane without specia
     assert.equal(
       plan.triggeredLanes.some((lane) => lane.id === 'biome:changed-files'),
       true,
+    );
+    assert.equal(
+      plan.turbo?.taskGroups.some((group) => group.task === 'lint'),
+      false,
     );
     assert.equal(
       plan.triggeredLanes.some((lane) => lane.id === 'lint:eslint:specialized'),

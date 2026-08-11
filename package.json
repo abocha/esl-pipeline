@@ -136,7 +136,6 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.6",
-    "@elevenlabs/elevenlabs-js": "^2.62.0",
     "@types/node": "^25.9.5",
     "@vitest/coverage-v8": "^4.1.10",
     "concurrently": "^10.0.4",

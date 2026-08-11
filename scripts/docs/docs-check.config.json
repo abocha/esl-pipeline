@@ -112,7 +112,7 @@
     "`configs/wizard.defaults.json`",
     "file://"
   ],
-  "allowed_missing_targets": ["packages/orchestrator/configs/wizard.defaults.json"],
+  "allowed_missing_targets": [],
   "docs_gardening": {
     "rolling_issue_title": "docs-gardening",
     "stale_scan_roots": ["docs"],

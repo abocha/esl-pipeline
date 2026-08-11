@@ -40,11 +40,16 @@ export const DropZone: React.FC<DropZoneProps> = ({
   onFiles,
 }) => {
   const handleDrop = useCallback(
-    (files: File[]) => {
-      if (files.length === 0) return;
+    (files: File[], fileRejections: readonly FileRejection[]) => {
+      // react-dropzone >=19 returns in-limit files from an over-limit batch.
+      // Preserve this wrapper's historical all-or-nothing single-file contract.
+      const hasTooManyFilesRejection = fileRejections.some((rejection) =>
+        rejection.errors.some((error) => error.code === 'too-many-files'),
+      );
+      if (files.length === 0 || (!multiple && hasTooManyFilesRejection)) return;
       onFiles(files);
     },
-    [onFiles],
+    [multiple, onFiles],
   );
 
   const { getRootProps, getInputProps, isDragActive, fileRejections } = useDropzone({
