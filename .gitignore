@@ -22,7 +22,6 @@ packages/orchestrator/configs/students/*.json
 .turbo
 .agent
 .agents
-.changeset
 .claude
 .tmp
 .venv
