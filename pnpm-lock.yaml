@@ -26,9 +26,6 @@ importers:
       '@biomejs/biome':
         specifier: 2.5.6
         version: 2.5.6
-      '@elevenlabs/elevenlabs-js':
-        specifier: ^2.62.0
-        version: 2.62.0
       '@types/node':
         specifier: ^25.9.5
         version: 25.9.5
@@ -71,9 +68,6 @@ importers:
       '@aws-sdk/s3-request-presigner':
         specifier: ^3.1106.0
         version: 3.1106.0
-      '@elevenlabs/elevenlabs-js':
-        specifier: ^2.62.0
-        version: 2.62.0
       '@esl-pipeline/contracts':
         specifier: workspace:*
         version: link:../contracts
@@ -3982,9 +3976,6 @@ packages:
     engines: {node: '>=16.20.0'}
     hasBin: true
 
-  uc.micro@2.1.0:
-    resolution: {integrity: sha512-ARDJmphmdvUk6Glw7y9DQ2bFkKBHwQHLi2lsaH6PPmz/Ka9sFOBsBluozhDltWmnv9u/cF6Rt87znRTPV+yp/A==}
-
   uc.micro@3.0.0:
     resolution: {integrity: sha512-U3PppEkleoTnIfi8BozMx3yju3qc/L6SwqWo2Sw+54PX+PX0q9I+r1Um5HCmqD7n9VDX5/v3vQH/AjA6deDdtw==}
 
@@ -7638,8 +7629,6 @@ snapshots:
       '@typescript/typescript-sunos-x64': 7.0.2
       '@typescript/typescript-win32-arm64': 7.0.2
       '@typescript/typescript-win32-x64': 7.0.2
-
-  uc.micro@2.1.0: {}
 
   uc.micro@3.0.0: {}
 
