@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.5.4] - 2026-08-11
+
+### Changed
+
+- Automated release from PR #172: chore(repo): complete post-171 maintenance follow-up (https://github.com/abocha/esl-pipeline/pull/172)
+
 ## [10.5.3] - 2026-08-10
 
 ### Changed
