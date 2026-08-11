@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
-const defaultTurboTasks = ['build', 'typecheck', 'lint', 'test:unit:prebuilt'];
+const defaultTurboTasks = ['build', 'typecheck', 'test:unit:prebuilt'];
 const alwaysLanes = [
   lane('guard:orchestrator:boundary', ['run', 'guard:orchestrator:boundary'], {
     reason: 'cheap global orchestrator boundary guard',

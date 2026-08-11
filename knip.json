@@ -9,18 +9,7 @@
     "packages/orchestrator/examples/service/server.ts"
   ],
   "project": ["scripts/**/*.mjs"],
-  "ignoreDependencies": [
-    "@elevenlabs/elevenlabs-js",
-    "@google-cloud/text-to-speech",
-    "@notionhq/client",
-    "gray-matter",
-    "js-yaml",
-    "remark-parse",
-    "turbo",
-    "unified",
-    "zod",
-    "pino-pretty"
-  ],
+  "ignoreDependencies": ["turbo"],
   "ignoreFiles": [
     "packages/batch-backend/src/application/homework-memory-backfill.ts",
     "packages/batch-backend/src/application/student-memory-snapshot-backfill.ts",
@@ -43,6 +32,19 @@
         "tests/**/*.ts",
         "tests/**/*.tsx"
       ]
+    },
+    "packages/orchestrator": {
+      "ignoreDependencies": [
+        "@elevenlabs/elevenlabs-js",
+        "@google-cloud/text-to-speech",
+        "js-yaml",
+        "remark-parse",
+        "unified",
+        "zod"
+      ]
+    },
+    "packages/batch-backend": {
+      "ignoreDependencies": ["pino-pretty"]
     }
   }
 }
