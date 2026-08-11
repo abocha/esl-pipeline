@@ -47,8 +47,10 @@ If this guide conflicts with [`docs/reference/agents-ssot.md`](agents-ssot.md), 
 - Root affected check: `pnpm check:fast`
   - Resolves a comparison base against `origin/main`.
   - Includes committed branch changes plus staged, unstaged, and untracked files.
-  - Runs cheap global guards, changed-file checks, affected workspace package tasks, and
-    path-triggered validation.
+  - Runs cheap global guards, changed-file checks, affected workspace build, typecheck, and prebuilt
+    unit tasks, and path-triggered validation.
+  - Changed-file Biome owns lint in the normal affected path; broad and pre-PR validation still run
+    the root Biome lint lane.
   - Uses Turborepo for workspace task ordering, dependency builds, concurrency, local cache, and run
     summaries.
   - Falls back conservatively to `check:pre-pr` when the changed scope cannot be classified.
@@ -249,11 +251,13 @@ The wrapper:
 - collects committed, staged, unstaged, and untracked files;
 - maps files to workspace packages from `pnpm-workspace.yaml`;
 - expands changed packages to transitive dependents;
-- asks Turbo to run package tasks only for packages that expose each script;
+- asks Turbo to run affected build, typecheck, and prebuilt unit tasks only for packages that expose
+  each script;
 - always runs `test:check-routing` and blocks unit consumers when the routing contract fails;
 - runs selected commands serially, aggregates every independent failure, and blocks only prebuilt
   consumers of a failed build;
-- runs changed-file Biome linting, changed-file Biome package-manifest formatting/assist, changed-file Prettier for Markdown/YAML, docs, workflow, shell,
+- uses changed-file Biome as the normal affected lint owner, and separately runs changed-file Biome
+  package-manifest formatting/assist, changed-file Prettier for Markdown/YAML, docs, workflow, shell,
   Docker, deterministic HTTP, and safe DB-baseline lanes when path rules trigger;
 - reports selected PostgreSQL and Redis service lanes as CI-owned requirements instead of executing
   them locally;
