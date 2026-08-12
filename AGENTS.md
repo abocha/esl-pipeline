@@ -64,6 +64,20 @@ branches, pushes, pull requests, deployments, delegated writes, or external muta
 user explicitly authorizes that action. The user prompt or an approved task plan may further narrow
 the workflow.
 
+## GitHub Issue Workflow
+
+- GitHub Issues is the only canonical engineering backlog.
+- When selecting work, use open issues labeled `status:ready` by default and match `effort:*` to the
+  maintainer's available time and quota.
+- Read the complete issue before editing. Validate the reported behavior first; proposed causes and
+  fixes are hypotheses until evidence confirms them.
+- `status:inbox` means captured but not yet actionable; `status:blocked` means a stated dependency,
+  missing evidence, or required decision prevents progress.
+- Use `Fixes #N` only when the linked issue's acceptance criteria are genuinely satisfied.
+
+The detailed intake and selection procedure is in
+[`docs/operations/github-issue-intake-and-codex-work-selection.md`](docs/operations/github-issue-intake-and-codex-work-selection.md).
+
 ## Complexity Discipline
 
 - Do not introduce structural complexity without a concrete reason grounded in requirements,

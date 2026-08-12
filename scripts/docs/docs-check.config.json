@@ -13,6 +13,7 @@
   ],
   "active_ops_docs": [
     "docs/operations/docker-host-paths.md",
+    "docs/operations/github-issue-intake-and-codex-work-selection.md",
     "docs/operations/postgres-backup-restore.md",
     "docs/operations/postgres-backup-s3.md",
     "docs/operations/postgres-ops-health.md",
@@ -53,6 +54,7 @@
     "docs/backend-frontend/BATCH_SYSTEM.md",
     "docs/backend-frontend/backend-frontend-alignment.md",
     "docs/operations/docker-host-paths.md",
+    "docs/operations/github-issue-intake-and-codex-work-selection.md",
     "docs/operations/postgres-backup-restore.md",
     "docs/operations/postgres-backup-s3.md",
     "docs/operations/postgres-ops-health.md",
