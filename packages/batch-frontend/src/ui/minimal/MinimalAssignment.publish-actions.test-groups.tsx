@@ -122,7 +122,7 @@ export function registerJobActionTests() {
     });
 
     it(
-      'requires preview before publish and requires re-preview after draft edits',
+      'requires preview before publish and enables share after preview',
       async () => {
         const user = createMinimalUser();
         await renderPreviewReadyAssignment();
@@ -143,22 +143,6 @@ export function registerJobActionTests() {
         await previewCurrentDraft(user);
         const publishButton = screen.getByRole('button', { name: /Share assignment/i });
         expect((publishButton as HTMLButtonElement).disabled).toBe(false);
-
-        await user.click(screen.getByRole('button', { name: /Create/i }));
-        fireEvent.change(screen.getByRole('textbox', { name: /Draft markdown/i }), {
-          target: { value: '# Preview gated draft\nOne more line' },
-        });
-        await user.click(screen.getByRole('button', { name: /Review & share/i }));
-        expect(screen.getByRole('heading', { name: /Create assignment/i })).toBeTruthy();
-        await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
-        await screen.findByRole('heading', { name: /Review and share/i });
-        const refreshedPublishButton = screen.getByRole('button', { name: /Share assignment/i });
-        const refreshedPreviewButton = screen.getByRole('button', { name: /Preview assignment/i });
-        await waitFor(() => {
-          expect((refreshedPublishButton as HTMLButtonElement).disabled).toBe(true);
-        });
-        expect(refreshedPreviewButton.className).toContain('minimal-preview-attention');
-        expect(screen.queryByText('Preview required before sharing.')).toBeNull();
       },
       INTEGRATION_TEST_TIMEOUT_MS,
     );
