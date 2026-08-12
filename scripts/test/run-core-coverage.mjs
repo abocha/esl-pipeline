@@ -2,45 +2,56 @@
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { buildCoreCoveragePlan } from './core-coverage-plan.mjs';
 
 const coverageRoot = path.resolve('tmp/coverage');
-const targets = [
-  { key: 'batch-frontend', packageName: '@esl-pipeline/batch-frontend' },
-  { key: 'batch-backend', packageName: '@esl-pipeline/batch-backend' },
-  { key: 'orchestrator', packageName: '@esl-pipeline/orchestrator' },
-  { key: 'tts-elevenlabs', packageName: '@esl-pipeline/tts-provider-elevenlabs' },
-];
 
-rmSync(coverageRoot, { recursive: true, force: true });
-mkdirSync(coverageRoot, { recursive: true });
+if (isMainModule()) {
+  const plan = buildCoreCoveragePlan();
 
-let failed = false;
-for (const target of targets) {
-  const reportsDirectory = `../../tmp/coverage/${target.key}`;
-  const args = [
-    '--filter',
-    target.packageName,
-    'run',
-    'test:unit',
-    '--coverage.enabled',
-    '--coverage.reporter=json-summary',
-    '--coverage.reporter=json',
-    `--coverage.reportsDirectory=${reportsDirectory}`,
-  ];
+  rmSync(coverageRoot, { recursive: true, force: true });
+  mkdirSync(coverageRoot, { recursive: true });
 
-  console.log(`\n[coverage] ${target.packageName}`);
-  const invocation = resolvePackageManagerCommand(args);
-  const result = spawnSync(invocation.command, invocation.args, { stdio: 'inherit' });
-  if (result.error) {
-    console.error(`Failed to run package manager: ${result.error.message}`);
+  console.log('\n[coverage] preparing workspace build graph');
+  const preparationInvocation = resolvePackageManagerCommand(plan.preparation.args);
+  const preparation = spawnSync(preparationInvocation.command, preparationInvocation.args, {
+    stdio: 'inherit',
+  });
+  if (preparation.error) {
+    console.error(`Failed to prepare workspace build graph: ${preparation.error.message}`);
   }
-  if (result.status !== 0) {
-    failed = true;
+  if (preparation.status !== 0) {
+    process.exitCode = 1;
+  } else {
+    runCoverage(plan.coverage);
   }
 }
 
-if (failed) {
-  process.exitCode = 1;
+function runCoverage(targets) {
+  let failed = false;
+  for (const target of targets) {
+    console.log(`\n[coverage] ${target.packageName}`);
+    const invocation = resolvePackageManagerCommand(target.args);
+    const result = spawnSync(invocation.command, invocation.args, { stdio: 'inherit' });
+    if (result.error) {
+      console.error(`Failed to run package manager: ${result.error.message}`);
+    }
+    if (result.status !== 0) {
+      failed = true;
+    }
+  }
+
+  if (failed) {
+    process.exitCode = 1;
+  }
+}
+
+function isMainModule() {
+  return (
+    process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
+  );
 }
 
 function resolvePackageManagerCommand(args) {
