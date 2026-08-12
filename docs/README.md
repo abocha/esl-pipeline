@@ -21,19 +21,18 @@
 
 ## Categories
 
-| Need                                          | Start with                                                                                       |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Repository orientation or local development   | [`PROJECT_OVERVIEW.md`](PROJECT_OVERVIEW.md) or [`QUICK_START.md`](QUICK_START.md)               |
-| Product/runtime contracts and system behavior | [`reference/`](reference/) and the owning package README                                         |
-| Operations or a current procedure             | [`operations/README.md`](operations/README.md)                                                   |
-| Product/design work                           | [`design/README.md`](design/README.md)                                                           |
-| Durable active planning                       | [`plans/README.md`](plans/README.md)                                                             |
-| Current documentation-system overhaul         | [`plans/documentation-system-overhaul/README.md`](plans/documentation-system-overhaul/README.md) |
-| Documentation upkeep and routing              | [`reference/DOCS_GOVERNANCE.md`](reference/DOCS_GOVERNANCE.md)                                   |
-| Named-task execution context                  | [`superpowers/README.md`](superpowers/README.md)                                                 |
-| Unfinished/disposable exploration             | [`drafts/README.md`](drafts/README.md)                                                           |
-| Historical rationale or prior execution       | [`archive/README.md`](archive/README.md)                                                         |
-| Generated inventories                         | [`generated/README.md`](generated/README.md)                                                     |
+| Need                                          | Start with                                                                         |
+| --------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Repository orientation or local development   | [`PROJECT_OVERVIEW.md`](PROJECT_OVERVIEW.md) or [`QUICK_START.md`](QUICK_START.md) |
+| Product/runtime contracts and system behavior | [`reference/`](reference/) and the owning package README                           |
+| Operations or a current procedure             | [`operations/README.md`](operations/README.md)                                     |
+| Product/design work                           | [`design/README.md`](design/README.md)                                             |
+| Durable active planning                       | [`plans/README.md`](plans/README.md)                                               |
+| Documentation upkeep and routing              | [`reference/DOCS_GOVERNANCE.md`](reference/DOCS_GOVERNANCE.md)                     |
+| Named-task execution context                  | [`superpowers/README.md`](superpowers/README.md)                                   |
+| Unfinished/disposable exploration             | [`drafts/README.md`](drafts/README.md)                                             |
+| Historical rationale or prior execution       | [`archive/README.md`](archive/README.md)                                           |
+| Generated inventories                         | [`generated/README.md`](generated/README.md)                                       |
 
 ## Lifecycle Boundaries
 

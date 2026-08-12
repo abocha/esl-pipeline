@@ -61,7 +61,6 @@ boundary.
 | Scheduling, billing, or business surfaces | `docs/reference/SCHEDULE_BILLING_PRODUCT_DECISIONS.md`               | `docs/reference/TEACHER_BUSINESS_DASHBOARD_PRODUCT_DRAFT.md` |
 | Product readiness                         | `docs/reference/PRODUCT_NORTH_STAR_AND_READINESS.md`                 | `docs/plans/2026-06-23-alpha-readiness.md`                   |
 | Create or locate a durable active plan    | `docs/plans/README.md`                                               | `docs/generated/plans-index.md`                              |
-| Documentation-system overhaul             | `docs/plans/documentation-system-overhaul/README.md`                 | its routed task-specific source                              |
 | Repair speech-planner evaluation          | `docs/plans/2026-07-29-speech-planner-evaluation-gap-remediation.md` | `docs/operations/speech-planner-evaluation.md`               |
 | Execute a named approved task artifact    | exact file under `docs/superpowers/`                                 | current reference/runbook and the owning package README      |
 | Resume after context loss                 | `docs/playbooks/RESTART_TOMORROW.md`                                 | current branch/worktree, GitHub issue, and exact active plan |
