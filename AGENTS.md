@@ -17,7 +17,7 @@ SSOT wins.
 
 ## Task Routing
 
-1. For delegated work or execution from an approved plan, read
+1. For delegated work or execution from an approved plan or explicitly approved Goal Contract, read
    [`.codex/ORCHESTRATION.md`](.codex/ORCHESTRATION.md), then
    [`.codex/PROJECT.md`](.codex/PROJECT.md).
 2. Start with [`docs/README.md`](docs/README.md) for a known ESL task.
@@ -33,7 +33,8 @@ SSOT wins.
 - Do not silently change manifest, DTO, environment, or database contracts.
 - Do not treat archive docs as current truth.
 - Keep code, tests, active docs, and package READMEs aligned when behavior changes.
-- When implementing from a plan, re-read that exact plan after context compaction.
+- When implementing from an approved plan or Goal Contract, re-read that exact handoff after context
+  compaction.
 - Treat the developer laptop as the primary development environment, Git/CI as the source of truth,
   and the Lightsail VPS as production runtime only.
 
@@ -56,8 +57,12 @@ Choose the lightest workflow consistent with ambiguity and risk:
   debugging, TDD, review, or verification workflow rather than the full design lifecycle.
 - **Full design and planning:** use when behavior is unsettled or work crosses architecture,
   frontend/backend/database boundaries, migrations, authentication, authorization, persistent state,
-  concurrency, data integrity, or production risk. Obtain approval for the design and plan before
-  implementation.
+  concurrency, data integrity, or production risk. Obtain approval for the design decisions before
+  implementation. After that approval, normal plan-backed execution remains the default; explicitly
+  approved goal-backed orchestration is an optional handoff when the outcome is stable and verifiable
+  but the implementation strategy is expected to adapt materially. If WHAT success means or WHETHER
+  to pursue it is unresolved, remain in interactive design/exploration. Goal-backed execution does not
+  bypass human approval of architecture, contracts, or risk-sensitive behavior.
 
 Repository authorization overrides workflow-plugin defaults. Do not create worktrees, commits,
 branches, pushes, pull requests, deployments, delegated writes, or external mutations unless the
