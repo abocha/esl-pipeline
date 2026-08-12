@@ -21,7 +21,7 @@ packages/orchestrator/configs/students/*.json
 .vscode
 .turbo
 .agent
-.agents
+.agents/*
 .claude
 .tmp
 .venv
@@ -29,6 +29,7 @@ packages/orchestrator/configs/students/*.json
 # Skill-related artifacts
 skills
 skills-lock.json
+.agents/*
 .codex/**
 !.codex/ORCHESTRATION.md
 !.codex/PLANNING_HANDOFF.md

@@ -100,6 +100,21 @@ Do not use Terra merely because a task is large if Luna can execute the bounded 
 from explicit requirements. Conversely, do not use Luna merely because a task is small when
 interaction correctness is the real risk.
 
+### Complexity discipline during execution
+
+Complexity must have a traceable reason. Prefer the simplest adequate design rather than the smallest diff or the fewest files.
+
+When the project-local `$complexity-discipline` skill is available, use it when implementation or decomposition introduces non-trivial new structural complexity, especially:
+
+- a new abstraction, dependency, configuration surface, compatibility layer, generic extension point, or custom framework/helper mechanism;
+- machinery that may duplicate repository, existing-dependency, platform, or standard-library capability;
+- substantial newly discovered work that was not clearly present in the approved plan;
+- a decision about whether to account now for a known future constraint whose retrofit may be expensive or difficult to reverse.
+
+For newly discovered work, require a necessity chain back to the approved goal/plan. It should normally be direct outcome work, a necessary enabler, required risk/validation control, or an evidenced constraint. If it fits none of these, leave it optional/out of scope rather than silently growing the implementation.
+
+Do not invoke the discipline for straightforward pattern-following work whose design is already established. Do not use YAGNI as a mechanical veto: a known constraint can justify preserving a seam or invariant now even when the full future feature should remain unbuilt.
+
 ## 5. Child prompt granularity
 
 Give workers enough information to own the deliverable, not instructions for every keystroke.
@@ -152,6 +167,8 @@ When runtime metadata is available, use it to verify role, model, reasoning effo
 linkage before claiming that a configured role actually ran.
 
 ## 8. Review routing
+
+When a Terra review is already justified and the actual diff added meaningful structural machinery, include a proportional complexity check: ask whether any new abstraction, dependency, configuration mechanism, duplicated capability, or generalized extension point lacks a concrete necessity chain. Do not create a dedicated complexity reviewer by default.
 
 Use `terra_reviewer` for a coherent ordinary implementation batch with meaningful correctness,
 integration, regression, failure-handling, or testing risk.
