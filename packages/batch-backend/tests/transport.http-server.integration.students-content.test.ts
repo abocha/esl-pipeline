@@ -29,11 +29,15 @@ describeHttpServerIntegrationSuite(
     mockRecordStudentPayment,
     mockUpsertPrimaryStudentLessonRecurrence,
     mockDeleteProfileContent,
+    mockUpsertProfileContent,
     mockGetProfileRevisionForProfile,
     mockListProfileRevisionsForProfile,
     mockRestoreProfileRevision,
     mockSaveProfileRevisionContent,
     mockDeleteTemplateContent,
+    mockSetDefaultTemplateContent,
+    mockRestoreTemplateRevision,
+    mockActivateTemplateRevisionForTemplate,
     mockRestoreStudentProfile,
     mockUpdateStudentProfile,
   }) => {
@@ -636,6 +640,44 @@ describeHttpServerIntegrationSuite(
       });
     });
 
+    it('PUT /profiles/:id saves profile content with the authenticated creator', async () => {
+      mockUpsertProfileContent.mockClear();
+
+      const response = await app.inject({
+        method: 'PUT',
+        url: '/profiles/profile.md',
+        payload: {
+          content: 'Updated profile content',
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({
+        id: 'profile.md',
+        content: 'Updated content',
+        currentRevisionId: 'revision-latest',
+      });
+      expect(mockUpsertProfileContent).toHaveBeenCalledWith(
+        'profile.md',
+        'Updated profile content',
+        { createdBy: 'test-user-id' },
+      );
+    });
+
+    it('PUT /profiles/:id rejects a missing content field', async () => {
+      mockUpsertProfileContent.mockClear();
+
+      const response = await app.inject({
+        method: 'PUT',
+        url: '/profiles/profile.md',
+        payload: {},
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toMatchObject({ error: 'validation_failed' });
+      expect(mockUpsertProfileContent).not.toHaveBeenCalled();
+    });
+
     it('DELETE /profiles/:id archives profile content', async () => {
       const response = await app.inject({
         method: 'DELETE',
@@ -1009,6 +1051,132 @@ describeHttpServerIntegrationSuite(
         offset: 0,
         order: 'desc',
       });
+    });
+
+    it('POST /templates/:id/default selects the default template', async () => {
+      mockSetDefaultTemplateContent.mockClear();
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/templates/template.md/default',
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({
+        id: 'template.md',
+        label: 'Template',
+        content: 'Template content',
+        currentRevisionId: 'template-revision-1',
+        updatedAt: '2024-01-01T00:00:00.000Z',
+      });
+      expect(mockSetDefaultTemplateContent).toHaveBeenCalledWith('template.md');
+    });
+
+    it('POST /templates/:id/default returns not found when the template is missing', async () => {
+      mockSetDefaultTemplateContent.mockClear();
+      mockSetDefaultTemplateContent.mockResolvedValueOnce(null);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/templates/missing.md/default',
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(response.json()).toMatchObject({ error: 'not_found' });
+      expect(mockSetDefaultTemplateContent).toHaveBeenCalledWith('missing.md');
+    });
+
+    it('POST /templates/:id/revisions/:revisionId/restore restores a template revision', async () => {
+      mockRestoreTemplateRevision.mockClear();
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/templates/template.md/revisions/11111111-1111-4111-8111-111111111111/restore',
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({
+        id: 'template.md',
+        label: 'Template',
+        content: 'Restored template',
+        currentRevisionId: 'template-revision-2',
+        updatedAt: '2024-01-02T00:00:00.000Z',
+      });
+      expect(mockRestoreTemplateRevision).toHaveBeenCalledWith(
+        'template.md',
+        '11111111-1111-4111-8111-111111111111',
+        { createdBy: 'test-user-id' },
+      );
+    });
+
+    it('POST /templates/:id/revisions/:revisionId/restore returns not found for an unknown revision', async () => {
+      mockRestoreTemplateRevision.mockClear();
+      mockRestoreTemplateRevision.mockResolvedValueOnce(null);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/templates/template.md/revisions/11111111-1111-4111-8111-111111111111/restore',
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(response.json()).toMatchObject({ error: 'not_found' });
+      expect(mockRestoreTemplateRevision).toHaveBeenCalledWith(
+        'template.md',
+        '11111111-1111-4111-8111-111111111111',
+        { createdBy: 'test-user-id' },
+      );
+    });
+
+    it('POST /templates/:id/revisions/:revisionId/activate activates a template revision', async () => {
+      mockActivateTemplateRevisionForTemplate.mockClear();
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/templates/template.md/revisions/11111111-1111-4111-8111-111111111111/activate',
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({
+        id: 'template-revision-1',
+        templateId: 'template.md',
+        status: 'active',
+        versionLabel: 'v1',
+        content: 'Template content',
+      });
+      expect(mockActivateTemplateRevisionForTemplate).toHaveBeenCalledWith(
+        'template.md',
+        '11111111-1111-4111-8111-111111111111',
+      );
+    });
+
+    it('POST /templates/:id/revisions/:revisionId/activate returns not found for an unknown revision', async () => {
+      mockActivateTemplateRevisionForTemplate.mockClear();
+      mockActivateTemplateRevisionForTemplate.mockResolvedValueOnce(null);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/templates/template.md/revisions/11111111-1111-4111-8111-111111111111/activate',
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(response.json()).toMatchObject({ error: 'not_found' });
+      expect(mockActivateTemplateRevisionForTemplate).toHaveBeenCalledWith(
+        'template.md',
+        '11111111-1111-4111-8111-111111111111',
+      );
+    });
+
+    it('POST /templates/:id/revisions/:revisionId/activate rejects an invalid revision id', async () => {
+      mockActivateTemplateRevisionForTemplate.mockClear();
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/templates/template.md/revisions/not-a-uuid/activate',
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toMatchObject({ error: 'validation_failed' });
+      expect(mockActivateTemplateRevisionForTemplate).not.toHaveBeenCalled();
     });
 
     it('passes authenticated workspace membership through every student business route', async () => {
