@@ -1009,7 +1009,10 @@ function isValidChangedFileStatus(status) {
 
 function isCiDocsPath(file) {
   return (
-    file === 'AGENTS.md' || file.startsWith('docs/') || file === '.github/pull_request_template.md'
+    file === 'AGENTS.md' ||
+    file.startsWith('.codex/') ||
+    file.startsWith('docs/') ||
+    file === '.github/pull_request_template.md'
   );
 }
 
