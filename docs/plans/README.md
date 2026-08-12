@@ -72,7 +72,6 @@
 4. `docs/plans/student-memory-system-upgrade/README.md`
 5. `docs/plans/student-profile-enrichment/README.md`
 6. `docs/plans/student-area-redesign/README.md`
-7. `docs/plans/documentation-system-overhaul/README.md`
 
 ### Standalone active plans
 
@@ -87,6 +86,7 @@
 ## Historical and Generated Aids
 
 - Archived plans: [`docs/archive/plans/`](../archive/plans/)
+- Completed documentation-system overhaul: [`docs/archive/plans/2026-08/documentation-system-overhaul/`](../archive/plans/2026-08/documentation-system-overhaul/)
 - Archived optimization backlog: [`docs/archive/plans/2026-08/optimization-backlog-2026-08-12.md`](../archive/plans/2026-08/optimization-backlog-2026-08-12.md)
 - Generated plan inventory: [`docs/generated/plans-index.md`](../generated/plans-index.md)
 

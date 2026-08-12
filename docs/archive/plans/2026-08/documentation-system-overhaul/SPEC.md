@@ -2,7 +2,7 @@
 
 ## Status
 
-Approved design specification for goal-backed execution.
+Historical approved design specification for the completed goal-backed execution in PR #187.
 
 The prior repository-wide documentation audit is the principal discovery input. Its factual findings should be verified where necessary; its proposed actions are recommendations, not mechanically binding instructions.
 

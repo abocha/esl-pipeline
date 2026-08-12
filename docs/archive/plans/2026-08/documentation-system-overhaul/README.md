@@ -3,13 +3,13 @@
 ## Meta
 
 - Audience: maintainer + Codex primary orchestrator.
-- Authority Level: active goal-backed execution handoff.
-- Last Verified Against: 2026-08-12 repository/audit state.
+- Authority Level: historical completed Goal Contract.
+- Last Verified Against: 2026-08-13 integrated PR #187 state.
 - Owner: founder-maintainer + primary orchestrator.
-- Status: `roadmap`.
-- Current Focus: implementation and local verification are complete; prepare the single authorized
-  PR and obtain required hosted CI evidence.
-- Exit Trigger: archive this plan directory after the overhaul PR merges or is intentionally abandoned.
+- Status: `archive`.
+- Current Focus: historical evidence only; current documentation and repository sources own ongoing
+  behavior.
+- Exit Trigger: satisfied by archival in PR #187 after implementation, review, and hosted CI completed.
 
 ## Goal Contract
 
@@ -214,4 +214,5 @@ One branch, one eventual PR.
 
 Do not create, push, or open the PR unless the user has explicitly authorized those Git mutations for the run.
 
-After the implementation PR merges, move this whole directory into the repository's normal archived-plan location according to the active plan lifecycle policy.
+This completed Goal Contract, specification, and audit baseline are retained together as historical
+evidence under the repository's dated archived-plan location. They are not active execution routes.

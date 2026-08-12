@@ -5,6 +5,7 @@ Use routed plans under `docs/plans/` for current work.
 
 ## Contents
 
+- `2026-08/` - plans and backlogs completed or retired in August 2026.
 - `completed/` - completed historical plan waves moved out of active routing.
 - `harness-agentic-docs-upgrade/` - historical docs-tooling phase plans.
 - `orchestrator-library-only-roadmap/` - historical orchestrator stage plans.
