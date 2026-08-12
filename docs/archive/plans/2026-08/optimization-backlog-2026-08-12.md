@@ -3,18 +3,40 @@
 ## Meta
 
 - Audience: maintainers and implementation agents.
-- Authority Level: active optimization backlog.
-- Last Verified Against: 2026-06-16 repo state.
+- Authority Level: historical archive.
+- Last Verified Against: 2026-08-12 repo and GitHub state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: after backlog item implementation PRs.
-- Status: `backlog`.
-- Exit Trigger: archive individual wave plans after their implementation PR merges; keep this backlog routed while it contains active or deferred optimization candidates.
-- Current Focus: work from queued backlog items only; completed wave plans are archive trace.
+- Status: `archived`.
+- Exit Trigger: archived on 2026-08-12 after unfinished items were split into GitHub Issues.
+- Current Focus: use the linked GitHub Issues as the canonical backlog; this document is historical trace only.
 
 ## Summary
 
 Prioritized backlog of high-impact technical debt and optimization work discovered during repository chores.
 This backlog is intended to be executed incrementally with safe, test-backed patches.
+
+## Archive disposition
+
+This backlog was revalidated against the repository and live GitHub state on 2026-08-12. GitHub
+Issues is now the canonical backlog; the links below are the durable handoff for work that remains.
+
+| ID  | Disposition                                                                                                                                                                                                                                         |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B1  | Already implemented: `extended-routes.ts` is a 35-line composition layer over route modules.                                                                                                                                                        |
+| B2  | Already completed by Wave 3: migration parity is inventoried and the legacy runtime patch path is explicitly quarantined and CI-frozen. The duplicate [Issue #174](https://github.com/abocha/esl-pipeline/issues/174) was closed during this audit. |
+| B3  | Already implemented: the metadata side-effect contract is documented in code and covered by `application.edit-metadata.test.ts`.                                                                                                                    |
+| B4  | Wave 1 completed the explicit fallback gate; deferred removal remains [Issue #175](https://github.com/abocha/esl-pipeline/issues/175), blocked on the orchestrator metadata-reliability SLO/decision.                                               |
+| B5  | Already implemented: `UploadRateLimiter`, `RedisRateLimiter`, and `NoOpRateLimiter` are separate current implementations.                                                                                                                           |
+| B6  | Already completed by Wave 2 in the scoped high-traffic tests. The duplicate [Issue #176](https://github.com/abocha/esl-pipeline/issues/176) was closed during this audit; residual casts have no newly validated acceptance scope.                  |
+| B7  | [Issue #177](https://github.com/abocha/esl-pipeline/issues/177)                                                                                                                                                                                     |
+| B8  | [Issue #178](https://github.com/abocha/esl-pipeline/issues/178), inbox investigation pending current lane mapping.                                                                                                                                  |
+| B9  | [Issue #179](https://github.com/abocha/esl-pipeline/issues/179), inbox investigation pending a current timing artifact.                                                                                                                             |
+| B10 | Already implemented: homework-memory lineage reuse compares `content_hash` before re-reading or creating same-content entries.                                                                                                                      |
+| B11 | [Issue #180](https://github.com/abocha/esl-pipeline/issues/180)                                                                                                                                                                                     |
+| B12 | Already verified: `BusinessSchedulePage.test.tsx` passes 7/7 with the repository's `jsdom` test environment.                                                                                                                                        |
+| B13 | [Issue #181](https://github.com/abocha/esl-pipeline/issues/181), inbox investigation pending Windows/service-lane reproduction.                                                                                                                     |
+| B14 | [Issue #182](https://github.com/abocha/esl-pipeline/issues/182)                                                                                                                                                                                     |
 
 ## Prioritized Items
 
@@ -37,9 +59,9 @@ This backlog is intended to be executed incrementally with safe, test-backed pat
 
 ## Wave Plans (Completed)
 
-1. [Wave 1 - Quick ROI](../../archive/plans/completed/wave-1-quick-roi.md): `B5`, `B3`, `B4`
-2. [Wave 2 - Maintainability](../../archive/plans/completed/wave-2-maintainability.md): `B6`, `B1`
-3. [Wave 3 - Schema Unification](../../archive/plans/completed/wave-3-schema-unification.md): `B2`
+1. [Wave 1 - Quick ROI](../completed/wave-1-quick-roi.md): `B5`, `B3`, `B4`
+2. [Wave 2 - Maintainability](../completed/wave-2-maintainability.md): `B6`, `B1`
+3. [Wave 3 - Schema Unification](../completed/wave-3-schema-unification.md): `B2`
 
 ## Wave Status
 
