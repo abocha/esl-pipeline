@@ -2,14 +2,17 @@
 
 ## Purpose
 
-This document defines how an approved implementation plan, when applicable, is translated into
-delegated Codex work. Direct execution and targeted discipline remain available under root
-[`AGENTS.md`](../AGENTS.md); delegation is not automatic.
+This document defines how an approved implementation plan or Goal Contract, as applicable, is
+translated into delegated Codex work. For plan-backed execution, the approved implementation plan is
+the scope and acceptance contract. For goal-backed orchestration, the approved Goal Contract is the
+durable scope and completion contract, while the current implementation plan/strategy is revisable
+beneath it. Direct execution and targeted discipline remain available under root [`AGENTS.md`](../AGENTS.md);
+delegation is not automatic.
 
-The task authorization and approved plan remain the scope and acceptance contract. This document
-controls delegation granularity, role routing, context economy, review routing, and primary-agent
-integration. [`.codex/PROJECT.md`](PROJECT.md) adapts these mechanics to ESL Pipeline, while
-[`docs/reference/agents-ssot.md`](../docs/reference/agents-ssot.md) remains the product/runtime SSOT.
+This document controls delegation granularity, role routing, context economy, review routing, and
+primary-agent integration. [`.codex/PROJECT.md`](PROJECT.md) adapts these mechanics to ESL Pipeline,
+while [`docs/reference/agents-ssot.md`](../docs/reference/agents-ssot.md) remains the product/runtime
+SSOT.
 
 The intended delegated workflow is:
 
@@ -23,10 +26,81 @@ approved task or plan
 The primary agent always owns decomposition, integration, repository accountability,
 repository-level validation, authorized Git mutations, and the final result.
 
+## 0. Goal-backed orchestration
+
+Plan-backed execution remains the default execution variant within ESL's `Full design and planning`
+path. Use the approved implementation plan as the scope and acceptance contract when the desired
+behavior is stable, the implementation path is sufficiently known, and durable goal state would add
+more ceremony than information.
+
+Goal-backed orchestration is optional and requires explicit user selection or approval. Use it only
+when the outcome and acceptance boundary are already stable and verifiable, the implementation
+strategy is expected to adapt materially as repository evidence emerges, several dependent ownership
+boundaries or root turns may be needed, durable outcome state across a long-lived Sol primary is
+useful, and outcome-level completion is meaningfully different from exhausting the current task list.
+Do not infer goal-backed mode from work being large, multi-step, delegated, difficult, or long-running.
+If WHAT success means or WHETHER to pursue the outcome remains unresolved, continue interactive
+design/exploration instead of creating a durable goal.
+
+### Root goal lifecycle
+
+The Sol primary owns exactly one durable root goal for a goal-backed run. At intake or resumption, it
+should:
+
+1. read the repository instructions, approved Goal Contract/handoff, relevant ESL SSOT/routed docs,
+   and [`.codex/PROJECT.md`](PROJECT.md);
+2. inspect the current thread goal with `get_goal` when goal tools are available;
+3. create the explicitly approved concise objective only when there is no unfinished active goal;
+4. reuse a matching active goal rather than duplicate it;
+5. escalate a conflicting active goal or materially changed desired outcome rather than silently
+   replacing or redefining the scope; and
+6. derive the current plan, tasks, and child routing from fresh repository evidence under the stable
+   goal.
+
+Runtime semantics are capability-dependent. When available, Codex may expose `get_goal`,
+`create_goal`, and `update_goal`: creation is explicit-request-only, an unfinished active goal
+prevents duplicate creation, and updating changes goal status rather than rewriting the objective.
+Omit a token budget unless the user explicitly requests one. Follow the runtime's supported lifecycle
+for statuses such as `complete` or `blocked`; do not hard-code a transient blocked threshold or other
+runtime-specific implementation detail into repository policy.
+
+The persisted runtime objective is a concise representation of the approved outcome, not a replacement
+for the richer Goal Contract. The goal is stable unless the human intentionally changes the desired
+outcome. Approved architecture, behavioral, contract, and risk-sensitive decisions remain stable
+unless new evidence reaches an approval boundary. The implementation plan and current task/child
+routing are revisable strategy owned by the primary. A material objective change is escalation, not
+normal plan mutation; never mark an unfinished goal complete merely to replace it.
+
+### Children and outcome audits
+
+The Sol primary is the sole owner of durable goal state for the run. Children do not create durable
+subgoals. Luna, Terra, and reviewer assignments remain ordinary compressed ownership-boundary
+assignments with local acceptance criteria, stop conditions, and only the mutation authority explicitly
+granted by the existing ESL workflow and repository instructions. Goal-backed execution grants no extra
+write, architecture, commit, deployment, review, or other authority to the primary or children. Existing
+ESL role contracts remain unchanged. A human
+may deliberately start a separate goal-backed root thread later; that is outside the current run.
+
+After meaningful implementation or review phases, the primary should audit progress against the root
+outcome rather than only checking whether the current task list is empty. Before marking the root goal
+complete, perform the existing final-integration checks plus an outcome audit:
+
+- map every required outcome and acceptance criterion to actual evidence;
+- inspect the integrated repository state and diff;
+- run required repository-level ESL validators;
+- account for required CI, manual, or environment-owned evidence;
+- identify any required item still outstanding; and
+- confirm that task exhaustion has not been mistaken for outcome completion.
+
+If required evidence is missing, do not claim completion. Material goal or scope conflicts must be
+escalated through the runtime-supported path. All existing complexity-discipline, role-routing,
+review, mutation, authorization, and final-integration rules below remain unchanged.
+
 ## 1. Parent plan versus child assignment
 
 Detailed implementation plans are written for the primary agent. They may contain fine-grained TDD,
-edit, validation, sequencing, and commit steps.
+edit, validation, sequencing, and commit steps. In a goal-backed run, the current plan/strategy may
+remain partial and is revised from repository evidence beneath the stable Goal Contract.
 
 Do not mechanically copy every fine-grained plan step into a delegated child's prompt.
 
@@ -40,8 +114,10 @@ A child assignment should normally contain:
 - explicit stop or escalation conditions;
 - mutation and commit authorization when applicable.
 
-The primary retains the full plan checklist and verifies that all requirements were satisfied after
-delegated work returns.
+For plan-backed execution, the primary retains the full plan checklist and verifies that all
+requirements were satisfied after delegated work returns. For goal-backed orchestration, the primary
+retains and revises the current strategy/checklist beneath the Goal Contract, then verifies the
+outcome requirements after delegated work returns.
 
 ## 2. Delegate by ownership boundary
 
@@ -225,13 +301,20 @@ Delegated workers do not own final completion.
 
 After delegated implementation returns, the primary agent:
 
-1. checks the integrated diff against the full approved task or plan;
+1. checks the integrated diff against the approved implementation plan for plan-backed execution, or
+   against the approved Goal Contract/outcome requirements and current implementation strategy for
+   goal-backed orchestration;
 2. verifies ownership boundaries were respected;
 3. resolves or routes review findings;
 4. runs the repository-level validation selected by [`.codex/PROJECT.md`](PROJECT.md) and the ESL
    validation SSOT;
-5. performs environment or manual validation required by the plan;
+5. performs environment or manual validation required by the approved implementation plan for
+   plan-backed execution, or by the Goal Contract/outcome requirements and current implementation
+   strategy for goal-backed orchestration;
 6. reports actual commands, outcomes, remaining gaps, and unperformed environment-owned checks.
+
+For goal-backed orchestration, the outcome audit in section 0 remains authoritative for completion;
+this section does not replace it with task-list exhaustion.
 
 Delegated validation is evidence, not a substitute for primary integration responsibility.
 

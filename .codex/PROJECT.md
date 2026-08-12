@@ -102,7 +102,10 @@ Do not change user-level Codex configuration from repository tasks.
 
 ## Primary integration notes
 
-- Treat approved plans as scope and acceptance contracts, not mandatory agent-per-task scripts.
+- For plan-backed execution, treat the approved implementation plan as the scope and acceptance
+  contract, not a mandatory agent-per-task script. For goal-backed orchestration, the approved Goal
+  Contract is the durable scope and completion contract; the current implementation plan is revisable
+  strategy.
 - Prefer the smallest useful role set and fresh child contexts for heterogeneous registered roles.
 - Run the proportionate ESL repository gate before expensive Sol review when applicable.
 - Use a final whole-branch Terra review only for substantial multi-boundary work where cross-boundary
