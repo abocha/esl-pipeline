@@ -1,6 +1,23 @@
-import { describe, expect, it } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { cp, mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { stitchPromptEnvelope, stitchPromptPayload } from '../src/application/prompt-assembly.js';
+
+const tempDirs: string[] = [];
+
+async function createTempDir(prefix: string): Promise<string> {
+  const dir = await mkdtemp(path.join(tmpdir(), prefix));
+  tempDirs.push(dir);
+  return dir;
+}
+
+afterEach(async () => {
+  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+});
 
 describe('application/prompt-assembly', () => {
   it('places the template in instructions and runtime blocks in envelope input', () => {
@@ -96,5 +113,45 @@ describe('application/prompt-assembly', () => {
     expect(result).toContain('[RECENT_LESSON_MEMORY]\nNot available.');
     expect(result).toContain('[RECENT_HOMEWORK_MEMORY]\nNot available.');
     expect(result).toContain('[UNRESOLVED_ISSUES]\nNot available.');
+  });
+
+  it('resolves relative prompt assets from the runtime root in a deployed dist layout', async () => {
+    const fixtureRoot = await createTempDir('batch-backend-runtime-root-');
+    const runtimeRoot = path.join(fixtureRoot, 'app');
+    const distRoot = path.join(runtimeRoot, 'dist');
+    const sourceDist = path.resolve(import.meta.dirname, '..', 'dist');
+    await cp(sourceDist, distRoot, { recursive: true });
+
+    const absoluteAssetPath = path.join(fixtureRoot, 'external', 'profile.md');
+    const moduleUrl = pathToFileURL(path.join(distRoot, 'application', 'prompt-assembly.js')).href;
+    const args = [
+      '--input-type=module',
+      '--eval',
+      `import { resolveRepoPath } from ${JSON.stringify(moduleUrl)};\n` +
+        `console.log(JSON.stringify({ relative: resolveRepoPath('packages/batch-backend/prompt-assets/templates/default.md'), absolute: resolveRepoPath(${JSON.stringify(absoluteAssetPath)}) }));`,
+    ];
+    const expected = {
+      relative: path.join(
+        runtimeRoot,
+        'packages',
+        'batch-backend',
+        'prompt-assets',
+        'templates',
+        'default.md',
+      ),
+      absolute: absoluteAssetPath,
+    };
+
+    for (const env of [
+      { ...process.env, PIPELINE_CWD: runtimeRoot },
+      Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== 'PIPELINE_CWD')),
+    ]) {
+      const output = execFileSync(process.execPath, args, {
+        cwd: runtimeRoot,
+        encoding: 'utf8',
+        env,
+      });
+      expect(JSON.parse(output)).toEqual(expected);
+    }
   });
 });

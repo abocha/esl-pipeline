@@ -83,5 +83,6 @@ function formatLabeledBlock(label: string, content: string): string {
 }
 
 export function resolveRepoPath(...segments: string[]): string {
-  return path.resolve(path.join(import.meta.dirname, '..', '..', '..', '..'), ...segments);
+  const runtimeRoot = process.env.PIPELINE_CWD?.trim() || process.cwd();
+  return path.resolve(runtimeRoot, ...segments);
 }

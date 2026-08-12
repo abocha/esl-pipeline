@@ -80,6 +80,7 @@ test('maintenance-only paths accept release:none', () => {
     '.codex/agents/terra_explorer.toml',
     'AGENTS.md',
     'docs/reference/VERSIONING_MODEL.md',
+    'docs/prompt-gallery/retired.md',
     'scripts/check/ci-workflow-structure.test.mjs',
     'scripts/docs/check-core-docs.mjs',
     'scripts/test/run-agent-vitest-lane.mjs',
@@ -101,7 +102,7 @@ test('maintenance-only paths accept release:none', () => {
 
 test('runtime, dependency, deployment, prompt, and unknown paths require a release', () => {
   for (const path of [
-    'docs/prompt-gallery/assignment.md',
+    'packages/batch-backend/prompt-assets/assignment.md',
     'packages/batch-frontend/src/main.tsx',
     'package.json',
     'pnpm-lock.yaml',

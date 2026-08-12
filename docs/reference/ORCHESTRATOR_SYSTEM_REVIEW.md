@@ -5,7 +5,7 @@
 - Audience: maintainers and AI agents planning orchestrator refactors.
 - Read Time: 10 minutes.
 - Authority Level: reference map + implementation baseline.
-- Last Verified Against: 2026-04-17 repo state.
+- Last Verified Against: 2026-08-12 repo state.
 - Owner: orchestrator + batch-backend maintainers.
 - Review Cadence: monthly and before major refactor slices.
 - Status: `active`.
@@ -44,10 +44,16 @@
 
 ### Stage Flow (Canonical)
 
-- `validate` -> `import` -> `colorize` -> `tts` -> `upload` -> `add-audio` -> `manifest`
+- `validate` -> `import` -> `colorize` -> `voice-plan` -> `speech-plan` -> `tts` -> `upload` ->
+  `add-audio` -> `manifest`
+- `voice-plan` resolves provider-scoped voice assignments and `speech-plan` resolves the speech
+  performance plan before `tts` synthesizes audio. Both stages can be skipped when TTS is disabled
+  or the relevant audio family is not requested.
 - `rerun` is regeneration-intent driven:
   - `republishOnly` derives `add-audio -> manifest`
   - any regeneration target derives `tts -> upload -> add-audio -> manifest`
+  - a study-text `tts` regeneration emits `voice-plan` and `speech-plan` internally before TTS;
+    the rerun planner's executable target list remains `tts`, `upload`, and `add-audio`
 - Rerun planning is now family-aware, not only stage-aware:
   - study-text audio
   - pronunciation primary/sentence-anchor audio

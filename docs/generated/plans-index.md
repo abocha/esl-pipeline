@@ -11,6 +11,9 @@
 
 | Kind | Title | Status | Routed | Editable | Current Focus | Exit Trigger | Path |
 | --- | --- | --- | --- | --- | --- | --- | --- |
+| archive | Documentation Audit Baseline | archived | no | no |  |  | `docs/archive/plans/2026-08/documentation-system-overhaul/AUDIT_BASELINE.md` |
+| archive | Documentation System Overhaul | archive | no | no | historical evidence only; current documentation and repository sources own ongoing | satisfied by archival in PR #187 after implementation, review, and hosted CI completed | `docs/archive/plans/2026-08/documentation-system-overhaul/README.md` |
+| archive | ESL Pipeline Documentation System Overhaul Specification | archived | no | no |  |  | `docs/archive/plans/2026-08/documentation-system-overhaul/SPEC.md` |
 | archive | Optimization Backlog | archived | no | no | use the linked GitHub Issues as the canonical backlog; this document is historical trace only | archived on 2026-08-12 after unfinished items were split into GitHub Issues | `docs/archive/plans/2026-08/optimization-backlog-2026-08-12.md` |
 | archive | Student-Memory Throughput Design Note | archive | no | no |  |  | `docs/archive/plans/completed/2026-06-16-student-memory-throughput-design-note.md` |
 | archive | legacy-retirement-plan_wave1.md | archived | no | no |  |  | `docs/archive/plans/completed/legacy-retirement/legacy-retirement-plan_wave1.md` |
@@ -25,6 +28,7 @@
 | archive | Harness-Aligned Agentic Docs Upgrade - Next Phases | archived | no | no |  | archive after the remaining docs-tooling phases are implemented or superseded by docs governance | `docs/archive/plans/harness-agentic-docs-upgrade/README.md` |
 | archive | Verification, Acceptance, and Assumptions | archived | no | no |  |  | `docs/archive/plans/harness-agentic-docs-upgrade/verification-acceptance-and-assumptions.md` |
 | archive | CLI Removal Release and Migration Note Template | archived | no | no |  |  | `docs/archive/plans/orchestrator-library-only-roadmap/cli-removal-release-and-migration-note-template.md` |
+| archive | Orchestrator Library-Only Roadmap | archive | no | no |  |  | `docs/archive/plans/orchestrator-library-only-roadmap/README.md` |
 | archive | Stage 1: Baseline and Ownership Lock | archived | no | no |  |  | `docs/archive/plans/orchestrator-library-only-roadmap/stage-1-baseline-and-ownership-lock.md` |
 | archive | Stage 2: CLI Sunset Declaration | archived | no | no |  |  | `docs/archive/plans/orchestrator-library-only-roadmap/stage-2-cli-sunset-declaration.md` |
 | archive | Stage 3: Shared Duplication Extraction | archived | no | no |  |  | `docs/archive/plans/orchestrator-library-only-roadmap/stage-3-shared-duplication-extraction.md` |
@@ -102,7 +106,6 @@
 | standalone | Legacy Retirement Backlog | active | yes | yes | use this file as the active legacy-retirement queue; completed wave plans are archive trace | archive after all queued legacy retirement items are done or moved into SSOT/runbooks | `docs/plans/legacy-retirement/legacy-retirement-backlog.md` |
 | standalone | Legacy Retirement Execution Playbook | active | yes | yes | use this file as the active per-item retirement workflow until it is promoted into durable repo guidance | archive after the legacy-retirement backlog is complete or the workflow is promoted into durable repo guidance | `docs/plans/legacy-retirement/legacy-retirement-execution-playbook.md` |
 | standalone | Legacy Retirement Inventory | active | yes | yes | update live legacy item status here only when a retirement PR changes an item | archive after all live legacy contracts are retired or represented in SSOT/runbooks | `docs/plans/legacy-retirement/legacy-retirement-inventory.md` |
-| topic | Orchestrator Library-Only Roadmap | roadmap | yes | yes | use this README with the orchestrator SSOT and ownership ledger to select the next library-only slice | archive after the library-only cutover is complete and current behavior is represented in SSOT, package READMEs, and release docs | `docs/plans/orchestrator-library-only-roadmap/README.md` |
 | topic | PostgreSQL Hardening + Offline Data-Preserving Migration Plan | roadmap | yes | yes | use this README with live schema and operations docs for remaining DB governance work | archive after migration governance and Postgres operations are fully represented in runbooks, schema docs, and package READMEs | `docs/plans/postgres-hardening-offline-migration/README.md` |
 | router | Plans Directory | router | no | yes |  |  | `docs/plans/README.md` |
 | standalone | Slice 2: Invite Signup to Workspace to First Student | active | yes | yes | implementation is shipped; capture one clean hosted invite acceptance -> default | archive or update after the Slice 2 implementation PR/hosted verification lands | `docs/plans/slice-2-invite-workspace-first-student.md` |

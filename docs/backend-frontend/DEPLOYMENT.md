@@ -224,8 +224,9 @@ Merge` revalidates the release decision, creates the release commit and `vX.Y.Z`
    publishes a complete backend, frontend, and Telegram bot bundle to GHCR with the release commit
    SHA tag and the `vX.Y.Z` tag. It rebuilds only affected images and server-side retags unchanged
    manifests from the previous version. A validated maintenance-only `release:none` merge creates no
-   release or images and therefore has nothing to deploy. `docs/prompt-gallery/**` is backend runtime
-   content and never qualifies for `release:none`.
+   release or images and therefore has nothing to deploy.
+   `packages/batch-backend/prompt-assets/**` is backend runtime content and never qualifies for
+   `release:none`.
 
    If publication fails after the release commit and tag exist, do not deploy that release. After
    confirming which images were already published, use the manually dispatched
@@ -384,9 +385,11 @@ docker compose -p esl-pipeline-prod -f /opt/esl-pipeline/docker-compose.prod.yml
   exec batch-backend node dist/tools/bootstrap-prompt-assets.js
 ```
 
-The production backend image copies `docs/prompt-gallery` into `/app/docs/prompt-gallery`.
+The production backend image copies `packages/batch-backend/prompt-assets` into
+`/app/packages/batch-backend/prompt-assets`.
 Keep `PROMPT_TEMPLATE_PATH` and `PROMPT_PROFILE_PATH` relative to `/app` or explicitly under
-`/app/docs/...`; paths such as `/docs/...` point outside the runtime image and fail bootstrap.
+`/app/packages/batch-backend/prompt-assets/...`; paths such as `/docs/...` point outside the runtime
+image and fail bootstrap.
 
 Details: [`docs/operations/prompt-gallery-bootstrap.md`](../operations/prompt-gallery-bootstrap.md)
 

@@ -324,12 +324,13 @@ Do not run that profile unless the bot is intentionally enabled with complete cr
 ## Prompt Assets
 
 Fresh or restored hosted databases need DB prompt assets bootstrapped before real assignment
-generation. The production backend image runs from `/app` and copies prompt-gallery files to
-`/app/docs/prompt-gallery`, so keep prompt paths relative to `/app` or explicitly under `/app`.
+generation. The production backend image runs from `/app` and copies runtime-owned prompt assets to
+`/app/packages/batch-backend/prompt-assets`, so keep prompt paths relative to `/app` or explicitly
+under `/app/packages/batch-backend/prompt-assets`.
 
 ```bash
-PROMPT_TEMPLATE_PATH=docs/prompt-gallery/templates/hw_prompt_definitive.md
-PROMPT_PROFILE_PATH=docs/prompt-gallery/profiles/PROFILE_2025-11-16.md
+PROMPT_TEMPLATE_PATH=packages/batch-backend/prompt-assets/templates/hw_prompt_definitive.md
+PROMPT_PROFILE_PATH=packages/batch-backend/prompt-assets/profiles/PROFILE_2025-11-16.md
 ```
 
 Do not use `/docs/...` paths in production containers.
@@ -445,8 +446,9 @@ Also verify from outside the VPS that raw frontend, backend, Postgres, Redis, an
 not publicly reachable, that `transcribe-worker` and `student-memory-worker` have no public ports,
 and that the `caddy_data` and `caddy_config` Docker volumes persist across container recreation.
 
-The production image copies `docs/prompt-gallery` into `/app/docs/prompt-gallery` so prompt asset
-bootstrap can use the documented prompt-gallery paths inside the runtime container.
+The production image copies `packages/batch-backend/prompt-assets` into
+`/app/packages/batch-backend/prompt-assets` so prompt asset bootstrap can use the documented
+runtime-owned paths inside the container.
 
 ## Backup Recovery Model
 

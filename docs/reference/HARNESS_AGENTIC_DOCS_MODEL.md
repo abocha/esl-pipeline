@@ -55,4 +55,4 @@
 
 - [`docs/reference/DOCS_GOVERNANCE.md`](DOCS_GOVERNANCE.md)
 - [`docs/reference/DOCS_GARDENING_PLAYBOOK.md`](DOCS_GARDENING_PLAYBOOK.md)
-- [`docs/reference/DOCS_QUALITY_SCORE.md`](DOCS_QUALITY_SCORE.md)
+- [`docs/generated/README.md`](../generated/README.md)
