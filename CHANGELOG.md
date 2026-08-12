@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.5.5] - 2026-08-12
+
+### Changed
+
+- Automated release from PR #183: Establish GitHub Issues intake and archive optimization backlog (https://github.com/abocha/esl-pipeline/pull/183)
+
 ## [10.5.4] - 2026-08-11
 
 ### Changed
