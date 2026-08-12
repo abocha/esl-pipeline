@@ -63,6 +63,11 @@ const ciScopeCases = [
     [false, false, false, false, true],
   ],
   [
+    'Codex maintainer guidance only',
+    records('M', '.codex/ORCHESTRATION.md'),
+    [false, false, false, false, true],
+  ],
+  [
     'frontend',
     records('M', 'packages/batch-frontend/src/main.tsx'),
     [true, true, false, false, false],
