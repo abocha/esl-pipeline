@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildPureTestEnv, resolveValidationLaneEnv } from './pure-test-env.mjs';
+import {
+  buildPureTestEnv,
+  PURE_TEST_SCRUBBED_ENV_NAMES,
+  resolveValidationLaneEnv,
+} from './pure-test-env.mjs';
 
 const poisonedEnv = {
   PATH: 'toolchain-path',
@@ -18,13 +22,9 @@ const poisonedEnv = {
   REDIS_HOST: 'ambient-redis',
   REDIS_PORT: '6379',
   DOCKER_HOST: 'tcp://ambient-docker:2375',
-  OPENAI_API_KEY: 'openai-secret',
-  ELEVENLABS_API_KEY: 'elevenlabs-secret',
-  INWORLD_API_KEY: 'inworld-secret',
-  AWS_ACCESS_KEY_ID: 'aws-id',
-  AWS_SECRET_ACCESS_KEY: 'aws-secret',
-  AWS_SESSION_TOKEN: 'aws-session',
-  GOOGLE_APPLICATION_CREDENTIALS: 'google-secret.json',
+  ...Object.fromEntries(
+    PURE_TEST_SCRUBBED_ENV_NAMES.map((key) => [key, `${key.toLowerCase()}-secret`]),
+  ),
 };
 
 test('pure test environments keep toolchain state and remove ambient prerequisites', () => {
@@ -51,27 +51,25 @@ test('pure test environments keep toolchain state and remove ambient prerequisit
     },
   );
 
+  for (const key of PURE_TEST_SCRUBBED_ENV_NAMES) {
+    assert.equal(key in pureEnv, false, `${key} must not enter a pure test lane`);
+  }
+
   for (const key of [
-    'BATCH_BACKEND_TEST_PG',
-    'BATCH_BACKEND_TEST_REDIS',
     'PG_ENABLED',
     'PG_CONNECTION_STRING',
     'REDIS_ENABLED',
     'REDIS_HOST',
     'REDIS_PORT',
-    'DOCKER_HOST',
-    'OPENAI_API_KEY',
-    'ELEVENLABS_API_KEY',
-    'INWORLD_API_KEY',
-    'AWS_ACCESS_KEY_ID',
-    'AWS_SECRET_ACCESS_KEY',
-    'AWS_SESSION_TOKEN',
-    'GOOGLE_APPLICATION_CREDENTIALS',
   ]) {
     assert.equal(key in pureEnv, false, `${key} must not enter a pure test lane`);
   }
 
-  assert.equal(poisonedEnv.OPENAI_API_KEY, 'openai-secret', 'source environment is not mutated');
+  assert.equal(
+    poisonedEnv.OPENAI_API_KEY,
+    'openai_api_key-secret',
+    'source environment is not mutated',
+  );
 });
 
 test('canonical unit lanes use the pure environment', () => {
