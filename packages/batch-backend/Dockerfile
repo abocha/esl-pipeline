@@ -49,7 +49,7 @@ RUN apt-get update \
 WORKDIR /app
 
 COPY --from=build --chown=node:node /app/deployed/ ./
-COPY --chown=node:node docs/prompt-gallery ./docs/prompt-gallery
+COPY --chown=node:node packages/batch-backend/prompt-assets ./packages/batch-backend/prompt-assets
 
 RUN mkdir -p /app/tmp /app/uploads \
     && chown -R node:node /app/tmp /app/uploads

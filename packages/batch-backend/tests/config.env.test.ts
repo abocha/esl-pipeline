@@ -84,6 +84,24 @@ describe('config/env - core defaults', () => {
       },
     );
   });
+
+  it('uses the batch-backend runtime prompt asset defaults when no overrides are set', async () => {
+    await withEnv(
+      {
+        NODE_ENV: 'test',
+        PROMPT_TEMPLATE_PATH: undefined,
+        PROMPT_PROFILE_PATH: undefined,
+      },
+      async () => {
+        const cfg = await loadConfigFresh();
+
+        expect(cfg.prompt).toMatchObject({
+          templatePath: 'packages/batch-backend/prompt-assets/templates/hw_prompt_definitive.md',
+          defaultProfilePath: 'packages/batch-backend/prompt-assets/profiles/PROFILE_2025-11-16.md',
+        });
+      },
+    );
+  });
 });
 
 describe('config/env - OpenAI target-model gate', () => {

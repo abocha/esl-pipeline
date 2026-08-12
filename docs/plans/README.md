@@ -5,7 +5,7 @@
 - Audience: maintainers and AI agents working from plan docs.
 - Read Time: 4 minutes.
 - Authority Level: planning router.
-- Last Verified Against: 2026-07-29 repo state.
+- Last Verified Against: 2026-08-12 repository planning topology.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: monthly or after major planning-topology changes.
 - Status: `router`.
@@ -67,12 +67,11 @@
 ### Topic directories
 
 1. `docs/plans/postgres-hardening-offline-migration/README.md`
-2. `docs/plans/orchestrator-library-only-roadmap/README.md`
-3. `docs/plans/stt-multi-provider-refactor/README.md`
-4. `docs/plans/telegram-ops-control-panel-hardening/README.md`
-5. `docs/plans/student-memory-system-upgrade/README.md`
-6. `docs/plans/student-profile-enrichment/README.md`
-7. `docs/plans/student-area-redesign/README.md`
+2. `docs/plans/stt-multi-provider-refactor/README.md`
+3. `docs/plans/telegram-ops-control-panel-hardening/README.md`
+4. `docs/plans/student-memory-system-upgrade/README.md`
+5. `docs/plans/student-profile-enrichment/README.md`
+6. `docs/plans/student-area-redesign/README.md`
 
 ### Standalone active plans
 
@@ -87,6 +86,7 @@
 ## Historical and Generated Aids
 
 - Archived plans: [`docs/archive/plans/`](../archive/plans/)
+- Completed documentation-system overhaul: [`docs/archive/plans/2026-08/documentation-system-overhaul/`](../archive/plans/2026-08/documentation-system-overhaul/)
 - Archived optimization backlog: [`docs/archive/plans/2026-08/optimization-backlog-2026-08-12.md`](../archive/plans/2026-08/optimization-backlog-2026-08-12.md)
 - Generated plan inventory: [`docs/generated/plans-index.md`](../generated/plans-index.md)
 

@@ -4,8 +4,9 @@
 
 - Audience: maintainers and AI agents making cross-package refactor decisions.
 - Read Time: 8 minutes.
-- Authority Level: decision ledger for Keep/Move/Extract/Retire outcomes.
-- Last Verified Against: 2026-05-12 repo state.
+- Authority Level: decision ledger for Keep/Move/Extract/Retire outcomes; the system review owns
+  the canonical runtime stage map.
+- Last Verified Against: 2026-08-12 repo state.
 - Owner: orchestrator + batch-backend maintainers.
 - Review Cadence: update on every ownership-affecting refactor PR.
 - Status: `active`.
@@ -28,11 +29,11 @@ Decision outcomes:
 - `Extract shared`: create/reuse shared package primitive.
 - `Retire`: remove obsolete or duplicate behavior.
 
-## Ownership Matrix (2026-05-12)
+## Ownership Matrix (source-verified 2026-08-12)
 
 | Capability                                                                                                                | Current Location                                              | Decision           | Target                                                             | Rationale                                                                                                | Compatibility Impact                                             | Migration Sequence                                                                    |
 | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- | ------------------ | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Canonical pipeline stages (`validate/import/colorize/tts/upload/add-audio/manifest`)                                      | orchestrator runtime                                          | Keep               | orchestrator                                                       | This is canonical pipeline domain behavior and already the integration contract.                         | High if moved. Keep stable.                                      | N/A                                                                                   |
+| Canonical pipeline stages (system review owns ordered nine-stage flow)                                                    | orchestrator runtime                                          | Keep               | orchestrator                                                       | Canonical pipeline domain behavior; ordered stage map lives in system review.                            | High if moved. Keep stable.                                      | N/A                                                                                   |
 | Manifest lifecycle and rerun planner semantics                                                                            | orchestrator                                                  | Keep               | orchestrator                                                       | Strong contract coupling with pipeline behavior and existing manifest schema docs/tests.                 | High if moved. Keep stable.                                      | N/A                                                                                   |
 | Stage event schema and stage-level observability emission (`stage.*`, pipeline metrics tags)                              | orchestrator runtime                                          | Keep               | orchestrator                                                       | Event semantics describe pipeline behavior and must evolve with stage contracts.                         | High for downstream integrations if drifted.                     | N/A                                                                                   |
 | Worker process model, IPC cancellation relay, fallback handling                                                           | batch-backend worker infra                                    | Keep               | batch-backend                                                      | Operational concern for backend workers, queue lifecycle, and service runtime isolation.                 | Medium if moved. Better boundary as-is.                          | N/A                                                                                   |

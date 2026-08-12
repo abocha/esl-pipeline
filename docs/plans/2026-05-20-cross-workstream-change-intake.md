@@ -550,9 +550,9 @@ removal, not a broader redesign.
   - `packages/batch-backend/tests/application.prompt-voice-capabilities.test.ts`
   - `packages/batch-backend/tests/application.prompt-package.create-store.test.ts`
 - Prompt-template guidance that consumes the capability block:
-  - `docs/prompt-gallery/templates/hw_prompt_definitive.md`
-  - `docs/reference/HOMEWORK_PROMPT_DEFINITIVE_ASSEMBLY_DRAFT.md`
-  - `docs/reference/HOMEWORK_PROMPT_CANDIDATE_TEMPLATE_PAYLOAD.md`
+  - `packages/batch-backend/prompt-assets/templates/hw_prompt_definitive.md`
+  - `docs/archive/drafts/2026-06/HOMEWORK_PROMPT_DEFINITIVE_ASSEMBLY_DRAFT.md`
+  - `docs/archive/drafts/2026-06/HOMEWORK_PROMPT_CANDIDATE_TEMPLATE_PAYLOAD.md`
 
 ### Current Behavior
 

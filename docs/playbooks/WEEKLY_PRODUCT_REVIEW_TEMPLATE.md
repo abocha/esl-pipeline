@@ -3,12 +3,13 @@
 ## Meta
 
 - Audience: founder and core maintainers.
-- Last Verified Against: 2026-05-12 repo state.
+- Last Verified Against: 2026-08-12 repository planning and readiness routes.
 - Cadence: weekly.
 - Status: `playbook`.
 - Inputs:
-  - `docs/reference/V1_IMPLEMENTATION_TRACKER.md`
   - `docs/reference/PRODUCT_NORTH_STAR_AND_READINESS.md`
+  - `docs/plans/2026-06-23-alpha-readiness.md`
+  - current GitHub issues selected under `docs/operations/github-issue-intake-and-codex-work-selection.md`
 
 ## Week Header
 
@@ -42,9 +43,9 @@
    Evidence:
    Frequency:
 
-## 3) Tracker Progress This Week
+## 3) Delivery Progress This Week
 
-- Completed checklist items (from `V1_IMPLEMENTATION_TRACKER.md`):
+- Completed active-plan outcomes or GitHub issues (include evidence links):
   - [ ]
   - [ ]
   - [ ]

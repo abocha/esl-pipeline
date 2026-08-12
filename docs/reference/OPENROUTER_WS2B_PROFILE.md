@@ -201,6 +201,6 @@ Do not implement fields or methods not declared in this profile unless tracker s
 - `docs/reference/GENERATION_PROVIDER_POLICY.md`
 - `docs/reference/OPENAI_RESPONSES_WS2B_PROFILE.md`
 - `docs/reference/GOOGLE_GENAI_WS2B_PROFILE.md`
-- `docs/reference/V1_IMPLEMENTATION_TRACKER.md`
+- `docs/reference/PRODUCT_NORTH_STAR_AND_READINESS.md`
 - `docs/reference/PRESET_V2_SPEC.md`
 - `docs/reference/env.md`

@@ -30,7 +30,7 @@
 ## Current Baseline
 
 - active prompt snapshot:
-  - `docs/prompt-gallery/templates/hw_prompt_definitive.md`
+  - `packages/batch-backend/prompt-assets/templates/hw_prompt_definitive.md`
 - runtime default lineage:
   - learning preset id: `general-english`
   - learning preset version: `v1`
@@ -99,5 +99,4 @@ Out of scope:
 - [`docs/reference/STUDENT_MEMORY_EXTRACTION_CAPABILITY_POLICY.md`](STUDENT_MEMORY_EXTRACTION_CAPABILITY_POLICY.md)
 - [`docs/reference/STUDENT_MEMORY_EXTRACTION_SCHEMA_SPEC.md`](STUDENT_MEMORY_EXTRACTION_SCHEMA_SPEC.md)
 - [`docs/reference/GENERATION_PROVIDER_POLICY.md`](GENERATION_PROVIDER_POLICY.md)
-- [`docs/reference/V1_IMPLEMENTATION_TRACKER.md`](V1_IMPLEMENTATION_TRACKER.md)
 - [`docs/reference/PRODUCT_NORTH_STAR_AND_READINESS.md`](PRODUCT_NORTH_STAR_AND_READINESS.md)

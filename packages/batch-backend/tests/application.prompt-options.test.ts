@@ -34,8 +34,8 @@ function createActiveRevisionDependencies(
 describe('application/prompt-options', () => {
   it('returns active-only prompt catalog and DB-backed defaults', async () => {
     const config = createConfig(
-      'docs/prompt-gallery/templates/default-template.md',
-      'docs/prompt-gallery/profiles/default-profile.md',
+      'packages/batch-backend/prompt-assets/templates/default-template.md',
+      'packages/batch-backend/prompt-assets/profiles/default-profile.md',
     );
 
     const options = await getPromptOptions({
@@ -105,8 +105,8 @@ describe('application/prompt-options', () => {
 
   it('returns null defaults when configured IDs are not active in DB', async () => {
     const config = createConfig(
-      'docs/prompt-gallery/templates/missing-template.md',
-      'docs/prompt-gallery/profiles/missing-profile.md',
+      'packages/batch-backend/prompt-assets/templates/missing-template.md',
+      'packages/batch-backend/prompt-assets/profiles/missing-profile.md',
     );
 
     const options = await getPromptOptions({
@@ -158,8 +158,8 @@ describe('application/prompt-options', () => {
 
   it('prefers an active DB-selected default template over the configured path', async () => {
     const config = createConfig(
-      'docs/prompt-gallery/templates/default-template.md',
-      'docs/prompt-gallery/profiles/default-profile.md',
+      'packages/batch-backend/prompt-assets/templates/default-template.md',
+      'packages/batch-backend/prompt-assets/profiles/default-profile.md',
     );
 
     const options = await getPromptOptions({
@@ -220,8 +220,8 @@ describe('application/prompt-options', () => {
 
   it('maps legacy profilePath to canonical profile ID in selection', async () => {
     const config = createConfig(
-      'docs/prompt-gallery/templates/default-template.md',
-      'docs/prompt-gallery/profiles/default-profile.md',
+      'packages/batch-backend/prompt-assets/templates/default-template.md',
+      'packages/batch-backend/prompt-assets/profiles/default-profile.md',
     );
 
     const selection = await resolvePromptSelection(
@@ -290,8 +290,8 @@ describe('application/prompt-options', () => {
 
   it('paginates beyond 500 records and resolves defaults outside first page', async () => {
     const config = createConfig(
-      'docs/prompt-gallery/templates/template-549.md',
-      'docs/prompt-gallery/profiles/profile-549.md',
+      'packages/batch-backend/prompt-assets/templates/template-549.md',
+      'packages/batch-backend/prompt-assets/profiles/profile-549.md',
     );
 
     const templateItems = Array.from({ length: 550 }, (_, index) => ({
@@ -360,8 +360,8 @@ describe('application/prompt-options', () => {
 
   it('excludes prompts when pointer exists but no active revision is confirmed', async () => {
     const config = createConfig(
-      'docs/prompt-gallery/templates/default-template.md',
-      'docs/prompt-gallery/profiles/default-profile.md',
+      'packages/batch-backend/prompt-assets/templates/default-template.md',
+      'packages/batch-backend/prompt-assets/profiles/default-profile.md',
     );
 
     const options = await getPromptOptions({
