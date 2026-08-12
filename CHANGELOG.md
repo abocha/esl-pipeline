@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.5.7] - 2026-08-12
+
+### Changed
+
+- Automated release from PR #194: test(auth): cover auth-user transport contracts (https://github.com/abocha/esl-pipeline/pull/194)
+
 ## [10.5.6] - 2026-08-12
 
 ### Changed
