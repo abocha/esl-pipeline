@@ -203,6 +203,7 @@ vi.mock('../src/application/template-content', () => {
     listTemplateContents: vi.fn(),
     getTemplateContent: vi.fn(),
     upsertTemplateContent: vi.fn(),
+    setDefaultTemplateContent: vi.fn(),
     deleteTemplateContent: vi.fn(),
     listTemplateRevisionsForTemplate: vi.fn(),
     getTemplateRevisionForTemplate: vi.fn(),
@@ -411,6 +412,9 @@ export function describeHttpServerIntegrationSuite(
     const mockListTemplateContents = vi.mocked(templateContentModule.listTemplateContents);
     const mockGetTemplateContent = vi.mocked(templateContentModule.getTemplateContent);
     const mockUpsertTemplateContent = vi.mocked(templateContentModule.upsertTemplateContent);
+    const mockSetDefaultTemplateContent = vi.mocked(
+      templateContentModule.setDefaultTemplateContent,
+    );
     const mockDeleteTemplateContent = vi.mocked(templateContentModule.deleteTemplateContent);
     const mockListTemplateRevisionsForTemplate = vi.mocked(
       templateContentModule.listTemplateRevisionsForTemplate,
@@ -753,6 +757,13 @@ export function describeHttpServerIntegrationSuite(
         content: String.raw`Updated template content`,
         currentRevisionId: 'template-revision-2',
         updatedAt: '2024-01-02T00:00:00.000Z',
+      });
+      mockSetDefaultTemplateContent.mockResolvedValue({
+        id: 'template.md',
+        label: 'Template',
+        content: 'Template content',
+        currentRevisionId: 'template-revision-1',
+        updatedAt: '2024-01-01T00:00:00.000Z',
       });
       mockDeleteTemplateContent.mockResolvedValue(true);
       mockListTemplateRevisionsForTemplate.mockResolvedValue({
@@ -1359,6 +1370,7 @@ export function describeHttpServerIntegrationSuite(
       mockListTemplateContents,
       mockGetTemplateContent,
       mockUpsertTemplateContent,
+      mockSetDefaultTemplateContent,
       mockDeleteTemplateContent,
       mockListTemplateRevisionsForTemplate,
       mockGetTemplateRevisionForTemplate,
