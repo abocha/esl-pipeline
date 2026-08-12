@@ -1,7 +1,7 @@
 name: Feature request
-description: Propose an enhancement with clear use-case and constraints.
+description: Propose an improvement with clear use-case and constraints.
 title: '[Feature] '
-labels: ['enhancement']
+labels: ['type:improvement', 'status:inbox']
 body:
   - type: textarea
     id: problem
