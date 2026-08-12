@@ -139,6 +139,10 @@ markdownLines.push('');
 if (topUncoveredLargeFiles.length > 0) {
   markdownLines.push('## Top Uncovered Large Files');
   markdownLines.push('');
+  markdownLines.push(
+    'Scope note: This report reflects core unit evidence only; deterministic HTTP and PostgreSQL/Redis/service lanes are not represented. A low/zero file value does not establish absence of meaningful tests elsewhere.',
+  );
+  markdownLines.push('');
   markdownLines.push('| Package | File | Uncovered Lines | Line Coverage |');
   markdownLines.push('| --- | --- | ---: | ---: |');
   for (const file of topUncoveredLargeFiles) {
