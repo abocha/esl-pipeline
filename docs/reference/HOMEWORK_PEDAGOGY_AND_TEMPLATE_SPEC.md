@@ -22,7 +22,7 @@
 
 This spec is intentionally based on the current canonical prompt baseline:
 
-- [`docs/prompt-gallery/templates/hw_prompt_definitive.md`](../prompt-gallery/templates/hw_prompt_definitive.md)
+- [`hw_prompt_definitive.md`](../../packages/batch-backend/prompt-assets/templates/hw_prompt_definitive.md)
 
 That template is the canonical pedagogical reference for the homework method. This doc exists to
 explain which pedagogical moves in the definitive prompt are deliberate, protected, and worth
@@ -453,7 +453,7 @@ method while improving the surrounding system.
 
 ## Related
 
-- [`docs/prompt-gallery/templates/hw_prompt_definitive.md`](../prompt-gallery/templates/hw_prompt_definitive.md)
+- [`hw_prompt_definitive.md`](../../packages/batch-backend/prompt-assets/templates/hw_prompt_definitive.md)
 - [`docs/reference/PRESET_V2_SPEC.md`](PRESET_V2_SPEC.md)
 - [`docs/plans/student-memory-system-upgrade/phase-4-student-rollup-and-retrieval-packaging.md`](../plans/student-memory-system-upgrade/phase-4-student-rollup-and-retrieval-packaging.md)
 - [`docs/plans/student-memory-system-upgrade/phase-5-prompt-template-and-provider-runtime.md`](../plans/student-memory-system-upgrade/phase-5-prompt-template-and-provider-runtime.md)

@@ -32,7 +32,6 @@
     "docs/reference/GENERATION_PROVIDER_POLICY.md",
     "docs/reference/AGENT_LEGIBILITY_MODEL.md",
     "docs/reference/DOCS_GARDENING_PLAYBOOK.md",
-    "docs/reference/DOCS_GARDENING_SCORECARD.md",
     "docs/plans/README.md",
     "packages/orchestrator/README.md",
     "packages/batch-backend/README.md",
@@ -119,7 +118,7 @@
     "rolling_issue_title": "docs-gardening",
     "stale_scan_roots": ["docs"],
     "stale_excluded_prefixes": ["docs/archive/", "docs/drafts/", "docs/templates/"],
-    "low_signal_prefixes": ["docs/prompt-gallery/"],
+    "low_signal_prefixes": [],
     "plan_lifecycle": {
       "route_source": "docs/plans/README.md",
       "allowed_active_statuses": ["active", "roadmap", "backlog", "draft"],

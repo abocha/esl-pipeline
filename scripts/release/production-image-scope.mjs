@@ -55,7 +55,7 @@ function isSafeNonImagePath(path) {
   if (SAFE_ROOT_FILES.has(path) || /^[^/]+\.md$/u.test(path)) return true;
   if (path.startsWith('.github/') || path.startsWith('.impeccable/')) return true;
   if (path.startsWith('deploy/') || path.startsWith('scripts/')) return true;
-  if (path.startsWith('docs/')) return !path.startsWith('docs/prompt-gallery/');
+  if (path.startsWith('docs/')) return true;
   return false;
 }
 
@@ -79,12 +79,6 @@ export function buildProductionImageScope({ changedFilePayload, workspacePackage
     if (ALL_IMAGE_INPUTS.has(path) || /^tsconfig(?:\.[^/]+)?\.json$/u.test(path)) {
       return allImages(`shared image input: ${path}`, changedFiles);
     }
-    if (path.startsWith('docs/prompt-gallery/')) {
-      backend = true;
-      reasons.push(`backend runtime content: ${path}`);
-      continue;
-    }
-
     const owner = owningPackage(path, workspacePackages);
     if (owner) {
       changedPackages.add(owner.name);

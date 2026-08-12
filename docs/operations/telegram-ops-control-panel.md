@@ -5,7 +5,7 @@
 - Audience: maintainers and operators running Telegram-based operational controls.
 - Read Time: 5 minutes.
 - Authority Level: operations runbook.
-- Last Verified Against: 2026-05-12 repo state.
+- Last Verified Against: 2026-08-12 repo state.
 - Owner: backend/ops maintainers + automation agents.
 - Review Cadence: monthly or after bot/control-surface changes.
 - Status: `runbook`.
@@ -37,12 +37,18 @@
   - `backup_upload`
   - `restore_drill_download_only`
 
-Backend prerequisites for action commands:
+Backend action execution:
 
-- `bash`, `aws`, and `docker` CLI available
-- GNU-compatible `date`/`find`
-- `scripts/docker/*` present in the runtime image
-- Docker socket access plus `PG_CONTAINER_NAME` for deterministic targeting
+- Telegram action requests pass through the authenticated backend `/ops/actions` endpoint. The
+  backend process enqueues the request and executes the configured command with
+  `bash -lc <command>` in its own process environment (`PIPELINE_CWD` when set, otherwise the
+  backend process working directory).
+- `BATCH_BACKEND_ENABLE_OPS_CONTROL` is `false` by default. Status, backup, and restore-drill
+  command variables are empty by default, so an operator must explicitly configure each command;
+  an unset action command fails closed as unconfigured.
+- The long-running backend runtime must not require Docker CLI, AWS CLI, Docker socket mounts, or
+  other privileged host access. Do not describe this surface as a host-dispatch mechanism; host
+  deployment and backup procedures remain separate operator workflows.
 
 ## Current UX Surface
 

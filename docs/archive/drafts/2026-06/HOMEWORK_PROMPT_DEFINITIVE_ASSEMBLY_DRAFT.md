@@ -13,7 +13,7 @@
 - Separate the static system prompt from runtime block assembly.
 - Provide a concrete draft that can later be adapted into a DB template revision and matching assembly logic.
 - Keep the design/rationale separate from the clean candidate payload in
-  [`docs/reference/HOMEWORK_PROMPT_CANDIDATE_TEMPLATE_PAYLOAD.md`](HOMEWORK_PROMPT_CANDIDATE_TEMPLATE_PAYLOAD.md).
+  [`HOMEWORK_PROMPT_CANDIDATE_TEMPLATE_PAYLOAD.md`](HOMEWORK_PROMPT_CANDIDATE_TEMPLATE_PAYLOAD.md).
 
 ## Proposed Static Prompt Content
 
@@ -408,4 +408,4 @@ The following blocks are **not part of the static template content above**. They
 - This draft intentionally removes the standalone `Dynamic Lesson Input` section.
 - This draft keeps the current output contract and assignment anatomy largely intact while moving toward a cleaner, code-owned runtime assembly model.
 - The clean candidate payload extracted from this draft lives in
-  [`docs/reference/HOMEWORK_PROMPT_CANDIDATE_TEMPLATE_PAYLOAD.md`](HOMEWORK_PROMPT_CANDIDATE_TEMPLATE_PAYLOAD.md).
+  [`HOMEWORK_PROMPT_CANDIDATE_TEMPLATE_PAYLOAD.md`](HOMEWORK_PROMPT_CANDIDATE_TEMPLATE_PAYLOAD.md).

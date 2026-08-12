@@ -38,7 +38,8 @@ Use this doc when changing:
 - Use [`docs/reference/HOMEWORK_PEDAGOGY_AND_TEMPLATE_SPEC.md`](HOMEWORK_PEDAGOGY_AND_TEMPLATE_SPEC.md) for the protected pedagogical method and assignment anatomy.
 - Use [`docs/reference/PRESET_V2_SPEC.md`](PRESET_V2_SPEC.md) for prompt governance, learning preset semantics, and lineage requirements.
 - Use [`docs/operations/prompt-gallery-bootstrap.md`](../operations/prompt-gallery-bootstrap.md) for DB bootstrap, asset import, and activation workflow.
-- Use [`docs/reference/gpt-5.4_prompt-guidance.md`](gpt-5.4_prompt-guidance.md) for broader GPT-5.4 prompt patterns not specific to the ESL homework system.
+- Use [`docs/reference/GENERATION_PROVIDER_POLICY.md`](GENERATION_PROVIDER_POLICY.md) for the
+  current model/provider mapping and model-era compatibility policy.
 
 ## Current Runtime Truth
 
@@ -48,7 +49,7 @@ Prompt templates and profiles are runtime-managed from PostgreSQL revision table
 
 The filesystem template:
 
-- [`docs/prompt-gallery/templates/hw_prompt_definitive.md`](../prompt-gallery/templates/hw_prompt_definitive.md)
+- [`hw_prompt_definitive.md`](../../packages/batch-backend/prompt-assets/templates/hw_prompt_definitive.md)
 
 is now primarily a **bootstrap seed/reference asset**, not the live runtime source of truth.
 

@@ -144,7 +144,7 @@ Common pairings in this repo:
 - new plan:
   - plan file + `docs/plans/README.md` + relevant topic router
 - docs tooling/gardening change:
-  - script/config + `docs/reference/DOCS_GOVERNANCE.md` + gardening playbook/scorecard
+  - script/config + `docs/reference/DOCS_GOVERNANCE.md` + gardening playbook
 - archive move:
   - moved doc + archive index + any router that pointed to the old path
 
@@ -153,5 +153,4 @@ Common pairings in this repo:
 - [`docs/reference/HARNESS_AGENTIC_DOCS_MODEL.md`](HARNESS_AGENTIC_DOCS_MODEL.md)
 - [`docs/reference/DOCS_GOVERNANCE.md`](DOCS_GOVERNANCE.md)
 - [`docs/reference/DOCS_GARDENING_PLAYBOOK.md`](DOCS_GARDENING_PLAYBOOK.md)
-- [`docs/reference/DOCS_GARDENING_SCORECARD.md`](DOCS_GARDENING_SCORECARD.md)
 - [`docs/generated/README.md`](../generated/README.md)

@@ -47,12 +47,20 @@ test('shared contract changes rebuild every dependent production image', () => {
   assert.deepEqual(flags(result), { backend: true, frontend: true, bot: true });
 });
 
-test('prompt-gallery runtime content rebuilds only the backend', () => {
+test('batch-backend prompt assets rebuild only the backend', () => {
   const result = buildProductionImageScope({
-    changedFilePayload: payload({ filename: 'docs/prompt-gallery/example.md' }),
+    changedFilePayload: payload({ filename: 'packages/batch-backend/prompt-assets/example.md' }),
     workspacePackages,
   });
   assert.deepEqual(flags(result), { backend: true, frontend: false, bot: false });
+});
+
+test('the retired documentation prompt-gallery path rebuilds no images', () => {
+  const result = buildProductionImageScope({
+    changedFilePayload: payload({ filename: 'docs/prompt-gallery/retired.md' }),
+    workspacePackages,
+  });
+  assert.deepEqual(flags(result), { backend: false, frontend: false, bot: false });
 });
 
 test('deployment, workflow, scripts, and ordinary docs changes rebuild no images', () => {

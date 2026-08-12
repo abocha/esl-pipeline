@@ -548,11 +548,11 @@ export function loadConfig(): BatchBackendConfig {
 
   const promptTemplatePath = readString(
     'PROMPT_TEMPLATE_PATH',
-    'docs/prompt-gallery/templates/hw_prompt_definitive.md',
+    'packages/batch-backend/prompt-assets/templates/hw_prompt_definitive.md',
   )!;
   const promptProfilePath = readString(
     'PROMPT_PROFILE_PATH',
-    'docs/prompt-gallery/profiles/PROFILE_2025-11-16.md',
+    'packages/batch-backend/prompt-assets/profiles/PROFILE_2025-11-16.md',
   )!;
   const draftLocalExport = readBool('DRAFT_LOCAL_EXPORT', nodeEnv === 'development');
   const jobOptionsAllowStaticFallback = readBool(

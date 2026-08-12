@@ -4,7 +4,7 @@
 
 - Audience: maintainers and AI agents.
 - Authority Level: reference.
-- Last Verified Against: 2026-07-14 repo state.
+- Last Verified Against: 2026-08-12 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: monthly or after release workflow changes.
 - Status: `reference`.
@@ -39,9 +39,9 @@ Canonical contract keys:
 4. `validator`
 5. `db`
 
-Additional DB release context: `dbMigrationHead` records the latest required migration ID. At this
-verification point it is `0043_manual_transcript_source`; the registry and migration directory are
-the source of truth when this value advances.
+Additional DB release context: `DB_MIGRATION_HEAD` in the registry records the latest required
+migration ID. Do not copy that volatile value into this policy; the registry and migration
+directory are the source of truth when the head advances.
 
 ## Bump Policy (Contract-First SemVer)
 
@@ -73,8 +73,9 @@ only when the complete, count-validated PR file set is inside the repository's c
 maintenance-only allowlist: GitHub metadata, non-runtime documentation, selected repository test
 and documentation tooling, project-local Codex maintainer configuration under `.codex/**`, the
 Hadolint runner, and explicitly named lint/editor configuration.
-Unknown or mixed paths require a normal release label. `docs/prompt-gallery/**` is runtime content
-copied into the backend image and always requires a normal release.
+Unknown or mixed paths require a normal release label.
+`packages/batch-backend/prompt-assets/**` is runtime content copied into the backend image and always
+requires a normal release.
 
 Choosing `release:patch`, `release:minor`, or `release:major` is always safe even when a change could
 qualify for `release:none`. The policy intentionally prefers an unnecessary release over suppressing
