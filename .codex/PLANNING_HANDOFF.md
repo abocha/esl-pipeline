@@ -37,6 +37,8 @@ Useful evidence requests include:
 Do not fill a repository-specific gap with generic assumptions when a small evidence request can
 resolve it.
 
+When interactive planning introduces non-trivial structural complexity or decides whether to account now for a known future constraint, apply the **complexity-discipline procedure**. When the installed source is available, read `.agents/skills/complexity-discipline/SKILL.md` and use its reasoning procedure; do not assume the ChatGPT planning environment supports Codex `$skill-name` invocation semantics. Require a concrete necessity chain and consider reversibility/retrofit cost rather than treating YAGNI as a universal veto. Prefer the simplest adequate design, but preserve architecture, risk controls, and difficult-to-reverse evidenced constraints when the evidence justifies them.
+
 ## 2. The implementation plan is the primary-agent contract
 
 A good implementation plan may be detailed enough to include:
@@ -203,6 +205,7 @@ Before calling a plan ready, confirm:
 - non-goals prevent obvious scope creep;
 - repository-specific facts are evidence-backed or clearly marked unknown;
 - validation commands are discovered rather than guessed;
+- non-trivial structural complexity has a concrete necessity chain, and known future constraints were judged using reversibility/retrofit cost rather than mechanical YAGNI;
 - orchestration recommendations describe boundaries, not ceremony;
 - the plan leaves the Codex primary enough freedom to adapt to current repository state without
   redesigning the approved behavior.

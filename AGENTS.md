@@ -4,7 +4,7 @@
 
 - Audience: AI agents and maintainers.
 - Authority Level: router + compact operating contract.
-- Last Verified Against: 2026-08-06 repo state and current Codex agent guidance.
+- Last Verified Against: 2026-08-12 repository/workflow state and current Codex agent guidance.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly or after major workflow/tooling changes.
 - Status: `router`.
@@ -63,6 +63,20 @@ Repository authorization overrides workflow-plugin defaults. Do not create workt
 branches, pushes, pull requests, deployments, delegated writes, or external mutations unless the
 user explicitly authorizes that action. The user prompt or an approved task plan may further narrow
 the workflow.
+
+## Complexity Discipline
+
+- Do not introduce structural complexity without a concrete reason grounded in requirements,
+  repository contracts, correctness/risk, or an evidenced constraint whose retrofit cost matters.
+  Prefer the simplest adequate design, not the smallest diff or fewest files.
+- Use `$complexity-discipline` only when that structural-complexity judgment is non-trivial. Typical
+  triggers include new abstractions/helper layers, dependencies, configuration surfaces, compatibility
+  mechanisms, generalized extension points, duplicated repository/platform/standard-library capability,
+  substantial newly discovered work, or deciding whether a difficult-to-reverse known future constraint
+  should be handled now.
+- Do not invoke it for straightforward pattern-following work whose design is already established and
+  unambiguous. Do not apply YAGNI mechanically. The discipline does not expand task scope, role
+  authority, mutation authorization, or architectural authority.
 
 ## Ownership and Project Roles
 
