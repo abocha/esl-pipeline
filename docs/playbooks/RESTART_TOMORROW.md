@@ -1,40 +1,36 @@
-# Restart Tomorrow
+# Resume Work Safely
 
-## Current Handoff (2026-06-23)
+## Meta
 
-- Current launch stage: pre-alpha with one tutor. The progression is one tutor in pre-alpha, 3–5 in
-  closed alpha, 6–10 in closed beta, then an explicit evidence-backed v1 production-readiness
-  decision.
-- Chunks 1–11 from the production-readiness restart wave are complete. Telegram and speculative
-  invite polish are deferred until after closed alpha.
-- Current implementation focus: Chunk 12 — tutor-facing UI distillation. Begin with the
-  lesson-source screen, where stage headings and static help repeat the same instruction.
-- Treat a reproduced tutor reliability blocker as higher priority than planned polish. Do not
-  broaden scope from one anecdote.
+- Audience: maintainers and AI agents resuming repository work.
+- Read Time: 2 minutes.
+- Authority Level: recovery procedure.
+- Last Verified Against: 2026-08-12 repository workflow.
+- Owner: founder-maintainer + automation agents.
+- Review Cadence: after workflow changes.
+- Status: `playbook`.
 
-## First Step Next Session
+## Purpose
 
-1. Read [`docs/plans/2026-06-23-alpha-readiness.md`](../plans/2026-06-23-alpha-readiness.md).
-2. Open the current tutor-facing surface and choose one bounded Chunk 12 slice.
-3. Preserve only state-aware guidance: text earns its place when it changes with state, prevents an
-   error, or explains a blocked action.
-4. Record the next tutor session against the scorecard in
-   [`docs/reference/PRODUCT_NORTH_STAR_AND_READINESS.md`](../reference/PRODUCT_NORTH_STAR_AND_READINESS.md).
+Recover current work from authoritative sources. This playbook intentionally records no current
+chunk, release state, task priority, or next implementation step.
 
-## Core Files
+## Recovery Procedure
 
-1. [`docs/plans/2026-06-23-alpha-readiness.md`](../plans/2026-06-23-alpha-readiness.md)
-2. [`docs/reference/PRODUCT_NORTH_STAR_AND_READINESS.md`](../reference/PRODUCT_NORTH_STAR_AND_READINESS.md)
-3. [`docs/reference/V1_IMPLEMENTATION_TRACKER.md`](../reference/V1_IMPLEMENTATION_TRACKER.md)
-4. [`docs/playbooks/WEEKLY_PRODUCT_REVIEW_TEMPLATE.md`](WEEKLY_PRODUCT_REVIEW_TEMPLATE.md)
+1. Inspect the current branch, worktree status, and recent commits. Preserve unrelated changes.
+2. Read [`AGENTS.md`](../../AGENTS.md), [`docs/README.md`](../README.md), and the applicable
+   task-specific route.
+3. For planned work, identify the editable entrypoint in [`docs/plans/README.md`](../plans/README.md)
+   and re-read the exact active plan. Do not infer current work from task artifacts or archive notes.
+4. For backlog selection, inspect the canonical GitHub issue workflow in
+   [`docs/operations/github-issue-intake-and-codex-work-selection.md`](../operations/github-issue-intake-and-codex-work-selection.md).
+5. Verify volatile state—CI, releases, deployments, incidents, or live evidence—from its stated
+   source, current runbook, and current repository state; do not reuse old handoff claims.
+6. State the first bounded next action and its validation before editing. End the session by leaving
+   durable conclusions in their canonical owner, not in this playbook.
 
-Historical context is retained in
-[`docs/archive/plans/standalone/2026-06-15-production-readiness-restart-chunks.md`](../archive/plans/standalone/2026-06-15-production-readiness-restart-chunks.md).
+## Related
 
-## Scope Rules
-
-1. One active chunk at a time.
-2. Reliability-only work takes priority if two or more readiness metrics are red.
-3. Do not activate production flags, deploy, or submit OpenAI Batch work without separate
-   maintainer approval.
-4. End each session with: what finished, the first next step, and any current blocker.
+- [`docs/reference/PRODUCT_NORTH_STAR_AND_READINESS.md`](../reference/PRODUCT_NORTH_STAR_AND_READINESS.md)
+- [`docs/operations/README.md`](../operations/README.md)
+- [`docs/archive/plans/standalone/2026-06-15-production-readiness-restart-chunks.md`](../archive/plans/standalone/2026-06-15-production-readiness-restart-chunks.md)

@@ -1,44 +1,43 @@
 # Contributing
 
-Thanks for helping improve the ESL pipeline! The notes below keep local development and releases aligned with what CI expects.
+Thanks for helping improve ESL Pipeline. This page is a compact entrypoint; the linked reference
+documents own volatile runtime, validation, and release details.
 
 ## Prerequisites
 
-- Node.js 24.11.1 (`nvm use 24.11.1` or `asdf install nodejs 24.11.1`).
-- pnpm 8+ (`corepack enable` installs the pinned version automatically).
-- Docker Desktop or the Docker CLI for image builds.
-- `ffmpeg` available on your `PATH` (or set the `FFMPEG_PATH` environment variable).
+- Use the Node.js version pinned in [`.nvmrc`](.nvmrc); the root `package.json` records the
+  compatibility floor.
+- Use Corepack with the pnpm version pinned by [`package.json`](package.json).
+- Install `ffmpeg` on `PATH` when working on provider flows (or set `FFMPEG_PATH`).
 
-## Development Workflow
+Install dependencies with:
 
-- Install dependencies with `pnpm install`.
-- Lint and test everything via `pnpm lint`, `pnpm test`, and `pnpm -r build`.
-- Match CI locally by running:
-  - `pnpm typecheck`
-  - `pnpm --filter @esl-pipeline/orchestrator test -- --runInBand`
+```bash
+pnpm install
+```
 
-## Release Process Overview
+## Validation
 
-Release model is private-repo and merge-driven.
+Choose the smallest gate that covers the change. The canonical routing and CI-owned lanes are in
+[`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md) and
+[`docs/reference/TESTING_GUIDELINES.md`](docs/reference/TESTING_GUIDELINES.md).
 
-1. Ensure the PR has exactly one release label:
-   - `release:major`
-   - `release:minor`
-   - `release:patch`
-2. Run checks locally:
-   - `pnpm release:verify:contracts`
-   - `pnpm -r build`
-   - `pnpm typecheck`
-   - `pnpm lint`
-   - `pnpm test`
-3. Merge the PR into `main`.
-4. GitHub Actions runs the release workflow and will:
-   - compute the next version from PR label,
-   - update root `package.json` and `CHANGELOG.md`,
-   - create bot commit `chore(release): vX.Y.Z`,
-   - create and push `vX.Y.Z` tag.
+- Documentation-only changes: `pnpm docs:generate:indexes`, `pnpm format`, and `pnpm docs:check`.
+- Normal affected changes: `pnpm --silent run check:fast:agent`.
+- Broad, shared-contract, or toolchain changes: `pnpm check:pre-pr` (use `pnpm check` when
+  reproducing CI or changing migrations, database, workers, or integrations).
+- Run the owning package's focused tests and build before the selected repository gate.
 
-See:
+## Release overview
 
-- `docs/reference/VERSIONING_MODEL.md`
-- `.github/workflows/release-on-merge.yml`
+Every PR to `main` has exactly one release label: `release:none`, `release:patch`,
+`release:minor`, or `release:major`. `release:none` is maintenance-only and is accepted only when
+the complete changed-file set passes the release guard's allowlist; deployable or unknown changes
+need a versioned label.
+
+After a versioned PR is merged, the release workflow updates the root version and changelog,
+creates the release commit and tag, and publishes the production images. It does not deploy them;
+production deployment is a separate operator action.
+
+See [`docs/reference/VERSIONING_MODEL.md`](docs/reference/VERSIONING_MODEL.md) for the policy and
+[`.github/workflows/release-on-merge.yml`](.github/workflows/release-on-merge.yml) for the workflow.

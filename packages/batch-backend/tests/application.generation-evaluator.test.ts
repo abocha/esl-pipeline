@@ -74,7 +74,7 @@ describe('application/generation-evaluator', () => {
       'utf8',
     );
     expect(GENERATION_EVAL_ASSIGNMENT_TEMPLATE_BASELINE).toMatchObject({
-      path: 'docs/prompt-gallery/templates/hw_prompt_definitive.md',
+      path: 'packages/batch-backend/prompt-assets/templates/hw_prompt_definitive.md',
       content: templateContent,
       contentHash: createHash('sha256').update(templateContent).digest('hex'),
     });
@@ -113,7 +113,7 @@ describe('application/generation-evaluator', () => {
 
     expect(result.records[0]).toMatchObject({
       templateBaseline: {
-        path: 'docs/prompt-gallery/templates/hw_prompt_definitive.md',
+        path: 'packages/batch-backend/prompt-assets/templates/hw_prompt_definitive.md',
         contentHash: GENERATION_EVAL_ASSIGNMENT_TEMPLATE_BASELINE.contentHash,
       },
     });

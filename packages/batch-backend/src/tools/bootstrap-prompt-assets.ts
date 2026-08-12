@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { resolveRepoPath } from '../application/prompt-assembly.js';
 import { getPromptOptions } from '../application/prompt-options.js';
 import { loadBatchBackendEnv } from '../bootstrap/env.js';
 import { configureHostRunPgRuntimeEnv } from '../bootstrap/pg-host-run-env.js';
@@ -114,10 +115,9 @@ function resolveConfiguredRoot(configuredPath: string, type: 'template' | 'profi
     throw new Error(`PROMPT_${type.toUpperCase()}_PATH must be configured.`);
   }
 
-  const repoRoot = path.resolve(path.join(import.meta.dirname, '..', '..', '..', '..'));
   const candidate = path.isAbsolute(configuredPath)
     ? path.resolve(configuredPath)
-    : path.resolve(repoRoot, configuredPath);
+    : resolveRepoPath(configuredPath);
 
   return path.dirname(candidate);
 }

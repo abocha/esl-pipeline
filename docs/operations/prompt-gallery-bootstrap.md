@@ -27,7 +27,9 @@ pnpm --filter @esl-pipeline/batch-backend run prompt-assets:bootstrap
 - Requires:
   - `ESL_PIPELINE_CONFIG_PROVIDER=local`
   - `PG_ENABLED=true`
-- Scans configured prompt roots (`PROMPT_TEMPLATE_PATH` and `PROMPT_PROFILE_PATH` parents).
+- Scans configured prompt roots (`PROMPT_TEMPLATE_PATH` and `PROMPT_PROFILE_PATH` parents). The
+  checked-in defaults live under `packages/batch-backend/prompt-assets/**`, which is copied into the
+  same `/app/packages/batch-backend/prompt-assets/**` path in the production image.
 - Requires template/profile roots to be distinct and non-overlapping.
 - Classifies files by root only:
   - template: files discovered from the configured template root

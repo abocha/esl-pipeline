@@ -16,7 +16,7 @@ const baseConfig = {
   docs_gardening: {
     rolling_issue_title: 'docs-gardening',
     golden_set_docs: ['AGENTS.md', 'docs/reference/agents-ssot.md'],
-    low_signal_prefixes: ['docs/prompt-gallery/'],
+    low_signal_prefixes: [],
   },
 };
 
@@ -82,7 +82,7 @@ test('docs gardening snapshot emits one rolling issue and triage-oriented state'
         lastCommitDate: '2025-12-01',
       },
       {
-        path: 'docs/prompt-gallery/profiles/example.md',
+        path: 'docs/reference/secondary-flow.md',
         priority: 'P3',
         confidence: 'low',
         daysOld: 15,
@@ -186,7 +186,7 @@ test('heuristic-only snapshot becomes review-suggested instead of failing', () =
     reasonCounts: { 'no-route-coverage': 1 },
     topCandidates: [
       {
-        path: 'docs/prompt-gallery/profiles/example.md',
+        path: 'docs/reference/secondary-flow.md',
         priority: 'P3',
         confidence: 'low',
         daysOld: 5,

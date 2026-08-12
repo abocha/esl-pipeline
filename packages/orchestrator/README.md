@@ -4,7 +4,7 @@
 
 - Audience: maintainers and implementing agents.
 - Authority Level: package entrypoint and API usage guide.
-- Last Verified Against: 2026-07-30 repo state.
+- Last Verified Against: 2026-08-12 repo state.
 - Owner: orchestrator maintainers + automation agents.
 - Review Cadence: monthly or after major API/runtime changes.
 - Status: `active`.
@@ -17,6 +17,8 @@ Library-only ESL pipeline engine for the monorepo.
 
 - validate
 - import/colorize
+- voice-plan
+- speech-plan
 - tts
 - upload
 - add-audio

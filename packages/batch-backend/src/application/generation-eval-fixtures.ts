@@ -1,6 +1,5 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 
 import {
   FOUNDATIONAL_PROFILE_JSON_SCHEMA,
@@ -24,6 +23,7 @@ import {
   PROFILE_CANDIDATE_PATCH_RESPONSE_SCHEMA_DESCRIPTION,
   PROFILE_CANDIDATE_PATCH_RESPONSE_SCHEMA_NAME,
 } from './profile-candidate-patch.js';
+import { resolveRepoPath } from './prompt-assembly.js';
 import {
   STUDENT_MEMORY_SNAPSHOT_CONTENT_JSON_SCHEMA,
   STUDENT_MEMORY_SNAPSHOT_RESPONSE_SCHEMA_DESCRIPTION,
@@ -32,9 +32,10 @@ import {
 
 export const GENERATION_EVAL_FIXTURE_VERSION = 'generation-eval-fixtures-v2' as const;
 
-const ASSIGNMENT_TEMPLATE_BASELINE_PATH = 'docs/prompt-gallery/templates/hw_prompt_definitive.md';
+const ASSIGNMENT_TEMPLATE_BASELINE_PATH =
+  'packages/batch-backend/prompt-assets/templates/hw_prompt_definitive.md';
 const assignmentTemplateBaselineContent = readFileSync(
-  resolve(import.meta.dirname, '..', '..', '..', '..', ASSIGNMENT_TEMPLATE_BASELINE_PATH),
+  resolveRepoPath(ASSIGNMENT_TEMPLATE_BASELINE_PATH),
   'utf8',
 );
 

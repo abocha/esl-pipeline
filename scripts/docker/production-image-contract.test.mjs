@@ -100,6 +100,14 @@ test('backend deployment includes only runtime-owned package files', () => {
   assert.deepEqual(backendPackage.files, ['dist', 'migrations', 'schema.sql']);
 });
 
+test('backend runtime image copies the runtime-owned prompt asset tree', () => {
+  assert.match(
+    dockerfiles.get('backend'),
+    /COPY --chown=node:node packages\/batch-backend\/prompt-assets \.\/packages\/batch-backend\/prompt-assets/u,
+  );
+  assert.doesNotMatch(dockerfiles.get('backend'), /docs\/prompt-gallery/u);
+});
+
 test('production infrastructure stays on controlled official image lines', () => {
   assert.match(dockerfiles.get('frontend'), /FROM nginx:1\.31-alpine3\.23-slim AS runtime/u);
   assert.match(composeService('caddy-edge'), /^    image: caddy:2\.11-alpine$/mu);
