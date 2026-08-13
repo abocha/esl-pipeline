@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.5.9] - 2026-08-13
+
+### Changed
+
+- Automated release from PR #197: test(batch-frontend): reduce duplicate preview timing cost (https://github.com/abocha/esl-pipeline/pull/197)
+
 ## [10.5.8] - 2026-08-12
 
 ### Changed
