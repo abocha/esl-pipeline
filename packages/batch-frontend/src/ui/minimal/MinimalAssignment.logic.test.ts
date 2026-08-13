@@ -252,7 +252,7 @@ describe('MinimalAssignment logic helpers', () => {
     });
   });
 
-  it('tracks preview readiness and draft hash deterministically', () => {
+  it('tracks preview readiness and invalidates it after draft edits', () => {
     const hash = hashDraftText('# Draft');
     expect(hash).toBe(hashDraftText('# Draft'));
     expect(
@@ -266,6 +266,18 @@ describe('MinimalAssignment logic helpers', () => {
       hasDraftText: true,
       previewReady: true,
       previewRequired: false,
+    });
+    expect(
+      getDraftPreviewGate({
+        draftText: '# Draft\nOne more line',
+        previewHtml: '<html></html>',
+        lastPreviewedDraftHash: hash,
+      }),
+    ).toEqual({
+      draftHash: hashDraftText('# Draft\nOne more line'),
+      hasDraftText: true,
+      previewReady: false,
+      previewRequired: true,
     });
   });
 
