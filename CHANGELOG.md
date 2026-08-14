@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.7.0] - 2026-08-14
+
+### Changed
+
+- Automated release from PR #201: feat(batch-backend): preserve latest published correction memory (https://github.com/abocha/esl-pipeline/pull/201)
+
 ## [10.6.1] - 2026-08-14
 
 ### Changed
