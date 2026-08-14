@@ -9,7 +9,7 @@ import {
 describe('manual transcript contract versions', () => {
   it('tracks the current post-cutover assignment contract', () => {
     expect(API_CONTRACT_VERSION).toBe('4.2.0');
-    expect(DB_CONTRACT_VERSION).toBe('0.23.1');
-    expect(DB_MIGRATION_HEAD).toBe('0045_student_memory_snapshot_eligibility_repair');
+    expect(DB_CONTRACT_VERSION).toBe('0.24.0');
+    expect(DB_MIGRATION_HEAD).toBe('0046_jobs_publication_sequence');
   });
 });

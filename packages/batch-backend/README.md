@@ -120,6 +120,13 @@ The assignment builder separates automatic recovery from tutor-owned confirmatio
   The correction worker hash-validates that immutable input and runs normal new-assignment pipeline
   semantics with child-owned manifest/output identity. It does not read or merge the parent's
   generated audio or manifest.
+- Initial publication and a successful published correction both request homework-memory extraction.
+  The lineage root remains the conceptual assignment identity while the memory row records the job
+  that produced its Markdown. A correction with changed content supersedes the lineage's prior ready
+  memory and triggers the normal snapshot refresh; ordinary reruns remain memory-neutral. The
+  canonical commit locks the lineage and accepts only current pending work and no older publication
+  than the current ready entry, so later publication wins even when extraction completes out of
+  order.
 - Historical `republishOnly` remains a rerun of the parent's frozen Markdown with its existing
   artifact-reuse contract. It is not a draft-correction path.
 

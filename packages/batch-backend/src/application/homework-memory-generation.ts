@@ -2,7 +2,7 @@ import type { GenerationProvider } from '@esl-pipeline/contracts';
 
 import type { BatchBackendConfig } from '../config/env.js';
 import type { HomeworkMemoryRecord } from '../domain/homework-memory-model.js';
-import { insertCanonicalReadyHomeworkMemoryEntry } from '../domain/homework-memory-repository.js';
+import { commitCanonicalReadyHomeworkMemoryEntry } from '../domain/homework-memory-repository.js';
 import type { ProviderStructuredExecutionResult } from './generation-providers.js';
 import type { GenerationRequestEnvelopeV1 } from './generation-request-envelope.js';
 import {
@@ -25,7 +25,8 @@ export interface GenerateHomeworkMemoryFromSourceRequest {
 }
 
 export interface GenerateHomeworkMemoryFromSourceResult {
-  entry: HomeworkMemoryRecord;
+  outcome: 'canonical_committed' | 'stale_discarded';
+  entry: HomeworkMemoryRecord | null;
   providerRequestId?: string;
   usage?: ProviderStructuredExecutionResult['usage'];
 }
@@ -33,7 +34,7 @@ export interface GenerateHomeworkMemoryFromSourceResult {
 export interface HomeworkMemoryGenerationDependencies {
   extractor: typeof extractHomeworkMemoryContent;
   repository: {
-    insertCanonicalReady: typeof insertCanonicalReadyHomeworkMemoryEntry;
+    commitCanonicalReady: typeof commitCanonicalReadyHomeworkMemoryEntry;
   };
   now: () => Date;
 }
@@ -45,7 +46,7 @@ export async function generateHomeworkMemoryFromSource(args: {
 }): Promise<GenerateHomeworkMemoryFromSourceResult> {
   const extractor = args.overrides?.extractor ?? extractHomeworkMemoryContent;
   const repository = args.overrides?.repository ?? {
-    insertCanonicalReady: insertCanonicalReadyHomeworkMemoryEntry,
+    commitCanonicalReady: commitCanonicalReadyHomeworkMemoryEntry,
   };
   const now = args.overrides?.now ?? (() => new Date());
 
@@ -61,7 +62,7 @@ export async function generateHomeworkMemoryFromSource(args: {
   });
 
   const generatedAt = now();
-  const entry = await repository.insertCanonicalReady({
+  const commit = await repository.commitCanonicalReady({
     studentId: args.request.source.studentId,
     jobId: args.request.source.jobId,
     assignmentLineageKey: args.request.source.assignmentLineageKey,
@@ -93,10 +94,12 @@ export async function generateHomeworkMemoryFromSource(args: {
     teacherFollowUpCues: extraction.content.teacherFollowUpCues,
     publishedAt: args.request.source.publishedAt,
     publishTargets: args.request.source.publishTargets,
+    pendingEntryId: args.request.pendingEntryId,
   });
 
   return {
-    entry,
+    outcome: commit.outcome,
+    entry: commit.entry,
     providerRequestId: extraction.providerRequestId,
     usage: extraction.usage,
   };
