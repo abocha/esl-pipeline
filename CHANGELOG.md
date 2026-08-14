@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.6.0] - 2026-08-14
+
+### Changed
+
+- Automated release from PR #198: feat(assignments): support post-share assignment corrections (https://github.com/abocha/esl-pipeline/pull/198)
+
 ## [10.5.9] - 2026-08-13
 
 ### Changed
