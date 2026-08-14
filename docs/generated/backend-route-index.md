@@ -43,6 +43,7 @@
 | POST | `/jobs/:jobId/actions` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
 | POST | `/jobs/:jobId/approve` | `packages/batch-backend/src/transport/core-routes.ts` |
 | GET | `/jobs/:jobId/provenance` | `packages/batch-backend/src/transport/core-routes.ts` |
+| POST | `/jobs/:publishedJobId/publish-correction` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
 | GET | `/jobs/events` | `packages/batch-backend/src/transport/core-routes.ts` |
 | GET | `/meta/version` | `packages/batch-backend/src/transport/core-routes.ts` |
 | GET | `/metrics/readiness` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
