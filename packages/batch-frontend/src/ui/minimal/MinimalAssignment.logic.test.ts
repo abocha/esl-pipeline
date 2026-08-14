@@ -143,7 +143,7 @@ describe('MinimalAssignment logic helpers', () => {
     expect(getPresetRerunActions()).toEqual([
       {
         kind: 'republish',
-        label: 'Republish current draft',
+        label: 'Republish published version',
         description: 'Refresh the HTML page without regenerating any audio.',
         payload: { republishOnly: true },
       },

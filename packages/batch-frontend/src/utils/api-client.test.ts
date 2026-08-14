@@ -2,7 +2,7 @@ import type { AxiosAdapter, AxiosResponse, InternalAxiosRequestConfig } from 'ax
 import { AxiosError } from 'axios';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import apiClient, { setApiAuthRefreshHandler, setApiAuthToken } from './api-client';
+import apiClient, { handleApiError, setApiAuthRefreshHandler, setApiAuthToken } from './api-client';
 
 const originalAdapter = apiClient.defaults.adapter;
 
@@ -71,5 +71,29 @@ describe('api-client auth refresh', () => {
     expect(protectedAttempts).toBe(2);
     expect(seenAuthorizations[0]).toBe('Bearer expired-token');
     expect(seenAuthorizations[1]).toBe('Bearer fresh-token');
+  });
+
+  it('keeps a domain code when a 409 response has no message', () => {
+    const error = new AxiosError('conflict', undefined, undefined, undefined, {
+      data: { code: 'assignment_session_completed' },
+      status: 409,
+      statusText: 'Conflict',
+      headers: {},
+      config: {} as InternalAxiosRequestConfig,
+    });
+
+    expect(handleApiError(error)).toBe('HTTP 409: assignment_session_completed');
+  });
+
+  it('uses a useful fallback when an HTTP error has no body or status text', () => {
+    const error = new AxiosError('conflict', undefined, undefined, undefined, {
+      data: {},
+      status: 409,
+      statusText: '',
+      headers: {},
+      config: {} as InternalAxiosRequestConfig,
+    });
+
+    expect(handleApiError(error)).toBe('HTTP 409: Request failed');
   });
 });

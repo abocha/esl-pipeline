@@ -133,7 +133,7 @@ export function buildPublishJobOverrides(input: PublishJobOverridesInput): Publi
 const PRESET_RERUN_ACTIONS: readonly PresetRerunAction[] = [
   {
     kind: 'republish',
-    label: 'Republish current draft',
+    label: 'Republish published version',
     description: 'Refresh the HTML page without regenerating any audio.',
     payload: { republishOnly: true },
   },

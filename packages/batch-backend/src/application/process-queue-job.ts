@@ -7,6 +7,8 @@
 // 4. If approved markdown is present, call ESL pipeline via runAssignmentJob.
 // 5. On success, transition running -> succeeded with manifestPath.
 // 6. On failure, transition running -> failed with error and rethrow so BullMQ can retry.
+
+import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -15,7 +17,11 @@ import { manifestPathFor } from '@esl-pipeline/orchestrator';
 
 import { type BatchBackendConfig, loadConfig } from '../config/env.js';
 import { publishJobEvent } from '../domain/job-events.js';
-import { getJobById, updateJobStateAndResult } from '../domain/job-repository.js';
+import {
+  getJobById,
+  resetFailedAssignmentCorrectionJob,
+  updateJobStateAndResult,
+} from '../domain/job-repository.js';
 import { getDecryptedElevenLabsKey, getSettingsByUserId } from '../domain/settings-repository.js';
 import { registerRunningJob, unregisterRunningJob } from '../infrastructure/job-cancellation.js';
 import { createJobLogger } from '../infrastructure/logger.js';
@@ -50,10 +56,34 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
   const { jobId } = payload;
   const log = createJobLogger(jobId);
 
-  const job = await getJobById(jobId);
+  let job = await getJobById(jobId);
   if (!job) {
     log.warn('Job not found; skipping', { event: 'job_missing' });
     return;
+  }
+
+  if (job.state === 'failed' && payload.executionMode === 'correction') {
+    if (
+      !payload.sourceJobId ||
+      !payload.correction?.expectedMarkdownHash ||
+      !payload.correction.manifestMd
+    ) {
+      throw new Error('Corrupted correction retry payload');
+    }
+    const reset = await resetFailedAssignmentCorrectionJob({
+      jobId,
+      sourceJobId: payload.sourceJobId,
+      expectedMarkdownHash: payload.correction.expectedMarkdownHash,
+    });
+    if (reset) {
+      job = reset;
+    } else {
+      const current = await getJobById(jobId);
+      if (!current || current.state === 'failed') {
+        throw new Error('Correction retry provenance mismatch');
+      }
+      job = current;
+    }
   }
 
   if (job.state === 'succeeded' || job.state === 'failed') {
@@ -87,9 +117,23 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
   registerRunningJob(jobId, cancellationController);
 
   try {
-    if (running.sourceJobId && (payload.executionMode !== 'rerun' || !payload.rerun)) {
+    if (running.sourceJobId && payload.executionMode === 'rerun' && !payload.rerun) {
       throw new Error(
         'Corrupted rerun queue payload: rerun jobs must include executionMode="rerun" and rerun metadata.',
+      );
+    }
+    if (
+      running.sourceJobId &&
+      payload.executionMode !== 'rerun' &&
+      payload.executionMode !== 'correction'
+    ) {
+      throw new Error(
+        'Corrupted rerun queue payload: rerun jobs must include executionMode="rerun" and rerun metadata.',
+      );
+    }
+    if (payload.executionMode === 'correction' && !payload.correction?.expectedMarkdownHash) {
+      throw new Error(
+        'Corrupted correction queue payload: correction jobs must include the expected markdown hash.',
       );
     }
 
@@ -117,8 +161,13 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
     }
 
     const isRerunExecution = payload.executionMode === 'rerun';
+    const isCorrectionExecution = payload.executionMode === 'correction';
     const markdownInput = await resolveMarkdownInput(running, {
       preferFilesystemMd: isRerunExecution,
+      expectedContentHash: isCorrectionExecution
+        ? payload.correction?.expectedMarkdownHash
+        : undefined,
+      materializedFilename: isCorrectionExecution ? `${sanitizeForFs(jobId)}.md` : undefined,
     });
 
     const uploadFlag = resolveUploadTarget(running.upload, config.storage.provider);
@@ -176,7 +225,9 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
 
     const canonicalManifestMd = isRerunExecution
       ? await resolveManifestMdPath(payload.rerun?.manifestMd, markdownInput.mdPath)
-      : await resolveManifestMdPath(running.md, markdownInput.mdPath);
+      : isCorrectionExecution
+        ? resolveCorrectionManifestMd(jobId, payload.correction?.manifestMd)
+        : await resolveManifestMdPath(running.md, markdownInput.mdPath);
 
     const executePipeline = async () => {
       try {
@@ -475,7 +526,11 @@ async function resolveMarkdownInput(
     md: string | null;
     mdStorageUri?: string | null;
   },
-  options: { preferFilesystemMd?: boolean } = {},
+  options: {
+    preferFilesystemMd?: boolean;
+    expectedContentHash?: string;
+    materializedFilename?: string;
+  } = {},
 ): Promise<ResolvedMarkdownInput> {
   if (options.preferFilesystemMd) {
     if (!job.md) {
@@ -490,7 +545,12 @@ async function resolveMarkdownInput(
   }
 
   if (job.mdStorageUri) {
-    return materializeMarkdownFromStorage(job.id, job.mdStorageUri);
+    return materializeMarkdownFromStorage(
+      job.id,
+      job.mdStorageUri,
+      options.expectedContentHash,
+      options.materializedFilename,
+    );
   }
 
   if (job.md) {
@@ -507,11 +567,19 @@ async function resolveMarkdownInput(
 async function materializeMarkdownFromStorage(
   jobId: string,
   storageUri: string,
+  expectedContentHash?: string,
+  materializedFilename = 'assignment.md',
 ): Promise<ResolvedMarkdownInput> {
   const storage = createTranscriptionStorageForUri(storageUri);
   const contents = await storage.getText(storageUri);
+  if (
+    expectedContentHash &&
+    createHash('sha256').update(contents, 'utf8').digest('hex') !== expectedContentHash
+  ) {
+    throw new Error('Correction markdown content hash mismatch');
+  }
   const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), `esl-job-${sanitizeForFs(jobId)}-`));
-  const mdPath = path.join(baseDir, 'assignment.md');
+  const mdPath = path.join(baseDir, path.basename(materializedFilename));
   await fs.writeFile(mdPath, contents, 'utf8');
 
   return {
@@ -520,6 +588,16 @@ async function materializeMarkdownFromStorage(
       await fs.rm(baseDir, { recursive: true, force: true });
     },
   };
+}
+
+function resolveCorrectionManifestMd(
+  jobId: string,
+  declaredManifestMd: string | undefined,
+): string {
+  const uploadDir = process.env.FILESYSTEM_UPLOAD_DIR || './uploads';
+  const fallbackFilename = `${sanitizeForFs(jobId)}.md`;
+  const filename = path.basename(declaredManifestMd?.trim() || fallbackFilename);
+  return path.resolve(uploadDir, 'corrections', filename);
 }
 
 function sanitizeForFs(value: string): string {

@@ -7,6 +7,7 @@ import type {
   AssignmentInvalidatedArtifact,
   ConfirmAssignmentSessionStepRequest,
   GenerationProvider,
+  PublishAssignmentCorrectionRequest,
   PublishTarget,
   TtsProviderId,
   TtsStrategy,
@@ -20,8 +21,16 @@ import {
   type AssignmentSessionRecord,
 } from './assignment-session-model.js';
 import { getDraftByIdForUpdate } from './draft-repository.js';
+import { insertJobActionHistory } from './job-action-history-repository.js';
+import { JobActionType } from './job-actions.js';
 import type { JobRecord } from './job-model.js';
-import { getJobById, type InsertJobParams, insertApprovalJob } from './job-repository.js';
+import {
+  getJobById,
+  type InsertJobParams,
+  insertApprovalJob,
+  insertJob,
+  resetFailedAssignmentCorrectionJob,
+} from './job-repository.js';
 import { getTranscriptByIdForUpdate } from './transcript-repository.js';
 
 export const ACTIVE_ASSIGNMENT_SESSION_SQL = `confirmed_step <> 'share'`;
@@ -136,6 +145,17 @@ export interface ReserveAssignmentShareParams {
   jobConfig: AssignmentShareJobConfig;
 }
 
+export interface PublishAssignmentCorrectionJobParams {
+  userId: string;
+  publishedJobId: string;
+  request: PublishAssignmentCorrectionRequest;
+}
+
+export interface PublishAssignmentCorrectionJobResult {
+  job: JobRecord;
+  created: boolean;
+}
+
 const RETURNING_COLUMNS = `
   id, user_id, student_id, lesson_id, recording_id, transcript_id,
   prompt_package_id, draft_id, revision, confirmed_step, confirmed_snapshot,
@@ -210,6 +230,20 @@ export class AssignmentSessionRequestConflictError extends Error {
   constructor(readonly session: AssignmentSessionRecord) {
     super('Student confirmation request ID was already used with different input.');
     this.name = 'AssignmentSessionRequestConflictError';
+  }
+}
+
+export class AssignmentCorrectionError extends Error {
+  constructor(
+    readonly code:
+      | 'ASSIGNMENT_CORRECTION_NOT_FOUND'
+      | 'ASSIGNMENT_CORRECTION_PARENT_INVALID'
+      | 'ASSIGNMENT_CORRECTION_SESSION_LINEAGE_INVALID'
+      | 'ASSIGNMENT_CORRECTION_DRAFT_CONFLICT'
+      | 'ASSIGNMENT_CORRECTION_REQUEST_CONFLICT',
+  ) {
+    super(code);
+    this.name = 'AssignmentCorrectionError';
   }
 }
 
@@ -947,6 +981,210 @@ export async function reserveAssignmentShare(
       throw error;
     }
   });
+}
+
+export async function publishAssignmentCorrectionJob(
+  params: PublishAssignmentCorrectionJobParams,
+): Promise<PublishAssignmentCorrectionJobResult> {
+  return withPgClient(async (client) => {
+    await client.query('BEGIN');
+    try {
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [
+        params.request.requestId,
+      ]);
+      const sessionResult = await client.query<AssignmentSessionRow>(
+        `WITH RECURSIVE job_lineage AS (
+           SELECT id, source_job_id FROM jobs WHERE id = $1
+           UNION
+           SELECT parent.id, parent.source_job_id
+           FROM jobs parent
+           JOIN job_lineage child ON parent.id = child.source_job_id
+         )
+         SELECT ${RETURNING_COLUMNS}
+         FROM assignment_sessions
+         WHERE user_id = $2
+           AND confirmed_step = 'share'
+           AND share_job_id IN (SELECT id FROM job_lineage)
+         ORDER BY updated_at DESC, id DESC
+         LIMIT 1
+         FOR UPDATE`,
+        [params.publishedJobId, params.userId],
+      );
+      const sessionRow = sessionResult.rows[0];
+      if (!sessionRow) {
+        throw new AssignmentCorrectionError('ASSIGNMENT_CORRECTION_SESSION_LINEAGE_INVALID');
+      }
+      const session = mapRow(sessionRow);
+      const source = session.confirmed.source;
+      const create = session.confirmed.create;
+      const parent = await getJobById(params.publishedJobId, { client, forUpdate: true });
+      if (!parent || parent.userId !== params.userId) {
+        throw new AssignmentCorrectionError('ASSIGNMENT_CORRECTION_NOT_FOUND');
+      }
+      if (parent.state !== 'succeeded' || parent.publishTarget !== 'html' || !parent.htmlUrl) {
+        throw new AssignmentCorrectionError('ASSIGNMENT_CORRECTION_PARENT_INVALID');
+      }
+      if (
+        !source ||
+        !create ||
+        session.shareJobId === null ||
+        parent.studentId !== session.studentId ||
+        parent.recordingId !== source.recordingId ||
+        parent.transcriptId !== source.transcriptId ||
+        parent.promptPackageId !== create.promptPackageId ||
+        parent.draftId !== create.draftId ||
+        parent.lessonId !== source.lessonId
+      ) {
+        throw new AssignmentCorrectionError('ASSIGNMENT_CORRECTION_SESSION_LINEAGE_INVALID');
+      }
+
+      const existing = await getJobById(params.request.requestId, { client, forUpdate: true });
+      if (existing) {
+        const replay = await getCorrectionReplayPayload(client, parent.id, existing.id);
+        if (
+          existing.userId !== params.userId ||
+          existing.sourceJobId !== parent.id ||
+          existing.draftId !== params.request.draftId ||
+          !storageUriMatchesHash(existing.mdStorageUri, params.request.draftHash) ||
+          !correctionReplayMatches(replay, params)
+        ) {
+          throw new AssignmentCorrectionError('ASSIGNMENT_CORRECTION_REQUEST_CONFLICT');
+        }
+        const job =
+          existing.state === 'failed'
+            ? await resetFailedAssignmentCorrectionJob(
+                {
+                  jobId: existing.id,
+                  sourceJobId: parent.id,
+                  expectedMarkdownHash: params.request.draftHash,
+                },
+                { client },
+              )
+            : existing;
+        if (!job) {
+          throw new AssignmentCorrectionError('ASSIGNMENT_CORRECTION_REQUEST_CONFLICT');
+        }
+        await client.query('COMMIT');
+        return { job, created: false };
+      }
+
+      if (create.draftId !== params.request.draftId) {
+        throw new AssignmentCorrectionError('ASSIGNMENT_CORRECTION_DRAFT_CONFLICT');
+      }
+      const draft = await getDraftByIdForUpdate(client, params.request.draftId);
+      if (
+        !draft ||
+        draft.promptPackageId !== create.promptPackageId ||
+        draft.studentId !== session.studentId ||
+        draft.workingVersion !== params.request.draftWorkingVersion ||
+        draft.contentHash !== params.request.draftHash
+      ) {
+        throw new AssignmentCorrectionError('ASSIGNMENT_CORRECTION_DRAFT_CONFLICT');
+      }
+
+      const job = await insertJob(
+        {
+          id: params.request.requestId,
+          md: null,
+          mdStorageUri: draft.storageUri,
+          recordingId: parent.recordingId,
+          transcriptId: parent.transcriptId,
+          promptPackageId: parent.promptPackageId,
+          draftId: draft.id,
+          studentId: parent.studentId,
+          lessonId: parent.lessonId,
+          preset: parent.preset ?? undefined,
+          learningPresetId: parent.learningPresetId,
+          learningPresetVersion: parent.learningPresetVersion,
+          promptSnapshotVersion: parent.promptSnapshotVersion,
+          promptAlias: parent.promptAlias,
+          withTts: parent.withTts ?? undefined,
+          upload: parent.upload,
+          voiceId: parent.voiceId ?? undefined,
+          voiceAccent: parent.voiceAccent ?? undefined,
+          forceTts: parent.forceTts ?? undefined,
+          publishTarget: parent.publishTarget ?? undefined,
+          ttsStrategy: parent.ttsStrategy ?? undefined,
+          ttsProvider: parent.ttsProvider ?? undefined,
+          ttsModel: parent.ttsModel ?? undefined,
+          userId: parent.userId ?? undefined,
+          autoPublish: parent.autoPublish ?? undefined,
+          sourceJobId: parent.id,
+        },
+        { client },
+      );
+      await insertJobActionHistory(
+        {
+          jobId: parent.id,
+          actionType: JobActionType.RERUN,
+          payload: correctionReplayPayload(params),
+          requestedAt: new Date(),
+          requestedBy: params.userId,
+          outcome: 'succeeded',
+          message: 'Correction child reserved',
+          createdJobId: job.id,
+        },
+        { client },
+      );
+      await client.query('COMMIT');
+      return { job, created: true };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
+  });
+}
+
+function storageUriMatchesHash(
+  storageUri: string | null | undefined,
+  contentHash: string,
+): boolean {
+  return storageUri?.endsWith(`/content/${contentHash}.md`) ?? false;
+}
+
+function correctionReplayPayload(
+  params: PublishAssignmentCorrectionJobParams,
+): Record<string, string | number> {
+  return {
+    operation: 'publish_correction',
+    publishedJobId: params.publishedJobId,
+    draftId: params.request.draftId,
+    draftWorkingVersion: params.request.draftWorkingVersion,
+    draftHash: params.request.draftHash,
+  };
+}
+
+async function getCorrectionReplayPayload(
+  client: PoolClient,
+  parentJobId: string,
+  childJobId: string,
+): Promise<Record<string, unknown> | null> {
+  const result = await client.query<{ payload_json: Record<string, unknown> | null }>(
+    `SELECT payload_json
+     FROM job_action_history
+     WHERE job_id = $1
+       AND created_job_id = $2
+       AND action_type = $3
+       AND payload_json #>> '{operation}' = 'publish_correction'
+     ORDER BY created_at DESC, id DESC
+     LIMIT 1
+     FOR UPDATE`,
+    [parentJobId, childJobId, JobActionType.RERUN],
+  );
+  return result.rows[0]?.payload_json ?? null;
+}
+
+function correctionReplayMatches(
+  payload: Record<string, unknown> | null,
+  params: PublishAssignmentCorrectionJobParams,
+): boolean {
+  return (
+    payload?.operation === 'publish_correction' &&
+    payload.publishedJobId === params.publishedJobId &&
+    payload.draftId === params.request.draftId &&
+    payload.draftWorkingVersion === params.request.draftWorkingVersion &&
+    payload.draftHash === params.request.draftHash
+  );
 }
 
 export async function completeAssignmentShare(params: {

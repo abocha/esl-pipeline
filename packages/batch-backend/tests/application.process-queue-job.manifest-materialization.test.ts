@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -19,6 +20,128 @@ const {
 } = h;
 
 describe('application/process-queue-job', () => {
+  it('uses a child-specific markdown basename for correction manifest identity', async () => {
+    const markdown = '# Corrected assignment';
+    const expectedHash = createHash('sha256').update(markdown, 'utf8').digest('hex');
+    const initial = makeJob({
+      state: 'queued',
+      md: null,
+      mdStorageUri: `s3://esl-notion-tts/drafts/draft-1/content/${expectedHash}.md`,
+      sourceJobId: 'job-parent',
+    });
+    getJobByIdSpy.mockResolvedValue(initial);
+    const running = makeJob({ ...initial, state: 'running', startedAt: new Date() });
+    const succeeded = { ...running, state: 'succeeded', finishedAt: new Date() };
+    updateJobStateAndResultSpy
+      .mockResolvedValueOnce(running as never)
+      .mockResolvedValueOnce(succeeded as never);
+    createTranscriptionStorageForUriSpy.mockReturnValue({
+      getText: vi.fn().mockResolvedValue(markdown),
+    } as unknown as ReturnType<typeof transcriptionStorage.createTranscriptionStorageForUri>);
+    runAssignmentJobSpy.mockResolvedValue({ manifestPath: 's3://manifests/job-1.manifest.json' });
+
+    await processQueueJob({
+      jobId: 'job-1',
+      sourceJobId: 'job-parent',
+      executionMode: 'correction',
+      correction: {
+        expectedMarkdownHash: expectedHash,
+        manifestMd: 'corrections/job-1.md',
+      },
+    } as never);
+
+    const [payload] = runAssignmentJobSpy.mock.calls[0]!;
+    expect(payload.md).toMatch(/[\\/]job-1\.md$/);
+  });
+
+  it('promotes a correction manifest to the child-owned durable identity instead of its parent', async () => {
+    const markdown = '# Corrected assignment';
+    const expectedHash = createHash('sha256').update(markdown, 'utf8').digest('hex');
+    const uploadDir = await fs.mkdtemp(path.join(tmpdir(), 'esl-correction-manifest-'));
+    const workerTempDir = await fs.mkdtemp(path.join(tmpdir(), 'esl-correction-worker-'));
+    const workerManifestPath = path.join(workerTempDir, 'job-child.manifest.json');
+    const durableManifestPath = path.join(uploadDir, 'corrections', 'job-child.manifest.json');
+    await fs.writeFile(workerManifestPath, '{"mdHash":"correction"}', 'utf8');
+    const previousUploadDir = process.env.FILESYSTEM_UPLOAD_DIR;
+    process.env.FILESYSTEM_UPLOAD_DIR = uploadDir;
+
+    const initial = makeJob({
+      state: 'queued',
+      md: null,
+      mdStorageUri: `s3://esl-notion-tts/drafts/draft-1/content/${expectedHash}.md`,
+      sourceJobId: 'job-parent',
+    });
+    getJobByIdSpy.mockResolvedValue(initial);
+    const running = makeJob({ ...initial, state: 'running', startedAt: new Date() });
+    updateJobStateAndResultSpy
+      .mockResolvedValueOnce(running as never)
+      .mockResolvedValueOnce({ ...running, state: 'succeeded', finishedAt: new Date() } as never);
+    createTranscriptionStorageForUriSpy.mockReturnValue({
+      getText: vi.fn().mockResolvedValue(markdown),
+    } as unknown as ReturnType<typeof transcriptionStorage.createTranscriptionStorageForUri>);
+    runAssignmentJobSpy.mockResolvedValue({ manifestPath: workerManifestPath });
+
+    try {
+      await processQueueJob({
+        jobId: 'job-child',
+        sourceJobId: 'job-parent',
+        executionMode: 'correction',
+        correction: {
+          expectedMarkdownHash: expectedHash,
+          manifestMd: 'corrections/job-child.md',
+        },
+      });
+
+      expect(updateJobStateAndResultSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({ manifestPath: durableManifestPath }),
+      );
+      await expect(fs.readFile(durableManifestPath, 'utf8')).resolves.toContain('correction');
+      await expect(
+        fs.access(path.join(uploadDir, 'corrections', 'job-parent.manifest.json')),
+      ).rejects.toThrow();
+    } finally {
+      if (previousUploadDir == null) delete process.env.FILESYSTEM_UPLOAD_DIR;
+      else process.env.FILESYSTEM_UPLOAD_DIR = previousUploadDir;
+      await fs.rm(uploadDir, { recursive: true, force: true });
+      await fs.rm(workerTempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('fails closed when correction storage does not match the reserved markdown hash', async () => {
+    const expectedHash = 'a'.repeat(64);
+    const initial = makeJob({
+      state: 'queued',
+      md: null,
+      mdStorageUri: `s3://esl-notion-tts/drafts/draft-1/content/${expectedHash}.md`,
+      sourceJobId: 'job-source',
+    });
+    getJobByIdSpy.mockResolvedValue(initial);
+
+    const running = makeJob({ ...initial, state: 'running', startedAt: new Date() });
+    updateJobStateAndResultSpy.mockResolvedValueOnce(running as never).mockResolvedValueOnce({
+      ...running,
+      state: 'failed',
+      error: 'Correction markdown content hash mismatch',
+    } as never);
+    createTranscriptionStorageForUriSpy.mockReturnValue({
+      getText: vi.fn().mockResolvedValue('# changed content'),
+    } as unknown as ReturnType<typeof transcriptionStorage.createTranscriptionStorageForUri>);
+
+    await expect(
+      processQueueJob({
+        jobId: 'job-1',
+        sourceJobId: 'job-source',
+        executionMode: 'correction',
+        correction: {
+          expectedMarkdownHash: expectedHash,
+          manifestMd: 'corrections/job-1.md',
+        },
+      }),
+    ).rejects.toThrow('Correction markdown content hash mismatch');
+
+    expect(runAssignmentJobSpy).not.toHaveBeenCalled();
+  });
+
   it('rejects rerun jobs that only have stored draft markdown', async () => {
     const initial = makeJob({
       state: 'queued',
