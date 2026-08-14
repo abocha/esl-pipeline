@@ -27,6 +27,7 @@ import * as profileCandidatePromotionModule from '../src/application/profile-can
 import * as profileContentModule from '../src/application/profile-content.js';
 import * as profileDraftRefreshModule from '../src/application/profile-draft-refresh.js';
 import { ProfilePathError } from '../src/application/profile-path.js';
+import * as publishAssignmentCorrectionModule from '../src/application/publish-assignment-correction.js';
 import * as readinessMetricsModule from '../src/application/readiness-metrics.js';
 import * as retryRecordingModule from '../src/application/retry-recording-transcription.js';
 import * as shareAssignmentSessionModule from '../src/application/share-assignment-session.js';
@@ -1314,6 +1315,7 @@ export function describeHttpServerIntegrationSuite(
       assignmentSessionsModule,
       confirmAssignmentSessionStepModule,
       shareAssignmentSessionModule,
+      publishAssignmentCorrectionModule,
       authMiddlewareModule,
       rateLimitMocks,
       approveJobModule,

@@ -298,6 +298,17 @@ export interface ConfirmAssignmentSessionShareResponse {
   job: JobStatusDto;
 }
 
+export interface PublishAssignmentCorrectionRequest {
+  requestId: string;
+  draftId: string;
+  draftWorkingVersion: number;
+  draftHash: string;
+}
+
+export interface PublishAssignmentCorrectionResponse {
+  job: JobStatusDto;
+}
+
 export interface AssignmentSessionConflictResponse {
   code: 'assignment_session_revision_conflict';
   session: AssignmentSessionDto;

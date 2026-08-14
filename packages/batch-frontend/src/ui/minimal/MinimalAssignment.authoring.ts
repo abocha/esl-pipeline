@@ -571,7 +571,8 @@ export interface AuthoringController extends AuthoringState {
   generateDraft: () => Promise<GenerateDraftResponse | null>;
   runValidation: () => Promise<MarkdownValidationResponse>;
   saveDraft: () => Promise<DraftResponse | null>;
-  refreshDraftPreservingLocal: () => Promise<void>;
+  flushDraftAutosave: () => Promise<DraftResponse | null>;
+  refreshDraftPreservingLocal: (options?: { forcePreserveLocal?: boolean }) => Promise<void>;
   previewDraft: () => Promise<void>;
   publishAssignment: (params: {
     onPublishedJob: (job: JobStatus) => void;
@@ -613,6 +614,7 @@ export function useMinimalAssignmentAuthoringController({
   const draftAutosaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const draftAutosaveLastSavedAtRef = useRef(0);
   const draftAutosaveInFlightRef = useRef(false);
+  const draftAutosaveInFlightPromiseRef = useRef<Promise<DraftResponse | null> | null>(null);
   const draftAutosavePendingRef = useRef(false);
   const draftConflictTextRef = useRef<string | null>(null);
   const [draftAutosaveRescheduleToken, requestDraftAutosaveReschedule] = useReducer(
@@ -753,6 +755,7 @@ export function useMinimalAssignmentAuthoringController({
   const invalidateDraftPersistence = useCallback(() => {
     authoringPersistenceVersionRef.current += 1;
     draftAutosaveInFlightRef.current = false;
+    draftAutosaveInFlightPromiseRef.current = null;
     draftAutosavePendingRef.current = false;
     if (draftAutosaveTimeoutRef.current) {
       clearTimeout(draftAutosaveTimeoutRef.current);
@@ -961,44 +964,66 @@ export function useMinimalAssignmentAuthoringController({
     }
   }, [persistDraftText, runValidation, state.draftText, state.promptPackage]);
 
-  const refreshDraftPreservingLocal = useCallback(async () => {
-    if (!state.draft?.id) return;
-    const localText = draftTextRef.current.trim();
-    const durableText = (state.draft.text ?? '').trim();
-    const preserveCurrentText = localText !== durableText;
-    try {
-      const latest = await fetchDraft(state.draft.id);
-      const remoteText = (latest.text ?? '').trim();
-      const remoteChanged =
-        latest.workingVersion !== state.draft.workingVersion ||
-        latest.contentHash !== state.draft.contentHash;
-      const overlapsRemote = preserveCurrentText && remoteChanged && localText !== remoteText;
-      if (overlapsRemote) {
-        draftConflictTextRef.current = localText;
-      } else {
-        draftConflictTextRef.current = null;
+  const flushDraftAutosave = useCallback(async (): Promise<DraftResponse | null> => {
+    if (draftAutosaveTimeoutRef.current) {
+      clearTimeout(draftAutosaveTimeoutRef.current);
+      draftAutosaveTimeoutRef.current = null;
+    }
+    const inFlight = draftAutosaveInFlightPromiseRef.current;
+    let inFlightDraft: DraftResponse | null | undefined;
+    if (inFlight) {
+      inFlightDraft = await inFlight;
+      if (inFlightDraft && draftTextRef.current.trim() === (inFlightDraft.text ?? '').trim()) {
+        return inFlightDraft;
       }
-      dispatch({
-        type: 'draft_save_succeeded',
-        payload: { draft: latest, preserveCurrentText },
-      });
-      if (overlapsRemote) {
+    }
+    if (draftDirty) {
+      return saveDraft();
+    }
+    return inFlightDraft ?? state.draft;
+  }, [draftDirty, saveDraft, state.draft]);
+
+  const refreshDraftPreservingLocal = useCallback(
+    async (options?: { forcePreserveLocal?: boolean }) => {
+      if (!state.draft?.id) return;
+      const localText = draftTextRef.current.trim();
+      const durableText = (state.draft.text ?? '').trim();
+      const preserveCurrentText = options?.forcePreserveLocal === true || localText !== durableText;
+      try {
+        const latest = await fetchDraft(state.draft.id);
+        const remoteText = (latest.text ?? '').trim();
+        const remoteChanged =
+          latest.workingVersion !== state.draft.workingVersion ||
+          latest.contentHash !== state.draft.contentHash;
+        const overlapsRemote = preserveCurrentText && remoteChanged && localText !== remoteText;
+        if (overlapsRemote) {
+          draftConflictTextRef.current = localText;
+        } else {
+          draftConflictTextRef.current = null;
+        }
+        dispatch({
+          type: 'draft_save_succeeded',
+          payload: { draft: latest, preserveCurrentText },
+        });
+        if (overlapsRemote) {
+          dispatch({
+            type: 'draft_save_failed',
+            payload: {
+              error: 'Newer saved draft work was found. Review your text before retrying.',
+            },
+          });
+        }
+      } catch (error) {
         dispatch({
           type: 'draft_save_failed',
           payload: {
-            error: 'Newer saved draft work was found. Review your text before retrying.',
+            error: error instanceof Error ? error.message : 'Unable to refresh saved draft.',
           },
         });
       }
-    } catch (error) {
-      dispatch({
-        type: 'draft_save_failed',
-        payload: {
-          error: error instanceof Error ? error.message : 'Unable to refresh saved draft.',
-        },
-      });
-    }
-  }, [state.draft?.contentHash, state.draft?.id, state.draft?.text, state.draft?.workingVersion]);
+    },
+    [state.draft?.contentHash, state.draft?.id, state.draft?.text, state.draft?.workingVersion],
+  );
 
   const draftRecoveryConflict = draftConflictTextRef.current === state.draftText.trim();
 
@@ -1353,19 +1378,25 @@ export function useMinimalAssignmentAuthoringController({
       }
       const textToSave = state.draftText;
       draftAutosaveInFlightRef.current = true;
-      void persistDraftText(textToSave, {
+      const autosaveRun = persistDraftText(textToSave, {
         preserveCurrentText: draftTextRef.current.trim() !== textToSave.trim(),
-      })
+      });
+      const trackedAutosave = autosaveRun
         .then((saved) => {
           if (saved) {
             draftAutosaveLastSavedAtRef.current = Date.now();
           }
+          return saved;
         })
         .catch((error) => {
           const message = error instanceof Error ? error.message : 'Unable to autosave draft.';
           dispatch({ type: 'draft_save_failed', payload: { error: message } });
+          return null;
         })
         .finally(() => {
+          if (draftAutosaveInFlightPromiseRef.current === trackedAutosave) {
+            draftAutosaveInFlightPromiseRef.current = null;
+          }
           draftAutosaveInFlightRef.current = false;
           const latestText = draftTextRef.current.trim();
           const savedText = textToSave.trim();
@@ -1374,6 +1405,8 @@ export function useMinimalAssignmentAuthoringController({
             requestDraftAutosaveReschedule();
           }
         });
+      draftAutosaveInFlightPromiseRef.current = trackedAutosave;
+      void trackedAutosave;
     }, delayMs);
 
     return () => {
@@ -1643,6 +1676,7 @@ export function useMinimalAssignmentAuthoringController({
     generateDraft: generateDraftHandler,
     runValidation,
     saveDraft,
+    flushDraftAutosave,
     refreshDraftPreservingLocal,
     previewDraft,
     publishAssignment,

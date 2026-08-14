@@ -176,7 +176,7 @@ export function registerJobActionTests() {
 
     it.each([
       {
-        label: 'Republish current draft',
+        label: 'Republish published version',
         description: 'Refresh the HTML page without regenerating any audio.',
         payload: { republishOnly: true },
       },
@@ -436,7 +436,7 @@ export function registerJobActionTests() {
         await renderPublishedAssignment();
         openAdvancedActions();
 
-        await user.click(screen.getByRole('button', { name: /Republish current draft/i }));
+        await user.click(screen.getByRole('button', { name: /Republish published version/i }));
 
         await waitFor(() => {
           expect(api.rerunJob).toHaveBeenCalledWith('job-1', { republishOnly: true });
@@ -467,7 +467,7 @@ export function registerJobActionTests() {
           }) as never,
         );
 
-        await user.click(screen.getByRole('button', { name: /Republish current draft/i }));
+        await user.click(screen.getByRole('button', { name: /Republish published version/i }));
 
         await waitFor(() => {
           expect(api.rerunJob).toHaveBeenCalledWith('job-1', { republishOnly: true });

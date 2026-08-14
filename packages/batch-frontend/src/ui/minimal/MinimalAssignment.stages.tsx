@@ -131,6 +131,7 @@ interface SourceStageSectionProps {
   transcriptDirty: boolean;
   transcriptSaving: boolean;
   hideStudentSelection?: boolean;
+  readOnly?: boolean;
 }
 
 interface ContextStageSectionProps {
@@ -157,6 +158,7 @@ interface ContextStageSectionProps {
   firstProfileAssist: FirstProfileAssistProps;
   teacherNotes: string;
   onTeacherNotesChange: (value: string) => void;
+  readOnly?: boolean;
 }
 
 interface FirstProfileAssistProps {
@@ -442,6 +444,8 @@ interface AssignmentStageSectionProps {
   validation: MarkdownValidationResponse | null;
   validationError: string | null;
   draftError: string | null;
+  readOnly?: boolean;
+  allowGenerate?: boolean;
 }
 
 interface ReviewStageSectionProps {
@@ -469,6 +473,15 @@ interface ReviewStageSectionProps {
   publishUrl: string | null | undefined;
   publishLabel: string;
   publishPending: string;
+  completedReferenceMode?: boolean;
+  correctionMode?: boolean;
+  correctionPublishing?: boolean;
+  correctionError?: string | null;
+  correctionCanPublish?: boolean;
+  savedUnpublishedChanges?: boolean;
+  onEnterCorrection?: () => void;
+  onExitCorrection?: () => void;
+  onPublishCorrection?: () => void;
 }
 
 function formatWorkflowStageStatusLabel(status: WorkflowStageStatus): string {
@@ -814,6 +827,7 @@ export function SourceStageSection({
   transcriptDirty,
   transcriptSaving,
   hideStudentSelection = false,
+  readOnly = false,
 }: SourceStageSectionProps) {
   const sourceGuidance =
     stage.status === 'current'
@@ -858,7 +872,7 @@ export function SourceStageSection({
                 }
                 value={selectedStudentId}
                 onChange={(event) => onSelectedStudentIdChange(event.target.value)}
-                disabled={Boolean(linkedLessonId) || Boolean(recording)}
+                disabled={readOnly || Boolean(linkedLessonId) || Boolean(recording)}
               >
                 <option value="">Select a student</option>
                 {studentOptions.map((student) => (
@@ -882,6 +896,7 @@ export function SourceStageSection({
                     type="button"
                     className="minimal-secondary"
                     onClick={() => onSelectLessonSuggestion(lesson.id)}
+                    disabled={readOnly}
                   >
                     {lesson.label}
                     <span className="minimal-muted"> {lesson.detail}</span>
@@ -906,7 +921,7 @@ export function SourceStageSection({
                   onChange={(event) =>
                     onSelectedSttProviderChange(event.target.value as SttProvider)
                   }
-                  disabled={sttProviders.length === 0}
+                  disabled={readOnly || sttProviders.length === 0}
                 >
                   {sttProviders.map((provider) => (
                     <option key={provider} value={provider}>
@@ -937,7 +952,7 @@ export function SourceStageSection({
                   hint="Single file upload"
                   accept={{ 'audio/*': [...audioExtensions] }}
                   multiple={false}
-                  disabled={uploading || !selectedStudentId}
+                  disabled={readOnly || uploading || !selectedStudentId}
                   onFiles={onFiles}
                 />
               </div>
@@ -946,7 +961,7 @@ export function SourceStageSection({
                   type="button"
                   className="minimal-secondary"
                   onClick={onCancelAudioReplacement}
-                  disabled={uploading}
+                  disabled={readOnly || uploading}
                 >
                   Cancel replacement
                 </button>
@@ -970,7 +985,7 @@ export function SourceStageSection({
                 <span>Transcript engine: {formatSttProviderLabel(selectedSttProvider)}</span>
                 {selectedStudent ? <span>Student: {selectedStudent.name}</span> : null}
               </div>
-              {canReplaceAudio && !replacingAudio ? (
+              {canReplaceAudio && !replacingAudio && !readOnly ? (
                 <button
                   type="button"
                   className="minimal-secondary"
@@ -1009,7 +1024,7 @@ export function SourceStageSection({
                 type="button"
                 className="minimal-secondary"
                 onClick={onRetryTranscript}
-                disabled={retryingTranscript}
+                disabled={readOnly || retryingTranscript}
               >
                 {retryingTranscript ? 'Retrying...' : 'Retry transcript'}
               </button>
@@ -1028,6 +1043,7 @@ export function SourceStageSection({
                 aria-label="Transcript text"
                 value={transcriptText}
                 onChange={(event) => onTranscriptTextChange(event.target.value)}
+                readOnly={readOnly}
                 rows={10}
               />
               <div className="minimal-inline" role="status" aria-live="polite">
@@ -1060,6 +1076,7 @@ export function ContextStageSection({
   firstProfileAssist,
   teacherNotes,
   onTeacherNotesChange,
+  readOnly = false,
 }: ContextStageSectionProps) {
   const isInRouterContext = useInRouterContext();
   const contextGuidance =
@@ -1194,7 +1211,7 @@ export function ContextStageSection({
                           type="button"
                           className="minimal-primary"
                           onClick={firstProfileAssist.onApprove}
-                          disabled={firstProfileAssist.busy === 'approving'}
+                          disabled={readOnly || firstProfileAssist.busy === 'approving'}
                         >
                           {firstProfileAssist.busy === 'approving'
                             ? 'Approving...'
@@ -1222,7 +1239,7 @@ export function ContextStageSection({
                     type="button"
                     className="minimal-primary"
                     onClick={firstProfileAssist.onPopulate}
-                    disabled={firstProfileAssist.busy === 'drafting'}
+                    disabled={readOnly || firstProfileAssist.busy === 'drafting'}
                   >
                     {firstProfileAssist.busy === 'drafting'
                       ? 'Populating...'
@@ -1253,6 +1270,7 @@ export function ContextStageSection({
                     type="button"
                     className="minimal-secondary"
                     onClick={firstProfileAssist.onRetry}
+                    disabled={readOnly}
                   >
                     Retry status check
                   </button>
@@ -1281,6 +1299,7 @@ export function ContextStageSection({
             aria-label="Teacher notes"
             value={teacherNotes}
             onChange={(event) => onTeacherNotesChange(event.target.value)}
+            readOnly={readOnly}
             rows={8}
             placeholder="Add lesson-specific context, corrections, or priorities for this assignment..."
           />
@@ -1313,6 +1332,8 @@ export function AssignmentStageSection({
   validation,
   validationError,
   draftError,
+  readOnly = false,
+  allowGenerate = true,
 }: AssignmentStageSectionProps) {
   const assignmentBusy = promptLoading || generatingDraft;
   const canGenerateAssignment =
@@ -1344,23 +1365,27 @@ export function AssignmentStageSection({
               <h3>Assignment draft</h3>
             </div>
             <div className="minimal-inline">
-              <button
-                ref={generateDraftButtonRef}
-                type="button"
-                className={`minimal-primary${
-                  stage.status === 'current' && !draftText.trim() ? ' minimal-guided-button' : ''
-                }`}
-                onClick={onGenerateAssignment}
-                disabled={!canGenerateAssignment}
-              >
-                {assignmentBusy ? 'Generating assignment...' : 'Generate assignment'}
-              </button>
+              {!readOnly && allowGenerate ? (
+                <button
+                  ref={generateDraftButtonRef}
+                  type="button"
+                  className={`minimal-primary${
+                    stage.status === 'current' && !draftText.trim() ? ' minimal-guided-button' : ''
+                  }`}
+                  onClick={onGenerateAssignment}
+                  disabled={!canGenerateAssignment}
+                >
+                  {assignmentBusy ? 'Generating assignment...' : 'Generate assignment'}
+                </button>
+              ) : null}
               <span className="minimal-muted" role="status" aria-live="polite">
-                {validating
-                  ? 'Checking draft…'
-                  : draftDirty
-                    ? 'Draft changes waiting to save'
-                    : 'Draft changes saved'}
+                {readOnly
+                  ? 'Current saved draft (reference only)'
+                  : validating
+                    ? 'Checking draft…'
+                    : draftDirty
+                      ? 'Draft changes waiting to save'
+                      : 'Draft changes saved'}
               </span>
             </div>
           </div>
@@ -1382,7 +1407,7 @@ export function AssignmentStageSection({
             aria-label="Draft markdown"
             value={draftText}
             onChange={(event) => onDraftTextChange(event.target.value)}
-            disabled={assignmentBusy}
+            disabled={readOnly || assignmentBusy}
             rows={14}
           />
           {validation?.errors?.length ? (
@@ -1438,6 +1463,15 @@ export function ReviewStageSection({
   publishUrl,
   publishLabel,
   publishPending,
+  completedReferenceMode = false,
+  correctionMode = false,
+  correctionPublishing = false,
+  correctionError = null,
+  correctionCanPublish = false,
+  savedUnpublishedChanges = false,
+  onEnterCorrection,
+  onExitCorrection,
+  onPublishCorrection,
 }: ReviewStageSectionProps) {
   const reviewGuidance =
     stage.status === 'current' && shareAvailable
@@ -1454,7 +1488,34 @@ export function ReviewStageSection({
       guidance={reviewGuidance}
       actions={
         <>
-          {shareAvailable ? (
+          {completedReferenceMode && !correctionMode ? (
+            <button
+              type="button"
+              className="minimal-primary"
+              onClick={onEnterCorrection}
+              disabled={!onEnterCorrection}
+            >
+              Correct published assignment
+            </button>
+          ) : null}
+          {correctionMode ? (
+            <>
+              <button
+                type="button"
+                className="minimal-primary"
+                onClick={onPublishCorrection}
+                disabled={!correctionCanPublish}
+              >
+                {correctionPublishing
+                  ? 'Publishing corrected version...'
+                  : 'Publish corrected version'}
+              </button>
+              <button type="button" className="minimal-secondary" onClick={onExitCorrection}>
+                Exit correction mode
+              </button>
+            </>
+          ) : null}
+          {shareAvailable && !completedReferenceMode ? (
             <button
               type="button"
               className={`minimal-primary${
@@ -1516,6 +1577,12 @@ export function ReviewStageSection({
             </details>
           ) : null}
           {publishError ? <p className="minimal-error">{publishError}</p> : null}
+          {correctionError ? <p className="minimal-error">{correctionError}</p> : null}
+          {savedUnpublishedChanges ? (
+            <p className="minimal-success" role="status">
+              Unpublished changes saved
+            </p>
+          ) : null}
           {jobFailureReason ? <p className="minimal-error">{jobFailureReason}</p> : null}
           {jobReady ? (
             <div className="minimal-meta">

@@ -119,7 +119,12 @@ Canonical behavior and current status live in:
   stop at terminal state.
 - Share uses one stable request/job ID across automatic retry, remount, focus reconciliation, and
   lost responses. Once Share is confirmed, the session is immutable workflow history; changing the
-  lesson starts a new assignment and never revokes the existing handout.
+  lesson starts a new assignment and never revokes the existing handout. Reopening a completed
+  session is reference-only until the tutor explicitly chooses **Correct published assignment**.
+  Correction mode edits the current mutable draft without reopening session confirmation, drains
+  durable autosave before publishing, and submits the exact saved version/hash through a stable
+  correction request. **Republish published version** remains the historical frozen-output action;
+  it does not publish mutable draft changes.
 
 Use these for deeper detail:
 

@@ -92,6 +92,7 @@ vi.mock('../../utils/api', () => ({
   listProfileRevisions: vi.fn(),
   materializeDraft: vi.fn(),
   populateFirstProfileFromLesson: vi.fn(),
+  publishAssignmentCorrection: vi.fn(),
   restoreProfileRevision: vi.fn(),
   shareAssignmentSession: vi.fn(),
   retryRecordingTranscription: vi.fn(),
@@ -858,7 +859,7 @@ export function setupMinimalAssignmentTest() {
       {
         type: 'rerun',
         label: 'Rerun',
-        description: 'Republish current draft or selectively regenerate audio families',
+        description: 'Republish published version or selectively regenerate audio families',
         implemented: true,
       },
       {

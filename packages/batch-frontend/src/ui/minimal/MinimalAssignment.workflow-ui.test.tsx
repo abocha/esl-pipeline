@@ -1899,7 +1899,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
       expect(button.className).toContain('product-button');
     }
     expect(
-      within(advancedActions).getByRole('button', { name: /Republish current draft/i }),
+      within(advancedActions).getByRole('button', { name: /Republish published version/i }),
     ).toBeTruthy();
 
     await user.click(screen.getByRole('button', { name: /^Step 1Student$/i }));
@@ -1919,7 +1919,7 @@ describe('MinimalAssignment - staged workflow UI', () => {
     await renderPublishedAssignment();
     openAdvancedActions();
 
-    await user.click(screen.getByRole('button', { name: /Republish current draft/i }));
+    await user.click(screen.getByRole('button', { name: /Republish published version/i }));
 
     const busyButtons = screen.getAllByRole('button', { name: /Queuing rerun/i });
     expect(busyButtons).not.toHaveLength(0);
