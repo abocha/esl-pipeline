@@ -5,7 +5,7 @@
 - Audience: AI agents and maintainers for batch frontend/backend tasks.
 - Read Time: 4 minutes.
 - Authority Level: Active system map.
-- Last Verified Against: 2026-07-14 repository and production-runtime state.
+- Last Verified Against: 2026-08-14 repository and production-runtime state.
 - Owner: backend/frontend maintainers + automation agents.
 - Review Cadence: monthly or after major batch workflow changes.
 - Status: `active`.
@@ -33,7 +33,9 @@ Batch Frontend (React + Vite)
 Telegram Ops Bot -> authenticated Batch Backend ops/job APIs
 ```
 
-The backend owns durable sessions, jobs, lineage, queues, and student-memory state. The frontend and
+The backend owns durable sessions, jobs, lineage, queues, and student-memory state. The frontend owns
+the authenticated five-step interaction and recovery presentation; the backend owns confirmation
+prerequisites, lineage, stable share reservation/retry, and the completed predicate. The frontend and
 Telegram bot are operator surfaces; neither owns alternate workflow or pipeline semantics.
 
 ## Assignment Flow
@@ -45,8 +47,10 @@ Telegram bot are operator surfaces; neither owns alternate workflow or pipeline 
 4. **Create:** generate and edit the prompt-backed assignment draft.
 5. **Review & share:** preview, approve, publish, and open the handout.
 
-After sharing, rerun and republish controls remain available under Advanced actions. Starting another
-assignment is always an explicit tutor action; asynchronous readiness changes do not navigate steps.
+After sharing, Advanced actions keep post-share rerun and republish controls. A rerun creates a new
+child job linked by `source_job_id`; republish-only and selected study-text or pronunciation
+regeneration are job actions, not new assignment-flow steps. Starting another assignment is always an
+explicit tutor action; asynchronous readiness changes do not navigate steps.
 
 ## Runtime Boundaries
 
@@ -63,6 +67,8 @@ assignment is always an explicit tutor action; asynchronous readiness changes do
 
 - Auth, recordings, transcripts, sessions, jobs, prompts, drafts, students, and ops routes:
   [`packages/batch-backend/README.md`](../../packages/batch-backend/README.md)
+- Operations routing and current runbooks: [`docs/operations/README.md`](../operations/README.md)
+  and [`docs/reference/DOCS_IA_MAP.md`](../reference/DOCS_IA_MAP.md)
 - Generated route inventory:
   [`docs/generated/backend-route-index.md`](../generated/backend-route-index.md)
 - Student-memory replay/backfill:
