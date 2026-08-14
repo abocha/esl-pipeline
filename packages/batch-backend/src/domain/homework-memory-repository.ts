@@ -92,14 +92,30 @@ export interface InsertHomeworkMemoryParams {
 }
 
 export type InsertCanonicalReadyHomeworkMemoryParams = Omit<InsertHomeworkMemoryParams, 'status'>;
+export interface CommitCanonicalReadyHomeworkMemoryParams
+  extends InsertCanonicalReadyHomeworkMemoryParams {
+  pendingEntryId?: string | null;
+}
+
+export interface CommitCanonicalReadyHomeworkMemoryResult {
+  outcome: 'canonical_committed' | 'stale_discarded';
+  entry: HomeworkMemoryRecord | null;
+}
 export interface EnsurePendingHomeworkMemoryEntryParams
   extends Omit<InsertHomeworkMemoryParams, 'status'> {
   bypassReadyReuse?: boolean;
 }
 
 export interface EnsurePendingHomeworkMemoryEntryResult {
-  outcome: 'created' | 'pending_exists' | 'ready_exists';
+  outcome: 'created' | 'pending_exists' | 'ready_exists' | 'stale_discarded';
   entry: HomeworkMemoryRecord;
+}
+
+interface HomeworkMemoryPublicationProvenance {
+  jobId: string;
+  studentId: string;
+  assignmentLineageKey: string;
+  publicationSequence: string;
 }
 
 export interface ListHomeworkMemoryEntriesOptions {
@@ -250,6 +266,17 @@ export async function insertCanonicalReadyHomeworkMemoryEntry(
   params: InsertCanonicalReadyHomeworkMemoryParams,
   options?: { client?: PoolClient },
 ): Promise<HomeworkMemoryRecord> {
+  const result = await commitCanonicalReadyHomeworkMemoryEntry(params, options);
+  if (!result.entry) {
+    throw new Error('Canonical homework-memory insertion was discarded without a ready entry');
+  }
+  return result.entry;
+}
+
+export async function commitCanonicalReadyHomeworkMemoryEntry(
+  params: CommitCanonicalReadyHomeworkMemoryParams,
+  options?: { client?: PoolClient },
+): Promise<CommitCanonicalReadyHomeworkMemoryResult> {
   const id = params.id ?? randomUUID();
   const generatedAt = params.generatedAt ?? new Date();
 
@@ -259,6 +286,73 @@ export async function insertCanonicalReadyHomeworkMemoryEntry(
       await client.query('SELECT id FROM jobs WHERE id = $1 FOR UPDATE', [
         params.assignmentLineageKey,
       ]);
+
+      const source = await loadHomeworkMemoryPublicationProvenance(client, params.jobId);
+      if (
+        !source ||
+        source.studentId !== params.studentId ||
+        source.assignmentLineageKey !== params.assignmentLineageKey
+      ) {
+        throw new Error('Homework-memory canonical commit source provenance no longer matches');
+      }
+
+      if (params.pendingEntryId) {
+        const pendingResult = await client.query<HomeworkMemoryRow>(
+          `SELECT ${HOMEWORK_MEMORY_COLUMNS} FROM homework_memory_entries WHERE id = $1 FOR UPDATE`,
+          [params.pendingEntryId],
+        );
+        const pending = pendingResult.rows[0];
+        if (
+          pending?.status !== 'pending' ||
+          pending.job_id !== params.jobId ||
+          pending.student_id !== params.studentId ||
+          pending.assignment_lineage_key !== params.assignmentLineageKey ||
+          (pending.content_hash ?? null) !== (params.contentHash ?? null) ||
+          pending.published_at.getTime() !== params.publishedAt.getTime()
+        ) {
+          if (!options?.client) await client.query('COMMIT');
+          return { outcome: 'stale_discarded' as const, entry: null };
+        }
+      }
+
+      const newerReadyResult = await client.query<HomeworkMemoryRow>(
+        `
+        SELECT homework_memory_entries.*
+        FROM homework_memory_entries
+        INNER JOIN jobs source_job ON source_job.id = homework_memory_entries.job_id
+        WHERE homework_memory_entries.assignment_lineage_key = $1
+          AND homework_memory_entries.status = 'ready'
+          AND (
+            source_job.publication_sequence > $2::bigint
+            OR (
+              source_job.publication_sequence = 0
+              AND $2::bigint = 0
+              AND homework_memory_entries.published_at > $3
+            )
+          )
+        ORDER BY source_job.publication_sequence DESC, homework_memory_entries.created_at DESC, homework_memory_entries.id DESC
+        LIMIT 1
+        `,
+        [params.assignmentLineageKey, source.publicationSequence, params.publishedAt],
+      );
+      const newerReady = newerReadyResult.rows[0];
+      if (newerReady) {
+        if (params.pendingEntryId) {
+          await client.query(
+            `
+            UPDATE homework_memory_entries
+            SET status = 'superseded', superseded_by_id = $1, superseded_at = $2, updated_at = NOW()
+            WHERE id = $3 AND status = 'pending'
+            `,
+            [newerReady.id, generatedAt, params.pendingEntryId],
+          );
+        }
+        if (!options?.client) await client.query('COMMIT');
+        return {
+          outcome: 'stale_discarded' as const,
+          entry: mapRowToHomeworkMemory(newerReady),
+        };
+      }
 
       const insertResult = await client.query(
         `
@@ -342,29 +436,65 @@ export async function insertCanonicalReadyHomeworkMemoryEntry(
           superseded_by_id = $1,
           superseded_at = $2,
           updated_at = NOW()
-        WHERE assignment_lineage_key = $3
-          AND status = 'ready'
-          AND id <> $1
+        FROM jobs source_job
+        WHERE homework_memory_entries.job_id = source_job.id
+          AND homework_memory_entries.assignment_lineage_key = $3
+          AND homework_memory_entries.status = 'ready'
+          AND homework_memory_entries.id <> $1
+          AND (
+            source_job.publication_sequence < $4::bigint
+            OR homework_memory_entries.job_id = $5
+            OR (
+              source_job.publication_sequence = 0
+              AND $4::bigint = 0
+              AND homework_memory_entries.published_at < $6
+            )
+          )
         `,
-        [id, generatedAt, params.assignmentLineageKey],
+        [
+          id,
+          generatedAt,
+          params.assignmentLineageKey,
+          source.publicationSequence,
+          params.jobId,
+          params.publishedAt,
+        ],
       );
 
+      if (params.pendingEntryId) {
+        await client.query(
+          `
+          UPDATE homework_memory_entries
+          SET status = 'superseded', superseded_by_id = $1, superseded_at = $2, updated_at = NOW()
+          WHERE id = $3 AND status = 'pending'
+          `,
+          [id, generatedAt, params.pendingEntryId],
+        );
+      }
+
       if (!options?.client) await client.query('COMMIT');
-      return insertResult.rows[0];
+      return {
+        outcome: 'canonical_committed' as const,
+        entry: mapRowToHomeworkMemory(insertResult.rows[0]),
+      };
     } catch (error) {
       if (!options?.client) await client.query('ROLLBACK');
       throw error;
     }
   };
-  const row = options?.client ? await write(options.client) : await withPgClient(write);
+  const result = options?.client ? await write(options.client) : await withPgClient(write);
 
-  logger.info('Canonical ready homework memory entry inserted', {
-    homeworkMemoryEntryId: id,
+  logger.info('Canonical homework-memory ready commit resolved', {
+    event:
+      result.outcome === 'canonical_committed'
+        ? 'homework_memory_canonical_ready_committed'
+        : 'homework_memory_canonical_result_discarded_stale',
+    homeworkMemoryEntryId: result.entry?.id ?? null,
     jobId: params.jobId,
     assignmentLineageKey: params.assignmentLineageKey,
   });
 
-  return mapRowToHomeworkMemory(row);
+  return result;
 }
 
 export async function insertCanonicalReadyHomeworkMemoryEntryWithinTransaction(
@@ -386,6 +516,15 @@ export async function ensurePendingHomeworkMemoryEntry(
       await client.query('SELECT id FROM jobs WHERE id = $1 FOR UPDATE', [
         params.assignmentLineageKey,
       ]);
+
+      const source = await loadHomeworkMemoryPublicationProvenance(client, params.jobId);
+      if (
+        !source ||
+        source.studentId !== params.studentId ||
+        source.assignmentLineageKey !== params.assignmentLineageKey
+      ) {
+        throw new Error('Homework-memory pending source provenance no longer matches');
+      }
 
       if (!params.bypassReadyReuse) {
         const readyResult = await client.query<HomeworkMemoryRow>(
@@ -410,6 +549,64 @@ export async function ensurePendingHomeworkMemoryEntry(
             entry: mapRowToHomeworkMemory(latestReady),
           };
         }
+      }
+
+      const newerReadyResult = await client.query<HomeworkMemoryRow>(
+        `
+        SELECT homework_memory_entries.*
+        FROM homework_memory_entries
+        INNER JOIN jobs source_job ON source_job.id = homework_memory_entries.job_id
+        WHERE homework_memory_entries.assignment_lineage_key = $1
+          AND homework_memory_entries.status = 'ready'
+          AND (
+            source_job.publication_sequence > $2::bigint
+            OR (
+              source_job.publication_sequence = 0
+              AND $2::bigint = 0
+              AND homework_memory_entries.published_at > $3
+            )
+          )
+        ORDER BY source_job.publication_sequence DESC, homework_memory_entries.created_at DESC, homework_memory_entries.id DESC
+        LIMIT 1
+        `,
+        [params.assignmentLineageKey, source.publicationSequence, params.publishedAt],
+      );
+      const newerReady = newerReadyResult.rows[0];
+      if (newerReady) {
+        await client.query('COMMIT');
+        return {
+          outcome: 'stale_discarded',
+          entry: mapRowToHomeworkMemory(newerReady),
+        };
+      }
+
+      const newerPendingResult = await client.query<HomeworkMemoryRow>(
+        `
+        SELECT homework_memory_entries.*
+        FROM homework_memory_entries
+        INNER JOIN jobs source_job ON source_job.id = homework_memory_entries.job_id
+        WHERE homework_memory_entries.assignment_lineage_key = $1
+          AND homework_memory_entries.status = 'pending'
+          AND (
+            source_job.publication_sequence > $2::bigint
+            OR (
+              source_job.publication_sequence = 0
+              AND $2::bigint = 0
+              AND homework_memory_entries.published_at > $3
+            )
+          )
+        ORDER BY source_job.publication_sequence DESC, homework_memory_entries.created_at DESC, homework_memory_entries.id DESC
+        LIMIT 1
+        `,
+        [params.assignmentLineageKey, source.publicationSequence, params.publishedAt],
+      );
+      const newerPending = newerPendingResult.rows[0];
+      if (newerPending) {
+        await client.query('COMMIT');
+        return {
+          outcome: 'stale_discarded',
+          entry: mapRowToHomeworkMemory(newerPending),
+        };
       }
 
       const pendingResult = await client.query<HomeworkMemoryRow>(
@@ -515,18 +712,34 @@ export async function ensurePendingHomeworkMemoryEntry(
       }
 
       await client.query(
-        `
-        UPDATE homework_memory_entries
-        SET
-          status = 'superseded',
-          superseded_by_id = $1,
-          superseded_at = $2,
-          updated_at = NOW()
-        WHERE assignment_lineage_key = $3
-          AND status = 'pending'
-          AND id <> $1
+          `
+          UPDATE homework_memory_entries
+          SET
+            status = 'superseded',
+            superseded_by_id = $1,
+            superseded_at = $2,
+            updated_at = NOW()
+          FROM jobs source_job
+          WHERE homework_memory_entries.job_id = source_job.id
+            AND homework_memory_entries.assignment_lineage_key = $3
+            AND homework_memory_entries.status = 'pending'
+            AND homework_memory_entries.id <> $1
+            AND (
+              source_job.publication_sequence < $4::bigint
+              OR (
+                source_job.publication_sequence = 0
+                AND $4::bigint = 0
+                AND homework_memory_entries.published_at < $5
+              )
+            )
         `,
-        [id, generatedAt, params.assignmentLineageKey],
+        [
+          id,
+          generatedAt,
+          params.assignmentLineageKey,
+          source.publicationSequence,
+          params.publishedAt,
+        ],
       );
 
       await client.query('COMMIT');
@@ -822,6 +1035,57 @@ export async function markHomeworkMemoryEntryFailed(params: {
   });
 
   return row ? mapRowToHomeworkMemory(row) : null;
+}
+
+async function loadHomeworkMemoryPublicationProvenance(
+  client: PoolClient,
+  jobId: string,
+): Promise<HomeworkMemoryPublicationProvenance | null> {
+  const result = await client.query<{
+    id: string;
+    student_id: string | null;
+    assignment_lineage_key: string;
+    publication_sequence: string;
+  }>(
+    `
+    WITH RECURSIVE upstream AS (
+      SELECT id, source_job_id
+      FROM jobs
+      WHERE id = $1
+
+      UNION ALL
+
+      SELECT parent.id, parent.source_job_id
+      FROM jobs parent
+      INNER JOIN upstream child ON parent.id = child.source_job_id
+    )
+    SELECT
+      source.id,
+      source.student_id,
+      root.id AS assignment_lineage_key,
+      source.publication_sequence::text
+    FROM jobs source
+    CROSS JOIN LATERAL (
+      SELECT id
+      FROM upstream
+      WHERE source_job_id IS NULL
+      LIMIT 1
+    ) root
+    WHERE source.id = $1
+      AND source.state = 'succeeded'
+    `,
+    [jobId],
+  );
+  const row = result.rows[0];
+  if (!row?.student_id) {
+    return null;
+  }
+  return {
+    jobId: row.id,
+    studentId: row.student_id,
+    assignmentLineageKey: row.assignment_lineage_key,
+    publicationSequence: row.publication_sequence,
+  };
 }
 
 function mapRowToHomeworkMemory(row: HomeworkMemoryRow): HomeworkMemoryRecord {

@@ -182,6 +182,38 @@ function finalizationRaceOverrides(args: {
 }
 
 describe('application/process-student-memory-snapshot-job', () => {
+  it('no-ops a delayed queue job after its pending snapshot was superseded', async () => {
+    const generator = vi.fn();
+
+    await processStudentMemorySnapshotJob({
+      config: createTestConfig(),
+      payload: {
+        kind: 'student-memory-snapshot-refresh',
+        studentId: 'student-1',
+        pendingEntryId: 'snapshot-superseded-1',
+        provider: 'openai',
+        model: 'gpt-5.2',
+        trigger: 'homework-memory-ready',
+        sourceEntryId: 'homework-memory-1',
+      },
+      overrides: {
+        snapshots: {
+          getById: vi.fn().mockResolvedValue({
+            id: 'snapshot-superseded-1',
+            status: 'superseded',
+          }),
+          getLatestReadyByStudentId: vi.fn(),
+          markFailed: vi.fn(),
+          supersedePendingForStudent: vi.fn(),
+          updateGenerationNotes: vi.fn(),
+        },
+        generator,
+      },
+    });
+
+    expect(generator).not.toHaveBeenCalled();
+  });
+
   it('uses incremental lesson-memory refresh without calling full-history list-all paths', async () => {
     const generator = successfulGenerator();
     const supersedePendingForStudent = vi.fn().mockResolvedValue([]);

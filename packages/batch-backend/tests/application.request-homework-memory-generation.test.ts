@@ -157,6 +157,36 @@ describe('application/request-homework-memory-generation', () => {
     );
   });
 
+  it('reuses same-content ready homework memory without enqueuing new extraction work', async () => {
+    ensurePendingHomeworkMemoryEntryMock.mockResolvedValue({
+      outcome: 'ready_exists',
+      entry: { id: 'ready-1' },
+    });
+
+    const result = await requestHomeworkMemoryGeneration({
+      config: { generation: {} } as never,
+      params: { jobId: 'job-2', studentId: 'student-1' },
+    });
+
+    expect(result?.outcome).toBe('ready_exists');
+    expect(enqueueMock).not.toHaveBeenCalled();
+  });
+
+  it('does not enqueue an older correction rejected behind a newer pending publication', async () => {
+    ensurePendingHomeworkMemoryEntryMock.mockResolvedValue({
+      outcome: 'stale_discarded',
+      entry: { id: 'pending-newer' },
+    });
+
+    const result = await requestHomeworkMemoryGeneration({
+      config: { generation: {} } as never,
+      params: { jobId: 'job-2', studentId: 'student-1' },
+    });
+
+    expect(result?.outcome).toBe('stale_discarded');
+    expect(enqueueMock).not.toHaveBeenCalled();
+  });
+
   it('lets replay flows bypass same-content ready deduplication', async () => {
     await requestHomeworkMemoryGeneration({
       config: {
@@ -207,7 +237,51 @@ describe('application/request-homework-memory-generation', () => {
     );
   });
 
-  it('skips rerun descendant jobs so only canonical root assignments generate homework memory', async () => {
+  it('allows an explicit published correction descendant to generate homework memory for its root lineage', async () => {
+    resolveHomeworkMemorySourceFromSucceededJobMock.mockResolvedValue({
+      jobId: 'job-correction',
+      assignmentLineageKey: 'job-root',
+      studentId: 'student-1',
+      publishedAt: new Date('2026-03-20T01:00:00.000Z'),
+      publishedMarkdown: '# Corrected homework',
+      contentHash: 'hash-correction',
+      publishTargets: [],
+      normalizedMarkdown: {
+        frontmatter: null,
+        sections: [],
+        plainText: '# Corrected homework',
+      },
+    });
+
+    await requestHomeworkMemoryGeneration({
+      config: {
+        generation: {},
+      } as never,
+      params: {
+        jobId: 'job-correction',
+        studentId: 'student-1',
+        publishKind: 'correction',
+      },
+    });
+
+    expect(ensurePendingHomeworkMemoryEntryMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jobId: 'job-correction',
+        assignmentLineageKey: 'job-root',
+        contentHash: 'hash-correction',
+        generationNotes: expect.objectContaining({
+          trigger: 'publish-correction-succeeded',
+          publishKind: 'correction',
+        }),
+      }),
+    );
+    expect(enqueueMock).toHaveBeenCalledWith(
+      expect.objectContaining({ jobId: 'job-correction', pendingEntryId: 'pending-1' }),
+      expect.any(Object),
+    );
+  });
+
+  it('rejects descendant jobs without the explicit correction publish policy', async () => {
     resolveHomeworkMemorySourceFromSucceededJobMock.mockResolvedValue({
       jobId: 'job-rerun',
       assignmentLineageKey: 'job-root',

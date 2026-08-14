@@ -532,6 +532,12 @@ describe('integration/migrations', () => {
             [createHash('sha256').update(cutoverSql).digest('hex')],
           );
 
+          const publicationSequenceSql = await fs.readFile(
+            path.join(migrationsPath, '0046_jobs_publication_sequence.sql'),
+            'utf8',
+          );
+          await pool.query(publicationSequenceSql);
+
           await pool.query(
             `
             INSERT INTO lesson_memory_entries (

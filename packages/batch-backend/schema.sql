@@ -479,6 +479,7 @@ CREATE TABLE public.jobs (
     tts_provider text,
     lesson_id uuid,
     tts_model text,
+    publication_sequence bigint DEFAULT 0 NOT NULL,
     CONSTRAINT jobs_mode_check CHECK (((mode IS NULL) OR (mode = ANY (ARRAY['auto'::text, 'dialogue'::text, 'monologue'::text, 'tts'::text])))),
     CONSTRAINT jobs_state_check CHECK ((state = ANY (ARRAY['queued'::text, 'running'::text, 'awaiting_approval'::text, 'succeeded'::text, 'failed'::text]))),
     CONSTRAINT jobs_tts_model_check CHECK (((tts_model IS NULL) OR ((tts_provider = 'elevenlabs'::text) AND (tts_model = ANY (ARRAY['eleven_v3'::text, 'eleven_multilingual_v2'::text, 'eleven_flash_v2_5'::text, 'eleven_flash_v2'::text]))) OR ((tts_provider = 'google'::text) AND (tts_model = ANY (ARRAY['chirp3_hd'::text, 'studio'::text, 'neural2'::text, 'wavenet'::text]))) OR ((tts_provider = 'inworld'::text) AND (tts_model = ANY (ARRAY['inworld-tts-2'::text, 'inworld-tts-1.5-max'::text, 'inworld-tts-1.5-mini'::text]))))),
@@ -1270,6 +1271,8 @@ CREATE INDEX idx_jobs_lesson_updated ON public.jobs USING btree (lesson_id, COAL
 
 CREATE INDEX idx_jobs_prompt_package_id ON public.jobs USING btree (prompt_package_id);
 
+CREATE INDEX idx_jobs_publication_sequence ON public.jobs USING btree (publication_sequence) WHERE (publication_sequence > 0);
+
 CREATE INDEX idx_jobs_publish_target_state_created_at ON public.jobs USING btree (publish_target, state, created_at DESC);
 
 CREATE INDEX idx_jobs_recording_id ON public.jobs USING btree (recording_id);
@@ -1914,5 +1917,6 @@ VALUES
   ('0042_lesson_memory_titles', '11e9eddcb127fcb2386f4f0a10e2240e23746136b5b1380ea09e10a82642b6a8', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0043_manual_transcript_source', '716fee229f067d8daee6eaf423bfc1797080045036afc58aa1e579e9a2631016', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0044_assignment_step_confirmation_contract', 'cdcca1a947c96eddacd8d1bb61dca29b2f06e6366c719401c4b0a8e529483987', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0045_student_memory_snapshot_eligibility_repair', 'c40a212c3fde21f699f31ba07d90fad5da90e0e5cad56934b72a13835daf356f', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0045_student_memory_snapshot_eligibility_repair', 'c40a212c3fde21f699f31ba07d90fad5da90e0e5cad56934b72a13835daf356f', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0046_jobs_publication_sequence', '9b63588b48faf38aef14df9c9f9dd8f94b9e554f5a1044d081dad9e2e6bf9595', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;
