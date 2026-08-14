@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.6.1] - 2026-08-14
+
+### Changed
+
+- Automated release from PR #200: fix(worker/deploy): retain correction manifests and production TTS cache (https://github.com/abocha/esl-pipeline/pull/200)
+
 ## [10.6.0] - 2026-08-14
 
 ### Changed
