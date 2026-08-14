@@ -5,7 +5,7 @@
 - Audience: AI agents, maintainers.
 - Read Time: 3 minutes.
 - Authority Level: Context baseline.
-- Last Verified Against: 2026-07-14 repo state.
+- Last Verified Against: 2026-08-14 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: monthly.
 - Status: `active`.
@@ -29,10 +29,12 @@
   context, Create, and Review & share.
 - Lesson sources may be OPUS recordings or tutor-pasted transcripts; both remain student-owned and
   converge on the same prompt, draft, approval, and publish pipeline.
-- Prompt runtime in batch flow is DB-canonical with bootstrap tooling.
+- Prompt runtime in batch flow is owned by `batch-backend`: the prompt catalog is DB-canonical, with
+  bootstrap tooling for fresh environments.
 - Student-memory extraction, review, health inspection, and replay tooling are backend-owned; the
   frontend exposes the tutor and support surfaces without inventing durable state.
-- Operations runbooks are actively maintained under `docs/operations`.
+- Operations documentation routes through [`docs/operations/README.md`](operations/README.md), with
+  current procedures actively maintained under `docs/operations`.
 
 ## Component Map
 
@@ -54,3 +56,4 @@
 - [`docs/README.md`](README.md)
 - [`docs/QUICK_START.md`](QUICK_START.md)
 - [`docs/reference/DOCS_IA_MAP.md`](reference/DOCS_IA_MAP.md)
+- [`docs/operations/README.md`](operations/README.md)
