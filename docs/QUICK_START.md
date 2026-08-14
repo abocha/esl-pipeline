@@ -5,7 +5,7 @@
 - Audience: AI agents, maintainers.
 - Read Time: 4 minutes.
 - Authority Level: Operational quickstart.
-- Last Verified Against: 2026-07-14 repo state.
+- Last Verified Against: 2026-08-14 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly.
 - Status: `active`.
@@ -59,6 +59,13 @@ This starts the API, batch worker, student-memory worker, and frontend on the ho
 iteration without a backend, use the mock-auth sandbox documented in
 [`packages/batch-frontend/README.md`](../packages/batch-frontend/README.md).
 
+The root command does not start the separate transcription worker. When testing OPUS transcription,
+start it in another shell:
+
+```bash
+pnpm --filter @esl-pipeline/batch-backend dev:transcribe-worker
+```
+
 ## Orchestrator Usage (Library-Only)
 
 Use orchestrator through programmatic APIs (`createPipeline` + execution methods) from backend and service code.
@@ -92,6 +99,9 @@ For image selection, production profiles, deployment, and rollback, read
 [`docs/backend-frontend/DEPLOYMENT.md`](backend-frontend/DEPLOYMENT.md).
 
 ## Operational Runbooks
+
+For procedures not listed here, start with the
+[`docs/operations/README.md`](operations/README.md) router.
 
 - Prompt gallery bootstrap: [`docs/operations/prompt-gallery-bootstrap.md`](operations/prompt-gallery-bootstrap.md)
 - Backup and restore: [`docs/operations/postgres-backup-restore.md`](operations/postgres-backup-restore.md)
