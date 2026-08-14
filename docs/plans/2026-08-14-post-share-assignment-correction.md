@@ -9,8 +9,8 @@
 - Owner: batch frontend, batch backend, contracts, and orchestrator maintainers.
 - Review Cadence: after each delegated ownership boundary and before final handoff.
 - Status: `active`.
-- Current Focus: implementation, local validation, and delegated review are complete; the
-  uncommitted working tree is ready for maintainer inspection and separately authorized Git/PR work.
+- Current Focus: implementation is committed to the feature branch; local implementation,
+  validation, and review are complete, and the next boundary is PR creation and hosted CI.
 - Exit Trigger: archive after the implementation PR merges and durable behavior is represented in
   current package/reference documentation.
 
