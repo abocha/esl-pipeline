@@ -60,12 +60,17 @@ describe('application/process-queue-job', () => {
   });
 
   it('processes correction children through the normal new-assignment path', async () => {
-    const initial = makeJob({ state: 'queued', sourceJobId: 'job-published-parent' });
+    const initial = makeJob({
+      state: 'queued',
+      sourceJobId: 'job-published-parent',
+      studentId: 'student-1',
+    });
     getJobByIdSpy.mockResolvedValue(initial);
 
     const running = makeJob({
       state: 'running',
       sourceJobId: 'job-published-parent',
+      studentId: 'student-1',
       startedAt: new Date('2024-01-01T10:01:00Z'),
     });
     const succeeded = {
@@ -98,6 +103,14 @@ describe('application/process-queue-job', () => {
       expect.objectContaining({ jobId: 'job-1' }),
       expect.any(String),
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(requestHomeworkMemoryGenerationSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          jobId: 'job-1',
+          publishKind: 'correction',
+        }),
+      }),
     );
   });
 

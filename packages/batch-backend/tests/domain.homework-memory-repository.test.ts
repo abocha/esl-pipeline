@@ -4,7 +4,9 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import {
+  commitCanonicalReadyHomeworkMemoryEntry,
   ensurePendingHomeworkMemoryEntry,
+  getHomeworkMemoryEntryById,
   getLatestReadyHomeworkMemoryByAssignmentLineageKey,
   insertCanonicalReadyHomeworkMemoryEntry,
   listRecentReadyHomeworkMemoryByStudentId,
@@ -49,7 +51,8 @@ describeIfPg('domain/homework-memory-repository', () => {
     const promptPackageId = randomUUID();
     const draftId = randomUUID();
     const rootJobId = randomUUID();
-    const rerunJobId = randomUUID();
+    const correctionAJobId = randomUUID();
+    const correctionBJobId = randomUUID();
 
     await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
       await client.query(
@@ -108,7 +111,33 @@ describeIfPg('domain/homework-memory-repository', () => {
         )
         VALUES ($1, 'succeeded', 'lesson.md', $2, $3, $4, $5, $6, $7, 'html', NOW(), NOW(), NOW())
         `,
-        [rerunJobId, studentId, recordingId, transcriptId, promptPackageId, draftId, rootJobId],
+        [
+          correctionAJobId,
+          studentId,
+          recordingId,
+          transcriptId,
+          promptPackageId,
+          draftId,
+          rootJobId,
+        ],
+      );
+      await client.query(
+        `
+        INSERT INTO jobs (
+          id, state, md, student_id, recording_id, transcript_id, prompt_package_id, draft_id,
+          source_job_id, publish_target, finished_at, created_at, updated_at
+        )
+        VALUES ($1, 'succeeded', 'lesson.md', $2, $3, $4, $5, $6, $7, 'html', NOW(), NOW(), NOW())
+        `,
+        [
+          correctionBJobId,
+          studentId,
+          recordingId,
+          transcriptId,
+          promptPackageId,
+          draftId,
+          rootJobId,
+        ],
       );
     });
 
@@ -147,9 +176,26 @@ describeIfPg('domain/homework-memory-repository', () => {
       ],
     });
 
+    const pendingA = await ensurePendingHomeworkMemoryEntry({
+      studentId,
+      jobId: correctionAJobId,
+      assignmentLineageKey: rootJobId,
+      promptPackageId,
+      draftId,
+      recordingId,
+      transcriptId,
+      schemaVersion: 'homework-memory.v1',
+      generatedAt: new Date('2026-03-20T10:30:00.000Z'),
+      provider: 'openrouter',
+      model: 'qwen/qwen3.5',
+      contentHash: 'sha-a',
+      publishedAt: new Date('2026-03-20T11:00:00.000Z'),
+      publishTargets: [],
+    });
+
     const second = await insertCanonicalReadyHomeworkMemoryEntry({
       studentId,
-      jobId: rerunJobId,
+      jobId: correctionBJobId,
       assignmentLineageKey: rootJobId,
       promptPackageId,
       draftId,
@@ -170,14 +216,14 @@ describeIfPg('domain/homework-memory-repository', () => {
       inputType: 'authentic',
       communicativeOutcome: 'Give advice.',
       teacherFollowUpCues: [],
-      publishedAt: new Date('2026-03-20T11:00:00.000Z'),
+      publishedAt: new Date('2026-03-20T12:00:00.000Z'),
       contentHash: 'sha-2',
       publishTargets: [
         {
           target: 'html',
           url: 'https://example.test/hw',
-          jobId: rerunJobId,
-          publishedAt: '2026-03-20T11:00:00.000Z',
+          jobId: correctionBJobId,
+          publishedAt: '2026-03-20T12:00:00.000Z',
         },
         {
           target: 'html',
@@ -188,11 +234,38 @@ describeIfPg('domain/homework-memory-repository', () => {
       ],
     });
 
+    const staleA = await commitCanonicalReadyHomeworkMemoryEntry({
+      studentId,
+      jobId: correctionAJobId,
+      assignmentLineageKey: rootJobId,
+      promptPackageId,
+      draftId,
+      recordingId,
+      transcriptId,
+      schemaVersion: 'homework-memory.v1',
+      generatedAt: new Date('2026-03-20T13:00:00.000Z'),
+      provider: 'openrouter',
+      model: 'qwen/qwen3.5',
+      contentHash: 'sha-a',
+      homeworkSummary: 'Earlier correction that completed late',
+      grammarTargets: [],
+      vocabularyTargets: [],
+      reviewTargets: [],
+      taskList: [],
+      pronunciationFocus: [],
+      teacherFollowUpCues: [],
+      publishedAt: new Date('2026-03-20T11:00:00.000Z'),
+      publishTargets: [],
+      pendingEntryId: pendingA.entry.id,
+    });
+
     const latest = await getLatestReadyHomeworkMemoryByAssignmentLineageKey(rootJobId);
     const recent = await listRecentReadyHomeworkMemoryByStudentId(studentId, { limit: 5 });
 
     expect(first.status).toBe('ready');
     expect(second.status).toBe('ready');
+    expect(staleA.outcome).toBe('stale_discarded');
+    expect(staleA.entry?.id).toBe(second.id);
     expect(latest?.id).toBe(second.id);
     expect(latest?.contentHash).toBe('sha-2');
     expect(recent).toHaveLength(1);
@@ -210,6 +283,186 @@ describeIfPg('domain/homework-memory-repository', () => {
 
     expect(supersededFirst?.status).toBe('superseded');
     expect(supersededFirst?.superseded_by_id).toBe(second.id);
+  });
+
+  it('keeps the later correction pending and canonical when equal publish timestamps complete out of order', async () => {
+    const studentId = randomUUID();
+    const rootJobId = randomUUID();
+    const correctionAJobId = randomUUID();
+    const correctionBJobId = randomUUID();
+    const publishedAt = new Date('2026-03-20T10:00:00.000Z');
+
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      await client.query(
+        `INSERT INTO students (id, student, created_at, updated_at) VALUES ($1, 'Lena', NOW(), NOW())`,
+        [studentId],
+      );
+      for (const [id, sourceJobId, publicationSequence] of [
+        [rootJobId, null, 1],
+        [correctionAJobId, rootJobId, 2],
+        [correctionBJobId, correctionAJobId, 3],
+      ] as const) {
+        await client.query(
+          `
+          INSERT INTO jobs (
+            id, state, md, student_id, source_job_id, publish_target,
+            publication_sequence, finished_at, created_at, updated_at
+          )
+          VALUES ($1, 'succeeded', 'lesson.md', $2, $3, 'html', $4, $5, NOW(), NOW())
+          `,
+          [id, studentId, sourceJobId, publicationSequence, publishedAt],
+        );
+      }
+    });
+
+    const pendingB = await ensurePendingHomeworkMemoryEntry({
+      studentId,
+      jobId: correctionBJobId,
+      assignmentLineageKey: rootJobId,
+      schemaVersion: 'homework-memory.v1',
+      provider: 'openai',
+      model: 'gpt-5.2',
+      contentHash: 'hash-b',
+      publishedAt,
+      publishTargets: [],
+    });
+    const forcedRootWhileBPending = await ensurePendingHomeworkMemoryEntry({
+      studentId,
+      jobId: rootJobId,
+      assignmentLineageKey: rootJobId,
+      schemaVersion: 'homework-memory.v1',
+      provider: 'openai',
+      model: 'gpt-5.2',
+      contentHash: 'hash-root',
+      bypassReadyReuse: true,
+      publishedAt,
+      publishTargets: [],
+    });
+
+    const committedB = await commitCanonicalReadyHomeworkMemoryEntry({
+      studentId,
+      jobId: correctionBJobId,
+      assignmentLineageKey: rootJobId,
+      schemaVersion: 'homework-memory.v1',
+      provider: 'openai',
+      model: 'gpt-5.2',
+      contentHash: 'hash-b',
+      homeworkSummary: 'Later correction',
+      grammarTargets: [],
+      vocabularyTargets: [],
+      reviewTargets: [],
+      taskList: [],
+      pronunciationFocus: [],
+      teacherFollowUpCues: [],
+      publishedAt,
+      publishTargets: [],
+      pendingEntryId: pendingB.entry.id,
+    });
+    const staleA = await commitCanonicalReadyHomeworkMemoryEntry({
+      studentId,
+      jobId: correctionAJobId,
+      assignmentLineageKey: rootJobId,
+      schemaVersion: 'homework-memory.v1',
+      provider: 'openai',
+      model: 'gpt-5.2',
+      contentHash: 'hash-a',
+      homeworkSummary: 'Earlier correction completed late',
+      grammarTargets: [],
+      vocabularyTargets: [],
+      reviewTargets: [],
+      taskList: [],
+      pronunciationFocus: [],
+      teacherFollowUpCues: [],
+      publishedAt,
+      publishTargets: [],
+    });
+    const forcedRootAfterBReady = await ensurePendingHomeworkMemoryEntry({
+      studentId,
+      jobId: rootJobId,
+      assignmentLineageKey: rootJobId,
+      schemaVersion: 'homework-memory.v1',
+      provider: 'openai',
+      model: 'gpt-5.2',
+      contentHash: 'hash-root',
+      bypassReadyReuse: true,
+      publishedAt,
+      publishTargets: [],
+    });
+
+    expect(pendingB.outcome).toBe('created');
+    expect(forcedRootWhileBPending).toMatchObject({
+      outcome: 'stale_discarded',
+      entry: { id: pendingB.entry.id },
+    });
+    expect(committedB).toMatchObject({ outcome: 'canonical_committed', entry: { jobId: correctionBJobId } });
+    expect(staleA.outcome).toBe('stale_discarded');
+    expect(forcedRootAfterBReady).toMatchObject({
+      outcome: 'stale_discarded',
+      entry: { id: committedB.entry?.id },
+    });
+    await expect(getLatestReadyHomeworkMemoryByAssignmentLineageKey(rootJobId)).resolves.toMatchObject({
+      jobId: correctionBJobId,
+      contentHash: 'hash-b',
+    });
+  });
+
+  it('replaces the prior ready row when the same source publication is force-regenerated', async () => {
+    const studentId = randomUUID();
+    const rootJobId = randomUUID();
+    const publishedAt = new Date('2026-03-20T10:00:00.000Z');
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      await client.query(
+        `INSERT INTO students (id, student, created_at, updated_at) VALUES ($1, 'Lena', NOW(), NOW())`,
+        [studentId],
+      );
+      await client.query(
+        `
+        INSERT INTO jobs (id, state, md, student_id, publish_target, publication_sequence, finished_at, created_at, updated_at)
+        VALUES ($1, 'succeeded', 'lesson.md', $2, 'html', 1, $3, NOW(), NOW())
+        `,
+        [rootJobId, studentId, publishedAt],
+      );
+    });
+
+    const initial = await insertCanonicalReadyHomeworkMemoryEntry({
+      studentId,
+      jobId: rootJobId,
+      assignmentLineageKey: rootJobId,
+      schemaVersion: 'homework-memory.v1',
+      provider: 'openai',
+      model: 'gpt-5.2',
+      contentHash: 'hash-1',
+      homeworkSummary: 'Initial extraction',
+      grammarTargets: [], vocabularyTargets: [], reviewTargets: [], taskList: [], pronunciationFocus: [], teacherFollowUpCues: [],
+      publishedAt,
+      publishTargets: [],
+    });
+    const replay = await ensurePendingHomeworkMemoryEntry({
+      studentId, jobId: rootJobId, assignmentLineageKey: rootJobId,
+      schemaVersion: 'homework-memory.v1', provider: 'openai', model: 'gpt-5.2', contentHash: 'hash-1',
+      bypassReadyReuse: true, publishedAt, publishTargets: [],
+    });
+    const regenerated = await commitCanonicalReadyHomeworkMemoryEntry({
+      studentId, jobId: rootJobId, assignmentLineageKey: rootJobId,
+      schemaVersion: 'homework-memory.v1', provider: 'openai', model: 'gpt-5.2', contentHash: 'hash-1',
+      homeworkSummary: 'Refreshed extraction',
+      grammarTargets: [], vocabularyTargets: [], reviewTargets: [], taskList: [], pronunciationFocus: [], teacherFollowUpCues: [],
+      publishedAt, publishTargets: [], pendingEntryId: replay.entry.id,
+    });
+    const readyRows = await withPgClientSessionContext({ rlsBypass: true }, async (client) =>
+      client.query<{ id: string }>(
+        `SELECT id FROM homework_memory_entries WHERE assignment_lineage_key = $1 AND status = 'ready'`,
+        [rootJobId],
+      ),
+    );
+
+    expect(replay.outcome).toBe('created');
+    expect(regenerated).toMatchObject({ outcome: 'canonical_committed', entry: { jobId: rootJobId } });
+    expect(readyRows.rows).toEqual([{ id: regenerated.entry?.id }]);
+    await expect(getHomeworkMemoryEntryById(initial.id)).resolves.toMatchObject({
+      status: 'superseded',
+      supersededById: regenerated.entry?.id,
+    });
   });
 
   it('returns ready_exists instead of creating a new row when only publish targets expand for the same content hash', async () => {

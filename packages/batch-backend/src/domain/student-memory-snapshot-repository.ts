@@ -113,10 +113,11 @@ export interface EnsurePendingStudentMemorySnapshotParams {
   model: string;
   generationNotes?: StudentMemorySnapshotGenerationNotes | null;
   sourceEntryId?: string | null;
+  reuseReadyHomeworkSource?: boolean;
 }
 
 export interface EnsurePendingStudentMemorySnapshotResult {
-  outcome: 'created' | 'pending_exists';
+  outcome: 'created' | 'pending_exists' | 'already_reconciled';
   entry: StudentMemorySnapshotRecord;
 }
 
@@ -157,6 +158,69 @@ export async function ensurePendingStudentMemorySnapshot(
     await client.query('BEGIN');
     try {
       await client.query('SELECT id FROM students WHERE id = $1 FOR UPDATE', [params.studentId]);
+
+      if (params.reuseReadyHomeworkSource && params.sourceEntryId) {
+        const eligibleLineage = buildEligibleStudentMemorySnapshotLineageSqlPredicate('snapshot');
+        const readyResult = await client.query<StudentMemorySnapshotRow>(
+          `
+          SELECT
+            id,
+            student_id,
+            schema_version,
+            generated_at,
+            provider,
+            model,
+            status,
+            source_kind,
+            lesson_memory_entry_ids,
+            homework_memory_entry_ids,
+            content_hash,
+            generation_notes,
+            stable_strengths,
+            recurring_issues,
+            active_review_backlog,
+            recent_progress,
+            personal_facts,
+            recommended_assignment_directions,
+            unresolved_issues,
+            snapshot_summary,
+            superseded_by_id,
+            superseded_at,
+            created_at,
+            updated_at
+          FROM student_memory_snapshots AS snapshot
+          WHERE snapshot.student_id = $1
+            AND snapshot.status = 'ready'
+            AND $2::uuid = ANY(snapshot.homework_memory_entry_ids)
+            AND ${eligibleLineage}
+          ORDER BY snapshot.generated_at DESC, snapshot.created_at DESC, snapshot.id DESC
+          LIMIT 1
+          `,
+          [params.studentId, params.sourceEntryId],
+        );
+        const ready = readyResult.rows[0];
+        if (ready) {
+          await client.query(
+            `
+            UPDATE student_memory_snapshots
+            SET
+              status = 'superseded',
+              superseded_by_id = $1,
+              superseded_at = $2,
+              updated_at = NOW()
+            WHERE student_id = $3
+              AND status = 'pending'
+              AND generation_notes ->> 'sourceEntryId' = $4
+            `,
+            [ready.id, generatedAt, params.studentId, params.sourceEntryId],
+          );
+          await client.query('COMMIT');
+          return {
+            outcome: 'already_reconciled',
+            entry: mapRowToStudentMemorySnapshot(ready),
+          };
+        }
+      }
 
       if (params.sourceEntryId) {
         const pendingResult = await client.query<StudentMemorySnapshotRow>(

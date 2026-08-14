@@ -38,8 +38,9 @@ describe('application/homework-memory-generation', () => {
       usage: { inputTokens: 80, outputTokens: 40, totalTokens: 120 },
     });
 
-    const insertCanonicalReady = vi.fn().mockImplementation(
-      async (params): Promise<HomeworkMemoryRecord> => ({
+    const commitCanonicalReady = vi.fn().mockImplementation(async (params) => ({
+      outcome: 'canonical_committed' as const,
+      entry: {
         id: 'homework-memory-1',
         studentId: params.studentId,
         jobId: params.jobId,
@@ -73,8 +74,8 @@ describe('application/homework-memory-generation', () => {
         supersededAt: null,
         createdAt: params.generatedAt,
         updatedAt: params.generatedAt,
-      }),
-    );
+      } satisfies HomeworkMemoryRecord,
+    }));
 
     const now = () => new Date('2026-03-20T16:00:00.000Z');
 
@@ -118,7 +119,7 @@ describe('application/homework-memory-generation', () => {
       overrides: {
         extractor,
         repository: {
-          insertCanonicalReady,
+          commitCanonicalReady,
         },
         now,
       },
@@ -133,7 +134,7 @@ describe('application/homework-memory-generation', () => {
         maxOutputTokens: undefined,
       },
     });
-    expect(insertCanonicalReady).toHaveBeenCalledWith(
+    expect(commitCanonicalReady).toHaveBeenCalledWith(
       expect.objectContaining({
         studentId: 'student-1',
         jobId: 'job-1',
@@ -145,8 +146,11 @@ describe('application/homework-memory-generation', () => {
           pendingEntryId: 'pending-1',
           providerRequestId: 'req-homework-1',
         }),
+        pendingEntryId: 'pending-1',
       }),
     );
+    expect(result.outcome).toBe('canonical_committed');
+    expect(result.entry?.id).toBe('homework-memory-1');
     expect(result.providerRequestId).toBe('req-homework-1');
     expect(result.usage?.totalTokens).toBe(120);
   });

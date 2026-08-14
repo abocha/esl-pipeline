@@ -55,6 +55,85 @@ describe('application/process-homework-memory-job', () => {
     expect(requestRefresh).not.toHaveBeenCalled();
   });
 
+  it('reconciles the same canonical snapshot request on retry when enqueue failed after commit', async () => {
+    const sourcePending = {
+      id: 'pending-1',
+      status: 'pending',
+      jobId: 'correction-1',
+      studentId: 'student-1',
+      assignmentLineageKey: 'root-1',
+      contentHash: 'hash-1',
+      generatedAt: new Date('2026-03-20T00:00:00.000Z'),
+      generationNotes: { trigger: 'publish-correction-succeeded' },
+    };
+    const canonicalEntry = {
+      id: 'ready-1',
+      status: 'ready',
+      jobId: 'correction-1',
+      studentId: 'student-1',
+      assignmentLineageKey: 'root-1',
+      contentHash: 'hash-1',
+      generationNotes: { pendingEntryId: 'pending-1' },
+      generatedAt: new Date('2026-03-20T00:01:00.000Z'),
+    };
+    const getById = vi
+      .fn()
+      .mockResolvedValueOnce(sourcePending)
+      .mockResolvedValueOnce({ ...sourcePending, status: 'superseded', supersededById: 'ready-1' })
+      .mockResolvedValueOnce(canonicalEntry);
+    const generator = vi.fn().mockResolvedValue({
+      outcome: 'canonical_committed',
+      entry: canonicalEntry,
+    });
+    const requestRefresh = vi.fn().mockRejectedValueOnce(new Error('snapshot queue unavailable'));
+
+    const args = {
+      config: createTestConfig(),
+      payload: {
+        kind: 'homework-memory-generate' as const,
+        jobId: 'correction-1',
+        studentId: 'student-1',
+        pendingEntryId: 'pending-1',
+        provider: 'openai' as const,
+        model: 'gpt-5.2',
+      },
+      overrides: {
+        sourceResolver: vi.fn().mockResolvedValue({
+          jobId: 'correction-1',
+          assignmentLineageKey: 'root-1',
+          studentId: 'student-1',
+          publishedAt: new Date('2026-03-20T00:00:00.000Z'),
+          publishedMarkdown: '# Corrected homework',
+          contentHash: 'hash-1',
+          publishTargets: [],
+          normalizedMarkdown: { frontmatter: null, sections: [], plainText: '# Corrected homework' },
+        }),
+        generator,
+        homeworkMemory: {
+          getById,
+          getLatestReadyByAssignmentLineageKey: vi.fn().mockResolvedValue(null),
+          markFailed: vi.fn(),
+          supersedePendingForAssignmentLineage: vi.fn(),
+        },
+        snapshots: { requestRefresh },
+      },
+    };
+
+    await expect(processHomeworkMemoryJob(args as never)).rejects.toThrow('snapshot queue unavailable');
+    await processHomeworkMemoryJob(args as never);
+
+    expect(generator).toHaveBeenCalledTimes(1);
+    expect(requestRefresh).toHaveBeenCalledTimes(2);
+    expect(requestRefresh).toHaveBeenLastCalledWith({
+      config: args.config,
+      params: {
+        studentId: 'student-1',
+        trigger: 'homework-memory-ready',
+        sourceEntryId: 'ready-1',
+      },
+    });
+  });
+
   it('marks the pending homework-memory entry failed on the final attempt', async () => {
     const markFailed = vi.fn().mockResolvedValue(null);
 
@@ -100,6 +179,7 @@ describe('application/process-homework-memory-job', () => {
 
   it('generates canonical homework memory from the pending lineage and requests snapshot refresh', async () => {
     const generator = vi.fn().mockResolvedValue({
+      outcome: 'canonical_committed',
       entry: {
         id: 'homework-memory-1',
         generatedAt: new Date('2026-03-20T00:00:00.000Z'),
@@ -264,8 +344,62 @@ describe('application/process-homework-memory-job', () => {
     expect(requestRefresh).not.toHaveBeenCalled();
   });
 
+  it('does not refresh student memory when a stale correction result is discarded at canonical commit', async () => {
+    const generator = vi.fn().mockResolvedValue({
+      outcome: 'stale_discarded',
+      entry: null,
+    });
+    const requestRefresh = vi.fn();
+    const supersedePendingForAssignmentLineage = vi.fn();
+
+    await processHomeworkMemoryJob({
+      config: createTestConfig(),
+      payload: {
+        kind: 'homework-memory-generate',
+        jobId: 'correction-a',
+        studentId: 'student-1',
+        pendingEntryId: 'pending-a',
+        provider: 'openai',
+        model: 'gpt-5.2',
+      },
+      overrides: {
+        sourceResolver: vi.fn().mockResolvedValue({
+          jobId: 'correction-a',
+          assignmentLineageKey: 'root-job',
+          studentId: 'student-1',
+          publishedAt: new Date('2026-03-20T10:00:00.000Z'),
+          publishedMarkdown: '# Earlier correction',
+          contentHash: 'hash-a',
+          publishTargets: [],
+          normalizedMarkdown: {
+            frontmatter: null,
+            sections: [],
+            plainText: '# Earlier correction',
+          },
+        }),
+        generator,
+        homeworkMemory: {
+          getById: vi.fn().mockResolvedValue({
+            id: 'pending-a',
+            status: 'pending',
+            generatedAt: new Date('2026-03-20T10:00:00.000Z'),
+            generationNotes: { trigger: 'publish-correction-succeeded' },
+          }),
+          getLatestReadyByAssignmentLineageKey: vi.fn().mockResolvedValue(null),
+          markFailed: vi.fn(),
+          supersedePendingForAssignmentLineage,
+        },
+        snapshots: { requestRefresh },
+      },
+    });
+
+    expect(supersedePendingForAssignmentLineage).not.toHaveBeenCalled();
+    expect(requestRefresh).not.toHaveBeenCalled();
+  });
+
   it('honors forceRegenerate and still rebuilds homework memory when same-content ready rows exist', async () => {
     const generator = vi.fn().mockResolvedValue({
+      outcome: 'canonical_committed',
       entry: {
         id: 'homework-memory-replay-1',
         generatedAt: new Date('2026-03-20T02:00:00.000Z'),
