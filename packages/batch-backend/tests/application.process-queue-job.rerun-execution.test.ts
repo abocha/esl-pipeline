@@ -6,6 +6,7 @@ import * as h from './application.process-queue-job.test-harness.js';
 const {
   makeJob,
   getJobByIdSpy,
+  resetFailedAssignmentCorrectionJobSpy,
   updateJobStateAndResultSpy,
   runAssignmentJobSpy,
   runRerunAssignmentJobSpy,
@@ -14,6 +15,92 @@ const {
 } = h;
 
 describe('application/process-queue-job', () => {
+  it('re-enters a failed correction child on its automatic BullMQ retry', async () => {
+    const failed = makeJob({
+      state: 'failed',
+      sourceJobId: 'job-published-parent',
+      mdStorageUri: null,
+    });
+    const running = makeJob({ ...failed, state: 'running', startedAt: new Date() });
+    const succeeded = makeJob({ ...running, state: 'succeeded', finishedAt: new Date() });
+    getJobByIdSpy.mockResolvedValueOnce(failed);
+    resetFailedAssignmentCorrectionJobSpy.mockResolvedValue({
+      ...failed,
+      state: 'queued',
+      error: null,
+      startedAt: null,
+      finishedAt: null,
+    });
+    updateJobStateAndResultSpy
+      .mockResolvedValueOnce(running as never)
+      .mockResolvedValueOnce(succeeded as never);
+    runAssignmentJobSpy.mockResolvedValue({ manifestPath: '/manifests/job-correction.json' });
+
+    await processQueueJob({
+      jobId: failed.id,
+      sourceJobId: failed.sourceJobId!,
+      executionMode: 'correction',
+      correction: {
+        expectedMarkdownHash: 'a'.repeat(64),
+        manifestMd: `corrections/${failed.id}.md`,
+      },
+    });
+
+    expect(resetFailedAssignmentCorrectionJobSpy).toHaveBeenCalledWith({
+      jobId: failed.id,
+      sourceJobId: failed.sourceJobId,
+      expectedMarkdownHash: 'a'.repeat(64),
+    });
+    expect(runAssignmentJobSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ jobId: failed.id }),
+      expect.any(String),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(runRerunAssignmentJobSpy).not.toHaveBeenCalled();
+  });
+
+  it('processes correction children through the normal new-assignment path', async () => {
+    const initial = makeJob({ state: 'queued', sourceJobId: 'job-published-parent' });
+    getJobByIdSpy.mockResolvedValue(initial);
+
+    const running = makeJob({
+      state: 'running',
+      sourceJobId: 'job-published-parent',
+      startedAt: new Date('2024-01-01T10:01:00Z'),
+    });
+    const succeeded = {
+      ...running,
+      state: 'succeeded',
+      manifestPath: '/manifests/job-correction.json',
+      finishedAt: new Date('2024-01-01T10:02:00Z'),
+      htmlUrl: 'https://example.com/job-correction',
+    };
+    updateJobStateAndResultSpy
+      .mockResolvedValueOnce(running as any)
+      .mockResolvedValueOnce(succeeded as any);
+    runAssignmentJobSpy.mockResolvedValue({
+      manifestPath: '/manifests/job-correction.json',
+      htmlUrl: 'https://example.com/job-correction',
+    });
+
+    await processQueueJob({
+      jobId: 'job-1',
+      sourceJobId: 'job-published-parent',
+      executionMode: 'correction',
+      correction: {
+        expectedMarkdownHash: 'a'.repeat(64),
+        manifestMd: 'corrections/job-1.md',
+      },
+    });
+
+    expect(runRerunAssignmentJobSpy).not.toHaveBeenCalled();
+    expect(runAssignmentJobSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ jobId: 'job-1' }),
+      expect.any(String),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
+
   it('processes rerun jobs via rerunAssignment execution path', async () => {
     const initial = makeJob({ state: 'queued' });
     getJobByIdSpy.mockResolvedValue(initial);

@@ -12,6 +12,7 @@ import { parseTtsModelId } from '@esl-pipeline/tts-core';
 import { buildLearningPresetProvenance } from '../application/learning-preset.js';
 import { withPgClient } from '../infrastructure/db.js';
 import { logger } from '../infrastructure/logger.js';
+import { JobActionType } from './job-actions.js';
 import {
   assertTransition,
   JobRecord,
@@ -195,8 +196,11 @@ export interface UpdateJobMetadataParams {
   voiceAccent?: string;
 }
 
-export async function insertJob(params: InsertJobParams): Promise<JobRecord> {
-  return insertJobWithState(params, 'queued');
+export async function insertJob(
+  params: InsertJobParams,
+  options?: { client?: PoolClient },
+): Promise<JobRecord> {
+  return insertJobWithState(params, 'queued', options);
 }
 
 export async function insertApprovalJob(
@@ -448,6 +452,49 @@ export async function resetFailedAssignmentShareJob(params: {
     return result.rows[0];
   });
   return row ? mapRowToJob(row) : null;
+}
+
+export async function resetFailedAssignmentCorrectionJob(
+  params: {
+    jobId: string;
+    sourceJobId: string;
+    expectedMarkdownHash: string;
+  },
+  options?: { client?: PoolClient },
+): Promise<JobRecord | null> {
+  const reset = async (client: PoolClient) => {
+    const result = await client.query<{ id: string }>(
+      String.raw`
+      UPDATE jobs j
+      SET state = 'queued', error = NULL, started_at = NULL, finished_at = NULL,
+          manifest_path = NULL, html_url = NULL, updated_at = NOW()
+      WHERE j.id = $1
+        AND j.state = 'failed'
+        AND j.source_job_id = $2
+        AND j.md IS NULL
+        AND right(j.md_storage_uri, length('/content/' || $3 || '.md')) = '/content/' || $3 || '.md'
+        AND EXISTS (
+          SELECT 1
+          FROM job_action_history h
+          WHERE h.job_id = $2
+            AND h.created_job_id = j.id
+            AND h.action_type = $4
+            AND h.requested_by::text = j.user_id::text
+            AND h.payload_json #>> '{operation}' = 'publish_correction'
+            AND h.payload_json #>> '{publishedJobId}' = $2::text
+            AND h.payload_json #>> '{draftId}' = j.draft_id::text
+            AND h.payload_json #>> '{draftHash}' = $3
+            AND jsonb_typeof(h.payload_json -> 'draftWorkingVersion') = 'number'
+            AND h.payload_json #>> '{draftWorkingVersion}' ~ '^[1-9][0-9]*$'
+        )
+      RETURNING j.id
+      `,
+      [params.jobId, params.sourceJobId, params.expectedMarkdownHash, JobActionType.RERUN],
+    );
+    if (!result.rows[0]) return null;
+    return getJobById(params.jobId, { client });
+  };
+  return options?.client ? reset(options.client) : withPgClient(reset);
 }
 
 export async function listJobs(options: JobListOptions): Promise<JobRecord[]> {

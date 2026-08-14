@@ -1262,7 +1262,7 @@ export function createFrontendSandboxApiAdapter(
           {
             type: 'rerun',
             label: 'Rerun',
-            description: 'Republish current draft or selectively regenerate audio families',
+            description: 'Republish published version or selectively regenerate audio families',
             implemented: true,
           },
           {

@@ -302,9 +302,8 @@ describe('domain/assignment-session-repository persistence contract', () => {
         ],
       );
     });
-    const { completeAssignmentShare, reserveAssignmentShare } = await import(
-      '../src/domain/assignment-session-repository.js'
-    );
+    const { completeAssignmentShare, publishAssignmentCorrectionJob, reserveAssignmentShare } =
+      await import('../src/domain/assignment-session-repository.js');
 
     await expect(
       reserveAssignmentShare({
@@ -457,6 +456,257 @@ describe('domain/assignment-session-repository persistence contract', () => {
       ]),
     );
     expect(jobs.rows[0]?.count).toBe('1');
+    await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+      client.query(
+        `UPDATE jobs
+         SET state = 'succeeded', html_url = 'https://example.test/share',
+             manifest_path = 's3://manifests/share.json'
+         WHERE id = $1`,
+        [requestId],
+      ),
+    );
+
+    for (const correctionFirst of [false, true]) {
+      const correctionRequest = {
+        requestId: randomUUID(),
+        draftId,
+        draftWorkingVersion: 1,
+        draftHash: 'b'.repeat(64),
+      };
+      const shareReplay = () =>
+        reserveAssignmentShare({
+          sessionId,
+          userId,
+          expectedRevision: 6,
+          requestId,
+          jobConfig: { publishTarget: 'html', upload: 'auto' },
+        });
+      const correction = () =>
+        publishAssignmentCorrectionJob({
+          userId,
+          publishedJobId: requestId,
+          request: correctionRequest,
+        });
+      const [share, correctionChild] = correctionFirst
+        ? await Promise.all([correction(), shareReplay()]).then(([child, replay]) => [
+            replay,
+            child,
+          ])
+        : await Promise.all([shareReplay(), correction()]);
+
+      expect(share).toMatchObject({ created: false, job: { id: requestId } });
+      expect(correctionChild).toMatchObject({
+        created: true,
+        job: { id: correctionRequest.requestId, sourceJobId: requestId, state: 'queued' },
+      });
+    }
+  });
+
+  it('creates one queued correction child from a terminal Share snapshot and rejects mismatched replays', async () => {
+    const userId = randomUUID();
+    const studentId = randomUUID();
+    const recordingId = randomUUID();
+    const transcriptId = randomUUID();
+    const promptPackageId = randomUUID();
+    const draftId = randomUUID();
+    const parentId = randomUUID();
+    const requestId = randomUUID();
+    const draftHash = 'b'.repeat(64);
+    const draftUri = `local://drafts/${draftId}/content/${draftHash}.md`;
+    await insertUserAndStudent(userId, studentId);
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      await client.query(
+        `INSERT INTO recordings (id, source, student_id, storage_uri, bytes, status)
+         VALUES ($1, 'upload', $2, 'local://recordings/a.opus', 1, 'transcribed')`,
+        [recordingId, studentId],
+      );
+      await client.query(
+        `INSERT INTO transcripts
+           (id, recording_id, storage_uri, working_version, content_hash, stt_provider,
+            mode, model, language, fallback_used)
+         VALUES ($1, $2, 'local://transcripts/a.txt', 1, $3, 'deepgram',
+                 'timeline', 'nova-3', 'multi', false)`,
+        [transcriptId, recordingId, 'a'.repeat(64)],
+      );
+      await client.query(
+        `INSERT INTO prompt_packages
+           (id, recording_id, transcript_id, student_id, template_version, storage_uri)
+         VALUES ($1, $2, $3, $4, 'template-v1', 'local://prompts/a.txt')`,
+        [promptPackageId, recordingId, transcriptId, studentId],
+      );
+      await client.query(
+        `INSERT INTO drafts
+           (id, prompt_package_id, student_id, storage_uri, working_version, content_hash, created_by)
+         VALUES ($1, $2, $3, $4, 3, $5, $6)`,
+        [draftId, promptPackageId, studentId, draftUri, draftHash, userId],
+      );
+      await client.query(
+        `INSERT INTO jobs
+           (id, state, md_storage_uri, recording_id, transcript_id, prompt_package_id, draft_id,
+            student_id, user_id, preset, with_tts, upload, publish_target, html_url, manifest_path)
+         VALUES ($1, 'succeeded', $2, $3, $4, $5, $6, $7, $8, 'b1-default', true,
+                 's3', 'html', 'https://example.test/parent', 's3://manifests/parent.json')`,
+        [
+          parentId,
+          draftUri,
+          recordingId,
+          transcriptId,
+          promptPackageId,
+          draftId,
+          studentId,
+          userId,
+        ],
+      );
+      await client.query(
+        `INSERT INTO assignment_sessions
+           (id, user_id, student_id, recording_id, transcript_id, prompt_package_id, draft_id,
+            revision, confirmed_step, confirmed_snapshot, share_job_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 6, 'share', $8::jsonb, $9)`,
+        [
+          randomUUID(),
+          userId,
+          studentId,
+          recordingId,
+          transcriptId,
+          promptPackageId,
+          draftId,
+          JSON.stringify({
+            student: { studentId },
+            source: {
+              lessonId: null,
+              recordingId,
+              transcriptId,
+              transcriptWorkingVersion: 1,
+              transcriptStorageUri: 'local://transcripts/a.txt',
+              transcriptHash: 'a'.repeat(64),
+            },
+            context: {
+              teacherNotes: null,
+              profileId: null,
+              profileRevisionId: null,
+              profileRevisionHash: null,
+            },
+            create: {
+              promptPackageId,
+              draftId,
+              draftWorkingVersion: 1,
+              draftStorageUri: 'local://drafts/original/content/original.md',
+              draftHash: 'c'.repeat(64),
+            },
+          }),
+          parentId,
+        ],
+      );
+    });
+    const { publishAssignmentCorrectionJob } = await import(
+      '../src/domain/assignment-session-repository.js'
+    );
+    const request = { requestId, draftId, draftWorkingVersion: 3, draftHash };
+
+    const [first, second] = await Promise.all([
+      publishAssignmentCorrectionJob({ userId, publishedJobId: parentId, request }),
+      publishAssignmentCorrectionJob({ userId, publishedJobId: parentId, request }),
+    ]);
+    const created = first.created ? first : second;
+    const replay = first.created ? second : first;
+
+    expect(created).toMatchObject({
+      created: true,
+      job: {
+        id: requestId,
+        state: 'queued',
+        sourceJobId: parentId,
+        draftId,
+        md: null,
+        mdStorageUri: draftUri,
+        htmlUrl: null,
+        manifestPath: null,
+      },
+    });
+    expect(replay).toMatchObject({ created: false, job: { id: requestId } });
+    await expect(
+      publishAssignmentCorrectionJob({
+        userId,
+        publishedJobId: parentId,
+        request: { ...request, draftHash: 'd'.repeat(64) },
+      }),
+    ).rejects.toMatchObject({ code: 'ASSIGNMENT_CORRECTION_REQUEST_CONFLICT' });
+    await expect(
+      publishAssignmentCorrectionJob({
+        userId,
+        publishedJobId: parentId,
+        request: { ...request, draftWorkingVersion: 4 },
+      }),
+    ).rejects.toMatchObject({ code: 'ASSIGNMENT_CORRECTION_REQUEST_CONFLICT' });
+    const competingRequest = { ...request, requestId: randomUUID() };
+    const competing = await Promise.allSettled([
+      publishAssignmentCorrectionJob({
+        userId,
+        publishedJobId: parentId,
+        request: competingRequest,
+      }),
+      publishAssignmentCorrectionJob({
+        userId,
+        publishedJobId: parentId,
+        request: { ...competingRequest, draftWorkingVersion: 4 },
+      }),
+    ]);
+    expect(competing.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(competing.filter((result) => result.status === 'rejected')).toHaveLength(1);
+    await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+      client.query(
+        `UPDATE jobs
+         SET state = 'failed', error = 'pipeline failed', started_at = NOW(), finished_at = NOW(),
+             manifest_path = 's3://manifests/partial-child.json', html_url = 'https://example.test/child'
+         WHERE id = $1`,
+        [requestId],
+      ),
+    );
+    const resetReplays = await Promise.all([
+      publishAssignmentCorrectionJob({ userId, publishedJobId: parentId, request }),
+      publishAssignmentCorrectionJob({ userId, publishedJobId: parentId, request }),
+    ]);
+    for (const resetReplay of resetReplays) {
+      expect(resetReplay).toMatchObject({
+        created: false,
+        job: {
+          id: requestId,
+          state: 'queued',
+          sourceJobId: parentId,
+          draftId,
+          mdStorageUri: draftUri,
+          error: null,
+          startedAt: null,
+          finishedAt: null,
+          manifestPath: null,
+          htmlUrl: null,
+        },
+      });
+    }
+    await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+      client.query(`UPDATE jobs SET state = 'failed' WHERE id = $1`, [requestId]),
+    );
+    await expect(
+      publishAssignmentCorrectionJob({
+        userId,
+        publishedJobId: parentId,
+        request: { ...request, draftHash: 'd'.repeat(64) },
+      }),
+    ).rejects.toMatchObject({ code: 'ASSIGNMENT_CORRECTION_REQUEST_CONFLICT' });
+    await expect(
+      withPgClientSessionContext({ rlsBypass: true }, (client) =>
+        client.query<{ state: string }>(`SELECT state FROM jobs WHERE id = $1`, [requestId]),
+      ),
+    ).resolves.toMatchObject({ rows: [{ state: 'failed' }] });
+    await expect(
+      withPgClientSessionContext({ rlsBypass: true }, (client) =>
+        client.query(`SELECT html_url, manifest_path FROM jobs WHERE id = $1`, [parentId]),
+      ),
+    ).resolves.toMatchObject({
+      rows: [
+        { html_url: 'https://example.test/parent', manifest_path: 's3://manifests/parent.json' },
+      ],
+    });
   });
 
   it('keeps completed Share readable but out of resume, counts, and active-recording reuse', async () => {

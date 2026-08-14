@@ -13,6 +13,7 @@ import {
 import { confirmAssignmentSessionStep } from '../../application/confirm-assignment-session-step.js';
 import { getJobSummaryWithDefaults } from '../../application/job-summary.js';
 import { listJobsWithDefaults } from '../../application/list-jobs.js';
+import { publishAssignmentCorrection } from '../../application/publish-assignment-correction.js';
 import {
   publishTtsModelSchema,
   publishTtsProviderSchema,
@@ -859,6 +860,14 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
       requestId: z.string().uuid(),
     })
     .strict();
+  const publishAssignmentCorrectionSchema = z
+    .object({
+      requestId: z.string().uuid(),
+      draftId: z.string().uuid(),
+      draftWorkingVersion: z.number().int().positive(),
+      draftHash: z.string().regex(/^[0-9a-f]{64}$/),
+    })
+    .strict();
 
   app.get('/user/assignment-sessions', { preHandler: authenticate }, async (request, reply) => {
     const authenticatedUser = getAuthenticatedUser(request);
@@ -1123,6 +1132,53 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
         logger.error(error instanceof Error ? error : String(error), {
           event: 'share_assignment_session_failed',
           userId: authenticatedUser.id,
+        });
+        return reply.code(500).send({ error: 'internal_error' });
+      }
+    },
+  );
+
+  app.post(
+    '/jobs/:publishedJobId/publish-correction',
+    { preHandler: authenticate },
+    async (request, reply) => {
+      const authenticatedUser = getAuthenticatedUser(request);
+      if (!authenticatedUser) {
+        return reply.code(401).send({ error: 'unauthorized', message: 'Authentication required' });
+      }
+      try {
+        const params = z.object({ publishedJobId: z.string().uuid() }).parse(request.params ?? {});
+        const body = publishAssignmentCorrectionSchema.parse(request.body ?? {});
+        const result = await publishAssignmentCorrection({
+          userId: authenticatedUser.id,
+          publishedJobId: params.publishedJobId,
+          request: body,
+        });
+        return reply.code(202).send(result);
+      } catch (error: unknown) {
+        const code = getErrorCode(error);
+        if (code === 'ASSIGNMENT_CORRECTION_NOT_FOUND') {
+          return reply.code(404).send({ error: 'not_found' });
+        }
+        if (
+          code === 'ASSIGNMENT_CORRECTION_PARENT_INVALID' ||
+          code === 'ASSIGNMENT_CORRECTION_SESSION_LINEAGE_INVALID' ||
+          code === 'ASSIGNMENT_CORRECTION_DRAFT_CONFLICT' ||
+          code === 'ASSIGNMENT_CORRECTION_REQUEST_CONFLICT'
+        ) {
+          return reply.code(409).send({ code: code.toLowerCase() });
+        }
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid request',
+            details: error.issues,
+          });
+        }
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'publish_assignment_correction_failed',
+          userId: authenticatedUser.id,
+          publishedJobId: (request.params as { publishedJobId?: string }).publishedJobId,
         });
         return reply.code(500).send({ error: 'internal_error' });
       }

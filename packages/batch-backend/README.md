@@ -113,6 +113,15 @@ The assignment builder separates automatic recovery from tutor-owned confirmatio
   a new assignment for the same recording. Job status DTOs expose the optional retained
   `assignmentSessionId` through rerun ancestry so post-cutover history can reopen confirmed inputs;
   pre-cutover jobs return no link. There is no assignment archival or archive-retry state.
+- `POST /jobs/:publishedJobId/publish-correction` is the distinct post-Share correction command. It
+  serializes on the stable request/job ID, locks and compares the authoritative mutable draft
+  version/hash, and transactionally reserves one `source_job_id` child against the server-owned
+  content-addressed Markdown URI. Replay must match the recorded parent, draft, version, and hash.
+  The correction worker hash-validates that immutable input and runs normal new-assignment pipeline
+  semantics with child-owned manifest/output identity. It does not read or merge the parent's
+  generated audio or manifest.
+- Historical `republishOnly` remains a rerun of the parent's frozen Markdown with its existing
+  artifact-reuse contract. It is not a draft-correction path.
 
 Migration `0044_assignment_step_confirmation_contract` is an intentional closed-alpha cutover. With
 the API and workers stopped, it deletes pre-cutover assignment sessions, drafts, and prompt packages

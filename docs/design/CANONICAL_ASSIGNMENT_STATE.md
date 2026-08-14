@@ -200,11 +200,20 @@ profile state, and Context confirmation pins the exact active revision the tutor
 ## Completed Assignments
 
 Share makes the canonical assignment immutable. Reopening the same source shows its confirmed
-inputs, output, and publication history without permitting assignment mutations. A new lesson needs
-a genuinely different canonical source.
+inputs, output, and publication history without permitting assignment-session mutations. A newer
+mutable draft is identified as unpublished working content, never as a changed confirmed snapshot.
+A new lesson needs a genuinely different canonical source.
 
 Reruns or output-repair actions remain children of the same canonical assignment and do not create a
 second assignment identity.
+
+Post-Share correction is an explicit child-job operation, not a session revision. The tutor enters
+correction mode, durably saves the existing mutable draft, and publishes a child bound to the exact
+server-authoritative URI, working version, and hash. That child runs normal content-dependent
+assignment generation with its own manifest/output identity, so corrected text cannot inherit audio
+or rendered artifacts from the historical parent merely because lineage exists. The completed
+session and original published job remain unchanged. Historical frozen-version republishing remains
+a separate rerun operation.
 
 ## Why This Matters
 

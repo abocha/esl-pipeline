@@ -5,6 +5,7 @@ import {
   ArtifactWorkingConflictApiError,
   confirmAssignmentSessionStep,
   confirmStudentAssignmentSession,
+  publishAssignmentCorrection,
   shareAssignmentSession,
   updateAssignmentSessionRecovery,
   updateDraft,
@@ -65,6 +66,27 @@ describe('assignment recovery API', () => {
       latestArtifact: { workingVersion: 4, contentHash: 'a'.repeat(64) },
     });
     expect(apiClient.put).toHaveBeenCalledTimes(1);
+  });
+
+  it('posts the authoritative correction payload to the published parent job', async () => {
+    vi.mocked(apiClient.post).mockResolvedValueOnce({
+      data: { job: { jobId: 'child-1' } },
+    } as never);
+
+    await expect(
+      publishAssignmentCorrection('parent-1', {
+        requestId: 'request-1',
+        draftId: 'draft-1',
+        draftWorkingVersion: 4,
+        draftHash: 'a'.repeat(64),
+      }),
+    ).resolves.toMatchObject({ job: { jobId: 'child-1' } });
+    expect(apiClient.post).toHaveBeenCalledWith('/api/jobs/parent-1/publish-correction', {
+      requestId: 'request-1',
+      draftId: 'draft-1',
+      draftWorkingVersion: 4,
+      draftHash: 'a'.repeat(64),
+    });
   });
 
   it('retries a transient draft recovery twice with the same CAS request', async () => {

@@ -62,6 +62,11 @@
   - unchecked families reuse prior published artifacts and keep their existing persisted defaults
   - checked families overwrite the published artifact even when deterministic upload keys or semantic hashes are unchanged
   - provider-specific voice identifiers are only reusable when the rerun stays on the same provider family; provider changes must fall back to provider-scoped voice resolution instead of inheriting stale foreign voice IDs
+- Batch-backend correction children are deliberately not reruns. They materialize and hash-check a
+  newly frozen draft object, then invoke `newAssignment` with child-owned manifest/output identity.
+  All normal Markdown-dependent planning and synthesis runs again; only normal content-addressed
+  caches may reuse genuinely identical generated content. `republishOnly` retains its historical
+  frozen-Markdown and artifact-reuse meaning.
 
 ### Stable Contracts
 
