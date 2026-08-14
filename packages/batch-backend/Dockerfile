@@ -51,7 +51,7 @@ WORKDIR /app
 COPY --from=build --chown=node:node /app/deployed/ ./
 COPY --chown=node:node packages/batch-backend/prompt-assets ./packages/batch-backend/prompt-assets
 
-RUN mkdir -p /app/tmp /app/uploads \
+RUN mkdir -p /app/tmp /app/tmp/tts-cache /app/uploads \
     && chown -R node:node /app/tmp /app/uploads
 
 EXPOSE 8080

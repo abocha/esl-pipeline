@@ -85,3 +85,31 @@ test('production backend-image services mount Google credentials read-only', () 
     assert.equal(secretsMount.read_only, true, `${serviceName} .secrets mount should be read-only`);
   }
 });
+
+test('production batch-worker mounts the dedicated named TTS cache volume', () => {
+  const config = renderProdComposeConfig();
+  const worker = config.services['batch-worker'];
+
+  assert.ok(worker, 'batch-worker service should be present');
+  const cacheMount = worker.volumes.find((volume) => volume.target === '/app/tmp/tts-cache');
+  assert.ok(cacheMount, 'batch-worker should mount the TTS cache path');
+  assert.equal(cacheMount.type, 'volume', 'TTS cache should use a Docker named volume');
+
+  const declaredVolume = config.volumes.tts_cache;
+  assert.ok(declaredVolume, 'production Compose should declare the TTS cache volume');
+  assert.equal(
+    cacheMount.source,
+    'tts_cache',
+    'TTS cache mount should use its declared volume key',
+  );
+  assert.match(declaredVolume.name, /_tts_cache$/u, 'TTS cache volume should be project-scoped');
+
+  for (const [serviceName, service] of Object.entries(config.services)) {
+    if (serviceName === 'batch-worker') continue;
+    assert.equal(
+      Boolean(service.volumes?.some((volume) => volume.target === '/app/tmp/tts-cache')),
+      false,
+      `${serviceName} should not mount the batch-worker TTS cache volume`,
+    );
+  }
+});

@@ -9,7 +9,8 @@
 - Review Cadence: monthly or after Docker workflow changes.
 - Status: `runbook`.
 
-This repo uses bind mounts for source/runtime data and Docker named volumes for dependency caches.
+This repo uses bind mounts for source/runtime data and Docker named volumes for dependency and
+disposable runtime caches.
 The canonical Compose files set `create_host_path: false` for the upload and production-secret
 mounts, so missing paths fail startup instead of being silently created with root ownership.
 
@@ -81,6 +82,12 @@ Backend, batch-worker, transcribe-worker, and student-memory-worker mount `./upl
 `/app/uploads` as writable storage. Those services also mount `./.secrets` at `/app/secrets` with
 `create_host_path: false` and read-only access; create the server-local directory and credentials
 outside git as described in [`DEPLOYMENT.md`](../backend-frontend/DEPLOYMENT.md).
+
+Production `batch-worker` also mounts the Docker named volume `tts_cache` at
+`/app/tmp/tts-cache`. The volume survives ordinary container recreation and deployment while
+remaining disposable cache state: it is governed by `BATCH_TTS_CACHE_MAX_AGE_DAYS` and
+`BATCH_TTS_CACHE_MAX_BYTES`, is not part of `uploads/`, and is not included in backup-critical
+application state. It does not require host-path preparation or backup/restore handling.
 
 `pnpm docker:prod:config` validates the production Compose shape with placeholder image references;
 it does not create host paths, build images, or deploy services.
