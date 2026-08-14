@@ -6,6 +6,7 @@ describeHttpServerIntegrationSuite(
     app,
     assignmentSessionsModule,
     confirmAssignmentSessionStepModule,
+    publishAssignmentCorrectionModule,
     shareAssignmentSessionModule,
     expect,
     it,
@@ -282,6 +283,54 @@ describeHttpServerIntegrationSuite(
       expect(share).toHaveBeenCalledWith({
         userId: 'test-user-id',
         sessionId: session.id,
+        request,
+      });
+    });
+
+    it('validates correction publish requests through the dedicated published-job route', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/jobs/55555555-5555-4555-8555-555555555555/publish-correction',
+        payload: {},
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toMatchObject({ error: 'validation_failed' });
+    });
+
+    it('publishes a correction child through the authenticated published-job route', async () => {
+      const request = {
+        requestId: '55555555-5555-4555-8555-555555555555',
+        draftId: '66666666-6666-4666-8666-666666666666',
+        draftWorkingVersion: 2,
+        draftHash: 'a'.repeat(64),
+      };
+      const publishedJobId = '77777777-7777-4777-8777-777777777777';
+      vi.spyOn(publishAssignmentCorrectionModule, 'publishAssignmentCorrection').mockResolvedValue({
+        job: {
+          jobId: request.requestId,
+          state: 'queued',
+          progress: 0,
+          createdAt: session.createdAt,
+          updatedAt: session.updatedAt,
+          error: null,
+          sourceJobId: publishedJobId,
+          manifestUri: null,
+          manifest: null,
+          provenance: null,
+        },
+      });
+      const response = await app.inject({
+        method: 'POST',
+        url: `/jobs/${publishedJobId}/publish-correction`,
+        payload: request,
+      });
+
+      expect(response.statusCode).toBe(202);
+      expect(response.json()).toMatchObject({ job: { jobId: request.requestId, state: 'queued' } });
+      expect(publishAssignmentCorrectionModule.publishAssignmentCorrection).toHaveBeenCalledWith({
+        userId: 'test-user-id',
+        publishedJobId,
         request,
       });
     });

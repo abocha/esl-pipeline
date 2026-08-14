@@ -171,12 +171,15 @@ export function handleApiError(error: AxiosError): string {
   if (error.response) {
     // Server responded with error status
     const data = error.response.data as Record<string, unknown> | string | undefined;
+    const domainCode =
+      typeof data === 'object' && data && typeof data.code === 'string' ? data.code : undefined;
     return (
       (typeof data === 'object' && data
         ? ((data.message as string | undefined) ?? (data.error as string | undefined))
         : undefined) ??
       (typeof data === 'string' ? data : undefined) ??
-      `HTTP ${error.response.status}: ${error.response.statusText}`
+      (domainCode ? `HTTP ${error.response.status}: ${domainCode}` : undefined) ??
+      `HTTP ${error.response.status}: ${error.response.statusText || 'Request failed'}`
     );
   } else if (error.request) {
     // Request was made but no response received

@@ -27,6 +27,7 @@ import {
   getStudentMemoryHealth,
   getStudentScheduleBillingSurface,
   populateFirstProfileFromLesson,
+  publishAssignmentCorrection,
   shareAssignmentSession,
   subscribeToJobEvents,
   updateAssignmentSessionRecovery,
@@ -58,6 +59,11 @@ import {
   shouldGuardAssignmentExit,
 } from './MinimalAssignment.confirmation';
 import { useMinimalAssignmentContextController } from './MinimalAssignment.context';
+import {
+  buildAssignmentCorrectionRequest,
+  hasSavedUnpublishedDraft,
+  isCompletedAssignmentSession,
+} from './MinimalAssignment.correction';
 import type { AssignmentEntryView } from './MinimalAssignment.entry-state';
 import {
   getJobPollingDecision,
@@ -325,6 +331,9 @@ export const MinimalAssignment: React.FC = () => {
   );
   const [assignmentRecoveryError, setAssignmentRecoveryError] = useState<string | null>(null);
   const [assignmentRecoveryNotice, setAssignmentRecoveryNotice] = useState<string | null>(null);
+  const [correctionMode, setCorrectionMode] = useState(false);
+  const [correctionPublishing, setCorrectionPublishing] = useState(false);
+  const [correctionError, setCorrectionError] = useState<string | null>(null);
   const assignmentSaveStateRef = useRef(assignmentSaveState);
   assignmentSaveStateRef.current = assignmentSaveState;
   const [startingAssignment, setStartingAssignment] = useState(false);
@@ -374,6 +383,10 @@ export const MinimalAssignment: React.FC = () => {
   } | null>(null);
   const shareRequestRef = useRef<string | null>(null);
   const shareReconciliationInFlightRef = useRef(false);
+  const correctionModeRef = useRef(false);
+  const correctionRequestRef = useRef<string | null>(null);
+  const correctionPayloadRef = useRef<ReturnType<typeof buildAssignmentCorrectionRequest>>(null);
+  const correctionReconciliationRef = useRef(false);
   const autoResumedShareSessionRef = useRef<string | null>(null);
   const assignmentSessionSettingsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const assignmentContextRecoveryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -559,6 +572,7 @@ export const MinimalAssignment: React.FC = () => {
   const refreshDraftPreservingLocal = authoring.refreshDraftPreservingLocal;
 
   const markAssignmentUserEdit = useCallback(() => {
+    if (correctionModeRef.current) return;
     assignmentSessionUserEditedRef.current = true;
     assignmentSessionPersistenceSuppressedRef.current = false;
   }, []);
@@ -995,6 +1009,12 @@ export const MinimalAssignment: React.FC = () => {
       studentConfirmationRequestRef.current = null;
       shareRequestRef.current = null;
       shareReconciliationInFlightRef.current = false;
+      correctionModeRef.current = false;
+      correctionReconciliationRef.current = false;
+      correctionRequestRef.current = null;
+      correctionPayloadRef.current = null;
+      setCorrectionMode(false);
+      setCorrectionError(null);
       autoResumedShareSessionRef.current = null;
       assignmentContextConflictKeyRef.current = null;
       assignmentSessionMutationQueueRef.current = Promise.resolve(null);
@@ -1695,6 +1715,13 @@ export const MinimalAssignment: React.FC = () => {
   }, [context, firstProfileDraft, markAssignmentUserEdit, source]);
 
   const jobReady = Boolean(jobStatus?.jobId);
+  const completedReferenceMode = isCompletedAssignmentSession(activeAssignmentSession);
+  const savedUnpublishedChanges = hasSavedUnpublishedDraft(
+    activeAssignmentSession?.confirmed.create,
+    authoring.draft,
+    authoring.draftDirty,
+  );
+  correctionModeRef.current = correctionMode;
   const hasAssignmentContent = authoring.draftText.trim().length > 0;
   const hasStartedFlow =
     entryView === 'summary' ||
@@ -1810,14 +1837,19 @@ export const MinimalAssignment: React.FC = () => {
     teacherNotes,
   ]);
   const handleGenerateAssignment = useCallback(async () => {
+    if (completedReferenceMode) return;
     markAssignmentUserEdit();
     const commitResult = await commitTeacherNotes();
     if (!commitResult) return;
     await authoring.generateAssignment({ forceFreshPrompt: commitResult === 'invalidated' });
-  }, [authoring, commitTeacherNotes, markAssignmentUserEdit]);
+  }, [authoring, commitTeacherNotes, completedReferenceMode, markAssignmentUserEdit]);
   const handleFocusedStepRequest = useCallback(
     async (requestedStep: AssignmentStepId) => {
       if (authoringOperationBusy && requestedStep !== 'student') return;
+      if (completedReferenceMode && !correctionMode) {
+        setActiveStep(requestedStep);
+        return;
+      }
       const requested = focusedWorkflowSteps.find((step) => step.id === requestedStep);
       const confirmedContext = activeAssignmentSession?.confirmed.context;
       const activeStepHasLocalDirtyWork =
@@ -1828,7 +1860,7 @@ export const MinimalAssignment: React.FC = () => {
             context.selectedProfileId !== (confirmedContext.profileId ?? '') ||
             context.selectedProfileRevisionId !== confirmedContext.profileRevisionId ||
             context.selectedProfileRevisionHash !== confirmedContext.profileRevisionHash)) ||
-        (activeStep === 'assignment' && authoring.draftDirty);
+        (activeStep === 'assignment' && authoring.draftDirty && !correctionMode);
       if (
         FOCUSED_STEP_ORDER.indexOf(requestedStep) > activeStepIndex &&
         (requested?.status === 'locked' || activeStepHasLocalDirtyWork)
@@ -1846,6 +1878,8 @@ export const MinimalAssignment: React.FC = () => {
       context.selectedProfileId,
       context.selectedProfileRevisionHash,
       context.selectedProfileRevisionId,
+      completedReferenceMode,
+      correctionMode,
       focusedWorkflowSteps,
       source.transcriptDirty,
       teacherNotes,
@@ -1857,6 +1891,7 @@ export const MinimalAssignment: React.FC = () => {
   }, [activeAssignmentSession, activeStepIndex, authoringOperationBusy, jobReady]);
   const handleFocusedContinue = useCallback(async () => {
     if (authoringOperationBusy) return;
+    if (completedReferenceMode) return;
     if (activeStep === 'source') {
       const recordingId = source.recording?.recordingId;
       const transcript = source.transcriptDirty
@@ -1930,6 +1965,7 @@ export const MinimalAssignment: React.FC = () => {
     activeStepIndex,
     authoring,
     commitTeacherNotes,
+    completedReferenceMode,
     confirmAssignmentStep,
     linkedLessonId,
     refreshFirstProfileLessonMemory,
@@ -2066,6 +2102,84 @@ export const MinimalAssignment: React.FC = () => {
   const saveDraft = authoring.saveDraft;
   const refreshSelectedProfile = context.refreshSelectedProfile;
   const applyJobStatusTransition = resume.applyJobStatusTransition;
+
+  const enterCorrectionMode = useCallback(() => {
+    if (!completedReferenceMode) return;
+    correctionModeRef.current = true;
+    setCorrectionMode(true);
+    setCorrectionError(null);
+    setActiveStep('assignment');
+  }, [completedReferenceMode]);
+
+  const exitCorrectionMode = useCallback(() => {
+    correctionModeRef.current = false;
+    setCorrectionMode(false);
+    setCorrectionError(null);
+    setActiveStep('review');
+  }, []);
+
+  const handlePublishCorrection = useCallback(async () => {
+    if (!completedReferenceMode || !correctionMode || !jobStatus?.jobId) return;
+    if (correctionReconciliationRef.current) return;
+    correctionReconciliationRef.current = true;
+    setCorrectionPublishing(true);
+    setCorrectionError(null);
+
+    try {
+      let payload = correctionPayloadRef.current;
+      if (!payload) {
+        if (authoring.draftRecoveryConflict) {
+          throw new Error('Resolve the saved draft conflict before publishing the correction.');
+        }
+        const saved = await authoring.flushDraftAutosave();
+        const draft = saved ?? authoring.draft;
+        payload = buildAssignmentCorrectionRequest({
+          requestId: correctionRequestRef.current ?? globalThis.crypto.randomUUID(),
+          draft,
+          confirmedCreate: activeAssignmentSession?.confirmed.create,
+        });
+        if (!payload) {
+          throw new Error('Save the current draft before publishing the correction.');
+        }
+        correctionRequestRef.current = payload.requestId;
+        correctionPayloadRef.current = payload;
+      }
+
+      const response = await publishAssignmentCorrection(jobStatus.jobId, payload);
+      setJobStatusState(response.job);
+      resume.applyJobStatusTransition(response.job);
+      setCorrectionMode(false);
+      correctionModeRef.current = false;
+      correctionPayloadRef.current = null;
+      correctionRequestRef.current = null;
+      setCorrectionError(null);
+      await resume.loadResumeJobs();
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Unable to publish the corrected version. Try again.';
+      if (message.includes('assignment_correction_draft_conflict')) {
+        correctionPayloadRef.current = null;
+        correctionRequestRef.current = null;
+        await authoring.refreshDraftPreservingLocal({ forcePreserveLocal: true });
+      } else if (message.includes('assignment_correction_request_conflict')) {
+        correctionPayloadRef.current = null;
+        correctionRequestRef.current = null;
+      }
+      setCorrectionError(message);
+    } finally {
+      correctionReconciliationRef.current = false;
+      setCorrectionPublishing(false);
+    }
+  }, [
+    activeAssignmentSession?.confirmed.create,
+    authoring,
+    completedReferenceMode,
+    correctionMode,
+    jobStatus?.jobId,
+    resume,
+  ]);
 
   useEffect(() => {
     if (!guardAssignmentExit) return;
@@ -2354,7 +2468,7 @@ export const MinimalAssignment: React.FC = () => {
         saveState={assignmentSaveState}
         onStepRequest={handleFocusedStepRequest}
         onBack={handleFocusedBack}
-        {...(activeStep === 'review' || activeStep === 'student'
+        {...(activeStep === 'review' || activeStep === 'student' || completedReferenceMode
           ? {}
           : {
               onContinue: handleFocusedContinue,
@@ -2521,6 +2635,7 @@ export const MinimalAssignment: React.FC = () => {
               }}
               transcriptDirty={source.transcriptDirty}
               transcriptSaving={source.transcriptSaving}
+              readOnly={completedReferenceMode}
             />
           </LessonSourceStep>
         </div>
@@ -2557,6 +2672,7 @@ export const MinimalAssignment: React.FC = () => {
                 onRetry: () => void refreshFirstProfileLessonMemory(),
               }}
               teacherNotes={teacherNotes}
+              readOnly={completedReferenceMode}
               onTeacherNotesChange={(value) => {
                 markAssignmentUserEdit();
                 setTeacherNotes(value);
@@ -2598,6 +2714,8 @@ export const MinimalAssignment: React.FC = () => {
               validation={authoring.validation}
               validationError={authoring.validationError}
               draftError={authoring.draftError}
+              readOnly={completedReferenceMode && !correctionMode}
+              allowGenerate={!completedReferenceMode}
             />
           </CreateAssignmentStep>
         </div>
@@ -2638,6 +2756,22 @@ export const MinimalAssignment: React.FC = () => {
               publishUrl={publishUrl}
               publishLabel={publishLabel}
               publishPending={publishPending}
+              completedReferenceMode={completedReferenceMode}
+              correctionMode={correctionMode}
+              correctionPublishing={correctionPublishing}
+              correctionError={correctionError}
+              correctionCanPublish={Boolean(
+                correctionMode &&
+                  !correctionPublishing &&
+                  !correctionReconciliationRef.current &&
+                  Boolean(authoring.draft?.id) &&
+                  !authoring.draftDirty &&
+                  !authoring.draftRecoveryConflict,
+              )}
+              savedUnpublishedChanges={savedUnpublishedChanges}
+              onEnterCorrection={enterCorrectionMode}
+              onExitCorrection={exitCorrectionMode}
+              onPublishCorrection={() => void handlePublishCorrection()}
             />
           </ReviewShareStep>
         </div>

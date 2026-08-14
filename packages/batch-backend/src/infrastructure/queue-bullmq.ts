@@ -14,8 +14,12 @@ import { createRedisClient } from './redis.js';
 
 export interface QueueJobPayload {
   jobId: string;
-  executionMode?: 'new_assignment' | 'rerun';
+  executionMode?: 'new_assignment' | 'rerun' | 'correction';
   sourceJobId?: string;
+  correction?: {
+    expectedMarkdownHash: string;
+    manifestMd: string;
+  };
   rerun?: {
     manifestMd?: string;
     upload?: 's3';

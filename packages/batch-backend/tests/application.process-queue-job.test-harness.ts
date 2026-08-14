@@ -24,6 +24,10 @@ vi.mock('../src/infrastructure/logger', async () => {
 });
 
 export const getJobByIdSpy = vi.spyOn(jobRepository, 'getJobById');
+export const resetFailedAssignmentCorrectionJobSpy = vi.spyOn(
+  jobRepository,
+  'resetFailedAssignmentCorrectionJob',
+);
 export const updateJobStateAndResultSpy = vi.spyOn(jobRepository, 'updateJobStateAndResult');
 export const runAssignmentJobSpy = vi.spyOn(orchestratorService, 'runAssignmentJob');
 export const runRerunAssignmentJobSpy = vi.spyOn(orchestratorService, 'runRerunAssignmentJob');

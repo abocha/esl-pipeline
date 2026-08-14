@@ -58,6 +58,8 @@ import type {
   JobSummaryResponse as ContractJobSummaryResponse,
   MarkdownValidationResponse as ContractMarkdownValidationResponse,
   PronunciationChunkTtsProviderId as ContractPronunciationChunkTtsProviderId,
+  PublishAssignmentCorrectionRequest as ContractPublishAssignmentCorrectionRequest,
+  PublishAssignmentCorrectionResponse as ContractPublishAssignmentCorrectionResponse,
   RecordingSourceId as ContractRecordingSourceId,
   RecordingStatus as ContractRecordingStatus,
   RerunJobPayload as ContractRerunJobPayload,
@@ -116,6 +118,8 @@ export type ConfirmAssignmentSessionStepRequest = ContractConfirmAssignmentSessi
 export type ConfirmAssignmentSessionStepResponse = ContractConfirmAssignmentSessionStepResponse;
 export type ConfirmAssignmentSessionShareRequest = ContractConfirmAssignmentSessionShareRequest;
 export type ConfirmAssignmentSessionShareResponse = ContractConfirmAssignmentSessionShareResponse;
+export type PublishAssignmentCorrectionRequest = ContractPublishAssignmentCorrectionRequest;
+export type PublishAssignmentCorrectionResponse = ContractPublishAssignmentCorrectionResponse;
 export type TtsProviderId = ContractTtsProviderId;
 export type TtsModelId = ContractTtsModelId;
 export type GoogleTtsModel = ContractGoogleTtsModel;
@@ -3496,6 +3500,27 @@ export async function shareAssignmentSession(
     if (conflict) throw new AssignmentSessionConflictApiError(conflict);
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to share this assignment.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function publishAssignmentCorrection(
+  publishedJobId: string,
+  request: PublishAssignmentCorrectionRequest,
+): Promise<PublishAssignmentCorrectionResponse> {
+  try {
+    const response = await runRecoveryRequest(() =>
+      apiClient.post(
+        buildApiProxyPath(`/jobs/${encodeURIComponent(publishedJobId)}/publish-correction`),
+        request,
+      ),
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please publish the corrected assignment again.');
     }
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }

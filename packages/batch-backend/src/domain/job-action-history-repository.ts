@@ -37,9 +37,10 @@ const SELECT_COLUMNS = `
 
 export async function insertJobActionHistory(
   params: InsertJobActionHistoryParams,
+  options?: { client?: PoolClient },
 ): Promise<JobActionHistoryRecord> {
   const id = randomUUID();
-  const row = await withPgClient(async (client: PoolClient) => {
+  const insert = async (client: PoolClient) => {
     const result = await client.query(
       `
       INSERT INTO job_action_history (
@@ -72,7 +73,8 @@ export async function insertJobActionHistory(
       ],
     );
     return result.rows[0] as JobActionHistoryRow;
-  });
+  };
+  const row = options?.client ? await insert(options.client) : await withPgClient(insert);
 
   return mapRow(row);
 }
