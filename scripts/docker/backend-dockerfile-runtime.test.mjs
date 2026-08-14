@@ -11,13 +11,17 @@ const runtimeMarker = 'FROM node:24-trixie-slim AS runtime';
 const runtimeStart = dockerfile.indexOf(runtimeMarker);
 const runtimeStage = runtimeStart === -1 ? '' : dockerfile.slice(runtimeStart);
 
-test('backend runtime image creates writable tmp and uploads before dropping privileges', () => {
-  const mkdirIndex = dockerfile.indexOf('mkdir -p /app/tmp /app/uploads');
+test('backend runtime image creates writable tmp, uploads, and TTS cache before dropping privileges', () => {
+  const mkdirIndex = dockerfile.indexOf('mkdir -p /app/tmp /app/tmp/tts-cache /app/uploads');
   const chownIndex = dockerfile.indexOf('chown -R node:node /app/tmp /app/uploads');
   const userNodeIndex = dockerfile.indexOf('USER node');
 
-  assert.notEqual(mkdirIndex, -1, 'Dockerfile should create /app/tmp and /app/uploads');
-  assert.notEqual(chownIndex, -1, 'Dockerfile should chown /app/tmp and /app/uploads to node');
+  assert.notEqual(
+    mkdirIndex,
+    -1,
+    'Dockerfile should create /app/tmp, /app/tmp/tts-cache, and /app/uploads',
+  );
+  assert.notEqual(chownIndex, -1, 'Dockerfile should chown runtime directories to node');
   assert.notEqual(userNodeIndex, -1, 'Dockerfile should drop privileges with USER node');
   assert.ok(mkdirIndex < userNodeIndex, 'runtime dirs must be created before USER node');
   assert.ok(chownIndex < userNodeIndex, 'runtime dirs must be chowned before USER node');
