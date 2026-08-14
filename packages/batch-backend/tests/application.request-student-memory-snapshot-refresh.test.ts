@@ -73,6 +73,10 @@ describe('application/request-student-memory-snapshot-refresh', () => {
         jobId: 'student-memory-snapshot:student-1:snapshot-pending-1',
       }),
     );
+    expect(supersedeClaimsMock).toHaveBeenCalledWith({
+      workload: 'student_memory_snapshot',
+      canonicalScopeKey: 'student-1',
+    });
   });
 
   it('supersedes an eligible Batch claim without delaying the fresh online request', async () => {
@@ -243,6 +247,138 @@ describe('application/request-student-memory-snapshot-refresh', () => {
         jobId: 'student-memory-snapshot:student-1:snapshot-pending-existing',
       }),
     );
+    expect(supersedeClaimsMock).toHaveBeenCalledWith({
+      workload: 'student_memory_snapshot',
+      canonicalScopeKey: 'student-1',
+    });
+  });
+
+  it('re-enqueues the same pending snapshot after queue insertion fails', async () => {
+    ensurePendingMock
+      .mockResolvedValueOnce({ outcome: 'created', entry: { id: 'snapshot-pending-1' } })
+      .mockResolvedValueOnce({ outcome: 'pending_exists', entry: { id: 'snapshot-pending-1' } })
+      .mockResolvedValueOnce({ outcome: 'pending_exists', entry: { id: 'snapshot-pending-1' } })
+      .mockResolvedValueOnce({ outcome: 'pending_exists', entry: { id: 'snapshot-pending-1' } });
+    enqueueMock.mockRejectedValueOnce(new Error('queue unavailable'));
+    const args = {
+      config: { generation: {} } as never,
+      params: {
+        studentId: 'student-1',
+        trigger: 'homework-memory-ready' as const,
+        sourceEntryId: 'homework-memory-1',
+      },
+    };
+
+    await expect(requestStudentMemorySnapshotRefresh(args)).rejects.toThrow('queue unavailable');
+    await requestStudentMemorySnapshotRefresh(args);
+
+    expect(enqueueMock).toHaveBeenCalledTimes(2);
+    expect(enqueueMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ pendingEntryId: 'snapshot-pending-1' }),
+      expect.objectContaining({
+        jobId: 'student-memory-snapshot:student-1:snapshot-pending-1',
+      }),
+    );
+  });
+
+  it('rechecks automatic homework coverage after batch arbitration before enqueueing', async () => {
+    let concurrentBatchImportCompleted = false;
+    ensurePendingMock.mockImplementation(async () =>
+      concurrentBatchImportCompleted
+        ? { outcome: 'already_reconciled', entry: { id: 'snapshot-ready-from-batch' } }
+        : { outcome: 'created', entry: { id: 'snapshot-pending-1' } },
+    );
+    supersedeClaimsMock.mockImplementation(async () => {
+      concurrentBatchImportCompleted = true;
+      return [];
+    });
+
+    const result = await requestStudentMemorySnapshotRefresh({
+      config: { generation: {} } as never,
+      params: {
+        studentId: 'student-1',
+        trigger: 'homework-memory-ready',
+        sourceEntryId: 'homework-memory-1',
+      },
+    });
+
+    expect(result).toMatchObject({
+      outcome: 'already_reconciled',
+      entry: { id: 'snapshot-ready-from-batch' },
+    });
+    expect(ensurePendingMock).toHaveBeenCalledTimes(2);
+    expect(supersedeClaimsMock).toHaveBeenCalledTimes(1);
+    expect(supersedeClaimsMock.mock.invocationCallOrder[0]).toBeLessThan(
+      ensurePendingMock.mock.invocationCallOrder[1] ?? Number.POSITIVE_INFINITY,
+    );
+    expect(enqueueMock).not.toHaveBeenCalled();
+  });
+
+  it('enqueues created automatic homework work after the second reconciliation retains its pending row', async () => {
+    ensurePendingMock
+      .mockResolvedValueOnce({ outcome: 'created', entry: { id: 'snapshot-pending-1' } })
+      .mockResolvedValueOnce({ outcome: 'pending_exists', entry: { id: 'snapshot-pending-1' } });
+
+    await requestStudentMemorySnapshotRefresh({
+      config: { generation: {} } as never,
+      params: {
+        studentId: 'student-1',
+        trigger: 'homework-memory-ready',
+        sourceEntryId: 'homework-memory-1',
+      },
+    });
+
+    expect(supersedeClaimsMock).toHaveBeenCalledTimes(1);
+    expect(enqueueMock).toHaveBeenCalledWith(
+      expect.objectContaining({ pendingEntryId: 'snapshot-pending-1' }),
+      expect.objectContaining({ jobId: 'student-memory-snapshot:student-1:snapshot-pending-1' }),
+    );
+  });
+
+  it('re-enqueues existing automatic homework work after the second reconciliation retains its pending row', async () => {
+    ensurePendingMock.mockResolvedValue({
+      outcome: 'pending_exists',
+      entry: { id: 'snapshot-pending-existing' },
+    });
+
+    await requestStudentMemorySnapshotRefresh({
+      config: { generation: {} } as never,
+      params: {
+        studentId: 'student-1',
+        trigger: 'homework-memory-ready',
+        sourceEntryId: 'homework-memory-1',
+      },
+    });
+
+    expect(ensurePendingMock).toHaveBeenCalledTimes(2);
+    expect(supersedeClaimsMock).toHaveBeenCalledTimes(1);
+    expect(enqueueMock).toHaveBeenCalledWith(
+      expect.objectContaining({ pendingEntryId: 'snapshot-pending-existing' }),
+      expect.objectContaining({ jobId: 'student-memory-snapshot:student-1:snapshot-pending-existing' }),
+    );
+  });
+
+  it('does not enqueue a second automatic homework refresh after a ready snapshot covers its source', async () => {
+    ensurePendingMock.mockResolvedValueOnce({
+      outcome: 'already_reconciled',
+      entry: { id: 'snapshot-ready-1' },
+    });
+
+    const result = await requestStudentMemorySnapshotRefresh({
+      config: { generation: {} } as never,
+      params: {
+        studentId: 'student-1',
+        trigger: 'homework-memory-ready',
+        sourceEntryId: 'homework-memory-1',
+      },
+    });
+
+    expect(result.outcome).toBe('already_reconciled');
+    expect(ensurePendingMock).toHaveBeenCalledWith(
+      expect.objectContaining({ reuseReadyHomeworkSource: true }),
+    );
+    expect(supersedeClaimsMock).not.toHaveBeenCalled();
+    expect(enqueueMock).not.toHaveBeenCalled();
   });
 
   it('creates a new queue job when the same source entry is retriggered after a new pending row is created', async () => {

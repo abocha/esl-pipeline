@@ -7,6 +7,7 @@ import { listStudentMemorySnapshotBackfillTargets } from '../src/application/stu
 import {
   getEligibleReadyStudentMemorySnapshotById,
   getLatestReadyStudentMemorySnapshotByStudentId,
+  ensurePendingStudentMemorySnapshot,
   insertCanonicalReadyStudentMemorySnapshot,
   listStudentMemorySnapshots,
   StudentMemorySnapshotParentChangedError,
@@ -95,20 +96,22 @@ async function insertStoredSnapshot(args: {
   status?: 'pending' | 'ready' | 'failed';
   generatedAt: string;
   lessonMemoryEntryIds: string[];
+  homeworkMemoryEntryIds?: string[];
 }) {
   const id = args.id ?? randomUUID();
   await withPgClient((client) =>
     client.query(
       `INSERT INTO student_memory_snapshots
          (id, student_id, schema_version, generated_at, provider, model, status,
-          lesson_memory_entry_ids)
-       VALUES ($1, $2, 'student-memory-snapshot.v1', $3, 'openai', 'gpt-5.2', $4, $5)`,
+          lesson_memory_entry_ids, homework_memory_entry_ids)
+       VALUES ($1, $2, 'student-memory-snapshot.v1', $3, 'openai', 'gpt-5.2', $4, $5, $6)`,
       [
         id,
         args.studentId,
         new Date(args.generatedAt),
         args.status ?? 'ready',
         args.lessonMemoryEntryIds,
+        args.homeworkMemoryEntryIds ?? [],
       ],
     ),
   );
@@ -178,6 +181,78 @@ describeIfPg('domain/student-memory-snapshot-repository', () => {
     await expect(getLatestReadyStudentMemorySnapshotByStudentId(studentId)).resolves.toMatchObject({
       id: child.id,
     });
+  });
+
+  it('supersedes matching pending homework refreshes when eligible ready coverage already exists', async () => {
+    const studentId = await insertStudent();
+    const homeworkMemoryEntryId = randomUUID();
+    const pending = await ensurePendingStudentMemorySnapshot({
+      studentId,
+      schemaVersion: 'student-memory.v1',
+      provider: 'openai',
+      model: 'gpt-5.2',
+      sourceEntryId: homeworkMemoryEntryId,
+      reuseReadyHomeworkSource: true,
+      generationNotes: { sourceEntryId: homeworkMemoryEntryId },
+    });
+    const existing = await insertStoredSnapshot({
+      studentId,
+      generatedAt: '2026-07-01T10:00:00.000Z',
+      lessonMemoryEntryIds: [],
+      homeworkMemoryEntryIds: [homeworkMemoryEntryId],
+    });
+
+    const reconciled = await ensurePendingStudentMemorySnapshot({
+      studentId,
+      schemaVersion: 'student-memory.v1',
+      provider: 'openai',
+      model: 'gpt-5.2',
+      sourceEntryId: homeworkMemoryEntryId,
+      reuseReadyHomeworkSource: true,
+    });
+    const snapshots = await listStudentMemorySnapshots({ studentId, limit: 10, offset: 0 });
+    const supersededPending = snapshots.find((snapshot) => snapshot.id === pending.entry.id);
+
+    expect(reconciled).toMatchObject({ outcome: 'already_reconciled', entry: { id: existing } });
+    expect(supersededPending).toMatchObject({
+      status: 'superseded',
+      supersededById: existing,
+    });
+    expect(
+      snapshots.filter(
+        (snapshot) =>
+          snapshot.status === 'pending' && snapshot.generationNotes?.sourceEntryId === homeworkMemoryEntryId,
+      ),
+    ).toHaveLength(0);
+  });
+
+  it('does not reconcile an automatic homework refresh through ineligible ready coverage', async () => {
+    const studentId = await insertStudent();
+    const homeworkMemoryEntryId = randomUUID();
+    const ineligibleLessonMemoryEntryId = await insertLessonMemory({
+      studentId,
+      status: 'superseded',
+      withConfirmedSource: false,
+    });
+    const historical = await insertStoredSnapshot({
+      studentId,
+      generatedAt: '2026-07-01T10:00:00.000Z',
+      lessonMemoryEntryIds: [ineligibleLessonMemoryEntryId],
+      homeworkMemoryEntryIds: [homeworkMemoryEntryId],
+    });
+
+    const result = await ensurePendingStudentMemorySnapshot({
+      studentId,
+      schemaVersion: 'student-memory.v1',
+      provider: 'openai',
+      model: 'gpt-5.2',
+      sourceEntryId: homeworkMemoryEntryId,
+      reuseReadyHomeworkSource: true,
+    });
+
+    expect(result).toMatchObject({ outcome: 'created' });
+    expect(result.entry.id).not.toBe(historical);
+    expect(result.entry.status).toBe('pending');
   });
 
   it('rejects a guarded ready snapshot when the expected parent is stale', async () => {

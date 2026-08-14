@@ -364,6 +364,7 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
           params: {
             jobId,
             studentId: succeeded.studentId ?? null,
+            publishKind: isCorrectionExecution ? 'correction' : 'initial',
           },
         }).catch((enqueueError) => {
           log.warn('Homework-memory enqueue failed after publish success; continuing', {

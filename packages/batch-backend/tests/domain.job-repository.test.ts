@@ -349,6 +349,55 @@ describe('domain/job-repository', () => {
       expect(succeeded!.htmlUrl).toBe('https://example.com/job');
     });
 
+    it('assigns a unique lineage-local publication sequence while concurrent corrections succeed', async () => {
+      const root = await insertJob({ md: 'fixtures/root.md', publishTarget: 'html' });
+      const correctionA = await insertJob({
+        md: 'fixtures/correction-a.md',
+        publishTarget: 'html',
+        sourceJobId: root.id,
+      });
+      const correctionB = await insertJob({
+        md: 'fixtures/correction-b.md',
+        publishTarget: 'html',
+        sourceJobId: root.id,
+      });
+
+      for (const job of [root, correctionA, correctionB]) {
+        await updateJobStateAndResult({
+          id: job.id,
+          expectedState: 'queued',
+          nextState: 'running',
+          startedAt: new Date(),
+        });
+      }
+      await updateJobStateAndResult({
+        id: root.id,
+        expectedState: 'running',
+        nextState: 'succeeded',
+        finishedAt: new Date('2026-03-20T10:00:00.000Z'),
+      });
+      await Promise.all(
+        [correctionA, correctionB].map((job) =>
+          updateJobStateAndResult({
+            id: job.id,
+            expectedState: 'running',
+            nextState: 'succeeded',
+            finishedAt: new Date('2026-03-20T10:00:01.000Z'),
+          }),
+        ),
+      );
+
+      const sequences = await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+        const result = await client.query<{ id: string; publication_sequence: string }>(
+          `SELECT id, publication_sequence::text FROM jobs WHERE id = ANY($1::uuid[])`,
+          [[root.id, correctionA.id, correctionB.id]],
+        );
+        return result.rows.map((row) => Number(row.publication_sequence)).sort((a, b) => a - b);
+      });
+
+      expect(sequences).toEqual([1, 2, 3]);
+    });
+
     it('returns null when expectedState does not match (optimistic concurrency / race)', async () => {
       const job = await insertJob({
         md: 'fixtures/ok.md',

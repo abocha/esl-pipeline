@@ -825,6 +825,12 @@ export async function updateJobStateAndResult(args: {
   assertTransition(expectedState, nextState);
 
   const row = await withPgClient(async (client: PoolClient) => {
+    await client.query('BEGIN');
+    try {
+      const publicationSequence =
+        nextState === 'succeeded'
+          ? await reservePublishedJobSequence(client, id)
+          : null;
     const result = await client.query(
       `
       UPDATE jobs
@@ -835,6 +841,7 @@ export async function updateJobStateAndResult(args: {
         html_url = COALESCE($4, html_url),
         started_at = COALESCE($5, started_at),
         finished_at = COALESCE($6, finished_at),
+        publication_sequence = COALESCE($9, publication_sequence),
         updated_at = now()
       WHERE id = $7
         AND state = $8
@@ -875,9 +882,24 @@ export async function updateJobStateAndResult(args: {
         source_job_id,
         user_id
       `,
-      [nextState, error, manifestPath, htmlUrl, startedAt, finishedAt, id, expectedState],
+      [
+        nextState,
+        error,
+        manifestPath,
+        htmlUrl,
+        startedAt,
+        finishedAt,
+        id,
+        expectedState,
+        publicationSequence,
+      ],
     );
-    return result.rows[0];
+      await client.query('COMMIT');
+      return result.rows[0];
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
   });
 
   if (!row) {
@@ -887,6 +909,59 @@ export async function updateJobStateAndResult(args: {
 
   logger.info('Job state updated', { jobId: id, state: row.state });
   return mapRowToJob(row);
+}
+
+async function reservePublishedJobSequence(client: PoolClient, jobId: string): Promise<string | null> {
+  const rootResult = await client.query<{ root_id: string; publish_target: string | null }>(
+    `
+    WITH RECURSIVE upstream AS (
+      SELECT id, source_job_id
+      FROM jobs
+      WHERE id = $1
+
+      UNION ALL
+
+      SELECT parent.id, parent.source_job_id
+      FROM jobs parent
+      INNER JOIN upstream child ON parent.id = child.source_job_id
+    )
+    SELECT root.id AS root_id, target.publish_target
+    FROM jobs target
+    CROSS JOIN LATERAL (
+      SELECT id
+      FROM upstream
+      WHERE source_job_id IS NULL
+      LIMIT 1
+    ) root
+    WHERE target.id = $1
+    `,
+    [jobId],
+  );
+  const root = rootResult.rows[0];
+  if (!root || root.publish_target !== 'html') {
+    return null;
+  }
+
+  await client.query('SELECT id FROM jobs WHERE id = $1 FOR UPDATE', [root.root_id]);
+  const sequenceResult = await client.query<{ next_sequence: string }>(
+    `
+    WITH RECURSIVE lineage AS (
+      SELECT id, source_job_id, publication_sequence
+      FROM jobs
+      WHERE id = $1
+
+      UNION ALL
+
+      SELECT child.id, child.source_job_id, child.publication_sequence
+      FROM jobs child
+      INNER JOIN lineage parent ON child.source_job_id = parent.id
+    )
+    SELECT (COALESCE(MAX(publication_sequence), 0) + 1)::text AS next_sequence
+    FROM lineage
+    `,
+    [root.root_id],
+  );
+  return sequenceResult.rows[0]?.next_sequence ?? null;
 }
 
 function assignmentShareJobIntegritySql(jobAlias: string, sessionAlias: string): string {

@@ -67,6 +67,13 @@ export async function processHomeworkMemoryJob(args: {
 
   const pendingEntry = await homeworkMemory.getById(args.payload.pendingEntryId);
   if (!pendingEntry || pendingEntry.status !== 'pending') {
+    await reconcileSnapshotForCommittedHomeworkMemory({
+      config: args.config,
+      payload: args.payload,
+      pendingEntry,
+      homeworkMemory,
+      snapshots,
+    });
     return;
   }
   const forceRegenerate = pendingEntry.generationNotes?.forceRegenerate === true;
@@ -119,6 +126,10 @@ export async function processHomeworkMemoryJob(args: {
         }),
     });
 
+    if (result.outcome !== 'canonical_committed' || !result.entry) {
+      return;
+    }
+
     await homeworkMemory.supersedePendingForAssignmentLineage({
       assignmentLineageKey: source.assignmentLineageKey,
       supersededById: result.entry.id,
@@ -146,6 +157,50 @@ export async function processHomeworkMemoryJob(args: {
     });
     throw error;
   }
+}
+
+async function reconcileSnapshotForCommittedHomeworkMemory(args: {
+  config: BatchBackendConfig;
+  payload: ProcessHomeworkMemoryJobPayload;
+  pendingEntry: Awaited<ReturnType<typeof getHomeworkMemoryEntryById>>;
+  homeworkMemory: {
+    getById: typeof getHomeworkMemoryEntryById;
+  };
+  snapshots: {
+    requestRefresh: typeof requestStudentMemorySnapshotRefresh;
+  };
+}): Promise<void> {
+  if (
+    !args.pendingEntry ||
+    args.pendingEntry.status !== 'superseded' ||
+    args.pendingEntry.jobId !== args.payload.jobId ||
+    args.pendingEntry.studentId !== args.payload.studentId ||
+    !args.pendingEntry.supersededById
+  ) {
+    return;
+  }
+
+  const canonicalEntry = await args.homeworkMemory.getById(args.pendingEntry.supersededById);
+  if (
+    !canonicalEntry ||
+    canonicalEntry.status !== 'ready' ||
+    canonicalEntry.jobId !== args.pendingEntry.jobId ||
+    canonicalEntry.studentId !== args.pendingEntry.studentId ||
+    canonicalEntry.assignmentLineageKey !== args.pendingEntry.assignmentLineageKey ||
+    (canonicalEntry.contentHash ?? null) !== (args.pendingEntry.contentHash ?? null) ||
+    canonicalEntry.generationNotes?.pendingEntryId !== args.pendingEntry.id
+  ) {
+    return;
+  }
+
+  await args.snapshots.requestRefresh({
+    config: args.config,
+    params: {
+      studentId: canonicalEntry.studentId,
+      trigger: 'homework-memory-ready',
+      sourceEntryId: canonicalEntry.id,
+    },
+  });
 }
 
 async function markFailureIfFinalAttempt(args: {

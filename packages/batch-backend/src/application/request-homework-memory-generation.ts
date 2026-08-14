@@ -36,6 +36,7 @@ export async function requestHomeworkMemoryGeneration(args: {
     providerOverride?: GenerationProvider;
     modelOverride?: string;
     forceRegenerate?: boolean;
+    publishKind?: 'initial' | 'correction';
   };
   overrides?: Partial<RequestHomeworkMemoryGenerationDependencies>;
 }): Promise<EnsurePendingHomeworkMemoryEntryResult | null> {
@@ -66,9 +67,10 @@ export async function requestHomeworkMemoryGeneration(args: {
   }
 
   const sourceBundle = await source.resolveFromSucceededJob(args.params.jobId);
-  if (sourceBundle.assignmentLineageKey !== args.params.jobId) {
-    logger.info('Homework-memory generation skipped for rerun descendant job', {
-      event: 'homework_memory_generation_skipped_rerun_descendant',
+  const publishKind = args.params.publishKind ?? 'initial';
+  if (sourceBundle.assignmentLineageKey !== args.params.jobId && publishKind !== 'correction') {
+    logger.info('Homework-memory generation rejected for non-correction descendant job', {
+      event: 'homework_memory_generation_rejected_descendant',
       jobId: args.params.jobId,
       assignmentLineageKey: sourceBundle.assignmentLineageKey,
       studentId: args.params.studentId,
@@ -98,7 +100,8 @@ export async function requestHomeworkMemoryGeneration(args: {
     contentHash: sourceBundle.contentHash,
     bypassReadyReuse: args.params.forceRegenerate ?? false,
     generationNotes: {
-      trigger: 'publish-succeeded',
+      trigger: publishKind === 'correction' ? 'publish-correction-succeeded' : 'publish-succeeded',
+      publishKind,
       requestedAt: requestedAt.toISOString(),
       requestedJobId: args.params.jobId,
       forceRegenerate: args.params.forceRegenerate ?? false,
@@ -107,7 +110,7 @@ export async function requestHomeworkMemoryGeneration(args: {
     publishTargets: sourceBundle.publishTargets,
   });
 
-  if (pending.outcome !== 'ready_exists') {
+  if (pending.outcome === 'created' || pending.outcome === 'pending_exists') {
     await queue.enqueue(
       {
         kind: 'homework-memory-generate',
@@ -127,6 +130,7 @@ export async function requestHomeworkMemoryGeneration(args: {
     event: 'homework_memory_generation_requested',
     jobId: args.params.jobId,
     assignmentLineageKey: sourceBundle.assignmentLineageKey,
+    publishKind,
     pendingEntryId: pending.entry.id,
     outcome: pending.outcome,
     studentId: args.params.studentId,

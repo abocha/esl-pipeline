@@ -78,19 +78,16 @@ export async function requestStudentMemorySnapshotRefresh(args: {
     throw new Error('No generation candidate is available for student-memory snapshot extraction');
   }
 
-  await batchClaims.supersedeForOnlineWork({
-    workload: 'student_memory_snapshot',
-    canonicalScopeKey: args.params.studentId,
-  });
-
   const requestedAt = now();
-  const pending = await snapshots.ensurePending({
+  const isAutomaticHomeworkRefresh = args.params.trigger === 'homework-memory-ready';
+  const ensureParams = {
     studentId: args.params.studentId,
     schemaVersion: STUDENT_MEMORY_SNAPSHOT_SCHEMA_VERSION,
     generatedAt: requestedAt,
     provider: candidate.provider,
     model: candidate.model,
     sourceEntryId,
+    reuseReadyHomeworkSource: isAutomaticHomeworkRefresh,
     generationNotes: {
       trigger: args.params.trigger,
       sourceEntryId,
@@ -99,7 +96,40 @@ export async function requestStudentMemorySnapshotRefresh(args: {
       requestCandidateRefresh: args.params.requestCandidateRefresh === true,
       requestedAt: requestedAt.toISOString(),
     },
+  };
+  let pending = await snapshots.ensurePending(ensureParams);
+
+  if (pending.outcome === 'already_reconciled') {
+    logger.info('Student-memory snapshot refresh requested', {
+      event: 'student_memory_snapshot_refresh_requested',
+      studentId: args.params.studentId,
+      trigger: args.params.trigger,
+      sourceEntryId,
+      pendingEntryId: pending.entry.id,
+      outcome: pending.outcome,
+    });
+    return pending;
+  }
+
+  await batchClaims.supersedeForOnlineWork({
+    workload: 'student_memory_snapshot',
+    canonicalScopeKey: args.params.studentId,
   });
+
+  if (isAutomaticHomeworkRefresh) {
+    pending = await snapshots.ensurePending(ensureParams);
+    if (pending.outcome === 'already_reconciled') {
+      logger.info('Student-memory snapshot refresh requested', {
+        event: 'student_memory_snapshot_refresh_requested',
+        studentId: args.params.studentId,
+        trigger: args.params.trigger,
+        sourceEntryId,
+        pendingEntryId: pending.entry.id,
+        outcome: pending.outcome,
+      });
+      return pending;
+    }
+  }
 
   await queue.enqueue(
     {
