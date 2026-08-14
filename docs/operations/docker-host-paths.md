@@ -4,18 +4,23 @@
 
 - Audience: maintainers and AI agents operating local Docker workflows.
 - Authority Level: operations runbook.
-- Last Verified Against: 2026-06-28 repo state.
+- Last Verified Against: 2026-08-14 repo state.
 - Owner: ops maintainer + automation agents.
 - Review Cadence: monthly or after Docker workflow changes.
 - Status: `runbook`.
 
 This repo uses bind mounts for source/runtime data and Docker named volumes for dependency caches.
-If host paths are missing, Docker may auto-create them with root ownership and cause `EACCES`.
+The canonical Compose files set `create_host_path: false` for the upload and production-secret
+mounts, so missing paths fail startup instead of being silently created with root ownership.
 
 ## Required Local Paths
 
 - `uploads/`
 - `uploads/drafts/`
+
+`pnpm docker:prepare` also ensures the default
+`packages/orchestrator/configs/elevenlabs.voices.json` catalog. Set
+`ESL_TTS_PROVIDER_ELEVENLABS_VOICES_PATH` when a different catalog path is intentionally configured.
 
 ## Dependency Volume Policy (Host vs Docker)
 
@@ -26,7 +31,8 @@ If host paths are missing, Docker may auto-create them with root ownership and c
     - one `pkg_*_node_modules` volume for each `packages/*/node_modules`
     - `example_orchestrator_service_node_modules` mounted at
       `/app/packages/orchestrator/examples/service/node_modules`
-    - `workspace_pnpm_store` mounted at `/pnpm` (with `PNPM_STORE_DIR=/pnpm/store`)
+    - `workspace_pnpm_store` mounted at `/pnpm` (with `PNPM_STORE_DIR=/pnpm/store` and
+      `NPM_CONFIG_STORE_DIR=/pnpm/store`)
   - `deps` bootstraps dependency volume permissions, then hands ownership back to `${UID}:${GID}` for the Docker-owned dependency volumes.
 - Source code is still bind-mounted at `/app` for live reload.
 - This avoids host/container dependency churn while preserving fast Docker restarts.
@@ -66,6 +72,19 @@ Optional tooling container (UV + Python) is now profile-gated and off by default
 docker compose -p esl-pipeline -f docker-compose.yml --profile tools up -d tools
 ```
 
+## Production Host Bind Mounts
+
+Production Compose is pull-based and uses the same host upload directory, but it does not build or
+create production bind mounts. `pnpm docker:prod` runs `pnpm docker:prepare`, so `uploads/` and
+`uploads/drafts/` must exist and remain writable by the production runtime before the services start.
+Backend, batch-worker, transcribe-worker, and student-memory-worker mount `./uploads` at
+`/app/uploads` as writable storage. Those services also mount `./.secrets` at `/app/secrets` with
+`create_host_path: false` and read-only access; create the server-local directory and credentials
+outside git as described in [`DEPLOYMENT.md`](../backend-frontend/DEPLOYMENT.md).
+
+`pnpm docker:prod:config` validates the production Compose shape with placeholder image references;
+it does not create host paths, build images, or deploy services.
+
 ## Common Error
 
 If you see:
@@ -83,6 +102,10 @@ pnpm docker:up
 ```
 
 On Windows, repair folder permissions through Windows security settings instead of `chown`.
+
+For the broader checkout and host/WSL boundary, see
+[`windows-linux-dev.md`](windows-linux-dev.md). For production paths and image/runtime procedures,
+see [`DEPLOYMENT.md`](../backend-frontend/DEPLOYMENT.md).
 
 ## Backend Host Port Override
 
