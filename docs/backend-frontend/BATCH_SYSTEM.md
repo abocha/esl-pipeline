@@ -33,7 +33,9 @@ Batch Frontend (React + Vite)
 Telegram Ops Bot -> authenticated Batch Backend ops/job APIs
 ```
 
-The backend owns durable sessions, jobs, lineage, queues, and student-memory state. The frontend and
+The backend owns durable sessions, jobs, lineage, queues, and student-memory state. The frontend owns
+the authenticated five-step interaction and recovery presentation; the backend owns confirmation
+prerequisites, lineage, stable share reservation/retry, and the completed predicate. The frontend and
 Telegram bot are operator surfaces; neither owns alternate workflow or pipeline semantics.
 
 ## Assignment Flow
@@ -48,8 +50,10 @@ Telegram bot are operator surfaces; neither owns alternate workflow or pipeline 
 Sharing completes an immutable assignment session. A tutor can explicitly enter correction mode to
 edit the mutable working draft; **Publish corrected version** snapshots the exact saved draft into a
 child job and executes the normal assignment pipeline. Historical rerun and **Republish published
-version** remain separate Advanced actions. Starting another assignment is always an explicit tutor
-action; asynchronous readiness changes do not navigate steps.
+version** remain separate Advanced actions: reruns create `source_job_id` children, while republish
+and selected study-text or pronunciation regeneration remain job actions rather than assignment-flow
+steps. Starting another assignment is always an explicit tutor action; asynchronous readiness changes
+do not navigate steps.
 
 ## Runtime Boundaries
 
@@ -66,6 +70,8 @@ action; asynchronous readiness changes do not navigate steps.
 
 - Auth, recordings, transcripts, sessions, jobs, prompts, drafts, students, and ops routes:
   [`packages/batch-backend/README.md`](../../packages/batch-backend/README.md)
+- Operations routing and current runbooks: [`docs/operations/README.md`](../operations/README.md)
+  and [`docs/reference/DOCS_IA_MAP.md`](../reference/DOCS_IA_MAP.md)
 - Generated route inventory:
   [`docs/generated/backend-route-index.md`](../generated/backend-route-index.md)
 - Student-memory replay/backfill:
