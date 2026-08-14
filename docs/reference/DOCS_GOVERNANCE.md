@@ -5,7 +5,7 @@
 - Audience: maintainers and AI agents editing docs.
 - Read Time: 3 minutes.
 - Authority Level: governance policy.
-- Last Verified Against: 2026-07-14 repo state.
+- Last Verified Against: 2026-08-14 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly or after docs-tooling changes.
 - Status: `reference`.
@@ -18,6 +18,8 @@
 ## Harness Contract
 
 - `docs:check` is the hard gate.
+- `docs:check` runs the core, active-operations, and non-core scopes; the non-core scope also
+  enforces the plan-lifecycle checks.
 - Freshness is an age signal, not proof that a document is accurate. Advancing the
   `Last Verified Against` date requires reviewing the document against the current repository; a
   date-only edit does not satisfy this policy even when it clears the mechanical gate.
@@ -26,9 +28,15 @@
 - Generated artifacts are the source of truth for each run; markdown summaries are renderings of those artifacts.
 - `pnpm docs:garden` emits the full artifact family for that run, including health and stale-active
   reports, so the GitHub workflow does not advertise files that were produced by separate commands.
-- `pnpm docs:generate:plans-index` refreshes only the plan lifecycle index for plan-only changes.
+- `pnpm docs:generate:indexes` refreshes the package README, backend-route, environment-surface, and
+  plans indexes. `pnpm docs:generate:plans-index` refreshes only the plan lifecycle index for
+  plan-only changes.
 - Plan lifecycle checks are hard gates: active plans stay under `docs/plans/`; completed or
   superseded execution plans move to `docs/archive/plans/`.
+- `docs/plans/README.md` remains the active-plan router, while `docs/generated/plans-index.md` is a
+  generated lookup aid rather than an authority source. Routed topic, standalone, and backlog plans
+  must remain editable and declare `Status`, `Last Verified Against`, `Exit Trigger`, and
+  `Current Focus`; configured route sources may not target non-editable plans.
 
 ## Lifecycle States
 
