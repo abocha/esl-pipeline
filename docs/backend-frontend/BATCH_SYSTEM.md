@@ -5,7 +5,7 @@
 - Audience: AI agents and maintainers for batch frontend/backend tasks.
 - Read Time: 4 minutes.
 - Authority Level: Active system map.
-- Last Verified Against: 2026-07-14 repository and production-runtime state.
+- Last Verified Against: 2026-08-14 repository state.
 - Owner: backend/frontend maintainers + automation agents.
 - Review Cadence: monthly or after major batch workflow changes.
 - Status: `active`.
@@ -45,8 +45,11 @@ Telegram bot are operator surfaces; neither owns alternate workflow or pipeline 
 4. **Create:** generate and edit the prompt-backed assignment draft.
 5. **Review & share:** preview, approve, publish, and open the handout.
 
-After sharing, rerun and republish controls remain available under Advanced actions. Starting another
-assignment is always an explicit tutor action; asynchronous readiness changes do not navigate steps.
+Sharing completes an immutable assignment session. A tutor can explicitly enter correction mode to
+edit the mutable working draft; **Publish corrected version** snapshots the exact saved draft into a
+child job and executes the normal assignment pipeline. Historical rerun and **Republish published
+version** remain separate Advanced actions. Starting another assignment is always an explicit tutor
+action; asynchronous readiness changes do not navigate steps.
 
 ## Runtime Boundaries
 
