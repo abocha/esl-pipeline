@@ -231,7 +231,7 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
 
     const executePipeline = async () => {
       try {
-        return isRerunExecution
+        const rawResult = isRerunExecution
           ? await runRerunAssignmentJob(
               {
                 jobId,
@@ -315,6 +315,16 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
               runId,
               { signal: cancellationController.signal },
             );
+
+        const durableManifestPath =
+          config.orchestrator.manifestStore === 'filesystem'
+            ? await promoteFilesystemManifestPath(rawResult.manifestPath, canonicalManifestMd)
+            : rawResult.manifestPath;
+
+        return {
+          ...rawResult,
+          manifestPath: durableManifestPath,
+        };
       } finally {
         try {
           await markdownInput.cleanup();
@@ -326,20 +336,12 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
       }
     };
 
-    const rawResult = shouldHoldTtsCacheActivityLock
+    const result = shouldHoldTtsCacheActivityLock
       ? await withTtsCacheActivitySharedLock(
           { lockKey: config.worker.ttsCacheMaintenanceLockKey },
           executePipeline,
         )
       : await executePipeline();
-    const durableManifestPath =
-      config.orchestrator.manifestStore === 'filesystem'
-        ? await promoteFilesystemManifestPath(rawResult.manifestPath, canonicalManifestMd)
-        : rawResult.manifestPath;
-    const result = {
-      ...rawResult,
-      manifestPath: durableManifestPath,
-    };
 
     const succeeded = await updateJobStateAndResult({
       id: jobId,

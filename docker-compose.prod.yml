@@ -66,6 +66,9 @@ services:
         target: /app/uploads
         bind:
           create_host_path: false
+      - type: volume
+        source: tts_cache
+        target: /app/tmp/tts-cache
       - type: bind
         source: ./.secrets
         target: /app/secrets
@@ -253,3 +256,4 @@ volumes:
   caddy_data:
   postgres18_data:
   redis_data:
+  tts_cache:
