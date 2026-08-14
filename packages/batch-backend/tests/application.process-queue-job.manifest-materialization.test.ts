@@ -58,10 +58,8 @@ describe('application/process-queue-job', () => {
     const markdown = '# Corrected assignment';
     const expectedHash = createHash('sha256').update(markdown, 'utf8').digest('hex');
     const uploadDir = await fs.mkdtemp(path.join(tmpdir(), 'esl-correction-manifest-'));
-    const workerTempDir = await fs.mkdtemp(path.join(tmpdir(), 'esl-correction-worker-'));
-    const workerManifestPath = path.join(workerTempDir, 'job-child.manifest.json');
     const durableManifestPath = path.join(uploadDir, 'corrections', 'job-child.manifest.json');
-    await fs.writeFile(workerManifestPath, '{"mdHash":"correction"}', 'utf8');
+    let materializedManifestPath: string | undefined;
     const previousUploadDir = process.env.FILESYSTEM_UPLOAD_DIR;
     process.env.FILESYSTEM_UPLOAD_DIR = uploadDir;
 
@@ -79,7 +77,11 @@ describe('application/process-queue-job', () => {
     createTranscriptionStorageForUriSpy.mockReturnValue({
       getText: vi.fn().mockResolvedValue(markdown),
     } as unknown as ReturnType<typeof transcriptionStorage.createTranscriptionStorageForUri>);
-    runAssignmentJobSpy.mockResolvedValue({ manifestPath: workerManifestPath });
+    runAssignmentJobSpy.mockImplementation(async (payload) => {
+      materializedManifestPath = path.join(path.dirname(payload.md), 'job-child.manifest.json');
+      await fs.writeFile(materializedManifestPath, '{"mdHash":"correction"}', 'utf8');
+      return { manifestPath: materializedManifestPath };
+    });
 
     try {
       await processQueueJob({
@@ -99,12 +101,60 @@ describe('application/process-queue-job', () => {
       await expect(
         fs.access(path.join(uploadDir, 'corrections', 'job-parent.manifest.json')),
       ).rejects.toThrow();
+      expect(materializedManifestPath).toBeDefined();
+      await expect(fs.access(path.dirname(materializedManifestPath!))).rejects.toThrow();
     } finally {
       if (previousUploadDir == null) delete process.env.FILESYSTEM_UPLOAD_DIR;
       else process.env.FILESYSTEM_UPLOAD_DIR = previousUploadDir;
       await fs.rm(uploadDir, { recursive: true, force: true });
-      await fs.rm(workerTempDir, { recursive: true, force: true });
     }
+  });
+
+  it('cleans up materialized correction markdown when the pipeline fails', async () => {
+    const markdown = '# Corrected assignment';
+    const expectedHash = createHash('sha256').update(markdown, 'utf8').digest('hex');
+    const initial = makeJob({
+      state: 'queued',
+      md: null,
+      mdStorageUri: `s3://esl-notion-tts/drafts/draft-1/content/${expectedHash}.md`,
+      sourceJobId: 'job-parent',
+    });
+    getJobByIdSpy.mockResolvedValue(initial);
+    const running = makeJob({ ...initial, state: 'running', startedAt: new Date() });
+    const failed = {
+      ...running,
+      state: 'failed',
+      error: 'correction pipeline failed',
+      finishedAt: new Date(),
+    };
+    updateJobStateAndResultSpy
+      .mockResolvedValueOnce(running as never)
+      .mockResolvedValueOnce(failed as never);
+    createTranscriptionStorageForUriSpy.mockReturnValue({
+      getText: vi.fn().mockResolvedValue(markdown),
+    } as unknown as ReturnType<typeof transcriptionStorage.createTranscriptionStorageForUri>);
+
+    let materializedMarkdownPath: string | undefined;
+    const pipelineError = new Error('correction pipeline failed');
+    runAssignmentJobSpy.mockImplementation(async (payload) => {
+      materializedMarkdownPath = payload.md;
+      throw pipelineError;
+    });
+
+    await expect(
+      processQueueJob({
+        jobId: 'job-child',
+        sourceJobId: 'job-parent',
+        executionMode: 'correction',
+        correction: {
+          expectedMarkdownHash: expectedHash,
+          manifestMd: 'corrections/job-child.md',
+        },
+      }),
+    ).rejects.toBe(pipelineError);
+
+    expect(materializedMarkdownPath).toBeDefined();
+    await expect(fs.access(path.dirname(materializedMarkdownPath!))).rejects.toThrow();
   });
 
   it('fails closed when correction storage does not match the reserved markdown hash', async () => {
