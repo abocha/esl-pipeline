@@ -52,6 +52,34 @@ describe('application/process-queue-job', () => {
 
     const [payload] = runAssignmentJobSpy.mock.calls[0]!;
     expect(payload.md).toMatch(/[\\/]job-1\.md$/);
+    expect(updateJobStateAndResultSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ publishedContentHash: expectedHash }),
+    );
+  });
+
+  it('persists the exact filesystem markdown hash with successful publication', async () => {
+    const markdown = '# Filesystem assignment\n';
+    const expectedHash = createHash('sha256').update(markdown, 'utf8').digest('hex');
+    const markdownDir = await fs.mkdtemp(path.join(tmpdir(), 'esl-filesystem-markdown-'));
+    const markdownPath = path.join(markdownDir, 'assignment.md');
+    await fs.writeFile(markdownPath, markdown, 'utf8');
+    const initial = makeJob({ state: 'queued', md: markdownPath, mdStorageUri: null });
+    getJobByIdSpy.mockResolvedValue(initial);
+    const running = makeJob({ ...initial, state: 'running', startedAt: new Date() });
+    updateJobStateAndResultSpy
+      .mockResolvedValueOnce(running as never)
+      .mockResolvedValueOnce({ ...running, state: 'succeeded', finishedAt: new Date() } as never);
+    runAssignmentJobSpy.mockResolvedValue({ manifestPath: '/manifests/filesystem.json' });
+
+    try {
+      await processQueueJob({ jobId: initial.id } as never);
+
+      expect(updateJobStateAndResultSpy).toHaveBeenLastCalledWith(
+        expect.objectContaining({ publishedContentHash: expectedHash }),
+      );
+    } finally {
+      await fs.rm(markdownDir, { recursive: true, force: true });
+    }
   });
 
   it('promotes a correction manifest to the child-owned durable identity instead of its parent', async () => {

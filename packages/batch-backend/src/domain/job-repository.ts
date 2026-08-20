@@ -808,6 +808,7 @@ export async function updateJobStateAndResult(args: {
   error?: string | null;
   manifestPath?: string | null;
   htmlUrl?: string | null;
+  publishedContentHash?: string | null;
   startedAt?: Date | null;
   finishedAt?: Date | null;
 }): Promise<JobRecord | null> {
@@ -820,6 +821,7 @@ export async function updateJobStateAndResult(args: {
     startedAt = null,
     finishedAt = null,
     htmlUrl = null,
+    publishedContentHash = null,
   } = args;
 
   assertTransition(expectedState, nextState);
@@ -828,11 +830,9 @@ export async function updateJobStateAndResult(args: {
     await client.query('BEGIN');
     try {
       const publicationSequence =
-        nextState === 'succeeded'
-          ? await reservePublishedJobSequence(client, id)
-          : null;
-    const result = await client.query(
-      `
+        nextState === 'succeeded' ? await reservePublishedJobSequence(client, id) : null;
+      const result = await client.query(
+        `
       UPDATE jobs
       SET
         state = $1,
@@ -842,6 +842,10 @@ export async function updateJobStateAndResult(args: {
         started_at = COALESCE($5, started_at),
         finished_at = COALESCE($6, finished_at),
         publication_sequence = COALESCE($9, publication_sequence),
+        published_content_hash = CASE
+          WHEN $1 = 'succeeded' THEN COALESCE($10, published_content_hash)
+          ELSE published_content_hash
+        END,
         updated_at = now()
       WHERE id = $7
         AND state = $8
@@ -882,18 +886,19 @@ export async function updateJobStateAndResult(args: {
         source_job_id,
         user_id
       `,
-      [
-        nextState,
-        error,
-        manifestPath,
-        htmlUrl,
-        startedAt,
-        finishedAt,
-        id,
-        expectedState,
-        publicationSequence,
-      ],
-    );
+        [
+          nextState,
+          error,
+          manifestPath,
+          htmlUrl,
+          startedAt,
+          finishedAt,
+          id,
+          expectedState,
+          publicationSequence,
+          publishedContentHash,
+        ],
+      );
       await client.query('COMMIT');
       return result.rows[0];
     } catch (error) {
@@ -911,7 +916,10 @@ export async function updateJobStateAndResult(args: {
   return mapRowToJob(row);
 }
 
-async function reservePublishedJobSequence(client: PoolClient, jobId: string): Promise<string | null> {
+async function reservePublishedJobSequence(
+  client: PoolClient,
+  jobId: string,
+): Promise<string | null> {
   const rootResult = await client.query<{ root_id: string; publish_target: string | null }>(
     `
     WITH RECURSIVE upstream AS (
