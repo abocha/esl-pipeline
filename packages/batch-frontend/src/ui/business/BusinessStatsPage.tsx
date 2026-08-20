@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { type BusinessStatsSurface, getBusinessStatsSurface } from '../../utils/api';
-import { currentMonthInput, formatHours, formatMoney } from './business-format';
+import { currentMonthInput, formatDateRange, formatHours, formatMoney } from './business-format';
 
 export const BusinessStatsPage: React.FC = () => {
   const [month, setMonth] = useState(currentMonthInput);
@@ -44,10 +44,17 @@ export const BusinessStatsPage: React.FC = () => {
     return <section className="business-empty">Loading business stats...</section>;
   }
 
-  const forecastValue =
+  const completedLessonValue =
     surface && surface.settings.defaultLessonRateMinor > 0
-      ? formatMoney(surface.forecastMinor, surface.currency)
+      ? formatMoney(surface.earnedMinor, surface.currency)
       : 'Set rate';
+  const scheduledLessonValue =
+    surface && surface.settings.defaultLessonRateMinor > 0
+      ? formatMoney(surface.scheduledGrossMinor, surface.currency)
+      : 'Set rate';
+  const planningRange = surface
+    ? formatDateRange(surface.forecastFrom, surface.forecastTo)
+    : 'planning horizon';
 
   return (
     <section className="business-dashboard-surface">
@@ -73,59 +80,50 @@ export const BusinessStatsPage: React.FC = () => {
 
       <div className="business-metric-grid">
         <Metric
-          label="Collected"
+          label="Recorded payments"
           value={surface ? formatMoney(surface.collectedMinor, surface.currency) : '-'}
-          detail="recorded payments"
+          detail={`selected month · ${surface?.currency ?? 'configured currency'}`}
         />
         <Metric
-          label="Earned"
-          value={surface ? formatMoney(surface.earnedMinor, surface.currency) : '-'}
-          detail="completed chargeable"
+          label="Completed lesson value"
+          value={surface ? completedLessonValue : '-'}
+          detail="selected month · chargeable lessons · workspace default rate"
         />
-        <Metric label="Forecast" value={forecastValue} detail="rolling horizon" />
+        <Metric
+          label="Scheduled lesson value"
+          value={surface ? scheduledLessonValue : '-'}
+          detail={`future scheduled chargeable · ${planningRange} · workspace default rate`}
+        />
         <Metric
           label="Taught"
           value={surface ? formatHours(surface.taughtMinutes) : '-'}
-          detail={`${surface?.completedLessons ?? 0} lessons`}
+          detail={`selected month · ${surface?.completedLessons ?? 0} lessons`}
         />
       </div>
+
+      {surface?.excludedCurrencies.length ? (
+        <div className="business-warning-box">
+          <strong>Excluded currencies from recorded payments</strong>
+          {surface.excludedCurrencies.map((item) => (
+            <span key={item.currency}>
+              {formatMoney(item.amountMinor, item.currency)} across {item.paymentCount} payments
+            </span>
+          ))}
+        </div>
+      ) : null}
+      <p className="business-muted">
+        Lesson values are default-rate measures, not payment records, per-student/package pricing,
+        or revenue projections.
+      </p>
 
       <div className="business-dashboard-grid">
         <article className="business-panel">
           <header>
-            <span className="business-dashboard-kicker">Cashflow</span>
-            <h2>{surface?.month ?? month}</h2>
-          </header>
-          <dl className="business-definition-list">
-            <div>
-              <dt>Received</dt>
-              <dd>{surface ? formatMoney(surface.collectedMinor, surface.currency) : '-'}</dd>
-            </div>
-            <div>
-              <dt>Scheduled gross</dt>
-              <dd>{surface ? formatMoney(surface.scheduledGrossMinor, surface.currency) : '-'}</dd>
-            </div>
-            <div>
-              <dt>Risk correction</dt>
-              <dd>{surface ? formatMoney(surface.riskAdjustmentMinor, surface.currency) : '-'}</dd>
-            </div>
-          </dl>
-          {surface?.excludedCurrencies.length ? (
-            <div className="business-warning-box">
-              <strong>Excluded currencies</strong>
-              {surface.excludedCurrencies.map((item) => (
-                <span key={item.currency}>
-                  {formatMoney(item.amountMinor, item.currency)} across {item.paymentCount} payments
-                </span>
-              ))}
-            </div>
-          ) : null}
-        </article>
-
-        <article className="business-panel">
-          <header>
             <span className="business-dashboard-kicker">Workload</span>
             <h2>Lessons and hours</h2>
+            <p className="business-muted">
+              Planning horizon: {planningRange} · all future scheduled lessons
+            </p>
           </header>
           <dl className="business-definition-list">
             <div>
@@ -147,8 +145,8 @@ export const BusinessStatsPage: React.FC = () => {
 
         <article className="business-panel">
           <header>
-            <span className="business-dashboard-kicker">Pipeline</span>
-            <h2>Likely top-ups</h2>
+            <span className="business-dashboard-kicker">Credit watch</span>
+            <h2>Students nearing their credit threshold</h2>
           </header>
           <div className="business-list">
             {surface?.pipeline.length ? (
@@ -165,30 +163,7 @@ export const BusinessStatsPage: React.FC = () => {
                 </Link>
               ))
             ) : (
-              <p className="business-muted">No top-up pressure detected.</p>
-            )}
-          </div>
-        </article>
-
-        <article className="business-panel">
-          <header>
-            <span className="business-dashboard-kicker">Risk</span>
-            <h2>Urgent items</h2>
-          </header>
-          <div className="business-list">
-            {surface?.risks.length ? (
-              surface.risks.map((item) => (
-                <Link
-                  key={item.studentId}
-                  className="business-alert business-alert-urgent"
-                  to={item.studentScheduleBillingPath}
-                >
-                  <strong>{item.studentName}</strong>
-                  <span>{item.remainingCredits} credits remaining</span>
-                </Link>
-              ))
-            ) : (
-              <p className="business-muted">No urgent business risks.</p>
+              <p className="business-muted">No students currently near their credit threshold.</p>
             )}
           </div>
         </article>

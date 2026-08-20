@@ -297,7 +297,7 @@ export async function getBusinessScheduleSurface(
       settings.topUpThreshold,
       workspaceId,
     );
-    const recentPayments = await listRecentPayments(client, settings.defaultCurrency, workspaceId);
+    const recentPayments = await listRecentPayments(client, workspaceId);
     const today = toDateInputInTimeZone(new Date(), settings.timezone);
 
     return {
@@ -329,8 +329,8 @@ export async function getBusinessStatsSurface(
     const settings = await getBusinessSettingsForWorkspace(client, workspaceId);
     const month = params.month ?? toDateInputInTimeZone(new Date(), settings.timezone).slice(0, 7);
     const monthRange = parseMonth(month);
-    const forecastFrom = new Date();
-    const forecastTo = addDays(forecastFrom, settings.forecastHorizonDays);
+    const planningFrom = new Date();
+    const planningTo = addDays(planningFrom, settings.forecastHorizonDays);
     const collected = await getCollectedForMonth(
       client,
       monthRange.fromDate,
@@ -352,21 +352,22 @@ export async function getBusinessStatsSurface(
       settings.timezone,
       workspaceId,
     );
-    const forecastLessons = await listForecastLessons(
+    const planningLessons = await listPlanningLessons(
       client,
-      forecastFrom,
-      forecastTo,
+      planningFrom,
+      planningTo,
       workspaceId,
     );
     const creditStates = await listStudentCreditStates(
       client,
-      forecastFrom,
-      forecastTo,
+      planningFrom,
+      planningTo,
       settings.topUpThreshold,
       workspaceId,
     );
 
-    const scheduledGrossMinor = forecastLessons.length * settings.defaultLessonRateMinor;
+    const scheduledChargeableLessons = planningLessons.filter((lesson) => lesson.consumesCredit);
+    const scheduledGrossMinor = scheduledChargeableLessons.length * settings.defaultLessonRateMinor;
     const riskRateBasisPoints = Math.min(
       10000,
       settings.noShowRateBasisPoints + settings.cancellationRateBasisPoints,
@@ -388,12 +389,12 @@ export async function getBusinessStatsSurface(
       riskAdjustmentMinor,
       completedLessons: lessonStats.completedLessons,
       taughtMinutes: lessonStats.taughtMinutes,
-      scheduledLessons: forecastLessons.length,
-      scheduledMinutes: forecastLessons.reduce((sum, lesson) => sum + lesson.durationMinutes, 0),
+      scheduledLessons: planningLessons.length,
+      scheduledMinutes: planningLessons.reduce((sum, lesson) => sum + lesson.durationMinutes, 0),
       noShowLessons: lessonStats.noShowLessons,
       canceledLessons: lessonStats.canceledLessons,
-      forecastFrom: toDateInput(forecastFrom),
-      forecastTo: toDateInput(forecastTo),
+      forecastFrom: toDateInputInTimeZone(planningFrom, settings.timezone),
+      forecastTo: toDateInputInTimeZone(planningTo, settings.timezone),
       excludedCurrencies,
       pipeline,
       risks: pipeline.filter((item) => item.severity === 'urgent'),
@@ -471,7 +472,7 @@ async function listBusinessLessons(
   }));
 }
 
-async function listForecastLessons(
+async function listPlanningLessons(
   client: PoolClient,
   from: Date,
   toExclusive: Date,
@@ -593,7 +594,6 @@ async function listStudentCreditStates(
 
 async function listRecentPayments(
   client: PoolClient,
-  currency: string,
   workspaceId: string,
 ): Promise<BusinessPaymentSummaryDto[]> {
   const result = await client.query<PaymentSummaryRow>(
@@ -607,15 +607,14 @@ async function listRecentPayments(
       student_payment_records.method
     FROM student_payment_records
     JOIN students ON students.id = student_payment_records.student_id
-    WHERE ${workspacePredicate('student_payment_records.workspace_id', '$2', '$3')}
-      AND ${workspacePredicate('students.workspace_id', '$2', '$3')}
+    WHERE ${workspacePredicate('student_payment_records.workspace_id', '$1', '$2')}
+      AND ${workspacePredicate('students.workspace_id', '$1', '$2')}
       AND students.archived_at IS NULL
       AND student_payment_records.voided_at IS NULL
-      AND student_payment_records.currency = $1
     ORDER BY student_payment_records.received_at DESC, student_payment_records.created_at DESC
     LIMIT 8
     `,
-    [currency, workspaceId, DEFAULT_WORKSPACE_ID],
+    [workspaceId, DEFAULT_WORKSPACE_ID],
   );
   return result.rows.map((row) => ({
     studentId: row.student_id,

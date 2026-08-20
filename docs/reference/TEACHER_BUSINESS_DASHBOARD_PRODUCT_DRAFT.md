@@ -25,6 +25,25 @@ The dashboard is for a self-employed teaching professional. It should answer:
 
 This is not an accounting system, admin console, or student-profile surface.
 
+## Current Shipped Boundary
+
+The current `/business/*` surface is intentionally narrower than the future direction described
+below:
+
+- `Recorded payments` is the selected-month total of non-voided payment records in the configured
+  default currency; other currencies remain visible as excluded-currency information.
+- `Completed lesson value` and `Scheduled lesson value` use the workspace default lesson rate as
+  bounded lesson-value measures. They are not payment, accounting, or revenue forecasts.
+- The planning horizon supports future scheduled workload, chargeable scheduled lesson value, and
+  credit watch. Credit watch reflects lesson-credit state and links to student Schedule & Billing.
+- Reminder actions are manual copy/follow-up actions, and schedule credit alerts do not claim that a
+  payment is due or collectible.
+- No risk-adjusted forecast is shown. Persisted correction fields remain part of the compatibility
+  contract but are not visible Business settings or a visible metric.
+
+The remainder of this draft preserves future product direction and should not be read as a claim
+that those broader forecasting, pricing, risk, or accounting capabilities are currently shipped.
+
 ## Product North Star
 
 The teacher business dashboard is a calm command desk for the teaching business.

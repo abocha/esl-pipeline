@@ -73,20 +73,65 @@ describe('BusinessStatsPage', () => {
     apiMocks.getBusinessStatsSurface.mockResolvedValue(makeStatsSurface());
   });
 
-  it('renders income, workload, forecast, and excluded-currency warnings', async () => {
+  it('renders factual stats labels, scoped values, credit watch, and excluded-currency warnings', async () => {
     render(
       <MemoryRouter>
         <BusinessStatsPage />
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText('Collected')).toBeTruthy();
+    expect(await screen.findByText('Recorded payments')).toBeTruthy();
+    expect(screen.getByText('Completed lesson value')).toBeTruthy();
+    expect(screen.getByText('Scheduled lesson value')).toBeTruthy();
     expect(screen.getAllByText('USD 120.00').length).toBeGreaterThan(0);
-    expect(screen.getByText('USD 68.00')).toBeTruthy();
+    expect(screen.getByText('USD 40.00')).toBeTruthy();
+    expect(screen.getByText('USD 80.00')).toBeTruthy();
+    expect(
+      screen.getByText('future scheduled chargeable · May 7 – Jun 21 · workspace default rate'),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        /not payment records, per-student\/package pricing, or revenue projections/i,
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText(/selected month · USD/i)).toBeTruthy();
+    expect(screen.getByText(/Planning horizon: May 7 – Jun 21/i)).toBeTruthy();
     expect(screen.getAllByText('2 h').length).toBeGreaterThan(0);
     expect(screen.getByText(/Excluded currencies/i)).toBeTruthy();
     expect(screen.getByText(/EUR 50.00/i)).toBeTruthy();
+    expect(screen.getByText('Credit watch')).toBeTruthy();
+    expect(screen.getByText('Students nearing their credit threshold')).toBeTruthy();
     expect(screen.getByText('Bea')).toBeTruthy();
+    expect(screen.queryByText('Forecast')).toBeNull();
+    expect(screen.queryByText('Risk correction')).toBeNull();
+    expect(screen.queryByText('Risk')).toBeNull();
+    expect(screen.queryByText('Cashflow')).toBeNull();
+    expect(screen.queryByText('Likely top-ups')).toBeNull();
+    expect(screen.queryByText('No urgent business risks.')).toBeNull();
+  });
+
+  it('renders backend planning boundaries as date-only calendar values', async () => {
+    vi.stubEnv('TZ', 'America/Los_Angeles');
+    try {
+      apiMocks.getBusinessStatsSurface.mockResolvedValue(
+        makeStatsSurface({ forecastFrom: '2026-01-01', forecastTo: '2026-01-02' }),
+      );
+
+      render(
+        <MemoryRouter>
+          <BusinessStatsPage />
+        </MemoryRouter>,
+      );
+
+      expect(
+        await screen.findByText(
+          'future scheduled chargeable · Jan 1 – Jan 2 · workspace default rate',
+        ),
+      ).toBeTruthy();
+      expect(screen.getByText(/Planning horizon: Jan 1 – Jan 2/i)).toBeTruthy();
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it('keeps newer month results when an older stats load resolves later', async () => {
