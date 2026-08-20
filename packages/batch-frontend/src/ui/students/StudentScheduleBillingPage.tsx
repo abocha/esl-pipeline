@@ -326,7 +326,7 @@ export const StudentScheduleBillingPage: React.FC = () => {
         <StudentAreaMetricCard
           eyebrow="Reminders"
           value={surface.reminders.length === 0 ? 'Clear' : `${surface.reminders.length} ready`}
-          detail="Copyable text only for now."
+          detail="Manual follow-ups; some include actions."
           tone={surface.reminders.length === 0 ? 'success' : 'attention'}
         />
         <StudentAreaMetricCard
@@ -1001,7 +1001,7 @@ export const StudentScheduleBillingPage: React.FC = () => {
       <StudentAreaPanel className="student-schedule-billing-panel">
         <header>
           <StudentAreaSectionLabel>Reminders</StudentAreaSectionLabel>
-          <p>Delivery is not connected yet; use copyable text for manual follow-up.</p>
+          <p>Manual follow-ups; some include actions.</p>
         </header>
         {surface.reminders.length === 0 ? (
           <StudentAreaEmptyState>No operational reminders are needed.</StudentAreaEmptyState>
