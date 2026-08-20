@@ -480,6 +480,7 @@ CREATE TABLE public.jobs (
     lesson_id uuid,
     tts_model text,
     publication_sequence bigint DEFAULT 0 NOT NULL,
+    published_content_hash text,
     CONSTRAINT jobs_mode_check CHECK (((mode IS NULL) OR (mode = ANY (ARRAY['auto'::text, 'dialogue'::text, 'monologue'::text, 'tts'::text])))),
     CONSTRAINT jobs_state_check CHECK ((state = ANY (ARRAY['queued'::text, 'running'::text, 'awaiting_approval'::text, 'succeeded'::text, 'failed'::text]))),
     CONSTRAINT jobs_tts_model_check CHECK (((tts_model IS NULL) OR ((tts_provider = 'elevenlabs'::text) AND (tts_model = ANY (ARRAY['eleven_v3'::text, 'eleven_multilingual_v2'::text, 'eleven_flash_v2_5'::text, 'eleven_flash_v2'::text]))) OR ((tts_provider = 'google'::text) AND (tts_model = ANY (ARRAY['chirp3_hd'::text, 'studio'::text, 'neural2'::text, 'wavenet'::text]))) OR ((tts_provider = 'inworld'::text) AND (tts_model = ANY (ARRAY['inworld-tts-2'::text, 'inworld-tts-1.5-max'::text, 'inworld-tts-1.5-mini'::text]))))),
@@ -1918,5 +1919,6 @@ VALUES
   ('0043_manual_transcript_source', '716fee229f067d8daee6eaf423bfc1797080045036afc58aa1e579e9a2631016', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0044_assignment_step_confirmation_contract', 'cdcca1a947c96eddacd8d1bb61dca29b2f06e6366c719401c4b0a8e529483987', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0045_student_memory_snapshot_eligibility_repair', 'c40a212c3fde21f699f31ba07d90fad5da90e0e5cad56934b72a13835daf356f', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0046_jobs_publication_sequence', '9b63588b48faf38aef14df9c9f9dd8f94b9e554f5a1044d081dad9e2e6bf9595', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0046_jobs_publication_sequence', '9b63588b48faf38aef14df9c9f9dd8f94b9e554f5a1044d081dad9e2e6bf9595', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0047_jobs_published_content_hash', '06508beba68bbd9b5141f76d7a69539385968f382736f53885cb1add81c8428c', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;

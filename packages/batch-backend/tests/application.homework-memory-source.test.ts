@@ -1,6 +1,6 @@
 import './support/bootstrap-pg-test-env.js';
 
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -29,6 +29,37 @@ async function truncateHomeworkMemoryScope() {
   });
 }
 
+async function insertSucceededHomeworkSourceJob(args: {
+  id: string;
+  studentId: string;
+  markdownPath: string;
+  sourceJobId?: string | null;
+  publishedContentHash?: string | null;
+  publishTarget?: 'html' | null;
+  htmlUrl?: string | null;
+}) {
+  await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+    await client.query(
+      `
+      INSERT INTO jobs (
+        id, state, md, student_id, source_job_id, published_content_hash,
+        publish_target, html_url, finished_at, created_at, updated_at
+      )
+      VALUES ($1, 'succeeded', $2, $3, $4, $5, $6, $7, NOW(), NOW(), NOW())
+      `,
+      [
+        args.id,
+        args.markdownPath,
+        args.studentId,
+        args.sourceJobId ?? null,
+        args.publishedContentHash ?? null,
+        args.publishTarget ?? null,
+        args.htmlUrl ?? null,
+      ],
+    );
+  });
+}
+
 const describeIfPg = hasPgTestEnv ? describe : describe.skip;
 
 describeIfPg('application/homework-memory-source', () => {
@@ -45,6 +76,189 @@ describeIfPg('application/homework-memory-source', () => {
 
   beforeEach(async () => {
     await truncateHomeworkMemoryScope();
+  });
+
+  it('merges persisted same-content history without reading its unavailable markdown artifact', async () => {
+    const studentId = randomUUID();
+    const rootJobId = randomUUID();
+    const historicalRerunJobId = randomUUID();
+    const currentJobId = randomUUID();
+    const currentMarkdownPath = path.join(tempDir, `${currentJobId}.md`);
+    const markdown = '### F. Your Mission\nGive travel advice.\n';
+    const contentHash = createHash('sha256').update(markdown, 'utf8').digest('hex');
+    await writeFile(currentMarkdownPath, markdown, 'utf8');
+
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      await client.query(
+        `INSERT INTO students (id, student, created_at, updated_at) VALUES ($1, 'Nadia', NOW(), NOW())`,
+        [studentId],
+      );
+      await client.query(
+        `
+        INSERT INTO jobs (
+          id, state, md, student_id, publish_target, html_url, published_content_hash,
+          finished_at, created_at, updated_at
+        )
+        VALUES ($1, 'succeeded', $2, $3, 'html', 'https://example.test/history', $4, NOW(), NOW(), NOW())
+        `,
+        [rootJobId, path.join(tempDir, 'unavailable-history.md'), studentId, contentHash],
+      );
+      await client.query(
+        `
+        INSERT INTO jobs (
+          id, state, md, student_id, source_job_id, publish_target, html_url, published_content_hash,
+          finished_at, created_at, updated_at
+        )
+        VALUES ($1, 'succeeded', $2, $3, $4, 'html', 'https://example.test/latest-history', $5,
+                NOW() + INTERVAL '1 minute', NOW(), NOW())
+        `,
+        [
+          historicalRerunJobId,
+          path.join(tempDir, 'unavailable-latest-history.md'),
+          studentId,
+          rootJobId,
+          contentHash,
+        ],
+      );
+      await client.query(
+        `
+        INSERT INTO jobs (
+          id, state, md, student_id, source_job_id, published_content_hash,
+          finished_at, created_at, updated_at
+        )
+        VALUES ($1, 'succeeded', $2, $3, $4, $5, NOW(), NOW(), NOW())
+        `,
+        [currentJobId, currentMarkdownPath, studentId, rootJobId, contentHash],
+      );
+    });
+
+    const source = await resolveHomeworkMemorySourceFromSucceededJob(currentJobId);
+
+    expect(source.publishedMarkdown).toBe(markdown);
+    expect(source.contentHash).toBe(contentHash);
+    expect(source.publishTargets).toEqual([
+      expect.objectContaining({
+        target: 'html',
+        jobId: historicalRerunJobId,
+        url: 'https://example.test/latest-history',
+      }),
+    ]);
+    expect(source.normalizedMarkdown.sections).toEqual(
+      expect.arrayContaining([expect.objectContaining({ heading: 'F. Your Mission' })]),
+    );
+  });
+
+  it('skips persisted changed-content history without reading its unavailable markdown artifact', async () => {
+    const studentId = randomUUID();
+    const currentJobId = randomUUID();
+    const currentMarkdownPath = path.join(tempDir, `${currentJobId}.md`);
+    const markdown = '### F. Your Mission\nCurrent content.\n';
+    await writeFile(currentMarkdownPath, markdown, 'utf8');
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      await client.query(
+        `INSERT INTO students (id, student, created_at, updated_at) VALUES ($1, 'Mai', NOW(), NOW())`,
+        [studentId],
+      );
+    });
+    await insertSucceededHomeworkSourceJob({
+      id: currentJobId,
+      studentId,
+      markdownPath: currentMarkdownPath,
+      publishedContentHash: createHash('sha256').update(markdown, 'utf8').digest('hex'),
+    });
+    await insertSucceededHomeworkSourceJob({
+      id: randomUUID(),
+      studentId,
+      markdownPath: path.join(tempDir, 'unavailable-changed-history.md'),
+      sourceJobId: currentJobId,
+      publishedContentHash: 'c'.repeat(64),
+      publishTarget: 'html',
+      htmlUrl: 'https://example.test/changed',
+    });
+
+    const source = await resolveHomeworkMemorySourceFromSucceededJob(currentJobId);
+
+    expect(source.publishTargets).toEqual([]);
+  });
+
+  it('uses readable legacy same-content history as a fallback', async () => {
+    const studentId = randomUUID();
+    const currentJobId = randomUUID();
+    const currentMarkdownPath = path.join(tempDir, `${currentJobId}.md`);
+    const legacyMarkdownPath = path.join(tempDir, `${currentJobId}-legacy.md`);
+    const markdown = '### F. Your Mission\nKeep this content.\n';
+    await Promise.all([
+      writeFile(currentMarkdownPath, markdown, 'utf8'),
+      writeFile(legacyMarkdownPath, markdown, 'utf8'),
+    ]);
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      await client.query(
+        `INSERT INTO students (id, student, created_at, updated_at) VALUES ($1, 'Lan', NOW(), NOW())`,
+        [studentId],
+      );
+    });
+    await insertSucceededHomeworkSourceJob({
+      id: currentJobId,
+      studentId,
+      markdownPath: currentMarkdownPath,
+    });
+    const legacyJobId = randomUUID();
+    await insertSucceededHomeworkSourceJob({
+      id: legacyJobId,
+      studentId,
+      markdownPath: legacyMarkdownPath,
+      sourceJobId: currentJobId,
+      publishTarget: 'html',
+      htmlUrl: 'https://example.test/legacy-same',
+    });
+
+    const source = await resolveHomeworkMemorySourceFromSucceededJob(currentJobId);
+
+    expect(source.publishTargets).toEqual([
+      expect.objectContaining({ jobId: legacyJobId, url: 'https://example.test/legacy-same' }),
+    ]);
+  });
+
+  it('ignores changed and unreadable legacy history without a persisted hash', async () => {
+    const studentId = randomUUID();
+    const currentJobId = randomUUID();
+    const currentMarkdownPath = path.join(tempDir, `${currentJobId}.md`);
+    const changedMarkdownPath = path.join(tempDir, `${currentJobId}-changed.md`);
+    await Promise.all([
+      writeFile(currentMarkdownPath, '### F. Your Mission\nCurrent content.\n', 'utf8'),
+      writeFile(changedMarkdownPath, '### F. Your Mission\nChanged content.\n', 'utf8'),
+    ]);
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      await client.query(
+        `INSERT INTO students (id, student, created_at, updated_at) VALUES ($1, 'An', NOW(), NOW())`,
+        [studentId],
+      );
+    });
+    await insertSucceededHomeworkSourceJob({
+      id: currentJobId,
+      studentId,
+      markdownPath: currentMarkdownPath,
+    });
+    await insertSucceededHomeworkSourceJob({
+      id: randomUUID(),
+      studentId,
+      markdownPath: changedMarkdownPath,
+      sourceJobId: currentJobId,
+      publishTarget: 'html',
+      htmlUrl: 'https://example.test/legacy-changed',
+    });
+    await insertSucceededHomeworkSourceJob({
+      id: randomUUID(),
+      studentId,
+      markdownPath: path.join(tempDir, 'unavailable-legacy.md'),
+      sourceJobId: currentJobId,
+      publishTarget: 'html',
+      htmlUrl: 'https://example.test/legacy-unavailable',
+    });
+
+    const source = await resolveHomeworkMemorySourceFromSucceededJob(currentJobId);
+
+    expect(source.publishTargets).toEqual([]);
   });
 
   it('collects same-content publish targets across succeeded lineage jobs', async () => {
