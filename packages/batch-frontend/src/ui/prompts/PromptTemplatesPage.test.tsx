@@ -131,6 +131,18 @@ describe('PromptTemplatesPage', () => {
     });
   });
 
+  it('shows the template-list error without normal empty-state copy', async () => {
+    apiMocks.listTemplateContents.mockRejectedValueOnce(new Error('Template catalog unavailable.'));
+
+    renderPromptTemplatesPage();
+
+    expect(await screen.findByText('Template catalog unavailable.')).toBeTruthy();
+    expect(screen.queryByText(/No active assignment templates/i)).toBeNull();
+    expect(
+      screen.queryByText(/Create one from the starter scaffold to unblock generation/i),
+    ).toBeNull();
+  });
+
   it('marks the selected active template as default', async () => {
     const user = userEvent.setup();
     apiMocks.listTemplateContents
