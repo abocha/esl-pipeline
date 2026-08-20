@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.8.4] - 2026-08-20
+
+### Changed
+
+- Automated release from PR #207: fix(frontend): distinguish load failures from empty states (https://github.com/abocha/esl-pipeline/pull/207)
+
 ## [10.8.3] - 2026-08-20
 
 ### Changed
