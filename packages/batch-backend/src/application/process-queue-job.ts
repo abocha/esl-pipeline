@@ -349,6 +349,7 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
       nextState: 'succeeded',
       manifestPath: result.manifestPath ?? null,
       htmlUrl: result.htmlUrl ?? null,
+      publishedContentHash: markdownInput.contentHash,
       finishedAt: new Date(),
     });
 
@@ -520,6 +521,7 @@ async function promoteFilesystemManifestPath(
 
 interface ResolvedMarkdownInput {
   mdPath: string;
+  contentHash: string;
   cleanup: () => Promise<void>;
 }
 
@@ -543,6 +545,7 @@ async function resolveMarkdownInput(
     const resolvedMdPath = await resolveMarkdownPath(job.md);
     return {
       mdPath: resolvedMdPath,
+      contentHash: await hashMarkdownFile(resolvedMdPath),
       cleanup: async () => {},
     };
   }
@@ -560,6 +563,7 @@ async function resolveMarkdownInput(
     const resolvedMdPath = await resolveMarkdownPath(job.md);
     return {
       mdPath: resolvedMdPath,
+      contentHash: await hashMarkdownFile(resolvedMdPath),
       cleanup: async () => {},
     };
   }
@@ -575,10 +579,8 @@ async function materializeMarkdownFromStorage(
 ): Promise<ResolvedMarkdownInput> {
   const storage = createTranscriptionStorageForUri(storageUri);
   const contents = await storage.getText(storageUri);
-  if (
-    expectedContentHash &&
-    createHash('sha256').update(contents, 'utf8').digest('hex') !== expectedContentHash
-  ) {
+  const contentHash = hashMarkdown(contents);
+  if (expectedContentHash && contentHash !== expectedContentHash) {
     throw new Error('Correction markdown content hash mismatch');
   }
   const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), `esl-job-${sanitizeForFs(jobId)}-`));
@@ -587,10 +589,19 @@ async function materializeMarkdownFromStorage(
 
   return {
     mdPath,
+    contentHash,
     cleanup: async () => {
       await fs.rm(baseDir, { recursive: true, force: true });
     },
   };
+}
+
+async function hashMarkdownFile(mdPath: string): Promise<string> {
+  return hashMarkdown(await fs.readFile(mdPath, 'utf8'));
+}
+
+function hashMarkdown(contents: string): string {
+  return createHash('sha256').update(contents, 'utf8').digest('hex');
 }
 
 function resolveCorrectionManifestMd(

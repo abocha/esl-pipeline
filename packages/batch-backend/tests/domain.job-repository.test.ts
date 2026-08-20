@@ -314,6 +314,7 @@ describe('domain/job-repository', () => {
 
   describe('updateJobStateAndResult', () => {
     it('performs queued -> running -> succeeded transitions with timestamps, htmlUrl, and manifestPath', async () => {
+      const publishedContentHash = 'b'.repeat(64);
       const job = await insertJob({
         md: 'fixtures/ok.md',
         preset: 'b1-default',
@@ -339,6 +340,7 @@ describe('domain/job-repository', () => {
         nextState: 'succeeded',
         manifestPath: '/manifests/test.json',
         htmlUrl: 'https://example.com/job',
+        publishedContentHash,
         finishedAt: new Date(),
       });
 
@@ -347,6 +349,14 @@ describe('domain/job-repository', () => {
       expect(succeeded!.manifestPath).toBe('/manifests/test.json');
       expect(succeeded!.finishedAt).toBeInstanceOf(Date);
       expect(succeeded!.htmlUrl).toBe('https://example.com/job');
+      const storedHash = await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+        const result = await client.query<{ published_content_hash: string | null }>(
+          'SELECT published_content_hash FROM jobs WHERE id = $1',
+          [job.id],
+        );
+        return result.rows[0]?.published_content_hash;
+      });
+      expect(storedHash).toBe(publishedContentHash);
     });
 
     it('assigns a unique lineage-local publication sequence while concurrent corrections succeed', async () => {
