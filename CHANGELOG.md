@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.8.2] - 2026-08-20
+
+### Changed
+
+- Automated release from PR #204: fix(students): make Student surfaces describe data truthfully (https://github.com/abocha/esl-pipeline/pull/204)
+
 ## [10.8.1] - 2026-08-20
 
 ### Changed
