@@ -85,6 +85,9 @@ export function CalmStudioShell({
     () => registerNavigationGuard,
     [registerNavigationGuard],
   );
+  const visibleWorkspaceLinks = workspaceLinks.filter(
+    ({ to }) => to !== '/prompts' || user.role === 'admin',
+  );
 
   const handleWorkspaceNavigation = useCallback(
     (event: MouseEvent<HTMLAnchorElement>, to: string) => {
@@ -167,7 +170,7 @@ export function CalmStudioShell({
           </div>
           <nav className="calm-shell__nav" aria-label="Workspace">
             <p className="calm-shell__nav-label">Workspace</p>
-            {workspaceLinks.map(({ to, label, icon: Icon, ...linkProps }) => (
+            {visibleWorkspaceLinks.map(({ to, label, icon: Icon, ...linkProps }) => (
               <NavLink
                 key={to}
                 to={to}
