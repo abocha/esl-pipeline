@@ -1919,6 +1919,7 @@ describeIfPg('application/student-schedule-billing', () => {
       defaultCurrency: 'EUR',
       defaultLessonRateMinor: 3500,
       noShowRateBasisPoints: 1000,
+      cancellationRateBasisPoints: 500,
       topUpThreshold: 1,
     });
 
@@ -1926,7 +1927,15 @@ describeIfPg('application/student-schedule-billing', () => {
       defaultCurrency: 'EUR',
       defaultLessonRateMinor: 3500,
       noShowRateBasisPoints: 1000,
+      cancellationRateBasisPoints: 500,
       topUpThreshold: 1,
+    });
+
+    await expect(
+      updateBusinessSettings(DEFAULT_WORKSPACE_ID, { defaultLessonRateMinor: 4500 }),
+    ).resolves.toMatchObject({
+      noShowRateBasisPoints: 1000,
+      cancellationRateBasisPoints: 500,
     });
 
     await expect(
@@ -1960,6 +1969,12 @@ describeIfPg('application/student-schedule-billing', () => {
       currency: 'USD',
       receivedAt: '2026-05-07',
     });
+    await insertBusinessPayment({
+      studentId: beaId,
+      amountMinor: 5000,
+      currency: 'EUR',
+      receivedAt: '2026-05-08',
+    });
     await updateBusinessSettings(DEFAULT_WORKSPACE_ID, { topUpThreshold: 4 });
 
     const surface = await getBusinessScheduleSurface(DEFAULT_WORKSPACE_ID, {
@@ -1968,7 +1983,7 @@ describeIfPg('application/student-schedule-billing', () => {
     });
 
     expect(surface.lessons.map((lesson) => lesson.studentName)).toEqual(['Alex']);
-    expect(surface.recentPayments).toHaveLength(1);
+    expect(surface.recentPayments.map((payment) => payment.currency)).toEqual(['EUR', 'USD']);
     expect(surface.creditAlerts).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -2126,7 +2141,7 @@ describeIfPg('application/student-schedule-billing', () => {
     expect(surface.lessons).toHaveLength(1);
   });
 
-  it('computes business stats from payments, taught lessons, forecasts, and excluded currencies', async () => {
+  it('computes business stats from recorded payments, lesson values, workload, and excluded currencies', async () => {
     const { studentId: alexId } = await seedStudent();
     const beaId = await seedAdditionalStudent('Bea');
     const archivedId = await seedAdditionalStudent('Archived', true);
@@ -2158,6 +2173,22 @@ describeIfPg('application/student-schedule-billing', () => {
       studentId: beaId,
       startsAt: addDays(3),
       status: 'scheduled',
+      durationMinutes: 45,
+      consumesCredit: false,
+    });
+    await insertBusinessLesson({
+      studentId: alexId,
+      startsAt: addDays(4),
+      status: 'scheduled',
+      durationMinutes: 90,
+      consumesCredit: true,
+    });
+    await insertBusinessLesson({
+      studentId: beaId,
+      startsAt: '2026-05-06T10:00:00.000Z',
+      status: 'completed',
+      consumesCredit: false,
+      durationMinutes: 30,
     });
     await insertBusinessPayment({
       studentId: alexId,
@@ -2176,10 +2207,12 @@ describeIfPg('application/student-schedule-billing', () => {
 
     expect(stats.collectedMinor).toBe(12000);
     expect(stats.earnedMinor).toBe(4000);
-    expect(stats.completedLessons).toBe(1);
-    expect(stats.taughtMinutes).toBe(75);
+    expect(stats.completedLessons).toBe(2);
+    expect(stats.taughtMinutes).toBe(105);
     expect(stats.noShowLessons).toBe(1);
     expect(stats.scheduledGrossMinor).toBe(4000);
+    expect(stats.scheduledLessons).toBe(2);
+    expect(stats.scheduledMinutes).toBe(135);
     expect(stats.riskAdjustmentMinor).toBe(600);
     expect(stats.forecastMinor).toBe(3400);
     expect(stats.excludedCurrencies).toEqual([
@@ -2206,5 +2239,18 @@ describeIfPg('application/student-schedule-billing', () => {
     expect(stats.completedLessons).toBe(1);
     expect(stats.earnedMinor).toBe(4000);
     expect(stats.taughtMinutes).toBe(60);
+  });
+
+  it('returns planning boundaries as configured business-timezone dates', async () => {
+    vi.setSystemTime(new Date('2026-05-07T23:30:00.000Z'));
+    await updateBusinessSettings(DEFAULT_WORKSPACE_ID, {
+      timezone: 'Asia/Bangkok',
+      forecastHorizonDays: 45,
+    });
+
+    const stats = await getBusinessStatsSurface(DEFAULT_WORKSPACE_ID, { month: '2026-05' });
+
+    expect(stats.forecastFrom).toBe('2026-05-08');
+    expect(stats.forecastTo).toBe('2026-06-22');
   });
 });

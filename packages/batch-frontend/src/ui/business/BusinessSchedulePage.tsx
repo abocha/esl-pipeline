@@ -179,7 +179,7 @@ export const BusinessSchedulePage: React.FC = () => {
         <Metric
           label="Reminders"
           value={String(surface?.reminders.length ?? 0)}
-          detail="ready to send"
+          detail="open follow-ups"
         />
         <Metric
           label="Credit alerts"
@@ -191,7 +191,7 @@ export const BusinessSchedulePage: React.FC = () => {
       <div className="business-dashboard-grid">
         <article className="business-panel business-panel-wide">
           <header>
-            <span className="business-dashboard-kicker">Week Agenda</span>
+            <span className="business-dashboard-kicker">Agenda</span>
             <h2>Lessons</h2>
           </header>
           <div className="business-list">
@@ -308,7 +308,7 @@ export const BusinessSchedulePage: React.FC = () => {
                 </article>
               ))
             ) : (
-              <p className="business-muted">No reminders ready.</p>
+              <p className="business-muted">No open follow-ups.</p>
             )}
             {surface?.latestHiddenReminder ? (
               <div className="business-hidden-reminder">
@@ -329,7 +329,7 @@ export const BusinessSchedulePage: React.FC = () => {
 
         <article className="business-panel">
           <header>
-            <span className="business-dashboard-kicker">Payment And Credit Alerts</span>
+            <span className="business-dashboard-kicker">Credit alerts</span>
             <h2>Needs action</h2>
           </header>
           <div className="business-list">
