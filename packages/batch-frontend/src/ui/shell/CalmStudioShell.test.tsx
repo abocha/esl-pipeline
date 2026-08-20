@@ -20,11 +20,11 @@ function GuardedAssignment({ allow }: { allow: boolean }) {
 }
 
 describe('CalmStudioShell', () => {
-  it('renders the ESL mark and workspace navigation', () => {
+  it('renders the ESL mark and admin workspace navigation', () => {
     const { container } = render(
       <MemoryRouter>
         <CalmStudioShell
-          user={{ id: 'teacher-1', email: 'teacher@example.com', role: 'user', isActive: true }}
+          user={{ id: 'admin-1', email: 'admin@example.com', role: 'admin', isActive: true }}
           onLogout={vi.fn()}
         >
           Assignment workspace
@@ -44,6 +44,21 @@ describe('CalmStudioShell', () => {
     for (const icon of container.querySelectorAll('nav svg, button svg')) {
       expect(icon.getAttribute('aria-hidden')).toBe('true');
     }
+  });
+
+  it.each(['user', 'viewer'] as const)('hides Assignment Templates for the %s role', (role) => {
+    render(
+      <MemoryRouter>
+        <CalmStudioShell
+          user={{ id: `${role}-1`, email: `${role}@example.com`, role, isActive: true }}
+          onLogout={vi.fn()}
+        >
+          Assignment workspace
+        </CalmStudioShell>
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByRole('link', { name: /Assignment Templates/i })).toBeNull();
   });
 
   it('places the sandbox marker with the account controls in the rail footer', () => {
