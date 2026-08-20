@@ -136,11 +136,16 @@ describe('BusinessSchedulePage', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText('Week Agenda')).toBeTruthy();
+    expect((await screen.findAllByText('Agenda')).length).toBeGreaterThan(1);
     expect(screen.getAllByText('Alex').length).toBeGreaterThan(0);
     expect(screen.getByText('Balance is negative')).toBeTruthy();
     expect(screen.getByText('USD 120.00')).toBeTruthy();
     expect(screen.getByText(/-1 credits/i)).toBeTruthy();
+    expect(screen.getByText('open follow-ups')).toBeTruthy();
+    expect(screen.getAllByText('Credit alerts').length).toBeGreaterThan(1);
+    expect(screen.queryByText('Week Agenda')).toBeNull();
+    expect(screen.queryByText(/ready to send/i)).toBeNull();
+    expect(screen.queryByText('Payment And Credit Alerts')).toBeNull();
   });
 
   it('keeps newer range results when an older schedule load resolves later', async () => {
