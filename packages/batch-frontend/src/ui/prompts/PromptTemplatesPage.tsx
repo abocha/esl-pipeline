@@ -80,6 +80,7 @@ export const PromptTemplatesPage: React.FC = () => {
   const [revisions, setRevisions] = useState<TemplateRevisionSummaryResponse[]>([]);
   const [busy, setBusy] = useState<TemplateBusyState | null>(null);
   const [listLoading, setListLoading] = useState(false);
+  const [listError, setListError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const requestIdRef = useRef(0);
@@ -145,6 +146,7 @@ export const PromptTemplatesPage: React.FC = () => {
       options: { loadSelectedTemplate?: boolean } = { loadSelectedTemplate: true },
     ) => {
       setListLoading(true);
+      setListError(null);
       setError(null);
       try {
         const response = await listTemplateContents();
@@ -166,7 +168,9 @@ export const PromptTemplatesPage: React.FC = () => {
           setSelectedTemplateId(nextSelected);
         }
       } catch (listError) {
-        setError(getErrorMessage(listError, 'Unable to load prompt templates.'));
+        const message = getErrorMessage(listError, 'Unable to load prompt templates.');
+        setListError(message);
+        setError(message);
       } finally {
         setListLoading(false);
       }
@@ -381,7 +385,7 @@ export const PromptTemplatesPage: React.FC = () => {
                   ))}
                 </select>
               </label>
-            ) : (
+            ) : listError ? null : (
               <div className="prompt-templates-empty-small">
                 <strong>No active assignment templates</strong>
                 <span>Create one from the starter scaffold to unblock generation.</span>

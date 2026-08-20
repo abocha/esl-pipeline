@@ -216,7 +216,7 @@ export const StudentDirectoryPage: React.FC = () => {
         {studentsError ? <p className="workspace-error">{studentsError}</p> : null}
         {studentActionError ? <p className="workspace-error">{studentActionError}</p> : null}
         {studentsLoading ? <p className="workspace-muted">Loading students...</p> : null}
-        {!studentsLoading && students.length === 0 ? (
+        {!studentsLoading && !studentsError && students.length === 0 ? (
           <p className="workspace-muted">{emptyMessage}</p>
         ) : null}
 
