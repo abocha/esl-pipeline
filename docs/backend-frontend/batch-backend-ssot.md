@@ -102,6 +102,10 @@ Prompt templates/profiles are runtime-managed from Postgres revisions.
 Invariants:
 
 - Catalog options/defaults come from active DB prompt assets.
+- Assignment Templates are service-owned global configuration in V1: only admins/operators may
+  manage templates and revisions, while ordinary tutors consume the active/default catalog through
+  assignment generation. Tutor-owned or workspace-scoped template customization is not currently
+  shipped.
 - Startup validation fails when configured defaults are not active.
 - Bootstrap is required for fresh environments:
   - `pnpm --filter @esl-pipeline/batch-backend run prompt-assets:bootstrap:dry`

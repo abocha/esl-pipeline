@@ -30,7 +30,7 @@ import {
   upsertTemplateContent,
 } from '../../application/template-content.js';
 import { logger } from '../../infrastructure/logger.js';
-import { getAuthenticatedUser } from '../auth-middleware.js';
+import { getAuthenticatedUser, requireRole } from '../auth-middleware.js';
 import { errorResponse, resolveRoutePath } from '../route-helpers.js';
 import type { ExtendedRoutesContext } from './context.js';
 
@@ -39,6 +39,7 @@ export function registerProfileTemplateRoutes(
   context: ExtendedRoutesContext,
 ): void {
   const { authenticate } = context;
+  const templateManagementPreHandler = [authenticate, requireRole(['admin'])];
   const foundationalProfileSchema = z.object({
     schemaVersion: z.literal(FOUNDATIONAL_PROFILE_SCHEMA_VERSION),
     overallLevel: z.string().nullable(),
@@ -887,7 +888,7 @@ export function registerProfileTemplateRoutes(
   app.get(
     '/templates',
     {
-      preHandler: [authenticate],
+      preHandler: templateManagementPreHandler,
     },
     async (request, reply) => {
       const routePath = resolveRoutePath(request, 'GET /templates');
@@ -925,7 +926,7 @@ export function registerProfileTemplateRoutes(
   app.get(
     '/templates/:id',
     {
-      preHandler: [authenticate],
+      preHandler: templateManagementPreHandler,
     },
     async (request, reply) => {
       const routePath = resolveRoutePath(request, 'GET /templates/:id');
@@ -979,7 +980,7 @@ export function registerProfileTemplateRoutes(
   app.put(
     '/templates/:id',
     {
-      preHandler: [authenticate],
+      preHandler: templateManagementPreHandler,
     },
     async (request, reply) => {
       const routePath = resolveRoutePath(request, 'PUT /templates/:id');
@@ -1036,7 +1037,7 @@ export function registerProfileTemplateRoutes(
   app.delete(
     '/templates/:id',
     {
-      preHandler: [authenticate],
+      preHandler: templateManagementPreHandler,
     },
     async (request, reply) => {
       const routePath = resolveRoutePath(request, 'DELETE /templates/:id');
@@ -1091,7 +1092,7 @@ export function registerProfileTemplateRoutes(
   app.get(
     '/templates/:id/revisions',
     {
-      preHandler: [authenticate],
+      preHandler: templateManagementPreHandler,
     },
     async (request, reply) => {
       const routePath = resolveRoutePath(request, 'GET /templates/:id/revisions');
@@ -1151,7 +1152,7 @@ export function registerProfileTemplateRoutes(
   app.get(
     '/templates/:id/revisions/:revisionId',
     {
-      preHandler: [authenticate],
+      preHandler: templateManagementPreHandler,
     },
     async (request, reply) => {
       const routePath = resolveRoutePath(request, 'GET /templates/:id/revisions/:revisionId');
@@ -1207,7 +1208,7 @@ export function registerProfileTemplateRoutes(
   app.post(
     '/templates/:id/default',
     {
-      preHandler: [authenticate],
+      preHandler: templateManagementPreHandler,
     },
     async (request, reply) => {
       const routePath = resolveRoutePath(request, 'POST /templates/:id/default');
@@ -1261,7 +1262,7 @@ export function registerProfileTemplateRoutes(
   app.post(
     '/templates/:id/revisions/:revisionId/restore',
     {
-      preHandler: [authenticate],
+      preHandler: templateManagementPreHandler,
     },
     async (request, reply) => {
       const routePath = resolveRoutePath(
@@ -1322,7 +1323,7 @@ export function registerProfileTemplateRoutes(
   app.post(
     '/templates/:id/revisions/:revisionId/activate',
     {
-      preHandler: [authenticate],
+      preHandler: templateManagementPreHandler,
     },
     async (request, reply) => {
       const routePath = resolveRoutePath(

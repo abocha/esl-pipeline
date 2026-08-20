@@ -226,7 +226,7 @@ describe('App', () => {
     expect(screen.getByText('teacher@example.com')).toBeTruthy();
     expect(await screen.findByText('Minimal assignment content')).toBeTruthy();
     expect(screen.getByRole('link', { name: /Business/i })).toBeTruthy();
-    expect(screen.getByRole('link', { name: /Assignment Templates/i })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: /Assignment Templates/i })).toBeNull();
     expect(document.querySelector('style')?.textContent ?? '').not.toContain('.app-shell::before');
 
     await user.click(screen.getByRole('link', { name: /Skip to main content/i }));
@@ -275,8 +275,28 @@ describe('App', () => {
     expect(await screen.findByText('Student directory content')).toBeTruthy();
   });
 
-  it('renders the prompt templates route from shell navigation', async () => {
+  it('renders the prompt templates route for an admin', async () => {
     const user = userEvent.setup();
+    useAuthMock.mockReturnValue(
+      createAuthState({
+        user: {
+          id: 'user-1',
+          email: 'teacher@example.com',
+          role: 'admin',
+          isActive: true,
+        },
+        isAuthenticated: true,
+      }),
+    );
+
+    renderApp();
+
+    await user.click(screen.getByRole('link', { name: /Assignment Templates/i }));
+
+    expect(await screen.findByText('Prompt templates content')).toBeTruthy();
+  });
+
+  it('redirects a non-admin away from a manually opened prompt templates route', async () => {
     useAuthMock.mockReturnValue(
       createAuthState({
         user: {
@@ -289,11 +309,10 @@ describe('App', () => {
       }),
     );
 
-    renderApp();
+    renderApp(['/prompts']);
 
-    await user.click(screen.getByRole('link', { name: /Assignment Templates/i }));
-
-    expect(await screen.findByText('Prompt templates content')).toBeTruthy();
+    expect(await screen.findByText('Minimal assignment content')).toBeTruthy();
+    expect(screen.queryByText('Prompt templates content')).toBeNull();
   });
 
   it('redirects /business to the business schedule route', async () => {
