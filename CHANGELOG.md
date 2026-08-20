@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.8.3] - 2026-08-20
+
+### Changed
+
+- Automated release from PR #206: fix(auth): restrict assignment template administration to admins (https://github.com/abocha/esl-pipeline/pull/206)
+
 ## [10.8.2] - 2026-08-20
 
 ### Changed
