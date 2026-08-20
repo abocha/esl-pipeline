@@ -19,6 +19,7 @@ interface HomeworkSourceJobRow {
   student_id: string | null;
   md: string | null;
   md_storage_uri: string | null;
+  published_content_hash: string | null;
   prompt_package_id: string | null;
   draft_id: string | null;
   lesson_id: string | null;
@@ -71,8 +72,17 @@ export async function resolveHomeworkMemorySourceFromSucceededJob(
   const contentHash = sha256(publishedMarkdown);
   const lineageJobs = await listSucceededLineageJobs(assignmentLineageKey, options?.client);
 
-  const sameContentJobs: HomeworkSourceJobRow[] = [];
+  const sameContentJobs: HomeworkSourceJobRow[] = [currentJob];
   for (const lineageJob of lineageJobs) {
+    if (lineageJob.id === currentJob.id) {
+      continue;
+    }
+    if (lineageJob.published_content_hash) {
+      if (lineageJob.published_content_hash === contentHash) {
+        sameContentJobs.push(lineageJob);
+      }
+      continue;
+    }
     try {
       if (sha256(await readPublishedMarkdownFromJob(lineageJob)) === contentHash) {
         sameContentJobs.push(lineageJob);
@@ -94,9 +104,7 @@ export async function resolveHomeworkMemorySourceFromSucceededJob(
     publishedAt: currentJob.finished_at ?? currentJob.updated_at,
     publishedMarkdown,
     contentHash,
-    publishTargets: mergePublishTargets(
-      sameContentJobs.length > 0 ? sameContentJobs : [currentJob],
-    ),
+    publishTargets: mergePublishTargets(sameContentJobs),
     normalizedMarkdown: normalizeHomeworkMarkdown(publishedMarkdown),
   };
 }
@@ -141,6 +149,7 @@ async function loadSucceededJob(
         student_id,
         md,
         md_storage_uri,
+        published_content_hash,
         prompt_package_id,
         draft_id,
         lesson_id,
@@ -206,6 +215,7 @@ async function listSucceededLineageJobs(
           student_id,
           md,
           md_storage_uri,
+          published_content_hash,
           prompt_package_id,
           draft_id,
           lesson_id,
@@ -227,6 +237,7 @@ async function listSucceededLineageJobs(
           j.student_id,
           j.md,
           j.md_storage_uri,
+          j.published_content_hash,
           j.prompt_package_id,
           j.draft_id,
           j.lesson_id,

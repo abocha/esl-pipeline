@@ -537,6 +537,11 @@ describe('integration/migrations', () => {
             'utf8',
           );
           await pool.query(publicationSequenceSql);
+          const publishedContentHashSql = await fs.readFile(
+            path.join(migrationsPath, '0047_jobs_published_content_hash.sql'),
+            'utf8',
+          );
+          await pool.query(publishedContentHashSql);
 
           await pool.query(
             `
