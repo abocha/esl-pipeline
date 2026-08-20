@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.8.1] - 2026-08-20
+
+### Changed
+
+- Automated release from PR #203: fix(business): make dashboard metrics truthful (https://github.com/abocha/esl-pipeline/pull/203)
+
 ## [10.8.0] - 2026-08-20
 
 ### Changed
