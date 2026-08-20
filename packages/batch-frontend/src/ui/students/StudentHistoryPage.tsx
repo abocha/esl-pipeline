@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 
 import {
   getStudentHistorySurface,
@@ -724,10 +723,9 @@ export const StudentHistoryPage: React.FC = () => {
         <article className="student-area-panel student-history-about">
           <p className="student-history-section-label">About this history</p>
           <p>
-            This timeline includes lessons, homework, materials, profile updates, billing, business,
-            and important operations.
+            Recent learning, profile, billing, and operational activity. Older records may not
+            appear in this view.
           </p>
-          <Link to={`/students/${encodeURIComponent(studentId)}/overview`}>How history works</Link>
         </article>
 
         {studentError || historyError ? (

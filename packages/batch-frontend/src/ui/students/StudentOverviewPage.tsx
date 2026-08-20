@@ -110,28 +110,12 @@ function compactDisplayText(value: string, maxLength: number): string {
   return truncateText(trimmed, maxLength);
 }
 
-function countProfileCoverage(profile: FoundationalProfile | null | undefined): number {
-  if (!profile) return 0;
-
-  return [
-    profile.overallLevel,
-    ...profile.primaryGoals,
-    ...profile.communicationContexts,
-    ...profile.interestsAndUsefulThemes,
-    ...profile.stableStrengths,
-    ...profile.persistentChallenges,
-    ...profile.studyPreferences,
-    ...profile.durableConstraints,
-    profile.teacherNotes,
-  ].filter((value) => value?.trim()).length;
-}
-
 function getStudentSummary(profile: FoundationalProfile | null | undefined): string {
   const goal = compactList(profile?.primaryGoals ?? [], 1)[0];
   const context = compactList(profile?.communicationContexts ?? [], 1)[0];
   if (goal) return compactDisplayText(goal, 145);
   if (context) return compactDisplayText(`Practicing English for ${context.toLowerCase()}.`, 130);
-  return 'Learner context is ready to be shaped into a clearer teaching picture.';
+  return 'Learner context is available to review and update in Learning.';
 }
 
 function getCurrentActiveRevision(args: {
@@ -212,26 +196,18 @@ function getProfileStatus(args: {
     };
   }
 
-  const coverage = countProfileCoverage(args.profile.structuredContent);
-  if (coverage >= 5) {
-    return {
-      label: 'On track',
-      detail: 'Keep building fluency and precision.',
-      tone: 'good',
-    };
-  }
-
   return {
-    label: 'Starter profile',
-    detail: 'A few more durable details will strengthen lesson generation.',
+    label: 'Active profile',
+    detail: 'Learner context is available. Review or update it in Learning.',
     tone: 'quiet',
   };
 }
 
-function getCurrentFocus(memory: StudentMemoryOverviewResponse | null): {
+function getSuggestedFocus(memory: StudentMemoryOverviewResponse | null): {
   title: string;
   detail: string;
   badge: string;
+  generatedAt: string | null;
 } {
   const snapshot = memory?.latestReadyStudentMemorySnapshot;
   const assignmentDirection = snapshot?.recommendedAssignmentDirections[0];
@@ -239,16 +215,18 @@ function getCurrentFocus(memory: StudentMemoryOverviewResponse | null): {
     return {
       title: assignmentDirection.direction,
       detail: assignmentDirection.rationale,
-      badge: 'Memory-backed focus',
+      badge: 'Latest ready snapshot',
+      generatedAt: snapshot.generatedAt,
     };
   }
 
-  const unresolvedIssue = snapshot?.unresolvedIssues[0] ?? memory?.unresolvedIssues[0];
+  const unresolvedIssue = snapshot?.unresolvedIssues[0];
   if (unresolvedIssue) {
     return {
       title: unresolvedIssue.label,
       detail: unresolvedIssue.note,
-      badge: `${unresolvedIssue.priority} priority`,
+      badge: 'Latest ready snapshot',
+      generatedAt: snapshot.generatedAt,
     };
   }
 
@@ -257,14 +235,25 @@ function getCurrentFocus(memory: StudentMemoryOverviewResponse | null): {
     return {
       title: progressSignal.label,
       detail: progressSignal.note,
-      badge: 'Recent progress',
+      badge: 'Latest ready snapshot',
+      generatedAt: snapshot.generatedAt,
+    };
+  }
+
+  if (snapshot) {
+    return {
+      title: 'No suggested focus yet',
+      detail: 'No focus signal was included in the latest ready memory snapshot.',
+      badge: 'Latest ready snapshot',
+      generatedAt: snapshot.generatedAt,
     };
   }
 
   return {
-    title: 'Choose the next teaching focus',
-    detail: 'Memory summaries will appear here after lessons produce ready long-term signals.',
+    title: 'No suggested focus yet',
+    detail: 'A suggested focus will appear after a ready memory snapshot is available.',
     badge: 'Waiting for memory',
+    generatedAt: null,
   };
 }
 
@@ -273,7 +262,7 @@ function getAttentionItem(args: {
   revisions: readonly ProfileRevisionSummaryResponse[];
   pendingCandidates: readonly StudentProfileCandidate[];
   memory: StudentMemoryOverviewResponse | null;
-}): { label: string; detail: string; target: 'learning' | 'history' | 'schedule-billing' } {
+}): { label: string; detail: string; target: 'learning' | 'schedule-billing' } {
   if (!args.profile) {
     return {
       label: 'Profile needed',
@@ -308,13 +297,13 @@ function getAttentionItem(args: {
     return {
       label: 'Memory snapshot pending',
       detail: 'Recent lesson memory will make this overview more useful after the next rollup.',
-      target: 'history',
+      target: 'learning',
     };
   }
 
   return {
-    label: 'No urgent review',
-    detail: 'Learning context is calm. Use the next lesson to keep the signal fresh.',
+    label: 'No profile review items',
+    detail: 'There are no profile drafts or candidate updates waiting.',
     target: 'learning',
   };
 }
@@ -326,9 +315,31 @@ function getActivityLabel(item: StudentTimelineItem): string {
 
 function StudentOverviewPendingCanvas({
   errorMessage,
+  onRetry,
 }: {
   errorMessage: string | null;
+  onRetry: () => void;
 }): React.JSX.Element {
+  if (errorMessage) {
+    return (
+      <section className="student-overview-page student-area-theme" aria-live="polite">
+        <div className="student-area-frame student-overview-frame">
+          <article
+            className="student-area-panel student-area-empty-state"
+            data-testid="student-overview-unavailable"
+          >
+            <p className="student-overview-section-label">Overview unavailable</p>
+            <h2>Overview unavailable</h2>
+            <p role="alert">{errorMessage}</p>
+            <button type="button" className="workspace-secondary-btn" onClick={onRetry}>
+              Retry
+            </button>
+          </article>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="student-overview-page student-area-theme" aria-busy="true">
       <div
@@ -407,6 +418,7 @@ export const StudentOverviewPage: React.FC = () => {
   const [overviewLoading, setOverviewLoading] = useState(true);
   const [overviewError, setOverviewError] = useState<string | null>(null);
   const [loadedOverviewKey, setLoadedOverviewKey] = useState<string | null>(null);
+  const [overviewRetryCount, setOverviewRetryCount] = useState(0);
   const latestOverviewRequestRef = useRef(0);
   const currentOverviewKey = createOverviewKey(studentId, student?.profileId);
 
@@ -454,8 +466,7 @@ export const StudentOverviewPage: React.FC = () => {
         if (latestOverviewRequestRef.current !== requestId) {
           return;
         }
-        setOverviewData(EMPTY_OVERVIEW_DATA);
-        setLoadedOverviewKey(requestOverviewKey);
+        setLoadedOverviewKey(null);
         setOverviewError(
           error instanceof Error ? error.message : 'Some overview context could not be loaded.',
         );
@@ -471,7 +482,7 @@ export const StudentOverviewPage: React.FC = () => {
     return () => {
       latestOverviewRequestRef.current += 1;
     };
-  }, [student?.profileId, studentId, studentLoading]);
+  }, [overviewRetryCount, student?.profileId, studentId, studentLoading]);
 
   const overviewReady = loadedOverviewKey === currentOverviewKey && !overviewLoading;
   const shellLoading = studentLoading || !overviewReady;
@@ -479,7 +490,12 @@ export const StudentOverviewPage: React.FC = () => {
     `/students/${encodeURIComponent(studentId)}/${section}`;
 
   if (!overviewReady) {
-    return <StudentOverviewPendingCanvas errorMessage={studentError} />;
+    return (
+      <StudentOverviewPendingCanvas
+        errorMessage={studentError ?? overviewError}
+        onRetry={() => setOverviewRetryCount((current) => current + 1)}
+      />
+    );
   }
 
   const renderedOverviewData = overviewData;
@@ -490,7 +506,7 @@ export const StudentOverviewPage: React.FC = () => {
     revisions: renderedOverviewData.revisions,
     pendingCandidates: renderedOverviewData.pendingCandidates,
   });
-  const currentFocus = getCurrentFocus(renderedOverviewData.memory);
+  const suggestedFocus = getSuggestedFocus(renderedOverviewData.memory);
   const attentionItem = getAttentionItem({
     profile: renderedOverviewData.profile,
     revisions: renderedOverviewData.revisions,
@@ -519,11 +535,11 @@ export const StudentOverviewPage: React.FC = () => {
           <article
             className="student-overview-status-panel"
             role="region"
-            aria-label="Learning State"
-            data-overview-section="learning-state"
+            aria-label="Learner profile"
+            data-overview-section="learner-profile"
             data-testid="student-overview-primary-story"
           >
-            <p className="student-overview-section-label">Learning State</p>
+            <p className="student-overview-section-label">Learner profile</p>
             <p>{getStudentSummary(profile)}</p>
             <Link
               className={`student-overview-status status-${profileStatus.tone}`}
@@ -641,30 +657,34 @@ export const StudentOverviewPage: React.FC = () => {
                 </ul>
               </div>
             </div>
-            <p className="student-overview-meta">Profile updated {profileUpdatedAt}</p>
+            <p className="student-overview-meta">Profile record updated {profileUpdatedAt}</p>
           </article>
 
           <article
-            className="student-area-panel student-overview-panel current-focus"
+            className="student-area-panel student-overview-panel suggested-focus"
             role="region"
-            aria-label="Current Focus"
-            data-overview-section="current-focus"
+            aria-label="Suggested focus"
+            data-overview-section="suggested-focus"
           >
             <header>
-              <p className="student-overview-section-label">Current Focus</p>
-              <span>{currentFocus.badge}</span>
+              <p className="student-overview-section-label">Suggested focus</p>
+              <span>{suggestedFocus.badge}</span>
             </header>
-            <h3>{currentFocus.title}</h3>
-            <p>{currentFocus.detail}</p>
+            <h3>{suggestedFocus.title}</h3>
+            <p>{suggestedFocus.detail}</p>
+            {suggestedFocus.generatedAt ? (
+              <small className="student-overview-focus-provenance">
+                Memory-generated suggestion · Snapshot generated{' '}
+                {formatDateTime(suggestedFocus.generatedAt)}
+              </small>
+            ) : null}
             <Link to={studentAreaPath('learning')}>Open Learning</Link>
           </article>
 
           <aside className="student-overview-side-stack">
             <Link
               to={studentAreaPath(attentionItem.target)}
-              className={`student-overview-attention ${
-                attentionItem.label === 'No urgent review' ? 'attention-calm' : ''
-              }`}
+              className="student-overview-attention"
               data-overview-section="attention"
             >
               <span aria-hidden="true">!</span>
