@@ -386,6 +386,12 @@ describe('StudentHistoryPage', () => {
     expect(screen.queryByRole('heading', { name: 'Daria' })).toBeNull();
     expect(screen.queryByText('Support ID: daria')).toBeNull();
     expect(screen.getByText('About this history')).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Recent learning, profile, billing, and operational activity. Older records may not appear in this view.',
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'How history works' })).toBeNull();
     expect(screen.getByRole('button', { name: 'All' }).getAttribute('aria-pressed')).toBe('true');
     expect(screen.getByRole('button', { name: 'Lessons' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Homework' })).toBeTruthy();

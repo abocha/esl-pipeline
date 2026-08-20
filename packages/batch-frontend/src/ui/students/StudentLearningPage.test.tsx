@@ -665,7 +665,10 @@ describe('StudentLearningPage', () => {
     expect(await screen.findByDisplayValue('B1')).toBeTruthy();
     expect(screen.queryByRole('heading', { name: /Pedagogical Home/i })).toBeNull();
     expect(screen.queryByText('Revision State')).toBeNull();
-    expect(screen.getByText('Profile Readiness')).toBeTruthy();
+    expect(screen.getByText('Profile coverage')).toBeTruthy();
+    expect(screen.queryByText('Profile Readiness')).toBeNull();
+    expect(screen.getByText('Strong coverage')).toBeTruthy();
+    expect(screen.getByText('9/9 durable fields populated')).toBeTruthy();
     expect(screen.getByText('Pending Candidates')).toBeTruthy();
     expect(screen.getByText('Promotion Queue')).toBeTruthy();
     expect(
@@ -689,6 +692,13 @@ describe('StudentLearningPage', () => {
     expect(await screen.findByDisplayValue('B2')).toBeTruthy();
     expect(screen.getByDisplayValue('Present roadmap updates with confidence.')).toBeTruthy();
     expect(screen.getByText(/Draft profile populated from the latest lesson memory/i)).toBeTruthy();
+  });
+
+  it('bounds an empty open-thread state to the latest memory snapshot', async () => {
+    renderLearningPage();
+
+    expect(await screen.findByText('No open threads in the latest memory snapshot.')).toBeTruthy();
+    expect(screen.queryByText('No unresolved teaching threads surfaced.')).toBeNull();
   });
 
   it('keeps populate-from-lesson unavailable until lesson memory is ready', async () => {
