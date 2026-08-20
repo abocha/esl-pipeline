@@ -64,6 +64,32 @@ describe('StudentDirectoryPage', () => {
     expect(screen.queryByRole('link', { name: /Open Overview/i })).toBeNull();
   });
 
+  it('shows the student-list error without normal empty-state copy', async () => {
+    apiMocks.listStudents.mockRejectedValueOnce(new Error('Student directory unavailable.'));
+
+    renderDirectory();
+
+    expect(await screen.findByText('Student directory unavailable.')).toBeTruthy();
+    expect(screen.queryByText(/No students yet/i)).toBeNull();
+    expect(screen.queryByText(/No archived students/i)).toBeNull();
+  });
+
+  it('shows the active empty state after a successful empty response', async () => {
+    apiMocks.listStudents.mockResolvedValueOnce({
+      items: [],
+      total: 0,
+      limit: 200,
+      offset: 0,
+      order: 'asc',
+    });
+
+    renderDirectory();
+
+    expect(
+      await screen.findByText('No students yet. Create the first learner to begin.'),
+    ).toBeTruthy();
+  });
+
   it('uses the same student-owned create form without loading profile options', async () => {
     const user = userEvent.setup();
     apiMocks.createStudentProfile.mockResolvedValue({
