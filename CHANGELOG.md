@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.8.0] - 2026-08-20
+
+### Changed
+
+- Automated release from PR #202: feat(batch-backend): avoid re-reading historical lineage markdown (https://github.com/abocha/esl-pipeline/pull/202)
+
 ## [10.7.0] - 2026-08-14
 
 ### Changed
