@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -21,14 +22,17 @@ const NOW = '2026-04-23T10:30:00.000Z';
 interface Deferred<T> {
   promise: Promise<T>;
   resolve: (value: T) => void;
+  reject: (reason?: unknown) => void;
 }
 
 function createDeferred<T>(): Deferred<T> {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((innerResolve) => {
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((innerResolve, innerReject) => {
     resolve = innerResolve;
+    reject = innerReject;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
 }
 
 function seedOverviewMocks() {
@@ -219,10 +223,12 @@ describe('StudentOverviewPage', () => {
     seedOverviewMocks();
   });
 
-  it('renders a calm overview from structured learner profile and memory data', async () => {
+  it('renders a factual overview from structured learner profile and memory data', async () => {
     renderOverview();
 
-    expect(await screen.findByText('On track')).toBeTruthy();
+    expect(await screen.findByText('Active profile')).toBeTruthy();
+    expect(screen.queryByText('On track')).toBeNull();
+    expect(screen.queryByText('Learning State')).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Alex Rivera' })).toBeNull();
     expect(screen.queryByText('Support ID: alex')).toBeNull();
     expect(screen.getByText('B1')).toBeTruthy();
@@ -230,10 +236,20 @@ describe('StudentOverviewPage', () => {
     expect(screen.getByText('Clear ideas')).toBeTruthy();
     expect(screen.getByText('Phrasal verbs')).toBeTruthy();
     expect(screen.getByText('Fluency with natural expression')).toBeTruthy();
+    expect(screen.getByText('Suggested focus')).toBeTruthy();
+    expect(screen.getByText(/Memory-generated suggestion/)).toBeTruthy();
+    expect(screen.getByText(/Snapshot generated/)).toBeTruthy();
     expect(screen.getByText('5 lesson credits')).toBeTruthy();
     expect(screen.getByText('No reminders ready')).toBeTruthy();
     expect(screen.getByText(/USD 120.00/)).toBeTruthy();
     expect(screen.getByText('Profile revision activated')).toBeTruthy();
+    expect(screen.getByText('Profile record updated Apr 23')).toBeTruthy();
+    expect(screen.getByText('No profile review items')).toBeTruthy();
+    expect(
+      screen.getByText('There are no profile drafts or candidate updates waiting.'),
+    ).toBeTruthy();
+    expect(screen.queryByText('No urgent review')).toBeNull();
+    expect(screen.queryByText('Learning context is calm')).toBeNull();
     expect(
       screen
         .getAllByRole('link', { name: /Open Learning/i })
@@ -249,10 +265,10 @@ describe('StudentOverviewPage', () => {
   it('exposes the overview as named control-tower regions with stable operations links', async () => {
     renderOverview();
 
-    expect(await screen.findByRole('region', { name: /Learning State/i })).toBeTruthy();
+    expect(await screen.findByRole('region', { name: /Learner profile/i })).toBeTruthy();
     expect(screen.getByRole('region', { name: /Operations/i })).toBeTruthy();
     expect(screen.getByRole('region', { name: /Learner Snapshot/i })).toBeTruthy();
-    expect(screen.getByRole('region', { name: /Current Focus/i })).toBeTruthy();
+    expect(screen.getByRole('region', { name: /Suggested focus/i })).toBeTruthy();
     expect(screen.getByRole('region', { name: /Recent Activity/i })).toBeTruthy();
 
     const operations = screen.getByRole('region', { name: /Operations/i });
@@ -269,7 +285,7 @@ describe('StudentOverviewPage', () => {
   it('keeps the teacher scan path in the locked overview layout order', async () => {
     renderOverview();
 
-    await screen.findByRole('region', { name: /Learning State/i });
+    await screen.findByRole('region', { name: /Learner profile/i });
 
     const layout = screen.getByTestId('student-overview-layout');
     expect(
@@ -277,16 +293,18 @@ describe('StudentOverviewPage', () => {
         element.getAttribute('data-overview-section'),
       ),
     ).toEqual([
-      'learning-state',
+      'learner-profile',
       'operations',
       'learner-snapshot',
-      'current-focus',
+      'suggested-focus',
       'attention',
       'recent-activity',
     ]);
 
     expect(
-      screen.getByTestId('student-overview-primary-story').contains(screen.getByText('On track')),
+      screen
+        .getByTestId('student-overview-primary-story')
+        .contains(screen.getByText('Active profile')),
     ).toBe(true);
     expect(
       screen
@@ -295,15 +313,17 @@ describe('StudentOverviewPage', () => {
     ).toBe('secondary');
   });
 
-  it('renders the learning status as a text callout without a standalone icon mark', async () => {
+  it('renders the profile status as a factual text callout without a standalone icon mark', async () => {
     renderOverview();
 
-    await screen.findByText('On track');
+    await screen.findByText('Active profile');
 
     const status = screen.getByTestId('student-overview-status-callout');
     expect(status.querySelector('.student-overview-status-mark')).toBeNull();
-    expect(status.textContent).toContain('On track');
-    expect(status.textContent).toContain('Keep building fluency and precision.');
+    expect(status.textContent).toContain('Active profile');
+    expect(status.textContent).toContain(
+      'Learner context is available. Review or update it in Learning.',
+    );
   });
 
   it('shows a non-readable pending canvas while overview data resolves', async () => {
@@ -328,7 +348,189 @@ describe('StudentOverviewPage', () => {
 
     overviewDeferred.resolve(makeOverviewSurface());
 
-    expect(await screen.findByText('On track')).toBeTruthy();
+    expect(await screen.findByText('Active profile')).toBeTruthy();
+  });
+
+  it('keeps the newer student overview after an older request rejects late', async () => {
+    const alexOverview =
+      createDeferred<Awaited<ReturnType<typeof apiMocks.getStudentOverviewSurface>>>();
+    const boraOverview =
+      createDeferred<Awaited<ReturnType<typeof apiMocks.getStudentOverviewSurface>>>();
+    const alexSurface = makeOverviewSurface();
+    const boraSurface = makeOverviewSurface({
+      profile: {
+        ...alexSurface.profile,
+        id: 'profiles/students/bora.md',
+        label: 'Bora',
+        currentRevisionId: 'revision-bora',
+        structuredContent: {
+          ...alexSurface.profile.structuredContent,
+          primaryGoals: ['Bora-only learner goal'],
+        },
+      },
+      memory: {
+        ...alexSurface.memory,
+        studentId: 'student-bora',
+        latestReadyStudentMemorySnapshot: {
+          ...alexSurface.memory.latestReadyStudentMemorySnapshot,
+          id: 'snapshot-bora',
+          studentId: 'student-bora',
+          recommendedAssignmentDirections: [
+            {
+              direction: 'Bora-only suggested focus',
+              rationale: 'Bora-only rationale',
+            },
+          ],
+        },
+      },
+      recentTimeline: {
+        ...alexSurface.recentTimeline,
+        items: [
+          {
+            ...alexSurface.recentTimeline.items[0],
+            studentId: 'student-bora',
+            displayName: 'Bora-only authoritative event',
+          },
+        ],
+      },
+      scheduleBilling: {
+        ...alexSurface.scheduleBilling,
+        studentId: 'student-bora',
+        reminders: [{ id: 'bora-reminder', kind: 'lesson_followup' }],
+      },
+    });
+    let contextValue = {
+      student: {
+        id: 'student-alex',
+        student: 'Alex Rivera',
+        profileId: 'profiles/students/alex.md',
+      },
+      studentId: 'student-alex',
+      studentLoading: false,
+      studentError: null,
+      refreshStudent: vi.fn(),
+    };
+    useStudentAreaContextMock.mockImplementation(() => contextValue);
+    apiMocks.getStudentOverviewSurface.mockImplementation((studentId: string) => {
+      if (studentId === 'student-alex') {
+        return alexOverview.promise;
+      }
+      if (studentId === 'student-bora') {
+        return boraOverview.promise;
+      }
+      return Promise.reject(new Error(`Unexpected student: ${studentId}`));
+    });
+
+    const view = render(
+      <MemoryRouter initialEntries={['/students/student-alex/overview']}>
+        <StudentOverviewPage />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId('student-overview-pending-canvas')).toBeTruthy();
+    await waitFor(() => {
+      expect(apiMocks.getStudentOverviewSurface).toHaveBeenNthCalledWith(1, 'student-alex');
+    });
+
+    contextValue = {
+      ...contextValue,
+      student: {
+        id: 'student-bora',
+        student: 'Bora Nguyen',
+        profileId: 'profiles/students/bora.md',
+      },
+      studentId: 'student-bora',
+    };
+    view.rerender(
+      <MemoryRouter initialEntries={['/students/student-bora/overview']}>
+        <StudentOverviewPage />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(apiMocks.getStudentOverviewSurface).toHaveBeenNthCalledWith(2, 'student-bora');
+    });
+
+    boraOverview.resolve(boraSurface);
+    expect(await screen.findByText('Bora-only suggested focus')).toBeTruthy();
+    expect(screen.getByText('Bora-only authoritative event')).toBeTruthy();
+
+    alexOverview.reject(new Error('Late Student A load failure'));
+    await alexOverview.promise.catch(() => undefined);
+
+    await waitFor(() => {
+      expect(screen.getByText('Bora-only suggested focus')).toBeTruthy();
+      expect(screen.getByText('Bora-only authoritative event')).toBeTruthy();
+      expect(screen.queryByText('Late Student A load failure')).toBeNull();
+      expect(screen.queryByRole('heading', { name: 'Overview unavailable' })).toBeNull();
+      expect(screen.queryByText('Not scheduled yet')).toBeNull();
+      expect(screen.queryByText('Not configured yet')).toBeNull();
+      expect(screen.queryByText('No reminders ready')).toBeNull();
+      expect(screen.queryAllByText('Bora-only learner goal').length).toBeGreaterThan(0);
+      expect(screen.queryByText('Alex Rivera')).toBeNull();
+    });
+  });
+
+  it('does not use an unsourced overview memory issue when no ready snapshot exists', async () => {
+    apiMocks.getStudentOverviewSurface.mockResolvedValue(
+      makeOverviewSurface({
+        memory: {
+          ...makeOverviewSurface().memory,
+          latestReadyStudentMemorySnapshot: null,
+          unresolvedIssues: [
+            {
+              label: 'Unbounded issue',
+              note: 'This issue is not tied to a ready snapshot.',
+              priority: 'high',
+            },
+          ],
+        },
+      }),
+    );
+
+    renderOverview();
+
+    expect(await screen.findByText('No suggested focus yet')).toBeTruthy();
+    expect(screen.getByText('Waiting for memory')).toBeTruthy();
+    expect(screen.queryByText('Unbounded issue')).toBeNull();
+    expect(screen.queryByText('This issue is not tied to a ready snapshot.')).toBeNull();
+  });
+
+  it('shows factual memory-pending attention routing to Learning', async () => {
+    apiMocks.getStudentOverviewSurface.mockResolvedValue(
+      makeOverviewSurface({
+        memory: {
+          ...makeOverviewSurface().memory,
+          latestReadyStudentMemorySnapshot: null,
+        },
+      }),
+    );
+
+    renderOverview();
+
+    const attention = await screen.findByRole('link', { name: /Memory snapshot pending/i });
+    expect(attention.getAttribute('href')).toBe('/students/student-alex/learning');
+  });
+
+  it('keeps the overview unavailable after a failed load until Retry succeeds', async () => {
+    const user = userEvent.setup();
+    apiMocks.getStudentOverviewSurface
+      .mockRejectedValueOnce(new Error('Overview unavailable'))
+      .mockResolvedValueOnce(makeOverviewSurface());
+
+    renderOverview();
+
+    expect(await screen.findByRole('heading', { name: 'Overview unavailable' })).toBeTruthy();
+    expect(screen.getByRole('alert').textContent).toContain('Overview unavailable');
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy();
+    expect(screen.queryByText('Not scheduled yet')).toBeNull();
+    expect(screen.queryByText('Not configured yet')).toBeNull();
+    expect(screen.queryByText('No reminders ready')).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+
+    expect(await screen.findByText('Active profile')).toBeTruthy();
+    expect(apiMocks.getStudentOverviewSurface).toHaveBeenCalledTimes(2);
   });
 
   it('surfaces pending profile suggestions as the one attention cue', async () => {
@@ -410,7 +612,7 @@ describe('StudentOverviewPage', () => {
 
     renderOverview();
 
-    expect(await screen.findByText('On track')).toBeTruthy();
+    expect(await screen.findByText('Active profile')).toBeTruthy();
     expect(screen.queryByText('Draft waiting')).toBeNull();
     expect(screen.queryByText('Profile draft waiting')).toBeNull();
   });

@@ -278,14 +278,14 @@ function countFilledProfileSections(form: FoundationalProfileFormState): number 
   ].filter((value) => value.trim().length > 0).length;
 }
 
-function getProfileReadinessLabel(populatedFields: number): string {
-  if (populatedFields >= 7) return 'Strong Coverage';
-  if (populatedFields >= 4) return 'Good Working Draft';
-  if (populatedFields >= 1) return 'Starter Profile';
-  return 'Needs First Pass';
+function getProfileCoverageLabel(populatedFields: number): string {
+  if (populatedFields >= 7) return 'Strong coverage';
+  if (populatedFields >= 4) return 'Working coverage';
+  if (populatedFields >= 1) return 'Starter coverage';
+  return 'Needs first pass';
 }
 
-function getProfileReadinessDetail(form: FoundationalProfileFormState): string {
+function getProfileCoverageDetail(form: FoundationalProfileFormState): string {
   const populatedFields = countFilledProfileSections(form);
   return `${populatedFields}/9 durable fields populated`;
 }
@@ -718,7 +718,7 @@ export const StudentLearningPage: React.FC = () => {
     [profileForm],
   );
 
-  const profileHealthDetail = useMemo(() => getProfileReadinessDetail(profileForm), [profileForm]);
+  const profileCoverageDetail = useMemo(() => getProfileCoverageDetail(profileForm), [profileForm]);
   const profileVersionDisplay = useMemo(() => {
     const currentRevisionId = currentRevision?.id ?? null;
     const nonCurrentRevisions = profileRevisions.filter(
@@ -1459,7 +1459,7 @@ export const StudentLearningPage: React.FC = () => {
   const latestSnapshot = memoryOverview?.latestReadyStudentMemorySnapshot ?? null;
   const activeBinding = bindingHistory[0] ?? null;
   const canActivateDraft = currentRevision?.status === 'draft';
-  const unresolvedIssues = memoryOverview?.unresolvedIssues ?? [];
+  const unresolvedIssues = latestSnapshot?.unresolvedIssues ?? [];
   const recentLessons = memoryOverview?.recentReadyLessonMemory ?? [];
   const recentHomework = memoryOverview?.recentReadyHomeworkMemory ?? [];
   const readyLessonMemoryCount = memoryHealth?.memoryCounts.lesson.ready.count ?? 0;
@@ -1540,9 +1540,9 @@ export const StudentLearningPage: React.FC = () => {
       <article className="student-area-panel student-learning-hero">
         <div className="student-learning-status-grid">
           <LearningMetricCard
-            eyebrow="Profile Readiness"
-            value={getProfileReadinessLabel(populatedProfileFields)}
-            detail={profileHealthDetail}
+            eyebrow="Profile coverage"
+            value={getProfileCoverageLabel(populatedProfileFields)}
+            detail={profileCoverageDetail}
           />
           <LearningMetricCard
             eyebrow="Memory Snapshot"
@@ -1738,7 +1738,9 @@ export const StudentLearningPage: React.FC = () => {
                         ))}
                       </ul>
                     ) : (
-                      <p className="workspace-muted">No unresolved teaching threads surfaced.</p>
+                      <p className="workspace-muted">
+                        No open threads in the latest memory snapshot.
+                      </p>
                     )}
                   </section>
                 </div>
