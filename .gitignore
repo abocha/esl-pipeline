@@ -51,6 +51,7 @@ skills-lock.json
 .env.batch-backend
 .secrets
 *.pem
+.env.audio-benchmark.local
 
 # Runtime artifacts
 /uploads
@@ -60,3 +61,10 @@ tmp
 packages/orchestrator/examples/service/fixtures/lesson.manifest.json
 fixtures/*.opus
 */tmp
+
+# Audio benchmark material must remain outside the checkout. These are defense-in-depth paths for
+# accidental local staging; the CLI also requires and validates ESL_AUDIO_BENCHMARK_ROOT.
+/audio-benchmark-root/
+/audio-benchmark-output/
+/scripts/audio-benchmark/private/
+/scripts/audio-benchmark/output/

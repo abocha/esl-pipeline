@@ -1,0 +1,151 @@
+{
+  "snapshots": [
+    {
+      "snapshotId": "public-2026-08-28",
+      "effectiveFrom": "2026-08-28",
+      "currency": "USD",
+      "sources": [
+        {
+          "providerId": "soniox-v5-async",
+          "url": "https://soniox.com/pricing",
+          "observed": "Async input audio tokens $1.50 per 1M; output text tokens $3.50 per 1M."
+        },
+        {
+          "providerId": "speechmatics-melia-1-batch",
+          "url": "https://www.speechmatics.com/pricing",
+          "observed": "Batch Melia 1 $0.129 per hour; billed to the second."
+        },
+        {
+          "providerId": "mistral-voxtral-mini-transcribe-2",
+          "url": "https://docs.mistral.ai/models/voxtral-mini-transcribe-26-02",
+          "observed": "Voxtral Mini Transcribe 2 $0.003 per minute."
+        },
+        {
+          "providerId": "deepgram-nova-3",
+          "url": "https://deepgram.com/pricing",
+          "observed": "Nova-3 multilingual pre-recorded $0.0092 per minute; speaker diarization is listed as a $0.0020 per minute add-on."
+        },
+        {
+          "providerId": "elevenlabs-scribe-v2",
+          "url": "https://elevenlabs.io/pricing/api?price.section=speech_to_text",
+          "observed": "Scribe v2 $0.22 per hour; keyterm prompting and entity detection are additional priced features."
+        }
+      ],
+      "contractEvidence": [
+        {
+          "providerId": "soniox-v5-async",
+          "model": "stt-async-v5",
+          "observedAt": "2026-08-28",
+          "sourceUrls": [
+            "https://soniox.com/docs/api-reference/stt/files/upload_file",
+            "https://soniox.com/docs/api-reference/stt/transcriptions/create_transcription",
+            "https://soniox.com/docs/api-reference/stt/transcriptions/get_transcription_transcript"
+          ],
+          "observed": "File upload, asynchronous transcription creation/status, transcript token timestamps, language identification, and speaker diarization are documented."
+        },
+        {
+          "providerId": "speechmatics-melia-1-batch",
+          "model": "melia-1",
+          "observedAt": "2026-08-28",
+          "sourceUrls": [
+            "https://docs.speechmatics.com/speech-to-text/batch/input",
+            "https://docs.speechmatics.com/speech-to-text/batch/output",
+            "https://docs.speechmatics.com/speech-to-text/batch/batch-diarization"
+          ],
+          "observed": "Batch multipart input, Melia 1, multi-language configuration, JSON v2 results, speaker diarization, and retained disfluencies are documented."
+        },
+        {
+          "providerId": "mistral-voxtral-mini-transcribe-2",
+          "model": "voxtral-mini-2602",
+          "observedAt": "2026-08-28",
+          "sourceUrls": [
+            "https://docs.mistral.ai/api/endpoint/audio/transcriptions",
+            "https://docs.mistral.ai/models/voxtral-mini-transcribe-26-02"
+          ],
+          "observed": "Direct audio transcription with diarization and segment/word timestamp options is documented; multipart field and timestamp-array encoding remain Gate 0 assumptions."
+        },
+        {
+          "providerId": "deepgram-nova-3",
+          "model": "nova-3",
+          "observedAt": "2026-08-28",
+          "sourceUrls": [
+            "https://developers.deepgram.com/reference/speech-to-text/listen-pre-recorded",
+            "https://developers.deepgram.com/docs/multichannel",
+            "https://developers.deepgram.com/docs/multilingual-voice-agent"
+          ],
+          "observed": "Pre-recorded Nova 3 requests, multilingual mode, latest diarization, and multichannel input are documented."
+        },
+        {
+          "providerId": "elevenlabs-scribe-v2",
+          "model": "scribe_v2",
+          "observedAt": "2026-08-28",
+          "sourceUrls": [
+            "https://elevenlabs.io/docs/api-reference/speech-to-text/convert",
+            "https://elevenlabs.io/docs/help-center/product/core-capabilities/speech-to-text/what-is-speech-to-text"
+          ],
+          "observed": "Multipart speech-to-text with Scribe v2, word timestamps, diarization, verbatim mode, and multi-channel options is documented."
+        }
+      ],
+      "entries": [
+        {
+          "providerId": "soniox-v5-async",
+          "model": "stt-async-v5",
+          "unit": "input_audio_token",
+          "usdPerUnit": 1.5,
+          "denominator": 1000000,
+          "usage": "raw_usage_input_audio_tokens",
+          "calculationStatus": "confirmed",
+          "notes": "The runner does not infer Soniox token counts; report cost is unknown unless raw usage metadata is supplied."
+        },
+        {
+          "providerId": "soniox-v5-async",
+          "model": "stt-async-v5",
+          "unit": "output_text_token",
+          "usdPerUnit": 3.5,
+          "denominator": 1000000,
+          "usage": "raw_usage_output_text_tokens",
+          "calculationStatus": "confirmed",
+          "notes": "The runner does not infer Soniox token counts; report cost is unknown unless raw usage metadata is supplied."
+        },
+        {
+          "providerId": "speechmatics-melia-1-batch",
+          "model": "melia-1",
+          "unit": "hour",
+          "usdPerUnit": 0.129,
+          "denominator": 3600,
+          "usage": "billable_duration_sec",
+          "calculationStatus": "confirmed",
+          "notes": "The runner maps the provider-reported job duration to billable seconds because the public price page states billing to the second."
+        },
+        {
+          "providerId": "mistral-voxtral-mini-transcribe-2",
+          "model": "voxtral-mini-2602",
+          "unit": "minute",
+          "usdPerUnit": 0.003,
+          "denominator": 60,
+          "usage": "provider_audio_duration_sec",
+          "calculationStatus": "confirmed"
+        },
+        {
+          "providerId": "deepgram-nova-3",
+          "model": "nova-3",
+          "unit": "minute",
+          "usdPerUnit": 0.0092,
+          "denominator": 60,
+          "usage": "billable_duration_sec",
+          "notes": "Incomplete until Gate 0 confirms whether diarization add-on and multichannel/split billing apply; the adapter does not infer billable duration or channels.",
+          "calculationStatus": "incomplete"
+        },
+        {
+          "providerId": "elevenlabs-scribe-v2",
+          "model": "scribe_v2",
+          "unit": "hour",
+          "usdPerUnit": 0.22,
+          "denominator": 3600,
+          "usage": "provider_audio_duration_sec",
+          "calculationStatus": "confirmed"
+        }
+      ]
+    }
+  ]
+}
