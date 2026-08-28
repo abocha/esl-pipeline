@@ -41,18 +41,19 @@ speaker_labels: [Narrator]
 ## 1. This Week's Mission Briefing
 text
 
-## 2. Your Homework Roadmap
-text
-
-## 3. Input Material: The Source
+## 2. Input Material: The Source
 :::study-text Transcript
 Narrator: Hello there.
 :::
 
-## 4. Language Toolkit: Useful Language
+### Comprehension Check
+1) question
+2) question
+
+## 3. Language Toolkit: Useful Language
 text
 
-## 5. Practice & Pronunciation
+## 4. Practice & Pronunciation
 ### A. Controlled Practice
 1) item
 2) item
@@ -62,25 +63,21 @@ text
 6) item
 7) item
 8) item
-### B. Comprehension Check
-1) question
-2) question
-
-### C. Pronunciation Micro-Focus
+### B. Pronunciation Micro-Focus
 text
 
-## 6. Your Turn: Complete the Mission!
+## 5. Your Turn: Complete the Mission!
 text
 
-## 7. Why This Mission Helps You
+## 6. Why This Mission Helps You
 text
 
-## 8. Answer Key & Sample Mission
+## 7. Answer Key & Sample Mission
 :::toggle-heading Answer Key
 content
 :::
 
-## 9. Teacher's Follow-up Plan
+## 8. Teacher's Follow-up Plan
 :::toggle-heading Teacher's Follow-up Plan
 content
 :::

@@ -23,10 +23,7 @@ speaker_labels: [Narrator, Alex]
 ## 1. This Week's Mission Briefing
 text
 
-## 2. Your Homework Roadmap
-text
-
-## 3. Input Material: The Source
+## 2. Input Material: The Source
 :::study-text Transcript
 Alex: Hey there,
 
@@ -40,10 +37,14 @@ Talk soon,
 Alex
 :::
 
-## 4. Language Toolkit: Useful Language
+### Comprehension Check
+1) question
+2) question
+
+## 3. Language Toolkit: Useful Language
 text
 
-## 5. Practice & Pronunciation
+## 4. Practice & Pronunciation
 ### A. Controlled Practice
 1) item
 2) item
@@ -53,25 +54,21 @@ text
 6) item
 7) item
 8) item
-### B. Comprehension Check
-1) question
-2) question
-
-### C. Pronunciation Micro-Focus
+### B. Pronunciation Micro-Focus
 text
 
-## 6. Your Turn: Complete the Mission!
+## 5. Your Turn: Complete the Mission!
 text
 
-## 7. Why This Mission Helps You
+## 6. Why This Mission Helps You
 text
 
-## 8. Answer Key & Sample Mission
+## 7. Answer Key & Sample Mission
 :::toggle-heading Answer Key
 content
 :::
 
-## 9. Teacher's Follow-up Plan
+## 8. Teacher's Follow-up Plan
 :::toggle-heading Teacher's Follow-up Plan
 content
 :::
@@ -101,20 +98,21 @@ speaker_labels: [Narrator]
 ## 1. This Week's Mission Briefing
 text
 
-## 2. Your Homework Roadmap
-text
-
-## 3. Input Material: The Source
+## 2. Input Material: The Source
 :::study-text
 It was a rainy day, and Leo left his umbrella on the bus.
 
 He ran back quickly, but the bus had already gone. Leo sighed and decided to buy a new one.
 :::
 
-## 4. Language Toolkit: Useful Language
+### Comprehension Check
+1) question
+2) question
+
+## 3. Language Toolkit: Useful Language
 text
 
-## 5. Practice & Pronunciation
+## 4. Practice & Pronunciation
 ### A. Controlled Practice
 1) item
 2) item
@@ -124,25 +122,21 @@ text
 6) item
 7) item
 8) item
-### B. Comprehension Check
-1) question
-2) question
-
-### C. Pronunciation Micro-Focus
+### B. Pronunciation Micro-Focus
 text
 
-## 6. Your Turn: Complete the Mission!
+## 5. Your Turn: Complete the Mission!
 text
 
-## 7. Why This Mission Helps You
+## 6. Why This Mission Helps You
 text
 
-## 8. Answer Key & Sample Mission
+## 7. Answer Key & Sample Mission
 :::toggle-heading Answer Key
 content
 :::
 
-## 9. Teacher's Follow-up Plan
+## 8. Teacher's Follow-up Plan
 :::toggle-heading Teacher's Follow-up Plan
 content
 :::
@@ -173,10 +167,7 @@ speaker_labels: [Narrator]
 ## 1. This Week's Mission Briefing
 text
 
-## 2. Your Homework Roadmap
-text
-
-## 3. Input Material: The Source
+## 2. Input Material: The Source
 :::study-text
 Narrator: Leo walked into the station and checked the big clock.
 
@@ -185,10 +176,14 @@ Narrator: The train was delayed, so he bought tea and reviewed his notes.
 Narrator: When the train arrived, Leo felt calm and ready for the meeting.
 :::
 
-## 4. Language Toolkit: Useful Language
+### Comprehension Check
+1) question
+2) question
+
+## 3. Language Toolkit: Useful Language
 text
 
-## 5. Practice & Pronunciation
+## 4. Practice & Pronunciation
 ### A. Controlled Practice
 1) item
 2) item
@@ -198,25 +193,21 @@ text
 6) item
 7) item
 8) item
-### B. Comprehension Check
-1) question
-2) question
-
-### C. Pronunciation Micro-Focus
+### B. Pronunciation Micro-Focus
 text
 
-## 6. Your Turn: Complete the Mission!
+## 5. Your Turn: Complete the Mission!
 text
 
-## 7. Why This Mission Helps You
+## 6. Why This Mission Helps You
 text
 
-## 8. Answer Key & Sample Mission
+## 7. Answer Key & Sample Mission
 :::toggle-heading Answer Key
 content
 :::
 
-## 9. Teacher's Follow-up Plan
+## 8. Teacher's Follow-up Plan
 :::toggle-heading Teacher's Follow-up Plan
 content
 :::
@@ -250,19 +241,20 @@ speaker_labels: [Alex, Mara]
 ## 1. This Week's Mission Briefing
 text
 
-## 2. Your Homework Roadmap
-text
-
-## 3. Input Material: The Source
+## 2. Input Material: The Source
 :::study-text
 Alex: Did you see the new timetable?
 Mara: Yes, the meeting moved to Friday afternoon.
 :::
 
-## 4. Language Toolkit: Useful Language
+### Comprehension Check
+1) question
+2) question
+
+## 3. Language Toolkit: Useful Language
 text
 
-## 5. Practice & Pronunciation
+## 4. Practice & Pronunciation
 ### A. Controlled Practice
 1) item
 2) item
@@ -272,25 +264,21 @@ text
 6) item
 7) item
 8) item
-### B. Comprehension Check
-1) question
-2) question
-
-### C. Pronunciation Micro-Focus
+### B. Pronunciation Micro-Focus
 text
 
-## 6. Your Turn: Complete the Mission!
+## 5. Your Turn: Complete the Mission!
 text
 
-## 7. Why This Mission Helps You
+## 6. Why This Mission Helps You
 text
 
-## 8. Answer Key & Sample Mission
+## 7. Answer Key & Sample Mission
 :::toggle-heading Answer Key
 content
 :::
 
-## 9. Teacher's Follow-up Plan
+## 8. Teacher's Follow-up Plan
 :::toggle-heading Teacher's Follow-up Plan
 content
 :::

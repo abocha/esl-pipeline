@@ -114,7 +114,7 @@ describe('application/process-queue-job', () => {
       nextState: 'succeeded',
       manifestPath: '/manifests/job-1.json',
       htmlUrl: 'https://cdn.example.com/job-1.html',
-      publishedContentHash: '056eeeb499bec552e43f3ed2c595418b0fd03d060dff3e7333090a7f57f340e0',
+      publishedContentHash: '7e0dbde9d430421784b20c164a0c601a2cd2e6b84c2445fb1cbcc24c46026ee8',
       finishedAt: expect.any(Date),
     });
 
@@ -245,7 +245,7 @@ describe('application/process-queue-job', () => {
       nextState: 'succeeded',
       manifestPath: '/manifests/job-1.json',
       htmlUrl: 'https://cdn.example.com/job-1.html',
-      publishedContentHash: '056eeeb499bec552e43f3ed2c595418b0fd03d060dff3e7333090a7f57f340e0',
+      publishedContentHash: '7e0dbde9d430421784b20c164a0c601a2cd2e6b84c2445fb1cbcc24c46026ee8',
       finishedAt: expect.any(Date),
     });
     expect(publishJobEventSpy).toHaveBeenCalledTimes(1);

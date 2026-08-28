@@ -128,7 +128,7 @@ interface HeadingRule {
   minTokenHits?: number;
 }
 
-const H2_RULES: HeadingRule[] = [
+const LEGACY_H2_RULES: HeadingRule[] = [
   {
     label: "This Week's Mission Briefing",
     groups: [['mission', 'briefing', 'overview', 'summary', 'recap', 'lesson']],
@@ -188,8 +188,17 @@ const H2_RULES: HeadingRule[] = [
   },
 ];
 
+const CURRENT_H2_RULES: HeadingRule[] = LEGACY_H2_RULES.filter(
+  (rule) => rule.label !== 'Your Homework Roadmap',
+);
+
+interface GeneralEnglishRulesetContract {
+  version: 'legacy' | 'current';
+}
+
 const NON_BLOCKING_WARNING_PREFIXES = [
   'Additional H2 sections after section 9 are ignored',
+  'Additional H2 sections after section 8 are ignored',
   'Controlled Practice has ',
   'Comprehension Check has ',
   'Missing "### <letter>. Pronunciation Micro-Focus" section under H2 #5.',
@@ -216,16 +225,23 @@ function normalizeHeadingText(s: string): string {
 }
 
 const CONTROLLED_PRACTICE_HEADING_PREFIX = normalizeHeadingText('A. Controlled Practice');
-const COMPREHENSION_CHECK_HEADING_PREFIX = normalizeHeadingText('B. Comprehension Check');
+const LEGACY_COMPREHENSION_CHECK_HEADING_PREFIX = normalizeHeadingText('B. Comprehension Check');
+const CURRENT_COMPREHENSION_CHECK_HEADING_PREFIX = normalizeHeadingText('Comprehension Check');
+const CURRENT_PRONUNCIATION_HEADING_PREFIX = normalizeHeadingText('B. Pronunciation Micro-Focus');
 
 function isControlledPracticeHeading(text: string): boolean {
   const normalized = normalizeHeadingText(text);
   return normalized.startsWith(CONTROLLED_PRACTICE_HEADING_PREFIX);
 }
 
-function isComprehensionCheckHeading(text: string): boolean {
+function isLegacyComprehensionCheckHeading(text: string): boolean {
   const normalized = normalizeHeadingText(text);
-  return normalized.startsWith(COMPREHENSION_CHECK_HEADING_PREFIX);
+  return normalized.startsWith(LEGACY_COMPREHENSION_CHECK_HEADING_PREFIX);
+}
+
+function isCurrentComprehensionCheckHeading(text: string): boolean {
+  const normalized = normalizeHeadingText(text);
+  return normalized.startsWith(CURRENT_COMPREHENSION_CHECK_HEADING_PREFIX);
 }
 
 function isPronunciationMicroFocusHeading(text: string): boolean {
@@ -233,6 +249,14 @@ function isPronunciationMicroFocusHeading(text: string): boolean {
   return (
     /\bpronunciation\b/.test(normalized) &&
     (/\bmicro(?:\s+|-)?focus\b/.test(normalized) || /\bmicrofocus\b/.test(normalized))
+  );
+}
+
+function isCurrentPronunciationMicroFocusHeading(text: string): boolean {
+  const normalized = normalizeHeadingText(text);
+  return (
+    normalized.startsWith(CURRENT_PRONUNCIATION_HEADING_PREFIX) &&
+    isPronunciationMicroFocusHeading(text)
   );
 }
 
@@ -1079,6 +1103,7 @@ async function resolveValidateInput(
 
 export async function validateGeneralEnglishRuleset(
   input: GeneralEnglishValidateInput,
+  contract: GeneralEnglishRulesetContract = { version: 'legacy' },
 ): Promise<GeneralEnglishValidateResult> {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -1164,12 +1189,22 @@ export async function validateGeneralEnglishRuleset(
 
   // a) H2 order check
   const h2 = collectHeadings(doc.body, 2);
-  if (h2.length < H2_RULES.length) {
-    warnings.push(`Expected at least ${H2_RULES.length} H2 sections, found ${h2.length}.`);
+  const h2Rules = contract.version === 'current' ? CURRENT_H2_RULES : LEGACY_H2_RULES;
+  if (h2.length < h2Rules.length) {
+    warnings.push(`Expected at least ${h2Rules.length} H2 sections, found ${h2.length}.`);
   }
-  for (const [index, rule] of H2_RULES.entries()) {
+  for (const [index, rule] of h2Rules.entries()) {
     const heading = h2[index];
     if (!heading) continue;
+    if (contract.version === 'current') {
+      const expectedSectionNumber = index + 1;
+      const observedSectionNumber = /^(\d+)\.\s+/.exec(heading.text)?.[1];
+      if (observedSectionNumber !== String(expectedSectionNumber)) {
+        warnings.push(
+          `H2 #${expectedSectionNumber} mismatch. Expected section number "${expectedSectionNumber}.", found: "${heading.text}".`,
+        );
+      }
+    }
     const tokens = tokenizeHeading(heading.text);
     if (!matchesHeadingRule(tokens, rule)) {
       warnings.push(
@@ -1177,8 +1212,10 @@ export async function validateGeneralEnglishRuleset(
       );
     }
   }
-  if (h2.length > H2_RULES.length) {
-    warnings.push('Additional H2 sections after section 9 are ignored by structure validation.');
+  if (h2.length > h2Rules.length) {
+    warnings.push(
+      `Additional H2 sections after section ${h2Rules.length} are ignored by structure validation.`,
+    );
   }
 
   // b) markers
@@ -1337,7 +1374,11 @@ export async function validateGeneralEnglishRuleset(
   }
 
   // c) Controlled Practice item count (soft check)
-  const practiceBlocks = h2[4] ? sectionSlice(doc.body, h2[4]) : doc.body;
+  const practiceSectionIndex = contract.version === 'current' ? 3 : 4;
+  const practiceSectionNumber = practiceSectionIndex + 1;
+  const practiceBlocks = h2[practiceSectionIndex]
+    ? sectionSlice(doc.body, h2[practiceSectionIndex])
+    : doc.body;
   const practiceH3 = collectHeadings(practiceBlocks, 3);
   const cp = practiceH3.find((heading) => isControlledPracticeHeading(heading.text));
   if (cp) {
@@ -1347,26 +1388,51 @@ export async function validateGeneralEnglishRuleset(
       warnings.push(`Controlled Practice has ${count} items (recommended 8–10).`);
     }
   } else {
-    warnings.push('No "### A. Controlled Practice" section found under H2 #5.');
+    warnings.push(
+      `No "### A. Controlled Practice" section found under H2 #${practiceSectionNumber}.`,
+    );
   }
 
   // d) Comprehension Check items (soft check)
-  const cc = practiceH3.find((heading) => isComprehensionCheckHeading(heading.text));
+  const comprehensionBlocks =
+    contract.version === 'current' && h2[1] ? sectionSlice(doc.body, h2[1]) : practiceBlocks;
+  const comprehensionH3 = collectHeadings(comprehensionBlocks, 3);
+  const cc = comprehensionH3.find((heading) =>
+    contract.version === 'current'
+      ? isCurrentComprehensionCheckHeading(heading.text)
+      : isLegacyComprehensionCheckHeading(heading.text),
+  );
+  const studyBlockIndex = studyBlock ? comprehensionBlocks.indexOf(studyBlock) : -1;
+  const comprehensionBlockIndex = cc ? comprehensionBlocks.indexOf(cc) : -1;
+  const comprehensionImmediatelyAfterStudyText =
+    contract.version !== 'current' ||
+    (studyBlockIndex >= 0 && comprehensionBlockIndex === studyBlockIndex + 1);
   if (cc) {
-    const nodes = sectionSlice(practiceBlocks, cc);
+    const nodes = sectionSlice(comprehensionBlocks, cc);
     const count = countListItems(nodes);
     if (count && count < 2) {
       warnings.push(`Comprehension Check has ${count} item(s) (recommended 2–3).`);
     }
-  } else {
-    warnings.push('No "### B. Comprehension Check" section found under H2 #5.');
+  }
+  if (!cc || !comprehensionImmediatelyAfterStudyText) {
+    warnings.push(
+      contract.version === 'current'
+        ? 'No "### Comprehension Check" section found after the study text under H2 #2.'
+        : 'No "### B. Comprehension Check" section found under H2 #5.',
+    );
   }
 
   const pronunciationHeading = practiceH3.find((heading) =>
-    isPronunciationMicroFocusHeading(heading.text),
+    contract.version === 'current'
+      ? isCurrentPronunciationMicroFocusHeading(heading.text)
+      : isPronunciationMicroFocusHeading(heading.text),
   );
   if (!pronunciationHeading) {
-    warnings.push('Missing "### <letter>. Pronunciation Micro-Focus" section under H2 #5.');
+    warnings.push(
+      contract.version === 'current'
+        ? 'Missing "### B. Pronunciation Micro-Focus" section under H2 #4.'
+        : 'Missing "### <letter>. Pronunciation Micro-Focus" section under H2 #5.',
+    );
   }
 
   const pronunciationFocus = parsedContext ? extractPronunciationFocus(parsedContext) : null;

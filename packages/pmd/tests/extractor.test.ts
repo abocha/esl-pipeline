@@ -32,7 +32,7 @@ A: I'm fine.
 
 - Q1
 
-### C. 🎙️ Pronunciation Micro-Focus (≈1 min)
+### B. 🎙️ Pronunciation Micro-Focus (≈1 min)
 
 :::callout 🗣️
 **Mode:** shadow_sentence

@@ -5,7 +5,7 @@
 - Audience: founder, maintainers, prompt/runtime implementers, AI agents.
 - Read Time: 9 minutes.
 - Authority Level: active system prompting and assembly guidance for homework drafting.
-- Last Verified Against: 2026-06-17 repo state.
+- Last Verified Against: 2026-08-28 repo state.
 - Owner: founder-maintainer + backend/frontend maintainers.
 - Review Cadence: after prompt-assembly or model-guidance changes.
 - Status: `reference`.
@@ -62,6 +62,11 @@ This means prompt changes must be reasoned about in two layers:
 
 1. the **live DB template revision**
 2. the **code-side assembly contract** that wraps and augments that template
+
+The checked-in default now specifies eight learner-facing H2 sections, omits roadmap/TOC output,
+and places `### 🤔 Comprehension Check` directly after the selected study-text input. Bootstrap
+imports changed content as a new draft when an active revision already exists; an operator must
+explicitly activate that revision before an already-running environment generates with it.
 
 ### Final model input path
 

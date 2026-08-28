@@ -117,18 +117,19 @@ speaker_labels: ["Anna"]
 ## 1. Lesson Recap & Mission Overview
 text
 
-## 2. Homework Plan
-text
-
-## 3. Source Text (Input)
+## 2. Source Text (Input)
 :::study-text
 Anna: Hello there!
 :::
 
-## 4. Grammar & Useful Language
+### Comprehension Check
+1) q1
+2) q2
+
+## 3. Grammar & Useful Language
 text
 
-## 5. Practice and Speaking
+## 4. Practice and Speaking
 ### A. Controlled Practice
 1) one
 2) two
@@ -138,25 +139,21 @@ text
 6) six
 7) seven
 8) eight
-### B. Comprehension Check
-1) q1
-2) q2
-
-### C. Pronunciation Micro-Focus
+### B. Pronunciation Micro-Focus
 text
 
-## 6. Your Task: Tell your story!
+## 5. Your Task: Tell your story!
 text
 
-## 7. Why this helps
+## 6. Why this helps
 text
 
-## 8. Answers & Example
+## 7. Answers & Example
 :::toggle-heading Answer Key
 answers
 :::
 
-## 9. Next Lesson Plan
+## 8. Next Lesson Plan
 :::toggle-heading Teacher's Follow-up Plan
 plan
 :::
@@ -168,16 +165,16 @@ plan
       expect(res.errors).toHaveLength(0);
     });
 
-    it('allows extra H2 sections appended after section 9', async () => {
+    it('allows extra H2 sections appended after section 8', async () => {
       const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
       const file = path.join(tempDir, 'extra-h2-after-core.md');
-      const md = `${buildBaseDoc('text')}\n\n## 10. Appendix Notes\ntext`;
+      const md = `${buildBaseDoc('text')}\n\n## 9. Appendix Notes\ntext`;
       await writeFile(file, md);
 
       const res = await validateMarkdownFile(file);
       expect(res.ok).toBe(true);
       expect(res.warnings).toContain(
-        'Additional H2 sections after section 9 are ignored by structure validation.',
+        'Additional H2 sections after section 8 are ignored by structure validation.',
       );
     });
 
@@ -185,44 +182,44 @@ plan
       const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
       const file = path.join(tempDir, 'extra-h2-mid-sequence.md');
       const md = buildBaseDoc('text').replace(
-        "## 9. 👨‍🏫 Teacher's Follow-up Plan",
-        "## 8.5. Appendix Notes\ntext\n\n## 9. 👨‍🏫 Teacher's Follow-up Plan",
+        "## 8. 👨‍🏫 Teacher's Follow-up Plan",
+        "## 7.5. Appendix Notes\ntext\n\n## 8. 👨‍🏫 Teacher's Follow-up Plan",
       );
       await writeFile(file, md);
 
       const res = await validateMarkdownFile(file);
       expect(res.ok).toBe(true);
-      expect(res.warnings.join('\n')).toMatch(/H2 #9 mismatch/i);
+      expect(res.warnings.join('\n')).toMatch(/H2 #8 mismatch/i);
     });
 
-    it('warns when fewer than 9 core H2 sections are present', async () => {
+    it('warns when fewer than 8 core H2 sections are present', async () => {
       const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
       const file = path.join(tempDir, 'missing-core-h2.md');
-      const md = buildBaseDoc('text').split("\n## 9. 👨‍🏫 Teacher's Follow-up Plan")[0] ?? '';
+      const md = buildBaseDoc('text').split("\n## 8. 👨‍🏫 Teacher's Follow-up Plan")[0] ?? '';
       await writeFile(file, md);
 
       const res = await validateMarkdownFile(file);
       expect(res.ok).toBe(true);
-      expect(res.warnings.join('\n')).toMatch(/Expected at least 9 H2 sections, found 8\./i);
+      expect(res.warnings.join('\n')).toMatch(/Expected at least 8 H2 sections, found 7\./i);
     });
 
-    it('warns on overly-generic section 5 headings that are semantically underspecified', async () => {
+    it('warns on overly-generic section 4 headings that are semantically underspecified', async () => {
       const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
       const file = path.join(tempDir, 'generic-practice-heading.md');
-      const md = buildBaseDoc('text').replace('## 5. ✍️ Practice & Pronunciation', '## 5. Practice');
+      const md = buildBaseDoc('text').replace('## 4. ✍️ Practice & Pronunciation', '## 4. Practice');
       await writeFile(file, md);
 
       const res = await validateMarkdownFile(file);
       expect(res.ok).toBe(true);
-      expect(res.warnings.join('\n')).toMatch(/H2 #5 mismatch/i);
+      expect(res.warnings.join('\n')).toMatch(/H2 #4 mismatch/i);
     });
 
-    it('accepts semantically-rich synonym headings for section 4', async () => {
+    it('accepts semantically-rich synonym headings for section 3', async () => {
       const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
       const file = path.join(tempDir, 'synonym-heading-section-4.md');
       const md = buildBaseDoc('text').replace(
-        '## 4. 🛠️ Language Toolkit: Useful Language',
-        '## 4. Useful Vocabulary Toolbox',
+        '## 3. 🛠️ Language Toolkit: Useful Language',
+        '## 3. Useful Vocabulary Toolbox',
       );
       await writeFile(file, md);
 
