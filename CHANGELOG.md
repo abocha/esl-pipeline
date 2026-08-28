@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.8.5] - 2026-08-28
+
+### Changed
+
+- Automated release from PR #210: fix(homework): simplify assignment output flow (https://github.com/abocha/esl-pipeline/pull/210)
+
 ## [10.8.4] - 2026-08-20
 
 ### Changed
