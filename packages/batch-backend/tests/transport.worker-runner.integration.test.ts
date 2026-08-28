@@ -61,19 +61,20 @@ speaker_labels: [Alex, Mara]
 ## 1. This Week's Mission Briefing
 text
 
-## 2. Your Homework Roadmap
-text
-
-## 3. Input Material: The Source
+## 2. Input Material: The Source
 :::study-text
 [Alex]: Hi!
 [Mara]: Hello!
 :::
 
-## 4. Language Toolkit: Useful Language
+### Comprehension Check
+1. question
+2. question
+
+## 3. Language Toolkit: Useful Language
 text
 
-## 5. Practice & Pronunciation
+## 4. Practice & Pronunciation
 ### A. Controlled Practice
 1. one
 2. two
@@ -83,25 +84,21 @@ text
 6. six
 7. seven
 8. eight
-### B. Comprehension Check
-1. question
-2. question
-
-### C. Pronunciation Micro-Focus
+### B. Pronunciation Micro-Focus
 text
 
-## 6. Your Turn: Complete the Mission!
+## 5. Your Turn: Complete the Mission!
 text
 
-## 7. Why This Mission Helps You
+## 6. Why This Mission Helps You
 text
 
-## 8. Answer Key & Sample Mission
+## 7. Answer Key & Sample Mission
 :::toggle Answer Key
 notes
 :::
 
-## 9. Teacher's Follow-up Plan
+## 8. Teacher's Follow-up Plan
 :::toggle Teacher's Follow-up Plan
 notes
 :::

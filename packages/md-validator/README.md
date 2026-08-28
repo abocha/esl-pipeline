@@ -83,6 +83,10 @@ Additive fields:
 - `:::audio` and `:::video` remain optional. If emitted, each must include a usable URL; a bare
   marker blocks strict v2 validation. Omitted media directives remain valid.
 - `general-english@v1` retains its legacy strict behavior for explicitly persisted v1 jobs.
+- Current `general-english@v2` assignments require the eight-H2 homework order. Comprehension Check
+  must be an unlettered H3 after the study-text block under Input Material; Controlled Practice and
+  Pronunciation Micro-Focus remain `A` and `B` under the fourth H2. The removed Homework Roadmap is
+  not part of the v2 structure.
 
 ## Tests
 

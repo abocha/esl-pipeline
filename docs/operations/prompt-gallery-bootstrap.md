@@ -35,9 +35,14 @@ pnpm --filter @esl-pipeline/batch-backend run prompt-assets:bootstrap
   - template: files discovered from the configured template root
   - profile: files discovered from the configured profile root
 - Upserts prompt assets and hash-deduplicated revisions.
-- Activates imported revision when an asset has no active revision.
+- Activates an imported revision only when an asset has no active revision. Changed checked-in
+  content for an already-active asset is imported as a draft and requires explicit admin activation.
 - Retires active DB templates that are no longer present under the configured template root.
 - Verifies configured defaults are present and active.
+
+For an existing environment receiving a changed default template, run the dry/apply commands, review
+the imported draft through the service-owned template management surface, and explicitly activate
+the intended revision. Bootstrap does not replace an existing active revision automatically.
 
 ## Startup warning mode
 

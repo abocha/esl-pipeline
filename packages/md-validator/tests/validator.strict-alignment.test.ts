@@ -84,57 +84,61 @@ describeMdValidatorSuite(
       const res = await validateMarkdownFile(file);
       expect(res.ok).toBe(true);
       expect(res.warnings).not.toContain(
-        'No "### A. Controlled Practice" section found under H2 #5.',
+        'No "### A. Controlled Practice" section found under H2 #4.',
       );
     });
 
-    it('warns when Comprehension Check is missing under H2 #5 even if a similarly named heading exists elsewhere', async () => {
+    it('warns when Comprehension Check is missing after input even if a similarly named heading exists elsewhere', async () => {
       const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
       const file = path.join(tempDir, 'comprehension-offscope.md');
       const md = buildBaseDoc('text')
-        .replace('### B. 🤔 Comprehension Check', '### B. Reflection')
+        .replace('### 🤔 Comprehension Check', '### Reflection')
         .replace(
-          "## 9. 👨‍🏫 Teacher's Follow-up Plan",
+          "## 8. 👨‍🏫 Teacher's Follow-up Plan",
           [
-            '### B. Comprehension Check',
+            '### Comprehension Check',
             '1) offscope',
             '2) offscope',
             '',
-            "## 9. 👨‍🏫 Teacher's Follow-up Plan",
+            "## 8. 👨‍🏫 Teacher's Follow-up Plan",
           ].join('\n'),
         );
       await writeFile(file, md);
 
       const res = await validateMarkdownFile(file);
       expect(res.ok).toBe(true);
-      expect(res.warnings).toContain('No "### B. Comprehension Check" section found under H2 #5.');
+      expect(res.warnings).toContain(
+        'No "### Comprehension Check" section found after the study text under H2 #2.',
+      );
     });
 
-    it('accepts comprehension check heading with trailing qualifier text under H2 #5', async () => {
+    it('accepts comprehension check heading with trailing qualifier text after input', async () => {
       const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
       const file = path.join(tempDir, 'comprehension-qualifier.md');
       const md = buildBaseDoc('text').replace(
-        '### B. 🤔 Comprehension Check',
-        '### B. 🤔 Comprehension Check (Fossil Hunter)',
+        '### 🤔 Comprehension Check',
+        '### 🤔 Comprehension Check (Fossil Hunter)',
       );
       await writeFile(file, md);
 
       const res = await validateMarkdownFile(file);
       expect(res.ok).toBe(true);
       expect(res.warnings).not.toContain(
-        'No "### B. Comprehension Check" section found under H2 #5.',
+        'No "### Comprehension Check" section found after the study text under H2 #2.',
       );
     });
 
-    it('treats missing H2 #5 comprehension check as blocking in strict mode', async () => {
+    it('treats missing post-input comprehension check as blocking in strict mode', async () => {
       const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
       const file = path.join(tempDir, 'missing-comprehension-strict.md');
-      const md = buildBaseDoc('text').replace('### B. 🤔 Comprehension Check', '### B. Reflection');
+      const md = buildBaseDoc('text').replace('### 🤔 Comprehension Check', '### Reflection');
       await writeFile(file, md);
 
       const res = await validateMarkdownFile(file, { strict: true });
       expect(res.ok).toBe(false);
-      expect(res.errors).toContain('No "### B. Comprehension Check" section found under H2 #5.');
+      expect(res.errors).toContain(
+        'No "### Comprehension Check" section found after the study text under H2 #2.',
+      );
     });
 
     it('keeps comprehension-count recommendation non-blocking in strict mode', async () => {
@@ -152,14 +156,14 @@ describeMdValidatorSuite(
       const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
       const file = path.join(tempDir, 'strict-h2-mismatch.md');
       const md = withStrictReadyFrontmatter(buildBaseDoc('text')).replace(
-        '## 5. ✍️ Practice & Pronunciation',
-        '## 5. Practice',
+        '## 4. ✍️ Practice & Pronunciation',
+        '## 4. Practice',
       );
       await writeFile(file, md);
 
       const res = await validateMarkdownFile(file, { strict: true });
       expect(res.ok).toBe(false);
-      expect(res.errors.join('\n')).toMatch(/H2 #5 mismatch/i);
+      expect(res.errors.join('\n')).toMatch(/H2 #4 mismatch/i);
     });
 
     it('treats speaker alignment warnings as blocking in strict mode', async () => {
@@ -176,35 +180,34 @@ describeMdValidatorSuite(
       expect(res.errors.join('\n')).toMatch(/unknown speaker "Sam"/i);
     });
 
-    it('accepts pronunciation micro-focus heading under H2 #5 with non-C letter prefix', async () => {
+    it('rejects a non-B pronunciation prefix under H2 #4', async () => {
       const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
       const file = path.join(tempDir, 'pronunciation-non-c-prefix.md');
       const md = buildBaseDoc('text').replace(
-        '### C. 🎙️ Pronunciation Micro-Focus (≈1 min)',
+        '### B. 🎙️ Pronunciation Micro-Focus (≈1 min)',
         '### F. 🎙️ Pronunciation Micro-Focus (Fossil Hunter)',
       );
       await writeFile(file, md);
 
       const res = await validateMarkdownFile(file);
-      expect(res.ok).toBe(true);
-      expect(res.errors).not.toContain(
-        'Missing "### <letter>. Pronunciation Micro-Focus" section under H2 #5.',
+      expect(res.warnings).toContain(
+        'Missing "### B. Pronunciation Micro-Focus" section under H2 #4.',
       );
     });
 
-    it('warns when pronunciation micro-focus heading is missing under H2 #5', async () => {
+    it('warns when pronunciation micro-focus heading is missing under H2 #4', async () => {
       const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
       const file = path.join(tempDir, 'pronunciation-missing-under-h2-5.md');
       const md = buildBaseDoc('text').replace(
-        '### C. 🎙️ Pronunciation Micro-Focus (≈1 min)',
-        '### C. 🎙️ Accent Drill (≈1 min)',
+        '### B. 🎙️ Pronunciation Micro-Focus (≈1 min)',
+        '### B. 🎙️ Accent Drill (≈1 min)',
       );
       await writeFile(file, md);
 
       const res = await validateMarkdownFile(file);
       expect(res.ok).toBe(true);
       expect(res.warnings).toContain(
-        'Missing "### <letter>. Pronunciation Micro-Focus" section under H2 #5.',
+        'Missing "### B. Pronunciation Micro-Focus" section under H2 #4.',
       );
     });
 
@@ -212,28 +215,28 @@ describeMdValidatorSuite(
       const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
       const file = path.join(tempDir, 'strict-pronunciation-missing-under-h2-5.md');
       const md = buildBaseDoc('text').replace(
-        '### C. 🎙️ Pronunciation Micro-Focus (≈1 min)',
-        '### C. 🎙️ Accent Drill (≈1 min)',
+        '### B. 🎙️ Pronunciation Micro-Focus (≈1 min)',
+        '### B. 🎙️ Accent Drill (≈1 min)',
       );
       await writeFile(file, withStrictReadyFrontmatter(md));
 
       const res = await validateMarkdownFile(file, { strict: true });
       expect(res.ok).toBe(true);
       expect(res.warnings).toContain(
-        'Missing "### <letter>. Pronunciation Micro-Focus" section under H2 #5.',
+        'Missing "### B. Pronunciation Micro-Focus" section under H2 #4.',
       );
     });
 
     it('keeps extra-after-core H2 warning non-blocking in strict mode', async () => {
       const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
       const file = path.join(tempDir, 'strict-extra-h2-after-core.md');
-      const md = `${withStrictReadyFrontmatter(buildBaseDoc('text'))}\n\n## 10. Appendix Notes\ntext`;
+      const md = `${withStrictReadyFrontmatter(buildBaseDoc('text'))}\n\n## 9. Appendix Notes\ntext`;
       await writeFile(file, md);
 
       const res = await validateMarkdownFile(file, { strict: true });
       expect(res.ok).toBe(true);
       expect(res.warnings).toContain(
-        'Additional H2 sections after section 9 are ignored by structure validation.',
+        'Additional H2 sections after section 8 are ignored by structure validation.',
       );
     });
 

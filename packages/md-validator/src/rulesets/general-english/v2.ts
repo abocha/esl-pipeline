@@ -38,7 +38,7 @@ const DIAGNOSTIC_POLICIES: readonly DiagnosticPolicy[] = [
     'h2-order',
     'quality',
     false,
-    /^additional h2 sections after section 9/i,
+    /^additional h2 sections after section 8/i,
   ),
   policy('marker.required_missing', 'required-markers', 'contract', true, /^missing marker:/i),
   errorPolicy('study_text.missing', 'study-text', 'runtime', true, /^missing ":::study-text/i),
@@ -90,7 +90,7 @@ const DIAGNOSTIC_POLICIES: readonly DiagnosticPolicy[] = [
     'comprehension-check',
     'contract',
     true,
-    /^no "### b\. comprehension check"/i,
+    /^no "### comprehension check"/i,
   ),
   policy(
     'practice.comprehension_count_recommendation',
@@ -104,7 +104,7 @@ const DIAGNOSTIC_POLICIES: readonly DiagnosticPolicy[] = [
     'pronunciation-micro-focus',
     'quality',
     false,
-    /^missing "### <letter>\. pronunciation micro-focus"/i,
+    /^missing "### b\. pronunciation micro-focus"/i,
   ),
   policy(
     'pronunciation.contract_recommendation',
@@ -149,7 +149,10 @@ const DIAGNOSTIC_POLICIES: readonly DiagnosticPolicy[] = [
 export async function validateGeneralEnglishV2Ruleset(
   input: GeneralEnglishValidateInput,
 ): Promise<MarkdownValidationResponse> {
-  const baseline = await validateGeneralEnglishRuleset({ ...input, strict: false });
+  const baseline = await validateGeneralEnglishRuleset(
+    { ...input, strict: false },
+    { version: 'current' },
+  );
   const issues = sortIssues([
     ...baseline.errors.map((message) => toIssue(message, 'error')),
     ...baseline.warnings.map((message) => toIssue(message, 'warning')),
