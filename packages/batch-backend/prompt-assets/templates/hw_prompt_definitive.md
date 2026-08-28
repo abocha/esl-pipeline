@@ -118,7 +118,7 @@ The list below describes append order, not priority order. For priority, follow 
    - gap fill without a word bank
    - inserting one necessary missing word or phrase
 6. When a contrastive format is useful, make it cognitively demanding enough that guessing is not the main path to success. Avoid flat item sets that become repetitive after the first 2-3 questions.
-7. In Section 5A, organize controlled practice into 2-3 distinct named parts when that improves diagnostic value. Each part should test the same weekly target from a different angle rather than repeating one flat item type 10 times.
+7. In Section 4A, organize controlled practice into 2-3 distinct named parts when that improves diagnostic value. Each part should test the same weekly target from a different angle rather than repeating one flat item type 10 times.
 8. Controlled practice should diagnose understanding, not just create the appearance of activity.
 9. If pronunciation is included, tie it to a real issue from the lesson or learner history; do not add generic pronunciation work only because the format contains a pronunciation section.
 10. If no strong pronunciation issue is evidenced, choose the smallest source-grounded rhythm, stress, or chunking intervention from the study text.
@@ -198,7 +198,6 @@ Return the assignment as **raw Markdown only**.
 2. **Use Rich Directives:** Use the following custom directives when they improve clarity or layout. **All directive markers must start at column 1 (flush-left, no indentation).**
    - `:::callout <emoji>` for tips, warnings, or key goals
    - `:::column-list` containing `:::column` for side-by-side comparisons
-   - `:::toc` for an automatic table of contents
    - `:::audio <url>` to embed external audio resources
    - `:::video <url>` to embed YouTube/Vimeo videos
    - `:::toggle <Title>` for collapsible sections such as the Answer Key or Teacher's Follow-up Plan
@@ -237,7 +236,7 @@ In grammar explanations, aim for polished digital teaching notes: bold labels, i
    Every speaker label used inside `:::study-text` must appear in `speaker_labels`.
    Every `speaker_labels` entry must appear at least once inside `:::study-text`.
 
-5. In Section 3, include exactly one source subsection:
+5. In Section 2, include exactly one source subsection:
    - Include `### 🌐 Authentic Material` if `input_type: 'authentic'`.
    - Include `### 🤖 Generated Material` if `input_type: 'generate'`.
    - Never include both.
@@ -245,7 +244,7 @@ In grammar explanations, aim for polished digital teaching notes: bold labels, i
 
 6. Wrap all answer content in **one** region marked `:::toggle Answer Key` … `:::`.
 7. Wrap the teacher's plan in **one** region marked `:::toggle Teacher’s Follow-up Plan` … `:::`.
-8. Use `## H2` for numbered main sections and `### H3` for subsections, **exactly matching the headings in the template below**, except for the conditional Section 3 source subsection described above.
+8. Use `## H2` for numbered main sections and `### H3` for subsections, **exactly matching the headings in the template below**, except for the conditional Section 2 source subsection described above.
 9. You may also use `#### H4` inside `### A. 🔩 Controlled Practice` and inside the matching Answer Key subsection when you need clearly labeled parts such as `#### Part 1: Find the Error` or `#### Part 2: Missing Words`.
 10. **Never** include Markdown code fences or triple backticks anywhere in the output. Use single backticks only for short grammar formulas, structural patterns, or technical labels where inline-code formatting improves clarity. Do not wrap ordinary sentences, examples, explanations, headings, or whole exercise items in backticks.
 11. **Always** use relevant emojis in H2/H3 headings and in the vocabulary and grammar sections when they aid scanning.
@@ -292,16 +291,7 @@ speaker_profiles:
 **Key Language You Will Use:** [name the target grammar, chunks, or vocabulary that directly support that mission].
 :::
 
-## 2. 🗺️ Your Homework Roadmap
-
-- **Time Plan:** Choose a load that fits your schedule this week. The **Default** plan is recommended.
-  - **Light (≈15 min):** Step 3 (Input) → Step 6 (Mission) → Step 5A (Controlled Practice).
-  - **Default (≈25 min):** Complete all steps in order.
-  - **Plus (≈45 min):** Complete all steps, plus an extended version of the same mission in Step 6.
-
-:::toc
-
-## 3. 🎧 Input Material: The Source
+## 2. 🎧 Input Material: The Source
 
 _(**Reuse Policy:** Grammar, vocabulary, comprehension, and pronunciation work should all reuse this same source whenever possible.)_
 
@@ -328,7 +318,11 @@ _(**Reuse Policy:** Grammar, vocabulary, comprehension, and pronunciation work s
 [Provide 3-5 short paragraphs or a 10-15 line dialogue using names listed in `speaker_labels`. Make it level-appropriate, coherent, and clearly related to the lesson direction. Do not use the real student's name or retell the student's real private stories from the recent lesson.]
 :::
 
-## 4. 🛠️ Language Toolkit: Useful Language
+### 🤔 Comprehension Check
+
+_(Write 2-3 short questions about the main ideas of the study text. Check meaningful understanding, not trivia. This subsection must appear immediately after the selected study-text/listening input and before language analysis or practice.)_
+
+## 3. 🛠️ Language Toolkit: Useful Language
 
 ### A. 👀 Notice the Grammar
 
@@ -367,17 +361,13 @@ Use **[Grammar Name]** when [practical meaning/use]. [Explain what it means, whe
 
 _(Create a Markdown table of 5-10 useful chunks or vocabulary items, add relevant emojis. Pull examples from the study text, give brief learner-friendly glosses, and choose items that help the student complete the mission. Do not include very basic words only because they appeared in grammar examples. Vocabulary items should be genuinely useful lexical chunks, collocations, phrasal verbs, discourse phrases, or topic words worth active recall.)_
 
-## 5. ✍️ Practice & Pronunciation
+## 4. ✍️ Practice & Pronunciation
 
 ### A. 🔩 Controlled Practice
 
 _(Create 8-12 items that directly rehearse this week's target language. Each item must require a real linguistic decision, not copying or surface matching. At least 4 items should address errors or patterns from the profile or recent lesson evidence when such evidence is available. If fewer than 4 evidence-backed patterns are available, do not invent them; use target-based items instead. Include 2-3 clearly labeled **[Review]** items from the previous 1-2 homeworks only when that review is still relevant. When useful, split this subsection into 2-3 named `#### H4` parts such as `#### Part 1: Find the Error`, `#### Part 2: Missing Words`, or `#### Part 3: Transform the Sentence`.)_
 
-### B. 🤔 Comprehension Check
-
-_(Write 2-3 short questions about the main ideas of the study text. Check meaningful understanding, not trivia.)_
-
-### C. 🎙️ Pronunciation Micro-Focus (≈1 min)
+### B. 🎙️ Pronunciation Micro-Focus (≈1 min)
 
 :::callout 🗣️
 **Mode:** [Choose one: shadow_sentence | intonation | rhythm_chunking | sentence_stress | connected_speech | minimal_pair]
@@ -462,22 +452,22 @@ Use these exact mode contracts:
   - Then exactly one final sentence-practice line: - **Natural sentence practice:** full sentence
     :::
 
-## 6. ✅ Your Turn: Complete the Mission!
+## 5. ✅ Your Turn: Complete the Mission!
 
 - **Task:** [Give one realistic communicative task that directly completes the Mission Briefing and makes the student use this week's target language. Keep it purposeful, supported, and open enough for genuine output.]
 - **Plus Task (Optional):** [Extend the same mission more deeply without introducing a new unrelated objective.]
 
-## 7. 🧠 Why This Mission Helps You
+## 6. 🧠 Why This Mission Helps You
 
 [Write a brief, human, student-specific rationale linking this week's mission to the student's goals, recurring issues, or broader learning direction. Keep it concise and concrete, not generic encouragement.]
 
-## 8. 🔑 Answer Key & Sample Mission
+## 7. 🔑 Answer Key & Sample Mission
 
 :::toggle Answer Key
 
 ### A. Controlled Practice Answers
 
-_(If Section 5A was split into `#### H4` parts, mirror the same part labels here so the answer key stays easy to scan.)_
+_(If Section 4A was split into `#### H4` parts, mirror the same part labels here so the answer key stays easy to scan.)_
 
 [...]
 
@@ -490,7 +480,7 @@ _(If Section 5A was split into `#### H4` parts, mirror the same part labels here
 [Provide one solid sample that models the target language, draws from the study text, and shows the kind of response the student is aiming for without replacing their own effort.]
 :::
 
-## 9. 👨‍🏫 Teacher's Follow-up Plan
+## 8. 👨‍🏫 Teacher's Follow-up Plan
 
 :::toggle Teacher’s Follow-up Plan
 

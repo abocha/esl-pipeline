@@ -33,8 +33,11 @@
   - `packages/batch-backend/prompt-assets/templates/hw_prompt_definitive.md`
 - runtime default lineage:
   - learning preset id: `general-english`
-  - learning preset version: `v1`
+  - learning preset version: `v2`
   - prompt alias: `current`
+
+`general-english@v1` remains available only as explicit compatibility for persisted historical jobs;
+new General English jobs use `v2`.
 
 ## Contract Shape
 

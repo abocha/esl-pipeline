@@ -33,15 +33,7 @@ speaker_profiles:
 *   **Pronunciation:** The "NG" sound (/ŋ/) in *working, thinking, ringing*.
 :::
 
-## 2. 🗺️ Your Homework Roadmap
-* **Time Plan:**
-  * **Light (≈15 min):** Step 3 (Input) → Step 6 (Mission) → Step 5A (Controlled Practice).
-  * **Default (≈25 min):** Complete all steps in order.
-  * **Plus (≈45 min):** Complete all steps, plus the extended writing task.
-
-:::toc
-
-## 3. 🎧 Input Material: The Source
+## 2. 🎧 Input Material: The Source
 *(**Context:** Alex is explaining a "bug" that happened yesterday and his plan for fixing it tomorrow.)*
 
 ### 🤖 Generated Material
@@ -65,7 +57,12 @@ speaker_profiles:
 **Alex:** Tomorrow morning, I **will be running** a diagnostic tool. At 10:00 AM, I **will be monitoring** the logs. If the computer **breaks** again, I will buy a new one!
 :::
 
-## 4. 🛠️ Language Toolkit: Useful Language
+### 🤔 Comprehension Check
+1.  What was Alex doing when the screen froze?
+2.  What happened while he was waiting?
+3.  What will Alex be doing tomorrow at 10:00 AM?
+
+## 3. 🛠️ Language Toolkit: Useful Language
 ### A. 👀 Notice the Grammar: The "Snapshot" Logic
 
 :::column-list
@@ -102,7 +99,7 @@ speaker_profiles:
 | **Meanwhile** | 🕰️ At the same time (in a different place/thread). |
 | **Reply vs. Replica** | 🚫 *Replica* = A copy. ✅ *Reply* = An answer in a dialogue. |
 
-## 5. ✍️ Practice & Pronunciation
+## 4. ✍️ Practice & Pronunciation
 ### A. 🔩 Controlled Practice
 *(Fill in the gaps. Decide if the action is a **Background Process** (Continuous) or a **Single Event** (Simple).)*
 
@@ -114,12 +111,7 @@ speaker_profiles:
 6.  **[Vocab]** I clicked the button, but the program is not **___________** (respond/reply).
 7.  **[Review]** I have **a** new laptop. It works **___________** (good/well).
 
-### B. 🤔 Comprehension Check
-1.  What was Alex doing when the screen froze?
-2.  What happened while he was waiting?
-3.  What will Alex be doing tomorrow at 10:00 AM?
-
-### C. 🎙️ Pronunciation Micro-Focus (≈1 min)
+### B. 🎙️ Pronunciation Micro-Focus (≈1 min)
 :::callout 🗣️
 **Target:** The "NG" Sound (/ŋ/) vs. "N" (/n/).
 
@@ -136,7 +128,7 @@ speaker_profiles:
 **Deliverable:** Send a voice note of sentence #3.
 :::
 
-## 6. ✅ Your Turn: Complete the Mission!
+## 5. ✅ Your Turn: Complete the Mission!
 * **Task:** Describe your timeline.
     1.  **The Past:** Pick a specific time yesterday (e.g., 8 PM). What **were you doing**?
     2.  **The Interruption:** Did anything happen while you were doing that? (e.g., "My friend called," "I got hungry").
@@ -146,10 +138,10 @@ speaker_profiles:
 
 * **Plus Task (Optional):** Record this story. Be careful not to say "will" in any *If* clauses if you add one!
 
-## 7. 🧠 Why This Mission Helps You
+## 6. 🧠 Why This Mission Helps You
 You often need to describe **processes** (debugging, testing, running code). Using the Continuous tense (`be` + `-ing`) allows you to describe the *state* of the system at a specific timestamp, rather than just stating a fact. It adds precision to your technical storytelling.
 
-## 8. 🔑 Answer Key & Sample Mission
+## 7. 🔑 Answer Key & Sample Mission
 :::toggle Answer Key
 ### A. Controlled Practice Answers
 1.  Yesterday at 6 PM, I **was playing** a video game. (Snapshot in past)
@@ -169,7 +161,7 @@ You often need to describe **processes** (debugging, testing, running code). Usi
 "Yesterday at 2 PM, I **was studying** math. While I **was solving** a problem, my laptop **froze**. It was annoying. Tomorrow at 2 PM, I **will be relaxing** because I **don't have to** go to university."
 :::
 
-## 9. 👨‍🏫 Teacher's Follow-up Plan
+## 8. 👨‍🏫 Teacher's Follow-up Plan
 :::toggle Teacher’s Follow-up Plan
 *   **Warm-up Idea:** "Alibi Game." Ask: "Where were you yesterday at 6:00? What were you doing?" (Force Past Continuous). Then ask: "Where will you be tomorrow at 6:00?"
 *   **Error Correction Focus:** Watch out for "I will go" when "I will be going" (snapshot) is better, and check for "If I will..." errors.

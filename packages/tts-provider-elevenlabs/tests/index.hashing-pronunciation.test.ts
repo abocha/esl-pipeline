@@ -34,7 +34,7 @@ input_type: generate
 Narrator: Main text.
 :::
 
-### C. 🎙️ Pronunciation Micro-Focus (≈1 min)
+### B. 🎙️ Pronunciation Micro-Focus (≈1 min)
 :::callout 🗣️
 **Mode:** shadow_sentence
 **Shadow sentence:** I was thinking about working this morning.
@@ -72,7 +72,7 @@ input_type: generate
 Narrator: Main text.
 :::
 
-### C. 🎙️ Pronunciation Micro-Focus (≈1 min)
+### B. 🎙️ Pronunciation Micro-Focus (≈1 min)
 :::callout 🗣️
 **Mode:** shadow_sentence
 **Shadow sentence:** I was thinking about working this morning.
