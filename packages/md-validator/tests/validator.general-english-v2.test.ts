@@ -18,13 +18,13 @@ describe('md-validator [general-english-v2]', () => {
       'voice.frontmatter_alignment',
     ],
     ['Front matter: title - Required', 'frontmatter.invalid'],
-    ['Expected at least 9 H2 sections, found 8.', 'structure.h2_count'],
+    ['Expected at least 8 H2 sections, found 7.', 'structure.h2_count'],
     [
       'H2 #2 mismatch. Expected wording similar to "Homework", found: "Other".',
       'structure.h2_mismatch',
     ],
     [
-      'Additional H2 sections after section 9 are ignored by structure validation.',
+      'Additional H2 sections after section 8 are ignored by structure validation.',
       'structure.additional_h2_ignored',
     ],
     ['Missing marker: ":::toggle Answer Key"', 'marker.required_missing'],
@@ -47,7 +47,7 @@ describe('md-validator [general-english-v2]', () => {
       'study_text.length_recommendation',
     ],
     [
-      'No "### A. Controlled Practice" section found under H2 #5.',
+      'No "### A. Controlled Practice" section found under H2 #4.',
       'practice.controlled_section_missing',
     ],
     [
@@ -55,7 +55,7 @@ describe('md-validator [general-english-v2]', () => {
       'practice.controlled_count_recommendation',
     ],
     [
-      'No "### B. Comprehension Check" section found under H2 #5.',
+      'No "### Comprehension Check" section found after the study text under H2 #2.',
       'practice.comprehension_section_missing',
     ],
     [
@@ -63,7 +63,7 @@ describe('md-validator [general-english-v2]', () => {
       'practice.comprehension_count_recommendation',
     ],
     [
-      'Missing "### <letter>. Pronunciation Micro-Focus" section under H2 #5.',
+      'Missing "### B. Pronunciation Micro-Focus" section under H2 #4.',
       'pronunciation.section_missing',
     ],
     [
@@ -101,10 +101,11 @@ describe('md-validator [general-english-v2]', () => {
 
   it('uses v2 by default while retaining explicit v1 compatibility', async () => {
     const markdown = await createStrictGolden();
+    const legacyMarkdown = await createLegacyStrictGolden();
 
     const defaultResult = await validateMarkdown({ markdown, strict: true });
     const v1Result = await validateMarkdown({
-      markdown,
+      markdown: legacyMarkdown,
       strict: true,
       learningPresetId: 'general-english',
       learningPresetVersion: 'v1',
@@ -121,11 +122,13 @@ describe('md-validator [general-english-v2]', () => {
       version: 'v2',
       fallbackApplied: false,
     });
+    expect(defaultResult.ok).toBe(true);
     expect(v1Result.ruleset).toMatchObject({
       id: 'general-english',
       version: 'v1',
       fallbackApplied: false,
     });
+    expect(v1Result.ok).toBe(true);
     expect(unknownVersionResult.ruleset).toMatchObject({
       id: 'general-english',
       version: 'v2',
@@ -138,8 +141,8 @@ describe('md-validator [general-english-v2]', () => {
     'blocks emitted %s directives that lack a URL in strict v2',
     async (media) => {
       const markdown = (await createStrictGolden()).replace(
-        'Text\n\n## 2. 🗺️ Your Homework Roadmap',
-        `Text\n\n:::${media}\n\n## 2. 🗺️ Your Homework Roadmap`,
+        'Text\n\n## 2. 🎧 Input Material: The Source',
+        `Text\n\n:::${media}\n\n## 2. 🎧 Input Material: The Source`,
       );
 
       const result = await validateMarkdown({ markdown, strict: true });
@@ -162,7 +165,7 @@ describe('md-validator [general-english-v2]', () => {
 
   it('keeps structural contract failures blocking with stable v2 codes', async () => {
     const markdown = (await createStrictGolden())
-      .replace('## 2. 🗺️ Your Homework Roadmap', '## 2. Unrelated heading')
+      .replace('## 2. 🎧 Input Material: The Source', '## 2. Unrelated heading')
       .replace(':::toggle Answer Key', ':::toggle');
 
     const result = await validateMarkdown({ markdown, strict: true });
@@ -187,6 +190,78 @@ describe('md-validator [general-english-v2]', () => {
     expect(
       result.issues?.some((issue) => issue.code === 'general_english_v2.unclassified_diagnostic'),
     ).toBe(false);
+  });
+
+  it('accepts comprehension immediately after input and rejects its former practice placement', async () => {
+    const current = await createStrictGolden();
+    const oldPlacement = current
+      .replace(['### 🤔 Comprehension Check', '', '1. x', '2. y', ''].join('\n'), '')
+      .replace(
+        '### B. 🎙️ Pronunciation Micro-Focus (≈1 min)',
+        [
+          '### B. 🤔 Comprehension Check',
+          '',
+          '1. x',
+          '2. y',
+          '',
+          '### C. 🎙️ Pronunciation Micro-Focus (≈1 min)',
+        ].join('\n'),
+      );
+
+    const currentResult = await validateMarkdown({ markdown: current, strict: true });
+    const oldPlacementResult = await validateMarkdown({ markdown: oldPlacement, strict: true });
+
+    expect(currentResult.ok).toBe(true);
+    expect(oldPlacementResult.ok).toBe(false);
+    expect(oldPlacementResult.issues).toContainEqual(
+      expect.objectContaining({
+        code: 'practice.comprehension_section_missing',
+        ruleId: 'comprehension-check',
+        blockingInStrict: true,
+      }),
+    );
+  });
+
+  it('rejects an intervening subsection between study text and comprehension', async () => {
+    const markdown = (await createStrictGolden()).replace(
+      '### 🤔 Comprehension Check',
+      [
+        '### Source Vocabulary Preview',
+        '',
+        '- preview item',
+        '',
+        '### 🤔 Comprehension Check',
+      ].join('\n'),
+    );
+
+    const result = await validateMarkdown({ markdown, strict: true });
+
+    expect(result.ok).toBe(false);
+    expect(result.issues).toContainEqual(
+      expect.objectContaining({
+        code: 'practice.comprehension_section_missing',
+        ruleId: 'comprehension-check',
+        blockingInStrict: true,
+      }),
+    );
+  });
+
+  it('rejects skipped H2 numbering in the current eight-section contract', async () => {
+    const markdown = (await createStrictGolden()).replace(
+      '## 2. 🎧 Input Material: The Source',
+      '## 3. 🎧 Input Material: The Source',
+    );
+
+    const result = await validateMarkdown({ markdown, strict: true });
+
+    expect(result.ok).toBe(false);
+    expect(result.issues).toContainEqual(
+      expect.objectContaining({
+        code: 'structure.h2_mismatch',
+        ruleId: 'h2-order',
+        blockingInStrict: true,
+      }),
+    );
   });
 
   it('keeps omitted media directives and controlled-practice recommendations nonblocking in strict v2', async () => {
@@ -231,4 +306,31 @@ async function createStrictGolden(): Promise<string> {
         '---',
       ].join('\n'),
     );
+}
+
+async function createLegacyStrictGolden(): Promise<string> {
+  const current = await createStrictGolden();
+  const comprehensionBlock = ['### 🤔 Comprehension Check', '', '1. x', '2. y', ''].join('\n');
+  const withoutComprehension = current.replace(comprehensionBlock, '');
+  const withLegacyPractice = withoutComprehension.replace(
+    '### B. 🎙️ Pronunciation Micro-Focus (≈1 min)',
+    [
+      '### B. 🤔 Comprehension Check',
+      '',
+      '1. x',
+      '2. y',
+      '',
+      '### C. 🎙️ Pronunciation Micro-Focus (≈1 min)',
+    ].join('\n'),
+  );
+  const renumbered = withLegacyPractice.replace(
+    /^## ([2-8])\./gm,
+    (_, sectionNumber: string) => `## ${Number(sectionNumber) + 1}.`,
+  );
+  return renumbered.replace(
+    '## 3. 🎧 Input Material: The Source',
+    ['## 2. 🗺️ Your Homework Roadmap', '', 'Text', '', '## 3. 🎧 Input Material: The Source'].join(
+      '\n',
+    ),
+  );
 }

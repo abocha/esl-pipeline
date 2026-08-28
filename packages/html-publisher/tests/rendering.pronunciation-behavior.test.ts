@@ -23,7 +23,7 @@ function buildPronunciationAudioPayload(
 
 describe('rendering', () => {
   it('ships browser word-level pronunciation controls for shadow_sentence mode', async () => {
-    const markdown = `### C. Pronunciation Micro-Focus
+    const markdown = `### B. Pronunciation Micro-Focus
   
   **Mode:** shadow_sentence
   **Shadow sentence:** The weather was unexpectedly warm.
@@ -70,7 +70,7 @@ describe('rendering', () => {
   });
 
   it('ships browser connected-speech playback controls', async () => {
-    const markdown = `### C. Pronunciation Micro-Focus
+    const markdown = `### B. Pronunciation Micro-Focus
   
   **Mode:** connected_speech
   
@@ -123,7 +123,7 @@ describe('rendering', () => {
   });
 
   it('renders sentence-level pronunciation controls for intonation mode', async () => {
-    const markdown = `### C. Pronunciation Micro-Focus
+    const markdown = `### B. Pronunciation Micro-Focus
   
   **Mode:** intonation
   
@@ -174,7 +174,7 @@ describe('rendering', () => {
   });
 
   it('renders disabled pronunciation buttons when preview payload has no clip URLs yet', async () => {
-    const markdown = `### C. Pronunciation Micro-Focus
+    const markdown = `### B. Pronunciation Micro-Focus
   
   **Mode:** intonation
   
@@ -215,7 +215,7 @@ describe('rendering', () => {
   });
 
   it('renders rhythm_chunking drill lines with playback controls', async () => {
-    const markdown = `### C. Pronunciation Micro-Focus
+    const markdown = `### B. Pronunciation Micro-Focus
   
   **Mode:** rhythm_chunking
   
@@ -259,7 +259,7 @@ describe('rendering', () => {
   });
 
   it('renders sentence_stress drill lines with playback controls', async () => {
-    const markdown = `### C. Pronunciation Micro-Focus
+    const markdown = `### B. Pronunciation Micro-Focus
   
   **Mode:** sentence_stress
   
@@ -305,7 +305,7 @@ describe('rendering', () => {
   });
 
   it('does not require numbered word drills in other pronunciation modes', async () => {
-    const markdown = `### C. Pronunciation Micro-Focus
+    const markdown = `### B. Pronunciation Micro-Focus
   
   **Mode:** minimal_pair
   
@@ -320,7 +320,7 @@ describe('rendering', () => {
   });
 
   it('renders play controls for both sides of each minimal pair', async () => {
-    const markdown = `### C. Pronunciation Micro-Focus
+    const markdown = `### B. Pronunciation Micro-Focus
   
   **Mode:** minimal_pair
   **Target:** Differentiating the short /ɪ/ from the long /iː/.
@@ -366,7 +366,7 @@ describe('rendering', () => {
   });
 
   it('matches drill item clips by numbered drill order inside pronunciation callouts', async () => {
-    const markdown = `### C. Pronunciation Micro-Focus
+    const markdown = `### B. Pronunciation Micro-Focus
   
   :::callout 🗣️
   - **Mode:** minimal_pair
@@ -411,7 +411,7 @@ describe('rendering', () => {
   });
 
   it('removes empty spacer paragraphs around the natural sentence anchor and pronunciation audio', async () => {
-    const markdown = `### C. Pronunciation Micro-Focus
+    const markdown = `### B. Pronunciation Micro-Focus
   
   **Mode:** rhythm_chunking
   **Target:** Connecting the chunks in the "It takes time..." structure.
@@ -466,7 +466,7 @@ describe('rendering', () => {
   });
 
   it('emits a parseable behavior script', async () => {
-    const html = await renderToHtml('### C. Pronunciation Micro-Focus', 'Script Parse');
+    const html = await renderToHtml('### B. Pronunciation Micro-Focus', 'Script Parse');
     const scriptText = extractBehaviorScript(html);
     expect(scriptText).toBeTruthy();
     expect(scriptText).toContain('theme-preference');
@@ -483,7 +483,7 @@ describe('rendering', () => {
   });
 
   it('normalizes LLM-variant pronunciation markup for clean rendering', async () => {
-    const markdown = `### C. Pronunciation Micro-Focus
+    const markdown = `### B. Pronunciation Micro-Focus
   
   :::callout 🗣️
   - \`**Mode:** shadow_sentence\`
@@ -500,7 +500,7 @@ describe('rendering', () => {
   });
 
   it('targets only the shadow sentence line inside pronunciation callouts', async () => {
-    const markdown = `### C. Pronunciation Micro-Focus
+    const markdown = `### B. Pronunciation Micro-Focus
   
   :::callout 🗣️
   - \`**Mode:** shadow_sentence\`
@@ -519,7 +519,7 @@ describe('rendering', () => {
   });
 
   it('does not mistake the mode line for the shadow sentence in paragraph callouts', async () => {
-    const markdown = `### C. Pronunciation Micro-Focus
+    const markdown = `### B. Pronunciation Micro-Focus
   
   :::callout 🗣️
   **Mode:** shadow_sentence
@@ -544,7 +544,7 @@ describe('rendering', () => {
   });
 
   it('preserves inline markup in word-drill items after behavior script runs', async () => {
-    const markdown = `### C. Pronunciation Micro-Focus
+    const markdown = `### B. Pronunciation Micro-Focus
   
   **Mode:** shadow_sentence
   **Shadow sentence:** There was a flood, so the vehicle stopped working.
@@ -584,7 +584,7 @@ describe('rendering', () => {
   });
 
   it('renders optional pronunciation notes on the right without duplicating transcription', async () => {
-    const markdown = `### C. Pronunciation Micro-Focus
+    const markdown = `### B. Pronunciation Micro-Focus
   
   **Mode:** shadow_sentence
   **Shadow sentence:** I wouldn't have made an appointment if I had known the price.
@@ -626,7 +626,7 @@ describe('rendering', () => {
   });
 
   it('supports word drill lines without dash delimiters', async () => {
-    const markdown = `### C. Pronunciation Micro-Focus
+    const markdown = `### B. Pronunciation Micro-Focus
   
   **Mode:** shadow_sentence
   **Shadow sentence:** I wouldn't have made an appointment if I had known the price.
@@ -664,7 +664,7 @@ describe('rendering', () => {
   });
 
   it('preserves slash-bearing words for dashed and no-dash pronunciation lines', async () => {
-    const markdown = `### C. Pronunciation Micro-Focus
+    const markdown = `### B. Pronunciation Micro-Focus
   
   **Mode:** shadow_sentence
   **Shadow sentence:** Please practice and/or quickly.

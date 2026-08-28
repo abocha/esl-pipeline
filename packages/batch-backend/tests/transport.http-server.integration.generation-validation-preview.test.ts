@@ -706,7 +706,7 @@ describeHttpServerIntegrationSuite(
         url: '/preview/html',
         payload: {
           text: [
-            '### C. Pronunciation Micro-Focus',
+            '### B. Pronunciation Micro-Focus',
             '',
             '**Mode:** shadow_sentence',
             '**Shadow sentence:** We should review this carefully.',
@@ -744,7 +744,7 @@ describeHttpServerIntegrationSuite(
         url: '/preview/html',
         payload: {
           text: [
-            '### C. Pronunciation Micro-Focus',
+            '### B. Pronunciation Micro-Focus',
             '',
             '**Mode:** shadow_sentence',
             '**Shadow sentence:** We should review this carefully.',
@@ -771,7 +771,7 @@ describeHttpServerIntegrationSuite(
         url: '/preview/html',
         payload: {
           text: [
-            '### C. Pronunciation Micro-Focus',
+            '### B. Pronunciation Micro-Focus',
             '',
             '**Mode:** shadow_sentence',
             '**Shadow sentence:**',
@@ -799,7 +799,7 @@ describeHttpServerIntegrationSuite(
         url: '/preview/html',
         payload: {
           text: [
-            '### C. Pronunciation Micro-Focus',
+            '### B. Pronunciation Micro-Focus',
             '',
             '**Mode:** connected_speech',
             '',
@@ -838,7 +838,7 @@ describeHttpServerIntegrationSuite(
         url: '/preview/html',
         payload: {
           text: [
-            '### C. Pronunciation Micro-Focus',
+            '### B. Pronunciation Micro-Focus',
             '',
             '**Mode:** minimal_pair',
             '**Target:** Hear the short /ɪ/ and long /iː/ clearly.',

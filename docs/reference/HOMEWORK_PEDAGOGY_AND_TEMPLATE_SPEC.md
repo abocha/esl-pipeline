@@ -4,8 +4,9 @@
 
 - Audience: founder, maintainers, prompt/runtime implementers, AI agents.
 - Read Time: 8 minutes.
-- Authority Level: canonical pedagogy and assignment-template reference for `general-english` v1.
-- Last Verified Against: 2026-05-12 repo state.
+- Authority Level: canonical pedagogy and assignment-template reference for the current
+  `general-english` track; `v1` remains explicit persisted-job validator compatibility.
+- Last Verified Against: 2026-08-28 repo state.
 - Owner: founder-maintainer + backend/frontend maintainers.
 - Review Cadence: monthly or after meaningful homework-template changes.
 - Status: `reference`.
@@ -63,17 +64,16 @@ preserving as the system evolves.
 
 ## Core Pedagogical Model
 
-The assignment method embodied by `v4.4` follows this teaching loop:
+The current assignment method follows this teaching loop:
 
 1. orient the student with one clear mission
-2. reduce overwhelm with a visible workload path
-3. ground the week in one coherent input source
+2. ground the week in one coherent input source and its listening experience when present
+3. check comprehension immediately after that input
 4. extract useful language from that source
-5. move from controlled practice to limited production
-6. include one small pronunciation intervention
-7. end with a communicative mission that feels purposeful
-8. explain why this week matters for this specific student
-9. leave both the student and the teacher with clean next-step guidance
+5. move from controlled practice to one small pronunciation intervention
+6. end with a communicative mission that feels purposeful
+7. explain why this week matters for this specific student
+8. leave both the student and the teacher with clean next-step guidance
 
 This loop is the real product. The prompt and formatting exist to deliver it consistently.
 
@@ -109,29 +109,7 @@ Allowed evolution:
 - the exact wording of the mission may become more memory-aware
 - the section should still remain short and confidence-building
 
-### 2. `## 2. 🗺️ Your Homework Roadmap`
-
-Purpose:
-
-- lower resistance by making the workload feel navigable
-- give the student agency over time and energy
-- keep the assignment usable even in a busy week
-
-Protected invariants:
-
-- the roadmap should offer a default full path plus lighter/heavier options
-- the default path should remain the recommended one
-- the roadmap should help the student decide how much to do without feeling they have failed if
-  they choose a lighter path
-
-Allowed evolution:
-
-- estimated times may be tuned
-- labels such as `Light`, `Default`, and `Plus` may evolve if a better student-facing language
-  emerges
-- the roadmap should still stay simple and fast to scan
-
-### 3. `## 3. 🎧 Input Material: The Source`
+### 2. `## 2. 🎧 Input Material: The Source`
 
 Purpose:
 
@@ -152,6 +130,23 @@ Important note:
 
 - The single-source reuse policy is not just a formatting preference. It is a pedagogical device for
   coherence and retention.
+- Generated study-text audio is inserted downstream immediately before the `:::study-text` block.
+  Keeping the comprehension subsection immediately after that block preserves the final learner flow
+  as listening/input, then comprehension. Without audio, comprehension follows the source text directly.
+
+#### `### 🤔 Comprehension Check`
+
+Purpose:
+
+- confirm the student understood the source before language analysis or practice
+- keep the source meaningful rather than decorative
+
+Protected invariants:
+
+- questions should check main ideas, not trivia
+- comprehension should remain short because it supports the larger assignment rather than becoming
+  the assignment
+- the subsection must follow the selected study-text/listening input and precede the Language Toolkit
 
 Allowed evolution:
 
@@ -160,7 +155,7 @@ Allowed evolution:
 - future systems may enrich source selection with memory and retrieval
 - the assignment should still center one primary source rather than fragment into unrelated texts
 
-### 4. `## 4. 🛠️ Language Toolkit: Useful Language`
+### 3. `## 3. 🛠️ Language Toolkit: Useful Language`
 
 Purpose:
 
@@ -214,7 +209,7 @@ Allowed evolution for Section 4:
 - the exact mix of grammar versus vocabulary emphasis may adapt to the lesson
 - the section should still feel like a compact toolkit extracted from the source
 
-### 5. `## 5. ✍️ Practice & Pronunciation`
+### 4. `## 4. ✍️ Practice & Pronunciation`
 
 Purpose:
 
@@ -237,20 +232,7 @@ Protected invariants:
 - some items should revisit recent homework or recurring issues when that review is truly warranted
 - review should be explicit and bounded, not a hidden accumulation of old material
 
-#### `### B. 🤔 Comprehension Check`
-
-Purpose:
-
-- confirm the student understood the source
-- keep the source meaningful rather than decorative
-
-Protected invariants:
-
-- questions should check main ideas, not trivia
-- comprehension should remain short because it supports the larger assignment rather than becoming
-  the assignment
-
-#### `### C. 🎙️ Pronunciation Micro-Focus`
+#### `### B. 🎙️ Pronunciation Micro-Focus`
 
 Purpose:
 
@@ -265,14 +247,14 @@ Protected invariants:
 - the task should feel doable in about a minute of focused practice
 - the deliverable should remain lightweight, such as a short voice note
 
-Allowed evolution for Section 5:
+Allowed evolution for Section 4:
 
 - exact exercise types may evolve
 - the review/load balance may evolve
 - pronunciation mode inventory may evolve
 - the section should still move from safer practice toward practical output
 
-### 6. `## 6. ✅ Your Turn: Complete the Mission!`
+### 5. `## 5. ✅ Your Turn: Complete the Mission!`
 
 Purpose:
 
@@ -313,7 +295,7 @@ Learner-fit rule:
 - if simple retelling is the most realistic path to actual spoken output, that is a valid and often
   valuable mission design
 
-### 7. `## 7. 🧠 Why This Mission Helps You`
+### 6. `## 6. 🧠 Why This Mission Helps You`
 
 Purpose:
 
@@ -327,7 +309,7 @@ Protected invariants:
 - it should link the mission to real goals, not generic encouragement
 - it should stay concise and human
 
-### 8. `## 8. 🔑 Answer Key & Sample Mission`
+### 7. `## 7. 🔑 Answer Key & Sample Mission`
 
 Purpose:
 
@@ -341,7 +323,7 @@ Protected invariants:
 - the sample mission response should model target language from the week's source/toolkit
 - the sample should support, not overshadow, the learner's own production
 
-### 9. `## 9. 👨‍🏫 Teacher's Follow-up Plan`
+### 8. `## 8. 👨‍🏫 Teacher's Follow-up Plan`
 
 Purpose:
 
@@ -417,7 +399,7 @@ them:
 
 1. one weekly mission
 2. one coherent source reused across the assignment
-3. a visible workload path
+3. comprehension immediately after the source/listening input
 4. contextualized grammar and useful chunks
 5. targeted controlled practice with bounded review
 6. one pronunciation micro-focus

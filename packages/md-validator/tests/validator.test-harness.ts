@@ -41,11 +41,7 @@ speaker_labels: [Alex, Mara]
 
 ${firstSectionContent}
 
-## 2. 🗺️ Your Homework Roadmap
-
-Text
-
-## 3. 🎧 Input Material: The Source
+## 2. 🎧 Input Material: The Source
 
 ### B. 🤖 Generated Material
 
@@ -55,7 +51,12 @@ Text
 [Mara]: Hello!
 :::
 
-## 4. 🛠️ Language Toolkit: Useful Language
+### 🤔 Comprehension Check
+
+1. x
+2. y
+
+## 3. 🛠️ Language Toolkit: Useful Language
 
 ### A. 👀 Notice the Grammar
 
@@ -65,7 +66,7 @@ text
 
 text
 
-## 5. ✍️ Practice & Pronunciation
+## 4. ✍️ Practice & Pronunciation
 
 ### A. 🔩 Controlled Practice
 
@@ -78,24 +79,19 @@ text
 7. g
 8. h
 
-### B. 🤔 Comprehension Check
-
-1. x
-2. y
-
-### C. 🎙️ Pronunciation Micro-Focus (≈1 min)
+### B. 🎙️ Pronunciation Micro-Focus (≈1 min)
 
 text
 
-## 6. ✅ Your Turn: Complete the Mission!
+## 5. ✅ Your Turn: Complete the Mission!
 
 text
 
-## 7. 🧠 Why This Mission Helps You
+## 6. 🧠 Why This Mission Helps You
 
 text
 
-## 8. 🔑 Answer Key & Sample Mission
+## 7. 🔑 Answer Key & Sample Mission
 
 :::toggle Answer Key
 
@@ -104,7 +100,7 @@ text
 ...
 :::
 
-## 9. 👨‍🏫 Teacher's Follow-up Plan
+## 8. 👨‍🏫 Teacher's Follow-up Plan
 
 :::toggle Teacher’s Follow-up Plan
 notes
@@ -115,18 +111,18 @@ notes
 function withPronunciationSection(doc: string, sectionContent: string): string {
   return doc.replace(
     [
-      '### C. 🎙️ Pronunciation Micro-Focus (≈1 min)',
+      '### B. 🎙️ Pronunciation Micro-Focus (≈1 min)',
       '',
       'text',
       '',
-      '## 6. ✅ Your Turn: Complete the Mission!',
+      '## 5. ✅ Your Turn: Complete the Mission!',
     ].join('\n'),
     [
-      '### C. 🎙️ Pronunciation Micro-Focus (≈1 min)',
+      '### B. 🎙️ Pronunciation Micro-Focus (≈1 min)',
       '',
       sectionContent,
       '',
-      '## 6. ✅ Your Turn: Complete the Mission!',
+      '## 5. ✅ Your Turn: Complete the Mission!',
     ].join('\n'),
   );
 }

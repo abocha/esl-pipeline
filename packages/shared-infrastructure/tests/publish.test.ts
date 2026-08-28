@@ -15,6 +15,9 @@ describe('publish helpers', () => {
       'Narrator: Hello',
       ':::',
       '',
+      '### 🤔 Comprehension Check',
+      '1. What happened?',
+      '',
       '### Pronunciation Micro-Focus',
       '**Shadow sentence:** Hello there',
       '',
@@ -32,6 +35,12 @@ describe('publish helpers', () => {
       '[Audio recording: Pronunciation Practice](https://new.example.com/pronunciation.mp3)',
     );
     expect(output).not.toContain('https://old.example.com/study.mp3');
+    expect(output.indexOf('Audio recording: Study Text')).toBeLessThan(
+      output.indexOf(':::study-text Transcript'),
+    );
+    expect(output.indexOf(':::study-text Transcript')).toBeLessThan(
+      output.indexOf('### 🤔 Comprehension Check'),
+    );
     expect(output.lastIndexOf('Audio recording: Pronunciation Practice')).toBeGreaterThan(
       output.indexOf('Shadow sentence'),
     );
