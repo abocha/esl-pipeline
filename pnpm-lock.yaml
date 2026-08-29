@@ -56,6 +56,9 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@types/node@25.9.5)(@vitest/coverage-v8@4.1.10)(jsdom@29.1.1)(vite@8.2.1(@types/node@25.9.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.11)(yaml@2.9.0))
+      ws:
+        specifier: 8.21.3
+        version: 8.21.3
 
   packages/batch-backend:
     dependencies:

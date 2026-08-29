@@ -8,6 +8,7 @@ export const providerIds = [
   'mistral-voxtral-mini-transcribe-2',
   'deepgram-nova-3',
   'elevenlabs-scribe-v2',
+  'inworld-stt-1',
 ] as const;
 
 export type ProviderId = (typeof providerIds)[number];
@@ -18,7 +19,7 @@ export const benchmarkRunModes = [
   'original_source_compatibility',
 ] as const;
 export type BenchmarkRunMode = (typeof benchmarkRunModes)[number];
-export type ProviderRequestMode = 'async_file' | 'batch' | 'direct';
+export type ProviderRequestMode = 'async_file' | 'batch' | 'direct' | 'websocket';
 export type PreparationKind = 'controlled_downmix_to_mono';
 export type AttemptPhase = 'upload' | 'submit' | 'poll' | 'result' | 'transcribe';
 export type AttemptOutcome = 'started' | 'succeeded' | 'failed' | 'uncertain';
