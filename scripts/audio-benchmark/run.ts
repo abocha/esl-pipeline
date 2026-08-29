@@ -116,6 +116,7 @@ export async function runBenchmark(options: {
   runId?: string;
   pollIntervalMs?: number;
   maxWaitMs?: number;
+  providerOptions?: Record<string, unknown>;
   fetchImpl?: FetchLike;
 }): Promise<BenchmarkRun> {
   const benchmarkRoot = options.benchmarkRoot ?? getBenchmarkRoot(options.environment);
@@ -186,6 +187,7 @@ export async function runBenchmark(options: {
     {
       pollIntervalMs: options.pollIntervalMs,
       maxWaitMs: options.maxWaitMs,
+      providerOptions: options.providerOptions,
       runId,
       selectedInputSha256: input.sha256,
       recordExternalReference: async (reference) => {
@@ -365,7 +367,13 @@ function providerInputFromCase(
   environment?: NodeJS.ProcessEnv,
   options: ProviderInputOptions = {},
 ): ProviderInput {
-  const { runId, selectedInputSha256, recordExternalReference, ...requestOptions } = options;
+  const {
+    runId,
+    selectedInputSha256,
+    recordExternalReference,
+    providerOptions,
+    ...requestOptions
+  } = options;
   return {
     providerId,
     runMode: input.runMode,
@@ -379,6 +387,7 @@ function providerInputFromCase(
       campaignId: manifest.campaignId,
       caseId: benchmarkCase.caseId,
       ...requestOptions,
+      ...providerOptions,
     },
     environment,
     runId: typeof runId === 'string' ? runId : undefined,
@@ -391,6 +400,7 @@ type ProviderInputOptions = Record<string, unknown> & {
   runId?: string;
   selectedInputSha256?: string;
   recordExternalReference?: (reference: ExternalReference) => Promise<void>;
+  providerOptions?: Record<string, unknown>;
 };
 
 function outputPathsFor(runDirectory: string): OutputPaths {

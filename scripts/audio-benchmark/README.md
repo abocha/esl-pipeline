@@ -139,6 +139,15 @@ pnpm run audio-benchmark:run -- `
   --run-id soniox-lesson-01-attempt-001
 ```
 
+Re-derive direct-run native and comparable artifacts from an already saved raw response without
+making a network request. This preserves the raw response and attempt ledger. It is currently
+limited to successful direct runs with exactly one final raw response.
+
+```powershell
+pnpm run audio-benchmark:rederive -- `
+  --run runs/2026-08-first-slice/deepgram-lesson-01-attempt-001
+```
+
 Use the Deepgram split control as a separate run against the original source:
 
 ```powershell

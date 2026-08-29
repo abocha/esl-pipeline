@@ -69,6 +69,55 @@ describe('provider-local benchmark adapters', () => {
     );
   });
 
+  test('passes ElevenLabs diarization diagnostics only when requested', () => {
+    const adapter = getProviderAdapter('elevenlabs-scribe-v2');
+    const fixedSpeakerCount = adapter.buildIntent({
+      ...context('elevenlabs-scribe-v2'),
+      options: { numSpeakers: 2 },
+    });
+    const threshold = adapter.buildIntent({
+      ...context('elevenlabs-scribe-v2'),
+      options: { diarizationThreshold: 0.1 },
+    });
+    const fixedFields = fixedSpeakerCount.steps[0]?.body;
+    const thresholdFields = threshold.steps[0]?.body;
+
+    expect(fixedFields?.kind).toBe('multipart');
+    expect(thresholdFields?.kind).toBe('multipart');
+    expect(fixedFields?.kind === 'multipart' ? fixedFields.fields.num_speakers : undefined).toBe(
+      '2',
+    );
+    expect(
+      fixedFields?.kind === 'multipart' ? fixedFields.fields.diarization_threshold : undefined,
+    ).toBeUndefined();
+    expect(
+      thresholdFields?.kind === 'multipart'
+        ? thresholdFields.fields.diarization_threshold
+        : undefined,
+    ).toBe('0.1');
+    expect(
+      thresholdFields?.kind === 'multipart' ? thresholdFields.fields.num_speakers : undefined,
+    ).toBeUndefined();
+  });
+
+  test('does not send Speechmatics v3 rejected transcript filtering config', () => {
+    const intent = getProviderAdapter('speechmatics-melia-1-batch').buildIntent(
+      context('speechmatics-melia-1-batch'),
+    );
+    const body = intent.steps[0]?.body;
+    expect(body?.kind).toBe('multipart');
+    const configValue = body?.kind === 'multipart' ? body.fields.config : undefined;
+    const config = JSON.parse(configValue ?? '{}');
+
+    expect(config).not.toHaveProperty('transcript_filtering_config');
+    expect(config?.transcription_config).toMatchObject({
+      model: 'melia-1',
+      language: 'multi',
+      language_hints: ['en', 'ru'],
+      diarization: 'speaker',
+    });
+  });
+
   test('parses provider-native speaker/timestamp fields without role mapping', () => {
     const samples = [
       {
@@ -162,6 +211,36 @@ describe('provider-local benchmark adapters', () => {
       [1, undefined],
     ]);
     expect(noLabel.nativeSegments[0]).not.toHaveProperty('speakerLabel');
+  });
+
+  test('preserves Deepgram punctuation and records the returned model metadata', () => {
+    const parsed = getProviderAdapter('deepgram-nova-3').parseResponse({
+      metadata: {
+        duration: 1,
+        channels: 1,
+        models: ['model-uuid'],
+        model_info: {
+          'model-uuid': { arch: 'nova-3', name: 'general-nova-3', version: '2026-01-27.9107' },
+        },
+      },
+      results: {
+        channels: [
+          {
+            alternatives: [
+              {
+                words: [
+                  { word: 'hello', punctuated_word: 'Hello.', start: 0, end: 0.5 },
+                  { word: 'this', punctuated_word: 'this', start: 0.5, end: 1 },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(parsed.returnedModel).toBe('nova-3');
+    expect(parsed.nativeSegments.map((item) => item.text)).toEqual(['Hello.', 'this']);
   });
 
   test('creates a deterministic Soniox reference from run and input identity', () => {

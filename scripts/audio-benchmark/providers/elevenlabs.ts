@@ -29,13 +29,7 @@ function buildRequest(input: ProviderInput): RequestIntent['steps'][number] {
       filePath: input.inputPath,
       fileField: 'file',
       fileName: input.fileName,
-      fields: {
-        model_id: model,
-        timestamps_granularity: 'word',
-        diarize: 'true',
-        use_multi_channel: 'false',
-        no_verbatim: 'false',
-      },
+      fields: requestFields(input),
     },
     credentialEnv,
     requestRisk: 'paid',
@@ -103,13 +97,7 @@ export const elevenLabsAdapter: ProviderAdapter = {
         filePath: input.inputPath,
         fileField: 'file',
         fileName: input.fileName,
-        fields: {
-          model_id: model,
-          timestamps_granularity: 'word',
-          diarize: 'true',
-          use_multi_channel: 'false',
-          no_verbatim: 'false',
-        },
+        fields: requestFields(input),
       },
       credentialEnv,
       requestRisk: 'paid',
@@ -127,6 +115,23 @@ export const elevenLabsAdapter: ProviderAdapter = {
     return { ...parsed, rawResponsePaths: response.responsePath ? [response.responsePath] : [] };
   },
 };
+
+function requestFields(input: ProviderInput): Record<string, string> {
+  const fields: Record<string, string> = {
+    model_id: model,
+    timestamps_granularity: 'word',
+    diarize: 'true',
+    use_multi_channel: 'false',
+    no_verbatim: 'false',
+  };
+  const numSpeakers = numberValue(input.options.numSpeakers);
+  if (numSpeakers !== undefined) fields.num_speakers = String(numSpeakers);
+  const diarizationThreshold = numberValue(input.options.diarizationThreshold);
+  if (diarizationThreshold !== undefined) {
+    fields.diarization_threshold = String(diarizationThreshold);
+  }
+  return fields;
+}
 
 function toMilliseconds(value: unknown): number | undefined {
   const seconds = numberValue(value);

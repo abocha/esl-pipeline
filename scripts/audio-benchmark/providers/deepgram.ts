@@ -93,7 +93,7 @@ export const deepgramAdapter: ProviderAdapter = {
       const words = asArray(asRecord(alternatives[0]).words);
       return words.flatMap((word) => {
         const item = asRecord(word);
-        const text = stringValue(item.word) ?? stringValue(item.punctuated_word);
+        const text = stringValue(item.punctuated_word) ?? stringValue(item.word);
         if (!text) return [];
         const speaker = item.speaker;
         const speakerLabel =
@@ -115,9 +115,15 @@ export const deepgramAdapter: ProviderAdapter = {
       });
     });
     const duration = numberValue(metadata.duration);
+    const modelIds = asArray(metadata.models);
+    const firstModelId = stringValue(modelIds[0]);
+    const modelInfo = firstModelId
+      ? asRecord(asRecord(metadata.model_info)[firstModelId])
+      : undefined;
     return {
       nativeSegments,
-      returnedModel: stringValue(metadata.model),
+      returnedModel:
+        stringValue(metadata.model) ?? stringValue(modelInfo?.arch) ?? stringValue(modelInfo?.name),
       usage:
         Object.keys(metadata).length === 0
           ? undefined
