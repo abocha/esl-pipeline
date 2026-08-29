@@ -146,6 +146,50 @@
           "calculationStatus": "confirmed"
         }
       ]
+    },
+    {
+      "snapshotId": "public-2026-08-29-inworld-stt-1",
+      "effectiveFrom": "2026-08-29",
+      "currency": "USD",
+      "sources": [
+        {
+          "providerId": "inworld-stt-1",
+          "url": "https://inworld.ai/pricing",
+          "observed": "STT 1 is $0.15 per hour on-demand; Creator and higher published tiers show $0.10 per hour. This snapshot uses the on-demand public rate because the benchmark account tier is not encoded in the runner."
+        },
+        {
+          "providerId": "inworld-stt-1",
+          "url": "https://inworld.ai/speech-to-text",
+          "observed": "The product page describes WebSocket realtime streaming, synchronous complete-file transcription, word-level timestamps, speaker diarization, and STT-1 pricing from $0.15 per hour on-demand to $0.10 per hour on paid plans."
+        }
+      ],
+      "contractEvidence": [
+        {
+          "providerId": "inworld-stt-1",
+          "model": "inworld/inworld-stt-1",
+          "observedAt": "2026-08-29",
+          "sourceUrls": [
+            "https://docs.inworld.ai/stt/quickstart",
+            "https://docs.inworld.ai/api-reference/sttAPI/speechtotext/transcribe-stream-websocket",
+            "https://docs.inworld.ai/stt/languages",
+            "https://docs.inworld.ai/stt/speaker-diarization",
+            "https://docs.inworld.ai/portal/usage"
+          ],
+          "observed": "The documented WebSocket wire contract requires transcribeConfig first, base64 LINEAR16 audioChunk messages, optional endTurn, and closeStream. Responses are result.transcription/interim-or-final, result.usage, speechStarted, and speechStopped. The docs show usage.transcribedAudioMs and modelId; account usage filtering by workspace/API key/time range is documented as not yet available. STT-1 lists 30 recognition languages including Russian; speaker diarization is Experimental."
+        }
+      ],
+      "entries": [
+        {
+          "providerId": "inworld-stt-1",
+          "model": "inworld/inworld-stt-1",
+          "unit": "hour",
+          "usdPerUnit": 0.15,
+          "denominator": 3600,
+          "usage": "provider_audio_duration_sec",
+          "calculationStatus": "confirmed",
+          "notes": "On-demand public rate used for a reproducible conservative estimate; paid-plan rates may be $0.10/hour or account-specific. Provider-observed usage and account credits remain separate from this snapshot estimate."
+        }
+      ]
     }
   ]
 }

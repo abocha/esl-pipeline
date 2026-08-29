@@ -25,6 +25,10 @@ import type {
   ProviderInput,
   ProviderRequest,
   ProviderRequestClient,
+  ProviderStreamClient,
+  ProviderStreamEvidence,
+  ProviderStreamRequest,
+  ProviderStreamResponse,
   RequestIntent,
 } from './providers/types';
 import { ProviderExecutionError } from './providers/types';
@@ -39,6 +43,11 @@ import type {
   ProviderId,
 } from './schema';
 import { BENCHMARK_SCHEMA_VERSION, benchmarkRunModes, providerIds } from './schema';
+import {
+  BenchmarkWebSocketError,
+  executeWebSocketRequest,
+  type WebSocketFactory,
+} from './websocket';
 
 export type DryRunPlan = {
   networkRequests: 0;
@@ -119,6 +128,7 @@ export async function runBenchmark(options: {
   maxWaitMs?: number;
   providerOptions?: Record<string, unknown>;
   fetchImpl?: FetchLike;
+  webSocketFactory?: WebSocketFactory;
   beforeProviderExecution?: () => Promise<void>;
 }): Promise<BenchmarkRun> {
   const benchmarkRoot = options.benchmarkRoot ?? getBenchmarkRoot(options.environment);
@@ -228,10 +238,12 @@ export async function runBenchmark(options: {
   );
   const request: ProviderRequestClient = (phase, providerRequest) =>
     ledger.request(phase, providerRequest, options.environment, options.fetchImpl);
+  const stream: ProviderStreamClient = (phase, streamRequest) =>
+    ledger.stream(phase, streamRequest, options.environment, options.webSocketFactory);
 
   try {
     await options.beforeProviderExecution?.();
-    const result = await adapter.execute(providerInput, request);
+    const result = await adapter.execute(providerInput, request, stream);
     const nativePath = path
       .relative(runDirectory, outputPaths.nativeSegments)
       .split(path.sep)
@@ -269,8 +281,12 @@ export async function runBenchmark(options: {
             message: `Provider-side work may have occurred, but local benchmark evidence persistence failed: ${classified.message}`,
           }
         : classified;
-    if (effectiveClassification.category === 'post_request_persistence_uncertain') {
-      markLatestRiskBearingAttemptUncertain(run, effectiveClassification.message);
+    if (effectiveClassification.outcome === 'uncertain') {
+      markLatestRiskBearingAttemptUncertain(
+        run,
+        effectiveClassification.message,
+        effectiveClassification.category,
+      );
     }
     run.status = effectiveClassification.outcome;
     run.errorCategory = effectiveClassification.category;
@@ -383,6 +399,92 @@ class AttemptLedger {
       throw effectiveError;
     }
   }
+
+  async stream(
+    phase: AttemptPhase,
+    request: ProviderStreamRequest,
+    environment: NodeJS.ProcessEnv = process.env,
+    webSocketFactory?: WebSocketFactory,
+  ): Promise<ProviderStreamResponse> {
+    const attemptId = `${String(this.run.attempts.length + 1).padStart(3, '0')}-${phase}`;
+    const startedAt = new Date().toISOString();
+    const attempt: AttemptRecord = {
+      attemptId,
+      phase,
+      startedAt,
+      method: 'WS',
+      endpoint: request.url,
+      requestRisk: request.requestRisk ?? 'none',
+      requestFingerprint: sha256Text(
+        canonicalJson({ ...request, filePath: '<file>', credentialEnv: request.credentialEnv }),
+      ),
+      outcome: 'started',
+    };
+    this.run.attempts.push(attempt);
+    this.run.status = 'uncertain';
+    await writeJsonFile(this.outputPaths.runRecord, this.run);
+    let providerSideWork = false;
+    let response: ProviderStreamResponse | undefined;
+    try {
+      response = await executeWebSocketRequest(request, environment, webSocketFactory);
+      providerSideWork = response.providerSideWork;
+      const responsePath = path.join(this.outputPaths.rawDirectory, `${attemptId}.events.json`);
+      await writeJsonFile(responsePath, streamEvidenceArtifact(response));
+      attempt.responsePath = path
+        .relative(path.dirname(this.outputPaths.runRecord), responsePath)
+        .split(path.sep)
+        .join('/');
+      attempt.outcome = 'succeeded';
+      finishAttempt(attempt, startedAt);
+      await writeJsonFile(this.outputPaths.runRecord, this.run);
+      return { ...response, responsePath: attempt.responsePath };
+    } catch (error: unknown) {
+      let caughtError: unknown = error;
+      const websocketError = error instanceof BenchmarkWebSocketError ? error : undefined;
+      providerSideWork = providerSideWork || Boolean(websocketError?.providerSideWork);
+      const evidence = response ?? websocketError?.evidence;
+      if (evidence && (evidence.events.length > 0 || evidence.providerSideWork)) {
+        try {
+          const responsePath = path.join(this.outputPaths.rawDirectory, `${attemptId}.events.json`);
+          await writeJsonFile(responsePath, streamEvidenceArtifact(evidence));
+          attempt.responsePath = path
+            .relative(path.dirname(this.outputPaths.runRecord), responsePath)
+            .split(path.sep)
+            .join('/');
+        } catch (persistenceError: unknown) {
+          if (!providerSideWork) throw persistenceError;
+          caughtError = new BenchmarkWebSocketError(
+            `Provider-side work may have occurred, but local WebSocket evidence persistence failed: ${errorMessage(persistenceError)}`,
+            'uncertain',
+            'post_request_persistence_uncertain',
+            evidence,
+          );
+        }
+      }
+      const effectiveError =
+        providerSideWork && isHarnessError(caughtError)
+          ? new BenchmarkWebSocketError(
+              `Provider-side work may have occurred, but local benchmark evidence persistence failed: ${errorMessage(caughtError)}`,
+              'uncertain',
+              'post_request_persistence_uncertain',
+              evidence!,
+            )
+          : caughtError;
+      if (attempt.outcome === 'started' || providerSideWork) {
+        const classified = classifyError(effectiveError);
+        attempt.outcome = classified.outcome;
+        attempt.errorCategory = classified.category;
+        attempt.errorMessage = classified.message;
+        if (!attempt.finishedAt) finishAttempt(attempt, startedAt);
+        try {
+          await writeJsonFile(this.outputPaths.runRecord, this.run);
+        } catch (persistenceError: unknown) {
+          if (!providerSideWork) throw persistenceError;
+        }
+      }
+      throw effectiveError;
+    }
+  }
 }
 
 function providerInputFromCase(
@@ -457,7 +559,11 @@ function classifyError(error: unknown): {
   category: string;
   message: string;
 } {
-  if (error instanceof ProviderExecutionError || error instanceof BenchmarkHttpError) {
+  if (
+    error instanceof ProviderExecutionError ||
+    error instanceof BenchmarkHttpError ||
+    error instanceof BenchmarkWebSocketError
+  ) {
     return { outcome: error.outcome, category: error.category, message: error.message };
   }
   return {
@@ -468,7 +574,11 @@ function classifyError(error: unknown): {
 }
 
 function isHarnessError(error: unknown): boolean {
-  return !(error instanceof ProviderExecutionError || error instanceof BenchmarkHttpError);
+  return !(
+    error instanceof ProviderExecutionError ||
+    error instanceof BenchmarkHttpError ||
+    error instanceof BenchmarkWebSocketError
+  );
 }
 
 function hasRiskBearingProviderWork(run: BenchmarkRun): boolean {
@@ -480,7 +590,11 @@ function hasRiskBearingProviderWork(run: BenchmarkRun): boolean {
   );
 }
 
-function markLatestRiskBearingAttemptUncertain(run: BenchmarkRun, message: string): void {
+function markLatestRiskBearingAttemptUncertain(
+  run: BenchmarkRun,
+  message: string,
+  category: string,
+): void {
   const attempt = [...run.attempts]
     .reverse()
     .find(
@@ -491,8 +605,30 @@ function markLatestRiskBearingAttemptUncertain(run: BenchmarkRun, message: strin
     );
   if (!attempt) return;
   attempt.outcome = 'uncertain';
-  attempt.errorCategory = 'post_request_persistence_uncertain';
+  attempt.errorCategory = category;
   attempt.errorMessage = message;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function streamEvidenceArtifact(evidence: ProviderStreamEvidence): Record<string, unknown> {
+  const {
+    rawMessages,
+    logicalResultMessages,
+    postCompletionTransportMessages,
+    events,
+    ...summary
+  } = evidence;
+  return {
+    schemaVersion: '1.0',
+    rawMessages,
+    logicalResultMessages,
+    postCompletionTransportMessages,
+    summary,
+    events,
+  };
 }
 
 function assertRunMode(providerId: ProviderId, runMode: BenchmarkRunMode): void {
@@ -570,6 +706,9 @@ async function main(): Promise<void> {
       ? Number(args.values['poll-interval-ms'])
       : undefined,
     maxWaitMs: args.values['max-wait-ms'] ? Number(args.values['max-wait-ms']) : undefined,
+    providerOptions: args.values['inworld-pacing']
+      ? { inworldPacing: parseInworldPacing(args.values['inworld-pacing']) }
+      : undefined,
   });
   console.log(
     JSON.stringify(
@@ -624,6 +763,15 @@ function asRunMode(value: string): BenchmarkRunMode {
     throw new Error(`Unsupported benchmark run mode: ${value}`);
   }
   return value as BenchmarkRunMode;
+}
+
+function parseInworldPacing(value: string): 'unpaced' | number {
+  if (value === 'unpaced') return value;
+  const rate = Number(value);
+  if (!Number.isFinite(rate) || rate <= 0) {
+    throw new Error('--inworld-pacing must be "unpaced" or a positive audio-rate multiplier.');
+  }
+  return rate;
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

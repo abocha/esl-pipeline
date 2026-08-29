@@ -28,6 +28,7 @@ describe('provider-local benchmark adapters', () => {
       'mistral-voxtral-mini-transcribe-2',
       'deepgram-nova-3',
       'elevenlabs-scribe-v2',
+      'inworld-stt-1',
     ]);
   });
 
@@ -37,14 +38,19 @@ describe('provider-local benchmark adapters', () => {
     expect(intent.providerId).toBe(providerId);
     expect(intent.steps.length).toBeGreaterThan(0);
     expect(JSON.stringify(intent)).not.toMatch(/test-secret|api[_-]?key\s*[:=]/iu);
-    expect(
-      intent.steps.some(
+    expect({
+      method: intent.steps[0]?.method,
+      hasSelectedFile: intent.steps.some(
         (step) =>
           step.body &&
           'filePath' in step.body &&
           step.body.filePath === 'C:\\bench\\prepared\\lesson.wav',
       ),
-    ).toBe(true);
+    }).toEqual(
+      providerId === 'inworld-stt-1'
+        ? { method: 'WS', hasSelectedFile: false }
+        : { method: 'POST', hasSelectedFile: true },
+    );
   });
 
   test('keeps Deepgram split control separate from mixed diarization', () => {

@@ -296,7 +296,7 @@ describe('benchmark request lifecycle safety', () => {
         externalReferences?: Array<{ kind: string; id: string }>;
       };
       expect(run.status).toBe('uncertain');
-      expect(run.attempts.map((attempt) => attempt.outcome)).toEqual(['succeeded', 'succeeded']);
+      expect(run.attempts.map((attempt) => attempt.outcome)).toEqual(['succeeded', 'uncertain']);
       expect(run.externalReferences).toContainEqual({ kind: 'file', id: 'file-1' });
       expect(fetchImpl).toHaveBeenCalledTimes(2);
     } finally {

@@ -15,7 +15,7 @@ Git or CI.
 Reports contain aggregate metrics and input hashes only; they do not read transcript artifacts when
 building the report and never include verbatim transcript text.
 
-## First-slice providers
+## Benchmark providers
 
 The approved providers are:
 
@@ -26,15 +26,16 @@ The approved providers are:
 | Mistral Voxtral Mini Transcribe 2 | direct multipart transcription               | `MISTRAL_API_KEY`      | mixed diarized                           |
 | Deepgram Nova-3                   | direct prerecorded binary request            | `DEEPGRAM_API_KEY`     | mixed diarized and trusted split control |
 | ElevenLabs Scribe v2              | direct multipart transcription               | `ELEVENLABS_API_KEY`   | mixed diarized                           |
+| Inworld STT-1                     | WebSocket LINEAR16 streaming                 | `INWORLD_API_KEY`      | mixed diarized (late-entry Gate 0)       |
 
-Mistral Batch, Inworld, Gemini, and all production provider registration are intentionally out of
-scope.
+Mistral Batch, Gemini, and all production provider registration are intentionally out of scope.
 
 ## Output layers
 
 Each successful run retains three separate layers under its private run directory:
 
-1. `raw/*.response` keeps each provider HTTP response body as received. The final provider result is
+1. `raw/*.response` keeps each provider HTTP response body as received. WebSocket providers store
+   received message frames as an exact ordered JSON string array. The final provider result is
    included in `run.json` through `rawResponsePaths`.
 2. `native-segments.json` contains minimally parsed provider words or segments. Provider lexical
    content, timestamps, native speaker labels, language labels, and confidence values are retained
@@ -66,7 +67,7 @@ Provider-specific cleanup, denoising, splitting, and resampling are not performe
 comparative lane. The one controlled downmix is an explicit preparation artifact recorded in the
 manifest and is not a provider-specific transformation.
 
-Every physical HTTP request gets an attempt record and raw response artifact. There is no automatic
+Every physical HTTP request or WebSocket stream gets an attempt record and raw response artifact. There is no automatic
 retry. A transport exception, relevant paid-request 5xx, or successful submission with an
 unrecognized response is recorded as `uncertain`; definitely rejected 4xx responses remain
 `failed`. An uncertain run fails closed, records any recoverable external ID, and stops. Recovery is
@@ -75,8 +76,8 @@ Polling an already-created asynchronous job is recorded as separate `poll` attem
 
 ## Exact CLI workflow
 
-The local prerequisites are Node 24+, `ffmpeg`, and `ffprobe` on `PATH` for preparation. The five
-provider credentials are only needed for a later real run; dry-run does not call a provider.
+The local prerequisites are Node 24+, `ffmpeg`, and `ffprobe` on `PATH` for preparation. Provider
+credentials are only needed for a later real run; dry-run does not call a provider.
 
 ```powershell
 $env:ESL_AUDIO_BENCHMARK_ROOT = 'D:\private\esl-audio-benchmark'
@@ -140,8 +141,11 @@ pnpm run audio-benchmark:run -- `
 ```
 
 Re-derive direct-run native and comparable artifacts from an already saved raw response without
-making a network request. This preserves the raw response and attempt ledger. It is currently
-limited to successful direct runs with exactly one final raw response.
+making a network request. This preserves the raw response and attempt ledger. Successful direct
+runs with exactly one final raw response remain supported. Inworld WebSocket timeout evidence can
+also be re-derived into separate `rederived-*` sidecars when the saved event sequence contains a
+final transcription and terminal usage; the original `run.json`, raw events, and physical attempt
+classification remain unchanged.
 
 ```powershell
 pnpm run audio-benchmark:rederive -- `
@@ -192,6 +196,7 @@ Credentials required only for the corresponding later real run:
 - `MISTRAL_API_KEY`
 - `DEEPGRAM_API_KEY`
 - `ELEVENLABS_API_KEY`
+- `INWORLD_API_KEY`
 
 Optional endpoint overrides are useful for a controlled local HTTP integration test or provider
 region selection. They are not needed for the public endpoints:
@@ -201,6 +206,18 @@ region selection. They are not needed for the public endpoints:
 - `MISTRAL_API_BASE_URL` (default `https://api.mistral.ai/v1`)
 - `DEEPGRAM_API_BASE_URL` (default `https://api.deepgram.com/v1`)
 - `ELEVENLABS_API_BASE_URL` (default `https://api.elevenlabs.io/v1`)
+
+Inworld uses the fixed public WebSocket endpoint
+`wss://api.inworld.ai/stt/v1/transcribe:streamBidirectional`. Its streaming contract accepts
+LINEAR16 PCM rather than a WAV container, so the benchmark sends only the verified WAV `data` chunk
+as base64 audio. The default follows Inworld's official prerecorded-file example: 100 ms chunks at
+1x audio cadence, a 350 ms trailing delay, `endTurn`, 1.5 seconds of response quiescence, then the
+required `closeStream`. Valid `result.usage` after `closeStream` is the logical terminal event; the
+client closes the physical socket separately. Authorized diagnostics may select callback-only
+unpaced ingestion or a positive audio-rate multiplier with `--inworld-pacing`. The Gate-0 config
+omits language, Voice Profile, prompts, and turn tuning while requesting diarization and word
+timestamps. Inworld documents speaker diarization as Experimental, so it must be validated with the
+consent-safe stream before any real lesson is considered.
 
 ## Effective-dated public evidence
 
@@ -229,5 +246,8 @@ silently include the separately listed diarization add-on or guess multichannel 
   `multichannel=true` behavior plus actual billed channels.
 - Confirm ElevenLabs Scribe v2 `timestamps_granularity=word`, `diarize=true`, `no_verbatim=false`,
   mixed-file limits, and whether the account exposes provider usage in the response.
+- Confirm Inworld STT-1 WebSocket config/response fields, diarization and word-timestamp behavior,
+  `transcribedAudioMs`, prerecorded pacing behavior, and account retention/ZDR settings.
 
-No live campaign API call is part of this implementation.
+No live campaign API call beyond the separately authorized Inworld synthetic Gate-0 is part of this
+implementation.

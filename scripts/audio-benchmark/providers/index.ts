@@ -2,6 +2,7 @@ import type { ProviderId } from '../schema';
 import { providerIds } from '../schema';
 import { deepgramAdapter } from './deepgram';
 import { elevenLabsAdapter } from './elevenlabs';
+import { inworldAdapter } from './inworld';
 import { mistralAdapter } from './mistral';
 import { sonioxAdapter } from './soniox';
 import { speechmaticsAdapter } from './speechmatics';
@@ -13,6 +14,7 @@ const adapters: Record<ProviderId, ProviderAdapter> = {
   'mistral-voxtral-mini-transcribe-2': mistralAdapter,
   'deepgram-nova-3': deepgramAdapter,
   'elevenlabs-scribe-v2': elevenLabsAdapter,
+  'inworld-stt-1': inworldAdapter,
 };
 
 export * from './types';
