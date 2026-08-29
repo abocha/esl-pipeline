@@ -25,6 +25,7 @@
   "scripts": {
     "audio-benchmark:manifest": "tsx scripts/audio-benchmark/manifest.ts",
     "audio-benchmark:prepare": "tsx scripts/audio-benchmark/prepare.ts",
+    "audio-benchmark:rederive": "tsx scripts/audio-benchmark/rederive.ts",
     "audio-benchmark:report": "tsx scripts/audio-benchmark/report.ts",
     "audio-benchmark:run": "tsx scripts/audio-benchmark/run.ts",
     "audio-benchmark:test": "pnpm exec vitest run scripts/audio-benchmark/tests",

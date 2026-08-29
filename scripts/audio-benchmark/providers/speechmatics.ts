@@ -30,9 +30,6 @@ function config(): Record<string, unknown> {
       language_hints: ['en', 'ru'],
       diarization: 'speaker',
     },
-    transcript_filtering_config: {
-      remove_disfluencies: false,
-    },
   };
 }
 
@@ -89,6 +86,7 @@ export const speechmaticsAdapter: ProviderAdapter = {
       steps: buildSteps(input),
       warnings: [
         'Speechmatics region is selected by SPEECHMATICS_API_BASE_URL; billing is not inferred by the adapter.',
+        'Speechmatics v3 rejects the root-level transcript_filtering_config; Gate 0 must confirm that the default preserves disfluencies.',
       ],
     };
   },
