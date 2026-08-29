@@ -125,6 +125,10 @@ export const sonioxAdapter: ProviderAdapter = {
                   ? String(speaker)
                   : undefined,
               language: stringValue(item.language),
+              isAudioEvent:
+                item.is_audio_event === null || typeof item.is_audio_event === 'boolean'
+                  ? item.is_audio_event
+                  : undefined,
               confidence: numberValue(item.confidence),
             },
             index,

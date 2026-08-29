@@ -107,6 +107,7 @@ export const deepgramAdapter: ProviderAdapter = {
             ...(speakerLabel === undefined ? {} : { speakerLabel }),
             channelIndex,
             confidence: numberValue(item.confidence),
+            language: stringValue(item.language),
           },
           nativeIndex,
         );

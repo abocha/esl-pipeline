@@ -73,6 +73,7 @@ export const elevenLabsAdapter: ProviderAdapter = {
               text,
               speakerLabel: stringValue(speaker),
               channelIndex: numberValue(item.channel_index),
+              logprob: numberValue(item.logprob),
             },
             index,
           ),
@@ -80,12 +81,26 @@ export const elevenLabsAdapter: ProviderAdapter = {
       },
     );
     const usageRoot = asRecord(root.usage);
+    const audioDurationSec = numberValue(root.audio_duration_secs);
+    const providerMetadata = Object.fromEntries(
+      [
+        ['language_code', stringValue(root.language_code)],
+        ['language_probability', numberValue(root.language_probability)],
+        ['transcription_id', stringValue(root.transcription_id)],
+        ['audio_duration_secs', audioDurationSec],
+      ].filter(([, value]) => value !== undefined),
+    );
+    const rawUsage = {
+      ...usageRoot,
+      ...(audioDurationSec === undefined ? {} : { audio_duration_secs: audioDurationSec }),
+    };
     return {
       nativeSegments,
+      providerMetadata: Object.keys(providerMetadata).length === 0 ? undefined : providerMetadata,
       usage:
-        Object.keys(usageRoot).length === 0
+        Object.keys(rawUsage).length === 0
           ? undefined
-          : { source: 'provider', rawUsage: usageRoot },
+          : { audioDurationSec, source: 'provider', rawUsage },
     };
   },
   async execute(input, request): Promise<ProviderExecution> {

@@ -71,8 +71,10 @@ export type NativeSegment = {
   text: string;
   speakerLabel?: string;
   language?: string;
+  isAudioEvent?: boolean | null;
   channelIndex?: number;
   confidence?: number;
+  logprob?: number;
 };
 
 export type ComparableSegment = {
@@ -124,6 +126,7 @@ export type BenchmarkRun = {
   providerId: ProviderId;
   requestedModel: string;
   returnedModel?: string;
+  providerMetadata?: Record<string, unknown>;
   requestMode: ProviderRequestMode;
   runMode: BenchmarkRunMode;
   sourceSha256: string;
