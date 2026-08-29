@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { realpathSync, statSync } from 'node:fs';
-import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -51,6 +51,33 @@ export async function sha256File(filePath: string): Promise<string> {
   const file = await readFile(filePath);
   hash.update(file);
   return hash.digest('hex');
+}
+
+export async function snapshotVerifiedFile(
+  sourcePath: string,
+  snapshotPath: string,
+  expectedSha256: string,
+): Promise<{ sha256: string; bytes: number }> {
+  await mkdir(path.dirname(snapshotPath), { recursive: true });
+  try {
+    const existing = await stat(snapshotPath);
+    const existingHash = await sha256File(snapshotPath);
+    if (existingHash !== expectedSha256) {
+      throw new Error(`Existing benchmark input snapshot hash does not match: ${snapshotPath}`);
+    }
+    return { sha256: existingHash, bytes: existing.size };
+  } catch (error: unknown) {
+    if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
+  }
+
+  await copyFile(sourcePath, snapshotPath);
+  const snapshotHash = await sha256File(snapshotPath);
+  if (snapshotHash !== expectedSha256) {
+    throw new Error(
+      `Benchmark input snapshot SHA-256 does not match the expected selected input: ${snapshotPath}`,
+    );
+  }
+  return { sha256: snapshotHash, bytes: (await stat(snapshotPath)).size };
 }
 
 export function computeManifestFingerprint(manifest: BenchmarkManifest): string {

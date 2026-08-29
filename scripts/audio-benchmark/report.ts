@@ -65,8 +65,12 @@ export type AggregateReport = {
       providerBillableChannels: number;
     };
     costs: {
-      calculatedUsd: number;
-      actualUsd: number;
+      calculatedUsd: number | null;
+      actualUsd: number | null;
+      calculatedStatus: 'complete' | 'partial_known_only' | 'unknown';
+      actualStatus: 'complete' | 'partial_known_only' | 'unknown';
+      calculatedKnownRunCount: number;
+      actualKnownRunCount: number;
       unknownRunCount: number;
       notes: string[];
     };
@@ -190,20 +194,56 @@ export function summarizeRuns(
             0,
           ),
         },
-        costs: {
-          calculatedUsd: costs.reduce(
-            (sum, cost) => sum + (cost?.status === 'calculated' ? (cost.amountUsd ?? 0) : 0),
-            0,
-          ),
-          actualUsd: costs.reduce(
-            (sum, cost) => sum + (cost?.status === 'actual' ? (cost.amountUsd ?? 0) : 0),
-            0,
-          ),
-          unknownRunCount: costs.filter((cost) => cost?.status === 'unknown').length,
-          notes: [...new Set(costs.flatMap((cost) => (cost?.note ? [cost.note] : [])))],
-        },
+        costs: aggregateCosts(costs),
       };
     }),
+  };
+}
+
+function aggregateCosts(
+  costs: Array<CalculatedCost | undefined>,
+): AggregateReport['aggregates'][number]['costs'] {
+  const aggregateCategory = (status: 'calculated' | 'actual') => {
+    const known = costs.filter(
+      (cost): cost is CalculatedCost =>
+        cost?.status === status && typeof cost.amountUsd === 'number',
+    );
+    const uncoveredCount = costs.length - known.length;
+    return {
+      amountUsd: known.length ? known.reduce((sum, cost) => sum + cost.amountUsd!, 0) : null,
+      status:
+        known.length === 0
+          ? ('unknown' as const)
+          : uncoveredCount
+            ? ('partial_known_only' as const)
+            : ('complete' as const),
+      knownCount: known.length,
+      uncoveredCount,
+    };
+  };
+  const calculated = aggregateCategory('calculated');
+  const actual = aggregateCategory('actual');
+  const unknownRunCount = costs.filter((cost) => cost?.status === 'unknown' || !cost).length;
+  const notes = costs.flatMap((cost) => (cost?.note ? [cost.note] : []));
+  if (calculated.status === 'partial_known_only') {
+    notes.push(
+      `Calculated cost is a PARTIAL KNOWN-ONLY sum; ${calculated.uncoveredCount} run(s) are not included.`,
+    );
+  }
+  if (actual.status === 'partial_known_only') {
+    notes.push(
+      `Actual cost is a PARTIAL KNOWN-ONLY sum; ${actual.uncoveredCount} run(s) are not included.`,
+    );
+  }
+  return {
+    calculatedUsd: calculated.amountUsd,
+    actualUsd: actual.amountUsd,
+    calculatedStatus: calculated.status,
+    actualStatus: actual.status,
+    calculatedKnownRunCount: calculated.knownCount,
+    actualKnownRunCount: actual.knownCount,
+    unknownRunCount,
+    notes: [...new Set(notes)],
   };
 }
 

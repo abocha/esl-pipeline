@@ -200,4 +200,67 @@ describe('aggregate benchmark reporting', () => {
       }),
     ).toThrow(/canonical hash/iu);
   });
+
+  test('does not serialize an all-unknown aggregate cost as zero', () => {
+    const report = summarizeRuns([run], 'public-2026-08-28', {
+      snapshotId: 'public-2026-08-28',
+      entries: [],
+    });
+    const costs = report.aggregates[0]!.costs;
+
+    expect(costs.calculatedUsd).toBeNull();
+    expect(costs.actualUsd).toBeNull();
+    expect(costs.calculatedStatus).toBe('unknown');
+    expect(costs.actualStatus).toBe('unknown');
+    expect(JSON.stringify(costs)).not.toMatch(/calculatedUsd["']?:0|actualUsd["']?:0/u);
+  });
+
+  test('marks known-only aggregate sums partial when another run is unknown', () => {
+    const knownRun = { ...run };
+    const unknownRun = { ...run, runId: 'run-unknown', providerUsage: undefined };
+    const report = summarizeRuns([knownRun, unknownRun], 'public-2026-08-28', {
+      snapshotId: 'public-2026-08-28',
+      entries: [
+        {
+          providerId: 'speechmatics-melia-1-batch',
+          model: 'melia-1',
+          unit: 'hour',
+          usdPerUnit: 0.129,
+          usage: 'billable_duration_sec',
+          denominator: 3600,
+          calculationStatus: 'confirmed',
+        },
+      ],
+    });
+    const speechmatics = report.aggregates.find(
+      (aggregate) => aggregate.providerId === 'speechmatics-melia-1-batch',
+    )!;
+
+    expect(speechmatics.costs.calculatedStatus).toBe('partial_known_only');
+    expect(speechmatics.costs.calculatedUsd).toBeGreaterThan(0);
+    expect(speechmatics.costs.unknownRunCount).toBe(1);
+    expect(speechmatics.costs.notes.join(' ')).toMatch(/known-only|partial|unknown/iu);
+  });
+
+  test('keeps an all-known aggregate complete and numeric', () => {
+    const report = summarizeRuns([run], 'public-2026-08-28', {
+      snapshotId: 'public-2026-08-28',
+      entries: [
+        {
+          providerId: 'speechmatics-melia-1-batch',
+          model: 'melia-1',
+          unit: 'hour',
+          usdPerUnit: 0.129,
+          usage: 'billable_duration_sec',
+          denominator: 3600,
+          calculationStatus: 'confirmed',
+        },
+      ],
+    });
+    const costs = report.aggregates[0]!.costs;
+
+    expect(costs.calculatedStatus).toBe('complete');
+    expect(costs.calculatedUsd).toBeCloseTo((90 / 3600) * 0.129);
+    expect(costs.unknownRunCount).toBe(0);
+  });
 });

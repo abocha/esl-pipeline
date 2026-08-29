@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, test, vi } from 'vitest';
@@ -322,6 +322,95 @@ describe('benchmark request lifecycle safety', () => {
       ).rejects.toThrow(/^(failed|uncertain):/u);
     } finally {
       await rm(fixture.root, { recursive: true, force: true });
+    }
+  });
+
+  test('sends the verified run snapshot after the selected pathname is replaced', async () => {
+    const fixture = await makeRunFixture();
+    const selectedInputPath = path.join(fixture.root, 'prepared.wav');
+    const verifiedBytes = await readFile(selectedInputPath);
+    const verifiedHash = await sha256File(selectedInputPath);
+    const fetchImpl = vi.fn<typeof fetch>(async (_url, init) => {
+      const form = init?.body as FormData;
+      const file = form.get('file') as File;
+      expect(Buffer.from(await file.arrayBuffer())).toEqual(verifiedBytes);
+      return new Response('{"segments":[{"start":0,"end":1,"text":"hello"}]}');
+    });
+    try {
+      const run = await runBenchmark({
+        manifestPath: fixture.manifestPath,
+        caseId: 'lesson-1',
+        providerId: 'mistral-voxtral-mini-transcribe-2',
+        runMode: 'mixed_diarized',
+        benchmarkRoot: fixture.root,
+        runId: 'run-snapshot',
+        environment: { MISTRAL_API_KEY: 'test-secret' },
+        fetchImpl,
+        beforeProviderExecution: async () => {
+          await writeFile(selectedInputPath, 'replacement bytes', 'utf8');
+        },
+      });
+
+      expect(run.status).toBe('success');
+      expect(run.consumedInputSnapshot?.sha256).toBe(verifiedHash);
+      expect(await sha256File(selectedInputPath)).not.toBe(verifiedHash);
+      expect(
+        await sha256File(
+          path.join(
+            fixture.root,
+            'runs/campaign-run/run-snapshot',
+            run.consumedInputSnapshot!.relativePath,
+          ),
+        ),
+      ).toBe(verifiedHash);
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+    } finally {
+      await rm(fixture.root, { recursive: true, force: true });
+    }
+  });
+
+  test('rejects a snapshot destination junction outside the benchmark root before copying or transport', async ({
+    skip,
+  }) => {
+    const fixture = await makeRunFixture();
+    const outsideRoot = await mkdtemp(path.join(os.tmpdir(), 'audio-benchmark-run-outside-'));
+    const snapshotDirectory = path.join(
+      fixture.root,
+      'runs/campaign-run/snapshot-junction/input-snapshot',
+    );
+    const fetchImpl = vi.fn<typeof fetch>();
+    try {
+      await mkdir(path.dirname(snapshotDirectory), { recursive: true });
+      try {
+        await symlink(outsideRoot, snapshotDirectory, 'junction');
+      } catch (error: unknown) {
+        const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined;
+        if (code === 'EPERM' || code === 'EACCES') {
+          skip('The test platform does not permit junction creation.');
+          return;
+        }
+        throw error;
+      }
+
+      await expect(
+        runBenchmark({
+          manifestPath: fixture.manifestPath,
+          caseId: 'lesson-1',
+          providerId: 'mistral-voxtral-mini-transcribe-2',
+          runMode: 'mixed_diarized',
+          benchmarkRoot: fixture.root,
+          runId: 'snapshot-junction',
+          environment: { MISTRAL_API_KEY: 'test-secret' },
+          fetchImpl,
+        }),
+      ).rejects.toThrow(/outside|path|snapshot/iu);
+      expect(fetchImpl).not.toHaveBeenCalled();
+      await expect(stat(path.join(outsideRoot, 'prepared.wav'))).rejects.toMatchObject({
+        code: 'ENOENT',
+      });
+    } finally {
+      await rm(fixture.root, { recursive: true, force: true });
+      await rm(outsideRoot, { recursive: true, force: true });
     }
   });
 });

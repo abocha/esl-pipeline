@@ -43,6 +43,14 @@ export type PreparedMedia = {
   sampleRateHz: number;
   preparationVersion: string;
   kind: PreparationKind;
+  inputSnapshot?: InputSnapshot;
+};
+
+export type InputSnapshot = {
+  selectedRelativePath: string;
+  relativePath: string;
+  sha256: string;
+  bytes: number;
 };
 
 export type BenchmarkCase = {
@@ -138,6 +146,7 @@ export type BenchmarkRun = {
   preparedArtifactDurationMs?: number;
   preparedArtifactChannels?: number;
   preparedArtifactSampleRateHz?: number;
+  consumedInputSnapshot?: InputSnapshot;
   mediaIngest: {
     inputArtifact: 'prepared_artifact' | 'original_source';
     originalSourceDirect: 'not_tested' | 'accepted' | 'rejected';

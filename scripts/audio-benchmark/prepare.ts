@@ -11,6 +11,7 @@ import {
   readManifest,
   resolveUnderBenchmarkRoot,
   sha256File,
+  snapshotVerifiedFile,
   writeManifest,
 } from './manifest';
 import { probeMedia } from './media';
@@ -18,6 +19,12 @@ import type { BenchmarkManifest, PreparedMedia } from './schema';
 import { PREPARATION_VERSION } from './schema';
 
 const execFile = promisify(execFileCallback);
+
+type ExecFileImplementation = (
+  command: string,
+  args: string[],
+  options: { windowsHide: boolean },
+) => Promise<{ stdout: string; stderr: string }>;
 
 export type DownmixPlan = {
   command: 'ffmpeg';
@@ -66,6 +73,7 @@ export async function prepareCase(options: {
   caseId: string;
   benchmarkRoot?: string;
   outputRelativePath?: string;
+  execFileImpl?: ExecFileImplementation;
 }): Promise<BenchmarkManifest> {
   const benchmarkRoot = options.benchmarkRoot ?? getBenchmarkRoot();
   const manifestPath = resolveUnderBenchmarkRoot(options.manifestPath, benchmarkRoot);
@@ -78,6 +86,18 @@ export async function prepareCase(options: {
       `Source SHA-256 does not match the manifest for ${options.caseId}; refusing to prepare it.`,
     );
   }
+  const sourceSnapshotRelativePath = path.join(
+    'preparation-snapshot',
+    manifest.campaignId,
+    options.caseId,
+    path.basename(benchmarkCase.source.relativePath),
+  );
+  const sourceSnapshotPath = resolveUnderBenchmarkRoot(sourceSnapshotRelativePath, benchmarkRoot);
+  const sourceSnapshot = await snapshotVerifiedFile(
+    inputPath,
+    sourceSnapshotPath,
+    benchmarkCase.source.sha256,
+  );
   const outputRelativePath =
     options.outputRelativePath ??
     path.join('prepared', manifest.campaignId, options.caseId, 'downmix-mono.wav');
@@ -87,7 +107,7 @@ export async function prepareCase(options: {
     .split(path.sep)
     .join('/');
   const plan = buildDownmixPlan({
-    inputPath,
+    inputPath: sourceSnapshotPath,
     outputPath,
     sourceChannels: benchmarkCase.source.channels,
   });
@@ -111,7 +131,7 @@ export async function prepareCase(options: {
   }
 
   await mkdir(path.dirname(outputPath), { recursive: true });
-  await execFile(plan.command, plan.args, { windowsHide: true });
+  await (options.execFileImpl ?? execFile)(plan.command, plan.args, { windowsHide: true });
   const fileStat = await stat(outputPath);
   const metadata = await probeMedia(outputPath);
   if (metadata.channels !== 1 || metadata.sampleRateHz !== 16000) {
@@ -127,6 +147,12 @@ export async function prepareCase(options: {
     sampleRateHz: metadata.sampleRateHz,
     preparationVersion: PREPARATION_VERSION,
     kind: 'controlled_downmix_to_mono',
+    inputSnapshot: {
+      selectedRelativePath: benchmarkCase.source.relativePath,
+      relativePath: path.relative(benchmarkRoot, sourceSnapshotPath).split(path.sep).join('/'),
+      sha256: sourceSnapshot.sha256,
+      bytes: sourceSnapshot.bytes,
+    },
   } satisfies PreparedMedia;
   await writeManifest(manifestPath, manifest);
   return manifest;
