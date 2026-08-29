@@ -50,6 +50,7 @@ export async function rederiveDirectRunArtifacts(options: {
   });
 
   run.returnedModel = parsed.returnedModel;
+  run.providerMetadata = parsed.providerMetadata;
   run.providerUsage = parsed.usage;
   run.nativeSegmentsPath = 'native-segments.json';
   run.comparableSegmentsPath = 'comparable-segments.json';

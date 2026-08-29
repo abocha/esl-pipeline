@@ -4,7 +4,8 @@ export function deriveComparableSegments(
   nativeSegments: NativeSegment[],
   providerId?: ProviderId,
 ): ComparableSegment[] {
-  const preserveProviderText = providerId === 'soniox-v5-async';
+  const preserveProviderText =
+    providerId === 'soniox-v5-async' || providerId === 'mistral-voxtral-mini-transcribe-2';
   const speakerKeys = new Map<string, string>();
   let nextSpeakerNumber = 1;
   const derived: ComparableSegment[] = [];

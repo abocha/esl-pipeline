@@ -224,6 +224,7 @@ export async function runBenchmark(options: {
       segments: deriveComparableSegments(result.nativeSegments, options.providerId),
     });
     run.returnedModel = result.returnedModel;
+    run.providerMetadata = result.providerMetadata;
     run.providerUsage = result.usage;
     run.rawResponsePaths = result.rawResponsePaths;
     run.nativeSegmentsPath = nativePath;

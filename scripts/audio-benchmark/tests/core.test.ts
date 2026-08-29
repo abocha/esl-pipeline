@@ -91,6 +91,52 @@ describe('benchmark output layers', () => {
     expect(result.map((segment) => segment.speakerKey)).toEqual(['S1', 'S1', 'S2', 'S2']);
   });
 
+  test('reconstructs Mistral segment text verbatim when segments carry provider spacing', () => {
+    const result = deriveComparableSegments(
+      [
+        {
+          index: 0,
+          kind: 'segment',
+          startMs: 0,
+          endMs: 100,
+          text: 'Hello',
+          speakerLabel: 'speaker_1',
+          language: 'en',
+        },
+        {
+          index: 1,
+          kind: 'segment',
+          startMs: 100,
+          endMs: 200,
+          text: ' world',
+          speakerLabel: 'speaker_1',
+          language: 'en',
+        },
+        {
+          index: 2,
+          kind: 'segment',
+          startMs: 200,
+          endMs: 300,
+          text: '!',
+          speakerLabel: 'speaker_1',
+          language: 'en',
+        },
+        {
+          index: 3,
+          kind: 'segment',
+          startMs: 300,
+          endMs: 400,
+          text: 'again',
+          speakerLabel: 'speaker_1',
+          language: 'en',
+        },
+      ],
+      'mistral-voxtral-mini-transcribe-2',
+    );
+
+    expect(result.map((segment) => segment.text)).toEqual(['Hello world!again']);
+  });
+
   test('keeps provider lexical content and assigns anonymous stable speaker keys', () => {
     const result = deriveComparableSegments([
       {

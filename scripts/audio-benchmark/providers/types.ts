@@ -74,6 +74,7 @@ export type ParsedProviderResponse = {
   nativeSegments: NativeSegment[];
   returnedModel?: string;
   usage?: ProviderUsage;
+  providerMetadata?: Record<string, unknown>;
 };
 
 export type ProviderExecution = ParsedProviderResponse & {

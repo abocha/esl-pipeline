@@ -100,6 +100,29 @@ describe('provider-local benchmark adapters', () => {
     ).toBeUndefined();
   });
 
+  test('preserves ElevenLabs logprob and top-level transcription metadata', () => {
+    const parsed = getProviderAdapter('elevenlabs-scribe-v2').parseResponse({
+      language_code: 'rus',
+      language_probability: 0.99,
+      transcription_id: 'transcription-1',
+      audio_duration_secs: 3.5,
+      words: [
+        { text: 'hello', start: 0, end: 1, type: 'word', speaker_id: 'speaker_0', logprob: -0.2 },
+        { text: ' ', start: 1, end: 1, type: 'spacing', speaker_id: 'speaker_0', logprob: -0.1 },
+      ],
+    });
+
+    expect(parsed.nativeSegments[0]?.logprob).toBe(-0.2);
+    expect(parsed.nativeSegments[1]?.kind).toBe('spacing');
+    expect(parsed.providerMetadata).toEqual({
+      language_code: 'rus',
+      language_probability: 0.99,
+      transcription_id: 'transcription-1',
+      audio_duration_secs: 3.5,
+    });
+    expect(parsed.usage).toMatchObject({ audioDurationSec: 3.5, source: 'provider' });
+  });
+
   test('does not send Speechmatics v3 rejected transcript filtering config', () => {
     const intent = getProviderAdapter('speechmatics-melia-1-batch').buildIntent(
       context('speechmatics-melia-1-batch'),
@@ -243,6 +266,25 @@ describe('provider-local benchmark adapters', () => {
     expect(parsed.nativeSegments.map((item) => item.text)).toEqual(['Hello.', 'this']);
   });
 
+  test('preserves Deepgram word-level language labels in native evidence', () => {
+    const parsed = getProviderAdapter('deepgram-nova-3').parseResponse({
+      metadata: { duration: 1, channels: 1 },
+      results: {
+        channels: [
+          {
+            alternatives: [
+              {
+                words: [{ word: 'привет', start: 0, end: 1, language: 'ru' }],
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(parsed.nativeSegments[0]?.language).toBe('ru');
+  });
+
   test('creates a deterministic Soniox reference from run and input identity', () => {
     const adapter = getProviderAdapter('soniox-v5-async');
     const first = adapter.buildIntent(context('soniox-v5-async', 'mixed_diarized'));
@@ -261,6 +303,37 @@ describe('provider-local benchmark adapters', () => {
     const referenceLength =
       firstBody?.kind === 'multipart' ? (firstBody.fields.client_reference_id?.length ?? -1) : -1;
     expect(referenceLength).toBeLessThanOrEqual(256);
+  });
+
+  test('preserves Soniox token audio-event metadata in native evidence', () => {
+    const parsed = getProviderAdapter('soniox-v5-async').parseResponse({
+      tokens: [
+        {
+          text: '[noise]',
+          start_ms: 10,
+          end_ms: 20,
+          confidence: 0.5,
+          speaker: '1',
+          language: 'en',
+          is_audio_event: true,
+        },
+        {
+          text: 'speech',
+          start_ms: 20,
+          end_ms: 30,
+          is_audio_event: null,
+        },
+      ],
+    });
+
+    expect(parsed.nativeSegments[0]).toMatchObject({
+      text: '[noise]',
+      isAudioEvent: true,
+    });
+    expect(parsed.nativeSegments[1]).toMatchObject({
+      text: 'speech',
+      isAudioEvent: null,
+    });
   });
 
   test('preserves Soniox model from the completed status response', async () => {

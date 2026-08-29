@@ -28,6 +28,7 @@
     "audio-benchmark:rederive": "tsx scripts/audio-benchmark/rederive.ts",
     "audio-benchmark:report": "tsx scripts/audio-benchmark/report.ts",
     "audio-benchmark:run": "tsx scripts/audio-benchmark/run.ts",
+    "audio-benchmark:score": "tsx scripts/audio-benchmark/score.ts",
     "audio-benchmark:test": "pnpm exec vitest run scripts/audio-benchmark/tests",
     "build": "pnpm -r --filter \"./packages/*\" run build",
     "check": "pnpm test:tooling && pnpm build && pnpm typecheck && pnpm lint && pnpm test:unit:prebuilt && pnpm test:integration:prebuilt && pnpm test:backend:db:worker",
