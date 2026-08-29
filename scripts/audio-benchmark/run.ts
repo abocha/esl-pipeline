@@ -15,6 +15,7 @@ import {
   resolveUnderBenchmarkRoot,
   sha256File,
   sha256Text,
+  snapshotVerifiedFile,
   writeJsonFile,
 } from './manifest';
 import { probeMedia } from './media';
@@ -118,6 +119,7 @@ export async function runBenchmark(options: {
   maxWaitMs?: number;
   providerOptions?: Record<string, unknown>;
   fetchImpl?: FetchLike;
+  beforeProviderExecution?: () => Promise<void>;
 }): Promise<BenchmarkRun> {
   const benchmarkRoot = options.benchmarkRoot ?? getBenchmarkRoot(options.environment);
   const manifestPath = resolveUnderBenchmarkRoot(options.manifestPath, benchmarkRoot);
@@ -147,6 +149,21 @@ export async function runBenchmark(options: {
   } catch (error: unknown) {
     if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
   }
+  const inputSnapshotPath = resolveUnderBenchmarkRoot(
+    path.join(
+      'runs',
+      manifest.campaignId,
+      runId,
+      'input-snapshot',
+      path.basename(input.relativePath),
+    ),
+    benchmarkRoot,
+  );
+  const inputSnapshot = await snapshotVerifiedFile(
+    input.absolutePath,
+    inputSnapshotPath,
+    input.sha256,
+  );
   await mkdir(outputPaths.rawDirectory, { recursive: true });
   const startedAt = new Date().toISOString();
   const run: BenchmarkRun = {
@@ -167,6 +184,12 @@ export async function runBenchmark(options: {
     preparedArtifactDurationMs: benchmarkCase.prepared?.durationMs,
     preparedArtifactChannels: benchmarkCase.prepared?.channels,
     preparedArtifactSampleRateHz: benchmarkCase.prepared?.sampleRateHz,
+    consumedInputSnapshot: {
+      selectedRelativePath: input.relativePath,
+      relativePath: path.relative(runDirectory, inputSnapshotPath).split(path.sep).join('/'),
+      sha256: inputSnapshot.sha256,
+      bytes: inputSnapshot.bytes,
+    },
     mediaIngest: {
       inputArtifact: input.inputArtifact,
       originalSourceDirect: 'not_tested',
@@ -190,6 +213,7 @@ export async function runBenchmark(options: {
       providerOptions: options.providerOptions,
       runId,
       selectedInputSha256: input.sha256,
+      consumedInputPath: inputSnapshotPath,
       recordExternalReference: async (reference) => {
         if (
           !run.externalReferences?.some(
@@ -206,6 +230,7 @@ export async function runBenchmark(options: {
     ledger.request(phase, providerRequest, options.environment, options.fetchImpl);
 
   try {
+    await options.beforeProviderExecution?.();
     const result = await adapter.execute(providerInput, request);
     const nativePath = path
       .relative(runDirectory, outputPaths.nativeSegments)
@@ -371,6 +396,7 @@ function providerInputFromCase(
   const {
     runId,
     selectedInputSha256,
+    consumedInputPath,
     recordExternalReference,
     providerOptions,
     ...requestOptions
@@ -378,7 +404,7 @@ function providerInputFromCase(
   return {
     providerId,
     runMode: input.runMode,
-    inputPath: input.absolutePath,
+    inputPath: consumedInputPath ?? input.absolutePath,
     fileName: path.basename(input.relativePath),
     sourceChannels: input.sourceChannels,
     preparedChannels: benchmarkCase.prepared?.channels ?? 1,
@@ -400,6 +426,7 @@ function providerInputFromCase(
 type ProviderInputOptions = Record<string, unknown> & {
   runId?: string;
   selectedInputSha256?: string;
+  consumedInputPath?: string;
   recordExternalReference?: (reference: ExternalReference) => Promise<void>;
   providerOptions?: Record<string, unknown>;
 };

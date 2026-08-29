@@ -157,10 +157,10 @@ export function chooseGlobalSpeakerMapping(input: SpeakerMappingInput): SpeakerM
     });
   }
   candidates.sort(
-    (left, right) => left.objective - right.objective || left.key.localeCompare(right.key),
+    (left, right) => left.objective - right.objective || compareStrings(left.key, right.key),
   );
   const best = candidates[0]!;
-  const second = candidates.find((candidate) => candidate.objective > best.objective);
+  const second = candidates[1];
   return {
     mapping: best.mapping,
     bestObjective: best.objective,
@@ -171,26 +171,21 @@ export function chooseGlobalSpeakerMapping(input: SpeakerMappingInput): SpeakerM
 }
 
 export function createBlindLabelMapping(
-  mixedProviderIds: string[],
-  controlId: string,
+  configurationKeys: string[],
   seed: string,
 ): BlindLabelMapping {
-  const mixed = [...new Set(mixedProviderIds)]
-    .filter((id) => id !== controlId)
-    .sort((left, right) => {
-      const leftHash = createHash('sha256').update(`${seed}:${left}`, 'utf8').digest('hex');
-      const rightHash = createHash('sha256').update(`${seed}:${right}`, 'utf8').digest('hex');
-      return leftHash.localeCompare(rightHash) || left.localeCompare(right);
-    });
+  const configurations = [...new Set(configurationKeys)].sort((left, right) => {
+    const leftHash = createHash('sha256').update(`${seed}:${left}`, 'utf8').digest('hex');
+    const rightHash = createHash('sha256').update(`${seed}:${right}`, 'utf8').digest('hex');
+    return compareStrings(leftHash, rightHash) || compareStrings(left, right);
+  });
   const providerToBlindLabel: Record<string, string> = {};
   const blindLabelToProvider: Record<string, string> = {};
-  mixed.forEach((providerId, index) => {
+  configurations.forEach((providerId, index) => {
     const label = `P${index + 1}`;
     providerToBlindLabel[providerId] = label;
     blindLabelToProvider[label] = providerId;
   });
-  providerToBlindLabel[controlId] = 'C1';
-  blindLabelToProvider.C1 = controlId;
   return {
     seed,
     algorithm:
@@ -220,6 +215,10 @@ type NativeReference = {
   speakerKey?: string;
   nativeSpeakerLabel?: string;
   channelIndex?: number;
+  language?: string;
+  confidence?: number;
+  logprob?: number;
+  isAudioEvent?: boolean | null;
 };
 type ProviderWindow = {
   windowId: string;
@@ -230,6 +229,337 @@ type ProviderWindow = {
   speakerTexts?: Record<string, JsonRecord>;
   channelTexts?: Array<JsonRecord>;
 };
+
+export type BlindedReviewCandidate = {
+  configurationKey: string;
+  chronologicalText: string;
+  studentText: string;
+  tutorText: string;
+};
+
+export type BlindedReviewWindow = {
+  windowId: string;
+  startMs: number;
+  endMs: number;
+  reference: {
+    chronologicalText: string;
+    studentText: string;
+    tutorText: string;
+  };
+  candidates: BlindedReviewCandidate[];
+};
+
+export function createBlindedReviewPackage(input: {
+  campaignId: string;
+  caseId: string;
+  mapping: BlindLabelMapping;
+  windows: BlindedReviewWindow[];
+}): JsonRecord {
+  return {
+    schemaVersion: '1.0',
+    kind: 'blinded_semantic_review_package',
+    campaignId: input.campaignId,
+    caseId: input.caseId,
+    candidateLabels: Object.keys(input.mapping.blindLabelToProvider).sort(compareStrings),
+    windows: input.windows.map((window) => ({
+      windowId: window.windowId,
+      startMs: window.startMs,
+      endMs: window.endMs,
+      reference: window.reference,
+      candidates: window.candidates
+        .map((candidate) => ({
+          blindLabel: input.mapping.providerToBlindLabel[candidate.configurationKey],
+          chronologicalText: candidate.chronologicalText,
+          studentText: candidate.studentText,
+          tutorText: candidate.tutorText,
+        }))
+        .sort((left, right) => compareStrings(String(left.blindLabel), String(right.blindLabel))),
+    })),
+  };
+}
+
+export function partitionComparisonProviders(providers: JsonRecord[]): {
+  eligible: JsonRecord[];
+  control: JsonRecord[];
+} {
+  const byStudentWer = (left: JsonRecord, right: JsonRecord): number => {
+    const leftAggregate = left.aggregate as JsonRecord;
+    const rightAggregate = right.aggregate as JsonRecord;
+    const leftStudent = leftAggregate.student as JsonRecord;
+    const rightStudent = rightAggregate.student as JsonRecord;
+    return (
+      Number(leftStudent.wer ?? Infinity) - Number(rightStudent.wer ?? Infinity) ||
+      compareStrings(String(left.displayName), String(right.displayName))
+    );
+  };
+  return {
+    eligible: providers.filter((provider) => !provider.controlOnly).sort(byStudentWer),
+    control: providers.filter((provider) => provider.controlOnly).sort(byStudentWer),
+  };
+}
+
+export type FrozenWindowDefinition = {
+  windowId: string;
+  startMs: number;
+  endMs: number;
+};
+
+export type ProviderWindowValidationInput = {
+  view: JsonRecord;
+  expectedCampaignId: string;
+  expectedCaseId: string;
+  expectedProviderId: ProviderId;
+  expectedRunId: string;
+  expectedRunMode: string;
+  expectedFrozenWindowsPath: string;
+  expectedNativeSegmentsPath: string;
+  expectedRawResponsePath: string;
+  frozenWindows: FrozenWindowDefinition[];
+  frozenWindowsSha256: string;
+  nativeArtifactSha256: string;
+  native: { providerId: string; segments: NativeSegment[] };
+};
+
+export function validateAndCanonicalizeProviderWindowView(input: ProviderWindowValidationInput): {
+  view: JsonRecord;
+  windows: ProviderWindow[];
+} {
+  assertMetadata(input.view, 'campaignId', input.expectedCampaignId);
+  assertMetadata(input.view, 'caseId', input.expectedCaseId);
+  assertMetadata(input.view, 'providerId', input.expectedProviderId);
+  assertMetadata(input.view, 'runId', input.expectedRunId);
+  if (input.view.runMode !== undefined)
+    assertMetadata(input.view, 'runMode', input.expectedRunMode);
+  assertMetadata(input.view, 'sourceFrozenWindowsPath', input.expectedFrozenWindowsPath);
+  assertMetadata(input.view, 'sourceNativeSegmentsPath', input.expectedNativeSegmentsPath);
+  assertMetadata(input.view, 'sourceRawResponsePath', input.expectedRawResponsePath);
+  if (input.native.providerId !== input.expectedProviderId) {
+    throw new Error('Native evidence providerId does not match the expected provider.');
+  }
+  if (input.expectedRunMode === 'trusted_split_control') {
+    assertTrustedSplitNativeLineage(input.native.segments);
+  }
+  if (
+    input.view.sourceFrozenWindowsSha256 !== input.frozenWindowsSha256 ||
+    typeof input.view.sourceFrozenWindowsSha256 !== 'string'
+  ) {
+    throw new Error('Provider view frozen-window hash does not match the actual frozen file.');
+  }
+  if (
+    input.view.sourceNativeSegmentsSha256 !== undefined &&
+    input.view.sourceNativeSegmentsSha256 !== input.nativeArtifactSha256
+  ) {
+    throw new Error('Provider view native-artifact hash does not match the current native file.');
+  }
+
+  assertExactWindows(input.frozenWindows, 'frozen evidence');
+  if (!Array.isArray(input.view.windows)) {
+    throw new Error('Provider view must contain exactly six windows.');
+  }
+  assertExactWindows(
+    input.view.windows.map((window: JsonRecord) => ({
+      windowId: String(window.windowId),
+      startMs: Number(window.startMs),
+      endMs: Number(window.endMs),
+    })),
+    'provider view',
+  );
+
+  const speakerKeys = new Map<string, string>();
+  let nextSpeakerNumber = 1;
+  const canonicalWindows = WINDOW_IDS.map((windowId) => {
+    const frozenWindow = input.frozenWindows.find((candidate) => candidate.windowId === windowId)!;
+    const sourceWindow = input.view.windows.find(
+      (window: JsonRecord) => window.windowId === frozenWindow.windowId,
+    )!;
+    if (
+      sourceWindow.startMs !== frozenWindow.startMs ||
+      sourceWindow.endMs !== frozenWindow.endMs
+    ) {
+      throw new Error(
+        `Provider view window bounds do not match frozen window ${frozenWindow.windowId}.`,
+      );
+    }
+    if (!Array.isArray(sourceWindow.nativeReferences)) {
+      throw new Error(`Provider view window ${frozenWindow.windowId} has no native references.`);
+    }
+    const referenceIndices = sourceWindow.nativeReferences.map((reference: NativeReference) => {
+      const nativeIndex = reference.nativeIndex;
+      const index = reference.index;
+      if (
+        (nativeIndex !== undefined && (!Number.isInteger(nativeIndex) || nativeIndex < 0)) ||
+        (index !== undefined && (!Number.isInteger(index) || index < 0))
+      ) {
+        throw new Error(`Invalid native reference index in window ${frozenWindow.windowId}.`);
+      }
+      if (nativeIndex !== undefined && index !== undefined && nativeIndex !== index) {
+        throw new Error(`Native reference index disagreement in window ${frozenWindow.windowId}.`);
+      }
+      const selectedIndex = nativeIndex ?? index;
+      if (
+        selectedIndex === undefined ||
+        selectedIndex >= input.native.segments.length ||
+        input.native.segments[selectedIndex]?.index !== selectedIndex
+      ) {
+        throw new Error(`Invalid native reference index in window ${frozenWindow.windowId}.`);
+      }
+      return selectedIndex;
+    });
+    if (new Set(referenceIndices).size !== referenceIndices.length) {
+      throw new Error(`Duplicate native reference index in window ${frozenWindow.windowId}.`);
+    }
+    const expectedIndices = input.native.segments
+      .filter(
+        (segment) =>
+          segment.startMs !== undefined &&
+          segment.endMs !== undefined &&
+          segment.startMs < frozenWindow.endMs &&
+          segment.endMs > frozenWindow.startMs,
+      )
+      .map((segment) => segment.index)
+      .sort((left, right) => left - right);
+    const actualIndices = [...referenceIndices].sort((left, right) => left - right);
+    if (JSON.stringify(expectedIndices) !== JSON.stringify(actualIndices)) {
+      throw new Error(
+        `Provider view native references do not match frozen window ${frozenWindow.windowId}.`,
+      );
+    }
+
+    const canonicalReferences = referenceIndices
+      .map((index: number) => {
+        const native = input.native.segments[index]!;
+        const sourceReference = sourceWindow.nativeReferences.find(
+          (reference: NativeReference) => (reference.nativeIndex ?? reference.index) === index,
+        )!;
+        assertNativeReferenceMatches(native, sourceReference, frozenWindow.windowId);
+        const identity = nativeIdentity(native);
+        const speakerKey = identity
+          ? getAnonymousSpeakerKey(identity, speakerKeys, () => nextSpeakerNumber++)
+          : undefined;
+        return nativeReferenceFromSegment(native, speakerKey);
+      })
+      .sort((left: NativeReference, right: NativeReference) => {
+        const a = itemOrder(left, 0);
+        const b = itemOrder(right, 0);
+        return a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
+      });
+    return {
+      windowId: frozenWindow.windowId,
+      startMs: frozenWindow.startMs,
+      endMs: frozenWindow.endMs,
+      chronologicalText: providerText(input.expectedProviderId, canonicalReferences),
+      nativeReferences: canonicalReferences,
+    };
+  });
+
+  return {
+    view: {
+      ...input.view,
+      runMode: input.expectedRunMode,
+      sourceFrozenWindowsSha256: input.frozenWindowsSha256,
+      sourceNativeSegmentsSha256: input.nativeArtifactSha256,
+      windows: canonicalWindows,
+    },
+    windows: canonicalWindows,
+  };
+}
+
+function assertTrustedSplitNativeLineage(segments: NativeSegment[]): void {
+  for (const segment of segments) {
+    if (segment.channelIndex !== 0 && segment.channelIndex !== 1) {
+      throw new Error(
+        'Trusted split control native evidence has missing or invalid channel lineage.',
+      );
+    }
+    if (
+      !Number.isFinite(segment.startMs) ||
+      !Number.isFinite(segment.endMs) ||
+      segment.startMs! >= segment.endMs!
+    ) {
+      throw new Error(
+        'Trusted split control native evidence has a text item without valid timestamp lineage.',
+      );
+    }
+  }
+}
+
+function assertMetadata(view: JsonRecord, key: string, expected: string): void {
+  if (view[key] !== expected)
+    throw new Error(`Provider view ${key} does not match expected evidence.`);
+}
+
+function assertExactWindows(windows: FrozenWindowDefinition[], label: string): void {
+  if (windows.length !== WINDOW_IDS.length) {
+    throw new Error(`${label} must contain exactly six windows.`);
+  }
+  const ids = windows.map((window) => window.windowId);
+  if (new Set(ids).size !== ids.length) throw new Error(`${label} window IDs must be unique.`);
+  if (ids.some((windowId) => !WINDOW_IDS.includes(windowId as (typeof WINDOW_IDS)[number]))) {
+    throw new Error(`${label} contains an unexpected window ID.`);
+  }
+  for (const windowId of WINDOW_IDS) {
+    const window = windows.find((candidate) => candidate.windowId === windowId);
+    if (!window || !Number.isFinite(window.startMs) || !Number.isFinite(window.endMs)) {
+      throw new Error(`${label} is missing window ${windowId}.`);
+    }
+    if (window.startMs >= window.endMs) throw new Error(`${label} has invalid window bounds.`);
+  }
+}
+
+function assertNativeReferenceMatches(
+  native: NativeSegment,
+  reference: NativeReference,
+  windowId: string,
+): void {
+  if (
+    reference.text !== native.text ||
+    reference.kind !== native.kind ||
+    reference.startMs !== native.startMs ||
+    reference.endMs !== native.endMs ||
+    reference.nativeSpeakerLabel !== native.speakerLabel ||
+    reference.channelIndex !== native.channelIndex ||
+    reference.language !== native.language
+  ) {
+    throw new Error(
+      `Provider view native reference is not bound to native evidence in window ${windowId}.`,
+    );
+  }
+}
+
+function nativeIdentity(segment: NativeSegment): string | undefined {
+  if (segment.channelIndex === undefined && segment.speakerLabel === undefined) return undefined;
+  return `${segment.channelIndex ?? ''}\u0000${segment.speakerLabel ?? ''}`;
+}
+
+function getAnonymousSpeakerKey(
+  identity: string,
+  keys: Map<string, string>,
+  next: () => number,
+): string {
+  const existing = keys.get(identity);
+  if (existing) return existing;
+  const key = `S${next()}`;
+  keys.set(identity, key);
+  return key;
+}
+
+function nativeReferenceFromSegment(segment: NativeSegment, speakerKey?: string): NativeReference {
+  return {
+    index: segment.index,
+    nativeIndex: segment.index,
+    kind: segment.kind,
+    startMs: segment.startMs,
+    endMs: segment.endMs,
+    text: segment.text,
+    nativeSpeakerLabel: segment.speakerLabel,
+    speakerKey,
+    channelIndex: segment.channelIndex,
+    language: segment.language,
+    confidence: segment.confidence,
+    logprob: segment.logprob,
+    isAudioEvent: segment.isAudioEvent,
+  };
+}
 
 function rawWhitespaceTokenCount(text: string): number {
   return text.trim() ? text.trim().split(/\s+/u).length : 0;
@@ -242,6 +572,7 @@ type LoadedProvider = {
   native: { providerId: string; segments: NativeSegment[] };
   windows: ProviderWindow[];
   viewHash: string;
+  viewPath: string;
   evidenceHashes: Record<string, string>;
 };
 
@@ -803,12 +1134,22 @@ function runDirectory(root: string, campaignId: string, runId: string): string {
 async function loadProvider(
   root: string,
   campaignId: string,
+  caseId: string,
   spec: (typeof RUN_SPECS)[number],
-  expectedWindowsHash: string,
+  frozenWindows: FrozenWindowDefinition[],
+  frozenWindowsPath: string,
+  frozenWindowsHash: string,
+  evaluationRoot: string,
 ): Promise<LoadedProvider> {
   const runDirectoryPath = runDirectory(root, campaignId, spec.runId);
   const run = await readJson<BenchmarkRun>(path.join(runDirectoryPath, 'run.json'));
-  if (run.status !== 'success' || run.providerId !== spec.providerId || run.runMode !== spec.mode) {
+  if (
+    run.status !== 'success' ||
+    run.campaignId !== campaignId ||
+    run.caseId !== caseId ||
+    run.providerId !== spec.providerId ||
+    run.runMode !== spec.mode
+  ) {
     throw new Error(`Run ${spec.runId} is not the expected successful ${spec.key} result.`);
   }
   const viewName = spec.runId.startsWith('deepgram-')
@@ -816,24 +1157,46 @@ async function loadProvider(
     : `${spec.providerId.split('-')[0]}-window-views.json`;
   const viewPath = path.join(runDirectoryPath, viewName);
   const view = await readJson<JsonRecord>(viewPath);
-  if (
-    view.sourceFrozenWindowsSha256 !== expectedWindowsHash ||
-    !Array.isArray(view.windows) ||
-    view.windows.length !== WINDOW_IDS.length
-  ) {
-    throw new Error(`Provider view ${spec.runId} is not bound to the six frozen windows.`);
+  if (!run.nativeSegmentsPath || !run.comparableSegmentsPath) {
+    throw new Error(`Run ${spec.runId} does not identify native/comparable evidence.`);
   }
-  const native = await readJson<{ providerId: string; segments: NativeSegment[] }>(
-    path.join(runDirectoryPath, run.nativeSegmentsPath!),
-  );
+  const nativePath = path.join(runDirectoryPath, run.nativeSegmentsPath);
+  const native = await readJson<{ providerId: string; segments: NativeSegment[] }>(nativePath);
   if (!Array.isArray(native.segments))
     throw new Error(`Native evidence is malformed for ${spec.runId}.`);
+  const rawResponsePath = run.rawResponsePaths?.at(-1);
+  if (!rawResponsePath)
+    throw new Error(`Run ${spec.runId} does not identify a final raw response.`);
+  const canonical = validateAndCanonicalizeProviderWindowView({
+    view,
+    expectedCampaignId: campaignId,
+    expectedCaseId: caseId,
+    expectedProviderId: spec.providerId,
+    expectedRunId: spec.runId,
+    expectedRunMode: spec.mode,
+    expectedFrozenWindowsPath: path
+      .relative(runDirectoryPath, frozenWindowsPath)
+      .split(path.sep)
+      .join('/'),
+    expectedNativeSegmentsPath: run.nativeSegmentsPath,
+    expectedRawResponsePath: rawResponsePath,
+    frozenWindows,
+    frozenWindowsSha256: frozenWindowsHash,
+    nativeArtifactSha256: await sha256File(nativePath),
+    native,
+  });
+  const validatedViewPath = path.join(
+    evaluationRoot,
+    'validated-provider-window-views',
+    `${spec.runId}.json`,
+  );
+  const viewHash = await writeImmutableJson(validatedViewPath, canonical.view);
   const rawPaths = (run.rawResponsePaths ?? []).map((relativePath) =>
     path.join(runDirectoryPath, relativePath),
   );
   const evidenceHashes: Record<string, string> = {
-    native: await sha256File(path.join(runDirectoryPath, run.nativeSegmentsPath!)),
-    comparable: await sha256File(path.join(runDirectoryPath, run.comparableSegmentsPath!)),
+    native: await sha256File(nativePath),
+    comparable: await sha256File(path.join(runDirectoryPath, run.comparableSegmentsPath)),
   };
   for (const [index, rawPath] of rawPaths.entries())
     evidenceHashes[`raw-${index + 1}`] = await sha256File(rawPath);
@@ -841,10 +1204,11 @@ async function loadProvider(
     spec,
     run,
     runDirectory: runDirectoryPath,
-    view,
+    view: canonical.view,
     native,
-    windows: view.windows as ProviderWindow[],
-    viewHash: await sha256File(viewPath),
+    windows: canonical.windows,
+    viewHash,
+    viewPath: validatedViewPath,
     evidenceHashes,
   };
 }
@@ -936,7 +1300,7 @@ function calculateOperationalCost(provider: LoadedProvider, snapshot: PriceSnaps
         : provider.run.elapsedMs / provider.run.sourceWallClockDurationMs,
     physicalAttemptCount: provider.run.attempts.length,
     costEvidenceStatus: calculated.status,
-    costUsd: amount,
+    costUsd: amount ?? null,
     normalizedUsdPerWallClockHour: amount === undefined ? null : amount / sourceHours,
     calculatedCostBasis: calculated.basis,
     costNote: calculated.note,
@@ -955,27 +1319,30 @@ function retentionObservation(provider: LoadedProvider): string {
 }
 
 function markdownMetrics(metrics: JsonRecord): string {
-  const sorted = [...metrics.providers].sort(
-    (left: JsonRecord, right: JsonRecord) =>
-      Number(left.aggregate.student.wer ?? Infinity) -
-      Number(right.aggregate.student.wer ?? Infinity),
-  );
+  const { eligible, control } = partitionComparisonProviders(metrics.providers as JsonRecord[]);
+  const formatRow = (provider: JsonRecord) => {
+    const aggregate = provider.aggregate as JsonRecord;
+    const format = (value: unknown) => (typeof value === 'number' ? value.toFixed(4) : 'n/a');
+    return `| ${provider.displayName} | ${format(aggregate.aggregateMicroWer)} | ${format((aggregate.student as JsonRecord).wer)} | ${format((aggregate.tutor as JsonRecord).wer)} | ${format(aggregate.saWer)} | ${format(aggregate.attributionPenalty)} | ${format(aggregate.aggregateCer)} | ${provider.mapping.nativeSpeakerLabelCount} |`;
+  };
   const lines = [
     '# Unified lexical and speaker-aware benchmark metrics',
     '',
     'This report is descriptive evidence for the six frozen configurations. It does not select a provider, calculate a weighted composite, or calculate a diarization error rate.',
     '',
-    '## Comparison',
+    '## Eligible simple-upload candidates',
     '',
     '| Configuration | Chronological WER | Student WER | Tutor WER | SA-WER | Attribution penalty | CER | Native labels |',
     '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |',
-    ...sorted.map((provider: JsonRecord) => {
-      const aggregate = provider.aggregate as JsonRecord;
-      const format = (value: unknown) => (typeof value === 'number' ? value.toFixed(4) : 'n/a');
-      return `| ${provider.displayName} | ${format(aggregate.aggregateMicroWer)} | ${format((aggregate.student as JsonRecord).wer)} | ${format((aggregate.tutor as JsonRecord).wer)} | ${format(aggregate.saWer)} | ${format(aggregate.attributionPenalty)} | ${format(aggregate.aggregateCer)} | ${provider.mapping.nativeSpeakerLabelCount} |`;
-    }),
+    ...eligible.map(formatRow),
     '',
-    'The display order uses student WER as a descriptive primary column only; it is not a winner declaration.',
+    '## Non-ranked quality control',
+    '',
+    '| Configuration | Chronological WER | Student WER | Tutor WER | SA-WER | Attribution penalty | CER | Native labels |',
+    '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |',
+    ...control.map(formatRow),
+    '',
+    'The eligible table is descriptively sorted by student WER and contains no quality control. The control is shown separately and is not a ranked candidate.',
     '',
     '## Method and limitations',
     '',
@@ -1052,7 +1419,7 @@ async function main(): Promise<void> {
   );
   const evaluationRoot = resolveUnderBenchmarkRoot(
     args['output-dir'] ??
-      path.join('evaluation', campaignId, caseId, 'unified-scoring-final-2026-08-29'),
+      path.join('evaluation', campaignId, caseId, 'unified-scoring-final-2026-08-29-v3'),
     root,
   );
 
@@ -1061,7 +1428,11 @@ async function main(): Promise<void> {
   const windowsPath = path.join(campaignEvaluationRoot, 'frozen-windows.json');
   await verifyHash(annotationPath, EXPECTED_REFERENCE_HASHES.annotations, 'annotations');
   await verifyHash(referenceViewsPath, EXPECTED_REFERENCE_HASHES.views, 'reference views');
-  await verifyHash(windowsPath, EXPECTED_REFERENCE_HASHES.windows, 'frozen windows');
+  const frozenWindowsHash = await verifyHash(
+    windowsPath,
+    EXPECTED_REFERENCE_HASHES.windows,
+    'frozen windows',
+  );
 
   const frozenWindows = await readJson<JsonRecord>(windowsPath);
   const references = await readJson<JsonRecord>(referenceViewsPath);
@@ -1073,6 +1444,15 @@ async function main(): Promise<void> {
   ) {
     throw new Error('Frozen scoring inputs must contain exactly six windows.');
   }
+  assertExactWindows(
+    frozenWindows.windows.map((window: JsonRecord) => ({
+      windowId: String(window.windowId),
+      startMs: Number(window.startMs),
+      endMs: Number(window.endMs),
+    })),
+    'frozen evidence',
+  );
+  const frozenWindowDefinitions = frozenWindows.windows as FrozenWindowDefinition[];
   const referenceWindows = WINDOW_IDS.map((windowId) => {
     const frozen = frozenWindows.windows.find((window: JsonRecord) => window.windowId === windowId);
     const reference = references.windows.find((window: JsonRecord) => window.windowId === windowId);
@@ -1090,7 +1470,18 @@ async function main(): Promise<void> {
   const specHash = await writeImmutableJson(specPath, scoringSpec(campaignId, caseId));
   const providers = [] as LoadedProvider[];
   for (const spec of RUN_SPECS)
-    providers.push(await loadProvider(root, campaignId, spec, EXPECTED_REFERENCE_HASHES.windows));
+    providers.push(
+      await loadProvider(
+        root,
+        campaignId,
+        caseId,
+        spec,
+        frozenWindowDefinitions,
+        windowsPath,
+        frozenWindowsHash,
+        evaluationRoot,
+      ),
+    );
 
   const scoredProviders = providers.map((provider) => {
     const mapping = mappingForProvider(provider, referenceWindows);
@@ -1114,22 +1505,12 @@ async function main(): Promise<void> {
       aggregate: aggregateMetrics(windows),
       windows,
       inputView: {
-        path: path
-          .relative(
-            root,
-            path.join(
-              provider.runDirectory,
-              provider.spec.runId.startsWith('deepgram-')
-                ? 'deepgram-window-views.json'
-                : `${provider.spec.providerId.split('-')[0]}-window-views.json`,
-            ),
-          )
-          .split(path.sep)
-          .join('/'),
+        path: path.relative(root, provider.viewPath).split(path.sep).join('/'),
         sha256: provider.viewHash,
       },
     };
   });
+  const comparisonPartitions = partitionComparisonProviders(scoredProviders);
   const metrics = {
     schemaVersion: '1.0',
     kind: 'unified_lexical_speaker_metrics',
@@ -1141,6 +1522,8 @@ async function main(): Promise<void> {
     noDiarizationErrorRate: true,
     noWeightedCompositeScore: true,
     providers: scoredProviders,
+    eligibleSimpleUploadCandidates: comparisonPartitions.eligible,
+    nonRankedQualityControls: comparisonPartitions.control,
   };
   const metricsPath = path.join(evaluationRoot, 'lexical-speaker-metrics.json');
   const metricsHash = await writeImmutableJson(metricsPath, metrics);
@@ -1171,13 +1554,8 @@ async function main(): Promise<void> {
     markdownOperational(operational),
   );
 
-  const mixedKeys = RUN_SPECS.filter((spec) => spec.mode === 'mixed_diarized').map(
-    (spec) => spec.key,
-  );
-  const controlKey = RUN_SPECS.find((spec) => spec.mode === 'trusted_split_control')!.key;
   const blind = createBlindLabelMapping(
-    mixedKeys,
-    controlKey,
+    RUN_SPECS.map((spec) => spec.key),
     `semantic-review-blind-v1-${campaignId}`,
   );
   const blindDirectory = path.join(evaluationRoot, 'blinded-semantic-review');
@@ -1192,8 +1570,6 @@ async function main(): Promise<void> {
     },
     candidates: scoredProviders
       .map((provider) => {
-        const blindLabel =
-          blind.providerToBlindLabel[`${provider.providerId}:${provider.runMode}`]!;
         const loadedProvider = providers.find(
           (candidate) => candidate.spec.runId === provider.runId,
         )!;
@@ -1202,7 +1578,7 @@ async function main(): Promise<void> {
         )!;
         const providerMapping = provider.mapping.mapping as Record<string, 'tutor' | 'student'>;
         return {
-          blindLabel,
+          configurationKey: `${provider.providerId}:${provider.runMode}`,
           chronologicalText: window.chronologicalText,
           studentText: roleText(
             loadedProvider.spec.providerId,
@@ -1218,16 +1594,14 @@ async function main(): Promise<void> {
           ),
         };
       })
-      .sort((left, right) => left.blindLabel.localeCompare(right.blindLabel)),
+      .sort((left, right) => left.configurationKey.localeCompare(right.configurationKey)),
   }));
-  const blindReview = {
-    schemaVersion: '1.0',
-    kind: 'blinded_semantic_review_package',
+  const blindReview = createBlindedReviewPackage({
     campaignId,
     caseId,
-    candidateLabels: ['P1', 'P2', 'P3', 'P4', 'P5', 'C1'],
+    mapping: blind,
     windows: blindWindows,
-  };
+  });
   const blindReviewPath = path.join(blindDirectory, 'review.json');
   const blindReviewHash = await writeImmutableJson(blindReviewPath, blindReview);
   const blindReadmePath = path.join(blindDirectory, 'README.md');
@@ -1242,7 +1616,10 @@ async function main(): Promise<void> {
     configurations: RUN_SPECS.map((spec) => ({
       key: spec.key,
       runId: spec.runId,
+      providerId: spec.providerId,
       mode: spec.mode,
+      model: providers.find((provider) => provider.spec.runId === spec.runId)!.run.requestedModel,
+      controlOnly: !spec.simpleUploadCandidate,
     })),
   });
 
@@ -1251,7 +1628,7 @@ async function main(): Promise<void> {
     kind: 'unified-scoring-freeze',
     campaignId,
     caseId,
-    generatedAt: new Date().toISOString(),
+    deterministic: true,
     scoringSpec: {
       relativePath: path.relative(root, specPath).split(path.sep).join('/'),
       sha256: specHash,
@@ -1273,18 +1650,7 @@ async function main(): Promise<void> {
     providerInputViews: providers.map((provider) => ({
       key: provider.spec.key,
       runId: provider.spec.runId,
-      relativePath: path
-        .relative(
-          root,
-          path.join(
-            provider.runDirectory,
-            provider.spec.runId.startsWith('deepgram-')
-              ? 'deepgram-window-views.json'
-              : `${provider.spec.providerId.split('-')[0]}-window-views.json`,
-          ),
-        )
-        .split(path.sep)
-        .join('/'),
+      relativePath: path.relative(root, provider.viewPath).split(path.sep).join('/'),
       sha256: provider.viewHash,
       evidenceHashes: provider.evidenceHashes,
     })),
