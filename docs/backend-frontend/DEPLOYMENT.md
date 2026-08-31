@@ -5,7 +5,7 @@
 - Audience: maintainers/operators deploying batch services.
 - Read Time: 7 minutes.
 - Authority Level: Deployment runbook.
-- Last Verified Against: 2026-07-15 repo state.
+- Last Verified Against: 2026-08-31 repo state.
 - Owner: backend/frontend maintainers + automation agents.
 - Review Cadence: monthly or after deployment workflow changes.
 - Status: `runbook`.
@@ -45,13 +45,13 @@ development affordances such as source mounts, exposed loopback ports, debug log
 resets.
 
 Use GitHub Actions as the clean validation authority on pull requests: install dependencies from
-scratch, lint, format-check, type-check, run automated tests, and test database migrations. The
-blocking CI lanes are listed below in [CI Expectations](#ci-expectations). After a PR merges, the
-release bot commits the version bump, pushes a `vX.Y.Z` tag, and then publishes a complete production
-image bundle from that bot-authored release commit. Changed images are built; unchanged image
-manifests are retagged server-side in GHCR. Every bundle still has all three images under the release
-commit SHA and release tag, and deployments use explicit SHA-tagged refs, not mutable tags such as
-`latest`.
+scratch, lint, type-check, validate docs and contracts, run automated tests, and test database
+migrations. The blocking CI lanes are listed below in [CI Expectations](#ci-expectations). After a
+PR merges, the release bot commits the version bump, pushes a `vX.Y.Z` tag, and then publishes a
+complete production image bundle from that bot-authored release commit. Changed images are built;
+unchanged image manifests are retagged server-side in GHCR. Every bundle still has all three images
+under the release commit SHA and release tag, and deployments use explicit SHA-tagged refs, not
+mutable tags such as `latest`.
 
 Use the AWS Lightsail VPS as production runtime, not as the normal coding machine. SSH is for
 deployment, container/service status, logs, CPU/RAM/disk checks, reviewed migrations, backup/restore
@@ -64,6 +64,12 @@ Production Compose is pull-based for app services. Backend, frontend, worker, tr
 student-memory-worker, and optional Telegram bot images come from GHCR image refs supplied by
 environment/state files. Do not use the VPS for routine image builds, and do not restore production
 `build:`, `:local`, `pull_policy: never`, or `up --build` paths for app services.
+
+The generic `batch-worker` mounts the Docker named volume `tts_cache` at `/app/tmp/tts-cache`, so
+ordinary container recreation and deployment retain reusable speech artifacts. This cache remains
+disposable, age/size governed, separate from `uploads/`, and outside backup-critical data; see
+[`docs/operations/docker-host-paths.md`](../operations/docker-host-paths.md) for its ownership and
+maintenance contract.
 
 ## Local Development Stack (Compose)
 
@@ -459,6 +465,7 @@ can explain server-side stalls without waiting for a failure window to reproduce
 
 Deployment changes should preserve green CI for:
 
+- `CI gate`
 - `static checks (node 24.x)`
 - `integration lane (blocking)`
 - `backend db + worker integration (blocking)`
