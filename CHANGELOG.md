@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.9.0] - 2026-08-31
+
+### Changed
+
+- Automated release from PR #212: feat(audio-benchmark): add reusable local STT benchmark harness (https://github.com/abocha/esl-pipeline/pull/212)
+
 ## [10.8.5] - 2026-08-28
 
 ### Changed
