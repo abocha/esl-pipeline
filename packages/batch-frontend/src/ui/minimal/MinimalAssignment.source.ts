@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type {
+  AudioInputTopology,
   JobEvent,
   RecordingListItem,
   RecordingStatus,
@@ -57,6 +58,7 @@ export interface SourceHydrationSnapshot {
 export interface SourceResetOptions {
   resetStudent?: boolean;
   nextStudentId?: string;
+  preserveRecordingSettings?: boolean;
 }
 
 interface UseMinimalAssignmentSourceControllerParams {
@@ -71,6 +73,8 @@ export interface SourceController extends SourceHydrationSnapshot {
   replacingAudio: boolean;
   uploadProgress: number;
   selectedSttProvider: SttProvider;
+  sttProviderOverrideActive: boolean;
+  selectedAudioTopology: AudioInputTopology;
   transcriptSaving: boolean;
   manualTranscriptSaving: boolean;
   manualTranscriptError: string | null;
@@ -87,14 +91,17 @@ export interface SourceController extends SourceHydrationSnapshot {
   setTranscriptText: (value: string) => void;
   loadStudentOptions: () => Promise<void>;
   handleStudentSelectionChange: (nextStudentId: string) => void;
-  handleSelectedSttProviderChange: (provider: SttProvider) => void;
+  handleSelectedSttProviderChange: (provider: SttProvider | 'auto') => void;
+  handleSelectedAudioTopologyChange: (topology: AudioInputTopology) => void;
   handleFiles: (files: File[]) => void;
   beginAudioReplacement: () => void;
   cancelAudioReplacement: () => void;
   handleCancelUpload: () => void;
   loadTranscript: () => Promise<void>;
   refreshTranscriptPreservingLocal: () => Promise<void>;
-  handleSaveTranscript: () => Promise<RecordingTranscriptResponse | null>;
+  handleSaveTranscript: (speakerRoleMapping?: {
+    roles: { speaker: number; role: 'teacher' | 'student' }[];
+  }) => Promise<RecordingTranscriptResponse | null>;
   handleRetryTranscription: () => Promise<void>;
   createManualTranscript: (text: string, displayName?: string) => Promise<void>;
   resetSourceFlow: (options?: SourceResetOptions) => void;
@@ -122,6 +129,9 @@ export function useMinimalAssignmentSourceController({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
   const [selectedSttProvider, setSelectedSttProvider] = useState<SttProvider>('deepgram');
+  const [sttProviderOverrideActive, setSttProviderOverrideActive] = useState(false);
+  const [selectedAudioTopology, setSelectedAudioTopology] =
+    useState<AudioInputTopology>('mixed_recording');
   const uploadAbortRef = useRef<AbortController | null>(null);
   const sttProviderUserChangedRef = useRef(false);
   const [transcript, setTranscript] = useState<RecordingTranscriptResponse | null>(null);
@@ -165,11 +175,12 @@ export function useMinimalAssignmentSourceController({
     const providers = (configuredSttProviders ?? [])
       .map((provider) => (isSttProvider(provider) ? provider : null))
       .filter((provider): provider is SttProvider => provider !== null);
-    if (providers.length > 0) {
-      return [...new Set(providers)];
-    }
-    return [...FALLBACK_STT_PROVIDERS];
-  }, [configuredSttProviders]);
+    const availableProviders =
+      providers.length > 0 ? [...new Set(providers)] : FALLBACK_STT_PROVIDERS;
+    return selectedAudioTopology === 'trusted_split_channels'
+      ? availableProviders.filter((provider) => provider === 'deepgram')
+      : availableProviders;
+  }, [configuredSttProviders, selectedAudioTopology]);
 
   const selectedStudent = useMemo(
     () => studentOptions.find((student) => student.id === selectedStudentId) ?? null,
@@ -205,7 +216,11 @@ export function useMinimalAssignmentSourceController({
     (options?: SourceResetOptions) => {
       uploadAbortRef.current?.abort();
       uploadAbortRef.current = null;
-      sttProviderUserChangedRef.current = false;
+      if (!options?.preserveRecordingSettings) {
+        sttProviderUserChangedRef.current = false;
+        setSttProviderOverrideActive(false);
+        setSelectedAudioTopology('mixed_recording');
+      }
       if (options?.nextStudentId !== undefined) {
         setSelectedStudentId(options.nextStudentId);
       } else if (options?.resetStudent) {
@@ -235,6 +250,7 @@ export function useMinimalAssignmentSourceController({
   const applyHydratedSnapshot = useCallback((snapshot: SourceHydrationSnapshot) => {
     setReplacingAudio(false);
     setRecording(snapshot.recording);
+    setSelectedAudioTopology(snapshot.recording?.audioTopology ?? 'mixed_recording');
     setRecordingStatus(snapshot.recordingStatus);
     setRecordingError(snapshot.recordingError);
     setSelectedFileName(snapshot.selectedFileName);
@@ -273,10 +289,30 @@ export function useMinimalAssignmentSourceController({
     setSelectedStudentId(nextStudentId);
   }, []);
 
-  const handleSelectedSttProviderChange = useCallback((provider: SttProvider) => {
+  const handleSelectedSttProviderChange = useCallback((provider: SttProvider | 'auto') => {
+    if (provider === 'auto') {
+      sttProviderUserChangedRef.current = false;
+      setSttProviderOverrideActive(false);
+      return;
+    }
     sttProviderUserChangedRef.current = true;
+    setSttProviderOverrideActive(true);
     setSelectedSttProvider(provider);
   }, []);
+  const handleSelectedAudioTopologyChange = useCallback(
+    (topology: AudioInputTopology) => {
+      if (
+        topology === 'trusted_split_channels' &&
+        sttProviderUserChangedRef.current &&
+        selectedSttProvider !== 'deepgram'
+      ) {
+        sttProviderUserChangedRef.current = false;
+        setSttProviderOverrideActive(false);
+      }
+      setSelectedAudioTopology(topology);
+    },
+    [selectedSttProvider],
+  );
 
   const beginAudioReplacement = useCallback(() => {
     if (!latestRecordingRef.current || latestRecordingRef.current.source !== 'upload') return;
@@ -302,7 +338,7 @@ export function useMinimalAssignmentSourceController({
       const previousFileName = selectedFileName;
       if (!replacingCurrentAudio) {
         onBeforeUploadReset();
-        resetSourceFlow();
+        resetSourceFlow({ preserveRecordingSettings: true });
       }
       setSelectedFileName(file.name);
       setUploading(true);
@@ -314,7 +350,9 @@ export function useMinimalAssignmentSourceController({
       try {
         const response = await uploadRecording(file, {
           studentId: selectedStudentId || undefined,
-          sttProvider: selectedSttProvider,
+          sttProvider: sttProviderUserChangedRef.current ? selectedSttProvider : undefined,
+          audioTopology:
+            selectedAudioTopology === 'trusted_split_channels' ? selectedAudioTopology : undefined,
           signal: controller.signal,
           onProgress: (progress) => setUploadProgress(progress),
         });
@@ -359,6 +397,7 @@ export function useMinimalAssignmentSourceController({
       selectedFileName,
       selectedStudentId,
       selectedSttProvider,
+      selectedAudioTopology,
       uploading,
     ],
   );
@@ -602,8 +641,10 @@ export function useMinimalAssignmentSourceController({
     }
   }, [transcriptText]);
 
-  const handleSaveTranscript =
-    useCallback(async (): Promise<RecordingTranscriptResponse | null> => {
+  const handleSaveTranscript = useCallback(
+    async (speakerRoleMapping?: {
+      roles: { speaker: number; role: 'teacher' | 'student' }[];
+    }): Promise<RecordingTranscriptResponse | null> => {
       if (!recording?.recordingId) return null;
       const normalizedText = transcriptText.trim();
       if (pendingTranscriptTextRef.current === normalizedText) {
@@ -626,6 +667,7 @@ export function useMinimalAssignmentSourceController({
             recording.recordingId,
             normalizedText,
             current.workingVersion,
+            speakerRoleMapping,
           );
           latestTranscriptRef.current = response;
           transcriptConflictTextRef.current = null;
@@ -659,7 +701,9 @@ export function useMinimalAssignmentSourceController({
         }
         setTranscriptSaving(false);
       }
-    }, [recording?.recordingId, transcriptText]);
+    },
+    [recording?.recordingId, transcriptText],
+  );
 
   useEffect(() => {
     if (!transcriptDirty || !recording?.recordingId || !transcript?.workingVersion) return;
@@ -683,7 +727,9 @@ export function useMinimalAssignmentSourceController({
     setTranscriptError(null);
     try {
       const updated = await retryRecordingTranscription(recording.recordingId, {
-        sttProvider: selectedSttProvider,
+        sttProvider: sttProviderUserChangedRef.current ? selectedSttProvider : undefined,
+        audioTopology:
+          selectedAudioTopology === 'trusted_split_channels' ? selectedAudioTopology : undefined,
       });
       setRecording(updated);
       setRecordingStatus(updated.status);
@@ -695,7 +741,7 @@ export function useMinimalAssignmentSourceController({
     } finally {
       setRetryingTranscript(false);
     }
-  }, [recording?.recordingId, selectedSttProvider]);
+  }, [recording?.recordingId, selectedSttProvider, selectedAudioTopology]);
 
   const createManualTranscript = useCallback(
     async (text: string, displayName = 'Pasted lesson transcript') => {
@@ -773,6 +819,8 @@ export function useMinimalAssignmentSourceController({
     uploadError,
     selectedFileName,
     selectedSttProvider,
+    sttProviderOverrideActive,
+    selectedAudioTopology,
     transcript,
     transcriptText,
     transcriptStatus,
@@ -796,6 +844,7 @@ export function useMinimalAssignmentSourceController({
     loadStudentOptions,
     handleStudentSelectionChange,
     handleSelectedSttProviderChange,
+    handleSelectedAudioTopologyChange,
     handleFiles,
     beginAudioReplacement,
     cancelAudioReplacement,

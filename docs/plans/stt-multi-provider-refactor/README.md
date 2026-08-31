@@ -9,7 +9,7 @@
 - Review Cadence: after STT provider or transcription pipeline PRs.
 - Status: `roadmap`.
 - Exit Trigger: archive after STT provider runtime behavior is shipped and captured in package READMEs, env policy, and operations docs.
-- Current Focus: use this README as the active STT provider roadmap; archived phase docs are historical trace.
+- Current Focus: review and approve the 2026-08-30 ElevenLabs mixed-recording production-adoption plan; archived phase docs are historical trace.
 
 ## Summary
 
@@ -30,6 +30,12 @@ Locked decisions:
 3. DB migration + backfill for provider identity.
 4. Frontend/provider metadata exposure for STT selector.
 5. Operational documentation updates.
+
+## Active Implementation Plan
+
+1. [ElevenLabs mixed-recording production adoption](2026-08-30-elevenlabs-mixed-production-adoption.md)
+   locks topology persistence, mixed/trusted routing, exact request profiles, cache identity, and
+   tutor-confirmed mixed speaker roles.
 
 ## Historical Trace
 

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import type { SttProviderId } from '@esl-pipeline/contracts';
+import type { AudioInputTopology, SttProviderId } from '@esl-pipeline/contracts';
 import { classifyProviderRuntimeFailure } from '@esl-pipeline/provider-runtime';
 import {
   formatSpeakerLabel,
@@ -23,6 +23,7 @@ import {
   createTranscriptionStorageForUri,
 } from '../infrastructure/transcription-storage.js';
 import { ensureSttProvidersRegistered } from './stt-provider-registry.js';
+import { resolveTranscriptionRoute } from './transcription-routing.js';
 
 export interface TranscribeDependencies {
   config: BatchBackendConfig;
@@ -88,21 +89,34 @@ export async function processTranscribeJob(
     return null;
   }
 
-  const transcribing = await recordings.updateStatus({
-    id: recording.id,
-    status: 'transcribing',
-    error: null,
-  });
-
-  if (transcribing) {
-    publishEvent({ type: 'recording_state_changed', recording: transcribing });
-  }
-
   const mode = config.transcription.mode;
   const transcriptId = randomUUID();
-  const sttProvider = resolveSttProvider(payload.sttProvider, config.transcription.sttProvider);
+  const topology: AudioInputTopology = recording.audioTopology ?? 'mixed_recording';
+  let sttProvider: SttProviderId =
+    payload.sttProvider ??
+    config.transcription.hardOverride ??
+    (topology === 'mixed_recording'
+      ? config.stt.defaultProvider
+      : (config.stt.trustedSplitProvider ?? 'deepgram'));
 
   try {
+    const route = resolveTranscriptionRoute({
+      config,
+      topology,
+      requestedProvider: payload.sttProvider,
+    });
+    sttProvider = route.provider;
+
+    const transcribing = await recordings.updateStatus({
+      id: recording.id,
+      status: 'transcribing',
+      error: null,
+    });
+
+    if (transcribing) {
+      publishEvent({ type: 'recording_state_changed', recording: transcribing });
+    }
+
     const readStorage =
       overrides?.storage ?? createTranscriptionStorageForUri(recording.storageUri);
     const transcription = await sttTranscribe({
@@ -112,13 +126,14 @@ export async function processTranscribeJob(
         storageUri: recording.storageUri,
         getStream: () => readStorage.getStream(recording.storageUri),
       },
-      configByProvider: buildSttProviderConfig(config),
+      configByProvider: buildSttProviderConfig(config, topology),
     });
 
     const transcriptText = formatTranscriptFromSegments(
       transcription.text,
       transcription.segments,
       mode,
+      topology,
     );
 
     const transcriptStored = await storage.putTranscript({
@@ -135,12 +150,14 @@ export async function processTranscribeJob(
       rawResponseUri = rawStored.uri;
     }
 
-    const speakerTracks = buildSpeakerTracks(transcription.segments);
+    const speakerTracks = buildSpeakerTracks(transcription.segments, topology);
     let summaryJson: Record<string, unknown> = {
       ...(transcription.summary ?? undefined),
       provider: transcription.provider,
       segmentCount: transcription.segments.length,
       fallbackUsed: transcription.fallbackUsed,
+      audioTopology: topology,
+      sttRequestProfile: route.profile,
     };
 
     if (speakerTracks.tracks.length > 0) {
@@ -246,16 +263,9 @@ export async function processTranscribeJob(
   }
 }
 
-function resolveSttProvider(
-  requested: SttProviderId | undefined,
-  fallback: SttProviderId,
-): SttProviderId {
-  if (!requested) return fallback;
-  return requested;
-}
-
 function buildSttProviderConfig(
   config: BatchBackendConfig,
+  topology: AudioInputTopology,
 ): Partial<Record<SttProviderId, Record<string, unknown>>> {
   return {
     deepgram: {
@@ -263,6 +273,7 @@ function buildSttProviderConfig(
       accessToken: config.stt.providers.deepgram.accessToken,
       model: config.stt.providers.deepgram.model,
       language: config.stt.providers.deepgram.language,
+      trustedSplitChannels: topology === 'trusted_split_channels',
     },
     elevenlabs: {
       apiKey: resolveElevenLabsSttApiKey(config),
@@ -288,7 +299,10 @@ function extractStatusCode(error: unknown): number | null {
   return typeof statusCode === 'number' ? statusCode : null;
 }
 
-function buildSpeakerTracks(segments: SttTranscriptionResult['segments']): {
+function buildSpeakerTracks(
+  segments: SttTranscriptionResult['segments'],
+  topology: AudioInputTopology,
+): {
   tracks: {
     speaker: number;
     label: string;
@@ -317,7 +331,7 @@ function buildSpeakerTracks(segments: SttTranscriptionResult['segments']): {
         const text = value.lines.join('\n');
         return {
           speaker,
-          label: formatSpeakerLabel(speaker),
+          label: formatSpeakerLabel(speaker, topology),
           text,
           turns: value.turns,
           characters: text.length,

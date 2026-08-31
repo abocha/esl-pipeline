@@ -61,6 +61,7 @@ export interface DeepgramSttConfig {
   language: string;
   retryMax?: number;
   retryBaseDelayMs?: number;
+  trustedSplitChannels?: boolean;
 }
 
 export interface DeepgramSttDependencies {
@@ -143,6 +144,45 @@ export function createDeepgramSttProvider(
         punctuate: true,
         smart_format: true,
       };
+
+      if (config.trustedSplitChannels) {
+        const result = await transcribeAttempt({
+          client,
+          getStream: context.getStream,
+          options: primaryOptions,
+          retryMax,
+          retryBaseDelayMs,
+          sleep,
+        });
+        if (getChannelCount(result) !== 2) {
+          throw new Error(
+            'Trusted split-channel recording did not preserve its declared two-channel contract. Re-upload or retry it as an ordinary mixed recording.',
+          );
+        }
+        const segments = mergeSegments(getTrustedSplitTranscriptSegments(result));
+        if (
+          !segments.some((segment) => segment.speaker === 0) ||
+          !segments.some((segment) => segment.speaker === 1)
+        ) {
+          throw new Error(
+            'Trusted split-channel recording did not return both declared channel roles. Re-upload or retry it as an ordinary mixed recording.',
+          );
+        }
+        return {
+          provider: 'deepgram',
+          model: config.model,
+          language: config.language,
+          text: getRawTranscript(result),
+          segments,
+          rawResponse: result,
+          fallbackUsed: false,
+          summary: {
+            ...(buildSummary(result) ?? undefined),
+            segmentCount: segments.length,
+            fallbackUsed: false,
+          },
+        };
+      }
 
       let result: DeepgramResult;
       let fallbackUsed = false;
@@ -370,6 +410,30 @@ function getTranscriptSegments(result: DeepgramResult): TranscriptSegment[] {
   return buildSegmentsFromWords(result);
 }
 
+function getTrustedSplitTranscriptSegments(result: DeepgramResult): TranscriptSegment[] {
+  const utterances = result.results?.utterances;
+  if (Array.isArray(utterances) && utterances.length > 0) {
+    const segments = utterances
+      .map((item) => {
+        if (item.channel !== 0 && item.channel !== 1) {
+          throw new Error(
+            'Trusted split-channel recording did not return explicit channel 0/1 provenance.',
+          );
+        }
+        return {
+          text: (item.transcript ?? '').trim(),
+          speaker: item.channel,
+          start: typeof item.start === 'number' ? item.start : undefined,
+          end: typeof item.end === 'number' ? item.end : undefined,
+        };
+      })
+      .filter((item) => item.text.length > 0);
+    return normalizeSegmentEnds(segments).sort((a, b) => (a.start ?? 0) - (b.start ?? 0));
+  }
+
+  return buildTrustedSplitSegmentsFromChannels(result);
+}
+
 function getRawTranscript(result: DeepgramResult): string {
   const channel = result.results?.channels?.[0];
   const alternative = channel?.alternatives?.[0];
@@ -446,5 +510,31 @@ function buildSegmentsFromWords(result: DeepgramResult): TranscriptSegment[] {
     }
   }
 
+  return normalizeSegmentEnds(segments).sort((a, b) => (a.start ?? 0) - (b.start ?? 0));
+}
+
+function buildTrustedSplitSegmentsFromChannels(result: DeepgramResult): TranscriptSegment[] {
+  const channels = result.results?.channels;
+  if (!Array.isArray(channels) || channels.length !== 2) return [];
+
+  const segments: TranscriptSegment[] = [];
+  for (const channelIndex of [0, 1] as const) {
+    const words = channels[channelIndex]?.alternatives?.[0]?.words;
+    if (!Array.isArray(words) || words.length === 0) continue;
+    let current: TranscriptSegment | null = null;
+    for (const word of words) {
+      const text = (word.punctuated_word ?? word.word ?? '').trim();
+      if (!text) continue;
+      const start = typeof word.start === 'number' ? word.start : undefined;
+      const end = typeof word.end === 'number' ? word.end : undefined;
+      if (!current) {
+        current = { text, speaker: channelIndex, start, end };
+        continue;
+      }
+      current.text = `${current.text} ${text}`.trim();
+      if (typeof end === 'number') current.end = end;
+    }
+    if (current) segments.push(current);
+  }
   return normalizeSegmentEnds(segments).sort((a, b) => (a.start ?? 0) - (b.start ?? 0));
 }

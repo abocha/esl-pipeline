@@ -1,11 +1,12 @@
 import fs from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { PromptOptionError } from '../src/application/prompt-options.js';
 import { validateTranscriptionConfig } from '../src/application/validate-transcription-config.js';
 import { loadConfig } from '../src/config/env.js';
+import { logger } from '../src/infrastructure/logger.js';
 import { createStorageConfigService } from '../src/infrastructure/storage-config.js';
 
 async function makeTempDir(prefix: string): Promise<string> {
@@ -33,6 +34,7 @@ describe('validateTranscriptionConfig', () => {
 
     const config = loadConfig();
     config.stt.providers.deepgram.apiKey = 'dg-test-key';
+    config.stt.providers.elevenlabs.apiKey = 'el-test-key';
 
     await expect(
       validateTranscriptionConfig({
@@ -62,6 +64,7 @@ describe('validateTranscriptionConfig', () => {
 
     const config = loadConfig();
     config.stt.providers.deepgram.apiKey = 'dg-test-key';
+    config.stt.providers.elevenlabs.apiKey = 'el-test-key';
 
     await expect(
       validateTranscriptionConfig({
@@ -91,6 +94,7 @@ describe('validateTranscriptionConfig', () => {
 
     const config = loadConfig();
     config.stt.providers.deepgram.apiKey = 'dg-test-key';
+    config.stt.providers.elevenlabs.apiKey = 'el-test-key';
 
     await expect(
       validateTranscriptionConfig({
@@ -120,6 +124,7 @@ describe('validateTranscriptionConfig', () => {
 
     const config = loadConfig();
     config.stt.providers.deepgram.apiKey = 'dg-test-key';
+    config.stt.providers.elevenlabs.apiKey = 'el-test-key';
 
     await expect(
       validateTranscriptionConfig({
@@ -196,7 +201,84 @@ describe('validateTranscriptionConfig', () => {
       }),
     ).rejects.toThrow(/GOOGLE_STT_PROJECT_ID|GOOGLE_STT_GCS_STAGING_BUCKET/i);
   });
+
+  it('rejects an ElevenLabs global override because it cannot handle every topology', async () => {
+    const { config, storageConfig } = await createValidStartupInputs();
+    config.transcription.hardOverride = 'elevenlabs';
+
+    await expect(
+      validateTranscriptionConfig({
+        config,
+        storageConfig,
+        promptOptionsLoader: activePromptOptions,
+      }),
+    ).rejects.toThrow(/STT_PROVIDER is an all-topology emergency override.*only deepgram/i);
+  });
+
+  it('rejects a Google global override even when Google provider prerequisites are present', async () => {
+    const { config, storageConfig } = await createValidStartupInputs();
+    config.transcription.hardOverride = 'google';
+    config.stt.providers.google.projectId = 'test-project';
+    config.stt.providers.google.gcsStagingBucket = 'test-bucket';
+
+    await expect(
+      validateTranscriptionConfig({
+        config,
+        storageConfig,
+        promptOptionsLoader: activePromptOptions,
+      }),
+    ).rejects.toThrow(/STT_PROVIDER is an all-topology emergency override.*only deepgram/i);
+  });
+
+  it('accepts and logs Deepgram as the all-topology rollback override', async () => {
+    const { config, storageConfig } = await createValidStartupInputs();
+    config.transcription.hardOverride = 'deepgram';
+    config.stt.providers.elevenlabs.apiKey = undefined;
+    const warning = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+
+    await expect(
+      validateTranscriptionConfig({
+        config,
+        storageConfig,
+        promptOptionsLoader: activePromptOptions,
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(warning).toHaveBeenCalledWith(
+      'STT topology routing bypassed by STT_PROVIDER all-topology emergency override.',
+      {
+        event: 'stt_global_override_active',
+        provider: 'deepgram',
+      },
+    );
+  });
 });
+
+const activePromptOptions = async () => ({
+  templates: [{ id: 'template.md', label: 'Template' }],
+  profiles: [{ id: 'profile.md', label: 'Profile' }],
+  defaults: {
+    templateId: 'template.md',
+    profileId: 'profile.md',
+  },
+});
+
+async function createValidStartupInputs() {
+  const root = await makeTempDir('esl-transcription-');
+  tempDirs.push(root);
+  const config = loadConfig();
+  config.stt.providers.deepgram.apiKey = 'dg-test-key';
+  config.stt.providers.deepgram.accessToken = undefined;
+  config.stt.providers.elevenlabs.apiKey = 'el-test-key';
+
+  return {
+    config,
+    storageConfig: createStorageConfigService({
+      provider: 'filesystem',
+      filesystem: { uploadDir: path.join(root, 'uploads') },
+    }),
+  };
+}
 
 function withActiveSttProvider(
   config: ReturnType<typeof loadConfig>,

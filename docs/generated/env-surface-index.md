@@ -72,6 +72,7 @@
 | `ESL_STT_PROVIDER_ELEVENLABS_MODEL` | `.env.example` | speech_runtime | `docs/reference/env.md` |
 | `ESL_STT_PROVIDER_ORDER` | `.env.example` | speech_runtime | `docs/reference/env.md` |
 | `ESL_STT_STORE_RAW_RESPONSE` | `.env.example` | speech_runtime | `docs/reference/env.md` |
+| `ESL_STT_TRUSTED_SPLIT_PROVIDER` | `.env.example` | speech_runtime | `docs/reference/env.md` |
 | `ESL_TTS_DEBUG` | `.env.example` | speech_runtime | `docs/reference/env.md` |
 | `ESL_TTS_DEFAULT_PROVIDER` | `.env.example` | speech_runtime | `docs/reference/env.md` |
 | `ESL_TTS_PROVIDER_ELEVENLABS_API_KEY` | `.env.example` | speech_runtime | `docs/reference/env.md` |
