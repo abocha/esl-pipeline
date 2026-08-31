@@ -14,6 +14,7 @@ export type PronunciationChunkTtsProviderId = TtsProviderId;
 export type SttProviderId = 'deepgram' | 'elevenlabs' | 'google';
 export type TranscriptProviderId = SttProviderId | 'manual';
 export type RecordingSourceId = 'upload' | 'manual_transcript';
+export type AudioInputTopology = 'mixed_recording' | 'trusted_split_channels';
 export type GoogleTtsModel = 'chirp3_hd' | 'studio' | 'neural2' | 'wavenet';
 export type InworldTtsModel = 'inworld-tts-2' | 'inworld-tts-1.5-max' | 'inworld-tts-1.5-mini';
 export type TtsModelId = ElevenLabsTtsModelId | GoogleTtsModel | InworldTtsModel;

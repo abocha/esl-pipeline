@@ -88,8 +88,40 @@ Great explanation.
     expect(uri).toBe('local://transcripts/student.txt');
   });
 
-  it('falls back to speaker index when labels are missing', () => {
+  it('uses the tutor-confirmed mapping for mixed speaker orderings', () => {
     const uri = resolveStudentTrackTranscriptUri({
+      audioTopology: 'mixed_recording',
+      speakerRoleMapping: {
+        version: 'speaker-role-mapping-v1',
+        provenance: 'tutor_confirmed',
+        confidence: null,
+        roles: [
+          { speaker: 0, role: 'student' },
+          { speaker: 1, role: 'teacher' },
+        ],
+      },
+      speakerTracks: {
+        transcripts: [
+          { speaker: 0, uri: 'local://transcripts/speaker0.txt' },
+          { speaker: 1, uri: 'local://transcripts/speaker1.txt' },
+        ],
+      },
+    });
+    expect(uri).toBe('local://transcripts/speaker0.txt');
+  });
+
+  it('uses the tutor-confirmed mapping when the student is the second diarized speaker', () => {
+    const uri = resolveStudentTrackTranscriptUri({
+      audioTopology: 'mixed_recording',
+      speakerRoleMapping: {
+        version: 'speaker-role-mapping-v1',
+        provenance: 'tutor_confirmed',
+        confidence: null,
+        roles: [
+          { speaker: 0, role: 'teacher' },
+          { speaker: 1, role: 'student' },
+        ],
+      },
       speakerTracks: {
         transcripts: [
           { speaker: 0, uri: 'local://transcripts/speaker0.txt' },
@@ -98,5 +130,18 @@ Great explanation.
       },
     });
     expect(uri).toBe('local://transcripts/speaker1.txt');
+  });
+
+  it('does not infer a student from a mixed numeric diarization ID', () => {
+    const uri = resolveStudentTrackTranscriptUri({
+      audioTopology: 'mixed_recording',
+      speakerTracks: {
+        transcripts: [
+          { speaker: 0, uri: 'local://transcripts/speaker0.txt' },
+          { speaker: 1, uri: 'local://transcripts/speaker1.txt' },
+        ],
+      },
+    });
+    expect(uri).toBeNull();
   });
 });

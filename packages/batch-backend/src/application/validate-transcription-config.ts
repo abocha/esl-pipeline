@@ -5,11 +5,13 @@ import { ConfigurationError } from '@esl-pipeline/contracts';
 
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
+import { logger } from '../infrastructure/logger.js';
 import {
   createStorageConfigService,
   StorageConfigurationService,
 } from '../infrastructure/storage-config.js';
 import { getPromptOptions, PromptOptionError } from './prompt-options.js';
+import { resolveTranscriptionRoute } from './transcription-routing.js';
 
 export async function validateTranscriptionConfig(
   overrides?: Partial<{
@@ -28,8 +30,29 @@ export async function validateTranscriptionConfig(
 }
 
 function validateActiveSttProviderConfig(config: BatchBackendConfig): void {
-  const activeProvider = config.transcription.sttProvider ?? config.stt.defaultProvider;
+  if (config.transcription.hardOverride) {
+    if (config.transcription.hardOverride !== 'deepgram') {
+      throw new ConfigurationError(
+        'STT_PROVIDER is an all-topology emergency override and must support every current audio topology; only deepgram is valid.',
+      );
+    }
+    logger.warn('STT topology routing bypassed by STT_PROVIDER all-topology emergency override.', {
+      event: 'stt_global_override_active',
+      provider: config.transcription.hardOverride,
+    });
+  }
+  const providers = config.transcription.hardOverride
+    ? [config.transcription.hardOverride]
+    : [
+        ...new Set([
+          resolveTranscriptionRoute({ config, topology: 'mixed_recording' }).provider,
+          resolveTranscriptionRoute({ config, topology: 'trusted_split_channels' }).provider,
+        ]),
+      ];
+  for (const activeProvider of providers) validateSttProviderConfig(config, activeProvider);
+}
 
+function validateSttProviderConfig(config: BatchBackendConfig, activeProvider: string): void {
   if (activeProvider === 'deepgram') {
     const deepgramApiKey = config.stt.providers.deepgram.apiKey?.trim();
     const deepgramAccessToken = config.stt.providers.deepgram.accessToken?.trim();

@@ -35,6 +35,10 @@ import {
   retryRecordingTranscription,
 } from '../../application/retry-recording-transcription.js';
 import { ValidationError } from '../../application/submit-job.js';
+import {
+  resolveTranscriptionRoute,
+  TranscriptionRouteError,
+} from '../../application/transcription-routing.js';
 import { updateRecordingTranscript } from '../../application/update-recording-transcript.js';
 import {
   type RecordingRecord,
@@ -119,6 +123,7 @@ export function registerRecordingRoutes(
         studentId: z.string().uuid().optional(),
         student: z.string().min(1).optional(),
         sttProvider: z.enum(['deepgram', 'elevenlabs', 'google']).optional(),
+        audioTopology: z.enum(['trusted_split_channels']).optional(),
       });
       let authenticatedUser;
 
@@ -149,7 +154,13 @@ export function registerRecordingRoutes(
         const studentName = query.student ? normalizeStudentName(query.student) : null;
         const studentId = query.studentId ?? (studentName ? deriveStudentId(studentName) : null);
         const requestedSttProvider = query.sttProvider;
-        const effectiveSttProvider = requestedSttProvider ?? config.transcription.sttProvider;
+        const audioTopology = query.audioTopology ?? 'mixed_recording';
+        const route = resolveTranscriptionRoute({
+          config,
+          topology: audioTopology,
+          requestedProvider: requestedSttProvider,
+        });
+        const effectiveSttProvider = route.provider;
         const expectedFingerprint = resolveExpectedSttModelAndLanguage(
           config,
           effectiveSttProvider,
@@ -210,6 +221,9 @@ export function registerRecordingRoutes(
           let providerUnknown = 0;
 
           for (const cachedRecording of cachedRecordings) {
+            if (cachedRecording.audioTopology !== audioTopology) {
+              continue;
+            }
             const cachedTranscript = transcriptByRecordingId.get(cachedRecording.id);
             if (!cachedTranscript) {
               continue;
@@ -225,6 +239,8 @@ export function registerRecordingRoutes(
             if (
               !shouldReuseCachedTranscriptForFingerprint({
                 effectiveProvider: effectiveSttProvider,
+                audioTopology,
+                sttRequestProfile: route.profile,
                 mode: config.transcription.mode,
                 model: expectedFingerprint.model,
                 language: expectedFingerprint.language,
@@ -243,6 +259,7 @@ export function registerRecordingRoutes(
                     studentId,
                     sourcePath,
                     sha256: fileSha256,
+                    audioTopology,
                     storage: transcriptionStorage,
                   })
                 : {
@@ -298,7 +315,8 @@ export function registerRecordingRoutes(
           stream: Readable.from(fileBuffer),
           sourcePath,
           studentId,
-          sttProvider: effectiveSttProvider,
+          sttProvider: requestedSttProvider,
+          audioTopology,
           storage: transcriptionStorage,
           repository: {
             insertRecording,
@@ -330,6 +348,12 @@ export function registerRecordingRoutes(
         if (error instanceof FileValidationError) {
           return reply.code(400).send({
             error: 'validation_failed',
+            message: error.message,
+            code: error.code,
+          });
+        }
+        if (error instanceof TranscriptionRouteError) {
+          return errorResponse(reply, 'validation_failed', {
             message: error.message,
             code: error.code,
           });
@@ -609,15 +633,25 @@ export function registerRecordingRoutes(
       const bodySchema = z
         .object({
           sttProvider: z.enum(['deepgram', 'elevenlabs', 'google']).optional(),
+          audioTopology: z.enum(['trusted_split_channels']).optional(),
         })
         .optional();
 
       try {
         const body = bodySchema.parse(request.body ?? undefined);
+        const recording = await getRecordingById(recordingId);
+        if (recording) {
+          resolveTranscriptionRoute({
+            config,
+            topology: body?.audioTopology ?? recording.audioTopology ?? 'mixed_recording',
+            requestedProvider: body?.sttProvider,
+          });
+        }
         const result = await retryRecordingTranscription(
           recordingId,
           {
             sttProvider: body?.sttProvider,
+            audioTopology: body?.audioTopology,
           },
           {
             enqueue: transcribeQueue.enqueue,
@@ -649,6 +683,12 @@ export function registerRecordingRoutes(
           });
         }
         if (error instanceof RecordingRetryError) {
+          return errorResponse(reply, 'validation_failed', {
+            message: error.message,
+            code: error.code,
+          });
+        }
+        if (error instanceof TranscriptionRouteError) {
           return errorResponse(reply, 'validation_failed', {
             message: error.message,
             code: error.code,
@@ -722,6 +762,16 @@ export function registerRecordingRoutes(
       const schema = z.object({
         text: z.string(),
         expectedWorkingVersion: z.number().int().positive(),
+        speakerRoleMapping: z
+          .object({
+            roles: z.array(
+              z.object({
+                speaker: z.number().int().nonnegative(),
+                role: z.enum(['teacher', 'student']),
+              }),
+            ),
+          })
+          .optional(),
       });
 
       try {
@@ -730,6 +780,7 @@ export function registerRecordingRoutes(
           recordingId,
           text: body.text,
           expectedWorkingVersion: body.expectedWorkingVersion,
+          speakerRoleMapping: body.speakerRoleMapping,
         });
 
         if (!updated) {
@@ -1423,6 +1474,7 @@ async function cloneCachedRecordingForStudent(params: {
   studentId: string;
   sourcePath: string;
   sha256: string;
+  audioTopology: import('@esl-pipeline/contracts').AudioInputTopology;
   storage: TranscriptionStorage;
 }) {
   const recordingId = randomUUID();
@@ -1436,6 +1488,7 @@ async function cloneCachedRecordingForStudent(params: {
     bytes: params.cachedRecording.bytes,
     durationSec: params.cachedRecording.durationSec,
     channels: params.cachedRecording.channels,
+    audioTopology: params.audioTopology,
     status: 'transcribed',
     error: null,
   });

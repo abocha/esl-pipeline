@@ -1,4 +1,4 @@
-import type { SttProviderId } from '@esl-pipeline/contracts';
+import type { AudioInputTopology, SttProviderId } from '@esl-pipeline/contracts';
 
 import type { BatchBackendConfig } from '../../config/env.js';
 import type { TranscriptRecord } from '../../domain/transcript-model.js';
@@ -69,6 +69,8 @@ export function resolveExpectedSttModelAndLanguage(
 
 export function shouldReuseCachedTranscriptForFingerprint(args: {
   effectiveProvider: SttProviderId;
+  audioTopology: AudioInputTopology;
+  sttRequestProfile: string;
   mode: TranscriptRecord['mode'];
   model: string;
   language: string;
@@ -87,5 +89,8 @@ export function shouldReuseCachedTranscriptForFingerprint(args: {
   if (args.transcript.language.trim().toLowerCase() !== args.language.trim().toLowerCase()) {
     return false;
   }
+  const summary = args.transcript.summaryJson;
+  if (!summary || summary.audioTopology !== args.audioTopology) return false;
+  if (summary.sttRequestProfile !== args.sttRequestProfile) return false;
   return true;
 }

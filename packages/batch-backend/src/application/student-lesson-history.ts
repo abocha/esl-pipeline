@@ -170,9 +170,26 @@ export function resolveStudentTrackTranscriptUri(
 
   if (transcripts.length === 0) return null;
 
+  const mapping = summaryJson.speakerRoleMapping;
+  if (mapping && typeof mapping === 'object') {
+    const roles = (mapping as { roles?: unknown }).roles;
+    if (Array.isArray(roles)) {
+      const studentSpeaker = roles.find(
+        (item) =>
+          item &&
+          typeof item === 'object' &&
+          (item as { role?: unknown }).role === 'student' &&
+          typeof (item as { speaker?: unknown }).speaker === 'number',
+      ) as { speaker: number } | undefined;
+      if (studentSpeaker)
+        return transcripts.find((item) => item.speaker === studentSpeaker.speaker)?.uri ?? null;
+    }
+  }
+
   const labeledStudent = transcripts.find((item) => /\bstudent\b/i.test(item.label));
   if (labeledStudent) return labeledStudent.uri;
 
+  if (summaryJson.audioTopology === 'mixed_recording') return null;
   const speakerOne = transcripts.find((item) => item.speaker === 1);
   if (speakerOne) return speakerOne.uri;
 

@@ -252,6 +252,7 @@ export class AssignmentSessionConfirmationError extends Error {
     readonly code:
       | 'ASSIGNMENT_STEP_PREREQUISITE_MISSING'
       | 'ASSIGNMENT_STEP_LINEAGE_INVALID'
+      | 'ASSIGNMENT_STEP_SPEAKER_ROLE_MAPPING_REQUIRED'
       | 'ASSIGNMENT_STEP_ARTIFACT_NOT_FOUND',
   ) {
     super(code);
@@ -342,12 +343,18 @@ async function confirmLockedSource(
   if (transcript.workingVersion !== request.transcriptWorkingVersion) {
     throw new ArtifactWorkingConflictError(transcript);
   }
-  const recording = await client.query<{ student_id: string | null }>(
-    'SELECT student_id FROM recordings WHERE id = $1',
-    [request.recordingId],
-  );
+  const recording = await client.query<{
+    student_id: string | null;
+    audio_topology: string | null;
+  }>('SELECT student_id, audio_topology FROM recordings WHERE id = $1', [request.recordingId]);
   if (!recording.rows[0] || recording.rows[0].student_id !== current.studentId) {
     throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_LINEAGE_INVALID');
+  }
+  if (
+    recording.rows[0].audio_topology === 'mixed_recording' &&
+    !hasTutorConfirmedSpeakerRoleMapping(transcript.summaryJson ?? null, transcript)
+  ) {
+    throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_SPEAKER_ROLE_MAPPING_REQUIRED');
   }
   if (request.lessonId) {
     const lesson = await client.query(
@@ -741,6 +748,29 @@ async function assertConfirmedSourceIsCurrent(
 function assertExpectedRevision(current: AssignmentSessionRecord, expectedRevision: number): void {
   if (current.revision !== expectedRevision)
     throw new AssignmentSessionRevisionConflictError(current);
+}
+
+function hasTutorConfirmedSpeakerRoleMapping(
+  summaryJson: Record<string, unknown> | null,
+  transcript: { workingVersion: number | null; contentHash: string | null },
+): boolean {
+  const mapping = summaryJson?.speakerRoleMapping;
+  if (!mapping || typeof mapping !== 'object') return false;
+  const typed = mapping as {
+    version?: unknown;
+    provenance?: unknown;
+    roles?: unknown;
+    confirmedWorkingVersion?: unknown;
+    confirmedContentHash?: unknown;
+  };
+  return (
+    typed.version === 'speaker-role-mapping-v1' &&
+    typed.provenance === 'tutor_confirmed' &&
+    Array.isArray(typed.roles) &&
+    typed.roles.length > 0 &&
+    typed.confirmedWorkingVersion === transcript.workingVersion &&
+    typed.confirmedContentHash === transcript.contentHash
+  );
 }
 
 function assertNever(value: never): never {

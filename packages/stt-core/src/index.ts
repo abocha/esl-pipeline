@@ -41,6 +41,7 @@ export async function validateSttProviderConfig(args: {
 }
 
 export { createSttEngine } from './engine.js';
+export type { SpeakerLabelTopology } from './format.js';
 export {
   formatSpeakerLabel,
   formatTimestamp,

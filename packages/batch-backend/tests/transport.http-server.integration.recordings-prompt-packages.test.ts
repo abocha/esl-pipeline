@@ -21,6 +21,43 @@ describeHttpServerIntegrationSuite(
     updateRecordingTranscriptModule,
     vi,
   }) => {
+    it('POST /recordings/upload rejects a trusted ElevenLabs override before recording work starts', async () => {
+      const insertRecording = vi.spyOn(recordingRepositoryModule, 'insertRecording');
+      const listRecordingsBySha256 = vi.spyOn(recordingRepositoryModule, 'listRecordingsBySha256');
+      insertRecording.mockClear();
+      listRecordingsBySha256.mockClear();
+
+      const boundary = '----esl-route-validation-boundary';
+      const payload = Buffer.concat([
+        Buffer.from(
+          `--${boundary}\r\n` +
+            'Content-Disposition: form-data; name="file"; filename="lesson.mp3"\r\n' +
+            'Content-Type: audio/mpeg\r\n\r\n',
+        ),
+        Buffer.from('mock-audio-content'),
+        Buffer.from(`\r\n--${boundary}--\r\n`),
+      ]);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/recordings/upload?audioTopology=trusted_split_channels&sttProvider=elevenlabs',
+        headers: {
+          'content-type': `multipart/form-data; boundary=${boundary}`,
+        },
+        payload,
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toEqual({
+        error: 'validation_failed',
+        code: 'trusted_split_provider_incompatible',
+        message:
+          'Trusted split-channel recordings require the Deepgram multichannel route; elevenlabs cannot prove the declared channel contract.',
+      });
+      expect(listRecordingsBySha256).not.toHaveBeenCalled();
+      expect(insertRecording).not.toHaveBeenCalled();
+    });
+
     it('POST /recordings/upload reuses existing transcript when hash already exists', async () => {
       const listRecordingsBySha256 = vi.spyOn(recordingRepositoryModule, 'listRecordingsBySha256');
       const listLatestTranscriptsByRecordingIds = vi.spyOn(
@@ -40,6 +77,7 @@ describeHttpServerIntegrationSuite(
           bytes: 1024,
           durationSec: 90,
           channels: 1,
+          audioTopology: 'mixed_recording',
           status: 'transcribed',
           error: null,
           createdAt: new Date('2024-01-01T00:00:00.000Z'),
@@ -55,11 +93,15 @@ describeHttpServerIntegrationSuite(
           contentHash: 'cached-hash',
           rawResponseUri: null,
           mode: 'timeline',
-          model: 'nova-3',
-          language: 'multi',
-          sttProvider: 'deepgram',
+          model: 'scribe_v2',
+          language: 'auto',
+          sttProvider: 'elevenlabs',
           fallbackUsed: false,
-          summaryJson: null,
+          summaryJson: {
+            provider: 'elevenlabs',
+            audioTopology: 'mixed_recording',
+            sttRequestProfile: 'mixed-recording-elevenlabs-scribe-v2-v1',
+          },
           createdAt: new Date('2024-01-01T00:05:00.000Z'),
           updatedAt: new Date('2024-01-01T00:05:00.000Z'),
         },
@@ -131,6 +173,7 @@ describeHttpServerIntegrationSuite(
           bytes: 1024,
           durationSec: 90,
           channels: 1,
+          audioTopology: 'mixed_recording',
           status: 'transcribed',
           error: null,
           createdAt: new Date('2024-01-01T00:00:00.000Z'),
@@ -146,11 +189,15 @@ describeHttpServerIntegrationSuite(
           contentHash: 'anna-hash',
           rawResponseUri: 'memory://transcripts/transcript-anna.raw.json',
           mode: 'timeline',
-          model: 'nova-3',
-          language: 'multi',
-          sttProvider: 'deepgram',
+          model: 'scribe_v2',
+          language: 'auto',
+          sttProvider: 'elevenlabs',
           fallbackUsed: false,
-          summaryJson: null,
+          summaryJson: {
+            provider: 'elevenlabs',
+            audioTopology: 'mixed_recording',
+            sttRequestProfile: 'mixed-recording-elevenlabs-scribe-v2-v1',
+          },
           createdAt: new Date('2024-01-01T00:05:00.000Z'),
           updatedAt: new Date('2024-01-01T00:05:00.000Z'),
         },
@@ -165,6 +212,7 @@ describeHttpServerIntegrationSuite(
         bytes: 1024,
         durationSec: 90,
         channels: 1,
+        audioTopology: 'mixed_recording',
         status: 'transcribed',
         error: null,
         createdAt: new Date('2024-01-02T00:00:00.000Z'),
@@ -178,11 +226,15 @@ describeHttpServerIntegrationSuite(
         contentHash: 'new-hash',
         rawResponseUri: 'memory://transcripts/transcript-anna.raw.json',
         mode: 'timeline',
-        model: 'nova-3',
-        language: 'multi',
-        sttProvider: 'deepgram',
+        model: 'scribe_v2',
+        language: 'auto',
+        sttProvider: 'elevenlabs',
         fallbackUsed: false,
-        summaryJson: null,
+        summaryJson: {
+          provider: 'elevenlabs',
+          audioTopology: 'mixed_recording',
+          sttRequestProfile: 'mixed-recording-elevenlabs-scribe-v2-v1',
+        },
         createdAt: new Date('2024-01-02T00:00:00.000Z'),
         updatedAt: new Date('2024-01-02T00:00:00.000Z'),
       });
@@ -254,6 +306,7 @@ describeHttpServerIntegrationSuite(
           bytes: 1024,
           durationSec: 90,
           channels: 1,
+          audioTopology: 'mixed_recording',
           status: 'transcribed',
           error: null,
           createdAt: new Date('2024-01-02T00:00:00.000Z'),
@@ -269,6 +322,7 @@ describeHttpServerIntegrationSuite(
           bytes: 1024,
           durationSec: 90,
           channels: 1,
+          audioTopology: 'mixed_recording',
           status: 'transcribed',
           error: null,
           createdAt: new Date('2024-01-01T00:00:00.000Z'),
@@ -288,7 +342,11 @@ describeHttpServerIntegrationSuite(
           language: 'auto',
           sttProvider: 'elevenlabs',
           fallbackUsed: false,
-          summaryJson: { provider: 'elevenlabs' },
+          summaryJson: {
+            provider: 'elevenlabs',
+            audioTopology: 'mixed_recording',
+            sttRequestProfile: 'mixed-recording-elevenlabs-scribe-v2-v1',
+          },
           createdAt: new Date('2024-01-02T00:05:00.000Z'),
           updatedAt: new Date('2024-01-02T00:05:00.000Z'),
         },
@@ -304,7 +362,11 @@ describeHttpServerIntegrationSuite(
           language: 'multi',
           sttProvider: 'deepgram',
           fallbackUsed: false,
-          summaryJson: { provider: 'deepgram' },
+          summaryJson: {
+            provider: 'deepgram',
+            audioTopology: 'mixed_recording',
+            sttRequestProfile: 'support-override-mixed_recording-deepgram-v1',
+          },
           createdAt: new Date('2024-01-01T00:05:00.000Z'),
           updatedAt: new Date('2024-01-01T00:05:00.000Z'),
         },
@@ -332,13 +394,13 @@ describeHttpServerIntegrationSuite(
       });
 
       expect(response.statusCode).toBe(200);
-      // Test env default STT provider is deepgram, so deepgram transcript should be selected.
+      // Ordinary mixed recordings now default to ElevenLabs, so its transcript should be selected.
       expect(response.json()).toMatchObject({
-        recordingId: 'recording-deepgram',
-        transcriptId: 'transcript-deepgram',
+        recordingId: 'recording-elevenlabs',
+        transcriptId: 'transcript-elevenlabs',
         cacheHit: true,
         cacheReason: 'transcript_reused',
-        cacheRecordingId: 'recording-deepgram',
+        cacheRecordingId: 'recording-elevenlabs',
       });
       expect(insertRecording).not.toHaveBeenCalled();
     });
@@ -362,6 +424,7 @@ describeHttpServerIntegrationSuite(
           bytes: 1024,
           durationSec: 90,
           channels: 1,
+          audioTopology: 'mixed_recording',
           status: 'transcribed',
           error: null,
           createdAt: new Date('2024-01-02T00:00:00.000Z'),
@@ -377,6 +440,7 @@ describeHttpServerIntegrationSuite(
           bytes: 1024,
           durationSec: 90,
           channels: 1,
+          audioTopology: 'mixed_recording',
           status: 'transcribed',
           error: null,
           createdAt: new Date('2024-01-01T00:00:00.000Z'),
@@ -396,7 +460,11 @@ describeHttpServerIntegrationSuite(
           language: 'multi',
           sttProvider: 'deepgram',
           fallbackUsed: false,
-          summaryJson: { provider: 'deepgram' },
+          summaryJson: {
+            provider: 'deepgram',
+            audioTopology: 'mixed_recording',
+            sttRequestProfile: 'support-override-mixed_recording-deepgram-v1',
+          },
           createdAt: new Date('2024-01-02T00:05:00.000Z'),
           updatedAt: new Date('2024-01-02T00:05:00.000Z'),
         },
@@ -412,7 +480,11 @@ describeHttpServerIntegrationSuite(
           language: 'auto',
           sttProvider: 'elevenlabs',
           fallbackUsed: false,
-          summaryJson: { provider: 'elevenlabs' },
+          summaryJson: {
+            provider: 'elevenlabs',
+            audioTopology: 'mixed_recording',
+            sttRequestProfile: 'mixed-recording-elevenlabs-scribe-v2-v1',
+          },
           createdAt: new Date('2024-01-01T00:05:00.000Z'),
           updatedAt: new Date('2024-01-01T00:05:00.000Z'),
         },
@@ -619,7 +691,9 @@ describeHttpServerIntegrationSuite(
 
     it('POST /recordings/:id/transcribe enqueues retry', async () => {
       const retryRecording = vi.spyOn(retryRecordingModule, 'retryRecordingTranscription');
+      const getRecordingById = vi.spyOn(recordingRepositoryModule, 'getRecordingById');
       retryRecording.mockClear();
+      getRecordingById.mockResolvedValueOnce(null);
       retryRecording.mockResolvedValue({
         recordingId: 'recording-1',
         status: 'queued',
@@ -664,7 +738,9 @@ describeHttpServerIntegrationSuite(
 
     it('POST /recordings/:id/transcribe forwards explicit STT provider override', async () => {
       const retryRecording = vi.spyOn(retryRecordingModule, 'retryRecordingTranscription');
+      const getRecordingById = vi.spyOn(recordingRepositoryModule, 'getRecordingById');
       retryRecording.mockClear();
+      getRecordingById.mockResolvedValueOnce(null);
       retryRecording.mockResolvedValue({
         recordingId: 'recording-1',
         status: 'queued',
@@ -692,6 +768,43 @@ describeHttpServerIntegrationSuite(
         { sttProvider: 'elevenlabs' },
         expect.objectContaining({ enqueue: expect.any(Function) }),
       );
+    });
+
+    it('POST /recordings/:id/transcribe rejects an incompatible trusted provider before retry work starts', async () => {
+      const retryRecording = vi.spyOn(retryRecordingModule, 'retryRecordingTranscription');
+      const getRecordingById = vi.spyOn(recordingRepositoryModule, 'getRecordingById');
+      retryRecording.mockClear();
+      getRecordingById.mockResolvedValueOnce({
+        id: 'recording-trusted',
+        source: 'upload',
+        studentId: null,
+        sourcePath: 'trusted.wav',
+        storageUri: 'memory://recordings/recording-trusted.wav',
+        sha256: 'trusted-sha',
+        bytes: 1024,
+        durationSec: 60,
+        channels: 2,
+        audioTopology: 'trusted_split_channels',
+        status: 'failed',
+        error: 'previous failure',
+        createdAt: new Date('2024-01-01T00:00:00.000Z'),
+        updatedAt: new Date('2024-01-01T00:00:00.000Z'),
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/recordings/recording-trusted/transcribe',
+        payload: { sttProvider: 'elevenlabs' },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toEqual({
+        error: 'validation_failed',
+        code: 'trusted_split_provider_incompatible',
+        message:
+          'Trusted split-channel recordings require the Deepgram multichannel route; elevenlabs cannot prove the declared channel contract.',
+      });
+      expect(retryRecording).not.toHaveBeenCalled();
     });
 
     it('GET /recordings/:id/transcript returns transcript payload', async () => {

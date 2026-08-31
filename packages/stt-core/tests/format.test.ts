@@ -8,10 +8,11 @@ import {
 } from '../src/index.js';
 
 describe('stt-core format helpers', () => {
-  it('maps speaker labels deterministically', () => {
-    expect(formatSpeakerLabel(0)).toBe('Teacher');
-    expect(formatSpeakerLabel(1)).toBe('Student');
-    expect(formatSpeakerLabel(2)).toBe('Speaker 3');
+  it('uses anonymous labels for mixed diarization and channel roles for trusted audio', () => {
+    expect(formatSpeakerLabel(0, 'mixed_recording')).toBe('Speaker 1');
+    expect(formatSpeakerLabel(1, 'mixed_recording')).toBe('Speaker 2');
+    expect(formatSpeakerLabel(0, 'trusted_split_channels')).toBe('Teacher');
+    expect(formatSpeakerLabel(1, 'trusted_split_channels')).toBe('Student');
   });
 
   it('formats timeline transcripts', () => {
@@ -22,10 +23,11 @@ describe('stt-core format helpers', () => {
         { text: 'Hi', speaker: 1, start: 1, end: 1.4 },
       ],
       'timeline',
+      'mixed_recording',
     );
 
-    expect(text).toContain('[Teacher 00:00] Hello');
-    expect(text).toContain('[Student 00:01] Hi');
+    expect(text).toContain('[Speaker 1 00:00] Hello');
+    expect(text).toContain('[Speaker 2 00:01] Hi');
     expect(text).not.toContain('00:00.000-00:00.500');
   });
 

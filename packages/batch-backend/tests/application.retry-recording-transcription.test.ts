@@ -48,6 +48,7 @@ describe('retryRecordingTranscription', () => {
       displayName: 'recording-1.opus',
       durationSec: null,
       channels: null,
+      audioTopology: null,
       bytes: 2048,
       createdAt: '2024-01-01T00:00:00.000Z',
       updatedAt: '2024-01-01T00:00:00.000Z',
@@ -89,6 +90,23 @@ describe('retryRecordingTranscription', () => {
       recordingId: 'recording-1',
       sttProvider: 'elevenlabs',
     });
+  });
+
+  it('uses persisted topology as worker authority and does not enqueue it', async () => {
+    const enqueue = vi.fn().mockResolvedValue(undefined);
+    await retryRecordingTranscription('recording-1', undefined, {
+      recordings: {
+        getById: vi
+          .fn()
+          .mockResolvedValue({ ...baseRecording, audioTopology: 'trusted_split_channels' }),
+        updateStatus: vi
+          .fn()
+          .mockResolvedValue({ ...baseRecording, status: 'queued', error: null }),
+      },
+      enqueue,
+      publishEvent: vi.fn(),
+    });
+    expect(enqueue).toHaveBeenCalledWith({ recordingId: 'recording-1' });
   });
 
   it('rejects retries when recording is not failed', async () => {

@@ -48,6 +48,7 @@ describe('application/ingest-recording-upload', () => {
     });
 
     expect(record.source).toBe('upload');
+    expect(repo.inserted[0]?.audioTopology).toBe('mixed_recording');
     expect(record.studentId).toBe('student-1');
     expect(enqueued).toEqual([record.id]);
     expect(record.storageUri).toBe(`local://recordings/${record.id}.opus`);
@@ -55,12 +56,18 @@ describe('application/ingest-recording-upload', () => {
   });
 });
 
-function createInMemoryRecordingRepository(): RecordingRepository & { records: RecordingRecord[] } {
+function createInMemoryRecordingRepository(): RecordingRepository & {
+  records: RecordingRecord[];
+  inserted: Parameters<RecordingRepository['insertRecording']>[0][];
+} {
   const records: RecordingRecord[] = [];
+  const inserted: Parameters<RecordingRepository['insertRecording']>[0][] = [];
 
   return {
     records,
+    inserted,
     async insertRecording(params) {
+      inserted.push(params);
       const now = new Date();
       const record: RecordingRecord = {
         id: params.id ?? `rec-${records.length + 1}`,

@@ -8,12 +8,104 @@ import {
   processTranscribeJob,
   resolveElevenLabsSttApiKey,
 } from '../src/application/process-transcribe-job.js';
+import {
+  MIXED_ELEVENLABS_PROFILE,
+  resolveTranscriptionRoute,
+  TRUSTED_SPLIT_DEEPGRAM_PROFILE,
+} from '../src/application/transcription-routing.js';
 import type { BatchBackendConfig } from '../src/config/env.js';
 import type { RecordingRecord } from '../src/domain/recording-model.js';
 import type { TranscriptRecord } from '../src/domain/transcript-model.js';
 import type { TranscriptionStorage } from '../src/infrastructure/transcription-storage.js';
 
 describe('application/process-transcribe-job', () => {
+  it('marks a recording failed when a forced route-resolution error occurs before provider execution', async () => {
+    const recording = {
+      ...createRecording('trusted-override'),
+      audioTopology: 'trusted_split_channels' as const,
+    };
+    const config = createConfig();
+    config.transcription.hardOverride = 'elevenlabs';
+    const sttTranscribe = vi.fn();
+    const updateStatus = vi.fn(async ({ status, error }) => {
+      recording.status = status;
+      recording.error = error ?? null;
+      return recording;
+    });
+    const publishEvent = vi.fn();
+
+    await expect(
+      processTranscribeJob(
+        { recordingId: recording.id },
+        {
+          config,
+          storage: createStorageStub(),
+          sttTranscribe,
+          recordings: {
+            getById: async () => recording,
+            updateStatus,
+          },
+          transcripts: {
+            getByRecordingId: async () => null,
+            insert: vi.fn(),
+          },
+          publishEvent,
+        },
+      ),
+    ).rejects.toThrow(/require the Deepgram multichannel route/i);
+
+    expect(sttTranscribe).not.toHaveBeenCalled();
+    expect(updateStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: recording.id,
+        status: 'failed',
+        error: expect.stringMatching(/require the Deepgram multichannel route/i),
+      }),
+    );
+    expect(publishEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'recording_state_changed',
+        recording: expect.objectContaining({ status: 'failed' }),
+      }),
+    );
+  });
+
+  it('keeps trusted Deepgram and ordinary mixed ElevenLabs routes distinct', () => {
+    const config = createConfig();
+    config.stt.defaultProvider = 'elevenlabs';
+    config.stt.trustedSplitProvider = 'deepgram';
+
+    expect(resolveTranscriptionRoute({ config, topology: 'mixed_recording' })).toEqual({
+      provider: 'elevenlabs',
+      profile: MIXED_ELEVENLABS_PROFILE,
+    });
+
+    expect(resolveTranscriptionRoute({ config, topology: 'trusted_split_channels' })).toEqual({
+      provider: 'deepgram',
+      profile: TRUSTED_SPLIT_DEEPGRAM_PROFILE,
+    });
+    expect(() =>
+      resolveTranscriptionRoute({
+        config,
+        topology: 'trusted_split_channels',
+        requestedProvider: 'elevenlabs',
+      }),
+    ).toThrow(/require the Deepgram multichannel route/i);
+    expect(
+      resolveTranscriptionRoute({
+        config,
+        topology: 'mixed_recording',
+        requestedProvider: 'elevenlabs',
+      }),
+    ).toEqual({ provider: 'elevenlabs', profile: MIXED_ELEVENLABS_PROFILE });
+
+    config.transcription.hardOverride = 'deepgram';
+    expect(resolveTranscriptionRoute({ config, topology: 'trusted_split_channels' })).toEqual({
+      provider: 'deepgram',
+      profile: TRUSTED_SPLIT_DEEPGRAM_PROFILE,
+    });
+  });
+
   it('transcribes recording and persists transcript metadata', async () => {
     const recording = createRecording('recording-1');
     const transcriptStore: TranscriptRecord[] = [];
@@ -326,7 +418,7 @@ describe('application/process-transcribe-job', () => {
       },
     );
 
-    expect(storedTexts).toContain('[Teacher 00:00] Hello there.\n[Student 00:02] Hi.');
+    expect(storedTexts).toContain('[Speaker 1 00:00] Hello there.\n[Speaker 2 00:02] Hi.');
     expect(storedTexts).toContain('Hello there.');
     expect(storedTexts).toContain('Hi.');
   });

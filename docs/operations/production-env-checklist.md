@@ -284,8 +284,10 @@ Canonical examples to verify against current code/docs:
 OPENAI_API_KEY=<if direct generation uses OpenAI>
 GEMINI_API_KEY=<if direct generation, speech planning, or Google AI Studio fallback uses Gemini>
 OPENROUTER_API_KEY=<if OpenRouter fallback is enabled>
-ESL_STT_DEFAULT_PROVIDER=deepgram
-ESL_STT_PROVIDER_DEEPGRAM_API_KEY=<if Deepgram STT is enabled>
+ESL_STT_DEFAULT_PROVIDER=elevenlabs
+ESL_STT_TRUSTED_SPLIT_PROVIDER=deepgram
+ESL_STT_PROVIDER_ELEVENLABS_API_KEY=<required for ordinary mixed recordings>
+ESL_STT_PROVIDER_DEEPGRAM_API_KEY=<required for trusted OBS split recordings>
 ESL_TTS_DEFAULT_PROVIDER=elevenlabs
 ESL_TTS_PROVIDER_ELEVENLABS_API_KEY=<if ElevenLabs TTS is enabled>
 GOOGLE_STT_PROJECT_ID=<if Google STT is enabled>
