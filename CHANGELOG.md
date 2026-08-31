@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.10.0] - 2026-08-31
+
+### Changed
+
+- Automated release from PR #213: feat(stt): adopt ElevenLabs for mixed recordings (https://github.com/abocha/esl-pipeline/pull/213)
+
 ## [10.9.0] - 2026-08-31
 
 ### Changed
