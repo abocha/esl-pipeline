@@ -368,7 +368,7 @@ export function registerPromptEditorTests() {
       );
     });
 
-    it('uploads a recording and shows recording metadata', async () => {
+    it('uploads an ordinary recording without a topology or provider override', async () => {
       vi.useFakeTimers({ shouldAdvanceTime: true });
       try {
         const user = createTimerAwareMinimalUser();
@@ -380,10 +380,10 @@ export function registerPromptEditorTests() {
         await waitFor(() => {
           expect(api.uploadRecording).toHaveBeenCalledTimes(1);
         });
-        expect(api.uploadRecording).toHaveBeenCalledWith(
-          expect.any(File),
-          expect.objectContaining({ studentId: 'student-alex', sttProvider: 'deepgram' }),
-        );
+        const [, options] = vi.mocked(api.uploadRecording).mock.calls[0]!;
+        expect(options).toEqual(expect.objectContaining({ studentId: 'student-alex' }));
+        expect(options?.sttProvider).toBeUndefined();
+        expect(options?.audioTopology).toBeUndefined();
 
         await waitFor(() => {
           expect(screen.getByText(/Recording: lesson\.mp3/i)).toBeTruthy();
@@ -394,7 +394,7 @@ export function registerPromptEditorTests() {
       }
     });
 
-    it('uses metadata-driven STT default provider for upload payloads', async () => {
+    it('keeps the metadata-driven provider as an automatic upload default', async () => {
       const defaultOptions = await api.fetchJobOptions();
       vi.mocked(api.fetchJobOptions).mockReset();
       vi.mocked(api.fetchJobOptions).mockResolvedValueOnce({
@@ -412,16 +412,89 @@ export function registerPromptEditorTests() {
         name: /Transcript engine/i,
       });
       await waitFor(() => {
-        expect((sttProviderSelect as HTMLSelectElement).value).toBe('google');
+        expect((sttProviderSelect as HTMLSelectElement).value).toBe('auto');
       });
       await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
 
       await waitFor(() => {
         expect(api.uploadRecording).toHaveBeenCalledTimes(1);
       });
-      expect(api.uploadRecording).toHaveBeenCalledWith(
-        expect.any(File),
-        expect.objectContaining({ sttProvider: 'google' }),
+      const [, options] = vi.mocked(api.uploadRecording).mock.calls[0]!;
+      expect(options?.sttProvider).toBeUndefined();
+      expect(options?.audioTopology).toBeUndefined();
+    });
+
+    it('keeps only Deepgram as a trusted split support override', async () => {
+      const user = createMinimalUser();
+      renderMinimalAssignment();
+
+      await startNewAssignmentForLearner(user);
+      openRecordingSettings();
+      await user.selectOptions(
+        screen.getByRole('combobox', { name: /Audio source/i }),
+        'trusted_split_channels',
+      );
+      const sttProviderSelect = screen.getByRole('combobox', { name: /Transcript engine/i });
+      expect(
+        Array.from((sttProviderSelect as HTMLSelectElement).options).map((option) => option.value),
+      ).toEqual(['auto', 'deepgram']);
+      await user.selectOptions(sttProviderSelect, 'deepgram');
+      await waitFor(() =>
+        expect(
+          (screen.getByRole('combobox', { name: /Transcript engine/i }) as HTMLSelectElement).value,
+        ).toBe('deepgram'),
+      );
+      await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+
+      await waitFor(() => expect(api.uploadRecording).toHaveBeenCalledTimes(1));
+      const [, options] = vi.mocked(api.uploadRecording).mock.calls[0]!;
+      expect(options).toEqual(
+        expect.objectContaining({
+          audioTopology: 'trusted_split_channels',
+          sttProvider: 'deepgram',
+        }),
+      );
+    });
+
+    it('resets an incompatible mixed support override to Automatic when switched to trusted split', async () => {
+      const user = createMinimalUser();
+      renderMinimalAssignment();
+
+      await startNewAssignmentForLearner(user);
+      openRecordingSettings();
+      const sttProviderSelect = screen.getByRole('combobox', { name: /Transcript engine/i });
+      await user.selectOptions(sttProviderSelect, 'elevenlabs');
+      expect((sttProviderSelect as HTMLSelectElement).value).toBe('elevenlabs');
+
+      await user.selectOptions(
+        screen.getByRole('combobox', { name: /Audio source/i }),
+        'trusted_split_channels',
+      );
+
+      expect(
+        (screen.getByRole('combobox', { name: /Transcript engine/i }) as HTMLSelectElement).value,
+      ).toBe('auto');
+    });
+
+    it('keeps ElevenLabs available as an ordinary mixed support override', async () => {
+      const user = createMinimalUser();
+      renderMinimalAssignment();
+
+      await startNewAssignmentForLearner(user);
+      openRecordingSettings();
+      await user.selectOptions(
+        screen.getByRole('combobox', { name: /Transcript engine/i }),
+        'elevenlabs',
+      );
+      await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+
+      await waitFor(() => expect(api.uploadRecording).toHaveBeenCalledTimes(1));
+      const [, options] = vi.mocked(api.uploadRecording).mock.calls[0]!;
+      expect(options).toEqual(
+        expect.objectContaining({
+          sttProvider: 'elevenlabs',
+          audioTopology: undefined,
+        }),
       );
     });
 

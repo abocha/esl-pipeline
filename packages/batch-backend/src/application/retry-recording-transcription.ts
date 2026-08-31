@@ -1,8 +1,12 @@
-import type { SttProviderId } from '@esl-pipeline/contracts';
+import type { AudioInputTopology, SttProviderId } from '@esl-pipeline/contracts';
 
 import { publishRecordingEvent } from '../domain/recording-events.js';
 import type { RecordingRecord } from '../domain/recording-model.js';
-import { getRecordingById, updateRecordingStatus } from '../domain/recording-repository.js';
+import {
+  getRecordingById,
+  updateRecordingAudioTopology,
+  updateRecordingStatus,
+} from '../domain/recording-repository.js';
 import { createTranscribeQueue } from '../infrastructure/transcribe-queue.js';
 import { type RecordingDto, recordingToDto } from './recording-dto.js';
 
@@ -20,6 +24,7 @@ export interface RetryRecordingDependencies {
   recordings: {
     getById: typeof getRecordingById;
     updateStatus: typeof updateRecordingStatus;
+    updateAudioTopology?: typeof updateRecordingAudioTopology;
   };
   enqueue: (payload: { recordingId: string; sttProvider?: SttProviderId }) => Promise<void>;
   publishEvent: typeof publishRecordingEvent;
@@ -27,7 +32,7 @@ export interface RetryRecordingDependencies {
 
 export async function retryRecordingTranscription(
   recordingId: string,
-  params?: { sttProvider?: SttProviderId },
+  params?: { sttProvider?: SttProviderId; audioTopology?: AudioInputTopology },
   overrides?: Partial<RetryRecordingDependencies>,
 ): Promise<RecordingDto | null> {
   if (!recordingId) return null;
@@ -35,6 +40,7 @@ export async function retryRecordingTranscription(
   const recordings = overrides?.recordings ?? {
     getById: getRecordingById,
     updateStatus: updateRecordingStatus,
+    updateAudioTopology: updateRecordingAudioTopology,
   };
   const enqueue = overrides?.enqueue ?? createTranscribeQueue().enqueue;
   const publishEvent = overrides?.publishEvent ?? publishRecordingEvent;
@@ -46,6 +52,12 @@ export async function retryRecordingTranscription(
     throw new RecordingRetryError('Recording is not in a failed state', 'recording_not_failed');
   }
 
+  const topology = params?.audioTopology ?? recording.audioTopology ?? 'mixed_recording';
+  const topologyRecording =
+    recording.audioTopology === topology || !recordings.updateAudioTopology
+      ? recording
+      : ((await recordings.updateAudioTopology({ id: recording.id, audioTopology: topology })) ??
+        recording);
   const queued = await recordings.updateStatus({
     id: recording.id,
     status: 'queued',
@@ -63,7 +75,7 @@ export async function retryRecordingTranscription(
 
   try {
     await enqueue({
-      recordingId: recording.id,
+      recordingId: topologyRecording.id,
       sttProvider: params?.sttProvider,
     });
   } catch (error) {

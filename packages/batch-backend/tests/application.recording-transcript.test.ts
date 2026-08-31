@@ -101,6 +101,101 @@ describe('application/recording-transcript', () => {
       updatedAt: updated.updatedAt.toISOString(),
     });
   });
+
+  it('binds a tutor-confirmed mixed-speaker mapping to the saved working version and hash', async () => {
+    const transcript = {
+      ...createTranscriptRecord(),
+      summaryJson: {
+        audioTopology: 'mixed_recording',
+        speakerTracks: { speakers: [{ speaker: 0 }, { speaker: 1 }] },
+      },
+    };
+    const updated = {
+      ...transcript,
+      workingVersion: 2,
+      contentHash: 'b'.repeat(64),
+      updatedAt: new Date('2024-01-01T01:00:00Z'),
+    };
+    const transcripts = {
+      getByRecordingId: vi.fn().mockResolvedValue(transcript),
+      update: vi.fn().mockResolvedValue(updated),
+    };
+    const storage = createStorageStub({
+      putTranscript: vi.fn().mockResolvedValue({
+        uri: transcript.storageUri,
+        bytes: 26,
+        sha256: 'b'.repeat(64),
+      }),
+    });
+
+    await updateRecordingTranscript(
+      {
+        recordingId: transcript.recordingId,
+        text: 'Speaker 1: Hello\nSpeaker 2: Hi',
+        expectedWorkingVersion: 1,
+        speakerRoleMapping: {
+          roles: [
+            { speaker: 0, role: 'teacher' },
+            { speaker: 1, role: 'student' },
+          ],
+        },
+      },
+      { storage, transcripts },
+    );
+
+    expect(transcripts.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        expectedWorkingVersion: 1,
+        summaryJson: expect.objectContaining({
+          speakerRoleMapping: expect.objectContaining({
+            confirmedWorkingVersion: 2,
+            confirmedContentHash: 'b'.repeat(64),
+          }),
+        }),
+      }),
+    );
+  });
+
+  it('does not attach a mapping when the optimistic transcript update loses', async () => {
+    const transcript = {
+      ...createTranscriptRecord(),
+      summaryJson: {
+        audioTopology: 'mixed_recording',
+        speakerTracks: { speakers: [{ speaker: 0 }, { speaker: 1 }] },
+      },
+    };
+    const transcripts = {
+      getByRecordingId: vi.fn().mockResolvedValue(transcript),
+      update: vi.fn().mockResolvedValue(null),
+    };
+    const storage = createStorageStub({
+      putTranscript: vi.fn().mockResolvedValue({
+        uri: transcript.storageUri,
+        bytes: 26,
+        sha256: 'b'.repeat(64),
+      }),
+    });
+
+    await expect(
+      updateRecordingTranscript(
+        {
+          recordingId: transcript.recordingId,
+          text: 'Speaker 1: Hello\nSpeaker 2: Hi',
+          expectedWorkingVersion: 1,
+          speakerRoleMapping: {
+            roles: [
+              { speaker: 0, role: 'teacher' },
+              { speaker: 1, role: 'student' },
+            ],
+          },
+        },
+        { storage, transcripts },
+      ),
+    ).resolves.toBeNull();
+    expect(transcripts.update).toHaveBeenCalledWith(
+      expect.objectContaining({ expectedWorkingVersion: 1 }),
+    );
+  });
 });
 
 function createTranscriptRecord(): TranscriptRecord {

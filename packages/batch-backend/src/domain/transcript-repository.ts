@@ -168,6 +168,7 @@ export async function updateTranscriptWorkingContent(params: {
   expectedWorkingVersion: number;
   storageUri: string;
   contentHash: string;
+  summaryJson?: Record<string, unknown> | null;
 }): Promise<TranscriptRecord> {
   const row = await withPgClient(async (client: PoolClient) => {
     const result = await client.query(
@@ -176,6 +177,7 @@ export async function updateTranscriptWorkingContent(params: {
       SET
         storage_uri = $3,
         content_hash = $4,
+        summary_json = COALESCE($5, summary_json),
         working_version = working_version + 1,
         updated_at = now()
       WHERE id = $1 AND working_version = $2
@@ -195,7 +197,13 @@ export async function updateTranscriptWorkingContent(params: {
         created_at,
         updated_at
       `,
-      [params.id, params.expectedWorkingVersion, params.storageUri, params.contentHash],
+      [
+        params.id,
+        params.expectedWorkingVersion,
+        params.storageUri,
+        params.contentHash,
+        params.summaryJson ?? null,
+      ],
     );
     return result.rows[0];
   });

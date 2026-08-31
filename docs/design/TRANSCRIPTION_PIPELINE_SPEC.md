@@ -99,3 +99,15 @@ Archived detailed version:
 - `docs/PIPELINE_INTEGRATION_VISION.md`
 - `docs/backend-frontend/BATCH_SYSTEM.md`
 - `docs/backend-frontend/backend-frontend-alignment.md`
+
+## Mixed and trusted recording topology
+
+Ordinary uploads persist `mixed_recording` and route to the versioned
+`mixed-recording-elevenlabs-scribe-v2-v1` profile. Initial diarized labels are anonymous; Source
+confirmation requires a tutor-confirmed Teacher/Student mapping. An explicit
+`trusted_split_channels` declaration retains Deepgram multichannel channel 0 tutor / channel 1
+student semantics and fails closed if that two-channel contract is not returned. Cache reuse also
+matches persisted topology and exact request-profile ID.
+
+`STT_PROVIDER` is an all-topology emergency rollback override, not a per-topology selection. In the
+current topology set only `deepgram` is valid; per-request support overrides remain topology-scoped.

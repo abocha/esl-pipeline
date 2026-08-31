@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import type { RecordingSourceId } from '@esl-pipeline/contracts';
+import type { AudioInputTopology, RecordingSourceId } from '@esl-pipeline/contracts';
 
 export type RecordingSource = RecordingSourceId;
 export type RecordingStatus = 'ingested' | 'queued' | 'transcribing' | 'transcribed' | 'failed';
@@ -15,6 +15,7 @@ export interface RecordingRecord {
   bytes: number;
   durationSec?: number | null;
   channels?: number | null;
+  audioTopology?: AudioInputTopology | null;
   status: RecordingStatus;
   error?: string | null;
   createdAt: Date;
@@ -29,3 +30,4 @@ export const RecordingStatusSchema = z.enum([
   'transcribed',
   'failed',
 ]);
+export const AudioInputTopologySchema = z.enum(['mixed_recording', 'trusted_split_channels']);

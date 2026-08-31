@@ -14,6 +14,92 @@ function baseConfig(): DeepgramSttConfig {
 }
 
 describe('stt-provider-deepgram', () => {
+  it('fails closed when a trusted split response does not preserve both channels', async () => {
+    const transcribeFile = vi.fn(async () => ({
+      metadata: { channels: 1 },
+      results: { channels: [{ alternatives: [{ transcript: 'collapsed audio' }] }] },
+    }));
+    const provider = createDeepgramSttProvider({
+      clientFactory: () => ({ listen: { v1: { media: { transcribeFile } } } }),
+      sleep: async () => undefined,
+    });
+
+    await expect(
+      provider.transcribe({
+        context: {
+          recordingId: 'recording-1',
+          storageUri: 'local://recordings/recording-1.wav',
+          getStream: async () => Readable.from(['audio']),
+        },
+        config: { ...baseConfig(), trustedSplitChannels: true },
+      }),
+    ).rejects.toThrow(/declared two-channel contract/i);
+    expect(transcribeFile).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not treat diarization speakers as trusted channel provenance', async () => {
+    const transcribeFile = vi.fn(async () => ({
+      metadata: { channels: 2 },
+      results: {
+        utterances: [
+          { transcript: 'Tutor turn', speaker: 0, start: 0, end: 0.5 },
+          { transcript: 'Student turn', speaker: 1, start: 1, end: 1.5 },
+        ],
+        channels: [
+          { alternatives: [{ transcript: 'Tutor turn' }] },
+          { alternatives: [{ transcript: 'Student turn' }] },
+        ],
+      },
+    }));
+    const provider = createDeepgramSttProvider({
+      clientFactory: () => ({ listen: { v1: { media: { transcribeFile } } } }),
+      sleep: async () => undefined,
+    });
+
+    await expect(
+      provider.transcribe({
+        context: {
+          recordingId: 'recording-1',
+          storageUri: 'local://recordings/recording-1.wav',
+          getStream: async () => Readable.from(['audio']),
+        },
+        config: { ...baseConfig(), trustedSplitChannels: true },
+      }),
+    ).rejects.toThrow(/explicit channel 0\/1 provenance/i);
+    expect(transcribeFile).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails closed for unexpected trusted channel identities', async () => {
+    const transcribeFile = vi.fn(async () => ({
+      metadata: { channels: 2 },
+      results: {
+        utterances: [
+          { transcript: 'Tutor turn', channel: 0, start: 0, end: 0.5 },
+          { transcript: 'Unexpected turn', channel: 2, start: 1, end: 1.5 },
+        ],
+        channels: [
+          { alternatives: [{ transcript: 'Tutor turn' }] },
+          { alternatives: [{ transcript: 'Unexpected turn' }] },
+        ],
+      },
+    }));
+    const provider = createDeepgramSttProvider({
+      clientFactory: () => ({ listen: { v1: { media: { transcribeFile } } } }),
+      sleep: async () => undefined,
+    });
+
+    await expect(
+      provider.transcribe({
+        context: {
+          recordingId: 'recording-1',
+          storageUri: 'local://recordings/recording-1.wav',
+          getStream: async () => Readable.from(['audio']),
+        },
+        config: { ...baseConfig(), trustedSplitChannels: true },
+      }),
+    ).rejects.toThrow(/explicit channel 0\/1 provenance/i);
+  });
+
   it('transcribes with multichannel primary path', async () => {
     const transcribeFile = vi.fn(async () => ({
       metadata: { channels: 2 },

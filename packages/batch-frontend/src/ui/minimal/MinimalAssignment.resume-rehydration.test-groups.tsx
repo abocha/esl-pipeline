@@ -426,6 +426,90 @@ export function registerResumeBasicTests() {
       expect(api.getJobStatus).not.toHaveBeenCalled();
     });
 
+    it('rehydrates trusted split topology and the persisted Deepgram transcript engine', async () => {
+      const session = makeAssignmentSession({
+        id: 'session-trusted-source',
+        studentId: 'student-alex',
+        recordingId: 'rec-trusted',
+        transcriptId: 'tx-trusted',
+        confirmedStep: 'context',
+      });
+      vi.mocked(api.listAssignmentSessions).mockResolvedValueOnce({
+        sessions: [session],
+        total: 1,
+        limit: 20,
+      });
+      vi.mocked(api.fetchAssignmentSession).mockResolvedValue(session);
+      vi.mocked(api.getRecording).mockResolvedValue(
+        makeRecording({
+          recordingId: 'rec-trusted',
+          transcriptId: 'tx-trusted',
+          studentId: 'student-alex',
+          status: 'transcribed',
+          audioTopology: 'trusted_split_channels',
+        }),
+      );
+      vi.mocked(api.fetchRecordingTranscript).mockResolvedValue(
+        makeTranscript({
+          recordingId: 'rec-trusted',
+          transcriptId: 'tx-trusted',
+          sttProvider: 'deepgram',
+        }),
+      );
+
+      globalThis.history.replaceState(null, '', '/?sessionId=session-trusted-source');
+      renderMinimalAssignment();
+
+      await waitFor(() => expect(api.getRecording).toHaveBeenCalledWith('rec-trusted'));
+      await (await createMinimalUser()).click(
+        screen.getByRole('button', { name: /Lesson source/i }),
+      );
+      expect(await screen.findByText('Audio source: Trusted OBS split')).toBeTruthy();
+      expect(screen.getByText('Transcript engine: Deepgram')).toBeTruthy();
+    });
+
+    it('rehydrates ordinary mixed topology and the persisted ElevenLabs transcript engine', async () => {
+      const session = makeAssignmentSession({
+        id: 'session-mixed-source',
+        studentId: 'student-alex',
+        recordingId: 'rec-mixed',
+        transcriptId: 'tx-mixed',
+        confirmedStep: 'context',
+      });
+      vi.mocked(api.listAssignmentSessions).mockResolvedValueOnce({
+        sessions: [session],
+        total: 1,
+        limit: 20,
+      });
+      vi.mocked(api.fetchAssignmentSession).mockResolvedValue(session);
+      vi.mocked(api.getRecording).mockResolvedValue(
+        makeRecording({
+          recordingId: 'rec-mixed',
+          transcriptId: 'tx-mixed',
+          studentId: 'student-alex',
+          status: 'transcribed',
+          audioTopology: 'mixed_recording',
+        }),
+      );
+      vi.mocked(api.fetchRecordingTranscript).mockResolvedValue(
+        makeTranscript({
+          recordingId: 'rec-mixed',
+          transcriptId: 'tx-mixed',
+          sttProvider: 'elevenlabs',
+        }),
+      );
+
+      globalThis.history.replaceState(null, '', '/?sessionId=session-mixed-source');
+      renderMinimalAssignment();
+
+      await waitFor(() => expect(api.getRecording).toHaveBeenCalledWith('rec-mixed'));
+      await (await createMinimalUser()).click(
+        screen.getByRole('button', { name: /Lesson source/i }),
+      );
+      expect(await screen.findByText('Audio source: Ordinary recording')).toBeTruthy();
+      expect(screen.getByText('Transcript engine: ElevenLabs')).toBeTruthy();
+    });
+
     it('follows the backend canonical session when a partial duplicate is resumed', async () => {
       const duplicateSession = makeAssignmentSession({
         id: 'session-duplicate',

@@ -98,6 +98,7 @@ export type JobState = ContractJobState;
 export type TtsStrategy = ContractTtsStrategy;
 export type RecordingStatus = ContractRecordingStatus;
 export type SttProvider = ContractSttProviderId;
+export type AudioInputTopology = 'mixed_recording' | 'trusted_split_channels';
 export type UserRole = 'admin' | 'user' | 'viewer';
 export type RegisterRole = Exclude<UserRole, 'admin'>;
 
@@ -185,6 +186,7 @@ export interface RecordingListItem {
   displayName: string;
   durationSec: number | null;
   channels: number | null;
+  audioTopology: AudioInputTopology | null;
   bytes: number;
   createdAt: string;
   updatedAt: string;
@@ -1963,6 +1965,7 @@ export async function uploadRecording(
   options?: {
     studentId?: string;
     sttProvider?: SttProvider;
+    audioTopology?: Extract<AudioInputTopology, 'trusted_split_channels'>;
     onProgress?: UploadProgressCallback;
     signal?: AbortSignal;
   },
@@ -2018,12 +2021,20 @@ export async function createManualTranscriptSource(
 
 export async function retryRecordingTranscription(
   recordingId: string,
-  options?: { sttProvider?: SttProvider },
+  options?: {
+    sttProvider?: SttProvider;
+    audioTopology?: Extract<AudioInputTopology, 'trusted_split_channels'>;
+  },
 ): Promise<RecordingListItem> {
   try {
     const response = await apiClient.post(
       buildApiProxyPath(`/recordings/${encodeURIComponent(recordingId)}/transcribe`),
-      options?.sttProvider ? { sttProvider: options.sttProvider } : undefined,
+      options?.sttProvider || options?.audioTopology
+        ? {
+            ...(options.sttProvider ? { sttProvider: options.sttProvider } : {}),
+            ...(options.audioTopology ? { audioTopology: options.audioTopology } : {}),
+          }
+        : undefined,
     );
     return response.data;
   } catch (error: unknown) {
@@ -3311,12 +3322,13 @@ export async function updateRecordingTranscript(
   recordingId: string,
   text: string,
   expectedWorkingVersion: number,
+  speakerRoleMapping?: { roles: { speaker: number; role: 'teacher' | 'student' }[] },
 ): Promise<RecordingTranscriptResponse> {
   try {
     const response = await runRecoveryRequest(() =>
       apiClient.put(
         buildApiProxyPath(`/recordings/${encodeURIComponent(recordingId)}/transcript`),
-        { text, expectedWorkingVersion },
+        { text, expectedWorkingVersion, ...(speakerRoleMapping ? { speakerRoleMapping } : {}) },
       ),
     );
     return response.data;

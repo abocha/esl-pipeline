@@ -264,6 +264,7 @@ export function makeRecording(
     displayName: 'lesson.mp3',
     durationSec: null,
     channels: null,
+    audioTopology: null,
     bytes: 1024,
     createdAt: now,
     updatedAt: now,

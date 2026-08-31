@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import type { Readable } from 'node:stream';
 
-import type { SttProviderId } from '@esl-pipeline/contracts';
+import type { AudioInputTopology, SttProviderId } from '@esl-pipeline/contracts';
 
 import type { RecordingRecord } from '../domain/recording-model.js';
 import {
@@ -22,6 +22,7 @@ export interface UploadRecordingOptions {
   sourcePath?: string | null;
   studentId?: string | null;
   sttProvider?: SttProviderId;
+  audioTopology?: AudioInputTopology;
   storage: TranscriptionStorage;
   repository: RecordingRepository;
   enqueue: (payload: { recordingId: string; sttProvider?: SttProviderId }) => Promise<void>;
@@ -55,6 +56,7 @@ export async function ingestRecordingUpload(
     storageUri: storageResult.uri,
     sha256: storageResult.sha256 ?? null,
     bytes: storageResult.bytes,
+    audioTopology: options.audioTopology ?? 'mixed_recording',
     status: 'queued',
   });
 
@@ -81,6 +83,7 @@ export async function ingestRecordingUploadWithDefaults(params: {
   sourcePath?: string | null;
   studentId?: string | null;
   sttProvider?: SttProviderId;
+  audioTopology?: AudioInputTopology;
   storage?: TranscriptionStorage;
 }): Promise<RecordingRecord> {
   const storage = params.storage ?? createTranscriptionStorage();
@@ -96,6 +99,7 @@ export async function ingestRecordingUploadWithDefaults(params: {
     sourcePath: params.sourcePath,
     studentId: params.studentId,
     sttProvider: params.sttProvider,
+    audioTopology: params.audioTopology,
     storage,
     repository,
     enqueue: queue.enqueue,

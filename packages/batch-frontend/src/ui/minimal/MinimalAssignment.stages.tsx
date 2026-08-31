@@ -15,10 +15,12 @@ import React from 'react';
 import { Link, useInRouterContext } from 'react-router-dom';
 
 import type {
+  AudioInputTopology,
   JobStatus,
   MarkdownValidationResponse,
   RecordingListItem,
   RecordingStatus,
+  RecordingTranscriptResponse,
   SttProvider,
   StudentOption,
 } from '../../utils/api';
@@ -103,7 +105,10 @@ interface SourceStageSectionProps {
   lessonSuggestionsError: string | null;
   onSelectLessonSuggestion: (lessonId: string) => void;
   selectedSttProvider: SttProvider;
-  onSelectedSttProviderChange: (provider: SttProvider) => void;
+  sttProviderOverrideActive: boolean;
+  selectedAudioTopology: AudioInputTopology;
+  onSelectedSttProviderChange: (provider: SttProvider | 'auto') => void;
+  onSelectedAudioTopologyChange: (topology: AudioInputTopology) => void;
   sttProviders: readonly SttProvider[];
   formatSttProviderLabel: (provider: SttProvider) => string;
   audioExtensions: readonly string[];
@@ -119,6 +124,7 @@ interface SourceStageSectionProps {
   uploadError: string | null;
   uploadCacheNotice: string | null;
   recording: RecordingListItem | null;
+  transcriptProvider: RecordingTranscriptResponse['sttProvider'] | null;
   recordingStatus: RecordingStatus | null;
   recordingError: string | null;
   transcriptStatus: 'idle' | 'loading' | 'processing' | 'ready' | 'failed';
@@ -130,6 +136,9 @@ interface SourceStageSectionProps {
   onTranscriptTextChange: (value: string) => void;
   transcriptDirty: boolean;
   transcriptSaving: boolean;
+  mixedSpeakerRoles: { speaker: number; role: 'teacher' | 'student' | '' }[];
+  onMixedSpeakerRoleChange: (speaker: number, role: 'teacher' | 'student' | '') => void;
+  onSaveMixedSpeakerRoles: () => void;
   hideStudentSelection?: boolean;
   readOnly?: boolean;
 }
@@ -799,7 +808,10 @@ export function SourceStageSection({
   lessonSuggestionsError,
   onSelectLessonSuggestion,
   selectedSttProvider,
+  sttProviderOverrideActive,
+  selectedAudioTopology,
   onSelectedSttProviderChange,
+  onSelectedAudioTopologyChange,
   sttProviders,
   formatSttProviderLabel,
   audioExtensions,
@@ -815,6 +827,7 @@ export function SourceStageSection({
   uploadError,
   uploadCacheNotice,
   recording,
+  transcriptProvider,
   recordingStatus,
   recordingError,
   transcriptStatus,
@@ -826,6 +839,9 @@ export function SourceStageSection({
   onTranscriptTextChange,
   transcriptDirty,
   transcriptSaving,
+  mixedSpeakerRoles,
+  onMixedSpeakerRoleChange,
+  onSaveMixedSpeakerRoles,
   hideStudentSelection = false,
   readOnly = false,
 }: SourceStageSectionProps) {
@@ -915,14 +931,30 @@ export function SourceStageSection({
             <details className="minimal-details">
               <summary>Recording settings</summary>
               <label className="minimal-select">
+                Audio source
+                <select
+                  value={selectedAudioTopology}
+                  onChange={(event) =>
+                    onSelectedAudioTopologyChange(event.target.value as AudioInputTopology)
+                  }
+                  disabled={readOnly}
+                >
+                  <option value="mixed_recording">Ordinary recording</option>
+                  <option value="trusted_split_channels">
+                    Trusted OBS split: channel 1 tutor, channel 2 student
+                  </option>
+                </select>
+              </label>
+              <label className="minimal-select">
                 Transcript engine
                 <select
-                  value={selectedSttProvider}
+                  value={sttProviderOverrideActive ? selectedSttProvider : 'auto'}
                   onChange={(event) =>
-                    onSelectedSttProviderChange(event.target.value as SttProvider)
+                    onSelectedSttProviderChange(event.target.value as SttProvider | 'auto')
                   }
                   disabled={readOnly || sttProviders.length === 0}
                 >
+                  <option value="auto">Automatic (recommended)</option>
                   {sttProviders.map((provider) => (
                     <option key={provider} value={provider}>
                       {formatSttProviderLabel(provider)}
@@ -982,7 +1014,20 @@ export function SourceStageSection({
               <div className="minimal-meta">
                 <span>Recording: {recording.displayName || recording.recordingId}</span>
                 <span>Status: {recordingStatus ?? 'unknown'}</span>
-                <span>Transcript engine: {formatSttProviderLabel(selectedSttProvider)}</span>
+                <span>
+                  Audio source:{' '}
+                  {selectedAudioTopology === 'trusted_split_channels'
+                    ? 'Trusted OBS split'
+                    : 'Ordinary recording'}
+                </span>
+                <span>
+                  Transcript engine:{' '}
+                  {transcriptProvider === 'manual'
+                    ? 'Manual transcript'
+                    : transcriptProvider
+                      ? formatSttProviderLabel(transcriptProvider)
+                      : 'Processing'}
+                </span>
                 {selectedStudent ? <span>Student: {selectedStudent.name}</span> : null}
               </div>
               {canReplaceAudio && !replacingAudio && !readOnly ? (
@@ -1055,6 +1100,42 @@ export function SourceStageSection({
                       : 'Transcript changes saved'}
                 </span>
               </div>
+              {mixedSpeakerRoles.length > 0 ? (
+                <div className="minimal-block">
+                  <p className="minimal-help">
+                    Assign every anonymous speaker before confirming this source.
+                  </p>
+                  {mixedSpeakerRoles.map((item) => (
+                    <label className="minimal-select" key={item.speaker}>
+                      Speaker {item.speaker + 1}
+                      <select
+                        value={item.role}
+                        onChange={(event) =>
+                          onMixedSpeakerRoleChange(
+                            item.speaker,
+                            event.target.value as 'teacher' | 'student' | '',
+                          )
+                        }
+                        disabled={readOnly || transcriptSaving}
+                      >
+                        <option value="">Choose role</option>
+                        <option value="teacher">Teacher</option>
+                        <option value="student">Student</option>
+                      </select>
+                    </label>
+                  ))}
+                  <button
+                    type="button"
+                    className="minimal-secondary"
+                    onClick={onSaveMixedSpeakerRoles}
+                    disabled={
+                      readOnly || transcriptSaving || mixedSpeakerRoles.some((item) => !item.role)
+                    }
+                  >
+                    Save speaker roles
+                  </button>
+                </div>
+              ) : null}
               {transcriptError ? <p className="minimal-error">{transcriptError}</p> : null}
             </div>
           ) : null}

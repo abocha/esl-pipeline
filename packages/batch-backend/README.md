@@ -59,6 +59,12 @@ Useful indexes:
 - Recording upload cache hits reuse compatible immutable STT artifacts. When identical audio is
   submitted for another student, the backend clones recording/transcript metadata for that student
   instead of reassigning the original learner-owned artifacts.
+- Audio uploads persist an explicit topology. Ordinary uploads default to `mixed_recording` and use
+  the configured ElevenLabs Scribe v2 mixed profile; only an explicit trusted OBS declaration uses
+  Deepgram's two-channel tutor/student path. Mixed diarization labels remain anonymous until the
+  tutor confirms the speaker-role mapping in the Source review flow.
+- `STT_PROVIDER` is an all-topology emergency rollback override; with the current topology set, only
+  `deepgram` is valid. Per-request support overrides remain topology-scoped.
 - Manual transcript sources require a student, retain the pasted text as durable source material,
   and participate in prompt-package, assignment-history, and resume flows like uploaded lessons.
 - Local/dev startup runs the API server, batch worker, transcribe worker, and dedicated student-memory worker as separate processes.

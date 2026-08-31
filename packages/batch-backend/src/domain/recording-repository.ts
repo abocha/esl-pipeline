@@ -1,9 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { PoolClient } from 'pg';
 
+import type { AudioInputTopology } from '@esl-pipeline/contracts';
+
 import { withPgClient } from '../infrastructure/db.js';
 import { logger } from '../infrastructure/logger.js';
 import {
+  AudioInputTopologySchema,
   type RecordingRecord,
   type RecordingSource,
   RecordingSourceSchema,
@@ -21,6 +24,7 @@ interface RecordingRow {
   bytes: string | number;
   duration_sec: number | null;
   channels: number | null;
+  audio_topology: string | null;
   status: string;
   error: string | null;
   created_at: Date;
@@ -41,6 +45,7 @@ export interface InsertRecordingParams {
   bytes: number;
   durationSec?: number | null;
   channels?: number | null;
+  audioTopology?: AudioInputTopology | null;
   status: RecordingStatus;
   error?: string | null;
 }
@@ -50,7 +55,7 @@ export async function getRecordingBySha256(sha256: string): Promise<RecordingRec
     const result = await client.query(
       `
       SELECT id, source, student_id, source_path, storage_uri, sha256, bytes,
-             duration_sec, channels, status, error, created_at, updated_at
+             duration_sec, channels, audio_topology, status, error, created_at, updated_at
       FROM recordings
       WHERE sha256 = $1
       LIMIT 1
@@ -68,7 +73,7 @@ export async function listRecordingsBySha256(sha256: string): Promise<RecordingR
     const result = await client.query(
       `
       SELECT id, source, student_id, source_path, storage_uri, sha256, bytes,
-             duration_sec, channels, status, error, created_at, updated_at
+             duration_sec, channels, audio_topology, status, error, created_at, updated_at
       FROM recordings
       WHERE sha256 = $1
       ORDER BY created_at DESC, id DESC
@@ -86,7 +91,7 @@ export async function getRecordingById(id: string): Promise<RecordingRecord | nu
     const result = await client.query(
       `
       SELECT id, source, student_id, source_path, storage_uri, sha256, bytes,
-             duration_sec, channels, status, error, created_at, updated_at
+             duration_sec, channels, audio_topology, status, error, created_at, updated_at
       FROM recordings
       WHERE id = $1
       `,
@@ -106,7 +111,7 @@ export async function getRecordingBySourcePath(
     const result = await client.query(
       `
       SELECT id, source, student_id, source_path, storage_uri, sha256, bytes,
-             duration_sec, channels, status, error, created_at, updated_at
+             duration_sec, channels, audio_topology, status, error, created_at, updated_at
       FROM recordings
       WHERE source_path = $1
         AND bytes = $2
@@ -140,12 +145,13 @@ export async function insertRecording(
         bytes,
         duration_sec,
         channels,
+        audio_topology,
         status,
         error,
         created_at,
         updated_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       RETURNING
         id,
         source,
@@ -156,6 +162,7 @@ export async function insertRecording(
         bytes,
         duration_sec,
         channels,
+        audio_topology,
         status,
         error,
         created_at,
@@ -171,6 +178,7 @@ export async function insertRecording(
         params.bytes,
         params.durationSec ?? null,
         params.channels ?? null,
+        params.audioTopology ?? null,
         params.status,
         params.error ?? null,
         now,
@@ -210,6 +218,7 @@ export async function updateRecordingStatus(params: {
         bytes,
         duration_sec,
         channels,
+        audio_topology,
         status,
         error,
         created_at,
@@ -227,6 +236,22 @@ export async function updateRecordingStatus(params: {
 
   logger.info('Recording status updated', { recordingId: params.id, status: row.status });
   return mapRowToRecording(row);
+}
+
+export async function updateRecordingAudioTopology(params: {
+  id: string;
+  audioTopology: AudioInputTopology;
+}): Promise<RecordingRecord | null> {
+  const row = await withPgClient(async (client: PoolClient) => {
+    const result = await client.query(
+      `UPDATE recordings SET audio_topology = $2, updated_at = now() WHERE id = $1
+       RETURNING id, source, student_id, source_path, storage_uri, sha256, bytes,
+                 duration_sec, channels, audio_topology, status, error, created_at, updated_at`,
+      [params.id, params.audioTopology],
+    );
+    return result.rows[0];
+  });
+  return row ? mapRowToRecording(row) : null;
 }
 
 export async function updateRecordingStudentId(params: {
@@ -251,6 +276,7 @@ export async function updateRecordingStudentId(params: {
         bytes,
         duration_sec,
         channels,
+        audio_topology,
         status,
         error,
         created_at,
@@ -339,6 +365,7 @@ export async function listRecordings(
         r.bytes,
         r.duration_sec,
         r.channels,
+        r.audio_topology,
         r.status,
         r.error,
         r.created_at,
@@ -427,6 +454,7 @@ function mapRowToRecording(row: RecordingRow): RecordingRecord {
     bytes: Number.isNaN(bytes) ? 0 : bytes,
     durationSec: row.duration_sec ?? null,
     channels: row.channels ?? null,
+    audioTopology: row.audio_topology ? AudioInputTopologySchema.parse(row.audio_topology) : null,
     status,
     error: row.error ?? null,
     createdAt: row.created_at,
