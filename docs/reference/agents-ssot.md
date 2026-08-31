@@ -4,7 +4,7 @@
 
 - Audience: maintainers and AI agents implementing or reviewing repo behavior.
 - Authority Level: authoritative contracts and invariants.
-- Last Verified Against: 2026-07-29 repo state.
+- Last Verified Against: 2026-08-31 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: monthly and after contract-level changes.
 - Status: `reference`.
@@ -159,8 +159,10 @@ Update together:
   detail in plans or task docs.
 - Use nested `AGENTS.md` files only for repeated subtree-specific overrides.
 - Reusable procedures belong in skills; deterministic requirements belong in scripts, hooks, or CI.
-- Active plans define the outcome, constraints, and verification for their task. After implementation
-  lands, current code, contracts, package READMEs, and reference/runbook docs outrank the plan.
+- Active plans define the outcome, constraints, and verification for plan-backed tasks; explicitly
+  approved Goal Contracts define the stable outcome boundary for goal-backed orchestration. After
+  implementation lands, current code, contracts, package READMEs, and reference/runbook docs outrank
+  either execution handoff.
 - A freshness-date change is valid only after content verification under
   `docs/reference/DOCS_GOVERNANCE.md`; date-only CI unblocking is forbidden.
 
