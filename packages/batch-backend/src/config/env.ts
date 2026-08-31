@@ -49,6 +49,7 @@ export interface BatchBackendConfig {
     mode: 'timeline' | 'stack';
     maxConcurrency: number;
     sttProvider: SttProviderId;
+    hardOverride?: SttProviderId;
     sttProviders: SttProviderId[];
   };
   studentMemory: {
@@ -68,6 +69,7 @@ export interface BatchBackendConfig {
   };
   stt: {
     defaultProvider: SttProviderId;
+    trustedSplitProvider?: SttProviderId;
     providerOrder: SttProviderId[];
     storeRawResponse: boolean;
     providers: {
@@ -408,15 +410,22 @@ export function loadConfig(): BatchBackendConfig {
   }
   const transcribeMaxConcurrency = readInt('TRANSCRIBE_MAX_CONCURRENCY', 2);
   const sttDefaultProvider = normalizeSttProvider(
-    readString('ESL_STT_DEFAULT_PROVIDER', 'deepgram')!,
+    readString('ESL_STT_DEFAULT_PROVIDER', 'elevenlabs')!,
   );
-  const sttProvider = normalizeSttProvider(readString('STT_PROVIDER', sttDefaultProvider)!);
+  const sttTrustedSplitProvider = normalizeSttProvider(
+    readString('ESL_STT_TRUSTED_SPLIT_PROVIDER', 'deepgram')!,
+  );
+  const explicitSttProvider = readString('STT_PROVIDER');
+  const sttProvider = normalizeSttProvider(explicitSttProvider ?? sttDefaultProvider);
+  const sttHardOverride = explicitSttProvider ? sttProvider : undefined;
   const sttProviderOrderRaw = readString(
     'ESL_STT_PROVIDER_ORDER',
     `${sttDefaultProvider},deepgram,elevenlabs,google`,
   )!;
   const sttProviderOrder = parseSttProviders(sttProviderOrderRaw);
-  const sttProviders = [...new Set([sttProvider, sttDefaultProvider, ...sttProviderOrder])];
+  const sttProviders = [
+    ...new Set([sttProvider, sttDefaultProvider, sttTrustedSplitProvider, ...sttProviderOrder]),
+  ];
   const sttStoreRawResponse = readBool(
     'ESL_STT_STORE_RAW_RESPONSE',
     readBool('DEEPGRAM_STORE_RAW_RESPONSE', true),
@@ -826,6 +835,7 @@ export function loadConfig(): BatchBackendConfig {
       mode: transcribeMode,
       maxConcurrency: transcribeMaxConcurrency,
       sttProvider,
+      hardOverride: sttHardOverride,
       sttProviders,
     },
     studentMemory: {
@@ -845,6 +855,7 @@ export function loadConfig(): BatchBackendConfig {
     },
     stt: {
       defaultProvider: sttDefaultProvider,
+      trustedSplitProvider: sttTrustedSplitProvider,
       providerOrder: sttProviderOrder,
       storeRawResponse: sttStoreRawResponse,
       providers: {

@@ -1253,6 +1253,155 @@ describe('MinimalAssignment - staged workflow UI', () => {
     INTEGRATION_TEST_TIMEOUT_MS,
   );
 
+  it('requires and saves mixed-speaker roles before Source confirmation', async () => {
+    const user = createMinimalUser();
+    const mixedRecording = makeRecording({
+      audioTopology: 'mixed_recording',
+      status: 'transcribed',
+      transcriptId: 'tx-mixed',
+    });
+    const mappedTranscript = makeTranscript({
+      recordingId: 'rec-1',
+      transcriptId: 'tx-mixed',
+      text: 'Teacher: Hello\nStudent: Hi',
+      workingVersion: 2,
+      contentHash: 'b'.repeat(64),
+      summaryJson: {
+        audioTopology: 'mixed_recording',
+        speakerRoleMapping: {
+          version: 'speaker-role-mapping-v1',
+          provenance: 'tutor_confirmed',
+          confidence: null,
+          roles: [
+            { speaker: 0, role: 'teacher' },
+            { speaker: 1, role: 'student' },
+          ],
+          confirmedWorkingVersion: 2,
+          confirmedContentHash: 'b'.repeat(64),
+        },
+        speakerTracks: { speakers: [0, 1] },
+      },
+    });
+    vi.mocked(api.uploadRecording).mockResolvedValue(mixedRecording);
+    vi.mocked(api.getRecording).mockResolvedValue(mixedRecording);
+    vi.mocked(api.fetchRecordingTranscript).mockResolvedValue(
+      makeTranscript({
+        recordingId: 'rec-1',
+        transcriptId: 'tx-mixed',
+        text: 'Speaker 1: Hello\nSpeaker 2: Hi',
+        summaryJson: {
+          audioTopology: 'mixed_recording',
+          speakerTracks: { speakers: [{ speaker: 0 }, { speaker: 1 }] },
+        },
+      }),
+    );
+    vi.mocked(api.updateRecordingTranscript).mockResolvedValue(mappedTranscript);
+
+    renderMinimalAssignment();
+    await startNewAssignmentForLearner(user);
+    await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+    await screen.findByRole('combobox', { name: /Speaker 1/i });
+
+    await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+    expect(api.confirmAssignmentSessionStep).not.toHaveBeenCalled();
+
+    await user.selectOptions(screen.getByRole('combobox', { name: /Speaker 1/i }), 'teacher');
+    await user.selectOptions(screen.getByRole('combobox', { name: /Speaker 2/i }), 'student');
+    await user.click(screen.getByRole('button', { name: /Save speaker roles/i }));
+
+    await waitFor(() =>
+      expect(api.updateRecordingTranscript).toHaveBeenCalledWith(
+        'rec-1',
+        'Speaker 1: Hello\nSpeaker 2: Hi',
+        1,
+        {
+          roles: [
+            { speaker: 0, role: 'teacher' },
+            { speaker: 1, role: 'student' },
+          ],
+        },
+      ),
+    );
+    await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+    await waitFor(() =>
+      expect(api.confirmAssignmentSessionStep).toHaveBeenCalledWith(
+        'session-1',
+        expect.objectContaining({ step: 'source', transcriptId: 'tx-mixed' }),
+      ),
+    );
+  });
+
+  it('shows stale mixed-speaker mappings again and requires an explicit reconfirmation', async () => {
+    const user = createMinimalUser();
+    const mixedRecording = makeRecording({
+      audioTopology: 'mixed_recording',
+      status: 'transcribed',
+      transcriptId: 'tx-mixed-stale',
+    });
+    const staleTranscript = makeTranscript({
+      recordingId: 'rec-1',
+      transcriptId: 'tx-mixed-stale',
+      text: 'Teacher: Edited hello\nStudent: Edited hi',
+      workingVersion: 3,
+      contentHash: 'c'.repeat(64),
+      summaryJson: {
+        audioTopology: 'mixed_recording',
+        speakerRoleMapping: {
+          version: 'speaker-role-mapping-v1',
+          provenance: 'tutor_confirmed',
+          confidence: null,
+          roles: [
+            { speaker: 0, role: 'teacher' },
+            { speaker: 1, role: 'student' },
+          ],
+          confirmedWorkingVersion: 2,
+          confirmedContentHash: 'b'.repeat(64),
+        },
+        speakerTracks: {
+          speakers: [
+            { speaker: 0, label: 'Teacher' },
+            { speaker: 1, label: 'Student' },
+          ],
+        },
+      },
+    });
+    vi.mocked(api.uploadRecording).mockResolvedValue(mixedRecording);
+    vi.mocked(api.getRecording).mockResolvedValue(mixedRecording);
+    vi.mocked(api.fetchRecordingTranscript).mockResolvedValue(staleTranscript);
+    vi.mocked(api.updateRecordingTranscript).mockResolvedValue(
+      makeTranscript({
+        ...staleTranscript,
+        workingVersion: 4,
+        contentHash: 'd'.repeat(64),
+      }),
+    );
+
+    renderMinimalAssignment();
+    await startNewAssignmentForLearner(user);
+    await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+    expect(
+      ((await screen.findByRole('combobox', { name: /Speaker 1/i })) as HTMLSelectElement).value,
+    ).toBe('teacher');
+    expect((screen.getByRole('combobox', { name: /Speaker 2/i }) as HTMLSelectElement).value).toBe(
+      'student',
+    );
+
+    await user.click(screen.getByRole('button', { name: /Save speaker roles/i }));
+    await waitFor(() =>
+      expect(api.updateRecordingTranscript).toHaveBeenCalledWith(
+        'rec-1',
+        'Teacher: Edited hello\nStudent: Edited hi',
+        3,
+        {
+          roles: [
+            { speaker: 0, role: 'teacher' },
+            { speaker: 1, role: 'student' },
+          ],
+        },
+      ),
+    );
+  });
+
   it(
     'replaces uploaded audio in the same assignment session and scheduled lesson',
     async () => {

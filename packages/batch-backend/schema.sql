@@ -620,6 +620,8 @@ CREATE TABLE public.recordings (
     error text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    audio_topology text,
+    CONSTRAINT recordings_audio_topology_check CHECK ((audio_topology = ANY (ARRAY['mixed_recording'::text, 'trusted_split_channels'::text]))),
     CONSTRAINT recordings_source_check CHECK ((source = ANY (ARRAY['upload'::text, 'manual_transcript'::text]))),
     CONSTRAINT recordings_status_check CHECK ((status = ANY (ARRAY['ingested'::text, 'queued'::text, 'transcribing'::text, 'transcribed'::text, 'failed'::text])))
 );
@@ -1920,5 +1922,6 @@ VALUES
   ('0044_assignment_step_confirmation_contract', 'cdcca1a947c96eddacd8d1bb61dca29b2f06e6366c719401c4b0a8e529483987', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0045_student_memory_snapshot_eligibility_repair', 'c40a212c3fde21f699f31ba07d90fad5da90e0e5cad56934b72a13835daf356f', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0046_jobs_publication_sequence', '9b63588b48faf38aef14df9c9f9dd8f94b9e554f5a1044d081dad9e2e6bf9595', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0047_jobs_published_content_hash', '06508beba68bbd9b5141f76d7a69539385968f382736f53885cb1add81c8428c', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0047_jobs_published_content_hash', '06508beba68bbd9b5141f76d7a69539385968f382736f53885cb1add81c8428c', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0048_recording_audio_topology', 'a426012df6f20d3a16962e004fef79e1f00e85da70557606b440e906aea4f0be', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;

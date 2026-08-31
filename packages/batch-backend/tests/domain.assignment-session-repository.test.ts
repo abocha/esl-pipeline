@@ -68,6 +68,90 @@ async function insertStudentConfirmedSession(params: {
   });
 }
 
+async function createMixedSourceConfirmationFixture(params: {
+  workingVersion: number;
+  contentHash: string;
+  mappingWorkingVersion: number;
+  mappingContentHash: string;
+}) {
+  const userId = randomUUID();
+  const studentId = randomUUID();
+  const recordingId = randomUUID();
+  const transcriptId = randomUUID();
+  await insertUserAndStudent(userId, studentId);
+  const repository = await import('../src/domain/assignment-session-repository.js');
+  const session = await repository.confirmStudentAssignmentSession({
+    userId,
+    requestId: randomUUID(),
+    studentId,
+    lessonId: null,
+  });
+  await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+    await client.query(
+      `INSERT INTO recordings
+         (id, source, student_id, storage_uri, bytes, status, audio_topology)
+       VALUES ($1, 'upload', $2, $3, 12, 'transcribed', 'mixed_recording')`,
+      [recordingId, studentId, `local://recordings/${recordingId}.mp3`],
+    );
+    await client.query(
+      `INSERT INTO transcripts
+         (id, recording_id, storage_uri, working_version, content_hash, stt_provider,
+          mode, model, language, fallback_used, summary_json)
+       VALUES ($1, $2, $3, $4, $5, 'elevenlabs', 'timeline', 'scribe_v2', 'auto', false, $6::jsonb)`,
+      [
+        transcriptId,
+        recordingId,
+        `local://transcripts/${transcriptId}.txt`,
+        params.workingVersion,
+        params.contentHash,
+        JSON.stringify({
+          audioTopology: 'mixed_recording',
+          speakerTracks: { speakers: [{ speaker: 0 }, { speaker: 1 }] },
+          speakerRoleMapping: {
+            version: 'speaker-role-mapping-v1',
+            provenance: 'tutor_confirmed',
+            confidence: null,
+            roles: [
+              { speaker: 0, role: 'teacher' },
+              { speaker: 1, role: 'student' },
+            ],
+            confirmedWorkingVersion: params.mappingWorkingVersion,
+            confirmedContentHash: params.mappingContentHash,
+          },
+        }),
+      ],
+    );
+  });
+  return { userId, recordingId, transcriptId, sessionId: session.id, ...params };
+}
+
+async function confirmMixedSource(
+  repository: Pick<
+    typeof import('../src/domain/assignment-session-repository.js'),
+    'confirmAssignmentSessionStepPersistence'
+  >,
+  fixture: Awaited<ReturnType<typeof createMixedSourceConfirmationFixture>>,
+) {
+  return repository.confirmAssignmentSessionStepPersistence({
+    id: fixture.sessionId,
+    userId: fixture.userId,
+    request: {
+      step: 'source',
+      expectedRevision: 1,
+      lessonId: null,
+      recordingId: fixture.recordingId,
+      transcriptId: fixture.transcriptId,
+      transcriptWorkingVersion: fixture.workingVersion,
+    },
+    lessonMemory: {
+      schemaVersion: 'lesson-memory-test-v1',
+      provider: 'openai',
+      model: 'test-model',
+      requestedAt: new Date(),
+    },
+  });
+}
+
 describe('domain/assignment-session-repository persistence contract', () => {
   beforeEach(async () => {
     await resetTables();
@@ -906,6 +990,64 @@ describe('domain/assignment-session-repository persistence contract', () => {
         expect(index.indexdef).toContain("confirmed_step <> 'share'::text");
         expect(index.indexdef).not.toContain('archived_at');
       }
+    });
+  });
+
+  it('accepts source confirmation when the tutor mapping binds the current transcript state', async () => {
+    const fixture = await createMixedSourceConfirmationFixture({
+      workingVersion: 2,
+      contentHash: 'b'.repeat(64),
+      mappingWorkingVersion: 2,
+      mappingContentHash: 'b'.repeat(64),
+    });
+    const repository = await import('../src/domain/assignment-session-repository.js');
+
+    await expect(confirmMixedSource(repository, fixture)).resolves.toMatchObject({
+      session: { confirmedStep: 'source' },
+    });
+  });
+
+  it('rejects stale mappings until the tutor reconfirms them for the current transcript state', async () => {
+    const fixture = await createMixedSourceConfirmationFixture({
+      workingVersion: 3,
+      contentHash: 'c'.repeat(64),
+      mappingWorkingVersion: 2,
+      mappingContentHash: 'b'.repeat(64),
+    });
+    const repository = await import('../src/domain/assignment-session-repository.js');
+
+    await expect(confirmMixedSource(repository, fixture)).rejects.toMatchObject({
+      code: 'ASSIGNMENT_STEP_SPEAKER_ROLE_MAPPING_REQUIRED',
+    });
+
+    await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+      client.query(
+        `UPDATE transcripts
+         SET summary_json = jsonb_set(
+           summary_json,
+           '{speakerRoleMapping}',
+           $2::jsonb
+         )
+         WHERE id = $1`,
+        [
+          fixture.transcriptId,
+          JSON.stringify({
+            version: 'speaker-role-mapping-v1',
+            provenance: 'tutor_confirmed',
+            confidence: null,
+            roles: [
+              { speaker: 0, role: 'teacher' },
+              { speaker: 1, role: 'student' },
+            ],
+            confirmedWorkingVersion: 3,
+            confirmedContentHash: 'c'.repeat(64),
+          }),
+        ],
+      ),
+    );
+
+    await expect(confirmMixedSource(repository, fixture)).resolves.toMatchObject({
+      session: { confirmedStep: 'source' },
     });
   });
 

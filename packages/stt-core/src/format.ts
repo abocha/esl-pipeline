@@ -1,6 +1,12 @@
 import type { TranscriptMode, TranscriptSegment } from './types.js';
 
-export function formatSpeakerLabel(index: number): string {
+export type SpeakerLabelTopology = 'mixed_recording' | 'trusted_split_channels';
+
+export function formatSpeakerLabel(
+  index: number,
+  topology: SpeakerLabelTopology = 'trusted_split_channels',
+): string {
+  if (topology === 'mixed_recording') return `Speaker ${index + 1}`;
   if (index === 0) return 'Teacher';
   if (index === 1) return 'Student';
   return `Speaker ${index + 1}`;
@@ -94,6 +100,7 @@ export function formatTranscriptFromSegments(
   transcript: string,
   segments: TranscriptSegment[],
   mode: TranscriptMode,
+  topology: SpeakerLabelTopology = 'trusted_split_channels',
 ): string {
   if (segments.length === 0) {
     return transcript;
@@ -109,14 +116,14 @@ export function formatTranscriptFromSegments(
     }
 
     return [...grouped.entries()]
-      .map(([speaker, lines]) => `${formatSpeakerLabel(speaker)}:\n${lines.join('\n')}`)
+      .map(([speaker, lines]) => `${formatSpeakerLabel(speaker, topology)}:\n${lines.join('\n')}`)
       .join('\n\n');
   }
 
   return segments
     .map((segment) => {
       const start = formatTimestamp(segment.start ?? 0);
-      const speaker = formatSpeakerLabel(segment.speaker ?? 0);
+      const speaker = formatSpeakerLabel(segment.speaker ?? 0, topology);
       return `[${speaker} ${start}] ${normalizeTranscriptText(segment.text)}`;
     })
     .join('\n');

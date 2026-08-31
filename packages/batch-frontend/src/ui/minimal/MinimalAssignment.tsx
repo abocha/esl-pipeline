@@ -504,6 +504,67 @@ export const MinimalAssignment: React.FC = () => {
     initialSelectedStudentId: scheduleFollowupContext.studentId,
     onBeforeUploadReset: resetJobShell,
   });
+  const [mixedSpeakerRoleSelections, setMixedSpeakerRoleSelections] = useState<
+    Record<number, 'teacher' | 'student' | ''>
+  >({});
+  useEffect(() => {
+    setMixedSpeakerRoleSelections({});
+  }, [source.transcript?.transcriptId]);
+  const mixedSpeakerRoles = useMemo(() => {
+    if (source.recording?.audioTopology !== 'mixed_recording') return [];
+    const summary = source.transcript?.summaryJson;
+    const mapping = summary?.speakerRoleMapping as
+      | {
+          provenance?: unknown;
+          roles?: unknown;
+          confirmedWorkingVersion?: unknown;
+          confirmedContentHash?: unknown;
+        }
+      | undefined;
+    const mappingIsCurrent =
+      mapping?.provenance === 'tutor_confirmed' &&
+      mapping.confirmedWorkingVersion === source.transcript?.workingVersion &&
+      mapping.confirmedContentHash === source.transcript?.contentHash;
+    if (mappingIsCurrent) return [];
+    const priorRoles = new Map(
+      Array.isArray(mapping?.roles)
+        ? mapping.roles.flatMap((item) => {
+            if (
+              !item ||
+              typeof item !== 'object' ||
+              typeof (item as { speaker?: unknown }).speaker !== 'number' ||
+              ((item as { role?: unknown }).role !== 'teacher' &&
+                (item as { role?: unknown }).role !== 'student')
+            ) {
+              return [];
+            }
+            const typed = item as { speaker: number; role: 'teacher' | 'student' };
+            return [[typed.speaker, typed.role] as const];
+          })
+        : [],
+    );
+    const speakers = (summary?.speakerTracks as { speakers?: unknown } | undefined)?.speakers;
+    if (!Array.isArray(speakers)) return [];
+    return speakers
+      .map((item) =>
+        item &&
+        typeof item === 'object' &&
+        typeof (item as { speaker?: unknown }).speaker === 'number'
+          ? (item as { speaker: number }).speaker
+          : null,
+      )
+      .filter((speaker): speaker is number => speaker !== null)
+      .map((speaker) => ({
+        speaker,
+        role: mixedSpeakerRoleSelections[speaker] ?? priorRoles.get(speaker) ?? '',
+      }));
+  }, [
+    mixedSpeakerRoleSelections,
+    source.recording?.audioTopology,
+    source.transcript?.contentHash,
+    source.transcript?.summaryJson,
+    source.transcript?.workingVersion,
+  ]);
 
   const context = useMinimalAssignmentContextController({
     selectedStudentId: source.selectedStudentId,
@@ -1107,6 +1168,7 @@ export const MinimalAssignment: React.FC = () => {
     source.recording?.studentId,
     source.selectedStudentId,
     linkedLessonId,
+    mixedSpeakerRoles,
     assignmentSessionWritesAllowed,
   ]);
 
@@ -1894,9 +1956,20 @@ export const MinimalAssignment: React.FC = () => {
     if (completedReferenceMode) return;
     if (activeStep === 'source') {
       const recordingId = source.recording?.recordingId;
-      const transcript = source.transcriptDirty
-        ? await source.handleSaveTranscript()
-        : source.transcript;
+      const requiresSpeakerMapping = mixedSpeakerRoles.length > 0;
+      if (requiresSpeakerMapping && mixedSpeakerRoles.some((item) => !item.role)) return;
+      const speakerRoleMapping = requiresSpeakerMapping
+        ? {
+            roles: mixedSpeakerRoles.map((item) => ({
+              speaker: item.speaker,
+              role: item.role as 'teacher' | 'student',
+            })),
+          }
+        : undefined;
+      const transcript =
+        source.transcriptDirty || speakerRoleMapping
+          ? await source.handleSaveTranscript(speakerRoleMapping)
+          : source.transcript;
       if (!recordingId || !transcript?.transcriptId || !transcript.workingVersion) return;
       const recovered = await saveAssignmentSessionProgress({
         lessonId: linkedLessonId || null,
@@ -1964,6 +2037,7 @@ export const MinimalAssignment: React.FC = () => {
     activeStep,
     activeStepIndex,
     authoring,
+    authoringOperationBusy,
     commitTeacherNotes,
     completedReferenceMode,
     confirmAssignmentStep,
@@ -1971,6 +2045,7 @@ export const MinimalAssignment: React.FC = () => {
     refreshFirstProfileLessonMemory,
     saveAssignmentSessionProgress,
     source,
+    mixedSpeakerRoles,
   ]);
 
   const handleShareAssignment = useCallback(async () => {
@@ -2593,9 +2668,15 @@ export const MinimalAssignment: React.FC = () => {
               lessonSuggestionsError={scheduleSurfaceError}
               onSelectLessonSuggestion={handleLinkedLessonSelection}
               selectedSttProvider={source.selectedSttProvider}
+              sttProviderOverrideActive={source.sttProviderOverrideActive}
+              selectedAudioTopology={source.selectedAudioTopology}
               onSelectedSttProviderChange={(provider) => {
                 markAssignmentUserEdit();
                 handleSelectedSttProviderChange(provider);
+              }}
+              onSelectedAudioTopologyChange={(topology) => {
+                markAssignmentUserEdit();
+                source.handleSelectedAudioTopologyChange(topology);
               }}
               sttProviders={source.sttProviders}
               formatSttProviderLabel={formatSttProviderLabel}
@@ -2621,6 +2702,7 @@ export const MinimalAssignment: React.FC = () => {
               uploadError={source.uploadError}
               uploadCacheNotice={source.uploadCacheNotice}
               recording={source.recording}
+              transcriptProvider={source.transcript?.sttProvider ?? null}
               recordingStatus={source.recordingStatus}
               recordingError={source.recordingError}
               transcriptStatus={source.transcriptStatus}
@@ -2635,6 +2717,18 @@ export const MinimalAssignment: React.FC = () => {
               }}
               transcriptDirty={source.transcriptDirty}
               transcriptSaving={source.transcriptSaving}
+              mixedSpeakerRoles={mixedSpeakerRoles}
+              onMixedSpeakerRoleChange={(speaker, role) =>
+                setMixedSpeakerRoleSelections((current) => ({ ...current, [speaker]: role }))
+              }
+              onSaveMixedSpeakerRoles={() => {
+                const roles = mixedSpeakerRoles
+                  .filter((item): item is { speaker: number; role: 'teacher' | 'student' } =>
+                    Boolean(item.role),
+                  )
+                  .map((item) => ({ speaker: item.speaker, role: item.role }));
+                void source.handleSaveTranscript({ roles });
+              }}
               readOnly={completedReferenceMode}
             />
           </LessonSourceStep>

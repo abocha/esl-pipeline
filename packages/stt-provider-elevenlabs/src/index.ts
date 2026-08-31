@@ -95,81 +95,26 @@ export function createElevenLabsSttProvider(
       bytes.set(audioBuffer);
       const blob = new Blob([bytes], { type: 'audio/mpeg' });
 
-      let primaryResponse: unknown;
-      let primaryError: unknown;
-      try {
-        primaryResponse = await client.speechToText.convert({
-          file: blob,
-          modelId,
-          diarize: false,
-          useMultiChannel: true,
-          timestampsGranularity: 'word',
-        });
-        const multichannel = parseElevenLabsMultichannelResponse(primaryResponse);
-        if (multichannel && multichannel.segments.length > 0) {
-          return {
-            provider: 'elevenlabs',
-            model: modelId,
-            language: 'auto',
-            text: multichannel.text,
-            segments: multichannel.segments,
-            rawResponse: primaryResponse,
-            fallbackUsed: false,
-            summary: {
-              segmentCount: multichannel.segments.length,
-              fallbackUsed: false,
-            },
-          };
-        }
-
-        const fallbackResponse = await client.speechToText.convert({
-          file: blob,
-          modelId,
-          diarize: true,
-          timestampsGranularity: 'word',
-        });
-        const fallbackParsed = parseElevenLabsDiarizedResponse(fallbackResponse);
-        return {
-          provider: 'elevenlabs',
-          model: modelId,
-          language: 'auto',
-          text: fallbackParsed.text,
-          segments: fallbackParsed.segments,
-          rawResponse: fallbackResponse,
-          fallbackUsed: true,
-          summary: {
-            segmentCount: fallbackParsed.segments.length,
-            fallbackUsed: true,
-          },
-        };
-      } catch (error) {
-        primaryError = error;
-      }
-
-      try {
-        const fallbackResponse = await client.speechToText.convert({
-          file: blob,
-          modelId,
-          diarize: true,
-          timestampsGranularity: 'word',
-        });
-        const fallbackParsed = parseElevenLabsDiarizedResponse(fallbackResponse);
-        return {
-          provider: 'elevenlabs',
-          model: modelId,
-          language: 'auto',
-          text: fallbackParsed.text,
-          segments: fallbackParsed.segments,
-          rawResponse: fallbackResponse,
-          fallbackUsed: true,
-          summary: {
-            segmentCount: fallbackParsed.segments.length,
-            fallbackUsed: true,
-          },
-        };
-      } catch (fallbackError) {
-        throw asError(fallbackError ?? primaryError, 'ElevenLabs transcription failed');
-      }
+      const response = await client.speechToText.convert({
+        file: blob,
+        modelId,
+        useMultiChannel: false,
+        diarize: true,
+        numSpeakers: 2,
+        timestampsGranularity: 'word',
+        noVerbatim: false,
+      });
+      const parsed = parseElevenLabsDiarizedResponse(response);
+      return {
+        provider: 'elevenlabs',
+        model: modelId,
+        language: 'auto',
+        text: parsed.text,
+        segments: parsed.segments,
+        rawResponse: response,
+        fallbackUsed: false,
+        summary: { segmentCount: parsed.segments.length, fallbackUsed: false },
+      };
     },
   };
 }
