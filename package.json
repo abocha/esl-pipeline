@@ -23,6 +23,13 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
+    "audio-benchmark:manifest": "tsx scripts/audio-benchmark/manifest.ts",
+    "audio-benchmark:prepare": "tsx scripts/audio-benchmark/prepare.ts",
+    "audio-benchmark:rederive": "tsx scripts/audio-benchmark/rederive.ts",
+    "audio-benchmark:report": "tsx scripts/audio-benchmark/report.ts",
+    "audio-benchmark:run": "tsx scripts/audio-benchmark/run.ts",
+    "audio-benchmark:score": "tsx scripts/audio-benchmark/score.ts",
+    "audio-benchmark:test": "pnpm exec vitest run scripts/audio-benchmark/tests",
     "build": "pnpm -r --filter \"./packages/*\" run build",
     "check": "pnpm test:tooling && pnpm build && pnpm typecheck && pnpm lint && pnpm test:unit:prebuilt && pnpm test:integration:prebuilt && pnpm test:backend:db:worker",
     "check:fast": "node scripts/check/run-affected-check.mjs",
@@ -145,7 +152,8 @@
     "tsx": "^4.23.11",
     "turbo": "^2.10.9",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "ws": "8.21.3"
   },
   "packageManager": "pnpm@11.10.0+sha512.0b7f8b98060031904c017e3a41eb187a16d40eeb829b95c4f8cb03681761fc4ab53dd219115b9b447f4dce1a05a214764461e7d3703392a9f32f9511ce8c86c8",
   "engines": {
