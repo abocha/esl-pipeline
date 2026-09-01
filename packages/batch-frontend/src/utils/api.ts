@@ -1981,6 +1981,9 @@ export async function uploadRecording(
     if (options?.sttProvider) {
       params.sttProvider = options.sttProvider;
     }
+    if (options?.audioTopology) {
+      params.audioTopology = options.audioTopology;
+    }
 
     const response = await apiClient.post(buildApiProxyPath('/recordings/upload'), formData, {
       params: Object.keys(params).length > 0 ? params : undefined,

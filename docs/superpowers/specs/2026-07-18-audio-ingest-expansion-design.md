@@ -3,13 +3,18 @@
 ## Meta
 
 - Audience: founder-maintainer, agentic implementers, speech-runtime maintainers, and alpha UX reviewers.
-- Authority Level: approved design direction; implementation remains slice-gated.
-- Last Verified Against: 2026-07-18 repository state.
+- Authority Level: superseded historical design direction.
+- Last Verified Against: superseded on 2026-09-01 by the approved ordinary-ingest Goal Contract.
 - Owner: founder-maintainer.
 - Review Cadence: after each ingest slice or material STT-provider decision.
-- Status: `design`.
+- Status: `superseded`.
 - Related issue: `#145` for Deepgram versus Inworld production quality and cost.
-- Exit Trigger: replace this design with active reference documentation after the first production-ready non-OBS ingest path ships.
+- Exit Trigger: historical trace; remaining ingest work is owned by [`2026-09-01-normal-user-audio-ingest-readiness.md`](../../plans/stt-multi-provider-refactor/2026-09-01-normal-user-audio-ingest-readiness.md).
+
+> Superseded scope: retain this document for problem framing and provenance only. The 2026-09-01
+> active plan replaces its generalized normalization, topology-inference, provider-evaluation, and
+> broad source-expansion machinery with the locked ElevenLabs mixed route, explicit trusted split,
+> bounded probe/copy preparation, tenant isolation, retry claiming, and audio disposal.
 
 ## Purpose
 

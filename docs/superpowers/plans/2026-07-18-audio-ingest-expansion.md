@@ -1,5 +1,11 @@
 # Audio Ingest Expansion Program Implementation Plan
 
+> **Superseded 2026-09-01:** This historical program plan is not executable. The locked production
+> provider/topology decisions and remaining work are owned by
+> [`2026-09-01-normal-user-audio-ingest-readiness.md`](../../plans/stt-multi-provider-refactor/2026-09-01-normal-user-audio-ingest-readiness.md).
+> Retain this file for research and decision provenance; do not implement its generalized
+> normalization, automatic topology work, provider evaluation, or mandatory per-slice PR structure.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Deliver and validate a source-agnostic lesson-audio ingest layer that accepts realistic tutor recordings, preserves provenance, produces provider-ready audio, and removes OBS-specific file preparation from the normal alpha workflow.

@@ -75,14 +75,15 @@
 
 ### Standalone active plans
 
-1. `docs/plans/2026-08-14-post-share-assignment-correction.md`
-2. `docs/plans/2026-07-29-speech-planner-evaluation-gap-remediation.md`
-3. `docs/plans/legacy-retirement/legacy-retirement-backlog.md`
-4. `docs/plans/legacy-retirement/legacy-retirement-inventory.md`
-5. `docs/plans/legacy-retirement/legacy-retirement-execution-playbook.md`
-6. `docs/plans/2026-05-20-cross-workstream-change-intake.md`
-7. `docs/plans/slice-2-invite-workspace-first-student.md`
-8. `docs/plans/2026-06-23-alpha-readiness.md`
+1. `docs/plans/stt-multi-provider-refactor/2026-09-01-normal-user-audio-ingest-readiness.md`
+2. `docs/plans/2026-08-14-post-share-assignment-correction.md`
+3. `docs/plans/2026-07-29-speech-planner-evaluation-gap-remediation.md`
+4. `docs/plans/legacy-retirement/legacy-retirement-backlog.md`
+5. `docs/plans/legacy-retirement/legacy-retirement-inventory.md`
+6. `docs/plans/legacy-retirement/legacy-retirement-execution-playbook.md`
+7. `docs/plans/2026-05-20-cross-workstream-change-intake.md`
+8. `docs/plans/slice-2-invite-workspace-first-student.md`
+9. `docs/plans/2026-06-23-alpha-readiness.md`
 
 ## Historical and Generated Aids
 
