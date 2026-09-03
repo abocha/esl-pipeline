@@ -15,15 +15,24 @@ async function resetTables() {
 }
 
 async function insertUserAndStudent(userId: string, studentId: string) {
+  const workspaceId = randomUUID();
   await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
     await client.query(
       `INSERT INTO users (id, email, password_hash, role)
        VALUES ($1, $2, 'hash', 'user') ON CONFLICT (id) DO NOTHING`,
       [userId, `${userId}@example.test`],
     );
-    await client.query(`INSERT INTO students (id, student) VALUES ($1, 'Alpha Tester')`, [
-      studentId,
+    await client.query(`INSERT INTO workspaces (id, name) VALUES ($1, 'Assignment test')`, [
+      workspaceId,
     ]);
+    await client.query(
+      `INSERT INTO workspace_memberships (workspace_id, user_id, role) VALUES ($1, $2, 'owner')`,
+      [workspaceId, userId],
+    );
+    await client.query(
+      `INSERT INTO students (id, student, workspace_id) VALUES ($1, 'Alpha Tester', $2)`,
+      [studentId, workspaceId],
+    );
   });
 }
 

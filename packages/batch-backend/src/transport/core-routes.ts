@@ -13,14 +13,18 @@ import {
   publishTtsStrategySchema,
 } from '../application/publish-study-text-overrides.js';
 import { deriveRecordingDisplayName } from '../application/recording-dto.js';
+import { resolvePrimaryWorkspaceIdForUser } from '../application/workspace-context.js';
 import { type SubmitJobRequest, submitJob } from '../application/submit-job.js';
 import { getVersionMeta } from '../application/version-meta.js';
 import type { BatchBackendConfig } from '../config/env.js';
 import { subscribeJobEvents } from '../domain/job-events.js';
+import { getJobWorkspaceAuthority } from '../domain/job-repository.js';
 import { subscribeRecordingEvents } from '../domain/recording-events.js';
+import { getRecordingByIdForWorkspace } from '../domain/recording-repository.js';
 import { checkBackendHealth } from '../infrastructure/health-checks.js';
 import { logger } from '../infrastructure/logger.js';
 import { errorResponse, resolveRoutePath } from './route-helpers.js';
+import { getAuthenticatedUser } from './auth-middleware.js';
 
 type AsyncPreHandler = (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
 
@@ -63,6 +67,8 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
   });
 
   const handleSubmitJob: RouteHandlerMethod = async (request, reply) => {
+    const user = getAuthenticatedUser(request);
+    if (!user) throw new Error('Authenticated job owner is required');
     const body = request.body as SubmitJobRequest | undefined;
 
     const jobSchema = z.object({
@@ -93,6 +99,7 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
       ttsStrategy: validatedData.ttsStrategy,
       ttsProvider: validatedData.ttsProvider,
       ttsModel: validatedData.ttsModel,
+      userId: user.id,
     });
 
     logger.info('HTTP request handled', {
@@ -105,11 +112,14 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
     return reply.code(202).send(result);
   };
 
-  if (jobRateLimitMiddleware) {
-    app.post('/jobs', { preHandler: [jobRateLimitMiddleware] }, handleSubmitJob);
-  } else {
-    app.post('/jobs', handleSubmitJob);
-  }
+  const submitJobPreHandlers = [authenticate, jobRateLimitMiddleware].filter(
+    (handler): handler is AsyncPreHandler => Boolean(handler),
+  );
+  app.post(
+    '/jobs',
+    submitJobPreHandlers.length > 0 ? { preHandler: submitJobPreHandlers } : {},
+    handleSubmitJob,
+  );
 
   const approveJobRouteOptions = authenticate ? { preHandler: [authenticate] } : {};
 
@@ -174,7 +184,8 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
     const routePath = resolveRoutePath(request, 'GET /jobs/:jobId');
 
     try {
-      const status = await getJobStatus(jobId);
+      const authority = await resolveRequestAuthority(request);
+      const status = await getWorkspaceOwnedJobStatus(jobId, authority);
       if (!status) {
         logger.info('HTTP request handled', {
           event: 'http_request',
@@ -213,7 +224,8 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
     const routePath = resolveRoutePath(request, 'GET /jobs/:jobId/provenance');
 
     try {
-      const provenance = await getJobProvenance(jobId);
+      const authority = await resolveRequestAuthority(request);
+      const provenance = await getJobProvenance(jobId, authority.workspaceId, authority.userId);
       if (!provenance) {
         logger.info('HTTP request handled', {
           event: 'http_request',
@@ -244,12 +256,7 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
     }
   }
 
-  const jobEventsRouteOptions =
-    config.experimental.extendedApiEnabled && authenticate
-      ? {
-          preHandler: [authenticate],
-        }
-      : {};
+  const jobEventsRouteOptions = authenticate ? { preHandler: [authenticate] } : {};
 
   app.get('/jobs/events', jobEventsRouteOptions, async (request, reply) => {
     const routePath = resolveRoutePath(request, 'GET /jobs/events');
@@ -275,12 +282,27 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
       rawRecordingIds.includes('all');
     const jobIds = wantsAll ? [] : rawIds;
     const requestedRecordingIds = wantsAll ? [] : rawRecordingIds;
+    const { workspaceId, userId } = await resolveRequestAuthority(request);
 
     if (!wantsAll && jobIds.length === 0 && requestedRecordingIds.length === 0) {
       return reply.code(400).send({
         error:
           'jobId or recordingId query param is required (use jobId=<id>[,id2], recordingId=<id>[,id2], or jobId=* for all events)',
       });
+    }
+
+    const authorizedJobs = wantsAll
+      ? []
+      : await Promise.all(
+          jobIds.map((jobId) => getJobWorkspaceAuthority(jobId, workspaceId, userId)),
+        );
+    const authorizedRecordings = wantsAll
+      ? []
+      : await Promise.all(
+          requestedRecordingIds.map((id) => getRecordingByIdForWorkspace(id, workspaceId)),
+        );
+    if (authorizedJobs.some((authority) => !authority) || authorizedRecordings.some((r) => !r)) {
+      return errorResponse(reply, 'not_found');
     }
 
     reply.raw.setHeader('Content-Type', 'text/event-stream');
@@ -324,10 +346,9 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
 
     if (!wantsAll && jobIds.length > 0) {
       try {
-        const statuses = await Promise.all(jobIds.map((jobId) => getJobStatus(jobId)));
-        for (const status of statuses) {
-          if (status?.recordingId) {
-            recordingIds.add(status.recordingId);
+        for (const authority of authorizedJobs) {
+          if (authority?.recordingId) {
+            recordingIds.add(authority.recordingId);
           }
         }
       } catch (error) {
@@ -349,6 +370,7 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
             try {
               if (!event || !event.recording) return;
               const recording = event.recording;
+              if (recording.workspaceId !== workspaceId) return;
               const payload: RecordingEventMessage = {
                 type: 'recording_state_changed',
                 recordingId: recording.id,
@@ -437,31 +459,45 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
                   return;
                 }
                 // Cast to JobEvent-like structure (job-events.ts defines the actual type)
-                const typedEvent = event as { job: unknown; type: string };
-                const dto = jobRecordToDto(typedEvent.job as Parameters<typeof jobRecordToDto>[0]);
-                if (addRecordingId(dto.recordingId)) {
-                  subscribeRecordings();
-                }
-                const payload: JobEventMessage = {
-                  type: typedEvent.type as JobEventMessage['type'],
-                  jobId: dto.jobId,
-                  state: dto.state,
-                  payload: {
-                    manifestPath: dto.manifestPath,
-                    error: dto.error,
-                    finishedAt: dto.finishedAt,
-                    ttsStrategy: dto.ttsStrategy,
-                    learningPresetId: dto.learningPresetId,
-                    md: dto.md,
-                    mdStorageUri: dto.mdStorageUri,
-                    htmlUrl: dto.htmlUrl,
-                    publishTarget: dto.publishTarget,
-                    recordingId: dto.recordingId,
-                    transcriptId: dto.transcriptId,
-                  },
+                const typedEvent = event as {
+                  job: Parameters<typeof jobRecordToDto>[0];
+                  type: string;
                 };
-                reply.raw.write(`event: ${typedEvent.type}\n`);
-                reply.raw.write(`data: ${JSON.stringify(payload)}\n\n`);
+                void getJobWorkspaceAuthority(typedEvent.job.id, workspaceId, userId)
+                  .then((authority) => {
+                    if (!authority || closed) return;
+                    const dto = jobRecordToDto(typedEvent.job);
+                    if (addRecordingId(dto.recordingId)) {
+                      subscribeRecordings();
+                    }
+                    const payload: JobEventMessage = {
+                      type: typedEvent.type as JobEventMessage['type'],
+                      jobId: dto.jobId,
+                      state: dto.state,
+                      payload: {
+                        manifestPath: dto.manifestPath,
+                        error: dto.error,
+                        finishedAt: dto.finishedAt,
+                        ttsStrategy: dto.ttsStrategy,
+                        learningPresetId: dto.learningPresetId,
+                        md: dto.md,
+                        mdStorageUri: dto.mdStorageUri,
+                        htmlUrl: dto.htmlUrl,
+                        publishTarget: dto.publishTarget,
+                        recordingId: dto.recordingId,
+                        transcriptId: dto.transcriptId,
+                      },
+                    };
+                    reply.raw.write(`event: ${typedEvent.type}\n`);
+                    reply.raw.write(`data: ${JSON.stringify(payload)}\n\n`);
+                  })
+                  .catch((error) => {
+                    logger.warn('Failed to authorize SSE job event', {
+                      event: 'job_events_sse_authorization_failed',
+                      route: routePath,
+                      error: error instanceof Error ? error.message : String(error),
+                    });
+                  });
               } catch (error: unknown) {
                 logger.warn('Failed to publish SSE job event', {
                   event: 'job_events_sse_publish_failed',
@@ -491,10 +527,38 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
     request.raw.on('error', cleanup);
   });
 
-  app.get('/jobs/:jobId', handleJobStatusRequest);
+  if (authenticate) {
+    app.get('/jobs/:jobId', { preHandler: [authenticate] }, handleJobStatusRequest);
+  } else {
+    app.get('/jobs/:jobId', handleJobStatusRequest);
+  }
   if (authenticate) {
     app.get('/jobs/:jobId/provenance', { preHandler: [authenticate] }, handleJobProvenanceRequest);
   } else {
     app.get('/jobs/:jobId/provenance', handleJobProvenanceRequest);
   }
+}
+
+interface RequestAuthority {
+  userId: string;
+  workspaceId: string;
+}
+
+async function resolveRequestAuthority(request: FastifyRequest): Promise<RequestAuthority> {
+  const user = getAuthenticatedUser(request);
+  if (!user) throw new Error('Authenticated workspace authority is required');
+  return {
+    userId: user.id,
+    workspaceId: await resolvePrimaryWorkspaceIdForUser(user.id),
+  };
+}
+
+async function getWorkspaceOwnedJobStatus(jobId: string, requestAuthority: RequestAuthority) {
+  const jobAuthority = await getJobWorkspaceAuthority(
+    jobId,
+    requestAuthority.workspaceId,
+    requestAuthority.userId,
+  );
+  if (!jobAuthority) return null;
+  return getJobStatus(jobId);
 }

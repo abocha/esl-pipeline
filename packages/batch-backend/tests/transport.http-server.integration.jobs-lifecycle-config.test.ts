@@ -16,6 +16,8 @@ describeHttpServerIntegrationSuite(
     it,
     mockListStudentProfiles,
     mockGetJobProvenance,
+    mockGetJobWorkspaceAuthority,
+    recordingRepositoryModule,
     studentStoreModule,
     submitJobModule,
     vi,
@@ -37,6 +39,7 @@ describeHttpServerIntegrationSuite(
 
       expect(submitJob).toHaveBeenLastCalledWith({
         md: 'fixtures/ok.md',
+        userId: 'test-user-id',
         learningPresetId: undefined,
         withTts: undefined,
         upload: undefined,
@@ -73,6 +76,7 @@ describeHttpServerIntegrationSuite(
       expect(response.statusCode).toBe(202);
       expect(submitJob).toHaveBeenLastCalledWith({
         md: 'fixtures/ok.md',
+        userId: 'test-user-id',
         learningPresetId: 'general-english',
         withTts: true,
         upload: 'auto',
@@ -105,6 +109,7 @@ describeHttpServerIntegrationSuite(
       expect(submitJob).toHaveBeenCalledWith(
         expect.objectContaining({
           md: 'fixtures/ok.md',
+          userId: 'test-user-id',
           withTts: true,
           ttsProvider: 'google',
           ttsModel: 'chirp3_hd',
@@ -132,6 +137,7 @@ describeHttpServerIntegrationSuite(
       expect(submitJob).toHaveBeenCalledWith(
         expect.objectContaining({
           md: 'fixtures/ok.md',
+          userId: 'test-user-id',
           withTts: true,
           ttsProvider: 'elevenlabs',
           ttsStrategy: 'dialogue',
@@ -156,6 +162,7 @@ describeHttpServerIntegrationSuite(
       expect(response.statusCode).toBe(202);
       expect(submitJob).toHaveBeenLastCalledWith({
         md: 'fixtures/ok.md',
+        userId: 'test-user-id',
         learningPresetId: 'general-english',
         withTts: undefined,
         upload: undefined,
@@ -323,7 +330,7 @@ describeHttpServerIntegrationSuite(
       getJobStatus.mockResolvedValue({
         jobId: 'job-1',
         md: 'fixtures/ok.md',
-        recordingId: null,
+        recordingId: 'recording-1',
         transcriptId: null,
         promptPackageId: null,
         draftId: null,
@@ -347,6 +354,10 @@ describeHttpServerIntegrationSuite(
         error: null,
         manifestPath: null,
       });
+      vi.spyOn(recordingRepositoryModule, 'getRecordingByIdForWorkspace').mockResolvedValueOnce({
+        id: 'recording-1',
+        workspaceId: '00000000-0000-4000-8000-000000000001',
+      } as never);
 
       const response = await app.inject({
         method: 'GET',
@@ -357,7 +368,7 @@ describeHttpServerIntegrationSuite(
       expect(response.json()).toEqual({
         jobId: 'job-1',
         md: 'fixtures/ok.md',
-        recordingId: null,
+        recordingId: 'recording-1',
         transcriptId: null,
         promptPackageId: null,
         draftId: null,
@@ -395,6 +406,19 @@ describeHttpServerIntegrationSuite(
       });
 
       expect(response.statusCode).toBe(404);
+      expect(getJobStatus).not.toHaveBeenCalled();
+    });
+
+    it('GET /jobs/:jobId authorizes before materialization and gives absent and foreign parity', async () => {
+      const getJobStatus = vi.spyOn(getJobStatusModule, 'getJobStatus');
+      getJobStatus.mockClear();
+      mockGetJobWorkspaceAuthority.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+
+      const foreign = await app.inject({ method: 'GET', url: '/jobs/foreign-job' });
+      const missing = await app.inject({ method: 'GET', url: '/jobs/missing-job' });
+
+      expect(foreign.statusCode).toBe(404);
+      expect(foreign.json()).toEqual(missing.json());
       expect(getJobStatus).not.toHaveBeenCalled();
     });
 
@@ -443,7 +467,11 @@ describeHttpServerIntegrationSuite(
           id: 'job-2',
         },
       });
-      expect(mockGetJobProvenance).toHaveBeenCalledWith('job-3');
+      expect(mockGetJobProvenance).toHaveBeenCalledWith(
+        'job-3',
+        '00000000-0000-4000-8000-000000000001',
+        'test-user-id',
+      );
     });
 
     it('GET /jobs/:jobId/provenance returns 404 when missing', async () => {
@@ -458,9 +486,18 @@ describeHttpServerIntegrationSuite(
       expect(response.json()).toEqual({ error: 'not_found' });
     });
 
+    it('GET /jobs/:jobId/provenance gives absent and foreign lineage the same response', async () => {
+      mockGetJobProvenance.mockResolvedValue(null);
+      const foreign = await app.inject({ method: 'GET', url: '/jobs/foreign/provenance' });
+      const missing = await app.inject({ method: 'GET', url: '/jobs/absent/provenance' });
+      expect(foreign.statusCode).toBe(404);
+      expect(foreign.json()).toEqual(missing.json());
+    });
+
     it('GET /jobs/:jobId returns 404 with canonical schema when job not found', async () => {
       const getJobStatus = vi.spyOn(getJobStatusModule, 'getJobStatus');
-      getJobStatus.mockResolvedValue(null);
+      getJobStatus.mockClear();
+      mockGetJobWorkspaceAuthority.mockResolvedValueOnce(null);
 
       const response = await app.inject({
         method: 'GET',
@@ -474,6 +511,7 @@ describeHttpServerIntegrationSuite(
       // Check that the response includes expected debugging fields but don't assert exact values
       const responseData = response.json();
       expect(responseData.error).toBe('not_found');
+      expect(getJobStatus).not.toHaveBeenCalled();
     });
 
     it('GET /jobs/:jobId returns 500 with canonical schema when getJobStatus throws', async () => {

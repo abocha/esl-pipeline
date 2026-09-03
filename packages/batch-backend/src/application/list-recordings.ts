@@ -7,6 +7,7 @@ import {
 import { type RecordingDto, recordingToDto } from './recording-dto.js';
 
 export interface ListRecordingsParams {
+  workspaceId: string;
   statuses?: string[] | null;
   sources?: string[] | null;
   search?: string | null;
@@ -35,7 +36,7 @@ const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
 
 export async function listRecordingsWithDefaults(
-  params: ListRecordingsParams = {},
+  params: ListRecordingsParams,
   overrides?: Partial<ListRecordingsDependencies>,
 ): Promise<RecordingsListResponse> {
   const recordings = overrides?.recordings ?? {
@@ -59,6 +60,7 @@ export async function listRecordingsWithDefaults(
 
   const [items, total] = await Promise.all([
     recordings.list({
+      workspaceId: params.workspaceId,
       statuses,
       sources,
       search,
@@ -67,7 +69,7 @@ export async function listRecordingsWithDefaults(
       offset,
       order,
     }),
-    recordings.count(statuses, studentId, sources, search),
+    recordings.count(params.workspaceId, statuses, studentId, sources, search),
   ]);
 
   return {

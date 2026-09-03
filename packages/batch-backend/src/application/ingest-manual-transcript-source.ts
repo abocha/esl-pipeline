@@ -17,6 +17,7 @@ const DEFAULT_DISPLAY_NAME = 'Pasted lesson transcript';
 const MAX_MANUAL_TRANSCRIPT_CHARACTERS = 500_000;
 
 export interface ManualTranscriptSourceInput {
+  workspaceId: string;
   studentId: string;
   text: string;
   displayName?: string | null;
@@ -28,6 +29,7 @@ export interface ManualTranscriptSourceResult {
 }
 
 export interface PersistManualTranscriptSourceParams {
+  workspaceId: string;
   recordingId: string;
   transcriptId: string;
   studentId: string;
@@ -79,6 +81,7 @@ export async function ingestManualTranscriptSource(
   try {
     return await (overrides?.persist ?? persistManualTranscriptSourceWithDefaults)({
       recordingId,
+      workspaceId: input.workspaceId,
       transcriptId,
       studentId: input.studentId,
       displayName: input.displayName?.trim() || DEFAULT_DISPLAY_NAME,
@@ -102,10 +105,12 @@ export async function persistManualTranscriptSourceWithDefaults(
       const recording = await insertRecording(
         {
           id: params.recordingId,
+          workspaceId: params.workspaceId,
           source: 'manual_transcript',
           studentId: params.studentId,
           sourcePath: params.displayName,
-          storageUri: params.storageUri,
+          storageUri: null,
+          audioLifecycle: 'not_retained',
           bytes: params.bytes,
           status: 'transcribed',
         },

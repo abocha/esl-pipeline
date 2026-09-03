@@ -5,9 +5,9 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { listStudentMemorySnapshotBackfillTargets } from '../src/application/student-memory-snapshot-backfill.js';
 import {
+  ensurePendingStudentMemorySnapshot,
   getEligibleReadyStudentMemorySnapshotById,
   getLatestReadyStudentMemorySnapshotByStudentId,
-  ensurePendingStudentMemorySnapshot,
   insertCanonicalReadyStudentMemorySnapshot,
   listStudentMemorySnapshots,
   StudentMemorySnapshotParentChangedError,
@@ -41,8 +41,8 @@ async function insertStudent(studentId = randomUUID()) {
   await withPgClient((client) =>
     client.query(
       `INSERT INTO students (id, student, created_at, updated_at)
-       VALUES ($1, 'Ari', NOW(), NOW())`,
-      [studentId],
+       VALUES ($1, $2, NOW(), NOW())`,
+      [studentId, `Ari-${studentId}`],
     ),
   );
   return studentId;
@@ -221,7 +221,8 @@ describeIfPg('domain/student-memory-snapshot-repository', () => {
     expect(
       snapshots.filter(
         (snapshot) =>
-          snapshot.status === 'pending' && snapshot.generationNotes?.sourceEntryId === homeworkMemoryEntryId,
+          snapshot.status === 'pending' &&
+          snapshot.generationNotes?.sourceEntryId === homeworkMemoryEntryId,
       ),
     ).toHaveLength(0);
   });

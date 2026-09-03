@@ -40,22 +40,24 @@ import {
   TranscriptionRouteError,
 } from '../../application/transcription-routing.js';
 import { updateRecordingTranscript } from '../../application/update-recording-transcript.js';
+import { resolvePrimaryWorkspaceIdForUser } from '../../application/workspace-context.js';
 import {
   type RecordingRecord,
   RecordingSourceSchema,
   RecordingStatusSchema,
 } from '../../domain/recording-model.js';
 import {
-  getRecordingById,
+  getRecordingByIdForWorkspace,
+  insertCachedRecordingLineage,
   insertRecording,
-  listRecordingsBySha256,
+  listRecordingsBySha256ForWorkspace,
   updateRecordingStatus,
 } from '../../domain/recording-repository.js';
-import { deriveStudentId, normalizeStudentName } from '../../domain/student-utils.js';
+import { getStudentById } from '../../domain/student-repository.js';
 import type { TranscriptRecord } from '../../domain/transcript-model.js';
 import {
-  insertTranscript,
-  listLatestTranscriptsByRecordingIds,
+  getTranscriptByRecordingIdForWorkspace,
+  listLatestTranscriptsByRecordingIdsForWorkspace,
 } from '../../domain/transcript-repository.js';
 import { FileSanitizationError } from '../../infrastructure/file-sanitization-service.js';
 import { FileValidationError } from '../../infrastructure/file-validation-service.js';
@@ -121,7 +123,6 @@ export function registerRecordingRoutes(
       const routePath = resolveRoutePath(request, 'POST /recordings/upload');
       const querySchema = z.object({
         studentId: z.string().uuid().optional(),
-        student: z.string().min(1).optional(),
         sttProvider: z.enum(['deepgram', 'elevenlabs', 'google']).optional(),
         audioTopology: z.enum(['trusted_split_channels']).optional(),
       });
@@ -151,8 +152,17 @@ export function registerRecordingRoutes(
         }
 
         const query = querySchema.parse(request.query ?? {});
-        const studentName = query.student ? normalizeStudentName(query.student) : null;
-        const studentId = query.studentId ?? (studentName ? deriveStudentId(studentName) : null);
+        if (!query.studentId) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Select a student before uploading.',
+            code: 'student_required',
+          });
+        }
+        const workspaceId = await resolvePrimaryWorkspaceIdForUser(authenticatedUser.id);
+        const student = await getStudentById(query.studentId, { workspaceId });
+        if (!student) return errorResponse(reply, 'not_found');
+        const studentId = student.id;
         const requestedSttProvider = query.sttProvider;
         const audioTopology = query.audioTopology ?? 'mixed_recording';
         const route = resolveTranscriptionRoute({
@@ -208,10 +218,11 @@ export function registerRecordingRoutes(
         const sourcePath = storageFilename || sanitizedFilename || filename;
         const fileSha256 = createContentSha256(fileBuffer);
 
-        const cachedRecordings = await listRecordingsBySha256(fileSha256);
+        const cachedRecordings = await listRecordingsBySha256ForWorkspace(fileSha256, workspaceId);
         if (cachedRecordings.length > 0) {
-          const latestTranscripts = await listLatestTranscriptsByRecordingIds(
+          const latestTranscripts = await listLatestTranscriptsByRecordingIdsForWorkspace(
             cachedRecordings.map((recording) => recording.id),
+            workspaceId,
           );
           const transcriptByRecordingId = new Map(
             latestTranscripts.map((transcript) => [transcript.recordingId, transcript] as const),
@@ -251,21 +262,16 @@ export function registerRecordingRoutes(
             }
 
             providerMatches += 1;
-            const recordingForResponse =
-              studentId && cachedRecording.studentId && cachedRecording.studentId !== studentId
-                ? await cloneCachedRecordingForStudent({
-                    cachedRecording,
-                    cachedTranscript,
-                    studentId,
-                    sourcePath,
-                    sha256: fileSha256,
-                    audioTopology,
-                    storage: transcriptionStorage,
-                  })
-                : {
-                    recording: cachedRecording,
-                    transcript: cachedTranscript,
-                  };
+            const recordingForResponse = await cloneCachedRecordingForStudent({
+              cachedRecording,
+              cachedTranscript,
+              workspaceId,
+              studentId,
+              sourcePath,
+              sha256: fileSha256,
+              audioTopology,
+              storage: transcriptionStorage,
+            });
             logger.info('Recording upload cache hit', {
               event: 'recording_upload_cache_hit',
               route: routePath,
@@ -312,6 +318,7 @@ export function registerRecordingRoutes(
 
         const record = await ingestRecordingUpload({
           filename: storageFilename || sanitizedFilename || filename,
+          workspaceId,
           stream: Readable.from(fileBuffer),
           sourcePath,
           studentId,
@@ -396,7 +403,10 @@ export function registerRecordingRoutes(
 
       try {
         const body = schema.parse(request.body ?? {});
-        const result = await ingestManualTranscriptSource(body);
+        const workspaceId = await resolvePrimaryWorkspaceIdForUser(authenticatedUser.id);
+        const student = await getStudentById(body.studentId, { workspaceId });
+        if (!student) return errorResponse(reply, 'not_found');
+        const result = await ingestManualTranscriptSource({ ...body, workspaceId });
 
         logger.info('Manual transcript source created', {
           event: 'manual_transcript_source_created',
@@ -453,7 +463,6 @@ export function registerRecordingRoutes(
         source: z.union([z.string(), z.array(z.string())]).optional(),
         q: z.string().min(1).optional(),
         studentId: z.string().uuid().optional(),
-        student: z.string().min(1).optional(),
         limit: z.coerce.number().int().min(1).max(200).optional(),
         offset: z.coerce.number().int().min(0).optional(),
         order: z.enum(['asc', 'desc']).optional(),
@@ -463,9 +472,15 @@ export function registerRecordingRoutes(
         const query = querySchema.parse(request.query ?? {});
         const statuses = normalizeStatusFilter(query.status);
         const sources = normalizeSourceFilter(query.source);
-        const studentName = query.student ? normalizeStudentName(query.student) : null;
-        const studentId = query.studentId ?? (studentName ? deriveStudentId(studentName) : null);
+        const authenticatedUser = getAuthenticatedUser(request);
+        if (!authenticatedUser) return reply.code(401).send({ error: 'unauthorized' });
+        const workspaceId = await resolvePrimaryWorkspaceIdForUser(authenticatedUser.id);
+        if (query.studentId && !(await getStudentById(query.studentId, { workspaceId }))) {
+          return errorResponse(reply, 'not_found');
+        }
+        const studentId = query.studentId ?? null;
         const recordings = await listRecordingsWithDefaults({
+          workspaceId,
           statuses,
           sources,
           search: query.q ?? null,
@@ -513,7 +528,10 @@ export function registerRecordingRoutes(
       const routePath = resolveRoutePath(request, 'GET /recordings/:recordingId');
 
       try {
-        const recording = await getRecording(recordingId);
+        const authenticatedUser = getAuthenticatedUser(request);
+        if (!authenticatedUser) return reply.code(401).send({ error: 'unauthorized' });
+        const workspaceId = await resolvePrimaryWorkspaceIdForUser(authenticatedUser.id);
+        const recording = await getRecording(recordingId, workspaceId);
         if (!recording) {
           logger.info('Recording not found', {
             event: 'recording_not_found',
@@ -555,8 +573,11 @@ export function registerRecordingRoutes(
       const routePath = resolveRoutePath(request, 'GET /recordings/:recordingId/audio');
 
       try {
-        const recording = await getRecordingById(recordingId);
-        if (!recording) {
+        const authenticatedUser = getAuthenticatedUser(request);
+        if (!authenticatedUser) return reply.code(401).send({ error: 'unauthorized' });
+        const workspaceId = await resolvePrimaryWorkspaceIdForUser(authenticatedUser.id);
+        const recording = await getRecordingByIdForWorkspace(recordingId, workspaceId);
+        if (!recording?.storageUri) {
           logger.info('Recording audio not found', {
             event: 'recording_audio_not_found',
             route: routePath,
@@ -639,7 +660,10 @@ export function registerRecordingRoutes(
 
       try {
         const body = bodySchema.parse(request.body ?? undefined);
-        const recording = await getRecordingById(recordingId);
+        const authenticatedUser = getAuthenticatedUser(request);
+        if (!authenticatedUser) return reply.code(401).send({ error: 'unauthorized' });
+        const workspaceId = await resolvePrimaryWorkspaceIdForUser(authenticatedUser.id);
+        const recording = await getRecordingByIdForWorkspace(recordingId, workspaceId);
         if (recording) {
           resolveTranscriptionRoute({
             config,
@@ -650,6 +674,7 @@ export function registerRecordingRoutes(
         const result = await retryRecordingTranscription(
           recordingId,
           {
+            workspaceId,
             sttProvider: body?.sttProvider,
             audioTopology: body?.audioTopology,
           },
@@ -718,7 +743,10 @@ export function registerRecordingRoutes(
       const routePath = resolveRoutePath(request, 'GET /recordings/:recordingId/transcript');
 
       try {
-        const transcript = await getRecordingTranscript(recordingId);
+        const authenticatedUser = getAuthenticatedUser(request);
+        if (!authenticatedUser) return reply.code(401).send({ error: 'unauthorized' });
+        const workspaceId = await resolvePrimaryWorkspaceIdForUser(authenticatedUser.id);
+        const transcript = await getRecordingTranscript(recordingId, workspaceId);
         if (!transcript) {
           logger.info('Recording transcript not found', {
             event: 'recording_transcript_not_found',
@@ -775,9 +803,13 @@ export function registerRecordingRoutes(
       });
 
       try {
+        const authenticatedUser = getAuthenticatedUser(request);
+        if (!authenticatedUser) return reply.code(401).send({ error: 'unauthorized' });
+        const workspaceId = await resolvePrimaryWorkspaceIdForUser(authenticatedUser.id);
         const body = schema.parse(request.body ?? {});
         const updated = await updateRecordingTranscript({
           recordingId,
+          workspaceId,
           text: body.text,
           expectedWorkingVersion: body.expectedWorkingVersion,
           speakerRoleMapping: body.speakerRoleMapping,
@@ -864,8 +896,10 @@ export function registerRecordingRoutes(
 
       try {
         const body = schema.parse(request.body ?? {});
+        const workspaceId = await resolvePrimaryWorkspaceIdForUser(authenticatedUser.id);
         const promptPackage = await createPromptPackage({
           recordingId,
+          workspaceId,
           assignmentSessionId: body.assignmentSessionId,
           userId: authenticatedUser.id,
           templateId: body.templateId,
@@ -1471,6 +1505,7 @@ export function registerRecordingRoutes(
 async function cloneCachedRecordingForStudent(params: {
   cachedRecording: RecordingRecord;
   cachedTranscript: TranscriptRecord;
+  workspaceId: string;
   studentId: string;
   sourcePath: string;
   sha256: string;
@@ -1478,40 +1513,118 @@ async function cloneCachedRecordingForStudent(params: {
   storage: TranscriptionStorage;
 }) {
   const recordingId = randomUUID();
-  const recording = await insertRecording({
-    id: recordingId,
-    source: 'upload',
-    studentId: params.studentId,
-    sourcePath: params.sourcePath,
-    storageUri: params.cachedRecording.storageUri,
-    sha256: params.sha256,
-    bytes: params.cachedRecording.bytes,
-    durationSec: params.cachedRecording.durationSec,
-    channels: params.cachedRecording.channels,
-    audioTopology: params.audioTopology,
-    status: 'transcribed',
-    error: null,
-  });
   const transcriptId = randomUUID();
   const readStorage = createTranscriptionStorageForUri(params.cachedTranscript.storageUri);
   const cachedText = await readStorage.getText(params.cachedTranscript.storageUri);
   const storedTranscript = await params.storage.putTranscript({ transcriptId, text: cachedText });
-  const transcript = await insertTranscript({
-    id: transcriptId,
-    recordingId,
-    storageUri: storedTranscript.uri,
-    workingVersion: 1,
-    contentHash: storedTranscript.sha256,
-    rawResponseUri: params.cachedTranscript.rawResponseUri,
-    mode: params.cachedTranscript.mode,
-    model: params.cachedTranscript.model,
-    language: params.cachedTranscript.language,
-    sttProvider: params.cachedTranscript.sttProvider,
-    fallbackUsed: params.cachedTranscript.fallbackUsed,
-    summaryJson: params.cachedTranscript.summaryJson,
-  });
+  const createdUris = [storedTranscript.uri];
+  try {
+    const summaryJson = await cloneSpeakerTrackArtifacts({
+      transcriptId,
+      summaryJson: params.cachedTranscript.summaryJson ?? null,
+      storage: params.storage,
+      createdUris,
+    });
+    return await insertCachedRecordingLineage({
+      recording: {
+        id: recordingId,
+        workspaceId: params.workspaceId,
+        source: 'upload',
+        studentId: params.studentId,
+        sourcePath: params.sourcePath,
+        storageUri: null,
+        audioLifecycle: 'not_retained',
+        sha256: params.sha256,
+        bytes: params.cachedRecording.bytes,
+        durationSec: params.cachedRecording.durationSec,
+        channels: params.cachedRecording.channels,
+        audioTopology: params.audioTopology,
+        status: 'transcribed',
+        error: null,
+      },
+      transcript: {
+        id: transcriptId,
+        recordingId,
+        storageUri: storedTranscript.uri,
+        workingVersion: 1,
+        contentHash: storedTranscript.sha256,
+        rawResponseUri: null,
+        mode: params.cachedTranscript.mode,
+        model: params.cachedTranscript.model,
+        language: params.cachedTranscript.language,
+        sttProvider: params.cachedTranscript.sttProvider,
+        fallbackUsed: params.cachedTranscript.fallbackUsed,
+        summaryJson,
+      },
+    });
+  } catch (error) {
+    const [committedRecording, committedTranscript] = await Promise.all([
+      getRecordingByIdForWorkspace(recordingId, params.workspaceId),
+      getTranscriptByRecordingIdForWorkspace(recordingId, params.workspaceId),
+    ]);
+    if (
+      committedRecording &&
+      committedTranscript?.id === transcriptId &&
+      committedTranscript.storageUri === storedTranscript.uri
+    ) {
+      return { recording: committedRecording, transcript: committedTranscript };
+    }
+    const failures: string[] = [];
+    for (const uri of [...createdUris].reverse()) {
+      try {
+        await params.storage.delete(uri);
+      } catch (cleanupError) {
+        failures.push(`${uri}: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`);
+      }
+    }
+    if (failures.length > 0) {
+      logger.error('Cache clone artifact cleanup failed', {
+        event: 'recording_cache_clone_cleanup_failed',
+        recordingId,
+        transcriptId,
+        failures,
+      });
+      throw new Error('Cache lineage persistence failed and clone artifact cleanup was incomplete', {
+        cause: error,
+      });
+    }
+    throw error;
+  }
+}
 
-  return { recording, transcript };
+async function cloneSpeakerTrackArtifacts(params: {
+  transcriptId: string;
+  summaryJson: Record<string, unknown> | null;
+  storage: TranscriptionStorage;
+  createdUris: string[];
+}): Promise<Record<string, unknown> | null> {
+  if (!params.summaryJson) return null;
+  const speakerTracks = params.summaryJson.speakerTracks;
+  if (!speakerTracks || typeof speakerTracks !== 'object') return structuredClone(params.summaryJson);
+  const typed = speakerTracks as { transcripts?: unknown; speakers?: unknown };
+  if (!Array.isArray(typed.transcripts)) return structuredClone(params.summaryJson);
+  const transcripts = [];
+  for (const [index, candidate] of typed.transcripts.entries()) {
+    if (!candidate || typeof candidate !== 'object') continue;
+    const track = candidate as { speaker?: unknown; label?: unknown; uri?: unknown };
+    if (typeof track.uri !== 'string') continue;
+    const text = await createTranscriptionStorageForUri(track.uri).getText(track.uri);
+    const stored = await params.storage.putTranscript({
+      transcriptId: `${params.transcriptId}-speaker-${String(track.speaker ?? index)}`,
+      text,
+    });
+    params.createdUris.push(stored.uri);
+    transcripts.push({ ...track, uri: stored.uri });
+  }
+  const aggregate = await params.storage.putRawResponse({
+    transcriptId: `${params.transcriptId}-speaker-tracks`,
+    json: { transcripts, speakers: typed.speakers ?? [] },
+  });
+  params.createdUris.push(aggregate.uri);
+  return {
+    ...structuredClone(params.summaryJson),
+    speakerTracks: { ...structuredClone(speakerTracks), uri: aggregate.uri, transcripts },
+  };
 }
 
 function isArtifactWorkingConflict(error: unknown): error is {

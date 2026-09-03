@@ -12,13 +12,13 @@ import {
 } from '../domain/profile-revision-repository.js';
 import type { PromptPackageRecord } from '../domain/prompt-package-model.js';
 import { insertPromptPackage } from '../domain/prompt-package-repository.js';
-import { getRecordingById } from '../domain/recording-repository.js';
+import { getRecordingByIdForWorkspace } from '../domain/recording-repository.js';
 import type { TemplateRevisionRecord } from '../domain/template-revision-model.js';
 import {
   activateTemplateRevision,
   getActiveTemplateRevision,
 } from '../domain/template-revision-repository.js';
-import { getTranscriptByRecordingId } from '../domain/transcript-repository.js';
+import { getTranscriptByRecordingIdForWorkspace } from '../domain/transcript-repository.js';
 import { withPgClient } from '../infrastructure/db.js';
 import type { TranscriptionStorage } from '../infrastructure/transcription-storage.js';
 import {
@@ -43,6 +43,7 @@ const LEGACY_PROFILE_MARKER = 'INSERT PROFILE HERE';
 
 export interface CreatePromptPackageParams {
   recordingId: string;
+  workspaceId: string;
   assignmentSessionId?: string;
   userId?: string;
   notes?: string | null;
@@ -118,10 +119,10 @@ export interface CreatePromptPackageDependencies {
   config: BatchBackendConfig;
   storage: TranscriptionStorage;
   transcripts: {
-    getByRecordingId: typeof getTranscriptByRecordingId;
+    getByRecordingId: typeof getTranscriptByRecordingIdForWorkspace;
   };
   recordings: {
-    getById: typeof getRecordingById;
+    getById: typeof getRecordingByIdForWorkspace;
   };
   students: {
     getById: typeof getStudentProfileById;
@@ -186,10 +187,10 @@ export async function createPromptPackage(
   const config = overrides?.config ?? loadConfig();
   const storage = overrides?.storage ?? createTranscriptionStorage();
   const transcripts = overrides?.transcripts ?? {
-    getByRecordingId: getTranscriptByRecordingId,
+    getByRecordingId: getTranscriptByRecordingIdForWorkspace,
   };
   const recordings = overrides?.recordings ?? {
-    getById: getRecordingById,
+    getById: getRecordingByIdForWorkspace,
   };
   const students = overrides?.students ?? {
     getById: getStudentProfileById,
@@ -251,6 +252,7 @@ export async function createPromptPackage(
     ? await resolveConfirmedAssignmentInputs({
         session: assignmentSession,
         routeRecordingId: params.recordingId,
+        workspaceId: params.workspaceId,
         recordings,
         profileRevisions,
       })
@@ -261,10 +263,11 @@ export async function createPromptPackage(
         recordingId: confirmedInputs.source.recordingId,
         storageUri: confirmedInputs.source.transcriptStorageUri,
       }
-    : await transcripts.getByRecordingId(params.recordingId);
+    : await transcripts.getByRecordingId(params.recordingId, params.workspaceId);
   if (!transcript) return null;
   const recording =
-    confirmedInputs?.recording ?? (await recordings.getById(transcript.recordingId));
+    confirmedInputs?.recording ??
+    (await recordings.getById(transcript.recordingId, params.workspaceId));
   const lessonId = confirmedInputs?.source.lessonId ?? params.lessonId ?? null;
   const notes = confirmedInputs?.context.teacherNotes ?? params.notes ?? null;
   if (!confirmedInputs && lessonId && recording?.studentId) {
@@ -423,6 +426,7 @@ export async function createPromptPackage(
 async function resolveConfirmedAssignmentInputs(params: {
   session: AssignmentSessionRecord;
   routeRecordingId: string;
+  workspaceId: string;
   recordings: CreatePromptPackageDependencies['recordings'];
   profileRevisions: CreatePromptPackageDependencies['profileRevisions'];
 }) {
@@ -446,7 +450,7 @@ async function resolveConfirmedAssignmentInputs(params: {
       'Confirmed Source does not match the assignment session lineage',
     );
   }
-  const recording = await params.recordings.getById(source.recordingId);
+  const recording = await params.recordings.getById(source.recordingId, params.workspaceId);
   if (!recording || recording.studentId !== session.studentId) {
     throw new PromptPackageAssignmentError(
       'PROMPT_PACKAGE_CONFIRMED_LINEAGE_INVALID',

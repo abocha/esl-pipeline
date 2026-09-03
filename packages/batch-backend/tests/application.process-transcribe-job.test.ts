@@ -427,7 +427,9 @@ describe('application/process-transcribe-job', () => {
 function createRecording(id: string): RecordingRecord {
   return {
     id,
+    workspaceId: 'workspace-1',
     source: 'upload',
+    audioLifecycle: 'retained',
     studentId: null,
     sourcePath: '/tmp/audio.opus',
     storageUri: 'local://recordings/recording.opus',

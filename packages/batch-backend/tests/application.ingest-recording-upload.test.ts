@@ -36,6 +36,7 @@ describe('application/ingest-recording-upload', () => {
     const enqueued: string[] = [];
 
     const record = await ingestRecordingUpload({
+      workspaceId: 'workspace-1',
       filename: 'lesson.opus',
       sourcePath: 'lesson.opus',
       stream: Readable.from([Buffer.from('audio-data')]),
@@ -51,7 +52,9 @@ describe('application/ingest-recording-upload', () => {
     expect(repo.inserted[0]?.audioTopology).toBe('mixed_recording');
     expect(record.studentId).toBe('student-1');
     expect(enqueued).toEqual([record.id]);
-    expect(record.storageUri).toBe(`local://recordings/${record.id}.opus`);
+    expect(record.storageUri).toBe(
+      `local://workspaces/workspace-1/recordings/${record.id}/audio.opus`,
+    );
     expect(repo.records).toHaveLength(1);
   });
 });
@@ -71,10 +74,12 @@ function createInMemoryRecordingRepository(): RecordingRepository & {
       const now = new Date();
       const record: RecordingRecord = {
         id: params.id ?? `rec-${records.length + 1}`,
+        workspaceId: params.workspaceId,
         source: params.source,
         studentId: params.studentId ?? null,
         sourcePath: params.sourcePath ?? null,
         storageUri: params.storageUri,
+        audioLifecycle: params.audioLifecycle ?? 'retained',
         sha256: params.sha256 ?? null,
         bytes: params.bytes,
         durationSec: params.durationSec ?? null,

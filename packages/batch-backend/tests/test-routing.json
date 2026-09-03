@@ -15,6 +15,7 @@
     "domain.student-memory-openai-batch-repository.test.ts",
     "domain.assignment-session-repository.test.ts",
     "domain.student-repository.workspace.test.ts",
+    "integration.recording-tenant-authority.test.ts",
     "application.assignment-step-confirmation.test.ts",
     "application.homework-memory-source.test.ts",
     "application.student-timeline.test.ts",

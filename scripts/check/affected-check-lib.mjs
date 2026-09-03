@@ -955,7 +955,7 @@ function resolveCiRequirements(files, { conservativeReason = null } = {}) {
 }
 
 function isBackendPostgresTest(file) {
-  return /^packages\/batch-backend\/tests\/(?:domain\.(?:.*-repository|student-memory-openai-batch-import|student-repository\.workspace)|application\.(?:assignment-step-confirmation|homework-memory-source|student-timeline|student-schedule-billing|alpha-invites\.registration)|integration\.(?:migrations|query-plan-regression))\.test\.ts$/u.test(
+  return /^packages\/batch-backend\/tests\/(?:domain\.(?:.*-repository|student-memory-openai-batch-import|student-repository\.workspace)|application\.(?:assignment-step-confirmation|homework-memory-source|student-timeline|student-schedule-billing|alpha-invites\.registration)|integration\.(?:migrations|query-plan-regression|recording-tenant-authority))\.test\.ts$/u.test(
     file,
   );
 }

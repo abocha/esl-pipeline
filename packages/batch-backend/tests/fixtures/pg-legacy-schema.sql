@@ -25,6 +25,7 @@ CREATE TABLE jobs (
 CREATE TABLE recordings (
   id UUID PRIMARY KEY,
   source TEXT NOT NULL,
+  student_id UUID NULL,
   storage_uri TEXT NOT NULL,
   bytes BIGINT NOT NULL,
   status TEXT NOT NULL,
@@ -117,8 +118,15 @@ VALUES
   ('44444444-4444-4444-8444-444444444441', 'templates/legacy.md', 'one', 'hash-a', NOW() - INTERVAL '2 days'),
   ('44444444-4444-4444-8444-444444444442', 'templates/legacy.md', 'two', 'hash-b', NOW() - INTERVAL '1 day');
 
-INSERT INTO recordings (id, source, storage_uri, bytes, status)
-VALUES ('55555555-5555-4555-8555-555555555551', 'upload', 's3://legacy/recording.opus', 1234, 'queued');
+INSERT INTO recordings (id, source, student_id, storage_uri, bytes, status)
+VALUES (
+  '55555555-5555-4555-8555-555555555551',
+  'upload',
+  '22222222-2222-4222-8222-222222222222',
+  's3://legacy/recording.opus',
+  1234,
+  'queued'
+);
 
 INSERT INTO transcripts (id, recording_id, storage_uri)
 VALUES ('66666666-6666-4666-8666-666666666661', '55555555-5555-4555-8555-555555555551', 's3://legacy/transcript.json');

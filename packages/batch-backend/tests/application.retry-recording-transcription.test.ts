@@ -7,7 +7,9 @@ import {
 
 const baseRecording = {
   id: 'recording-1',
+  workspaceId: 'workspace-1',
   source: 'upload' as const,
+  audioLifecycle: 'retained' as const,
   studentId: null,
   sourcePath: null,
   storageUri: 'local://recordings/recording-1.opus',
@@ -32,11 +34,15 @@ describe('retryRecordingTranscription', () => {
     const enqueue = vi.fn().mockImplementation(async () => {});
     const publishEvent = vi.fn();
 
-    const result = await retryRecordingTranscription('recording-1', undefined, {
-      recordings: { getById, updateStatus },
-      enqueue,
-      publishEvent,
-    });
+    const result = await retryRecordingTranscription(
+      'recording-1',
+      { workspaceId: 'workspace-1' },
+      {
+        recordings: { getById, updateStatus },
+        enqueue,
+        publishEvent,
+      },
+    );
 
     expect(result).toEqual({
       recordingId: 'recording-1',
@@ -49,6 +55,7 @@ describe('retryRecordingTranscription', () => {
       durationSec: null,
       channels: null,
       audioTopology: null,
+      audioLifecycle: 'retained',
       bytes: 2048,
       createdAt: '2024-01-01T00:00:00.000Z',
       updatedAt: '2024-01-01T00:00:00.000Z',
@@ -78,7 +85,7 @@ describe('retryRecordingTranscription', () => {
 
     await retryRecordingTranscription(
       'recording-1',
-      { sttProvider: 'elevenlabs' },
+      { workspaceId: 'workspace-1', sttProvider: 'elevenlabs' },
       {
         recordings: { getById, updateStatus },
         enqueue,
@@ -94,18 +101,22 @@ describe('retryRecordingTranscription', () => {
 
   it('uses persisted topology as worker authority and does not enqueue it', async () => {
     const enqueue = vi.fn().mockResolvedValue(undefined);
-    await retryRecordingTranscription('recording-1', undefined, {
-      recordings: {
-        getById: vi
-          .fn()
-          .mockResolvedValue({ ...baseRecording, audioTopology: 'trusted_split_channels' }),
-        updateStatus: vi
-          .fn()
-          .mockResolvedValue({ ...baseRecording, status: 'queued', error: null }),
+    await retryRecordingTranscription(
+      'recording-1',
+      { workspaceId: 'workspace-1' },
+      {
+        recordings: {
+          getById: vi
+            .fn()
+            .mockResolvedValue({ ...baseRecording, audioTopology: 'trusted_split_channels' }),
+          updateStatus: vi
+            .fn()
+            .mockResolvedValue({ ...baseRecording, status: 'queued', error: null }),
+        },
+        enqueue,
+        publishEvent: vi.fn(),
       },
-      enqueue,
-      publishEvent: vi.fn(),
-    });
+    );
     expect(enqueue).toHaveBeenCalledWith({ recordingId: 'recording-1' });
   });
 
@@ -118,11 +129,15 @@ describe('retryRecordingTranscription', () => {
     const updateStatus = vi.fn();
 
     await expect(
-      retryRecordingTranscription('recording-1', undefined, {
-        recordings: { getById, updateStatus },
-        enqueue: vi.fn(),
-        publishEvent: vi.fn(),
-      }),
+      retryRecordingTranscription(
+        'recording-1',
+        { workspaceId: 'workspace-1' },
+        {
+          recordings: { getById, updateStatus },
+          enqueue: vi.fn(),
+          publishEvent: vi.fn(),
+        },
+      ),
     ).rejects.toBeInstanceOf(RecordingRetryError);
     expect(updateStatus).not.toHaveBeenCalled();
   });
@@ -145,11 +160,15 @@ describe('retryRecordingTranscription', () => {
     const publishEvent = vi.fn();
 
     await expect(
-      retryRecordingTranscription('recording-1', undefined, {
-        recordings: { getById, updateStatus },
-        enqueue,
-        publishEvent,
-      }),
+      retryRecordingTranscription(
+        'recording-1',
+        { workspaceId: 'workspace-1' },
+        {
+          recordings: { getById, updateStatus },
+          enqueue,
+          publishEvent,
+        },
+      ),
     ).rejects.toThrow('queue-down');
     expect(updateStatus).toHaveBeenCalledTimes(2);
     expect(publishEvent).toHaveBeenCalledTimes(2);

@@ -18,6 +18,7 @@ export interface StorageWriteResult {
 }
 
 export interface PutAudioOptions {
+  workspaceId: string;
   recordingId: string;
   inputPath?: string;
   stream?: Readable;
@@ -64,7 +65,7 @@ export class FilesystemTranscriptionStorage implements TranscriptionStorage {
 
   async putAudio(options: PutAudioOptions): Promise<StorageWriteResult> {
     const extension = resolveAudioExtension(options);
-    const relativePath = path.posix.join('recordings', `${options.recordingId}${extension}`);
+    const relativePath = buildWorkspaceAudioPath(options, extension);
     const targetPath = this.resolveRelativePath(relativePath);
     await fs.mkdir(path.dirname(targetPath), { recursive: true });
 
@@ -172,7 +173,7 @@ export class S3TranscriptionStorage implements TranscriptionStorage {
 
   async putAudio(options: PutAudioOptions): Promise<StorageWriteResult> {
     const extension = resolveAudioExtension(options);
-    const relativePath = path.posix.join('recordings', `${options.recordingId}${extension}`);
+    const relativePath = buildWorkspaceAudioPath(options, extension);
     const targetKey = this.buildKey(relativePath);
 
     if (!options.inputPath && !options.stream) {
@@ -265,6 +266,16 @@ export class S3TranscriptionStorage implements TranscriptionStorage {
       throw new Error(`Storage URI bucket mismatch: ${uri}`);
     }
   }
+}
+
+function buildWorkspaceAudioPath(options: PutAudioOptions, extension: string): string {
+  return path.posix.join(
+    'workspaces',
+    options.workspaceId,
+    'recordings',
+    options.recordingId,
+    `audio${extension}`,
+  );
 }
 
 export function createTranscriptionStorage(options?: {

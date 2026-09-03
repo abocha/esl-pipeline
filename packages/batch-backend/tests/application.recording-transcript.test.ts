@@ -12,7 +12,7 @@ describe('application/recording-transcript', () => {
     };
     const storage = createStorageStub({ getText: vi.fn() });
 
-    const result = await getRecordingTranscript('recording-1', {
+    const result = await getRecordingTranscript('recording-1', 'workspace-1', {
       storage,
       transcripts,
     });
@@ -30,7 +30,7 @@ describe('application/recording-transcript', () => {
       getText: vi.fn().mockResolvedValue('Hello transcript'),
     });
 
-    const result = await getRecordingTranscript('recording-1', {
+    const result = await getRecordingTranscript('recording-1', 'workspace-1', {
       storage,
       transcripts,
     });
@@ -72,7 +72,12 @@ describe('application/recording-transcript', () => {
     });
 
     const result = await updateRecordingTranscript(
-      { recordingId: transcript.recordingId, text: 'Updated text', expectedWorkingVersion: 1 },
+      {
+        recordingId: transcript.recordingId,
+        workspaceId: 'workspace-1',
+        text: 'Updated text',
+        expectedWorkingVersion: 1,
+      },
       { storage, transcripts },
     );
 
@@ -131,6 +136,7 @@ describe('application/recording-transcript', () => {
     await updateRecordingTranscript(
       {
         recordingId: transcript.recordingId,
+        workspaceId: 'workspace-1',
         text: 'Speaker 1: Hello\nSpeaker 2: Hi',
         expectedWorkingVersion: 1,
         speakerRoleMapping: {
@@ -180,6 +186,7 @@ describe('application/recording-transcript', () => {
       updateRecordingTranscript(
         {
           recordingId: transcript.recordingId,
+          workspaceId: 'workspace-1',
           text: 'Speaker 1: Hello\nSpeaker 2: Hi',
           expectedWorkingVersion: 1,
           speakerRoleMapping: {

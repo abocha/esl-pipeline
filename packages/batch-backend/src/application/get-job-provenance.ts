@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import type { VoiceProviderErrorDetails } from '@esl-pipeline/contracts';
 
 import { listJobActionHistoryForJob } from '../domain/job-action-history-repository.js';
-import { getJobById } from '../domain/job-repository.js';
+import { getJobById, getJobWorkspaceAuthority } from '../domain/job-repository.js';
 import { withPgClient } from '../infrastructure/db.js';
 import {
   getPromptPackageLineage,
@@ -110,8 +110,15 @@ export interface JobProvenanceResponse {
   }[];
 }
 
-export async function getJobProvenance(jobId: string): Promise<JobProvenanceResponse | null> {
+export async function getJobProvenance(
+  jobId: string,
+  workspaceId: string,
+  userId: string,
+): Promise<JobProvenanceResponse | null> {
   if (!jobId) return null;
+
+  const authority = await getJobWorkspaceAuthority(jobId, workspaceId, userId);
+  if (!authority) return null;
 
   const job = await getJobById(jobId);
   if (!job) return null;
@@ -149,14 +156,17 @@ export async function getJobProvenance(jobId: string): Promise<JobProvenanceResp
         LEFT JOIN recordings r ON r.id = COALESCE(j.recording_id, p.recording_id)
         LEFT JOIN transcripts t ON t.id = COALESCE(j.transcript_id, p.transcript_id)
         WHERE j.id = $1
+          AND ($3 = 'standalone_owner' OR r.workspace_id = $2)
         `,
-        [jobId],
+        [jobId, workspaceId, authority.mode],
       );
       return (result.rows[0] as JobProvenanceRow | undefined) ?? null;
     }),
     job.sourceJobId ? getJobById(job.sourceJobId) : Promise.resolve(null),
     listJobActionHistoryForJob(jobId),
   ]);
+
+  if (!row || (authority.mode === 'recording_backed' && !row.recording_id)) return null;
 
   const promptPackageId = row?.prompt_package_id ?? null;
   const lineage = promptPackageId ? await getPromptPackageLineage(promptPackageId) : null;
