@@ -47,6 +47,16 @@ function expectRecordingUploadRequest(params: Record<string, string> | undefined
 describe('utils/api recording upload request', () => {
   beforeEach(() => vi.clearAllMocks());
 
+  it('rejects an oversized File before starting a recording upload request', async () => {
+    const file = new File(['small sentinel'], 'oversized.mp3', { type: 'audio/mpeg' });
+    Object.defineProperty(file, 'size', { value: 2_147_483_649 });
+
+    await expect(uploadRecording(file, { studentId: 'student-1' })).rejects.toThrow(
+      'Recording exceeds the 2 GiB upload limit.',
+    );
+    expect(apiClient.post).not.toHaveBeenCalled();
+  });
+
   it('omits audioTopology for ordinary recordings while preserving a provider override', async () => {
     vi.mocked(apiClient.post).mockResolvedValueOnce({ data: recording } as never);
 

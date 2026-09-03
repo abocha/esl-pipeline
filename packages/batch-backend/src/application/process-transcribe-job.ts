@@ -168,6 +168,9 @@ export async function processTranscribeJob(
       fallbackUsed: transcription.fallbackUsed,
       audioTopology: topology,
       sttRequestProfile: route.profile,
+      ...(payload.mediaPreparationVersion === undefined
+        ? {}
+        : { mediaPreparationVersion: payload.mediaPreparationVersion }),
     };
 
     if (speakerTracks.tracks.length > 0) {

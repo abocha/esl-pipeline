@@ -30,6 +30,7 @@ describe('domain/recording-repository', () => {
           duration_sec: null,
           channels: null,
           audio_topology: null,
+          media_preparation_version: 'recording-media-v1',
           audio_lifecycle: 'not_retained',
           audio_deletion_requested_at: null,
           audio_deleted_at: null,
@@ -56,12 +57,15 @@ describe('domain/recording-repository', () => {
         storageUri: null,
         audioLifecycle: 'not_retained',
         bytes: 24,
+        mediaPreparationVersion: 'recording-media-v1',
         status: 'transcribed',
       },
       { client },
     );
 
     expect(result.source).toBe('manual_transcript');
+    expect(result.mediaPreparationVersion).toBe('recording-media-v1');
+    expect(query.mock.calls[0]?.[1]).toContain('recording-media-v1');
     expect(query).toHaveBeenCalledTimes(1);
     expect(mockWithPgClient).not.toHaveBeenCalled();
   });
@@ -102,6 +106,7 @@ describe('domain/recording-repository', () => {
       duration_sec: 60,
       channels: 1,
       audio_topology: 'mixed_recording',
+      media_preparation_version: 'recording-media-v1',
       audio_lifecycle: 'not_retained',
       audio_deletion_requested_at: null,
       audio_deleted_at: null,
@@ -152,6 +157,7 @@ describe('domain/recording-repository', () => {
         durationSec: recordingRow.duration_sec,
         channels: recordingRow.channels,
         audioTopology: 'mixed_recording',
+        mediaPreparationVersion: 'recording-media-v1',
         status: 'transcribed',
       },
       transcript: {
@@ -170,6 +176,7 @@ describe('domain/recording-repository', () => {
     });
 
     expect(result.recording.audioLifecycle).toBe('not_retained');
+    expect(result.recording.mediaPreparationVersion).toBe('recording-media-v1');
     expect(result.transcript.rawResponseUri).toBeNull();
     expect(query.mock.calls.map(([sql]) => String(sql).trim())).toEqual([
       'BEGIN',

@@ -85,6 +85,7 @@ import type {
   UpdateStudentLessonRequest,
   UpsertStudentLessonRecurrenceRequest,
 } from '@esl-pipeline/contracts';
+import { DEFAULT_RECORDING_UPLOAD_MAX_BYTES } from '@esl-pipeline/contracts';
 import { JobActionType } from '@esl-pipeline/contracts';
 
 import apiClient, {
@@ -1970,6 +1971,9 @@ export async function uploadRecording(
     signal?: AbortSignal;
   },
 ): Promise<RecordingListItem> {
+  if (file.size > DEFAULT_RECORDING_UPLOAD_MAX_BYTES) {
+    throw new Error('Recording exceeds the 2 GiB upload limit.');
+  }
   try {
     const formData = new FormData();
     formData.append('file', file);

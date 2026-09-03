@@ -44,7 +44,8 @@ describe('config/env - core defaults', () => {
         expect(cfg.transcription.queueName).toBe('transcribe-queue');
         expect(cfg.transcription.mode).toBe('timeline');
         expect(cfg.transcription.maxConcurrency).toBe(2);
-        expect(cfg.recordings.maxFileSize).toBe(100 * 1024 * 1024);
+        expect(cfg.recordings.maxFileSize).toBe(2 * 1024 * 1024 * 1024);
+        expect(cfg.recordings.diskReserveBytes).toBe(10 * 1024 * 1024 * 1024);
         expect(cfg.deepgram.model).toBe('nova-3');
         expect(cfg.deepgram.language).toBe('multi');
         expect(cfg.deepgram.storeRawResponse).toBe(true);
@@ -80,6 +81,23 @@ describe('config/env - core defaults', () => {
           enabled: false,
           provider: 'openai',
           model: 'gpt-5.6-luna',
+        });
+      },
+    );
+  });
+
+  it('allows the ingest operational byte limit and disk reserve to be configured together', async () => {
+    await withEnv(
+      {
+        NODE_ENV: 'test',
+        RECORDINGS_MAX_FILE_SIZE: '123456789',
+        RECORDINGS_DISK_RESERVE_BYTES: '987654321',
+      },
+      async () => {
+        const cfg = await loadConfigFresh();
+        expect(cfg.recordings).toEqual({
+          maxFileSize: 123_456_789,
+          diskReserveBytes: 987_654_321,
         });
       },
     );

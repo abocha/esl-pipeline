@@ -106,7 +106,7 @@ describe('application/process-transcribe-job', () => {
     });
   });
 
-  it('transcribes recording and persists transcript metadata', async () => {
+  it('persists the ingest-captured preparation version rather than the worker media module version', async () => {
     const recording = createRecording('recording-1');
     const transcriptStore: TranscriptRecord[] = [];
     const updates: string[] = [];
@@ -126,7 +126,7 @@ describe('application/process-transcribe-job', () => {
     );
 
     const result = await processTranscribeJob(
-      { recordingId: recording.id },
+      { recordingId: recording.id, mediaPreparationVersion: 'recording-media-vA' },
       {
         config: createConfig(),
         storage,
@@ -179,12 +179,77 @@ describe('application/process-transcribe-job', () => {
     expect(result?.sttProvider).toBe('deepgram');
     expect(result).toMatchObject({ workingVersion: 1, contentHash: expect.any(String) });
     expect((result?.summaryJson as { provider?: unknown } | null)?.provider).toBe('deepgram');
+    expect(
+      (result?.summaryJson as { mediaPreparationVersion?: unknown } | null)
+        ?.mediaPreparationVersion,
+    ).toBe('recording-media-vA');
     expect(updates).toEqual(['transcribing', 'transcribed']);
     expect(sttTranscribe).toHaveBeenCalledWith(
       expect.objectContaining({
         provider: 'deepgram',
       }),
     );
+  });
+
+  it('leaves historical recordings without a preparation version cache-ineligible', async () => {
+    const recording = createRecording('historical-recording');
+    const transcriptStore: TranscriptRecord[] = [];
+
+    const result = await processTranscribeJob(
+      { recordingId: recording.id },
+      {
+        config: createConfig(),
+        storage: createStorageStub(),
+        sttTranscribe: vi.fn(async () =>
+          createSttResult({
+            provider: 'deepgram',
+            model: 'nova-3',
+            language: 'multi',
+            text: 'Historical recording.',
+            segments: [],
+          }),
+        ),
+        recordings: {
+          async getById(id: string) {
+            return id === recording.id ? recording : null;
+          },
+          async updateStatus({ id, status, error }) {
+            if (id !== recording.id) return null;
+            recording.status = status;
+            recording.error = error ?? null;
+            return recording;
+          },
+        },
+        transcripts: {
+          async getByRecordingId() {
+            return transcriptStore[0] ?? null;
+          },
+          async insert(params) {
+            const transcript: TranscriptRecord = {
+              id: params.id ?? 'historical-transcript',
+              recordingId: params.recordingId,
+              storageUri: params.storageUri,
+              workingVersion: params.workingVersion,
+              contentHash: params.contentHash,
+              rawResponseUri: params.rawResponseUri ?? null,
+              mode: params.mode,
+              model: params.model,
+              language: params.language,
+              sttProvider: params.sttProvider,
+              fallbackUsed: params.fallbackUsed,
+              summaryJson: params.summaryJson ?? null,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            };
+            transcriptStore.push(transcript);
+            return transcript;
+          },
+        },
+        publishEvent: vi.fn(),
+      },
+    );
+
+    expect(result?.summaryJson).not.toHaveProperty('mediaPreparationVersion');
   });
 
   it('accepts ELEVENLABS_API_TOKEN fallback for ElevenLabs STT credentials', () => {
@@ -506,7 +571,7 @@ function createConfig(): BatchBackendConfig {
         },
       },
     },
-    recordings: { maxFileSize: 0 },
+    recordings: { maxFileSize: 0, diskReserveBytes: 0 },
     deepgram: {
       apiKey: 'dg-key',
       accessToken: undefined,

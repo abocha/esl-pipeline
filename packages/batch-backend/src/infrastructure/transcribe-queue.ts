@@ -9,6 +9,8 @@ import { createRedisClient } from './redis.js';
 export interface TranscribeQueuePayload {
   recordingId: string;
   sttProvider?: SttProviderId;
+  /** Captured when canonical media is prepared; absent historical payloads stay cache-ineligible. */
+  mediaPreparationVersion?: string;
 }
 
 let queueSingleton: Queue<TranscribeQueuePayload> | null = null;

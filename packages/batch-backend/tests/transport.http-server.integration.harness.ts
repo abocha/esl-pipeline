@@ -113,6 +113,39 @@ vi.mock('../src/infrastructure/logger', async () => {
   };
 });
 
+// Route integration fixtures intentionally exercise route/cache ownership with synthetic multipart
+// bytes. Media probing itself is exercised in infrastructure.recording-media.test.ts with generated
+// files, so this harness keeps its pre-existing route fixtures independent from ffmpeg.
+vi.mock('../src/infrastructure/recording-media.js', async () => {
+  const actual = await vi.importActual<typeof import('../src/infrastructure/recording-media.js')>(
+    '../src/infrastructure/recording-media.js',
+  );
+  return {
+    ...actual,
+    ensureRecordingUploadCapacity: vi.fn(actual.ensureRecordingUploadCapacity),
+    prepareRecordingMedia: vi.fn(
+      async (params: { sourcePath: string; sourceSha256: string; sourceBytes: number }) => ({
+        path: params.sourcePath,
+        sha256: params.sourceSha256,
+        bytes: params.sourceBytes,
+        preparationVersion: actual.RECORDING_PREPARATION_VERSION,
+        extension: '.mp3',
+        facts: {
+          container: 'mp3',
+          audioStreams: 1,
+          hasVideo: false,
+          durationSeconds: 1,
+          audioCodec: 'mp3',
+          channels: 2,
+          channelLayout: 'stereo',
+          integrity: 'ok' as const,
+        },
+        cleanup: () => actual.removeTemporaryFile(params.sourcePath),
+      }),
+    ),
+  };
+});
+
 vi.mock('../src/infrastructure/orchestrator-service', () => {
   const orchestratorJobOptionsMock = {
     presets: ['b1-default'],

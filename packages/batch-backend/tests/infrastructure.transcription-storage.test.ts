@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { StorageConfigurationService } from '@esl-pipeline/shared-infrastructure';
 
@@ -12,6 +12,7 @@ import {
   FilesystemTranscriptionStorage,
   S3TranscriptionStorage,
 } from '../src/infrastructure/transcription-storage.js';
+import { logger } from '../src/infrastructure/logger.js';
 
 async function createTempDir(): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), 'esl-transcription-'));
@@ -116,6 +117,64 @@ describe('infrastructure/transcription-storage', () => {
     expect(stored.equals(content)).toBe(true);
   });
 
+  it('removes a partial local audio target when its source stream fails', async () => {
+    tempDir = await createTempDir();
+    const storage = new FilesystemTranscriptionStorage(tempDir);
+    const stream = new Readable({
+      read() {
+        this.push(Buffer.from('partial'));
+        this.destroy(new Error('source stream failed'));
+      },
+    });
+    const targetPath = path.join(
+      tempDir,
+      'workspaces',
+      'workspace-1',
+      'recordings',
+      'r-source-failure',
+      'audio.opus',
+    );
+
+    await expect(
+      storage.putAudio({
+        workspaceId: 'workspace-1',
+        recordingId: 'r-source-failure',
+        stream,
+        extension: '.opus',
+      }),
+    ).rejects.toThrow('source stream failed');
+    await expect(fs.stat(targetPath)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('removes a partial local audio target when its destination write fails', async () => {
+    tempDir = await createTempDir();
+    const destinationError = new Error('destination write failed');
+    const storage = new FilesystemTranscriptionStorage(tempDir, {
+      writeAudio: async (_input, targetPath) => {
+        await fs.writeFile(targetPath, 'partial');
+        throw destinationError;
+      },
+    });
+    const targetPath = path.join(
+      tempDir,
+      'workspaces',
+      'workspace-1',
+      'recordings',
+      'r-destination-failure',
+      'audio.opus',
+    );
+
+    await expect(
+      storage.putAudio({
+        workspaceId: 'workspace-1',
+        recordingId: 'r-destination-failure',
+        stream: Readable.from([Buffer.from('audio')]),
+        extension: '.opus',
+      }),
+    ).rejects.toBe(destinationError);
+    await expect(fs.stat(targetPath)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
   it('selects filesystem storage for local URIs even when provider is s3', async () => {
     tempDir = await createTempDir();
     const storageConfig = new StorageConfigurationService({
@@ -161,4 +220,139 @@ describe('infrastructure/transcription-storage', () => {
 
     expect(storage).toBeInstanceOf(S3TranscriptionStorage);
   });
+
+  it('compensates an owned S3 audio key when upload rejects', async () => {
+    const storage = createS3Storage();
+    const uploadError = new Error('upload rejected before acknowledgement');
+    const adapter = {
+      uploadFile: vi.fn(async (_key: string, content: Readable) => {
+        for await (const _chunk of content) {
+          // The production multipart uploader consumes the stream before reporting failure.
+        }
+        throw uploadError;
+      }),
+      deleteFile: vi.fn(async () => {}),
+    };
+    replaceS3Adapter(storage, adapter);
+
+    await expect(
+      storage.putAudio({
+        workspaceId: 'workspace-1',
+        recordingId: 'r-s3-rejected',
+        stream: Readable.from([Buffer.from('audio')]),
+        extension: '.opus',
+      }),
+    ).rejects.toBe(uploadError);
+    expect(adapter.deleteFile).toHaveBeenCalledWith(
+      'workspaces/workspace-1/recordings/r-s3-rejected/audio.opus',
+    );
+  });
+
+  it('compensates an owned S3 audio key after an ambiguous upload failure', async () => {
+    const storage = createS3Storage();
+    const uploadError = new Error('connection lost after object creation');
+    const adapter = {
+      uploadFile: vi.fn(async (_key: string, content: Readable) => {
+        for await (const _chunk of content) {
+          // The production multipart uploader consumes the stream before reporting failure.
+        }
+        throw uploadError;
+      }),
+      deleteFile: vi.fn(async () => {}),
+    };
+    replaceS3Adapter(storage, adapter);
+
+    await expect(
+      storage.putAudio({
+        workspaceId: 'workspace-1',
+        recordingId: 'r-s3-ambiguous',
+        stream: Readable.from([Buffer.from('audio')]),
+        extension: '.opus',
+      }),
+    ).rejects.toBe(uploadError);
+    expect(adapter.deleteFile).toHaveBeenCalledWith(
+      'workspaces/workspace-1/recordings/r-s3-ambiguous/audio.opus',
+    );
+  });
+
+  it('does not compensate a successfully stored S3 audio object', async () => {
+    const storage = createS3Storage();
+    const adapter = {
+      uploadFile: vi.fn(async (_key: string, content: Readable) => {
+        for await (const _chunk of content) {
+          // The production multipart uploader consumes the stream before succeeding.
+        }
+      }),
+      deleteFile: vi.fn(async () => {}),
+    };
+    replaceS3Adapter(storage, adapter);
+
+    await storage.putAudio({
+      workspaceId: 'workspace-1',
+      recordingId: 'r-s3-success',
+      stream: Readable.from([Buffer.from('audio')]),
+      extension: '.opus',
+    });
+    expect(adapter.deleteFile).not.toHaveBeenCalled();
+  });
+
+  it('logs a failed S3 compensation but preserves the upload error', async () => {
+    const storage = createS3Storage();
+    const uploadError = new Error('upload failed');
+    const cleanupError = new Error('delete failed');
+    const adapter = {
+      uploadFile: vi.fn(async (_key: string, content: Readable) => {
+        for await (const _chunk of content) {
+          // The production multipart uploader consumes the stream before reporting failure.
+        }
+        throw uploadError;
+      }),
+      deleteFile: vi.fn(async () => {
+        throw cleanupError;
+      }),
+    };
+    replaceS3Adapter(storage, adapter);
+    const logError = vi.spyOn(logger, 'error').mockImplementation(() => undefined);
+
+    try {
+      await expect(
+        storage.putAudio({
+          workspaceId: 'workspace-1',
+          recordingId: 'r-s3-cleanup-failure',
+          stream: Readable.from([Buffer.from('audio')]),
+          extension: '.opus',
+        }),
+      ).rejects.toBe(uploadError);
+      expect(logError).toHaveBeenCalledWith(
+        expect.stringContaining('owned S3 audio target'),
+        expect.objectContaining({ event: 'recording_audio_upload_compensation_failed' }),
+      );
+    } finally {
+      logError.mockRestore();
+    }
+  });
 });
+
+function createS3Storage(): S3TranscriptionStorage {
+  return new S3TranscriptionStorage(
+    new StorageConfigurationService({
+      provider: 's3',
+      s3: {
+        region: 'us-east-1',
+        accessKeyId: 'test',
+        secretAccessKey: 'secret',
+        bucket: 'bucket',
+      },
+    }),
+  );
+}
+
+function replaceS3Adapter(
+  storage: S3TranscriptionStorage,
+  adapter: {
+    uploadFile: (key: string, content: Readable, mimeType: string) => Promise<unknown>;
+    deleteFile: (key: string) => Promise<void>;
+  },
+): void {
+  (storage as unknown as { adapter: typeof adapter }).adapter = adapter;
+}

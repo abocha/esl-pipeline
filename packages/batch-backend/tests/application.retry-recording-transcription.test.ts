@@ -17,6 +17,7 @@ const baseRecording = {
   bytes: 2048,
   durationSec: null,
   channels: null,
+  mediaPreparationVersion: 'recording-media-v1',
   status: 'failed' as const,
   error: 'boom',
   createdAt: new Date('2024-01-01T00:00:00.000Z'),
@@ -65,7 +66,10 @@ describe('retryRecordingTranscription', () => {
       status: 'queued',
       error: null,
     });
-    expect(enqueue).toHaveBeenCalledWith({ recordingId: 'recording-1' });
+    expect(enqueue).toHaveBeenCalledWith({
+      recordingId: 'recording-1',
+      mediaPreparationVersion: 'recording-media-v1',
+    });
     expect(publishEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'recording_state_changed',
@@ -96,6 +100,7 @@ describe('retryRecordingTranscription', () => {
     expect(enqueue).toHaveBeenCalledWith({
       recordingId: 'recording-1',
       sttProvider: 'elevenlabs',
+      mediaPreparationVersion: 'recording-media-v1',
     });
   });
 
@@ -117,6 +122,29 @@ describe('retryRecordingTranscription', () => {
         publishEvent: vi.fn(),
       },
     );
+    expect(enqueue).toHaveBeenCalledWith({
+      recordingId: 'recording-1',
+      mediaPreparationVersion: 'recording-media-v1',
+    });
+  });
+
+  it('retries historical recordings without inventing a preparation version', async () => {
+    const enqueue = vi.fn().mockResolvedValue(undefined);
+    await retryRecordingTranscription(
+      'recording-1',
+      { workspaceId: 'workspace-1' },
+      {
+        recordings: {
+          getById: vi.fn().mockResolvedValue({ ...baseRecording, mediaPreparationVersion: null }),
+          updateStatus: vi
+            .fn()
+            .mockResolvedValue({ ...baseRecording, mediaPreparationVersion: null, status: 'queued', error: null }),
+        },
+        enqueue,
+        publishEvent: vi.fn(),
+      },
+    );
+
     expect(enqueue).toHaveBeenCalledWith({ recordingId: 'recording-1' });
   });
 

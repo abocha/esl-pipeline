@@ -45,7 +45,10 @@ describeHttpServerIntegrationSuite(
         'memory://transcripts/source-speaker-1.txt',
         'memory://transcripts/source-speaker-tracks.json',
       ];
-      vi.spyOn(recordingRepositoryModule, 'listRecordingsBySha256ForWorkspace').mockResolvedValueOnce([
+      vi.spyOn(
+        recordingRepositoryModule,
+        'listRecordingsBySha256ForWorkspace',
+      ).mockResolvedValueOnce([
         {
           id: 'source-recording',
           workspaceId: '00000000-0000-4000-8000-000000000001',
@@ -85,6 +88,7 @@ describeHttpServerIntegrationSuite(
             provider: 'elevenlabs',
             audioTopology: 'mixed_recording',
             sttRequestProfile: 'mixed-recording-elevenlabs-scribe-v2-v1',
+            mediaPreparationVersion: 'recording-media-v1',
             speakerTracks: {
               uri: sourceUris[3],
               transcripts: [
@@ -147,7 +151,9 @@ describeHttpServerIntegrationSuite(
       vi.mocked(recordingRepositoryModule.insertCachedRecordingLineage).mockRejectedValueOnce(
         new Error('insert failed before COMMIT'),
       );
-      vi.spyOn(recordingRepositoryModule, 'getRecordingByIdForWorkspace').mockResolvedValueOnce(null);
+      vi.spyOn(recordingRepositoryModule, 'getRecordingByIdForWorkspace').mockResolvedValueOnce(
+        null,
+      );
       vi.spyOn(
         transcriptRepositoryModule,
         'getTranscriptByRecordingIdForWorkspace',
@@ -167,7 +173,10 @@ describeHttpServerIntegrationSuite(
 
     it('cache clone recovers committed lineage when COMMIT acknowledgement is lost', async () => {
       const fault = arrangeCacheCloneFault();
-      let attempted: { recording: InsertRecordingParams; transcript: InsertTranscriptParams } | null = null;
+      let attempted: {
+        recording: InsertRecordingParams;
+        transcript: InsertTranscriptParams;
+      } | null = null;
       vi.mocked(recordingRepositoryModule.insertCachedRecordingLineage).mockImplementationOnce(
         async (params: {
           recording: InsertRecordingParams;
@@ -178,27 +187,34 @@ describeHttpServerIntegrationSuite(
         },
       );
       vi.spyOn(recordingRepositoryModule, 'getRecordingByIdForWorkspace').mockImplementationOnce(
-        async (id: string, workspaceId: string) => ({
-          ...attempted!.recording,
-          id,
-          workspaceId,
-          createdAt: new Date('2024-01-02T00:00:00.000Z'),
-          updatedAt: new Date('2024-01-02T00:00:00.000Z'),
-        } as never),
+        async (id: string, workspaceId: string) =>
+          ({
+            ...attempted!.recording,
+            id,
+            workspaceId,
+            createdAt: new Date('2024-01-02T00:00:00.000Z'),
+            updatedAt: new Date('2024-01-02T00:00:00.000Z'),
+          }) as never,
       );
       vi.spyOn(
         transcriptRepositoryModule,
         'getTranscriptByRecordingIdForWorkspace',
-      ).mockImplementationOnce(async () => ({
-        ...attempted!.transcript,
-        createdAt: new Date('2024-01-02T00:00:00.000Z'),
-        updatedAt: new Date('2024-01-02T00:00:00.000Z'),
-      } as never));
+      ).mockImplementationOnce(
+        async () =>
+          ({
+            ...attempted!.transcript,
+            createdAt: new Date('2024-01-02T00:00:00.000Z'),
+            updatedAt: new Date('2024-01-02T00:00:00.000Z'),
+          }) as never,
+      );
 
       const response = await fault.upload();
 
       expect(response.statusCode).toBe(200);
-      expect(response.json()).toMatchObject({ cacheHit: true, recordingId: attempted!.recording.id });
+      expect(response.json()).toMatchObject({
+        cacheHit: true,
+        recordingId: attempted!.recording.id,
+      });
       expect(fault.createdUris).toHaveLength(4);
       expect(fault.deleteArtifact).not.toHaveBeenCalled();
     });
@@ -208,7 +224,9 @@ describeHttpServerIntegrationSuite(
       vi.mocked(recordingRepositoryModule.insertCachedRecordingLineage).mockRejectedValueOnce(
         new Error('ambiguous persistence failure'),
       );
-      vi.spyOn(recordingRepositoryModule, 'getRecordingByIdForWorkspace').mockResolvedValueOnce(null);
+      vi.spyOn(recordingRepositoryModule, 'getRecordingByIdForWorkspace').mockResolvedValueOnce(
+        null,
+      );
       vi.spyOn(
         transcriptRepositoryModule,
         'getTranscriptByRecordingIdForWorkspace',
@@ -229,7 +247,9 @@ describeHttpServerIntegrationSuite(
       vi.mocked(recordingRepositoryModule.insertCachedRecordingLineage).mockRejectedValueOnce(
         new Error('ambiguous persistence failure'),
       );
-      vi.spyOn(recordingRepositoryModule, 'getRecordingByIdForWorkspace').mockResolvedValueOnce(null);
+      vi.spyOn(recordingRepositoryModule, 'getRecordingByIdForWorkspace').mockResolvedValueOnce(
+        null,
+      );
       vi.spyOn(
         transcriptRepositoryModule,
         'getTranscriptByRecordingIdForWorkspace',
@@ -246,9 +266,7 @@ describeHttpServerIntegrationSuite(
         'Cache clone artifact cleanup failed',
         expect.objectContaining({
           event: 'recording_cache_clone_cleanup_failed',
-          failures: expect.arrayContaining([
-            expect.stringContaining('storage unavailable'),
-          ]),
+          failures: expect.arrayContaining([expect.stringContaining('storage unavailable')]),
         }),
       );
       expect(fault.deleteArtifact).toHaveBeenCalledTimes(4);
@@ -341,6 +359,7 @@ describeHttpServerIntegrationSuite(
             provider: 'elevenlabs',
             audioTopology: 'mixed_recording',
             sttRequestProfile: 'mixed-recording-elevenlabs-scribe-v2-v1',
+            mediaPreparationVersion: 'recording-media-v1',
           },
           createdAt: new Date('2024-01-01T00:05:00.000Z'),
           updatedAt: new Date('2024-01-01T00:05:00.000Z'),
@@ -379,6 +398,125 @@ describeHttpServerIntegrationSuite(
       listLatestTranscriptsByRecordingIds.mockReset();
     });
 
+    it('POST /recordings/upload rejects prepared media before cache, storage, or recording creation', async () => {
+      const media = await import('../src/infrastructure/recording-media.js');
+      const prepare = vi.mocked(media.prepareRecordingMedia);
+      const listRecordingsBySha256 = vi.spyOn(
+        recordingRepositoryModule,
+        'listRecordingsBySha256ForWorkspace',
+      );
+      const putAudio = vi.spyOn(
+        transcriptionStorageModule.FilesystemTranscriptionStorage.prototype,
+        'putAudio',
+      );
+      const insertRecording = vi.spyOn(recordingRepositoryModule, 'insertRecording');
+      prepare.mockRejectedValueOnce(new media.RecordingMediaError('no_audio', 'No audio stream.'));
+      const boundary = '----invalid-media-boundary';
+      const payload = Buffer.concat([
+        Buffer.from(
+          `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="bad.mp4"\r\n\r\n`,
+        ),
+        Buffer.from('synthetic'),
+        Buffer.from(`\r\n--${boundary}--\r\n`),
+      ]);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/recordings/upload?studentId=${deriveStudentId('Anna')}`,
+        headers: { 'content-type': `multipart/form-data; boundary=${boundary}` },
+        payload,
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toMatchObject({ error: 'validation_failed', code: 'no_audio' });
+      expect(listRecordingsBySha256).not.toHaveBeenCalled();
+      expect(putAudio).not.toHaveBeenCalled();
+      expect(insertRecording).not.toHaveBeenCalled();
+    });
+
+    it('POST /recordings/upload rejects insufficient disk capacity before multipart media work', async () => {
+      const media = await import('../src/infrastructure/recording-media.js');
+      const admit = vi.mocked(media.ensureRecordingUploadCapacity);
+      const prepare = vi.mocked(media.prepareRecordingMedia);
+      const listRecordingsBySha256 = vi.spyOn(
+        recordingRepositoryModule,
+        'listRecordingsBySha256ForWorkspace',
+      );
+      const putAudio = vi.spyOn(
+        transcriptionStorageModule.FilesystemTranscriptionStorage.prototype,
+        'putAudio',
+      );
+      admit.mockRejectedValueOnce(
+        new media.RecordingMediaError(
+          'insufficient_upload_capacity',
+          'The server does not currently have enough free upload capacity. Try again later.',
+        ),
+      );
+      prepare.mockClear();
+      const boundary = '----disk-capacity-boundary';
+      const payload = Buffer.concat([
+        Buffer.from(
+          `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="lesson.mp3"\r\n\r\n`,
+        ),
+        Buffer.from('synthetic'),
+        Buffer.from(`\r\n--${boundary}--\r\n`),
+      ]);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/recordings/upload?studentId=${deriveStudentId('Anna')}`,
+        headers: { 'content-type': `multipart/form-data; boundary=${boundary}` },
+        payload,
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toMatchObject({
+        error: 'validation_failed',
+        code: 'insufficient_upload_capacity',
+      });
+      expect(prepare).not.toHaveBeenCalled();
+      expect(listRecordingsBySha256).not.toHaveBeenCalled();
+      expect(putAudio).not.toHaveBeenCalled();
+    });
+
+    it('POST /recordings/upload performs cache lookup before a cache-miss audio storage failure', async () => {
+      const media = await import('../src/infrastructure/recording-media.js');
+      const prepare = vi.mocked(media.prepareRecordingMedia);
+      const listRecordingsBySha256 = vi
+        .spyOn(recordingRepositoryModule, 'listRecordingsBySha256ForWorkspace')
+        .mockResolvedValueOnce([]);
+      const putAudio = vi
+        .spyOn(transcriptionStorageModule.FilesystemTranscriptionStorage.prototype, 'putAudio')
+        .mockRejectedValueOnce(new Error('storage unavailable'));
+      const insertRecording = vi.spyOn(recordingRepositoryModule, 'insertRecording');
+      const boundary = '----storage-failure-boundary';
+      const payload = Buffer.concat([
+        Buffer.from(
+          `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="lesson.mp3"\r\n\r\n`,
+        ),
+        Buffer.from('synthetic'),
+        Buffer.from(`\r\n--${boundary}--\r\n`),
+      ]);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/recordings/upload?studentId=${deriveStudentId('Anna')}`,
+        headers: { 'content-type': `multipart/form-data; boundary=${boundary}` },
+        payload,
+      });
+
+      expect(response.statusCode).toBe(500);
+      expect(listRecordingsBySha256).toHaveBeenCalledBefore(putAudio);
+      expect(insertRecording).not.toHaveBeenCalled();
+      const preparedSourcePath = prepare.mock.calls.at(-1)?.[0].sourcePath;
+      expect(preparedSourcePath).toEqual(expect.any(String));
+      await expect(
+        import('node:fs/promises').then((fs) => fs.stat(preparedSourcePath!)),
+      ).rejects.toMatchObject({
+        code: 'ENOENT',
+      });
+    });
+
     it("POST /recordings/upload clones cached artifacts instead of transferring another student's recording", async () => {
       const cachedStudentId = deriveStudentId('Anna');
       const requestedStudentId = deriveStudentId('Bella');
@@ -405,7 +543,10 @@ describeHttpServerIntegrationSuite(
           sha256: 'new-hash',
         }));
       const putClonedTrackMetadata = vi
-        .spyOn(transcriptionStorageModule.FilesystemTranscriptionStorage.prototype, 'putRawResponse')
+        .spyOn(
+          transcriptionStorageModule.FilesystemTranscriptionStorage.prototype,
+          'putRawResponse',
+        )
         .mockImplementation(async ({ transcriptId }: { transcriptId: string }) => ({
           uri: `local://transcripts/${transcriptId}.json`,
           bytes: 22,
@@ -448,6 +589,7 @@ describeHttpServerIntegrationSuite(
             provider: 'elevenlabs',
             audioTopology: 'mixed_recording',
             sttRequestProfile: 'mixed-recording-elevenlabs-scribe-v2-v1',
+            mediaPreparationVersion: 'recording-media-v1',
             speakerTracks: {
               uri: 'memory://transcripts/transcript-anna-speaker-tracks.json',
               transcripts: [
@@ -494,6 +636,7 @@ describeHttpServerIntegrationSuite(
           provider: 'elevenlabs',
           audioTopology: 'mixed_recording',
           sttRequestProfile: 'mixed-recording-elevenlabs-scribe-v2-v1',
+          mediaPreparationVersion: 'recording-media-v1',
         },
         createdAt: new Date('2024-01-02T00:00:00.000Z'),
         updatedAt: new Date('2024-01-02T00:00:00.000Z'),
@@ -560,6 +703,8 @@ describeHttpServerIntegrationSuite(
     });
 
     it('POST /recordings/upload matches cached transcript by effective provider when query omits sttProvider', async () => {
+      const media = await import('../src/infrastructure/recording-media.js');
+      const prepare = vi.mocked(media.prepareRecordingMedia);
       const listRecordingsBySha256 = vi.spyOn(
         recordingRepositoryModule,
         'listRecordingsBySha256ForWorkspace',
@@ -570,6 +715,11 @@ describeHttpServerIntegrationSuite(
       );
       const insertRecording = vi.spyOn(recordingRepositoryModule, 'insertRecording');
       const insertTranscript = vi.spyOn(transcriptRepositoryModule, 'insertTranscript');
+      const putAudio = vi.spyOn(
+        transcriptionStorageModule.FilesystemTranscriptionStorage.prototype,
+        'putAudio',
+      );
+      putAudio.mockClear();
       vi.spyOn(transcriptionStorageModule, 'createTranscriptionStorageForUri').mockReturnValueOnce({
         getText: vi.fn().mockResolvedValue('cached transcript'),
       } as never);
@@ -633,6 +783,7 @@ describeHttpServerIntegrationSuite(
             provider: 'elevenlabs',
             audioTopology: 'mixed_recording',
             sttRequestProfile: 'mixed-recording-elevenlabs-scribe-v2-v1',
+            mediaPreparationVersion: 'recording-media-v1',
           },
           createdAt: new Date('2024-01-02T00:05:00.000Z'),
           updatedAt: new Date('2024-01-02T00:05:00.000Z'),
@@ -653,6 +804,7 @@ describeHttpServerIntegrationSuite(
             provider: 'deepgram',
             audioTopology: 'mixed_recording',
             sttRequestProfile: 'support-override-mixed_recording-deepgram-v1',
+            mediaPreparationVersion: 'recording-media-v1',
           },
           createdAt: new Date('2024-01-01T00:05:00.000Z'),
           updatedAt: new Date('2024-01-01T00:05:00.000Z'),
@@ -720,8 +872,20 @@ describeHttpServerIntegrationSuite(
         cacheRecordingId: 'recording-elevenlabs',
       });
       expect(insertRecording).toHaveBeenCalledWith(
-        expect.objectContaining({ storageUri: null, audioLifecycle: 'not_retained' }),
+        expect.objectContaining({
+          storageUri: null,
+          audioLifecycle: 'not_retained',
+          mediaPreparationVersion: 'recording-media-v1',
+        }),
       );
+      expect(putAudio).not.toHaveBeenCalled();
+      const preparedSourcePath = prepare.mock.calls.at(-1)?.[0].sourcePath;
+      expect(preparedSourcePath).toEqual(expect.any(String));
+      await expect(
+        import('node:fs/promises').then((fs) => fs.stat(preparedSourcePath!)),
+      ).rejects.toMatchObject({
+        code: 'ENOENT',
+      });
     });
 
     it('POST /recordings/upload honors explicit sttProvider against mixed cached transcripts', async () => {
@@ -798,6 +962,7 @@ describeHttpServerIntegrationSuite(
             provider: 'deepgram',
             audioTopology: 'mixed_recording',
             sttRequestProfile: 'support-override-mixed_recording-deepgram-v1',
+            mediaPreparationVersion: 'recording-media-v1',
           },
           createdAt: new Date('2024-01-02T00:05:00.000Z'),
           updatedAt: new Date('2024-01-02T00:05:00.000Z'),
@@ -818,6 +983,7 @@ describeHttpServerIntegrationSuite(
             provider: 'elevenlabs',
             audioTopology: 'mixed_recording',
             sttRequestProfile: 'mixed-recording-elevenlabs-scribe-v2-v1',
+            mediaPreparationVersion: 'recording-media-v1',
           },
           createdAt: new Date('2024-01-01T00:05:00.000Z'),
           updatedAt: new Date('2024-01-01T00:05:00.000Z'),

@@ -23,7 +23,7 @@ Completion requires evidence that:
 
 1. A normal supported audio upload works end to end.
 2. Cheap-demux video works if the feasibility boundary below remains valid in the production FFmpeg image; only its extracted audio is retained remotely and its temporary source video is removed.
-3. The browser rejects a file larger than 100 MiB before upload, while the backend independently rejects oversize, corrupt, no-audio, and over-duration sources before paid STT.
+3. The browser rejects a file larger than the initial 2 GiB operational upload guard before upload, while the backend independently rejects oversize, disk-capacity-constrained, corrupt, no-audio, and over-duration sources before paid STT.
 4. Injected transient, ambiguous, and malformed STT failures recover automatically within the bounded retry policy.
 5. Concurrent duplicate enqueue cannot create parallel STT submissions for one recording attempt.
 6. Cross-tutor student resolution, recording, transcript, cache, retry, retrieval, and deletion access is denied, including legacy name-based student seams.
@@ -67,7 +67,7 @@ Do not add or reopen:
 ## 3. Locked product and architecture decisions
 
 1. ESL Pipeline supports 1:1 lessons only. ElevenLabs mixed requests use `numSpeakers: 2`; trusted split must contain exactly the expected Teacher and Student channels.
-2. Input size is capped at 100 MiB (`104857600` bytes) and probed duration at 100 minutes (`6000` seconds). The browser rejects a larger `File.size` before upload; backend streaming enforcement remains authoritative. Both limits must pass before paid STT.
+2. Probed duration is capped at 100 minutes (`6000` seconds). The initial uploaded-source operational guard is 2 GiB (`2147483648` bytes), configured by `RECORDINGS_MAX_FILE_SIZE`; it protects transport and spool capacity rather than defining lesson quality or duration. The browser rejects a larger `File.size` before upload and the backend remains authoritative. Before accepting a spool, the backend also requires enough free space on the ingest temporary filesystem to preserve the configured `RECORDINGS_DISK_RESERVE_BYTES` (initially 10 GiB / `10737418240` bytes) after one maximum-size upload.
 3. The normal route hides provider and topology concepts. Advanced trusted-split controls may remain collapsed for support/power users.
 4. Preserve supported source audio byte-for-byte as the retained artifact. For supported video containers, extract one already-supported audio stream with FFmpeg stream copy, retain only that extracted audio, and remove the temporary source video; never re-encode or upload source video.
 5. Reject unsupported or ambiguous media cleanly instead of adding general transcoding.
@@ -87,10 +87,10 @@ Do not add or reopen:
 
 ### Target flow
 
-1. In the browser, reject `File.size > 104857600` before starting the request and show the same 100 MB product-limit error used for backend rejection.
+1. In the browser, reject `File.size > 2147483648` before starting the request and show the 2 GiB operational upload-limit error used for backend rejection.
 2. Authenticate the tutor and resolve the tutor's primary workspace.
 3. Resolve the explicitly selected student by ID within that workspace; return a non-enumerating not-found response otherwise. Authenticated upload must not use global `student=` name lookup or `deriveStudentId(studentName)`.
-4. Stream the multipart part to a bounded temporary file while computing SHA-256 and byte count. Stop and clean up as soon as 100 MiB is exceeded.
+4. Before consuming multipart media, admit the request only when the ingest temporary filesystem has enough point-in-time free capacity for the configured maximum upload while retaining its reserve. Stream the multipart part to a bounded temporary file while computing SHA-256 and byte count. Stop and clean up as soon as the configured byte guard is exceeded.
 5. Probe the completed temporary file. Reject unsupported, corrupt, no-audio, multi-audio-stream, or over-100-minute input before storage and STT.
 6. For direct supported audio, keep the spooled audio unchanged as the candidate retained artifact. For an allowed video/audio-stream pair, stream-copy the selected audio stream to a second temporary file, re-probe it, and make the extracted audio the sole candidate retained artifact. Delete the temporary source video after successful extraction. On preparation failure, delete all temporary files, store nothing remotely, and return the deterministic failure.
 7. Compute the complete transcription/cache fingerprint from the candidate audio hash, probed media facts, topology, provider/request profile, language/model, and preparation version. Resolve cache only within the authenticated workspace before retained-audio storage and before transcription-run creation.
@@ -171,6 +171,12 @@ Add one migration, expected as `0049_recording_ingest_readiness.sql`, containing
 7. A unique transcript winner per recording after the duplicate audit.
 8. Corresponding `schema.sql` baseline and contract/version updates required by repository policy.
 
+The initially local `0049` checkpoint may already be checksum-recorded in development databases. In
+that case, preserve its immutability and add `0050_recording_media_preparation_version.sql` instead
+of editing it: nullable `recordings.media_preparation_version` is the durable owner of the canonical
+candidate's captured preparation semantics. Historical rows remain `NULL` and are never relabeled
+from a later worker deployment; initial and manual-retry queue payloads carry that stored value.
+
 Do not activate broad database RLS as part of this slice. Current production enforcement remains explicit application/query scoping; dormant RLS policy text is not a substitute for it.
 
 ## 6. Media ingest, probe, and preparation contract
@@ -213,12 +219,25 @@ The local read-only feasibility probe succeeded for synthetic MP4/AAC to M4A, MO
 
 ### Limit interaction
 
-1. Reject multipart input beyond 100 MiB before the upload finishes.
-2. Reject `File.size > 104857600` in the browser before creating the upload request. This is a convenience/safety guard for accidental 1–2 GB platform videos, not an authority boundary.
-3. Reject probed duration greater than 6000 seconds before storing or queueing.
-4. Also reject an extracted audio artifact beyond 100 MiB, though stream-copy extraction should normally reduce size.
-5. Do not estimate duration from bytes or trust client MIME/extension for acceptance.
-6. A file must satisfy both limits. A 99 MiB, 101-minute file fails duration; a 101 MiB, 20-minute file fails size. Backend streaming enforcement is authoritative even when the browser guard was bypassed.
+1. Reject multipart input beyond the configured 2 GiB initial operational guard before the upload finishes.
+2. Reject `File.size > 2147483648` in the browser before creating the upload request. This is a convenience/safety guard; backend streaming enforcement is authoritative.
+3. Before multipart consumption, reject admission when the temp filesystem cannot retain the configured 10 GiB reserve after one maximum-size upload. This is a point-in-time check, not a disk reservation: concurrent accepted uploads can consume the same observed capacity, so it does not promise a strict aggregate free-space floor.
+4. Reject probed duration greater than 6000 seconds before storing or queueing.
+5. Also reject an extracted audio artifact beyond the configured source-size guard, though stream-copy extraction should normally reduce size.
+6. Do not estimate duration from bytes or trust client MIME/extension for acceptance.
+7. A file must satisfy both operational byte/admission guards and the duration constraint. Backend enforcement remains authoritative even when the browser guard was bypassed.
+
+### Expected recording-source compatibility evidence
+
+Ordinary lesson exports are expected to originate from Zoom, Microsoft Teams, Google Meet, Yandex Telemost, LiveDigital, Jitsi, or OBS Studio, including video exports. This is an architectural compatibility direction, not certification of every current export mode. Slice 2 deliberately keeps its deterministic allowlist narrow until representative evidence supports additions.
+
+Before general release, run a source-compatibility campaign that:
+
+1. obtains representative exports or authoritative exact media facts for each expected source;
+2. probes them with `ffprobe` in the production image and records container, selected audio codec, stream topology, and typical size;
+3. adds only clearly necessary allowlist combinations and tests them; and
+4. records intentional exclusions, including unusually large or high-bitrate OBS captures; and
+5. obtains and probes a representative LiveDigital `.mkv` export before deciding whether its exact Matroska container, audio codec, stream count/layout, and typical size warrant allowlist support. The filename alone is not evidence of compatibility.
 
 ## 7. Retry, concurrency, and paid-call semantics
 
@@ -295,7 +314,8 @@ Map stable backend error codes to actions:
 
 | Error code                                | Tutor message/action                                                                                                              |
 | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `file_too_large`                          | Choose a recording under 100 MB.                                                                                                  |
+| `file_too_large`                          | Choose a source file at or below the configured 2 GiB operational upload limit.                                                  |
+| `insufficient_upload_capacity`            | The server is temporarily short of upload capacity; try again later.                                                              |
 | `recording_too_long`                      | Choose a lesson no longer than 100 minutes.                                                                                       |
 | `no_audio`                                | This file has no usable audio; choose the lesson recording with sound.                                                            |
 | `corrupt_media`                           | The recording appears damaged; play/export it again and re-upload.                                                                |
@@ -307,7 +327,7 @@ Map stable backend error codes to actions:
 
 Refresh, resume, polling, and SSE must all derive from the same run projection. While a retry is pending, they must not show terminal failure or enable manual retry. Once a usable transcript exists, remove the normal-user retry button and make the backend reject such requests.
 
-A cache-hit recording has no run and is immediately projected as ready for Source review with `audioLifecycle = 'not_retained'` and `audioAvailable = false`; refresh/resume must not invent queue or retry state or render an audio player. The browser applies the 100 MiB guard before upload and uses the same `file_too_large` product message, while preserving backend errors as authoritative.
+A cache-hit recording has no run and is immediately projected as ready for Source review with `audioLifecycle = 'not_retained'` and `audioAvailable = false`; refresh/resume must not invent queue or retry state or render an audio player. The browser applies the configured 2 GiB source-file guard before upload and uses the same `file_too_large` product message, while preserving backend errors as authoritative.
 
 ## 10. Implementation slices
 
@@ -342,7 +362,7 @@ These are reviewable commit boundaries, not mandatory PR boundaries. Prefer one 
 
 **Scope**
 
-1. Add the client-side 100 MiB preflight guard and replace backend upload buffering with authoritative bounded temp-file spooling and streaming storage.
+1. Add the client-side configured 2 GiB preflight guard and replace backend upload buffering with authoritative bounded temp-file spooling and streaming storage.
 2. Add the small FFprobe/FFmpeg boundary, typed probe failures, allowlist, stream-copy preparation, cleanup, and limits.
 3. Keep direct supported audio unchanged. For video, delete the local source after successful extraction/re-probe and make the extracted audio the only remotely retainable artifact; preparation failure stores nothing remotely.
 4. Resolve the complete same-workspace cache fingerprint after preparation identity is known but before storage/run creation. A hit cleans local files and creates lineage without audio/run/enqueue; a miss stores exactly one audio artifact.
@@ -353,7 +373,7 @@ These are reviewable commit boundaries, not mandatory PR boundaries. Prefer one 
 **Acceptance criteria**
 
 1. Process memory does not scale with file size during upload.
-2. `File.size > 104857600` is rejected before a browser request starts, and bypassing that guard still meets independent backend streaming rejection.
+2. `File.size > 2147483648` is rejected before a browser request starts, and bypassing that guard still meets independent backend streaming rejection.
 3. Oversize, over-duration, corrupt, no-audio, multi-audio-stream, and unsupported sources are rejected before retained-audio storage, queue/run creation, and paid STT.
 4. Supported direct audio is stored byte-identically as the one retained artifact.
 5. Allowed MP4/MOV/WebM fixtures stream-copy without codec/channel change, are re-probed, retain only extracted audio on a miss, and leave no source video locally or remotely.
@@ -363,7 +383,7 @@ These are reviewable commit boundaries, not mandatory PR boundaries. Prefer one 
 **Validation gates**
 
 1. Generated fixtures at limit boundaries plus corrupt/truncated/no-audio/multiple-audio cases.
-2. Browser no-request test for the 100 MiB guard plus backend memory/RSS regression test or bounded instrumentation using a near-100 MiB synthetic upload.
+2. Browser no-request test for the configured 2 GiB guard plus backend bounded-streaming instrumentation using a 100 MiB synthetic upload. The latter proves chunk-bounded architecture, not a product size limit.
 3. Exact production Docker runtime FFmpeg copy/probe integration gate; disable video acceptance if it fails.
 4. Trusted split mono/stereo/channel-order regression tests, including the completed atomic topology upload test.
 5. Terra/high review of media-policy determinism, subprocess safety, cleanup, and limit behavior.
@@ -381,7 +401,7 @@ These are reviewable commit boundaries, not mandatory PR boundaries. Prefer one 
 
 **Acceptance criteria**
 
-1. A near-100 MiB source reaches the adapter without whole-file heap growth.
+1. A synthetic large source reaches the adapter without whole-file heap growth.
 2. Each attempt gets a fresh URL with adequate expiry; logs never contain the signed URL.
 3. Direct audio and copied video-audio formats are submitted with correct provider semantics.
 4. No provider-live calls are required in tests; mocked contract tests assert URL/file request shape.
@@ -423,7 +443,7 @@ These are reviewable commit boundaries, not mandatory PR boundaries. Prefer one 
 
 1. Expose the stable run projection/error code in recording DTOs, polling/SSE, and resume payloads.
 2. Add Checking/Retrying states and terminal error/action copy.
-3. Consume the Slice 2 `File.size > 104857600` guard in the normal upload UI and render the shared `file_too_large` message; do not add a second size-policy implementation.
+3. Consume the Slice 2 `File.size > 2147483648` guard in the normal upload UI and render the shared `file_too_large` message; do not add a second size-policy implementation.
 4. Expose `audioLifecycle`/`audioAvailable`, render cache-hit `not_retained` recordings as ready without a run/audio control, and never synthesize processing state for them.
 5. Remove the successful/normal-user retry control; retain collapsed trusted-split controls only where already authorized.
 6. Ensure refresh/reconnect produces the same state as uninterrupted processing.
@@ -481,7 +501,7 @@ These are reviewable commit boundaries, not mandatory PR boundaries. Prefer one 
 1. Migration 0049 is additive until its guarded workspace backfill and constraints. Before deployment, run a production read-only preflight for recordings without resolvable student workspaces, duplicate transcripts, active legacy jobs, and storage-key distribution.
 2. Rehearse the migration on a current production snapshot/synthetic clone. Do not resolve ambiguous ownership automatically; stop for operator mapping or quarantine.
 3. Deploy compatible API and worker images together after migration. Do not let an old unscoped API remain active against the new tenant contract.
-4. Confirm runtime FFmpeg/ffprobe availability, writable temp capacity for `worker concurrency x 2 x 100 MiB` plus headroom, S3 Get/Put/Delete permissions, and presigned URL reachability from ElevenLabs.
+4. Confirm runtime FFmpeg/ffprobe availability, writable temp capacity for configured upload concurrency and the 2 GiB source-file operational limit plus the 10 GiB local-disk reserve, S3 Get/Put/Delete permissions, and presigned URL reachability from ElevenLabs.
 5. Enable ordinary audio first. Enable cheap video formats only after the exact production-image copy probe passes.
 6. Keep cleanup disabled initially, inspect candidate counts, run synthetic deletion, then enable it and verify confirmed audio becomes inaccessible/deleted while transcripts remain.
 7. Provider-live smoke and production mutation require separate explicit authorization.
@@ -499,7 +519,7 @@ These are reviewable commit boundaries, not mandatory PR boundaries. Prefer one 
 ### Update during implementation
 
 1. Active transcription/runtime docs and `packages/batch-backend`/STT package READMEs: fixed routes, request profiles, media policy, run/retry semantics, ownership, and retention.
-2. Environment reference/example: 100 MiB/100-minute policy where configurable, seven-day TTL, cleanup enablement, probe deadline/temp requirements, and provider submission prerequisites.
+2. Environment reference/example: configurable 2 GiB source-file operational limit, 10 GiB local-disk reserve, 100-minute duration policy, seven-day TTL, cleanup enablement, probe deadline/temp requirements, and provider submission prerequisites.
 3. API/frontend docs: normal upload states, stable error codes, no successful retry, advanced trusted split.
 4. Operations docs: migration preflight, queue/run inspection, submission-slot/latency/outcome logs, cleanup rehearsal, and rollback.
 
@@ -514,7 +534,7 @@ These are reviewable commit boundaries, not mandatory PR boundaries. Prefer one 
 
 ## 13. Explicit deferred work
 
-1. Any increase above 100 MiB or 100 minutes; revisit only with observed tutor files and capacity/cost evidence.
+1. Any increase above the configured 2 GiB operational source-file limit or 100 minutes; revisit only with observed tutor files and capacity/cost evidence.
 2. Additional container/codec pairs, audio-stream selection UI, or re-encoding/transcoding.
 3. Lessons with more than one student/tutor or speaker-count inference.
 4. Automatic topology/role inference, AEC, native capture, platform integrations, and realtime STT.

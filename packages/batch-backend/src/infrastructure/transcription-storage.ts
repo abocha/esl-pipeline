@@ -6,6 +6,7 @@ import { Readable, Transform } from 'node:stream';
 import { finished, pipeline } from 'node:stream/promises';
 
 import { S3StorageAdapter } from './s3-storage-adapter.js';
+import { logger } from './logger.js';
 import { createStorageConfigService, StorageConfigurationService } from './storage-config.js';
 
 const LOCAL_URI_PREFIX = 'local://';
@@ -56,11 +57,20 @@ export interface TranscriptionStorage {
   delete(uri: string): Promise<void>;
 }
 
+export interface FilesystemTranscriptionStorageDependencies {
+  writeAudio?: typeof writeStreamToFile;
+  removeAudioTarget?: (targetPath: string) => Promise<void>;
+}
+
 export class FilesystemTranscriptionStorage implements TranscriptionStorage {
   private baseDir: string;
+  private writeAudio: typeof writeStreamToFile;
+  private removeAudioTarget: (targetPath: string) => Promise<void>;
 
-  constructor(baseDir: string) {
+  constructor(baseDir: string, dependencies: FilesystemTranscriptionStorageDependencies = {}) {
     this.baseDir = path.resolve(baseDir);
+    this.writeAudio = dependencies.writeAudio ?? writeStreamToFile;
+    this.removeAudioTarget = dependencies.removeAudioTarget ?? removeOwnedLocalAudioTarget;
   }
 
   async putAudio(options: PutAudioOptions): Promise<StorageWriteResult> {
@@ -74,12 +84,18 @@ export class FilesystemTranscriptionStorage implements TranscriptionStorage {
     }
 
     const inputStream = options.stream ?? createReadStream(options.inputPath!);
-    const { bytes, sha256 } = await writeStreamToFile(inputStream, targetPath);
+    let written: { bytes: number; sha256: string };
+    try {
+      written = await this.writeAudio(inputStream, targetPath);
+    } catch (error) {
+      await this.cleanupFailedAudioTarget(targetPath, error);
+      throw error;
+    }
 
     return {
       uri: toLocalUri(relativePath),
-      bytes,
-      sha256,
+      bytes: written.bytes,
+      sha256: written.sha256,
     };
   }
 
@@ -157,6 +173,19 @@ export class FilesystemTranscriptionStorage implements TranscriptionStorage {
     }
     return resolved;
   }
+
+  private async cleanupFailedAudioTarget(targetPath: string, uploadError: unknown): Promise<void> {
+    try {
+      await this.removeAudioTarget(targetPath);
+    } catch (cleanupError) {
+      logger.error('Failed to remove owned local audio target after upload failure', {
+        event: 'recording_audio_local_upload_cleanup_failed',
+        targetPath,
+        uploadError: errorMessage(uploadError),
+        cleanupError: errorMessage(cleanupError),
+      });
+    }
+  }
 }
 
 export class S3TranscriptionStorage implements TranscriptionStorage {
@@ -181,17 +210,23 @@ export class S3TranscriptionStorage implements TranscriptionStorage {
     }
 
     const inputStream = options.stream ?? createReadStream(options.inputPath!);
-    const { bytes, sha256 } = await writeStreamToS3({
-      adapter: this.adapter,
-      key: targetKey,
-      input: inputStream,
-      mimeType: resolveAudioMimeType(extension),
-    });
+    let written: { bytes: number; sha256: string };
+    try {
+      written = await writeStreamToS3({
+        adapter: this.adapter,
+        key: targetKey,
+        input: inputStream,
+        mimeType: resolveAudioMimeType(extension),
+      });
+    } catch (error) {
+      await this.cleanupFailedAudioTarget(targetKey, error);
+      throw error;
+    }
 
     return {
       uri: toS3Uri(this.bucket, targetKey),
-      bytes,
-      sha256,
+      bytes: written.bytes,
+      sha256: written.sha256,
     };
   }
 
@@ -264,6 +299,21 @@ export class S3TranscriptionStorage implements TranscriptionStorage {
   private ensureBucket(bucket: string, uri: string): void {
     if (bucket !== this.bucket) {
       throw new Error(`Storage URI bucket mismatch: ${uri}`);
+    }
+  }
+
+  private async cleanupFailedAudioTarget(targetKey: string, uploadError: unknown): Promise<void> {
+    // buildWorkspaceAudioPath includes the fresh ingest-generated recording ID, so this exact key
+    // is exclusively owned by this recording write attempt and can be safely compensated.
+    try {
+      await this.adapter.deleteFile(targetKey);
+    } catch (cleanupError) {
+      logger.error('Failed to remove owned S3 audio target after upload failure', {
+        event: 'recording_audio_upload_compensation_failed',
+        key: targetKey,
+        uploadError: errorMessage(uploadError),
+        cleanupError: errorMessage(cleanupError),
+      });
     }
   }
 }
@@ -343,7 +393,8 @@ function normalizeExtension(extension: string): string {
 
 function resolveAudioMimeType(extension: string): string {
   switch (normalizeExtension(extension).toLowerCase()) {
-    case '.opus': {
+    case '.opus':
+    case '.ogg': {
       return 'audio/ogg';
     }
     case '.mp3': {
@@ -354,6 +405,12 @@ function resolveAudioMimeType(extension: string): string {
     }
     case '.m4a': {
       return 'audio/mp4';
+    }
+    case '.aac': {
+      return 'audio/aac';
+    }
+    case '.webm': {
+      return 'audio/webm';
     }
     default: {
       return 'application/octet-stream';
@@ -414,6 +471,14 @@ function isWithinBaseDir(baseDir: string, targetPath: string): boolean {
   const relative = path.relative(baseDir, targetPath);
   if (!relative) return true;
   return !relative.startsWith('..') && !path.isAbsolute(relative);
+}
+
+async function removeOwnedLocalAudioTarget(targetPath: string): Promise<void> {
+  await fs.rm(targetPath, { force: true });
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 async function writeStreamToFile(

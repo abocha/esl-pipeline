@@ -30,6 +30,7 @@ interface RecordingRow {
   duration_sec: number | null;
   channels: number | null;
   audio_topology: string | null;
+  media_preparation_version: string | null;
   audio_lifecycle: string;
   audio_deletion_requested_at: Date | null;
   audio_deleted_at: Date | null;
@@ -58,6 +59,7 @@ export interface InsertRecordingParams {
   durationSec?: number | null;
   channels?: number | null;
   audioTopology?: AudioInputTopology | null;
+  mediaPreparationVersion?: string | null;
   audioLifecycle?: AudioLifecycle;
   status: RecordingStatus;
   error?: string | null;
@@ -71,7 +73,7 @@ export async function getRecordingBySha256ForWorker(
     const result = await client.query(
       `
       SELECT id, workspace_id, source, student_id, source_path, storage_uri, sha256, bytes,
-             duration_sec, channels, audio_topology, audio_lifecycle,
+             duration_sec, channels, audio_topology, media_preparation_version, audio_lifecycle,
              audio_deletion_requested_at, audio_deleted_at, audio_deletion_attempt_count,
              audio_deletion_error_code, audio_deletion_next_attempt_at,
              status, error, created_at, updated_at
@@ -93,7 +95,7 @@ export async function listRecordingsBySha256ForWorker(sha256: string): Promise<R
     const result = await client.query(
       `
       SELECT id, workspace_id, source, student_id, source_path, storage_uri, sha256, bytes,
-             duration_sec, channels, audio_topology, audio_lifecycle,
+             duration_sec, channels, audio_topology, media_preparation_version, audio_lifecycle,
              audio_deletion_requested_at, audio_deleted_at, audio_deletion_attempt_count,
              audio_deletion_error_code, audio_deletion_next_attempt_at,
              status, error, created_at, updated_at
@@ -130,7 +132,7 @@ export async function getRecordingByIdForWorker(id: string): Promise<RecordingRe
     const result = await client.query(
       `
       SELECT id, workspace_id, source, student_id, source_path, storage_uri, sha256, bytes,
-             duration_sec, channels, audio_topology, audio_lifecycle,
+             duration_sec, channels, audio_topology, media_preparation_version, audio_lifecycle,
              audio_deletion_requested_at, audio_deleted_at, audio_deletion_attempt_count,
              audio_deletion_error_code, audio_deletion_next_attempt_at,
              status, error, created_at, updated_at
@@ -206,13 +208,14 @@ export async function insertRecording(
         duration_sec,
         channels,
         audio_topology,
+        media_preparation_version,
         audio_lifecycle,
         status,
         error,
         created_at,
         updated_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
       RETURNING
         id,
         workspace_id,
@@ -225,6 +228,7 @@ export async function insertRecording(
         duration_sec,
         channels,
         audio_topology,
+        media_preparation_version,
         audio_lifecycle,
         audio_deletion_requested_at, audio_deleted_at, audio_deletion_attempt_count,
         audio_deletion_error_code, audio_deletion_next_attempt_at,
@@ -245,6 +249,7 @@ export async function insertRecording(
         params.durationSec ?? null,
         params.channels ?? null,
         params.audioTopology ?? null,
+        params.mediaPreparationVersion ?? null,
         params.audioLifecycle ?? (params.storageUri ? 'retained' : 'not_retained'),
         params.status,
         params.error ?? null,
@@ -426,6 +431,7 @@ export async function listRecordings(
         r.duration_sec,
         r.channels,
         r.audio_topology,
+        r.media_preparation_version,
         r.audio_lifecycle,
         r.audio_deletion_requested_at,
         r.audio_deleted_at,
@@ -525,6 +531,7 @@ function mapRowToRecording(row: RecordingRow): RecordingRecord {
     durationSec: row.duration_sec ?? null,
     channels: row.channels ?? null,
     audioTopology: row.audio_topology ? AudioInputTopologySchema.parse(row.audio_topology) : null,
+    mediaPreparationVersion: row.media_preparation_version ?? null,
     audioLifecycle: AudioLifecycleSchema.parse(row.audio_lifecycle),
     audioDeletionRequestedAt: row.audio_deletion_requested_at ?? null,
     audioDeletedAt: row.audio_deleted_at ?? null,
