@@ -19,14 +19,20 @@ import {
 export interface UploadRecordingOptions {
   workspaceId: string;
   filename: string;
-  stream: Readable;
+  stream?: Readable;
+  inputPath?: string;
   sourcePath?: string | null;
   studentId?: string | null;
   sttProvider?: SttProviderId;
   audioTopology?: AudioInputTopology;
+  mediaPreparationVersion?: string;
   storage: TranscriptionStorage;
   repository: RecordingRepository;
-  enqueue: (payload: { recordingId: string; sttProvider?: SttProviderId }) => Promise<void>;
+  enqueue: (payload: {
+    recordingId: string;
+    sttProvider?: SttProviderId;
+    mediaPreparationVersion?: string;
+  }) => Promise<void>;
 }
 
 export interface RecordingRepository {
@@ -47,6 +53,7 @@ export async function ingestRecordingUpload(
     workspaceId: options.workspaceId,
     recordingId,
     stream: options.stream,
+    inputPath: options.inputPath,
     extension,
   });
 
@@ -60,6 +67,7 @@ export async function ingestRecordingUpload(
     sha256: storageResult.sha256 ?? null,
     bytes: storageResult.bytes,
     audioTopology: options.audioTopology ?? 'mixed_recording',
+    mediaPreparationVersion: options.mediaPreparationVersion ?? null,
     status: 'queued',
   });
 
@@ -67,6 +75,9 @@ export async function ingestRecordingUpload(
     await options.enqueue({
       recordingId,
       sttProvider: options.sttProvider,
+      ...(record.mediaPreparationVersion === null || record.mediaPreparationVersion === undefined
+        ? {}
+        : { mediaPreparationVersion: record.mediaPreparationVersion }),
     });
   } catch (error) {
     await options.repository.updateRecordingStatus({
@@ -83,11 +94,13 @@ export async function ingestRecordingUpload(
 export async function ingestRecordingUploadWithDefaults(params: {
   workspaceId: string;
   filename: string;
-  stream: Readable;
+  stream?: Readable;
+  inputPath?: string;
   sourcePath?: string | null;
   studentId?: string | null;
   sttProvider?: SttProviderId;
   audioTopology?: AudioInputTopology;
+  mediaPreparationVersion?: string;
   storage?: TranscriptionStorage;
 }): Promise<RecordingRecord> {
   const storage = params.storage ?? createTranscriptionStorage();
@@ -101,10 +114,12 @@ export async function ingestRecordingUploadWithDefaults(params: {
     workspaceId: params.workspaceId,
     filename: params.filename,
     stream: params.stream,
+    inputPath: params.inputPath,
     sourcePath: params.sourcePath,
     studentId: params.studentId,
     sttProvider: params.sttProvider,
     audioTopology: params.audioTopology,
+    mediaPreparationVersion: params.mediaPreparationVersion,
     storage,
     repository,
     enqueue: queue.enqueue,

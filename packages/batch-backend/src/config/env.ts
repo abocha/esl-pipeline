@@ -10,6 +10,10 @@ import type {
   GenerationQuotaSource,
   SttProviderId,
 } from '@esl-pipeline/contracts';
+import {
+  DEFAULT_RECORDING_UPLOAD_DISK_RESERVE_BYTES,
+  DEFAULT_RECORDING_UPLOAD_MAX_BYTES,
+} from '@esl-pipeline/contracts';
 import { readBool, readInt, readString } from '@esl-pipeline/shared-infrastructure';
 
 export type GenerationSafetyMode = 'off' | 'warn' | 'hard_stop';
@@ -59,6 +63,7 @@ export interface BatchBackendConfig {
   };
   recordings: {
     maxFileSize: number;
+    diskReserveBytes: number;
   };
   deepgram: {
     apiKey?: string;
@@ -403,7 +408,14 @@ export function loadConfig(): BatchBackendConfig {
   const studentMemoryMaxConcurrency = readInt('STUDENT_MEMORY_MAX_CONCURRENCY', 2);
   const studentMemoryOpenAiBatchEnabled = readBool('STUDENT_MEMORY_OPENAI_BATCH_ENABLED', false);
 
-  const recordingsMaxFileSize = readInt('RECORDINGS_MAX_FILE_SIZE', 100 * 1024 * 1024);
+  const recordingsMaxFileSize = readInt(
+    'RECORDINGS_MAX_FILE_SIZE',
+    DEFAULT_RECORDING_UPLOAD_MAX_BYTES,
+  );
+  const recordingsDiskReserveBytes = readInt(
+    'RECORDINGS_DISK_RESERVE_BYTES',
+    DEFAULT_RECORDING_UPLOAD_DISK_RESERVE_BYTES,
+  );
   const transcribeMode = readString('TRANSCRIBE_MODE', 'timeline') as 'timeline' | 'stack';
   if (transcribeMode !== 'timeline' && transcribeMode !== 'stack') {
     throw new Error('TRANSCRIBE_MODE must be "timeline" or "stack"');
@@ -845,6 +857,7 @@ export function loadConfig(): BatchBackendConfig {
     },
     recordings: {
       maxFileSize: recordingsMaxFileSize,
+      diskReserveBytes: recordingsDiskReserveBytes,
     },
     deepgram: {
       apiKey: deepgramApiKey,

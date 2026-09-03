@@ -649,6 +649,7 @@ CREATE TABLE public.recordings (
     audio_deletion_attempt_count integer DEFAULT 0 NOT NULL,
     audio_deletion_error_code text,
     audio_deletion_next_attempt_at timestamp with time zone,
+    media_preparation_version text,
     CONSTRAINT recordings_audio_deletion_attempt_count_check CHECK ((audio_deletion_attempt_count >= 0)),
     CONSTRAINT recordings_audio_lifecycle_check CHECK ((audio_lifecycle = ANY (ARRAY['not_retained'::text, 'retained'::text, 'pending'::text, 'deleting'::text, 'deleted'::text, 'delete_failed'::text]))),
     CONSTRAINT recordings_audio_lifecycle_uri_check CHECK ((((audio_lifecycle = ANY (ARRAY['not_retained'::text, 'deleted'::text])) AND (storage_uri IS NULL)) OR ((audio_lifecycle = ANY (ARRAY['retained'::text, 'pending'::text, 'deleting'::text, 'delete_failed'::text])) AND (storage_uri IS NOT NULL)))),
@@ -2017,5 +2018,6 @@ VALUES
   ('0046_jobs_publication_sequence', '9b63588b48faf38aef14df9c9f9dd8f94b9e554f5a1044d081dad9e2e6bf9595', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0047_jobs_published_content_hash', '06508beba68bbd9b5141f76d7a69539385968f382736f53885cb1add81c8428c', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0048_recording_audio_topology', 'a426012df6f20d3a16962e004fef79e1f00e85da70557606b440e906aea4f0be', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0049_recording_ingest_readiness', '46c6544bd299ace4c46445761788b8d1acaa5e5d64bbbd7a1e943f2306d8636d', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0049_recording_ingest_readiness', '46c6544bd299ace4c46445761788b8d1acaa5e5d64bbbd7a1e943f2306d8636d', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0050_recording_media_preparation_version', 'ddfcb6bfbc7fc740b6642361ef15fdd96fcb868ce358dcdee7cc2d5ce2dc5c15', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;

@@ -26,7 +26,11 @@ export interface RetryRecordingDependencies {
     updateStatus: typeof updateRecordingStatus;
     updateAudioTopology?: typeof updateRecordingAudioTopology;
   };
-  enqueue: (payload: { recordingId: string; sttProvider?: SttProviderId }) => Promise<void>;
+  enqueue: (payload: {
+    recordingId: string;
+    sttProvider?: SttProviderId;
+    mediaPreparationVersion?: string;
+  }) => Promise<void>;
   publishEvent: typeof publishRecordingEvent;
 }
 
@@ -80,7 +84,10 @@ export async function retryRecordingTranscription(
   try {
     await enqueue({
       recordingId: topologyRecording.id,
-      sttProvider: params.sttProvider,
+      ...(params.sttProvider === undefined ? {} : { sttProvider: params.sttProvider }),
+      ...(recording.mediaPreparationVersion === null || recording.mediaPreparationVersion === undefined
+        ? {}
+        : { mediaPreparationVersion: recording.mediaPreparationVersion }),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

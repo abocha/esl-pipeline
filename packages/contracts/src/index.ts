@@ -26,6 +26,11 @@ export type PublishTarget = 'html';
 
 export type RecordingStatus = 'ingested' | 'queued' | 'transcribing' | 'transcribed' | 'failed';
 
+/** Initial product-facing upload guard; backend may be configured more conservatively. */
+export const DEFAULT_RECORDING_UPLOAD_MAX_BYTES = 2_147_483_648;
+/** Local ingest must leave this much disk space after admitting one maximum-size upload. */
+export const DEFAULT_RECORDING_UPLOAD_DISK_RESERVE_BYTES = 10_737_418_240;
+
 export interface VoiceOption {
   id: string;
   name: string;

@@ -24,6 +24,8 @@ export interface RecordingRecord {
   durationSec?: number | null;
   channels?: number | null;
   audioTopology?: AudioInputTopology | null;
+  /** Preparation semantics used to create this recording's canonical media candidate. */
+  mediaPreparationVersion?: string | null;
   audioLifecycle: AudioLifecycle;
   audioDeletionRequestedAt?: Date | null;
   audioDeletedAt?: Date | null;

@@ -33,7 +33,7 @@ describe('application/ingest-recording-upload', () => {
 
     const storage = new FilesystemTranscriptionStorage(uploadDir);
     const repo = createInMemoryRecordingRepository();
-    const enqueued: string[] = [];
+    const enqueued: { recordingId: string; mediaPreparationVersion?: string }[] = [];
 
     const record = await ingestRecordingUpload({
       workspaceId: 'workspace-1',
@@ -41,17 +41,26 @@ describe('application/ingest-recording-upload', () => {
       sourcePath: 'lesson.opus',
       stream: Readable.from([Buffer.from('audio-data')]),
       studentId: 'student-1',
+      mediaPreparationVersion: 'recording-media-vA',
       storage,
       repository: repo,
-      enqueue: async ({ recordingId }) => {
-        enqueued.push(recordingId);
+      enqueue: async ({ recordingId, mediaPreparationVersion }) => {
+        enqueued.push({ recordingId, mediaPreparationVersion });
       },
     });
 
     expect(record.source).toBe('upload');
     expect(repo.inserted[0]?.audioTopology).toBe('mixed_recording');
+    expect(
+      (repo.inserted[0] as (typeof repo.inserted)[number] & {
+        mediaPreparationVersion?: string | null;
+      })?.mediaPreparationVersion,
+    ).toBe('recording-media-vA');
+    expect(record).toMatchObject({ mediaPreparationVersion: 'recording-media-vA' });
     expect(record.studentId).toBe('student-1');
-    expect(enqueued).toEqual([record.id]);
+    expect(enqueued).toEqual([
+      { recordingId: record.id, mediaPreparationVersion: 'recording-media-vA' },
+    ]);
     expect(record.storageUri).toBe(
       `local://workspaces/workspace-1/recordings/${record.id}/audio.opus`,
     );
@@ -80,6 +89,9 @@ function createInMemoryRecordingRepository(): RecordingRepository & {
         sourcePath: params.sourcePath ?? null,
         storageUri: params.storageUri,
         audioLifecycle: params.audioLifecycle ?? 'retained',
+        mediaPreparationVersion: (
+          params as typeof params & { mediaPreparationVersion?: string | null }
+        ).mediaPreparationVersion,
         sha256: params.sha256 ?? null,
         bytes: params.bytes,
         durationSec: params.durationSec ?? null,

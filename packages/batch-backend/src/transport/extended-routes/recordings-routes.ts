@@ -63,6 +63,13 @@ import { FileSanitizationError } from '../../infrastructure/file-sanitization-se
 import { FileValidationError } from '../../infrastructure/file-validation-service.js';
 import { logger } from '../../infrastructure/logger.js';
 import {
+  ensureRecordingUploadCapacity,
+  prepareRecordingMedia,
+  RecordingMediaError,
+  spoolRecordingUpload,
+  validateTrustedSplitChannels,
+} from '../../infrastructure/recording-media.js';
+import {
   createTranscriptionStorageForUri,
   type TranscriptionStorage,
 } from '../../infrastructure/transcription-storage.js';
@@ -138,8 +145,17 @@ export function registerRecordingRoutes(
           });
         }
 
+        // This is deliberately before multipart consumption. It is a point-in-time local check,
+        // not a concurrent disk reservation; the configured maximum is the admission budget.
+        await ensureRecordingUploadCapacity({
+          maxBytes: config.recordings.maxFileSize,
+          reserveBytes: config.recordings.diskReserveBytes,
+        });
+
         const file = await (request as RecordingUploadRequest).file({
-          limits: { fileSize: config.recordings.maxFileSize },
+          // The spool remains authoritative. This ceiling only prevents the multipart parser
+          // retaining an unbounded remainder after the spool has rejected it.
+          limits: { fileSize: config.recordings.maxFileSize + 1 },
           throwFileSizeLimit: false,
         });
 
@@ -177,173 +193,171 @@ export function registerRecordingRoutes(
         );
 
         const filename = file.filename || '';
-        const fileBuffer = await readFileBuffer(file.file);
-        if (isStreamTruncated(file.file)) {
-          return reply.code(413).send({
-            error: 'validation_failed',
-            message: `Recording exceeds max size (${formatBytes(config.recordings.maxFileSize)}).`,
-            code: 'file_too_large',
+        const spooled = await spoolRecordingUpload({
+          input: file.file,
+          maxBytes: config.recordings.maxFileSize,
+          diskReserveBytes: config.recordings.diskReserveBytes,
+        });
+        let prepared;
+        try {
+          prepared = await prepareRecordingMedia({
+            sourcePath: spooled.path,
+            sourceSha256: spooled.sha256,
+            sourceBytes: spooled.bytes,
+            maxOutputBytes: config.recordings.maxFileSize,
           });
-        }
-
-        let validationResult;
-        if (recordingUploadValidationService) {
-          validationResult = await recordingUploadValidationService.validateFile(
-            fileBuffer,
-            filename,
-          );
-          if (!validationResult.isValid) {
-            logger.warn('Recording upload validation failed', {
-              event: 'recording_upload_validation_failed',
-              userId: authenticatedUser.id,
-              filename,
-              errors: validationResult.errors.map((e: { code: string }) => e.code),
-              warnings: validationResult.warnings.map((w: { code: string }) => w.code),
-            });
-
-            return reply.code(400).send({
-              error: 'validation_failed',
-              message: 'File validation failed',
-              code: 'file_validation_failed',
-              details: {
-                errors: validationResult.errors,
-                warnings: validationResult.warnings,
-              },
+          if (audioTopology === 'trusted_split_channels') {
+            validateTrustedSplitChannels({
+              channels: prepared.facts.channels,
+              channelLayout: prepared.facts.channelLayout,
             });
           }
-        }
 
-        const sanitizedFilename = sanitizeRecordingFilename(filename);
-        const storageFilename = sanitizedFilename.replaceAll(/[^\w.-]/g, '_');
-        const sourcePath = storageFilename || sanitizedFilename || filename;
-        const fileSha256 = createContentSha256(fileBuffer);
+          const sanitizedFilename = sanitizeRecordingFilename(filename);
+          const storageFilename = sanitizedFilename.replaceAll(/[^\w.-]/g, '_');
+          const sourcePath = storageFilename || sanitizedFilename || filename;
+          const fileSha256 = prepared.sha256;
 
-        const cachedRecordings = await listRecordingsBySha256ForWorkspace(fileSha256, workspaceId);
-        if (cachedRecordings.length > 0) {
-          const latestTranscripts = await listLatestTranscriptsByRecordingIdsForWorkspace(
-            cachedRecordings.map((recording) => recording.id),
+          const cachedRecordings = await listRecordingsBySha256ForWorkspace(
+            fileSha256,
             workspaceId,
           );
-          const transcriptByRecordingId = new Map(
-            latestTranscripts.map((transcript) => [transcript.recordingId, transcript] as const),
-          );
-          let transcriptCandidates = 0;
-          let providerMatches = 0;
-          let providerUnknown = 0;
-
-          for (const cachedRecording of cachedRecordings) {
-            if (cachedRecording.audioTopology !== audioTopology) {
-              continue;
-            }
-            const cachedTranscript = transcriptByRecordingId.get(cachedRecording.id);
-            if (!cachedTranscript) {
-              continue;
-            }
-
-            transcriptCandidates += 1;
-            const cachedProvider = inferTranscriptSttProvider(cachedTranscript);
-            if (cachedProvider === null) {
-              providerUnknown += 1;
-              continue;
-            }
-
-            if (
-              !shouldReuseCachedTranscriptForFingerprint({
-                effectiveProvider: effectiveSttProvider,
-                audioTopology,
-                sttRequestProfile: route.profile,
-                mode: config.transcription.mode,
-                model: expectedFingerprint.model,
-                language: expectedFingerprint.language,
-                transcript: cachedTranscript,
-              })
-            ) {
-              continue;
-            }
-
-            providerMatches += 1;
-            const recordingForResponse = await cloneCachedRecordingForStudent({
-              cachedRecording,
-              cachedTranscript,
+          if (cachedRecordings.length > 0) {
+            const latestTranscripts = await listLatestTranscriptsByRecordingIdsForWorkspace(
+              cachedRecordings.map((recording) => recording.id),
               workspaceId,
-              studentId,
-              sourcePath,
-              sha256: fileSha256,
-              audioTopology,
-              storage: transcriptionStorage,
-            });
-            logger.info('Recording upload cache hit', {
-              event: 'recording_upload_cache_hit',
+            );
+            const transcriptByRecordingId = new Map(
+              latestTranscripts.map((transcript) => [transcript.recordingId, transcript] as const),
+            );
+            let transcriptCandidates = 0;
+            let providerMatches = 0;
+            let providerUnknown = 0;
+
+            for (const cachedRecording of cachedRecordings) {
+              if (cachedRecording.audioTopology !== audioTopology) {
+                continue;
+              }
+              const cachedTranscript = transcriptByRecordingId.get(cachedRecording.id);
+              if (!cachedTranscript) {
+                continue;
+              }
+
+              transcriptCandidates += 1;
+              const cachedProvider = inferTranscriptSttProvider(cachedTranscript);
+              if (cachedProvider === null) {
+                providerUnknown += 1;
+                continue;
+              }
+
+              if (
+                !shouldReuseCachedTranscriptForFingerprint({
+                  effectiveProvider: effectiveSttProvider,
+                  audioTopology,
+                  sttRequestProfile: route.profile,
+                  mode: config.transcription.mode,
+                  model: expectedFingerprint.model,
+                  language: expectedFingerprint.language,
+                  preparationVersion: prepared.preparationVersion,
+                  transcript: cachedTranscript,
+                })
+              ) {
+                continue;
+              }
+
+              providerMatches += 1;
+              const recordingForResponse = await cloneCachedRecordingForStudent({
+                cachedRecording,
+                cachedTranscript,
+                workspaceId,
+                studentId,
+                sourcePath,
+                sha256: fileSha256,
+                bytes: prepared.bytes,
+                audioTopology,
+                mediaPreparationVersion: prepared.preparationVersion,
+                storage: transcriptionStorage,
+              });
+              logger.info('Recording upload cache hit', {
+                event: 'recording_upload_cache_hit',
+                route: routePath,
+                userId: authenticatedUser.id,
+                recordingId: recordingForResponse.recording.id,
+                transcriptId: recordingForResponse.transcript.id,
+                cacheRecordingId: cachedRecording.id,
+                clonedForStudent: recordingForResponse.recording.id !== cachedRecording.id,
+                filename,
+                sha256: fileSha256,
+                requestedProvider: requestedSttProvider ?? null,
+                effectiveProvider: effectiveSttProvider,
+                cachedProvider,
+                candidateRecordings: cachedRecordings.length,
+                candidateTranscripts: transcriptCandidates,
+                providerMatches,
+              });
+
+              return reply.code(200).send({
+                ...recordingToDto({
+                  ...recordingForResponse.recording,
+                  transcriptId: recordingForResponse.transcript.id,
+                }),
+                cacheHit: true,
+                cacheReason: 'transcript_reused',
+                cacheRecordingId: cachedRecording.id,
+              });
+            }
+
+            logger.info('Recording upload cache bypassed', {
+              event: 'recording_upload_cache_bypassed',
               route: routePath,
               userId: authenticatedUser.id,
-              recordingId: recordingForResponse.recording.id,
-              transcriptId: recordingForResponse.transcript.id,
-              cacheRecordingId: cachedRecording.id,
-              clonedForStudent: recordingForResponse.recording.id !== cachedRecording.id,
               filename,
               sha256: fileSha256,
               requestedProvider: requestedSttProvider ?? null,
               effectiveProvider: effectiveSttProvider,
-              cachedProvider,
               candidateRecordings: cachedRecordings.length,
               candidateTranscripts: transcriptCandidates,
               providerMatches,
-            });
-
-            return reply.code(200).send({
-              ...recordingToDto({
-                ...recordingForResponse.recording,
-                transcriptId: recordingForResponse.transcript.id,
-              }),
-              cacheHit: true,
-              cacheReason: 'transcript_reused',
-              cacheRecordingId: cachedRecording.id,
+              providerUnknown,
             });
           }
 
-          logger.info('Recording upload cache bypassed', {
-            event: 'recording_upload_cache_bypassed',
+          const record = await ingestRecordingUpload({
+            // Storage naming follows probed/prepared facts, never the untrusted original extension.
+            filename: `audio${prepared.extension}`,
+            workspaceId,
+            inputPath: prepared.path,
+            sourcePath,
+            studentId,
+            sttProvider: requestedSttProvider,
+            audioTopology,
+            mediaPreparationVersion: prepared.preparationVersion,
+            storage: transcriptionStorage,
+            repository: {
+              insertRecording,
+              updateRecordingStatus,
+            },
+            enqueue: transcribeQueue.enqueue,
+          });
+
+          logger.info('Recording uploaded', {
+            event: 'recording_uploaded',
             route: routePath,
             userId: authenticatedUser.id,
+            recordingId: record.id,
             filename,
-            sha256: fileSha256,
-            requestedProvider: requestedSttProvider ?? null,
-            effectiveProvider: effectiveSttProvider,
-            candidateRecordings: cachedRecordings.length,
-            candidateTranscripts: transcriptCandidates,
-            providerMatches,
-            providerUnknown,
+            sanitizedFilename,
+            bytes: record.bytes,
+            storageProvider: storageConfig.getProvider(),
           });
+
+          return reply.code(201).send(recordingToDto(record));
+        } finally {
+          // Direct audio and extracted video have exactly one candidate path. Both are local-only
+          // after storage and must disappear even when cache cloning or persistence fails.
+          await prepared?.cleanup();
+          await spooled.cleanup().catch(() => undefined);
         }
-
-        const record = await ingestRecordingUpload({
-          filename: storageFilename || sanitizedFilename || filename,
-          workspaceId,
-          stream: Readable.from(fileBuffer),
-          sourcePath,
-          studentId,
-          sttProvider: requestedSttProvider,
-          audioTopology,
-          storage: transcriptionStorage,
-          repository: {
-            insertRecording,
-            updateRecordingStatus,
-          },
-          enqueue: transcribeQueue.enqueue,
-        });
-
-        logger.info('Recording uploaded', {
-          event: 'recording_uploaded',
-          route: routePath,
-          userId: authenticatedUser.id,
-          recordingId: record.id,
-          filename,
-          sanitizedFilename,
-          bytes: record.bytes,
-          storageProvider: storageConfig.getProvider(),
-        });
-
-        return reply.code(201).send(recordingToDto(record));
       } catch (error: unknown) {
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
@@ -361,6 +375,14 @@ export function registerRecordingRoutes(
         }
         if (error instanceof TranscriptionRouteError) {
           return errorResponse(reply, 'validation_failed', {
+            message: error.message,
+            code: error.code,
+          });
+        }
+        if (error instanceof RecordingMediaError) {
+          const status = error.code === 'file_too_large' ? 413 : 400;
+          return reply.code(status).send({
+            error: 'validation_failed',
             message: error.message,
             code: error.code,
           });
@@ -1509,7 +1531,9 @@ async function cloneCachedRecordingForStudent(params: {
   studentId: string;
   sourcePath: string;
   sha256: string;
+  bytes: number;
   audioTopology: import('@esl-pipeline/contracts').AudioInputTopology;
+  mediaPreparationVersion: string;
   storage: TranscriptionStorage;
 }) {
   const recordingId = randomUUID();
@@ -1535,10 +1559,11 @@ async function cloneCachedRecordingForStudent(params: {
         storageUri: null,
         audioLifecycle: 'not_retained',
         sha256: params.sha256,
-        bytes: params.cachedRecording.bytes,
+        bytes: params.bytes,
         durationSec: params.cachedRecording.durationSec,
         channels: params.cachedRecording.channels,
         audioTopology: params.audioTopology,
+        mediaPreparationVersion: params.mediaPreparationVersion,
         status: 'transcribed',
         error: null,
       },
@@ -1574,7 +1599,9 @@ async function cloneCachedRecordingForStudent(params: {
       try {
         await params.storage.delete(uri);
       } catch (cleanupError) {
-        failures.push(`${uri}: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`);
+        failures.push(
+          `${uri}: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`,
+        );
       }
     }
     if (failures.length > 0) {
@@ -1584,9 +1611,12 @@ async function cloneCachedRecordingForStudent(params: {
         transcriptId,
         failures,
       });
-      throw new Error('Cache lineage persistence failed and clone artifact cleanup was incomplete', {
-        cause: error,
-      });
+      throw new Error(
+        'Cache lineage persistence failed and clone artifact cleanup was incomplete',
+        {
+          cause: error,
+        },
+      );
     }
     throw error;
   }
@@ -1600,7 +1630,8 @@ async function cloneSpeakerTrackArtifacts(params: {
 }): Promise<Record<string, unknown> | null> {
   if (!params.summaryJson) return null;
   const speakerTracks = params.summaryJson.speakerTracks;
-  if (!speakerTracks || typeof speakerTracks !== 'object') return structuredClone(params.summaryJson);
+  if (!speakerTracks || typeof speakerTracks !== 'object')
+    return structuredClone(params.summaryJson);
   const typed = speakerTracks as { transcripts?: unknown; speakers?: unknown };
   if (!Array.isArray(typed.transcripts)) return structuredClone(params.summaryJson);
   const transcripts = [];

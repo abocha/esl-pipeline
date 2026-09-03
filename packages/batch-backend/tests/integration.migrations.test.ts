@@ -367,6 +367,48 @@ describe('integration/migrations', () => {
   );
 
   it(
+    '0050 adds a nullable preparation identity without inventing one for historical recordings',
+    async () => {
+      await withAdminClient(async (pool) => {
+        await applyMigrationsThrough(pool, '0049_recording_ingest_readiness');
+        const workspaceId = '10000000-0000-4000-8000-000000000050';
+        const studentId = '20000000-0000-4000-8000-000000000050';
+        await pool.query(`INSERT INTO workspaces (id, name) VALUES ($1, 'Tutor C')`, [workspaceId]);
+        await pool.query(
+          `INSERT INTO students (id, student, workspace_id) VALUES ($1, 'Alex', $2)`,
+          [studentId, workspaceId],
+        );
+        await pool.query(
+          await fs.readFile(
+            path.join(migrationsPath, '0050_recording_media_preparation_version.sql'),
+            'utf8',
+          ),
+        );
+        await pool.query(
+          `INSERT INTO recordings
+             (id, workspace_id, source, student_id, storage_uri, audio_lifecycle, bytes, status,
+              media_preparation_version)
+           VALUES
+             ('30000000-0000-4000-8000-000000000050', $1, 'upload', $2,
+              's3://audio/historical.opus', 'retained', 10, 'failed', NULL),
+             ('30000000-0000-4000-8000-000000000051', $1, 'upload', $2,
+              's3://audio/prepared.opus', 'retained', 10, 'queued', 'recording-media-v1')`,
+          [workspaceId, studentId],
+        );
+
+        const rows = await pool.query(
+          `SELECT media_preparation_version FROM recordings ORDER BY id ASC`,
+        );
+        expect(rows.rows.map((row) => row.media_preparation_version)).toEqual([
+          null,
+          'recording-media-v1',
+        ]);
+      });
+    },
+    testTimeout,
+  );
+
+  it(
     'generated schema baseline matches current migration output',
     async () => {
       const expected = await generateSchemaBaselineSql(connectionString);
