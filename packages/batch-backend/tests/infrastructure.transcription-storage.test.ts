@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { StorageConfigurationService } from '@esl-pipeline/shared-infrastructure';
 
 import {
+  DEFAULT_PROVIDER_SUBMISSION_URL_EXPIRY_SECONDS,
   createTranscriptionStorageForUri,
   FilesystemTranscriptionStorage,
   S3TranscriptionStorage,
@@ -117,6 +118,78 @@ describe('infrastructure/transcription-storage', () => {
     expect(stored.equals(content)).toBe(true);
   });
 
+  it.each([
+    ['.mp3', 'audio/mpeg'],
+    ['.wav', 'audio/wav'],
+    ['.aac', 'audio/aac'],
+    ['.m4a', 'audio/mp4'],
+    ['.ogg', 'audio/ogg'],
+    ['.webm', 'audio/webm'],
+  ])(
+    'returns a file-backed provider source for %s with its prepared media identity',
+    async (extension, contentType) => {
+      tempDir = await createTempDir();
+      const relativePath = path.join(
+        'workspaces',
+        'workspace-1',
+        'recordings',
+        'recording-1',
+        `audio${extension}`,
+      );
+      const targetPath = path.join(tempDir, relativePath);
+      await fs.mkdir(path.dirname(targetPath), { recursive: true });
+      await fs.writeFile(targetPath, 'synthetic audio');
+      const storage = new FilesystemTranscriptionStorage(tempDir);
+
+      const source = await storage.getProviderSubmissionSource(
+        `local://${relativePath.replaceAll('\\', '/')}`,
+      );
+
+      expect(source).toEqual({
+        kind: 'file',
+        path: targetPath,
+        filename: `audio${extension}`,
+        contentType,
+        contentLength: Buffer.byteLength('synthetic audio'),
+      });
+    },
+  );
+
+  it('keeps local provider source construction bounded for a large retained file', async () => {
+    tempDir = await createTempDir();
+    const relativePath = 'workspaces/workspace-1/recordings/large/audio.m4a';
+    const targetPath = path.join(tempDir, relativePath);
+    await fs.mkdir(path.dirname(targetPath), { recursive: true });
+    const handle = await fs.open(targetPath, 'w');
+    try {
+      await handle.truncate(128 * 1024 * 1024);
+    } finally {
+      await handle.close();
+    }
+    const storage = new FilesystemTranscriptionStorage(tempDir);
+
+    const source = await storage.getProviderSubmissionSource(`local://${relativePath}`);
+
+    expect(source.kind).toBe('file');
+    expect(source).toMatchObject({
+      path: targetPath,
+      filename: 'audio.m4a',
+      contentType: 'audio/mp4',
+      contentLength: 128 * 1024 * 1024,
+    });
+  });
+
+  it('fails before provider submission when the retained local file is missing', async () => {
+    tempDir = await createTempDir();
+    const storage = new FilesystemTranscriptionStorage(tempDir);
+
+    await expect(
+      storage.getProviderSubmissionSource(
+        'local://workspaces/workspace-1/recordings/missing/audio.mp3',
+      ),
+    ).rejects.toThrow(/provider submission/i);
+  });
+
   it('removes a partial local audio target when its source stream fails', async () => {
     tempDir = await createTempDir();
     const storage = new FilesystemTranscriptionStorage(tempDir);
@@ -219,6 +292,89 @@ describe('infrastructure/transcription-storage', () => {
     });
 
     expect(storage).toBeInstanceOf(S3TranscriptionStorage);
+  });
+
+  it('creates a fresh short-lived S3 provider URL for each source request', async () => {
+    const storage = createS3Storage();
+    const urls = [
+      'https://storage.example.test/audio.mp3?X-Amz-Signature=first-secret',
+      'https://storage.example.test/audio.mp3?X-Amz-Signature=second-secret',
+    ];
+    const generatePresignedUrl = vi.fn(async () => urls.shift()!);
+    replaceS3Adapter(storage, {
+      uploadFile: vi.fn(async () => undefined),
+      deleteFile: vi.fn(async () => undefined),
+      generatePresignedUrl,
+    });
+
+    const first = await storage.getProviderSubmissionSource(
+      's3://bucket/workspaces/workspace-1/recordings/r-1/audio.mp3',
+    );
+    const second = await storage.getProviderSubmissionSource(
+      's3://bucket/workspaces/workspace-1/recordings/r-1/audio.mp3',
+    );
+
+    expect(first).toEqual({
+      kind: 'url',
+      url: 'https://storage.example.test/audio.mp3?X-Amz-Signature=first-secret',
+    });
+    expect(second).toEqual({
+      kind: 'url',
+      url: 'https://storage.example.test/audio.mp3?X-Amz-Signature=second-secret',
+    });
+    expect(generatePresignedUrl).toHaveBeenCalledTimes(2);
+    expect(generatePresignedUrl).toHaveBeenNthCalledWith(
+      1,
+      'workspaces/workspace-1/recordings/r-1/audio.mp3',
+      { expiresIn: DEFAULT_PROVIDER_SUBMISSION_URL_EXPIRY_SECONDS },
+    );
+    expect(generatePresignedUrl).toHaveBeenNthCalledWith(
+      2,
+      'workspaces/workspace-1/recordings/r-1/audio.mp3',
+      { expiresIn: DEFAULT_PROVIDER_SUBMISSION_URL_EXPIRY_SECONDS },
+    );
+  });
+
+  it('does not log the signed S3 provider URL', async () => {
+    const storage = createS3Storage();
+    const logInfo = vi.spyOn(logger, 'info').mockImplementation(() => undefined);
+
+    try {
+      const source = await storage.getProviderSubmissionSource(
+        's3://bucket/workspaces/workspace-1/recordings/r-1/audio.mp3',
+      );
+      const signedUrl = source.kind === 'url' ? source.url : '';
+      const serializedLogs = JSON.stringify(logInfo.mock.calls);
+
+      expect(signedUrl).toContain('X-Amz-Signature');
+      expect(serializedLogs).not.toContain(signedUrl);
+      expect(serializedLogs).not.toContain('X-Amz-Signature');
+    } finally {
+      logInfo.mockRestore();
+    }
+  });
+
+  it('does not expose a presigned URL when S3 source preparation fails', async () => {
+    const storage = createS3Storage();
+    const signedUrl = 'https://storage.example.test/audio.mp3?X-Amz-Signature=secret';
+    replaceS3Adapter(storage, {
+      uploadFile: vi.fn(async () => undefined),
+      deleteFile: vi.fn(async () => undefined),
+      generatePresignedUrl: vi.fn(async () => {
+        throw new Error(`presigning failed for ${signedUrl}`);
+      }),
+    });
+
+    const error = await storage
+      .getProviderSubmissionSource('s3://bucket/workspaces/workspace-1/recordings/r-1/audio.mp3')
+      .catch((value: unknown) => value as Error);
+
+    expect(error).toBeInstanceOf(Error);
+    if (!(error instanceof Error)) throw new Error('Expected provider source preparation to fail.');
+    expect(error.message).toMatch(/provider submission/i);
+    expect(error.message).not.toContain(signedUrl);
+    expect((error as { cause?: unknown }).cause).toBeUndefined();
+    expect(error.stack).not.toContain(signedUrl);
   });
 
   it('compensates an owned S3 audio key when upload rejects', async () => {
@@ -352,6 +508,7 @@ function replaceS3Adapter(
   adapter: {
     uploadFile: (key: string, content: Readable, mimeType: string) => Promise<unknown>;
     deleteFile: (key: string) => Promise<void>;
+    generatePresignedUrl?: (key: string, options: { expiresIn: number }) => Promise<string>;
   },
 ): void {
   (storage as unknown as { adapter: typeof adapter }).adapter = adapter;

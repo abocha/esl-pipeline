@@ -2,12 +2,26 @@ import { Readable } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { SttProviderId } from '@esl-pipeline/contracts';
-import type { SttTranscriptionResult } from '@esl-pipeline/stt-core';
+import { createSttEngine, type SttTranscriptionResult } from '@esl-pipeline/stt-core';
+import { createElevenLabsSttProvider } from '@esl-pipeline/stt-provider-elevenlabs';
+
+const jobLogger = vi.hoisted(() => ({
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+  debug: vi.fn(),
+  child: vi.fn(),
+}));
+
+vi.mock('../src/infrastructure/logger.js', () => ({
+  createJobLogger: vi.fn(() => jobLogger),
+}));
 
 import {
   processTranscribeJob,
   resolveElevenLabsSttApiKey,
 } from '../src/application/process-transcribe-job.js';
+import type { TranscribeDependencies } from '../src/application/process-transcribe-job.js';
 import {
   MIXED_ELEVENLABS_PROFILE,
   resolveTranscriptionRoute,
@@ -189,6 +203,81 @@ describe('application/process-transcribe-job', () => {
         provider: 'deepgram',
       }),
     );
+  });
+
+  it('passes a lazy storage-owned provider submission source to the STT engine', async () => {
+    const recording = createRecording('recording-source');
+    const source = {
+      kind: 'file' as const,
+      path: 'C:\\recordings\\audio.opus',
+      filename: 'audio.opus',
+      contentType: 'audio/ogg',
+      contentLength: 128,
+    };
+    const getProviderSubmissionSource = vi.fn(async (uri: string) => {
+      expect(uri).toBe(recording.storageUri);
+      return source;
+    });
+    const storage: TranscriptionStorage = {
+      ...createStorageStub(),
+      getProviderSubmissionSource,
+    };
+    const sttTranscribe: TranscribeDependencies['sttTranscribe'] = vi.fn(async ({ context }) => {
+      expect(context.getSubmissionSource).toBeDefined();
+      await expect(context.getSubmissionSource?.()).resolves.toEqual(source);
+      return createSttResult({
+        provider: 'deepgram',
+        model: 'nova-3',
+        language: 'multi',
+        text: 'Hello',
+        segments: [{ text: 'Hello', speaker: 0, start: 0, end: 0.5 }],
+      });
+    });
+
+    await processTranscribeJob(
+      { recordingId: recording.id },
+      {
+        config: createConfig(),
+        storage,
+        sttTranscribe,
+        recordings: {
+          async getById() {
+            return recording;
+          },
+          async updateStatus({ status, error }) {
+            recording.status = status;
+            recording.error = error ?? null;
+            return recording;
+          },
+        },
+        transcripts: {
+          async getByRecordingId() {
+            return null;
+          },
+          async insert(params) {
+            return {
+              id: params.id ?? 'transcript-source',
+              recordingId: params.recordingId,
+              storageUri: params.storageUri,
+              workingVersion: params.workingVersion,
+              contentHash: params.contentHash,
+              rawResponseUri: params.rawResponseUri ?? null,
+              mode: params.mode,
+              model: params.model,
+              language: params.language,
+              sttProvider: params.sttProvider,
+              fallbackUsed: params.fallbackUsed,
+              summaryJson: params.summaryJson ?? null,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            };
+          },
+        },
+        publishEvent: vi.fn(),
+      },
+    );
+
+    expect(getProviderSubmissionSource).toHaveBeenCalledTimes(1);
   });
 
   it('leaves historical recordings without a preparation version cache-ineligible', async () => {
@@ -376,6 +465,291 @@ describe('application/process-transcribe-job', () => {
 
     expect(recording.status).toBe('failed');
     expect(recording.error).toContain('service unavailable');
+  });
+
+  it('keeps reflected signed URL details out of worker persistence and logs', async () => {
+    const secret = 'SIGNED_URL_SECRET_123';
+    const signedUrl = `https://storage.example.test/audio.mp3?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=${secret}`;
+    const rawCause = new Error(`provider cause ${signedUrl}`);
+    const rawError = new Error(`provider message ${signedUrl}`);
+    const providerCodeSecret =
+      'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789';
+    Object.assign(rawError, {
+      body: { message: `provider body ${signedUrl}` },
+      status: 504,
+      code: providerCodeSecret,
+    });
+    Object.defineProperty(rawError, 'cause', { value: rawCause, enumerable: true });
+    rawError.stack = `Error: provider stack ${signedUrl}`;
+
+    const recording = { ...createRecording('recording-url-secret') };
+    recording.storageUri = 's3://bucket/recordings/recording.mp3';
+    const storage = createStorageStub();
+    storage.getProviderSubmissionSource = async () => ({
+      kind: 'url' as const,
+      url: signedUrl,
+    });
+    const config = createConfig();
+    config.stt.defaultProvider = 'elevenlabs';
+    config.stt.providers.elevenlabs.apiKey = 'elevenlabs-test-key';
+    const convert = vi.fn().mockRejectedValue(rawError);
+    const provider = createElevenLabsSttProvider({
+      clientFactory: () => ({ speechToText: { convert } }),
+    });
+    const sttEngine = createSttEngine([provider]);
+    const updateStatus = vi.fn(async ({ status, error }) => {
+      recording.status = status;
+      recording.error = error ?? null;
+      return recording;
+    });
+    jobLogger.error.mockClear();
+
+    let thrown: unknown;
+    try {
+      await processTranscribeJob(
+        { recordingId: recording.id },
+        {
+          config,
+          storage,
+          sttTranscribe: (args) => sttEngine.transcribe(args),
+          recordings: {
+            getById: async () => recording,
+            updateStatus,
+          },
+          transcripts: {
+            getByRecordingId: async () => null,
+            insert: vi.fn(),
+          },
+          publishEvent: vi.fn(),
+        },
+      );
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(Error);
+    expect(thrown).not.toBe(rawError);
+    expect((thrown as Error).message).not.toContain(signedUrl);
+    expect((thrown as Error).message).not.toContain('X-Amz-Signature');
+    expect((thrown as Error).message).not.toContain(secret);
+    expect((thrown as Error).message).not.toContain(providerCodeSecret);
+    expect((thrown as Error).stack).not.toContain(signedUrl);
+    expect((thrown as Error).stack).not.toContain('X-Amz-Signature');
+    expect((thrown as Error).stack).not.toContain(secret);
+    expect((thrown as Error).stack).not.toContain(providerCodeSecret);
+    expect((thrown as Error & { cause?: unknown }).cause).toBeUndefined();
+    expect((thrown as Error & { status?: number }).status).toBe(504);
+    expect((thrown as Error & { code?: string }).code).toBeUndefined();
+    expect(recording.status).toBe('failed');
+    expect(recording.error).not.toContain(signedUrl);
+    expect(recording.error).not.toContain('X-Amz-Signature');
+    expect(recording.error).not.toContain(secret);
+    const persistedRecording = JSON.stringify(recording);
+    expect(persistedRecording).not.toContain(signedUrl);
+    expect(persistedRecording).not.toContain('X-Amz-Signature');
+    expect(persistedRecording).not.toContain(secret);
+    expect(convert).toHaveBeenCalledTimes(1);
+    expect(jobLogger.error).toHaveBeenCalledTimes(1);
+    const loggedError = jobLogger.error.mock.calls[0]?.[0];
+    expect(loggedError).toBe(thrown);
+    expect(loggedError).toBeInstanceOf(Error);
+    expect((loggedError as Error).message).not.toContain(signedUrl);
+    expect((loggedError as Error).message).not.toContain('X-Amz-Signature');
+    expect((loggedError as Error).message).not.toContain(secret);
+    expect((loggedError as Error).message).not.toContain(providerCodeSecret);
+    expect((loggedError as Error).stack).not.toContain(signedUrl);
+    expect((loggedError as Error).stack).not.toContain('X-Amz-Signature');
+    expect((loggedError as Error).stack).not.toContain(secret);
+    expect((loggedError as Error).stack).not.toContain(providerCodeSecret);
+    const applicationLogs = JSON.stringify(jobLogger.error.mock.calls);
+    expect(applicationLogs).not.toContain(signedUrl);
+    expect(applicationLogs).not.toContain('X-Amz-Signature');
+    expect(applicationLogs).not.toContain(secret);
+    expect(applicationLogs).not.toContain(providerCodeSecret);
+    expect(jobLogger.error.mock.calls[0]?.[1]).toMatchObject({
+      provider: 'elevenlabs',
+      providerCategory: 'provider_timeout',
+    });
+  });
+
+  it('does not persist arbitrary URL-backed provider responses', async () => {
+    const signedUrl =
+      'https://storage.example.test/audio.mp3?X-Amz-Signature=SIGNED_URL_SECRET_123&X-Amz-Security-Token=TEMP_TOKEN_SECRET_456';
+    const recording = {
+      ...createRecording('recording-url-success'),
+      storageUri: 's3://bucket/recordings/recording.mp3',
+    };
+    const storedTexts: string[] = [];
+    const putRawResponse = vi.fn(async () => ({
+      uri: 'local://transcripts/raw.json',
+      bytes: 1,
+      sha256: 'raw-hash',
+    }));
+    const storage: TranscriptionStorage = {
+      ...createStorageStub(),
+      putRawResponse,
+      async putTranscript({ text }) {
+        storedTexts.push(text);
+        return { uri: 'local://transcripts/transcript.txt', bytes: text.length, sha256: 'hash' };
+      },
+      async getProviderSubmissionSource() {
+        return { kind: 'url' as const, url: signedUrl };
+      },
+    };
+    const config = createConfig();
+    config.stt.defaultProvider = 'elevenlabs';
+    config.stt.providers.elevenlabs.apiKey = 'elevenlabs-test-key';
+    const convert = vi.fn(async (_request: Record<string, unknown>) => ({
+      language_code: 'eng',
+      language_probability: 1,
+      text: 'Hello',
+      words: [],
+      provider_echo: signedUrl,
+      diagnostics: { nested_secret: 'TEMP_TOKEN_SECRET_456' },
+    }));
+    const provider = createElevenLabsSttProvider({
+      clientFactory: () => ({ speechToText: { convert } }),
+    });
+    const sttEngine = createSttEngine([provider]);
+    const inserted: TranscriptRecord[] = [];
+    const updateStatus = vi.fn(async ({ status, error }) => {
+      recording.status = status;
+      recording.error = error ?? null;
+      return recording;
+    });
+    jobLogger.info.mockClear();
+    jobLogger.error.mockClear();
+
+    const result = await processTranscribeJob(
+      { recordingId: recording.id },
+      {
+        config,
+        storage,
+        sttTranscribe: (args) => sttEngine.transcribe(args),
+        recordings: {
+          getById: async () => recording,
+          updateStatus,
+        },
+        transcripts: {
+          getByRecordingId: async () => null,
+          async insert(params) {
+            const transcript: TranscriptRecord = {
+              id: params.id ?? 'transcript-url-success',
+              recordingId: params.recordingId,
+              storageUri: params.storageUri,
+              workingVersion: params.workingVersion,
+              contentHash: params.contentHash,
+              rawResponseUri: params.rawResponseUri ?? null,
+              mode: params.mode,
+              model: params.model,
+              language: params.language,
+              sttProvider: params.sttProvider,
+              fallbackUsed: params.fallbackUsed,
+              summaryJson: params.summaryJson ?? null,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            };
+            inserted.push(transcript);
+            return transcript;
+          },
+        },
+        publishEvent: vi.fn(),
+      },
+    );
+
+    expect(result).not.toBeNull();
+    expect(recording.status).toBe('transcribed');
+    expect(recording.error).toBeNull();
+    expect(storedTexts).toEqual(['Hello']);
+    expect(inserted[0]?.rawResponseUri).toBeNull();
+    expect(putRawResponse).not.toHaveBeenCalled();
+    expect(convert).toHaveBeenCalledTimes(1);
+    const durableState = JSON.stringify({ recording, inserted, storedTexts });
+    expect(durableState).not.toContain(signedUrl);
+    expect(durableState).not.toContain('SIGNED_URL_SECRET_123');
+    expect(durableState).not.toContain('TEMP_TOKEN_SECRET_456');
+    expect(JSON.stringify(jobLogger.info.mock.calls)).not.toContain('SIGNED_URL_SECRET_123');
+    expect(JSON.stringify(jobLogger.info.mock.calls)).not.toContain('TEMP_TOKEN_SECRET_456');
+    expect(jobLogger.error).not.toHaveBeenCalled();
+  });
+
+  it('contains normalized URL credential reflections before worker persistence and logging', async () => {
+    const signedUrl =
+      'https://storage.example.test/audio.mp3?X-Amz-Signature=SIGNED_URL_SECRET_123&X-Amz-Security-Token=TEMP_TOKEN_SECRET_456';
+    const recording = {
+      ...createRecording('recording-url-contaminated'),
+      storageUri: 's3://bucket/recordings/recording.mp3',
+    };
+    const storage = createStorageStub();
+    const putRawResponse = vi.fn(storage.putRawResponse);
+    storage.putRawResponse = putRawResponse;
+    storage.getProviderSubmissionSource = async () => ({
+      kind: 'url' as const,
+      url: signedUrl,
+    });
+    const config = createConfig();
+    config.stt.defaultProvider = 'elevenlabs';
+    config.stt.providers.elevenlabs.apiKey = 'elevenlabs-test-key';
+    const convert = vi.fn(async (_request: Record<string, unknown>) => ({
+      language_code: 'eng',
+      language_probability: 1,
+      text: signedUrl,
+      words: [],
+    }));
+    const provider = createElevenLabsSttProvider({
+      clientFactory: () => ({ speechToText: { convert } }),
+    });
+    const sttEngine = createSttEngine([provider]);
+    const updateStatus = vi.fn(async ({ status, error }) => {
+      recording.status = status;
+      recording.error = error ?? null;
+      return recording;
+    });
+    jobLogger.info.mockClear();
+    jobLogger.error.mockClear();
+
+    let thrown: unknown;
+    try {
+      await processTranscribeJob(
+        { recordingId: recording.id },
+        {
+          config,
+          storage,
+          sttTranscribe: (args) => sttEngine.transcribe(args),
+          recordings: {
+            getById: async () => recording,
+            updateStatus,
+          },
+          transcripts: {
+            getByRecordingId: async () => null,
+            insert: vi.fn(),
+          },
+          publishEvent: vi.fn(),
+        },
+      );
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(Error);
+    expect((thrown as Error).message).toBe('ElevenLabs source URL submission failed.');
+    expect(recording.status).toBe('failed');
+    expect(recording.error).not.toContain(signedUrl);
+    expect(recording.error).not.toContain('SIGNED_URL_SECRET_123');
+    expect(recording.error).not.toContain('TEMP_TOKEN_SECRET_456');
+    expect(putRawResponse).not.toHaveBeenCalled();
+    const workerState = JSON.stringify({ recording, thrown });
+    expect(workerState).not.toContain(signedUrl);
+    expect(workerState).not.toContain('SIGNED_URL_SECRET_123');
+    expect(workerState).not.toContain('TEMP_TOKEN_SECRET_456');
+    expect(JSON.stringify(jobLogger.error.mock.calls)).not.toContain(signedUrl);
+    expect(JSON.stringify(jobLogger.error.mock.calls)).not.toContain('SIGNED_URL_SECRET_123');
+    expect(JSON.stringify(jobLogger.error.mock.calls)).not.toContain('TEMP_TOKEN_SECRET_456');
+    expect(jobLogger.error.mock.calls[0]?.[1]).toMatchObject({
+      provider: 'elevenlabs',
+      providerCategory: 'provider_contract_error',
+    });
+    expect(convert).toHaveBeenCalledTimes(1);
   });
 
   it('fails loudly when provider raises async accepted response error', async () => {

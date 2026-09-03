@@ -135,6 +135,12 @@ export async function processTranscribeJob(
         recordingId: recording.id,
         storageUri,
         getStream: () => readStorage.getStream(storageUri),
+        getSubmissionSource: async () => {
+          if (!readStorage.getProviderSubmissionSource) {
+            throw new Error('Transcription storage cannot prepare a provider submission source.');
+          }
+          return readStorage.getProviderSubmissionSource(storageUri);
+        },
       },
       configByProvider: buildSttProviderConfig(config, topology),
     });

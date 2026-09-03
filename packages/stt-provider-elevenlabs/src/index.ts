@@ -1,10 +1,11 @@
-import type { Readable } from 'node:stream';
+import { openAsBlob } from 'node:fs';
 import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 
 import { classifyProviderRuntimeFailure } from '@esl-pipeline/provider-runtime';
 import {
   mergeSegments,
   type SttProviderAdapter,
+  type SttSubmissionSource,
   type TranscriptSegment,
 } from '@esl-pipeline/stt-core';
 
@@ -90,28 +91,55 @@ export function createElevenLabsSttProvider(
       const modelId = config.modelId ?? DEFAULT_MODEL_ID;
       const client = clientFactory(config.apiKey);
 
-      const audioBuffer = await readStreamToBuffer(await context.getStream());
-      const bytes = new Uint8Array(audioBuffer.byteLength);
-      bytes.set(audioBuffer);
-      const blob = new Blob([bytes], { type: 'audio/mpeg' });
+      const submissionSource = await context.getSubmissionSource?.();
+      if (!submissionSource) {
+        throw new Error('ElevenLabs provider submission source is unavailable.');
+      }
 
-      const response = await client.speechToText.convert({
-        file: blob,
-        modelId,
-        useMultiChannel: false,
-        diarize: true,
-        numSpeakers: 2,
-        timestampsGranularity: 'word',
-        noVerbatim: false,
-      });
+      let knownUrlSecretMaterials: readonly string[] | undefined;
+      if (submissionSource.kind === 'url') {
+        try {
+          knownUrlSecretMaterials = deriveKnownUrlSecretMaterials(submissionSource.url);
+        } catch {
+          throw createSafeUrlSubmissionError();
+        }
+      }
+
+      const sourceFields =
+        submissionSource.kind === 'url'
+          ? { sourceUrl: submissionSource.url }
+          : { file: await toElevenLabsFileSource(submissionSource) };
+      let response: unknown;
+      try {
+        response = await client.speechToText.convert({
+          ...sourceFields,
+          modelId,
+          useMultiChannel: false,
+          diarize: true,
+          numSpeakers: 2,
+          timestampsGranularity: 'word',
+          noVerbatim: false,
+        });
+      } catch (error) {
+        if (submissionSource.kind === 'url') {
+          throw createSafeUrlSubmissionError(error);
+        }
+        throw error;
+      }
       const parsed = parseElevenLabsDiarizedResponse(response);
+      if (
+        knownUrlSecretMaterials &&
+        containsKnownSecretMaterial(parsed, knownUrlSecretMaterials)
+      ) {
+        throw createSafeUrlSubmissionError();
+      }
       return {
         provider: 'elevenlabs',
         model: modelId,
         language: 'auto',
         text: parsed.text,
         segments: parsed.segments,
-        rawResponse: response,
+        rawResponse: submissionSource.kind === 'url' ? null : response,
         fallbackUsed: false,
         summary: { segmentCount: parsed.segments.length, fallbackUsed: false },
       };
@@ -123,17 +151,72 @@ function defaultClientFactory(apiKey: string) {
   return new ElevenLabsClient({ apiKey }) as unknown as ElevenLabsClientLike;
 }
 
-async function readStreamToBuffer(stream: Readable): Promise<Buffer> {
-  const chunks: Buffer[] = [];
-  await new Promise<void>((resolve, reject) => {
-    stream.on('data', (chunk: Buffer | string) => {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+function createSafeUrlSubmissionError(error?: unknown): Error {
+  const safeError = new Error('ElevenLabs source URL submission failed.');
+  safeError.name = 'ElevenLabsUrlSubmissionError';
+
+  const status = readSafeStatus(error);
+  if (status !== undefined) {
+    Object.defineProperty(safeError, 'status', {
+      configurable: false,
+      enumerable: true,
+      value: status,
+      writable: false,
     });
-    stream.on('end', resolve);
-    stream.on('error', reject);
-  });
-  stream.destroy();
-  return Buffer.concat(chunks);
+  }
+
+  return safeError;
+}
+
+const URL_SECRET_QUERY_KEYS = new Set([
+  'x-amz-signature',
+  'x-amz-security-token',
+  'x-amz-credential',
+]);
+
+function deriveKnownUrlSecretMaterials(url: string): string[] {
+  const parsed = new URL(url);
+  const materials = new Set<string>([url]);
+  for (const [key, value] of parsed.searchParams) {
+    if (URL_SECRET_QUERY_KEYS.has(key.toLowerCase()) && value) {
+      materials.add(value);
+    }
+  }
+  return [...materials];
+}
+
+function containsKnownSecretMaterial(
+  parsed: { text: string; segments: TranscriptSegment[] },
+  knownSecretMaterials: readonly string[],
+): boolean {
+  const mappedStrings = [parsed.text, ...parsed.segments.map((segment) => segment.text)];
+  return mappedStrings.some((mappedString) =>
+    knownSecretMaterials.some((secretMaterial) =>
+      secretMaterial.length > 0 && mappedString.includes(secretMaterial),
+    ),
+  );
+}
+
+function readSafeStatus(error: unknown): number | undefined {
+  if (!error || typeof error !== 'object') return undefined;
+  try {
+    const candidate = error as { status?: unknown; statusCode?: unknown };
+    const status = candidate.status ?? candidate.statusCode;
+    return typeof status === 'number' && Number.isInteger(status) && status >= 100 && status <= 599
+      ? status
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function toElevenLabsFileSource(source: Extract<SttSubmissionSource, { kind: 'file' }>) {
+  return {
+    data: await openAsBlob(source.path, { type: source.contentType }),
+    filename: source.filename,
+    contentType: source.contentType,
+    contentLength: source.contentLength,
+  };
 }
 
 function parseElevenLabsMultichannelResponse(

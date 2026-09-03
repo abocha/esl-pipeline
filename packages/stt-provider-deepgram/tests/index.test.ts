@@ -112,6 +112,7 @@ describe('stt-provider-deepgram', () => {
       },
     }));
 
+    const getStream = vi.fn(async () => Readable.from(Buffer.from('audio')));
     const provider = createDeepgramSttProvider({
       clientFactory: () => ({
         listen: {
@@ -128,9 +129,7 @@ describe('stt-provider-deepgram', () => {
       context: {
         recordingId: 'rec-1',
         storageUri: 'local://audio.wav',
-        async getStream() {
-          return Readable.from(Buffer.from('audio'));
-        },
+        getStream,
       },
       config: baseConfig(),
     });
@@ -139,6 +138,7 @@ describe('stt-provider-deepgram', () => {
     expect(result.fallbackUsed).toBe(false);
     expect(result.segments).toHaveLength(2);
     expect(transcribeFile).toHaveBeenCalledTimes(1);
+    expect(getStream).toHaveBeenCalledTimes(1);
   });
 
   it('falls back to diarize when primary fails', async () => {
