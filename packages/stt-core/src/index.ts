@@ -54,6 +54,7 @@ export type {
   SttEngine,
   SttProviderAdapter,
   SttProviderId,
+  SttSubmissionSource,
   SttTranscribeContext,
   SttTranscriptionResult,
   TranscriptMode,

@@ -5,12 +5,17 @@ import path from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { finished, pipeline } from 'node:stream/promises';
 
+import type { SttSubmissionSource } from '@esl-pipeline/stt-core';
+
 import { S3StorageAdapter } from './s3-storage-adapter.js';
 import { logger } from './logger.js';
 import { createStorageConfigService, StorageConfigurationService } from './storage-config.js';
 
 const LOCAL_URI_PREFIX = 'local://';
 const S3_URI_PREFIX = 's3://';
+
+/** Fifteen minutes covers ordinary provider fetch latency without retaining a durable URL. */
+export const DEFAULT_PROVIDER_SUBMISSION_URL_EXPIRY_SECONDS = 15 * 60;
 
 export interface StorageWriteResult {
   uri: string;
@@ -54,7 +59,15 @@ export interface TranscriptionStorage {
   putDraft(options: PutDraftOptions): Promise<StorageWriteResult>;
   getText(uri: string): Promise<string>;
   getStream(uri: string): Promise<Readable>;
+  getProviderSubmissionSource?(uri: string): Promise<SttSubmissionSource>;
   delete(uri: string): Promise<void>;
+}
+
+export class TranscriptionStorageSubmissionError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = 'TranscriptionStorageSubmissionError';
+  }
 }
 
 export interface FilesystemTranscriptionStorageDependencies {
@@ -135,6 +148,33 @@ export class FilesystemTranscriptionStorage implements TranscriptionStorage {
   async getStream(uri: string): Promise<Readable> {
     const filePath = this.resolveUriToPath(uri);
     return createReadStream(filePath);
+  }
+
+  async getProviderSubmissionSource(uri: string): Promise<SttSubmissionSource> {
+    const filePath = this.resolveUriToPath(uri);
+    const media = resolveProviderMediaIdentity(filePath);
+    let fileStats: Awaited<ReturnType<typeof fs.stat>>;
+    try {
+      fileStats = await fs.stat(filePath);
+    } catch (error) {
+      throw new TranscriptionStorageSubmissionError(
+        'Could not prepare the retained local audio for provider submission.',
+        { cause: error },
+      );
+    }
+    if (!fileStats.isFile()) {
+      throw new TranscriptionStorageSubmissionError(
+        'The retained local audio is not a regular file.',
+      );
+    }
+
+    return {
+      kind: 'file',
+      path: filePath,
+      filename: path.basename(filePath),
+      contentType: media.contentType,
+      contentLength: fileStats.size,
+    };
   }
 
   async delete(uri: string): Promise<void> {
@@ -268,6 +308,26 @@ export class S3TranscriptionStorage implements TranscriptionStorage {
     const { bucket, key } = parseS3Uri(uri);
     this.ensureBucket(bucket, uri);
     return this.adapter.getObjectStream(key);
+  }
+
+  async getProviderSubmissionSource(uri: string): Promise<SttSubmissionSource> {
+    const { bucket, key } = parseS3Uri(uri);
+    this.ensureBucket(bucket, uri);
+    resolveProviderMediaIdentity(key);
+
+    try {
+      const url = await this.adapter.generatePresignedUrl(key, {
+        expiresIn: DEFAULT_PROVIDER_SUBMISSION_URL_EXPIRY_SECONDS,
+      });
+      if (!url) {
+        throw new Error('S3 presigner returned an empty URL.');
+      }
+      return { kind: 'url', url };
+    } catch {
+      throw new TranscriptionStorageSubmissionError(
+        'Could not prepare the retained S3 audio for provider submission.',
+      );
+    }
   }
 
   async delete(uri: string): Promise<void> {
@@ -415,6 +475,29 @@ function resolveAudioMimeType(extension: string): string {
     default: {
       return 'application/octet-stream';
     }
+  }
+}
+
+function resolveProviderMediaIdentity(fileOrKey: string): { contentType: string } {
+  const extension = path.extname(fileOrKey).toLowerCase();
+  switch (extension) {
+    case '.mp3':
+      return { contentType: 'audio/mpeg' };
+    case '.wav':
+      return { contentType: 'audio/wav' };
+    case '.aac':
+      return { contentType: 'audio/aac' };
+    case '.m4a':
+      return { contentType: 'audio/mp4' };
+    case '.ogg':
+    case '.opus':
+      return { contentType: 'audio/ogg' };
+    case '.webm':
+      return { contentType: 'audio/webm' };
+    default:
+      throw new TranscriptionStorageSubmissionError(
+        'The retained audio has no supported prepared media identity.',
+      );
   }
 }
 
