@@ -19,14 +19,16 @@ const INSTANCE_ID = randomUUID();
 
 interface SerializedRecording {
   id: string;
+  workspaceId: string;
   source: RecordingRecord['source'];
   studentId: string | null;
   sourcePath: string | null;
-  storageUri: string;
+  storageUri: string | null;
   sha256: string | null;
   bytes: number;
   durationSec: number | null;
   channels: number | null;
+  audioLifecycle: RecordingRecord['audioLifecycle'];
   status: RecordingRecord['status'];
   error: string | null;
   createdAt: string;
@@ -229,6 +231,7 @@ class RedisRecordingEventBridge {
 function serializeRecording(recording: RecordingRecord): SerializedRecording {
   return {
     id: recording.id,
+    workspaceId: recording.workspaceId,
     source: recording.source,
     studentId: recording.studentId ?? null,
     sourcePath: recording.sourcePath ?? null,
@@ -237,6 +240,7 @@ function serializeRecording(recording: RecordingRecord): SerializedRecording {
     bytes: recording.bytes,
     durationSec: recording.durationSec ?? null,
     channels: recording.channels ?? null,
+    audioLifecycle: recording.audioLifecycle,
     status: recording.status,
     error: recording.error ?? null,
     createdAt: recording.createdAt.toISOString(),
@@ -247,6 +251,7 @@ function serializeRecording(recording: RecordingRecord): SerializedRecording {
 function deserializeRecording(serialized: SerializedRecording): RecordingRecord {
   return {
     id: serialized.id,
+    workspaceId: serialized.workspaceId,
     source: serialized.source,
     studentId: serialized.studentId ?? null,
     sourcePath: serialized.sourcePath ?? null,
@@ -255,6 +260,7 @@ function deserializeRecording(serialized: SerializedRecording): RecordingRecord 
     bytes: serialized.bytes,
     durationSec: serialized.durationSec ?? null,
     channels: serialized.channels ?? null,
+    audioLifecycle: serialized.audioLifecycle,
     status: serialized.status,
     error: serialized.error ?? null,
     createdAt: new Date(serialized.createdAt),

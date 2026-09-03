@@ -7,7 +7,7 @@ import { listRecordings } from '../domain/recording-repository.js';
 import type { StudentRecord } from '../domain/student-model.js';
 import { getStudentById } from '../domain/student-repository.js';
 import type { TranscriptRecord } from '../domain/transcript-model.js';
-import { listLatestTranscriptsByRecordingIds } from '../domain/transcript-repository.js';
+import { listLatestTranscriptsByRecordingIdsForWorkspace } from '../domain/transcript-repository.js';
 import {
   createTranscriptionStorageForUri,
   type TranscriptionStorage,
@@ -39,7 +39,7 @@ interface StudentLessonArtifactExportDependencies {
     list: typeof listRecordings;
   };
   transcripts: {
-    listLatestByRecordingIds: typeof listLatestTranscriptsByRecordingIds;
+    listLatestByRecordingIds: typeof listLatestTranscriptsByRecordingIdsForWorkspace;
   };
   lessonMemory: {
     list: typeof listLessonMemoryEntries;
@@ -61,7 +61,7 @@ function defaultDependencies(): StudentLessonArtifactExportDependencies {
       list: listRecordings,
     },
     transcripts: {
-      listLatestByRecordingIds: listLatestTranscriptsByRecordingIds,
+      listLatestByRecordingIds: listLatestTranscriptsByRecordingIdsForWorkspace,
     },
     lessonMemory: {
       list: listLessonMemoryEntries,
@@ -501,6 +501,7 @@ export function renderHomeworkMemoryText(memory: HomeworkMemoryRecord): string {
 
 async function listAllRecordingsForStudent(
   studentId: string,
+  workspaceId: string,
   deps: StudentLessonArtifactExportDependencies,
 ): Promise<RecordingWithTranscript[]> {
   const items: RecordingWithTranscript[] = [];
@@ -508,6 +509,7 @@ async function listAllRecordingsForStudent(
 
   while (true) {
     const page = await deps.recordings.list({
+      workspaceId,
       studentId,
       limit: DEFAULT_PAGE_SIZE,
       offset,
@@ -604,11 +606,16 @@ export async function loadStudentLessonArtifactExportPlan(args: {
   if (!student) {
     return null;
   }
+  if (!student.workspaceId) {
+    throw new Error(`Student ${student.id} has no workspace authority`);
+  }
 
-  const recordings = await listAllRecordingsForStudent(args.studentId, deps);
+  const recordings = await listAllRecordingsForStudent(args.studentId, student.workspaceId, deps);
   const recordingIds = recordings.map((item) => item.id);
   const transcripts =
-    recordingIds.length > 0 ? await deps.transcripts.listLatestByRecordingIds(recordingIds) : [];
+    recordingIds.length > 0
+      ? await deps.transcripts.listLatestByRecordingIds(recordingIds, student.workspaceId)
+      : [];
   const transcriptTexts = new Map<string, string>();
   for (const transcript of transcripts) {
     const storage = deps.transcriptStorage.createForUri(transcript.storageUri);

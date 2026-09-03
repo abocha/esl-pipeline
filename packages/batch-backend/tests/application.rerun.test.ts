@@ -223,6 +223,10 @@ describe('application/job-actions/rerun', () => {
       mdStorageUri: 's3://drafts/raw-placeholder-student.md',
       studentId: 'student-1',
       studentName: 'Alice Nguyen',
+      recordingId: 'recording-1',
+      transcriptId: 'transcript-1',
+      promptPackageId: 'prompt-1',
+      draftId: 'draft-1',
       withTts: true,
       ttsProvider: 'elevenlabs',
       ttsStrategy: 'auto',
@@ -248,9 +252,32 @@ describe('application/job-actions/rerun', () => {
     expect(insertParams).toMatchObject({
       md: jobMdPath,
       studentId: 'student-1',
+      recordingId: 'recording-1',
+      transcriptId: 'transcript-1',
+      promptPackageId: 'prompt-1',
+      draftId: 'draft-1',
       sourceJobId: 'job-1',
     });
     expect(insertParams).not.toHaveProperty('mdStorageUri');
+  });
+
+  it('preserves absent immutable lineage as null instead of manufacturing identifiers', async () => {
+    const result = await rerun('job-1', {
+      type: JobActionType.RERUN,
+      requestedAt,
+      payload: { republishOnly: true },
+    });
+
+    expect(result.success).toBe(true);
+    expect(vi.mocked(insertJob)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recordingId: null,
+        transcriptId: null,
+        promptPackageId: null,
+        draftId: null,
+        sourceJobId: 'job-1',
+      }),
+    );
   });
 
   it('forwards inherited study-text model defaults into the rerun queue payload', async () => {

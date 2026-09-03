@@ -12,9 +12,15 @@ import {
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
 import { publishRecordingEvent } from '../domain/recording-events.js';
-import { getRecordingById, updateRecordingStatus } from '../domain/recording-repository.js';
+import {
+  getRecordingByIdForWorker,
+  updateRecordingStatus,
+} from '../domain/recording-repository.js';
 import { type TranscriptRecord } from '../domain/transcript-model.js';
-import { getTranscriptByRecordingId, insertTranscript } from '../domain/transcript-repository.js';
+import {
+  getTranscriptByRecordingIdForWorker,
+  insertTranscript,
+} from '../domain/transcript-repository.js';
 import { createJobLogger } from '../infrastructure/logger.js';
 import type { TranscribeQueuePayload } from '../infrastructure/transcribe-queue.js';
 import type { TranscriptionStorage } from '../infrastructure/transcription-storage.js';
@@ -29,11 +35,11 @@ export interface TranscribeDependencies {
   config: BatchBackendConfig;
   storage: TranscriptionStorage;
   recordings: {
-    getById: typeof getRecordingById;
+    getById: typeof getRecordingByIdForWorker;
     updateStatus: typeof updateRecordingStatus;
   };
   transcripts: {
-    getByRecordingId: typeof getTranscriptByRecordingId;
+    getByRecordingId: typeof getTranscriptByRecordingIdForWorker;
     insert: typeof insertTranscript;
   };
   publishEvent: typeof publishRecordingEvent;
@@ -60,11 +66,11 @@ export async function processTranscribeJob(
   const log = createJobLogger(payload.recordingId);
   const storage = overrides?.storage ?? createTranscriptionStorage();
   const recordings = overrides?.recordings ?? {
-    getById: getRecordingById,
+    getById: getRecordingByIdForWorker,
     updateStatus: updateRecordingStatus,
   };
   const transcripts = overrides?.transcripts ?? {
-    getByRecordingId: getTranscriptByRecordingId,
+    getByRecordingId: getTranscriptByRecordingIdForWorker,
     insert: insertTranscript,
   };
   const publishEvent = overrides?.publishEvent ?? publishRecordingEvent;
@@ -117,14 +123,18 @@ export async function processTranscribeJob(
       publishEvent({ type: 'recording_state_changed', recording: transcribing });
     }
 
+    if (!recording.storageUri) {
+      throw new Error(`Recording has no retained audio: ${recording.id}`);
+    }
+    const storageUri = recording.storageUri;
     const readStorage =
       overrides?.storage ?? createTranscriptionStorageForUri(recording.storageUri);
     const transcription = await sttTranscribe({
       provider: sttProvider,
       context: {
         recordingId: recording.id,
-        storageUri: recording.storageUri,
-        getStream: () => readStorage.getStream(recording.storageUri),
+        storageUri,
+        getStream: () => readStorage.getStream(storageUri),
       },
       configByProvider: buildSttProviderConfig(config, topology),
     });

@@ -92,15 +92,23 @@ describe('infrastructure/transcription-storage', () => {
     const stream = Readable.from([content]);
 
     const result = await storage.putAudio({
+      workspaceId: 'workspace-1',
       recordingId: 'r-1',
       stream,
       extension: '.opus',
     });
 
-    const expectedPath = path.join(tempDir, 'recordings', 'r-1.opus');
+    const expectedPath = path.join(
+      tempDir,
+      'workspaces',
+      'workspace-1',
+      'recordings',
+      'r-1',
+      'audio.opus',
+    );
     const expectedHash = createHash('sha256').update(content).digest('hex');
 
-    expect(result.uri).toBe('local://recordings/r-1.opus');
+    expect(result.uri).toBe('local://workspaces/workspace-1/recordings/r-1/audio.opus');
     expect(result.bytes).toBe(content.length);
     expect(result.sha256).toBe(expectedHash);
 

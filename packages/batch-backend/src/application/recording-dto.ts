@@ -13,6 +13,7 @@ export interface RecordingDto {
   durationSec: number | null;
   channels: number | null;
   audioTopology: RecordingRecord['audioTopology'];
+  audioLifecycle: RecordingRecord['audioLifecycle'];
   bytes: number;
   createdAt: string;
   updatedAt: string;
@@ -32,6 +33,7 @@ export function recordingToDto(recording: RecordingWithTranscript): RecordingDto
     durationSec: recording.durationSec ?? null,
     channels: recording.channels ?? null,
     audioTopology: recording.audioTopology ?? null,
+    audioLifecycle: recording.audioLifecycle,
     bytes: recording.bytes,
     createdAt: recording.createdAt.toISOString(),
     updatedAt: recording.updatedAt.toISOString(),

@@ -129,6 +129,7 @@ describe('application/prompt-package', () => {
     const result = await createPromptPackage(
       {
         recordingId: 'recording-1',
+        workspaceId: 'workspace-1',
         assignmentSessionId: 'session-1',
         userId: 'user-1',
         templateId: 'template.md',
@@ -150,7 +151,9 @@ describe('application/prompt-package', () => {
         recordings: {
           getById: async () => ({
             id: 'recording-1',
+            workspaceId: 'workspace-1',
             source: 'upload',
+            audioLifecycle: 'retained',
             studentId: 'student-1',
             sourcePath: null,
             storageUri: 'local://recordings/a.opus',
@@ -222,6 +225,7 @@ describe('application/prompt-package', () => {
     const result = await createPromptPackage(
       {
         recordingId: 'recording-1',
+        workspaceId: 'workspace-1',
         assignmentSessionId: 'session-1',
         userId: 'user-1',
         templateId: 'template.md',
@@ -240,7 +244,9 @@ describe('application/prompt-package', () => {
         recordings: {
           getById: async () => ({
             id: 'recording-1',
+            workspaceId: 'workspace-1',
             source: 'upload',
+            audioLifecycle: 'retained',
             studentId: 'student-1',
             sourcePath: null,
             storageUri: 'local://recordings/a.opus',
@@ -337,6 +343,7 @@ describe('application/prompt-package', () => {
       createPromptPackage(
         {
           recordingId: 'recording-1',
+          workspaceId: 'workspace-1',
           assignmentSessionId: 'session-1',
           userId: 'other-user',
         },
@@ -348,7 +355,12 @@ describe('application/prompt-package', () => {
   it('rejects missing confirmed prerequisites and broken confirmed lineage', async () => {
     await expect(
       createPromptPackage(
-        { recordingId: 'recording-1', assignmentSessionId: 'session-1', userId: 'user-1' },
+        {
+          recordingId: 'recording-1',
+          workspaceId: 'workspace-1',
+          assignmentSessionId: 'session-1',
+          userId: 'user-1',
+        },
         {
           sessions: {
             getByIdForUser: async () =>
@@ -367,7 +379,12 @@ describe('application/prompt-package', () => {
 
     await expect(
       createPromptPackage(
-        { recordingId: 'recording-1', assignmentSessionId: 'session-1', userId: 'user-1' },
+        {
+          recordingId: 'recording-1',
+          workspaceId: 'workspace-1',
+          assignmentSessionId: 'session-1',
+          userId: 'user-1',
+        },
         {
           sessions: {
             getByIdForUser: async () =>
@@ -404,6 +421,7 @@ describe('application/prompt-package', () => {
     await createPromptPackage(
       {
         recordingId: transcript.recordingId,
+        workspaceId: 'workspace-1',
         templateId: 'template.md',
         profileId: 'profile.md',
       },
@@ -490,6 +508,7 @@ describe('application/prompt-package', () => {
     const result = await createPromptPackage(
       {
         recordingId: transcript.recordingId,
+        workspaceId: 'workspace-1',
         templateId: 'template.md',
         profileId: 'profile.md',
       },
@@ -646,6 +665,7 @@ describe('application/prompt-package', () => {
     await createPromptPackage(
       {
         recordingId: transcript.recordingId,
+        workspaceId: 'workspace-1',
         templateId: 'template.md',
         profileId: 'profile.md',
       },
@@ -666,6 +686,7 @@ describe('application/prompt-package', () => {
     await createPromptPackage(
       {
         recordingId: transcript.recordingId,
+        workspaceId: 'workspace-1',
         templateId: 'template.md',
         profileId: 'profile.md',
       },
@@ -714,6 +735,7 @@ describe('application/prompt-package', () => {
       createPromptPackage(
         {
           recordingId: transcript.recordingId,
+          workspaceId: 'workspace-1',
           notes: 'Some notes',
           templateId: 'template.md',
           profileId: 'missing.md',
@@ -727,7 +749,9 @@ describe('application/prompt-package', () => {
           recordings: {
             getById: async () => ({
               id: transcript.recordingId,
+              workspaceId: 'workspace-1',
               source: 'upload',
+              audioLifecycle: 'retained',
               studentId: 'student-1',
               sourcePath: null,
               storageUri: 'local://recordings/recording-1.opus',
@@ -778,6 +802,7 @@ describe('application/prompt-package', () => {
       createPromptPackage(
         {
           recordingId: transcript.recordingId,
+          workspaceId: 'workspace-1',
           profilePath,
         },
         {
@@ -827,6 +852,7 @@ describe('application/prompt-package', () => {
     const result = await createPromptPackage(
       {
         recordingId: transcript.recordingId,
+        workspaceId: 'workspace-1',
         templateId: 'template.md',
       },
       {
@@ -838,7 +864,9 @@ describe('application/prompt-package', () => {
         recordings: {
           getById: async () => ({
             id: transcript.recordingId,
+            workspaceId: 'workspace-1',
             source: 'upload',
+            audioLifecycle: 'retained',
             studentId: 'student-1',
             sourcePath: null,
             storageUri: 'local://recordings/recording-1.opus',
@@ -902,6 +930,7 @@ describe('application/prompt-package', () => {
     const result = await createPromptPackage(
       {
         recordingId: transcript.recordingId,
+        workspaceId: 'workspace-1',
         templateId: 'template.md',
       },
       {
@@ -913,7 +942,9 @@ describe('application/prompt-package', () => {
         recordings: {
           getById: async () => ({
             id: transcript.recordingId,
+            workspaceId: 'workspace-1',
             source: 'upload',
+            audioLifecycle: 'retained',
             studentId: 'student-1',
             sourcePath: null,
             storageUri: 'local://recordings/recording-1.opus',
@@ -1019,7 +1050,9 @@ describe('application/prompt-package', () => {
     const recordingLookup = {
       getById: async (): Promise<RecordingRecord> => ({
         id: transcript.recordingId,
+        workspaceId: 'workspace-1',
         source: 'upload',
+        audioLifecycle: 'retained',
         studentId: 'student-1',
         sourcePath: null,
         storageUri: 'local://recordings/recording-1.opus',
@@ -1044,6 +1077,7 @@ describe('application/prompt-package', () => {
     const explicitIdResult = await createPromptPackage(
       {
         recordingId: transcript.recordingId,
+        workspaceId: 'workspace-1',
         templateId: 'template.md',
         profileId: 'profiles/explicit.md',
       },
@@ -1067,6 +1101,7 @@ describe('application/prompt-package', () => {
     const explicitPathResult = await createPromptPackage(
       {
         recordingId: transcript.recordingId,
+        workspaceId: 'workspace-1',
         templateId: 'template.md',
         profilePath: explicitProfilePath,
       },
@@ -1105,6 +1140,7 @@ describe('application/prompt-package', () => {
     const result = await createPromptPackage(
       {
         recordingId: transcript.recordingId,
+        workspaceId: 'workspace-1',
         templateId: 'template.md',
       },
       {
@@ -1116,7 +1152,9 @@ describe('application/prompt-package', () => {
         recordings: {
           getById: async () => ({
             id: transcript.recordingId,
+            workspaceId: 'workspace-1',
             source: 'upload',
+            audioLifecycle: 'retained',
             studentId: 'student-1',
             sourcePath: null,
             storageUri: 'local://recordings/recording-1.opus',
@@ -1167,7 +1205,11 @@ describe('application/prompt-package', () => {
     const transcript = createTranscriptRecord();
     await expect(
       createPromptPackage(
-        { recordingId: transcript.recordingId, templateId: 'template.md' },
+        {
+          recordingId: transcript.recordingId,
+          workspaceId: 'workspace-1',
+          templateId: 'template.md',
+        },
         {
           config: createConfig(templatePath, defaultProfilePath),
           storage: createStorageStub({ getText: async () => 'TRANSCRIPT BODY' }),
@@ -1175,7 +1217,9 @@ describe('application/prompt-package', () => {
           recordings: {
             getById: async () => ({
               id: transcript.recordingId,
+              workspaceId: 'workspace-1',
               source: 'upload',
+              audioLifecycle: 'retained',
               studentId: 'student-1',
               sourcePath: null,
               storageUri: 'local://recordings/recording-1.opus',

@@ -1,5 +1,5 @@
 import {
-  getTranscriptByRecordingId,
+  getTranscriptByRecordingIdForWorkspace,
   updateTranscriptWorkingContent,
 } from '../domain/transcript-repository.js';
 import type { TranscriptionStorage } from '../infrastructure/transcription-storage.js';
@@ -11,6 +11,7 @@ import {
 
 export interface UpdateRecordingTranscriptParams {
   recordingId: string;
+  workspaceId: string;
   text: string;
   expectedWorkingVersion: number;
   speakerRoleMapping?: { roles: { speaker: number; role: 'teacher' | 'student' }[] };
@@ -19,7 +20,7 @@ export interface UpdateRecordingTranscriptParams {
 export interface UpdateRecordingTranscriptDependencies {
   storage: TranscriptionStorage;
   transcripts: {
-    getByRecordingId: typeof getTranscriptByRecordingId;
+    getByRecordingId: typeof getTranscriptByRecordingIdForWorkspace;
     update: typeof updateTranscriptWorkingContent;
   };
 }
@@ -32,11 +33,11 @@ export async function updateRecordingTranscript(
 
   const storage = overrides?.storage ?? createTranscriptionStorage();
   const transcripts = overrides?.transcripts ?? {
-    getByRecordingId: getTranscriptByRecordingId,
+    getByRecordingId: getTranscriptByRecordingIdForWorkspace,
     update: updateTranscriptWorkingContent,
   };
 
-  const transcript = await transcripts.getByRecordingId(params.recordingId);
+  const transcript = await transcripts.getByRecordingId(params.recordingId, params.workspaceId);
   if (!transcript) return null;
 
   const mapping = params.speakerRoleMapping;

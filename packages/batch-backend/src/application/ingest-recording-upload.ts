@@ -17,6 +17,7 @@ import {
 } from '../infrastructure/transcription-storage.js';
 
 export interface UploadRecordingOptions {
+  workspaceId: string;
   filename: string;
   stream: Readable;
   sourcePath?: string | null;
@@ -43,6 +44,7 @@ export async function ingestRecordingUpload(
   const extension = resolveExtension(options.filename);
   const recordingId = randomUUID();
   const storageResult = await options.storage.putAudio({
+    workspaceId: options.workspaceId,
     recordingId,
     stream: options.stream,
     extension,
@@ -50,6 +52,7 @@ export async function ingestRecordingUpload(
 
   const record = await options.repository.insertRecording({
     id: recordingId,
+    workspaceId: options.workspaceId,
     source: 'upload',
     studentId: options.studentId ?? null,
     sourcePath: options.sourcePath ?? options.filename,
@@ -78,6 +81,7 @@ export async function ingestRecordingUpload(
 }
 
 export async function ingestRecordingUploadWithDefaults(params: {
+  workspaceId: string;
   filename: string;
   stream: Readable;
   sourcePath?: string | null;
@@ -94,6 +98,7 @@ export async function ingestRecordingUploadWithDefaults(params: {
   };
 
   return ingestRecordingUpload({
+    workspaceId: params.workspaceId,
     filename: params.filename,
     stream: params.stream,
     sourcePath: params.sourcePath,

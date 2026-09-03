@@ -199,6 +199,11 @@ describe('application/confirm-assignment-session-step transactional persistence'
       );
       await client.query(`INSERT INTO students (id, student) VALUES ($1, 'Alpha')`, [studentId]);
       await client.query(
+        `INSERT INTO workspace_memberships (workspace_id, user_id, role)
+         SELECT workspace_id, $2, 'owner' FROM students WHERE id = $1`,
+        [studentId, userId],
+      );
+      await client.query(
         `INSERT INTO recordings (id, source, student_id, storage_uri, bytes, status)
          VALUES ($1, 'upload', $2, 's3://recordings/a.mp3', 1, 'transcribed')`,
         [recordingId, studentId],
@@ -330,6 +335,11 @@ describe('application/confirm-assignment-session-step transactional persistence'
         [userId, `${userId}@example.test`],
       );
       await client.query(`INSERT INTO students (id, student) VALUES ($1, 'Alpha')`, [studentId]);
+      await client.query(
+        `INSERT INTO workspace_memberships (workspace_id, user_id, role)
+         SELECT workspace_id, $2, 'owner' FROM students WHERE id = $1`,
+        [studentId, userId],
+      );
       await client.query(
         `INSERT INTO recordings (id, source, student_id, storage_uri, bytes, status)
          VALUES ($1, 'upload', $2, 's3://recordings/a.mp3', 1, 'transcribed')`,
@@ -618,6 +628,11 @@ describe('application/confirm-assignment-session-step transactional persistence'
         [userId, `${userId}@example.test`],
       );
       await client.query(`INSERT INTO students (id, student) VALUES ($1, 'Alpha')`, [studentId]);
+      await client.query(
+        `INSERT INTO workspace_memberships (workspace_id, user_id, role)
+         SELECT workspace_id, $2, 'owner' FROM students WHERE id = $1`,
+        [studentId, userId],
+      );
       await client.query(
         `INSERT INTO recordings (id, source, student_id, storage_uri, bytes, status)
          VALUES ($1, 'upload', $2, 's3://recordings/a.mp3', 1, 'transcribed')`,

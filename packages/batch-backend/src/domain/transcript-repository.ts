@@ -44,7 +44,27 @@ export interface InsertTranscriptParams {
   summaryJson?: Record<string, unknown> | null;
 }
 
-export async function getTranscriptByRecordingId(
+export async function getTranscriptByIdForUpdateForUser(
+  client: PoolClient,
+  id: string,
+  userId: string,
+): Promise<TranscriptRecord | null> {
+  const result = await client.query(
+    `SELECT t.id, t.recording_id, t.storage_uri, t.working_version, t.content_hash,
+            t.raw_response_uri, t.mode, t.model, t.language, t.stt_provider,
+            t.fallback_used, t.summary_json, t.created_at, t.updated_at
+     FROM transcripts t
+     JOIN recordings r ON r.id = t.recording_id
+     JOIN workspace_memberships wm ON wm.workspace_id = r.workspace_id
+     WHERE t.id = $1 AND wm.user_id = $2
+     FOR UPDATE OF t`,
+    [id, userId],
+  );
+  return result.rows[0] ? mapRowToTranscript(result.rows[0]) : null;
+}
+
+/** Explicitly unscoped for queue/service execution only. */
+export async function getTranscriptByRecordingIdForWorker(
   recordingId: string,
 ): Promise<TranscriptRecord | null> {
   const row = await withPgClient(async (client: PoolClient) => {
@@ -66,7 +86,45 @@ export async function getTranscriptByRecordingId(
   return row ? mapRowToTranscript(row) : null;
 }
 
-export async function listLatestTranscriptsByRecordingIds(
+export async function getTranscriptByRecordingIdForWorkspace(
+  recordingId: string,
+  workspaceId: string,
+): Promise<TranscriptRecord | null> {
+  const row = await withPgClient(async (client: PoolClient) => {
+    const result = await client.query(
+      `SELECT t.id, t.recording_id, t.storage_uri, t.working_version, t.content_hash,
+              t.raw_response_uri, t.mode, t.model, t.language, t.stt_provider,
+              t.fallback_used, t.summary_json, t.created_at, t.updated_at
+       FROM transcripts t
+       JOIN recordings r ON r.id = t.recording_id
+       WHERE t.recording_id = $1 AND r.workspace_id = $2`,
+      [recordingId, workspaceId],
+    );
+    return result.rows[0];
+  });
+  return row ? mapRowToTranscript(row) : null;
+}
+
+export async function getTranscriptByIdForWorkspace(
+  id: string,
+  workspaceId: string,
+): Promise<TranscriptRecord | null> {
+  const row = await withPgClient(async (client: PoolClient) => {
+    const result = await client.query(
+      `SELECT t.id, t.recording_id, t.storage_uri, t.working_version, t.content_hash,
+              t.raw_response_uri, t.mode, t.model, t.language, t.stt_provider,
+              t.fallback_used, t.summary_json, t.created_at, t.updated_at
+       FROM transcripts t JOIN recordings r ON r.id = t.recording_id
+       WHERE t.id = $1 AND r.workspace_id = $2`,
+      [id, workspaceId],
+    );
+    return result.rows[0];
+  });
+  return row ? mapRowToTranscript(row) : null;
+}
+
+/** Explicitly unscoped for queue/service execution only. */
+export async function listLatestTranscriptsByRecordingIdsForWorker(
   recordingIds: string[],
 ): Promise<TranscriptRecord[]> {
   if (recordingIds.length === 0) {
@@ -92,6 +150,26 @@ export async function listLatestTranscriptsByRecordingIds(
   });
 
   return rows.map((row) => mapRowToTranscript(row));
+}
+
+export async function listLatestTranscriptsByRecordingIdsForWorkspace(
+  recordingIds: string[],
+  workspaceId: string,
+): Promise<TranscriptRecord[]> {
+  if (recordingIds.length === 0) return [];
+  const rows = await withPgClient(async (client: PoolClient) => {
+    const result = await client.query(
+      `SELECT t.id, t.recording_id, t.storage_uri, t.working_version, t.content_hash,
+              t.raw_response_uri, t.mode, t.model, t.language, t.stt_provider,
+              t.fallback_used, t.summary_json, t.created_at, t.updated_at
+       FROM transcripts t JOIN recordings r ON r.id = t.recording_id
+       WHERE t.recording_id = ANY($1::uuid[]) AND r.workspace_id = $2
+         AND t.working_version IS NOT NULL AND t.content_hash IS NOT NULL`,
+      [recordingIds, workspaceId],
+    );
+    return result.rows;
+  });
+  return rows.map(mapRowToTranscript);
 }
 
 export async function insertTranscript(

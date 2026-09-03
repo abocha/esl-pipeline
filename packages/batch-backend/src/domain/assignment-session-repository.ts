@@ -20,6 +20,7 @@ import {
   AssignmentConfirmedSnapshotSchema,
   type AssignmentSessionRecord,
 } from './assignment-session-model.js';
+import type { DraftRecord } from './draft-model.js';
 import { getDraftByIdForUpdate } from './draft-repository.js';
 import { insertJobActionHistory } from './job-action-history-repository.js';
 import { JobActionType } from './job-actions.js';
@@ -31,7 +32,7 @@ import {
   insertJob,
   resetFailedAssignmentCorrectionJob,
 } from './job-repository.js';
-import { getTranscriptByIdForUpdate } from './transcript-repository.js';
+import { getTranscriptByIdForUpdateForUser } from './transcript-repository.js';
 
 export const ACTIVE_ASSIGNMENT_SESSION_SQL = `confirmed_step <> 'share'`;
 
@@ -330,7 +331,11 @@ async function confirmLockedSource(
     ConfirmAssignmentSessionStepRequest,
     { step: 'source' }
   >;
-  const transcript = await getTranscriptByIdForUpdate(client, request.transcriptId);
+  const transcript = await getTranscriptByIdForUpdateForUser(
+    client,
+    request.transcriptId,
+    params.userId,
+  );
   if (!transcript)
     throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_ARTIFACT_NOT_FOUND');
   if (
@@ -346,7 +351,14 @@ async function confirmLockedSource(
   const recording = await client.query<{
     student_id: string | null;
     audio_topology: string | null;
-  }>('SELECT student_id, audio_topology FROM recordings WHERE id = $1', [request.recordingId]);
+  }>(
+    `SELECT r.student_id, r.audio_topology
+     FROM recordings r
+     JOIN students s ON s.id = r.student_id AND s.workspace_id = r.workspace_id
+     JOIN workspace_memberships wm ON wm.workspace_id = r.workspace_id AND wm.user_id = $2
+     WHERE r.id = $1`,
+    [request.recordingId, params.userId],
+  );
   if (!recording.rows[0] || recording.rows[0].student_id !== current.studentId) {
     throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_LINEAGE_INVALID');
   }
@@ -358,8 +370,11 @@ async function confirmLockedSource(
   }
   if (request.lessonId) {
     const lesson = await client.query(
-      'SELECT 1 FROM student_lessons WHERE id = $1 AND student_id = $2',
-      [request.lessonId, current.studentId],
+      `SELECT 1 FROM student_lessons sl
+       JOIN students s ON s.id = sl.student_id
+       JOIN workspace_memberships wm ON wm.workspace_id = s.workspace_id
+       WHERE sl.id = $1 AND sl.student_id = $2 AND wm.user_id = $3`,
+      [request.lessonId, current.studentId, params.userId],
     );
     if (!lesson.rows[0]) {
       throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_LINEAGE_INVALID');
@@ -431,7 +446,7 @@ async function confirmLockedContext(
   if (!current.confirmed.source) {
     throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_PREREQUISITE_MISSING');
   }
-  await assertConfirmedSourceIsCurrent(client, current);
+  await assertConfirmedSourceIsCurrent(client, current, params.userId);
   const profileValues = [request.profileId, request.profileRevisionId, request.profileRevisionHash];
   if (
     profileValues.some((value) => value !== null) &&
@@ -500,7 +515,7 @@ async function confirmLockedCreate(
   if (!source || !current.confirmed.context) {
     throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_PREREQUISITE_MISSING');
   }
-  await assertConfirmedSourceIsCurrent(client, current);
+  await assertConfirmedSourceIsCurrent(client, current, params.userId);
   const context = current.confirmed.context;
   if (
     current.teacherNotes !== context.teacherNotes ||
@@ -510,44 +525,26 @@ async function confirmLockedCreate(
   ) {
     throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_PREREQUISITE_MISSING');
   }
-  const draft = await getDraftByIdForUpdate(client, request.draftId);
-  if (!draft) throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_ARTIFACT_NOT_FOUND');
+  const authorized = await getAuthorizedCreateLineageForUpdate(client, {
+    draftId: request.draftId,
+    promptPackageId: request.promptPackageId,
+    userId: params.userId,
+    studentId: current.studentId,
+    recordingId: source.recordingId,
+    transcriptId: source.transcriptId,
+    lessonId: source.lessonId,
+  });
+  if (!authorized) {
+    throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_ARTIFACT_NOT_FOUND');
+  }
+  const { draft, packageRow } = authorized;
   if (draft.workingVersion === null || draft.contentHash === null) {
     throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_LINEAGE_INVALID');
   }
   if (draft.workingVersion !== request.draftWorkingVersion) {
     throw new ArtifactWorkingConflictError(draft);
   }
-  const prompt = await client.query<{
-    id: string;
-    recording_id: string;
-    transcript_id: string;
-    student_id: string | null;
-    lesson_id: string | null;
-    notes: string | null;
-    resolved_profile_id: string | null;
-    resolved_profile_revision_id: string | null;
-    resolved_profile_hash: string | null;
-    resolved_profile_revision_content_hash: string | null;
-  }>(
-    `SELECT pp.id, pp.recording_id, pp.transcript_id, pp.student_id, pp.lesson_id, pp.notes,
-            pp.resolved_profile_id, pp.resolved_profile_revision_id, pp.resolved_profile_hash,
-            pr.content_hash AS resolved_profile_revision_content_hash
-     FROM prompt_packages pp
-     LEFT JOIN profile_revisions pr
-       ON pr.id = pp.resolved_profile_revision_id AND pr.profile_id = pp.resolved_profile_id
-     WHERE pp.id = $1`,
-    [request.promptPackageId],
-  );
-  const packageRow = prompt.rows[0];
   if (
-    !packageRow ||
-    draft.promptPackageId !== packageRow.id ||
-    draft.studentId !== current.studentId ||
-    packageRow.student_id !== current.studentId ||
-    packageRow.recording_id !== source.recordingId ||
-    packageRow.transcript_id !== source.transcriptId ||
-    packageRow.lesson_id !== source.lessonId ||
     packageRow.notes !== context.teacherNotes ||
     packageRow.resolved_profile_id !== context.profileId ||
     packageRow.resolved_profile_revision_id !== context.profileRevisionId ||
@@ -574,6 +571,105 @@ async function confirmLockedCreate(
     columns: { prompt_package_id: request.promptPackageId, draft_id: request.draftId },
   });
   return { session: updated, invalidated: ['preview'], lessonMemoryIntent: null };
+}
+
+interface AuthorizedCreatePackageRow {
+  id: string;
+  notes: string | null;
+  resolved_profile_id: string | null;
+  resolved_profile_revision_id: string | null;
+  resolved_profile_hash: string | null;
+  resolved_profile_revision_content_hash: string | null;
+}
+
+async function getAuthorizedCreateLineageForUpdate(
+  client: PoolClient,
+  params: {
+    draftId: string;
+    promptPackageId: string;
+    userId: string;
+    studentId: string;
+    recordingId: string;
+    transcriptId: string;
+    lessonId: string | null;
+  },
+): Promise<{ draft: DraftRecord; packageRow: AuthorizedCreatePackageRow } | null> {
+  const result = await client.query<
+    AuthorizedCreatePackageRow & {
+      draft_id: string;
+      draft_prompt_package_id: string;
+      draft_student_id: string | null;
+      draft_lesson_id: string | null;
+      draft_storage_uri: string;
+      draft_working_version: number | null;
+      draft_content_hash: string | null;
+      draft_created_by: string | null;
+      draft_created_at: Date;
+      draft_updated_at: Date;
+    }
+  >(
+    `SELECT
+       pp.id,
+       pp.notes,
+       pp.resolved_profile_id,
+       pp.resolved_profile_revision_id,
+       pp.resolved_profile_hash,
+       pr.content_hash AS resolved_profile_revision_content_hash,
+       d.id AS draft_id,
+       d.prompt_package_id AS draft_prompt_package_id,
+       d.student_id AS draft_student_id,
+       d.lesson_id AS draft_lesson_id,
+       d.storage_uri AS draft_storage_uri,
+       d.working_version AS draft_working_version,
+       d.content_hash AS draft_content_hash,
+       d.created_by AS draft_created_by,
+       d.created_at AS draft_created_at,
+       d.updated_at AS draft_updated_at
+     FROM drafts d
+     JOIN prompt_packages pp ON pp.id = d.prompt_package_id
+     JOIN recordings r ON r.id = pp.recording_id
+     JOIN transcripts t ON t.id = pp.transcript_id AND t.recording_id = r.id
+     JOIN workspace_memberships wm ON wm.workspace_id = r.workspace_id
+     LEFT JOIN profile_revisions pr
+       ON pr.id = pp.resolved_profile_revision_id AND pr.profile_id = pp.resolved_profile_id
+     WHERE d.id = $1
+       AND pp.id = $2
+       AND wm.user_id = $3
+       AND r.student_id = $4
+       AND pp.student_id = $4
+       AND d.student_id = $4
+       AND r.id = $5
+       AND t.id = $6
+       AND pp.lesson_id IS NOT DISTINCT FROM $7::uuid
+       AND d.lesson_id IS NOT DISTINCT FROM $7::uuid
+     FOR UPDATE OF d`,
+    [
+      params.draftId,
+      params.promptPackageId,
+      params.userId,
+      params.studentId,
+      params.recordingId,
+      params.transcriptId,
+      params.lessonId,
+    ],
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  return {
+    packageRow: row,
+    draft: {
+      id: row.draft_id,
+      promptPackageId: row.draft_prompt_package_id,
+      studentId: row.draft_student_id,
+      lessonId: row.draft_lesson_id,
+      storageUri: row.draft_storage_uri,
+      workingVersion: row.draft_working_version,
+      contentHash: row.draft_content_hash,
+      createdBy: row.draft_created_by,
+      createdAt: row.draft_created_at,
+      updatedAt: row.draft_updated_at,
+    },
+  };
 }
 
 async function updateConfirmedSession(
@@ -720,6 +816,7 @@ async function reconcileConfirmedLessonMemoryIntent(
 async function assertConfirmedSourceIsCurrent(
   client: PoolClient,
   session: AssignmentSessionRecord,
+  userId: string,
 ): Promise<void> {
   const source = session.confirmed.source;
   if (!source) {
@@ -732,7 +829,7 @@ async function assertConfirmedSourceIsCurrent(
   ) {
     throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_PREREQUISITE_MISSING');
   }
-  const transcript = await getTranscriptByIdForUpdate(client, source.transcriptId);
+  const transcript = await getTranscriptByIdForUpdateForUser(client, source.transcriptId, userId);
   if (!transcript) {
     throw new AssignmentSessionConfirmationError('ASSIGNMENT_STEP_ARTIFACT_NOT_FOUND');
   }
@@ -834,12 +931,18 @@ export async function updateAssignmentSessionRecovery(
   }
 
   return withPgClient(async (client) => {
-    if (params.patch.promptPackageId !== undefined || params.patch.draftId !== undefined) {
+    if (
+      params.patch.recordingId !== undefined ||
+      params.patch.transcriptId !== undefined ||
+      params.patch.promptPackageId !== undefined ||
+      params.patch.draftId !== undefined
+    ) {
       const currentRow = await findOwnedById(client, params.id, params.userId);
       if (currentRow) {
         const current = mapRow(currentRow);
         if (current.revision === params.expectedRevision) {
-          await assertRecoveryPromptDraftLineage(client, current, params.patch);
+          await assertRecoverySourceLineage(client, current, params.patch, params.userId);
+          await assertRecoveryPromptDraftLineage(client, current, params.patch, params.userId);
         }
       }
     }
@@ -893,25 +996,97 @@ export async function updateAssignmentSessionRecovery(
   });
 }
 
+async function assertRecoverySourceLineage(
+  client: PoolClient,
+  current: AssignmentSessionRecord,
+  patch: AssignmentSessionRecoveryPatch,
+  userId: string,
+): Promise<void> {
+  const recordingId = patch.recordingId === undefined ? current.recordingId : patch.recordingId;
+  const transcriptId = patch.transcriptId === undefined ? current.transcriptId : patch.transcriptId;
+  if (!recordingId && !transcriptId) return;
+  if (recordingId && !transcriptId) {
+    const recording = await client.query(
+      `SELECT 1 FROM recordings r
+       JOIN workspace_memberships wm ON wm.workspace_id = r.workspace_id
+       WHERE r.id = $1 AND r.student_id = $2 AND wm.user_id = $3`,
+      [recordingId, current.studentId, userId],
+    );
+    if (!recording.rows[0]) throw new AssignmentRecoveryLineageError();
+    return;
+  }
+  if (!recordingId && transcriptId) {
+    const transcript = await client.query(
+      `SELECT 1 FROM transcripts t
+       JOIN recordings r ON r.id = t.recording_id
+       JOIN workspace_memberships wm ON wm.workspace_id = r.workspace_id
+       WHERE t.id = $1 AND r.student_id = $2 AND wm.user_id = $3`,
+      [transcriptId, current.studentId, userId],
+    );
+    if (!transcript.rows[0]) throw new AssignmentRecoveryLineageError();
+    return;
+  }
+  const result = await client.query(
+    `SELECT 1 FROM recordings r
+     JOIN transcripts t ON t.recording_id = r.id
+     JOIN workspace_memberships wm ON wm.workspace_id = r.workspace_id
+     WHERE r.id = $1 AND t.id = $2 AND r.student_id = $3 AND wm.user_id = $4`,
+    [recordingId, transcriptId, current.studentId, userId],
+  );
+  if (!result.rows[0]) throw new AssignmentRecoveryLineageError();
+}
+
 async function assertRecoveryPromptDraftLineage(
   client: PoolClient,
   current: AssignmentSessionRecord,
   patch: AssignmentSessionRecoveryPatch,
+  userId: string,
 ): Promise<void> {
   const promptPackageId =
     patch.promptPackageId === undefined ? current.promptPackageId : patch.promptPackageId;
   const draftId = patch.draftId === undefined ? current.draftId : patch.draftId;
-  if (!draftId) return;
+  if (!promptPackageId && !draftId) return;
   if (!promptPackageId) throw new AssignmentRecoveryLineageError();
 
-  const draft = await getDraftByIdForUpdate(client, draftId);
-  if (
-    !draft ||
-    draft.promptPackageId !== promptPackageId ||
-    draft.studentId !== current.studentId
-  ) {
-    throw new AssignmentRecoveryLineageError();
-  }
+  const recordingId = patch.recordingId === undefined ? current.recordingId : patch.recordingId;
+  const transcriptId = patch.transcriptId === undefined ? current.transcriptId : patch.transcriptId;
+  if (!recordingId || !transcriptId) throw new AssignmentRecoveryLineageError();
+
+  const params = [
+    promptPackageId,
+    userId,
+    current.studentId,
+    recordingId,
+    transcriptId,
+    current.lessonId,
+  ];
+  const commonSql = `
+    JOIN recordings r ON r.id = pp.recording_id
+    JOIN transcripts t ON t.id = pp.transcript_id AND t.recording_id = r.id
+    JOIN workspace_memberships wm ON wm.workspace_id = r.workspace_id
+    WHERE pp.id = $1
+      AND wm.user_id = $2
+      AND r.student_id = $3
+      AND pp.student_id = $3
+      AND r.id = $4
+      AND t.id = $5
+      AND pp.lesson_id IS NOT DISTINCT FROM $6::uuid`;
+
+  const result = draftId
+    ? await client.query(
+        `SELECT 1
+         FROM drafts d
+         JOIN prompt_packages pp ON pp.id = d.prompt_package_id
+         ${commonSql}
+           AND d.id = $7
+           AND d.student_id = $3
+           AND d.lesson_id IS NOT DISTINCT FROM $6::uuid
+         FOR UPDATE OF d`,
+        [...params, draftId],
+      )
+    : await client.query(`SELECT 1 FROM prompt_packages pp ${commonSql}`, params);
+
+  if (!result.rows[0]) throw new AssignmentRecoveryLineageError();
 }
 
 export async function reserveAssignmentShare(
@@ -962,7 +1137,11 @@ export async function reserveAssignmentShare(
       ) {
         throw new AssignmentSessionShareError('ASSIGNMENT_SHARE_DIRTY_RECOVERY');
       }
-      const transcript = await getTranscriptByIdForUpdate(client, source.transcriptId);
+      const transcript = await getTranscriptByIdForUpdateForUser(
+        client,
+        source.transcriptId,
+        params.userId,
+      );
       const draft = await getDraftByIdForUpdate(client, create.draftId);
       if (
         !transcript ||
@@ -1283,17 +1462,17 @@ function shareJobMatchesSession(job: JobRecord, session: AssignmentSessionRecord
   const create = session.confirmed.create;
   return Boolean(
     source &&
-      create &&
-      job.id === session.shareJobId &&
-      job.userId === session.userId &&
-      job.studentId === session.studentId &&
-      job.recordingId === source.recordingId &&
-      job.transcriptId === source.transcriptId &&
-      job.promptPackageId === create.promptPackageId &&
-      job.draftId === create.draftId &&
-      job.lessonId === source.lessonId &&
-      job.mdStorageUri === create.draftStorageUri &&
-      job.sourceJobId === null,
+    create &&
+    job.id === session.shareJobId &&
+    job.userId === session.userId &&
+    job.studentId === session.studentId &&
+    job.recordingId === source.recordingId &&
+    job.transcriptId === source.transcriptId &&
+    job.promptPackageId === create.promptPackageId &&
+    job.draftId === create.draftId &&
+    job.lessonId === source.lessonId &&
+    job.mdStorageUri === create.draftStorageUri &&
+    job.sourceJobId === null,
   );
 }
 
