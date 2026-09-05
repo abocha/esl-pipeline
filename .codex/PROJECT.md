@@ -56,11 +56,21 @@ verification baseline in [`docs/reference/agents-ssot.md`](../docs/reference/age
 - run the narrowest focused tests first;
 - use `pnpm --silent run check:fast:agent` as the default affected gate;
 - use `pnpm check:pre-pr` directly for broad, cross-cutting, shared-contract, or toolchain work;
+- use `pnpm check:pre-pr:agent` when that same broad gate should return the existing persisted agent
+  summary and lane-log references for a completion handoff; it uses the same `--broad` validation
+  plan and does not change broad semantics;
 - use `pnpm check` for DB, migration, worker, integration behavior, or local CI reproduction;
 - use existing `:agent` lanes and inspect their cited artifacts before diagnostic reruns;
 - keep selected PostgreSQL and Redis requirements visible as CI-owned evidence;
 - treat `PASS_WITH_CI_REQUIREMENTS` as permission to create a PR, never to merge; every selected
   hosted job and `CI gate` must pass before merge.
+
+When a validation command produces structured or persisted evidence, completion handoffs must retain
+the exact local summary/run-directory reference (or hosted run, job, and artifact identity), the
+outcome, outstanding CI/manual/environment-owned requirements, and enough execution-state or
+relevant-delta context for a fresh agent to assess freshness. Follow the detailed evidence reuse
+policy in the validation skill; if continuity cannot be established cheaply, rerun the affected
+scope. Do not treat a `HEAD` value plus a dirty flag as proof that dirty content is unchanged.
 
 Docs-only harness changes use the docs-specific lanes selected by `AGENTS.md`; do not run broad
 application or service integration merely for ceremony.
