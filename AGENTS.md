@@ -49,15 +49,17 @@ SSOT wins.
 
 ## Workflow Selection
 
-Choose the lightest workflow consistent with ambiguity and risk:
+Choose the lightest workflow consistent with ambiguity and risk. For mode or model selection,
+use [`.codex/WORKFLOW_MODES.md`](.codex/WORKFLOW_MODES.md).
 
 - **Direct execution:** use for obvious, isolated, low-risk changes. Do not require brainstorming, a
   specification, an implementation plan, a worktree, delegated implementation, or delegated review.
 - **Targeted discipline:** use for contained bugs and behavior changes. Invoke only the relevant
   debugging, TDD, review, or verification workflow rather than the full design lifecycle.
-- **Full design and planning:** use when behavior is unsettled or work crosses architecture,
-  frontend/backend/database boundaries, migrations, authentication, authorization, persistent state,
-  concurrency, data integrity, or production risk. Obtain approval for the design decisions before
+- **Full design and planning:** use for unresolved design decisions or material changes to
+  architecture, contracts, migrations, authentication, authorization, persistent state, concurrency,
+  data integrity, or production behavior. Established bounded fixes may use targeted discipline
+  when they preserve approved contracts and introduce no new risk-sensitive decisions. Obtain approval for the design decisions before
   implementation. After that approval, normal plan-backed execution remains the default; explicitly
   approved goal-backed orchestration is an optional handoff when the outcome is stable and verifiable
   but the implementation strategy is expected to adapt materially. If WHAT success means or WHETHER
@@ -67,7 +69,8 @@ Choose the lightest workflow consistent with ambiguity and risk:
 Repository authorization overrides workflow-plugin defaults. Do not create worktrees, commits,
 branches, pushes, pull requests, deployments, delegated writes, or external mutations unless the
 user explicitly authorizes that action. The user prompt or an approved task plan may further narrow
-the workflow.
+the workflow. Authorization covering the action and scope remains applicable; do not request it again
+solely because execution continues in another turn.
 
 ## GitHub Issue Workflow
 
@@ -103,36 +106,16 @@ The detailed intake and selection procedure is in
   validation, separately authorized Git mutations, and the final result.
 - Delegated implementation is opt-in. It requires explicit scope, file or responsibility ownership,
   acceptance criteria, validation, and a named project role.
-- Project roles are narrow and non-default:
-  - `luna_implementer`: GPT-5.6 Luna at xhigh for bounded coherent, pattern-following or otherwise
-    sufficiently specified implementation with explicit acceptance criteria and targeted validation.
-    High is only a fallback when quota or cost materially matters or measured current-environment
-    latency justifies it. Stop before architecture, security or authorization, privacy,
-    persistent-data integrity, migrations, concurrency, public contracts, or production decisions.
-  - `terra_workhorse`: GPT-5.6 Terra at high for predetermined implementation requiring substantial
-    semantic coupling or integration judgment. Route by interaction complexity rather than size;
-    signals include cross-process state, concurrency, transactional or rollback semantics, several
-    mutually dependent ownership surfaces, or correctness located primarily in component interactions.
-  - `terra_explorer`: GPT-5.6 Terra at low for conditional read-only tracing of execution paths,
-    ownership, contracts, tests, configuration, and active docs. Skip it when an active plan already
-    supplies a fresh trustworthy map.
-  - `terra_reviewer`: GPT-5.6 Terra at high for ordinary coherent correctness, integration,
-    regression, failure-handling, and testing review.
-  - `sol_reviewer`: GPT-5.6 Sol at high for narrow concrete exceptional-risk surfaces in the actual
-    diff, including security or authorization, privacy, persistent-data integrity, destructive
-    operations, migrations, concurrency, retry or idempotency, or comparable high-consequence behavior.
-- `terra_explorer` must stop and return control when exploration reveals ambiguous ownership,
-  contradictory contracts, implicit state transitions, concurrency, data-integrity implications, or
-  architectural decisions.
-- Use the smallest role set that materially improves the result. Give every role a bounded,
-  non-overlapping question or responsibility. Do not duplicate an explorer's trace in the primary
-  context; perform only the targeted verification needed to decide or validate the work.
-- For heterogeneous delegated children, prefer fresh task contexts equivalent to
-  `fork_turns = "none"` where supported. Select the registered project role, never silently substitute
-  a generic/default child, and verify role, model, effort, and parent linkage from runtime metadata
-  when available.
+- Use registered roles: Luna for bounded specified implementation, Terra for coupled implementation,
+  exploration, or ordinary review, and Sol for exceptional-risk review. Detailed role boundaries,
+  model settings, context reuse, and routing integrity belong in
+  [`.codex/ORCHESTRATION.md`](.codex/ORCHESTRATION.md) and `.codex/agents/*.toml`.
+- Use the smallest useful role set and preserve the primary's integration accountability.
 
 ## Review Routing
+
+These rules apply when delegated implementation or independent review is warranted. Direct
+execution retains its exemption; a diff alone does not require a reviewer.
 
 - Review coherent subsystem and risk batches, not every implementation-plan checklist item.
 - Use `terra_reviewer` at high reasoning for ordinary meaningful review batches.

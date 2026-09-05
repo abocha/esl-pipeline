@@ -47,7 +47,7 @@ when:
 - the desired outcome and acceptance boundary are already stable and verifiable;
 - the implementation strategy is expected to adapt materially as repository evidence emerges;
 - several dependent ownership boundaries or root turns may be needed;
-- durable outcome state across a long-lived Sol primary is useful; and
+- durable outcome state across a long-lived primary agent is useful; and
 - outcome-level completion is meaningfully different from exhausting the current task list.
 
 The handoff does not need fake certainty about every future implementation task. It must establish the
@@ -95,7 +95,14 @@ must state what concrete thing will be true, how completion will be proved, and 
 primary to stop or escalate rather than grind. Goal-backed mode is not appropriate while WHAT success
 means or WHETHER to pursue the outcome remains under investigation.
 
-## 1. Use ChatGPT for design, not remote micromanagement
+## 1. Plan where the evidence is
+
+ChatGPT is the default discussion environment. A bounded Codex investigation may develop the recommendation when repeated local inspection is needed. Return to ChatGPT when further discussion helps; routine execution needs no mandatory round trip. Suggest manual evidence commands only when convenient for the maintainer. See `WORKFLOW_MODES.md` for revisable model-selection defaults.
+
+Recommend one execution or routing choice by default. Surface alternatives only when they materially
+differ in correctness, cost or quota, independence, or required maintainer involvement. The
+maintainer approves consequential design and scope decisions; routine model topology and dispatch
+remain execution mechanics.
 
 The interactive planning phase should establish:
 
