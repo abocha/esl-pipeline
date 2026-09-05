@@ -5,7 +5,8 @@ ESL Pipeline. It is a concise adapter, not a second product or testing manual.
 
 ## Authority and routing
 
-Apply authority in this order:
+Read selectively in this order; this is a reading route, not descending authority. User/task
+authorization controls scope. The ESL SSOT wins conflicts with repository instruction documents.
 
 1. user/task authorization and an approved plan where applicable;
 2. root [`AGENTS.md`](../AGENTS.md), the ESL router and operating contract;
@@ -16,6 +17,14 @@ Apply authority in this order:
 6. the task-specific active doc or owning package README;
 7. [`docs/reference/agents-ssot.md`](../docs/reference/agents-ssot.md), which remains the canonical
    ESL product/runtime contract and wins on product/runtime conflicts.
+
+## Workflow source and adaptation
+
+Portable source: `D:/code/codex-workflow`. `WORKFLOW_MODES.md` is copied from the portable
+standard. The installed `ORCHESTRATION.md` and `PLANNING_HANDOFF.md` retain reviewed ESL
+adaptations; compare and reconcile upstream changes rather than overwriting them with `-Force`.
+Keep new ESL-specific policy here or in root `AGENTS.md`. Role and skill differences should be
+reviewed separately from formatting-only differences. Model defaults live in `WORKFLOW_MODES.md`.
 
 ## Major ownership boundaries
 
