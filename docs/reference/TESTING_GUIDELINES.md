@@ -62,6 +62,9 @@ If this guide conflicts with [`docs/reference/agents-ssot.md`](agents-ssot.md), 
     prebuilt core unit subset for orchestrator, batch-backend, and batch-frontend.
   - Uses the same serial aggregate runner as `check:fast`; it does not hide the broad commands behind
     an opaque shell `&&` chain.
+- Root broad pre-PR check, agent output: `pnpm check:pre-pr:agent`
+  - Runs the same broad `--broad` validation plan as `check:pre-pr` while preserving the existing
+    persisted agent summary and lane-log references for completion handoffs.
 - Root full check: `pnpm check`
   - Runs root tooling tests, `build`, `typecheck`, `lint`, `test:unit:prebuilt`,
     `test:integration:prebuilt`, and the backend DB + worker lane.

@@ -44,22 +44,35 @@ between local evidence and CI-owned PostgreSQL/Redis evidence.
 - Do not add lane parallelism without explicit resource accounting across pnpm, Turbo, and Vitest.
 - Stop with findings when the request is review or redesign only.
 
-## Evidence freshness
+## Evidence freshness and completion handoff
 
-Evidence must cover the final relevant code, configuration, and environment. Reuse a completed
-check from this task when those inputs have not changed; a new message alone does not invalidate it.
+Evidence must cover the final relevant code, configuration, and environment. The completion handoff
+is the reuse boundary for a fresh receiving agent. When a command or validation lane produces
+structured or persisted evidence, report:
+
+- the exact command or validation lane and outcome;
+- the exact local summary file or run-directory reference when one exists;
+- for hosted evidence, the run URL or run identity plus the job and artifact identification when
+  applicable;
+- outstanding CI, manual, or environment-owned requirements; and
+- enough execution-state and relevant-delta context to judge freshness, such as the comparison
+  base and whether relevant files changed after the run.
+
+Preserve the concrete evidence reference and the scope/state it covered. Preserve subsequent
+relevant changes while ownership and context continue. Reuse completed evidence when relevant inputs
+have not changed; a new message alone does not invalidate it. If continuity cannot be established
+cheaply, treat freshness as unknown and rerun the affected scope. A `HEAD` value plus a dirty flag
+does not prove that dirty content is unchanged. Do not add hashes, registries, generalized
+fingerprints, or new artifact infrastructure for this handoff contract.
+
 Read the recorded result and scope before relying on it. Rerun affected checks after relevant changes
 or when concrete uncertainty remains, not merely to restate a passing result. Focused checks support
 focused claims and do not replace a required repository or hosted gate.
 
-## Completion evidence
+Agent-output commands are available when the receiving handoff needs persisted local evidence:
+`pnpm check:fast:agent` for affected validation and `pnpm check:pre-pr:agent` for the existing broad
+pre-PR validation. The canonical human-readable broad command remains `pnpm check:pre-pr`.
 
-Report:
-
-- focused commands actually run;
-- the canonical gate result;
-- cited artifact paths for failures;
-- named CI-owned requirements;
-- whether the result is `PASS`, `PASS_WITH_CI_REQUIREMENTS`, or a failure.
-
-Never describe `PASS_WITH_CI_REQUIREMENTS` as merge-ready.
+Always report focused commands actually run, the canonical gate result, cited artifact paths for
+failures, named CI-owned requirements, and whether the result is `PASS`,
+`PASS_WITH_CI_REQUIREMENTS`, or a failure. Never describe `PASS_WITH_CI_REQUIREMENTS` as merge-ready.
