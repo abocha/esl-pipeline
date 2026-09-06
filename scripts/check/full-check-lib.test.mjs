@@ -8,6 +8,7 @@ import {
   formatAgentCheckSummary,
 } from './agent-check-lib.mjs';
 import {
+  buildFullCheckEvidence,
   buildFullCheckLaneResult,
   buildFullCheckLanes,
   runFullCheckLanes,
@@ -69,6 +70,62 @@ test('full check stops at the first failed canonical lane and retains its exit r
       ['lint', 'pass', 0],
       ['test:unit:prebuilt', 'fail', 37],
     ],
+  );
+});
+
+test('failed full checks retain the complete plan and mark later lanes as not run', () => {
+  const lanes = buildFullCheckLanes();
+  const results = [
+    buildFullCheckLaneResult({
+      lane: lanes[0],
+      exitCode: 0,
+      durationMs: 100,
+      output: 'tooling passed',
+    }),
+    buildFullCheckLaneResult({
+      lane: lanes[1],
+      exitCode: 41,
+      durationMs: 200,
+      output: 'build failed',
+    }),
+  ];
+
+  const evidence = buildFullCheckEvidence({ lanes, results });
+  const persistedSummary = JSON.parse(
+    JSON.stringify({
+      ...buildAgentCheckSummary({
+        label: 'check:agent',
+        durationMs: 300,
+        lanes: results,
+      }),
+      ...evidence,
+    }),
+  );
+
+  assert.deepEqual(
+    persistedSummary.lanes.map((lane) => [lane.name, lane.status, lane.exitCode]),
+    [
+      ['test:tooling', 'pass', 0],
+      ['build', 'fail', 41],
+    ],
+  );
+  assert.deepEqual(
+    persistedSummary.plannedLanes.map((lane) => lane.name),
+    canonicalScripts,
+  );
+  assert.deepEqual(
+    persistedSummary.notRun.map((lane) => [lane.name, lane.status, lane.reason, lane.stoppedAfter]),
+    [
+      ['typecheck', 'not_run', 'stopped_after_first_failure', 'build'],
+      ['lint', 'not_run', 'stopped_after_first_failure', 'build'],
+      ['test:unit:prebuilt', 'not_run', 'stopped_after_first_failure', 'build'],
+      ['test:integration:prebuilt', 'not_run', 'stopped_after_first_failure', 'build'],
+      ['test:backend:db:worker', 'not_run', 'stopped_after_first_failure', 'build'],
+    ],
+  );
+  assert.equal(
+    persistedSummary.notRun.some((lane) => ['pass', 'fail', 'blocked'].includes(lane.status)),
+    false,
   );
 });
 

@@ -25,6 +25,22 @@ export async function runFullCheckLanes({ lanes, runLane, onResult = () => {} })
   return results;
 }
 
+export function buildFullCheckEvidence({ lanes, results }) {
+  const firstFailure = results.find((result) => result.status !== 'pass');
+  return {
+    plannedLanes: lanes.map((laneEntry) => ({ name: laneEntry.id, repro: laneEntry.repro })),
+    notRun: firstFailure
+      ? lanes.slice(results.length).map((laneEntry) => ({
+          name: laneEntry.id,
+          status: 'not_run',
+          reason: 'stopped_after_first_failure',
+          stoppedAfter: firstFailure.name,
+          repro: laneEntry.repro,
+        }))
+      : [],
+  };
+}
+
 export function buildFullCheckLaneResult({ lane, exitCode, durationMs, output, artifacts = {} }) {
   return {
     name: lane.id,
