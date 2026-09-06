@@ -13,6 +13,7 @@ import {
   resolvePackageManagerCommand,
 } from './agent-check-lib.mjs';
 import {
+  buildFullCheckEvidence,
   buildFullCheckLaneResult,
   buildFullCheckLanes,
   runFullCheckLanes,
@@ -36,8 +37,9 @@ if (runArtifacts) {
   mkdirSync(runArtifacts.runDir, { recursive: true });
 }
 
+const lanes = buildFullCheckLanes();
 const results = await runFullCheckLanes({
-  lanes: buildFullCheckLanes(),
+  lanes,
   runLane: agentMode ? runAgentLane : runHumanLane,
 });
 const firstFailure = results.find((result) => result.status !== 'pass') ?? null;
@@ -48,7 +50,12 @@ if (agentMode) {
     durationMs: Date.now() - startedMs,
     lanes: results,
   });
-  writeFileSync(runArtifacts.summaryJson, `${JSON.stringify(summary, null, 2)}\n`, 'utf8');
+  const evidence = buildFullCheckEvidence({ lanes, results });
+  writeFileSync(
+    runArtifacts.summaryJson,
+    `${JSON.stringify({ ...summary, ...evidence }, null, 2)}\n`,
+    'utf8',
+  );
   console.log(
     formatAgentCheckSummary(summary, {
       logsDir: relativeArtifactPath(runArtifacts.runDir),
