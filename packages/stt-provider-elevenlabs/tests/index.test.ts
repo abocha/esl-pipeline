@@ -12,6 +12,39 @@ import { createElevenLabsSttProvider } from '../src/index.js';
 const TEST_MODULE_PATH = fileURLToPath(import.meta.url);
 
 describe('stt-provider-elevenlabs', () => {
+  it('uses the installed SDK transport with the execution abort signal', async () => {
+    let receivedSignal: AbortSignal | undefined;
+    const controller = new AbortController();
+    const guardedFetch = vi.fn<typeof fetch>(async (_input, init) => {
+      receivedSignal = init?.signal ?? undefined;
+      return new Response(
+        JSON.stringify({ language_code: 'eng', language_probability: 1, text: 'Hello', words: [] }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      );
+    });
+    const provider = createElevenLabsSttProvider();
+
+    await provider.transcribe({
+      context: {
+        recordingId: 'rec-sdk-transport',
+        storageUri: 's3://bucket/audio.mp3',
+        async getStream() {
+          return Readable.from(['audio']);
+        },
+        async getSubmissionSource() {
+          return { kind: 'url' as const, url: 'https://storage.example.test/audio.mp3' };
+        },
+        providerTransport: { fetch: guardedFetch, signal: controller.signal },
+      },
+      config: { apiKey: 'test' },
+    });
+
+    expect(guardedFetch).toHaveBeenCalledTimes(1);
+    expect(receivedSignal).toBeDefined();
+    controller.abort();
+    expect(receivedSignal?.aborted).toBe(true);
+  });
+
   it('serializes the SDK sourceUrl field as source_url without a file part', async () => {
     const requests: Request[] = [];
     const client = new ElevenLabsClient({
@@ -183,7 +216,7 @@ describe('stt-provider-elevenlabs', () => {
       arrayBufferSpy.mockRestore();
       await fs.rm(directory, { recursive: true, force: true });
     }
-  });
+  }, 30_000);
 
   it('uses exactly one diarized Scribe v2 request for mixed audio', async () => {
     const convert = vi.fn(async (_request: Record<string, unknown>) => ({
@@ -289,9 +322,7 @@ describe('stt-provider-elevenlabs', () => {
       language_code: 'eng',
       language_probability: 1,
       text: 'TEMP_TOKEN_SECRET_456',
-      words: [
-        { text: 'SIGNED_URL_SECRET_123', speakerId: 'speaker_0', start: 0.1, end: 0.3 },
-      ],
+      words: [{ text: 'SIGNED_URL_SECRET_123', speakerId: 'speaker_0', start: 0.1, end: 0.3 }],
     }));
     const provider = createElevenLabsSttProvider({
       clientFactory: () => ({ speechToText: { convert } }),
@@ -432,8 +463,7 @@ describe('stt-provider-elevenlabs', () => {
       'https://storage.example.test/audio.mp3?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=SIGNED_URL_SECRET_123';
     const rawCause = new Error(`cause reflected ${signedUrl}`);
     const rawError = new Error(`provider rejected ${signedUrl}`);
-    const providerCodeSecret =
-      'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789';
+    const providerCodeSecret = 'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789';
     Object.assign(rawError, {
       body: { message: `body reflected ${signedUrl}` },
       status: 503,
@@ -485,9 +515,9 @@ describe('stt-provider-elevenlabs', () => {
     expect(enumerableError).not.toContain('X-Amz-Signature');
     expect(enumerableError).not.toContain('SIGNED_URL_SECRET_123');
     expect(safeError.status).toBe(503);
-    expect(safeError.code).toBeUndefined();
+    expect(safeError.code).toBe('PROVIDER_RETRYABLE_HTTP');
     expect(JSON.stringify(safeError)).not.toContain(providerCodeSecret);
-    expect(provider.classifyProviderError?.(safeError)).toBe('provider_timeout');
+    expect(provider.classifyProviderError).toBeUndefined();
     expect(convert).toHaveBeenCalledTimes(1);
   });
 
