@@ -118,6 +118,23 @@ describe('infrastructure/transcription-storage', () => {
     expect(stored.equals(content)).toBe(true);
   });
 
+  it('uses an immutable filesystem candidate key when an upload attempt owns storage', async () => {
+    tempDir = await createTempDir();
+    const storage = new FilesystemTranscriptionStorage(tempDir);
+
+    const result = await storage.putAudio({
+      workspaceId: 'workspace-1',
+      recordingId: 'r-1',
+      candidateId: 'attempt-1',
+      stream: Readable.from([Buffer.from('candidate-audio')]),
+      extension: '.opus',
+    });
+
+    expect(result.uri).toBe(
+      'local://workspaces/workspace-1/recordings/r-1/candidates/attempt-1/audio.opus',
+    );
+  });
+
   it.each([
     ['.mp3', 'audio/mpeg'],
     ['.wav', 'audio/wav'],
@@ -395,13 +412,38 @@ describe('infrastructure/transcription-storage', () => {
       storage.putAudio({
         workspaceId: 'workspace-1',
         recordingId: 'r-s3-rejected',
+        candidateId: 'attempt-s3',
         stream: Readable.from([Buffer.from('audio')]),
         extension: '.opus',
       }),
     ).rejects.toBe(uploadError);
     expect(adapter.deleteFile).toHaveBeenCalledWith(
-      'workspaces/workspace-1/recordings/r-s3-rejected/audio.opus',
+      'workspaces/workspace-1/recordings/r-s3-rejected/candidates/attempt-s3/audio.opus',
     );
+  });
+
+  it('derives and enforces the same deterministic S3 candidate URI used for a registered attempt', async () => {
+    const storage = createS3Storage();
+    const candidate = storage.getAudioUri({
+      workspaceId: 'workspace-1',
+      recordingId: 'r-s3-registered',
+      candidateId: 'attempt-s3',
+      extension: '.opus',
+    });
+    expect(candidate).toBe(
+      's3://bucket/workspaces/workspace-1/recordings/r-s3-registered/candidates/attempt-s3/audio.opus',
+    );
+
+    await expect(
+      storage.putAudio({
+        workspaceId: 'workspace-1',
+        recordingId: 'r-s3-registered',
+        candidateId: 'attempt-s3',
+        targetUri: 's3://bucket/workspaces/workspace-1/recordings/other/audio.opus',
+        stream: Readable.from([Buffer.from('audio')]),
+        extension: '.opus',
+      }),
+    ).rejects.toThrow(/pre-registered audio target/i);
   });
 
   it('compensates an owned S3 audio key after an ambiguous upload failure', async () => {

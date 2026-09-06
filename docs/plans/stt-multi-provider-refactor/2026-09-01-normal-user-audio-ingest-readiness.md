@@ -4,12 +4,12 @@
 
 - Audience: maintainers implementing or reviewing ordinary lesson-recording ingest.
 - Authority Level: approved Goal Contract execution plan.
-- Last Verified Against: 2026-09-01 repository state at `0e002c7ffdd2604130d21bb6a03847edebe673a4`, the local `codex/audio-topology` prerequisite fix, and the read-only ingest audit.
+- Last Verified Against: 2026-09-07 current `codex/audio-topology` checkout, locally implemented Slices 1–4, and the closed Slice 4 exceptional-risk semantic review.
 - Owner: founder-maintainer + speech-runtime maintainers.
 - Review Cadence: before implementation and after any material recording, tenant, retry, or retention contract change.
 - Status: `active`.
 - Exit Trigger: archive after implementation is merged, production rollout evidence satisfies the Goal Contract, and active runtime/operations docs own the shipped behavior.
-- Current Focus: make the fixed ElevenLabs mixed-recording path safe and routine for ordinary 1:1 tutor uploads.
+- Current Focus: begin Slice 5 — truthful frontend state and actionable recovery.
 
 This is the execution strategy beneath the maintainer-approved Goal Contract. It may adapt implementation detail as evidence changes, but it must not change the locked product or architecture decisions below without maintainer approval.
 
@@ -46,6 +46,13 @@ Do not add or reopen:
 
 ## 2. Current prerequisite state
 
+### Current campaign status
+
+- Slices 1–4 are implemented locally in the current checkout.
+- The Slice 4 exceptional-risk semantic review is `CLOSED` with no remaining findings.
+- Slice 5 is the next implementation slice.
+- Local and hosted validation status remains evidence for readiness, merge, and rollout; it is not architecture or slice-sequencing state.
+
 ### Already completed or fixed
 
 1. ElevenLabs Scribe v2 is the production `mixed_recording` route.
@@ -54,15 +61,12 @@ Do not add or reopen:
 4. The provider benchmark decision is closed.
 5. The atomic trusted-topology upload serialization defect has been fixed locally on `codex/audio-topology`. This plan assumes that fix is integrated and retains only regression coverage for the upload contract; it does not reimplement it.
 
-### Current implementation gaps that this plan closes
+### Remaining implementation work
 
-1. `recordings-routes.ts` collects multipart bytes into process memory, although `transcription-storage.ts` can already upload a path/stream to S3.
-2. The ElevenLabs adapter collects the stored stream into a second whole-file buffer and wraps it in a hard-coded `audio/mpeg` Blob.
-3. Upload validation is extension/MIME/size oriented rather than a deterministic media probe.
-4. Recording and transcript repositories and cache reuse are not consistently rooted in the authenticated tutor's workspace.
-5. BullMQ retries, provider SDK retries, manual retry, and queue re-enqueue do not form one bounded submission-slot policy.
-6. Recording status can become terminal while queue recovery remains possible, and error clearing/status projection are not one coherent state machine.
-7. Audio storage has no post-confirmation deletion boundary or stale-object cleanup policy.
+1. Slice 5 must surface the canonical run/error projection through DTOs, polling, SSE, and resume, and render its truthful user states.
+2. Slice 5 must consume the existing browser size guard and stable backend error codes, expose `audioLifecycle`/`audioAvailable`, remove normal-user transcription retry UI, and make refresh/reconnect equivalent.
+3. Slice 6 still owns deletion of recording-adopted retained audio after Source confirmation/TTL; it is not complete as part of Slice 4.
+4. Slice 7 still owns integrated acceptance, operations, documentation closeout, and separately authorized production evidence.
 
 ## 3. Locked product and architecture decisions
 
@@ -90,18 +94,19 @@ Do not add or reopen:
 1. In the browser, reject `File.size > 2147483648` before starting the request and show the 2 GiB operational upload-limit error used for backend rejection.
 2. Authenticate the tutor and resolve the tutor's primary workspace.
 3. Resolve the explicitly selected student by ID within that workspace; return a non-enumerating not-found response otherwise. Authenticated upload must not use global `student=` name lookup or `deriveStudentId(studentName)`.
-4. Before consuming multipart media, admit the request only when the ingest temporary filesystem has enough point-in-time free capacity for the configured maximum upload while retaining its reserve. Stream the multipart part to a bounded temporary file while computing SHA-256 and byte count. Stop and clean up as soon as the configured byte guard is exceeded.
+4. Before consuming multipart media, the frontend-owned UUID claims the workspace-scoped logical upload in `recording_upload_operations`; active duplicates resolve as processing, completed duplicates resolve their committed recording, and an expired attempt is retired before reclaim. Then admit the request only when the ingest temporary filesystem has enough point-in-time free capacity for the configured maximum upload while retaining its reserve. Stream the multipart part to a bounded temporary file while computing SHA-256 and byte count. Stop and clean up as soon as the configured byte guard is exceeded.
 5. Probe the completed temporary file. Reject unsupported, corrupt, no-audio, multi-audio-stream, or over-100-minute input before storage and STT.
 6. For direct supported audio, keep the spooled audio unchanged as the candidate retained artifact. For an allowed video/audio-stream pair, stream-copy the selected audio stream to a second temporary file, re-probe it, and make the extracted audio the sole candidate retained artifact. Delete the temporary source video after successful extraction. On preparation failure, delete all temporary files, store nothing remotely, and return the deterministic failure.
 7. Compute the complete transcription/cache fingerprint from the candidate audio hash, probed media facts, topology, provider/request profile, language/model, and preparation version. Resolve cache only within the authenticated workspace before retained-audio storage and before transcription-run creation.
 8. On a valid cache hit, transactionally create independent workspace-owned recording and transcript lineage with audio lifecycle `not_retained`; copy durable transcript content into the new lineage or omit non-required raw response, clean all temporary files, upload no audio, create no transcription run, and enqueue no transcription job.
-9. On a cache miss, store exactly one retained audio artifact under the recording's workspace-prefixed key: the unchanged uploaded audio for direct audio, or the losslessly extracted audio for supported video. No source video, second audio object, or object shared with another recording is retained.
-10. In one database transaction, create the workspace-owned recording and its one active transcription run. Publish one BullMQ job whose deterministic `jobId` is the stable run ID.
-11. The worker claims the run atomically, generates a fresh provider submission source, reserves at most one submission slot for that queue attempt before the provider call, validates the result objectively, and records the slot outcome as known or ambiguous where evidence permits.
-12. Retryable outcomes transition the run to `retry_wait`; BullMQ performs bounded backoff while the recording remains user-visible as processing. Permanent outcomes or exhaustion of the three-slot budget transition to terminal failure.
+9. On a cache miss, write one immutable attempt-specific physical upload candidate under a workspace-prefixed key. In the recording/run transaction, adopt exactly one winning candidate URI; never share a candidate or adopted audio object across recordings. Obsolete unadopted candidates remain isolated for bounded retrying cleanup.
+10. In one database transaction, create the workspace-owned recording and its one active transcription run. The `recording_upload_operations` row remains the owner of the workspace-scoped logical upload identity: the client retains one UUID across ambiguous retry/resume, while intentional new or replacement uploads use a new UUID. Publish one BullMQ job whose deterministic `jobId` is the stable run ID. Queue acknowledgement is not the durable handoff: a worker-owned reconciler restores a missing, failed, or exhausted delivery for any nonterminal run.
+11. The worker claims the run atomically, reserves at most one submission slot before provider work, and maintains a short durable claim lease without holding a database session across source preparation or provider I/O. Its attempt-local, single-use guarded SDK transport conditionally renews the same claim and verifies the committed slot at actual HTTP dispatch; authority loss or local deadline expiry latches cancellation before a stale continuation can dispatch. A stale claim token cannot commit a later outcome. Three slots cap only provider reservations/submissions that may cross the paid boundary, not BullMQ deliveries: reconciliation may recreate more queue executions, and an ambiguous dispatched request can conservatively consume another slot during recovery. Exact-once remote cancellation or billing is not promised.
+12. Retryable outcomes, including a structurally malformed Deepgram success, transition the run to `retry_wait` and bounded recovery; BullMQ delivery count may exceed three while the recording remains user-visible as processing. Permanent outcomes or reservation exhaustion commit terminal failure first, then publish only that committed terminal projection.
 13. A usable result writes the one transcript winner and transitions both run and recording to success atomically.
 14. Source review maps anonymous mixed speakers to Teacher/Student when needed. Successful Source confirmation atomically marks retained audio deletion pending; a `not_retained` cache hit remains `not_retained`.
-15. A small worker-owned sweeper deletes pending/expired retained audio idempotently without deleting the recording or transcript row.
+15. A separate Slice 4 worker-owned reconciler deletes only obsolete, unadopted upload-attempt candidates with bounded retries after rechecking durable adoption/reference; it never deletes recording-adopted audio.
+16. Slice 6, still future work, owns lifecycle deletion of recording-adopted retained audio after Source confirmation or TTL, idempotently without deleting the recording or transcript row.
 
 ### Persistent transcription-run states
 
@@ -119,7 +124,7 @@ Rules:
 2. `succeeded` requires a committed usable transcript.
 3. `failed` means a permanent error or exhausted submission-slot budget.
 4. A worker finding a stale `submitting` claim with a reserved slot and no durable result treats that slot as ambiguous and may reclaim only if another submission slot remains.
-5. A database compare-and-set claim, not BullMQ delivery alone, determines whether work may submit.
+5. A database compare-and-set claim with a short durable lease, not an execution-wide advisory lock/fence or BullMQ delivery alone, determines whether work may submit.
 
 The existing recording status remains the stable product projection:
 
@@ -160,7 +165,14 @@ Do not project a retryable attempt failure as `recordings.status = 'failed'`. Cl
 
 ### Database additions
 
-Add one migration, expected as `0049_recording_ingest_readiness.sql`, containing the coherent schema contract:
+The current migration chain preserves the foundational `0049_recording_ingest_readiness.sql` and
+`0050_recording_media_preparation_version.sql` contracts. Slice 4 adds
+`0051_recording_upload_operations.sql` for workspace-scoped logical upload ownership and immutable
+attempt candidates, plus `0052_recording_upload_candidate_cleanup_schedule.sql` for bounded candidate
+cleanup retries. `schema.sql` and contract/version metadata track
+`0052_recording_upload_candidate_cleanup_schedule` as the current migration head.
+
+The foundational 0049/0050 schema contract includes:
 
 1. `recordings.workspace_id` with deterministic backfill from `recordings.student_id -> students.workspace_id`, guarded unresolved-row failure, index, and final `NOT NULL`.
 2. Make the existing canonical retained-audio `recordings.storage_uri` nullable so a cache-hit recording can truthfully have no remote audio object. Do not add a second source-video/prepared-audio URI: a recording has zero or one retained audio object.
@@ -171,11 +183,10 @@ Add one migration, expected as `0049_recording_ingest_readiness.sql`, containing
 7. A unique transcript winner per recording after the duplicate audit.
 8. Corresponding `schema.sql` baseline and contract/version updates required by repository policy.
 
-The initially local `0049` checkpoint may already be checksum-recorded in development databases. In
-that case, preserve its immutability and add `0050_recording_media_preparation_version.sql` instead
-of editing it: nullable `recordings.media_preparation_version` is the durable owner of the canonical
-candidate's captured preparation semantics. Historical rows remain `NULL` and are never relabeled
-from a later worker deployment; initial and manual-retry queue payloads carry that stored value.
+Migration 0050 preserves immutability when the 0049 checkpoint is already checksum-recorded:
+nullable `recordings.media_preparation_version` is the durable owner of the canonical candidate's
+captured preparation semantics. Historical rows remain `NULL` and are never relabeled from a later
+worker deployment; initial and support-only retry queue payloads carry that stored value.
 
 Do not activate broad database RLS as part of this slice. Current production enforcement remains explicit application/query scoping; dormant RLS policy text is not a substitute for it.
 
@@ -246,11 +257,11 @@ Before general release, run a source-compatibility campaign that:
 1. The stable `transcription_runs.id` is the BullMQ `jobId` and logical execution identity.
 2. Create/reuse the active run transactionally; concurrent enqueue requests must converge on the same active run.
 3. The worker performs an atomic compare-and-set claim on run state/claim expiry before reading audio or contacting a provider.
-4. Before a provider network call, atomically reserve one numbered submission slot by incrementing `submission_slots_reserved` and persist the run as `submitting`. Because a crash may occur between reservation and observable network outcome, a reserved slot is not claimed to be an exact physical submission count; it is one call that could have crossed the paid boundary.
-5. A run may reserve at most three submission slots. Configure BullMQ for three application attempts with explicit exponential backoff and disable ElevenLabs SDK retries. Remove/bypass any Deepgram adapter retry layer for this path so no hidden mechanism can make more provider calls than the three-slot application budget.
+4. Before a provider network call, atomically reserve one numbered durable submission slot by incrementing `submission_slots_reserved` and persist the run as `submitting`. The attempt-local, single-use guarded transport renews the claim and checks cancellation, the lease, and the committed slot at actual HTTP dispatch. Because a crash may occur between reservation and observable network outcome, a reserved slot is not an exact physical submission count; it is one call that could have crossed the paid boundary.
+5. A run may reserve at most three submission slots. Disable ElevenLabs SDK retries and any Deepgram adapter retry layer for this path. BullMQ uses bounded backoff and delivery reconciliation; its delivery count may exceed three and is not the paid-boundary budget.
 6. Generate a fresh short-lived S3 URL for each attempt. Filesystem development uses a file-backed Blob/stream supported by Node 24, never a whole-file buffer.
 7. A unique transcript winner and atomic success transition prevent two completions from persisting competing transcripts.
-8. Public/manual retry must reject active or successful runs. The normal tutor UI exposes no retry action; terminal failure recovery is re-upload/replace recording. Any retained support-only action must be separately authorized, workspace-scoped, and limited to terminal failed runs.
+8. Public/manual retry must reject active or successful runs. Slice 5 removes normal-user transcription retry UI; terminal failure recovery is re-upload/replace recording. Any retained support-only action must be separately authorized, workspace-scoped, and limited to terminal failed runs.
 
 ### Failure classification
 
@@ -265,7 +276,7 @@ Retryable transient failures include HTTP 408, 429, provider 5xx/unavailability,
 
 Ambiguous failures include a connection loss/timeout after a request may have reached the provider, or recovery of an expired `submitting` claim with a reserved slot and no durable result. Mark that slot outcome ambiguous; it remains consumed, may have incurred a charge, and may retry only if another of the three slots remains.
 
-Malformed STT is objective protocol/output invalidity, not a quality judgment. Retry when the response cannot be parsed/validated, has no non-whitespace transcript or usable timed lexical segments, contains non-finite or invalid segment timing, or violates route-specific speaker structure. For `mixed_recording`, every lexical segment must have a provider speaker ID and the result must contain exactly two observed speakers. For trusted split, retain the existing exact Teacher/Student channel invariant. Do not score grammar, WER, semantic quality, confidence, or role correctness.
+Malformed STT is objective protocol/output invalidity, not a quality judgment. Retry when the response cannot be parsed/validated, has no non-whitespace transcript or usable timed lexical segments, contains non-finite or invalid segment timing, or violates route-specific speaker structure. A malformed Deepgram success enters this bounded recovery path and never becomes a transcript winner. For `mixed_recording`, every lexical segment must have a provider speaker ID and the result must contain exactly two observed speakers. For trusted split, retain the existing exact Teacher/Student channel invariant. Do not score grammar, WER, semantic quality, confidence, or role correctness.
 
 ### Paid submission observability
 
@@ -286,7 +297,12 @@ Use audio lifecycle states `not_retained`, `retained`, `pending`, `deleting`, `d
 7. Missing objects count as successful idempotent deletion.
 8. Never share retained audio objects across recording rows, so one recording can be cleaned without reference counting.
 
-### Cleanup policy
+### Distinct cleanup authorities
+
+- Slice 4 cleans only obsolete, unadopted physical upload-attempt candidates, with bounded retries and a durable adoption/reference recheck before deletion.
+- Slice 6, which remains future work, owns lifecycle deletion of recording-adopted retained audio after Source confirmation or TTL. These authorities must not be merged.
+
+### Slice 6 retained-audio cleanup policy
 
 A bounded sweeper owned by the existing transcription worker scans in small batches and claims rows with database locking safe for multiple worker replicas. It deletes:
 
@@ -303,18 +319,19 @@ The ordinary UI vocabulary is:
 
 1. Uploading recording.
 2. Checking recording.
-3. Waiting to transcribe / Transcribing.
-4. Trying again automatically.
-5. Ready for review.
-6. Recording needs attention, with one actionable terminal explanation.
+3. Waiting to transcribe.
+4. Transcribing.
+5. Trying again automatically.
+6. Ready for review.
+7. Recording needs attention, with one actionable terminal explanation.
 
-Provider, codec, topology, and retry-count controls are not required knowledge. It is acceptable to show `attempt 2 of 3` in support detail, but the tutor is never asked to choose whether to retry.
+Provider, codec, topology, and reservation-count controls are not required knowledge. Support detail may show `reserved submission 2 of 3`, but the tutor is never asked to choose whether to retry.
 
 Map stable backend error codes to actions:
 
 | Error code                                | Tutor message/action                                                                                                              |
 | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `file_too_large`                          | Choose a source file at or below the configured 2 GiB operational upload limit.                                                  |
+| `file_too_large`                          | Choose a source file at or below the configured 2 GiB operational upload limit.                                                   |
 | `insufficient_upload_capacity`            | The server is temporarily short of upload capacity; try again later.                                                              |
 | `recording_too_long`                      | Choose a lesson no longer than 100 minutes.                                                                                       |
 | `no_audio`                                | This file has no usable audio; choose the lesson recording with sound.                                                            |
@@ -395,7 +412,7 @@ These are reviewable commit boundaries, not mandatory PR boundaries. Prefer one 
 1. Extend the existing transcription storage seam to provide a submission source without buffering: fresh short-lived presigned URL for S3 and file-backed Blob/stream for local filesystem.
 2. Update ElevenLabs Scribe v2 submission to use `sourceUrl` for S3 media and the probed real MIME/filename for local files. The installed `@elevenlabs/elevenlabs-js` 2.62.0 request type exposes `sourceUrl`, and its client serializes it as `source_url`; do not use the deprecated `cloudStorageUrl` field.
 3. Remove the adapter's stream-to-Buffer collector and hard-coded `audio/mpeg` Blob.
-4. Keep Deepgram trusted split on its existing streaming path while aligning the shared one-reserved-submission-slot-per-queue-attempt contract.
+4. Keep Deepgram trusted split on its existing streaming path while aligning the shared one-durable-submission-reservation-per-provider-dispatch contract; BullMQ delivery count is separate.
 
 **Dependencies:** Slice 2 prepared-media contract.
 
@@ -410,25 +427,27 @@ These are reviewable commit boundaries, not mandatory PR boundaries. Prefer one 
 
 ### Slice 4 — Stable execution, claiming, retry, and transcript winner
 
-**Scope**
+**Status:** Implemented locally. The exceptional-risk semantic review is `CLOSED` with no remaining findings.
 
-1. Make run creation plus deterministic BullMQ `jobId` the only enqueue path.
-2. Add atomic claim/reclaim and durable submission-slot reservation/outcome accounting in `transcription_runs`.
-3. Configure three application attempts/backoff and disable stacked SDK/adapter retries.
-4. Add permanent/transient/ambiguous/malformed classification and objective output validation.
-5. Commit transcript and run/recording success atomically; retain one transcript winner.
-6. Remove normal-user manual retry and reject active/successful retry server-side.
+**Implemented architecture**
+
+1. `recording_upload_operations` owns workspace-scoped logical upload identity before media consumption. The frontend-owned operation UUID is retained across ambiguous retry/resume reconciliation and rotated for intentional new or replacement uploads.
+2. Each physical upload attempt uses an immutable, attempt-specific storage candidate. The recording/run transaction adopts exactly one winning candidate URI; obsolete unadopted candidates are isolated for bounded, retrying cleanup with a durable adoption/reference recheck.
+3. Replace execution-wide advisory fencing with a short durable run claim lease. At the actual SDK transport boundary, a single-use guarded dispatch permit checks the current claim and committed slot, composes cancellation with the SDK signal, and prevents stale continuation dispatch.
+4. Three durable submission reservations remain the paid-boundary ceiling for a run. BullMQ deliveries may exceed three during reconciliation/recovery and are not the provider-call budget; provider-library retries remain disabled.
+5. Permanent, transient, ambiguous, and malformed outcomes use objective classification. A malformed Deepgram success enters bounded recovery, and reservation exhaustion commits terminal state before publishing only the committed terminal projection.
+6. Transcript winner and run/recording success commit atomically. The server rejects active/successful normal retry; removal of normal-user transcription retry UI remains in Slice 5.
 
 **Dependencies:** Slice 1 run schema and Slice 3 provider source.
 
-**Acceptance criteria**
+**Implemented behavior**
 
 1. Concurrent duplicate enqueue and duplicate Bull delivery produce at most one live provider call for a run claim; a valid cache hit creates no run or job to duplicate.
-2. No run reserves more than three submission slots that could possibly cross the paid boundary; tests and observability do not claim those reservations equal exact physical submissions.
-3. Injected transient, ambiguous, crash-recovery, and malformed outcomes retry and eventually succeed or terminally exhaust as specified.
+2. No run reserves more than three submission slots that could possibly cross the paid boundary; BullMQ delivery attempts may exceed three, and tests and observability do not claim reservations equal exact physical submissions.
+3. Injected transient, ambiguous, crash-recovery, and malformed outcomes retry and eventually succeed or terminally exhaust as specified; malformed provider success is never accepted as a transcript winner.
 4. Permanent failures do not retry.
 5. Competing completion cannot write two transcripts.
-6. Success cannot be retried through the normal route/UI.
+6. Success and active runs cannot be retried through the server; normal-user transcription retry UI is Slice 5 work.
 
 **Validation gates**
 
@@ -441,16 +460,16 @@ These are reviewable commit boundaries, not mandatory PR boundaries. Prefer one 
 
 **Scope**
 
-1. Expose the stable run projection/error code in recording DTOs, polling/SSE, and resume payloads.
-2. Add Checking/Retrying states and terminal error/action copy.
-3. Consume the Slice 2 `File.size > 2147483648` guard in the normal upload UI and render the shared `file_too_large` message; do not add a second size-policy implementation.
-4. Expose `audioLifecycle`/`audioAvailable`, render cache-hit `not_retained` recordings as ready without a run/audio control, and never synthesize processing state for them.
-5. Remove the successful/normal-user retry control; retain collapsed trusted-split controls only where already authorized.
+1. Surface the canonical run/error projection through recording DTOs, polling, SSE, and resume payloads; every path must use the same server projection.
+2. Render truthful `Checking`, `Waiting`, `Transcribing`, `Trying again`, `Ready`, and terminal `Recording needs attention` states with actionable copy.
+3. Consume the existing Slice 2 browser `File.size > 2147483648` guard and stable backend error codes, including the shared `file_too_large` message; do not add a second size-policy implementation.
+4. Expose `audioLifecycle`/`audioAvailable`, and render cache-hit `not_retained` recordings as ready without a fake run or audio control.
+5. Remove normal-user transcription retry UI. Keep Slice 4's frontend-owned operation UUID and ambiguous upload retry/resume reconciliation intact; terminal recovery is re-upload/replace recording.
 6. Ensure refresh/reconnect produces the same state as uninterrupted processing.
 
 **Dependencies:** Slices 2 and 4 state/error contracts.
 
-**Acceptance criteria:** route-visible tests cover client oversize rejection with no request, upload, probe, cache hit with no run/audio, queue, retry_wait, resumed retry, success/review, exhausted failure, and re-upload recovery; no normal flow asks for provider/topology/retry knowledge.
+**Acceptance criteria:** route-visible tests cover the canonical DTO/polling/SSE/resume projection, client oversize rejection with no request, cache hit with no run/audio, `Checking`/`Waiting`/`Transcribing`/`Trying again`/`Ready`/terminal-attention states, stable error actions, normal retry removal, and refresh/reconnect equivalence; no normal flow asks for provider/topology/retry knowledge.
 
 **Validation gates:** frontend unit/route-visible tests, API contract tests, manual browser smoke with injected backend states, and Terra/high UX/state integration review.
 
@@ -460,7 +479,7 @@ These are reviewable commit boundaries, not mandatory PR boundaries. Prefer one 
 
 1. Mark retained-audio deletion pending in the Source-confirmation transaction and make confirmed audio unavailable immediately.
 2. Add the worker-owned, multi-replica-safe cleanup sweep and seven-day TTL policy.
-3. Delete the one canonical retained-audio object idempotently while preserving recordings/transcripts/downstream text artifacts; exclude `not_retained` cache-hit rows.
+3. Delete only the one recording-adopted retained-audio object idempotently while preserving recordings/transcripts/downstream text artifacts; exclude `not_retained` cache-hit rows. Slice 4 candidate cleanup remains separate and never belongs here.
 4. Add cleanup config, startup validation, structured logs, deletion-specific attempt/error fields, retry behavior, and operator dry-run query/runbook.
 
 **Dependencies:** Slice 1 ownership/lifecycle schema; may proceed alongside Slices 3–5 after that foundation.
@@ -490,15 +509,17 @@ These are reviewable commit boundaries, not mandatory PR boundaries. Prefer one 
 
 **Validation gates**
 
-1. Targeted suites first, then `pnpm check` because this changes DB, worker, queue, and integration behavior.
-2. `pnpm release:verify:contracts`, backend baseline verification, docs index generation, formatting, repository hygiene, and docs checks.
-3. One final Terra/high whole-branch review for cross-boundary regressions after the three narrow Sol/high risk reviews are resolved.
+1. Run focused affected validation first. After the tree is ready, run one routed normal completion gate: `pnpm --silent run check:fast:agent` by default, or `pnpm check:pre-pr:agent` / `pnpm check:pre-pr` for broad, cross-cutting, shared-contract, or toolchain work. These are alternatives unless routing or task requirements say otherwise.
+2. Reuse still-fresh evidence and do not repeat aggregate reruns without a relevant state change.
+3. Selected PostgreSQL/Redis hosted lanes and the `CI gate` remain merge evidence where applicable; `PASS_WITH_CI_REQUIREMENTS` permits PR creation but not merge.
+4. `pnpm release:verify:contracts`, backend baseline verification, docs index generation, formatting, repository hygiene, and docs checks remain required where their paths are affected.
+5. One final Terra/high whole-branch review for cross-boundary regressions after the three narrow Sol/high risk reviews are resolved.
 
 ## 11. Migration, deployment, and rollback considerations
 
 ### Migration and rollout
 
-1. Migration 0049 is additive until its guarded workspace backfill and constraints. Before deployment, run a production read-only preflight for recordings without resolvable student workspaces, duplicate transcripts, active legacy jobs, and storage-key distribution.
+1. Migrations 0049–0052 are additive until their guarded workspace backfill, upload-operation ownership, candidate-cleanup, and constraints are verified. Before deployment, run a production read-only preflight for recordings without resolvable student workspaces, duplicate transcripts, active legacy jobs, storage-key distribution, and obsolete upload candidates.
 2. Rehearse the migration on a current production snapshot/synthetic clone. Do not resolve ambiguous ownership automatically; stop for operator mapping or quarantine.
 3. Deploy compatible API and worker images together after migration. Do not let an old unscoped API remain active against the new tenant contract.
 4. Confirm runtime FFmpeg/ffprobe availability, writable temp capacity for configured upload concurrency and the 2 GiB source-file operational limit plus the 10 GiB local-disk reserve, S3 Get/Put/Delete permissions, and presigned URL reachability from ElevenLabs.
@@ -508,7 +529,7 @@ These are reviewable commit boundaries, not mandatory PR boundaries. Prefer one 
 
 ### Rollback
 
-1. Keep migration 0049 and durable transcript/run data; do not down-migrate or delete evidence.
+1. Keep migrations 0049–0052 and durable transcript/run data; do not down-migrate or delete evidence.
 2. Do not roll back to an API version that permits cross-workspace access. If tenant correctness is uncertain, disable recording intake/worker processing and deploy a forward fix.
 3. A media-preparation problem may be rolled back by narrowing the allowlist to direct audio while preserving tenant/run/retention contracts.
 4. A provider submission or retry problem may pause worker consumption; it must not switch providers automatically or reset reserved submission slots.
@@ -549,7 +570,7 @@ No maintainer product decision remains open.
 
 The following are mandatory evidence gates, not architecture blockers:
 
-1. Integrate the completed `codex/audio-topology` atomic upload fix before or with Slice 1 and retain its regression test.
+1. Preserve the locally integrated `codex/audio-topology` atomic upload fix and its regression test through subsequent validation and release evidence.
 2. Run the production read-only migration preflight. Any recording that cannot be mapped to exactly one workspace, or any duplicate transcript winner, requires explicit operator resolution before `NOT NULL`/unique enforcement.
 3. Repeat the synthetic MP4/MOV/WebM stream-copy probe in the exact production Docker runtime. If it fails, ship direct audio only and defer video convenience.
 4. Use mocked request-shape tests to lock the installed SDK's verified `sourceUrl -> source_url` serialization, then use one separately authorized production smoke to prove ElevenLabs can fetch the actual presigned S3 URL. A runtime fetch failure is a rollout gate to diagnose, not permission to restore whole-file buffering.

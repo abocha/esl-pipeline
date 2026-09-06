@@ -121,6 +121,8 @@ interface SourceStageSectionProps {
   onBeginAudioReplacement: () => void;
   onCancelAudioReplacement: () => void;
   onCancelUpload: () => void;
+  canRetryUpload: boolean;
+  onRetryUpload: () => void;
   uploadError: string | null;
   uploadCacheNotice: string | null;
   recording: RecordingListItem | null;
@@ -824,6 +826,8 @@ export function SourceStageSection({
   onBeginAudioReplacement,
   onCancelAudioReplacement,
   onCancelUpload,
+  canRetryUpload,
+  onRetryUpload,
   uploadError,
   uploadCacheNotice,
   recording,
@@ -1008,6 +1012,11 @@ export function SourceStageSection({
             />
           ) : null}
           {uploadError ? <p className="minimal-error">{uploadError}</p> : null}
+          {canRetryUpload && !uploading ? (
+            <button type="button" className="minimal-secondary" onClick={onRetryUpload}>
+              Retry upload
+            </button>
+          ) : null}
           {uploadCacheNotice ? <p className="minimal-success">{uploadCacheNotice}</p> : null}
           {recording ? (
             <div className="minimal-block">

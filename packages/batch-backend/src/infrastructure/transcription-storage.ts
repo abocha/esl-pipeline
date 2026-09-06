@@ -7,8 +7,8 @@ import { finished, pipeline } from 'node:stream/promises';
 
 import type { SttSubmissionSource } from '@esl-pipeline/stt-core';
 
-import { S3StorageAdapter } from './s3-storage-adapter.js';
 import { logger } from './logger.js';
+import { S3StorageAdapter } from './s3-storage-adapter.js';
 import { createStorageConfigService, StorageConfigurationService } from './storage-config.js';
 
 const LOCAL_URI_PREFIX = 'local://';
@@ -26,9 +26,13 @@ export interface StorageWriteResult {
 export interface PutAudioOptions {
   workspaceId: string;
   recordingId: string;
+  /** Immutable writer identity. A candidate is adopted by database state only. */
+  candidateId?: string;
   inputPath?: string;
   stream?: Readable;
   extension?: string;
+  /** Pre-registered immutable candidate location, if this write has upload-attempt authority. */
+  targetUri?: string;
 }
 
 export interface PutTranscriptOptions {
@@ -52,6 +56,9 @@ export interface PutDraftOptions {
 }
 
 export interface TranscriptionStorage {
+  getAudioUri?(
+    options: Pick<PutAudioOptions, 'workspaceId' | 'recordingId' | 'candidateId' | 'extension'>,
+  ): string;
   putAudio(options: PutAudioOptions): Promise<StorageWriteResult>;
   putTranscript(options: PutTranscriptOptions): Promise<StorageWriteResult>;
   putRawResponse(options: PutRawResponseOptions): Promise<StorageWriteResult>;
@@ -89,6 +96,8 @@ export class FilesystemTranscriptionStorage implements TranscriptionStorage {
   async putAudio(options: PutAudioOptions): Promise<StorageWriteResult> {
     const extension = resolveAudioExtension(options);
     const relativePath = buildWorkspaceAudioPath(options, extension);
+    const uri = toLocalUri(relativePath);
+    assertTargetUri(options.targetUri, uri);
     const targetPath = this.resolveRelativePath(relativePath);
     await fs.mkdir(path.dirname(targetPath), { recursive: true });
 
@@ -106,10 +115,16 @@ export class FilesystemTranscriptionStorage implements TranscriptionStorage {
     }
 
     return {
-      uri: toLocalUri(relativePath),
+      uri,
       bytes: written.bytes,
       sha256: written.sha256,
     };
+  }
+
+  getAudioUri(
+    options: Pick<PutAudioOptions, 'workspaceId' | 'recordingId' | 'candidateId' | 'extension'>,
+  ): string {
+    return toLocalUri(buildWorkspaceAudioPath(options, resolveAudioExtension(options)));
   }
 
   async putTranscript(options: PutTranscriptOptions): Promise<StorageWriteResult> {
@@ -244,6 +259,8 @@ export class S3TranscriptionStorage implements TranscriptionStorage {
     const extension = resolveAudioExtension(options);
     const relativePath = buildWorkspaceAudioPath(options, extension);
     const targetKey = this.buildKey(relativePath);
+    const uri = toS3Uri(this.bucket, targetKey);
+    assertTargetUri(options.targetUri, uri);
 
     if (!options.inputPath && !options.stream) {
       throw new Error('putAudio requires inputPath or stream');
@@ -264,10 +281,19 @@ export class S3TranscriptionStorage implements TranscriptionStorage {
     }
 
     return {
-      uri: toS3Uri(this.bucket, targetKey),
+      uri,
       bytes: written.bytes,
       sha256: written.sha256,
     };
+  }
+
+  getAudioUri(
+    options: Pick<PutAudioOptions, 'workspaceId' | 'recordingId' | 'candidateId' | 'extension'>,
+  ): string {
+    return toS3Uri(
+      this.bucket,
+      this.buildKey(buildWorkspaceAudioPath(options, resolveAudioExtension(options))),
+    );
   }
 
   async putTranscript(options: PutTranscriptOptions): Promise<StorageWriteResult> {
@@ -379,13 +405,21 @@ export class S3TranscriptionStorage implements TranscriptionStorage {
 }
 
 function buildWorkspaceAudioPath(options: PutAudioOptions, extension: string): string {
-  return path.posix.join(
+  const prefix = path.posix.join(
     'workspaces',
     options.workspaceId,
     'recordings',
     options.recordingId,
-    `audio${extension}`,
   );
+  return options.candidateId
+    ? path.posix.join(prefix, 'candidates', options.candidateId, `audio${extension}`)
+    : path.posix.join(prefix, `audio${extension}`);
+}
+
+function assertTargetUri(expected: string | undefined, actual: string): void {
+  if (expected !== undefined && expected !== actual) {
+    throw new Error('Pre-registered audio target does not match the storage candidate location.');
+  }
 }
 
 export function createTranscriptionStorage(options?: {

@@ -1,7 +1,6 @@
 import { openAsBlob } from 'node:fs';
 import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 
-import { classifyProviderRuntimeFailure } from '@esl-pipeline/provider-runtime';
 import {
   mergeSegments,
   type SttProviderAdapter,
@@ -36,7 +35,10 @@ type ElevenLabsModelId = 'scribe_v1' | 'scribe_v2';
 
 interface ElevenLabsClientLike {
   speechToText: {
-    convert: (args: Record<string, unknown>) => Promise<unknown>;
+    convert: (
+      args: Record<string, unknown>,
+      requestOptions?: { abortSignal?: AbortSignal },
+    ) => Promise<unknown>;
   };
 }
 
@@ -46,7 +48,10 @@ export interface ElevenLabsSttConfig {
 }
 
 export interface ElevenLabsSttDependencies {
-  clientFactory?: (apiKey: string) => ElevenLabsClientLike;
+  clientFactory?: (
+    apiKey: string,
+    transport?: { fetch: typeof fetch; signal: AbortSignal },
+  ) => ElevenLabsClientLike;
 }
 
 const DEFAULT_MODEL_ID = 'scribe_v2';
@@ -67,29 +72,12 @@ export function createElevenLabsSttProvider(
         throw new Error('ELEVENLABS_API_KEY is required when STT_PROVIDER=elevenlabs');
       }
     },
-    classifyProviderError(error) {
-      const details = getErrorDetails(error);
-      return classifyProviderRuntimeFailure({
-        provider: 'elevenlabs',
-        message: details.message,
-        status: details.status,
-        code: details.code,
-        name: details.name,
-        rules: {
-          byProvider: {
-            elevenlabs: {
-              timeoutStatusMin: 500,
-            },
-          },
-        },
-      });
-    },
     async transcribe({ context, config }) {
       if (!config.apiKey.trim()) {
         throw new Error('ELEVENLABS_API_KEY is required when STT_PROVIDER=elevenlabs');
       }
       const modelId = config.modelId ?? DEFAULT_MODEL_ID;
-      const client = clientFactory(config.apiKey);
+      const client = clientFactory(config.apiKey, context.providerTransport);
 
       const submissionSource = await context.getSubmissionSource?.();
       if (!submissionSource) {
@@ -111,7 +99,7 @@ export function createElevenLabsSttProvider(
           : { file: await toElevenLabsFileSource(submissionSource) };
       let response: unknown;
       try {
-        response = await client.speechToText.convert({
+        const request = {
           ...sourceFields,
           modelId,
           useMultiChannel: false,
@@ -119,18 +107,20 @@ export function createElevenLabsSttProvider(
           numSpeakers: 2,
           timestampsGranularity: 'word',
           noVerbatim: false,
-        });
+        };
+        response = context.providerTransport
+          ? await client.speechToText.convert(request, {
+              abortSignal: context.providerTransport.signal,
+            })
+          : await client.speechToText.convert(request);
       } catch (error) {
         if (submissionSource.kind === 'url') {
           throw createSafeUrlSubmissionError(error);
         }
-        throw error;
+        throw createSafeProviderSubmissionError(error);
       }
       const parsed = parseElevenLabsDiarizedResponse(response);
-      if (
-        knownUrlSecretMaterials &&
-        containsKnownSecretMaterial(parsed, knownUrlSecretMaterials)
-      ) {
+      if (knownUrlSecretMaterials && containsKnownSecretMaterial(parsed, knownUrlSecretMaterials)) {
         throw createSafeUrlSubmissionError();
       }
       return {
@@ -147,8 +137,17 @@ export function createElevenLabsSttProvider(
   };
 }
 
-function defaultClientFactory(apiKey: string) {
-  return new ElevenLabsClient({ apiKey }) as unknown as ElevenLabsClientLike;
+function defaultClientFactory(
+  apiKey: string,
+  transport?: { fetch: typeof fetch; signal: AbortSignal },
+) {
+  // The recording run owns the paid-boundary retry budget. The SDK defaults to two
+  // invisible replays, which would make one reserved submission slot dishonest.
+  return new ElevenLabsClient({
+    apiKey,
+    maxRetries: 0,
+    ...(transport ? { fetch: transport.fetch } : {}),
+  }) as unknown as ElevenLabsClientLike;
 }
 
 function createSafeUrlSubmissionError(error?: unknown): Error {
@@ -156,6 +155,13 @@ function createSafeUrlSubmissionError(error?: unknown): Error {
   safeError.name = 'ElevenLabsUrlSubmissionError';
 
   const status = readSafeStatus(error);
+  const code = controlledProviderErrorCode(error, status);
+  Object.defineProperty(safeError, 'code', {
+    configurable: false,
+    enumerable: true,
+    value: code,
+    writable: false,
+  });
   if (status !== undefined) {
     Object.defineProperty(safeError, 'status', {
       configurable: false,
@@ -166,6 +172,36 @@ function createSafeUrlSubmissionError(error?: unknown): Error {
   }
 
   return safeError;
+}
+
+function createSafeProviderSubmissionError(error?: unknown): Error {
+  const safeError = new Error('ElevenLabs transcription request failed.');
+  Object.defineProperty(safeError, 'code', {
+    configurable: false,
+    enumerable: true,
+    value: controlledProviderErrorCode(error, readSafeStatus(error)),
+    writable: false,
+  });
+  const status = readSafeStatus(error);
+  if (status !== undefined) {
+    Object.defineProperty(safeError, 'status', {
+      configurable: false,
+      enumerable: true,
+      value: status,
+      writable: false,
+    });
+  }
+  return safeError;
+}
+
+function controlledProviderErrorCode(error: unknown, status: number | undefined): string {
+  if (status === 408 || status === 429 || (status !== undefined && status >= 500)) {
+    return 'PROVIDER_RETRYABLE_HTTP';
+  }
+  if (status !== undefined && status >= 400) return 'PROVIDER_PERMANENT_REJECTION';
+  const sourceCode = readSafeCode(error);
+  if (sourceCode === 'ETIMEDOUT' || sourceCode === 'ESOCKETTIMEDOUT') return 'PROVIDER_TIMEOUT';
+  return 'PROVIDER_TRANSPORT_ERROR';
 }
 
 const URL_SECRET_QUERY_KEYS = new Set([
@@ -191,8 +227,8 @@ function containsKnownSecretMaterial(
 ): boolean {
   const mappedStrings = [parsed.text, ...parsed.segments.map((segment) => segment.text)];
   return mappedStrings.some((mappedString) =>
-    knownSecretMaterials.some((secretMaterial) =>
-      secretMaterial.length > 0 && mappedString.includes(secretMaterial),
+    knownSecretMaterials.some(
+      (secretMaterial) => secretMaterial.length > 0 && mappedString.includes(secretMaterial),
     ),
   );
 }
@@ -208,6 +244,12 @@ function readSafeStatus(error: unknown): number | undefined {
   } catch {
     return undefined;
   }
+}
+
+function readSafeCode(error: unknown): string | undefined {
+  if (!error || typeof error !== 'object') return undefined;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === 'string' ? code.toUpperCase() : undefined;
 }
 
 async function toElevenLabsFileSource(source: Extract<SttSubmissionSource, { kind: 'file' }>) {
@@ -368,30 +410,4 @@ function asError(error: unknown, fallbackMessage: string): Error {
     }
   }
   return new Error(fallbackMessage);
-}
-
-function getErrorDetails(error: unknown): {
-  status?: number;
-  code?: string;
-  message: string;
-  name?: string;
-} {
-  if (error instanceof Error) {
-    const typed = error as Error & {
-      status?: number;
-      statusCode?: number;
-      code?: unknown;
-    };
-    const code = typeof typed.code === 'string' ? typed.code : undefined;
-    return {
-      status: typeof typed.status === 'number' ? typed.status : typed.statusCode,
-      code,
-      message: error.message,
-      name: error.name,
-    };
-  }
-
-  return {
-    message: String(error),
-  };
 }

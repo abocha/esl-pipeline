@@ -9,12 +9,12 @@ export interface ContractVersionRegistry {
   db: string;
 }
 
-export const API_CONTRACT_VERSION = '4.3.0';
+export const API_CONTRACT_VERSION = '4.4.0';
 export const MANIFEST_CONTRACT_VERSION = '3.2.0';
 export const PROMPT_SCHEMA_VERSION = '2.2.0';
 export const VALIDATOR_CONTRACT_VERSION = '2.1.0';
-export const DB_CONTRACT_VERSION = '0.28.0';
-export const DB_MIGRATION_HEAD = '0050_recording_media_preparation_version';
+export const DB_CONTRACT_VERSION = '0.30.0';
+export const DB_MIGRATION_HEAD = '0052_recording_upload_candidate_cleanup_schedule';
 
 export const CONTRACT_VERSIONS: Readonly<ContractVersionRegistry> = Object.freeze({
   api: API_CONTRACT_VERSION,

@@ -25,6 +25,8 @@
   ],
   "postgresRedisWorker": [
     "transport.worker-runner.integration.test.ts",
-    "integration.student-memory-pacing-delay.test.ts"
+    "integration.student-memory-pacing-delay.test.ts",
+    "infrastructure.transcribe-queue.redis.integration.test.ts",
+    "integration.transcription-execution-worker.redis.test.ts"
   ]
 }

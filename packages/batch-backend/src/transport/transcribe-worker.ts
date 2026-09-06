@@ -3,6 +3,8 @@
 import { fileURLToPath } from 'node:url';
 
 import { processTranscribeJob } from '../application/process-transcribe-job.js';
+import { reconcileTranscriptionDelivery } from '../application/reconcile-transcription-delivery.js';
+import { reconcileUploadCandidates } from '../application/reconcile-upload-candidates.js';
 import { validateTranscriptionConfig } from '../application/validate-transcription-config.js';
 import { loadBatchBackendEnv } from '../bootstrap/env.js';
 import { loadConfig } from '../config/env.js';
@@ -31,6 +33,27 @@ export async function startTranscribeWorker(): Promise<void> {
   await runMigrationsIfConfigured();
   await validateTranscriptionConfig();
   await enableRedisRecordingEventBridge();
+  await reconcileTranscriptionDelivery({ limit: config.transcription.reconciliationBatchSize });
+  await reconcileUploadCandidates({ limit: config.transcription.reconciliationBatchSize });
+  const reconciliationTimer = setInterval(() => {
+    void reconcileTranscriptionDelivery({
+      limit: config.transcription.reconciliationBatchSize,
+    }).catch((error) => {
+      logger.error(error as Error, {
+        component: 'transcribe-worker',
+        message: 'Transcription delivery reconciliation failed',
+      });
+    });
+    void reconcileUploadCandidates({ limit: config.transcription.reconciliationBatchSize }).catch(
+      (error) => {
+        logger.error(error as Error, {
+          component: 'transcribe-worker',
+          message: 'Recording upload candidate reconciliation failed',
+        });
+      },
+    );
+  }, config.transcription.reconciliationIntervalMs);
+  reconciliationTimer.unref();
   const worker = createTranscribeWorker(async (bullJob) => {
     await processTranscribeJob(bullJob.data);
   });
@@ -47,6 +70,7 @@ export async function startTranscribeWorker(): Promise<void> {
       component: 'transcribe-worker',
     });
     try {
+      clearInterval(reconciliationTimer);
       await worker.close();
       logger.info('Transcribe worker closed cleanly', { component: 'transcribe-worker' });
       process.exit(0);

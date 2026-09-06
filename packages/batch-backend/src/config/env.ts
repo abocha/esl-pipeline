@@ -55,6 +55,9 @@ export interface BatchBackendConfig {
     sttProvider: SttProviderId;
     hardOverride?: SttProviderId;
     sttProviders: SttProviderId[];
+    claimTtlMs?: number;
+    reconciliationIntervalMs: number;
+    reconciliationBatchSize: number;
   };
   studentMemory: {
     queueName: string;
@@ -404,6 +407,8 @@ export function loadConfig(): BatchBackendConfig {
   // Queue
   const queueName = readString('BATCH_JOBS_QUEUE_NAME', 'esl-jobs')!;
   const transcribeQueueName = readString('TRANSCRIBE_QUEUE_NAME', 'transcribe-queue')!;
+  const transcribeReconciliationIntervalMs = readInt('TRANSCRIBE_RECONCILIATION_INTERVAL_MS', 30_000);
+  const transcribeReconciliationBatchSize = readInt('TRANSCRIBE_RECONCILIATION_BATCH_SIZE', 100);
   const studentMemoryQueueName = readString('STUDENT_MEMORY_QUEUE_NAME', 'student-memory-queue')!;
   const studentMemoryMaxConcurrency = readInt('STUDENT_MEMORY_MAX_CONCURRENCY', 2);
   const studentMemoryOpenAiBatchEnabled = readBool('STUDENT_MEMORY_OPENAI_BATCH_ENABLED', false);
@@ -421,6 +426,10 @@ export function loadConfig(): BatchBackendConfig {
     throw new Error('TRANSCRIBE_MODE must be "timeline" or "stack"');
   }
   const transcribeMaxConcurrency = readInt('TRANSCRIBE_MAX_CONCURRENCY', 2);
+  const transcribeClaimTtlMs = readInt('TRANSCRIBE_CLAIM_TTL_MS', 10 * 60 * 1000);
+  if (transcribeClaimTtlMs < 60_000 || transcribeClaimTtlMs > 60 * 60 * 1000) {
+    throw new Error('TRANSCRIBE_CLAIM_TTL_MS must be between 60000 and 3600000');
+  }
   const sttDefaultProvider = normalizeSttProvider(
     readString('ESL_STT_DEFAULT_PROVIDER', 'elevenlabs')!,
   );
@@ -849,6 +858,9 @@ export function loadConfig(): BatchBackendConfig {
       sttProvider,
       hardOverride: sttHardOverride,
       sttProviders,
+      claimTtlMs: transcribeClaimTtlMs,
+      reconciliationIntervalMs: transcribeReconciliationIntervalMs,
+      reconciliationBatchSize: transcribeReconciliationBatchSize,
     },
     studentMemory: {
       queueName: studentMemoryQueueName,

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { SttProviderId } from '@esl-pipeline/contracts';
 import { createSttEngine, type SttTranscriptionResult } from '@esl-pipeline/stt-core';
+import { createDeepgramSttProvider } from '@esl-pipeline/stt-provider-deepgram';
 import { createElevenLabsSttProvider } from '@esl-pipeline/stt-provider-elevenlabs';
 
 const jobLogger = vi.hoisted(() => ({
@@ -13,15 +14,47 @@ const jobLogger = vi.hoisted(() => ({
   child: vi.fn(),
 }));
 
+const transcriptionRuns = vi.hoisted(() => ({
+  claim: vi.fn(async ({ runId }: { runId: string }) => ({
+    id: runId,
+    recordingId: runId,
+    provider: 'elevenlabs',
+    claimToken: 'claim-token',
+    submissionSlotsReserved: 0,
+  })),
+  reserve: vi.fn(async ({ runId }: { runId: string }) => ({
+    id: runId,
+    submissionSlotsReserved: 1,
+    currentSubmissionSlot: 1,
+  })),
+  renew: vi.fn(async () => ({ id: 'run', claimToken: 'claim-token' })),
+  complete: vi.fn(async ({ transcript }: { transcript: { id?: string } }) => ({
+    transcriptId: transcript.id ?? 'transcript-1',
+  })),
+  get: vi.fn(async () => ({ submissionSlotsReserved: 1 })),
+  retry: vi.fn(async () => ({ state: 'retry_wait' as const })),
+  fail: vi.fn(async () => ({ state: 'failed' as const })),
+}));
+
 vi.mock('../src/infrastructure/logger.js', () => ({
   createJobLogger: vi.fn(() => jobLogger),
 }));
 
+vi.mock('../src/domain/transcription-run-repository.js', () => ({
+  claimTranscriptionRun: transcriptionRuns.claim,
+  reserveTranscriptionSubmissionSlot: transcriptionRuns.reserve,
+  completeTranscriptionRun: transcriptionRuns.complete,
+  getTranscriptionRunById: transcriptionRuns.get,
+  markTranscriptionRunRetryWait: transcriptionRuns.retry,
+  failTranscriptionRun: transcriptionRuns.fail,
+  renewTranscriptionRunLease: transcriptionRuns.renew,
+}));
+
+import type { TranscribeDependencies } from '../src/application/process-transcribe-job.js';
 import {
   processTranscribeJob,
   resolveElevenLabsSttApiKey,
 } from '../src/application/process-transcribe-job.js';
-import type { TranscribeDependencies } from '../src/application/process-transcribe-job.js';
 import {
   MIXED_ELEVENLABS_PROFILE,
   resolveTranscriptionRoute,
@@ -33,6 +66,68 @@ import type { TranscriptRecord } from '../src/domain/transcript-model.js';
 import type { TranscriptionStorage } from '../src/infrastructure/transcription-storage.js';
 
 describe('application/process-transcribe-job', () => {
+  it('projects a committed terminal failure after all three submission slots are exhausted', async () => {
+    const recording = createRecording('reservation-exhausted');
+    const publishEvent = vi.fn();
+    transcriptionRuns.reserve.mockResolvedValueOnce(null as never);
+    transcriptionRuns.fail.mockResolvedValueOnce({ state: 'failed' } as never);
+    const updateStatus = vi.fn(async ({ status, error }) => {
+      recording.status = status;
+      recording.error = error ?? null;
+      return recording;
+    });
+
+    await processTranscribeJob(
+      { recordingId: recording.id },
+      {
+        config: createConfig(),
+        storage: createStorageStub(),
+        sttTranscribe: vi.fn(),
+        recordings: { getById: async () => recording, updateStatus },
+        transcripts: { getByRecordingId: async () => null, insert: vi.fn() },
+        publishEvent,
+      },
+    );
+
+    expect(transcriptionRuns.fail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcome: 'ambiguous',
+        errorCode: 'transcription_unavailable_after_retries',
+      }),
+    );
+    expect(publishEvent).toHaveBeenLastCalledWith(
+      expect.objectContaining({ recording: expect.objectContaining({ status: 'failed' }) }),
+    );
+  });
+
+  it('does not publish a fabricated failed projection when terminal transition loses authority', async () => {
+    const recording = createRecording('reservation-authority-lost');
+    const publishEvent = vi.fn();
+    transcriptionRuns.reserve.mockResolvedValueOnce(null as never);
+    transcriptionRuns.fail.mockResolvedValueOnce(null as never);
+    const updateStatus = vi.fn(async ({ status, error }) => {
+      recording.status = status;
+      recording.error = error ?? null;
+      return recording;
+    });
+
+    await processTranscribeJob(
+      { recordingId: recording.id },
+      {
+        config: createConfig(),
+        storage: createStorageStub(),
+        sttTranscribe: vi.fn(),
+        recordings: { getById: async () => recording, updateStatus },
+        transcripts: { getByRecordingId: async () => null, insert: vi.fn() },
+        publishEvent,
+      },
+    );
+
+    expect(publishEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({ recording: expect.objectContaining({ status: 'failed' }) }),
+    );
+  });
+
   it('marks a recording failed when a forced route-resolution error occurs before provider execution', async () => {
     const recording = {
       ...createRecording('trusted-override'),
@@ -66,14 +161,14 @@ describe('application/process-transcribe-job', () => {
           publishEvent,
         },
       ),
-    ).rejects.toThrow(/require the Deepgram multichannel route/i);
+    ).rejects.toThrow('transcription_permanent_failure');
 
     expect(sttTranscribe).not.toHaveBeenCalled();
     expect(updateStatus).toHaveBeenCalledWith(
       expect.objectContaining({
         id: recording.id,
         status: 'failed',
-        error: expect.stringMatching(/require the Deepgram multichannel route/i),
+        error: 'transcription_permanent_failure',
       }),
     );
     expect(publishEvent).toHaveBeenCalledWith(
@@ -128,7 +223,7 @@ describe('application/process-transcribe-job', () => {
     const storage = createStorageStub();
     const sttTranscribe = vi.fn(async () =>
       createSttResult({
-        provider: 'deepgram',
+        provider: 'elevenlabs',
         model: 'nova-3',
         language: 'multi',
         text: 'Hello there Hi!',
@@ -190,9 +285,9 @@ describe('application/process-transcribe-job', () => {
     expect(result?.recordingId).toBe(recording.id);
     expect(result?.mode).toBe('timeline');
     expect(result?.fallbackUsed).toBe(false);
-    expect(result?.sttProvider).toBe('deepgram');
+    expect(result?.sttProvider).toBe('elevenlabs');
     expect(result).toMatchObject({ workingVersion: 1, contentHash: expect.any(String) });
-    expect((result?.summaryJson as { provider?: unknown } | null)?.provider).toBe('deepgram');
+    expect((result?.summaryJson as { provider?: unknown } | null)?.provider).toBe('elevenlabs');
     expect(
       (result?.summaryJson as { mediaPreparationVersion?: unknown } | null)
         ?.mediaPreparationVersion,
@@ -200,7 +295,7 @@ describe('application/process-transcribe-job', () => {
     expect(updates).toEqual(['transcribing', 'transcribed']);
     expect(sttTranscribe).toHaveBeenCalledWith(
       expect.objectContaining({
-        provider: 'deepgram',
+        provider: 'elevenlabs',
       }),
     );
   });
@@ -229,8 +324,11 @@ describe('application/process-transcribe-job', () => {
         provider: 'deepgram',
         model: 'nova-3',
         language: 'multi',
-        text: 'Hello',
-        segments: [{ text: 'Hello', speaker: 0, start: 0, end: 0.5 }],
+        text: 'Hello there',
+        segments: [
+          { text: 'Hello', speaker: 0, start: 0, end: 0.5 },
+          { text: 'there', speaker: 1, start: 0.6, end: 1 },
+        ],
       });
     });
 
@@ -295,7 +393,10 @@ describe('application/process-transcribe-job', () => {
             model: 'nova-3',
             language: 'multi',
             text: 'Historical recording.',
-            segments: [],
+            segments: [
+              { text: 'Historical', speaker: 0, start: 0, end: 0.4 },
+              { text: 'recording.', speaker: 1, start: 0.5, end: 1 },
+            ],
           }),
         ),
         recordings: {
@@ -381,8 +482,11 @@ describe('application/process-transcribe-job', () => {
             provider: 'elevenlabs',
             model: 'scribe_v2',
             language: 'auto',
-            text: 'Fallback text',
-            segments: [{ text: 'Fallback text', speaker: 0, start: 0.1, end: 0.9 }],
+            text: 'Fallback text here',
+            segments: [
+              { text: 'Fallback text', speaker: 0, start: 0.1, end: 0.5 },
+              { text: 'here', speaker: 1, start: 0.6, end: 0.9 },
+            ],
             fallbackUsed: true,
           }),
         ),
@@ -461,10 +565,90 @@ describe('application/process-transcribe-job', () => {
           publishEvent: vi.fn(),
         },
       ),
-    ).rejects.toThrow('service unavailable');
+    ).rejects.toThrow('transcription_permanent_failure');
 
     expect(recording.status).toBe('failed');
-    expect(recording.error).toContain('service unavailable');
+    expect(recording.error).toBe('transcription_permanent_failure');
+  });
+
+  it('routes a malformed successful trusted-channel Deepgram result through retry_wait classification', async () => {
+    const recording = {
+      ...createRecording('recording-malformed-deepgram'),
+      audioTopology: 'trusted_split_channels' as const,
+    };
+    const provider = createDeepgramSttProvider({
+      clientFactory: () => ({
+        listen: {
+          v1: {
+            media: {
+              async transcribeFile() {
+                return {
+                  metadata: { channels: 2 },
+                  results: {
+                    channels: [{ alternatives: [{ transcript: 'Only one channel' }] }],
+                    utterances: [{ channel: 0, transcript: 'Only one channel', start: 0, end: 1 }],
+                  },
+                };
+              },
+            },
+          },
+        },
+      }),
+    });
+    transcriptionRuns.claim.mockResolvedValueOnce({
+      id: recording.id,
+      recordingId: recording.id,
+      provider: 'deepgram',
+      claimToken: 'claim-token',
+      submissionSlotsReserved: 0,
+    });
+    const config = createConfig();
+    config.stt.defaultProvider = 'deepgram';
+    config.stt.trustedSplitProvider = 'deepgram';
+    config.stt.providers.deepgram.apiKey = 'deepgram-test-key';
+    const updateStatus = vi.fn(async ({ status, error }) => {
+      recording.status = status;
+      recording.error = error ?? null;
+      return recording;
+    });
+    const publishEvent = vi.fn();
+
+    let thrown: unknown;
+    try {
+      await processTranscribeJob(
+        { recordingId: recording.id },
+        {
+          config,
+          storage: createStorageStub(),
+          sttTranscribe: ({ context }) =>
+            provider.transcribe({
+              context,
+              config: {
+                apiKey: 'deepgram-test-key',
+                  model: 'nova-3',
+                  language: 'en',
+                trustedSplitChannels: true,
+              },
+            }),
+          recordings: { getById: async () => recording, updateStatus },
+          transcripts: { getByRecordingId: async () => null, insert: vi.fn() },
+          publishEvent,
+        },
+      );
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toHaveProperty('message', 'malformed_provider_result');
+    expect(transcriptionRuns.retry).toHaveBeenLastCalledWith(
+      expect.objectContaining({ errorCode: 'malformed_provider_result', outcome: 'known_failure' }),
+    );
+    expect(updateStatus).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'transcribing', error: null }),
+    );
+    expect(publishEvent).toHaveBeenLastCalledWith(
+      expect.objectContaining({ recording: expect.objectContaining({ status: 'transcribing' }) }),
+    );
   });
 
   it('keeps reflected signed URL details out of worker persistence and logs', async () => {
@@ -472,8 +656,7 @@ describe('application/process-transcribe-job', () => {
     const signedUrl = `https://storage.example.test/audio.mp3?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=${secret}`;
     const rawCause = new Error(`provider cause ${signedUrl}`);
     const rawError = new Error(`provider message ${signedUrl}`);
-    const providerCodeSecret =
-      'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789';
+    const providerCodeSecret = 'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789';
     Object.assign(rawError, {
       body: { message: `provider body ${signedUrl}` },
       status: 504,
@@ -538,12 +721,10 @@ describe('application/process-transcribe-job', () => {
     expect((thrown as Error).stack).not.toContain(secret);
     expect((thrown as Error).stack).not.toContain(providerCodeSecret);
     expect((thrown as Error & { cause?: unknown }).cause).toBeUndefined();
-    expect((thrown as Error & { status?: number }).status).toBe(504);
+    expect((thrown as Error & { status?: number }).status).toBeUndefined();
     expect((thrown as Error & { code?: string }).code).toBeUndefined();
-    expect(recording.status).toBe('failed');
-    expect(recording.error).not.toContain(signedUrl);
-    expect(recording.error).not.toContain('X-Amz-Signature');
-    expect(recording.error).not.toContain(secret);
+    expect(recording.status).toBe('transcribing');
+    expect(recording.error).toBeNull();
     const persistedRecording = JSON.stringify(recording);
     expect(persistedRecording).not.toContain(signedUrl);
     expect(persistedRecording).not.toContain('X-Amz-Signature');
@@ -551,16 +732,7 @@ describe('application/process-transcribe-job', () => {
     expect(convert).toHaveBeenCalledTimes(1);
     expect(jobLogger.error).toHaveBeenCalledTimes(1);
     const loggedError = jobLogger.error.mock.calls[0]?.[0];
-    expect(loggedError).toBe(thrown);
-    expect(loggedError).toBeInstanceOf(Error);
-    expect((loggedError as Error).message).not.toContain(signedUrl);
-    expect((loggedError as Error).message).not.toContain('X-Amz-Signature');
-    expect((loggedError as Error).message).not.toContain(secret);
-    expect((loggedError as Error).message).not.toContain(providerCodeSecret);
-    expect((loggedError as Error).stack).not.toContain(signedUrl);
-    expect((loggedError as Error).stack).not.toContain('X-Amz-Signature');
-    expect((loggedError as Error).stack).not.toContain(secret);
-    expect((loggedError as Error).stack).not.toContain(providerCodeSecret);
+    expect(loggedError).toBe('Transcription attempt failed');
     const applicationLogs = JSON.stringify(jobLogger.error.mock.calls);
     expect(applicationLogs).not.toContain(signedUrl);
     expect(applicationLogs).not.toContain('X-Amz-Signature');
@@ -568,7 +740,7 @@ describe('application/process-transcribe-job', () => {
     expect(applicationLogs).not.toContain(providerCodeSecret);
     expect(jobLogger.error.mock.calls[0]?.[1]).toMatchObject({
       provider: 'elevenlabs',
-      providerCategory: 'provider_timeout',
+      providerCategory: 'transient',
     });
   });
 
@@ -602,8 +774,11 @@ describe('application/process-transcribe-job', () => {
     const convert = vi.fn(async (_request: Record<string, unknown>) => ({
       language_code: 'eng',
       language_probability: 1,
-      text: 'Hello',
-      words: [],
+      text: 'Hello there',
+      words: [
+        { text: 'Hello', speakerId: 'speaker_0', start: 0, end: 0.4 },
+        { text: 'there', speakerId: 'speaker_1', start: 0.5, end: 0.9 },
+      ],
       provider_echo: signedUrl,
       diagnostics: { nested_secret: 'TEMP_TOKEN_SECRET_456' },
     }));
@@ -660,14 +835,19 @@ describe('application/process-transcribe-job', () => {
     expect(result).not.toBeNull();
     expect(recording.status).toBe('transcribed');
     expect(recording.error).toBeNull();
-    expect(storedTexts).toEqual(['Hello']);
+    expect(storedTexts).toContain('[Speaker 1 00:00] Hello\n[Speaker 2 00:01] there');
     expect(inserted[0]?.rawResponseUri).toBeNull();
-    expect(putRawResponse).not.toHaveBeenCalled();
+    expect(putRawResponse).toHaveBeenCalledWith(
+      expect.objectContaining({
+        transcriptId: expect.stringContaining('-speaker-tracks'),
+      }),
+    );
     expect(convert).toHaveBeenCalledTimes(1);
     const durableState = JSON.stringify({ recording, inserted, storedTexts });
     expect(durableState).not.toContain(signedUrl);
     expect(durableState).not.toContain('SIGNED_URL_SECRET_123');
     expect(durableState).not.toContain('TEMP_TOKEN_SECRET_456');
+    expect(JSON.stringify(putRawResponse.mock.calls)).not.toContain(signedUrl);
     expect(JSON.stringify(jobLogger.info.mock.calls)).not.toContain('SIGNED_URL_SECRET_123');
     expect(JSON.stringify(jobLogger.info.mock.calls)).not.toContain('TEMP_TOKEN_SECRET_456');
     expect(jobLogger.error).not.toHaveBeenCalled();
@@ -732,11 +912,9 @@ describe('application/process-transcribe-job', () => {
     }
 
     expect(thrown).toBeInstanceOf(Error);
-    expect((thrown as Error).message).toBe('ElevenLabs source URL submission failed.');
-    expect(recording.status).toBe('failed');
-    expect(recording.error).not.toContain(signedUrl);
-    expect(recording.error).not.toContain('SIGNED_URL_SECRET_123');
-    expect(recording.error).not.toContain('TEMP_TOKEN_SECRET_456');
+    expect((thrown as Error).message).toBe('transcription_unavailable_after_retries');
+    expect(recording.status).toBe('transcribing');
+    expect(recording.error).toBeNull();
     expect(putRawResponse).not.toHaveBeenCalled();
     const workerState = JSON.stringify({ recording, thrown });
     expect(workerState).not.toContain(signedUrl);
@@ -747,7 +925,7 @@ describe('application/process-transcribe-job', () => {
     expect(JSON.stringify(jobLogger.error.mock.calls)).not.toContain('TEMP_TOKEN_SECRET_456');
     expect(jobLogger.error.mock.calls[0]?.[1]).toMatchObject({
       provider: 'elevenlabs',
-      providerCategory: 'provider_contract_error',
+      providerCategory: 'ambiguous',
     });
     expect(convert).toHaveBeenCalledTimes(1);
   });
@@ -787,7 +965,7 @@ describe('application/process-transcribe-job', () => {
           publishEvent: vi.fn(),
         },
       ),
-    ).rejects.toThrow(/async accepted response/i);
+    ).rejects.toThrow('transcription_permanent_failure');
 
     expect(recording.status).toBe('failed');
   });
@@ -913,6 +1091,8 @@ function createConfig(): BatchBackendConfig {
       maxConcurrency: 1,
       sttProvider: 'deepgram',
       sttProviders: ['deepgram', 'elevenlabs', 'google'],
+      reconciliationIntervalMs: 30_000,
+      reconciliationBatchSize: 100,
     },
     studentMemory: {
       queueName: 'student-memory-queue',

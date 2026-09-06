@@ -38,6 +38,12 @@ vi.mock('../../utils/api', () => ({
       this.name = 'ArtifactWorkingConflictApiError';
     }
   },
+  RecordingUploadPreDispatchError: class RecordingUploadPreDispatchError extends Error {
+    constructor(message: string) {
+      super(message);
+      this.name = 'RecordingUploadPreDispatchError';
+    }
+  },
   approveJob: vi.fn(),
   cancelJob: vi.fn(),
   confirmAssignmentSessionStep: vi.fn(),
@@ -84,6 +90,7 @@ vi.mock('../../utils/api', () => ({
   getProfileRevision: vi.fn(),
   getJobStatus: vi.fn(),
   getRecording: vi.fn(),
+  getRecordingUploadOperation: vi.fn(),
   getStudentMemoryHealth: vi.fn(),
   getStudentScheduleBillingSurface: vi.fn(),
   listUserJobs: vi.fn(),
@@ -132,7 +139,14 @@ vi.mock('../shared/DropZone', () => ({
 }));
 
 vi.mock('../shared/UploadProgress', () => ({
-  UploadProgress: ({ progress }: { progress: number }) => <div>Upload progress: {progress}%</div>,
+  UploadProgress: ({ progress, onCancel }: { progress: number; onCancel: () => void }) => (
+    <div>
+      Upload progress: {progress}%
+      <button type="button" onClick={onCancel}>
+        Cancel upload
+      </button>
+    </div>
+  ),
 }));
 
 const now = '2026-02-05T00:00:00.000Z';
@@ -1143,6 +1157,7 @@ export function setupMinimalAssignmentTest() {
   });
 
   vi.mocked(api.uploadRecording).mockResolvedValue(makeRecording());
+  vi.mocked(api.getRecordingUploadOperation).mockResolvedValue(null);
   vi.mocked(api.getRecording).mockResolvedValue(
     makeRecording({
       status: 'transcribed',

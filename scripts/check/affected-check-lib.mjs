@@ -961,7 +961,7 @@ function isBackendPostgresTest(file) {
 }
 
 function isBackendWorkerTest(file) {
-  return /^packages\/batch-backend\/tests\/(?:transport\.worker-runner\.integration|integration\.student-memory-pacing-delay)\.test\.ts$/u.test(
+  return /^packages\/batch-backend\/tests\/(?:transport\.worker-runner\.integration|integration\.student-memory-pacing-delay|infrastructure\.transcribe-queue\.redis\.integration|integration\.transcription-execution-worker\.redis)\.test\.ts$/u.test(
     file,
   );
 }

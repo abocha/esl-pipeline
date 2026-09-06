@@ -1958,6 +1958,17 @@ export async function uploadMarkdown(
 }
 
 /**
+ * The request was rejected locally before Axios could begin an HTTP upload.
+ * Callers may safely retire a browser-owned upload operation after this error.
+ */
+export class RecordingUploadPreDispatchError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RecordingUploadPreDispatchError';
+  }
+}
+
+/**
  * Upload an audio recording via POST /recordings/upload.
  * Returns the created recording metadata.
  */
@@ -1967,12 +1978,14 @@ export async function uploadRecording(
     studentId?: string;
     sttProvider?: SttProvider;
     audioTopology?: Extract<AudioInputTopology, 'trusted_split_channels'>;
+    /** Browser-owned logical upload identity. Production callers always supply it. */
+    uploadOperationId?: string;
     onProgress?: UploadProgressCallback;
     signal?: AbortSignal;
   },
 ): Promise<RecordingListItem> {
   if (file.size > DEFAULT_RECORDING_UPLOAD_MAX_BYTES) {
-    throw new Error('Recording exceeds the 2 GiB upload limit.');
+    throw new RecordingUploadPreDispatchError('Recording exceeds the 2 GiB upload limit.');
   }
   try {
     const formData = new FormData();
@@ -1993,6 +2006,9 @@ export async function uploadRecording(
       params: Object.keys(params).length > 0 ? params : undefined,
       headers: {
         'Content-Type': 'multipart/form-data',
+        ...(options?.uploadOperationId
+          ? { 'x-upload-operation-id': options.uploadOperationId }
+          : {}),
       },
       onUploadProgress: (event) => reportUploadProgress(event, options?.onProgress),
       signal: options?.signal,
@@ -2003,6 +2019,29 @@ export async function uploadRecording(
     const axiosError = toAxiosError(error);
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to upload recordings.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export type RecordingUploadOperationStatus =
+  | RecordingListItem
+  | { operationId: string; recordingId: string; status: 'processing' | 'reclaimable' };
+
+/** Resolve durable ownership before a browser retransmits an uncertain upload. */
+export async function getRecordingUploadOperation(
+  uploadOperationId: string,
+): Promise<RecordingUploadOperationStatus | null> {
+  try {
+    const response = await apiClient.get<RecordingUploadOperationStatus>(
+      buildApiProxyPath(`/recording-upload-operations/${uploadOperationId}`),
+      { validateStatus: (status) => status === 200 || status === 202 || status === 404 },
+    );
+    return response.status === 404 ? null : response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to check upload status.');
     }
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }
