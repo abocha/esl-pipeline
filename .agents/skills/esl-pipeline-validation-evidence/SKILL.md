@@ -70,8 +70,11 @@ or when concrete uncertainty remains, not merely to restate a passing result. Fo
 focused claims and do not replace a required repository or hosted gate.
 
 Agent-output commands are available when the receiving handoff needs persisted local evidence:
-`pnpm check:fast:agent` for affected validation and `pnpm check:pre-pr:agent` for the existing broad
-pre-PR validation. The canonical human-readable broad command remains `pnpm check:pre-pr`.
+`pnpm check:fast:agent` for affected validation, `pnpm check:pre-pr:agent` for broad pre-PR
+validation, and `pnpm check:agent` for the full CI-reproduction / DB / migration / worker /
+integration gate. Agent variants preserve validation scope and exit semantics; they change only
+output presentation and persisted evidence. The corresponding non-agent commands remain the
+canonical human-readable equivalents.
 
 Always report focused commands actually run, the canonical gate result, cited artifact paths for
 failures, named CI-owned requirements, and whether the result is `PASS`,

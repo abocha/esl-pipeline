@@ -141,8 +141,9 @@ execution retains its exemption; a diff alone does not require a reviewer.
   focused test, or bounded specialist review. Stop when evidence is sufficient for the decision.
 - During editing, run the narrowest relevant package, file, or related-test lane first.
 - After focused tests, use `pnpm --silent run check:fast:agent` by default. Use
-  `pnpm check:pre-pr` directly for broad, cross-cutting, shared-contract, or toolchain work, and use
-  `pnpm check` when reproducing CI or changing DB, migration, worker, or integration behavior.
+  `pnpm check:pre-pr:agent` for broad, cross-cutting, shared-contract, or toolchain work run by an
+  agent, and `pnpm check:agent` when reproducing CI or changing DB, migration, worker, or integration
+  behavior. The corresponding non-agent commands remain the human-readable equivalents.
 - Prefer existing `:agent` commands. Read their cited artifacts under `tmp/check-logs/...` or
   `tmp/test-logs/...` before any diagnostic rerun. Allow at most one isolated rerun per unchanged
   failure; rerun the complete gate only after relevant state changes.
