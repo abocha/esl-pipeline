@@ -18,6 +18,7 @@ import { getJobStatus } from '../src/application/get-job-status.js';
 import { rerun } from '../src/application/job-actions/rerun.js';
 import { jobRecordToDto } from '../src/application/job-dto.js';
 import { retryRecordingTranscription } from '../src/application/retry-recording-transcription.js';
+import { reconcileUploadCandidates } from '../src/application/reconcile-upload-candidates.js';
 import {
   confirmAssignmentSessionStepPersistence,
   confirmStudentAssignmentSession,
@@ -33,11 +34,27 @@ import {
   insertRecording,
   listRecordingsBySha256ForWorkspace,
 } from '../src/domain/recording-repository.js';
+import {
+  beginRecordingUploadOperation,
+  completeRecordingUploadOperation,
+  isObsoleteUploadCandidateDeletable,
+  listObsoleteUploadCandidates,
+  recordObsoleteUploadCandidateCleanupResult,
+  recordUploadAttemptCandidate,
+} from '../src/domain/recording-upload-operation-repository.js';
 import { getStudentById } from '../src/domain/student-repository.js';
 import {
   getTranscriptByRecordingIdForWorkspace,
   insertTranscript,
 } from '../src/domain/transcript-repository.js';
+import {
+  claimTranscriptionRun,
+  completeTranscriptionRun,
+  createQueuedTranscriptionRun,
+  getTranscriptionRunById,
+  markTranscriptionRunRetryWait,
+  reserveTranscriptionSubmissionSlot,
+} from '../src/domain/transcription-run-repository.js';
 import { createPgPool, withPgClientSessionContext } from '../src/infrastructure/db.js';
 import type { AuthenticatedRequest } from '../src/transport/auth-middleware.js';
 import { registerCoreRoutes } from '../src/transport/core-routes.js';
@@ -659,6 +676,339 @@ describe('recording tenant authority', () => {
       locker.release();
     }
   });
+
+  it('serializes run claims, conserves stale reserved slots, and commits one transcript winner', async () => {
+    const tenant = await seedTenant('Run concurrency');
+    const recording = await insertRecording({
+      workspaceId: tenant.workspaceId,
+      source: 'upload',
+      studentId: tenant.studentId,
+      sourcePath: 'lesson.mp3',
+      storageUri: 'local://recordings/run-concurrency.mp3',
+      sha256: 'c'.repeat(64),
+      bytes: 10,
+      audioTopology: 'mixed_recording',
+      status: 'queued',
+    });
+    const run = await createQueuedTranscriptionRun({
+      recordingId: recording.id,
+      workspaceId: tenant.workspaceId,
+      provider: 'elevenlabs',
+      requestProfile: 'ordinary_mixed_v1',
+    });
+    const duplicateEnqueueRuns = await Promise.all([
+      createQueuedTranscriptionRun({
+        recordingId: recording.id,
+        workspaceId: tenant.workspaceId,
+        provider: 'elevenlabs',
+        requestProfile: 'ordinary_mixed_v1',
+      }),
+      createQueuedTranscriptionRun({
+        recordingId: recording.id,
+        workspaceId: tenant.workspaceId,
+        provider: 'elevenlabs',
+        requestProfile: 'ordinary_mixed_v1',
+      }),
+    ]);
+    expect(new Set([run.id, ...duplicateEnqueueRuns.map((candidate) => candidate.id)])).toEqual(
+      new Set([run.id]),
+    );
+
+    const claims = await Promise.all([
+      claimTranscriptionRun({ runId: run.id, claimTtlMs: 1_000 }),
+      claimTranscriptionRun({ runId: run.id, claimTtlMs: 1_000 }),
+    ]);
+    const firstClaim = claims.filter((claim): claim is NonNullable<typeof claim> => claim !== null);
+    expect(firstClaim).toHaveLength(1);
+    const firstToken = firstClaim[0]?.claimToken;
+    expect(firstToken).toBeTruthy();
+    await reserveTranscriptionSubmissionSlot({ runId: run.id, claimToken: firstToken! });
+
+    await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+      client.query(
+        `UPDATE transcription_runs SET claim_expires_at = now() - interval '1 second' WHERE id = $1`,
+        [run.id],
+      ),
+    );
+    await expect(
+      completeTranscriptionRun({
+        runId: run.id,
+        claimToken: firstToken!,
+        transcript: {
+          recordingId: recording.id,
+          storageUri: 'local://transcripts/stale-completion.txt',
+          workingVersion: 1,
+          contentHash: 'f'.repeat(64),
+          mode: 'timeline',
+          model: 'scribe_v2',
+          language: 'auto',
+          sttProvider: 'elevenlabs',
+          fallbackUsed: false,
+        },
+      }),
+    ).resolves.toBeNull();
+    const reclaimed = await claimTranscriptionRun({ runId: run.id, claimTtlMs: 1_000 });
+    expect(reclaimed).toMatchObject({
+      submissionSlotsReserved: 1,
+      lastSubmissionOutcome: 'ambiguous',
+    });
+    expect(reclaimed?.claimToken).toBeTruthy();
+    await reserveTranscriptionSubmissionSlot({ runId: run.id, claimToken: reclaimed!.claimToken! });
+    await reserveTranscriptionSubmissionSlot({ runId: run.id, claimToken: reclaimed!.claimToken! });
+    await expect(
+      reserveTranscriptionSubmissionSlot({ runId: run.id, claimToken: reclaimed!.claimToken! }),
+    ).resolves.toBeNull();
+
+    const transcript = {
+      recordingId: recording.id,
+      storageUri: 'local://transcripts/run-concurrency.txt',
+      workingVersion: 1,
+      contentHash: 'd'.repeat(64),
+      mode: 'timeline' as const,
+      model: 'scribe_v2',
+      language: 'auto',
+      sttProvider: 'elevenlabs' as const,
+      fallbackUsed: false,
+    };
+    const completions = await Promise.all([
+      completeTranscriptionRun({ runId: run.id, claimToken: reclaimed!.claimToken!, transcript }),
+      completeTranscriptionRun({
+        runId: run.id,
+        claimToken: reclaimed!.claimToken!,
+        transcript: { ...transcript, id: randomUUID() },
+      }),
+    ]);
+    expect(completions.filter(Boolean)).toHaveLength(1);
+    await expect(getTranscriptionRunById(run.id)).resolves.toMatchObject({ state: 'succeeded' });
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      const winners = await client.query(`SELECT id FROM transcripts WHERE recording_id = $1`, [
+        recording.id,
+      ]);
+      expect(winners.rowCount).toBe(1);
+    });
+  });
+
+  it('serializes one upload operation, retires stale candidates, and adopts only the current one', async () => {
+    const tenant = await seedTenant('Upload operation');
+    const context = {
+      workspaceId: tenant.workspaceId,
+      operationUuid: randomUUID(),
+      studentId: tenant.studentId,
+      audioTopology: 'mixed_recording' as const,
+      requestedProvider: null,
+      requestProfile: 'ordinary_mixed_v1',
+    };
+    const starts = await Promise.all([
+      beginRecordingUploadOperation(context),
+      beginRecordingUploadOperation(context),
+    ]);
+    const initial = starts.find((result) => result.kind === 'claimed');
+    expect(initial?.kind).toBe('claimed');
+    if (!initial || initial.kind !== 'claimed')
+      throw new Error('Expected one upload attempt claim.');
+    expect(starts.filter((result) => result.kind === 'claimed')).toHaveLength(1);
+    expect(
+      starts.every((result) => result.operation.recordingId === initial.operation.recordingId),
+    ).toBe(true);
+
+    const firstCandidate = `local://workspaces/${tenant.workspaceId}/recordings/${initial.operation.recordingId}/candidates/${initial.operation.attemptToken}/audio.mp3`;
+    await expect(
+      recordUploadAttemptCandidate({
+        operationId: initial.operation.id,
+        attemptToken: initial.operation.attemptToken!,
+        candidateUri: firstCandidate,
+      }),
+    ).resolves.toBe(true);
+    await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+      client.query(
+        `UPDATE recording_upload_operations
+         SET attempt_expires_at = now() - interval '1 second' WHERE id = $1`,
+        [initial.operation.id],
+      ),
+    );
+
+    const reclaimed = await beginRecordingUploadOperation(context);
+    expect(reclaimed).toMatchObject({ kind: 'claimed', obsoleteCandidateUris: [firstCandidate] });
+    if (reclaimed.kind !== 'claimed')
+      throw new Error('Expected expired upload attempt to reclaim.');
+    await expect(
+      recordUploadAttemptCandidate({
+        operationId: initial.operation.id,
+        attemptToken: initial.operation.attemptToken!,
+        candidateUri: firstCandidate,
+      }),
+    ).resolves.toBe(false);
+
+    const winnerCandidate = `local://workspaces/${tenant.workspaceId}/recordings/${reclaimed.operation.recordingId}/candidates/${reclaimed.operation.attemptToken}/audio.mp3`;
+    await expect(
+      recordUploadAttemptCandidate({
+        operationId: reclaimed.operation.id,
+        attemptToken: reclaimed.operation.attemptToken!,
+        candidateUri: winnerCandidate,
+      }),
+    ).resolves.toBe(true);
+    await insertRecording({
+      id: reclaimed.operation.recordingId,
+      workspaceId: tenant.workspaceId,
+      source: 'upload',
+      studentId: tenant.studentId,
+      sourcePath: 'lesson.mp3',
+      storageUri: winnerCandidate,
+      bytes: 10,
+      audioTopology: 'mixed_recording',
+      status: 'queued',
+    });
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      await client.query('BEGIN');
+      try {
+        await expect(
+          completeRecordingUploadOperation({
+            client,
+            operationId: reclaimed.operation.id,
+            attemptToken: reclaimed.operation.attemptToken!,
+            recordingId: reclaimed.operation.recordingId,
+            candidateUri: winnerCandidate,
+          }),
+        ).resolves.toBe(true);
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      }
+    });
+    await expect(beginRecordingUploadOperation(context)).resolves.toMatchObject({
+      kind: 'completed',
+      operation: { finalRecordingId: reclaimed.operation.recordingId },
+    });
+  });
+
+  it('advances bounded cleanup work past successful and failed obsolete candidates', async () => {
+    const tenant = await seedTenant('Upload cleanup progress');
+    const candidates = await Promise.all(
+      ['first', 'second', 'third'].map((suffix) => createObsoleteUploadCandidate(tenant, suffix)),
+    );
+
+    const firstPass = await listObsoleteUploadCandidates(2);
+    expect(firstPass).toHaveLength(2);
+    for (const candidate of firstPass) {
+      await recordObsoleteUploadCandidateCleanupResult({ candidate, deleted: true });
+    }
+    const secondPass = await listObsoleteUploadCandidates(2);
+    expect(secondPass).toHaveLength(1);
+    expect(secondPass[0]?.uri).toBe(
+      candidates.find((candidate) =>
+        firstPass.every((processed) => processed.uri !== candidate.uri),
+      )?.uri,
+    );
+
+    await recordObsoleteUploadCandidateCleanupResult({
+      candidate: secondPass[0]!,
+      deleted: false,
+    });
+    await expect(listObsoleteUploadCandidates(3)).resolves.toEqual([]);
+    await makeCleanupDue(secondPass[0]!);
+    await expect(listObsoleteUploadCandidates(3)).resolves.toEqual([secondPass[0]]);
+  });
+
+  it('revisits a successfully checked candidate and deletes a late storage completion', async () => {
+    const tenant = await seedTenant('Late upload candidate');
+    const candidate = await createObsoleteUploadCandidate(tenant, 'late-write');
+    const storedUris = new Set<string>();
+    const deleteCandidate = vi.fn(async (uri: string) => {
+      storedUris.delete(uri);
+    });
+    const storageForUri = () => ({ delete: deleteCandidate }) as never;
+
+    await expect(reconcileUploadCandidates({ limit: 1, storageForUri })).resolves.toBe(1);
+    expect(storedUris).not.toContain(candidate.uri);
+
+    // The attempt registered this immutable URI before storage mutation. A
+    // writer that finishes after this first no-op delete must be revisited.
+    storedUris.add(candidate.uri);
+    await makeCleanupDue(candidate);
+    await expect(reconcileUploadCandidates({ limit: 1, storageForUri })).resolves.toBe(1);
+    expect(deleteCandidate).toHaveBeenCalledTimes(2);
+    expect(storedUris).not.toContain(candidate.uri);
+  });
+
+  it('does not list adopted, referenced, or current-attempt upload candidates for deletion', async () => {
+    const tenant = await seedTenant('Upload cleanup safety');
+    const referenced = await createObsoleteUploadCandidate(tenant, 'referenced');
+    await insertRecording({
+      workspaceId: tenant.workspaceId,
+      source: 'upload',
+      studentId: tenant.studentId,
+      sourcePath: 'referenced.mp3',
+      storageUri: referenced.uri,
+      bytes: 10,
+      audioTopology: 'mixed_recording',
+      status: 'queued',
+    });
+    await expect(isObsoleteUploadCandidateDeletable(referenced)).resolves.toBe(false);
+
+    const obsolete = await createObsoleteUploadCandidate(tenant, 'shared-current');
+    const current = await beginRecordingUploadOperation({
+      workspaceId: tenant.workspaceId,
+      operationUuid: randomUUID(),
+      studentId: tenant.studentId,
+      audioTopology: 'mixed_recording',
+      requestedProvider: null,
+      requestProfile: 'ordinary_mixed_v1',
+    });
+    if (current.kind !== 'claimed') throw new Error('Expected current upload attempt claim.');
+    await expect(
+      recordUploadAttemptCandidate({
+        operationId: current.operation.id,
+        attemptToken: current.operation.attemptToken!,
+        candidateUri: obsolete.uri,
+      }),
+    ).resolves.toBe(true);
+
+    await expect(isObsoleteUploadCandidateDeletable(obsolete)).resolves.toBe(false);
+    const listed = await listObsoleteUploadCandidates(10);
+    expect(listed.map((candidate) => candidate.uri)).not.toContain(referenced.uri);
+    expect(listed.map((candidate) => candidate.uri)).not.toContain(obsolete.uri);
+  });
+
+  it('clears the recording error while a retry_wait run retains its diagnostic', async () => {
+    const tenant = await seedTenant('Retry projection');
+    const recording = await insertRecording({
+      workspaceId: tenant.workspaceId,
+      source: 'upload',
+      studentId: tenant.studentId,
+      sourcePath: 'lesson.mp3',
+      storageUri: 'local://recordings/retry-projection.mp3',
+      sha256: 'e'.repeat(64),
+      bytes: 10,
+      audioTopology: 'mixed_recording',
+      status: 'queued',
+      error: 'old_terminal_error',
+    });
+    const run = await createQueuedTranscriptionRun({
+      recordingId: recording.id,
+      workspaceId: tenant.workspaceId,
+      provider: 'elevenlabs',
+      requestProfile: 'ordinary_mixed_v1',
+    });
+    const claimed = await claimTranscriptionRun({ runId: run.id, claimTtlMs: 1_000 });
+    await expect(
+      markTranscriptionRunRetryWait({
+        runId: run.id,
+        claimToken: claimed!.claimToken!,
+        errorCode: 'transcription_unavailable_after_retries',
+        outcome: 'known_failure',
+      }),
+    ).resolves.toMatchObject({
+      state: 'retry_wait',
+      errorCode: 'transcription_unavailable_after_retries',
+    });
+    await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
+      const persisted = await client.query(`SELECT status, error FROM recordings WHERE id = $1`, [
+        recording.id,
+      ]);
+      expect(persisted.rows[0]).toEqual({ status: 'transcribing', error: null });
+    });
+  });
 });
 
 async function settlesWithin(promise: Promise<unknown>, timeoutMs: number) {
@@ -785,6 +1135,57 @@ async function seedTenant(label: string) {
   return { workspaceId, userId, studentId };
 }
 
+async function createObsoleteUploadCandidate(
+  tenant: Awaited<ReturnType<typeof seedTenant>>,
+  suffix: string,
+) {
+  const started = await beginRecordingUploadOperation({
+    workspaceId: tenant.workspaceId,
+    operationUuid: randomUUID(),
+    studentId: tenant.studentId,
+    audioTopology: 'mixed_recording',
+    requestedProvider: null,
+    requestProfile: 'ordinary_mixed_v1',
+  });
+  if (started.kind !== 'claimed') throw new Error('Expected upload attempt claim.');
+  const candidateUri = `local://workspaces/${tenant.workspaceId}/recordings/${started.operation.recordingId}/candidates/${started.operation.attemptToken}/${suffix}.mp3`;
+  await expect(
+    recordUploadAttemptCandidate({
+      operationId: started.operation.id,
+      attemptToken: started.operation.attemptToken!,
+      candidateUri,
+    }),
+  ).resolves.toBe(true);
+  await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+    client.query(
+      `UPDATE recording_upload_operation_attempts
+       SET state = 'obsolete', retired_at = now(), cleanup_next_attempt_at = now()
+       WHERE operation_id = $1 AND attempt_token = $2`,
+      [started.operation.id, started.operation.attemptToken],
+    ),
+  );
+  return {
+    operationId: started.operation.id,
+    attemptToken: started.operation.attemptToken!,
+    uri: candidateUri,
+  };
+}
+
+async function makeCleanupDue(candidate: {
+  operationId: string;
+  attemptToken: string;
+  uri: string;
+}) {
+  await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+    client.query(
+      `UPDATE recording_upload_operation_attempts
+       SET cleanup_next_attempt_at = now() - interval '1 second'
+       WHERE operation_id = $1 AND attempt_token = $2 AND candidate_uri = $3`,
+      [candidate.operationId, candidate.attemptToken, candidate.uri],
+    ),
+  );
+}
+
 function createCoreAppForTenant(tenant: Awaited<ReturnType<typeof seedTenant>>): FastifyInstance {
   const app = Fastify();
   registerCoreRoutes(app, {
@@ -819,7 +1220,10 @@ async function captureTargetedJobEvent(app: FastifyInstance, job: JobRecord): Pr
       const chunk = await Promise.race([
         reader.read(),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Timed out waiting for standalone job SSE event')), remainingMs),
+          setTimeout(
+            () => reject(new Error('Timed out waiting for standalone job SSE event')),
+            remainingMs,
+          ),
         ),
       ]);
       if (chunk.done) break;

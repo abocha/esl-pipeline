@@ -50,9 +50,16 @@ import {
   getRecordingByIdForWorkspace,
   insertCachedRecordingLineage,
   insertRecording,
+  insertRecordingWithQueuedTranscriptionRun,
   listRecordingsBySha256ForWorkspace,
   updateRecordingStatus,
 } from '../../domain/recording-repository.js';
+import {
+  beginRecordingUploadOperation,
+  getRecordingUploadOperation,
+  RecordingUploadOperationConflictError,
+  recordUploadAttemptCandidate,
+} from '../../domain/recording-upload-operation-repository.js';
 import { getStudentById } from '../../domain/student-repository.js';
 import type { TranscriptRecord } from '../../domain/transcript-model.js';
 import {
@@ -145,6 +152,83 @@ export function registerRecordingRoutes(
           });
         }
 
+        const workspaceId = await resolvePrimaryWorkspaceIdForUser(authenticatedUser.id);
+        const rawUploadOperationId = request.headers['x-upload-operation-id'];
+        const uploadOperationId =
+          typeof rawUploadOperationId === 'string' &&
+          z.string().uuid().safeParse(rawUploadOperationId).success
+            ? rawUploadOperationId
+            : null;
+        if (rawUploadOperationId !== undefined && !uploadOperationId) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid upload operation identity.',
+            code: 'invalid_upload_operation_id',
+          });
+        }
+        if (!uploadOperationId) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Upload operation identity is required.',
+            code: 'upload_operation_id_required',
+          });
+        }
+
+        // Request identity is query/header metadata, deliberately available before
+        // multipart consumption. Do not make ownership depend on form field order.
+        const query = querySchema.parse(request.query ?? {});
+        if (!query.studentId) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Select a student before uploading.',
+            code: 'student_required',
+          });
+        }
+        const student = await getStudentById(query.studentId, { workspaceId });
+        if (!student) return errorResponse(reply, 'not_found');
+        const studentId = student.id;
+        const requestedSttProvider = query.sttProvider;
+        const audioTopology = query.audioTopology ?? 'mixed_recording';
+        const route = resolveTranscriptionRoute({
+          config,
+          topology: audioTopology,
+          requestedProvider: requestedSttProvider,
+        });
+        const effectiveSttProvider = route.provider;
+        const expectedFingerprint = resolveExpectedSttModelAndLanguage(
+          config,
+          effectiveSttProvider,
+        );
+        const operationResult = await beginRecordingUploadOperation({
+          workspaceId,
+          operationUuid: uploadOperationId,
+          studentId,
+          audioTopology,
+          requestedProvider: requestedSttProvider ?? null,
+          requestProfile: route.profile,
+        });
+        if (operationResult.kind === 'completed') {
+          const existing = await getRecordingByIdForWorkspace(
+            operationResult.operation.finalRecordingId ?? operationResult.operation.recordingId,
+            workspaceId,
+          );
+          if (existing) return reply.code(200).send(recordingToDto(existing));
+          throw new Error('Completed upload operation has no recording projection.');
+        }
+        if (operationResult.kind === 'active') {
+          return reply.code(202).send({
+            operationId: uploadOperationId,
+            recordingId: operationResult.operation.recordingId,
+            status: 'processing',
+          });
+        }
+        // Obsolete candidates are deliberately left to the bounded worker reconciler.
+        // It re-checks durable adoption/recording references immediately before every
+        // idempotent filesystem/S3 delete and retries after process/storage failure.
+        const uploadOperation = operationResult.operation;
+        if (!uploadOperation.attemptToken)
+          throw new Error('Claimed upload operation lacks attempt token.');
+
         // This is deliberately before multipart consumption. It is a point-in-time local check,
         // not a concurrent disk reservation; the configured maximum is the admission budget.
         await ensureRecordingUploadCapacity({
@@ -166,31 +250,6 @@ export function registerRecordingRoutes(
             code: 'no_file',
           });
         }
-
-        const query = querySchema.parse(request.query ?? {});
-        if (!query.studentId) {
-          return reply.code(400).send({
-            error: 'validation_failed',
-            message: 'Select a student before uploading.',
-            code: 'student_required',
-          });
-        }
-        const workspaceId = await resolvePrimaryWorkspaceIdForUser(authenticatedUser.id);
-        const student = await getStudentById(query.studentId, { workspaceId });
-        if (!student) return errorResponse(reply, 'not_found');
-        const studentId = student.id;
-        const requestedSttProvider = query.sttProvider;
-        const audioTopology = query.audioTopology ?? 'mixed_recording';
-        const route = resolveTranscriptionRoute({
-          config,
-          topology: audioTopology,
-          requestedProvider: requestedSttProvider,
-        });
-        const effectiveSttProvider = route.provider;
-        const expectedFingerprint = resolveExpectedSttModelAndLanguage(
-          config,
-          effectiveSttProvider,
-        );
 
         const filename = file.filename || '';
         const spooled = await spoolRecordingUpload({
@@ -277,6 +336,11 @@ export function registerRecordingRoutes(
                 audioTopology,
                 mediaPreparationVersion: prepared.preparationVersion,
                 storage: transcriptionStorage,
+                recordingId: uploadOperation.recordingId,
+                uploadOperation: {
+                  id: uploadOperation.id,
+                  attemptToken: uploadOperation.attemptToken,
+                },
               });
               logger.info('Recording upload cache hit', {
                 event: 'recording_upload_cache_hit',
@@ -326,6 +390,18 @@ export function registerRecordingRoutes(
             // Storage naming follows probed/prepared facts, never the untrusted original extension.
             filename: `audio${prepared.extension}`,
             workspaceId,
+            recordingId: uploadOperation.recordingId,
+            uploadOperation: {
+              id: uploadOperation.id,
+              attemptToken: uploadOperation.attemptToken,
+              recordingId: uploadOperation.recordingId,
+              recordCandidate: (candidateUri) =>
+                recordUploadAttemptCandidate({
+                  operationId: uploadOperation.id,
+                  attemptToken: uploadOperation.attemptToken!,
+                  candidateUri,
+                }),
+            },
             inputPath: prepared.path,
             sourcePath,
             studentId,
@@ -334,6 +410,8 @@ export function registerRecordingRoutes(
             mediaPreparationVersion: prepared.preparationVersion,
             storage: transcriptionStorage,
             repository: {
+              getRecordingByIdForWorkspace,
+              insertRecordingWithRun: insertRecordingWithQueuedTranscriptionRun,
               insertRecording,
               updateRecordingStatus,
             },
@@ -379,6 +457,13 @@ export function registerRecordingRoutes(
             code: error.code,
           });
         }
+        if (error instanceof RecordingUploadOperationConflictError) {
+          return reply.code(409).send({
+            error: 'validation_failed',
+            message: 'Upload operation identity was reused with different upload settings.',
+            code: 'upload_operation_conflict',
+          });
+        }
         if (error instanceof RecordingMediaError) {
           const status = error.code === 'file_too_large' ? 413 : 400;
           return reply.code(status).send({
@@ -399,6 +484,40 @@ export function registerRecordingRoutes(
           error: 'internal_error',
         });
       }
+    },
+  );
+
+  app.get(
+    '/recording-upload-operations/:operationId',
+    { preHandler: [authenticate] },
+    async (request, reply) => {
+      const operationId = (request.params as { operationId: string }).operationId;
+      if (!z.string().uuid().safeParse(operationId).success)
+        return errorResponse(reply, 'not_found');
+      const authenticatedUser = getAuthenticatedUser(request);
+      if (!authenticatedUser) return reply.code(401).send({ error: 'unauthorized' });
+      const workspaceId = await resolvePrimaryWorkspaceIdForUser(authenticatedUser.id);
+      const operation = await getRecordingUploadOperation(workspaceId, operationId);
+      if (!operation) return errorResponse(reply, 'not_found');
+      if (operation.state !== 'completed') {
+        return reply.code(202).send({
+          operationId,
+          recordingId: operation.recordingId,
+          // The same logical UUID remains valid after lease expiry. Tell the
+          // browser it may retransmit that UUID so begin() can durably reclaim
+          // the operation, rather than minting a second logical upload.
+          status:
+            operation.attemptExpiresAt && operation.attemptExpiresAt <= new Date()
+              ? 'reclaimable'
+              : 'processing',
+        });
+      }
+      const recording = await getRecordingByIdForWorkspace(
+        operation.finalRecordingId ?? operation.recordingId,
+        workspaceId,
+      );
+      if (!recording) return errorResponse(reply, 'not_found');
+      return reply.send(recordingToDto(recording));
     },
   );
 
@@ -1535,8 +1654,10 @@ async function cloneCachedRecordingForStudent(params: {
   audioTopology: import('@esl-pipeline/contracts').AudioInputTopology;
   mediaPreparationVersion: string;
   storage: TranscriptionStorage;
+  recordingId: string;
+  uploadOperation: { id: string; attemptToken: string };
 }) {
-  const recordingId = randomUUID();
+  const recordingId = params.recordingId;
   const transcriptId = randomUUID();
   const readStorage = createTranscriptionStorageForUri(params.cachedTranscript.storageUri);
   const cachedText = await readStorage.getText(params.cachedTranscript.storageUri);
@@ -1581,6 +1702,7 @@ async function cloneCachedRecordingForStudent(params: {
         fallbackUsed: params.cachedTranscript.fallbackUsed,
         summaryJson,
       },
+      uploadOperation: params.uploadOperation,
     });
   } catch (error) {
     const [committedRecording, committedTranscript] = await Promise.all([

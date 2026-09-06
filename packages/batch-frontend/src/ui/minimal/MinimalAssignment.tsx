@@ -664,13 +664,19 @@ export const MinimalAssignment: React.FC = () => {
 
   const beginHydration = useCallback(
     (mode: HydrationMode): HydrationContext => {
+      if (mode !== 'new') {
+        // A resumed assignment has its own source workflow even when it belongs
+        // to the same student. Invalidate before any resume I/O can yield so an
+        // older upload-status lookup cannot hydrate the resumed source state.
+        resetSourceFlow({ preserveRecordingSettings: true });
+      }
       hydrationIdRef.current += 1;
       assignmentSessionUserEditedRef.current = false;
       assignmentSessionPersistenceSuppressedRef.current = mode !== 'new';
       resetPendingSessionRecovery();
       return { id: hydrationIdRef.current, mode };
     },
-    [resetPendingSessionRecovery],
+    [resetPendingSessionRecovery, resetSourceFlow],
   );
 
   const isCurrentHydration = useCallback(
@@ -2699,6 +2705,8 @@ export const MinimalAssignment: React.FC = () => {
               onBeginAudioReplacement={source.beginAudioReplacement}
               onCancelAudioReplacement={source.cancelAudioReplacement}
               onCancelUpload={handleCancelUpload}
+              canRetryUpload={source.canRetryUpload}
+              onRetryUpload={source.retryPendingUpload}
               uploadError={source.uploadError}
               uploadCacheNotice={source.uploadCacheNotice}
               recording={source.recording}

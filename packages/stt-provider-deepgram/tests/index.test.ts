@@ -8,12 +8,32 @@ function baseConfig(): DeepgramSttConfig {
     apiKey: 'test-key',
     model: 'nova-3',
     language: 'multi',
-    retryBaseDelayMs: 0,
-    retryMax: 1,
   };
 }
 
 describe('stt-provider-deepgram', () => {
+  it('uses the installed SDK transport once for a retryable 503', async () => {
+    const originalFetch = globalThis.fetch;
+    const dispatch = vi.fn(async () => new Response('unavailable', { status: 503 }));
+    globalThis.fetch = dispatch;
+    try {
+      const provider = createDeepgramSttProvider();
+      await expect(
+        provider.transcribe({
+          context: {
+            recordingId: 'recording-sdk-retry',
+            storageUri: 'local://recordings/recording-sdk-retry.wav',
+            getStream: async () => Readable.from(['audio']),
+          },
+          config: baseConfig(),
+        }),
+      ).rejects.toMatchObject({ code: 'PROVIDER_RETRYABLE_HTTP', status: 503 });
+      expect(dispatch).toHaveBeenCalledTimes(1);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it('fails closed when a trusted split response does not preserve both channels', async () => {
     const transcribeFile = vi.fn(async () => ({
       metadata: { channels: 1 },
@@ -21,7 +41,6 @@ describe('stt-provider-deepgram', () => {
     }));
     const provider = createDeepgramSttProvider({
       clientFactory: () => ({ listen: { v1: { media: { transcribeFile } } } }),
-      sleep: async () => undefined,
     });
 
     await expect(
@@ -33,7 +52,7 @@ describe('stt-provider-deepgram', () => {
         },
         config: { ...baseConfig(), trustedSplitChannels: true },
       }),
-    ).rejects.toThrow(/declared two-channel contract/i);
+    ).rejects.toMatchObject({ code: 'PROVIDER_RESPONSE_INVALID' });
     expect(transcribeFile).toHaveBeenCalledTimes(1);
   });
 
@@ -53,7 +72,6 @@ describe('stt-provider-deepgram', () => {
     }));
     const provider = createDeepgramSttProvider({
       clientFactory: () => ({ listen: { v1: { media: { transcribeFile } } } }),
-      sleep: async () => undefined,
     });
 
     await expect(
@@ -65,7 +83,7 @@ describe('stt-provider-deepgram', () => {
         },
         config: { ...baseConfig(), trustedSplitChannels: true },
       }),
-    ).rejects.toThrow(/explicit channel 0\/1 provenance/i);
+    ).rejects.toMatchObject({ code: 'PROVIDER_RESPONSE_INVALID' });
     expect(transcribeFile).toHaveBeenCalledTimes(1);
   });
 
@@ -85,7 +103,6 @@ describe('stt-provider-deepgram', () => {
     }));
     const provider = createDeepgramSttProvider({
       clientFactory: () => ({ listen: { v1: { media: { transcribeFile } } } }),
-      sleep: async () => undefined,
     });
 
     await expect(
@@ -97,7 +114,7 @@ describe('stt-provider-deepgram', () => {
         },
         config: { ...baseConfig(), trustedSplitChannels: true },
       }),
-    ).rejects.toThrow(/explicit channel 0\/1 provenance/i);
+    ).rejects.toMatchObject({ code: 'PROVIDER_RESPONSE_INVALID' });
   });
 
   it('transcribes with multichannel primary path', async () => {
@@ -141,7 +158,43 @@ describe('stt-provider-deepgram', () => {
     expect(getStream).toHaveBeenCalledTimes(1);
   });
 
-  it('falls back to diarize when primary fails', async () => {
+  it('preserves a missing lexical speaker instead of inheriting speaker 0', async () => {
+    const provider = createDeepgramSttProvider({
+      clientFactory: () => ({
+        listen: {
+          v1: {
+            media: {
+              async transcribeFile() {
+                return {
+                  results: {
+                    utterances: [
+                      { transcript: 'Tutor', speaker: 0, start: 0, end: 0.2 },
+                      { transcript: 'Unknown', start: 0.3, end: 0.5 },
+                      { transcript: 'Student', speaker: 1, start: 0.6, end: 0.8 },
+                    ],
+                    channels: [{ alternatives: [{ transcript: 'Tutor Unknown Student' }] }],
+                  },
+                };
+              },
+            },
+          },
+        },
+      }),
+    });
+
+    const result = await provider.transcribe({
+      context: {
+        recordingId: 'rec-speaker-provenance',
+        storageUri: 'local://audio.wav',
+        getStream: async () => Readable.from(['audio']),
+      },
+      config: baseConfig(),
+    });
+
+    expect(result.segments.map((segment) => segment.speaker)).toEqual([0, undefined, 1]);
+  });
+
+  it('does not hide a second Deepgram submission behind adapter fallback', async () => {
     const transcribeFile = vi
       .fn()
       .mockRejectedValueOnce(new Error('terminated'))
@@ -165,19 +218,20 @@ describe('stt-provider-deepgram', () => {
       }),
     });
 
-    const result = await provider.transcribe({
-      context: {
-        recordingId: 'rec-1',
-        storageUri: 'local://audio.wav',
-        async getStream() {
-          return Readable.from(Buffer.from('audio'));
+    await expect(
+      provider.transcribe({
+        context: {
+          recordingId: 'rec-1',
+          storageUri: 'local://audio.wav',
+          async getStream() {
+            return Readable.from(Buffer.from('audio'));
+          },
         },
-      },
-      config: baseConfig(),
-    });
+        config: baseConfig(),
+      }),
+    ).rejects.toMatchObject({ code: 'PROVIDER_TRANSPORT_ERROR' });
 
-    expect(result.fallbackUsed).toBe(true);
-    expect(transcribeFile).toHaveBeenCalledTimes(2);
+    expect(transcribeFile).toHaveBeenCalledTimes(1);
   });
 
   it('throws on async accepted responses', async () => {
@@ -206,7 +260,34 @@ describe('stt-provider-deepgram', () => {
         },
         config: baseConfig(),
       }),
-    ).rejects.toThrow(/async accepted response/i);
+    ).rejects.toMatchObject({ code: 'PROVIDER_RESPONSE_INVALID' });
+  });
+
+  it('uses the actual SDK injected fetch and prevents a cancelled continuation from dispatching', async () => {
+    const dispatch = vi.fn<typeof fetch>(async () => new Response('{}'));
+    const controller = new AbortController();
+    controller.abort();
+    const guardedFetch = vi.fn<typeof fetch>(async (input, init) => {
+      if (controller.signal.aborted || init?.signal?.aborted) {
+        throw Object.assign(new Error('dispatch cancelled'), { code: 'AMBIGUOUS_PROVIDER_OUTCOME' });
+      }
+      return dispatch(input, init);
+    });
+    const provider = createDeepgramSttProvider();
+
+    await expect(
+      provider.transcribe({
+        context: {
+          recordingId: 'rec-stale-sdk-preparation',
+          storageUri: 'local://audio.wav',
+          getStream: async () => Readable.from(['audio']),
+          providerTransport: { fetch: guardedFetch, signal: controller.signal },
+        },
+        config: baseConfig(),
+      }),
+    ).rejects.toMatchObject({ code: 'PROVIDER_TRANSPORT_ERROR' });
+    expect(guardedFetch).toHaveBeenCalledTimes(1);
+    expect(dispatch).not.toHaveBeenCalled();
   });
 
   it('normalizes Deepgram Spanish-looking aha in returned segments', async () => {

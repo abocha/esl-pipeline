@@ -7,9 +7,11 @@ import { createJobLogger, logger } from './logger.js';
 import { createRedisClient } from './redis.js';
 
 export interface TranscribeQueuePayload {
+  /** Stable durable execution identity. BullMQ is delivery only. */
+  runId: string;
   recordingId: string;
+  /** Compatibility metadata is ignored by run-authoritative execution. */
   sttProvider?: SttProviderId;
-  /** Captured when canonical media is prepared; absent historical payloads stay cache-ineligible. */
   mediaPreparationVersion?: string;
 }
 
@@ -56,8 +58,26 @@ export function createTranscribeQueue() {
     queueEvents: queueEventsSingleton!,
     async enqueue(payload: TranscribeQueuePayload) {
       const opts: JobsOptions = {
-        attempts: 5,
-        backoff: { type: 'exponential', delay: 1000 },
+        jobId: payload.runId,
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 5_000 },
+        removeOnComplete: 1000,
+        removeOnFail: 1000,
+      };
+      await queueSingleton!.add('transcribe', payload, opts);
+    },
+    async ensureDelivery(payload: TranscribeQueuePayload): Promise<void> {
+      const existing = await queueSingleton!.getJob(payload.runId);
+      if (existing) {
+        const state = await existing.getState();
+        if (state === 'active' || state === 'waiting' || state === 'delayed') return;
+        if (state === 'completed' || state === 'failed' || state === 'unknown')
+          await existing.remove();
+      }
+      const opts: JobsOptions = {
+        jobId: payload.runId,
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 5_000 },
         removeOnComplete: 1000,
         removeOnFail: 1000,
       };

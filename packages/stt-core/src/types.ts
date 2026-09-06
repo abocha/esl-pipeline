@@ -31,6 +31,15 @@ export interface SttTranscribeContext {
   getStream: () => Promise<Readable>;
   /** Provider-specific submission source, prepared only when a provider attempt is submitted. */
   getSubmissionSource?: () => Promise<SttSubmissionSource>;
+  /**
+   * Attempt-local provider transport. The backend supplies this only after it has
+   * reserved a submission slot. Provider SDKs must use it for their actual HTTP
+   * dispatch rather than asserting ownership before SDK-side preparation.
+   */
+  providerTransport?: {
+    fetch: typeof fetch;
+    signal: AbortSignal;
+  };
 }
 
 export interface SttTranscriptionResult {

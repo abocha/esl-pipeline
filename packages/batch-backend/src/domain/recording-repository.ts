@@ -4,6 +4,7 @@ import { PoolClient } from 'pg';
 import type { AudioInputTopology } from '@esl-pipeline/contracts';
 
 import { withPgClient } from '../infrastructure/db.js';
+import { completeRecordingUploadOperation } from './recording-upload-operation-repository.js';
 import { logger } from '../infrastructure/logger.js';
 import {
   AudioInputTopologySchema,
@@ -17,6 +18,10 @@ import {
 } from './recording-model.js';
 import type { TranscriptRecord } from './transcript-model.js';
 import { type InsertTranscriptParams, insertTranscript } from './transcript-repository.js';
+import {
+  createQueuedTranscriptionRun,
+  type TranscriptionRun,
+} from './transcription-run-repository.js';
 
 interface RecordingRow {
   id: string;
@@ -269,14 +274,66 @@ export async function insertRecording(
 export async function insertCachedRecordingLineage(params: {
   recording: InsertRecordingParams;
   transcript: InsertTranscriptParams;
+  uploadOperation?: { id: string; attemptToken: string };
 }): Promise<{ recording: RecordingRecord; transcript: TranscriptRecord }> {
   return withPgClient(async (client) => {
     await client.query('BEGIN');
     try {
       const recording = await insertRecording(params.recording, { client });
       const transcript = await insertTranscript(params.transcript, { client });
+      if (
+        params.uploadOperation &&
+        !(await completeRecordingUploadOperation({
+          client,
+          operationId: params.uploadOperation.id,
+          attemptToken: params.uploadOperation.attemptToken,
+          recordingId: recording.id,
+          candidateUri: null,
+        }))
+      ) {
+        throw new Error('Recording upload operation lost ownership before cache adoption.');
+      }
       await client.query('COMMIT');
       return { recording, transcript };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
+  });
+}
+
+/** The recording and its execution authority are one durable transaction. */
+export async function insertRecordingWithQueuedTranscriptionRun(params: {
+  recording: InsertRecordingParams;
+  provider: import('@esl-pipeline/contracts').SttProviderId;
+  requestProfile: string;
+  uploadOperation?: { id: string; attemptToken: string; candidateUri: string };
+}): Promise<{ recording: RecordingRecord; run: TranscriptionRun }> {
+  return withPgClient(async (client) => {
+    await client.query('BEGIN');
+    try {
+      const recording = await insertRecording(params.recording, { client });
+      const run = await createQueuedTranscriptionRun({
+        recordingId: recording.id,
+        workspaceId: recording.workspaceId,
+        provider: params.provider,
+        requestProfile: params.requestProfile,
+        client,
+      });
+      if (
+        params.uploadOperation &&
+        !(await completeRecordingUploadOperation({
+          client,
+          operationId: params.uploadOperation.id,
+          attemptToken: params.uploadOperation.attemptToken,
+          recordingId: recording.id,
+          candidateUri: params.uploadOperation.candidateUri,
+        }))
+      ) {
+        throw new Error('Recording upload operation lost ownership before storage adoption.');
+      }
+      await client.query('COMMIT');
+      return { recording, run };
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;

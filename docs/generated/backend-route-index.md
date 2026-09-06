@@ -69,6 +69,7 @@
 | GET | `/prompt-packages/:promptPackageId` | `packages/batch-backend/src/transport/extended-routes/recordings-routes.ts` |
 | POST | `/prompt-packages/:promptPackageId/draft` | `packages/batch-backend/src/transport/extended-routes/recordings-routes.ts` |
 | GET | `/prompt-packages/:promptPackageId/lineage` | `packages/batch-backend/src/transport/extended-routes/recordings-routes.ts` |
+| GET | `/recording-upload-operations/:operationId` | `packages/batch-backend/src/transport/extended-routes/recordings-routes.ts` |
 | GET | `/recordings` | `packages/batch-backend/src/transport/extended-routes/recordings-routes.ts` |
 | GET | `/recordings/:recordingId` | `packages/batch-backend/src/transport/extended-routes/recordings-routes.ts` |
 | GET | `/recordings/:recordingId/audio` | `packages/batch-backend/src/transport/extended-routes/recordings-routes.ts` |
