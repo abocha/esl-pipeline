@@ -71,7 +71,8 @@ test('canonical replacements remain available', () => {
 
 test('the complete tooling suite remains available through broad local guards', () => {
   assert.equal(pkg.scripts['test:tooling'], 'node --test "scripts/**/*.test.mjs"');
-  assert.match(pkg.scripts.check, /pnpm test:tooling/u);
+  assert.equal(pkg.scripts.check, 'node scripts/check/run-full-check.mjs');
+  assert.equal(pkg.scripts['check:agent'], 'node scripts/check/run-full-check.mjs --agent');
   assert.equal(pkg.scripts['check:pre-pr'], 'node scripts/check/run-affected-check.mjs --broad');
   assert.equal(
     pkg.scripts['check:pre-pr:agent'],

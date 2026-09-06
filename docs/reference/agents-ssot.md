@@ -178,9 +178,11 @@ Required repo checks for behavior changes:
 
 - During editing, run the narrowest relevant package, file, or `vitest related --run` lane first.
 - After focused tests, choose one normal pre-push gate. Use
-  `pnpm --silent run check:fast:agent` by default, or use `pnpm check:pre-pr` directly when the
-  branch is already broad, cross-cutting, shared-contract, or toolchain-level. Clearly docs-only
-  work may use the documented docs-specific lanes.
+  `pnpm --silent run check:fast:agent` by default, use `pnpm check:pre-pr:agent` when an agent runs
+  a broad, cross-cutting, shared-contract, or toolchain gate, and use `pnpm check:agent` for full CI
+  reproduction or DB, migration, worker, or integration behavior. The corresponding non-agent
+  commands remain the human-readable equivalents. Clearly docs-only work may use the documented
+  docs-specific lanes.
 - `check:fast` is affected-package validation. It must include committed, staged, unstaged, and
   untracked changes; expand to workspace dependents; run cheap global guards; apply explicit
   path-risk rules; and fail conservatively to a broader lane when the affected scope is uncertain.
@@ -208,9 +210,12 @@ Required repo checks for behavior changes:
   gate only after relevant source, configuration, toolchain, or a diagnosed prerequisite condition
   changed. Stop and report a stable infrastructure or prerequisite failure instead of assembling a
   green cache through reruns.
-- A successful `pnpm check` subsumes both narrower pre-push gates.
-- Run `pnpm check` when reproducing CI locally or when DB, migration, worker, integration, or
-  similarly broad behavior changed.
+- Agent variants preserve validation scope and exit semantics; they change only output presentation
+  and persisted evidence.
+- A successful `pnpm check` or `pnpm check:agent` subsumes both narrower pre-push gates.
+- Run `pnpm check` for human-readable local CI reproduction, or `pnpm check:agent` when the same
+  full gate needs persisted agent evidence, including for DB, migration, worker, integration, or
+  similarly broad behavior changes.
 
 Canonical blocking PR check names are `CI gate`, `static checks (node 24.x)`,
 `integration lane (blocking)`, `backend db + worker integration (blocking)`, and

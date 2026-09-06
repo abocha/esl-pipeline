@@ -59,7 +59,9 @@ verification baseline in [`docs/reference/agents-ssot.md`](../docs/reference/age
 - use `pnpm check:pre-pr:agent` when that same broad gate should return the existing persisted agent
   summary and lane-log references for a completion handoff; it uses the same `--broad` validation
   plan and does not change broad semantics;
-- use `pnpm check` for DB, migration, worker, integration behavior, or local CI reproduction;
+- use `pnpm check:agent` for DB, migration, worker, integration behavior, or local CI reproduction
+  when the completion handoff needs persisted evidence; use `pnpm check` for the same human-readable
+  gate;
 - use existing `:agent` lanes and inspect their cited artifacts before diagnostic reruns;
 - keep selected PostgreSQL and Redis requirements visible as CI-owned evidence;
 - treat `PASS_WITH_CI_REQUIREMENTS` as permission to create a PR, never to merge; every selected
