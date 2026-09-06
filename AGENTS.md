@@ -158,6 +158,13 @@ execution retains its exemption; a diff alone does not require a reviewer.
   checkout. Do not reintroduce production builds, local tags, `pull_policy: never`, `up --build`,
   backend Docker socket mounts, or long-running backend Docker/AWS CLIs.
 
+## Local service-test endpoint
+
+- The supported local Docker Redis endpoint for `@esl-pipeline/batch-backend` PostgreSQL + BullMQ
+  worker tests is `redis://127.0.0.1:6380`. The test bootstrap defaults to this endpoint when
+  `BATCH_BACKEND_TEST_REDIS` is absent; an explicit value remains authoritative for CI or an
+  alternate isolated test service. Do not point this variable at production or a shared runtime.
+
 ## Definition of Done
 
 - The requested outcome is implemented without widening scope or silently changing contracts.

@@ -38,11 +38,54 @@ between local evidence and CI-owned PostgreSQL/Redis evidence.
 
 ## Diagnose efficiently
 
-- Run the narrowest focused test first, then one normal pre-push gate selected by `AGENTS.md`.
+- Run the narrowest focused test first.
+- After focused validation is complete, choose one normal completion gate according to `AGENTS.md`
+  and `docs/reference/TESTING_GUIDELINES.md`.
+- `check:fast:agent` and `check:pre-pr` / `check:pre-pr:agent` are alternative normal completion
+  gates unless the task explicitly requires both. Do not infer that a passing affected gate requires
+  a separate broad gate.
+- A `check:fast:agent` fallback to `check:pre-pr` satisfies the broad gate. A successful full
+  `pnpm check` subsumes narrower normal gates.
 - Allow at most one isolated diagnostic rerun for an unchanged failure.
-- Treat a timeout as inconclusive until the artifact and any orphaned process are inspected.
+- Treat a timeout, missing output, or detached caller as inconclusive until the artifact and any
+  surviving process are inspected.
+- If an aggregate validation process is still alive, continue observing or reconnect to that run.
+  Do not start a second copy of the same aggregate gate against the same repository state.
 - Do not add lane parallelism without explicit resource accounting across pnpm, Turbo, and Vitest.
 - Stop with findings when the request is review or redesign only.
+
+## Terminal validation phase
+
+Aggregate repository validation is a completion phase, not an editing-loop command.
+
+Before starting the final normal gate:
+
+1. finish the planned source, test, configuration, and documentation edits;
+2. run the necessary focused checks;
+3. resolve known focused failures;
+4. inspect the final intended diff and identify any remaining required validation;
+5. then freeze the relevant tree and begin aggregate validation.
+
+Once aggregate validation has started, do not make optional cleanup, refactoring, coverage expansion,
+or "one more useful test" changes merely because additional improvement is possible.
+
+After a passing aggregate gate, treat the covered tree as complete for the current task unless:
+
+- the gate or its artifacts reveal a concrete defect;
+- a required acceptance criterion is still unproven;
+- the user or task explicitly requires another change;
+- repository routing requires additional evidence; or
+- a genuinely relevant external state change invalidates the result.
+
+Optional improvements discovered after final validation should be reported as follow-up findings rather
+than applied in a way that invalidates otherwise sufficient completion evidence.
+
+If a concrete post-gate defect requires an edit, leave the terminal validation phase, make the bounded
+correction, finish all resulting focused work, freeze the tree again, and run only the aggregate
+validation required for that new final state.
+
+When a task explicitly requires multiple aggregate gates, treat them as one terminal validation
+sequence against the same frozen tree. Do not repeat the whole sequence after every intermediate edit.
 
 ## Evidence freshness and completion handoff
 
@@ -68,6 +111,9 @@ fingerprints, or new artifact infrastructure for this handoff contract.
 Read the recorded result and scope before relying on it. Rerun affected checks after relevant changes
 or when concrete uncertainty remains, not merely to restate a passing result. Focused checks support
 focused claims and do not replace a required repository or hosted gate.
+
+A relevant change invalidates only evidence whose claimed scope it can affect. Do not mechanically
+rerun unrelated focused lanes or aggregate gates when existing evidence still covers their inputs.
 
 Agent-output commands are available when the receiving handoff needs persisted local evidence:
 `pnpm check:fast:agent` for affected validation, `pnpm check:pre-pr:agent` for broad pre-PR
