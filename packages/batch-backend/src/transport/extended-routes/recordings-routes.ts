@@ -29,7 +29,6 @@ import {
   publishTtsProviderSchema,
   publishTtsStrategySchema,
 } from '../../application/publish-study-text-overrides.js';
-import { recordingToDto } from '../../application/recording-dto.js';
 import {
   RecordingRetryError,
   retryRecordingTranscription,
@@ -208,11 +207,11 @@ export function registerRecordingRoutes(
           requestProfile: route.profile,
         });
         if (operationResult.kind === 'completed') {
-          const existing = await getRecordingByIdForWorkspace(
+          const existing = await getRecording(
             operationResult.operation.finalRecordingId ?? operationResult.operation.recordingId,
             workspaceId,
           );
-          if (existing) return reply.code(200).send(recordingToDto(existing));
+          if (existing) return reply.code(200).send(existing);
           throw new Error('Completed upload operation has no recording projection.');
         }
         if (operationResult.kind === 'active') {
@@ -360,11 +359,10 @@ export function registerRecordingRoutes(
                 providerMatches,
               });
 
+              const projection = await getRecording(recordingForResponse.recording.id, workspaceId);
+              if (!projection) throw new Error('Cached recording has no canonical projection.');
               return reply.code(200).send({
-                ...recordingToDto({
-                  ...recordingForResponse.recording,
-                  transcriptId: recordingForResponse.transcript.id,
-                }),
+                ...projection,
                 cacheHit: true,
                 cacheReason: 'transcript_reused',
                 cacheRecordingId: cachedRecording.id,
@@ -429,7 +427,9 @@ export function registerRecordingRoutes(
             storageProvider: storageConfig.getProvider(),
           });
 
-          return reply.code(201).send(recordingToDto(record));
+          const projection = await getRecording(record.id, workspaceId);
+          if (!projection) throw new Error('Uploaded recording has no canonical projection.');
+          return reply.code(201).send(projection);
         } finally {
           // Direct audio and extracted video have exactly one candidate path. Both are local-only
           // after storage and must disappear even when cache cloning or persistence fails.
@@ -512,12 +512,12 @@ export function registerRecordingRoutes(
               : 'processing',
         });
       }
-      const recording = await getRecordingByIdForWorkspace(
+      const recording = await getRecording(
         operation.finalRecordingId ?? operation.recordingId,
         workspaceId,
       );
       if (!recording) return errorResponse(reply, 'not_found');
-      return reply.send(recordingToDto(recording));
+      return reply.send(recording);
     },
   );
 
@@ -558,12 +558,9 @@ export function registerRecordingRoutes(
           transcriptId: result.transcript.id,
         });
 
-        return reply.code(201).send(
-          recordingToDto({
-            ...result.recording,
-            transcriptId: result.transcript.id,
-          }),
-        );
+        const projection = await getRecording(result.recording.id, workspaceId);
+        if (!projection) throw new Error('Manual transcript source has no canonical projection.');
+        return reply.code(201).send(projection);
       } catch (error: unknown) {
         if (error instanceof z.ZodError) {
           return reply.code(400).send({

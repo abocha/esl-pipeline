@@ -268,17 +268,45 @@ export function makeAssignmentSession(
 export function makeRecording(
   overrides: Partial<api.RecordingListItem> = {},
 ): api.RecordingListItem {
+  const status = overrides.status ?? 'ingested';
+  const productState =
+    overrides.productState ??
+    (
+      {
+        ingested: 'checking',
+        queued: 'waiting',
+        transcribing: 'transcribing',
+        transcribed: 'ready',
+        failed: 'attention',
+      } as const
+    )[status];
+  const runState = Object.hasOwn(overrides, 'runState')
+    ? (overrides.runState ?? null)
+    : (
+        {
+          ingested: null,
+          queued: 'queued',
+          transcribing: 'submitting',
+          transcribed: 'succeeded',
+          failed: 'failed',
+        } as const
+      )[status];
   return {
     recordingId: 'rec-1',
-    status: 'ingested',
+    status,
+    productState,
+    runState,
     transcriptId: null,
     error: null,
+    errorCode: null,
     source: 'upload',
     studentId: null,
     displayName: 'lesson.mp3',
     durationSec: null,
     channels: null,
     audioTopology: null,
+    audioLifecycle: 'retained',
+    audioAvailable: true,
     bytes: 1024,
     createdAt: now,
     updatedAt: now,

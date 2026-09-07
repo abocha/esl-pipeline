@@ -19,11 +19,11 @@ import type {
   JobStatus,
   MarkdownValidationResponse,
   RecordingListItem,
-  RecordingStatus,
   RecordingTranscriptResponse,
   SttProvider,
   StudentOption,
 } from '../../utils/api';
+import { getRecordingProductLabel } from '../../utils/recording-state';
 import { DropZone } from '../shared/DropZone';
 import { UploadProgress } from '../shared/UploadProgress';
 import { ProductButton } from '../system/ProductButton';
@@ -127,13 +127,10 @@ interface SourceStageSectionProps {
   uploadCacheNotice: string | null;
   recording: RecordingListItem | null;
   transcriptProvider: RecordingTranscriptResponse['sttProvider'] | null;
-  recordingStatus: RecordingStatus | null;
   recordingError: string | null;
   transcriptStatus: 'idle' | 'loading' | 'processing' | 'ready' | 'failed';
   transcriptError: string | null;
   transcriptReady: boolean;
-  retryingTranscript: boolean;
-  onRetryTranscript: () => void;
   transcriptText: string;
   onTranscriptTextChange: (value: string) => void;
   transcriptDirty: boolean;
@@ -832,13 +829,10 @@ export function SourceStageSection({
   uploadCacheNotice,
   recording,
   transcriptProvider,
-  recordingStatus,
   recordingError,
   transcriptStatus,
   transcriptError,
   transcriptReady,
-  retryingTranscript,
-  onRetryTranscript,
   transcriptText,
   onTranscriptTextChange,
   transcriptDirty,
@@ -849,6 +843,7 @@ export function SourceStageSection({
   hideStudentSelection = false,
   readOnly = false,
 }: SourceStageSectionProps) {
+  const recordingProductLabel = getRecordingProductLabel(recording, uploading, uploadProgress);
   const sourceGuidance =
     stage.status === 'current'
       ? !selectedStudentId
@@ -856,7 +851,7 @@ export function SourceStageSection({
         : !recording
           ? 'Next step: upload the lesson recording.'
           : !transcriptReady && transcriptStatus === 'failed'
-            ? 'Next step: retry the transcript so you can keep moving.'
+            ? 'Next step: replace the recording or upload it again later.'
             : !transcriptReady
               ? 'Next step: wait for the transcript, then review it here.'
               : null
@@ -1011,6 +1006,11 @@ export function SourceStageSection({
               onCancel={onCancelUpload}
             />
           ) : null}
+          {recordingProductLabel ? (
+            <p className="minimal-help" role="status" aria-live="polite">
+              {recordingProductLabel}
+            </p>
+          ) : null}
           {uploadError ? <p className="minimal-error">{uploadError}</p> : null}
           {canRetryUpload && !uploading ? (
             <button type="button" className="minimal-secondary" onClick={onRetryUpload}>
@@ -1022,7 +1022,7 @@ export function SourceStageSection({
             <div className="minimal-block">
               <div className="minimal-meta">
                 <span>Recording: {recording.displayName || recording.recordingId}</span>
-                <span>Status: {recordingStatus ?? 'unknown'}</span>
+                <span>Status: {recordingProductLabel ?? 'Checking recording'}</span>
                 <span>
                   Audio source:{' '}
                   {selectedAudioTopology === 'trusted_split_channels'
@@ -1074,14 +1074,6 @@ export function SourceStageSection({
           {transcriptStatus === 'failed' ? (
             <div className="minimal-block">
               <p className="minimal-error">{transcriptError ?? 'Transcript failed to load.'}</p>
-              <button
-                type="button"
-                className="minimal-secondary"
-                onClick={onRetryTranscript}
-                disabled={readOnly || retryingTranscript}
-              >
-                {retryingTranscript ? 'Retrying...' : 'Retry transcript'}
-              </button>
             </div>
           ) : null}
           {transcriptReady ? (

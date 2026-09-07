@@ -4,6 +4,7 @@ import {
   listRecordings,
   type RecordingListOptions,
 } from '../domain/recording-repository.js';
+import { listLatestTranscriptionRunsForRecordings } from '../domain/transcription-run-repository.js';
 import { type RecordingDto, recordingToDto } from './recording-dto.js';
 
 export interface ListRecordingsParams {
@@ -30,6 +31,9 @@ export interface ListRecordingsDependencies {
     list: typeof listRecordings;
     count: typeof countRecordings;
   };
+  transcriptionRuns: {
+    listLatestForRecordings: typeof listLatestTranscriptionRunsForRecordings;
+  };
 }
 
 const DEFAULT_LIMIT = 50;
@@ -42,6 +46,9 @@ export async function listRecordingsWithDefaults(
   const recordings = overrides?.recordings ?? {
     list: listRecordings,
     count: countRecordings,
+  };
+  const transcriptionRuns = overrides?.transcriptionRuns ?? {
+    listLatestForRecordings: listLatestTranscriptionRunsForRecordings,
   };
 
   const limit = clampNumber(params.limit ?? DEFAULT_LIMIT, 1, MAX_LIMIT);
@@ -71,9 +78,14 @@ export async function listRecordingsWithDefaults(
     }),
     recordings.count(params.workspaceId, statuses, studentId, sources, search),
   ]);
+  const runs = await transcriptionRuns.listLatestForRecordings(
+    items.map((item) => item.id),
+    params.workspaceId,
+  );
+  const runByRecordingId = new Map(runs.map((run) => [run.recordingId, run] as const));
 
   return {
-    items: items.map((item) => recordingToDto(item)),
+    items: items.map((item) => recordingToDto(item, runByRecordingId.get(item.id) ?? null)),
     limit,
     offset,
     total,

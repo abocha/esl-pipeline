@@ -146,6 +146,7 @@ async function processTranscribeJobWithinFence(
     recordings,
     hasInjectedRecordings: Boolean(overrides?.recordings),
     publishEvent,
+    run: claimed,
   });
 
   const mode = config.transcription.mode;
@@ -336,6 +337,7 @@ async function processTranscribeJobWithinFence(
       hasInjectedRecordings: Boolean(overrides?.recordings),
       publishEvent,
       transcriptId: completed.transcriptId,
+      run: completed.run,
     });
     const transcriptRecord = {
       ...completed,
@@ -402,6 +404,7 @@ async function processTranscribeJobWithinFence(
       recordings,
       hasInjectedRecordings: Boolean(overrides?.recordings),
       publishEvent,
+      run: transitioned,
     });
 
     log.error('Transcription attempt failed', {
@@ -423,6 +426,10 @@ async function publishCommittedProjection(params: {
   hasInjectedRecordings: boolean;
   publishEvent: typeof publishRecordingEvent;
   transcriptId?: string;
+  run?: Pick<
+    import('../domain/transcription-run-repository.js').TranscriptionRun,
+    'state' | 'errorCode'
+  >;
 }): Promise<void> {
   // Production transitions already committed their recording projection inside
   // the run transaction. Read that authority; never issue a second status write
@@ -439,6 +446,7 @@ async function publishCommittedProjection(params: {
       type: 'recording_state_changed',
       recording,
       ...(params.transcriptId ? { transcriptId: params.transcriptId } : {}),
+      ...(params.run ? { run: params.run } : {}),
     });
   }
 }

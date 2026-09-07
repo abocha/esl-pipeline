@@ -590,7 +590,6 @@ export const MinimalAssignment: React.FC = () => {
     resetSourceFlow,
     applyHydratedSnapshot: applySourceHydration,
     loadStudentOptions,
-    handleRetryTranscription,
     handleSelectedSttProviderChange,
     handleStudentSelectionChange,
     handleFiles,
@@ -2711,13 +2710,10 @@ export const MinimalAssignment: React.FC = () => {
               uploadCacheNotice={source.uploadCacheNotice}
               recording={source.recording}
               transcriptProvider={source.transcript?.sttProvider ?? null}
-              recordingStatus={source.recordingStatus}
               recordingError={source.recordingError}
               transcriptStatus={source.transcriptStatus}
               transcriptError={source.transcriptError}
               transcriptReady={transcriptReady}
-              retryingTranscript={source.retryingTranscript}
-              onRetryTranscript={() => void handleRetryTranscription()}
               transcriptText={source.transcriptText}
               onTranscriptTextChange={(value) => {
                 markAssignmentUserEdit();
