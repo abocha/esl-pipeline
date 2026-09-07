@@ -1,3 +1,4 @@
+// biome-ignore-all assist/source/organizeImports: the test harness must register API mocks before the controller module loads.
 import { fireEvent, render } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -33,6 +34,11 @@ describe('MinimalAssignment upload operation ownership', () => {
       .mockResolvedValueOnce({
         recordingId: 'recording-1',
         status: 'queued',
+        productState: 'waiting',
+        runState: 'queued',
+        errorCode: null,
+        audioLifecycle: 'retained',
+        audioAvailable: true,
         transcriptId: null,
         error: null,
         source: 'upload',
@@ -68,6 +74,11 @@ describe('MinimalAssignment upload operation ownership', () => {
       .mockResolvedValueOnce({
         recordingId: 'recording-2',
         status: 'queued',
+        productState: 'waiting',
+        runState: 'queued',
+        errorCode: null,
+        audioLifecycle: 'retained',
+        audioAvailable: true,
         transcriptId: null,
         error: null,
         source: 'upload',
@@ -102,6 +113,11 @@ describe('MinimalAssignment upload operation ownership', () => {
       .mockResolvedValueOnce({
         recordingId: 'recording-original',
         status: 'queued',
+        productState: 'waiting',
+        runState: 'queued',
+        errorCode: null,
+        audioLifecycle: 'retained',
+        audioAvailable: true,
         transcriptId: null,
         error: null,
         source: 'upload',
@@ -117,6 +133,11 @@ describe('MinimalAssignment upload operation ownership', () => {
       .mockResolvedValueOnce({
         recordingId: 'recording-replacement',
         status: 'queued',
+        productState: 'waiting',
+        runState: 'queued',
+        errorCode: null,
+        audioLifecycle: 'retained',
+        audioAvailable: true,
         transcriptId: null,
         error: null,
         source: 'upload',
@@ -160,6 +181,11 @@ describe('MinimalAssignment upload operation ownership', () => {
       .mockResolvedValueOnce({
         recordingId: 'recording-after-cancel',
         status: 'queued',
+        productState: 'waiting',
+        runState: 'queued',
+        errorCode: null,
+        audioLifecycle: 'retained',
+        audioAvailable: true,
         transcriptId: null,
         error: null,
         source: 'upload',
@@ -209,11 +235,18 @@ describe('MinimalAssignment upload operation ownership', () => {
     const user = createMinimalUser();
     vi.mocked(api.uploadRecording)
       .mockRejectedValueOnce(
-        new api.RecordingUploadPreDispatchError('Recording exceeds the 2 GiB upload limit.'),
+        new api.RecordingUploadPreDispatchError(
+          'Choose a source file at or below the configured 2 GiB operational upload limit.',
+        ),
       )
       .mockResolvedValueOnce({
         recordingId: 'recording-after-local-rejection',
         status: 'queued',
+        productState: 'waiting',
+        runState: 'queued',
+        errorCode: null,
+        audioLifecycle: 'retained',
+        audioAvailable: true,
         transcriptId: null,
         error: null,
         source: 'upload',
@@ -230,7 +263,7 @@ describe('MinimalAssignment upload operation ownership', () => {
     renderMinimalAssignment();
     await startNewAssignmentForLearner(user);
     fireEvent.click(screen.getByRole('button', { name: /Drop audio file/i }));
-    await screen.findByText(/Recording exceeds the 2 GiB upload limit/i);
+    await screen.findByText(/Choose a source file at or below the configured 2 GiB/i);
     fireEvent.click(screen.getByRole('button', { name: /Drop audio file/i }));
 
     await waitFor(() => expect(api.uploadRecording).toHaveBeenCalledTimes(2));
@@ -258,7 +291,12 @@ describe('MinimalAssignment upload operation ownership', () => {
     globalThis.history.replaceState(null, '', '/?studentId=student-alex');
     vi.mocked(api.getRecordingUploadOperation).mockResolvedValue({
       recordingId: 'restored-recording',
-      status: 'queued',
+      status: 'transcribing',
+      productState: 'retrying',
+      runState: 'retry_wait',
+      errorCode: null,
+      audioLifecycle: 'retained',
+      audioAvailable: true,
       transcriptId: null,
       error: null,
       source: 'upload',
@@ -279,6 +317,7 @@ describe('MinimalAssignment upload operation ownership', () => {
         '33333333-3333-4333-8333-333333333333',
       ),
     );
+    expect(screen.getAllByText('Trying again automatically')).not.toHaveLength(0);
   });
 
   it('discards a completed reconciliation after a new assignment, student, and pending operation replace its owner', async () => {
@@ -354,6 +393,11 @@ describe('MinimalAssignment upload operation ownership', () => {
     resolveOldReconciliation?.({
       recordingId: 'stale-recording',
       status: 'queued',
+      productState: 'waiting',
+      runState: 'queued',
+      errorCode: null,
+      audioLifecycle: 'retained',
+      audioAvailable: true,
       transcriptId: null,
       error: null,
       source: 'upload',
@@ -439,6 +483,11 @@ describe('MinimalAssignment upload operation ownership', () => {
     resolveOldReconciliation?.({
       recordingId: 'stale-recording-a',
       status: 'queued',
+      productState: 'waiting',
+      runState: 'queued',
+      errorCode: null,
+      audioLifecycle: 'retained',
+      audioAvailable: true,
       transcriptId: null,
       error: null,
       source: 'upload',

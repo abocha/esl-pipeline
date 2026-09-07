@@ -12,10 +12,10 @@ import {
   publishTtsProviderSchema,
   publishTtsStrategySchema,
 } from '../application/publish-study-text-overrides.js';
-import { deriveRecordingDisplayName } from '../application/recording-dto.js';
-import { resolvePrimaryWorkspaceIdForUser } from '../application/workspace-context.js';
+import { recordingToDto } from '../application/recording-dto.js';
 import { type SubmitJobRequest, submitJob } from '../application/submit-job.js';
 import { getVersionMeta } from '../application/version-meta.js';
+import { resolvePrimaryWorkspaceIdForUser } from '../application/workspace-context.js';
 import type { BatchBackendConfig } from '../config/env.js';
 import { subscribeJobEvents } from '../domain/job-events.js';
 import { getJobWorkspaceAuthority } from '../domain/job-repository.js';
@@ -23,8 +23,8 @@ import { subscribeRecordingEvents } from '../domain/recording-events.js';
 import { getRecordingByIdForWorkspace } from '../domain/recording-repository.js';
 import { checkBackendHealth } from '../infrastructure/health-checks.js';
 import { logger } from '../infrastructure/logger.js';
-import { errorResponse, resolveRoutePath } from './route-helpers.js';
 import { getAuthenticatedUser } from './auth-middleware.js';
+import { errorResponse, resolveRoutePath } from './route-helpers.js';
 
 type AsyncPreHandler = (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
 
@@ -361,40 +361,42 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
     }
 
     let unsubscribeRecordings = () => {};
+    const latestRecordingEventAt = new Map<string, number>();
+
+    const publishCanonicalRecordingEvent = async (
+      event: Parameters<Parameters<typeof subscribeRecordingEvents>[0]>[0],
+    ) => {
+      const recordingId = event.recording.id;
+      const recording = recordingToDto(
+        { ...event.recording, transcriptId: event.transcriptId ?? null },
+        event.run,
+      );
+      if (closed) return;
+      const updatedAt = Date.parse(recording.updatedAt);
+      const previousUpdatedAt = latestRecordingEventAt.get(recordingId) ?? Number.NEGATIVE_INFINITY;
+      if (Number.isFinite(updatedAt) && updatedAt < previousUpdatedAt) return;
+      if (Number.isFinite(updatedAt)) latestRecordingEventAt.set(recordingId, updatedAt);
+      const payload: RecordingEventMessage = {
+        type: 'recording_state_changed',
+        ...recording,
+      };
+      reply.raw.write(`event: recording_state_changed\n`);
+      reply.raw.write(`data: ${JSON.stringify(payload)}\n\n`);
+    };
 
     const subscribeRecordings = () => {
       unsubscribeRecordings();
       if (wantsAll) {
         unsubscribeRecordings = subscribeRecordingEvents(
           (event) => {
-            try {
-              if (!event || !event.recording) return;
-              const recording = event.recording;
-              if (recording.workspaceId !== workspaceId) return;
-              const payload: RecordingEventMessage = {
-                type: 'recording_state_changed',
-                recordingId: recording.id,
-                status: recording.status,
-                transcriptId: event.transcriptId ?? null,
-                error: recording.error ?? null,
-                studentId: recording.studentId ?? null,
-                source: recording.source,
-                displayName: deriveRecordingDisplayName(recording),
-                durationSec: recording.durationSec ?? null,
-                channels: recording.channels ?? null,
-                bytes: recording.bytes,
-                createdAt: recording.createdAt.toISOString(),
-                updatedAt: recording.updatedAt.toISOString(),
-              };
-              reply.raw.write(`event: recording_state_changed\n`);
-              reply.raw.write(`data: ${JSON.stringify(payload)}\n\n`);
-            } catch (error: unknown) {
+            if (!event?.recording || event.recording.workspaceId !== workspaceId) return;
+            void publishCanonicalRecordingEvent(event).catch((error: unknown) => {
               logger.warn('Failed to publish SSE recording event', {
                 event: 'recording_events_sse_publish_failed',
                 route: routePath,
                 error: error instanceof Error ? error.message : String(error),
               });
-            }
+            });
           },
           { allRecordings: true },
         );
@@ -409,34 +411,14 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
 
       unsubscribeRecordings = subscribeRecordingEvents(
         (event) => {
-          try {
-            if (!event || !event.recording) return;
-            const recording = event.recording;
-            if (!recordingIds.has(recording.id)) return;
-            const payload: RecordingEventMessage = {
-              type: 'recording_state_changed',
-              recordingId: recording.id,
-              status: recording.status,
-              transcriptId: event.transcriptId ?? null,
-              error: recording.error ?? null,
-              studentId: recording.studentId ?? null,
-              source: recording.source,
-              displayName: deriveRecordingDisplayName(recording),
-              durationSec: recording.durationSec ?? null,
-              channels: recording.channels ?? null,
-              bytes: recording.bytes,
-              createdAt: recording.createdAt.toISOString(),
-              updatedAt: recording.updatedAt.toISOString(),
-            };
-            reply.raw.write(`event: recording_state_changed\n`);
-            reply.raw.write(`data: ${JSON.stringify(payload)}\n\n`);
-          } catch (error: unknown) {
+          if (!event?.recording || !recordingIds.has(event.recording.id)) return;
+          void publishCanonicalRecordingEvent(event).catch((error: unknown) => {
             logger.warn('Failed to publish SSE recording event', {
               event: 'recording_events_sse_publish_failed',
               route: routePath,
               error: error instanceof Error ? error.message : String(error),
             });
-          }
+          });
         },
         { recordingIds: ids },
       );

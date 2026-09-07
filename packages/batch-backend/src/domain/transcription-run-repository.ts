@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto';
+import type { PoolClient } from 'pg';
 
 import type { SttProviderId } from '@esl-pipeline/contracts';
-import type { PoolClient } from 'pg';
 
 import { withPgClient } from '../infrastructure/db.js';
 import type { RecordingStatus } from './recording-model.js';
-import { insertTranscript, type InsertTranscriptParams } from './transcript-repository.js';
+import { type InsertTranscriptParams, insertTranscript } from './transcript-repository.js';
 
 export type TranscriptionRunState = 'queued' | 'submitting' | 'retry_wait' | 'succeeded' | 'failed';
 
@@ -286,6 +286,39 @@ export async function getTranscriptionRunById(runId: string): Promise<Transcript
   return withPgClient(async (client) => {
     const result = await client.query('SELECT * FROM transcription_runs WHERE id = $1', [runId]);
     return result.rows[0] ? mapRun(result.rows[0]) : null;
+  });
+}
+
+export async function getLatestTranscriptionRunForRecording(
+  recordingId: string,
+  workspaceId: string,
+): Promise<TranscriptionRun | null> {
+  return withPgClient(async (client) => {
+    const result = await client.query(
+      `SELECT * FROM transcription_runs
+       WHERE recording_id = $1 AND workspace_id = $2
+       ORDER BY created_at DESC, id DESC
+       LIMIT 1`,
+      [recordingId, workspaceId],
+    );
+    return result.rows[0] ? mapRun(result.rows[0]) : null;
+  });
+}
+
+export async function listLatestTranscriptionRunsForRecordings(
+  recordingIds: string[],
+  workspaceId: string,
+): Promise<TranscriptionRun[]> {
+  if (recordingIds.length === 0) return [];
+  return withPgClient(async (client) => {
+    const result = await client.query(
+      `SELECT DISTINCT ON (recording_id) *
+       FROM transcription_runs
+       WHERE recording_id = ANY($1::uuid[]) AND workspace_id = $2
+       ORDER BY recording_id, created_at DESC, id DESC`,
+      [recordingIds, workspaceId],
+    );
+    return result.rows.map(mapRun);
   });
 }
 

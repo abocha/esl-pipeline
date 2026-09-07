@@ -18,6 +18,7 @@ import {
   listAssignmentSessions,
   listUserJobs,
 } from '../../utils/api';
+import { getRecordingErrorAction } from '../../utils/recording-state';
 import type { AuthoringHydrationSnapshot } from './MinimalAssignment.authoring';
 import { deriveResumeDestination } from './MinimalAssignment.confirmation';
 import {
@@ -574,7 +575,10 @@ export function useMinimalAssignmentResume({
             const resumedRecording = await getRecording(status.recordingId);
             snapshot.recording = resumedRecording;
             snapshot.recordingStatus = resumedRecording.status;
-            snapshot.recordingError = resumedRecording.error ?? null;
+            snapshot.recordingError =
+              resumedRecording.productState === 'attention'
+                ? getRecordingErrorAction(resumedRecording.errorCode)
+                : null;
             snapshot.selectedFileName = resumedRecording.displayName || null;
             if (resumedRecording.studentId) {
               resolvedStudentId = resumedRecording.studentId;
@@ -596,8 +600,10 @@ export function useMinimalAssignmentResume({
                 const message =
                   error instanceof Error ? error.message : 'Unable to load transcript.';
                 if (
-                  resumedRecording.status === 'transcribing' ||
-                  resumedRecording.status === 'queued'
+                  resumedRecording.productState === 'checking' ||
+                  resumedRecording.productState === 'waiting' ||
+                  resumedRecording.productState === 'transcribing' ||
+                  resumedRecording.productState === 'retrying'
                 ) {
                   snapshot.transcriptStatus = 'processing';
                   snapshot.transcriptError = null;
@@ -606,9 +612,9 @@ export function useMinimalAssignmentResume({
                   snapshot.transcriptError = message;
                 }
               }
-            } else if (resumedRecording.status === 'failed') {
+            } else if (resumedRecording.productState === 'attention') {
               snapshot.transcriptStatus = 'failed';
-              snapshot.transcriptError = resumedRecording.error ?? 'Transcription failed.';
+              snapshot.transcriptError = getRecordingErrorAction(resumedRecording.errorCode);
             } else {
               snapshot.transcriptStatus = 'processing';
             }
@@ -743,7 +749,10 @@ export function useMinimalAssignmentResume({
             const resumedRecording = await getRecording(session.recordingId);
             snapshot.recording = resumedRecording;
             snapshot.recordingStatus = resumedRecording.status;
-            snapshot.recordingError = resumedRecording.error ?? null;
+            snapshot.recordingError =
+              resumedRecording.productState === 'attention'
+                ? getRecordingErrorAction(resumedRecording.errorCode)
+                : null;
             snapshot.selectedFileName = resumedRecording.displayName || null;
             if (resumedRecording.studentId) {
               resolvedStudentId = resumedRecording.studentId;
@@ -765,8 +774,10 @@ export function useMinimalAssignmentResume({
                 const message =
                   error instanceof Error ? error.message : 'Unable to load transcript.';
                 if (
-                  resumedRecording.status === 'transcribing' ||
-                  resumedRecording.status === 'queued'
+                  resumedRecording.productState === 'checking' ||
+                  resumedRecording.productState === 'waiting' ||
+                  resumedRecording.productState === 'transcribing' ||
+                  resumedRecording.productState === 'retrying'
                 ) {
                   snapshot.transcriptStatus = 'processing';
                   snapshot.transcriptError = null;
@@ -775,9 +786,9 @@ export function useMinimalAssignmentResume({
                   snapshot.transcriptError = message;
                 }
               }
-            } else if (resumedRecording.status === 'failed') {
+            } else if (resumedRecording.productState === 'attention') {
               snapshot.transcriptStatus = 'failed';
-              snapshot.transcriptError = resumedRecording.error ?? 'Transcription failed.';
+              snapshot.transcriptError = getRecordingErrorAction(resumedRecording.errorCode);
             } else {
               snapshot.transcriptStatus = 'processing';
             }

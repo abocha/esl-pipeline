@@ -388,7 +388,7 @@ export function registerPromptEditorTests() {
         await waitFor(() => {
           expect(screen.getByText(/Recording: lesson\.mp3/i)).toBeTruthy();
         });
-        expect(screen.getByText(/Status: transcribed/i)).toBeTruthy();
+        expect(screen.getByText(/Status: Ready for review/i)).toBeTruthy();
       } finally {
         vi.useRealTimers();
       }

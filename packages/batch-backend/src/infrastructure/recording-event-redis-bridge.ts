@@ -40,6 +40,10 @@ interface SerializedRecordingEvent {
   type: RecordingEventType;
   recording: SerializedRecording;
   transcriptId?: string | null;
+  run?: {
+    state: import('../domain/transcription-run-repository.js').TranscriptionRunState;
+    errorCode: string | null;
+  } | null;
 }
 
 let bridgePromise: Promise<void> | null = null;
@@ -115,6 +119,7 @@ class RedisRecordingEventBridge {
       type: event.type,
       recording: serializeRecording(event.recording),
       transcriptId: event.transcriptId ?? null,
+      run: event.run ?? null,
     };
 
     const message = JSON.stringify(payload);
@@ -156,6 +161,7 @@ class RedisRecordingEventBridge {
         type: parsed.type,
         recording,
         transcriptId: parsed.transcriptId ?? null,
+        run: parsed.run ?? null,
       });
     } finally {
       this.suppressForwarding = false;

@@ -1,5 +1,6 @@
 import { getRecordingByIdForWorkspace } from '../domain/recording-repository.js';
 import { getTranscriptByRecordingIdForWorkspace } from '../domain/transcript-repository.js';
+import { getLatestTranscriptionRunForRecording } from '../domain/transcription-run-repository.js';
 import { type RecordingDto, recordingToDto } from './recording-dto.js';
 
 export interface GetRecordingDependencies {
@@ -8,6 +9,9 @@ export interface GetRecordingDependencies {
   };
   transcripts: {
     getByRecordingId: typeof getTranscriptByRecordingIdForWorkspace;
+  };
+  transcriptionRuns: {
+    getLatestForRecording: typeof getLatestTranscriptionRunForRecording;
   };
 }
 
@@ -24,13 +28,22 @@ export async function getRecording(
   const transcripts = overrides?.transcripts ?? {
     getByRecordingId: getTranscriptByRecordingIdForWorkspace,
   };
+  const transcriptionRuns = overrides?.transcriptionRuns ?? {
+    getLatestForRecording: getLatestTranscriptionRunForRecording,
+  };
 
   const recording = await recordings.getById(recordingId, workspaceId);
   if (!recording) return null;
 
-  const transcript = await transcripts.getByRecordingId(recording.id, workspaceId);
-  return recordingToDto({
-    ...recording,
-    transcriptId: transcript?.id ?? null,
-  });
+  const [transcript, run] = await Promise.all([
+    transcripts.getByRecordingId(recording.id, workspaceId),
+    transcriptionRuns.getLatestForRecording(recording.id, workspaceId),
+  ]);
+  return recordingToDto(
+    {
+      ...recording,
+      transcriptId: transcript?.id ?? null,
+    },
+    run,
+  );
 }

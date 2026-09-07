@@ -54,8 +54,10 @@ describe('utils/api recording upload request', () => {
     const file = new File(['small sentinel'], 'oversized.mp3', { type: 'audio/mpeg' });
     Object.defineProperty(file, 'size', { value: 2_147_483_649 });
 
-    await expect(uploadRecording(file, { studentId: 'student-1' })).rejects.toBeInstanceOf(
-      RecordingUploadPreDispatchError,
+    await expect(uploadRecording(file, { studentId: 'student-1' })).rejects.toMatchObject(
+      new RecordingUploadPreDispatchError(
+        'Choose a source file at or below the configured 2 GiB operational upload limit.',
+      ),
     );
     expect(apiClient.post).not.toHaveBeenCalled();
   });

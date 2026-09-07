@@ -11,17 +11,17 @@ import type {
 } from '../../utils/api';
 import {
   ArtifactWorkingConflictApiError,
-  RecordingUploadPreDispatchError,
   createManualTranscriptSource,
   fetchRecordingTranscript,
   fetchStudentOptions,
   getRecording as getRecordingStatus,
   getRecordingUploadOperation,
-  retryRecordingTranscription,
+  RecordingUploadPreDispatchError,
   subscribeToJobEvents,
   updateRecordingTranscript,
   uploadRecording,
 } from '../../utils/api';
+import { getRecordingErrorAction, selectNewestRecording } from '../../utils/recording-state';
 import {
   getNextFallbackPollingDelay,
   getRecordingPollingDecision,
@@ -148,7 +148,6 @@ export interface SourceController extends SourceHydrationSnapshot {
   transcriptSaving: boolean;
   manualTranscriptSaving: boolean;
   manualTranscriptError: string | null;
-  retryingTranscript: boolean;
   studentOptions: StudentOption[];
   studentOptionsLoading: boolean;
   studentOptionsResolved: boolean;
@@ -173,7 +172,6 @@ export interface SourceController extends SourceHydrationSnapshot {
   handleSaveTranscript: (speakerRoleMapping?: {
     roles: { speaker: number; role: 'teacher' | 'student' }[];
   }) => Promise<RecordingTranscriptResponse | null>;
-  handleRetryTranscription: () => Promise<void>;
   createManualTranscript: (text: string, displayName?: string) => Promise<void>;
   resetSourceFlow: (options?: SourceResetOptions) => void;
   applyHydratedSnapshot: (snapshot: SourceHydrationSnapshot) => void;
@@ -216,7 +214,6 @@ export function useMinimalAssignmentSourceController({
   const [transcriptStatus, setTranscriptStatus] = useState<TranscriptUiStatus>('idle');
   const [transcriptError, setTranscriptError] = useState<string | null>(null);
   const [transcriptSaving, setTranscriptSaving] = useState(false);
-  const [retryingTranscript, setRetryingTranscript] = useState(false);
   const [manualTranscriptSaving, setManualTranscriptSaving] = useState(false);
   const [manualTranscriptError, setManualTranscriptError] = useState<string | null>(null);
   const [studentOptions, setStudentOptions] = useState<StudentOption[]>([]);
@@ -284,9 +281,14 @@ export function useMinimalAssignmentSourceController({
         // The result belongs to the captured workflow, student, and operation.
         // A reset, resume, student change, or replacement invalidates it.
         if (!clearPendingUploadOperation(reconciliationOwner)) return;
+        latestRecordingRef.current = resolved;
         setRecording(resolved);
         setRecordingStatus(resolved.status);
-        setRecordingError(resolved.error ?? null);
+        setRecordingError(
+          resolved.productState === 'attention'
+            ? getRecordingErrorAction(resolved.errorCode)
+            : null,
+        );
         setSelectedFileName(resolved.displayName ?? null);
       })
       .catch(() => undefined);
@@ -366,14 +368,16 @@ export function useMinimalAssignmentSourceController({
         setSelectedStudentId(initialSelectedStudentId ?? '');
       }
       setRecording(null);
+      latestRecordingRef.current = null;
       setRecordingStatus(null);
       setRecordingError(null);
       setTranscript(null);
+      latestTranscriptIdRef.current = null;
+      latestTranscriptRef.current = null;
       setTranscriptText('');
       setTranscriptStatus('idle');
       setTranscriptError(null);
       setTranscriptSaving(false);
-      setRetryingTranscript(false);
       setManualTranscriptSaving(false);
       setManualTranscriptError(null);
       setSelectedFileName(null);
@@ -387,6 +391,9 @@ export function useMinimalAssignmentSourceController({
   );
 
   const applyHydratedSnapshot = useCallback((snapshot: SourceHydrationSnapshot) => {
+    latestRecordingRef.current = snapshot.recording;
+    latestTranscriptIdRef.current = snapshot.transcript?.transcriptId ?? null;
+    latestTranscriptRef.current = snapshot.transcript;
     selectedStudentIdRef.current = snapshot.selectedStudentId;
     setReplacingAudio(false);
     setRecording(snapshot.recording);
@@ -533,9 +540,14 @@ export function useMinimalAssignmentSourceController({
           const resolved = await getRecordingUploadOperation(operation.id);
           if (resolved && 'source' in resolved) {
             if (!clearPendingUploadOperation(operation)) return;
+            latestRecordingRef.current = resolved;
             setRecording(resolved);
             setRecordingStatus(resolved.status);
-            setRecordingError(resolved.error ?? null);
+            setRecordingError(
+              resolved.productState === 'attention'
+                ? getRecordingErrorAction(resolved.errorCode)
+                : null,
+            );
             setSelectedFileName(resolved.displayName || file.name);
             setReplacingAudio(false);
             return;
@@ -558,6 +570,7 @@ export function useMinimalAssignmentSourceController({
           onProgress: (progress) => setUploadProgress(progress),
         });
         if (!ownsPendingUploadOperation(operation)) return;
+        latestRecordingRef.current = response;
         if (replacingCurrentAudio) {
           latestTranscriptIdRef.current = null;
           latestTranscriptRef.current = null;
@@ -569,11 +582,14 @@ export function useMinimalAssignmentSourceController({
           setTranscriptStatus('idle');
           setTranscriptError(null);
           setTranscriptSaving(false);
-          setRetryingTranscript(false);
         }
         setRecording(response);
         setRecordingStatus(response.status);
-        setRecordingError(response.error ?? null);
+        setRecordingError(
+          response.productState === 'attention'
+            ? getRecordingErrorAction(response.errorCode)
+            : null,
+        );
         setSelectedFileName(response.displayName || file.name);
         setUploadCacheNotice(
           response.cacheHit ? 'Reused an existing transcript for this exact audio file.' : null,
@@ -643,10 +659,14 @@ export function useMinimalAssignmentSourceController({
 
       try {
         const response = await fetchRecordingTranscript(recordingId);
+        if (latestRecordingRef.current?.recordingId !== recordingId) return;
+        latestTranscriptIdRef.current = response.transcriptId;
+        latestTranscriptRef.current = response;
         setTranscript(response);
         setTranscriptText(response.text ?? '');
         setTranscriptStatus('ready');
       } catch (error) {
+        if (latestRecordingRef.current?.recordingId !== recordingId) return;
         const message = error instanceof Error ? error.message : 'Unable to load transcript.';
         if (currentRecordingStatus && currentRecordingStatus !== 'transcribed') {
           setTranscriptStatus('processing');
@@ -667,12 +687,14 @@ export function useMinimalAssignmentSourceController({
 
   const refreshTranscriptPreservingLocal = useCallback(async () => {
     if (!recording?.recordingId) return;
+    const recordingId = recording.recordingId;
     const durable = latestTranscriptRef.current;
     const localText = transcriptTextRef.current.trim();
     const durableText = durable?.text?.trim() ?? '';
     const preserveLocalText = localText !== durableText;
     try {
-      const response = await fetchRecordingTranscript(recording.recordingId);
+      const response = await fetchRecordingTranscript(recordingId);
+      if (latestRecordingRef.current?.recordingId !== recordingId) return;
       const remoteText = response.text?.trim() ?? '';
       const remoteChanged =
         durable !== null &&
@@ -692,6 +714,7 @@ export function useMinimalAssignmentSourceController({
       }
       setTranscriptStatus('ready');
     } catch (error) {
+      if (latestRecordingRef.current?.recordingId !== recordingId) return;
       setTranscriptError(error instanceof Error ? error.message : 'Unable to refresh transcript.');
     }
   }, [recording?.recordingId]);
@@ -733,17 +756,21 @@ export function useMinimalAssignmentSourceController({
     };
 
     const applyRecordingTransition = (updated: RecordingListItem) => {
-      latestRecordingRef.current = updated;
-      setRecording(updated);
-      setRecordingStatus(updated.status);
-      setRecordingError(updated.error ?? null);
+      if (latestRecordingRef.current?.recordingId !== recordingId) return false;
+      const selected = selectNewestRecording(latestRecordingRef.current, updated);
+      if (selected !== updated) return true;
+      latestRecordingRef.current = selected;
+      setRecording(selected);
+      setRecordingStatus(selected.status);
+      setRecordingError(
+        selected.productState === 'attention' ? getRecordingErrorAction(selected.errorCode) : null,
+      );
       const decision = getRecordingPollingDecision({
-        status: updated.status,
-        error: updated.error,
+        recording: selected,
         hasTranscriptId: Boolean(latestTranscriptIdRef.current),
       });
       if (decision.shouldLoadTranscript) {
-        void loadTranscriptForRecording(recordingId, updated.status);
+        void loadTranscriptForRecording(recordingId, selected.status);
       }
       if (decision.shouldMarkTranscriptFailed) {
         setTranscriptStatus('failed');
@@ -818,20 +845,8 @@ export function useMinimalAssignmentSourceController({
       const currentRecording = latestRecordingRef.current;
       if (!currentRecording || currentRecording.recordingId !== recordingId) return;
       armSseStaleTimeout();
-      applyRecordingTransition({
-        ...currentRecording,
-        status: event.status,
-        transcriptId: event.transcriptId ?? currentRecording.transcriptId,
-        error: event.error ?? null,
-        studentId: event.studentId ?? currentRecording.studentId,
-        source: event.source ?? currentRecording.source,
-        displayName: event.displayName ?? currentRecording.displayName,
-        durationSec: event.durationSec ?? currentRecording.durationSec,
-        channels: event.channels ?? currentRecording.channels,
-        bytes: event.bytes ?? currentRecording.bytes,
-        createdAt: event.createdAt ?? currentRecording.createdAt,
-        updatedAt: event.updatedAt ?? currentRecording.updatedAt,
-      });
+      const { type: _type, ...updated } = event;
+      applyRecordingTransition(updated);
     };
 
     documentRef?.addEventListener('visibilitychange', handleVisibilityChange);
@@ -941,28 +956,6 @@ export function useMinimalAssignmentSourceController({
     transcriptText,
   ]);
 
-  const handleRetryTranscription = useCallback(async () => {
-    if (!recording?.recordingId) return;
-    setRetryingTranscript(true);
-    setTranscriptError(null);
-    try {
-      const updated = await retryRecordingTranscription(recording.recordingId, {
-        sttProvider: sttProviderUserChangedRef.current ? selectedSttProvider : undefined,
-        audioTopology:
-          selectedAudioTopology === 'trusted_split_channels' ? selectedAudioTopology : undefined,
-      });
-      setRecording(updated);
-      setRecordingStatus(updated.status);
-      setRecordingError(updated.error ?? null);
-      setTranscriptStatus('processing');
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to retry transcription.';
-      setTranscriptError(message);
-    } finally {
-      setRetryingTranscript(false);
-    }
-  }, [recording?.recordingId, selectedSttProvider, selectedAudioTopology]);
-
   const createManualTranscript = useCallback(
     async (text: string, displayName = 'Pasted lesson transcript') => {
       const normalizedText = text.trim();
@@ -986,9 +979,12 @@ export function useMinimalAssignmentSourceController({
           text: normalizedText,
           displayName,
         });
+        latestRecordingRef.current = created;
         setRecording(created);
         setRecordingStatus(created.status);
-        setRecordingError(created.error ?? null);
+        setRecordingError(
+          created.productState === 'attention' ? getRecordingErrorAction(created.errorCode) : null,
+        );
         setSelectedFileName(created.displayName || displayName);
         setUploadCacheNotice(null);
 
@@ -1051,7 +1047,6 @@ export function useMinimalAssignmentSourceController({
     transcriptSaving,
     manualTranscriptSaving,
     manualTranscriptError,
-    retryingTranscript,
     studentOptions,
     studentOptionsLoading,
     studentOptionsResolved,
@@ -1076,7 +1071,6 @@ export function useMinimalAssignmentSourceController({
     loadTranscript,
     refreshTranscriptPreservingLocal,
     handleSaveTranscript,
-    handleRetryTranscription,
     createManualTranscript,
     resetSourceFlow,
     applyHydratedSnapshot,

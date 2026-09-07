@@ -60,7 +60,7 @@ import type {
   PronunciationChunkTtsProviderId as ContractPronunciationChunkTtsProviderId,
   PublishAssignmentCorrectionRequest as ContractPublishAssignmentCorrectionRequest,
   PublishAssignmentCorrectionResponse as ContractPublishAssignmentCorrectionResponse,
-  RecordingSourceId as ContractRecordingSourceId,
+  RecordingDto as ContractRecordingDto,
   RecordingStatus as ContractRecordingStatus,
   RerunJobPayload as ContractRerunJobPayload,
   SttProviderId as ContractSttProviderId,
@@ -77,6 +77,7 @@ import type {
   JobActionRequest,
   JobStatusDto,
   PublishTarget,
+  RecordingErrorCode,
   RecordStudentPaymentRequest,
   StreamEventMessage,
   StudentScheduleBillingSurfaceResponse,
@@ -85,8 +86,7 @@ import type {
   UpdateStudentLessonRequest,
   UpsertStudentLessonRecurrenceRequest,
 } from '@esl-pipeline/contracts';
-import { DEFAULT_RECORDING_UPLOAD_MAX_BYTES } from '@esl-pipeline/contracts';
-import { JobActionType } from '@esl-pipeline/contracts';
+import { DEFAULT_RECORDING_UPLOAD_MAX_BYTES, JobActionType } from '@esl-pipeline/contracts';
 
 import apiClient, {
   buildApiProxyPath,
@@ -94,6 +94,7 @@ import apiClient, {
   handleApiError,
   isAuthError,
 } from './api-client';
+import { getRecordingErrorAction } from './recording-state';
 
 export type JobState = ContractJobState;
 export type TtsStrategy = ContractTtsStrategy;
@@ -177,20 +178,7 @@ export interface RecordingTranscriptResponse {
   updatedAt: string;
 }
 
-export interface RecordingListItem {
-  recordingId: string;
-  status: RecordingStatus;
-  transcriptId: string | null;
-  error: string | null;
-  source: ContractRecordingSourceId;
-  studentId: string | null;
-  displayName: string;
-  durationSec: number | null;
-  channels: number | null;
-  audioTopology: AudioInputTopology | null;
-  bytes: number;
-  createdAt: string;
-  updatedAt: string;
+export interface RecordingListItem extends ContractRecordingDto {
   cacheHit?: boolean;
   cacheReason?: 'transcript_reused' | null;
   cacheRecordingId?: string | null;
@@ -1962,6 +1950,8 @@ export async function uploadMarkdown(
  * Callers may safely retire a browser-owned upload operation after this error.
  */
 export class RecordingUploadPreDispatchError extends Error {
+  readonly code: RecordingErrorCode = 'file_too_large';
+
   constructor(message: string) {
     super(message);
     this.name = 'RecordingUploadPreDispatchError';
@@ -1985,7 +1975,9 @@ export async function uploadRecording(
   },
 ): Promise<RecordingListItem> {
   if (file.size > DEFAULT_RECORDING_UPLOAD_MAX_BYTES) {
-    throw new RecordingUploadPreDispatchError('Recording exceeds the 2 GiB upload limit.');
+    throw new RecordingUploadPreDispatchError(
+      'Choose a source file at or below the configured 2 GiB operational upload limit.',
+    );
   }
   try {
     const formData = new FormData();
@@ -2020,7 +2012,19 @@ export async function uploadRecording(
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to upload recordings.');
     }
-    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+    const data = axiosError?.response?.data;
+    const code =
+      data && typeof data === 'object' && 'code' in data && typeof data.code === 'string'
+        ? data.code
+        : null;
+    if (code) {
+      throw new Error(getRecordingErrorAction(code));
+    }
+    throw new Error(
+      axiosError?.request
+        ? handleApiError(axiosError)
+        : 'Unable to upload recording. Try again or choose another file.',
+    );
   }
 }
 

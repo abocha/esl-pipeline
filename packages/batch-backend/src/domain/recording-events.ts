@@ -1,4 +1,5 @@
 import type { RecordingRecord } from './recording-model.js';
+import type { TranscriptionRun } from './transcription-run-repository.js';
 
 export type RecordingEventType = 'recording_state_changed';
 
@@ -6,6 +7,7 @@ export interface RecordingEvent {
   type: RecordingEventType;
   recording: RecordingRecord;
   transcriptId?: string | null;
+  run?: Pick<TranscriptionRun, 'state' | 'errorCode'> | null;
 }
 
 class RecordingEventCustomEvent extends Event {
