@@ -14,6 +14,7 @@
     "domain.student-memory-openai-batch-import.test.ts",
     "domain.student-memory-openai-batch-repository.test.ts",
     "domain.assignment-session-repository.test.ts",
+    "domain.recording-audio-cleanup-repository.test.ts",
     "domain.student-repository.workspace.test.ts",
     "integration.recording-tenant-authority.test.ts",
     "application.assignment-step-confirmation.test.ts",

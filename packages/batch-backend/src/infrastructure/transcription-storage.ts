@@ -77,6 +77,50 @@ export class TranscriptionStorageSubmissionError extends Error {
   }
 }
 
+export class RecordingAudioOwnershipError extends Error {
+  constructor() {
+    super('The retained audio URI does not belong to the claimed recording.');
+    this.name = 'RecordingAudioOwnershipError';
+  }
+}
+
+export function assertRecordingOwnedAudioUri(
+  uri: string,
+  workspaceId: string,
+  recordingId: string,
+): void {
+  const objectPath = isLocalUri(uri) ? parseLocalUri(uri) : isS3Uri(uri) ? parseS3Uri(uri).key : '';
+  const segments = objectPath.replaceAll('\\', '/').split('/');
+  const ownerIndex = segments.lastIndexOf('workspaces');
+  const ownedTail = ownerIndex >= 0 ? segments.slice(ownerIndex) : [];
+  const validOwner =
+    ownedTail[0] === 'workspaces' &&
+    ownedTail[1] === workspaceId &&
+    ownedTail[2] === 'recordings' &&
+    ownedTail[3] === recordingId;
+  const remainder = ownedTail.slice(4);
+  const validWorkspaceObject =
+    (remainder.length === 1 && /^audio\.[A-Za-z0-9]+$/u.test(remainder[0] ?? '')) ||
+    (remainder.length === 3 &&
+      remainder[0] === 'candidates' &&
+      Boolean(remainder[1]) &&
+      /^audio\.[A-Za-z0-9]+$/u.test(remainder[2] ?? ''));
+  // Before migration 0049, recording audio used recordings/{recordingId}.{ext}.
+  // Recording IDs are global UUID primary keys; S3 may also have a configured
+  // prefix before that exact two-segment legacy tail.
+  const legacyRecordingsIndex = segments.lastIndexOf('recordings');
+  const legacyFilename = segments.at(-1) ?? '';
+  const validLegacyObject =
+    legacyRecordingsIndex === segments.length - 2 &&
+    (isS3Uri(uri) || legacyRecordingsIndex === 0) &&
+    legacyFilename.startsWith(`${recordingId}.`) &&
+    /^[A-Za-z0-9]+$/u.test(legacyFilename.slice(recordingId.length + 1));
+  const validObject = (validOwner && validWorkspaceObject) || validLegacyObject;
+  if (!validObject || segments.some((segment) => segment === '..')) {
+    throw new RecordingAudioOwnershipError();
+  }
+}
+
 export interface FilesystemTranscriptionStorageDependencies {
   writeAudio?: typeof writeStreamToFile;
   removeAudioTarget?: (targetPath: string) => Promise<void>;

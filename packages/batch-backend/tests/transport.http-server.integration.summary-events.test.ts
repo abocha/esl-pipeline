@@ -586,6 +586,7 @@ describeHttpServerIntegrationSuite(
         studentId: null,
         sourcePath: null,
         storageUri: 'local://recordings/recording.opus',
+        audioLifecycle: 'retained',
         sha256: null,
         bytes: 11,
         durationSec: null,
@@ -623,6 +624,41 @@ describeHttpServerIntegrationSuite(
         'recording-1',
         '00000000-0000-4000-8000-000000000001',
       );
+    });
+
+    it('GET /recordings/:id/audio hides pending audio before physical deletion', async () => {
+      const getRecordingById = vi.spyOn(recordingRepositoryModule, 'getRecordingByIdForWorkspace');
+      getRecordingById.mockResolvedValue({
+        id: 'recording-pending',
+        workspaceId: '00000000-0000-4000-8000-000000000001',
+        source: 'upload',
+        studentId: null,
+        sourcePath: null,
+        storageUri: 'local://recordings/still-present.opus',
+        sha256: null,
+        bytes: 11,
+        durationSec: null,
+        channels: null,
+        audioTopology: 'mixed_recording',
+        audioLifecycle: 'pending',
+        status: 'transcribed',
+        error: null,
+        createdAt: new Date('2024-01-01T00:00:00.000Z'),
+        updatedAt: new Date('2024-01-01T00:00:00.000Z'),
+      });
+      const createStorage = vi.spyOn(
+        transcriptionStorageModule,
+        'createTranscriptionStorageForUri',
+      );
+      createStorage.mockClear();
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/recordings/recording-pending/audio',
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(createStorage).not.toHaveBeenCalled();
     });
 
     it('GET /recordings/:id/audio returns the same 404 for foreign and missing recordings', async () => {

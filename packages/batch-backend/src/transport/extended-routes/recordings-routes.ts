@@ -715,7 +715,7 @@ export function registerRecordingRoutes(
         if (!authenticatedUser) return reply.code(401).send({ error: 'unauthorized' });
         const workspaceId = await resolvePrimaryWorkspaceIdForUser(authenticatedUser.id);
         const recording = await getRecordingByIdForWorkspace(recordingId, workspaceId);
-        if (!recording?.storageUri) {
+        if (recording?.audioLifecycle !== 'retained' || !recording.storageUri) {
           logger.info('Recording audio not found', {
             event: 'recording_audio_not_found',
             route: routePath,

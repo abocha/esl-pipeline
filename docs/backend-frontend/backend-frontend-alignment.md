@@ -59,6 +59,9 @@ Provider/model detail stays in
   immutable URI, hash, and working version directly; no content-revision tables exist.
 - Confirmed Source exclusively drives transcript-hash-keyed lesson memory from its immutable URI.
   Prompt generation consumes confirmed Source/Context; Preview and Share consume confirmed Create.
+- Confirmed Source also makes retained recording audio unavailable in the same transaction and queues
+  recording-owned deletion; historical confirmed rows are backfilled to that lifecycle without
+  changing transcript, Source snapshot, or downstream text lineage.
 - The frontend owns automatic debounce/retry/refresh mechanics and preserves local buffers on
   conflict. The backend owns confirmation prerequisites, lineage validation, invalidation, stable
   Share reservation/retry, and the canonical active/completed predicate.

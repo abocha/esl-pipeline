@@ -625,8 +625,8 @@ describe('application/process-transcribe-job', () => {
               context,
               config: {
                 apiKey: 'deepgram-test-key',
-                  model: 'nova-3',
-                  language: 'en',
+                model: 'nova-3',
+                language: 'en',
                 trustedSplitChannels: true,
               },
             }),
@@ -1125,7 +1125,12 @@ function createConfig(): BatchBackendConfig {
         },
       },
     },
-    recordings: { maxFileSize: 0, diskReserveBytes: 0 },
+    recordings: {
+      maxFileSize: 0,
+      diskReserveBytes: 0,
+      audioCleanupEnabled: false,
+      audioRecoveryTtlDays: 7,
+    },
     deepgram: {
       apiKey: 'dg-key',
       accessToken: undefined,

@@ -63,6 +63,12 @@ Useful indexes:
   the configured ElevenLabs Scribe v2 mixed profile; only an explicit trusted OBS declaration uses
   Deepgram's two-channel tutor/student path. Mixed diarization labels remain anonymous until the
   tutor confirms the speaker-role mapping in the Source review flow.
+- Successful Source confirmation makes retained recording audio unavailable immediately and requests
+  asynchronous recording-owned deletion. The transcribe worker sweeps bounded PostgreSQL claims for
+  confirmed audio plus eligible failed or unconfirmed audio after
+  `RECORDING_AUDIO_RECOVERY_TTL_DAYS` (default 7). Physical cleanup is disabled unless
+  `RECORDING_AUDIO_CLEANUP_ENABLED=true`; transcript and downstream text lineage is never deleted.
+  Slice 4 upload-attempt candidate cleanup remains a separate authority.
 - `STT_PROVIDER` is an all-topology emergency rollback override; with the current topology set, only
   `deepgram` is valid. Per-request support overrides remain topology-scoped.
 - Manual transcript sources require a student, retain the pasted text as durable source material,

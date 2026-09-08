@@ -46,6 +46,8 @@ describe('config/env - core defaults', () => {
         expect(cfg.transcription.maxConcurrency).toBe(2);
         expect(cfg.recordings.maxFileSize).toBe(2 * 1024 * 1024 * 1024);
         expect(cfg.recordings.diskReserveBytes).toBe(10 * 1024 * 1024 * 1024);
+        expect(cfg.recordings.audioCleanupEnabled).toBe(false);
+        expect(cfg.recordings.audioRecoveryTtlDays).toBe(7);
         expect(cfg.deepgram.model).toBe('nova-3');
         expect(cfg.deepgram.language).toBe('multi');
         expect(cfg.deepgram.storeRawResponse).toBe(true);
@@ -98,9 +100,37 @@ describe('config/env - core defaults', () => {
         expect(cfg.recordings).toEqual({
           maxFileSize: 123_456_789,
           diskReserveBytes: 987_654_321,
+          audioCleanupEnabled: false,
+          audioRecoveryTtlDays: 7,
         });
       },
     );
+  });
+
+  it('maps valid recording cleanup policy and rejects invalid values', async () => {
+    await withEnv(
+      {
+        NODE_ENV: 'test',
+        RECORDING_AUDIO_CLEANUP_ENABLED: 'true',
+        RECORDING_AUDIO_RECOVERY_TTL_DAYS: '14',
+      },
+      async () => {
+        expect((await loadConfigFresh()).recordings).toMatchObject({
+          audioCleanupEnabled: true,
+          audioRecoveryTtlDays: 14,
+        });
+      },
+    );
+    await expect(
+      withEnv({ NODE_ENV: 'test', RECORDING_AUDIO_CLEANUP_ENABLED: 'sometimes' }, async () => {
+        await loadConfigFresh();
+      }),
+    ).rejects.toThrow('RECORDING_AUDIO_CLEANUP_ENABLED');
+    await expect(
+      withEnv({ NODE_ENV: 'test', RECORDING_AUDIO_RECOVERY_TTL_DAYS: '0' }, async () => {
+        await loadConfigFresh();
+      }),
+    ).rejects.toThrow('RECORDING_AUDIO_RECOVERY_TTL_DAYS');
   });
 
   it('uses the batch-backend runtime prompt asset defaults when no overrides are set', async () => {

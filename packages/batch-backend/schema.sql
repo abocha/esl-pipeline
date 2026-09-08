@@ -50,6 +50,20 @@ BEGIN
   RETURN NEW;
 END $$;
 
+CREATE FUNCTION public.request_confirmed_source_audio_deletion() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  UPDATE recordings r SET audio_lifecycle = 'pending',
+      audio_deletion_requested_at = COALESCE(r.audio_deletion_requested_at, NOW()),
+      updated_at = NOW()
+  WHERE r.id = NEW.recording_id
+    AND r.student_id = NEW.student_id
+    AND r.id::text = NEW.confirmed_snapshot #>> '{source,recordingId}'
+    AND r.audio_lifecycle = 'retained';
+  RETURN NEW;
+END $$;
+
 CREATE FUNCTION public.resolve_jobs_student_id(p_current_student_id uuid, p_recording_id uuid, p_prompt_package_id uuid, p_draft_id uuid, p_source_job_id uuid) RETURNS uuid
     LANGUAGE plpgsql
     AS $$
@@ -1582,6 +1596,8 @@ CREATE INDEX idx_users_role ON public.users USING btree (role);
 
 CREATE INDEX idx_workspace_memberships_user_id ON public.workspace_memberships USING btree (user_id);
 
+CREATE TRIGGER assignment_sessions_confirmed_source_audio_deletion AFTER INSERT OR UPDATE OF confirmed_snapshot, recording_id, student_id ON public.assignment_sessions FOR EACH ROW EXECUTE FUNCTION public.request_confirmed_source_audio_deletion();
+
 CREATE TRIGGER recordings_workspace_authority_trigger BEFORE INSERT OR UPDATE OF student_id, workspace_id ON public.recordings FOR EACH ROW EXECUTE FUNCTION public.enforce_recording_workspace_authority();
 
 CREATE TRIGGER set_drafts_updated_at BEFORE UPDATE ON public.drafts FOR EACH ROW EXECUTE FUNCTION public.set_drafts_updated_at();
@@ -2072,5 +2088,6 @@ VALUES
   ('0049_recording_ingest_readiness', '46c6544bd299ace4c46445761788b8d1acaa5e5d64bbbd7a1e943f2306d8636d', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0050_recording_media_preparation_version', 'ddfcb6bfbc7fc740b6642361ef15fdd96fcb868ce358dcdee7cc2d5ce2dc5c15', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0051_recording_upload_operations', '7353b778b5e973f4dc05774676ff0657062f31eb9966f1459e84dbc3edce03cb', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0052_recording_upload_candidate_cleanup_schedule', '34891f5ed3494026d41d58a9d901f2f31e5ce7802dcf706cb2f5468175080890', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0052_recording_upload_candidate_cleanup_schedule', '34891f5ed3494026d41d58a9d901f2f31e5ce7802dcf706cb2f5468175080890', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0053_recording_audio_cleanup_backfill', '7d4e11f27d14a035f15d9b629ec00bdfcc641882dbb7eaf0ad16d87692f2440f', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;
