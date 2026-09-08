@@ -293,7 +293,9 @@ describe('integration/migrations', () => {
             otherWorkspaceId,
           ]),
         ).rejects.toThrow();
-        await expect(pool.query(`DELETE FROM students WHERE id = $1`, [studentId])).rejects.toThrow();
+        await expect(
+          pool.query(`DELETE FROM students WHERE id = $1`, [studentId]),
+        ).rejects.toThrow();
         await expect(
           pool.query(
             `INSERT INTO transcription_runs
@@ -402,6 +404,127 @@ describe('integration/migrations', () => {
         expect(rows.rows.map((row) => row.media_preparation_version)).toEqual([
           null,
           'recording-media-v1',
+        ]);
+      });
+    },
+    testTimeout,
+  );
+
+  it(
+    '0053 makes historical Source-confirmed retained audio unavailable without a replay',
+    async () => {
+      await withAdminClient(async (pool) => {
+        await applyMigrationsThrough(pool, '0052_recording_upload_candidate_cleanup_schedule');
+        const userId = '00000000-0000-4000-8000-000000000053';
+        const workspaceId = '10000000-0000-4000-8000-000000000053';
+        const studentId = '20000000-0000-4000-8000-000000000053';
+        const confirmedRecordingId = '30000000-0000-4000-8000-000000000053';
+        const unconfirmedRecordingId = '30000000-0000-4000-8000-000000000054';
+        const rollingDeployRecordingId = '30000000-0000-4000-8000-000000000055';
+        await pool.query(
+          `INSERT INTO users (id, email, password_hash, role)
+           VALUES ($1, 'cleanup-migration@example.test', 'hash', 'user')`,
+          [userId],
+        );
+        await pool.query(`INSERT INTO workspaces (id, name) VALUES ($1, 'Cleanup migration')`, [
+          workspaceId,
+        ]);
+        await pool.query(
+          `INSERT INTO workspace_memberships (workspace_id, user_id, role)
+           VALUES ($1, $2, 'owner')`,
+          [workspaceId, userId],
+        );
+        await pool.query(
+          `INSERT INTO students (id, student, workspace_id) VALUES ($1, 'Alex', $2)`,
+          [studentId, workspaceId],
+        );
+        await pool.query(
+          `INSERT INTO recordings
+             (id, workspace_id, source, student_id, storage_uri, audio_lifecycle, bytes, status)
+           VALUES
+             ($1, $3, 'upload', $4, $5, 'retained', 10, 'transcribed'),
+             ($2, $3, 'upload', $4, $6, 'retained', 10, 'transcribed')`,
+          [
+            confirmedRecordingId,
+            unconfirmedRecordingId,
+            workspaceId,
+            studentId,
+            `local://recordings/${confirmedRecordingId}.mp3`,
+            `local://recordings/${unconfirmedRecordingId}.mp3`,
+          ],
+        );
+        await pool.query(
+          `INSERT INTO assignment_sessions
+             (id, user_id, student_id, recording_id, revision, confirmed_step, confirmed_snapshot)
+           VALUES (gen_random_uuid(), $1, $2, $3, 1, 'source', $4::jsonb)`,
+          [
+            userId,
+            studentId,
+            confirmedRecordingId,
+            JSON.stringify({
+              student: { studentId },
+              source: { recordingId: confirmedRecordingId },
+              context: null,
+              create: null,
+            }),
+          ],
+        );
+
+        await pool.query(
+          await fs.readFile(
+            path.join(migrationsPath, '0053_recording_audio_cleanup_backfill.sql'),
+            'utf8',
+          ),
+        );
+        await pool.query(
+          `INSERT INTO recordings
+             (id, workspace_id, source, student_id, storage_uri, audio_lifecycle, bytes, status)
+           VALUES ($1, $2, 'upload', $3, $4, 'retained', 10, 'transcribed')`,
+          [
+            rollingDeployRecordingId,
+            workspaceId,
+            studentId,
+            `local://recordings/${rollingDeployRecordingId}.mp3`,
+          ],
+        );
+        await pool.query(
+          `INSERT INTO assignment_sessions
+             (id, user_id, student_id, recording_id, revision, confirmed_step, confirmed_snapshot)
+           VALUES (gen_random_uuid(), $1, $2, $3, 1, 'source', $4::jsonb)`,
+          [
+            userId,
+            studentId,
+            rollingDeployRecordingId,
+            JSON.stringify({
+              student: { studentId },
+              source: { recordingId: rollingDeployRecordingId },
+              context: null,
+              create: null,
+            }),
+          ],
+        );
+
+        const rows = await pool.query(
+          `SELECT id, audio_lifecycle, audio_deletion_requested_at
+           FROM recordings WHERE id IN ($1, $2, $3) ORDER BY id`,
+          [confirmedRecordingId, unconfirmedRecordingId, rollingDeployRecordingId],
+        );
+        expect(rows.rows).toEqual([
+          {
+            id: confirmedRecordingId,
+            audio_lifecycle: 'pending',
+            audio_deletion_requested_at: expect.any(Date),
+          },
+          {
+            id: unconfirmedRecordingId,
+            audio_lifecycle: 'retained',
+            audio_deletion_requested_at: null,
+          },
+          {
+            id: rollingDeployRecordingId,
+            audio_lifecycle: 'pending',
+            audio_deletion_requested_at: expect.any(Date),
+          },
         ]);
       });
     },

@@ -8,10 +8,10 @@ import {
 import type { AssignmentSessionDto } from '../../contracts/src/index.js';
 
 describe('contracts/assignment confirmation contract version', () => {
-  it('publishes the current upload-operation contract versions', () => {
+  it('publishes the current recording cleanup contract versions', () => {
     expect(API_CONTRACT_VERSION).toBe('4.4.0');
-    expect(DB_CONTRACT_VERSION).toBe('0.30.0');
-    expect(DB_MIGRATION_HEAD).toBe('0052_recording_upload_candidate_cleanup_schedule');
+    expect(DB_CONTRACT_VERSION).toBe('0.30.1');
+    expect(DB_MIGRATION_HEAD).toBe('0053_recording_audio_cleanup_backfill');
   });
 
   it('does not expose a nullable legacy learner on an assignment session', () => {

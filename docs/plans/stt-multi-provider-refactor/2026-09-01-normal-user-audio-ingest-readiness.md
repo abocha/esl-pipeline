@@ -4,12 +4,12 @@
 
 - Audience: maintainers implementing or reviewing ordinary lesson-recording ingest.
 - Authority Level: approved Goal Contract execution plan.
-- Last Verified Against: 2026-09-07 current `codex/audio-topology` checkout, locally implemented Slices 1–4, and the closed Slice 4 exceptional-risk semantic review.
+- Last Verified Against: 2026-09-07 current `codex/audio-topology` checkout, locally implemented Slices 1–6, and the closed Slice 4/5 semantic reviews.
 - Owner: founder-maintainer + speech-runtime maintainers.
 - Review Cadence: before implementation and after any material recording, tenant, retry, or retention contract change.
 - Status: `active`.
 - Exit Trigger: archive after implementation is merged, production rollout evidence satisfies the Goal Contract, and active runtime/operations docs own the shipped behavior.
-- Current Focus: begin Slice 5 — truthful frontend state and actionable recovery.
+- Current Focus: validate and review Slice 6 — Source-confirmation deletion and stale cleanup.
 
 This is the execution strategy beneath the maintainer-approved Goal Contract. It may adapt implementation detail as evidence changes, but it must not change the locked product or architecture decisions below without maintainer approval.
 
@@ -48,9 +48,10 @@ Do not add or reopen:
 
 ### Current campaign status
 
-- Slices 1–4 are implemented locally in the current checkout.
+- Slices 1–6 are implemented locally in the current checkout.
 - The Slice 4 exceptional-risk semantic review is `CLOSED` with no remaining findings.
-- Slice 5 is the next implementation slice.
+- Slice 5 passed its independent Terra/high semantic review.
+- Slice 6 terminal validation and narrow Sol/high exceptional-risk review remain required.
 - Local and hosted validation status remains evidence for readiness, merge, and rollout; it is not architecture or slice-sequencing state.
 
 ### Already completed or fixed
@@ -63,10 +64,8 @@ Do not add or reopen:
 
 ### Remaining implementation work
 
-1. Slice 5 must surface the canonical run/error projection through DTOs, polling, SSE, and resume, and render its truthful user states.
-2. Slice 5 must consume the existing browser size guard and stable backend error codes, expose `audioLifecycle`/`audioAvailable`, remove normal-user transcription retry UI, and make refresh/reconnect equivalent.
-3. Slice 6 still owns deletion of recording-adopted retained audio after Source confirmation/TTL; it is not complete as part of Slice 4.
-4. Slice 7 still owns integrated acceptance, operations, documentation closeout, and separately authorized production evidence.
+1. Slice 6 terminal validation and exceptional-risk review must confirm transactional deletion requests, immediate unavailability, TTL/stale safety, multi-worker claiming, and storage deletion semantics.
+2. Slice 7 still owns integrated acceptance, operations, documentation closeout, and separately authorized production evidence.
 
 ## 3. Locked product and architecture decisions
 
@@ -106,7 +105,7 @@ Do not add or reopen:
 13. A usable result writes the one transcript winner and transitions both run and recording to success atomically.
 14. Source review maps anonymous mixed speakers to Teacher/Student when needed. Successful Source confirmation atomically marks retained audio deletion pending; a `not_retained` cache hit remains `not_retained`.
 15. A separate Slice 4 worker-owned reconciler deletes only obsolete, unadopted upload-attempt candidates with bounded retries after rechecking durable adoption/reference; it never deletes recording-adopted audio.
-16. Slice 6, still future work, owns lifecycle deletion of recording-adopted retained audio after Source confirmation or TTL, idempotently without deleting the recording or transcript row.
+16. Slice 6 owns lifecycle deletion of recording-adopted retained audio after Source confirmation or TTL, idempotently without deleting the recording or transcript row.
 
 ### Persistent transcription-run states
 
@@ -168,9 +167,10 @@ Do not project a retryable attempt failure as `recordings.status = 'failed'`. Cl
 The current migration chain preserves the foundational `0049_recording_ingest_readiness.sql` and
 `0050_recording_media_preparation_version.sql` contracts. Slice 4 adds
 `0051_recording_upload_operations.sql` for workspace-scoped logical upload ownership and immutable
-attempt candidates, plus `0052_recording_upload_candidate_cleanup_schedule.sql` for bounded candidate
-cleanup retries. `schema.sql` and contract/version metadata track
-`0052_recording_upload_candidate_cleanup_schedule` as the current migration head.
+attempt candidates, `0052_recording_upload_candidate_cleanup_schedule.sql` for bounded candidate
+cleanup retries, and `0053_recording_audio_cleanup_backfill.sql` for legacy Source-confirmed audio
+unavailability. `schema.sql` and contract/version metadata track
+`0053_recording_audio_cleanup_backfill` as the current migration head.
 
 The foundational 0049/0050 schema contract includes:
 
@@ -300,7 +300,7 @@ Use audio lifecycle states `not_retained`, `retained`, `pending`, `deleting`, `d
 ### Distinct cleanup authorities
 
 - Slice 4 cleans only obsolete, unadopted physical upload-attempt candidates, with bounded retries and a durable adoption/reference recheck before deletion.
-- Slice 6, which remains future work, owns lifecycle deletion of recording-adopted retained audio after Source confirmation or TTL. These authorities must not be merged.
+- Slice 6 owns lifecycle deletion of recording-adopted retained audio after Source confirmation or TTL. These authorities remain separate.
 
 ### Slice 6 retained-audio cleanup policy
 
@@ -474,6 +474,8 @@ These are reviewable commit boundaries, not mandatory PR boundaries. Prefer one 
 **Validation gates:** frontend unit/route-visible tests, API contract tests, manual browser smoke with injected backend states, and Terra/high UX/state integration review.
 
 ### Slice 6 — Source-confirmation deletion and stale cleanup
+
+**Status:** Implemented locally; terminal validation and narrow Sol/high review pending.
 
 **Scope**
 

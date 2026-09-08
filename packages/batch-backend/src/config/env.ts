@@ -67,6 +67,8 @@ export interface BatchBackendConfig {
   recordings: {
     maxFileSize: number;
     diskReserveBytes: number;
+    audioCleanupEnabled: boolean;
+    audioRecoveryTtlDays: number;
   };
   deepgram: {
     apiKey?: string;
@@ -355,6 +357,23 @@ function uniqueStringList(values: string[]): string[] {
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
 }
 
+function readStrictBoolean(name: string, fallback: boolean): boolean {
+  const raw = process.env[name]?.trim().toLowerCase();
+  if (!raw) return fallback;
+  if (raw === '1' || raw === 'true') return true;
+  if (raw === '0' || raw === 'false') return false;
+  throw new Error(`${name} must be true, false, 1, or 0`);
+}
+
+function readStrictInteger(name: string, fallback: number): number {
+  const raw = process.env[name]?.trim();
+  if (!raw) return fallback;
+  if (!/^-?\d+$/u.test(raw)) throw new Error(`${name} must be an integer`);
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value)) throw new Error(`${name} must be an integer`);
+  return value;
+}
+
 // loadConfig.declaration()
 export function loadConfig(): BatchBackendConfig {
   const nodeEnv = (process.env.NODE_ENV as NodeEnv) || 'development';
@@ -407,7 +426,10 @@ export function loadConfig(): BatchBackendConfig {
   // Queue
   const queueName = readString('BATCH_JOBS_QUEUE_NAME', 'esl-jobs')!;
   const transcribeQueueName = readString('TRANSCRIBE_QUEUE_NAME', 'transcribe-queue')!;
-  const transcribeReconciliationIntervalMs = readInt('TRANSCRIBE_RECONCILIATION_INTERVAL_MS', 30_000);
+  const transcribeReconciliationIntervalMs = readInt(
+    'TRANSCRIBE_RECONCILIATION_INTERVAL_MS',
+    30_000,
+  );
   const transcribeReconciliationBatchSize = readInt('TRANSCRIBE_RECONCILIATION_BATCH_SIZE', 100);
   const studentMemoryQueueName = readString('STUDENT_MEMORY_QUEUE_NAME', 'student-memory-queue')!;
   const studentMemoryMaxConcurrency = readInt('STUDENT_MEMORY_MAX_CONCURRENCY', 2);
@@ -421,6 +443,11 @@ export function loadConfig(): BatchBackendConfig {
     'RECORDINGS_DISK_RESERVE_BYTES',
     DEFAULT_RECORDING_UPLOAD_DISK_RESERVE_BYTES,
   );
+  const recordingAudioCleanupEnabled = readStrictBoolean('RECORDING_AUDIO_CLEANUP_ENABLED', false);
+  const recordingAudioRecoveryTtlDays = readStrictInteger('RECORDING_AUDIO_RECOVERY_TTL_DAYS', 7);
+  if (recordingAudioRecoveryTtlDays < 1 || recordingAudioRecoveryTtlDays > 3650) {
+    throw new Error('RECORDING_AUDIO_RECOVERY_TTL_DAYS must be between 1 and 3650');
+  }
   const transcribeMode = readString('TRANSCRIBE_MODE', 'timeline') as 'timeline' | 'stack';
   if (transcribeMode !== 'timeline' && transcribeMode !== 'stack') {
     throw new Error('TRANSCRIBE_MODE must be "timeline" or "stack"');
@@ -870,6 +897,8 @@ export function loadConfig(): BatchBackendConfig {
     recordings: {
       maxFileSize: recordingsMaxFileSize,
       diskReserveBytes: recordingsDiskReserveBytes,
+      audioCleanupEnabled: recordingAudioCleanupEnabled,
+      audioRecoveryTtlDays: recordingAudioRecoveryTtlDays,
     },
     deepgram: {
       apiKey: deepgramApiKey,

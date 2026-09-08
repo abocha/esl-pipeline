@@ -381,6 +381,21 @@ async function confirmLockedSource(
     }
   }
 
+  // Source confirmation and the retained-audio deletion request are one
+  // authoritative transaction. Replays repair a missing request timestamp but
+  // never reset attempts or move an in-progress/final lifecycle backwards.
+  await client.query(
+    `UPDATE recordings
+     SET audio_lifecycle = CASE WHEN audio_lifecycle = 'retained' THEN 'pending' ELSE audio_lifecycle END,
+         audio_deletion_requested_at = CASE
+           WHEN audio_lifecycle = 'not_retained' THEN audio_deletion_requested_at
+           ELSE COALESCE(audio_deletion_requested_at, now())
+         END,
+         updated_at = CASE WHEN audio_lifecycle = 'retained' THEN now() ELSE updated_at END
+     WHERE id = $1`,
+    [request.recordingId],
+  );
+
   const source = {
     lessonId: request.lessonId,
     recordingId: request.recordingId,
@@ -1462,17 +1477,17 @@ function shareJobMatchesSession(job: JobRecord, session: AssignmentSessionRecord
   const create = session.confirmed.create;
   return Boolean(
     source &&
-    create &&
-    job.id === session.shareJobId &&
-    job.userId === session.userId &&
-    job.studentId === session.studentId &&
-    job.recordingId === source.recordingId &&
-    job.transcriptId === source.transcriptId &&
-    job.promptPackageId === create.promptPackageId &&
-    job.draftId === create.draftId &&
-    job.lessonId === source.lessonId &&
-    job.mdStorageUri === create.draftStorageUri &&
-    job.sourceJobId === null,
+      create &&
+      job.id === session.shareJobId &&
+      job.userId === session.userId &&
+      job.studentId === session.studentId &&
+      job.recordingId === source.recordingId &&
+      job.transcriptId === source.transcriptId &&
+      job.promptPackageId === create.promptPackageId &&
+      job.draftId === create.draftId &&
+      job.lessonId === source.lessonId &&
+      job.mdStorageUri === create.draftStorageUri &&
+      job.sourceJobId === null,
   );
 }
 

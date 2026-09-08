@@ -7,13 +7,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { StorageConfigurationService } from '@esl-pipeline/shared-infrastructure';
 
+import { logger } from '../src/infrastructure/logger.js';
 import {
-  DEFAULT_PROVIDER_SUBMISSION_URL_EXPIRY_SECONDS,
+  assertRecordingOwnedAudioUri,
   createTranscriptionStorageForUri,
+  DEFAULT_PROVIDER_SUBMISSION_URL_EXPIRY_SECONDS,
   FilesystemTranscriptionStorage,
   S3TranscriptionStorage,
 } from '../src/infrastructure/transcription-storage.js';
-import { logger } from '../src/infrastructure/logger.js';
 
 async function createTempDir(): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), 'esl-transcription-'));
@@ -133,6 +134,74 @@ describe('infrastructure/transcription-storage', () => {
     expect(result.uri).toBe(
       'local://workspaces/workspace-1/recordings/r-1/candidates/attempt-1/audio.opus',
     );
+  });
+
+  it('deletes recording-owned filesystem audio idempotently while retaining transcript text', async () => {
+    tempDir = await createTempDir();
+    const storage = new FilesystemTranscriptionStorage(tempDir);
+    const audio = await storage.putAudio({
+      workspaceId: 'workspace-1',
+      recordingId: 'recording-1',
+      stream: Readable.from([Buffer.from('audio')]),
+      extension: '.mp3',
+    });
+    const transcript = await storage.putTranscript({ transcriptId: 'transcript-1', text: 'text' });
+
+    await expect(storage.delete(audio.uri)).resolves.toBeUndefined();
+    await expect(storage.delete(audio.uri)).resolves.toBeUndefined();
+    await expect(storage.getText(transcript.uri)).resolves.toBe('text');
+  });
+
+  it('accepts only the exact recording-owned canonical or adopted-candidate URI', () => {
+    expect(() =>
+      assertRecordingOwnedAudioUri(
+        'local://workspaces/workspace-1/recordings/recording-1/audio.mp3',
+        'workspace-1',
+        'recording-1',
+      ),
+    ).not.toThrow();
+    expect(() =>
+      assertRecordingOwnedAudioUri(
+        's3://bucket/prefix/workspaces/workspace-1/recordings/recording-1/candidates/attempt-1/audio.m4a',
+        'workspace-1',
+        'recording-1',
+      ),
+    ).not.toThrow();
+    expect(() =>
+      assertRecordingOwnedAudioUri(
+        'local://recordings/recording-1.mp3',
+        'workspace-1',
+        'recording-1',
+      ),
+    ).not.toThrow();
+    expect(() =>
+      assertRecordingOwnedAudioUri(
+        's3://bucket/prefix/recordings/recording-1.m4a',
+        'workspace-1',
+        'recording-1',
+      ),
+    ).not.toThrow();
+    expect(() =>
+      assertRecordingOwnedAudioUri(
+        'local://workspaces/workspace-1/recordings/other/audio.mp3',
+        'workspace-1',
+        'recording-1',
+      ),
+    ).toThrow(/does not belong/i);
+    expect(() =>
+      assertRecordingOwnedAudioUri(
+        'local://workspaces/workspace-1/recordings/recording-1/candidates/attempt-1/transcript.txt',
+        'workspace-1',
+        'recording-1',
+      ),
+    ).toThrow(/does not belong/i);
+    expect(() =>
+      assertRecordingOwnedAudioUri(
+        'local://recordings/other-recording.mp3',
+        'workspace-1',
+        'recording-1',
+      ),
+    ).toThrow(/does not belong/i);
   });
 
   it.each([
@@ -492,6 +561,23 @@ describe('infrastructure/transcription-storage', () => {
       extension: '.opus',
     });
     expect(adapter.deleteFile).not.toHaveBeenCalled();
+  });
+
+  it('treats S3 DeleteObject success, including an absent object, as idempotent success', async () => {
+    const storage = createS3Storage();
+    const deleteFile = vi.fn(async () => undefined);
+    replaceS3Adapter(storage, {
+      uploadFile: vi.fn(async () => undefined),
+      deleteFile,
+    });
+    const uri = 's3://bucket/workspaces/workspace-1/recordings/recording-1/audio.mp3';
+
+    await expect(storage.delete(uri)).resolves.toBeUndefined();
+    await expect(storage.delete(uri)).resolves.toBeUndefined();
+    expect(deleteFile).toHaveBeenCalledTimes(2);
+    expect(deleteFile).toHaveBeenCalledWith(
+      'workspaces/workspace-1/recordings/recording-1/audio.mp3',
+    );
   });
 
   it('logs a failed S3 compensation but preserves the upload error', async () => {

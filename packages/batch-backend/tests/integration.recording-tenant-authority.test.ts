@@ -17,8 +17,8 @@ import { getJobProvenance } from '../src/application/get-job-provenance.js';
 import { getJobStatus } from '../src/application/get-job-status.js';
 import { rerun } from '../src/application/job-actions/rerun.js';
 import { jobRecordToDto } from '../src/application/job-dto.js';
-import { retryRecordingTranscription } from '../src/application/retry-recording-transcription.js';
 import { reconcileUploadCandidates } from '../src/application/reconcile-upload-candidates.js';
+import { retryRecordingTranscription } from '../src/application/retry-recording-transcription.js';
 import {
   confirmAssignmentSessionStepPersistence,
   confirmStudentAssignmentSession,
@@ -158,6 +158,17 @@ describe('recording tenant authority', () => {
         },
       }),
     ).rejects.toMatchObject({ code: 'ASSIGNMENT_STEP_ARTIFACT_NOT_FOUND' });
+    const foreignAudio = await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+      client.query(
+        `SELECT audio_lifecycle, audio_deletion_requested_at
+         FROM recordings WHERE id = $1`,
+        [recordingB.id],
+      ),
+    );
+    expect(foreignAudio.rows[0]).toEqual({
+      audio_lifecycle: 'retained',
+      audio_deletion_requested_at: null,
+    });
   });
 
   it('rejects mixed-workspace job lineage before authenticated job materialization', async () => {

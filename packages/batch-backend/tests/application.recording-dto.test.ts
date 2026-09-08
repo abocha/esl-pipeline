@@ -66,6 +66,23 @@ describe('recordingToDto canonical projection', () => {
     });
   });
 
+  it.each(['pending', 'deleting', 'deleted', 'delete_failed'] as const)(
+    'reports %s retained audio as unavailable before or after physical deletion',
+    (audioLifecycle) => {
+      expect(
+        recordingToDto(
+          {
+            ...recording,
+            storageUri: audioLifecycle === 'deleted' ? null : recording.storageUri,
+            audioLifecycle,
+            status: 'transcribed',
+          },
+          null,
+        ),
+      ).toMatchObject({ audioLifecycle, audioAvailable: false });
+    },
+  );
+
   it('exposes only stable terminal error codes', () => {
     expect(
       recordingToDto({ ...recording, status: 'failed' }, run('failed', 'speakers_not_separated')),

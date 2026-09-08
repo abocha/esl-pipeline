@@ -116,6 +116,12 @@ Primary groups:
   - `PG_*`, `REDIS_*`, `BATCH_JOBS_QUEUE_NAME`, `TRANSCRIBE_QUEUE_NAME`
 - Worker/runtime:
   - `WORKER_CONCURRENCY`, `MAX_CONCURRENT_FFMPEG`, `FILESYSTEM_UPLOAD_DIR`, `PIPELINE_CWD`
+- Recording audio retention:
+  - `RECORDING_AUDIO_CLEANUP_ENABLED` defaults to `false`; the transcribe worker does not claim or
+    physically delete recording-owned audio until an operator enables it after rehearsal.
+  - `RECORDING_AUDIO_RECOVERY_TTL_DAYS` defaults to `7` and must be an integer from 1 through 3650.
+  - Use the [recording-audio cleanup runbook](../operations/recording-audio-cleanup.md) before
+    enabling cleanup.
 - Auth/security/uploads:
   - `JWT_*`, `REFRESH_*`, `ENABLE_*`, `CORS_*`, upload limits
 
