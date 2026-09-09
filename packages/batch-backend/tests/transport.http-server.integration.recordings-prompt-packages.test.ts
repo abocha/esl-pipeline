@@ -1,5 +1,8 @@
+import { randomUUID } from 'node:crypto';
+
 import type { InsertRecordingParams } from '../src/domain/recording-repository.js';
 import type { InsertTranscriptParams } from '../src/domain/transcript-repository.js';
+import * as recordingUploadOperationRepositoryModule from '../src/domain/recording-upload-operation-repository.js';
 import { describeHttpServerIntegrationSuite } from './transport.http-server.integration.harness.js';
 
 describeHttpServerIntegrationSuite(
@@ -24,6 +27,80 @@ describeHttpServerIntegrationSuite(
     updateRecordingTranscriptModule,
     vi,
   }) => {
+    vi.spyOn(
+      recordingUploadOperationRepositoryModule,
+      'beginRecordingUploadOperation',
+    ).mockImplementation(
+      async (context: recordingUploadOperationRepositoryModule.RecordingUploadOperationContext) => ({
+        kind: 'claimed',
+        operation: {
+          ...context,
+          id: randomUUID(),
+          recordingId: randomUUID(),
+          state: 'processing',
+          attemptToken: randomUUID(),
+          attemptExpiresAt: new Date(Date.now() + 60_000),
+          finalRecordingId: null,
+        },
+        obsoleteCandidateUris: [],
+      }),
+    );
+    vi.spyOn(
+      recordingUploadOperationRepositoryModule,
+      'recordUploadAttemptCandidate',
+    ).mockResolvedValue(true);
+
+    function injectRecordingUpload(
+      options: {
+        method: 'POST';
+        url: string;
+        headers?: Record<string, string>;
+        payload?: Buffer;
+      },
+      fixture: { operationId?: string | null } = {},
+    ) {
+      const existingOperationId = options.headers?.['x-upload-operation-id'];
+      const operationId =
+        fixture.operationId === null
+          ? null
+          : (fixture.operationId ?? existingOperationId ?? randomUUID());
+      return app.inject({
+        ...options,
+        headers: {
+          ...options.headers,
+          ...(operationId ? { 'x-upload-operation-id': operationId } : {}),
+        },
+      });
+    }
+
+    function mockCanonicalUploadProjection(
+      resolveIds: () => { recordingId: string; transcriptId: string },
+    ) {
+      vi.spyOn(getRecordingModule, 'getRecording').mockImplementationOnce(async () => {
+        const { recordingId, transcriptId } = resolveIds();
+        return {
+          recordingId,
+          transcriptId,
+          source: 'upload',
+          status: 'transcribed',
+          productState: 'ready',
+          runState: null,
+          error: null,
+          errorCode: null,
+          studentId: deriveStudentId('Anna'),
+          displayName: 'lesson.mp3',
+          durationSec: 90,
+          channels: 1,
+          audioTopology: 'mixed_recording',
+          audioLifecycle: 'not_retained',
+          audioAvailable: false,
+          bytes: 1024,
+          createdAt: '2024-01-02T00:00:00.000Z',
+          updatedAt: '2024-01-02T00:00:00.000Z',
+        };
+      });
+    }
+
     vi.spyOn(recordingRepositoryModule, 'insertCachedRecordingLineage').mockImplementation(
       async ({
         recording,
@@ -137,7 +214,7 @@ describeHttpServerIntegrationSuite(
         Buffer.from(`\r\n--${payloadBoundary}--\r\n`),
       ]);
       const upload = () =>
-        app.inject({
+        injectRecordingUpload({
           method: 'POST',
           url: `/recordings/upload?studentId=${studentId}`,
           headers: { 'content-type': `multipart/form-data; boundary=${payloadBoundary}` },
@@ -207,6 +284,10 @@ describeHttpServerIntegrationSuite(
             updatedAt: new Date('2024-01-02T00:00:00.000Z'),
           }) as never,
       );
+      mockCanonicalUploadProjection(() => ({
+        recordingId: attempted!.recording.id!,
+        transcriptId: attempted!.transcript.id!,
+      }));
 
       const response = await fault.upload();
 
@@ -292,7 +373,7 @@ describeHttpServerIntegrationSuite(
         Buffer.from(`\r\n--${boundary}--\r\n`),
       ]);
 
-      const response = await app.inject({
+      const response = await injectRecordingUpload({
         method: 'POST',
         url: `/recordings/upload?studentId=${deriveStudentId('Anna')}&audioTopology=trusted_split_channels&sttProvider=elevenlabs`,
         headers: {
@@ -378,7 +459,7 @@ describeHttpServerIntegrationSuite(
         Buffer.from(`\r\n--${boundary}--\r\n`),
       ]);
 
-      const response = await app.inject({
+      const response = await injectRecordingUpload({
         method: 'POST',
         url: '/recordings/upload',
         headers: {
@@ -420,7 +501,7 @@ describeHttpServerIntegrationSuite(
         Buffer.from(`\r\n--${boundary}--\r\n`),
       ]);
 
-      const response = await app.inject({
+      const response = await injectRecordingUpload({
         method: 'POST',
         url: `/recordings/upload?studentId=${deriveStudentId('Anna')}`,
         headers: { 'content-type': `multipart/form-data; boundary=${boundary}` },
@@ -462,7 +543,7 @@ describeHttpServerIntegrationSuite(
         Buffer.from(`\r\n--${boundary}--\r\n`),
       ]);
 
-      const response = await app.inject({
+      const response = await injectRecordingUpload({
         method: 'POST',
         url: `/recordings/upload?studentId=${deriveStudentId('Anna')}`,
         headers: { 'content-type': `multipart/form-data; boundary=${boundary}` },
@@ -498,7 +579,7 @@ describeHttpServerIntegrationSuite(
         Buffer.from(`\r\n--${boundary}--\r\n`),
       ]);
 
-      const response = await app.inject({
+      const response = await injectRecordingUpload({
         method: 'POST',
         url: `/recordings/upload?studentId=${deriveStudentId('Anna')}`,
         headers: { 'content-type': `multipart/form-data; boundary=${boundary}` },
@@ -641,6 +722,10 @@ describeHttpServerIntegrationSuite(
         createdAt: new Date('2024-01-02T00:00:00.000Z'),
         updatedAt: new Date('2024-01-02T00:00:00.000Z'),
       });
+      mockCanonicalUploadProjection(() => ({
+        recordingId: 'recording-bella',
+        transcriptId: 'transcript-bella',
+      }));
 
       const boundary = '----esl-test-boundary';
       const payload = Buffer.concat([
@@ -653,7 +738,7 @@ describeHttpServerIntegrationSuite(
         Buffer.from(`\r\n--${boundary}--\r\n`),
       ]);
 
-      const response = await app.inject({
+      const response = await injectRecordingUpload({
         method: 'POST',
         url: `/recordings/upload?studentId=${requestedStudentId}`,
         headers: {
@@ -841,6 +926,10 @@ describeHttpServerIntegrationSuite(
         createdAt: new Date('2024-01-03T00:00:00.000Z'),
         updatedAt: new Date('2024-01-03T00:00:00.000Z'),
       });
+      mockCanonicalUploadProjection(() => ({
+        recordingId: 'recording-reused',
+        transcriptId: 'transcript-reused',
+      }));
 
       const boundary = '----esl-test-boundary-2';
       const payload = Buffer.concat([
@@ -853,7 +942,7 @@ describeHttpServerIntegrationSuite(
         Buffer.from(`\r\n--${boundary}--\r\n`),
       ]);
 
-      const response = await app.inject({
+      const response = await injectRecordingUpload({
         method: 'POST',
         url: `/recordings/upload?studentId=${deriveStudentId('Anna')}`,
         headers: {
@@ -1023,6 +1112,10 @@ describeHttpServerIntegrationSuite(
         createdAt: new Date('2024-01-03T00:00:00.000Z'),
         updatedAt: new Date('2024-01-03T00:00:00.000Z'),
       });
+      mockCanonicalUploadProjection(() => ({
+        recordingId: 'recording-reused-2',
+        transcriptId: 'transcript-reused-2',
+      }));
 
       const boundary = '----esl-test-boundary-3';
       const payload = Buffer.concat([
@@ -1035,7 +1128,7 @@ describeHttpServerIntegrationSuite(
         Buffer.from(`\r\n--${boundary}--\r\n`),
       ]);
 
-      const response = await app.inject({
+      const response = await injectRecordingUpload({
         method: 'POST',
         url: `/recordings/upload?studentId=${deriveStudentId('Anna')}&sttProvider=elevenlabs`,
         headers: {
@@ -1228,128 +1321,149 @@ describeHttpServerIntegrationSuite(
       expect(response.json()).toEqual({ error: 'not_found' });
     });
 
-    it('POST /recordings/:id/transcribe enqueues retry', async () => {
+    it('POST /recordings/:id/transcribe rejects terminal normal-user retry', async () => {
       const retryRecording = vi.spyOn(retryRecordingModule, 'retryRecordingTranscription');
       const getRecordingById = vi.spyOn(recordingRepositoryModule, 'getRecordingByIdForWorkspace');
-      retryRecording.mockClear();
-      getRecordingById.mockResolvedValueOnce(null);
-      retryRecording.mockResolvedValue({
-        recordingId: 'recording-1',
-        status: 'queued',
-        transcriptId: null,
-        error: null,
+      getRecordingById.mockResolvedValue({
+        id: 'recording-1',
+        workspaceId: '00000000-0000-4000-8000-000000000001',
         source: 'upload',
         studentId: null,
-        displayName: 'recording-1.opus',
+        sourcePath: 'recording-1.opus',
+        storageUri: 'memory://recordings/recording-1.opus',
+        sha256: 'recording-sha',
+        audioLifecycle: 'retained',
         durationSec: null,
         channels: null,
+        audioTopology: 'mixed_recording',
+        mediaPreparationVersion: 'recording-media-v1',
         bytes: 1234,
-        createdAt: '2024-01-01T00:00:00.000Z',
-        updatedAt: '2024-01-01T00:05:00.000Z',
+        status: 'failed',
+        error: 'previous failure',
+        createdAt: new Date('2024-01-01T00:00:00.000Z'),
+        updatedAt: new Date('2024-01-01T00:05:00.000Z'),
       });
 
-      const response = await app.inject({
-        method: 'POST',
-        url: '/recordings/recording-1/transcribe',
-      });
+      try {
+        const response = await app.inject({
+          method: 'POST',
+          url: '/recordings/recording-1/transcribe',
+        });
 
-      expect(response.statusCode).toBe(200);
-      expect(response.json()).toEqual({
-        recordingId: 'recording-1',
-        status: 'queued',
-        transcriptId: null,
-        error: null,
-        source: 'upload',
-        studentId: null,
-        displayName: 'recording-1.opus',
-        durationSec: null,
-        channels: null,
-        bytes: 1234,
-        createdAt: '2024-01-01T00:00:00.000Z',
-        updatedAt: '2024-01-01T00:05:00.000Z',
-      });
-      expect(retryRecording).toHaveBeenCalledWith(
-        'recording-1',
-        expect.objectContaining({
-          workspaceId: '00000000-0000-4000-8000-000000000001',
-          sttProvider: undefined,
-        }),
-        expect.objectContaining({ enqueue: expect.any(Function) }),
-      );
+        expect(response.statusCode).toBe(400);
+        expect(response.json()).toEqual({
+          error: 'validation_failed',
+          code: 'recording_retry_not_supported',
+          message:
+            'Automatic transcription recovery is platform-managed; upload the recording again after terminal failure.',
+        });
+        expect(retryRecording).toHaveBeenCalledWith(
+          'recording-1',
+          expect.objectContaining({
+            workspaceId: '00000000-0000-4000-8000-000000000001',
+            sttProvider: undefined,
+          }),
+          expect.objectContaining({ enqueue: expect.any(Function) }),
+        );
+      } finally {
+        retryRecording.mockRestore();
+        getRecordingById.mockRestore();
+      }
     });
 
-    it('POST /recordings/:id/transcribe forwards explicit STT provider override', async () => {
+    it('POST /recordings/:id/transcribe does not let a provider override restore normal-user retry', async () => {
       const retryRecording = vi.spyOn(retryRecordingModule, 'retryRecordingTranscription');
       const getRecordingById = vi.spyOn(recordingRepositoryModule, 'getRecordingByIdForWorkspace');
-      retryRecording.mockClear();
-      getRecordingById.mockResolvedValueOnce(null);
-      retryRecording.mockResolvedValue({
-        recordingId: 'recording-1',
-        status: 'queued',
-        transcriptId: null,
-        error: null,
+      getRecordingById.mockResolvedValue({
+        id: 'recording-1',
+        workspaceId: '00000000-0000-4000-8000-000000000001',
         source: 'upload',
         studentId: null,
-        displayName: 'recording-1.opus',
+        sourcePath: 'recording-1.opus',
+        storageUri: 'memory://recordings/recording-1.opus',
+        sha256: 'recording-sha',
+        audioLifecycle: 'retained',
         durationSec: null,
         channels: null,
+        audioTopology: 'mixed_recording',
+        mediaPreparationVersion: 'recording-media-v1',
         bytes: 1234,
-        createdAt: '2024-01-01T00:00:00.000Z',
-        updatedAt: '2024-01-01T00:05:00.000Z',
+        status: 'failed',
+        error: 'previous failure',
+        createdAt: new Date('2024-01-01T00:00:00.000Z'),
+        updatedAt: new Date('2024-01-01T00:05:00.000Z'),
       });
 
-      const response = await app.inject({
-        method: 'POST',
-        url: '/recordings/recording-1/transcribe',
-        payload: { sttProvider: 'elevenlabs' },
-      });
+      try {
+        const response = await app.inject({
+          method: 'POST',
+          url: '/recordings/recording-1/transcribe',
+          payload: { sttProvider: 'elevenlabs' },
+        });
 
-      expect(response.statusCode).toBe(200);
-      expect(retryRecording).toHaveBeenCalledWith(
-        'recording-1',
-        expect.objectContaining({
-          workspaceId: '00000000-0000-4000-8000-000000000001',
-          sttProvider: 'elevenlabs',
-        }),
-        expect.objectContaining({ enqueue: expect.any(Function) }),
-      );
+        expect(response.statusCode).toBe(400);
+        expect(response.json()).toEqual({
+          error: 'validation_failed',
+          code: 'recording_retry_not_supported',
+          message:
+            'Automatic transcription recovery is platform-managed; upload the recording again after terminal failure.',
+        });
+        expect(retryRecording).toHaveBeenCalledWith(
+          'recording-1',
+          expect.objectContaining({
+            workspaceId: '00000000-0000-4000-8000-000000000001',
+            sttProvider: 'elevenlabs',
+          }),
+          expect.objectContaining({ enqueue: expect.any(Function) }),
+        );
+      } finally {
+        retryRecording.mockRestore();
+        getRecordingById.mockRestore();
+      }
     });
 
     it('POST /recordings/:id/transcribe rejects an incompatible trusted provider before retry work starts', async () => {
       const retryRecording = vi.spyOn(retryRecordingModule, 'retryRecordingTranscription');
       const getRecordingById = vi.spyOn(recordingRepositoryModule, 'getRecordingByIdForWorkspace');
-      retryRecording.mockClear();
       getRecordingById.mockResolvedValueOnce({
         id: 'recording-trusted',
+        workspaceId: '00000000-0000-4000-8000-000000000001',
         source: 'upload',
         studentId: null,
         sourcePath: 'trusted.wav',
         storageUri: 'memory://recordings/recording-trusted.wav',
+        audioLifecycle: 'retained',
         sha256: 'trusted-sha',
         bytes: 1024,
         durationSec: 60,
         channels: 2,
         audioTopology: 'trusted_split_channels',
+        mediaPreparationVersion: 'recording-media-v1',
         status: 'failed',
         error: 'previous failure',
         createdAt: new Date('2024-01-01T00:00:00.000Z'),
         updatedAt: new Date('2024-01-01T00:00:00.000Z'),
       });
 
-      const response = await app.inject({
-        method: 'POST',
-        url: '/recordings/recording-trusted/transcribe',
-        payload: { sttProvider: 'elevenlabs' },
-      });
+      try {
+        const response = await app.inject({
+          method: 'POST',
+          url: '/recordings/recording-trusted/transcribe',
+          payload: { sttProvider: 'elevenlabs' },
+        });
 
-      expect(response.statusCode).toBe(400);
-      expect(response.json()).toEqual({
-        error: 'validation_failed',
-        code: 'trusted_split_provider_incompatible',
-        message:
-          'Trusted split-channel recordings require the Deepgram multichannel route; elevenlabs cannot prove the declared channel contract.',
-      });
-      expect(retryRecording).not.toHaveBeenCalled();
+        expect(response.statusCode).toBe(400);
+        expect(response.json()).toEqual({
+          error: 'validation_failed',
+          code: 'trusted_split_provider_incompatible',
+          message:
+            'Trusted split-channel recordings require the Deepgram multichannel route; elevenlabs cannot prove the declared channel contract.',
+        });
+        expect(retryRecording).not.toHaveBeenCalled();
+      } finally {
+        retryRecording.mockRestore();
+        getRecordingById.mockRestore();
+      }
     });
 
     it('GET /recordings/:id/transcript returns transcript payload', async () => {

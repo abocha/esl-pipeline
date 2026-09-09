@@ -5,7 +5,7 @@ import { describeHttpServerIntegrationSuite } from './transport.http-server.inte
 
 describeHttpServerIntegrationSuite(
   'transport/http-server - integration (in-process) [manual-transcript-source]',
-  ({ app, authMiddlewareModule, expect, it, rateLimitMocks, vi }) => {
+  ({ app, authMiddlewareModule, expect, getRecordingModule, it, rateLimitMocks, vi }) => {
     it('POST /recordings/transcript-source requires authentication', async () => {
       vi.mocked(authMiddlewareModule.authenticate).mockImplementationOnce(
         (_request: FastifyRequest, reply: FastifyReply) => {
@@ -112,6 +112,26 @@ describeHttpServerIntegrationSuite(
           updatedAt: now,
         },
       });
+      vi.spyOn(getRecordingModule, 'getRecording').mockResolvedValueOnce({
+        recordingId: '22222222-2222-4222-8222-222222222222',
+        transcriptId: '33333333-3333-4333-8333-333333333333',
+        source: 'manual_transcript',
+        status: 'transcribed',
+        productState: 'ready',
+        runState: null,
+        error: null,
+        errorCode: null,
+        studentId: '11111111-1111-4111-8111-111111111111',
+        displayName: 'Lesson on travel',
+        durationSec: null,
+        channels: null,
+        audioTopology: null,
+        audioLifecycle: 'not_retained',
+        audioAvailable: false,
+        bytes: 25,
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString(),
+      });
 
       const response = await app.inject({
         method: 'POST',
@@ -132,6 +152,10 @@ describeHttpServerIntegrationSuite(
         studentId: '11111111-1111-4111-8111-111111111111',
         displayName: 'Lesson on travel',
       });
+      expect(getRecordingModule.getRecording).toHaveBeenCalledWith(
+        '22222222-2222-4222-8222-222222222222',
+        '00000000-0000-4000-8000-000000000001',
+      );
     });
   },
 );
