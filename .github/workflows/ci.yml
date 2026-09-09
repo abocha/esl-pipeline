@@ -259,6 +259,12 @@ jobs:
           set -o pipefail
           pnpm lint 2>&1 | tee tmp/ci-logs/static-checks/lint.log
 
+      - name: Install FFmpeg for recording media tests
+        if: ${{ fromJSON(needs.change-scope.outputs.runtime) }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ffmpeg
+
       - name: Unit tests
         id: unit_tests
         if: ${{ fromJSON(needs.change-scope.outputs.runtime) }}
