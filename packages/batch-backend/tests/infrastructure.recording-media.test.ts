@@ -29,6 +29,12 @@ const execFile = promisify(execFileCallback);
 // product upload cap. It exercises enough chunks to catch whole-file collectors
 // without turning a unit test into a multi-gigabyte disk write.
 const STREAMING_MEMORY_REGRESSION_BYTES = 100 * 1024 * 1024;
+const statfsWithUploadCapacity = async () => ({
+  bavail:
+    BigInt(DEFAULT_RECORDING_UPLOAD_MAX_BYTES) +
+    BigInt(DEFAULT_RECORDING_UPLOAD_DISK_RESERVE_BYTES),
+  bsize: 1n,
+});
 
 const tempDirectories: string[] = [];
 
@@ -129,7 +135,11 @@ describe('recording media boundary', () => {
       }),
     );
 
-    const spooled = await spoolRecordingUpload({ input: source, temporaryDirectory: directory });
+    const spooled = await spoolRecordingUpload({
+      input: source,
+      temporaryDirectory: directory,
+      statfs: statfsWithUploadCapacity,
+    });
     const expectedHasher = createHash('sha256');
     for (const chunk of chunks) expectedHasher.update(chunk);
     const expected = expectedHasher.digest('hex');
@@ -161,7 +171,11 @@ describe('recording media boundary', () => {
       },
     });
 
-    const spooled = await spoolRecordingUpload({ input: source, temporaryDirectory: directory });
+    const spooled = await spoolRecordingUpload({
+      input: source,
+      temporaryDirectory: directory,
+      statfs: statfsWithUploadCapacity,
+    });
 
     expect(spooled.bytes).toBe(STREAMING_MEMORY_REGRESSION_BYTES);
     expect(emitted).toBe(chunkCount);
@@ -176,7 +190,12 @@ describe('recording media boundary', () => {
     const source = Readable.from([Buffer.alloc(1024), Buffer.alloc(1)]);
 
     await expect(
-      spoolRecordingUpload({ input: source, temporaryDirectory: directory, maxBytes: 1024 }),
+      spoolRecordingUpload({
+        input: source,
+        temporaryDirectory: directory,
+        maxBytes: 1024,
+        statfs: statfsWithUploadCapacity,
+      }),
     ).rejects.toMatchObject({
       code: 'file_too_large',
     } satisfies Partial<RecordingMediaError>);
@@ -193,7 +212,11 @@ describe('recording media boundary', () => {
     });
 
     await expect(
-      spoolRecordingUpload({ input: source, temporaryDirectory: directory }),
+      spoolRecordingUpload({
+        input: source,
+        temporaryDirectory: directory,
+        statfs: statfsWithUploadCapacity,
+      }),
     ).rejects.toThrow('client disconnected');
     await expect(fs.readdir(directory)).resolves.toEqual([]);
   });
