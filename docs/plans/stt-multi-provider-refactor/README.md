@@ -4,16 +4,18 @@
 
 - Audience: maintainers and speech-runtime agents.
 - Authority Level: active staged roadmap.
-- Last Verified Against: 2026-09-01 repo state and the approved ordinary-ingest Goal Contract.
+- Last Verified Against: 2026-09-09 local Slice 7 closeout and the approved ordinary-ingest Goal Contract.
 - Owner: founder-maintainer + speech-runtime maintainers.
 - Review Cadence: after STT provider or transcription pipeline PRs.
 - Status: `roadmap`.
 - Exit Trigger: archive after ordinary recording ingest is rollout-proven and captured in package READMEs, environment policy, and operations docs.
-- Current Focus: execute the approved ordinary lesson-recording ingest-readiness plan; provider selection and benchmark decisions are closed.
+- Current Focus: preserve local closeout evidence and obtain hosted CI plus separately authorized rollout evidence; provider selection and benchmark decisions are closed.
 
 ## Summary
 
-The provider refactor is complete enough for the locked production routes. The active work is to make ordinary lesson-recording upload safe and routine without reopening provider comparison.
+The provider refactor and local ordinary lesson-recording ingest implementation are closed. The active
+plan remains the rollout authority until hosted CI, production preflight, presigned-S3 fetch, staged
+audio/deletion smoke, and representative export evidence satisfy the Goal Contract.
 
 Current locked decisions:
 

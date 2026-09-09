@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { Accept } from 'react-dropzone';
 
 import type {
   AssignmentSession,
@@ -115,7 +116,12 @@ async function getJobStatusWithRecoveryRetry(jobId: string): Promise<JobStatus> 
   }
 }
 
-const AUDIO_EXTENSIONS = ['.opus'] as const;
+const RECORDING_FILE_ACCEPT = {
+  'audio/*': ['.aac', '.m4a', '.mp3', '.ogg', '.opus', '.wav', '.webm'],
+  'video/mp4': ['.mp4'],
+  'video/quicktime': ['.mov'],
+  'video/webm': ['.webm'],
+} satisfies Accept;
 const FOCUSED_STEP_ORDER: AssignmentStepId[] = [
   'student',
   'source',
@@ -2685,7 +2691,7 @@ export const MinimalAssignment: React.FC = () => {
               }}
               sttProviders={source.sttProviders}
               formatSttProviderLabel={formatSttProviderLabel}
-              audioExtensions={AUDIO_EXTENSIONS}
+              recordingFileAccept={RECORDING_FILE_ACCEPT}
               uploading={source.uploading}
               replacingAudio={source.replacingAudio}
               canReplaceAudio={Boolean(

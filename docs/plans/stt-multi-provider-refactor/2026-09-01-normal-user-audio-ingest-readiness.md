@@ -4,12 +4,12 @@
 
 - Audience: maintainers implementing or reviewing ordinary lesson-recording ingest.
 - Authority Level: approved Goal Contract execution plan.
-- Last Verified Against: 2026-09-07 current `codex/audio-topology` checkout, locally implemented Slices 1–6, and the closed Slice 4/5 semantic reviews.
+- Last Verified Against: 2026-09-09 current `codex/audio-topology` Slice 7 closeout tree and persisted Slice 1–6 validation/review evidence.
 - Owner: founder-maintainer + speech-runtime maintainers.
 - Review Cadence: before implementation and after any material recording, tenant, retry, or retention contract change.
 - Status: `active`.
 - Exit Trigger: archive after implementation is merged, production rollout evidence satisfies the Goal Contract, and active runtime/operations docs own the shipped behavior.
-- Current Focus: validate and review Slice 6 — Source-confirmation deletion and stale cleanup.
+- Current Focus: obtain hosted CI and separately authorized deployment/production rollout evidence; local implementation closeout is complete.
 
 This is the execution strategy beneath the maintainer-approved Goal Contract. It may adapt implementation detail as evidence changes, but it must not change the locked product or architecture decisions below without maintainer approval.
 
@@ -48,10 +48,15 @@ Do not add or reopen:
 
 ### Current campaign status
 
-- Slices 1–6 are implemented locally in the current checkout.
+- Slices 1–7 are implemented locally in the current checkout.
 - The Slice 4 exceptional-risk semantic review is `CLOSED` with no remaining findings.
 - Slice 5 passed its independent Terra/high semantic review.
-- Slice 6 terminal validation and narrow Sol/high exceptional-risk review remain required.
+- Slice 6 focused validation and its narrow Sol/high exceptional-risk review are closed with no
+  remaining findings. Its prior aggregate failure was isolated to an unrelated frontend test that
+  subsequently passed in its owning suite; Slice 7 owns the one final aggregate gate.
+- The exact production Docker runtime passed the synthetic MP4/AAC, MOV/AAC, and WebM/Opus
+  stream-copy gate. Representative conferencing-platform export compatibility is still deferred to
+  rollout evidence.
 - Local and hosted validation status remains evidence for readiness, merge, and rollout; it is not architecture or slice-sequencing state.
 
 ### Already completed or fixed
@@ -62,10 +67,12 @@ Do not add or reopen:
 4. The provider benchmark decision is closed.
 5. The atomic trusted-topology upload serialization defect has been fixed locally on `codex/audio-topology`. This plan assumes that fix is integrated and retains only regression coverage for the upload contract; it does not reimplement it.
 
-### Remaining implementation work
+### Remaining closeout evidence
 
-1. Slice 6 terminal validation and exceptional-risk review must confirm transactional deletion requests, immediate unavailability, TTL/stale safety, multi-worker claiming, and storage deletion semantics.
-2. Slice 7 still owns integrated acceptance, operations, documentation closeout, and separately authorized production evidence.
+1. Hosted PostgreSQL/Redis lanes and the fail-closed `CI gate` remain authoritative merge evidence.
+2. Production read-only migration preflight, snapshot/clone rehearsal, actual presigned-S3 provider
+   fetch, staged end-to-end audio/deletion smoke, and representative source-export compatibility
+   require separate authorization or rollout inputs.
 
 ## 3. Locked product and architecture decisions
 
@@ -521,7 +528,7 @@ These are reviewable commit boundaries, not mandatory PR boundaries. Prefer one 
 
 ### Migration and rollout
 
-1. Migrations 0049–0052 are additive until their guarded workspace backfill, upload-operation ownership, candidate-cleanup, and constraints are verified. Before deployment, run a production read-only preflight for recordings without resolvable student workspaces, duplicate transcripts, active legacy jobs, storage-key distribution, and obsolete upload candidates.
+1. Migrations 0049–0053 are additive until their guarded workspace backfill, upload-operation ownership, candidate-cleanup, retained-audio backfill, and constraints are verified. Before deployment, run a production read-only preflight for recordings without resolvable student workspaces, duplicate transcripts, active legacy jobs, storage-key distribution, obsolete upload candidates, and retained-audio cleanup candidates.
 2. Rehearse the migration on a current production snapshot/synthetic clone. Do not resolve ambiguous ownership automatically; stop for operator mapping or quarantine.
 3. Deploy compatible API and worker images together after migration. Do not let an old unscoped API remain active against the new tenant contract.
 4. Confirm runtime FFmpeg/ffprobe availability, writable temp capacity for configured upload concurrency and the 2 GiB source-file operational limit plus the 10 GiB local-disk reserve, S3 Get/Put/Delete permissions, and presigned URL reachability from ElevenLabs.
@@ -531,7 +538,7 @@ These are reviewable commit boundaries, not mandatory PR boundaries. Prefer one 
 
 ### Rollback
 
-1. Keep migrations 0049–0052 and durable transcript/run data; do not down-migrate or delete evidence.
+1. Keep migrations 0049–0053 and durable transcript/run data; do not down-migrate or delete evidence.
 2. Do not roll back to an API version that permits cross-workspace access. If tenant correctness is uncertain, disable recording intake/worker processing and deploy a forward fix.
 3. A media-preparation problem may be rolled back by narrowing the allowlist to direct audio while preserving tenant/run/retention contracts.
 4. A provider submission or retry problem may pause worker consumption; it must not switch providers automatically or reset reserved submission slots.
@@ -574,5 +581,9 @@ The following are mandatory evidence gates, not architecture blockers:
 
 1. Preserve the locally integrated `codex/audio-topology` atomic upload fix and its regression test through subsequent validation and release evidence.
 2. Run the production read-only migration preflight. Any recording that cannot be mapped to exactly one workspace, or any duplicate transcript winner, requires explicit operator resolution before `NOT NULL`/unique enforcement.
-3. Repeat the synthetic MP4/MOV/WebM stream-copy probe in the exact production Docker runtime. If it fails, ship direct audio only and defer video convenience.
-4. Use mocked request-shape tests to lock the installed SDK's verified `sourceUrl -> source_url` serialization, then use one separately authorized production smoke to prove ElevenLabs can fetch the actual presigned S3 URL. A runtime fetch failure is a rollout gate to diagnose, not permission to restore whole-file buffering.
+3. Preserve the passing exact-production-runtime synthetic MP4/MOV/WebM stream-copy gate for the
+   deployed image. A changed or failing image ships direct audio only and defers video convenience.
+4. Preserve the mocked installed-SDK `sourceUrl -> source_url` request-shape proof, then use one
+   separately authorized production smoke to prove ElevenLabs can fetch the actual presigned S3 URL.
+   A runtime fetch failure is a rollout gate to diagnose, not permission to restore whole-file
+   buffering.
