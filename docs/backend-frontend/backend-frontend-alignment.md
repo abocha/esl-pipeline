@@ -63,10 +63,10 @@ Provider/model detail stays in
   recording-owned deletion; historical confirmed rows are backfilled to that lifecycle without
   changing transcript, Source snapshot, or downstream text lineage.
 - The frontend owns automatic debounce/retry/refresh mechanics and preserves local buffers on
-  conflict. Before Share reservation, the frontend drains pending recovery and returns a dirty
-  session to its earliest reconfirmation boundary; the backend owns confirmation prerequisites,
-  lineage validation, invalidation, stable Share reservation/retry, and the canonical
-  active/completed predicate.
+  conflict. The frontend enables Share only when confirmed recovery and current artifacts are clean;
+  before reservation it drains pending recovery and returns a dirty session to its earliest
+  reconfirmation boundary. The backend owns confirmation prerequisites, lineage validation,
+  invalidation, stable Share reservation/retry, and the canonical active/completed predicate.
 - Routine tutor Save/Refresh responsibility is absent. Stable data refreshes only on load, focus, or
   mutation completion; async recording/job work alone polls. Navigation guards only unrecovered or
   ambiguous work and drains pending recovery before leaving.
