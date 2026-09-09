@@ -5,7 +5,7 @@
 - Audience: maintainers and implementing agents.
 - Read Time: 5 minutes.
 - Authority Level: environment contract reference.
-- Last Verified Against: 2026-07-30 repo state.
+- Last Verified Against: 2026-09-09 recording-ingest closeout state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly or after environment contract changes.
 - Status: `reference`.
@@ -116,12 +116,26 @@ Primary groups:
   - `PG_*`, `REDIS_*`, `BATCH_JOBS_QUEUE_NAME`, `TRANSCRIBE_QUEUE_NAME`
 - Worker/runtime:
   - `WORKER_CONCURRENCY`, `MAX_CONCURRENT_FFMPEG`, `FILESYSTEM_UPLOAD_DIR`, `PIPELINE_CWD`
+- Recording ingest:
+  - `RECORDINGS_MAX_FILE_SIZE` defaults to `2147483648` bytes (2 GiB). The browser applies the
+    shared default before starting a request; a smaller backend override remains authoritative.
+  - `RECORDINGS_DISK_RESERVE_BYTES` defaults to `10737418240` bytes (10 GiB). Admission requires
+    the temp filesystem to retain this reserve after one configured maximum-size upload; it is a
+    point-in-time check, not a cross-request disk reservation.
+  - Probed recording duration is capped at `6000` seconds (100 minutes). FFmpeg and ffprobe
+    must be present in the API/worker runtime, the temp directory must be writable, and
+    `MAX_CONCURRENT_FFMPEG` must fit host CPU and temp capacity.
+  - S3 recording submission requires configured Get/Put/Delete access plus presigned-URL reachability
+    from ElevenLabs. Filesystem submission requires the retained local file to remain readable by the
+    transcribe worker.
 - Recording audio retention:
   - `RECORDING_AUDIO_CLEANUP_ENABLED` defaults to `false`; the transcribe worker does not claim or
     physically delete recording-owned audio until an operator enables it after rehearsal.
   - `RECORDING_AUDIO_RECOVERY_TTL_DAYS` defaults to `7` and must be an integer from 1 through 3650.
   - Use the [recording-audio cleanup runbook](../operations/recording-audio-cleanup.md) before
     enabling cleanup.
+  - Use the [ordinary recording ingest rollout runbook](../operations/ordinary-recording-ingest-rollout.md)
+    for migrations 0049-0053, run/reservation inspection, media-runtime verification, and rollback.
 - Auth/security/uploads:
   - `JWT_*`, `REFRESH_*`, `ENABLE_*`, `CORS_*`, upload limits
 

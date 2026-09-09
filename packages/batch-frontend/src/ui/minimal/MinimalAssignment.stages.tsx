@@ -12,6 +12,7 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import React from 'react';
+import type { Accept } from 'react-dropzone';
 import { Link, useInRouterContext } from 'react-router-dom';
 
 import type {
@@ -111,7 +112,7 @@ interface SourceStageSectionProps {
   onSelectedAudioTopologyChange: (topology: AudioInputTopology) => void;
   sttProviders: readonly SttProvider[];
   formatSttProviderLabel: (provider: SttProvider) => string;
-  audioExtensions: readonly string[];
+  recordingFileAccept: Accept;
   uploading: boolean;
   replacingAudio: boolean;
   canReplaceAudio: boolean;
@@ -813,7 +814,7 @@ export function SourceStageSection({
   onSelectedAudioTopologyChange,
   sttProviders,
   formatSttProviderLabel,
-  audioExtensions,
+  recordingFileAccept,
   uploading,
   replacingAudio,
   canReplaceAudio,
@@ -980,8 +981,8 @@ export function SourceStageSection({
                         ? 'Drop replacement audio'
                         : 'Drop audio file'
                   }
-                  hint="Single file upload"
-                  accept={{ 'audio/*': [...audioExtensions] }}
+                  hint="Single supported recording file"
+                  accept={recordingFileAccept}
                   multiple={false}
                   disabled={readOnly || uploading || !selectedStudentId}
                   onFiles={onFiles}

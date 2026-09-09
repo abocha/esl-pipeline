@@ -119,15 +119,20 @@ vi.mock('../../utils/api', () => ({
 vi.mock('../shared/DropZone', () => ({
   DropZone: ({
     title,
+    accept,
     disabled,
     onFiles,
   }: {
     title: string;
+    accept?: Record<string, string[]>;
     disabled?: boolean;
     onFiles: (files: File[]) => void;
   }) => (
     <button
       type="button"
+      data-accept={Object.entries(accept ?? {})
+        .flatMap(([mime, extensions]) => [mime, ...extensions])
+        .join(',')}
       disabled={disabled}
       onClick={() => {
         onFiles([new File(['audio'], 'lesson.mp3', { type: 'audio/mpeg' })]);

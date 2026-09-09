@@ -5,7 +5,7 @@
 - Audience: AI agents, maintainers.
 - Read Time: 3 minutes.
 - Authority Level: Context baseline.
-- Last Verified Against: 2026-08-14 repo state.
+- Last Verified Against: 2026-09-09 recording-ingest closeout state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: monthly.
 - Status: `active`.
@@ -27,8 +27,9 @@
 - Monorepo with orchestrator-centric pipeline architecture.
 - Batch system is active through the five-step assignment builder: Student, Lesson source, Teaching
   context, Create, and Review & share.
-- Lesson sources may be OPUS recordings or tutor-pasted transcripts; both remain student-owned and
-  converge on the same prompt, draft, approval, and publish pipeline.
+- Lesson sources may be supported direct-audio/cheap-demux recording uploads or tutor-pasted
+  transcripts; both remain workspace/student-owned and converge on the same prompt, draft, approval,
+  and publish pipeline.
 - Prompt runtime in batch flow is owned by `batch-backend`: the prompt catalog is DB-canonical, with
   bootstrap tooling for fresh environments.
 - Student-memory extraction, review, health inspection, and replay tooling are backend-owned; the

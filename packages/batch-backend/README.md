@@ -4,7 +4,7 @@
 
 - Audience: maintainers and implementing agents.
 - Authority Level: package entrypoint and operational usage guide.
-- Last Verified Against: 2026-07-29 repo state.
+- Last Verified Against: 2026-09-09 recording-ingest closeout state.
 - Owner: batch-backend maintainers + automation agents.
 - Review Cadence: monthly or after major API/worker changes.
 - Status: `active`.
@@ -63,12 +63,28 @@ Useful indexes:
   the configured ElevenLabs Scribe v2 mixed profile; only an explicit trusted OBS declaration uses
   Deepgram's two-channel tutor/student path. Mixed diarization labels remain anonymous until the
   tutor confirms the speaker-role mapping in the Source review flow.
+- Recording uploads spool incrementally to bounded temporary files. The browser and backend share a
+  2 GiB default source guard, the backend preserves a configured 10 GiB free-space reserve at
+  admission, and probed duration is capped at 6000 seconds. Direct MP3, PCM16 WAV, AAC/M4A,
+  Ogg/Opus, and WebM/Opus audio remains byte-identical. MP4/AAC, MOV/AAC, and WebM/Opus video is
+  accepted only as a single-audio-stream convenience input and is demuxed with `-c:a copy`; no
+  transcoding or video decoding is part of ingest.
+- A cache miss adopts exactly one workspace-prefixed immutable audio candidate and creates one
+  durable transcription run. A same-workspace cache hit copies independent transcript lineage with
+  `audio_lifecycle=not_retained`, uploads no audio, creates no run, and enqueues no BullMQ job.
+- Transcription runs use a short durable claim lease and at most three committed provider-submission
+  reservations. BullMQ delivery/reconciliation count is separate and can exceed three. Permanent
+  failures stop; transient, ambiguous, and malformed provider outcomes recover automatically within
+  the reservation ceiling. Provider SDK retries remain disabled.
 - Successful Source confirmation makes retained recording audio unavailable immediately and requests
   asynchronous recording-owned deletion. The transcribe worker sweeps bounded PostgreSQL claims for
   confirmed audio plus eligible failed or unconfirmed audio after
   `RECORDING_AUDIO_RECOVERY_TTL_DAYS` (default 7). Physical cleanup is disabled unless
   `RECORDING_AUDIO_CLEANUP_ENABLED=true`; transcript and downstream text lineage is never deleted.
   Slice 4 upload-attempt candidate cleanup remains a separate authority.
+- Production migration, run/reservation, storage-candidate, runtime-media, and cleanup readiness
+  procedures live in the
+  [ordinary recording ingest rollout runbook](../../docs/operations/ordinary-recording-ingest-rollout.md).
 - `STT_PROVIDER` is an all-topology emergency rollback override; with the current topology set, only
   `deepgram` is valid. Per-request support overrides remain topology-scoped.
 - Manual transcript sources require a student, retain the pasted text as durable source material,

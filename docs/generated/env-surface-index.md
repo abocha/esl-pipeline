@@ -230,6 +230,7 @@
 | `PROMPT_TEMPLATE_PATH` | `.env.example` | misc | `docs/reference/env.md` |
 | `RECORDING_AUDIO_CLEANUP_ENABLED` | `.env.example` | misc | `docs/reference/env.md` |
 | `RECORDING_AUDIO_RECOVERY_TTL_DAYS` | `.env.example` | misc | `docs/reference/env.md` |
+| `RECORDINGS_DISK_RESERVE_BYTES` | `.env.example` | misc | `docs/reference/env.md` |
 | `RECORDINGS_MAX_FILE_SIZE` | `.env.example` | shared_runtime | `docs/reference/env.md` |
 | `REDIS_ENABLED` | `.env.example` | batch_backend | `packages/batch-backend/README.md` |
 | `REDIS_HOST` | `.env.example` | batch_backend | `packages/batch-backend/README.md` |
