@@ -503,9 +503,6 @@ importers:
       '@deepgram/sdk':
         specifier: ^5.7.0
         version: 5.7.0
-      '@esl-pipeline/provider-runtime':
-        specifier: workspace:*
-        version: link:../provider-runtime
       '@esl-pipeline/stt-core':
         specifier: workspace:*
         version: link:../stt-core
@@ -525,9 +522,6 @@ importers:
       '@elevenlabs/elevenlabs-js':
         specifier: ^2.62.0
         version: 2.62.0
-      '@esl-pipeline/provider-runtime':
-        specifier: workspace:*
-        version: link:../provider-runtime
       '@esl-pipeline/stt-core':
         specifier: workspace:*
         version: link:../stt-core
