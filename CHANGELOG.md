@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.11.0] - 2026-09-09
+
+### Changed
+
+- Automated release from PR #220: feat(recordings): make ordinary lesson ingest rollout-ready (https://github.com/abocha/esl-pipeline/pull/220)
+
 ## [10.10.0] - 2026-08-31
 
 ### Changed
