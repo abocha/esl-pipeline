@@ -2,6 +2,7 @@ import { fireEvent } from '@testing-library/react';
 import { afterEach, beforeEach, describe, it } from 'vitest';
 
 import {
+  testAct as act,
   testApi as api,
   createMinimalUser,
   createTimerAwareMinimalUser,
@@ -149,6 +150,43 @@ export function registerPublishValidationTests() {
       ).toBeTruthy();
       expect(await screen.findByRole('heading', { name: /Add teaching context/i })).toBeTruthy();
       expect(screen.queryByText(/HTTP 409: assignment_share_dirty_recovery/i)).toBeNull();
+    }, 30_000);
+
+    it('keeps Share disabled while confirmed Context recovery is dirty', async () => {
+      const { user } = await renderPromptReadyAssignment();
+      fireEvent.change(screen.getByRole('textbox', { name: /Draft markdown/i }), {
+        target: { value: '# Final draft' },
+      });
+      await previewCurrentDraft(user);
+
+      const dirtySession = makeAssignmentSession({
+        id: 'session-1',
+        studentId: 'student-alex',
+        recordingId: 'rec-1',
+        transcriptId: 'tx-1',
+        promptPackageId: 'pkg-1',
+        draftId: 'draft-1',
+        confirmedStep: 'create',
+        selectedProfileId: null,
+        selectedProfileRevisionId: null,
+        selectedProfileRevisionHash: null,
+      });
+      dirtySession.confirmed.context = {
+        teacherNotes: null,
+        profileId: 'profiles/alex.md',
+        profileRevisionId: 'revision-active',
+        profileRevisionHash: 'hash-active',
+      };
+      vi.mocked(api.fetchAssignmentSession).mockResolvedValueOnce(dirtySession);
+
+      await act(async () => {
+        globalThis.dispatchEvent(new Event('focus'));
+      });
+
+      const shareButton = await screen.findByRole('button', { name: /Share assignment/i });
+      await waitFor(() => expect((shareButton as HTMLButtonElement).disabled).toBe(true));
+      await user.click(shareButton);
+      expect(api.shareAssignmentSession).not.toHaveBeenCalled();
     }, 30_000);
   });
 }

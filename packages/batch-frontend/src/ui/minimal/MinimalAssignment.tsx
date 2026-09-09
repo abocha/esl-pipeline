@@ -1880,6 +1880,11 @@ export const MinimalAssignment: React.FC = () => {
     }
     return deriveAssignmentWorkflow(activeAssignmentSession, assignmentWorkingArtifacts);
   }, [activeAssignmentSession, assignmentWorkingArtifacts, jobReady]);
+  const shareRecoveryReady = Boolean(
+    activeAssignmentSession?.shareJobId ||
+      (activeAssignmentSession &&
+        canShareAssignment(activeAssignmentSession, assignmentWorkingArtifacts).allowed),
+  );
   const activeStepIndex = FOCUSED_STEP_ORDER.indexOf(activeStep);
   const authoringOperationBusy = authoring.promptLoading || authoring.generatingDraft;
   const commitTeacherNotes = useCallback(async (): Promise<TeacherNotesCommitResult> => {
@@ -2115,6 +2120,7 @@ export const MinimalAssignment: React.FC = () => {
       if (!initialSession.shareJobId && !(await flushPendingSessionRecovery())) return;
       const current = activeAssignmentSessionRef.current;
       if (!current || current.confirmedStep !== 'create') return;
+      if (!current.shareJobId && returnToDirtyRecovery(current)) return;
       const recovered = current.shareJobId
         ? current
         : await saveAssignmentSessionProgress({
@@ -2883,7 +2889,7 @@ export const MinimalAssignment: React.FC = () => {
               onPublish={() => void handleShareAssignment()}
               shareAvailable={activeAssignmentSession?.confirmedStep === 'create'}
               onCancelJob={() => void advancedActions.handleCancelJob()}
-              canPublishWithPreview={authoring.canPublishWithPreview}
+              canPublishWithPreview={authoring.canPublishWithPreview && shareRecoveryReady}
               cancelEnabled={advancedActions.cancelEnabled}
               actionBusy={advancedActions.actionBusy}
               publishing={authoring.publishing || sharingAssignment}
