@@ -60,6 +60,7 @@ describe('application/prompt-package memory provenance', () => {
     const result = await createPromptPackage(
       {
         recordingId: transcript.recordingId,
+        workspaceId: 'workspace-1',
         templateId: 'template.md',
         profileId: 'profile.md',
       },
@@ -72,7 +73,9 @@ describe('application/prompt-package memory provenance', () => {
         recordings: {
           getById: async () => ({
             id: transcript.recordingId,
+            workspaceId: 'workspace-1',
             source: 'upload',
+            audioLifecycle: 'retained',
             studentId: 'student-1',
             sourcePath: null,
             storageUri: 'local://recordings/recording-1.opus',

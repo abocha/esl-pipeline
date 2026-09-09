@@ -60,7 +60,7 @@ import type {
   PronunciationChunkTtsProviderId as ContractPronunciationChunkTtsProviderId,
   PublishAssignmentCorrectionRequest as ContractPublishAssignmentCorrectionRequest,
   PublishAssignmentCorrectionResponse as ContractPublishAssignmentCorrectionResponse,
-  RecordingSourceId as ContractRecordingSourceId,
+  RecordingDto as ContractRecordingDto,
   RecordingStatus as ContractRecordingStatus,
   RerunJobPayload as ContractRerunJobPayload,
   SttProviderId as ContractSttProviderId,
@@ -77,6 +77,7 @@ import type {
   JobActionRequest,
   JobStatusDto,
   PublishTarget,
+  RecordingErrorCode,
   RecordStudentPaymentRequest,
   StreamEventMessage,
   StudentScheduleBillingSurfaceResponse,
@@ -85,7 +86,7 @@ import type {
   UpdateStudentLessonRequest,
   UpsertStudentLessonRecurrenceRequest,
 } from '@esl-pipeline/contracts';
-import { JobActionType } from '@esl-pipeline/contracts';
+import { DEFAULT_RECORDING_UPLOAD_MAX_BYTES, JobActionType } from '@esl-pipeline/contracts';
 
 import apiClient, {
   buildApiProxyPath,
@@ -93,6 +94,7 @@ import apiClient, {
   handleApiError,
   isAuthError,
 } from './api-client';
+import { getRecordingErrorAction } from './recording-state';
 
 export type JobState = ContractJobState;
 export type TtsStrategy = ContractTtsStrategy;
@@ -176,20 +178,7 @@ export interface RecordingTranscriptResponse {
   updatedAt: string;
 }
 
-export interface RecordingListItem {
-  recordingId: string;
-  status: RecordingStatus;
-  transcriptId: string | null;
-  error: string | null;
-  source: ContractRecordingSourceId;
-  studentId: string | null;
-  displayName: string;
-  durationSec: number | null;
-  channels: number | null;
-  audioTopology: AudioInputTopology | null;
-  bytes: number;
-  createdAt: string;
-  updatedAt: string;
+export interface RecordingListItem extends ContractRecordingDto {
   cacheHit?: boolean;
   cacheReason?: 'transcript_reused' | null;
   cacheRecordingId?: string | null;
@@ -1957,6 +1946,19 @@ export async function uploadMarkdown(
 }
 
 /**
+ * The request was rejected locally before Axios could begin an HTTP upload.
+ * Callers may safely retire a browser-owned upload operation after this error.
+ */
+export class RecordingUploadPreDispatchError extends Error {
+  readonly code: RecordingErrorCode = 'file_too_large';
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'RecordingUploadPreDispatchError';
+  }
+}
+
+/**
  * Upload an audio recording via POST /recordings/upload.
  * Returns the created recording metadata.
  */
@@ -1966,10 +1968,17 @@ export async function uploadRecording(
     studentId?: string;
     sttProvider?: SttProvider;
     audioTopology?: Extract<AudioInputTopology, 'trusted_split_channels'>;
+    /** Browser-owned logical upload identity. Production callers always supply it. */
+    uploadOperationId?: string;
     onProgress?: UploadProgressCallback;
     signal?: AbortSignal;
   },
 ): Promise<RecordingListItem> {
+  if (file.size > DEFAULT_RECORDING_UPLOAD_MAX_BYTES) {
+    throw new RecordingUploadPreDispatchError(
+      'Choose a source file at or below the configured 2 GiB operational upload limit.',
+    );
+  }
   try {
     const formData = new FormData();
     formData.append('file', file);
@@ -1981,11 +1990,17 @@ export async function uploadRecording(
     if (options?.sttProvider) {
       params.sttProvider = options.sttProvider;
     }
+    if (options?.audioTopology) {
+      params.audioTopology = options.audioTopology;
+    }
 
     const response = await apiClient.post(buildApiProxyPath('/recordings/upload'), formData, {
       params: Object.keys(params).length > 0 ? params : undefined,
       headers: {
         'Content-Type': 'multipart/form-data',
+        ...(options?.uploadOperationId
+          ? { 'x-upload-operation-id': options.uploadOperationId }
+          : {}),
       },
       onUploadProgress: (event) => reportUploadProgress(event, options?.onProgress),
       signal: options?.signal,
@@ -1996,6 +2011,41 @@ export async function uploadRecording(
     const axiosError = toAxiosError(error);
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to upload recordings.');
+    }
+    const data = axiosError?.response?.data;
+    const code =
+      data && typeof data === 'object' && 'code' in data && typeof data.code === 'string'
+        ? data.code
+        : null;
+    if (code) {
+      throw new Error(getRecordingErrorAction(code));
+    }
+    throw new Error(
+      axiosError?.request
+        ? handleApiError(axiosError)
+        : 'Unable to upload recording. Try again or choose another file.',
+    );
+  }
+}
+
+export type RecordingUploadOperationStatus =
+  | RecordingListItem
+  | { operationId: string; recordingId: string; status: 'processing' | 'reclaimable' };
+
+/** Resolve durable ownership before a browser retransmits an uncertain upload. */
+export async function getRecordingUploadOperation(
+  uploadOperationId: string,
+): Promise<RecordingUploadOperationStatus | null> {
+  try {
+    const response = await apiClient.get<RecordingUploadOperationStatus>(
+      buildApiProxyPath(`/recording-upload-operations/${uploadOperationId}`),
+      { validateStatus: (status) => status === 200 || status === 202 || status === 404 },
+    );
+    return response.status === 404 ? null : response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to check upload status.');
     }
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }

@@ -15,7 +15,9 @@ function createRecording(
 ): RecordingWithTranscript {
   return {
     id: 'recording-1',
+    workspaceId: 'workspace-1',
     source: 'upload',
+    audioLifecycle: 'retained',
     studentId: 'student-1',
     sourcePath: '/lessons/lesson-1.m4a',
     storageUri: 'local://recordings/recording-1.m4a',

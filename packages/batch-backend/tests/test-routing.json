@@ -14,7 +14,9 @@
     "domain.student-memory-openai-batch-import.test.ts",
     "domain.student-memory-openai-batch-repository.test.ts",
     "domain.assignment-session-repository.test.ts",
+    "domain.recording-audio-cleanup-repository.test.ts",
     "domain.student-repository.workspace.test.ts",
+    "integration.recording-tenant-authority.test.ts",
     "application.assignment-step-confirmation.test.ts",
     "application.homework-memory-source.test.ts",
     "application.student-timeline.test.ts",
@@ -24,6 +26,8 @@
   ],
   "postgresRedisWorker": [
     "transport.worker-runner.integration.test.ts",
-    "integration.student-memory-pacing-delay.test.ts"
+    "integration.student-memory-pacing-delay.test.ts",
+    "infrastructure.transcribe-queue.redis.integration.test.ts",
+    "integration.transcription-execution-worker.redis.test.ts"
   ]
 }

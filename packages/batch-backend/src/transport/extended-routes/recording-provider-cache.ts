@@ -74,6 +74,7 @@ export function shouldReuseCachedTranscriptForFingerprint(args: {
   mode: TranscriptRecord['mode'];
   model: string;
   language: string;
+  preparationVersion: string;
   transcript: Pick<TranscriptRecord, 'sttProvider' | 'mode' | 'model' | 'language' | 'summaryJson'>;
 }): boolean {
   const inferredProvider = inferTranscriptSttProvider(args.transcript);
@@ -92,5 +93,6 @@ export function shouldReuseCachedTranscriptForFingerprint(args: {
   const summary = args.transcript.summaryJson;
   if (!summary || summary.audioTopology !== args.audioTopology) return false;
   if (summary.sttRequestProfile !== args.sttRequestProfile) return false;
+  if (summary.mediaPreparationVersion !== args.preparationVersion) return false;
   return true;
 }

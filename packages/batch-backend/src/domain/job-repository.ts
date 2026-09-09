@@ -129,6 +129,154 @@ export interface JobListOptions {
   userId?: string | null;
 }
 
+export type JobWorkspaceAuthority =
+  | { mode: 'recording_backed'; recordingId: string }
+  | { mode: 'standalone_owner'; recordingId: null };
+
+/**
+ * Proves that an attacker-selected job and every lineage edge exposed by the
+ * authenticated job/status surfaces either resolve to one recording in one
+ * workspace or form an intentionally lineage-free graph owned by one user.
+ * This query intentionally returns metadata only: callers must not materialize
+ * job content or storage-backed fields until it succeeds. Partial lineage never
+ * falls back to standalone owner authority.
+ */
+export async function getJobWorkspaceAuthority(
+  id: string,
+  workspaceId: string,
+  userId: string,
+): Promise<JobWorkspaceAuthority | null> {
+  const row = await withPgClient(async (client) => {
+    const result = await client.query<{
+      authority_mode: JobWorkspaceAuthority['mode'];
+      recording_id: string | null;
+    }>(
+      String.raw`
+      WITH RECURSIVE related_job_ids(id) AS (
+        SELECT j.id
+        FROM jobs j
+        WHERE j.id = $1
+        UNION
+        SELECT edge.id
+        FROM related_job_ids related
+        CROSS JOIN LATERAL (
+          SELECT parent.source_job_id AS id
+          FROM jobs parent
+          WHERE parent.id = related.id AND parent.source_job_id IS NOT NULL
+          UNION
+          SELECT h.job_id
+          FROM job_action_history h
+          WHERE h.created_job_id = related.id
+          UNION
+          SELECT h.created_job_id
+          FROM job_action_history h
+          WHERE h.job_id = related.id AND h.created_job_id IS NOT NULL
+        ) edge
+      ),
+      lineage AS (
+        SELECT
+          j.id,
+          j.student_id,
+          j.recording_id,
+          j.transcript_id,
+          j.prompt_package_id,
+          j.draft_id,
+          j.user_id,
+          d.prompt_package_id AS draft_prompt_package_id,
+          d.student_id AS draft_student_id,
+          COALESCE(j.prompt_package_id, d.prompt_package_id) AS effective_prompt_package_id,
+          p.recording_id AS prompt_recording_id,
+          p.transcript_id AS prompt_transcript_id,
+          p.student_id AS prompt_student_id,
+          COALESCE(j.recording_id, p.recording_id) AS authority_recording_id
+        FROM related_job_ids related
+        JOIN jobs j ON j.id = related.id
+        LEFT JOIN drafts d ON d.id = j.draft_id
+        LEFT JOIN prompt_packages p ON p.id = COALESCE(j.prompt_package_id, d.prompt_package_id)
+      ),
+      valid_lineage AS (
+        SELECT lineage.id, lineage.authority_recording_id
+        FROM lineage
+        JOIN recordings r
+          ON r.id = lineage.authority_recording_id
+         AND r.workspace_id = $2
+        LEFT JOIN transcripts jt ON jt.id = lineage.transcript_id
+        LEFT JOIN transcripts pt ON pt.id = lineage.prompt_transcript_id
+        WHERE (lineage.recording_id IS NULL OR lineage.recording_id = r.id)
+          AND (lineage.student_id IS NULL OR lineage.student_id = r.student_id)
+          AND (
+            lineage.transcript_id IS NULL
+            OR (jt.id IS NOT NULL AND jt.recording_id = r.id)
+          )
+          AND (
+            lineage.effective_prompt_package_id IS NULL
+            OR (
+              lineage.prompt_recording_id = r.id
+              AND (lineage.prompt_student_id IS NULL OR lineage.prompt_student_id = r.student_id)
+              AND pt.id IS NOT NULL
+              AND pt.recording_id = r.id
+            )
+          )
+          AND (
+            lineage.prompt_package_id IS NULL
+            OR lineage.draft_id IS NULL
+            OR lineage.prompt_package_id = lineage.draft_prompt_package_id
+          )
+          AND (
+            lineage.draft_id IS NULL
+            OR (
+              lineage.draft_prompt_package_id IS NOT NULL
+              AND (lineage.draft_student_id IS NULL OR lineage.draft_student_id = r.student_id)
+            )
+          )
+          AND (
+            lineage.transcript_id IS NULL
+            OR lineage.prompt_transcript_id IS NULL
+            OR lineage.transcript_id = lineage.prompt_transcript_id
+          )
+      ),
+      requested AS (
+        SELECT authority_recording_id
+        FROM valid_lineage
+        WHERE id = $1
+      )
+      SELECT requested.authority_recording_id AS recording_id
+           , 'recording_backed'::text AS authority_mode
+      FROM requested
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM lineage
+        LEFT JOIN valid_lineage valid ON valid.id = lineage.id
+        WHERE valid.id IS NULL
+           OR valid.authority_recording_id <> requested.authority_recording_id
+      )
+      UNION ALL
+      SELECT NULL::uuid AS recording_id,
+             'standalone_owner'::text AS authority_mode
+      FROM lineage requested_standalone
+      WHERE requested_standalone.id = $1
+        AND NOT EXISTS (
+          SELECT 1
+          FROM lineage related
+          WHERE related.student_id IS NOT NULL
+             OR related.recording_id IS NOT NULL
+             OR related.transcript_id IS NOT NULL
+             OR related.prompt_package_id IS NOT NULL
+             OR related.draft_id IS NOT NULL
+             OR related.user_id IS DISTINCT FROM $3
+        )
+      `,
+      [id, workspaceId, userId],
+    );
+    return result.rows[0] ?? null;
+  });
+
+  if (!row) return null;
+  return row.authority_mode === 'recording_backed'
+    ? { mode: 'recording_backed', recordingId: row.recording_id! }
+    : { mode: 'standalone_owner', recordingId: null };
+}
+
 export interface JobListFilters {
   states?: JobState[];
   studentId?: string | null;

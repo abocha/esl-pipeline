@@ -38,8 +38,12 @@ export interface RedisTestEnv {
   port: number;
 }
 
+// The repository's local Compose Redis publishes this test-only host port.
+// An explicit environment value still wins for CI and alternate local setups.
+const DEFAULT_LOCAL_TEST_REDIS = 'redis://127.0.0.1:6380';
+
 export function requireRedisTestEnv(): RedisTestEnv {
-  const url = readRequiredEnv('BATCH_BACKEND_TEST_REDIS');
+  const url = process.env.BATCH_BACKEND_TEST_REDIS?.trim() || DEFAULT_LOCAL_TEST_REDIS;
   const parsed = parseUrl(url, 'BATCH_BACKEND_TEST_REDIS');
   if (!['redis:', 'rediss:'].includes(parsed.protocol)) {
     throw new Error('BATCH_BACKEND_TEST_REDIS must use redis:// or rediss://.');
@@ -53,9 +57,12 @@ export function requireRedisTestEnv(): RedisTestEnv {
     throw new Error('BATCH_BACKEND_TEST_REDIS must include a valid port.');
   }
 
-  process.env.REDIS_ENABLED = process.env.REDIS_ENABLED ?? 'true';
-  process.env.REDIS_HOST = process.env.REDIS_HOST ?? parsed.hostname;
-  process.env.REDIS_PORT = process.env.REDIS_PORT ?? String(port);
+  // The queue reads REDIS_HOST/REDIS_PORT, not BATCH_BACKEND_TEST_REDIS.
+  // Force both from the resolved isolated test endpoint so stale development
+  // .env values cannot make a service test connect somewhere else and hang.
+  process.env.REDIS_ENABLED = 'true';
+  process.env.REDIS_HOST = parsed.hostname;
+  process.env.REDIS_PORT = String(port);
   if (parsed.password && !process.env.REDIS_PASSWORD) {
     process.env.REDIS_PASSWORD = decodeURIComponent(parsed.password);
   }

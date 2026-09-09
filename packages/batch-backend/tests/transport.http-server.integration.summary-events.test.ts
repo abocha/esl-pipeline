@@ -23,6 +23,7 @@ describeHttpServerIntegrationSuite(
     it,
     jobSummaryModule,
     listJobsModule,
+    mockGetJobWorkspaceAuthority,
     publishJobEvent,
     publishRecordingEvent,
     readinessMetricsModule,
@@ -578,13 +579,14 @@ describeHttpServerIntegrationSuite(
     });
 
     it('GET /recordings/:id/audio supports range requests', async () => {
-      const getRecordingById = vi.spyOn(recordingRepositoryModule, 'getRecordingById');
+      const getRecordingById = vi.spyOn(recordingRepositoryModule, 'getRecordingByIdForWorkspace');
       getRecordingById.mockResolvedValue({
         id: 'recording-1',
         source: 'upload',
         studentId: null,
         sourcePath: null,
         storageUri: 'local://recordings/recording.opus',
+        audioLifecycle: 'retained',
         sha256: null,
         bytes: 11,
         durationSec: null,
@@ -599,6 +601,7 @@ describeHttpServerIntegrationSuite(
         transcriptionStorageModule,
         'createTranscriptionStorageForUri',
       );
+      createStorage.mockClear();
       createStorage.mockReturnValue({
         getStream: async () => Readable.from(Buffer.from('hello world')),
       } as any);
@@ -617,12 +620,76 @@ describeHttpServerIntegrationSuite(
       expect(response.headers['content-length']).toBe('5');
       expect(response.headers['content-type']).toBe('audio/ogg');
       expect(response.payload).toBe('hello');
+      expect(getRecordingById).toHaveBeenCalledWith(
+        'recording-1',
+        '00000000-0000-4000-8000-000000000001',
+      );
+    });
+
+    it('GET /recordings/:id/audio hides pending audio before physical deletion', async () => {
+      const getRecordingById = vi.spyOn(recordingRepositoryModule, 'getRecordingByIdForWorkspace');
+      getRecordingById.mockResolvedValue({
+        id: 'recording-pending',
+        workspaceId: '00000000-0000-4000-8000-000000000001',
+        source: 'upload',
+        studentId: null,
+        sourcePath: null,
+        storageUri: 'local://recordings/still-present.opus',
+        sha256: null,
+        bytes: 11,
+        durationSec: null,
+        channels: null,
+        audioTopology: 'mixed_recording',
+        audioLifecycle: 'pending',
+        status: 'transcribed',
+        error: null,
+        createdAt: new Date('2024-01-01T00:00:00.000Z'),
+        updatedAt: new Date('2024-01-01T00:00:00.000Z'),
+      });
+      const createStorage = vi.spyOn(
+        transcriptionStorageModule,
+        'createTranscriptionStorageForUri',
+      );
+      createStorage.mockClear();
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/recordings/recording-pending/audio',
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(createStorage).not.toHaveBeenCalled();
+    });
+
+    it('GET /recordings/:id/audio returns the same 404 for foreign and missing recordings', async () => {
+      const getRecordingById = vi.spyOn(recordingRepositoryModule, 'getRecordingByIdForWorkspace');
+      getRecordingById.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+      const createStorage = vi.spyOn(
+        transcriptionStorageModule,
+        'createTranscriptionStorageForUri',
+      );
+      createStorage.mockClear();
+
+      const foreign = await app.inject({ method: 'GET', url: '/recordings/foreign/audio' });
+      const missing = await app.inject({ method: 'GET', url: '/recordings/missing/audio' });
+
+      expect(foreign.statusCode).toBe(404);
+      expect(missing.statusCode).toBe(404);
+      expect(foreign.json()).toEqual(missing.json());
+      expect(createStorage).not.toHaveBeenCalled();
     });
 
     it('GET /jobs/events streams job events as SSE', { timeout: 10_000 }, async () => {
       const getJobStatus = vi.spyOn(getJobStatusModule, 'getJobStatus');
       getJobStatus.mockClear();
-      getJobStatus.mockResolvedValue(null);
+      mockGetJobWorkspaceAuthority.mockResolvedValue({
+        mode: 'recording_backed',
+        recordingId: 'recording-stream',
+      });
+      vi.spyOn(recordingRepositoryModule, 'getRecordingByIdForWorkspace').mockResolvedValue({
+        id: 'recording-stream',
+        workspaceId: '00000000-0000-4000-8000-000000000001',
+      } as never);
       const streamingApp = await createHttpServer();
       const address = (await streamingApp.listen({ port: 0, host: '127.0.0.1' })) as string;
       const url = new URL('/jobs/events', address);
@@ -648,6 +715,7 @@ describeHttpServerIntegrationSuite(
         finishedAt: null,
         error: null,
         manifestPath: null,
+        recordingId: 'recording-stream',
       };
 
       const eventPayload = await new Promise<any>((resolve, reject) => {
@@ -723,7 +791,28 @@ describeHttpServerIntegrationSuite(
       expect(eventPayload.payload?.ttsStrategy).toBeNull();
       expect(eventPayload.payload?.learningPresetId).toBe('general-english');
       expect(eventPayload.payload?.md).toBe(job.md);
-      expect(getJobStatus).toHaveBeenCalledTimes(1);
+      expect(getJobStatus).not.toHaveBeenCalled();
+    });
+
+    it('GET /jobs/events rejects foreign recording and job subscriptions non-enumeratingly', async () => {
+      const getJobStatus = vi.spyOn(getJobStatusModule, 'getJobStatus');
+      getJobStatus.mockClear();
+      mockGetJobWorkspaceAuthority.mockResolvedValueOnce(null);
+      const getRecording = vi
+        .spyOn(recordingRepositoryModule, 'getRecordingByIdForWorkspace')
+        .mockResolvedValue(null);
+
+      const foreignRecording = await app.inject({
+        method: 'GET',
+        url: '/jobs/events?recordingId=foreign-recording',
+      });
+      const foreignJob = await app.inject({ method: 'GET', url: '/jobs/events?jobId=foreign-job' });
+
+      expect(foreignRecording.statusCode).toBe(404);
+      expect(foreignJob.statusCode).toBe(404);
+      expect(foreignRecording.json()).toEqual(foreignJob.json());
+      expect(getJobStatus).not.toHaveBeenCalled();
+      getRecording.mockRestore();
     });
 
     it('GET /jobs/events streams recording events when jobId maps to a recording', {
@@ -731,31 +820,14 @@ describeHttpServerIntegrationSuite(
     }, async () => {
       const getJobStatus = vi.spyOn(getJobStatusModule, 'getJobStatus');
       getJobStatus.mockClear();
-      getJobStatus.mockResolvedValue({
-        jobId: 'job-stream',
-        md: 'fixtures/ok.md',
+      mockGetJobWorkspaceAuthority.mockResolvedValue({
+        mode: 'recording_backed',
         recordingId: 'recording-1',
-        transcriptId: null,
-        promptPackageId: null,
-        draftId: null,
-        preset: null,
-        withTts: null,
-        upload: null,
-        voiceId: null,
-        voiceAccent: null,
-        forceTts: null,
-        publishTarget: 'html',
-        ttsStrategy: null,
-        autoPublish: null,
-        htmlUrl: null,
-        state: 'queued',
-        createdAt: '2024-01-01T00:00:00.000Z',
-        updatedAt: '2024-01-01T00:00:00.000Z',
-        startedAt: null,
-        finishedAt: null,
-        error: null,
-        manifestPath: null,
       });
+      vi.spyOn(recordingRepositoryModule, 'getRecordingByIdForWorkspace').mockResolvedValue({
+        id: 'recording-1',
+        workspaceId: '00000000-0000-4000-8000-000000000001',
+      } as never);
 
       const streamingApp = await createHttpServer();
       const address = (await streamingApp.listen({ port: 0, host: '127.0.0.1' })) as string;
@@ -764,7 +836,9 @@ describeHttpServerIntegrationSuite(
 
       const recording: RecordingRecord = {
         id: 'recording-1',
+        workspaceId: '00000000-0000-4000-8000-000000000001',
         source: 'upload',
+        audioLifecycle: 'retained',
         studentId: 'student-1',
         sourcePath: '/tmp/recording.opus',
         storageUri: 'local://recordings/recording.opus',
@@ -849,19 +923,23 @@ describeHttpServerIntegrationSuite(
         }, 10_000);
       });
 
-      expect(getJobStatus).toHaveBeenCalledWith('job-stream');
-      expect(getJobStatus).toHaveBeenCalledTimes(1);
+      expect(getJobStatus).not.toHaveBeenCalled();
       expect(eventPayload.type).toBe('recording_state_changed');
       expect(eventPayload.recordingId).toBe('recording-1');
       expect(eventPayload.status).toBe('transcribed');
+      expect(eventPayload.productState).toBe('ready');
+      expect(eventPayload.runState).toBeNull();
       expect(eventPayload.transcriptId).toBe('transcript-1');
       expect(eventPayload.error).toBeNull();
+      expect(eventPayload.errorCode).toBeNull();
       expect(eventPayload.studentId).toBe('student-1');
       expect(eventPayload.source).toBe('upload');
+      expect(eventPayload.audioLifecycle).toBe('retained');
+      expect(eventPayload.audioAvailable).toBe(true);
       expect(eventPayload.bytes).toBe(12);
     });
 
-    it('GET /jobs/events streams directly targeted recording events without a jobId', {
+    it('GET /jobs/events wildcard filters foreign recording events', {
       timeout: 10_000,
     }, async () => {
       const getJobStatus = vi.spyOn(getJobStatusModule, 'getJobStatus');
@@ -870,11 +948,13 @@ describeHttpServerIntegrationSuite(
       const streamingApp = await createHttpServer();
       const address = (await streamingApp.listen({ port: 0, host: '127.0.0.1' })) as string;
       const url = new URL('/jobs/events', address);
-      url.searchParams.set('recordingId', 'recording-direct');
+      url.searchParams.set('recordingId', '*');
 
       const recording: RecordingRecord = {
         id: 'recording-direct',
+        workspaceId: '00000000-0000-4000-8000-000000000001',
         source: 'upload',
+        audioLifecycle: 'retained',
         studentId: 'student-1',
         sourcePath: '/tmp/recording.opus',
         storageUri: 'local://recordings/recording.opus',
@@ -921,6 +1001,15 @@ describeHttpServerIntegrationSuite(
             if (!published && buffer.includes(': connected')) {
               published = true;
               publishTimer = setTimeout(() => {
+                publishRecordingEvent({
+                  type: 'recording_state_changed',
+                  recording: {
+                    ...recording,
+                    id: 'foreign-recording',
+                    workspaceId: '99999999-9999-4999-8999-999999999999',
+                  },
+                  transcriptId: 'foreign-transcript',
+                });
                 publishRecordingEvent({
                   type: 'recording_state_changed',
                   recording,

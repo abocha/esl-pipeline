@@ -78,8 +78,11 @@ export function mergeSegments(
       continue;
     }
 
+    // Missing provenance is meaningful until the execution layer has applied its
+    // topology contract.  Treating it as speaker 0 here would let a malformed
+    // provider word inherit the preceding speaker before validation can see it.
     const canMerge =
-      (previous.speaker ?? 0) === (current.speaker ?? 0) &&
+      previous.speaker === current.speaker &&
       getGapSeconds(previous.end, current.start) <= utteranceGapSec;
 
     if (!canMerge) {

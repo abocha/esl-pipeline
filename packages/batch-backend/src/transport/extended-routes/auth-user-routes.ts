@@ -946,6 +946,9 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
 
         return reply.code(200).send(session);
       } catch (error: unknown) {
+        if (getErrorCode(error) === 'ASSIGNMENT_SESSION_NOT_FOUND') {
+          return reply.code(404).send({ error: 'not_found' });
+        }
         if (getErrorCode(error) === 'ASSIGNMENT_SESSION_REQUEST_CONFLICT') {
           return reply.code(409).send({
             code: 'assignment_session_request_conflict',

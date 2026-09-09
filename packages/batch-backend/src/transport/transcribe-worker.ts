@@ -3,6 +3,9 @@
 import { fileURLToPath } from 'node:url';
 
 import { processTranscribeJob } from '../application/process-transcribe-job.js';
+import { reconcileTranscriptionDelivery } from '../application/reconcile-transcription-delivery.js';
+import { reconcileUploadCandidates } from '../application/reconcile-upload-candidates.js';
+import { sweepRecordingAudio } from '../application/sweep-recording-audio.js';
 import { validateTranscriptionConfig } from '../application/validate-transcription-config.js';
 import { loadBatchBackendEnv } from '../bootstrap/env.js';
 import { loadConfig } from '../config/env.js';
@@ -27,10 +30,54 @@ export async function startTranscribeWorker(): Promise<void> {
     poolMax: config.pg.poolMax,
     idleTimeoutMs: config.pg.idleTimeoutMs,
     connectionTimeoutMs: config.pg.connectionTimeoutMs,
+    recordingAudioCleanupEnabled: config.recordings.audioCleanupEnabled,
+    recordingAudioRecoveryTtlDays: config.recordings.audioRecoveryTtlDays,
   });
   await runMigrationsIfConfigured();
   await validateTranscriptionConfig();
   await enableRedisRecordingEventBridge();
+  await reconcileTranscriptionDelivery({ limit: config.transcription.reconciliationBatchSize });
+  await reconcileUploadCandidates({ limit: config.transcription.reconciliationBatchSize });
+  let cleanupRunning = false;
+  const runRecordingAudioCleanup = async () => {
+    if (cleanupRunning || !config.recordings.audioCleanupEnabled) return;
+    cleanupRunning = true;
+    try {
+      await sweepRecordingAudio({
+        enabled: true,
+        recoveryTtlDays: config.recordings.audioRecoveryTtlDays,
+        limit: config.transcription.reconciliationBatchSize,
+      });
+    } catch (error) {
+      logger.error(error as Error, {
+        component: 'transcribe-worker',
+        message: 'Recording audio cleanup sweep failed',
+      });
+    } finally {
+      cleanupRunning = false;
+    }
+  };
+  await runRecordingAudioCleanup();
+  const reconciliationTimer = setInterval(() => {
+    void reconcileTranscriptionDelivery({
+      limit: config.transcription.reconciliationBatchSize,
+    }).catch((error) => {
+      logger.error(error as Error, {
+        component: 'transcribe-worker',
+        message: 'Transcription delivery reconciliation failed',
+      });
+    });
+    void reconcileUploadCandidates({ limit: config.transcription.reconciliationBatchSize }).catch(
+      (error) => {
+        logger.error(error as Error, {
+          component: 'transcribe-worker',
+          message: 'Recording upload candidate reconciliation failed',
+        });
+      },
+    );
+    void runRecordingAudioCleanup();
+  }, config.transcription.reconciliationIntervalMs);
+  reconciliationTimer.unref();
   const worker = createTranscribeWorker(async (bullJob) => {
     await processTranscribeJob(bullJob.data);
   });
@@ -47,6 +94,7 @@ export async function startTranscribeWorker(): Promise<void> {
       component: 'transcribe-worker',
     });
     try {
+      clearInterval(reconciliationTimer);
       await worker.close();
       logger.info('Transcribe worker closed cleanly', { component: 'transcribe-worker' });
       process.exit(0);

@@ -14,26 +14,32 @@ import {
   getAssignmentSessionByIdForUser,
   listAssignmentSessionsForUser,
   updateAssignmentSessionRecovery,
+  AssignmentSessionRepositoryError,
 } from '../domain/assignment-session-repository.js';
-import { getTranscriptById } from '../domain/transcript-repository.js';
+import { getTranscriptByIdForWorkspace } from '../domain/transcript-repository.js';
+import { getStudentById } from '../domain/student-repository.js';
 import { withPgClient } from '../infrastructure/db.js';
 import { logger } from '../infrastructure/logger.js';
 import { requestLessonMemoryGeneration } from './request-lesson-memory-generation.js';
 import { completeElapsedScheduledLessonForHomework } from './student-schedule-billing.js';
+import { resolvePrimaryWorkspaceIdForUser } from './workspace-context.js';
 
 export async function confirmStudentAssignmentSessionForUser(
   userId: string,
   request: ConfirmStudentAssignmentSessionRequest,
 ): Promise<AssignmentSessionDto> {
   const lessonId = request.lessonId ?? null;
-  await validateLessonStudentPair(lessonId, request.studentId);
+  const workspaceId = await resolvePrimaryWorkspaceIdForUser(userId);
+  const student = await getStudentById(request.studentId, { workspaceId });
+  if (!student) throw new AssignmentSessionRepositoryError('ASSIGNMENT_SESSION_NOT_FOUND');
+  await validateLessonStudentPair(lessonId, request.studentId, workspaceId);
   const session = await confirmStudentAssignmentSession({
     userId,
     requestId: request.requestId,
     studentId: request.studentId,
     lessonId,
   });
-  await completeLinkedElapsedLessonForHomework(userId, session);
+  await completeLinkedElapsedLessonForHomework(userId, workspaceId, session);
   return toAssignmentSessionDto(session);
 }
 
@@ -44,7 +50,10 @@ export async function updateAssignmentSessionRecoveryForUser(
 ): Promise<AssignmentSessionDto> {
   if (request.patch.lessonId !== undefined) {
     const existing = await getAssignmentSessionByIdForUser(sessionId, userId);
-    if (existing) await validateLessonStudentPair(request.patch.lessonId, existing.studentId);
+    if (existing) {
+      const workspaceId = await resolvePrimaryWorkspaceIdForUser(userId);
+      await validateLessonStudentPair(request.patch.lessonId, existing.studentId, workspaceId);
+    }
   }
   const session = await updateAssignmentSessionRecovery({
     id: sessionId,
@@ -52,7 +61,8 @@ export async function updateAssignmentSessionRecoveryForUser(
     expectedRevision: request.expectedRevision,
     patch: request.patch,
   });
-  await completeLinkedElapsedLessonForHomework(userId, session);
+  const workspaceId = await resolvePrimaryWorkspaceIdForUser(userId);
+  await completeLinkedElapsedLessonForHomework(userId, workspaceId, session);
   return toAssignmentSessionDto(session);
 }
 
@@ -111,21 +121,25 @@ export function toAssignmentSessionDto(session: AssignmentSessionRecord): Assign
 
 async function completeLinkedElapsedLessonForHomework(
   userId: string,
+  workspaceId: string,
   session: AssignmentSessionRecord,
 ): Promise<void> {
   if (!session.lessonId) return;
-  await completeElapsedScheduledLessonForHomework(session.studentId, session.lessonId, userId);
+  await completeElapsedScheduledLessonForHomework(workspaceId, session.studentId, session.lessonId, userId);
 }
 
 async function validateLessonStudentPair(
   lessonId: string | null,
   studentId: string,
+  workspaceId: string,
 ): Promise<void> {
   if (!lessonId) return;
   const belongsToStudent = await withPgClient(async (client) => {
     const result = await client.query(
-      'SELECT 1 FROM student_lessons WHERE id = $1 AND student_id = $2',
-      [lessonId, studentId],
+      `SELECT 1 FROM student_lessons sl
+       JOIN students s ON s.id = sl.student_id
+       WHERE sl.id = $1 AND sl.student_id = $2 AND s.workspace_id = $3`,
+      [lessonId, studentId, workspaceId],
     );
     return (result.rowCount ?? 0) > 0;
   });
@@ -148,7 +162,8 @@ async function resolveCanonicalSourceSession(
     session.shareJobId === null;
   if (!canResolvePartialSource) return session;
 
-  const transcript = await getTranscriptById(transcriptId);
+  const workspaceId = await resolvePrimaryWorkspaceIdForUser(userId);
+  const transcript = await getTranscriptByIdForWorkspace(transcriptId, workspaceId);
   if (!transcript) return session;
   const canonical = await getActiveAssignmentSessionByRecording(userId, transcript.recordingId);
   if (!canonical || canonical.id === session.id || canonical.studentId !== session.studentId) {

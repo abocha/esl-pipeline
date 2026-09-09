@@ -74,6 +74,7 @@ describe('student-timeline', () => {
     };
 
     await withPgClient(async (client) => {
+      await client.query(`INSERT INTO students (id, student) VALUES ($1, 'Anna')`, [studentId]);
       await client.query(
         `
         INSERT INTO recordings (id, source, student_id, source_path, storage_uri, bytes, status, created_at, updated_at)

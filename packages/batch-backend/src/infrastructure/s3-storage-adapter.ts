@@ -137,9 +137,9 @@ export class S3StorageAdapter {
       logger.error('Failed to generate presigned URL', {
         bucket: this.config.bucket,
         key: this.getFullKey(key),
-        error: String(error),
+        error: error instanceof Error ? error.name : 'unknown_error',
       });
-      throw new Error(`Presigned URL generation failed: ${error}`);
+      throw new Error('Presigned URL generation failed.');
     }
   }
 

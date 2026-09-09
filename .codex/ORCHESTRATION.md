@@ -36,7 +36,7 @@ more ceremony than information.
 Goal-backed orchestration is optional and requires explicit user selection or approval. Use it only
 when the outcome and acceptance boundary are already stable and verifiable, the implementation
 strategy is expected to adapt materially as repository evidence emerges, several dependent ownership
-boundaries or root turns may be needed, durable outcome state across a long-lived Sol primary is
+boundaries or root turns may be needed, durable outcome state across a long-lived primary agent is
 useful, and outcome-level completion is meaningfully different from exhausting the current task list.
 Do not infer goal-backed mode from work being large, multi-step, delegated, difficult, or long-running.
 If WHAT success means or WHETHER to pursue the outcome remains unresolved, continue interactive
@@ -44,7 +44,7 @@ design/exploration instead of creating a durable goal.
 
 ### Root goal lifecycle
 
-The Sol primary owns exactly one durable root goal for a goal-backed run. At intake or resumption, it
+The primary agent owns exactly one durable root goal for a goal-backed run. At intake or resumption, it
 should:
 
 1. read the repository instructions, approved Goal Contract/handoff, relevant ESL SSOT/routed docs,
@@ -73,7 +73,7 @@ normal plan mutation; never mark an unfinished goal complete merely to replace i
 
 ### Children and outcome audits
 
-The Sol primary is the sole owner of durable goal state for the run. Children do not create durable
+The primary agent is the sole owner of durable goal state for the run. Children do not create durable
 subgoals. Luna, Terra, and reviewer assignments remain ordinary compressed ownership-boundary
 assignments with local acceptance criteria, stop conditions, and only the mutation authority explicitly
 granted by the existing ESL workflow and repository instructions. Goal-backed execution grants no extra
@@ -210,7 +210,11 @@ Fine-grained TDD steps remain useful in the parent-facing plan when behavior or 
 
 ## 6. Context economy
 
-Prefer fresh child context for heterogeneous-model delegation (`fork_turns = "none"` when supported).
+Minimize the cost of obtaining the next useful, evidence-backed decision while preserving
+correctness. Cost includes model capability and price, active working-set size, model callbacks,
+tool/probe churn, rediscovery, delegation, validation, and maintainer attention.
+
+Prefer fresh child context for heterogeneous-model delegation (`fork_turns = "none"` when supported) when a new ownership boundary or independent perspective materially helps. Reuse an existing owner for a direct bounded continuation when it retains expensive relevant evidence. Use a delta prompt stating new intent, authorization, boundaries, and validation instead of replaying its findings.
 
 Avoid sending children:
 
@@ -221,6 +225,16 @@ Avoid sending children:
 
 Prefer giving a child paths to authoritative local documents over pasting large copies of those
 documents into its task prompt when the runtime can read them directly.
+
+Batch related independent searches and reads when practical. Use bounded reads sized to the evidence
+needed, and avoid a read -> truncation -> reread loop. Before another probe, identify the unresolved
+decision or evidence gap its result can change. Stop investigating when the available evidence is
+sufficient for the current decision.
+
+After delegating a coherent ownership boundary, let the child own its local tool, edit, and test loop.
+The primary should review returned evidence and changed artifacts in proportion to residual risk
+rather than shadowing each child callback. A worker's completion claim and summary are evidence, not
+acceptance.
 
 Optimize primarily by reducing unnecessary context loading, repeated exploration, duplicate
 validation, and tool-turn churn before reducing model capability.
@@ -243,6 +257,8 @@ When runtime metadata is available, use it to verify role, model, reasoning effo
 linkage before claiming that a configured role actually ran.
 
 ## 8. Review routing
+
+These rules govern warranted delegated implementation and independent review. Direct execution retains its exemption; the existence of a diff alone does not require a reviewer. Model defaults live in `WORKFLOW_MODES.md`; primary responsibilities apply regardless of the selected model.
 
 When a Terra review is already justified and the actual diff added meaningful structural machinery, include a proportional complexity check: ask whether any new abstraction, dependency, configuration mechanism, duplicated capability, or generalized extension point lacks a concrete necessity chain. Do not create a dedicated complexity reviewer by default.
 
@@ -318,6 +334,12 @@ this section does not replace it with task-list exhaustion.
 
 Delegated validation is evidence, not a substitute for primary integration responsibility.
 
+Run validation appropriate to the change and complete required repository gates. Broaden or repeat
+validation when relevant code, configuration, or environment state changed; a failure needs diagnosis;
+unresolved concerns remain; or integration/final confidence requires it. Do not run broad formatting,
+test, or check passes as ritual for narrow work when repository policy does not require them. Reuse
+still-fresh evidence when its relevant inputs have not changed.
+
 Do not turn a manual validation requirement into an unsafe experiment. If a destructive or upgrade
 smoke check would touch real user data or a real installation and no disposable environment is
 available, report that check as manual/environment-owned rather than improvising against the real
@@ -327,14 +349,15 @@ target.
 
 Periodically inspect rollout metadata for:
 
-- actual role and model selected;
-- reasoning effort;
-- child-parent linkage;
-- token-event count;
+- model response/callback count;
+- active input/context trajectory;
 - cached and uncached input;
 - output and reasoning tokens;
+- context rollover, compaction, and historical retrieval when observable;
+- actual role, model, and reasoning effort selected;
+- parent-child linkage and overlapping activity;
 - duration;
-- repeated context loading;
+- quota snapshots;
 - unnecessary tool-turn choreography.
 
 If a root Codex thread contains several user tasks, scope measurement to the root turn being
@@ -344,6 +367,10 @@ sessions should be attributed to the turn in which they were spawned.
 
 Use measurements to tune assignment granularity, exploration frequency, review routing, and role
 choice.
+
+Quota telemetry is account-level. Do not naively attribute overlapping thread quota deltas to one
+parent or child. Logged tokens, API pricing, published credit weights, and ChatGPT/Codex allowance
+are related measurement lenses, not interchangeable units or formulas.
 
 Do not encode fixed token quotas, arbitrary model-call limits, or runtime-specific token thresholds
 as durable repository policy.

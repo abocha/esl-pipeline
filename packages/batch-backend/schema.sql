@@ -29,6 +29,41 @@ CREATE FUNCTION public.app_rls_bypass() RETURNS boolean
   SELECT COALESCE(NULLIF(current_setting('app.rls_bypass', true), ''), 'off') = 'on'
 $$;
 
+CREATE FUNCTION public.enforce_recording_workspace_authority() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+  resolved_workspace_id UUID;
+BEGIN
+  IF TG_OP = 'UPDATE' AND NEW.workspace_id IS DISTINCT FROM OLD.workspace_id THEN
+    RAISE EXCEPTION 'recording workspace authority is immutable';
+  END IF;
+  SELECT workspace_id INTO resolved_workspace_id FROM students WHERE id = NEW.student_id;
+  IF resolved_workspace_id IS NULL THEN
+    RAISE EXCEPTION 'recording student has no workspace authority';
+  END IF;
+  IF NEW.workspace_id IS NULL THEN
+    NEW.workspace_id := resolved_workspace_id;
+  ELSIF NEW.workspace_id <> resolved_workspace_id THEN
+    RAISE EXCEPTION 'recording workspace does not match student workspace authority';
+  END IF;
+  RETURN NEW;
+END $$;
+
+CREATE FUNCTION public.request_confirmed_source_audio_deletion() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  UPDATE recordings r SET audio_lifecycle = 'pending',
+      audio_deletion_requested_at = COALESCE(r.audio_deletion_requested_at, NOW()),
+      updated_at = NOW()
+  WHERE r.id = NEW.recording_id
+    AND r.student_id = NEW.student_id
+    AND r.id::text = NEW.confirmed_snapshot #>> '{source,recordingId}'
+    AND r.audio_lifecycle = 'retained';
+  RETURN NEW;
+END $$;
+
 CREATE FUNCTION public.resolve_jobs_student_id(p_current_student_id uuid, p_recording_id uuid, p_prompt_package_id uuid, p_draft_id uuid, p_source_job_id uuid) RETURNS uuid
     LANGUAGE plpgsql
     AS $$
@@ -606,12 +641,43 @@ CREATE TABLE public.prompt_packages (
     request_envelope jsonb
 );
 
+CREATE TABLE public.recording_upload_operation_attempts (
+    operation_id uuid NOT NULL,
+    attempt_token uuid NOT NULL,
+    state text DEFAULT 'active'::text NOT NULL,
+    candidate_uri text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    retired_at timestamp with time zone,
+    cleanup_next_attempt_at timestamp with time zone DEFAULT now() CONSTRAINT recording_upload_operation_att_cleanup_next_attempt_at_not_null NOT NULL,
+    CONSTRAINT recording_upload_operation_attempts_state_check CHECK ((state = ANY (ARRAY['active'::text, 'obsolete'::text, 'adopted'::text])))
+);
+
+CREATE TABLE public.recording_upload_operations (
+    id uuid NOT NULL,
+    workspace_id uuid NOT NULL,
+    operation_uuid uuid NOT NULL,
+    recording_id uuid NOT NULL,
+    student_id uuid NOT NULL,
+    audio_topology text NOT NULL,
+    requested_provider text,
+    request_profile text NOT NULL,
+    state text DEFAULT 'processing'::text NOT NULL,
+    attempt_token uuid,
+    attempt_expires_at timestamp with time zone,
+    final_recording_id uuid,
+    completed_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT recording_upload_operations_completed_check CHECK ((((state = 'completed'::text) AND (final_recording_id IS NOT NULL) AND (completed_at IS NOT NULL)) OR ((state = 'processing'::text) AND (final_recording_id IS NULL) AND (completed_at IS NULL)))),
+    CONSTRAINT recording_upload_operations_state_check CHECK ((state = ANY (ARRAY['processing'::text, 'completed'::text])))
+);
+
 CREATE TABLE public.recordings (
     id uuid NOT NULL,
     source text NOT NULL,
     student_id uuid,
     source_path text,
-    storage_uri text NOT NULL,
+    storage_uri text,
     sha256 text,
     bytes bigint NOT NULL,
     duration_sec integer,
@@ -621,6 +687,17 @@ CREATE TABLE public.recordings (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     audio_topology text,
+    workspace_id uuid NOT NULL,
+    audio_lifecycle text DEFAULT 'retained'::text NOT NULL,
+    audio_deletion_requested_at timestamp with time zone,
+    audio_deleted_at timestamp with time zone,
+    audio_deletion_attempt_count integer DEFAULT 0 NOT NULL,
+    audio_deletion_error_code text,
+    audio_deletion_next_attempt_at timestamp with time zone,
+    media_preparation_version text,
+    CONSTRAINT recordings_audio_deletion_attempt_count_check CHECK ((audio_deletion_attempt_count >= 0)),
+    CONSTRAINT recordings_audio_lifecycle_check CHECK ((audio_lifecycle = ANY (ARRAY['not_retained'::text, 'retained'::text, 'pending'::text, 'deleting'::text, 'deleted'::text, 'delete_failed'::text]))),
+    CONSTRAINT recordings_audio_lifecycle_uri_check CHECK ((((audio_lifecycle = ANY (ARRAY['not_retained'::text, 'deleted'::text])) AND (storage_uri IS NULL)) OR ((audio_lifecycle = ANY (ARRAY['retained'::text, 'pending'::text, 'deleting'::text, 'delete_failed'::text])) AND (storage_uri IS NOT NULL)))),
     CONSTRAINT recordings_audio_topology_check CHECK ((audio_topology = ANY (ARRAY['mixed_recording'::text, 'trusted_split_channels'::text]))),
     CONSTRAINT recordings_source_check CHECK ((source = ANY (ARRAY['upload'::text, 'manual_transcript'::text]))),
     CONSTRAINT recordings_status_check CHECK ((status = ANY (ARRAY['ingested'::text, 'queued'::text, 'transcribing'::text, 'transcribed'::text, 'failed'::text])))
@@ -981,6 +1058,36 @@ CREATE TABLE public.templates (
     is_default boolean DEFAULT false NOT NULL
 );
 
+CREATE TABLE public.transcription_runs (
+    id uuid NOT NULL,
+    recording_id uuid NOT NULL,
+    workspace_id uuid NOT NULL,
+    provider text NOT NULL,
+    request_profile text NOT NULL,
+    state text DEFAULT 'queued'::text NOT NULL,
+    claim_token uuid,
+    claimed_at timestamp with time zone,
+    claim_expires_at timestamp with time zone,
+    submission_slots_reserved integer DEFAULT 0 NOT NULL,
+    submission_slot_limit integer DEFAULT 3 NOT NULL,
+    current_submission_slot integer,
+    last_submission_outcome text,
+    provider_request_id text,
+    error_code text,
+    error_detail text,
+    provider_latency_ms integer,
+    total_latency_ms integer,
+    started_at timestamp with time zone,
+    completed_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT transcription_runs_current_slot_check CHECK (((current_submission_slot IS NULL) OR ((current_submission_slot >= 1) AND (current_submission_slot <= submission_slot_limit)))),
+    CONSTRAINT transcription_runs_outcome_check CHECK (((last_submission_outcome IS NULL) OR (last_submission_outcome = ANY (ARRAY['known_success'::text, 'known_failure'::text, 'ambiguous'::text])))),
+    CONSTRAINT transcription_runs_state_check CHECK ((state = ANY (ARRAY['queued'::text, 'claimed'::text, 'submitting'::text, 'retry_wait'::text, 'succeeded'::text, 'failed'::text]))),
+    CONSTRAINT transcription_runs_submission_slot_limit_check CHECK ((submission_slot_limit = 3)),
+    CONSTRAINT transcription_runs_submission_slots_check CHECK (((submission_slots_reserved >= 0) AND (submission_slots_reserved <= submission_slot_limit)))
+);
+
 CREATE TABLE public.transcripts (
     id uuid NOT NULL,
     recording_id uuid NOT NULL,
@@ -1125,6 +1232,15 @@ ALTER TABLE ONLY public.profiles
 ALTER TABLE ONLY public.prompt_packages
     ADD CONSTRAINT prompt_packages_pkey PRIMARY KEY (id);
 
+ALTER TABLE ONLY public.recording_upload_operation_attempts
+    ADD CONSTRAINT recording_upload_operation_attempts_pkey PRIMARY KEY (operation_id, attempt_token);
+
+ALTER TABLE ONLY public.recording_upload_operations
+    ADD CONSTRAINT recording_upload_operations_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.recording_upload_operations
+    ADD CONSTRAINT recording_upload_operations_workspace_operation_unique UNIQUE (workspace_id, operation_uuid);
+
 ALTER TABLE ONLY public.recordings
     ADD CONSTRAINT recordings_pkey PRIMARY KEY (id);
 
@@ -1180,6 +1296,9 @@ ALTER TABLE ONLY public.student_reminder_preferences
     ADD CONSTRAINT student_reminder_preferences_pkey PRIMARY KEY (student_id);
 
 ALTER TABLE ONLY public.students
+    ADD CONSTRAINT students_id_workspace_unique UNIQUE (id, workspace_id);
+
+ALTER TABLE ONLY public.students
     ADD CONSTRAINT students_pkey PRIMARY KEY (id);
 
 ALTER TABLE ONLY public.template_revisions
@@ -1187,6 +1306,9 @@ ALTER TABLE ONLY public.template_revisions
 
 ALTER TABLE ONLY public.templates
     ADD CONSTRAINT templates_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.transcription_runs
+    ADD CONSTRAINT transcription_runs_pkey PRIMARY KEY (id);
 
 ALTER TABLE ONLY public.transcripts
     ADD CONSTRAINT transcripts_pkey PRIMARY KEY (id);
@@ -1340,13 +1462,21 @@ CREATE INDEX idx_prompt_packages_student_memory_snapshot_id ON public.prompt_pac
 
 CREATE INDEX idx_prompt_packages_transcript_id ON public.prompt_packages USING btree (transcript_id);
 
+CREATE INDEX idx_recording_upload_operation_attempts_obsolete ON public.recording_upload_operation_attempts USING btree (state, cleanup_next_attempt_at, retired_at) WHERE (state = 'obsolete'::text);
+
 CREATE INDEX idx_recordings_created_at ON public.recordings USING btree (created_at);
+
+CREATE UNIQUE INDEX idx_recordings_id_workspace_unique ON public.recordings USING btree (id, workspace_id);
 
 CREATE INDEX idx_recordings_source ON public.recordings USING btree (source);
 
 CREATE INDEX idx_recordings_status ON public.recordings USING btree (status);
 
 CREATE INDEX idx_recordings_student_id ON public.recordings USING btree (student_id);
+
+CREATE INDEX idx_recordings_workspace_id ON public.recordings USING btree (workspace_id);
+
+CREATE INDEX idx_recordings_workspace_sha256 ON public.recordings USING btree (workspace_id, sha256, created_at DESC) WHERE (sha256 IS NOT NULL);
 
 CREATE INDEX idx_schema_migrations_applied_at ON public.schema_migrations USING btree (applied_at DESC);
 
@@ -1442,6 +1572,12 @@ CREATE INDEX idx_templates_label ON public.templates USING btree (label);
 
 CREATE UNIQUE INDEX idx_templates_single_default ON public.templates USING btree (is_default) WHERE is_default;
 
+CREATE UNIQUE INDEX idx_transcription_runs_one_active_per_recording ON public.transcription_runs USING btree (recording_id) WHERE (state = ANY (ARRAY['queued'::text, 'claimed'::text, 'submitting'::text, 'retry_wait'::text]));
+
+CREATE INDEX idx_transcription_runs_workspace_recording ON public.transcription_runs USING btree (workspace_id, recording_id, created_at DESC);
+
+CREATE UNIQUE INDEX idx_transcripts_one_winner_per_recording ON public.transcripts USING btree (recording_id);
+
 CREATE INDEX idx_transcripts_recording_id ON public.transcripts USING btree (recording_id);
 
 CREATE INDEX idx_uploaded_files_created_at ON public.uploaded_files USING btree (created_at);
@@ -1459,6 +1595,10 @@ CREATE INDEX idx_users_email ON public.users USING btree (email);
 CREATE INDEX idx_users_role ON public.users USING btree (role);
 
 CREATE INDEX idx_workspace_memberships_user_id ON public.workspace_memberships USING btree (user_id);
+
+CREATE TRIGGER assignment_sessions_confirmed_source_audio_deletion AFTER INSERT OR UPDATE OF confirmed_snapshot, recording_id, student_id ON public.assignment_sessions FOR EACH ROW EXECUTE FUNCTION public.request_confirmed_source_audio_deletion();
+
+CREATE TRIGGER recordings_workspace_authority_trigger BEFORE INSERT OR UPDATE OF student_id, workspace_id ON public.recordings FOR EACH ROW EXECUTE FUNCTION public.enforce_recording_workspace_authority();
 
 CREATE TRIGGER set_drafts_updated_at BEFORE UPDATE ON public.drafts FOR EACH ROW EXECUTE FUNCTION public.set_drafts_updated_at();
 
@@ -1617,6 +1757,21 @@ ALTER TABLE ONLY public.prompt_packages
 
 ALTER TABLE ONLY public.prompt_packages
     ADD CONSTRAINT prompt_packages_transcript_id_fkey FOREIGN KEY (transcript_id) REFERENCES public.transcripts(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.recording_upload_operation_attempts
+    ADD CONSTRAINT recording_upload_operation_attempts_operation_id_fkey FOREIGN KEY (operation_id) REFERENCES public.recording_upload_operations(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.recording_upload_operations
+    ADD CONSTRAINT recording_upload_operations_student_id_fkey FOREIGN KEY (student_id) REFERENCES public.students(id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY public.recording_upload_operations
+    ADD CONSTRAINT recording_upload_operations_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY public.recordings
+    ADD CONSTRAINT recordings_student_workspace_fkey FOREIGN KEY (student_id, workspace_id) REFERENCES public.students(id, workspace_id) ON UPDATE RESTRICT ON DELETE RESTRICT;
+
+ALTER TABLE ONLY public.recordings
+    ADD CONSTRAINT recordings_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE RESTRICT;
 
 ALTER TABLE ONLY public.student_credit_events
     ADD CONSTRAINT student_credit_events_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
@@ -1783,6 +1938,12 @@ ALTER TABLE ONLY public.template_revisions
 ALTER TABLE ONLY public.templates
     ADD CONSTRAINT templates_active_revision_id_fkey FOREIGN KEY (active_revision_id) REFERENCES public.template_revisions(id) ON DELETE SET NULL;
 
+ALTER TABLE ONLY public.transcription_runs
+    ADD CONSTRAINT transcription_runs_recording_workspace_fkey FOREIGN KEY (recording_id, workspace_id) REFERENCES public.recordings(id, workspace_id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.transcription_runs
+    ADD CONSTRAINT transcription_runs_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE RESTRICT;
+
 ALTER TABLE ONLY public.transcripts
     ADD CONSTRAINT transcripts_recording_id_fkey FOREIGN KEY (recording_id) REFERENCES public.recordings(id) ON DELETE CASCADE;
 
@@ -1923,5 +2084,10 @@ VALUES
   ('0045_student_memory_snapshot_eligibility_repair', 'c40a212c3fde21f699f31ba07d90fad5da90e0e5cad56934b72a13835daf356f', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0046_jobs_publication_sequence', '9b63588b48faf38aef14df9c9f9dd8f94b9e554f5a1044d081dad9e2e6bf9595', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0047_jobs_published_content_hash', '06508beba68bbd9b5141f76d7a69539385968f382736f53885cb1add81c8428c', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0048_recording_audio_topology', 'a426012df6f20d3a16962e004fef79e1f00e85da70557606b440e906aea4f0be', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0048_recording_audio_topology', 'a426012df6f20d3a16962e004fef79e1f00e85da70557606b440e906aea4f0be', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0049_recording_ingest_readiness', '46c6544bd299ace4c46445761788b8d1acaa5e5d64bbbd7a1e943f2306d8636d', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0050_recording_media_preparation_version', 'ddfcb6bfbc7fc740b6642361ef15fdd96fcb868ce358dcdee7cc2d5ce2dc5c15', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0051_recording_upload_operations', '7353b778b5e973f4dc05774676ff0657062f31eb9966f1459e84dbc3edce03cb', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0052_recording_upload_candidate_cleanup_schedule', '34891f5ed3494026d41d58a9d901f2f31e5ce7802dcf706cb2f5468175080890', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0053_recording_audio_cleanup_backfill', '7d4e11f27d14a035f15d9b629ec00bdfcc641882dbb7eaf0ad16d87692f2440f', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;

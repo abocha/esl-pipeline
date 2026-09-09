@@ -46,8 +46,10 @@ pnpm --silent run check:fast:agent
 pnpm docs:check
 ```
 
-Use `pnpm check:fast` when human-readable lane selection is useful, `pnpm check:pre-pr` for broad
-PR validation, and `pnpm check` only for CI reproduction or DB/worker/integration-risk changes.
+Use `pnpm check:fast` when human-readable lane selection is useful, `pnpm check:pre-pr:agent` for
+broad agent-driven PR validation, and `pnpm check:agent` for agent-driven CI reproduction or
+DB/worker/integration-risk changes. The corresponding non-agent commands remain human-readable and
+validate the same scope with the same exit semantics.
 
 ## Operational Entry Point (Backend-First)
 

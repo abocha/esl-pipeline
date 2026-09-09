@@ -1,15 +1,17 @@
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockGetJobById = vi.fn();
+const mockGetJobWorkspaceAuthority = vi.fn();
 const mockListJobActionHistoryForJob = vi.fn();
 const mockWithPgClient = vi.fn();
 const mockGetPromptPackageLineage = vi.fn();
 
 vi.mock('../src/domain/job-repository.js', () => ({
   getJobById: mockGetJobById,
+  getJobWorkspaceAuthority: mockGetJobWorkspaceAuthority,
 }));
 
 vi.mock('../src/domain/job-action-history-repository.js', () => ({
@@ -25,6 +27,85 @@ vi.mock('../src/application/get-prompt-package.js', () => ({
 }));
 
 describe('application/get-job-provenance', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetJobWorkspaceAuthority.mockResolvedValue({
+      mode: 'recording_backed',
+      recordingId: 'recording-1',
+    });
+  });
+
+  it('does not materialize job or lineage helpers before workspace authority succeeds', async () => {
+    mockGetJobWorkspaceAuthority.mockResolvedValueOnce(null);
+
+    const { getJobProvenance } = await import('../src/application/get-job-provenance.js');
+    await expect(
+      getJobProvenance('foreign-or-absent-job', 'workspace-1', 'user-1'),
+    ).resolves.toBeNull();
+
+    expect(mockGetJobById).not.toHaveBeenCalled();
+    expect(mockWithPgClient).not.toHaveBeenCalled();
+    expect(mockListJobActionHistoryForJob).not.toHaveBeenCalled();
+    expect(mockGetPromptPackageLineage).not.toHaveBeenCalled();
+    expect(mockGetJobWorkspaceAuthority).toHaveBeenCalledWith(
+      'foreign-or-absent-job',
+      'workspace-1',
+      'user-1',
+    );
+  });
+
+  it('returns provenance for an owner-authorized job with intentionally null recording lineage', async () => {
+    mockGetJobWorkspaceAuthority.mockResolvedValueOnce({
+      mode: 'standalone_owner',
+      recordingId: null,
+    });
+    mockGetJobById.mockResolvedValueOnce({
+      id: 'standalone-job',
+      state: 'queued',
+      createdAt: new Date('2026-09-03T00:00:00.000Z'),
+      updatedAt: new Date('2026-09-03T00:00:00.000Z'),
+      startedAt: null,
+      finishedAt: null,
+      sourceJobId: null,
+      manifestPath: null,
+      htmlUrl: null,
+      error: null,
+    });
+    mockListJobActionHistoryForJob.mockResolvedValue([]);
+    mockWithPgClient.mockImplementation(async (fn: (client: { query: () => unknown }) => unknown) =>
+      fn({ query: vi.fn().mockResolvedValue({ rows: [{}] }) }),
+    );
+
+    const { getJobProvenance } = await import('../src/application/get-job-provenance.js');
+    await expect(
+      getJobProvenance('standalone-job', 'workspace-1', 'user-1'),
+    ).resolves.toMatchObject({
+      job: { id: 'standalone-job' },
+      recording: null,
+      transcript: null,
+      promptPackage: null,
+      draft: null,
+    });
+  });
+
+  it.each([
+    'foreign transcript_id',
+    'foreign prompt_package_id',
+    'foreign draft_id',
+    'foreign source_job_id',
+    'foreign action/history job lineage',
+  ])('rejects owned jobs with %s before following rich lineage', async () => {
+    mockGetJobWorkspaceAuthority.mockResolvedValueOnce(null);
+
+    const { getJobProvenance } = await import('../src/application/get-job-provenance.js');
+    await expect(getJobProvenance('mixed-job', 'workspace-1', 'user-1')).resolves.toBeNull();
+
+    expect(mockGetJobById).not.toHaveBeenCalled();
+    expect(mockWithPgClient).not.toHaveBeenCalled();
+    expect(mockListJobActionHistoryForJob).not.toHaveBeenCalled();
+    expect(mockGetPromptPackageLineage).not.toHaveBeenCalled();
+  });
+
   it('surfaces inferred providerError details for untagged provider failures', async () => {
     mockGetJobById.mockResolvedValueOnce({
       id: 'job-1',
@@ -41,13 +122,13 @@ describe('application/get-job-provenance', () => {
     mockListJobActionHistoryForJob.mockResolvedValue([]);
     mockWithPgClient.mockImplementation(async (fn: (client: { query: () => unknown }) => unknown) =>
       fn({
-        query: vi.fn().mockResolvedValue({ rows: [] }),
+        query: vi.fn().mockResolvedValue({ rows: [{ recording_id: 'recording-1' }] }),
       }),
     );
     mockGetPromptPackageLineage.mockResolvedValue(null);
 
     const { getJobProvenance } = await import('../src/application/get-job-provenance.js');
-    const result = await getJobProvenance('job-1');
+    const result = await getJobProvenance('job-1', 'workspace-1', 'user-1');
 
     expect(result?.job.providerError).toEqual({
       category: 'provider_timeout',
@@ -97,13 +178,13 @@ describe('application/get-job-provenance', () => {
     mockListJobActionHistoryForJob.mockResolvedValue([]);
     mockWithPgClient.mockImplementation(async (fn: (client: { query: () => unknown }) => unknown) =>
       fn({
-        query: vi.fn().mockResolvedValue({ rows: [] }),
+        query: vi.fn().mockResolvedValue({ rows: [{ recording_id: 'recording-1' }] }),
       }),
     );
     mockGetPromptPackageLineage.mockResolvedValue(null);
 
     const { getJobProvenance } = await import('../src/application/get-job-provenance.js');
-    const result = await getJobProvenance('job-2');
+    const result = await getJobProvenance('job-2', 'workspace-1', 'user-1');
 
     expect(result?.tts).toEqual({
       provider: 'elevenlabs',
@@ -169,13 +250,13 @@ describe('application/get-job-provenance', () => {
     mockListJobActionHistoryForJob.mockResolvedValue([]);
     mockWithPgClient.mockImplementation(async (fn: (client: { query: () => unknown }) => unknown) =>
       fn({
-        query: vi.fn().mockResolvedValue({ rows: [] }),
+        query: vi.fn().mockResolvedValue({ rows: [{ recording_id: 'recording-1' }] }),
       }),
     );
     mockGetPromptPackageLineage.mockResolvedValue(null);
 
     const { getJobProvenance } = await import('../src/application/get-job-provenance.js');
-    const result = await getJobProvenance('job-3');
+    const result = await getJobProvenance('job-3', 'workspace-1', 'user-1');
 
     expect(result?.pronunciationWarnings).toEqual([
       {

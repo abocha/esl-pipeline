@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { Accept } from 'react-dropzone';
 
 import type {
   AssignmentSession,
@@ -115,7 +116,12 @@ async function getJobStatusWithRecoveryRetry(jobId: string): Promise<JobStatus> 
   }
 }
 
-const AUDIO_EXTENSIONS = ['.opus'] as const;
+const RECORDING_FILE_ACCEPT = {
+  'audio/*': ['.aac', '.m4a', '.mp3', '.ogg', '.opus', '.wav', '.webm'],
+  'video/mp4': ['.mp4'],
+  'video/quicktime': ['.mov'],
+  'video/webm': ['.webm'],
+} satisfies Accept;
 const FOCUSED_STEP_ORDER: AssignmentStepId[] = [
   'student',
   'source',
@@ -590,7 +596,6 @@ export const MinimalAssignment: React.FC = () => {
     resetSourceFlow,
     applyHydratedSnapshot: applySourceHydration,
     loadStudentOptions,
-    handleRetryTranscription,
     handleSelectedSttProviderChange,
     handleStudentSelectionChange,
     handleFiles,
@@ -664,13 +669,19 @@ export const MinimalAssignment: React.FC = () => {
 
   const beginHydration = useCallback(
     (mode: HydrationMode): HydrationContext => {
+      if (mode !== 'new') {
+        // A resumed assignment has its own source workflow even when it belongs
+        // to the same student. Invalidate before any resume I/O can yield so an
+        // older upload-status lookup cannot hydrate the resumed source state.
+        resetSourceFlow({ preserveRecordingSettings: true });
+      }
       hydrationIdRef.current += 1;
       assignmentSessionUserEditedRef.current = false;
       assignmentSessionPersistenceSuppressedRef.current = mode !== 'new';
       resetPendingSessionRecovery();
       return { id: hydrationIdRef.current, mode };
     },
-    [resetPendingSessionRecovery],
+    [resetPendingSessionRecovery, resetSourceFlow],
   );
 
   const isCurrentHydration = useCallback(
@@ -2680,7 +2691,7 @@ export const MinimalAssignment: React.FC = () => {
               }}
               sttProviders={source.sttProviders}
               formatSttProviderLabel={formatSttProviderLabel}
-              audioExtensions={AUDIO_EXTENSIONS}
+              recordingFileAccept={RECORDING_FILE_ACCEPT}
               uploading={source.uploading}
               replacingAudio={source.replacingAudio}
               canReplaceAudio={Boolean(
@@ -2699,17 +2710,16 @@ export const MinimalAssignment: React.FC = () => {
               onBeginAudioReplacement={source.beginAudioReplacement}
               onCancelAudioReplacement={source.cancelAudioReplacement}
               onCancelUpload={handleCancelUpload}
+              canRetryUpload={source.canRetryUpload}
+              onRetryUpload={source.retryPendingUpload}
               uploadError={source.uploadError}
               uploadCacheNotice={source.uploadCacheNotice}
               recording={source.recording}
               transcriptProvider={source.transcript?.sttProvider ?? null}
-              recordingStatus={source.recordingStatus}
               recordingError={source.recordingError}
               transcriptStatus={source.transcriptStatus}
               transcriptError={source.transcriptError}
               transcriptReady={transcriptReady}
-              retryingTranscript={source.retryingTranscript}
-              onRetryTranscript={() => void handleRetryTranscription()}
               transcriptText={source.transcriptText}
               onTranscriptTextChange={(value) => {
                 markAssignmentUserEdit();

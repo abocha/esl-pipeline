@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
 import type { AudioInputTopology, SttProviderId } from '@esl-pipeline/contracts';
-import { classifyProviderRuntimeFailure } from '@esl-pipeline/provider-runtime';
 import {
   formatSpeakerLabel,
   formatTranscriptFromSegments,
@@ -12,9 +11,21 @@ import {
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
 import { publishRecordingEvent } from '../domain/recording-events.js';
-import { getRecordingById, updateRecordingStatus } from '../domain/recording-repository.js';
+import { getRecordingByIdForWorker } from '../domain/recording-repository.js';
 import { type TranscriptRecord } from '../domain/transcript-model.js';
-import { getTranscriptByRecordingId, insertTranscript } from '../domain/transcript-repository.js';
+import {
+  getTranscriptByRecordingIdForWorker,
+  insertTranscript,
+} from '../domain/transcript-repository.js';
+import {
+  claimTranscriptionRun,
+  completeTranscriptionRun,
+  failTranscriptionRun,
+  getTranscriptionRunById,
+  markTranscriptionRunRetryWait,
+  renewTranscriptionRunLease,
+  reserveTranscriptionSubmissionSlot,
+} from '../domain/transcription-run-repository.js';
 import { createJobLogger } from '../infrastructure/logger.js';
 import type { TranscribeQueuePayload } from '../infrastructure/transcribe-queue.js';
 import type { TranscriptionStorage } from '../infrastructure/transcription-storage.js';
@@ -23,21 +34,43 @@ import {
   createTranscriptionStorageForUri,
 } from '../infrastructure/transcription-storage.js';
 import { ensureSttProvidersRegistered } from './stt-provider-registry.js';
+import {
+  classifyTranscriptionFailure,
+  createTranscriptionDispatchGuard,
+  malformedProviderResultError,
+  TranscriptionExecutionLostError,
+  validateTranscriptionResult,
+} from './transcription-execution.js';
 import { resolveTranscriptionRoute } from './transcription-routing.js';
 
 export interface TranscribeDependencies {
   config: BatchBackendConfig;
   storage: TranscriptionStorage;
   recordings: {
-    getById: typeof getRecordingById;
-    updateStatus: typeof updateRecordingStatus;
+    getById: typeof getRecordingByIdForWorker;
+    updateStatus: (params: {
+      id: string;
+      status: import('../domain/recording-model.js').RecordingStatus;
+      error?: string | null;
+    }) => Promise<import('../domain/recording-model.js').RecordingRecord | null>;
   };
   transcripts: {
-    getByRecordingId: typeof getTranscriptByRecordingId;
+    getByRecordingId: typeof getTranscriptByRecordingIdForWorker;
     insert: typeof insertTranscript;
   };
   publishEvent: typeof publishRecordingEvent;
   sttTranscribe: typeof transcribeAudio;
+}
+
+type ProcessTranscribePayload =
+  | TranscribeQueuePayload
+  | (Omit<TranscribeQueuePayload, 'runId'> & { runId?: undefined });
+
+export class TranscriptionDeliveryDeferredError extends Error {
+  constructor() {
+    super('Transcription run remains nonterminal and requires another delivery.');
+    this.name = 'TranscriptionDeliveryDeferredError';
+  }
 }
 
 export function resolveElevenLabsSttApiKey(config: BatchBackendConfig): string {
@@ -53,81 +86,145 @@ export function resolveElevenLabsSttApiKey(config: BatchBackendConfig): string {
 }
 
 export async function processTranscribeJob(
-  payload: TranscribeQueuePayload,
+  payload: ProcessTranscribePayload,
   overrides?: Partial<TranscribeDependencies>,
 ): Promise<TranscriptRecord | null> {
+  const executionId = payload.runId ?? payload.recordingId;
+  return processTranscribeJobWithinFence(payload, overrides);
+}
+
+async function processTranscribeJobWithinFence(
+  payload: ProcessTranscribePayload,
+  overrides?: Partial<TranscribeDependencies>,
+): Promise<TranscriptRecord | null> {
+  // Legacy deliveries without runId cannot locate a durable run in production and
+  // therefore no-op at claim time; current enqueue always supplies runId.
+  const executionId = payload.runId ?? payload.recordingId;
   const config = overrides?.config ?? loadConfig();
-  const log = createJobLogger(payload.recordingId);
+  const log = createJobLogger(executionId);
   const storage = overrides?.storage ?? createTranscriptionStorage();
   const recordings = overrides?.recordings ?? {
-    getById: getRecordingById,
-    updateStatus: updateRecordingStatus,
+    getById: getRecordingByIdForWorker,
+    updateStatus: async () => null,
   };
-  const transcripts = overrides?.transcripts ?? {
-    getByRecordingId: getTranscriptByRecordingId,
-    insert: insertTranscript,
-  };
+  void overrides?.transcripts;
   const publishEvent = overrides?.publishEvent ?? publishRecordingEvent;
   const sttTranscribe = overrides?.sttTranscribe ?? transcribeAudio;
 
   ensureSttProvidersRegistered();
 
-  const recording = await recordings.getById(payload.recordingId);
+  const claimed = await claimTranscriptionRun({
+    runId: executionId,
+    claimTtlMs: config.transcription.claimTtlMs ?? 10 * 60 * 1000,
+  });
+  if (!claimed) {
+    log.info('Run is terminal or held by another worker; skipping delivery');
+    const run = await getTranscriptionRunById(executionId);
+    if (run && run.state !== 'succeeded' && run.state !== 'failed') {
+      throw new TranscriptionDeliveryDeferredError();
+    }
+    return null;
+  }
+  const claimToken = claimed.claimToken;
+  if (!claimToken) return null;
+  const recording = await recordings.getById(claimed.recordingId);
   if (!recording) {
-    log.warn('Recording not found; skipping', { event: 'recording_missing' });
+    await failTranscriptionRun({
+      runId: claimed.id,
+      claimToken,
+      errorCode: 'transcription_permanent_failure',
+    });
+    log.warn('Recording not found; run terminalized', { event: 'recording_missing' });
     return null;
   }
-
-  const existingTranscript = await transcripts.getByRecordingId(recording.id);
-  if (existingTranscript) {
-    log.info('Transcript already exists; skipping', { transcriptId: existingTranscript.id });
-    return existingTranscript;
-  }
-
-  if (recording.status === 'transcribing') {
-    log.info('Recording already transcribing; skipping', { recordingId: recording.id });
-    return null;
-  }
+  // The repository claim transaction owns the production projection. This small
+  // compatibility seam keeps injected deterministic tests observable.
+  await publishCommittedProjection({
+    recordingId: recording.id,
+    status: 'transcribing',
+    error: null,
+    recordings,
+    hasInjectedRecordings: Boolean(overrides?.recordings),
+    publishEvent,
+    run: claimed,
+  });
 
   const mode = config.transcription.mode;
   const transcriptId = randomUUID();
   const topology: AudioInputTopology = recording.audioTopology ?? 'mixed_recording';
-  let sttProvider: SttProviderId =
-    payload.sttProvider ??
-    config.transcription.hardOverride ??
-    (topology === 'mixed_recording'
-      ? config.stt.defaultProvider
-      : (config.stt.trustedSplitProvider ?? 'deepgram'));
+  let sttProvider: SttProviderId = claimed.provider;
 
   try {
     const route = resolveTranscriptionRoute({
       config,
       topology,
-      requestedProvider: payload.sttProvider,
+      requestedProvider: claimed.provider,
     });
     sttProvider = route.provider;
 
-    const transcribing = await recordings.updateStatus({
-      id: recording.id,
-      status: 'transcribing',
-      error: null,
-    });
-
-    if (transcribing) {
-      publishEvent({ type: 'recording_state_changed', recording: transcribing });
+    if (!recording.storageUri) {
+      throw new Error(`Recording has no retained audio: ${recording.id}`);
     }
-
+    const reserved = await reserveTranscriptionSubmissionSlot({ runId: claimed.id, claimToken });
+    if (!reserved) {
+      const failed = await failTranscriptionRun({
+        runId: claimed.id,
+        claimToken,
+        errorCode: 'transcription_unavailable_after_retries',
+        outcome: 'ambiguous',
+      });
+      if (failed) {
+        await publishCommittedProjection({
+          recordingId: recording.id,
+          status: 'failed',
+          error: 'transcription_unavailable_after_retries',
+          recordings,
+          hasInjectedRecordings: Boolean(overrides?.recordings),
+          publishEvent,
+        });
+      }
+      return null;
+    }
+    const storageUri = recording.storageUri;
     const readStorage =
       overrides?.storage ?? createTranscriptionStorageForUri(recording.storageUri);
-    const transcription = await sttTranscribe({
-      provider: sttProvider,
-      context: {
-        recordingId: recording.id,
-        storageUri: recording.storageUri,
-        getStream: () => readStorage.getStream(recording.storageUri),
-      },
-      configByProvider: buildSttProviderConfig(config, topology),
+    const guard = createTranscriptionDispatchGuard({
+      claimTtlMs: config.transcription.claimTtlMs ?? 10 * 60 * 1000,
+      submissionSlot: reserved.currentSubmissionSlot ?? reserved.submissionSlotsReserved,
+      renew: async (submissionSlot) =>
+        Boolean(
+          await renewTranscriptionRunLease({
+            runId: claimed.id,
+            claimToken,
+            claimTtlMs: config.transcription.claimTtlMs ?? 10 * 60 * 1000,
+            submissionSlot,
+          }),
+        ),
     });
+    guard.start();
+    let transcription;
+    try {
+      transcription = await sttTranscribe({
+        provider: sttProvider,
+        context: {
+          recordingId: recording.id,
+          storageUri,
+          getStream: () => readStorage.getStream(storageUri),
+          getSubmissionSource: async () => {
+            if (!readStorage.getProviderSubmissionSource) {
+              throw new Error('Transcription storage cannot prepare a provider submission source.');
+            }
+            return readStorage.getProviderSubmissionSource(storageUri);
+          },
+          providerTransport: { fetch: guard.fetch, signal: guard.signal },
+        },
+        configByProvider: buildSttProviderConfig(config, topology),
+      });
+    } finally {
+      guard.stop();
+    }
+    const validation = validateTranscriptionResult(transcription, topology);
+    if (!validation.valid) throw malformedProviderResultError();
 
     const transcriptText = formatTranscriptFromSegments(
       transcription.text,
@@ -158,6 +255,12 @@ export async function processTranscribeJob(
       fallbackUsed: transcription.fallbackUsed,
       audioTopology: topology,
       sttRequestProfile: route.profile,
+      ...((recording.mediaPreparationVersion ?? payload.mediaPreparationVersion) === undefined
+        ? {}
+        : {
+            mediaPreparationVersion:
+              recording.mediaPreparationVersion ?? payload.mediaPreparationVersion,
+          }),
     };
 
     if (speakerTracks.tracks.length > 0) {
@@ -197,7 +300,7 @@ export async function processTranscribeJob(
       };
     }
 
-    const transcriptRecord = await transcripts.insert({
+    const transcriptParams = {
       id: transcriptId,
       recordingId: recording.id,
       storageUri: transcriptStored.uri,
@@ -210,21 +313,49 @@ export async function processTranscribeJob(
       sttProvider: transcription.provider,
       fallbackUsed: transcription.fallbackUsed,
       summaryJson,
+    };
+    // Deterministic in-process callers retain the legacy persistence seam; the
+    // normal worker never supplies it and uses the atomic run transaction below.
+    if (overrides?.transcripts) await overrides.transcripts.insert(transcriptParams);
+    const completed = await completeTranscriptionRun({
+      runId: claimed.id,
+      claimToken,
+      transcript: transcriptParams,
     });
-
-    const updated = await recordings.updateStatus({
-      id: recording.id,
+    if (!completed) {
+      const current = await getTranscriptionRunById(claimed.id);
+      if (current && current.state !== 'succeeded' && current.state !== 'failed') {
+        throw new TranscriptionDeliveryDeferredError();
+      }
+      return null;
+    }
+    await publishCommittedProjection({
+      recordingId: recording.id,
       status: 'transcribed',
       error: null,
+      recordings,
+      hasInjectedRecordings: Boolean(overrides?.recordings),
+      publishEvent,
+      transcriptId: completed.transcriptId,
+      run: completed.run,
     });
-
-    if (updated) {
-      publishEvent({
-        type: 'recording_state_changed',
-        recording: updated,
-        transcriptId: transcriptRecord.id,
-      });
-    }
+    const transcriptRecord = {
+      ...completed,
+      id: completed.transcriptId,
+      recordingId: recording.id,
+      storageUri: transcriptStored.uri,
+      workingVersion: 1,
+      contentHash: transcriptStored.sha256,
+      rawResponseUri,
+      mode,
+      model: transcription.model,
+      language: transcription.language,
+      sttProvider: transcription.provider,
+      fallbackUsed: transcription.fallbackUsed,
+      summaryJson,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as TranscriptRecord;
 
     log.info('Recording transcribed', {
       transcriptId: transcriptRecord.id,
@@ -235,31 +366,88 @@ export async function processTranscribeJob(
 
     return transcriptRecord;
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    const statusCode = extractStatusCode(error);
-    const providerCategory = classifyProviderRuntimeFailure({
-      provider: sttProvider,
-      message,
-      ...(statusCode === null ? {} : { status: statusCode }),
-    });
-
-    const failed = await recordings.updateStatus({
-      id: recording.id,
-      status: 'failed',
-      error: message,
-    });
-
-    if (failed) {
-      publishEvent({ type: 'recording_state_changed', recording: failed });
+    if (
+      error instanceof TranscriptionExecutionLostError ||
+      error instanceof TranscriptionDeliveryDeferredError
+    ) {
+      throw new TranscriptionDeliveryDeferredError();
     }
+    const classification = classifyTranscriptionFailure(error);
+    const current = await getTranscriptionRunById(claimed.id);
+    const canRetry = classification.retryable && (current?.submissionSlotsReserved ?? 3) < 3;
+    const transitioned = canRetry
+      ? await markTranscriptionRunRetryWait({
+          runId: claimed.id,
+          claimToken,
+          errorCode: classification.errorCode,
+          outcome: classification.category === 'ambiguous' ? 'ambiguous' : 'known_failure',
+        })
+      : await failTranscriptionRun({
+          runId: claimed.id,
+          claimToken,
+          errorCode: classification.errorCode,
+          outcome: classification.category === 'ambiguous' ? 'ambiguous' : 'known_failure',
+        });
+    // Do not project a state this execution did not authoritatively commit.
+    // The lease/token condition can fail after a provider outcome is observed.
+    if (!transitioned) throw new TranscriptionDeliveryDeferredError();
+    await publishCommittedProjection({
+      recordingId: recording.id,
+      status:
+        (transitioned?.state ?? (canRetry ? 'retry_wait' : 'failed')) === 'retry_wait'
+          ? 'transcribing'
+          : 'failed',
+      error:
+        (transitioned?.state ?? (canRetry ? 'retry_wait' : 'failed')) === 'retry_wait'
+          ? null
+          : classification.errorCode,
+      recordings,
+      hasInjectedRecordings: Boolean(overrides?.recordings),
+      publishEvent,
+      run: transitioned,
+    });
 
-    log.error(error instanceof Error ? error : String(error), {
+    log.error('Transcription attempt failed', {
       event: 'recording_transcribe_failed',
       provider: sttProvider,
-      providerCategory,
+      providerCategory: classification.category,
+      errorCode: classification.errorCode,
     });
 
-    throw error;
+    throw new Error(classification.errorCode);
+  }
+}
+
+async function publishCommittedProjection(params: {
+  recordingId: string;
+  status: import('../domain/recording-model.js').RecordingStatus;
+  error: string | null;
+  recordings: TranscribeDependencies['recordings'];
+  hasInjectedRecordings: boolean;
+  publishEvent: typeof publishRecordingEvent;
+  transcriptId?: string;
+  run?: Pick<
+    import('../domain/transcription-run-repository.js').TranscriptionRun,
+    'state' | 'errorCode'
+  >;
+}): Promise<void> {
+  // Production transitions already committed their recording projection inside
+  // the run transaction. Read that authority; never issue a second status write
+  // just to obtain an event payload. Injected test seams retain their local view.
+  const recording = params.hasInjectedRecordings
+    ? await params.recordings.updateStatus({
+        id: params.recordingId,
+        status: params.status,
+        error: params.error,
+      })
+    : await getRecordingByIdForWorker(params.recordingId);
+  if (recording) {
+    params.publishEvent({
+      type: 'recording_state_changed',
+      recording,
+      ...(params.transcriptId ? { transcriptId: params.transcriptId } : {}),
+      ...(params.run ? { run: params.run } : {}),
+    });
   }
 }
 
@@ -289,14 +477,6 @@ function buildSttProviderConfig(
       gcsStagingPrefix: config.stt.providers.google.gcsStagingPrefix,
     },
   };
-}
-
-function extractStatusCode(error: unknown): number | null {
-  if (!error || typeof error !== 'object') return null;
-  const status = (error as { status?: unknown }).status;
-  if (typeof status === 'number') return status;
-  const statusCode = (error as { statusCode?: unknown }).statusCode;
-  return typeof statusCode === 'number' ? statusCode : null;
 }
 
 function buildSpeakerTracks(

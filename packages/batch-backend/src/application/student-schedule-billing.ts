@@ -520,12 +520,13 @@ export async function createStudentLesson(
 }
 
 export async function completeElapsedScheduledLessonForHomework(
+  workspaceId: string,
   studentId: string,
   lessonId: string,
   actorUserId?: string | null,
 ): Promise<boolean> {
   return withPgTransaction(async (client) => {
-    const context = await requireTrustedStudentContextById(client, studentId);
+    const context = await requireAuthorizedStudentContext(client, workspaceId, studentId);
     const existing = await getLessonRow(client, context, lessonId);
     if (!existing || existing.status !== 'scheduled' || !isLessonHomeworkFollowUpDue(existing)) {
       return false;

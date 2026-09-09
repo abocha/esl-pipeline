@@ -317,7 +317,7 @@ export function registerGenerationThrottleTests() {
         expect((publishButton as HTMLButtonElement).disabled).toBe(false);
 
         await user.click(screen.getByRole('button', { name: /Create/i }));
-        const generateDraftButton = screen.getByRole('button', {
+        const generateDraftButton = await screen.findByRole('button', {
           name: /^Generate assignment$/i,
         });
         await waitFor(() => {

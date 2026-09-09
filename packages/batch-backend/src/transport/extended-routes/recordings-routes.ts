@@ -29,7 +29,6 @@ import {
   publishTtsProviderSchema,
   publishTtsStrategySchema,
 } from '../../application/publish-study-text-overrides.js';
-import { recordingToDto } from '../../application/recording-dto.js';
 import {
   RecordingRetryError,
   retryRecordingTranscription,
@@ -40,26 +39,42 @@ import {
   TranscriptionRouteError,
 } from '../../application/transcription-routing.js';
 import { updateRecordingTranscript } from '../../application/update-recording-transcript.js';
+import { resolvePrimaryWorkspaceIdForUser } from '../../application/workspace-context.js';
 import {
   type RecordingRecord,
   RecordingSourceSchema,
   RecordingStatusSchema,
 } from '../../domain/recording-model.js';
 import {
-  getRecordingById,
+  getRecordingByIdForWorkspace,
+  insertCachedRecordingLineage,
   insertRecording,
-  listRecordingsBySha256,
+  insertRecordingWithQueuedTranscriptionRun,
+  listRecordingsBySha256ForWorkspace,
   updateRecordingStatus,
 } from '../../domain/recording-repository.js';
-import { deriveStudentId, normalizeStudentName } from '../../domain/student-utils.js';
+import {
+  beginRecordingUploadOperation,
+  getRecordingUploadOperation,
+  RecordingUploadOperationConflictError,
+  recordUploadAttemptCandidate,
+} from '../../domain/recording-upload-operation-repository.js';
+import { getStudentById } from '../../domain/student-repository.js';
 import type { TranscriptRecord } from '../../domain/transcript-model.js';
 import {
-  insertTranscript,
-  listLatestTranscriptsByRecordingIds,
+  getTranscriptByRecordingIdForWorkspace,
+  listLatestTranscriptsByRecordingIdsForWorkspace,
 } from '../../domain/transcript-repository.js';
 import { FileSanitizationError } from '../../infrastructure/file-sanitization-service.js';
 import { FileValidationError } from '../../infrastructure/file-validation-service.js';
 import { logger } from '../../infrastructure/logger.js';
+import {
+  ensureRecordingUploadCapacity,
+  prepareRecordingMedia,
+  RecordingMediaError,
+  spoolRecordingUpload,
+  validateTrustedSplitChannels,
+} from '../../infrastructure/recording-media.js';
 import {
   createTranscriptionStorageForUri,
   type TranscriptionStorage,
@@ -121,7 +136,6 @@ export function registerRecordingRoutes(
       const routePath = resolveRoutePath(request, 'POST /recordings/upload');
       const querySchema = z.object({
         studentId: z.string().uuid().optional(),
-        student: z.string().min(1).optional(),
         sttProvider: z.enum(['deepgram', 'elevenlabs', 'google']).optional(),
         audioTopology: z.enum(['trusted_split_channels']).optional(),
       });
@@ -137,22 +151,41 @@ export function registerRecordingRoutes(
           });
         }
 
-        const file = await (request as RecordingUploadRequest).file({
-          limits: { fileSize: config.recordings.maxFileSize },
-          throwFileSizeLimit: false,
-        });
-
-        if (!file) {
+        const workspaceId = await resolvePrimaryWorkspaceIdForUser(authenticatedUser.id);
+        const rawUploadOperationId = request.headers['x-upload-operation-id'];
+        const uploadOperationId =
+          typeof rawUploadOperationId === 'string' &&
+          z.string().uuid().safeParse(rawUploadOperationId).success
+            ? rawUploadOperationId
+            : null;
+        if (rawUploadOperationId !== undefined && !uploadOperationId) {
           return reply.code(400).send({
             error: 'validation_failed',
-            message: 'No file uploaded',
-            code: 'no_file',
+            message: 'Invalid upload operation identity.',
+            code: 'invalid_upload_operation_id',
+          });
+        }
+        if (!uploadOperationId) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Upload operation identity is required.',
+            code: 'upload_operation_id_required',
           });
         }
 
+        // Request identity is query/header metadata, deliberately available before
+        // multipart consumption. Do not make ownership depend on form field order.
         const query = querySchema.parse(request.query ?? {});
-        const studentName = query.student ? normalizeStudentName(query.student) : null;
-        const studentId = query.studentId ?? (studentName ? deriveStudentId(studentName) : null);
+        if (!query.studentId) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Select a student before uploading.',
+            code: 'student_required',
+          });
+        }
+        const student = await getStudentById(query.studentId, { workspaceId });
+        if (!student) return errorResponse(reply, 'not_found');
+        const studentId = student.id;
         const requestedSttProvider = query.sttProvider;
         const audioTopology = query.audioTopology ?? 'mixed_recording';
         const route = resolveTranscriptionRoute({
@@ -165,178 +198,244 @@ export function registerRecordingRoutes(
           config,
           effectiveSttProvider,
         );
+        const operationResult = await beginRecordingUploadOperation({
+          workspaceId,
+          operationUuid: uploadOperationId,
+          studentId,
+          audioTopology,
+          requestedProvider: requestedSttProvider ?? null,
+          requestProfile: route.profile,
+        });
+        if (operationResult.kind === 'completed') {
+          const existing = await getRecording(
+            operationResult.operation.finalRecordingId ?? operationResult.operation.recordingId,
+            workspaceId,
+          );
+          if (existing) return reply.code(200).send(existing);
+          throw new Error('Completed upload operation has no recording projection.');
+        }
+        if (operationResult.kind === 'active') {
+          return reply.code(202).send({
+            operationId: uploadOperationId,
+            recordingId: operationResult.operation.recordingId,
+            status: 'processing',
+          });
+        }
+        // Obsolete candidates are deliberately left to the bounded worker reconciler.
+        // It re-checks durable adoption/recording references immediately before every
+        // idempotent filesystem/S3 delete and retries after process/storage failure.
+        const uploadOperation = operationResult.operation;
+        if (!uploadOperation.attemptToken)
+          throw new Error('Claimed upload operation lacks attempt token.');
 
-        const filename = file.filename || '';
-        const fileBuffer = await readFileBuffer(file.file);
-        if (isStreamTruncated(file.file)) {
-          return reply.code(413).send({
+        // This is deliberately before multipart consumption. It is a point-in-time local check,
+        // not a concurrent disk reservation; the configured maximum is the admission budget.
+        await ensureRecordingUploadCapacity({
+          maxBytes: config.recordings.maxFileSize,
+          reserveBytes: config.recordings.diskReserveBytes,
+        });
+
+        const file = await (request as RecordingUploadRequest).file({
+          // The spool remains authoritative. This ceiling only prevents the multipart parser
+          // retaining an unbounded remainder after the spool has rejected it.
+          limits: { fileSize: config.recordings.maxFileSize + 1 },
+          throwFileSizeLimit: false,
+        });
+
+        if (!file) {
+          return reply.code(400).send({
             error: 'validation_failed',
-            message: `Recording exceeds max size (${formatBytes(config.recordings.maxFileSize)}).`,
-            code: 'file_too_large',
+            message: 'No file uploaded',
+            code: 'no_file',
           });
         }
 
-        let validationResult;
-        if (recordingUploadValidationService) {
-          validationResult = await recordingUploadValidationService.validateFile(
-            fileBuffer,
-            filename,
-          );
-          if (!validationResult.isValid) {
-            logger.warn('Recording upload validation failed', {
-              event: 'recording_upload_validation_failed',
-              userId: authenticatedUser.id,
-              filename,
-              errors: validationResult.errors.map((e: { code: string }) => e.code),
-              warnings: validationResult.warnings.map((w: { code: string }) => w.code),
-            });
-
-            return reply.code(400).send({
-              error: 'validation_failed',
-              message: 'File validation failed',
-              code: 'file_validation_failed',
-              details: {
-                errors: validationResult.errors,
-                warnings: validationResult.warnings,
-              },
+        const filename = file.filename || '';
+        const spooled = await spoolRecordingUpload({
+          input: file.file,
+          maxBytes: config.recordings.maxFileSize,
+          diskReserveBytes: config.recordings.diskReserveBytes,
+        });
+        let prepared;
+        try {
+          prepared = await prepareRecordingMedia({
+            sourcePath: spooled.path,
+            sourceSha256: spooled.sha256,
+            sourceBytes: spooled.bytes,
+            maxOutputBytes: config.recordings.maxFileSize,
+          });
+          if (audioTopology === 'trusted_split_channels') {
+            validateTrustedSplitChannels({
+              channels: prepared.facts.channels,
+              channelLayout: prepared.facts.channelLayout,
             });
           }
-        }
 
-        const sanitizedFilename = sanitizeRecordingFilename(filename);
-        const storageFilename = sanitizedFilename.replaceAll(/[^\w.-]/g, '_');
-        const sourcePath = storageFilename || sanitizedFilename || filename;
-        const fileSha256 = createContentSha256(fileBuffer);
+          const sanitizedFilename = sanitizeRecordingFilename(filename);
+          const storageFilename = sanitizedFilename.replaceAll(/[^\w.-]/g, '_');
+          const sourcePath = storageFilename || sanitizedFilename || filename;
+          const fileSha256 = prepared.sha256;
 
-        const cachedRecordings = await listRecordingsBySha256(fileSha256);
-        if (cachedRecordings.length > 0) {
-          const latestTranscripts = await listLatestTranscriptsByRecordingIds(
-            cachedRecordings.map((recording) => recording.id),
+          const cachedRecordings = await listRecordingsBySha256ForWorkspace(
+            fileSha256,
+            workspaceId,
           );
-          const transcriptByRecordingId = new Map(
-            latestTranscripts.map((transcript) => [transcript.recordingId, transcript] as const),
-          );
-          let transcriptCandidates = 0;
-          let providerMatches = 0;
-          let providerUnknown = 0;
+          if (cachedRecordings.length > 0) {
+            const latestTranscripts = await listLatestTranscriptsByRecordingIdsForWorkspace(
+              cachedRecordings.map((recording) => recording.id),
+              workspaceId,
+            );
+            const transcriptByRecordingId = new Map(
+              latestTranscripts.map((transcript) => [transcript.recordingId, transcript] as const),
+            );
+            let transcriptCandidates = 0;
+            let providerMatches = 0;
+            let providerUnknown = 0;
 
-          for (const cachedRecording of cachedRecordings) {
-            if (cachedRecording.audioTopology !== audioTopology) {
-              continue;
-            }
-            const cachedTranscript = transcriptByRecordingId.get(cachedRecording.id);
-            if (!cachedTranscript) {
-              continue;
-            }
+            for (const cachedRecording of cachedRecordings) {
+              if (cachedRecording.audioTopology !== audioTopology) {
+                continue;
+              }
+              const cachedTranscript = transcriptByRecordingId.get(cachedRecording.id);
+              if (!cachedTranscript) {
+                continue;
+              }
 
-            transcriptCandidates += 1;
-            const cachedProvider = inferTranscriptSttProvider(cachedTranscript);
-            if (cachedProvider === null) {
-              providerUnknown += 1;
-              continue;
-            }
+              transcriptCandidates += 1;
+              const cachedProvider = inferTranscriptSttProvider(cachedTranscript);
+              if (cachedProvider === null) {
+                providerUnknown += 1;
+                continue;
+              }
 
-            if (
-              !shouldReuseCachedTranscriptForFingerprint({
-                effectiveProvider: effectiveSttProvider,
+              if (
+                !shouldReuseCachedTranscriptForFingerprint({
+                  effectiveProvider: effectiveSttProvider,
+                  audioTopology,
+                  sttRequestProfile: route.profile,
+                  mode: config.transcription.mode,
+                  model: expectedFingerprint.model,
+                  language: expectedFingerprint.language,
+                  preparationVersion: prepared.preparationVersion,
+                  transcript: cachedTranscript,
+                })
+              ) {
+                continue;
+              }
+
+              providerMatches += 1;
+              const recordingForResponse = await cloneCachedRecordingForStudent({
+                cachedRecording,
+                cachedTranscript,
+                workspaceId,
+                studentId,
+                sourcePath,
+                sha256: fileSha256,
+                bytes: prepared.bytes,
                 audioTopology,
-                sttRequestProfile: route.profile,
-                mode: config.transcription.mode,
-                model: expectedFingerprint.model,
-                language: expectedFingerprint.language,
-                transcript: cachedTranscript,
-              })
-            ) {
-              continue;
+                mediaPreparationVersion: prepared.preparationVersion,
+                storage: transcriptionStorage,
+                recordingId: uploadOperation.recordingId,
+                uploadOperation: {
+                  id: uploadOperation.id,
+                  attemptToken: uploadOperation.attemptToken,
+                },
+              });
+              logger.info('Recording upload cache hit', {
+                event: 'recording_upload_cache_hit',
+                route: routePath,
+                userId: authenticatedUser.id,
+                recordingId: recordingForResponse.recording.id,
+                transcriptId: recordingForResponse.transcript.id,
+                cacheRecordingId: cachedRecording.id,
+                clonedForStudent: recordingForResponse.recording.id !== cachedRecording.id,
+                filename,
+                sha256: fileSha256,
+                requestedProvider: requestedSttProvider ?? null,
+                effectiveProvider: effectiveSttProvider,
+                cachedProvider,
+                candidateRecordings: cachedRecordings.length,
+                candidateTranscripts: transcriptCandidates,
+                providerMatches,
+              });
+
+              const projection = await getRecording(recordingForResponse.recording.id, workspaceId);
+              if (!projection) throw new Error('Cached recording has no canonical projection.');
+              return reply.code(200).send({
+                ...projection,
+                cacheHit: true,
+                cacheReason: 'transcript_reused',
+                cacheRecordingId: cachedRecording.id,
+              });
             }
 
-            providerMatches += 1;
-            const recordingForResponse =
-              studentId && cachedRecording.studentId && cachedRecording.studentId !== studentId
-                ? await cloneCachedRecordingForStudent({
-                    cachedRecording,
-                    cachedTranscript,
-                    studentId,
-                    sourcePath,
-                    sha256: fileSha256,
-                    audioTopology,
-                    storage: transcriptionStorage,
-                  })
-                : {
-                    recording: cachedRecording,
-                    transcript: cachedTranscript,
-                  };
-            logger.info('Recording upload cache hit', {
-              event: 'recording_upload_cache_hit',
+            logger.info('Recording upload cache bypassed', {
+              event: 'recording_upload_cache_bypassed',
               route: routePath,
               userId: authenticatedUser.id,
-              recordingId: recordingForResponse.recording.id,
-              transcriptId: recordingForResponse.transcript.id,
-              cacheRecordingId: cachedRecording.id,
-              clonedForStudent: recordingForResponse.recording.id !== cachedRecording.id,
               filename,
               sha256: fileSha256,
               requestedProvider: requestedSttProvider ?? null,
               effectiveProvider: effectiveSttProvider,
-              cachedProvider,
               candidateRecordings: cachedRecordings.length,
               candidateTranscripts: transcriptCandidates,
               providerMatches,
-            });
-
-            return reply.code(200).send({
-              ...recordingToDto({
-                ...recordingForResponse.recording,
-                transcriptId: recordingForResponse.transcript.id,
-              }),
-              cacheHit: true,
-              cacheReason: 'transcript_reused',
-              cacheRecordingId: cachedRecording.id,
+              providerUnknown,
             });
           }
 
-          logger.info('Recording upload cache bypassed', {
-            event: 'recording_upload_cache_bypassed',
+          const record = await ingestRecordingUpload({
+            // Storage naming follows probed/prepared facts, never the untrusted original extension.
+            filename: `audio${prepared.extension}`,
+            workspaceId,
+            recordingId: uploadOperation.recordingId,
+            uploadOperation: {
+              id: uploadOperation.id,
+              attemptToken: uploadOperation.attemptToken,
+              recordingId: uploadOperation.recordingId,
+              recordCandidate: (candidateUri) =>
+                recordUploadAttemptCandidate({
+                  operationId: uploadOperation.id,
+                  attemptToken: uploadOperation.attemptToken!,
+                  candidateUri,
+                }),
+            },
+            inputPath: prepared.path,
+            sourcePath,
+            studentId,
+            sttProvider: requestedSttProvider,
+            audioTopology,
+            mediaPreparationVersion: prepared.preparationVersion,
+            storage: transcriptionStorage,
+            repository: {
+              getRecordingByIdForWorkspace,
+              insertRecordingWithRun: insertRecordingWithQueuedTranscriptionRun,
+              insertRecording,
+              updateRecordingStatus,
+            },
+            enqueue: transcribeQueue.enqueue,
+          });
+
+          logger.info('Recording uploaded', {
+            event: 'recording_uploaded',
             route: routePath,
             userId: authenticatedUser.id,
+            recordingId: record.id,
             filename,
-            sha256: fileSha256,
-            requestedProvider: requestedSttProvider ?? null,
-            effectiveProvider: effectiveSttProvider,
-            candidateRecordings: cachedRecordings.length,
-            candidateTranscripts: transcriptCandidates,
-            providerMatches,
-            providerUnknown,
+            sanitizedFilename,
+            bytes: record.bytes,
+            storageProvider: storageConfig.getProvider(),
           });
+
+          const projection = await getRecording(record.id, workspaceId);
+          if (!projection) throw new Error('Uploaded recording has no canonical projection.');
+          return reply.code(201).send(projection);
+        } finally {
+          // Direct audio and extracted video have exactly one candidate path. Both are local-only
+          // after storage and must disappear even when cache cloning or persistence fails.
+          await prepared?.cleanup();
+          await spooled.cleanup().catch(() => undefined);
         }
-
-        const record = await ingestRecordingUpload({
-          filename: storageFilename || sanitizedFilename || filename,
-          stream: Readable.from(fileBuffer),
-          sourcePath,
-          studentId,
-          sttProvider: requestedSttProvider,
-          audioTopology,
-          storage: transcriptionStorage,
-          repository: {
-            insertRecording,
-            updateRecordingStatus,
-          },
-          enqueue: transcribeQueue.enqueue,
-        });
-
-        logger.info('Recording uploaded', {
-          event: 'recording_uploaded',
-          route: routePath,
-          userId: authenticatedUser.id,
-          recordingId: record.id,
-          filename,
-          sanitizedFilename,
-          bytes: record.bytes,
-          storageProvider: storageConfig.getProvider(),
-        });
-
-        return reply.code(201).send(recordingToDto(record));
       } catch (error: unknown) {
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
@@ -358,6 +457,21 @@ export function registerRecordingRoutes(
             code: error.code,
           });
         }
+        if (error instanceof RecordingUploadOperationConflictError) {
+          return reply.code(409).send({
+            error: 'validation_failed',
+            message: 'Upload operation identity was reused with different upload settings.',
+            code: 'upload_operation_conflict',
+          });
+        }
+        if (error instanceof RecordingMediaError) {
+          const status = error.code === 'file_too_large' ? 413 : 400;
+          return reply.code(status).send({
+            error: 'validation_failed',
+            message: error.message,
+            code: error.code,
+          });
+        }
 
         logger.error(error instanceof Error ? error : String(error), {
           event: 'recording_upload_failed',
@@ -370,6 +484,40 @@ export function registerRecordingRoutes(
           error: 'internal_error',
         });
       }
+    },
+  );
+
+  app.get(
+    '/recording-upload-operations/:operationId',
+    { preHandler: [authenticate] },
+    async (request, reply) => {
+      const operationId = (request.params as { operationId: string }).operationId;
+      if (!z.string().uuid().safeParse(operationId).success)
+        return errorResponse(reply, 'not_found');
+      const authenticatedUser = getAuthenticatedUser(request);
+      if (!authenticatedUser) return reply.code(401).send({ error: 'unauthorized' });
+      const workspaceId = await resolvePrimaryWorkspaceIdForUser(authenticatedUser.id);
+      const operation = await getRecordingUploadOperation(workspaceId, operationId);
+      if (!operation) return errorResponse(reply, 'not_found');
+      if (operation.state !== 'completed') {
+        return reply.code(202).send({
+          operationId,
+          recordingId: operation.recordingId,
+          // The same logical UUID remains valid after lease expiry. Tell the
+          // browser it may retransmit that UUID so begin() can durably reclaim
+          // the operation, rather than minting a second logical upload.
+          status:
+            operation.attemptExpiresAt && operation.attemptExpiresAt <= new Date()
+              ? 'reclaimable'
+              : 'processing',
+        });
+      }
+      const recording = await getRecording(
+        operation.finalRecordingId ?? operation.recordingId,
+        workspaceId,
+      );
+      if (!recording) return errorResponse(reply, 'not_found');
+      return reply.send(recording);
     },
   );
 
@@ -396,7 +544,10 @@ export function registerRecordingRoutes(
 
       try {
         const body = schema.parse(request.body ?? {});
-        const result = await ingestManualTranscriptSource(body);
+        const workspaceId = await resolvePrimaryWorkspaceIdForUser(authenticatedUser.id);
+        const student = await getStudentById(body.studentId, { workspaceId });
+        if (!student) return errorResponse(reply, 'not_found');
+        const result = await ingestManualTranscriptSource({ ...body, workspaceId });
 
         logger.info('Manual transcript source created', {
           event: 'manual_transcript_source_created',
@@ -407,12 +558,9 @@ export function registerRecordingRoutes(
           transcriptId: result.transcript.id,
         });
 
-        return reply.code(201).send(
-          recordingToDto({
-            ...result.recording,
-            transcriptId: result.transcript.id,
-          }),
-        );
+        const projection = await getRecording(result.recording.id, workspaceId);
+        if (!projection) throw new Error('Manual transcript source has no canonical projection.');
+        return reply.code(201).send(projection);
       } catch (error: unknown) {
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
@@ -453,7 +601,6 @@ export function registerRecordingRoutes(
         source: z.union([z.string(), z.array(z.string())]).optional(),
         q: z.string().min(1).optional(),
         studentId: z.string().uuid().optional(),
-        student: z.string().min(1).optional(),
         limit: z.coerce.number().int().min(1).max(200).optional(),
         offset: z.coerce.number().int().min(0).optional(),
         order: z.enum(['asc', 'desc']).optional(),
@@ -463,9 +610,15 @@ export function registerRecordingRoutes(
         const query = querySchema.parse(request.query ?? {});
         const statuses = normalizeStatusFilter(query.status);
         const sources = normalizeSourceFilter(query.source);
-        const studentName = query.student ? normalizeStudentName(query.student) : null;
-        const studentId = query.studentId ?? (studentName ? deriveStudentId(studentName) : null);
+        const authenticatedUser = getAuthenticatedUser(request);
+        if (!authenticatedUser) return reply.code(401).send({ error: 'unauthorized' });
+        const workspaceId = await resolvePrimaryWorkspaceIdForUser(authenticatedUser.id);
+        if (query.studentId && !(await getStudentById(query.studentId, { workspaceId }))) {
+          return errorResponse(reply, 'not_found');
+        }
+        const studentId = query.studentId ?? null;
         const recordings = await listRecordingsWithDefaults({
+          workspaceId,
           statuses,
           sources,
           search: query.q ?? null,
@@ -513,7 +666,10 @@ export function registerRecordingRoutes(
       const routePath = resolveRoutePath(request, 'GET /recordings/:recordingId');
 
       try {
-        const recording = await getRecording(recordingId);
+        const authenticatedUser = getAuthenticatedUser(request);
+        if (!authenticatedUser) return reply.code(401).send({ error: 'unauthorized' });
+        const workspaceId = await resolvePrimaryWorkspaceIdForUser(authenticatedUser.id);
+        const recording = await getRecording(recordingId, workspaceId);
         if (!recording) {
           logger.info('Recording not found', {
             event: 'recording_not_found',
@@ -555,8 +711,11 @@ export function registerRecordingRoutes(
       const routePath = resolveRoutePath(request, 'GET /recordings/:recordingId/audio');
 
       try {
-        const recording = await getRecordingById(recordingId);
-        if (!recording) {
+        const authenticatedUser = getAuthenticatedUser(request);
+        if (!authenticatedUser) return reply.code(401).send({ error: 'unauthorized' });
+        const workspaceId = await resolvePrimaryWorkspaceIdForUser(authenticatedUser.id);
+        const recording = await getRecordingByIdForWorkspace(recordingId, workspaceId);
+        if (recording?.audioLifecycle !== 'retained' || !recording.storageUri) {
           logger.info('Recording audio not found', {
             event: 'recording_audio_not_found',
             route: routePath,
@@ -639,7 +798,10 @@ export function registerRecordingRoutes(
 
       try {
         const body = bodySchema.parse(request.body ?? undefined);
-        const recording = await getRecordingById(recordingId);
+        const authenticatedUser = getAuthenticatedUser(request);
+        if (!authenticatedUser) return reply.code(401).send({ error: 'unauthorized' });
+        const workspaceId = await resolvePrimaryWorkspaceIdForUser(authenticatedUser.id);
+        const recording = await getRecordingByIdForWorkspace(recordingId, workspaceId);
         if (recording) {
           resolveTranscriptionRoute({
             config,
@@ -650,6 +812,7 @@ export function registerRecordingRoutes(
         const result = await retryRecordingTranscription(
           recordingId,
           {
+            workspaceId,
             sttProvider: body?.sttProvider,
             audioTopology: body?.audioTopology,
           },
@@ -718,7 +881,10 @@ export function registerRecordingRoutes(
       const routePath = resolveRoutePath(request, 'GET /recordings/:recordingId/transcript');
 
       try {
-        const transcript = await getRecordingTranscript(recordingId);
+        const authenticatedUser = getAuthenticatedUser(request);
+        if (!authenticatedUser) return reply.code(401).send({ error: 'unauthorized' });
+        const workspaceId = await resolvePrimaryWorkspaceIdForUser(authenticatedUser.id);
+        const transcript = await getRecordingTranscript(recordingId, workspaceId);
         if (!transcript) {
           logger.info('Recording transcript not found', {
             event: 'recording_transcript_not_found',
@@ -775,9 +941,13 @@ export function registerRecordingRoutes(
       });
 
       try {
+        const authenticatedUser = getAuthenticatedUser(request);
+        if (!authenticatedUser) return reply.code(401).send({ error: 'unauthorized' });
+        const workspaceId = await resolvePrimaryWorkspaceIdForUser(authenticatedUser.id);
         const body = schema.parse(request.body ?? {});
         const updated = await updateRecordingTranscript({
           recordingId,
+          workspaceId,
           text: body.text,
           expectedWorkingVersion: body.expectedWorkingVersion,
           speakerRoleMapping: body.speakerRoleMapping,
@@ -864,8 +1034,10 @@ export function registerRecordingRoutes(
 
       try {
         const body = schema.parse(request.body ?? {});
+        const workspaceId = await resolvePrimaryWorkspaceIdForUser(authenticatedUser.id);
         const promptPackage = await createPromptPackage({
           recordingId,
+          workspaceId,
           assignmentSessionId: body.assignmentSessionId,
           userId: authenticatedUser.id,
           templateId: body.templateId,
@@ -1471,47 +1643,138 @@ export function registerRecordingRoutes(
 async function cloneCachedRecordingForStudent(params: {
   cachedRecording: RecordingRecord;
   cachedTranscript: TranscriptRecord;
+  workspaceId: string;
   studentId: string;
   sourcePath: string;
   sha256: string;
+  bytes: number;
   audioTopology: import('@esl-pipeline/contracts').AudioInputTopology;
+  mediaPreparationVersion: string;
   storage: TranscriptionStorage;
+  recordingId: string;
+  uploadOperation: { id: string; attemptToken: string };
 }) {
-  const recordingId = randomUUID();
-  const recording = await insertRecording({
-    id: recordingId,
-    source: 'upload',
-    studentId: params.studentId,
-    sourcePath: params.sourcePath,
-    storageUri: params.cachedRecording.storageUri,
-    sha256: params.sha256,
-    bytes: params.cachedRecording.bytes,
-    durationSec: params.cachedRecording.durationSec,
-    channels: params.cachedRecording.channels,
-    audioTopology: params.audioTopology,
-    status: 'transcribed',
-    error: null,
-  });
+  const recordingId = params.recordingId;
   const transcriptId = randomUUID();
   const readStorage = createTranscriptionStorageForUri(params.cachedTranscript.storageUri);
   const cachedText = await readStorage.getText(params.cachedTranscript.storageUri);
   const storedTranscript = await params.storage.putTranscript({ transcriptId, text: cachedText });
-  const transcript = await insertTranscript({
-    id: transcriptId,
-    recordingId,
-    storageUri: storedTranscript.uri,
-    workingVersion: 1,
-    contentHash: storedTranscript.sha256,
-    rawResponseUri: params.cachedTranscript.rawResponseUri,
-    mode: params.cachedTranscript.mode,
-    model: params.cachedTranscript.model,
-    language: params.cachedTranscript.language,
-    sttProvider: params.cachedTranscript.sttProvider,
-    fallbackUsed: params.cachedTranscript.fallbackUsed,
-    summaryJson: params.cachedTranscript.summaryJson,
-  });
+  const createdUris = [storedTranscript.uri];
+  try {
+    const summaryJson = await cloneSpeakerTrackArtifacts({
+      transcriptId,
+      summaryJson: params.cachedTranscript.summaryJson ?? null,
+      storage: params.storage,
+      createdUris,
+    });
+    return await insertCachedRecordingLineage({
+      recording: {
+        id: recordingId,
+        workspaceId: params.workspaceId,
+        source: 'upload',
+        studentId: params.studentId,
+        sourcePath: params.sourcePath,
+        storageUri: null,
+        audioLifecycle: 'not_retained',
+        sha256: params.sha256,
+        bytes: params.bytes,
+        durationSec: params.cachedRecording.durationSec,
+        channels: params.cachedRecording.channels,
+        audioTopology: params.audioTopology,
+        mediaPreparationVersion: params.mediaPreparationVersion,
+        status: 'transcribed',
+        error: null,
+      },
+      transcript: {
+        id: transcriptId,
+        recordingId,
+        storageUri: storedTranscript.uri,
+        workingVersion: 1,
+        contentHash: storedTranscript.sha256,
+        rawResponseUri: null,
+        mode: params.cachedTranscript.mode,
+        model: params.cachedTranscript.model,
+        language: params.cachedTranscript.language,
+        sttProvider: params.cachedTranscript.sttProvider,
+        fallbackUsed: params.cachedTranscript.fallbackUsed,
+        summaryJson,
+      },
+      uploadOperation: params.uploadOperation,
+    });
+  } catch (error) {
+    const [committedRecording, committedTranscript] = await Promise.all([
+      getRecordingByIdForWorkspace(recordingId, params.workspaceId),
+      getTranscriptByRecordingIdForWorkspace(recordingId, params.workspaceId),
+    ]);
+    if (
+      committedRecording &&
+      committedTranscript?.id === transcriptId &&
+      committedTranscript.storageUri === storedTranscript.uri
+    ) {
+      return { recording: committedRecording, transcript: committedTranscript };
+    }
+    const failures: string[] = [];
+    for (const uri of [...createdUris].reverse()) {
+      try {
+        await params.storage.delete(uri);
+      } catch (cleanupError) {
+        failures.push(
+          `${uri}: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`,
+        );
+      }
+    }
+    if (failures.length > 0) {
+      logger.error('Cache clone artifact cleanup failed', {
+        event: 'recording_cache_clone_cleanup_failed',
+        recordingId,
+        transcriptId,
+        failures,
+      });
+      throw new Error(
+        'Cache lineage persistence failed and clone artifact cleanup was incomplete',
+        {
+          cause: error,
+        },
+      );
+    }
+    throw error;
+  }
+}
 
-  return { recording, transcript };
+async function cloneSpeakerTrackArtifacts(params: {
+  transcriptId: string;
+  summaryJson: Record<string, unknown> | null;
+  storage: TranscriptionStorage;
+  createdUris: string[];
+}): Promise<Record<string, unknown> | null> {
+  if (!params.summaryJson) return null;
+  const speakerTracks = params.summaryJson.speakerTracks;
+  if (!speakerTracks || typeof speakerTracks !== 'object')
+    return structuredClone(params.summaryJson);
+  const typed = speakerTracks as { transcripts?: unknown; speakers?: unknown };
+  if (!Array.isArray(typed.transcripts)) return structuredClone(params.summaryJson);
+  const transcripts = [];
+  for (const [index, candidate] of typed.transcripts.entries()) {
+    if (!candidate || typeof candidate !== 'object') continue;
+    const track = candidate as { speaker?: unknown; label?: unknown; uri?: unknown };
+    if (typeof track.uri !== 'string') continue;
+    const text = await createTranscriptionStorageForUri(track.uri).getText(track.uri);
+    const stored = await params.storage.putTranscript({
+      transcriptId: `${params.transcriptId}-speaker-${String(track.speaker ?? index)}`,
+      text,
+    });
+    params.createdUris.push(stored.uri);
+    transcripts.push({ ...track, uri: stored.uri });
+  }
+  const aggregate = await params.storage.putRawResponse({
+    transcriptId: `${params.transcriptId}-speaker-tracks`,
+    json: { transcripts, speakers: typed.speakers ?? [] },
+  });
+  params.createdUris.push(aggregate.uri);
+  return {
+    ...structuredClone(params.summaryJson),
+    speakerTracks: { ...structuredClone(speakerTracks), uri: aggregate.uri, transcripts },
+  };
 }
 
 function isArtifactWorkingConflict(error: unknown): error is {

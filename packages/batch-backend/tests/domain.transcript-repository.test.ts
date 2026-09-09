@@ -119,11 +119,11 @@ describe('domain/transcript-repository', () => {
     mockWithPgClient.mockImplementation(async (callback) =>
       callback({ query } as unknown as PoolClient),
     );
-    const { listLatestTranscriptsByRecordingIds } = await import(
+    const { listLatestTranscriptsByRecordingIdsForWorker } = await import(
       '../src/domain/transcript-repository.js'
     );
 
-    await listLatestTranscriptsByRecordingIds(['11111111-1111-4111-8111-111111111111']);
+    await listLatestTranscriptsByRecordingIdsForWorker(['11111111-1111-4111-8111-111111111111']);
 
     expect(query.mock.calls[0]?.[0]).toContain('working_version IS NOT NULL');
     expect(query.mock.calls[0]?.[0]).toContain('content_hash IS NOT NULL');
