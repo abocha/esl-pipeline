@@ -56,6 +56,8 @@ import {
 } from './MinimalAssignment.advanced';
 import { useMinimalAssignmentAuthoringController } from './MinimalAssignment.authoring';
 import {
+  canShareAssignment,
+  findResumeStep,
   isAssignmentConfirmationApplied,
   shouldGuardAssignmentExit,
 } from './MinimalAssignment.confirmation';
@@ -1855,11 +1857,8 @@ export const MinimalAssignment: React.FC = () => {
   const reviewReady =
     hasAssignmentContent &&
     (!authoring.draftPreviewGate.previewRequired || authoring.previewReadyForCurrentDraft);
-  const focusedWorkflowSteps = useMemo(() => {
-    if (!activeAssignmentSession && jobReady) {
-      return deriveHistoricalAssignmentOutputWorkflow();
-    }
-    return deriveAssignmentWorkflow(activeAssignmentSession, {
+  const assignmentWorkingArtifacts = useMemo(
+    () => ({
       transcript: source.transcript
         ? {
             workingVersion: source.transcript.workingVersion,
@@ -1872,22 +1871,35 @@ export const MinimalAssignment: React.FC = () => {
             contentHash: authoring.draft.contentHash,
           }
         : null,
-    });
-  }, [activeAssignmentSession, authoring.draft, jobReady, source.transcript]);
+    }),
+    [authoring.draft, source.transcript],
+  );
+  const focusedWorkflowSteps = useMemo(() => {
+    if (!activeAssignmentSession && jobReady) {
+      return deriveHistoricalAssignmentOutputWorkflow();
+    }
+    return deriveAssignmentWorkflow(activeAssignmentSession, assignmentWorkingArtifacts);
+  }, [activeAssignmentSession, assignmentWorkingArtifacts, jobReady]);
   const activeStepIndex = FOCUSED_STEP_ORDER.indexOf(activeStep);
   const authoringOperationBusy = authoring.promptLoading || authoring.generatingDraft;
   const commitTeacherNotes = useCallback(async (): Promise<TeacherNotesCommitResult> => {
     if (!context.profileLineageReady) return null;
     const normalizedTeacherNotes = teacherNotes.trim();
+    const committedRecovery = {
+      teacherNotes: normalizedTeacherNotes || null,
+      ...durableProfileLineage,
+    };
+    const committedRecoveryKey = JSON.stringify(committedRecovery);
     if (assignmentContextRecoveryTimeoutRef.current) {
       clearTimeout(assignmentContextRecoveryTimeoutRef.current);
       assignmentContextRecoveryTimeoutRef.current = null;
     }
+    // Confirmation persists this exact Context snapshot through the mutation queue.
+    // An older debounce entry must not replay after Create and make recovery dirty again.
+    pendingContextRecoveryRef.current = null;
+    refreshDebouncedRecoveryPendingState();
 
-    const saved = await saveAssignmentSessionProgress({
-      teacherNotes: normalizedTeacherNotes || null,
-      ...durableProfileLineage,
-    });
+    const saved = await saveAssignmentSessionProgress(committedRecovery);
     if (!saved) return null;
 
     const hadDownstream = Boolean(saved.confirmed.create || saved.promptPackageId || saved.draftId);
@@ -1900,12 +1912,21 @@ export const MinimalAssignment: React.FC = () => {
       profileRevisionHash: durableProfileLineage.selectedProfileRevisionHash,
     }));
     if (!confirmed) return null;
+    const pendingAfterConfirmation = pendingContextRecoveryRef.current as {
+      key: string;
+      patch: UpdateAssignmentSessionRecoveryRequest['patch'];
+    } | null;
+    if (pendingAfterConfirmation?.key === committedRecoveryKey) {
+      pendingContextRecoveryRef.current = null;
+      refreshDebouncedRecoveryPendingState();
+    }
     committedTeacherNotesRef.current = normalizedTeacherNotes;
     return hadDownstream ? 'invalidated' : 'committed';
   }, [
     confirmAssignmentStep,
     context.profileLineageReady,
     durableProfileLineage,
+    refreshDebouncedRecoveryPendingState,
     saveAssignmentSessionProgress,
     teacherNotes,
   ]);
@@ -2060,16 +2081,28 @@ export const MinimalAssignment: React.FC = () => {
   ]);
 
   const handleShareAssignment = useCallback(async () => {
-    const session = activeAssignmentSessionRef.current;
-    if (!session || session.confirmedStep !== 'create') return;
+    const initialSession = activeAssignmentSessionRef.current;
+    if (!initialSession || initialSession.confirmedStep !== 'create') return;
     if (shareReconciliationInFlightRef.current) return;
     shareReconciliationInFlightRef.current = true;
     setSharingAssignment(true);
     setAssignmentShareError(null);
     setAssignmentSaveState('saving');
     const requestId =
-      session.shareJobId ?? shareRequestRef.current ?? globalThis.crypto.randomUUID();
+      initialSession.shareJobId ?? shareRequestRef.current ?? globalThis.crypto.randomUUID();
     shareRequestRef.current = requestId;
+    const returnToDirtyRecovery = (session: AssignmentSession): boolean => {
+      const decision = canShareAssignment(session, assignmentWorkingArtifacts);
+      if (decision.allowed) return false;
+      const dirtyStep = findResumeStep(session, assignmentWorkingArtifacts);
+      setAssignmentShareError(`Sharing paused. ${decision.reason}`);
+      setAssignmentRecoveryNotice(
+        `Review and confirm ${dirtyStep === 'source' ? 'Lesson source' : dirtyStep === 'context' ? 'Teaching context' : 'Create'} before sharing.`,
+      );
+      setAssignmentSaveState('saved');
+      if (dirtyStep) setActiveStep(dirtyStep);
+      return true;
+    };
     const presentSharedJob = async (job: JobStatus) => {
       activeAssignmentSessionRef.current = null;
       setActiveAssignmentSession(null);
@@ -2079,8 +2112,11 @@ export const MinimalAssignment: React.FC = () => {
       await resume.loadResumeJobs();
     };
     try {
-      const recovered = session.shareJobId
-        ? session
+      if (!initialSession.shareJobId && !(await flushPendingSessionRecovery())) return;
+      const current = activeAssignmentSessionRef.current;
+      if (!current || current.confirmedStep !== 'create') return;
+      const recovered = current.shareJobId
+        ? current
         : await saveAssignmentSessionProgress({
             publishTarget: authoring.publishTarget,
             selectedTtsProvider: authoring.selectedTtsProvider,
@@ -2098,7 +2134,7 @@ export const MinimalAssignment: React.FC = () => {
       const latest =
         error instanceof AssignmentSessionConflictApiError
           ? error.latestSession
-          : await fetchAssignmentSession(session.id).catch(() => null);
+          : await fetchAssignmentSession(initialSession.id).catch(() => null);
       if (latest) {
         activeAssignmentSessionRef.current = latest;
         setActiveAssignmentSession(latest);
@@ -2116,6 +2152,7 @@ export const MinimalAssignment: React.FC = () => {
           await presentSharedJob(resumed.job);
           return;
         }
+        if (latest && returnToDirtyRecovery(latest)) return;
         const message = error instanceof Error ? error.message : 'Unable to share this assignment.';
         setAssignmentShareError(message);
         setAssignmentSaveState(
@@ -2137,7 +2174,14 @@ export const MinimalAssignment: React.FC = () => {
       shareReconciliationInFlightRef.current = false;
       setSharingAssignment(false);
     }
-  }, [authoring, resume, saveAssignmentSessionProgress, setActiveAssignmentSession]);
+  }, [
+    assignmentWorkingArtifacts,
+    authoring,
+    flushPendingSessionRecovery,
+    resume,
+    saveAssignmentSessionProgress,
+    setActiveAssignmentSession,
+  ]);
 
   useEffect(() => {
     if (

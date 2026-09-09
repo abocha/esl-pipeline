@@ -128,7 +128,9 @@ Canonical behavior and current status live in:
   related mutation completion. Only genuinely asynchronous recording and job states poll, and they
   stop at terminal state.
 - Share uses one stable request/job ID across automatic retry, remount, focus reconciliation, and
-  lost responses. Once Share is confirmed, the session is immutable workflow history; changing the
+  lost responses. Share drains pending session recovery before reservation; if authoritative
+  recovery is dirty, the tutor is returned to the earliest affected step with a concrete
+  reconfirmation action. Once Share is confirmed, the session is immutable workflow history; changing the
   lesson starts a new assignment and never revokes the existing handout. Reopening a completed
   session is reference-only until the tutor explicitly chooses **Correct published assignment**.
   Correction mode edits the current mutable draft without reopening session confirmation, drains
