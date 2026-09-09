@@ -404,6 +404,10 @@ export async function rerun(jobId: string, action: RerunAction): Promise<JobActi
   const rerunJob = await insertJob({
     md: job.md,
     studentId: job.studentId ?? null,
+    recordingId: job.recordingId ?? null,
+    transcriptId: job.transcriptId ?? null,
+    promptPackageId: job.promptPackageId ?? null,
+    draftId: job.draftId ?? null,
     lessonId: job.lessonId ?? null,
     preset: job.preset ?? undefined,
     withTts: payload.republishOnly ? (job.withTts ?? true) : true,

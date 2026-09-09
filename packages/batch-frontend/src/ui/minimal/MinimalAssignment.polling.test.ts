@@ -13,8 +13,7 @@ import {
 describe('MinimalAssignment polling helpers', () => {
   it('loads transcript and stops polling when recording becomes transcribed without transcript id', () => {
     const decision = getRecordingPollingDecision({
-      status: 'transcribed',
-      error: null,
+      recording: { status: 'transcribed', productState: 'ready', errorCode: null },
       hasTranscriptId: false,
     });
 
@@ -24,23 +23,25 @@ describe('MinimalAssignment polling helpers', () => {
     expect(decision.transcriptFailureMessage).toBeNull();
   });
 
-  it('marks transcript failed with default error message for failed recordings', () => {
+  it('marks terminal recording failure with an actionable safe fallback', () => {
     const decision = getRecordingPollingDecision({
-      status: 'failed',
-      error: null,
+      recording: { status: 'failed', productState: 'attention', errorCode: null },
       hasTranscriptId: false,
     });
 
     expect(decision.shouldContinuePolling).toBe(false);
     expect(decision.shouldLoadTranscript).toBe(false);
     expect(decision.shouldMarkTranscriptFailed).toBe(true);
-    expect(decision.transcriptFailureMessage).toBe('Transcription failed.');
+    expect(decision.transcriptFailureMessage).toMatch(/Replace the recording or upload it again/i);
   });
 
   it('continues polling while recording is still processing', () => {
     const decision = getRecordingPollingDecision({
-      status: 'transcribing',
-      error: null,
+      recording: {
+        status: 'transcribing',
+        productState: 'retrying',
+        errorCode: null,
+      },
       hasTranscriptId: false,
     });
 

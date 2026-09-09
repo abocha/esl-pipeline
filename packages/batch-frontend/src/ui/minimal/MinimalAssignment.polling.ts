@@ -1,8 +1,8 @@
-import type { JobStatus, RecordingStatus } from '../../utils/api';
+import type { JobStatus, RecordingListItem } from '../../utils/api';
+import { getRecordingErrorAction } from '../../utils/recording-state';
 
 const TERMINAL_JOB_STATES = new Set<JobStatus['state']>(['succeeded', 'failed']);
 const ACTIVE_JOB_STATES = new Set<JobStatus['state']>(['queued', 'running']);
-const TERMINAL_RECORDING_STATUSES = new Set<RecordingStatus>(['transcribed', 'failed']);
 
 export const INITIAL_FALLBACK_POLL_MS = 3000;
 export const MAX_FALLBACK_POLL_MS = 30_000;
@@ -31,19 +31,18 @@ export function isActivelyProcessingJobState(
 }
 
 export function getRecordingPollingDecision(params: {
-  status: RecordingStatus;
-  error: string | null | undefined;
+  recording: Pick<RecordingListItem, 'status' | 'productState' | 'errorCode'>;
   hasTranscriptId: boolean;
 }): RecordingPollingDecision {
-  const { status, error, hasTranscriptId } = params;
-  const isTerminal = TERMINAL_RECORDING_STATUSES.has(status);
-  const isFailed = status === 'failed';
+  const { recording, hasTranscriptId } = params;
+  const isFailed = recording.productState === 'attention';
+  const isTerminal = isFailed || recording.productState === 'ready';
 
   return {
     shouldContinuePolling: !isTerminal,
-    shouldLoadTranscript: status === 'transcribed' && !hasTranscriptId,
+    shouldLoadTranscript: recording.productState === 'ready' && !hasTranscriptId,
     shouldMarkTranscriptFailed: isFailed,
-    transcriptFailureMessage: isFailed ? (error ?? 'Transcription failed.') : null,
+    transcriptFailureMessage: isFailed ? getRecordingErrorAction(recording.errorCode) : null,
   };
 }
 

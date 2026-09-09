@@ -5,8 +5,8 @@ import { describe, expect, it } from 'vitest';
 import { DB_MIGRATION_HEAD } from '../../contracts/src/contract-versions.js';
 
 describe('contracts/db contract version', () => {
-  it('publishes the homework-memory published-content hash migration head', () => {
-    expect(DB_MIGRATION_HEAD).toBe('0048_recording_audio_topology');
+  it('publishes the recording audio cleanup backfill migration head', () => {
+    expect(DB_MIGRATION_HEAD).toBe('0053_recording_audio_cleanup_backfill');
   });
 
   it('tracks the latest backend migration head', async () => {

@@ -12,10 +12,34 @@ export interface TranscriptSegment {
   end?: number;
 }
 
+export type SttSubmissionSource =
+  | {
+      kind: 'url';
+      url: string;
+    }
+  | {
+      kind: 'file';
+      path: string;
+      filename: string;
+      contentType: string;
+      contentLength: number;
+    };
+
 export interface SttTranscribeContext {
   recordingId: string;
   storageUri: string;
   getStream: () => Promise<Readable>;
+  /** Provider-specific submission source, prepared only when a provider attempt is submitted. */
+  getSubmissionSource?: () => Promise<SttSubmissionSource>;
+  /**
+   * Attempt-local provider transport. The backend supplies this only after it has
+   * reserved a submission slot. Provider SDKs must use it for their actual HTTP
+   * dispatch rather than asserting ownership before SDK-side preparation.
+   */
+  providerTransport?: {
+    fetch: typeof fetch;
+    signal: AbortSignal;
+  };
 }
 
 export interface SttTranscriptionResult {

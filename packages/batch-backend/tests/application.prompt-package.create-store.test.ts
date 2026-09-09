@@ -143,6 +143,7 @@ describe('application/prompt-package', () => {
       const result = await createPromptPackage(
         {
           recordingId: transcript.recordingId,
+          workspaceId: 'workspace-1',
           notes: 'Some notes',
           templateId: 'template.md',
           profileId: 'profile.md',
@@ -156,7 +157,9 @@ describe('application/prompt-package', () => {
           recordings: {
             getById: async () => ({
               id: transcript.recordingId,
+              workspaceId: 'workspace-1',
               source: 'upload',
+              audioLifecycle: 'retained',
               studentId: 'student-1',
               sourcePath: null,
               storageUri: 'local://recordings/recording-1.opus',
@@ -261,6 +264,7 @@ describe('application/prompt-package', () => {
       await createPromptPackage(
         {
           recordingId: transcript.recordingId,
+          workspaceId: 'workspace-1',
           templateId: 'hw_prompt_definitive.md',
           profileId: 'profile.md',
         },

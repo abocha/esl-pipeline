@@ -16,6 +16,11 @@ Use a current runbook for instructions. Start with the relevant entry in
 [`docs/reference/DOCS_IA_MAP.md`](../reference/DOCS_IA_MAP.md), or with the deployment,
 backup/restore, health, Telegram, prompt-gallery, or replay runbook named there.
 
+Ordinary lesson-recording rollout uses
+[`ordinary-recording-ingest-rollout.md`](ordinary-recording-ingest-rollout.md) for migrations,
+runtime media verification, run/reservation inspection, and staged enablement, plus
+[`recording-audio-cleanup.md`](recording-audio-cleanup.md) for the disabled-first deletion rehearsal.
+
 ## Dated Evidence and Incidents
 
 Dated evidence records what a bounded run, rehearsal, evaluation, or incident observed. It may

@@ -5,7 +5,7 @@
 - Audience: AI agents and maintainers for batch frontend/backend tasks.
 - Read Time: 4 minutes.
 - Authority Level: Active system map.
-- Last Verified Against: 2026-08-14 repository state.
+- Last Verified Against: 2026-09-09 recording-ingest closeout state.
 - Owner: backend/frontend maintainers + automation agents.
 - Review Cadence: monthly or after major batch workflow changes.
 - Status: `active`.
@@ -41,8 +41,9 @@ Telegram bot are operator surfaces; neither owns alternate workflow or pipeline 
 ## Assignment Flow
 
 1. **Student:** start new work or resume a recent assignment, then select/confirm the learner.
-2. **Lesson source:** upload an OPUS recording or paste an existing transcript. Manual transcripts
-   retain explicit `manual_transcript`/`manual` provenance and do not enqueue STT.
+2. **Lesson source:** upload a supported recording or paste an existing transcript. Ordinary media
+   uses backend probe/allowlist policy and automatic STT recovery; manual transcripts retain explicit
+   `manual_transcript`/`manual` provenance and do not enqueue STT.
 3. **Teaching context:** review learner context and enter assignment-specific guidance.
 4. **Create:** generate and edit the prompt-backed assignment draft.
 5. **Review & share:** preview, approve, publish, and open the handout.

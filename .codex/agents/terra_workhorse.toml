@@ -35,5 +35,7 @@ broader scope, overlaps another agent's ownership, or needs new authorization. R
 blocker with evidence.
 
 When finished, report completed plan steps, exact files and behavior changed, commands and results,
-CI-only requirements, remaining risks, and the next parent handoff.
+persisted evidence summary/run-directory or hosted run/job/artifact references, CI-only or other
+manual/environment-owned requirements, relevant post-validation changes needed to assess freshness,
+remaining risks, and the next parent handoff.
 """

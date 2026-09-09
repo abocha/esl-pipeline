@@ -46,6 +46,7 @@ import * as updateRecordingTranscriptModule from '../src/application/update-reco
 import { getVersionMeta } from '../src/application/version-meta.js';
 import * as workspaceContextModule from '../src/application/workspace-context.js';
 import { publishJobEvent } from '../src/domain/job-events.js';
+import * as jobRepositoryModule from '../src/domain/job-repository.js';
 import { publishRecordingEvent } from '../src/domain/recording-events.js';
 import * as recordingRepositoryModule from '../src/domain/recording-repository.js';
 import * as settingsRepositoryModule from '../src/domain/settings-repository.js';
@@ -109,6 +110,39 @@ vi.mock('../src/infrastructure/logger', async () => {
         warn: vi.fn(),
       }),
     },
+  };
+});
+
+// Route integration fixtures intentionally exercise route/cache ownership with synthetic multipart
+// bytes. Media probing itself is exercised in infrastructure.recording-media.test.ts with generated
+// files, so this harness keeps its pre-existing route fixtures independent from ffmpeg.
+vi.mock('../src/infrastructure/recording-media.js', async () => {
+  const actual = await vi.importActual<typeof import('../src/infrastructure/recording-media.js')>(
+    '../src/infrastructure/recording-media.js',
+  );
+  return {
+    ...actual,
+    ensureRecordingUploadCapacity: vi.fn(actual.ensureRecordingUploadCapacity),
+    prepareRecordingMedia: vi.fn(
+      async (params: { sourcePath: string; sourceSha256: string; sourceBytes: number }) => ({
+        path: params.sourcePath,
+        sha256: params.sourceSha256,
+        bytes: params.sourceBytes,
+        preparationVersion: actual.RECORDING_PREPARATION_VERSION,
+        extension: '.mp3',
+        facts: {
+          container: 'mp3',
+          audioStreams: 1,
+          hasVideo: false,
+          durationSeconds: 1,
+          audioCodec: 'mp3',
+          channels: 2,
+          channelLayout: 'stereo',
+          integrity: 'ok' as const,
+        },
+        cleanup: () => actual.removeTemporaryFile(params.sourcePath),
+      }),
+    ),
   };
 });
 
@@ -182,6 +216,32 @@ vi.mock('../src/application/workspace-context', async () => {
     resolvePrimaryWorkspaceIdForUser: vi
       .fn()
       .mockResolvedValue('00000000-0000-4000-8000-000000000001'),
+  };
+});
+
+vi.mock('../src/domain/student-repository', async () => {
+  const actual = await vi.importActual<typeof import('../src/domain/student-repository.js')>(
+    '../src/domain/student-repository.js',
+  );
+  return {
+    ...actual,
+    getStudentById: vi.fn(async (id: string, options?: { workspaceId?: string | null }) => ({
+      id,
+      student: 'Test student',
+      workspaceId: options?.workspaceId ?? null,
+      dbId: null,
+      pageParentId: null,
+      colorPreset: null,
+      voices: {},
+      manifestPreset: null,
+      accentPreference: null,
+      profileId: null,
+      archivedAt: null,
+      archivedBy: null,
+      archiveReason: null,
+      createdAt: new Date('2024-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2024-01-01T00:00:00.000Z'),
+    })),
   };
 });
 
@@ -507,11 +567,17 @@ export function describeHttpServerIntegrationSuite(
       teacherBusinessDashboardModule.getBusinessStatsSurface,
     );
     const mockGetJobProvenance = vi.mocked(getJobProvenanceModule.getJobProvenance);
+    const mockGetJobWorkspaceAuthority = vi.spyOn(jobRepositoryModule, 'getJobWorkspaceAuthority');
 
     beforeAll(async () => {
       vi.clearAllMocks();
       mockResolvePrimaryWorkspaceIdForUser.mockResolvedValue(
         '00000000-0000-4000-8000-000000000001',
+      );
+      mockGetJobWorkspaceAuthority.mockImplementation(async (jobId) =>
+        jobId.includes('foreign') || jobId.includes('missing')
+          ? null
+          : { mode: 'recording_backed', recordingId: 'recording-1' },
       );
       mockListStudentProfiles.mockResolvedValue({
         items: [
@@ -1331,6 +1397,7 @@ export function describeHttpServerIntegrationSuite(
       jobSummaryModule,
       listJobsModule,
       listRecordingsModule,
+      loggerModule,
       materializeDraftModule,
       readinessMetricsModule,
       getVersionMeta,
@@ -1410,6 +1477,8 @@ export function describeHttpServerIntegrationSuite(
       mockGetBusinessScheduleSurface,
       mockGetBusinessStatsSurface,
       mockGetJobProvenance,
+      mockGetJobWorkspaceAuthority,
+      jobRepositoryModule,
     });
   });
 }

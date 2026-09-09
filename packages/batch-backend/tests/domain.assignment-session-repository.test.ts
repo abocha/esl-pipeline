@@ -15,15 +15,24 @@ async function resetTables() {
 }
 
 async function insertUserAndStudent(userId: string, studentId: string) {
+  const workspaceId = randomUUID();
   await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
     await client.query(
       `INSERT INTO users (id, email, password_hash, role)
        VALUES ($1, $2, 'hash', 'user') ON CONFLICT (id) DO NOTHING`,
       [userId, `${userId}@example.test`],
     );
-    await client.query(`INSERT INTO students (id, student) VALUES ($1, 'Alpha Tester')`, [
-      studentId,
+    await client.query(`INSERT INTO workspaces (id, name) VALUES ($1, 'Assignment test')`, [
+      workspaceId,
     ]);
+    await client.query(
+      `INSERT INTO workspace_memberships (workspace_id, user_id, role) VALUES ($1, $2, 'owner')`,
+      [workspaceId, userId],
+    );
+    await client.query(
+      `INSERT INTO students (id, student, workspace_id) VALUES ($1, 'Alpha Tester', $2)`,
+      [studentId, workspaceId],
+    );
   });
 }
 
@@ -1004,6 +1013,95 @@ describe('domain/assignment-session-repository persistence contract', () => {
 
     await expect(confirmMixedSource(repository, fixture)).resolves.toMatchObject({
       session: { confirmedStep: 'source' },
+    });
+    const audio = await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+      client.query(
+        `SELECT audio_lifecycle, audio_deletion_requested_at
+         FROM recordings WHERE id = $1`,
+        [fixture.recordingId],
+      ),
+    );
+    expect(audio.rows[0]).toMatchObject({
+      audio_lifecycle: 'pending',
+      audio_deletion_requested_at: expect.any(Date),
+    });
+  });
+
+  it('restores the deletion request without resetting state when Source confirmation is replayed', async () => {
+    const fixture = await createMixedSourceConfirmationFixture({
+      workingVersion: 2,
+      contentHash: 'd'.repeat(64),
+      mappingWorkingVersion: 2,
+      mappingContentHash: 'd'.repeat(64),
+    });
+    const repository = await import('../src/domain/assignment-session-repository.js');
+    await confirmMixedSource(repository, fixture);
+    const nextAttemptAt = new Date('2026-09-07T02:02:03.000Z');
+    await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+      client.query(
+        `UPDATE recordings
+         SET audio_lifecycle = 'delete_failed',
+             audio_deletion_requested_at = NULL,
+             audio_deletion_attempt_count = 3,
+             audio_deletion_error_code = 'recording_audio_delete_failed',
+             audio_deletion_next_attempt_at = $2
+         WHERE id = $1`,
+        [fixture.recordingId, nextAttemptAt],
+      ),
+    );
+
+    await expect(confirmMixedSource(repository, fixture)).resolves.toMatchObject({
+      session: { confirmedStep: 'source' },
+    });
+    const replayed = await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+      client.query(
+        `SELECT audio_lifecycle, audio_deletion_requested_at,
+                audio_deletion_attempt_count, audio_deletion_error_code,
+                audio_deletion_next_attempt_at, storage_uri
+         FROM recordings WHERE id = $1`,
+        [fixture.recordingId],
+      ),
+    );
+    expect(replayed.rows[0]).toEqual({
+      audio_lifecycle: 'delete_failed',
+      audio_deletion_requested_at: expect.any(Date),
+      audio_deletion_attempt_count: 3,
+      audio_deletion_error_code: 'recording_audio_delete_failed',
+      audio_deletion_next_attempt_at: nextAttemptAt,
+      storage_uri: `local://recordings/${fixture.recordingId}.mp3`,
+    });
+  });
+
+  it('keeps a cache-hit Source recording not_retained when confirmed', async () => {
+    const fixture = await createMixedSourceConfirmationFixture({
+      workingVersion: 2,
+      contentHash: 'e'.repeat(64),
+      mappingWorkingVersion: 2,
+      mappingContentHash: 'e'.repeat(64),
+    });
+    await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+      client.query(
+        `UPDATE recordings SET storage_uri = NULL, audio_lifecycle = 'not_retained'
+         WHERE id = $1`,
+        [fixture.recordingId],
+      ),
+    );
+    const repository = await import('../src/domain/assignment-session-repository.js');
+
+    await expect(confirmMixedSource(repository, fixture)).resolves.toMatchObject({
+      session: { confirmedStep: 'source' },
+    });
+    const audio = await withPgClientSessionContext({ rlsBypass: true }, (client) =>
+      client.query(
+        `SELECT audio_lifecycle, audio_deletion_requested_at, storage_uri
+         FROM recordings WHERE id = $1`,
+        [fixture.recordingId],
+      ),
+    );
+    expect(audio.rows[0]).toEqual({
+      audio_lifecycle: 'not_retained',
+      audio_deletion_requested_at: null,
+      storage_uri: null,
     });
   });
 

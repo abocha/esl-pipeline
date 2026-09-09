@@ -5,11 +5,17 @@ import path from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { finished, pipeline } from 'node:stream/promises';
 
+import type { SttSubmissionSource } from '@esl-pipeline/stt-core';
+
+import { logger } from './logger.js';
 import { S3StorageAdapter } from './s3-storage-adapter.js';
 import { createStorageConfigService, StorageConfigurationService } from './storage-config.js';
 
 const LOCAL_URI_PREFIX = 'local://';
 const S3_URI_PREFIX = 's3://';
+
+/** Fifteen minutes covers ordinary provider fetch latency without retaining a durable URL. */
+export const DEFAULT_PROVIDER_SUBMISSION_URL_EXPIRY_SECONDS = 15 * 60;
 
 export interface StorageWriteResult {
   uri: string;
@@ -18,10 +24,15 @@ export interface StorageWriteResult {
 }
 
 export interface PutAudioOptions {
+  workspaceId: string;
   recordingId: string;
+  /** Immutable writer identity. A candidate is adopted by database state only. */
+  candidateId?: string;
   inputPath?: string;
   stream?: Readable;
   extension?: string;
+  /** Pre-registered immutable candidate location, if this write has upload-attempt authority. */
+  targetUri?: string;
 }
 
 export interface PutTranscriptOptions {
@@ -45,6 +56,9 @@ export interface PutDraftOptions {
 }
 
 export interface TranscriptionStorage {
+  getAudioUri?(
+    options: Pick<PutAudioOptions, 'workspaceId' | 'recordingId' | 'candidateId' | 'extension'>,
+  ): string;
   putAudio(options: PutAudioOptions): Promise<StorageWriteResult>;
   putTranscript(options: PutTranscriptOptions): Promise<StorageWriteResult>;
   putRawResponse(options: PutRawResponseOptions): Promise<StorageWriteResult>;
@@ -52,19 +66,82 @@ export interface TranscriptionStorage {
   putDraft(options: PutDraftOptions): Promise<StorageWriteResult>;
   getText(uri: string): Promise<string>;
   getStream(uri: string): Promise<Readable>;
+  getProviderSubmissionSource?(uri: string): Promise<SttSubmissionSource>;
   delete(uri: string): Promise<void>;
+}
+
+export class TranscriptionStorageSubmissionError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = 'TranscriptionStorageSubmissionError';
+  }
+}
+
+export class RecordingAudioOwnershipError extends Error {
+  constructor() {
+    super('The retained audio URI does not belong to the claimed recording.');
+    this.name = 'RecordingAudioOwnershipError';
+  }
+}
+
+export function assertRecordingOwnedAudioUri(
+  uri: string,
+  workspaceId: string,
+  recordingId: string,
+): void {
+  const objectPath = isLocalUri(uri) ? parseLocalUri(uri) : isS3Uri(uri) ? parseS3Uri(uri).key : '';
+  const segments = objectPath.replaceAll('\\', '/').split('/');
+  const ownerIndex = segments.lastIndexOf('workspaces');
+  const ownedTail = ownerIndex >= 0 ? segments.slice(ownerIndex) : [];
+  const validOwner =
+    ownedTail[0] === 'workspaces' &&
+    ownedTail[1] === workspaceId &&
+    ownedTail[2] === 'recordings' &&
+    ownedTail[3] === recordingId;
+  const remainder = ownedTail.slice(4);
+  const validWorkspaceObject =
+    (remainder.length === 1 && /^audio\.[A-Za-z0-9]+$/u.test(remainder[0] ?? '')) ||
+    (remainder.length === 3 &&
+      remainder[0] === 'candidates' &&
+      Boolean(remainder[1]) &&
+      /^audio\.[A-Za-z0-9]+$/u.test(remainder[2] ?? ''));
+  // Before migration 0049, recording audio used recordings/{recordingId}.{ext}.
+  // Recording IDs are global UUID primary keys; S3 may also have a configured
+  // prefix before that exact two-segment legacy tail.
+  const legacyRecordingsIndex = segments.lastIndexOf('recordings');
+  const legacyFilename = segments.at(-1) ?? '';
+  const validLegacyObject =
+    legacyRecordingsIndex === segments.length - 2 &&
+    (isS3Uri(uri) || legacyRecordingsIndex === 0) &&
+    legacyFilename.startsWith(`${recordingId}.`) &&
+    /^[A-Za-z0-9]+$/u.test(legacyFilename.slice(recordingId.length + 1));
+  const validObject = (validOwner && validWorkspaceObject) || validLegacyObject;
+  if (!validObject || segments.some((segment) => segment === '..')) {
+    throw new RecordingAudioOwnershipError();
+  }
+}
+
+export interface FilesystemTranscriptionStorageDependencies {
+  writeAudio?: typeof writeStreamToFile;
+  removeAudioTarget?: (targetPath: string) => Promise<void>;
 }
 
 export class FilesystemTranscriptionStorage implements TranscriptionStorage {
   private baseDir: string;
+  private writeAudio: typeof writeStreamToFile;
+  private removeAudioTarget: (targetPath: string) => Promise<void>;
 
-  constructor(baseDir: string) {
+  constructor(baseDir: string, dependencies: FilesystemTranscriptionStorageDependencies = {}) {
     this.baseDir = path.resolve(baseDir);
+    this.writeAudio = dependencies.writeAudio ?? writeStreamToFile;
+    this.removeAudioTarget = dependencies.removeAudioTarget ?? removeOwnedLocalAudioTarget;
   }
 
   async putAudio(options: PutAudioOptions): Promise<StorageWriteResult> {
     const extension = resolveAudioExtension(options);
-    const relativePath = path.posix.join('recordings', `${options.recordingId}${extension}`);
+    const relativePath = buildWorkspaceAudioPath(options, extension);
+    const uri = toLocalUri(relativePath);
+    assertTargetUri(options.targetUri, uri);
     const targetPath = this.resolveRelativePath(relativePath);
     await fs.mkdir(path.dirname(targetPath), { recursive: true });
 
@@ -73,13 +150,25 @@ export class FilesystemTranscriptionStorage implements TranscriptionStorage {
     }
 
     const inputStream = options.stream ?? createReadStream(options.inputPath!);
-    const { bytes, sha256 } = await writeStreamToFile(inputStream, targetPath);
+    let written: { bytes: number; sha256: string };
+    try {
+      written = await this.writeAudio(inputStream, targetPath);
+    } catch (error) {
+      await this.cleanupFailedAudioTarget(targetPath, error);
+      throw error;
+    }
 
     return {
-      uri: toLocalUri(relativePath),
-      bytes,
-      sha256,
+      uri,
+      bytes: written.bytes,
+      sha256: written.sha256,
     };
+  }
+
+  getAudioUri(
+    options: Pick<PutAudioOptions, 'workspaceId' | 'recordingId' | 'candidateId' | 'extension'>,
+  ): string {
+    return toLocalUri(buildWorkspaceAudioPath(options, resolveAudioExtension(options)));
   }
 
   async putTranscript(options: PutTranscriptOptions): Promise<StorageWriteResult> {
@@ -120,6 +209,33 @@ export class FilesystemTranscriptionStorage implements TranscriptionStorage {
     return createReadStream(filePath);
   }
 
+  async getProviderSubmissionSource(uri: string): Promise<SttSubmissionSource> {
+    const filePath = this.resolveUriToPath(uri);
+    const media = resolveProviderMediaIdentity(filePath);
+    let fileStats: Awaited<ReturnType<typeof fs.stat>>;
+    try {
+      fileStats = await fs.stat(filePath);
+    } catch (error) {
+      throw new TranscriptionStorageSubmissionError(
+        'Could not prepare the retained local audio for provider submission.',
+        { cause: error },
+      );
+    }
+    if (!fileStats.isFile()) {
+      throw new TranscriptionStorageSubmissionError(
+        'The retained local audio is not a regular file.',
+      );
+    }
+
+    return {
+      kind: 'file',
+      path: filePath,
+      filename: path.basename(filePath),
+      contentType: media.contentType,
+      contentLength: fileStats.size,
+    };
+  }
+
   async delete(uri: string): Promise<void> {
     const filePath = this.resolveUriToPath(uri);
     try {
@@ -156,6 +272,19 @@ export class FilesystemTranscriptionStorage implements TranscriptionStorage {
     }
     return resolved;
   }
+
+  private async cleanupFailedAudioTarget(targetPath: string, uploadError: unknown): Promise<void> {
+    try {
+      await this.removeAudioTarget(targetPath);
+    } catch (cleanupError) {
+      logger.error('Failed to remove owned local audio target after upload failure', {
+        event: 'recording_audio_local_upload_cleanup_failed',
+        targetPath,
+        uploadError: errorMessage(uploadError),
+        cleanupError: errorMessage(cleanupError),
+      });
+    }
+  }
 }
 
 export class S3TranscriptionStorage implements TranscriptionStorage {
@@ -172,26 +301,43 @@ export class S3TranscriptionStorage implements TranscriptionStorage {
 
   async putAudio(options: PutAudioOptions): Promise<StorageWriteResult> {
     const extension = resolveAudioExtension(options);
-    const relativePath = path.posix.join('recordings', `${options.recordingId}${extension}`);
+    const relativePath = buildWorkspaceAudioPath(options, extension);
     const targetKey = this.buildKey(relativePath);
+    const uri = toS3Uri(this.bucket, targetKey);
+    assertTargetUri(options.targetUri, uri);
 
     if (!options.inputPath && !options.stream) {
       throw new Error('putAudio requires inputPath or stream');
     }
 
     const inputStream = options.stream ?? createReadStream(options.inputPath!);
-    const { bytes, sha256 } = await writeStreamToS3({
-      adapter: this.adapter,
-      key: targetKey,
-      input: inputStream,
-      mimeType: resolveAudioMimeType(extension),
-    });
+    let written: { bytes: number; sha256: string };
+    try {
+      written = await writeStreamToS3({
+        adapter: this.adapter,
+        key: targetKey,
+        input: inputStream,
+        mimeType: resolveAudioMimeType(extension),
+      });
+    } catch (error) {
+      await this.cleanupFailedAudioTarget(targetKey, error);
+      throw error;
+    }
 
     return {
-      uri: toS3Uri(this.bucket, targetKey),
-      bytes,
-      sha256,
+      uri,
+      bytes: written.bytes,
+      sha256: written.sha256,
     };
+  }
+
+  getAudioUri(
+    options: Pick<PutAudioOptions, 'workspaceId' | 'recordingId' | 'candidateId' | 'extension'>,
+  ): string {
+    return toS3Uri(
+      this.bucket,
+      this.buildKey(buildWorkspaceAudioPath(options, resolveAudioExtension(options))),
+    );
   }
 
   async putTranscript(options: PutTranscriptOptions): Promise<StorageWriteResult> {
@@ -234,6 +380,26 @@ export class S3TranscriptionStorage implements TranscriptionStorage {
     return this.adapter.getObjectStream(key);
   }
 
+  async getProviderSubmissionSource(uri: string): Promise<SttSubmissionSource> {
+    const { bucket, key } = parseS3Uri(uri);
+    this.ensureBucket(bucket, uri);
+    resolveProviderMediaIdentity(key);
+
+    try {
+      const url = await this.adapter.generatePresignedUrl(key, {
+        expiresIn: DEFAULT_PROVIDER_SUBMISSION_URL_EXPIRY_SECONDS,
+      });
+      if (!url) {
+        throw new Error('S3 presigner returned an empty URL.');
+      }
+      return { kind: 'url', url };
+    } catch {
+      throw new TranscriptionStorageSubmissionError(
+        'Could not prepare the retained S3 audio for provider submission.',
+      );
+    }
+  }
+
   async delete(uri: string): Promise<void> {
     const { bucket, key } = parseS3Uri(uri);
     this.ensureBucket(bucket, uri);
@@ -264,6 +430,39 @@ export class S3TranscriptionStorage implements TranscriptionStorage {
     if (bucket !== this.bucket) {
       throw new Error(`Storage URI bucket mismatch: ${uri}`);
     }
+  }
+
+  private async cleanupFailedAudioTarget(targetKey: string, uploadError: unknown): Promise<void> {
+    // buildWorkspaceAudioPath includes the fresh ingest-generated recording ID, so this exact key
+    // is exclusively owned by this recording write attempt and can be safely compensated.
+    try {
+      await this.adapter.deleteFile(targetKey);
+    } catch (cleanupError) {
+      logger.error('Failed to remove owned S3 audio target after upload failure', {
+        event: 'recording_audio_upload_compensation_failed',
+        key: targetKey,
+        uploadError: errorMessage(uploadError),
+        cleanupError: errorMessage(cleanupError),
+      });
+    }
+  }
+}
+
+function buildWorkspaceAudioPath(options: PutAudioOptions, extension: string): string {
+  const prefix = path.posix.join(
+    'workspaces',
+    options.workspaceId,
+    'recordings',
+    options.recordingId,
+  );
+  return options.candidateId
+    ? path.posix.join(prefix, 'candidates', options.candidateId, `audio${extension}`)
+    : path.posix.join(prefix, `audio${extension}`);
+}
+
+function assertTargetUri(expected: string | undefined, actual: string): void {
+  if (expected !== undefined && expected !== actual) {
+    throw new Error('Pre-registered audio target does not match the storage candidate location.');
   }
 }
 
@@ -332,7 +531,8 @@ function normalizeExtension(extension: string): string {
 
 function resolveAudioMimeType(extension: string): string {
   switch (normalizeExtension(extension).toLowerCase()) {
-    case '.opus': {
+    case '.opus':
+    case '.ogg': {
       return 'audio/ogg';
     }
     case '.mp3': {
@@ -344,9 +544,38 @@ function resolveAudioMimeType(extension: string): string {
     case '.m4a': {
       return 'audio/mp4';
     }
+    case '.aac': {
+      return 'audio/aac';
+    }
+    case '.webm': {
+      return 'audio/webm';
+    }
     default: {
       return 'application/octet-stream';
     }
+  }
+}
+
+function resolveProviderMediaIdentity(fileOrKey: string): { contentType: string } {
+  const extension = path.extname(fileOrKey).toLowerCase();
+  switch (extension) {
+    case '.mp3':
+      return { contentType: 'audio/mpeg' };
+    case '.wav':
+      return { contentType: 'audio/wav' };
+    case '.aac':
+      return { contentType: 'audio/aac' };
+    case '.m4a':
+      return { contentType: 'audio/mp4' };
+    case '.ogg':
+    case '.opus':
+      return { contentType: 'audio/ogg' };
+    case '.webm':
+      return { contentType: 'audio/webm' };
+    default:
+      throw new TranscriptionStorageSubmissionError(
+        'The retained audio has no supported prepared media identity.',
+      );
   }
 }
 
@@ -403,6 +632,14 @@ function isWithinBaseDir(baseDir: string, targetPath: string): boolean {
   const relative = path.relative(baseDir, targetPath);
   if (!relative) return true;
   return !relative.startsWith('..') && !path.isAbsolute(relative);
+}
+
+async function removeOwnedLocalAudioTarget(targetPath: string): Promise<void> {
+  await fs.rm(targetPath, { force: true });
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 async function writeStreamToFile(

@@ -7,9 +7,9 @@ import {
 } from '../../contracts/src/contract-versions.js';
 
 describe('manual transcript contract versions', () => {
-  it('tracks the current post-cutover assignment contract', () => {
-    expect(API_CONTRACT_VERSION).toBe('4.3.0');
-    expect(DB_CONTRACT_VERSION).toBe('0.26.0');
-    expect(DB_MIGRATION_HEAD).toBe('0048_recording_audio_topology');
+  it('tracks the recording cleanup contract', () => {
+    expect(API_CONTRACT_VERSION).toBe('4.4.0');
+    expect(DB_CONTRACT_VERSION).toBe('0.30.1');
+    expect(DB_MIGRATION_HEAD).toBe('0053_recording_audio_cleanup_backfill');
   });
 });

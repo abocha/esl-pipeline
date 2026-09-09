@@ -25,6 +25,58 @@ export type UploadOption = JobUploadOption;
 export type PublishTarget = 'html';
 
 export type RecordingStatus = 'ingested' | 'queued' | 'transcribing' | 'transcribed' | 'failed';
+export type TranscriptionRunState = 'queued' | 'submitting' | 'retry_wait' | 'succeeded' | 'failed';
+export type RecordingProductState =
+  | 'checking'
+  | 'waiting'
+  | 'transcribing'
+  | 'retrying'
+  | 'ready'
+  | 'attention';
+export type RecordingAudioLifecycle =
+  | 'not_retained'
+  | 'retained'
+  | 'pending'
+  | 'deleting'
+  | 'deleted'
+  | 'delete_failed';
+export type RecordingErrorCode =
+  | 'file_too_large'
+  | 'insufficient_upload_capacity'
+  | 'recording_too_long'
+  | 'no_audio'
+  | 'corrupt_media'
+  | 'unsupported_media'
+  | 'multiple_audio_streams'
+  | 'preparation_failed'
+  | 'speakers_not_separated'
+  | 'transcription_unavailable_after_retries';
+
+export interface RecordingDto {
+  recordingId: string;
+  status: RecordingStatus;
+  productState: RecordingProductState;
+  runState: TranscriptionRunState | null;
+  transcriptId: string | null;
+  error: RecordingErrorCode | null;
+  errorCode: RecordingErrorCode | null;
+  source: RecordingSourceId;
+  studentId: string | null;
+  displayName: string;
+  durationSec: number | null;
+  channels: number | null;
+  audioTopology: AudioInputTopology | null;
+  audioLifecycle: RecordingAudioLifecycle;
+  audioAvailable: boolean;
+  bytes: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Initial product-facing upload guard; backend may be configured more conservatively. */
+export const DEFAULT_RECORDING_UPLOAD_MAX_BYTES = 2_147_483_648;
+/** Local ingest must leave this much disk space after admitting one maximum-size upload. */
+export const DEFAULT_RECORDING_UPLOAD_DISK_RESERVE_BYTES = 10_737_418_240;
 
 export interface VoiceOption {
   id: string;
@@ -1031,20 +1083,8 @@ export interface JobEventMessage {
 
 export type RecordingEventType = 'recording_state_changed';
 
-export interface RecordingEventMessage {
+export interface RecordingEventMessage extends RecordingDto {
   type: RecordingEventType;
-  recordingId: string;
-  status: RecordingStatus;
-  transcriptId?: string | null;
-  error?: string | null;
-  studentId?: string | null;
-  source?: RecordingSourceId;
-  displayName?: string | null;
-  durationSec?: number | null;
-  channels?: number | null;
-  bytes?: number;
-  createdAt?: string;
-  updatedAt?: string;
 }
 
 export type StreamEventMessage = JobEventMessage | RecordingEventMessage;

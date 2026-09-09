@@ -7,9 +7,9 @@
 - Last Verified Against: `89be936b2b0407369602dd7f531acc8175f80592` and the accepted 2026-08-30 production-path investigation.
 - Owner: founder-maintainer + speech-runtime maintainers.
 - Review Cadence: before implementation and after any material STT, transcript, or upload-contract change.
-- Status: `draft`.
-- Exit Trigger: archive after the implementation PR merges and active runtime/docs contracts are synchronized.
-- Current Focus: adopt ElevenLabs Scribe v2 for ordinary mixed uploads without weakening trusted split-channel identity or downstream speaker attribution.
+- Status: `archive`.
+- Exit Trigger: historical trace; the shipped adoption is complete and remaining readiness work is owned by the 2026-09-01 active plan.
+- Current Focus: preserve the completed ElevenLabs mixed-production adoption rationale and acceptance history.
 
 ## Goal
 

@@ -5,153 +5,63 @@ import {
   retryRecordingTranscription,
 } from '../src/application/retry-recording-transcription.js';
 
-const baseRecording = {
+const failedRecording = {
   id: 'recording-1',
+  workspaceId: 'workspace-1',
   source: 'upload' as const,
+  audioLifecycle: 'retained' as const,
   studentId: null,
   sourcePath: null,
-  storageUri: 'local://recordings/recording-1.opus',
+  storageUri: 'local://recording-1.opus',
   sha256: null,
-  bytes: 2048,
+  bytes: 1,
   durationSec: null,
   channels: null,
+  mediaPreparationVersion: 'recording-media-v1',
   status: 'failed' as const,
-  error: 'boom',
-  createdAt: new Date('2024-01-01T00:00:00.000Z'),
-  updatedAt: new Date('2024-01-01T00:00:00.000Z'),
+  error: 'old failure',
+  createdAt: new Date(),
+  updatedAt: new Date(),
 };
 
 describe('retryRecordingTranscription', () => {
-  it('queues a failed recording and publishes the update', async () => {
-    const getById = vi.fn().mockResolvedValue(baseRecording);
-    const updateStatus = vi.fn().mockResolvedValue({
-      ...baseRecording,
-      status: 'queued',
-      error: null,
-    });
-    const enqueue = vi.fn().mockImplementation(async () => {});
-    const publishEvent = vi.fn();
-
-    const result = await retryRecordingTranscription('recording-1', undefined, {
-      recordings: { getById, updateStatus },
-      enqueue,
-      publishEvent,
-    });
-
-    expect(result).toEqual({
-      recordingId: 'recording-1',
-      status: 'queued',
-      transcriptId: null,
-      error: null,
-      source: 'upload',
-      studentId: null,
-      displayName: 'recording-1.opus',
-      durationSec: null,
-      channels: null,
-      audioTopology: null,
-      bytes: 2048,
-      createdAt: '2024-01-01T00:00:00.000Z',
-      updatedAt: '2024-01-01T00:00:00.000Z',
-    });
-    expect(updateStatus).toHaveBeenCalledWith({
-      id: 'recording-1',
-      status: 'queued',
-      error: null,
-    });
-    expect(enqueue).toHaveBeenCalledWith({ recordingId: 'recording-1' });
-    expect(publishEvent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: 'recording_state_changed',
-        recording: expect.objectContaining({ status: 'queued' }),
-      }),
-    );
-  });
-
-  it('forwards explicit STT provider override into transcribe queue payload', async () => {
-    const getById = vi.fn().mockResolvedValue(baseRecording);
-    const updateStatus = vi.fn().mockResolvedValue({
-      ...baseRecording,
-      status: 'queued',
-      error: null,
-    });
-    const enqueue = vi.fn().mockImplementation(async () => {});
-
-    await retryRecordingTranscription(
-      'recording-1',
-      { sttProvider: 'elevenlabs' },
-      {
-        recordings: { getById, updateStatus },
-        enqueue,
-        publishEvent: vi.fn(),
-      },
-    );
-
-    expect(enqueue).toHaveBeenCalledWith({
-      recordingId: 'recording-1',
-      sttProvider: 'elevenlabs',
-    });
-  });
-
-  it('uses persisted topology as worker authority and does not enqueue it', async () => {
-    const enqueue = vi.fn().mockResolvedValue(undefined);
-    await retryRecordingTranscription('recording-1', undefined, {
-      recordings: {
-        getById: vi
-          .fn()
-          .mockResolvedValue({ ...baseRecording, audioTopology: 'trusted_split_channels' }),
-        updateStatus: vi
-          .fn()
-          .mockResolvedValue({ ...baseRecording, status: 'queued', error: null }),
-      },
-      enqueue,
-      publishEvent: vi.fn(),
-    });
-    expect(enqueue).toHaveBeenCalledWith({ recordingId: 'recording-1' });
-  });
-
-  it('rejects retries when recording is not failed', async () => {
-    const getById = vi.fn().mockResolvedValue({
-      ...baseRecording,
-      status: 'transcribed',
-      error: null,
-    });
-    const updateStatus = vi.fn();
-
+  it('rejects terminal normal-user retry without enqueuing replacement provider work', async () => {
+    const enqueue = vi.fn();
     await expect(
-      retryRecordingTranscription('recording-1', undefined, {
-        recordings: { getById, updateStatus },
-        enqueue: vi.fn(),
-        publishEvent: vi.fn(),
-      }),
-    ).rejects.toBeInstanceOf(RecordingRetryError);
-    expect(updateStatus).not.toHaveBeenCalled();
+      retryRecordingTranscription(
+        'recording-1',
+        { workspaceId: 'workspace-1' },
+        {
+          recordings: {
+            getById: vi.fn().mockResolvedValue(failedRecording),
+            updateStatus: vi.fn(),
+          },
+          enqueue,
+          publishEvent: vi.fn(),
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'recording_retry_not_supported' });
+    expect(enqueue).not.toHaveBeenCalled();
   });
 
-  it('reverts the recording if enqueue fails', async () => {
-    const getById = vi.fn().mockResolvedValue(baseRecording);
-    const updateStatus = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ...baseRecording,
-        status: 'queued',
-        error: null,
-      })
-      .mockResolvedValueOnce({
-        ...baseRecording,
-        status: 'failed',
-        error: 'queue-down',
-      });
-    const enqueue = vi.fn().mockRejectedValue(new Error('queue-down'));
-    const publishEvent = vi.fn();
-
-    await expect(
-      retryRecordingTranscription('recording-1', undefined, {
-        recordings: { getById, updateStatus },
-        enqueue,
-        publishEvent,
-      }),
-    ).rejects.toThrow('queue-down');
-    expect(updateStatus).toHaveBeenCalledTimes(2);
-    expect(publishEvent).toHaveBeenCalledTimes(2);
+  it('rejects active and successful retry before any mutation', async () => {
+    for (const status of ['queued', 'transcribing', 'transcribed'] as const) {
+      const updateStatus = vi.fn();
+      await expect(
+        retryRecordingTranscription(
+          'recording-1',
+          { workspaceId: 'workspace-1' },
+          {
+            recordings: {
+              getById: vi.fn().mockResolvedValue({ ...failedRecording, status }),
+              updateStatus,
+            },
+            enqueue: vi.fn(),
+            publishEvent: vi.fn(),
+          },
+        ),
+      ).rejects.toBeInstanceOf(RecordingRetryError);
+      expect(updateStatus).not.toHaveBeenCalled();
+    }
   });
 });

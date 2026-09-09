@@ -1,7 +1,7 @@
 import type { TranscriptProviderId } from '@esl-pipeline/contracts';
 
 import type { TranscriptMode, TranscriptRecord } from '../domain/transcript-model.js';
-import { getTranscriptByRecordingId } from '../domain/transcript-repository.js';
+import { getTranscriptByRecordingIdForWorkspace } from '../domain/transcript-repository.js';
 import type { TranscriptionStorage } from '../infrastructure/transcription-storage.js';
 import { createTranscriptionStorageForUri } from '../infrastructure/transcription-storage.js';
 
@@ -23,21 +23,22 @@ export interface RecordingTranscriptResponse {
 export interface RecordingTranscriptDependencies {
   storage: TranscriptionStorage;
   transcripts: {
-    getByRecordingId: typeof getTranscriptByRecordingId;
+    getByRecordingId: typeof getTranscriptByRecordingIdForWorkspace;
   };
 }
 
 export async function getRecordingTranscript(
   recordingId: string,
+  workspaceId: string,
   overrides?: Partial<RecordingTranscriptDependencies>,
 ): Promise<RecordingTranscriptResponse | null> {
   if (!recordingId) return null;
 
   const transcripts = overrides?.transcripts ?? {
-    getByRecordingId: getTranscriptByRecordingId,
+    getByRecordingId: getTranscriptByRecordingIdForWorkspace,
   };
 
-  const transcript = await transcripts.getByRecordingId(recordingId);
+  const transcript = await transcripts.getByRecordingId(recordingId, workspaceId);
   if (!transcript) return null;
 
   const storage = overrides?.storage ?? createTranscriptionStorageForUri(transcript.storageUri);

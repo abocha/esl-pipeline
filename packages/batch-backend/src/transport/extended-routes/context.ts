@@ -25,7 +25,11 @@ export interface ExtendedRouteOptions {
 }
 
 export interface TranscribeQueueFacade {
-  enqueue(payload: { recordingId: string; sttProvider?: SttProviderId }): Promise<void>;
+  enqueue(payload: {
+    recordingId: string;
+    sttProvider?: SttProviderId;
+    mediaPreparationVersion?: string;
+  }): Promise<void>;
 }
 
 export interface ExtendedRoutesContext extends ExtendedRouteOptions {

@@ -4,6 +4,7 @@ Deepgram adapter for `@esl-pipeline/stt-core`.
 
 Behavior:
 
-- multichannel-first transcription
-- diarized fallback when primary fails or collapses to one channel
+- explicit `trusted_split_channels` recordings use one multichannel request
+- the response must preserve exactly two channels and both tutor/student channel roles
+- no hidden diarization retry or cross-provider fallback; the durable run owns bounded recovery
 - normalized transcript segments for timeline/stack formatting

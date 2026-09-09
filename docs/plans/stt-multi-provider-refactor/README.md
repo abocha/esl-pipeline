@@ -4,38 +4,41 @@
 
 - Audience: maintainers and speech-runtime agents.
 - Authority Level: active staged roadmap.
-- Last Verified Against: 2026-05-17 repo state.
+- Last Verified Against: 2026-09-09 local Slice 7 closeout and the approved ordinary-ingest Goal Contract.
 - Owner: founder-maintainer + speech-runtime maintainers.
 - Review Cadence: after STT provider or transcription pipeline PRs.
 - Status: `roadmap`.
-- Exit Trigger: archive after STT provider runtime behavior is shipped and captured in package READMEs, env policy, and operations docs.
-- Current Focus: review and approve the 2026-08-30 ElevenLabs mixed-recording production-adoption plan; archived phase docs are historical trace.
+- Exit Trigger: archive after ordinary recording ingest is rollout-proven and captured in package READMEs, environment policy, and operations docs.
+- Current Focus: preserve local closeout evidence and obtain hosted CI plus separately authorized rollout evidence; provider selection and benchmark decisions are closed.
 
 ## Summary
 
-This plan refactors STT into a provider-agnostic architecture parallel to TTS (`core + adapters + registry`), then adds Google Cloud STT V2 as a first-class provider.
+The provider refactor and local ordinary lesson-recording ingest implementation are closed. The active
+plan remains the rollout authority until hosted CI, production preflight, presigned-S3 fetch, staged
+audio/deletion smoke, and representative export evidence satisfy the Goal Contract.
 
-Locked decisions:
+Current locked decisions:
 
-1. Full architecture parity with TTS-style provider seams.
-2. Explicit `transcripts.stt_provider` persistence with historical backfill.
-3. Google Cloud STT V2 target.
-4. Required GCS staging bucket for Google large-audio path.
-5. No cross-provider runtime fallback; provider selection is explicit override or default only.
+1. ElevenLabs Scribe v2 owns ordinary `mixed_recording` transcription with exactly two speakers.
+2. Deepgram multichannel owns explicitly trusted split-channel transcription.
+3. There is no automatic cross-provider fallback.
+4. Normal tutors do not need provider or topology knowledge.
+5. The active readiness boundary is tenant-safe streaming ingest, deterministic media validation, bounded retry/claiming, truthful states, and audio disposal.
 
 ## Scope
 
-1. New STT core and provider packages.
-2. Batch-backend transcription pipeline integration, cache hardening, and startup validation.
-3. DB migration + backfill for provider identity.
-4. Frontend/provider metadata exposure for STT selector.
-5. Operational documentation updates.
+1. Workspace-owned recording/transcript/cache operations.
+2. Streaming upload and provider submission without whole-file buffers.
+3. Deterministic probe and cheap allowlisted video-audio stream copy.
+4. One bounded retry/claim/submission state machine.
+5. Source-confirmation and TTL-based audio disposal.
+6. Truthful normal-user states, errors, and recovery.
 
 ## Active Implementation Plan
 
-1. [ElevenLabs mixed-recording production adoption](2026-08-30-elevenlabs-mixed-production-adoption.md)
-   locks topology persistence, mixed/trusted routing, exact request profiles, cache identity, and
-   tutor-confirmed mixed speaker roles.
+1. [Ordinary lesson recording ingest readiness](2026-09-01-normal-user-audio-ingest-readiness.md)
+   owns the approved Goal Contract, architecture, slice order, migration, validation, rollout, and
+   documentation lifecycle for normal-user readiness.
 
 ## Historical Trace
 
@@ -48,21 +51,20 @@ Archived phase details remain available for rationale, but this README is the ac
 5. [phase-5-schema-backfill-and-cutover.md](../../archive/plans/stt-multi-provider-refactor/phase-5-schema-backfill-and-cutover.md)
 6. [phase-6-frontend-docs-and-ops.md](../../archive/plans/stt-multi-provider-refactor/phase-6-frontend-docs-and-ops.md)
 7. [verification-acceptance-and-assumptions.md](../../archive/plans/stt-multi-provider-refactor/verification-acceptance-and-assumptions.md)
+8. [ElevenLabs mixed-recording production adoption](../../archive/plans/stt-multi-provider-refactor/2026-08-30-elevenlabs-mixed-production-adoption.md)
 
 ## Acceptance Gates
 
-1. `pnpm --filter @esl-pipeline/stt-core test`
-2. `pnpm --filter @esl-pipeline/stt-provider-deepgram test`
-3. `pnpm --filter @esl-pipeline/stt-provider-elevenlabs test`
-4. `pnpm --filter @esl-pipeline/stt-provider-google test`
-5. `pnpm --filter @esl-pipeline/batch-backend test -- application.process-transcribe-job.test.ts`
-6. `pnpm --filter @esl-pipeline/batch-backend test -- transport.extended-routes-provider-cache.test.ts`
-7. `pnpm --filter @esl-pipeline/batch-frontend test`
-8. `pnpm check:fast`
-9. `pnpm docs:check`
+1. The active plan's Goal Contract matrix passes, including tenant, concurrency, retry, media, retention, and refresh/resume boundaries.
+2. Provider package, batch-backend, and batch-frontend targeted tests pass.
+3. The exact production Docker image passes synthetic FFmpeg probe/copy tests before video is enabled.
+4. DB/worker/integration changes pass `pnpm check` and required contract/baseline verification.
+5. Active runtime and operations docs pass generated-index, format, hygiene, and docs checks.
 
 ## Rollback Notes
 
-1. Runtime rollback path is `STT_PROVIDER=deepgram` while retaining new schema columns.
-2. `stt_provider` backfill is additive metadata; no transcript text artifacts are rewritten.
-3. If Google STT rollout is blocked, keep provider registered but unavailable until prerequisites validate.
+1. Retain additive schema/run evidence; do not down-migrate.
+2. Never roll back to an API that permits cross-workspace access; pause intake and roll forward.
+3. Narrow media acceptance to direct audio if video preparation fails.
+4. Pause workers without switching providers or resetting physical-submission counters if retry/submission behavior is unsafe.
+5. Disable the cleanup worker while retaining pending rows if deletion behavior is unsafe.

@@ -228,13 +228,18 @@ describe('domain/job-repository', () => {
 
       await withPgClientSessionContext({ rlsBypass: true }, async (client) => {
         await client.query(
+          `INSERT INTO students (id, student, created_at, updated_at)
+           VALUES ($1, $2, $3, $3)`,
+          [studentId, `Job student ${studentId}`, now],
+        );
+        await client.query(
           `
           INSERT INTO recordings (
             id, source, student_id, source_path, storage_uri, bytes, status, created_at, updated_at
           )
-          VALUES ($1, 'upload', NULL, 'fixtures/audio.wav', 'local://recordings/audio.wav', 1024, 'ingested', $2, $2)
+          VALUES ($1, 'upload', $2, 'fixtures/audio.wav', 'local://recordings/audio.wav', 1024, 'ingested', $3, $3)
           `,
-          [recordingId, now],
+          [recordingId, studentId, now],
         );
 
         await client.query(
@@ -245,11 +250,14 @@ describe('domain/job-repository', () => {
           [jobId, recordingId, now],
         );
 
-        // Simulate post-insert drift: related entity gains student_id while jobs.student_id remains null.
-        await client.query('UPDATE recordings SET student_id = $1 WHERE id = $2', [
-          studentId,
-          recordingId,
-        ]);
+        // Simulate historical post-trigger drift while retaining a recording with valid
+        // workspace authority. Repository reads must still trust jobs.student_id itself.
+        await client.query('ALTER TABLE jobs DISABLE TRIGGER set_jobs_student_id');
+        try {
+          await client.query('UPDATE jobs SET student_id = NULL WHERE id = $1', [jobId]);
+        } finally {
+          await client.query('ALTER TABLE jobs ENABLE TRIGGER set_jobs_student_id');
+        }
       });
 
       const loaded = await getJobById(jobId);

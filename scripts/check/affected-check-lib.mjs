@@ -955,13 +955,13 @@ function resolveCiRequirements(files, { conservativeReason = null } = {}) {
 }
 
 function isBackendPostgresTest(file) {
-  return /^packages\/batch-backend\/tests\/(?:domain\.(?:.*-repository|student-memory-openai-batch-import|student-repository\.workspace)|application\.(?:assignment-step-confirmation|homework-memory-source|student-timeline|student-schedule-billing|alpha-invites\.registration)|integration\.(?:migrations|query-plan-regression))\.test\.ts$/u.test(
+  return /^packages\/batch-backend\/tests\/(?:domain\.(?:.*-repository|student-memory-openai-batch-import|student-repository\.workspace)|application\.(?:assignment-step-confirmation|homework-memory-source|student-timeline|student-schedule-billing|alpha-invites\.registration)|integration\.(?:migrations|query-plan-regression|recording-tenant-authority))\.test\.ts$/u.test(
     file,
   );
 }
 
 function isBackendWorkerTest(file) {
-  return /^packages\/batch-backend\/tests\/(?:transport\.worker-runner\.integration|integration\.student-memory-pacing-delay)\.test\.ts$/u.test(
+  return /^packages\/batch-backend\/tests\/(?:transport\.worker-runner\.integration|integration\.student-memory-pacing-delay|infrastructure\.transcribe-queue\.redis\.integration|integration\.transcription-execution-worker\.redis)\.test\.ts$/u.test(
     file,
   );
 }

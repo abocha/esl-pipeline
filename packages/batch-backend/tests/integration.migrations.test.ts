@@ -220,6 +220,318 @@ describe('integration/migrations', () => {
   );
 
   it(
+    '0049 backfills recording ownership and creates constrained ingest foundations',
+    async () => {
+      await withAdminClient(async (pool) => {
+        await applyMigrationsThrough(pool, '0048_recording_audio_topology');
+        const workspaceId = '10000000-0000-4000-8000-000000000001';
+        const studentId = '20000000-0000-4000-8000-000000000001';
+        const recordingId = '30000000-0000-4000-8000-000000000001';
+        await pool.query(`INSERT INTO workspaces (id, name) VALUES ($1, 'Tutor A')`, [workspaceId]);
+        await pool.query(
+          `INSERT INTO students (id, student, workspace_id) VALUES ($1, 'Alex', $2)`,
+          [studentId, workspaceId],
+        );
+        await pool.query(
+          `INSERT INTO recordings (id, source, student_id, storage_uri, bytes, status)
+           VALUES ($1, 'upload', $2, 's3://audio/a.mp3', 10, 'queued')`,
+          [recordingId, studentId],
+        );
+
+        await pool.query(
+          await fs.readFile(
+            path.join(migrationsPath, '0049_recording_ingest_readiness.sql'),
+            'utf8',
+          ),
+        );
+
+        const row = await pool.query(
+          `SELECT workspace_id, storage_uri, audio_lifecycle FROM recordings WHERE id = $1`,
+          [recordingId],
+        );
+        expect(row.rows[0]).toMatchObject({
+          workspace_id: workspaceId,
+          storage_uri: 's3://audio/a.mp3',
+          audio_lifecycle: 'retained',
+        });
+        await expect(
+          pool.query(
+            `INSERT INTO transcription_runs
+             (id, recording_id, workspace_id, provider, request_profile, submission_slots_reserved)
+             VALUES (gen_random_uuid(), $1, $2, 'elevenlabs', 'mixed-v1', 4)`,
+            [recordingId, workspaceId],
+          ),
+        ).rejects.toThrow();
+        const otherWorkspaceId = '10000000-0000-4000-8000-000000000099';
+        await pool.query(`INSERT INTO workspaces (id, name) VALUES ($1, 'Tutor Other')`, [
+          otherWorkspaceId,
+        ]);
+        const otherStudentId = '20000000-0000-4000-8000-000000000099';
+        await pool.query(
+          `INSERT INTO students (id, student, workspace_id) VALUES ($1, 'Alex', $2)`,
+          [otherStudentId, otherWorkspaceId],
+        );
+        const constraints = await pool.query(
+          `SELECT conname FROM pg_constraint
+           WHERE conname IN ('students_id_workspace_unique', 'recordings_student_workspace_fkey')`,
+        );
+        expect(constraints.rows.map((candidate) => candidate.conname).sort()).toEqual([
+          'recordings_student_workspace_fkey',
+          'students_id_workspace_unique',
+        ]);
+        await expect(
+          pool.query(
+            `INSERT INTO recordings
+             (id, workspace_id, source, student_id, storage_uri, audio_lifecycle, bytes, status)
+             VALUES (gen_random_uuid(), $1, 'upload', $2, 's3://audio/b.mp3', 'retained', 10, 'queued')`,
+            [otherWorkspaceId, studentId],
+          ),
+        ).rejects.toThrow();
+        await expect(
+          pool.query(`UPDATE students SET workspace_id = $2 WHERE id = $1`, [
+            studentId,
+            otherWorkspaceId,
+          ]),
+        ).rejects.toThrow();
+        await expect(
+          pool.query(`DELETE FROM students WHERE id = $1`, [studentId]),
+        ).rejects.toThrow();
+        await expect(
+          pool.query(
+            `INSERT INTO transcription_runs
+             (id, recording_id, workspace_id, provider, request_profile)
+             VALUES (gen_random_uuid(), $1, $2, 'elevenlabs', 'mixed-v1')`,
+            [recordingId, otherWorkspaceId],
+          ),
+        ).rejects.toThrow();
+      });
+    },
+    testTimeout,
+  );
+
+  it(
+    '0049 aborts when recording ownership cannot be resolved',
+    async () => {
+      await withAdminClient(async (pool) => {
+        await applyMigrationsThrough(pool, '0048_recording_audio_topology');
+        await pool.query(
+          `INSERT INTO recordings (id, source, student_id, storage_uri, bytes, status)
+           VALUES (gen_random_uuid(), 'upload', NULL, 's3://audio/orphan.mp3', 10, 'queued')`,
+        );
+        await expect(
+          pool.query(
+            await fs.readFile(
+              path.join(migrationsPath, '0049_recording_ingest_readiness.sql'),
+              'utf8',
+            ),
+          ),
+        ).rejects.toThrow('unresolved recording workspace ownership: 1 row(s)');
+      });
+    },
+    testTimeout,
+  );
+
+  it(
+    '0049 aborts rather than choosing among historical duplicate transcript winners',
+    async () => {
+      await withAdminClient(async (pool) => {
+        await applyMigrationsThrough(pool, '0048_recording_audio_topology');
+        const workspaceId = '10000000-0000-4000-8000-000000000002';
+        const studentId = '20000000-0000-4000-8000-000000000002';
+        const recordingId = '30000000-0000-4000-8000-000000000002';
+        await pool.query(`INSERT INTO workspaces (id, name) VALUES ($1, 'Tutor B')`, [workspaceId]);
+        await pool.query(
+          `INSERT INTO students (id, student, workspace_id) VALUES ($1, 'Alex', $2)`,
+          [studentId, workspaceId],
+        );
+        await pool.query(
+          `INSERT INTO recordings (id, source, student_id, storage_uri, bytes, status)
+           VALUES ($1, 'upload', $2, 's3://audio/b.mp3', 10, 'transcribed')`,
+          [recordingId, studentId],
+        );
+        await pool.query(
+          `INSERT INTO transcripts (id, recording_id, storage_uri)
+           VALUES (gen_random_uuid(), $1, 's3://transcripts/one.json'),
+                  (gen_random_uuid(), $1, 's3://transcripts/two.json')`,
+          [recordingId],
+        );
+        await expect(
+          pool.query(
+            await fs.readFile(
+              path.join(migrationsPath, '0049_recording_ingest_readiness.sql'),
+              'utf8',
+            ),
+          ),
+        ).rejects.toThrow('duplicate transcript winners require manual resolution: 1 recording(s)');
+      });
+    },
+    testTimeout,
+  );
+
+  it(
+    '0050 adds a nullable preparation identity without inventing one for historical recordings',
+    async () => {
+      await withAdminClient(async (pool) => {
+        await applyMigrationsThrough(pool, '0049_recording_ingest_readiness');
+        const workspaceId = '10000000-0000-4000-8000-000000000050';
+        const studentId = '20000000-0000-4000-8000-000000000050';
+        await pool.query(`INSERT INTO workspaces (id, name) VALUES ($1, 'Tutor C')`, [workspaceId]);
+        await pool.query(
+          `INSERT INTO students (id, student, workspace_id) VALUES ($1, 'Alex', $2)`,
+          [studentId, workspaceId],
+        );
+        await pool.query(
+          await fs.readFile(
+            path.join(migrationsPath, '0050_recording_media_preparation_version.sql'),
+            'utf8',
+          ),
+        );
+        await pool.query(
+          `INSERT INTO recordings
+             (id, workspace_id, source, student_id, storage_uri, audio_lifecycle, bytes, status,
+              media_preparation_version)
+           VALUES
+             ('30000000-0000-4000-8000-000000000050', $1, 'upload', $2,
+              's3://audio/historical.opus', 'retained', 10, 'failed', NULL),
+             ('30000000-0000-4000-8000-000000000051', $1, 'upload', $2,
+              's3://audio/prepared.opus', 'retained', 10, 'queued', 'recording-media-v1')`,
+          [workspaceId, studentId],
+        );
+
+        const rows = await pool.query(
+          `SELECT media_preparation_version FROM recordings ORDER BY id ASC`,
+        );
+        expect(rows.rows.map((row) => row.media_preparation_version)).toEqual([
+          null,
+          'recording-media-v1',
+        ]);
+      });
+    },
+    testTimeout,
+  );
+
+  it(
+    '0053 makes historical Source-confirmed retained audio unavailable without a replay',
+    async () => {
+      await withAdminClient(async (pool) => {
+        await applyMigrationsThrough(pool, '0052_recording_upload_candidate_cleanup_schedule');
+        const userId = '00000000-0000-4000-8000-000000000053';
+        const workspaceId = '10000000-0000-4000-8000-000000000053';
+        const studentId = '20000000-0000-4000-8000-000000000053';
+        const confirmedRecordingId = '30000000-0000-4000-8000-000000000053';
+        const unconfirmedRecordingId = '30000000-0000-4000-8000-000000000054';
+        const rollingDeployRecordingId = '30000000-0000-4000-8000-000000000055';
+        await pool.query(
+          `INSERT INTO users (id, email, password_hash, role)
+           VALUES ($1, 'cleanup-migration@example.test', 'hash', 'user')`,
+          [userId],
+        );
+        await pool.query(`INSERT INTO workspaces (id, name) VALUES ($1, 'Cleanup migration')`, [
+          workspaceId,
+        ]);
+        await pool.query(
+          `INSERT INTO workspace_memberships (workspace_id, user_id, role)
+           VALUES ($1, $2, 'owner')`,
+          [workspaceId, userId],
+        );
+        await pool.query(
+          `INSERT INTO students (id, student, workspace_id) VALUES ($1, 'Alex', $2)`,
+          [studentId, workspaceId],
+        );
+        await pool.query(
+          `INSERT INTO recordings
+             (id, workspace_id, source, student_id, storage_uri, audio_lifecycle, bytes, status)
+           VALUES
+             ($1, $3, 'upload', $4, $5, 'retained', 10, 'transcribed'),
+             ($2, $3, 'upload', $4, $6, 'retained', 10, 'transcribed')`,
+          [
+            confirmedRecordingId,
+            unconfirmedRecordingId,
+            workspaceId,
+            studentId,
+            `local://recordings/${confirmedRecordingId}.mp3`,
+            `local://recordings/${unconfirmedRecordingId}.mp3`,
+          ],
+        );
+        await pool.query(
+          `INSERT INTO assignment_sessions
+             (id, user_id, student_id, recording_id, revision, confirmed_step, confirmed_snapshot)
+           VALUES (gen_random_uuid(), $1, $2, $3, 1, 'source', $4::jsonb)`,
+          [
+            userId,
+            studentId,
+            confirmedRecordingId,
+            JSON.stringify({
+              student: { studentId },
+              source: { recordingId: confirmedRecordingId },
+              context: null,
+              create: null,
+            }),
+          ],
+        );
+
+        await pool.query(
+          await fs.readFile(
+            path.join(migrationsPath, '0053_recording_audio_cleanup_backfill.sql'),
+            'utf8',
+          ),
+        );
+        await pool.query(
+          `INSERT INTO recordings
+             (id, workspace_id, source, student_id, storage_uri, audio_lifecycle, bytes, status)
+           VALUES ($1, $2, 'upload', $3, $4, 'retained', 10, 'transcribed')`,
+          [
+            rollingDeployRecordingId,
+            workspaceId,
+            studentId,
+            `local://recordings/${rollingDeployRecordingId}.mp3`,
+          ],
+        );
+        await pool.query(
+          `INSERT INTO assignment_sessions
+             (id, user_id, student_id, recording_id, revision, confirmed_step, confirmed_snapshot)
+           VALUES (gen_random_uuid(), $1, $2, $3, 1, 'source', $4::jsonb)`,
+          [
+            userId,
+            studentId,
+            rollingDeployRecordingId,
+            JSON.stringify({
+              student: { studentId },
+              source: { recordingId: rollingDeployRecordingId },
+              context: null,
+              create: null,
+            }),
+          ],
+        );
+
+        const rows = await pool.query(
+          `SELECT id, audio_lifecycle, audio_deletion_requested_at
+           FROM recordings WHERE id IN ($1, $2, $3) ORDER BY id`,
+          [confirmedRecordingId, unconfirmedRecordingId, rollingDeployRecordingId],
+        );
+        expect(rows.rows).toEqual([
+          {
+            id: confirmedRecordingId,
+            audio_lifecycle: 'pending',
+            audio_deletion_requested_at: expect.any(Date),
+          },
+          {
+            id: unconfirmedRecordingId,
+            audio_lifecycle: 'retained',
+            audio_deletion_requested_at: null,
+          },
+          {
+            id: rollingDeployRecordingId,
+            audio_lifecycle: 'pending',
+            audio_deletion_requested_at: expect.any(Date),
+          },
+        ]);
+      });
+    },
+    testTimeout,
+  );
+
+  it(
     'generated schema baseline matches current migration output',
     async () => {
       const expected = await generateSchemaBaselineSql(connectionString);

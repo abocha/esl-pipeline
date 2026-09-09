@@ -78,6 +78,29 @@ describe('MinimalAssignment - staged workflow UI', () => {
     expect(screen.getByText('Student selected. Recording needed.')).toBeTruthy();
   });
 
+  it('exposes every backend-supported direct-audio and cheap-demux family in the Source picker', async () => {
+    const user = createMinimalUser();
+    renderMinimalAssignment();
+    await startNewAssignmentForLearner(user);
+
+    const picker = screen.getByRole('button', { name: /Drop audio file/i });
+    const accept = picker.getAttribute('data-accept') ?? '';
+
+    expect(accept).toContain('audio/*');
+    expect(accept).toContain('.aac');
+    expect(accept).toContain('.m4a');
+    expect(accept).toContain('.mp3');
+    expect(accept).toContain('.ogg');
+    expect(accept).toContain('.opus');
+    expect(accept).toContain('.wav');
+    expect(accept).toContain('video/mp4');
+    expect(accept).toContain('.mp4');
+    expect(accept).toContain('video/quicktime');
+    expect(accept).toContain('.mov');
+    expect(accept).toContain('video/webm');
+    expect(accept).toContain('.webm');
+  });
+
   it('flags Spanish-looking accent characters in transcript text', () => {
     expect(getTranscriptUnexpectedCharacterWarnings('Student: Ajá, I understand.')).toEqual(['á']);
     expect(getTranscriptUnexpectedCharacterWarnings('Teacher: Ага, good.')).toEqual([]);

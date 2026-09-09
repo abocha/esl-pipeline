@@ -25,10 +25,12 @@ describe('application/ingest-manual-transcript-source', () => {
     const persist = vi.fn(async (params) => ({
       recording: {
         id: params.recordingId,
+        workspaceId: params.workspaceId,
         source: 'manual_transcript' as const,
         studentId: params.studentId,
         sourcePath: params.displayName,
-        storageUri: params.storageUri,
+        storageUri: null,
+        audioLifecycle: 'not_retained' as const,
         sha256: null,
         bytes: params.bytes,
         durationSec: null,
@@ -61,6 +63,7 @@ describe('application/ingest-manual-transcript-source', () => {
 
     const result = await ingestManualTranscriptSource(
       {
+        workspaceId: '00000000-0000-4000-8000-000000000001',
         studentId: '11111111-1111-4111-8111-111111111111',
         text: '  Tutor supplied transcript  ',
         displayName: '  Lesson on travel  ',
@@ -73,6 +76,7 @@ describe('application/ingest-manual-transcript-source', () => {
       text: 'Tutor supplied transcript',
     });
     expect(persist).toHaveBeenCalledWith({
+      workspaceId: '00000000-0000-4000-8000-000000000001',
       recordingId: expect.any(String),
       transcriptId: expect.any(String),
       studentId: '11111111-1111-4111-8111-111111111111',
@@ -101,7 +105,11 @@ describe('application/ingest-manual-transcript-source', () => {
 
     await expect(
       ingestManualTranscriptSource(
-        { studentId: '11111111-1111-4111-8111-111111111111', text: '   ' },
+        {
+          workspaceId: '00000000-0000-4000-8000-000000000001',
+          studentId: '11111111-1111-4111-8111-111111111111',
+          text: '   ',
+        },
         { storage, persist: vi.fn() },
       ),
     ).rejects.toMatchObject({ code: 'text_required' });
@@ -117,6 +125,7 @@ describe('application/ingest-manual-transcript-source', () => {
     await expect(
       ingestManualTranscriptSource(
         {
+          workspaceId: '00000000-0000-4000-8000-000000000001',
           studentId: '11111111-1111-4111-8111-111111111111',
           text: 'x'.repeat(500_001),
         },
@@ -135,6 +144,7 @@ describe('application/ingest-manual-transcript-source', () => {
     await expect(
       ingestManualTranscriptSource(
         {
+          workspaceId: '00000000-0000-4000-8000-000000000001',
           studentId: '11111111-1111-4111-8111-111111111111',
           text: 'Tutor supplied transcript',
         },

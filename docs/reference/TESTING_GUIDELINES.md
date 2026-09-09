@@ -62,9 +62,17 @@ If this guide conflicts with [`docs/reference/agents-ssot.md`](agents-ssot.md), 
     prebuilt core unit subset for orchestrator, batch-backend, and batch-frontend.
   - Uses the same serial aggregate runner as `check:fast`; it does not hide the broad commands behind
     an opaque shell `&&` chain.
+- Root broad pre-PR check, agent output: `pnpm check:pre-pr:agent`
+  - Runs the same broad `--broad` validation plan as `check:pre-pr` while preserving the existing
+    persisted agent summary and lane-log references for completion handoffs.
 - Root full check: `pnpm check`
   - Runs root tooling tests, `build`, `typecheck`, `lint`, `test:unit:prebuilt`,
     `test:integration:prebuilt`, and the backend DB + worker lane.
+- Root full check, agent output: `pnpm check:agent`
+  - Runs the exact same ordered canonical lane topology as `check`, stops at its first failure, and
+    persists the shared agent summary and raw lane logs.
+  - Agent variants preserve validation scope and exit semantics; they change only output presentation
+    and persisted evidence.
 - Root lint lane:
   - `pnpm lint` runs Biome for JS/TS/TSX/JSX/CSS/JSON linting, including the selected React, Fast Refresh, TypeScript, and Vitest protections.
 - Root lane behavior:
@@ -85,14 +93,16 @@ Use the narrowest lane that answers the question at hand:
 | Related            | Editing loop for one source file or feature                       | `pnpm --filter <package> exec vitest related --run <source-file>` |
 | Explicit test file | Editing loop when the exact suite is known                        | `pnpm --filter <package> exec vitest run <test-file>`             |
 | Affected           | Agent/human task completion                                       | `pnpm --silent run check:fast:agent` or `pnpm check:fast`         |
-| Pre-PR             | Broad or cross-cutting changes                                    | `pnpm check:pre-pr`                                               |
-| Full               | Local CI reproduction, DB, migration, worker, or integration risk | `pnpm check`                                                      |
+| Pre-PR             | Broad or cross-cutting changes                                    | `pnpm check:pre-pr:agent` or `pnpm check:pre-pr`                  |
+| Full               | Local CI reproduction, DB, migration, worker, or integration risk | `pnpm check:agent` or `pnpm check`                                |
 
 After focused tests, choose one normal pre-push gate. Use `check:fast:agent` by default; use
-`check:pre-pr` directly when the branch is already broad, cross-cutting, shared-contract, or
-toolchain-level. A `check:fast:agent` fallback to `check:pre-pr` satisfies the broad gate. A
-successful full `check` subsumes both narrower gates. Clearly docs-only work may use the documented
-docs-specific lanes. Do not use `check:pre-pr` as a routine editing-loop command.
+`check:pre-pr:agent` when an agent runs a broad, cross-cutting, shared-contract, or toolchain gate;
+use `check:agent` for the full CI-reproduction, DB, migration, worker, or integration gate. The
+non-agent commands remain the human-readable equivalents. A `check:fast:agent` fallback to
+`check:pre-pr` satisfies the broad gate. A successful full `check` or `check:agent` subsumes both
+narrower gates. Clearly docs-only work may use the documented docs-specific lanes. Do not use
+`check:pre-pr` as a routine editing-loop command.
 
 Affected and broad gates run selected lanes serially. Independent lanes continue after failure so one
 run reports every available problem. A prebuilt test lane is marked blocked when its build
@@ -220,9 +230,10 @@ Use this order when updating tests:
 1. Run targeted package or related tests first.
 2. Choose one normal pre-push gate:
    - Default: `pnpm --silent run check:fast:agent`.
-   - Known broad, cross-cutting, shared-contract, or toolchain branch: `pnpm check:pre-pr` directly.
+   - Known broad, cross-cutting, shared-contract, or toolchain branch: `pnpm check:pre-pr:agent`
+     for agent output, or `pnpm check:pre-pr` for human-readable output.
    - A fallback from `check:fast:agent` to `check:pre-pr` already satisfies the broad gate.
-   - A successful `pnpm check` subsumes both narrower gates.
+   - A successful `pnpm check` or `pnpm check:agent` subsumes both narrower gates.
    - Clearly docs-only work may use the documented docs-specific lanes.
    - Use `pnpm check:fast:dry-run` to inspect local and committed hosted routing separately without
      executing lanes.
@@ -233,7 +244,8 @@ Use this order when updating tests:
    - `pnpm test:integration`
    - `pnpm test:integration:prebuilt` when the workspace is already built
    - `pnpm test:backend:db:worker` when backend PG/Redis behavior changed
-4. Run `pnpm check` before merge for changes that can affect DB-backed backend or worker behavior.
+4. Run `pnpm check:agent` for agent-driven completion of changes that can affect DB-backed backend
+   or worker behavior; `pnpm check` is the corresponding human-readable command.
 5. When touching backend migrations, `packages/batch-backend/schema.sql`, or `packages/contracts/src/contract-versions.ts`, also run:
    - `pnpm release:verify:contracts`
    - `pnpm --filter @esl-pipeline/batch-backend run db:verify-baseline`

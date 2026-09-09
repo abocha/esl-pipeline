@@ -38,6 +38,12 @@ vi.mock('../../utils/api', () => ({
       this.name = 'ArtifactWorkingConflictApiError';
     }
   },
+  RecordingUploadPreDispatchError: class RecordingUploadPreDispatchError extends Error {
+    constructor(message: string) {
+      super(message);
+      this.name = 'RecordingUploadPreDispatchError';
+    }
+  },
   approveJob: vi.fn(),
   cancelJob: vi.fn(),
   confirmAssignmentSessionStep: vi.fn(),
@@ -84,6 +90,7 @@ vi.mock('../../utils/api', () => ({
   getProfileRevision: vi.fn(),
   getJobStatus: vi.fn(),
   getRecording: vi.fn(),
+  getRecordingUploadOperation: vi.fn(),
   getStudentMemoryHealth: vi.fn(),
   getStudentScheduleBillingSurface: vi.fn(),
   listUserJobs: vi.fn(),
@@ -112,15 +119,20 @@ vi.mock('../../utils/api', () => ({
 vi.mock('../shared/DropZone', () => ({
   DropZone: ({
     title,
+    accept,
     disabled,
     onFiles,
   }: {
     title: string;
+    accept?: Record<string, string[]>;
     disabled?: boolean;
     onFiles: (files: File[]) => void;
   }) => (
     <button
       type="button"
+      data-accept={Object.entries(accept ?? {})
+        .flatMap(([mime, extensions]) => [mime, ...extensions])
+        .join(',')}
       disabled={disabled}
       onClick={() => {
         onFiles([new File(['audio'], 'lesson.mp3', { type: 'audio/mpeg' })]);
@@ -132,7 +144,14 @@ vi.mock('../shared/DropZone', () => ({
 }));
 
 vi.mock('../shared/UploadProgress', () => ({
-  UploadProgress: ({ progress }: { progress: number }) => <div>Upload progress: {progress}%</div>,
+  UploadProgress: ({ progress, onCancel }: { progress: number; onCancel: () => void }) => (
+    <div>
+      Upload progress: {progress}%
+      <button type="button" onClick={onCancel}>
+        Cancel upload
+      </button>
+    </div>
+  ),
 }));
 
 const now = '2026-02-05T00:00:00.000Z';
@@ -254,17 +273,45 @@ export function makeAssignmentSession(
 export function makeRecording(
   overrides: Partial<api.RecordingListItem> = {},
 ): api.RecordingListItem {
+  const status = overrides.status ?? 'ingested';
+  const productState =
+    overrides.productState ??
+    (
+      {
+        ingested: 'checking',
+        queued: 'waiting',
+        transcribing: 'transcribing',
+        transcribed: 'ready',
+        failed: 'attention',
+      } as const
+    )[status];
+  const runState = Object.hasOwn(overrides, 'runState')
+    ? (overrides.runState ?? null)
+    : (
+        {
+          ingested: null,
+          queued: 'queued',
+          transcribing: 'submitting',
+          transcribed: 'succeeded',
+          failed: 'failed',
+        } as const
+      )[status];
   return {
     recordingId: 'rec-1',
-    status: 'ingested',
+    status,
+    productState,
+    runState,
     transcriptId: null,
     error: null,
+    errorCode: null,
     source: 'upload',
     studentId: null,
     displayName: 'lesson.mp3',
     durationSec: null,
     channels: null,
     audioTopology: null,
+    audioLifecycle: 'retained',
+    audioAvailable: true,
     bytes: 1024,
     createdAt: now,
     updatedAt: now,
@@ -1143,6 +1190,7 @@ export function setupMinimalAssignmentTest() {
   });
 
   vi.mocked(api.uploadRecording).mockResolvedValue(makeRecording());
+  vi.mocked(api.getRecordingUploadOperation).mockResolvedValue(null);
   vi.mocked(api.getRecording).mockResolvedValue(
     makeRecording({
       status: 'transcribed',
