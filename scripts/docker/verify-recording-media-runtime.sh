@@ -28,9 +28,9 @@ ffmpeg -nostdin -v verbose -y -i "$work_dir/source.webm" \
 
 for family in mp4 mov webm; do
   case "$family" in
-    mp4) output=output-mp4.m4a ;;
-    mov) output=output-mov.m4a ;;
-    webm) output=output-webm.webm ;;
+    mp4) output='output-mp4.m4a' ;;
+    mov) output='output-mov.m4a' ;;
+    webm) output='output-webm.webm' ;;
   esac
   ffprobe -v error \
     -show_entries format=format_name,duration:stream=codec_type,codec_name,channels \
