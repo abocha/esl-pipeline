@@ -207,6 +207,19 @@ describeHttpServerIntegrationSuite(
         code: 'artifact_working_conflict',
         artifact: { workingVersion: 2, contentHash: 'a'.repeat(64) },
       });
+
+      confirm.mockRejectedValueOnce({
+        code: 'ASSIGNMENT_STEP_SPEAKER_ROLE_MAPPING_REQUIRED',
+      });
+      const speakerMappingRequired = await app.inject({
+        method: 'POST',
+        url: `/assignment-sessions/${session.id}/confirm`,
+        payload,
+      });
+      expect(speakerMappingRequired.statusCode).toBe(400);
+      expect(speakerMappingRequired.json()).toEqual({
+        code: 'assignment_step_speaker_role_mapping_required',
+      });
     });
 
     it('returns conflict when a Student request ID is reused with different input', async () => {

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   ArtifactWorkingConflictApiError,
+  AssignmentSpeakerRoleMappingRequiredApiError,
   confirmAssignmentSessionStep,
   confirmStudentAssignmentSession,
   publishAssignmentCorrection,
@@ -159,6 +160,24 @@ describe('assignment recovery API', () => {
       name: 'ArtifactWorkingConflictApiError',
       latestArtifact: { workingVersion: 5, contentHash: 'c'.repeat(64) },
     });
+    expect(apiClient.post).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves the recoverable speaker-role requirement from Source confirmation', async () => {
+    vi.mocked(apiClient.post).mockRejectedValueOnce(
+      makeAxiosError(400, { code: 'assignment_step_speaker_role_mapping_required' }),
+    );
+
+    await expect(
+      confirmAssignmentSessionStep('session-1', {
+        step: 'source',
+        expectedRevision: 2,
+        lessonId: null,
+        recordingId: 'recording-1',
+        transcriptId: 'transcript-1',
+        transcriptWorkingVersion: 1,
+      }),
+    ).rejects.toBeInstanceOf(AssignmentSpeakerRoleMappingRequiredApiError);
     expect(apiClient.post).toHaveBeenCalledTimes(1);
   });
 

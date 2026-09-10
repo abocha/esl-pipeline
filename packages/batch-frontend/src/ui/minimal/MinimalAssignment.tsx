@@ -16,6 +16,7 @@ import type {
 } from '../../utils/api';
 import {
   ArtifactWorkingConflictApiError,
+  AssignmentSpeakerRoleMappingRequiredApiError,
   AssignmentSessionConflictApiError,
   AssignmentSourceOwnershipApiError,
   activateProfileRevision,
@@ -637,6 +638,7 @@ export const MinimalAssignment: React.FC = () => {
     setPublishError: setAuthoringPublishError,
   } = authoring;
   const refreshTranscriptPreservingLocal = source.refreshTranscriptPreservingLocal;
+  const reconcileRecordingAndTranscript = source.reconcileRecordingAndTranscript;
   const refreshDraftPreservingLocal = authoring.refreshDraftPreservingLocal;
 
   const markAssignmentUserEdit = useCallback(() => {
@@ -999,6 +1001,10 @@ export const MinimalAssignment: React.FC = () => {
           try {
             response = await confirmAssignmentSessionStep(current.id, request);
           } catch (error) {
+            if (error instanceof AssignmentSpeakerRoleMappingRequiredApiError) {
+              await reconcileRecordingAndTranscript();
+              throw error;
+            }
             if (error instanceof ArtifactWorkingConflictApiError) {
               if (request.step === 'source') {
                 await refreshTranscriptPreservingLocal();
@@ -1058,6 +1064,7 @@ export const MinimalAssignment: React.FC = () => {
     },
     [
       invalidateAuthoringGeneration,
+      reconcileRecordingAndTranscript,
       refreshDraftPreservingLocal,
       refreshTranscriptPreservingLocal,
       resetAuthoring,
@@ -2210,7 +2217,8 @@ export const MinimalAssignment: React.FC = () => {
     activeStep === 'student'
       ? !hasStartedFlow || !source.selectedStudentId
       : activeStep === 'source'
-        ? !transcriptReady
+        ? !transcriptReady ||
+          (mixedSpeakerRoles.length > 0 && mixedSpeakerRoles.some((item) => !item.role))
         : activeStep === 'context'
           ? !context.profileLineageReady || firstProfileAssistBusy === 'approving'
           : activeStep === 'assignment'
