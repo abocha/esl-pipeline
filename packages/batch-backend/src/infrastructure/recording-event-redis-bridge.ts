@@ -28,6 +28,7 @@ interface SerializedRecording {
   bytes: number;
   durationSec: number | null;
   channels: number | null;
+  audioTopology: RecordingRecord['audioTopology'];
   audioLifecycle: RecordingRecord['audioLifecycle'];
   status: RecordingRecord['status'];
   error: string | null;
@@ -246,6 +247,7 @@ function serializeRecording(recording: RecordingRecord): SerializedRecording {
     bytes: recording.bytes,
     durationSec: recording.durationSec ?? null,
     channels: recording.channels ?? null,
+    audioTopology: recording.audioTopology ?? null,
     audioLifecycle: recording.audioLifecycle,
     status: recording.status,
     error: recording.error ?? null,
@@ -266,6 +268,7 @@ function deserializeRecording(serialized: SerializedRecording): RecordingRecord 
     bytes: serialized.bytes,
     durationSec: serialized.durationSec ?? null,
     channels: serialized.channels ?? null,
+    audioTopology: serialized.audioTopology ?? null,
     audioLifecycle: serialized.audioLifecycle,
     status: serialized.status,
     error: serialized.error ?? null,

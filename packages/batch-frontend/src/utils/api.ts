@@ -152,6 +152,13 @@ export class ArtifactWorkingConflictApiError extends Error {
     this.name = 'ArtifactWorkingConflictApiError';
   }
 }
+
+export class AssignmentSpeakerRoleMappingRequiredApiError extends Error {
+  constructor() {
+    super('Speaker roles are required. Assign every speaker before confirming this source.');
+    this.name = 'AssignmentSpeakerRoleMappingRequiredApiError';
+  }
+}
 export type GenerateDraftResponse = ContractGenerateDraftResponse;
 export type GenerationDraftErrorCode = GenerationErrorCategory;
 export type GenerationProvider = ContractGenerationProvider;
@@ -1718,6 +1725,12 @@ function getArtifactWorkingConflict(
     | { code?: unknown; artifact?: ContractArtifactWorkingContentDto }
     | undefined;
   return data?.code === 'artifact_working_conflict' && data.artifact ? data.artifact : null;
+}
+
+function isAssignmentSpeakerRoleMappingRequired(error: AxiosError | null): boolean {
+  if (error?.response?.status !== 400) return false;
+  const data = error.response.data as { code?: unknown } | undefined;
+  return data?.code === 'assignment_step_speaker_role_mapping_required';
 }
 
 const formatUnknownError = (error: unknown): string => {
@@ -3537,6 +3550,9 @@ export async function confirmAssignmentSessionStep(
     if (conflict) throw new AssignmentSessionConflictApiError(conflict);
     const artifactConflict = getArtifactWorkingConflict(axiosError);
     if (artifactConflict) throw new ArtifactWorkingConflictApiError(artifactConflict);
+    if (isAssignmentSpeakerRoleMappingRequired(axiosError)) {
+      throw new AssignmentSpeakerRoleMappingRequiredApiError();
+    }
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to confirm assignment progress.');
     }
