@@ -5,15 +5,17 @@
 
 ## Validation
 
-- [ ] `pnpm format`
-- [ ] `pnpm run lint:repo-hygiene`
-- [ ] `pnpm check:fast` or `pnpm --silent run check:fast:agent` completed as `PASS` or `PASS_WITH_CI_REQUIREMENTS`
-- [ ] I listed every reported CI requirement for the hosted merge gate
-- [ ] Risk-specific lanes, such as DB, migration, worker, HTTP, Docker, workflow, or docs checks
-- [ ] `pnpm check:pre-pr` when the change is broad or cross-cutting
+- Focused local evidence is the default; record the commands and outcomes that cover this PR's
+  plausible failure modes.
+- [ ] Focused local evidence recorded (commands and outcomes)
+- [ ] Optional local aggregate validation recorded with its concrete diagnostic reason (if run)
+- [ ] CI-owned comprehensive evidence identified: selected hosted jobs and `CI gate` remain required
+      before merge
+- [ ] Risk-specific checks recorded, such as formatting, repository hygiene, DB, migration, worker,
+      HTTP, Docker, workflow, or docs checks
+- [ ] Manual/environment-owned evidence recorded, or marked not applicable
 - [ ] `pnpm release:verify:contracts` and `pnpm --filter @esl-pipeline/batch-backend run db:verify-baseline` when migrations/schema/contracts changed
 - [ ] Targeted package tests (if applicable)
-- [ ] Manual smoke test (if applicable)
 - [ ] I inspected the aggregate summary before rerunning and used at most one isolated diagnostic rerun per unchanged failure
 
 ## Risk Notes
