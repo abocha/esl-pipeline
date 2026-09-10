@@ -17,6 +17,7 @@ import {
   now,
   openRecordingSettings,
   renderMinimalAssignment,
+  renderMinimalAssignmentWithNavigationGuard,
   renderPromptReadyAssignment,
   testScreen as screen,
   setupMinimalAssignmentTest,
@@ -27,7 +28,7 @@ import {
 
 const PROMPT_DRAFT_TEST_TIMEOUT_MS = 15_000;
 
-async function renderResumedDraftSession() {
+async function renderResumedDraftSession(user = createMinimalUser()) {
   const session = makeAssignmentSession({
     id: 'session-teacher-notes',
     studentId: 'student-alex',
@@ -52,7 +53,6 @@ async function renderResumedDraftSession() {
     }),
   );
   globalThis.history.replaceState(null, '', '/?sessionId=session-teacher-notes');
-  const user = createMinimalUser();
   renderMinimalAssignment();
   await screen.findByRole('button', { name: /^Generate assignment$/i });
   return user;
@@ -184,6 +184,58 @@ export function registerPromptEditorTests() {
           (patch) => 'teacherNotes' in patch && patch.teacherNotes !== 'Focus on articles.',
         ),
       ).toBe(false);
+    });
+
+    it('preserves a newer Context edit queued while confirmation is in flight', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const user = await renderResumedDraftSession(createTimerAwareMinimalUser());
+      await user.click(screen.getByRole('button', { name: /Teaching context/i }));
+      const notes = await screen.findByRole('textbox', { name: /Teacher notes/i });
+      fireEvent.change(notes, { target: { value: 'Committed note' } });
+
+      let resolveConfirmation!: (
+        value: Awaited<ReturnType<typeof api.confirmAssignmentSessionStep>>,
+      ) => void;
+      vi.mocked(api.confirmAssignmentSessionStep).mockImplementationOnce(
+        (_id, request) =>
+          new Promise((resolve) => {
+            resolveConfirmation = resolve;
+            expect(request).toMatchObject({ step: 'context', teacherNotes: 'Committed note' });
+          }),
+      );
+
+      await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+      await waitFor(() => expect(api.confirmAssignmentSessionStep).toHaveBeenCalledTimes(1));
+      fireEvent.change(notes, { target: { value: 'Newer note' } });
+
+      await act(async () => {
+        resolveConfirmation({
+          session: makeAssignmentSession({
+            id: 'session-teacher-notes',
+            studentId: 'student-alex',
+            recordingId: 'rec-1',
+            transcriptId: 'tx-1',
+            promptPackageId: 'pkg-1',
+            draftId: 'draft-1',
+            confirmedStep: 'context',
+            teacherNotes: 'Committed note',
+          }),
+          invalidated: ['prompt', 'draft', 'preview'],
+        });
+        await Promise.resolve();
+      });
+      await screen.findByRole('button', { name: /^Generate assignment$/i });
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_500);
+      });
+      expect(api.updateAssignmentSessionRecovery).toHaveBeenLastCalledWith(
+        'session-teacher-notes',
+        expect.objectContaining({
+          patch: expect.objectContaining({ teacherNotes: 'Newer note' }),
+        }),
+      );
+      vi.useRealTimers();
     });
 
     it('atomically clears durable prompt and draft ids before invalidated work can resume', async () => {
@@ -751,6 +803,85 @@ export function registerPromptEditorTests() {
           }),
         );
       });
+    });
+
+    it('does not replay Context profile recovery queued before confirmation after Create', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const user = createTimerAwareMinimalUser();
+      let navigationGuard: (() => Promise<boolean>) | null = null;
+      vi.mocked(api.fetchStudentOptions).mockResolvedValueOnce({
+        students: [{ id: 'student-alex', name: 'Alex', profileId: null }],
+      });
+      vi.mocked(api.getStudentMemoryHealth).mockResolvedValue({
+        studentId: 'student-alex',
+        latestSnapshot: null,
+        memoryCounts: {
+          lesson: {
+            ready: { count: 1, capped: false, limit: 20 },
+            pending: { count: 0, capped: false, limit: 20 },
+            failed: { count: 0, capped: false, limit: 20 },
+          },
+          homework: {
+            ready: { count: 0, capped: false, limit: 20 },
+            pending: { count: 0, capped: false, limit: 20 },
+            failed: { count: 0, capped: false, limit: 20 },
+          },
+        },
+        latestFailedReason: null,
+        profileCandidateCounts: { pending: 0, approved: 0, rejected: 0, deferred: 0 },
+      });
+      renderMinimalAssignmentWithNavigationGuard((guard) => {
+        navigationGuard = guard;
+      });
+
+      await startNewAssignmentForLearner(user);
+      await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+      await screen.findByDisplayValue('Student transcript text');
+      await advanceSourceToTeachingContext(user);
+      await user.click(
+        await screen.findByRole('button', { name: /Populate first profile from lesson/i }),
+      );
+      await user.click(await screen.findByRole('button', { name: /Approve profile draft/i }));
+      const continueButton = screen.getByRole('button', { name: /Confirm and continue/i });
+      await waitFor(() => expect((continueButton as HTMLButtonElement).disabled).toBe(false));
+
+      await waitFor(() => {
+        const pendingContext = new Event('beforeunload', { cancelable: true });
+        globalThis.dispatchEvent(pendingContext);
+        expect(pendingContext.defaultPrevented).toBe(true);
+      });
+
+      await user.click(continueButton);
+      await user.click(await screen.findByRole('button', { name: /^Generate assignment$/i }));
+      await screen.findByDisplayValue('# Generated assignment draft');
+      await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+      await screen.findByRole('heading', { name: /Review and share/i });
+      const recoveryCallsAfterCreate = vi.mocked(api.updateAssignmentSessionRecovery).mock.calls
+        .length;
+
+      const guard = navigationGuard as unknown as () => Promise<boolean>;
+      await expect(guard()).resolves.toBe(true);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_500);
+      });
+
+      const laterRecoveryPatches = vi
+        .mocked(api.updateAssignmentSessionRecovery)
+        .mock.calls.slice(recoveryCallsAfterCreate)
+        .map(([, request]) => request.patch);
+      expect(laterRecoveryPatches.some((patch) => Object.hasOwn(patch, 'selectedProfileId'))).toBe(
+        false,
+      );
+      expect(api.confirmAssignmentSessionStep).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          step: 'context',
+          profileId: 'profiles/alex.md',
+          profileRevisionId: 'revision-draft-1',
+          profileRevisionHash: 'hash-draft-1',
+        }),
+      );
+      vi.useRealTimers();
     });
 
     it('ignores a first-profile draft response from audio that was replaced before activation', async () => {

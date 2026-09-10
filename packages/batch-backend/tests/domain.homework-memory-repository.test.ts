@@ -394,13 +394,18 @@ describeIfPg('domain/homework-memory-repository', () => {
       outcome: 'stale_discarded',
       entry: { id: pendingB.entry.id },
     });
-    expect(committedB).toMatchObject({ outcome: 'canonical_committed', entry: { jobId: correctionBJobId } });
+    expect(committedB).toMatchObject({
+      outcome: 'canonical_committed',
+      entry: { jobId: correctionBJobId },
+    });
     expect(staleA.outcome).toBe('stale_discarded');
     expect(forcedRootAfterBReady).toMatchObject({
       outcome: 'stale_discarded',
       entry: { id: committedB.entry?.id },
     });
-    await expect(getLatestReadyHomeworkMemoryByAssignmentLineageKey(rootJobId)).resolves.toMatchObject({
+    await expect(
+      getLatestReadyHomeworkMemoryByAssignmentLineageKey(rootJobId),
+    ).resolves.toMatchObject({
       jobId: correctionBJobId,
       contentHash: 'hash-b',
     });
@@ -433,21 +438,45 @@ describeIfPg('domain/homework-memory-repository', () => {
       model: 'gpt-5.2',
       contentHash: 'hash-1',
       homeworkSummary: 'Initial extraction',
-      grammarTargets: [], vocabularyTargets: [], reviewTargets: [], taskList: [], pronunciationFocus: [], teacherFollowUpCues: [],
+      grammarTargets: [],
+      vocabularyTargets: [],
+      reviewTargets: [],
+      taskList: [],
+      pronunciationFocus: [],
+      teacherFollowUpCues: [],
       publishedAt,
       publishTargets: [],
     });
     const replay = await ensurePendingHomeworkMemoryEntry({
-      studentId, jobId: rootJobId, assignmentLineageKey: rootJobId,
-      schemaVersion: 'homework-memory.v1', provider: 'openai', model: 'gpt-5.2', contentHash: 'hash-1',
-      bypassReadyReuse: true, publishedAt, publishTargets: [],
+      studentId,
+      jobId: rootJobId,
+      assignmentLineageKey: rootJobId,
+      schemaVersion: 'homework-memory.v1',
+      provider: 'openai',
+      model: 'gpt-5.2',
+      contentHash: 'hash-1',
+      bypassReadyReuse: true,
+      publishedAt,
+      publishTargets: [],
     });
     const regenerated = await commitCanonicalReadyHomeworkMemoryEntry({
-      studentId, jobId: rootJobId, assignmentLineageKey: rootJobId,
-      schemaVersion: 'homework-memory.v1', provider: 'openai', model: 'gpt-5.2', contentHash: 'hash-1',
+      studentId,
+      jobId: rootJobId,
+      assignmentLineageKey: rootJobId,
+      schemaVersion: 'homework-memory.v1',
+      provider: 'openai',
+      model: 'gpt-5.2',
+      contentHash: 'hash-1',
       homeworkSummary: 'Refreshed extraction',
-      grammarTargets: [], vocabularyTargets: [], reviewTargets: [], taskList: [], pronunciationFocus: [], teacherFollowUpCues: [],
-      publishedAt, publishTargets: [], pendingEntryId: replay.entry.id,
+      grammarTargets: [],
+      vocabularyTargets: [],
+      reviewTargets: [],
+      taskList: [],
+      pronunciationFocus: [],
+      teacherFollowUpCues: [],
+      publishedAt,
+      publishTargets: [],
+      pendingEntryId: replay.entry.id,
     });
     const readyRows = await withPgClientSessionContext({ rlsBypass: true }, async (client) =>
       client.query<{ id: string }>(
@@ -457,7 +486,10 @@ describeIfPg('domain/homework-memory-repository', () => {
     );
 
     expect(replay.outcome).toBe('created');
-    expect(regenerated).toMatchObject({ outcome: 'canonical_committed', entry: { jobId: rootJobId } });
+    expect(regenerated).toMatchObject({
+      outcome: 'canonical_committed',
+      entry: { jobId: rootJobId },
+    });
     expect(readyRows.rows).toEqual([{ id: regenerated.entry?.id }]);
     await expect(getHomeworkMemoryEntryById(initial.id)).resolves.toMatchObject({
       status: 'superseded',

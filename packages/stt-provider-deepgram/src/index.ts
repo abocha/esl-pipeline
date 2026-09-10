@@ -172,7 +172,10 @@ function defaultClientFactory(
       ...transportOptions,
     }) as unknown as DeepgramClientLike;
   }
-  return new DeepgramClient({ maxRetries: 0, ...transportOptions }) as unknown as DeepgramClientLike;
+  return new DeepgramClient({
+    maxRetries: 0,
+    ...transportOptions,
+  }) as unknown as DeepgramClientLike;
 }
 
 async function transcribeAttempt(args: {

@@ -269,7 +269,9 @@ describe('stt-provider-deepgram', () => {
     controller.abort();
     const guardedFetch = vi.fn<typeof fetch>(async (input, init) => {
       if (controller.signal.aborted || init?.signal?.aborted) {
-        throw Object.assign(new Error('dispatch cancelled'), { code: 'AMBIGUOUS_PROVIDER_OUTCOME' });
+        throw Object.assign(new Error('dispatch cancelled'), {
+          code: 'AMBIGUOUS_PROVIDER_OUTCOME',
+        });
       }
       return dispatch(input, init);
     });

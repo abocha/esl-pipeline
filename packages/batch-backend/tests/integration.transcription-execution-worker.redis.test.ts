@@ -11,11 +11,11 @@ import {
   createQueuedTranscriptionRun,
   getTranscriptionRunById,
 } from '../src/domain/transcription-run-repository.js';
+import { closePgPool, createPgPool, withPgClientSessionContext } from '../src/infrastructure/db.js';
 import {
   createTranscribeQueue,
   createTranscribeWorker,
 } from '../src/infrastructure/transcribe-queue.js';
-import { closePgPool, createPgPool, withPgClientSessionContext } from '../src/infrastructure/db.js';
 import { requireRedisTestEnv, resolveTestTimeout } from './support/test-env.js';
 
 requireRedisTestEnv();
@@ -119,7 +119,7 @@ describe('transcription execution worker (requires PostgreSQL and Redis)', () =>
 
       await service.queue.getJob(run.id).then((completed) => completed?.remove());
       await reconcileTranscriptionDelivery({ limit: 10 });
-    expect(await service.queue.getJob(run.id)).toBeFalsy();
+      expect(await service.queue.getJob(run.id)).toBeFalsy();
     },
     timeout,
   );
