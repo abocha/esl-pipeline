@@ -15,7 +15,13 @@ export function buildAgentCheckArtifacts({ repoRoot, runLabel, lane, timestamp }
   };
 }
 
-export function buildAgentCheckSummary({ label, durationMs, lanes, ciRequirements = [] }) {
+export function buildAgentCheckSummary({
+  label,
+  durationMs,
+  lanes,
+  ciRequirements = [],
+  deferredBroadFallback = null,
+}) {
   const problems = lanes.filter((lane) => lane.status !== 'pass');
   const firstFailure = lanes.find((lane) => lane.status === 'fail') ?? null;
   return {
@@ -35,6 +41,7 @@ export function buildAgentCheckSummary({ label, durationMs, lanes, ciRequirement
     },
     lanes,
     ciRequirements,
+    deferredBroadFallback,
     problems,
     firstFailure,
   };
@@ -51,9 +58,17 @@ export function formatAgentCheckSummary(summary, { logsDir }) {
   }
 
   if (summary.status === 'pass_with_ci_requirements') {
+    if (summary.deferredBroadFallback) {
+      lines.push(
+        `broad local lanes not run: ${summary.deferredBroadFallback.lane} is delegated to hosted PR CI`,
+        `reason: ${summary.deferredBroadFallback.reason}`,
+      );
+    }
     lines.push(
-      `local lanes ${summary.counts.passed} passed`,
-      'CI required:',
+      summary.deferredBroadFallback
+        ? `local lanes ${summary.counts.total} executed`
+        : `local lanes ${summary.counts.passed} passed`,
+      summary.deferredBroadFallback ? 'Hosted comprehensive regression required:' : 'CI required:',
       ...summary.ciRequirements.map(
         (requirement) => `  - ${requirement.id}: ${requirement.reason}`,
       ),

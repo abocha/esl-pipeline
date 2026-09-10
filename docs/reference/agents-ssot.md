@@ -177,19 +177,25 @@ Update together:
 Required repo checks for behavior changes:
 
 - During editing, run the narrowest relevant package, file, or `vitest related --run` lane first.
-- After focused tests, choose one normal pre-push gate. Use
-  `pnpm --silent run check:fast:agent` by default, use `pnpm check:pre-pr:agent` when an agent runs
-  a broad, cross-cutting, shared-contract, or toolchain gate, and use `pnpm check:agent` for full CI
-  reproduction or DB, migration, worker, or integration behavior. The corresponding non-agent
-  commands remain the human-readable equivalents. Clearly docs-only work may use the documented
-  docs-specific lanes.
+- Focused local checks are the default. Broad local aggregation requires a concrete plausible wider
+  failure to catch before CI, local environment behavior under test, unavailable equivalent hosted
+  evidence, or a specific CI failure being reproduced or diagnosed. Diff breadth alone is not a
+  reason. Clearly docs-only work may use the documented docs-specific lanes.
+- Hosted PR CI is the default comprehensive regression executor for the resource-constrained
+  developer laptop. A task with focused evidence covering its plausible failure modes may be ready
+  for hosted CI without a local aggregate gate. Primary validation accountability means selecting,
+  inspecting, and reporting focused local, optional/risk-triggered local aggregate, CI-owned
+  comprehensive, and manual/environment-owned evidence; it does not require every broad suite to
+  run locally.
 - `check:fast` is affected-package validation. It must include committed, staged, unstaged, and
   untracked changes; expand to workspace dependents; run cheap global guards; apply explicit
   path-risk rules; and fail conservatively to a broader lane when the affected scope is uncertain.
 - `check:fast:dry-run` must show local working-tree scope separately from the committed hosted CI
-  preview. A `check:fast:agent` fallback to `check:pre-pr` satisfies the broad gate.
-- `check:pre-pr` is the direct gate for a branch already known to be broad. It runs the broad build,
-  typecheck, lint, and core unit regression sweep.
+  preview. A conservative `check:fast:agent` fallback persists the broad plan but does not execute
+  broad lanes locally: it reports `PASS_WITH_CI_REQUIREMENTS` with hosted comprehensive regression
+  outstanding. This preserves fail-closed classification without presenting broad local evidence.
+- `check:pre-pr` and `check:pre-pr:agent` deliberately execute the broad build, typecheck, lint, and
+  core unit regression plan when a concrete diagnostic reason justifies local broad validation.
 - Affected and broad local validation run selected lanes serially to completion. Independent lanes
   continue after another lane fails; prebuilt test lanes are blocked when their build prerequisite
   fails. The aggregate summary and cited raw logs are the canonical diagnostic starting point.
@@ -210,8 +216,9 @@ Required repo checks for behavior changes:
   gate only after relevant source, configuration, toolchain, or a diagnosed prerequisite condition
   changed. Stop and report a stable infrastructure or prerequisite failure instead of assembling a
   green cache through reruns.
-- Agent variants preserve validation scope and exit semantics; they change only output presentation
-  and persisted evidence.
+- `check:pre-pr:agent` and `check:agent` preserve their explicit local execution scope and exit
+  semantics while changing output presentation and persisted evidence. `check:fast:agent` preserves
+  affected classification and artifacts, but delegates a conservative broad fallback to hosted CI.
 - A successful `pnpm check` or `pnpm check:agent` subsumes both narrower pre-push gates.
 - Run `pnpm check` for human-readable local CI reproduction, or `pnpm check:agent` when the same
   full gate needs persisted agent evidence, including for DB, migration, worker, integration, or
