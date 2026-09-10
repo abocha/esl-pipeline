@@ -169,6 +169,7 @@ export interface SourceController extends SourceHydrationSnapshot {
   retryPendingUpload: () => void;
   loadTranscript: () => Promise<void>;
   refreshTranscriptPreservingLocal: () => Promise<void>;
+  reconcileRecordingAndTranscript: () => Promise<void>;
   handleSaveTranscript: (speakerRoleMapping?: {
     roles: { speaker: number; role: 'teacher' | 'student' }[];
   }) => Promise<RecordingTranscriptResponse | null>;
@@ -719,6 +720,28 @@ export function useMinimalAssignmentSourceController({
     }
   }, [recording?.recordingId]);
 
+  const reconcileRecordingAndTranscript = useCallback(async () => {
+    const recordingId = latestRecordingRef.current?.recordingId;
+    if (!recordingId) return;
+    try {
+      const updated = await getRecordingStatus(recordingId);
+      if (latestRecordingRef.current?.recordingId !== recordingId) return;
+      latestRecordingRef.current = updated;
+      setRecording(updated);
+      setSelectedAudioTopology(updated.audioTopology ?? 'mixed_recording');
+      setRecordingStatus(updated.status);
+      setRecordingError(
+        updated.productState === 'attention' ? getRecordingErrorAction(updated.errorCode) : null,
+      );
+      await refreshTranscriptPreservingLocal();
+    } catch (error) {
+      if (latestRecordingRef.current?.recordingId !== recordingId) return;
+      setRecordingError(
+        error instanceof Error ? error.message : 'Unable to refresh the recording source.',
+      );
+    }
+  }, [refreshTranscriptPreservingLocal]);
+
   const transcriptRecoveryConflict = transcriptConflictTextRef.current === transcriptText.trim();
 
   useEffect(() => {
@@ -1070,6 +1093,7 @@ export function useMinimalAssignmentSourceController({
     retryPendingUpload,
     loadTranscript,
     refreshTranscriptPreservingLocal,
+    reconcileRecordingAndTranscript,
     handleSaveTranscript,
     createManualTranscript,
     resetSourceFlow,
