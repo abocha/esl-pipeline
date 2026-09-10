@@ -846,6 +846,7 @@ describeHttpServerIntegrationSuite(
         bytes: 12,
         durationSec: 120,
         channels: 2,
+        audioTopology: 'mixed_recording',
         status: 'transcribed',
         error: null,
         createdAt: new Date('2024-01-01T10:00:00Z'),
@@ -935,6 +936,7 @@ describeHttpServerIntegrationSuite(
       expect(eventPayload.studentId).toBe('student-1');
       expect(eventPayload.source).toBe('upload');
       expect(eventPayload.audioLifecycle).toBe('retained');
+      expect(eventPayload.audioTopology).toBe('mixed_recording');
       expect(eventPayload.audioAvailable).toBe(true);
       expect(eventPayload.bytes).toBe(12);
     });
