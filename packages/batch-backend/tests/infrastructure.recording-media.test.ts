@@ -1,5 +1,5 @@
-import { createHash } from 'node:crypto';
 import { execFile as execFileCallback } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -13,14 +13,14 @@ import {
   ensureRecordingUploadCapacity,
   MAX_RECORDING_BYTES,
   MAX_RECORDING_DURATION_SECONDS,
+  prepareRecordingMedia,
+  probeRecordingMedia,
   RECORDING_PREPARATION_VERSION,
   RecordingMediaError,
   recordRecordingUploadBytes,
-  prepareRecordingMedia,
-  probeRecordingMedia,
   spoolRecordingUpload,
-  validateTrustedSplitChannels,
   validateRecordingMedia,
+  validateTrustedSplitChannels,
 } from '../src/infrastructure/recording-media.js';
 import { shouldReuseCachedTranscriptForFingerprint } from '../src/transport/extended-routes/recording-provider-cache.js';
 

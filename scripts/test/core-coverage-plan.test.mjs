@@ -23,9 +23,18 @@ test('core coverage prepares the selected build graph before prebuilt unit lanes
   assert.deepEqual(
     plan.coverage.map((target) => [target.packageName, target.args.slice(0, 4)]),
     [
-      ['@esl-pipeline/batch-frontend', ['--filter', '@esl-pipeline/batch-frontend', 'run', 'test:unit:prebuilt']],
-      ['@esl-pipeline/batch-backend', ['--filter', '@esl-pipeline/batch-backend', 'run', 'test:unit:prebuilt']],
-      ['@esl-pipeline/orchestrator', ['--filter', '@esl-pipeline/orchestrator', 'run', 'test:unit:prebuilt']],
+      [
+        '@esl-pipeline/batch-frontend',
+        ['--filter', '@esl-pipeline/batch-frontend', 'run', 'test:unit:prebuilt'],
+      ],
+      [
+        '@esl-pipeline/batch-backend',
+        ['--filter', '@esl-pipeline/batch-backend', 'run', 'test:unit:prebuilt'],
+      ],
+      [
+        '@esl-pipeline/orchestrator',
+        ['--filter', '@esl-pipeline/orchestrator', 'run', 'test:unit:prebuilt'],
+      ],
       [
         '@esl-pipeline/tts-provider-elevenlabs',
         ['--filter', '@esl-pipeline/tts-provider-elevenlabs', 'run', 'test:unit:prebuilt'],
