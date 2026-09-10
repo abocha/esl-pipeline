@@ -22,6 +22,9 @@
   ],
   "ignoreBinaries": ["actionlint", "rg", "shellcheck"],
   "workspaces": {
+    ".": {
+      "ignoreDependencies": ["fastify"]
+    },
     "packages/*": {
       "entry": ["src/index.ts", "bin/cli.ts", "bin/**/*.ts"],
       "project": [
