@@ -39,3 +39,4 @@ allowBuilds:
 
 minimumReleaseAgeExclude:
   - undici@7.29.0
+  - '@types/node@24.13.4'

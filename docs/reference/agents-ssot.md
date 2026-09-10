@@ -168,7 +168,7 @@ Update together:
 
 ## Runtime and Verification Baseline
 
-- Node.js 24.11.1+
+- Node.js 24.15.0+
 - Use the repo-pinned Node version in `.nvmrc` for local development and CI parity; the engine range
   above remains the compatibility floor.
 - pnpm
