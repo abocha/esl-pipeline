@@ -518,11 +518,18 @@ These are reviewable commit boundaries, not mandatory PR boundaries. Prefer one 
 
 **Validation gates**
 
-1. Run focused affected validation first. After the tree is ready, run one routed normal completion gate: `pnpm --silent run check:fast:agent` by default, or `pnpm check:pre-pr:agent` / `pnpm check:pre-pr` for broad, cross-cutting, shared-contract, or toolchain work. These are alternatives unless routing or task requirements say otherwise.
-2. Reuse still-fresh evidence and do not repeat aggregate reruns without a relevant state change.
-3. Selected PostgreSQL/Redis hosted lanes and the `CI gate` remain merge evidence where applicable; `PASS_WITH_CI_REQUIREMENTS` permits PR creation but not merge.
-4. `pnpm release:verify:contracts`, backend baseline verification, docs index generation, formatting, repository hygiene, and docs checks remain required where their paths are affected.
-5. One final Terra/high whole-branch review for cross-boundary regressions after the three narrow Sol/high risk reviews are resolved.
+1. Run focused local validation first. Do not require a local aggregate completion gate: choose one only
+   for a concrete plausible wider failure, local environment behavior under test, unavailable equivalent
+   hosted evidence, or a specific CI failure being reproduced or diagnosed. Diff breadth alone is not
+   sufficient.
+2. Hosted PR CI is the comprehensive regression executor. `check:fast:agent` may run selected
+   affected local evidence, but its conservative broad fallback records the plan and delegates it to
+   CI; use `check:pre-pr:agent` / `check:pre-pr` only when deliberately running that broad local plan.
+3. Reuse still-fresh evidence and do not repeat aggregate reruns without a relevant state change.
+4. Selected PostgreSQL/Redis hosted lanes and the `CI gate` remain merge evidence where applicable;
+   `PASS_WITH_CI_REQUIREMENTS` permits PR creation but not merge.
+5. `pnpm release:verify:contracts`, backend baseline verification, docs index generation, formatting, repository hygiene, and docs checks remain required where their paths are affected.
+6. One final Terra/high whole-branch review for cross-boundary regressions after the three narrow Sol/high risk reviews are resolved.
 
 ## 11. Migration, deployment, and rollback considerations
 

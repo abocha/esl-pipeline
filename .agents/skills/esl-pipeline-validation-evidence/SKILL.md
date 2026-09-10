@@ -5,8 +5,9 @@ description: Use when work in esl-pipeline involves affected validation, check:f
 
 # ESL Pipeline validation evidence
 
-Use the smallest reliable validation path while preserving the repository's explicit division
-between local evidence and CI-owned PostgreSQL/Redis evidence.
+Use the smallest reliable validation path. Focused local evidence is the default; hosted PR CI owns
+comprehensive regression on the resource-constrained developer laptop. Preserve the repository's
+explicit division between local, CI-owned, and manual/environment-owned evidence.
 
 ## Establish the contract
 
@@ -35,17 +36,21 @@ between local evidence and CI-owned PostgreSQL/Redis evidence.
 - Keep selected PostgreSQL/Redis application evidence in PR CI. `PASS_WITH_CI_REQUIREMENTS` permits
   PR creation but is not merge evidence.
 - Require every selected hosted job and the fail-closed `CI gate` before merge.
+- The primary owns choosing, inspecting, and reporting evidence, not physically running every broad
+  suite locally. A focused-evidence branch may be ready for hosted CI without a local aggregate gate.
 
 ## Diagnose efficiently
 
 - Run the narrowest focused test first.
-- After focused validation is complete, choose one normal completion gate according to `AGENTS.md`
-  and `docs/reference/TESTING_GUIDELINES.md`.
-- `check:fast:agent` and `check:pre-pr` / `check:pre-pr:agent` are alternative normal completion
-  gates unless the task explicitly requires both. Do not infer that a passing affected gate requires
-  a separate broad gate.
-- A `check:fast:agent` fallback to `check:pre-pr` satisfies the broad gate. A successful full
-  `pnpm check` subsumes narrower normal gates.
+- Do not require a local aggregate completion gate. Choose broad local execution only when there is a
+  concrete plausible wider failure to catch before CI, local environment behavior under test,
+  unavailable equivalent hosted evidence, or a specific CI failure to reproduce/diagnose. Diff
+  breadth, package metadata, or a pre-PR command name alone is not enough.
+- `check:fast:agent` can run selected affected local evidence. Its conservative broad fallback
+  persists the broad plan and reports hosted comprehensive regression outstanding without executing
+  broad local lanes. `check:pre-pr` / `check:pre-pr:agent` deliberately execute the broad plan when
+  the reason is stated. A successful full `pnpm check` is local evidence only and never replaces
+  required hosted CI.
 - Allow at most one isolated diagnostic rerun for an unchanged failure.
 - Treat a timeout, missing output, or detached caller as inconclusive until the artifact and any
   surviving process are inspected.
@@ -54,38 +59,17 @@ between local evidence and CI-owned PostgreSQL/Redis evidence.
 - Do not add lane parallelism without explicit resource accounting across pnpm, Turbo, and Vitest.
 - Stop with findings when the request is review or redesign only.
 
-## Terminal validation phase
+## Optional aggregate validation
 
-Aggregate repository validation is a completion phase, not an editing-loop command.
+Do not create a terminal aggregate-validation phase for focused work. When a concrete reason does
+justify local aggregate execution, finish planned edits and focused checks first, state the expected
+failure class and why hosted CI alone is insufficient for that decision, then inspect the resulting
+artifact before changing the tree again. Do not run aggregates as an editing loop or repeat them to
+manufacture a green summary; one isolated rerun is only for a diagnosed unchanged failure.
 
-Before starting the final normal gate:
-
-1. finish the planned source, test, configuration, and documentation edits;
-2. run the necessary focused checks;
-3. resolve known focused failures;
-4. inspect the final intended diff and identify any remaining required validation;
-5. then freeze the relevant tree and begin aggregate validation.
-
-Once aggregate validation has started, do not make optional cleanup, refactoring, coverage expansion,
-or "one more useful test" changes merely because additional improvement is possible.
-
-After a passing aggregate gate, treat the covered tree as complete for the current task unless:
-
-- the gate or its artifacts reveal a concrete defect;
-- a required acceptance criterion is still unproven;
-- the user or task explicitly requires another change;
-- repository routing requires additional evidence; or
-- a genuinely relevant external state change invalidates the result.
-
-Optional improvements discovered after final validation should be reported as follow-up findings rather
-than applied in a way that invalidates otherwise sufficient completion evidence.
-
-If a concrete post-gate defect requires an edit, leave the terminal validation phase, make the bounded
-correction, finish all resulting focused work, freeze the tree again, and run only the aggregate
-validation required for that new final state.
-
-When a task explicitly requires multiple aggregate gates, treat them as one terminal validation
-sequence against the same frozen tree. Do not repeat the whole sequence after every intermediate edit.
+After sufficient focused local evidence, hand off the branch as ready for hosted CI and retain the
+required hosted jobs, `CI gate`, and any manual/environment-owned checks as outstanding. Optional
+improvements found after evidence is sufficient are follow-up findings unless separately authorized.
 
 ## Evidence freshness and completion handoff
 
@@ -116,11 +100,12 @@ A relevant change invalidates only evidence whose claimed scope it can affect. D
 rerun unrelated focused lanes or aggregate gates when existing evidence still covers their inputs.
 
 Agent-output commands are available when the receiving handoff needs persisted local evidence:
-`pnpm check:fast:agent` for affected validation, `pnpm check:pre-pr:agent` for broad pre-PR
-validation, and `pnpm check:agent` for the full CI-reproduction / DB / migration / worker /
-integration gate. Agent variants preserve validation scope and exit semantics; they change only
-output presentation and persisted evidence. The corresponding non-agent commands remain the
-canonical human-readable equivalents.
+`pnpm check:fast:agent` for affected validation, `pnpm check:pre-pr:agent` for deliberately
+justified broad local validation, and `pnpm check:agent` for full local CI reproduction or DB /
+migration / worker / integration behavior. `check:fast:agent` preserves conservative classification
+and artifacts but delegates its broad fallback to hosted CI; the explicit broad and full agent commands
+preserve their local execution scope and exit semantics. The corresponding non-agent commands remain
+the canonical human-readable equivalents.
 
 Always report focused commands actually run, the canonical gate result, cited artifact paths for
 failures, named CI-owned requirements, and whether the result is `PASS`,

@@ -57,8 +57,45 @@ test('agent check summary reports passing local evidence with required CI eviden
   assert.match(text, /local lanes 2 passed/u);
   assert.match(
     text,
-    /CI required:\n  - backend-db-integration: backend worker or queue behavior changed/u,
+    /CI required:\n {2}- backend-db-integration: backend worker or queue behavior changed/u,
   );
+});
+
+test('deferred broad fallback remains ready for hosted CI without claiming local broad evidence', () => {
+  const summary = buildAgentCheckSummary({
+    label: 'check:fast:agent',
+    durationMs: 500,
+    lanes: [],
+    ciRequirements: [
+      {
+        id: 'backend-db-integration',
+        reason: 'changed scope requires conservative hosted service evidence',
+      },
+      {
+        id: 'CI gate',
+        reason:
+          'affected routing requires conservative broad validation; hosted PR CI owns comprehensive regression',
+      },
+    ],
+    deferredBroadFallback: {
+      lane: 'check:pre-pr',
+      reason:
+        'root validation, package manager, TypeScript, Vitest, Biome, or Turbo config changed',
+    },
+  });
+
+  assert.equal(summary.status, 'pass_with_ci_requirements');
+  assert.deepEqual(summary.counts, { total: 0, passed: 0, failed: 0, blocked: 0 });
+
+  const text = formatAgentCheckSummary(summary, {
+    logsDir: 'tmp/check-logs/2026-check-fast',
+  });
+
+  assert.match(text, /PASS_WITH_CI_REQUIREMENTS/u);
+  assert.match(text, /broad local lanes not run: check:pre-pr is delegated to hosted PR CI/u);
+  assert.match(text, /local lanes 0 executed/u);
+  assert.match(text, /Hosted comprehensive regression required:/u);
+  assert.doesNotMatch(text, /local lanes [1-9][0-9]* passed/u);
 });
 
 test('local failures remain failures when CI evidence is also required', () => {

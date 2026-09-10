@@ -53,8 +53,11 @@ If this guide conflicts with [`docs/reference/agents-ssot.md`](agents-ssot.md), 
     the root Biome lint lane.
   - Uses Turborepo for workspace task ordering, dependency builds, concurrency, local cache, and run
     summaries.
-  - Falls back conservatively to `check:pre-pr` when the changed scope cannot be classified.
+  - Classifies an unclassifiable changed scope conservatively to the broad `check:pre-pr` plan.
 - Root affected check, agent output: `pnpm check:fast:agent`
+  - Executes normal affected local lanes. If routing conservatively requires the broad plan, it
+    persists that plan and delegates comprehensive regression to hosted PR CI without executing
+    broad local lanes.
 - Root affected dry-run: `pnpm check:fast:dry-run`
   - Prints local working-tree scope separately from the committed hosted CI preview.
 - Root broad pre-PR check: `pnpm check:pre-pr`
@@ -92,17 +95,26 @@ Use the narrowest lane that answers the question at hand:
 | ------------------ | ----------------------------------------------------------------- | ----------------------------------------------------------------- |
 | Related            | Editing loop for one source file or feature                       | `pnpm --filter <package> exec vitest related --run <source-file>` |
 | Explicit test file | Editing loop when the exact suite is known                        | `pnpm --filter <package> exec vitest run <test-file>`             |
-| Affected           | Agent/human task completion                                       | `pnpm --silent run check:fast:agent` or `pnpm check:fast`         |
-| Pre-PR             | Broad or cross-cutting changes                                    | `pnpm check:pre-pr:agent` or `pnpm check:pre-pr`                  |
+| Affected           | Selected affected local evidence or routing preview               | `pnpm --silent run check:fast:agent` or `pnpm check:fast`         |
+| Pre-PR             | Deliberately justified local broad diagnosis                      | `pnpm check:pre-pr:agent` or `pnpm check:pre-pr`                  |
 | Full               | Local CI reproduction, DB, migration, worker, or integration risk | `pnpm check:agent` or `pnpm check`                                |
 
-After focused tests, choose one normal pre-push gate. Use `check:fast:agent` by default; use
-`check:pre-pr:agent` when an agent runs a broad, cross-cutting, shared-contract, or toolchain gate;
-use `check:agent` for the full CI-reproduction, DB, migration, worker, or integration gate. The
-non-agent commands remain the human-readable equivalents. A `check:fast:agent` fallback to
-`check:pre-pr` satisfies the broad gate. A successful full `check` or `check:agent` subsumes both
-narrower gates. Clearly docs-only work may use the documented docs-specific lanes. Do not use
-`check:pre-pr` as a routine editing-loop command.
+Focused local checks are the default; do not require one local aggregate gate before push. Choose
+local aggregate execution only for a concrete plausible wider failure, local environment behavior
+under test, unavailable equivalent hosted evidence, or a specific CI failure being reproduced or
+diagnosed. Diff breadth alone is not a reason. `check:fast:agent` can run selected affected local
+evidence, but its conservative broad fallback persists the broad plan and delegates comprehensive
+regression to hosted PR CI. `check:pre-pr:agent` deliberately runs that broad local plan only when
+the diagnostic reason is stated. Use `check:agent` for full local CI reproduction, DB, migration,
+worker, or integration behavior. The non-agent commands remain human-readable equivalents. Clearly
+docs-only work may use the documented docs-specific lanes.
+
+Hosted PR CI is the default comprehensive regression executor for the resource-constrained developer
+laptop. A task may be ready for hosted CI when focused evidence covers the plausible failure modes,
+even when no local aggregate gate has run. The primary owns selecting, inspecting, and reporting the
+four evidence classes: focused local evidence, optional/risk-triggered local aggregate evidence,
+CI-owned comprehensive evidence, and manual/environment-owned evidence. Required hosted jobs and
+`CI gate` still determine merge readiness.
 
 Affected and broad gates run selected lanes serially. Independent lanes continue after failure so one
 run reports every available problem. A prebuilt test lane is marked blocked when its build
@@ -114,10 +126,12 @@ diagnosed prerequisite state changed.
 
 Affected plans assign every selected lane to `local` or `ci`. Local execution runs only local lanes;
 selected PostgreSQL and Redis lanes remain visible as required `backend-db-integration` evidence. If
-all local lanes pass while CI evidence remains, the agent summary reports
-`PASS_WITH_CI_REQUIREMENTS`. That outcome permits PR creation, not merge, and never means service
-coverage was skipped. A direct `check:pre-pr` run has no affected-file projection, so it
-conservatively reports the same hosted service requirement.
+all executed local lanes pass while CI evidence remains, the agent summary reports
+`PASS_WITH_CI_REQUIREMENTS`. An affected-agent broad fallback records that no broad local lanes ran
+and that hosted comprehensive regression remains required; it is not ordinary local PASS evidence.
+That outcome permits PR creation, not merge, and never means service coverage was skipped. A direct
+`check:pre-pr` run has no affected-file projection, so it conservatively reports the same hosted
+service requirement.
 
 ## Script Methodology
 
@@ -228,24 +242,22 @@ For interval- or polling-driven behavior:
 Use this order when updating tests:
 
 1. Run targeted package or related tests first.
-2. Choose one normal pre-push gate:
-   - Default: `pnpm --silent run check:fast:agent`.
-   - Known broad, cross-cutting, shared-contract, or toolchain branch: `pnpm check:pre-pr:agent`
-     for agent output, or `pnpm check:pre-pr` for human-readable output.
-   - A fallback from `check:fast:agent` to `check:pre-pr` already satisfies the broad gate.
-   - A successful `pnpm check` or `pnpm check:agent` subsumes both narrower gates.
-   - Clearly docs-only work may use the documented docs-specific lanes.
-   - Use `pnpm check:fast:dry-run` to inspect local and committed hosted routing separately without
-     executing lanes.
-3. Run lane-level checks when the risk class calls for them:
+2. Record the evidence still needed: focused local checks, an optional concrete-reason local
+   aggregate, hosted comprehensive CI, or manual/environment-owned validation. Do not add an
+   aggregate local gate merely as completion ceremony; use `pnpm check:fast:dry-run` when its routing
+   preview informs that decision.
+3. Run lane-level or aggregate local checks only when the selected risk class calls for them:
    - `pnpm test`
    - `pnpm test:unit` when specifically validating package entrypoint normalization
    - `pnpm test:unit:prebuilt` when the workspace is already built
    - `pnpm test:integration`
    - `pnpm test:integration:prebuilt` when the workspace is already built
    - `pnpm test:backend:db:worker` when backend PG/Redis behavior changed
-4. Run `pnpm check:agent` for agent-driven completion of changes that can affect DB-backed backend
-   or worker behavior; `pnpm check` is the corresponding human-readable command.
+   - `pnpm check:pre-pr:agent` or `pnpm check:pre-pr` only with a stated broad local diagnostic
+     reason; `pnpm check:agent` or `pnpm check` for local CI reproduction or the corresponding DB,
+     migration, worker, or integration behavior.
+4. Treat a successful `pnpm check` or `pnpm check:agent` as subsuming narrower local commands, but
+   never as a replacement for required hosted CI.
 5. When touching backend migrations, `packages/batch-backend/schema.sql`, or `packages/contracts/src/contract-versions.ts`, also run:
    - `pnpm release:verify:contracts`
    - `pnpm --filter @esl-pipeline/batch-backend run db:verify-baseline`
@@ -293,8 +305,9 @@ Important path rules:
 - contracts, shared infrastructure, workflow changes, and unknown scope conservatively require the
   CI PostgreSQL/Redis service job.
 - backend HTTP transport route and middleware paths trigger HTTP integration.
-- root validation config, package manager metadata, Turbo config, and validation-runner files fall
-  back to the explicit broad `check:pre-pr` lane plan.
+- root validation config, package manager metadata, Turbo config, and validation-runner files classify
+  to the explicit broad `check:pre-pr` lane plan. `check:fast:agent` persists that plan and delegates
+  its broad execution to hosted PR CI; explicit `check:pre-pr` variants still execute it locally.
 
 For production image changes:
 
