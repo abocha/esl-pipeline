@@ -483,12 +483,15 @@ interface ReviewStageSectionProps {
   publishLabel: string;
   publishPending: string;
   completedReferenceMode?: boolean;
+  correctionAvailable?: boolean;
+  publicationRecoveryAvailable?: boolean;
   correctionMode?: boolean;
   correctionPublishing?: boolean;
   correctionError?: string | null;
   correctionCanPublish?: boolean;
   savedUnpublishedChanges?: boolean;
   onEnterCorrection?: () => void;
+  onRetryPublication?: () => void;
   onExitCorrection?: () => void;
   onPublishCorrection?: () => void;
 }
@@ -1547,12 +1550,15 @@ export function ReviewStageSection({
   publishLabel,
   publishPending,
   completedReferenceMode = false,
+  correctionAvailable = false,
+  publicationRecoveryAvailable = false,
   correctionMode = false,
   correctionPublishing = false,
   correctionError = null,
   correctionCanPublish = false,
   savedUnpublishedChanges = false,
   onEnterCorrection,
+  onRetryPublication,
   onExitCorrection,
   onPublishCorrection,
 }: ReviewStageSectionProps) {
@@ -1571,7 +1577,7 @@ export function ReviewStageSection({
       guidance={reviewGuidance}
       actions={
         <>
-          {completedReferenceMode && !correctionMode ? (
+          {completedReferenceMode && !correctionMode && correctionAvailable ? (
             <button
               type="button"
               className="minimal-primary"
@@ -1579,6 +1585,16 @@ export function ReviewStageSection({
               disabled={!onEnterCorrection}
             >
               Correct published assignment
+            </button>
+          ) : null}
+          {completedReferenceMode && !correctionMode && publicationRecoveryAvailable ? (
+            <button
+              type="button"
+              className="minimal-primary"
+              onClick={onRetryPublication}
+              disabled={!onRetryPublication || publishing}
+            >
+              {publishing ? 'Retrying publication...' : 'Retry publication'}
             </button>
           ) : null}
           {correctionMode ? (

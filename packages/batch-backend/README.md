@@ -137,8 +137,10 @@ The assignment builder separates automatic recovery from tutor-owned confirmatio
 - Prompt generation reads confirmed Source and Context inputs. Preview and Share read confirmed
   Create content, so newer autosaved recovery cannot silently enter downstream output.
 - Share reserves one existing job row with a stable database/BullMQ ID. Retry and ambiguous-response
-  reconciliation reuse that identity; terminal failure resets/re-enqueues it in place, while an
-  intentional rerun remains a new `source_job_id` child.
+  reconciliation reuse that identity. An unpublished failed/queued root is lineage-validated and
+  made runnable in PostgreSQL before its matching retained BullMQ job is reactivated in place;
+  generic queue reconciliation remains strict. An intentional rerun remains a new `source_job_id`
+  child.
 - `confirmedStep = 'share'` is the sole completed predicate. Completed sessions remain immutable
   provenance for their historical jobs/handouts, are not resumable or in progress, and do not block
   a new assignment for the same recording. Job status DTOs expose the optional retained

@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import type { AssignmentSession, DraftResponse } from '../../utils/api';
+import type { AssignmentSession, DraftResponse, JobStatus } from '../../utils/api';
 import {
   buildAssignmentCorrectionRequest,
+  canRetryAssignmentPublication,
   hasSavedUnpublishedDraft,
   isCompletedAssignmentSession,
+  isValidAssignmentPublicationParent,
 } from './MinimalAssignment.correction';
 
 const draft: DraftResponse = {
@@ -39,6 +41,30 @@ describe('post-share assignment correction model', () => {
   it('recognizes a completed session without treating an active session as immutable', () => {
     expect(isCompletedAssignmentSession(completedSession)).toBe(true);
     expect(isCompletedAssignmentSession({ ...completedSession, shareJobId: null })).toBe(false);
+  });
+
+  it('separates structural completion, valid publication ancestry, and root recovery', () => {
+    const session = { ...completedSession, id: 'session-1' };
+    const published = {
+      jobId: 'job-1',
+      assignmentSessionId: 'session-1',
+      state: 'succeeded',
+      publishTarget: 'html',
+      htmlUrl: 'https://example.test/assignment',
+    } as JobStatus;
+    expect(isValidAssignmentPublicationParent(session, published)).toBe(true);
+    expect(canRetryAssignmentPublication(session, published)).toBe(false);
+    expect(isValidAssignmentPublicationParent(session, { ...published, htmlUrl: null })).toBe(
+      false,
+    );
+
+    const failedRoot = { ...published, state: 'failed' as const, htmlUrl: null };
+    expect(isValidAssignmentPublicationParent(session, failedRoot)).toBe(false);
+    expect(canRetryAssignmentPublication(session, failedRoot)).toBe(true);
+    expect(canRetryAssignmentPublication(session, { ...failedRoot, jobId: 'child-1' })).toBe(false);
+    expect(
+      isValidAssignmentPublicationParent(session, { ...published, assignmentSessionId: 'other' }),
+    ).toBe(false);
   });
 
   it('marks only an authoritative saved version/hash change as unpublished', () => {

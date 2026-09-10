@@ -1,6 +1,7 @@
 import type {
   AssignmentSession,
   DraftResponse,
+  JobStatus,
   PublishAssignmentCorrectionRequest,
 } from '../../utils/api';
 
@@ -10,6 +11,34 @@ export function isCompletedAssignmentSession(
   session: Pick<AssignmentSession, 'confirmedStep' | 'shareJobId'> | null | undefined,
 ): boolean {
   return session?.confirmedStep === 'share' && Boolean(session.shareJobId);
+}
+
+export function isValidAssignmentPublicationParent(
+  session: Pick<AssignmentSession, 'id' | 'confirmedStep' | 'shareJobId'> | null | undefined,
+  job: JobStatus | null | undefined,
+): boolean {
+  return Boolean(
+    isCompletedAssignmentSession(session) &&
+      job &&
+      job.assignmentSessionId === session?.id &&
+      job.state === 'succeeded' &&
+      job.publishTarget === 'html' &&
+      job.htmlUrl?.trim(),
+  );
+}
+
+export function canRetryAssignmentPublication(
+  session: Pick<AssignmentSession, 'id' | 'confirmedStep' | 'shareJobId'> | null | undefined,
+  job: JobStatus | null | undefined,
+): boolean {
+  return Boolean(
+    isCompletedAssignmentSession(session) &&
+      job &&
+      job.assignmentSessionId === session?.id &&
+      job.jobId === session?.shareJobId &&
+      (job.state === 'failed' || job.state === 'queued') &&
+      !isValidAssignmentPublicationParent(session, job),
+  );
 }
 
 export function hasSavedUnpublishedDraft(

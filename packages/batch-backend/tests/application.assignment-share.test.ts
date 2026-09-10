@@ -75,6 +75,7 @@ function createJob(): JobRecord {
     promptPackageId: 'prompt-1',
     draftId: 'draft-1',
     lessonId: 'lesson-1',
+    publishTarget: 'html',
     sourceJobId: null,
     userId: 'user-1',
     createdAt: new Date('2026-07-19T00:00:00Z'),
@@ -124,7 +125,7 @@ function createHarness(
     job = { ...job, state: 'queued' };
     return { ...job } as never;
   });
-  const reconcile = vi.fn(async ({ jobId }: { jobId: string }) => {
+  const recoverAssignmentShare = vi.fn(async ({ jobId }: { jobId: string }) => {
     enqueuedJobIds.add(jobId);
     if (options.failAfterEnqueue) job = { ...job, state: 'failed' };
   });
@@ -150,12 +151,13 @@ function createHarness(
     },
     jobs: {
       approve,
-      resetFailedShare: vi.fn(async () => {
-        job = { ...job, state: 'queued' };
+      recoverShare: vi.fn(async (_params, reactivateQueue) => {
+        if (job.state === 'failed') job = { ...job, state: 'queued' };
+        await reactivateQueue();
         return { ...job } as never;
       }),
     },
-    queue: { reconcile },
+    queue: { recoverAssignmentShare },
     resolveJobConfig: vi.fn(async () => ({ publishTarget: 'html' as const })),
     materialize,
     publishEvent: vi.fn(),
@@ -184,7 +186,7 @@ function createHarness(
       job = { ...job, state: 'failed' };
       session.shareJobId = job.id;
     },
-    resetFailedShare: overrides.jobs.resetFailedShare,
+    recoverShare: overrides.jobs.recoverShare,
   };
 }
 
@@ -223,11 +225,14 @@ describe('application/share-assignment-session', () => {
 
     const result = await harness.retrySameRequest();
 
-    expect(harness.resetFailedShare).toHaveBeenCalledWith({
-      sessionId: 'session-1',
-      userId: 'user-1',
-      jobId: request.requestId,
-    });
+    expect(harness.recoverShare).toHaveBeenCalledWith(
+      {
+        sessionId: 'session-1',
+        userId: 'user-1',
+        jobId: request.requestId,
+      },
+      expect.any(Function),
+    );
     expect([...harness.enqueuedJobIds]).toEqual([request.requestId]);
     expect(result.job.jobId).toBe(request.requestId);
   });
