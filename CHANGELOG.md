@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.11.1] - 2026-09-10
+
+### Changed
+
+- Automated release from PR #223: fix(assignment): recover dirty state before sharing (https://github.com/abocha/esl-pipeline/pull/223)
+
 ## [10.11.0] - 2026-09-09
 
 ### Changed
