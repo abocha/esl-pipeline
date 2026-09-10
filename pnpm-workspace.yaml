@@ -22,6 +22,13 @@ overrides:
   uuid: ^11.1.1
   yaml: ^2.8.3
 
+# The published cookie types import Fastify but omit it from package metadata.
+# Keep the type augmentation attached to the backend's Fastify identity under pnpm's isolated linker.
+packageExtensions:
+  '@fastify/cookie@11.1.2':
+    peerDependencies:
+      fastify: ^5.12.3
+
 allowBuilds:
   '@swc/core': true
   bcrypt: true
