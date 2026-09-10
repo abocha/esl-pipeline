@@ -47,12 +47,12 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/node": "^25.9.5",
+    "@types/node": "^24.13.4",
     "tsx": "^4.23.11",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
   },
   "engines": {
-    "node": ">=24.11.1"
+    "node": ">=24.15.0"
   }
 }
