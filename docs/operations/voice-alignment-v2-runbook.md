@@ -17,7 +17,7 @@ validation, and TTS execution.
 
 ## Preconditions
 
-- Node `24.11.1+`
+- Node `24.15.0+`
 - `pnpm` installed
 - `ESL_TTS_PROVIDER_ELEVENLABS_API_KEY` configured
 - Voice catalog path available (`ESL_TTS_PROVIDER_ELEVENLABS_VOICES_PATH` or default
