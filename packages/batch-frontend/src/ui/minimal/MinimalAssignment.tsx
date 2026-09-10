@@ -65,8 +65,10 @@ import {
 import { useMinimalAssignmentContextController } from './MinimalAssignment.context';
 import {
   buildAssignmentCorrectionRequest,
+  canRetryAssignmentPublication,
   hasSavedUnpublishedDraft,
   isCompletedAssignmentSession,
+  isValidAssignmentPublicationParent,
 } from './MinimalAssignment.correction';
 import type { AssignmentEntryView } from './MinimalAssignment.entry-state';
 import {
@@ -325,6 +327,7 @@ export const MinimalAssignment: React.FC = () => {
   const [scheduleSurfaceError, setScheduleSurfaceError] = useState<string | null>(null);
   const [teacherNotes, setTeacherNotes] = useState('');
   const [jobStatus, setJobStatusState] = useState<JobStatus | null>(null);
+  const [publicationParentJob, setPublicationParentJob] = useState<JobStatus | null>(null);
   const [jobOptions, setJobOptions] = useState<JobOptionsResponse | null>(null);
   const [jobOptionsError, setJobOptionsError] = useState<string | null>(null);
   const [entryView, setEntryView] = useState<AssignmentEntryView>('choice');
@@ -1798,6 +1801,60 @@ export const MinimalAssignment: React.FC = () => {
 
   const jobReady = Boolean(jobStatus?.jobId);
   const completedReferenceMode = isCompletedAssignmentSession(activeAssignmentSession);
+  const effectivePublicationParent = isValidAssignmentPublicationParent(
+    activeAssignmentSession,
+    jobStatus,
+  )
+    ? jobStatus
+    : publicationParentJob;
+  const validPublicationParent = isValidAssignmentPublicationParent(
+    activeAssignmentSession,
+    effectivePublicationParent,
+  );
+  const publicationRecoveryAvailable = canRetryAssignmentPublication(
+    activeAssignmentSession,
+    jobStatus,
+  );
+  useEffect(() => {
+    let cancelled = false;
+    if (!completedReferenceMode || !activeAssignmentSession) {
+      setPublicationParentJob(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+    if (isValidAssignmentPublicationParent(activeAssignmentSession, jobStatus)) {
+      setPublicationParentJob(jobStatus);
+      return () => {
+        cancelled = true;
+      };
+    }
+    if (publicationParentJob?.assignmentSessionId !== activeAssignmentSession.id) {
+      setPublicationParentJob(null);
+    }
+    if (!jobStatus?.sourceJobId) {
+      return () => {
+        cancelled = true;
+      };
+    }
+    void (async () => {
+      let parentId: string | null | undefined = jobStatus.sourceJobId;
+      const visited = new Set<string>();
+      while (parentId && !visited.has(parentId)) {
+        visited.add(parentId);
+        const parent = await getJobStatus(parentId).catch(() => null);
+        if (!parent || cancelled) return;
+        if (isValidAssignmentPublicationParent(activeAssignmentSession, parent)) {
+          setPublicationParentJob(parent);
+          return;
+        }
+        parentId = parent.sourceJobId;
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeAssignmentSession, completedReferenceMode, jobStatus, publicationParentJob]);
   const savedUnpublishedChanges = hasSavedUnpublishedDraft(
     activeAssignmentSession?.confirmed.create,
     authoring.draft,
@@ -2248,12 +2305,64 @@ export const MinimalAssignment: React.FC = () => {
   const applyJobStatusTransition = resume.applyJobStatusTransition;
 
   const enterCorrectionMode = useCallback(() => {
-    if (!completedReferenceMode) return;
+    if (!completedReferenceMode || !validPublicationParent) return;
     correctionModeRef.current = true;
     setCorrectionMode(true);
     setCorrectionError(null);
     setActiveStep('assignment');
-  }, [completedReferenceMode]);
+  }, [completedReferenceMode, validPublicationParent]);
+
+  const handleRetryPublication = useCallback(async () => {
+    const current = activeAssignmentSessionRef.current;
+    if (
+      !current ||
+      !canRetryAssignmentPublication(current, jobStatus) ||
+      shareReconciliationInFlightRef.current
+    ) {
+      return;
+    }
+    shareReconciliationInFlightRef.current = true;
+    setSharingAssignment(true);
+    setAssignmentShareError(null);
+    setAssignmentSaveState('saving');
+    shareRequestRef.current = current.shareJobId;
+    try {
+      const response = await shareAssignmentSession(current.id, {
+        expectedRevision: current.revision,
+        requestId: current.shareJobId!,
+      });
+      activeAssignmentSessionRef.current = response.session;
+      setActiveAssignmentSession(response.session);
+      setJobStatusState(response.job);
+      resume.applyJobStatusTransition(response.job);
+      setAssignmentSaveState('saved');
+      await resume.loadResumeJobs();
+    } catch (error) {
+      const latest = await fetchAssignmentSession(current.id).catch(() => null);
+      const latestJob = latest?.shareJobId
+        ? await getJobStatusWithRecoveryRetry(latest.shareJobId).catch(() => null)
+        : null;
+      if (latest) {
+        activeAssignmentSessionRef.current = latest;
+        setActiveAssignmentSession(latest);
+      }
+      if (latestJob) {
+        setJobStatusState(latestJob);
+        resume.applyJobStatusTransition(latestJob);
+      }
+      setAssignmentShareError(
+        latestJob && (latestJob.state === 'queued' || latestJob.state === 'running')
+          ? null
+          : error instanceof Error
+            ? error.message
+            : 'Unable to retry publication.',
+      );
+      setAssignmentSaveState(latestJob ? 'saved' : 'ambiguous');
+    } finally {
+      shareReconciliationInFlightRef.current = false;
+      setSharingAssignment(false);
+    }
+  }, [jobStatus, resume, setActiveAssignmentSession]);
 
   const exitCorrectionMode = useCallback(() => {
     correctionModeRef.current = false;
@@ -2263,7 +2372,13 @@ export const MinimalAssignment: React.FC = () => {
   }, []);
 
   const handlePublishCorrection = useCallback(async () => {
-    if (!completedReferenceMode || !correctionMode || !jobStatus?.jobId) return;
+    if (
+      !completedReferenceMode ||
+      !validPublicationParent ||
+      !correctionMode ||
+      !effectivePublicationParent?.jobId
+    )
+      return;
     if (correctionReconciliationRef.current) return;
     correctionReconciliationRef.current = true;
     setCorrectionPublishing(true);
@@ -2289,7 +2404,7 @@ export const MinimalAssignment: React.FC = () => {
         correctionPayloadRef.current = payload;
       }
 
-      const response = await publishAssignmentCorrection(jobStatus.jobId, payload);
+      const response = await publishAssignmentCorrection(effectivePublicationParent.jobId, payload);
       setJobStatusState(response.job);
       resume.applyJobStatusTransition(response.job);
       setCorrectionMode(false);
@@ -2321,8 +2436,9 @@ export const MinimalAssignment: React.FC = () => {
     authoring,
     completedReferenceMode,
     correctionMode,
-    jobStatus?.jobId,
+    effectivePublicationParent?.jobId,
     resume,
+    validPublicationParent,
   ]);
 
   useEffect(() => {
@@ -2919,6 +3035,8 @@ export const MinimalAssignment: React.FC = () => {
               publishLabel={publishLabel}
               publishPending={publishPending}
               completedReferenceMode={completedReferenceMode}
+              correctionAvailable={validPublicationParent}
+              publicationRecoveryAvailable={publicationRecoveryAvailable}
               correctionMode={correctionMode}
               correctionPublishing={correctionPublishing}
               correctionError={correctionError}
@@ -2932,6 +3050,7 @@ export const MinimalAssignment: React.FC = () => {
               )}
               savedUnpublishedChanges={savedUnpublishedChanges}
               onEnterCorrection={enterCorrectionMode}
+              onRetryPublication={() => void handleRetryPublication()}
               onExitCorrection={exitCorrectionMode}
               onPublishCorrection={() => void handlePublishCorrection()}
             />

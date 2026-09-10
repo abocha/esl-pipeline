@@ -10,7 +10,7 @@ import type { VoiceProviderErrorCategory } from '@esl-pipeline/contracts';
 import { parseTtsModelId } from '@esl-pipeline/tts-core';
 
 import { buildLearningPresetProvenance } from '../application/learning-preset.js';
-import { withPgClient } from '../infrastructure/db.js';
+import { createPgPool, withPgClient } from '../infrastructure/db.js';
 import { logger } from '../infrastructure/logger.js';
 import { JobActionType } from './job-actions.js';
 import {
@@ -540,66 +540,98 @@ export async function getJobById(
   return row ? mapRowToJob(row) : null;
 }
 
-export async function resetFailedAssignmentShareJob(params: {
-  sessionId: string;
-  userId: string;
-  jobId: string;
-}): Promise<JobRecord | null> {
-  const row = await withPgClient(async (client: PoolClient) => {
-    const result = await client.query(
+export async function recoverAssignmentShareJob(
+  params: {
+    sessionId: string;
+    userId: string;
+    jobId: string;
+  },
+  reactivateQueue: () => Promise<void>,
+): Promise<JobRecord | null> {
+  const client = await createPgPool().connect();
+  const lockKey = jobStateCoordinationKey(params.jobId);
+  let lockAttempted = false;
+  let transactionOpen = false;
+  try {
+    lockAttempted = true;
+    await client.query('SELECT pg_advisory_lock(hashtextextended($1, 0))', [lockKey]);
+    await client.query('BEGIN');
+    transactionOpen = true;
+    const eligible = await client.query<{ state: JobState }>(
       String.raw`
-      UPDATE jobs j
-      SET state = 'queued', error = NULL, started_at = NULL, finished_at = NULL,
-          manifest_path = NULL, html_url = NULL, updated_at = NOW()
-      FROM assignment_sessions s
+      SELECT j.state
+      FROM jobs j
+      JOIN assignment_sessions s ON s.share_job_id = j.id
       WHERE j.id = $3
-        AND j.state = 'failed'
+        AND j.state IN ('failed', 'queued')
+        AND j.publish_target = 'html'
+        AND j.html_url IS NULL
+        AND j.published_content_hash IS NULL
+        AND j.publication_sequence = 0
         AND s.id = $1
         AND s.user_id = $2
-        AND s.share_job_id = j.id
         AND ${assignmentShareJobIntegritySql('j', 's')}
-      RETURNING
-        j.id,
-        j.student_id,
-        (SELECT student FROM students WHERE id = j.student_id) AS student_name,
-        j.state,
-        j.md,
-        j.md_storage_uri,
-        j.recording_id,
-        j.transcript_id,
-        j.prompt_package_id,
-        j.draft_id,
-        j.lesson_id,
-        j.preset,
-        j.learning_preset_id,
-        j.learning_preset_version,
-        j.prompt_snapshot_version,
-        j.prompt_alias,
-        j.with_tts,
-        j.upload,
-        j.voice_id,
-        j.voice_accent,
-        j.force_tts,
-        j.publish_target,
-        j.mode,
-        j.tts_provider,
-        j.tts_model,
-        j.html_url,
-        j.auto_publish,
-        j.created_at,
-        j.updated_at,
-        j.started_at,
-        j.finished_at,
-        j.error,
-        j.manifest_path,
-        j.source_job_id,
-        j.user_id
+        AND NOT EXISTS (
+          WITH RECURSIVE descendants AS (
+            SELECT child.id, child.state, child.publish_target, child.html_url
+            FROM jobs child
+            WHERE child.source_job_id = j.id
+            UNION ALL
+            SELECT child.id, child.state, child.publish_target, child.html_url
+            FROM jobs child
+            JOIN descendants parent ON child.source_job_id = parent.id
+          )
+          SELECT 1
+          FROM descendants
+          WHERE state = 'succeeded'
+            AND publish_target = 'html'
+            AND NULLIF(BTRIM(html_url), '') IS NOT NULL
+        )
+      FOR UPDATE OF j, s
       `,
       [params.sessionId, params.userId, params.jobId],
     );
-    return result.rows[0];
-  });
-  return row ? mapRowToJob(row) : null;
+    if (!eligible.rows[0]) {
+      await client.query('COMMIT');
+      transactionOpen = false;
+      return null;
+    }
+    if (eligible.rows[0].state === 'failed') {
+      await client.query(
+        `UPDATE jobs
+         SET state = 'queued', error = NULL, started_at = NULL, finished_at = NULL,
+             manifest_path = NULL, html_url = NULL, updated_at = NOW()
+         WHERE id = $1 AND state = 'failed'`,
+        [params.jobId],
+      );
+    }
+    await client.query('COMMIT');
+    transactionOpen = false;
+
+    // Commit queued before BullMQ dispatch, but keep competing state transitions behind this lock.
+    await reactivateQueue();
+    return await getJobById(params.jobId, { client });
+  } catch (error) {
+    if (transactionOpen) await client.query('ROLLBACK').catch(() => undefined);
+    throw error;
+  } finally {
+    let releaseError: Error | undefined;
+    if (lockAttempted) {
+      try {
+        const unlocked = await client.query<{ unlocked: boolean }>(
+          'SELECT pg_advisory_unlock(hashtextextended($1, 0)) AS unlocked',
+          [lockKey],
+        );
+        if (unlocked.rows[0]?.unlocked !== true) {
+          releaseError = new Error('Assignment Share recovery lock was not held during cleanup');
+        }
+      } catch (error) {
+        releaseError = error instanceof Error ? error : new Error(String(error));
+      }
+    }
+    // Destroy a connection whose session lock cleanup was uncertain; connection close releases it.
+    client.release(releaseError);
+  }
 }
 
 export async function resetFailedAssignmentCorrectionJob(
@@ -977,6 +1009,9 @@ export async function updateJobStateAndResult(args: {
   const row = await withPgClient(async (client: PoolClient) => {
     await client.query('BEGIN');
     try {
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [
+        jobStateCoordinationKey(id),
+      ]);
       const publicationSequence =
         nextState === 'succeeded' ? await reservePublishedJobSequence(client, id) : null;
       const result = await client.query(
@@ -1062,6 +1097,10 @@ export async function updateJobStateAndResult(args: {
 
   logger.info('Job state updated', { jobId: id, state: row.state });
   return mapRowToJob(row);
+}
+
+function jobStateCoordinationKey(jobId: string): string {
+  return `job-state:${jobId}`;
 }
 
 async function reservePublishedJobSequence(

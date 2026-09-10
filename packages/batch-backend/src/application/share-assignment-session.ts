@@ -13,11 +13,8 @@ import {
   reserveAssignmentShare,
 } from '../domain/assignment-session-repository.js';
 import { publishJobEvent } from '../domain/job-events.js';
-import {
-  approveAssignmentShareJob,
-  resetFailedAssignmentShareJob,
-} from '../domain/job-repository.js';
-import { createJobQueue } from '../infrastructure/queue-bullmq.js';
+import { approveAssignmentShareJob, recoverAssignmentShareJob } from '../domain/job-repository.js';
+import { recoverAssignmentShareQueue } from '../infrastructure/queue-bullmq.js';
 import { toAssignmentSessionDto } from './assignment-sessions.js';
 import { resolveApprovalJobConfig } from './create-approval-job.js';
 import { jobRecordToDto } from './job-dto.js';
@@ -34,9 +31,9 @@ export interface ShareAssignmentSessionDependencies {
   };
   jobs: {
     approve: typeof approveAssignmentShareJob;
-    resetFailedShare: typeof resetFailedAssignmentShareJob;
+    recoverShare: typeof recoverAssignmentShareJob;
   };
-  queue: { reconcile: ReturnType<typeof createJobQueue>['reconcile'] };
+  queue: { recoverAssignmentShare: typeof recoverAssignmentShareQueue };
   resolveJobConfig: typeof resolveApprovalJobConfig;
   materialize: typeof materializeDraft;
   publishEvent: typeof publishJobEvent;
@@ -57,9 +54,9 @@ export async function shareAssignmentSession(args: {
   };
   const jobs = args.overrides?.jobs ?? {
     approve: approveAssignmentShareJob,
-    resetFailedShare: resetFailedAssignmentShareJob,
+    recoverShare: recoverAssignmentShareJob,
   };
-  const queue = args.overrides?.queue ?? createJobQueue();
+  const queue = args.overrides?.queue ?? { recoverAssignmentShare: recoverAssignmentShareQueue };
   const resolveJobConfig = args.overrides?.resolveJobConfig ?? resolveApprovalJobConfig;
   const materialize = args.overrides?.materialize ?? materializeDraft;
   const publishEvent = args.overrides?.publishEvent ?? publishJobEvent;
@@ -138,29 +135,33 @@ export async function shareAssignmentSession(args: {
     await checkpoint('approval');
   }
 
-  if (job.state === 'failed') {
-    const reset = await jobs.resetFailedShare({
-      sessionId: args.sessionId,
-      userId: args.userId,
-      jobId: job.id,
-    });
-    job =
-      reset ??
-      (await sessions.getShareJob({
-        sessionId: args.sessionId,
-        userId: args.userId,
-        jobId: job.id,
-      }));
-  }
-
   job = await sessions.getShareJob({
     sessionId: args.sessionId,
     userId: args.userId,
     jobId: job.id,
   });
   let enqueueSatisfied = false;
-  if (job.state === 'queued') {
-    await queue.reconcile({ jobId: job.id });
+  if (job.state === 'queued' || job.state === 'failed') {
+    const recovered = await jobs.recoverShare(
+      {
+        sessionId: args.sessionId,
+        userId: args.userId,
+        jobId: job.id,
+      },
+      () => queue.recoverAssignmentShare({ jobId: job.id }),
+    );
+    if (!recovered) {
+      job = await sessions.getShareJob({
+        sessionId: args.sessionId,
+        userId: args.userId,
+        jobId: job.id,
+      });
+      if (job.state !== 'running' && job.state !== 'succeeded') {
+        throw new AssignmentSessionShareError('ASSIGNMENT_SHARE_JOB_INTEGRITY_INVALID');
+      }
+    } else {
+      job = recovered;
+    }
     enqueueSatisfied = true;
     await checkpoint('enqueue');
   } else if (job.state === 'running' || job.state === 'succeeded') {

@@ -169,6 +169,55 @@ export function createJobQueue() {
   };
 }
 
+export async function recoverAssignmentShareQueue(payload: QueueJobPayload): Promise<void> {
+  const { queue } = createJobQueue();
+  const options: JobsOptions = {
+    jobId: payload.jobId,
+    attempts: 5,
+    backoff: { type: 'exponential', delay: 1000 },
+    removeOnComplete: 1000,
+    removeOnFail: 1000,
+  };
+  const existing = await queue.getJob(payload.jobId);
+  if (!existing) {
+    await queue.add('assignment', payload, options);
+    return;
+  }
+  const data = existing.data;
+  if (
+    !data ||
+    Object.keys(data).length !== 1 ||
+    data.jobId !== payload.jobId ||
+    data.executionMode !== undefined ||
+    data.sourceJobId !== undefined ||
+    data.correction !== undefined ||
+    data.rerun !== undefined
+  ) {
+    throw new QueueJobStateConflictError(payload.jobId, 'payload_mismatch');
+  }
+  const state = await existing.getState();
+  if (state === 'active') {
+    throw new QueueJobStateConflictError(payload.jobId, state);
+  }
+  if (state !== 'completed' && state !== 'failed') {
+    if (state === 'waiting' || state === 'delayed' || state === 'prioritized') return;
+    throw new QueueJobStateConflictError(payload.jobId, state);
+  }
+  try {
+    await existing.retry(state, {
+      resetAttemptsMade: true,
+      resetAttemptsStarted: true,
+    });
+  } catch (error) {
+    const current = await queue.getJob(payload.jobId);
+    if (!current) {
+      await queue.add('assignment', payload, options);
+      return;
+    }
+    if ((await current.getState()) === state) throw error;
+  }
+}
+
 // createJobWorker.declaration()
 export function createJobWorker(processor: Processor<QueueJobPayload>): Worker<QueueJobPayload> {
   const config = loadConfig();
