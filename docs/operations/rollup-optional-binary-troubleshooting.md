@@ -29,7 +29,7 @@ store-path drift, or interrupted dependency setup).
 
 ## Toolchain Assumptions
 
-- Use the Node version in [`.nvmrc`](../../.nvmrc), currently `24.15.0`.
+- Use the Node version in [`.nvmrc`](../../.nvmrc), currently `24.21.0`.
 - The root [`package.json`](../../package.json) pins pnpm `11.10.0`; use Corepack so the repository
   package-manager pin is selected.
 - Host installs use `storeDir: .pnpm-store/v11` from

@@ -24,7 +24,7 @@
 
 ## Baseline Requirements
 
-- Node `24.11.1+`
+- Node `24.15.0+`
 - Docker + Docker Compose
 - Postgres 18+
 - Redis 8+
