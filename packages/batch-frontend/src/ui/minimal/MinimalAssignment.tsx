@@ -1829,9 +1829,7 @@ export const MinimalAssignment: React.FC = () => {
         cancelled = true;
       };
     }
-    if (publicationParentJob?.assignmentSessionId !== activeAssignmentSession.id) {
-      setPublicationParentJob(null);
-    }
+    setPublicationParentJob(null);
     if (!jobStatus?.sourceJobId) {
       return () => {
         cancelled = true;
@@ -1854,7 +1852,7 @@ export const MinimalAssignment: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [activeAssignmentSession, completedReferenceMode, jobStatus, publicationParentJob]);
+  }, [activeAssignmentSession, completedReferenceMode, jobStatus]);
   const savedUnpublishedChanges = hasSavedUnpublishedDraft(
     activeAssignmentSession?.confirmed.create,
     authoring.draft,

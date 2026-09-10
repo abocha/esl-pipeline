@@ -1,4 +1,4 @@
-import { fireEvent } from '@testing-library/react';
+import { act, fireEvent } from '@testing-library/react';
 import { describe, it } from 'vitest';
 
 import {
@@ -165,9 +165,12 @@ describe('MinimalAssignment post-share correction UI', () => {
       limit: 20,
       offset: 0,
     });
-    vi.mocked(api.getJobStatus).mockImplementation(async (jobId) =>
-      jobId === 'child-1' ? failedChild : root,
-    );
+    let ancestorLoads = 0;
+    vi.mocked(api.getJobStatus).mockImplementation(async (jobId) => {
+      if (jobId === 'child-1') return failedChild;
+      ancestorLoads += 1;
+      return { ...root };
+    });
 
     renderMinimalAssignment();
     await user.click(await screen.findByRole('button', { name: /Resume recent work/i }));
@@ -177,8 +180,13 @@ describe('MinimalAssignment post-share correction UI', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /Correct published assignment/i })).toBeTruthy();
     });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
     expect(screen.queryByRole('button', { name: /Retry publication/i })).toBeNull();
     expect(api.getJobStatus).toHaveBeenCalledWith('job-1');
+    expect(ancestorLoads).toBe(1);
   });
 
   it('drains draft autosave and publishes the authoritative saved version/hash', async () => {
