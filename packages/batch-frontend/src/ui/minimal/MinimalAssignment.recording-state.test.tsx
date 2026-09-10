@@ -166,6 +166,57 @@ describe('MinimalAssignment recording projection', () => {
     expect(screen.queryByRole('link', { name: /download audio/i })).toBeNull();
   });
 
+  it('renders required speaker-role pickers from a live mixed-recording SSE event', async () => {
+    let receiveEvent: ((event: JobEvent) => void) | null = null;
+    vi.mocked(api.subscribeToJobEvents).mockImplementation((onEvent) => {
+      receiveEvent = onEvent;
+      return { close: vi.fn() } as never;
+    });
+    const transcribing = makeRecording({
+      status: 'transcribing',
+      productState: 'transcribing',
+      runState: 'submitting',
+      transcriptId: null,
+      audioTopology: null,
+      updatedAt: '2026-09-10T10:00:00.000Z',
+    });
+    vi.mocked(api.uploadRecording).mockResolvedValue(transcribing);
+    vi.mocked(api.getRecording).mockResolvedValue(transcribing);
+    vi.mocked(api.fetchRecordingTranscript).mockResolvedValue(
+      makeTranscript({
+        summaryJson: {
+          audioTopology: 'mixed_recording',
+          speakerTracks: { speakers: [{ speaker: 0 }, { speaker: 1 }] },
+        },
+      }),
+    );
+
+    const user = createMinimalUser();
+    renderMinimalAssignment();
+    await startNewAssignmentForLearner(user);
+    fireEvent.click(screen.getByRole('button', { name: /Drop audio file/i }));
+    await waitFor(() => expect(receiveEvent).not.toBeNull());
+
+    await act(async () => {
+      receiveEvent?.({
+        type: 'recording_state_changed',
+        ...makeRecording({
+          status: 'transcribed',
+          productState: 'ready',
+          runState: 'succeeded',
+          transcriptId: 'tx-1',
+          audioTopology: 'mixed_recording',
+          updatedAt: '2026-09-10T10:00:01.000Z',
+        }),
+      });
+    });
+
+    expect(await screen.findByRole('combobox', { name: /Speaker 1/i })).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: /Speaker 2/i })).toBeTruthy();
+    expect(api.fetchRecordingTranscript).toHaveBeenCalledWith('rec-1');
+    expect(api.getRecording).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects a stale SSE update after newer polling truth has hydrated', async () => {
     let receiveEvent: ((event: JobEvent) => void) | null = null;
     vi.mocked(api.subscribeToJobEvents).mockImplementation((onEvent) => {
