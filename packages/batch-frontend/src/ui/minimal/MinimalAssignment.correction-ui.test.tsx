@@ -143,6 +143,61 @@ describe('MinimalAssignment post-share correction UI', () => {
     expect(api.updateAssignmentSessionRecovery).not.toHaveBeenCalled();
   });
 
+  it('reconciles a lost retry response when the root publication already succeeded', async () => {
+    setupMinimalAssignmentTest();
+    const succeededRoot = prepareCompletedSession();
+    const user = createMinimalUser();
+    const failedRoot = {
+      ...succeededRoot,
+      state: 'failed' as const,
+      htmlUrl: null,
+      error: 'cancelled',
+    };
+    const authoritativeSession = makeAssignmentSession({
+      id: 'session-completed',
+      studentId: 'student-alex',
+      recordingId: 'rec-1',
+      transcriptId: 'tx-1',
+      promptPackageId: 'prompt-1',
+      draftId: 'draft-1',
+      confirmedStep: 'share',
+      shareJobId: 'job-1',
+    });
+    let retryRequested = false;
+    vi.mocked(api.listUserJobs).mockResolvedValue({
+      jobs: [failedRoot],
+      total: 1,
+      limit: 20,
+      offset: 0,
+    });
+    vi.mocked(api.fetchAssignmentSession).mockResolvedValue(authoritativeSession);
+    vi.mocked(api.getJobStatus).mockImplementation(async () =>
+      retryRequested ? succeededRoot : failedRoot,
+    );
+    vi.mocked(api.shareAssignmentSession).mockImplementation(async () => {
+      retryRequested = true;
+      throw new Error('Retry response lost');
+    });
+
+    renderMinimalAssignment();
+    await user.click(await screen.findByRole('button', { name: /Resume recent work/i }));
+    await user.click((await screen.findAllByRole('radio'))[0]!);
+    await user.click(screen.getByRole('button', { name: /Review issue/i }));
+
+    await user.click(await screen.findByRole('button', { name: /Retry publication/i }));
+    await waitFor(() => {
+      expect(api.shareAssignmentSession).toHaveBeenCalledWith('session-completed', {
+        expectedRevision: 1,
+        requestId: 'job-1',
+      });
+      expect(screen.getByRole('button', { name: /Correct published assignment/i })).toBeTruthy();
+    });
+    expect(api.fetchAssignmentSession).toHaveBeenCalledWith('session-completed');
+    expect(api.getJobStatus).toHaveBeenCalledWith('job-1');
+    expect(screen.queryByText(/Retry response lost/i)).toBeNull();
+    expect(screen.queryByRole('button', { name: /Retry publication/i })).toBeNull();
+  });
+
   it('reloads a valid publication ancestor instead of recovering a failed correction child', async () => {
     setupMinimalAssignmentTest();
     const root = prepareCompletedSession();

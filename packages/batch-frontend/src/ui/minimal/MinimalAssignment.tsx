@@ -2349,7 +2349,10 @@ export const MinimalAssignment: React.FC = () => {
         resume.applyJobStatusTransition(latestJob);
       }
       setAssignmentShareError(
-        latestJob && (latestJob.state === 'queued' || latestJob.state === 'running')
+        latestJob &&
+          (latestJob.state === 'queued' ||
+            latestJob.state === 'running' ||
+            isValidAssignmentPublicationParent(latest, latestJob))
           ? null
           : error instanceof Error
             ? error.message
