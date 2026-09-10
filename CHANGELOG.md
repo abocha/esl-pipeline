@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.11.4] - 2026-09-10
+
+### Changed
+
+- Automated release from PR #226: fix(deps): patch Fastify and multipart security releases (https://github.com/abocha/esl-pipeline/pull/226)
+
 ## [10.11.3] - 2026-09-10
 
 ### Changed
