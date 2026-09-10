@@ -1069,6 +1069,7 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
         if (
           code === 'ASSIGNMENT_STEP_PREREQUISITE_MISSING' ||
           code === 'ASSIGNMENT_STEP_LINEAGE_INVALID' ||
+          code === 'ASSIGNMENT_STEP_SPEAKER_ROLE_MAPPING_REQUIRED' ||
           code === 'ASSIGNMENT_STEP_ARTIFACT_NOT_FOUND'
         ) {
           return reply.code(400).send({ code: code.toLowerCase() });

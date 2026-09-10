@@ -38,6 +38,13 @@ vi.mock('../../utils/api', () => ({
       this.name = 'ArtifactWorkingConflictApiError';
     }
   },
+  AssignmentSpeakerRoleMappingRequiredApiError:
+    class AssignmentSpeakerRoleMappingRequiredApiError extends Error {
+      constructor() {
+        super('Speaker roles are required. Assign every speaker before confirming this source.');
+        this.name = 'AssignmentSpeakerRoleMappingRequiredApiError';
+      }
+    },
   RecordingUploadPreDispatchError: class RecordingUploadPreDispatchError extends Error {
     constructor(message: string) {
       super(message);

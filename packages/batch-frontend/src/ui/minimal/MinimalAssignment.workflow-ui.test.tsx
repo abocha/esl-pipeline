@@ -1425,6 +1425,61 @@ describe('MinimalAssignment - staged workflow UI', () => {
     );
   });
 
+  it('reconciles authoritative Source state when confirmation reports required speaker roles', async () => {
+    const eventProjectionWithoutTopology = makeRecording({
+      audioTopology: null,
+      status: 'transcribed',
+      transcriptId: 'tx-mixed-recovery',
+    });
+    const authoritativeRecording = makeRecording({
+      audioTopology: 'mixed_recording',
+      status: 'transcribed',
+      transcriptId: 'tx-mixed-recovery',
+    });
+    const transcript = makeTranscript({
+      recordingId: 'rec-1',
+      transcriptId: 'tx-mixed-recovery',
+      text: 'Speaker 1: Hello\nSpeaker 2: Hi',
+      summaryJson: {
+        audioTopology: 'mixed_recording',
+        speakerTracks: { speakers: [{ speaker: 0 }, { speaker: 1 }] },
+      },
+    });
+    vi.mocked(api.getRecording).mockResolvedValue(eventProjectionWithoutTopology);
+    vi.mocked(api.fetchRecordingTranscript).mockResolvedValue(
+      makeTranscript({
+        recordingId: 'rec-1',
+        transcriptId: 'tx-mixed-recovery',
+        text: 'Speaker 1: Hello\nSpeaker 2: Hi',
+      }),
+    );
+    vi.mocked(api.confirmAssignmentSessionStep).mockRejectedValueOnce(
+      new api.AssignmentSpeakerRoleMappingRequiredApiError(),
+    );
+
+    const { user } = await renderResumedAssignment({}, { waitFor: 'none' });
+    await user.click(screen.getByRole('button', { name: /Lesson source/i }));
+    await screen.findByRole('textbox', { name: /Transcript text/i });
+    expect(screen.queryByRole('combobox', { name: /Speaker 1/i })).toBeNull();
+    const recordingFetchesBeforeRecovery = vi.mocked(api.getRecording).mock.calls.length;
+    const transcriptFetchesBeforeRecovery = vi.mocked(api.fetchRecordingTranscript).mock.calls.length;
+    vi.mocked(api.getRecording).mockResolvedValue(authoritativeRecording);
+    vi.mocked(api.fetchRecordingTranscript).mockResolvedValue(transcript);
+
+    await user.click(screen.getByRole('button', { name: /Confirm and continue/i }));
+
+    expect(await screen.findByRole('combobox', { name: /Speaker 1/i })).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: /Speaker 2/i })).toBeTruthy();
+    expect(
+      (screen.getByRole('button', { name: /Confirm and continue/i }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(
+      screen.getByText(/Speaker roles are required. Assign every speaker before confirming/i),
+    ).toBeTruthy();
+    expect(api.getRecording).toHaveBeenCalledTimes(recordingFetchesBeforeRecovery + 1);
+    expect(api.fetchRecordingTranscript).toHaveBeenCalledTimes(transcriptFetchesBeforeRecovery + 1);
+  });
+
   it(
     'replaces uploaded audio in the same assignment session and scheduled lesson',
     async () => {
