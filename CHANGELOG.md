@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.11.6] - 2026-09-10
+
+### Changed
+
+- Automated release from PR #229: refactor(validation): delegate broad agent checks to hosted CI (https://github.com/abocha/esl-pipeline/pull/229)
+
 ## [10.11.5] - 2026-09-10
 
 ### Changed
