@@ -140,10 +140,19 @@ execution retains its exemption; a diff alone does not require a reviewer.
 - Prefer the lowest-cost reliable evidence path: the smallest relevant doc set, targeted search,
   focused test, or bounded specialist review. Stop when evidence is sufficient for the decision.
 - During editing, run the narrowest relevant package, file, or related-test lane first.
-- After focused tests, use `pnpm --silent run check:fast:agent` by default. Use
-  `pnpm check:pre-pr:agent` for broad, cross-cutting, shared-contract, or toolchain work run by an
-  agent, and `pnpm check:agent` when reproducing CI or changing DB, migration, worker, or integration
-  behavior. The corresponding non-agent commands remain the human-readable equivalents.
+- Focused local evidence is the default. Run a local aggregate gate only for a concrete plausible
+  wider failure, local-environment behavior under test, unavailable equivalent hosted evidence, or a
+  specific CI failure being reproduced or diagnosed. Diff breadth alone is not a reason.
+- Hosted PR CI is the default comprehensive regression executor for the resource-constrained
+  developer laptop. `pnpm --silent run check:fast:agent` may supply selected affected local evidence,
+  but its conservative broad fallback records the broad plan and delegates it to hosted CI rather
+  than executing broad local lanes. Use `pnpm check:pre-pr:agent` only when broad local execution is
+  deliberately justified; use `pnpm check:agent` for local CI reproduction or DB, migration, worker,
+  or integration behavior. The corresponding non-agent commands remain human-readable equivalents.
+- The primary owns the validation decision and evidence handoff: choose, inspect, and report focused,
+  optional local aggregate, CI-owned, and manual/environment-owned evidence. A task may be ready for
+  hosted CI without a local aggregate gate; it is never merge-ready until required hosted jobs and
+  `CI gate` pass.
 - Prefer existing `:agent` commands. Read their cited artifacts under `tmp/check-logs/...` or
   `tmp/test-logs/...` before any diagnostic rerun. Allow at most one isolated rerun per unchanged
   failure; rerun the complete gate only after relevant state changes.

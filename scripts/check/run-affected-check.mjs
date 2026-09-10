@@ -24,6 +24,7 @@ import {
   resolvePackageManagerCommand,
 } from './agent-check-lib.mjs';
 import { buildExecutionLanes, runExecutionLanes } from './execution-lane-lib.mjs';
+import { resolveAffectedCheckExecution } from './run-affected-check-lib.mjs';
 
 const repoRoot = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const cliArgs = process.argv.slice(2);
@@ -89,11 +90,20 @@ try {
   hostedDecision = broadHostedDecision('comparison-base-failure', reason);
 }
 
-const planText = formatPlanSummary(plan);
+const execution = resolveAffectedCheckExecution({
+  plan,
+  agentMode,
+  broadRun,
+});
+const reportedPlan = {
+  ...plan,
+  ciRequirements: execution.ciRequirements,
+};
+const planText = formatPlanSummary(reportedPlan);
 writeFileSync(path.join(runArtifacts.runDir, 'plan.txt'), `${planText}\n`, 'utf8');
 writeFileSync(
   path.join(runArtifacts.runDir, 'plan.json'),
-  `${JSON.stringify(plan, null, 2)}\n`,
+  `${JSON.stringify(reportedPlan, null, 2)}\n`,
   'utf8',
 );
 
@@ -108,23 +118,26 @@ if (!agentMode) {
   console.log('');
 }
 
-const lanes = buildExecutionLanes(plan);
-const laneResults = await runExecutionLanes({
-  lanes,
-  runLane,
-  onResult(result) {
-    if (!agentMode) {
-      const status = result.status === 'pass' ? 'PASS' : result.status.toUpperCase();
-      console.log(`${status} ${result.name}`);
-    }
-  },
-});
+const lanes = execution.executeLanes ? buildExecutionLanes(plan) : [];
+const laneResults = execution.executeLanes
+  ? await runExecutionLanes({
+      lanes,
+      runLane,
+      onResult(result) {
+        if (!agentMode) {
+          const status = result.status === 'pass' ? 'PASS' : result.status.toUpperCase();
+          console.log(`${status} ${result.name}`);
+        }
+      },
+    })
+  : [];
 
 const summary = buildAgentCheckSummary({
   label: runLabel,
   durationMs: Date.now() - startedMs,
   lanes: laneResults,
-  ciRequirements: plan.ciRequirements,
+  ciRequirements: execution.ciRequirements,
+  deferredBroadFallback: execution.deferredBroadFallback,
 });
 writeFileSync(runArtifacts.summaryJson, `${JSON.stringify(summary, null, 2)}\n`, 'utf8');
 
