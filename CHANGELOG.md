@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.11.3] - 2026-09-10
+
+### Changed
+
+- Automated release from PR #225: fix(assignment): recover cancelled Share publication (https://github.com/abocha/esl-pipeline/pull/225)
+
 ## [10.11.2] - 2026-09-10
 
 ### Changed
