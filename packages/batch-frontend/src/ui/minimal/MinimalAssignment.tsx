@@ -16,9 +16,9 @@ import type {
 } from '../../utils/api';
 import {
   ArtifactWorkingConflictApiError,
-  AssignmentSpeakerRoleMappingRequiredApiError,
   AssignmentSessionConflictApiError,
   AssignmentSourceOwnershipApiError,
+  AssignmentSpeakerRoleMappingRequiredApiError,
   activateProfileRevision,
   confirmAssignmentSessionStep,
   confirmStudentAssignmentSession,
