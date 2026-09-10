@@ -1462,7 +1462,8 @@ describe('MinimalAssignment - staged workflow UI', () => {
     await screen.findByRole('textbox', { name: /Transcript text/i });
     expect(screen.queryByRole('combobox', { name: /Speaker 1/i })).toBeNull();
     const recordingFetchesBeforeRecovery = vi.mocked(api.getRecording).mock.calls.length;
-    const transcriptFetchesBeforeRecovery = vi.mocked(api.fetchRecordingTranscript).mock.calls.length;
+    const transcriptFetchesBeforeRecovery = vi.mocked(api.fetchRecordingTranscript).mock.calls
+      .length;
     vi.mocked(api.getRecording).mockResolvedValue(authoritativeRecording);
     vi.mocked(api.fetchRecordingTranscript).mockResolvedValue(transcript);
 

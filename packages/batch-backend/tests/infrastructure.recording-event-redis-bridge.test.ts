@@ -65,7 +65,10 @@ describe('infrastructure/recording-event-redis-bridge', () => {
     const publisher = createFakeRedisConnection();
     const subscriber = createFakeRedisConnection();
     createRedisClientMock.mockReturnValue({
-      duplicate: vi.fn().mockReturnValueOnce(publisher as any).mockReturnValueOnce(subscriber as any),
+      duplicate: vi
+        .fn()
+        .mockReturnValueOnce(publisher as any)
+        .mockReturnValueOnce(subscriber as any),
     } as any);
 
     const { enableRedisRecordingEventBridge } = await import(
