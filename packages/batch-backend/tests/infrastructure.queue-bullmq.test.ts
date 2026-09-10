@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Import SUT after mocks so it binds to the mocked modules.
-import { createJobQueue, createJobWorker } from '../src/infrastructure/queue-bullmq.js';
+import {
+  createJobQueue,
+  createJobWorker,
+  recoverAssignmentShareQueue,
+} from '../src/infrastructure/queue-bullmq.js';
 
 // Helper to get or create global mock storage
 function getMockStorage() {
@@ -237,6 +241,65 @@ describe('infrastructure/queue-bullmq', () => {
       { jobId: 'job-failed-removed' },
       expect.objectContaining({ jobId: 'job-failed-removed' }),
     );
+  });
+
+  it('reactivates only the matching retained terminal root Share job', async () => {
+    const mocks = getMockStorage();
+    mocks.queueGetJob.mockResolvedValue(null);
+    await recoverAssignmentShareQueue({ jobId: 'job-missing' });
+    expect(mocks.queueAdd).toHaveBeenCalledWith(
+      'assignment',
+      { jobId: 'job-missing' },
+      expect.objectContaining({ jobId: 'job-missing' }),
+    );
+
+    const retry = vi.fn();
+    mocks.queueAdd.mockClear();
+    mocks.queueGetJob.mockResolvedValue({
+      data: { jobId: 'job-share' },
+      getState: vi.fn().mockResolvedValue('failed'),
+      retry,
+    });
+    await recoverAssignmentShareQueue({ jobId: 'job-share' });
+    expect(retry).toHaveBeenCalledWith('failed', {
+      resetAttemptsMade: true,
+      resetAttemptsStarted: true,
+    });
+
+    retry.mockClear();
+    mocks.queueGetJob.mockResolvedValue({
+      data: { jobId: 'job-share' },
+      getState: vi.fn().mockResolvedValue('completed'),
+      retry,
+    });
+
+    await recoverAssignmentShareQueue({ jobId: 'job-share' });
+
+    expect(retry).toHaveBeenCalledWith('completed', {
+      resetAttemptsMade: true,
+      resetAttemptsStarted: true,
+    });
+    expect(mocks.queueAdd).not.toHaveBeenCalled();
+
+    mocks.queueGetJob.mockResolvedValue({
+      data: { jobId: 'job-share', executionMode: 'correction' },
+      getState: vi.fn().mockResolvedValue('completed'),
+      retry: vi.fn(),
+    });
+    await expect(recoverAssignmentShareQueue({ jobId: 'job-share' })).rejects.toMatchObject({
+      name: 'QueueJobStateConflictError',
+      queueState: 'payload_mismatch',
+    });
+
+    mocks.queueGetJob.mockResolvedValue({
+      data: { jobId: 'job-share' },
+      getState: vi.fn().mockResolvedValue('active'),
+      retry: vi.fn(),
+    });
+    await expect(recoverAssignmentShareQueue({ jobId: 'job-share' })).rejects.toMatchObject({
+      name: 'QueueJobStateConflictError',
+      queueState: 'active',
+    });
   });
 
   it('createJobWorker constructs Worker with expected queue name and concurrency', () => {

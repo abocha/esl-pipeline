@@ -95,6 +95,92 @@ describe('MinimalAssignment post-share correction UI', () => {
     expect(screen.queryByRole('button', { name: /Generate assignment/i })).toBeNull();
   });
 
+  it('offers same-identity publication recovery instead of correction for a failed root', async () => {
+    setupMinimalAssignmentTest();
+    const failed = prepareCompletedSession();
+    const user = createMinimalUser();
+    const failedRoot = { ...failed, state: 'failed' as const, htmlUrl: null, error: 'cancelled' };
+    vi.mocked(api.listUserJobs).mockResolvedValue({
+      jobs: [failedRoot],
+      total: 1,
+      limit: 20,
+      offset: 0,
+    });
+    vi.mocked(api.getJobStatus).mockResolvedValue(failedRoot);
+    vi.mocked(api.shareAssignmentSession).mockResolvedValue({
+      session: makeAssignmentSession({
+        id: 'session-completed',
+        studentId: 'student-alex',
+        recordingId: 'rec-1',
+        transcriptId: 'tx-1',
+        promptPackageId: 'prompt-1',
+        draftId: 'draft-1',
+        confirmedStep: 'share',
+        shareJobId: 'job-1',
+      }),
+      job: { ...failedRoot, state: 'queued', error: null },
+    });
+
+    renderMinimalAssignment();
+    await user.click(await screen.findByRole('button', { name: /Resume recent work/i }));
+    await user.click((await screen.findAllByRole('radio'))[0]!);
+    await user.click(
+      screen.getByRole('button', {
+        name: /Review assignment|Review progress|Open assignment|Review issue/i,
+      }),
+    );
+
+    const retry = await screen.findByRole('button', { name: /Retry publication/i });
+    expect(screen.queryByRole('button', { name: /Correct published assignment/i })).toBeNull();
+    await user.click(retry);
+    await waitFor(() => {
+      expect(api.shareAssignmentSession).toHaveBeenCalledWith('session-completed', {
+        expectedRevision: 1,
+        requestId: 'job-1',
+      });
+    });
+    expect(api.publishAssignmentCorrection).not.toHaveBeenCalled();
+    expect(api.updateAssignmentSessionRecovery).not.toHaveBeenCalled();
+  });
+
+  it('reloads a valid publication ancestor instead of recovering a failed correction child', async () => {
+    setupMinimalAssignmentTest();
+    const root = prepareCompletedSession();
+    const user = createMinimalUser();
+    const failedChild = makeJobStatus({
+      jobId: 'child-1',
+      assignmentSessionId: 'session-completed',
+      sourceJobId: 'job-1',
+      studentId: 'student-alex',
+      promptPackageId: 'prompt-1',
+      draftId: 'draft-1',
+      state: 'failed',
+      publishTarget: 'html',
+      htmlUrl: null,
+      error: 'correction failed',
+    });
+    vi.mocked(api.listUserJobs).mockResolvedValue({
+      jobs: [failedChild],
+      total: 1,
+      limit: 20,
+      offset: 0,
+    });
+    vi.mocked(api.getJobStatus).mockImplementation(async (jobId) =>
+      jobId === 'child-1' ? failedChild : root,
+    );
+
+    renderMinimalAssignment();
+    await user.click(await screen.findByRole('button', { name: /Resume recent work/i }));
+    await user.click((await screen.findAllByRole('radio'))[0]!);
+    await user.click(screen.getByRole('button', { name: /Review issue/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Correct published assignment/i })).toBeTruthy();
+    });
+    expect(screen.queryByRole('button', { name: /Retry publication/i })).toBeNull();
+    expect(api.getJobStatus).toHaveBeenCalledWith('job-1');
+  });
+
   it('drains draft autosave and publishes the authoritative saved version/hash', async () => {
     setupMinimalAssignmentTest();
     prepareCompletedSession();
