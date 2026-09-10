@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.11.2] - 2026-09-10
+
+### Changed
+
+- Automated release from PR #224: fix(assignment): show speaker-role picker after live transcription (https://github.com/abocha/esl-pipeline/pull/224)
+
 ## [10.11.1] - 2026-09-10
 
 ### Changed
