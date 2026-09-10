@@ -133,7 +133,9 @@ Canonical behavior and current status live in:
   the tutor is returned to the earliest affected step with a concrete reconfirmation action. Once
   Share is confirmed, the session is immutable workflow history; changing the lesson starts a new
   assignment and never revokes the existing handout. Reopening a completed
-  session is reference-only until the tutor explicitly chooses **Correct published assignment**.
+  session is reference-only. A failed/queued root offers **Retry publication** with the retained
+  Share request ID; **Correct published assignment** appears only for a succeeded HTML publication
+  with a non-empty URL.
   Correction mode edits the current mutable draft without reopening session confirmation, drains
   durable autosave before publishing, and submits the exact saved version/hash through a stable
   correction request. **Republish published version** remains the historical frozen-output action;

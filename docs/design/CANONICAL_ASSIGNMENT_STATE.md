@@ -204,6 +204,10 @@ inputs, output, and publication history without permitting assignment-session mu
 mutable draft is identified as unpublished working content, never as a changed confirmed snapshot.
 A new lesson needs a genuinely different canonical source.
 
+Structural Share confirmation is distinct from publication availability. An unpublished failed or
+queued root can retry the same frozen Share identity; correction is available only from a succeeded
+HTML job in the session lineage with a non-empty URL.
+
 Reruns or output-repair actions remain children of the same canonical assignment and do not create a
 second assignment identity.
 
