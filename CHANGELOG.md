@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [10.11.5] - 2026-09-10
+
+### Changed
+
+- Automated release from PR #227: chore(toolchain): align Node 24 baseline and jsdom 30 (https://github.com/abocha/esl-pipeline/pull/227)
+
 ## [10.11.4] - 2026-09-10
 
 ### Changed
