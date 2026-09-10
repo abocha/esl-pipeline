@@ -4,7 +4,6 @@ import { PoolClient } from 'pg';
 import type { AudioInputTopology } from '@esl-pipeline/contracts';
 
 import { withPgClient } from '../infrastructure/db.js';
-import { completeRecordingUploadOperation } from './recording-upload-operation-repository.js';
 import { logger } from '../infrastructure/logger.js';
 import {
   AudioInputTopologySchema,
@@ -16,6 +15,7 @@ import {
   type RecordingStatus,
   RecordingStatusSchema,
 } from './recording-model.js';
+import { completeRecordingUploadOperation } from './recording-upload-operation-repository.js';
 import type { TranscriptRecord } from './transcript-model.js';
 import { type InsertTranscriptParams, insertTranscript } from './transcript-repository.js';
 import {

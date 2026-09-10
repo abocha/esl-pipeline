@@ -106,7 +106,11 @@ describe('application/process-homework-memory-job', () => {
           publishedMarkdown: '# Corrected homework',
           contentHash: 'hash-1',
           publishTargets: [],
-          normalizedMarkdown: { frontmatter: null, sections: [], plainText: '# Corrected homework' },
+          normalizedMarkdown: {
+            frontmatter: null,
+            sections: [],
+            plainText: '# Corrected homework',
+          },
         }),
         generator,
         homeworkMemory: {
@@ -119,7 +123,9 @@ describe('application/process-homework-memory-job', () => {
       },
     };
 
-    await expect(processHomeworkMemoryJob(args as never)).rejects.toThrow('snapshot queue unavailable');
+    await expect(processHomeworkMemoryJob(args as never)).rejects.toThrow(
+      'snapshot queue unavailable',
+    );
     await processHomeworkMemoryJob(args as never);
 
     expect(generator).toHaveBeenCalledTimes(1);

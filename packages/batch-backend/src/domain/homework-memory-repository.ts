@@ -712,7 +712,7 @@ export async function ensurePendingHomeworkMemoryEntry(
       }
 
       await client.query(
-          `
+        `
           UPDATE homework_memory_entries
           SET
             status = 'superseded',

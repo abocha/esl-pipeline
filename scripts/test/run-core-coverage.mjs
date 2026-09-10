@@ -50,7 +50,8 @@ function runCoverage(targets) {
 
 function isMainModule() {
   return (
-    process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
+    process.argv[1] &&
+    path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
   );
 }
 
