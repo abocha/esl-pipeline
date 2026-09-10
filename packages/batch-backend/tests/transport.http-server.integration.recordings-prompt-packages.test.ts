@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 
 import type { InsertRecordingParams } from '../src/domain/recording-repository.js';
-import type { InsertTranscriptParams } from '../src/domain/transcript-repository.js';
 import * as recordingUploadOperationRepositoryModule from '../src/domain/recording-upload-operation-repository.js';
+import type { InsertTranscriptParams } from '../src/domain/transcript-repository.js';
 import { describeHttpServerIntegrationSuite } from './transport.http-server.integration.harness.js';
 
 describeHttpServerIntegrationSuite(
@@ -31,7 +31,9 @@ describeHttpServerIntegrationSuite(
       recordingUploadOperationRepositoryModule,
       'beginRecordingUploadOperation',
     ).mockImplementation(
-      async (context: recordingUploadOperationRepositoryModule.RecordingUploadOperationContext) => ({
+      async (
+        context: recordingUploadOperationRepositoryModule.RecordingUploadOperationContext,
+      ) => ({
         kind: 'claimed',
         operation: {
           ...context,

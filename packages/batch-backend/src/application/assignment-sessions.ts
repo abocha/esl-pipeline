@@ -8,16 +8,16 @@ import type {
 import type { BatchBackendConfig } from '../config/env.js';
 import type { AssignmentSessionRecord } from '../domain/assignment-session-model.js';
 import {
+  AssignmentSessionRepositoryError,
   confirmStudentAssignmentSession,
   countAssignmentSessionsForUser,
   getActiveAssignmentSessionByRecording,
   getAssignmentSessionByIdForUser,
   listAssignmentSessionsForUser,
   updateAssignmentSessionRecovery,
-  AssignmentSessionRepositoryError,
 } from '../domain/assignment-session-repository.js';
-import { getTranscriptByIdForWorkspace } from '../domain/transcript-repository.js';
 import { getStudentById } from '../domain/student-repository.js';
+import { getTranscriptByIdForWorkspace } from '../domain/transcript-repository.js';
 import { withPgClient } from '../infrastructure/db.js';
 import { logger } from '../infrastructure/logger.js';
 import { requestLessonMemoryGeneration } from './request-lesson-memory-generation.js';
@@ -125,7 +125,12 @@ async function completeLinkedElapsedLessonForHomework(
   session: AssignmentSessionRecord,
 ): Promise<void> {
   if (!session.lessonId) return;
-  await completeElapsedScheduledLessonForHomework(workspaceId, session.studentId, session.lessonId, userId);
+  await completeElapsedScheduledLessonForHomework(
+    workspaceId,
+    session.studentId,
+    session.lessonId,
+    userId,
+  );
 }
 
 async function validateLessonStudentPair(

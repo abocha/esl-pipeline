@@ -354,7 +354,9 @@ describe('application/request-student-memory-snapshot-refresh', () => {
     expect(supersedeClaimsMock).toHaveBeenCalledTimes(1);
     expect(enqueueMock).toHaveBeenCalledWith(
       expect.objectContaining({ pendingEntryId: 'snapshot-pending-existing' }),
-      expect.objectContaining({ jobId: 'student-memory-snapshot:student-1:snapshot-pending-existing' }),
+      expect.objectContaining({
+        jobId: 'student-memory-snapshot:student-1:snapshot-pending-existing',
+      }),
     );
   });
 
