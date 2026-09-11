@@ -98,9 +98,8 @@ jobs:
               "docs_only=$DOCS_ONLY" >> "$GITHUB_OUTPUT"
           fi
 
-  static-checks:
-    name: static checks (node 24.x)
-    needs: change-scope
+  repository-policy:
+    name: repository policy (node 24.x)
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
@@ -129,22 +128,22 @@ jobs:
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
-      - name: Initialize static check logs
-        run: mkdir -p tmp/ci-logs/static-checks
+      - name: Initialize repository policy logs
+        run: mkdir -p tmp/ci-logs/repository-policy
 
       - name: Validate environment template
         id: env_template
         shell: bash
         run: |
           set -o pipefail
-          pnpm env:validate:example 2>&1 | tee tmp/ci-logs/static-checks/env-validate-example.log
+          pnpm env:validate:example 2>&1 | tee tmp/ci-logs/repository-policy/env-validate-example.log
 
       - name: Tooling tests
         id: tooling_tests
         shell: bash
         run: |
           set -o pipefail
-          pnpm test:tooling 2>&1 | tee tmp/ci-logs/static-checks/test-tooling.log
+          pnpm test:tooling 2>&1 | tee tmp/ci-logs/repository-policy/test-tooling.log
 
       - name: Verify repo hygiene tools
         shell: bash
@@ -168,42 +167,42 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          pnpm run lint:workflows 2>&1 | tee tmp/ci-logs/static-checks/lint-workflows.log
+          pnpm run lint:workflows 2>&1 | tee tmp/ci-logs/repository-policy/lint-workflows.log
 
       - name: Lint shell scripts
         id: lint_shell
         shell: bash
         run: |
           set -o pipefail
-          pnpm run lint:shell 2>&1 | tee tmp/ci-logs/static-checks/lint-shell.log
+          pnpm run lint:shell 2>&1 | tee tmp/ci-logs/repository-policy/lint-shell.log
 
       - name: Lint Docker configuration
         id: docker_lint
         shell: bash
         run: |
           set -o pipefail
-          pnpm docker:lint 2>&1 | tee tmp/ci-logs/static-checks/docker-lint.log
+          pnpm docker:lint 2>&1 | tee tmp/ci-logs/repository-policy/docker-lint.log
 
       - name: Dependency audit
         id: dependency_audit
         shell: bash
         run: |
           set -o pipefail
-          pnpm deps:audit:strict 2>&1 | tee tmp/ci-logs/static-checks/deps-audit-strict.log
+          pnpm deps:audit:strict 2>&1 | tee tmp/ci-logs/repository-policy/deps-audit-strict.log
 
       - name: Contract version consistency
         id: contract_versions
         shell: bash
         run: |
           set -o pipefail
-          pnpm release:verify:contracts 2>&1 | tee tmp/ci-logs/static-checks/release-verify-contracts.log
+          pnpm release:verify:contracts 2>&1 | tee tmp/ci-logs/repository-policy/release-verify-contracts.log
 
       - name: Orchestrator boundary guardrails
         id: orchestrator_boundary
         shell: bash
         run: |
           set -o pipefail
-          pnpm guard:orchestrator:boundary 2>&1 | tee tmp/ci-logs/static-checks/guard-orchestrator-boundary.log
+          pnpm guard:orchestrator:boundary 2>&1 | tee tmp/ci-logs/repository-policy/guard-orchestrator-boundary.log
 
       - name: Docs sanity checks
         id: docs_sanity
@@ -211,7 +210,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          pnpm docs:check 2>&1 | tee tmp/ci-logs/static-checks/docs-check.log
+          pnpm docs:check 2>&1 | tee tmp/ci-logs/repository-policy/docs-check.log
 
       - name: Generate docs health report
         if: always()
@@ -235,65 +234,179 @@ jobs:
           echo "Docs sanity checks failed. See docs-health-report artifact for details."
           exit 1
 
-      - name: Build
-        id: build
-        if: ${{ fromJSON(needs.change-scope.outputs.runtime) }}
-        shell: bash
-        run: |
-          set -o pipefail
-          pnpm build 2>&1 | tee tmp/ci-logs/static-checks/build.log
-
-      - name: Typecheck
-        id: typecheck
-        if: ${{ fromJSON(needs.change-scope.outputs.runtime) }}
-        shell: bash
-        run: |
-          set -o pipefail
-          pnpm typecheck 2>&1 | tee tmp/ci-logs/static-checks/typecheck.log
-
-      - name: Lint
-        id: lint
-        if: ${{ fromJSON(needs.change-scope.outputs.runtime) }}
-        shell: bash
-        run: |
-          set -o pipefail
-          pnpm lint 2>&1 | tee tmp/ci-logs/static-checks/lint.log
-
-      - name: Install FFmpeg for recording media tests
-        if: ${{ fromJSON(needs.change-scope.outputs.runtime) }}
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends ffmpeg
-
-      - name: Unit tests
-        id: unit_tests
-        if: ${{ fromJSON(needs.change-scope.outputs.runtime) }}
-        shell: bash
-        run: |
-          set -o pipefail
-          pnpm test:unit:prebuilt 2>&1 | tee tmp/ci-logs/static-checks/test-unit-prebuilt.log
-
-      - name: Write static check log manifest
+      - name: Write repository policy log manifest
         if: always()
         env:
-          STATIC_RESULTS: >-
-            [{"command":"pnpm env:validate:example","conclusion":"${{ steps.env_template.outcome }}","logPath":"tmp/ci-logs/static-checks/env-validate-example.log"},{"command":"pnpm test:tooling","conclusion":"${{ steps.tooling_tests.outcome }}","logPath":"tmp/ci-logs/static-checks/test-tooling.log"},{"command":"pnpm run lint:workflows","conclusion":"${{ steps.lint_workflows.outcome }}","logPath":"tmp/ci-logs/static-checks/lint-workflows.log"},{"command":"pnpm run lint:shell","conclusion":"${{ steps.lint_shell.outcome }}","logPath":"tmp/ci-logs/static-checks/lint-shell.log"},{"command":"pnpm docker:lint","conclusion":"${{ steps.docker_lint.outcome }}","logPath":"tmp/ci-logs/static-checks/docker-lint.log"},{"command":"pnpm deps:audit:strict","conclusion":"${{ steps.dependency_audit.outcome }}","logPath":"tmp/ci-logs/static-checks/deps-audit-strict.log"},{"command":"pnpm release:verify:contracts","conclusion":"${{ steps.contract_versions.outcome }}","logPath":"tmp/ci-logs/static-checks/release-verify-contracts.log"},{"command":"pnpm guard:orchestrator:boundary","conclusion":"${{ steps.orchestrator_boundary.outcome }}","logPath":"tmp/ci-logs/static-checks/guard-orchestrator-boundary.log"},{"command":"pnpm docs:check","conclusion":"${{ steps.docs_sanity.outcome }}","logPath":"tmp/ci-logs/static-checks/docs-check.log"},{"command":"pnpm build","conclusion":"${{ steps.build.outcome }}","logPath":"tmp/ci-logs/static-checks/build.log"},{"command":"pnpm typecheck","conclusion":"${{ steps.typecheck.outcome }}","logPath":"tmp/ci-logs/static-checks/typecheck.log"},{"command":"pnpm lint","conclusion":"${{ steps.lint.outcome }}","logPath":"tmp/ci-logs/static-checks/lint.log"},{"command":"pnpm test:unit:prebuilt","conclusion":"${{ steps.unit_tests.outcome }}","logPath":"tmp/ci-logs/static-checks/test-unit-prebuilt.log"}]
+          POLICY_RESULTS: >-
+            [{"command":"pnpm env:validate:example","conclusion":"${{ steps.env_template.outcome }}","logPath":"tmp/ci-logs/repository-policy/env-validate-example.log"},{"command":"pnpm test:tooling","conclusion":"${{ steps.tooling_tests.outcome }}","logPath":"tmp/ci-logs/repository-policy/test-tooling.log"},{"command":"pnpm run lint:workflows","conclusion":"${{ steps.lint_workflows.outcome }}","logPath":"tmp/ci-logs/repository-policy/lint-workflows.log"},{"command":"pnpm run lint:shell","conclusion":"${{ steps.lint_shell.outcome }}","logPath":"tmp/ci-logs/repository-policy/lint-shell.log"},{"command":"pnpm docker:lint","conclusion":"${{ steps.docker_lint.outcome }}","logPath":"tmp/ci-logs/repository-policy/docker-lint.log"},{"command":"pnpm deps:audit:strict","conclusion":"${{ steps.dependency_audit.outcome }}","logPath":"tmp/ci-logs/repository-policy/deps-audit-strict.log"},{"command":"pnpm release:verify:contracts","conclusion":"${{ steps.contract_versions.outcome }}","logPath":"tmp/ci-logs/repository-policy/release-verify-contracts.log"},{"command":"pnpm guard:orchestrator:boundary","conclusion":"${{ steps.orchestrator_boundary.outcome }}","logPath":"tmp/ci-logs/repository-policy/guard-orchestrator-boundary.log"},{"command":"pnpm docs:check","conclusion":"${{ steps.docs_sanity.outcome }}","logPath":"tmp/ci-logs/repository-policy/docs-check.log"}]
         run: |
-          mkdir -p tmp/ci-logs/static-checks
-          node -e "require('node:fs').writeFileSync('tmp/ci-logs/static-checks/manifest.json', JSON.stringify(JSON.parse(process.env.STATIC_RESULTS), null, 2) + '\n')"
+          mkdir -p tmp/ci-logs/repository-policy
+          node -e "require('node:fs').writeFileSync('tmp/ci-logs/repository-policy/manifest.json', JSON.stringify(JSON.parse(process.env.POLICY_RESULTS), null, 2) + '\n')"
 
-      - name: Upload static check logs
+      - name: Upload repository policy logs
         if: always()
         # actions/upload-artifact v7.0.0
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
         with:
-          name: static-checks-logs
-          path: tmp/ci-logs/static-checks
+          name: repository-policy-logs
+          path: tmp/ci-logs/repository-policy
           if-no-files-found: warn
           retention-days: 14
 
-  integration-tests:
-    name: integration lane (blocking)
+  build-code-quality:
+    name: build + code quality (node 24.x)
+    needs: change-scope
+    if: ${{ fromJSON(needs.change-scope.outputs.runtime) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      NODE_OPTIONS: --max_old_space_size=4096
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271
+        with:
+          run_install: false
+
+      - name: Setup Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Initialize build and code quality logs
+        run: mkdir -p tmp/ci-logs/build-code-quality
+
+      - name: Build
+        id: build
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm build 2>&1 | tee tmp/ci-logs/build-code-quality/build.log
+
+      - name: Typecheck
+        id: typecheck
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm typecheck 2>&1 | tee tmp/ci-logs/build-code-quality/typecheck.log
+
+      - name: Lint
+        id: lint
+        if: always()
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm lint 2>&1 | tee tmp/ci-logs/build-code-quality/lint.log
+
+      - name: Write build and code quality log manifest
+        if: always()
+        env:
+          BUILD_RESULTS: >-
+            [{"command":"pnpm build","conclusion":"${{ steps.build.outcome }}","logPath":"tmp/ci-logs/build-code-quality/build.log"},{"command":"pnpm typecheck","conclusion":"${{ steps.typecheck.outcome }}","logPath":"tmp/ci-logs/build-code-quality/typecheck.log"},{"command":"pnpm lint","conclusion":"${{ steps.lint.outcome }}","logPath":"tmp/ci-logs/build-code-quality/lint.log"}]
+        run: |
+          mkdir -p tmp/ci-logs/build-code-quality
+          node -e "require('node:fs').writeFileSync('tmp/ci-logs/build-code-quality/manifest.json', JSON.stringify(JSON.parse(process.env.BUILD_RESULTS), null, 2) + '\n')"
+
+      - name: Upload build and code quality logs
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        with:
+          name: build-code-quality-logs
+          path: tmp/ci-logs/build-code-quality
+          if-no-files-found: warn
+          retention-days: 14
+
+  unit-component:
+    name: unit + component (node 24.x)
+    needs: change-scope
+    if: ${{ fromJSON(needs.change-scope.outputs.runtime) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      NODE_OPTIONS: --max_old_space_size=4096
+      UNIT_WORKSPACE_CONCURRENCY: '2'
+      UNIT_MAX_WORKERS: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271
+        with:
+          run_install: false
+
+      - name: Setup Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Initialize unit and component logs
+        run: mkdir -p tmp/ci-logs/unit-component
+
+      - name: Build test prerequisites
+        id: build
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm build 2>&1 | tee tmp/ci-logs/unit-component/build.log
+
+      - name: Display runner resources
+        id: runner_resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "UNIT_WORKSPACE_CONCURRENCY=$UNIT_WORKSPACE_CONCURRENCY"
+            echo "UNIT_MAX_WORKERS=$UNIT_MAX_WORKERS"
+            echo "nproc=$(nproc)"
+            free -h
+            df -h "$GITHUB_WORKSPACE"
+          } | tee tmp/ci-logs/unit-component/runner-resources.log
+
+      - name: Unit and component tests
+        id: unit_tests
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/test/assert-test-unit-scripts.mjs
+          /usr/bin/time -v -o tmp/ci-logs/unit-component/unit-resource-usage.txt \
+            pnpm -r --parallel --workspace-concurrency="$UNIT_WORKSPACE_CONCURRENCY" \
+              --filter "./packages/*" --if-present run test:unit:prebuilt \
+              --maxWorkers="$UNIT_MAX_WORKERS" \
+            2>&1 | tee tmp/ci-logs/unit-component/test-unit-prebuilt.log
+
+      - name: Write unit and component log manifest
+        if: always()
+        env:
+          UNIT_RESULTS: >-
+            [{"command":"pnpm build","conclusion":"${{ steps.build.outcome }}","logPath":"tmp/ci-logs/unit-component/build.log"},{"command":"node scripts/test/assert-test-unit-scripts.mjs && pnpm -r --parallel --workspace-concurrency=$UNIT_WORKSPACE_CONCURRENCY --filter ./packages/* run test:unit:prebuilt --maxWorkers=$UNIT_MAX_WORKERS","conclusion":"${{ steps.unit_tests.outcome }}","logPath":"tmp/ci-logs/unit-component/test-unit-prebuilt.log"},{"command":"runner resource display","conclusion":"${{ steps.runner_resources.outcome }}","logPath":"tmp/ci-logs/unit-component/runner-resources.log"},{"command":"/usr/bin/time -v pnpm -r --workspace-concurrency=$UNIT_WORKSPACE_CONCURRENCY test:unit:prebuilt","conclusion":"${{ steps.unit_tests.outcome }}","logPath":"tmp/ci-logs/unit-component/unit-resource-usage.txt"}]
+        run: |
+          mkdir -p tmp/ci-logs/unit-component
+          node -e "require('node:fs').writeFileSync('tmp/ci-logs/unit-component/manifest.json', JSON.stringify(JSON.parse(process.env.UNIT_RESULTS), null, 2) + '\n')"
+
+      - name: Upload unit and component logs
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
+        with:
+          name: unit-component-logs
+          path: tmp/ci-logs/unit-component
+          if-no-files-found: warn
+          retention-days: 14
+
+  deterministic-integration-media:
+    name: deterministic integration + media (blocking)
     needs: change-scope
     if: ${{ fromJSON(needs.change-scope.outputs.integration) }}
     runs-on: ubuntu-24.04
@@ -319,30 +432,43 @@ jobs:
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
+      - name: Initialize deterministic integration and media logs
+        run: mkdir -p tmp/ci-logs/deterministic-integration-media
+
+      - name: Install FFmpeg for recording media tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ffmpeg
+
       - name: Integration tests
         id: integration_tests
         shell: bash
         run: |
           set -o pipefail
-          mkdir -p tmp/ci-logs/integration-tests
-          pnpm test:integration 2>&1 | tee tmp/ci-logs/integration-tests/test-integration.log
+          pnpm test:integration 2>&1 | tee tmp/ci-logs/deterministic-integration-media/test-integration.log
 
-      - name: Write integration log manifest
+      - name: Backend recording media tests
+        id: media_tests
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm --filter @esl-pipeline/batch-backend test:media 2>&1 | tee tmp/ci-logs/deterministic-integration-media/test-media.log
+
+      - name: Write deterministic integration and media log manifest
         if: always()
         env:
           INTEGRATION_RESULTS: >-
-            [{"command":"pnpm test:integration","conclusion":"${{ steps.integration_tests.outcome }}","logPath":"tmp/ci-logs/integration-tests/test-integration.log"}]
+            [{"command":"pnpm test:integration","conclusion":"${{ steps.integration_tests.outcome }}","logPath":"tmp/ci-logs/deterministic-integration-media/test-integration.log"},{"command":"pnpm --filter @esl-pipeline/batch-backend test:media","conclusion":"${{ steps.media_tests.outcome }}","logPath":"tmp/ci-logs/deterministic-integration-media/test-media.log"}]
         run: |
-          mkdir -p tmp/ci-logs/integration-tests
-          node -e "require('node:fs').writeFileSync('tmp/ci-logs/integration-tests/manifest.json', JSON.stringify(JSON.parse(process.env.INTEGRATION_RESULTS), null, 2) + '\n')"
+          mkdir -p tmp/ci-logs/deterministic-integration-media
+          node -e "require('node:fs').writeFileSync('tmp/ci-logs/deterministic-integration-media/manifest.json', JSON.stringify(JSON.parse(process.env.INTEGRATION_RESULTS), null, 2) + '\n')"
 
-      - name: Upload integration test logs
+      - name: Upload deterministic integration and media logs
         if: always()
-        # actions/upload-artifact v7.0.0
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f
         with:
-          name: integration-tests-logs
-          path: tmp/ci-logs/integration-tests
+          name: deterministic-integration-media-logs
+          path: tmp/ci-logs/deterministic-integration-media
           if-no-files-found: warn
           retention-days: 14
 
@@ -516,8 +642,10 @@ jobs:
     if: ${{ always() }}
     needs:
       - change-scope
-      - static-checks
-      - integration-tests
+      - repository-policy
+      - build-code-quality
+      - unit-component
+      - deterministic-integration-media
       - backend-db-integration
       - telegram-compose-smoke
     runs-on: ubuntu-24.04
@@ -526,17 +654,19 @@ jobs:
       - name: Evaluate required CI results
         env:
           CI_RESULTS: >-
-            {"change-scope":"${{ needs.change-scope.result }}","static-checks":"${{ needs.static-checks.result }}","integration-tests":"${{ needs.integration-tests.result }}","backend-db-integration":"${{ needs.backend-db-integration.result }}","telegram-compose-smoke":"${{ needs.telegram-compose-smoke.result }}"}
+            {"change-scope":"${{ needs.change-scope.result }}","repository-policy":"${{ needs.repository-policy.result }}","build-code-quality":"${{ needs.build-code-quality.result }}","unit-component":"${{ needs.unit-component.result }}","deterministic-integration-media":"${{ needs.deterministic-integration-media.result }}","backend-db-integration":"${{ needs.backend-db-integration.result }}","telegram-compose-smoke":"${{ needs.telegram-compose-smoke.result }}"}
           CI_SCOPES: >-
-            {"integration":"${{ needs.change-scope.outputs.integration }}","backend_db_worker":"${{ needs.change-scope.outputs.backend_db_worker }}","telegram":"${{ needs.change-scope.outputs.telegram }}"}
+            {"runtime":"${{ needs.change-scope.outputs.runtime }}","integration":"${{ needs.change-scope.outputs.integration }}","backend_db_worker":"${{ needs.change-scope.outputs.backend_db_worker }}","telegram":"${{ needs.change-scope.outputs.telegram }}"}
         run: |
           node <<'NODE'
           // ci-gate-evaluator:start
           const results = JSON.parse(process.env.CI_RESULTS);
           const scopes = JSON.parse(process.env.CI_SCOPES);
-          const required = ['change-scope', 'static-checks'];
+          const required = ['change-scope', 'repository-policy'];
           const conditional = {
-            'integration-tests': 'integration',
+            'build-code-quality': 'runtime',
+            'unit-component': 'runtime',
+            'deterministic-integration-media': 'integration',
             'backend-db-integration': 'backend_db_worker',
             'telegram-compose-smoke': 'telegram',
           };

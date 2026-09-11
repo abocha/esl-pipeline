@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
+import { BACKEND_TEST_PROJECT_FILES } from '../../packages/batch-backend/vitest.projects.mjs';
 import {
   buildAffectedCheckPlan,
   buildBroadCheckPlan,
@@ -15,10 +15,6 @@ import {
   parseNameStatusZ,
   resolveComparisonBase,
 } from './affected-check-lib.mjs';
-
-const backendTestRouting = JSON.parse(
-  readFileSync(new URL('../../packages/batch-backend/tests/test-routing.json', import.meta.url)),
-);
 
 const workspacePackages = [
   pkg('@esl-pipeline/contracts', 'packages/contracts', [], ['build', 'typecheck']),
@@ -204,9 +200,9 @@ test('CI scope keeps docs-only exclusive and blocking scopes monotonic', () => {
 test('CI scope routes every explicit backend DB and worker file plus shared support', () => {
   const backendDbWorkerFiles = [
     ...[
-      ...backendTestRouting.postgresMigrations,
-      ...backendTestRouting.postgres,
-      ...backendTestRouting.postgresRedisWorker,
+      ...BACKEND_TEST_PROJECT_FILES.migrations,
+      ...BACKEND_TEST_PROJECT_FILES.postgres,
+      ...BACKEND_TEST_PROJECT_FILES.worker,
     ].map((file) => `packages/batch-backend/tests/${file}`),
     'packages/batch-backend/tests/support/bootstrap-pg-test-env.ts',
     'packages/batch-backend/tests/support/test-env.ts',
@@ -512,6 +508,24 @@ test('service ownership selection is independent of ambient service variables', 
   } finally {
     restoreEnv('PG_CONNECTION_STRING', previousPg);
     restoreEnv('REDIS_URL', previousRedis);
+  }
+});
+
+test('recording-media changes select the explicit media project outside pure unit', () => {
+  for (const changedFile of [
+    'packages/batch-backend/tests/infrastructure.recording-media.test.ts',
+    'packages/batch-backend/src/infrastructure/recording-media.ts',
+  ]) {
+    const plan = buildAffectedCheckPlan({
+      baseRef: 'origin/main',
+      mergeBase: 'abc123',
+      changedFiles: [changedFile],
+      workspacePackages,
+    });
+    assert.deepEqual(
+      plan.triggeredLanes.find((lane) => lane.id === 'backend:test:media')?.pnpmArgs,
+      ['--filter', '@esl-pipeline/batch-backend', 'run', 'test:media'],
+    );
   }
 });
 

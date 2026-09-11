@@ -229,15 +229,18 @@ From repo root:
 pnpm --filter @esl-pipeline/batch-backend build
 pnpm --filter @esl-pipeline/batch-backend test
 pnpm --filter @esl-pipeline/batch-backend test:integration:http
+pnpm --filter @esl-pipeline/batch-backend test:media
 pnpm test:check-routing
 pnpm --filter @esl-pipeline/batch-backend db:verify-baseline
 ```
 
-Backend tests are classified by prerequisites in [`tests/test-routing.json`](tests/test-routing.json):
-pure unit, deterministic in-process HTTP, PostgreSQL migrations/queries, or PostgreSQL + Redis worker
-integration. Service tests are positively listed; unit is the guarded remainder. Test names remain
-descriptive only, so update the manifest and package script membership together when prerequisites
-change.
+Backend tests are classified by prerequisite in [`vitest.projects.mjs`](vitest.projects.mjs): pure unit,
+deterministic in-process HTTP, PostgreSQL migrations, PostgreSQL queries, PostgreSQL + Redis worker
+integration, or the real FFmpeg-backed media boundary. The configuration retains the established HTTP
+integration prefix and positively lists the other non-pure prerequisites; pure unit is the guarded
+discovered remainder. Package scripts select named Vitest projects, so update the configuration once
+when a test's prerequisites change. Project setup owns the safe test environment before modules load,
+including scrubbing ambient service and provider credentials from direct pure-test entrypoints.
 
 `db:generate-baseline` and `db:verify-baseline` require a Postgres connection that can create and drop temporary databases on the target server.
 

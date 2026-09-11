@@ -5,14 +5,16 @@ import test from 'node:test';
 
 const ci = readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8');
 
-test('PR CI exposes a classifier and an always-running aggregate gate', () => {
+test('PR CI exposes scoped evidence jobs and an always-running aggregate gate', () => {
   assert.match(ci, /^ {2}change-scope:/mu);
   assert.match(ci, /^ {2}ci-gate:/mu);
   assert.match(jobBlock('ci-gate'), /if: \$\{\{ always\(\) \}\}/u);
   assert.doesNotMatch(ci, /if: \$\{\{ needs\.change-scope\.outputs\.[a-z_]+ \}\}/u);
 
   for (const [job, scope] of [
-    ['integration-tests', 'integration'],
+    ['build-code-quality', 'runtime'],
+    ['unit-component', 'runtime'],
+    ['deterministic-integration-media', 'integration'],
     ['backend-db-integration', 'backend_db_worker'],
     ['telegram-compose-smoke', 'telegram'],
   ]) {
@@ -30,7 +32,8 @@ test('PR CI exposes a classifier and an always-running aggregate gate', () => {
   }
 
   assert.match(jobBlock('ci-gate'), /- change-scope(?:\n|$)/u);
-  assert.match(jobBlock('ci-gate'), /- static-checks(?:\n|$)/u);
+  assert.match(jobBlock('ci-gate'), /- repository-policy(?:\n|$)/u);
+  assert.doesNotMatch(jobBlock('repository-policy'), /^ {4}(?:needs|if):/mu);
 });
 
 test('bootstrap scope check is mechanically independent from the classifier', () => {
@@ -44,12 +47,19 @@ test('aggregate gate evaluator accepts only successful selected lanes', () => {
   const evaluator = markedScript('ci-gate-evaluator');
   const baseResults = {
     'change-scope': 'success',
-    'static-checks': 'success',
-    'integration-tests': 'success',
+    'repository-policy': 'success',
+    'build-code-quality': 'success',
+    'unit-component': 'success',
+    'deterministic-integration-media': 'success',
     'backend-db-integration': 'success',
     'telegram-compose-smoke': 'success',
   };
-  const allSelected = { integration: 'true', backend_db_worker: 'true', telegram: 'true' };
+  const allSelected = {
+    runtime: 'true',
+    integration: 'true',
+    backend_db_worker: 'true',
+    telegram: 'true',
+  };
 
   assert.equal(runEvaluator(evaluator, baseResults, allSelected), 0);
   assert.notEqual(
@@ -57,22 +67,46 @@ test('aggregate gate evaluator accepts only successful selected lanes', () => {
     0,
   );
   assert.notEqual(
-    runEvaluator(evaluator, { ...baseResults, 'static-checks': 'failure' }, allSelected),
+    runEvaluator(evaluator, { ...baseResults, 'repository-policy': 'failure' }, allSelected),
     0,
   );
   assert.notEqual(
-    runEvaluator(evaluator, { ...baseResults, 'integration-tests': 'failure' }, allSelected),
+    runEvaluator(evaluator, { ...baseResults, 'build-code-quality': 'failure' }, allSelected),
     0,
   );
   assert.notEqual(
-    runEvaluator(evaluator, { ...baseResults, 'integration-tests': 'skipped' }, allSelected),
+    runEvaluator(evaluator, { ...baseResults, 'unit-component': 'failure' }, allSelected),
+    0,
+  );
+  assert.notEqual(
+    runEvaluator(
+      evaluator,
+      { ...baseResults, 'deterministic-integration-media': 'failure' },
+      allSelected,
+    ),
+    0,
+  );
+  assert.notEqual(
+    runEvaluator(
+      evaluator,
+      { ...baseResults, 'deterministic-integration-media': 'skipped' },
+      allSelected,
+    ),
     0,
   );
   assert.equal(
     runEvaluator(
       evaluator,
-      { ...baseResults, 'integration-tests': 'skipped' },
+      { ...baseResults, 'deterministic-integration-media': 'skipped' },
       { ...allSelected, integration: 'false' },
+    ),
+    0,
+  );
+  assert.equal(
+    runEvaluator(
+      evaluator,
+      { ...baseResults, 'build-code-quality': 'skipped', 'unit-component': 'skipped' },
+      { ...allSelected, runtime: 'false' },
     ),
     0,
   );
@@ -80,6 +114,39 @@ test('aggregate gate evaluator accepts only successful selected lanes', () => {
     runEvaluator(evaluator, { ...baseResults, 'telegram-compose-smoke': 'cancelled' }, allSelected),
     0,
   );
+});
+
+test('unit/component lane keeps a conservative worker budget and measurement evidence', () => {
+  const unit = jobBlock('unit-component');
+  assert.match(unit, /UNIT_WORKSPACE_CONCURRENCY:\s*['"]2['"]/u);
+  assert.match(unit, /UNIT_MAX_WORKERS:\s*['"]1['"]/u);
+  assert.match(unit, /--workspace-concurrency="\$UNIT_WORKSPACE_CONCURRENCY"/u);
+  assert.match(unit, /--maxWorkers="\$UNIT_MAX_WORKERS"/u);
+  assert.match(unit, /nproc/u);
+  assert.match(unit, /free -h/u);
+  assert.match(unit, /\/usr\/bin\/time -v/u);
+  assert.match(unit, /unit-resource-usage\.txt/u);
+});
+
+test('integration/media lane installs FFmpeg and runs backend media coverage', () => {
+  const media = jobBlock('deterministic-integration-media');
+  assert.match(media, /apt-get update/u);
+  assert.match(media, /apt-get install --yes --no-install-recommends ffmpeg/u);
+  assert.match(media, /pnpm test:integration/u);
+  assert.match(media, /pnpm --filter @esl-pipeline\/batch-backend test:media/u);
+});
+
+test('runtime lanes keep duplicated builds without sharding or matrix fanout', () => {
+  assert.match(jobBlock('build-code-quality'), /pnpm build/u);
+  assert.match(jobBlock('unit-component'), /pnpm build/u);
+  assert.doesNotMatch(ci, /^\s+matrix:/mu);
+  assert.doesNotMatch(ci, /--shard(?:=|\s)/u);
+});
+
+test('code-quality lint still reports when its build prerequisite fails', () => {
+  const quality = jobBlock('build-code-quality');
+  assert.match(namedStep(quality, 'Lint'), /^\s+if: always\(\)$/mu);
+  assert.doesNotMatch(namedStep(quality, 'Typecheck'), /^\s+if: always\(\)$/mu);
 });
 
 test('diagnostics run weekly or manually and preserve producer failures', () => {
@@ -112,7 +179,7 @@ test('diagnostics run weekly or manually and preserve producer failures', () => 
 });
 
 test('static tooling bootstrap verifies bundled shellcheck before extracting verified actionlint', () => {
-  const bootstrap = namedStep(jobBlock('static-checks'), 'Verify repo hygiene tools');
+  const bootstrap = namedStep(jobBlock('repository-policy'), 'Verify repo hygiene tools');
   assert.doesNotMatch(bootstrap, /apt-get (?:update|install)/u);
   assert.match(bootstrap, /command -v shellcheck/u);
   assert.match(bootstrap, /shellcheck --version/u);
@@ -144,7 +211,7 @@ test('static tooling bootstrap verifies bundled shellcheck before extracting ver
 });
 
 test('tooling tests remain an unconditional static guard', () => {
-  const step = namedStep(jobBlock('static-checks'), 'Tooling tests');
+  const step = namedStep(jobBlock('repository-policy'), 'Tooling tests');
   assert.match(step, /run: \|[\s\S]*pnpm test:tooling 2>&1 \| tee/u);
   assert.doesNotMatch(step, /^\s+if:/mu);
 });
@@ -166,7 +233,7 @@ test('diagnostic workflows use explicit concurrency and bounded artifact retenti
   }
 
   for (const [job, step] of [
-    ['static-checks', 'Upload docs health artifact on failure'],
+    ['repository-policy', 'Upload docs health artifact on failure'],
     ['backend-db-integration', 'Upload backend db + worker artifacts'],
     ['telegram-compose-smoke', 'Upload Telegram compose smoke artifacts'],
   ]) {
