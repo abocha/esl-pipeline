@@ -134,6 +134,17 @@ test('integration/media lane installs FFmpeg and runs backend media coverage', (
   assert.match(media, /apt-get install --yes --no-install-recommends ffmpeg/u);
   assert.match(media, /pnpm test:integration/u);
   assert.match(media, /pnpm --filter @esl-pipeline\/batch-backend test:media/u);
+  const stepNames = [...media.matchAll(/^ {6}- name: (.+)$/gmu)].map((match) => match[1]);
+  const integrationIndex = stepNames.indexOf('Integration tests');
+  assert.deepEqual(
+    stepNames.slice(integrationIndex, integrationIndex + 3),
+    [
+      'Integration tests',
+      'Install FFmpeg for recording media tests',
+      'Backend recording media tests',
+    ],
+    'FFmpeg installation must run after deterministic integration and immediately before media',
+  );
 });
 
 test('runtime lanes keep duplicated builds without sharding or matrix fanout', () => {

@@ -435,17 +435,17 @@ jobs:
       - name: Initialize deterministic integration and media logs
         run: mkdir -p tmp/ci-logs/deterministic-integration-media
 
-      - name: Install FFmpeg for recording media tests
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends ffmpeg
-
       - name: Integration tests
         id: integration_tests
         shell: bash
         run: |
           set -o pipefail
           pnpm test:integration 2>&1 | tee tmp/ci-logs/deterministic-integration-media/test-integration.log
+
+      - name: Install FFmpeg for recording media tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ffmpeg
 
       - name: Backend recording media tests
         id: media_tests
