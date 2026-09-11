@@ -10,6 +10,7 @@ import {
   collectChangedFiles,
   expandTransitiveDependents,
   flattenChangedFileRecords,
+  formatCiScopeGithubOutputs,
   formatPlanSummary,
   parseNameStatusZ,
   resolveComparisonBase,
@@ -70,7 +71,7 @@ const ciScopeCases = [
   [
     'frontend',
     records('M', 'packages/batch-frontend/src/main.tsx'),
-    [true, true, false, false, false],
+    [true, true, true, false, false],
   ],
   [
     'deleted migration',
@@ -90,7 +91,7 @@ const ciScopeCases = [
   [
     'telegram',
     records('M', 'packages/telegram-ops-bot/src/index.ts'),
-    [true, true, false, true, false],
+    [true, true, true, true, false],
   ],
   ['contracts', records('M', 'packages/contracts/src/index.ts'), [true, true, true, true, false]],
   [
@@ -130,6 +131,24 @@ test('CI scope fails open for empty records', () => {
   );
 });
 
+test('CI scope fails closed for discovered workspaces without trustworthy names', () => {
+  for (const name of [undefined, '']) {
+    const decision = buildCiScopeDecision({
+      changedFileRecords: records('M', 'packages/unowned-runtime/src/index.ts'),
+      workspacePackages: [...ciWorkspacePackages, pkg(name, 'packages/unowned-runtime', [])],
+    });
+    assert.deepEqual(scopeFlags(decision), [true, true, true, true, false]);
+    assert.equal(
+      formatCiScopeGithubOutputs(decision),
+      'runtime=true\nintegration=true\nbackend_db_worker=true\ntelegram=true\ndocs_only=false\n',
+    );
+    assert.equal(
+      decision.reasons.some((reason) => reason.code === 'untrusted-workspace-metadata'),
+      true,
+    );
+  }
+});
+
 test('CI scope treats every path of a rename as relevant', () => {
   const runtimeToDocs = buildCiScopeDecision({
     changedFileRecords: [
@@ -143,8 +162,8 @@ test('CI scope treats every path of a rename as relevant', () => {
     ],
     workspacePackages: ciWorkspacePackages,
   });
-  assert.deepEqual(scopeFlags(runtimeToDocs), [true, true, false, false, false]);
-  assert.deepEqual(scopeFlags(docsToRuntime), [true, true, false, false, false]);
+  assert.deepEqual(scopeFlags(runtimeToDocs), [true, true, true, false, false]);
+  assert.deepEqual(scopeFlags(docsToRuntime), [true, true, true, false, false]);
 });
 
 test('CI scope normalizes separators, duplicates, and input order', () => {
@@ -212,6 +231,24 @@ test('CI scope selects service evidence for backend repository implementations',
       workspacePackages: ciWorkspacePackages,
     });
     assert.equal(decision.backend_db_worker, true, `${file} must select backend DB/worker CI`);
+  }
+});
+
+test('CI scope requires core service evidence for ordinary application runtime changes', () => {
+  for (const file of [
+    'packages/batch-backend/src/application/transcription-execution.ts',
+    'packages/batch-backend/src/application/reconcile-transcription-delivery.ts',
+    'packages/batch-backend/src/application/confirm-assignment-session-step.ts',
+  ]) {
+    const decision = buildCiScopeDecision({
+      changedFileRecords: records('M', file),
+      workspacePackages: ciWorkspacePackages,
+    });
+    assert.deepEqual(scopeFlags(decision), [true, true, true, false, false]);
+    assert.equal(
+      formatCiScopeGithubOutputs(decision),
+      'runtime=true\nintegration=true\nbackend_db_worker=true\ntelegram=false\ndocs_only=false\n',
+    );
   }
 });
 

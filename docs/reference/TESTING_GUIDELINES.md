@@ -300,10 +300,13 @@ Important path rules:
   lint/config checks.
 - `packages/batch-backend/migrations/**` and `packages/batch-backend/schema.sql` trigger the local DB
   baseline guard and require the CI migration/PostgreSQL service job.
-- backend repository implementations/tests, worker, queue, and `process-*-job.ts` paths require the
-  CI PostgreSQL/Redis service job.
+- every non-docs runtime scope, including ordinary application implementation paths, requires the CI
+  PostgreSQL/Redis service job; backend repository implementations/tests, worker, queue, and
+  `process-*-job.ts` paths remain representative service-sensitive cases.
 - contracts, shared infrastructure, workflow changes, and unknown scope conservatively require the
   CI PostgreSQL/Redis service job.
+- Telegram Compose smoke is selected by its own Telegram/subsystem rule; ordinary runtime selection
+  does not imply it.
 - backend HTTP transport route and middleware paths trigger HTTP integration.
 - root validation config, package manager metadata, Turbo config, and validation-runner files classify
   to the explicit broad `check:pre-pr` lane plan. `check:fast:agent` persists that plan and delegates

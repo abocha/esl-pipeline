@@ -4,7 +4,7 @@
 
 - Audience: maintainers and AI agents deploying batch-backend environments.
 - Authority Level: operations runbook.
-- Last Verified Against: 2026-07-27 repo state.
+- Last Verified Against: 2026-09-11 repo state.
 - Owner: backend maintainer + automation agents.
 - Review Cadence: monthly or after prompt/runtime model changes.
 - Status: `runbook`.
